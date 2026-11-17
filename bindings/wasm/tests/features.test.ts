@@ -726,7 +726,7 @@ describe('Feature API precision (reference compatibility)', () => {
 
     it('timeStretch rate=2.0 should produce shorter output', () => {
       const tone = generateSine(440, SR, DURATION);
-      const stretched = timeStretch(tone, SR, 2.0);
+      const stretched = timeStretch(tone, SR, { speedRatio: 2.0 });
 
       expect(stretched).toBeInstanceOf(Float32Array);
       // Rate 2.0 means playback at double speed -> half the length
@@ -737,7 +737,7 @@ describe('Feature API precision (reference compatibility)', () => {
 
     it('timeStretch rate=0.5 should produce longer output', () => {
       const tone = generateSine(440, SR, DURATION);
-      const stretched = timeStretch(tone, SR, 0.5);
+      const stretched = timeStretch(tone, SR, { speedRatio: 0.5 });
 
       expect(stretched).toBeInstanceOf(Float32Array);
       // Rate 0.5 means playback at half speed -> double the length
@@ -753,22 +753,32 @@ describe('Feature API precision (reference compatibility)', () => {
       // addon on the wording, but it agrees only because it was made to: an
       // assertion that accepts any throw cannot hold that agreement, and this
       // one went on passing when the class moved underneath it.
-      expect(() => timeStretch(tone, SR, Number.NaN)).toThrow(
-        new RangeError('timeStretch: rate must be a finite number'),
+      expect(() => timeStretch(tone, SR, { speedRatio: Number.NaN })).toThrow(
+        new RangeError(
+          'timeStretch: speedRatio must be a finite number within the 32-bit float range',
+        ),
       );
-      expect(() => timeStretch(tone, SR, Number.POSITIVE_INFINITY)).toThrow(
-        new RangeError('timeStretch: rate must be a finite number'),
+      expect(() => timeStretch(tone, SR, { speedRatio: Number.POSITIVE_INFINITY })).toThrow(
+        new RangeError(
+          'timeStretch: speedRatio must be a finite number within the 32-bit float range',
+        ),
       );
       // Finite, so the facade passes it on and the core refuses the projected
       // length instead: the same class, told apart by the core's own wording.
-      expect(() => timeStretch(tone, SR, 1.1754943508222875e-38)).toThrow(RangeError);
-      expect(() => timeStretch(tone, SR, 1.1754943508222875e-38)).not.toThrow(/finite number/);
-      expect(Array.from(timeStretch(tone, SR, 1)).every(Number.isFinite)).toBe(true);
+      expect(() => timeStretch(tone, SR, { speedRatio: 1.1754943508222875e-38 })).toThrow(
+        RangeError,
+      );
+      expect(() => timeStretch(tone, SR, { speedRatio: 1.1754943508222875e-38 })).not.toThrow(
+        /finite number/,
+      );
+      expect(Array.from(timeStretch(tone, SR, { speedRatio: 1 })).every(Number.isFinite)).toBe(
+        true,
+      );
     });
 
     it('pitchShift should return Float32Array of similar length', () => {
       const tone = generateSine(440, SR, DURATION);
-      const shifted = pitchShift(tone, SR, 2);
+      const shifted = pitchShift(tone, SR, { pitchSemitones: 2 });
 
       expect(shifted).toBeInstanceOf(Float32Array);
       // pitchShift uses time-stretch + resample so length may vary slightly
@@ -777,8 +787,10 @@ describe('Feature API precision (reference compatibility)', () => {
     });
 
     it('pitchShift rejects an unsupported effective rate before processing input', () => {
-      expect(() => pitchShift(new Float32Array(4), 48000, -120)).toThrow();
-      expect(pitchShift(generateSine(440, SR, 0.1), SR, 0)).toBeInstanceOf(Float32Array);
+      expect(() => pitchShift(new Float32Array(4), 48000, { pitchSemitones: -120 })).toThrow();
+      expect(pitchShift(generateSine(440, SR, 0.1), SR, { pitchSemitones: 0 })).toBeInstanceOf(
+        Float32Array,
+      );
     });
 
     it('normalize should produce peak close to target', () => {
@@ -789,7 +801,7 @@ describe('Feature API precision (reference compatibility)', () => {
         samples[i] = 0.1 * Math.sin((2 * Math.PI * 440 * i) / SR);
       }
 
-      const normalized = normalize(samples, SR, 0.0);
+      const normalized = normalize(samples, SR, { targetDb: 0.0 });
       expect(normalized).toBeInstanceOf(Float32Array);
       expect(normalized.length).toBe(samples.length);
 
@@ -815,7 +827,7 @@ describe('Feature API precision (reference compatibility)', () => {
         samples[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / SR);
       }
 
-      const trimmed = trim(samples, SR, -40.0);
+      const trimmed = trim(samples, SR, { thresholdDb: -40.0 });
       expect(trimmed).toBeInstanceOf(Float32Array);
       expect(trimmed.length).toBeLessThan(samples.length);
       expect(trimmed.length).toBeGreaterThan(0);

@@ -82,7 +82,7 @@ describe('insert automation ids (WASM)', () => {
   setupWorklet();
 
   it('keeps a track insert lane on its track when a later lane edit follows a reorder', () => {
-    const engine = new RealtimeEngine(48000, kBlock);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: kBlock });
     try {
       // Only track 20 sounds, so the output reads track 20's gain alone.
       engine.setClips([
@@ -95,17 +95,26 @@ describe('insert automation ids (WASM)', () => {
         },
       ]);
       engine.setTrackLanes([{ trackId: 10 }, { trackId: 20 }]);
-      engine.setTrackStripJson(10, insertScene('strips', 'track-10', ['utility.gain']));
-      engine.setTrackStripJson(20, insertScene('strips', 'track-20', ['utility.gain']));
-      engine.setMasterStripJson(insertScene('strips', 'master', ['utility.gain']));
+      engine.setStrip(
+        10,
+        JSON.parse(insertScene('strips', 'track-10', ['utility.gain'])).strips[0],
+      );
+      engine.setStrip(
+        20,
+        JSON.parse(insertScene('strips', 'track-20', ['utility.gain'])).strips[0],
+      );
+      engine.setStrip(
+        'master',
+        JSON.parse(insertScene('strips', 'master', ['utility.gain'])).strips[0],
+      );
 
-      const track10Gain = engine.resolveTrackInsertAutomationId(10, 0, 'levelDb');
+      const track10Gain = engine.resolveStripInsertAutomationId(10, 0, 'levelDb');
       expect(track10Gain).toBeGreaterThan(0);
       engine.setAutomationLane(track10Gain, [{ ppq: 0, value: -60 }]);
 
       // Reorder, then edit an unrelated lane: the track 10 lane must still name track 10.
       engine.setTrackLanes([{ trackId: 20 }, { trackId: 10 }]);
-      const masterGain = engine.resolveMasterInsertAutomationId(0, 'levelDb');
+      const masterGain = engine.resolveStripInsertAutomationId('master', 0, 'levelDb');
       expect(masterGain).toBeGreaterThan(0);
       engine.setAutomationLane(masterGain, [{ ppq: 0, value: 0 }]);
 
@@ -116,27 +125,36 @@ describe('insert automation ids (WASM)', () => {
   });
 
   it('keeps a track id across reorders and the removal of another track', () => {
-    const engine = new RealtimeEngine(48000, kBlock);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: kBlock });
     try {
-      engine.setTrackLanes([10, 20]);
-      engine.setTrackStripJson(10, insertScene('strips', 'track-10', ['utility.gain']));
-      engine.setTrackStripJson(20, insertScene('strips', 'track-20', ['utility.gain']));
-      const id10 = engine.resolveTrackInsertAutomationId(10, 0, 'levelDb');
-      const id20 = engine.resolveTrackInsertAutomationId(20, 0, 'levelDb');
+      engine.setTrackLanes([{ trackId: 10 }, { trackId: 20 }]);
+      engine.setStrip(
+        10,
+        JSON.parse(insertScene('strips', 'track-10', ['utility.gain'])).strips[0],
+      );
+      engine.setStrip(
+        20,
+        JSON.parse(insertScene('strips', 'track-20', ['utility.gain'])).strips[0],
+      );
+      const id10 = engine.resolveStripInsertAutomationId(10, 0, 'levelDb');
+      const id20 = engine.resolveStripInsertAutomationId(20, 0, 'levelDb');
       expect(id10).toBeGreaterThan(0);
       expect(id20).not.toBe(id10);
 
-      engine.setTrackLanes([20, 10]);
-      expect(engine.resolveTrackInsertAutomationId(10, 0, 'levelDb')).toBe(id10);
+      engine.setTrackLanes([{ trackId: 20 }, { trackId: 10 }]);
+      expect(engine.resolveStripInsertAutomationId(10, 0, 'levelDb')).toBe(id10);
 
-      engine.setTrackLanes([10]);
+      engine.setTrackLanes([{ trackId: 10 }]);
       expect(alive(engine, id10)).toBe(true);
       expect(alive(engine, id20)).toBe(false);
 
-      engine.setTrackLanes([20, 10]);
-      engine.setTrackStripJson(20, insertScene('strips', 'track-20', ['utility.gain']));
+      engine.setTrackLanes([{ trackId: 20 }, { trackId: 10 }]);
+      engine.setStrip(
+        20,
+        JSON.parse(insertScene('strips', 'track-20', ['utility.gain'])).strips[0],
+      );
       expect(alive(engine, id20)).toBe(false);
-      const readded = engine.resolveTrackInsertAutomationId(20, 0, 'levelDb');
+      const readded = engine.resolveStripInsertAutomationId(20, 0, 'levelDb');
       expect(readded).toBeGreaterThan(0);
       expect(readded).not.toBe(id20);
     } finally {
@@ -145,11 +163,11 @@ describe('insert automation ids (WASM)', () => {
   });
 
   it('keeps a bus id across bus reorders and retires it when the bus is removed', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     try {
       engine.setTrackBuses([{ busId: 1 }, { busId: 2 }]);
-      engine.setBusStripJson(1, insertScene('buses', '1', ['utility.gain']));
-      engine.setBusStripJson(2, insertScene('buses', '2', ['utility.gain']));
+      engine.setBusStrip(1, JSON.parse(insertScene('buses', '1', ['utility.gain'])).buses[0]);
+      engine.setBusStrip(2, JSON.parse(insertScene('buses', '2', ['utility.gain'])).buses[0]);
       const id1 = engine.resolveBusInsertAutomationId(1, 0, 'levelDb');
       const id2 = engine.resolveBusInsertAutomationId(2, 0, 'levelDb');
       expect(id1).toBeGreaterThan(0);
@@ -163,7 +181,7 @@ describe('insert automation ids (WASM)', () => {
       expect(alive(engine, id2)).toBe(true);
       expect(alive(engine, id1)).toBe(false);
       engine.setTrackBuses([{ busId: 2 }, { busId: 1 }]);
-      engine.setBusStripJson(1, insertScene('buses', '1', ['utility.gain']));
+      engine.setBusStrip(1, JSON.parse(insertScene('buses', '1', ['utility.gain'])).buses[0]);
       expect(alive(engine, id1)).toBe(false);
       expect(engine.resolveBusInsertAutomationId(1, 0, 'levelDb')).not.toBe(id1);
     } finally {
@@ -172,19 +190,22 @@ describe('insert automation ids (WASM)', () => {
   });
 
   it('retires track, bus and master ids when the slot changes processor type', () => {
-    const engine = new RealtimeEngine(48000, kBlock);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: kBlock });
     try {
-      engine.setTrackLanes([10]);
+      engine.setTrackLanes([{ trackId: 10 }]);
       engine.setTrackBuses([{ busId: 1 }]);
       const setAll = (processor: string) => {
-        engine.setTrackStripJson(10, insertScene('strips', 'track-10', [processor]));
-        engine.setBusStripJson(1, insertScene('buses', '1', [processor]));
-        engine.setMasterStripJson(insertScene('strips', 'master', [processor]));
+        engine.setStrip(10, JSON.parse(insertScene('strips', 'track-10', [processor])).strips[0]);
+        engine.setBusStrip(1, JSON.parse(insertScene('buses', '1', [processor])).buses[0]);
+        engine.setStrip(
+          'master',
+          JSON.parse(insertScene('strips', 'master', [processor])).strips[0],
+        );
       };
       const resolveAll = (key: string) => [
-        engine.resolveTrackInsertAutomationId(10, 0, key),
+        engine.resolveStripInsertAutomationId(10, 0, key),
         engine.resolveBusInsertAutomationId(1, 0, key),
-        engine.resolveMasterInsertAutomationId(0, key),
+        engine.resolveStripInsertAutomationId('master', 0, key),
       ];
 
       setAll('utility.gain');
@@ -214,18 +235,18 @@ describe('insert automation ids (WASM)', () => {
   });
 
   it('refuses a strip change that would overflow the id table', () => {
-    const engine = new RealtimeEngine(48000, 64);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 64 });
     try {
       // 64 slots per rebuild against 8192 entries: rebuild 129 cannot fit.
       const gain = insertScene('strips', 'master', Array(64).fill('utility.gain'));
       const tilt = insertScene('strips', 'master', Array(64).fill('eq.tilt'));
       for (let round = 0; round < 128; round += 1) {
-        engine.setMasterStripJson(round % 2 === 0 ? gain : tilt);
+        engine.setStrip('master', JSON.parse(round % 2 === 0 ? gain : tilt).strips[0]);
       }
-      const before = engine.resolveMasterInsertAutomationId(0, 'tiltDb');
-      expect(() => engine.setMasterStripJson(gain)).toThrow();
+      const before = engine.resolveStripInsertAutomationId('master', 0, 'tiltDb');
+      expect(() => engine.setStrip('master', JSON.parse(gain).strips[0])).toThrow();
       expect(alive(engine, before)).toBe(true);
-      expect(() => engine.setMasterStripJson(tilt)).not.toThrow();
+      expect(() => engine.setStrip('master', JSON.parse(tilt).strips[0])).not.toThrow();
     } finally {
       engine.destroy();
     }
@@ -233,11 +254,11 @@ describe('insert automation ids (WASM)', () => {
 
   it('numbers ids identically on the mirror and the worklet engine, and drives the worklet', async () => {
     const posted: unknown[] = [];
-    const offline = new RealtimeEngine(48000, kBlock);
+    const offline = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: kBlock });
     const engine = await SonareEngine.create(fakeContext(), {
       mode: 'postMessage',
       offlineEngine: offline as unknown as OfflineEngineOption,
-      offlineChannelCount: 1,
+      offlineNumChannels: 1,
       nodeFactory: () =>
         readyWorkletNode({
           postMessage: (message: unknown) => posted.push(message),
@@ -272,16 +293,16 @@ describe('insert automation ids (WASM)', () => {
         for (const key of ['levelDb', 'thresholdDb']) {
           const pairs = [
             ...[7, 8].map((track) => [
-              outcome(() => offline.resolveTrackInsertAutomationId(track, slot, key)),
-              outcome(() => liveEngine.resolveTrackInsertAutomationId(track, slot, key)),
+              outcome(() => offline.resolveStripInsertAutomationId(track, slot, key)),
+              outcome(() => liveEngine.resolveStripInsertAutomationId(track, slot, key)),
             ]),
             ...[100, 200].map((bus) => [
               outcome(() => offline.resolveBusInsertAutomationId(bus, slot, key)),
               outcome(() => liveEngine.resolveBusInsertAutomationId(bus, slot, key)),
             ]),
             [
-              outcome(() => offline.resolveMasterInsertAutomationId(slot, key)),
-              outcome(() => liveEngine.resolveMasterInsertAutomationId(slot, key)),
+              outcome(() => offline.resolveStripInsertAutomationId('master', slot, key)),
+              outcome(() => liveEngine.resolveStripInsertAutomationId('master', slot, key)),
             ],
           ];
           for (const [mirror, worklet] of pairs) {
@@ -295,21 +316,28 @@ describe('insert automation ids (WASM)', () => {
       return resolved;
     };
     try {
-      engine.setMasterStripJson(insertScene('strips', 'master', ['utility.gain']));
-      engine.setTrackLanes([7]);
-      engine.setTrackStripJson(7, insertScene('strips', 'track-7', ['utility.gain']));
+      engine.setStrip(
+        'master',
+        JSON.parse(insertScene('strips', 'master', ['utility.gain'])).strips[0],
+      );
+      engine.setTrackLanes([{ trackId: 7 }]);
+      engine.setStrip(7, JSON.parse(insertScene('strips', 'track-7', ['utility.gain'])).strips[0]);
       flush();
       expect(expectSameIds()).toBe(2);
 
       engine.setTrackBuses([{ busId: 100 }, { busId: 200 }]);
-      engine.setBusStripJson(200, insertScene('buses', '200', ['dynamics.compressor']));
-      engine.setBusStripJson(100, insertScene('buses', '100', ['utility.gain']));
-      engine.setTrackLanes([7, 8]);
-      engine.setTrackStripJson(8, insertScene('strips', 'track-8', ['utility.gain']));
+      engine.setBusStrip(
+        200,
+        JSON.parse(insertScene('buses', '200', ['dynamics.compressor'])).buses[0],
+      );
+      engine.setBusStrip(100, JSON.parse(insertScene('buses', '100', ['utility.gain'])).buses[0]);
+      engine.setTrackLanes([{ trackId: 7 }, { trackId: 8 }]);
+      engine.setStrip(8, JSON.parse(insertScene('strips', 'track-8', ['utility.gain'])).strips[0]);
       // A processor-type change at slot 0 retires that id on both engines alike.
-      engine.setTrackStripJson(
+      engine.setStrip(
         7,
-        insertScene('strips', 'track-7', ['dynamics.compressor', 'utility.gain']),
+        JSON.parse(insertScene('strips', 'track-7', ['dynamics.compressor', 'utility.gain']))
+          .strips[0],
       );
       flush();
       expect(expectSameIds()).toBe(6);
@@ -321,12 +349,12 @@ describe('insert automation ids (WASM)', () => {
       flush();
       expect(expectSameIds()).toBe(5);
       engine.setTrackBuses([{ busId: 200 }, { busId: 100 }]);
-      engine.setBusStripJson(100, insertScene('buses', '100', ['utility.gain']));
+      engine.setBusStrip(100, JSON.parse(insertScene('buses', '100', ['utility.gain'])).buses[0]);
       flush();
       expect(expectSameIds()).toBe(6);
 
       // An id resolved on the mirror drives the same parameter on the worklet engine.
-      const gainId = offline.resolveTrackInsertAutomationId(7, 1, 'levelDb');
+      const gainId = offline.resolveStripInsertAutomationId(7, 1, 'levelDb');
       expect(gainId).toBeGreaterThan(0);
       const clips = [
         {
@@ -343,11 +371,11 @@ describe('insert automation ids (WASM)', () => {
       live.receiveCommand({
         type: SonareEngineCommandType.SetParam,
         targetId: gainId,
-        sampleTime: -1,
+        renderFrame: -1,
         argFloat: -12,
       });
       offline.play();
-      live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
+      live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
       let expected = 0;
       let actual = 0;
       for (let block = 0; block < 30; block += 1) {

@@ -13,7 +13,7 @@ export function mixingScenePresetNames(): string[] {
 /**
  * Get a built-in mixing scene preset serialized as JSON. This is the canonical
  * name shared with the Node and Python bindings; the returned JSON loads
- * directly into a {@link Mixer} via {@link Mixer.fromSceneJson}.
+ * directly into a {@link Mixer} via {@link Mixer.fromJson}.
  *
  * @param presetName - Preset name (see {@link mixingScenePresetNames})
  * @returns Scene JSON string

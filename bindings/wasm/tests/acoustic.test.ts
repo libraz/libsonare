@@ -20,20 +20,39 @@ beforeAll(async () => {
 
 describe('geometric room acoustics', () => {
   it('synthesizes a decaying RIR from geometry', () => {
-    const result = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15 });
+    const result = synthesizeRir({
+      sampleRate: 48000,
+      lengthM: 7,
+      widthM: 5,
+      heightM: 3,
+      absorption: 0.15,
+    });
     expect(result.sampleRate).toBe(48000);
     expect(result.rir.length).toBeGreaterThan(0);
     expect(Array.from(result.rir).some((s) => Math.abs(s) > 0)).toBe(true);
   });
 
   it('throws a RangeError for invalid geometry', () => {
-    const attempt = () => synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, sourceX: 99 });
+    const attempt = () =>
+      synthesizeRir({
+        sampleRate: 48000,
+        lengthM: 7,
+        widthM: 5,
+        heightM: 3,
+        source: { x: 99, y: 1, z: 1 },
+      });
     expect(attempt).toThrow(/acoustic\.source_outside_room/);
     expect(attempt).toThrow(RangeError);
   });
 
   it('round-trips a known shoebox within tolerance', () => {
-    const rir = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15 });
+    const rir = synthesizeRir({
+      sampleRate: 48000,
+      lengthM: 7,
+      widthM: 5,
+      heightM: 3,
+      absorption: 0.15,
+    });
     const est = estimateRoom(rir.rir, 48000, {
       aspectHintLw: 7 / 5,
       aspectHintLh: 7 / 3,
@@ -58,12 +77,12 @@ describe('geometric room acoustics', () => {
   });
 
   it('refuses an out-of-domain RIR field naming the key the caller wrote', () => {
-    const room = { lengthM: 7, widthM: 5, heightM: 3, maxSeconds: 0.2 };
+    const room = { lengthM: 7, widthM: 5, heightM: 3, maxSec: 0.2 };
     const impulse = new Float32Array(4000);
     impulse[0] = 1.0;
     for (const [key, value] of [
       ['ismOrder', -1],
-      ['maxSeconds', -1],
+      ['maxSec', -1],
       ['mixingTimeMs', -1],
       ['crossfadeMs', -5],
       ['lengthM', Number.NaN],
@@ -73,16 +92,18 @@ describe('geometric room acoustics', () => {
         name: 'RangeError',
         message: expect.stringContaining(key),
       });
-      expect(() => synthesizeRir({ ...room, [key]: value })).toThrow(refusal);
+      expect(() => synthesizeRir({ sampleRate: 48000, ...room, [key]: value })).toThrow(refusal);
       expect(() => roomMorph(impulse, 48000, { ...room, [key]: value })).toThrow(refusal);
     }
-    expect(() => synthesizeRir({ ...room, ismOrder: 'x' as never })).toThrow(TypeError);
+    expect(() => synthesizeRir({ sampleRate: 48000, ...room, ismOrder: 'x' as never })).toThrow(
+      TypeError,
+    );
   });
 
   it('refuses a seed that is not a uint32 instead of taking the default', () => {
     const samples = new Float32Array(4000);
     samples[0] = 1.0;
-    const opts = { lengthM: 12, widthM: 9, heightM: 5, maxSeconds: 0.2 };
+    const opts = { lengthM: 12, widthM: 9, heightM: 5, maxSec: 0.2 };
     expect(() => roomMorph(samples, 48000, { ...opts, seed: 'abc' as never })).toThrow(TypeError);
     for (const seed of [-1, 2 ** 32, 0.5]) {
       expect(() => roomMorph(samples, 48000, { ...opts, seed })).toThrow(RangeError);
@@ -103,7 +124,7 @@ describe('geometric room acoustics', () => {
       heightM: 5,
       absorption: 0.4,
       wet: 1.0,
-      maxSeconds: 0.3,
+      maxSec: 0.3,
     };
     // Well above the synthesizer's safe maximum rather than one past it: this
     // case is about the channel the warning travels on, not about where the
@@ -136,34 +157,50 @@ describe('geometric room acoustics', () => {
 
   it('rejects the same invalid room/material inputs the C ABI refuses', () => {
     // Over the 64-band material cap.
-    expect(() => synthesizeRir({ bandAbsorption: new Float32Array(65).fill(0.2) })).toThrow();
+    expect(() =>
+      synthesizeRir({ sampleRate: 48000, bandAbsorption: new Float32Array(65).fill(0.2) }),
+    ).toThrow();
     // Per-band absorption/scattering outside [0, 1] (or non-finite) are rejected,
     // matching the C-ABI oracle's `unit` predicate rather than being silently
     // clamped only on this surface.
-    expect(() => synthesizeRir({ bandAbsorption: new Float32Array([0.2, 1.5, 0.3]) })).toThrow();
-    expect(() => synthesizeRir({ bandAbsorption: new Float32Array([0.2, -0.2, 0.3]) })).toThrow();
     expect(() =>
-      synthesizeRir({ bandAbsorption: new Float32Array([0.1, Number.NaN, 0.3]) }),
+      synthesizeRir({ sampleRate: 48000, bandAbsorption: new Float32Array([0.2, 1.5, 0.3]) }),
+    ).toThrow();
+    expect(() =>
+      synthesizeRir({ sampleRate: 48000, bandAbsorption: new Float32Array([0.2, -0.2, 0.3]) }),
     ).toThrow();
     expect(() =>
       synthesizeRir({
+        sampleRate: 48000,
+        bandAbsorption: new Float32Array([0.1, Number.NaN, 0.3]),
+      }),
+    ).toThrow();
+    expect(() =>
+      synthesizeRir({
+        sampleRate: 48000,
         bandAbsorption: new Float32Array([0.2, 0.3]),
         bandScattering: new Float32Array([0, -0.5]),
       }),
     ).toThrow();
     // An in-range per-band table is accepted.
     expect(() =>
-      synthesizeRir({ bandAbsorption: new Float32Array([0.1, 0.3, 0.5]), maxSeconds: 0.1 }),
+      synthesizeRir({
+        sampleRate: 48000,
+        bandAbsorption: new Float32Array([0.1, 0.3, 0.5]),
+        maxSec: 0.1,
+      }),
     ).not.toThrow();
     // The scalar absorption path is still rejected out of [0, 1] (both surfaces).
-    expect(() => synthesizeRir({ absorption: 2 })).toThrow();
+    expect(() => synthesizeRir({ sampleRate: 48000, absorption: 2 })).toThrow();
     // Non-finite geometry and timing.
-    expect(() => synthesizeRir({ lengthM: Number.NaN })).toThrow();
-    expect(() => synthesizeRir({ sourceX: Number.POSITIVE_INFINITY })).toThrow();
-    expect(() => synthesizeRir({ maxSeconds: 100000 })).toThrow();
+    expect(() => synthesizeRir({ sampleRate: 48000, lengthM: Number.NaN })).toThrow();
+    expect(() =>
+      synthesizeRir({ sampleRate: 48000, source: { x: Number.POSITIVE_INFINITY, y: 1, z: 1 } }),
+    ).toThrow();
+    expect(() => synthesizeRir({ sampleRate: 48000, maxSec: 100000 })).toThrow();
     // An in-range absorption of exactly 1.0 is accepted (matches the C ABI's
     // [0, 1] bound, not the old 0.999 clamp).
-    expect(() => synthesizeRir({ absorption: 1, maxSeconds: 0.1 })).not.toThrow();
+    expect(() => synthesizeRir({ sampleRate: 48000, absorption: 1, maxSec: 0.1 })).not.toThrow();
   });
 
   it('rejects invalid estimation priors and room-morph configuration', () => {
@@ -179,7 +216,7 @@ describe('geometric room acoustics', () => {
         lengthM: 5,
         widthM: 4,
         heightM: 3,
-        sourceX: 99,
+        source: { x: 99, y: 1, z: 1 },
       }),
     ).toThrow();
     expect(() =>
@@ -190,7 +227,7 @@ describe('geometric room acoustics', () => {
         lengthM: 5,
         widthM: 4,
         heightM: 3,
-        maxSeconds: Number.POSITIVE_INFINITY,
+        maxSec: Number.POSITIVE_INFINITY,
       }),
     ).toThrow();
   });
@@ -205,33 +242,33 @@ describe('geometric room acoustics', () => {
   });
 
   it('honors the late-tail model selector', () => {
-    const base = { lengthM: 7, widthM: 5, heightM: 3, absorption: 0.4, maxSeconds: 0.3 };
-    const sabine = synthesizeRir({ ...base, preferEyring: false });
-    const eyring = synthesizeRir({ ...base, preferEyring: true });
+    const base = { lengthM: 7, widthM: 5, heightM: 3, absorption: 0.4, maxSec: 0.3 };
+    const sabine = synthesizeRir({ sampleRate: 48000, ...base, preferEyring: false });
+    const eyring = synthesizeRir({ sampleRate: 48000, ...base, preferEyring: true });
     expect(Array.from(sabine.rir)).not.toEqual(Array.from(eyring.rir));
   });
 
-  it('treats crossfadeMs 0 as the default acoustic crossfade', () => {
-    const base = { lengthM: 7, widthM: 5, heightM: 3, absorption: 0.2, seed: 123, maxSeconds: 0.3 };
-    const defaultRir = synthesizeRir(base);
-    const zeroRir = synthesizeRir({ ...base, crossfadeMs: 0 });
-    expect(Array.from(zeroRir.rir)).toEqual(Array.from(defaultRir.rir));
+  it('refuses crossfadeMs 0 and takes the default crossfade when it is omitted', () => {
+    const base = { lengthM: 7, widthM: 5, heightM: 3, absorption: 0.2, seed: 123, maxSec: 0.3 };
+    expect(() => synthesizeRir({ sampleRate: 48000, ...base, crossfadeMs: 0 })).toThrow(RangeError);
+    expect(synthesizeRir({ sampleRate: 48000, ...base }).rir.length).toBeGreaterThan(0);
 
     const samples = new Float32Array(4000);
     samples[0] = 1.0;
     const morphBase = { ...base, wet: 0.7 };
-    const defaultMorph = roomMorph(samples, 48000, morphBase);
-    const zeroMorph = roomMorph(samples, 48000, { ...morphBase, crossfadeMs: 0 });
-    expect(Array.from(zeroMorph.audio)).toEqual(Array.from(defaultMorph.audio));
+    expect(() => roomMorph(samples, 48000, { ...morphBase, crossfadeMs: 0 })).toThrow(RangeError);
+    expect(roomMorph(samples, 48000, morphBase).audio.length).toBeGreaterThan(samples.length);
   });
 
-  it('treats seed 0 as the library default (1) for cross-surface reproducibility', () => {
-    const base = { lengthM: 7, widthM: 5, heightM: 3, absorption: 0.2, maxSeconds: 0.3 };
-    const zero = synthesizeRir({ ...base, seed: 0 });
-    const one = synthesizeRir({ ...base, seed: 1 });
-    const two = synthesizeRir({ ...base, seed: 2 });
-    expect(Array.from(zero.rir)).toEqual(Array.from(one.rir));
-    expect(Array.from(zero.rir)).not.toEqual(Array.from(two.rir));
+  it('refuses an explicit seed 0 and takes the default seed when it is omitted', () => {
+    const base = { lengthM: 7, widthM: 5, heightM: 3, absorption: 0.2, maxSec: 0.3 };
+    const rirOf = (seed?: number): number[] =>
+      Array.from(
+        synthesizeRir({ sampleRate: 48000, ...base, ...(seed === undefined ? {} : { seed }) }).rir,
+      );
+    expect(() => rirOf(0)).toThrow(RangeError);
+    expect(rirOf()).toEqual(rirOf(1));
+    expect(rirOf()).not.toEqual(rirOf(2));
   });
 
   it('reaches the whole uint32 seed space the C ABI accepts', () => {
@@ -244,8 +281,9 @@ describe('geometric room acoustics', () => {
     // for a different reason: Int32Value wraps, so its high seeds fell back to
     // the default. Hence the distinctness and rejection assertions below rather
     // than only a comparison against the default.)
-    const base = { lengthM: 7, widthM: 5, heightM: 3, absorption: 0.2, maxSeconds: 0.3 };
-    const asArray = (seed: number): number[] => Array.from(synthesizeRir({ ...base, seed }).rir);
+    const base = { lengthM: 7, widthM: 5, heightM: 3, absorption: 0.2, maxSec: 0.3 };
+    const asArray = (seed: number): number[] =>
+      Array.from(synthesizeRir({ sampleRate: 48000, ...base, seed }).rir);
     const defaultRir = asArray(1);
     // Positive control: a seed inside the int32 range already varied the tail,
     // so "differs from the default" is not free.
@@ -261,21 +299,26 @@ describe('geometric room acoustics', () => {
 
     // Past the uint32 range there is no C-ABI seed to reach, so it is rejected
     // rather than silently answered with the default RIR.
-    expect(() => synthesizeRir({ ...base, seed: 2 ** 32 })).toThrow();
-    expect(() => synthesizeRir({ ...base, seed: 2 ** 40 })).toThrow();
+    expect(() => synthesizeRir({ sampleRate: 48000, ...base, seed: 2 ** 32 })).toThrow();
+    expect(() => synthesizeRir({ sampleRate: 48000, ...base, seed: 2 ** 40 })).toThrow();
   });
 
   it('refuses a fractional seed rather than truncating it onto a neighbour', () => {
     // The range check reaches 1.5 and passes it, so the cast decided the seed:
     // 1.5 and 1.9 both landed on seed 1 and reported success, which is the same
     // silent fold as the wrap above from the other end.
-    const base = { lengthM: 7, widthM: 5, heightM: 3, absorption: 0.2, maxSeconds: 0.3 };
-    const asArray = (seed: number): number[] => Array.from(synthesizeRir({ ...base, seed }).rir);
+    const base = { lengthM: 7, widthM: 5, heightM: 3, absorption: 0.2, maxSec: 0.3 };
+    const asArray = (seed: number): number[] =>
+      Array.from(synthesizeRir({ sampleRate: 48000, ...base, seed }).rir);
     // Non-vacuity: 1 and 2 must actually differ, or "1.5 is refused" would pass
     // for an entry point that ignores its seed entirely.
     expect(asArray(1)).not.toEqual(asArray(2));
-    expect(() => synthesizeRir({ ...base, seed: 1.5 })).toThrow(/seed must be an integer/);
-    expect(() => synthesizeRir({ ...base, seed: 1.9 })).toThrow(/seed must be an integer/);
+    expect(() => synthesizeRir({ sampleRate: 48000, ...base, seed: 1.5 })).toThrow(
+      /seed must be an integer/,
+    );
+    expect(() => synthesizeRir({ sampleRate: 48000, ...base, seed: 1.9 })).toThrow(
+      /seed must be an integer/,
+    );
     // The neighbours it used to truncate onto stay accepted.
     expect(asArray(1).length).toBeGreaterThan(0);
     expect(asArray(2).length).toBeGreaterThan(0);
@@ -287,30 +330,45 @@ describe('geometric room acoustics', () => {
       widthM: 5,
       heightM: 3,
       bandAbsorption: new Float32Array([0.2, 0.22, 0.24, 0.26]),
-      maxSeconds: 0.3,
+      maxSec: 0.3,
       seed: 123,
     };
-    const mirror = synthesizeRir({ ...base, bandScattering: new Float32Array([0, 0, 0, 0]) });
+    const mirror = synthesizeRir({
+      sampleRate: 48000,
+      ...base,
+      bandScattering: new Float32Array([0, 0, 0, 0]),
+    });
     const diffuse = synthesizeRir({
+      sampleRate: 48000,
       ...base,
       bandScattering: new Float32Array([0.8, 0.8, 0.8, 0.8]),
     });
     expect(Array.from(diffuse.rir)).not.toEqual(Array.from(mirror.rir));
   });
 
-  it('treats an explicit zero referenceAbsorption as the library default, matching the C ABI', () => {
-    const rir = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15 });
+  it('refuses an explicit zero referenceAbsorption and takes the default when omitted', () => {
+    const rir = synthesizeRir({
+      sampleRate: 48000,
+      lengthM: 7,
+      widthM: 5,
+      heightM: 3,
+      absorption: 0.15,
+    });
+    expect(() => estimateRoom(rir.rir, 48000, { referenceAbsorption: 0 })).toThrow(RangeError);
     const dflt = estimateRoom(rir.rir, 48000);
-    const zero = estimateRoom(rir.rir, 48000, { referenceAbsorption: 0 });
-    expect(zero.volume).toBe(dflt.volume);
-    expect(zero.lengthM).toBe(dflt.lengthM);
-    // Non-vacuity: the analyzer's 0.01 floor (what a raw 0 used to reach) is far smaller.
+    // Non-vacuity: the analyzer's 0.01 floor is far smaller than the default.
     const floored = estimateRoom(rir.rir, 48000, { referenceAbsorption: 0.01 });
     expect(floored.volume).toBeLessThan(dflt.volume / 1000);
   });
 
   it('emits absorption and rt60 bands at the same length', () => {
-    const rir = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15 });
+    const rir = synthesizeRir({
+      sampleRate: 48000,
+      lengthM: 7,
+      widthM: 5,
+      heightM: 3,
+      absorption: 0.15,
+    });
     const est = estimateRoom(rir.rir, 48000);
     expect(est.bandAbsorption.length).toBe(est.rt60Bands.length);
   });
@@ -319,25 +377,38 @@ describe('geometric room acoustics', () => {
   // C ABI, so Node passing says nothing about this surface. Until these two, the
   // only WASM assertion on the RIR result was the band-length invariant above.
   it('names the diagnostic that fired in the thrown error, and carries warnings on success', () => {
-    expect(() => synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, sourceX: 99 })).toThrow(
-      /acoustic\.source_outside_room/,
-    );
+    expect(() =>
+      synthesizeRir({
+        sampleRate: 48000,
+        lengthM: 7,
+        widthM: 5,
+        heightM: 3,
+        source: { x: 99, y: 1, z: 1 },
+      }),
+    ).toThrow(/acoustic\.source_outside_room/);
 
-    const clean = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15 });
+    const clean = synthesizeRir({
+      sampleRate: 48000,
+      lengthM: 7,
+      widthM: 5,
+      heightM: 3,
+      absorption: 0.15,
+    });
     expect(clean).not.toHaveProperty('hasError');
     expect(clean).not.toHaveProperty('errorMessage');
     expect(clean.diagnostics).toEqual([]);
   });
 
-  it('surfaces a maxSeconds tail clamp as a warning on a successful call', () => {
+  it('surfaces a maxSec tail clamp as a warning on a successful call', () => {
     // A clamped tail used to be indistinguishable from an untruncated RIR: the
     // convolution just sounded wrong, with nothing thrown.
     const clamped = synthesizeRir({
+      sampleRate: 48000,
       lengthM: 20,
       widthM: 15,
       heightM: 8,
       absorption: 0.03,
-      maxSeconds: 0.2,
+      maxSec: 0.2,
     });
     const warning = clamped.diagnostics.find((d) => d.code === 'acoustic.rir_length_clamped');
     expect(warning).toBeDefined();
@@ -347,13 +418,28 @@ describe('geometric room acoustics', () => {
   // Cross-surface parity fixes: these paths previously diverged from the C ABI.
   it('rejects a negative ISM order instead of clamping it to zero', () => {
     expect(() =>
-      synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15, ismOrder: -1 }),
+      synthesizeRir({
+        sampleRate: 48000,
+        lengthM: 7,
+        widthM: 5,
+        heightM: 3,
+        absorption: 0.15,
+        ismOrder: -1,
+      }),
     ).toThrow();
   });
 
-  it('treats an explicit zero aspect hint as the default, matching the C ABI', () => {
-    const rir = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15 });
-    const est = estimateRoom(rir.rir, 48000, { aspectHintLw: 0, aspectHintLh: 0 });
+  it('refuses an explicit zero aspect hint', () => {
+    const rir = synthesizeRir({
+      sampleRate: 48000,
+      lengthM: 7,
+      widthM: 5,
+      heightM: 3,
+      absorption: 0.15,
+    });
+    expect(() => estimateRoom(rir.rir, 48000, { aspectHintLw: 0 })).toThrow(RangeError);
+    expect(() => estimateRoom(rir.rir, 48000, { aspectHintLh: 0 })).toThrow(RangeError);
+    const est = estimateRoom(rir.rir, 48000);
     expect(est.rt60Bands.length).toBeGreaterThanOrEqual(4);
   });
   // The ISO 9613-1 atmospheric term reached only the streaming insert
@@ -365,14 +451,10 @@ describe('geometric room acoustics', () => {
     lengthM: 30,
     widthM: 24,
     heightM: 15,
-    sourceX: 3,
-    sourceY: 3,
-    sourceZ: 1.5,
-    listenerX: 10,
-    listenerY: 8,
-    listenerZ: 1.7,
+    source: { x: 3, y: 3, z: 1.5 },
+    listener: { x: 10, y: 8, z: 1.7 },
     absorption: 0.2,
-    maxSeconds: 0.5,
+    maxSec: 0.5,
     ismOrder: 2,
     seed: 3,
   };
@@ -387,8 +469,9 @@ describe('geometric room acoustics', () => {
   };
 
   it('routes air absorption into the synthesized tail', () => {
-    const off = synthesizeRir({ ...airHall, airAbsorptionEnabled: false });
+    const off = synthesizeRir({ sampleRate: 48000, ...airHall, airAbsorptionEnabled: false });
     const iso = synthesizeRir({
+      sampleRate: 48000,
       ...airHall,
       airAbsorptionEnabled: true,
       airTemperatureC: 20,
@@ -400,20 +483,28 @@ describe('geometric room acoustics', () => {
 
     // A zeroed/omitted climate resolves to the ISO reference, matching the
     // seed and crossfadeMs convention these options already follow.
-    const implicitIso = synthesizeRir({ ...airHall, airAbsorptionEnabled: true });
+    const implicitIso = synthesizeRir({
+      sampleRate: 48000,
+      ...airHall,
+      airAbsorptionEnabled: true,
+    });
     expect(Array.from(implicitIso.rir)).toEqual(Array.from(iso.rir));
 
     // Air absorption is on by default.
-    expect(Array.from(synthesizeRir(airHall).rir)).toEqual(Array.from(iso.rir));
+    expect(Array.from(synthesizeRir({ sampleRate: 48000, ...airHall }).rir)).toEqual(
+      Array.from(iso.rir),
+    );
 
     // Both climate values are read individually.
     const warm = synthesizeRir({
+      sampleRate: 48000,
       ...airHall,
       airAbsorptionEnabled: true,
       airTemperatureC: 35,
       airHumidityPercent: 50,
     });
     const humid = synthesizeRir({
+      sampleRate: 48000,
       ...airHall,
       airAbsorptionEnabled: true,
       airTemperatureC: 20,
@@ -425,6 +516,7 @@ describe('geometric room acoustics', () => {
 
     // The climate is ignored while the flag is off.
     const ignored = synthesizeRir({
+      sampleRate: 48000,
       ...airHall,
       airAbsorptionEnabled: false,
       airTemperatureC: 35,
@@ -436,8 +528,9 @@ describe('geometric room acoustics', () => {
   it('throws on an implausible air climate, naming the diagnostic', () => {
     expect(() =>
       synthesizeRir({
+        sampleRate: 48000,
         ...airHall,
-        maxSeconds: 0.2,
+        maxSec: 0.2,
         airAbsorptionEnabled: true,
         airTemperatureC: -500,
       }),
@@ -447,7 +540,7 @@ describe('geometric room acoustics', () => {
   it('routes air absorption into the room-morph target room', () => {
     const samples = new Float32Array(4000);
     samples[0] = 1.0;
-    const target = { ...airHall, maxSeconds: 0.3, wet: 1.0, sourceTailSuppression: 0.5 };
+    const target = { ...airHall, maxSec: 0.3, wet: 1.0, sourceTailSuppression: 0.5 };
     const off = roomMorph(samples, 48000, { ...target, airAbsorptionEnabled: false });
     const on = roomMorph(samples, 48000, {
       ...target,
@@ -469,7 +562,7 @@ describe('geometric room acoustics', () => {
 });
 
 describe('named selectors and estimate-to-geometry', () => {
-  const room = { maxSeconds: 0.1, sampleRate: 22050, ismOrder: 2 };
+  const room = { maxSec: 0.1, sampleRate: 22050, ismOrder: 2 };
   const presets = ['none', 'concrete', 'wood', 'curtain', 'carpet', 'glass'] as const;
 
   it('builds a different RIR for each preset name', () => {
@@ -480,8 +573,10 @@ describe('named selectors and estimate-to-geometry', () => {
   });
 
   it('refuses a number for a preset or mode, naming the valid set', () => {
-    expect(() => synthesizeRir({ materialPreset: 2 as never })).toThrow(TypeError);
-    expect(() => synthesizeRir({ materialPreset: 2 as never })).toThrow(
+    expect(() => synthesizeRir({ sampleRate: 48000, materialPreset: 2 as never })).toThrow(
+      TypeError,
+    );
+    expect(() => synthesizeRir({ sampleRate: 48000, materialPreset: 2 as never })).toThrow(
       /'none', 'concrete', 'wood', 'curtain', 'carpet', 'glass'/,
     );
     expect(() => roomMorph(new Float32Array(100), 48000, { materialPreset: 1 as never })).toThrow(
@@ -491,25 +586,33 @@ describe('named selectors and estimate-to-geometry', () => {
       TypeError,
     );
     expect(() => estimateRoom(new Float32Array(1000), 48000, { mode: 1 as never })).toThrow(
-      /'auto', 'blind', 'impulse_response'/,
+      /'auto', 'blind', 'impulseResponse'/,
     );
   });
 
   it('refuses an unknown preset or mode name, naming the valid set', () => {
-    expect(() => synthesizeRir({ materialPreset: 'marble' as never })).toThrow(RangeError);
-    expect(() => synthesizeRir({ materialPreset: 'marble' as never })).toThrow(
+    expect(() => synthesizeRir({ sampleRate: 48000, materialPreset: 'marble' as never })).toThrow(
+      RangeError,
+    );
+    expect(() => synthesizeRir({ sampleRate: 48000, materialPreset: 'marble' as never })).toThrow(
       /'none', 'concrete', 'wood', 'curtain', 'carpet', 'glass'/,
     );
     expect(() =>
       roomMorph(new Float32Array(100), 48000, { materialPreset: 'Concrete' as never }),
     ).toThrow(RangeError);
     expect(() => estimateRoom(new Float32Array(1000), 48000, { mode: 'blinds' as never })).toThrow(
-      /'auto', 'blind', 'impulse_response'/,
+      /'auto', 'blind', 'impulseResponse'/,
     );
   });
 
   it('feeds an estimate to synthesizeRir exactly as the hand-mapped call does', () => {
-    const rir = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15 });
+    const rir = synthesizeRir({
+      sampleRate: 48000,
+      lengthM: 7,
+      widthM: 5,
+      heightM: 3,
+      absorption: 0.15,
+    });
     const estimate = estimateRoom(rir.rir, 48000, {
       aspectHintLw: 7 / 5,
       aspectHintLh: 7 / 3,
@@ -517,43 +620,27 @@ describe('named selectors and estimate-to-geometry', () => {
     });
     const source = { x: 1, y: 1, z: 1.2 };
     const listener = { x: 3, y: 2, z: 1.7 };
-    const geometry = roomGeometryFromEstimate(estimate, { source, listener });
+    const geometry = roomGeometryFromEstimate({ estimate, source, listener });
     expect(Object.keys(geometry).sort()).toEqual(
-      [
-        'absorption',
-        'bandAbsorption',
-        'heightM',
-        'lengthM',
-        'listenerX',
-        'listenerY',
-        'listenerZ',
-        'sourceX',
-        'sourceY',
-        'sourceZ',
-        'widthM',
-      ].sort(),
+      ['absorption', 'bandAbsorption', 'heightM', 'lengthM', 'listener', 'source', 'widthM'].sort(),
     );
     expect(geometry.lengthM).toBeCloseTo(estimate.lengthM, 5);
-    const options = { maxSeconds: 0.1, ismOrder: 2 };
-    const mapped = synthesizeRir({ ...geometry, ...options });
+    const options = { maxSec: 0.1, ismOrder: 2 };
+    const mapped = synthesizeRir({ sampleRate: 48000, ...geometry, ...options });
     const byHand = synthesizeRir({
+      sampleRate: 48000,
       lengthM: estimate.lengthM,
       widthM: estimate.widthM,
       heightM: estimate.heightM,
       bandAbsorption: estimate.bandAbsorption,
-      sourceX: 1,
-      sourceY: 1,
-      sourceZ: 1.2,
-      listenerX: 3,
-      listenerY: 2,
-      listenerZ: 1.7,
+      source,
+      listener,
       ...options,
     });
     expect(Array.from(mapped.rir)).toEqual(Array.from(byHand.rir));
-    // The request form and the positional form agree; omitted positions stay omitted.
-    expect(roomGeometryFromEstimate({ estimate, source, listener })).toEqual(geometry);
-    const scaled = roomGeometryFromEstimate(estimate);
-    expect(Object.keys(scaled)).toContain('sourceX');
+    // Omitted positions are scaled into the estimated room.
+    const scaled = roomGeometryFromEstimate({ estimate });
+    expect(Object.keys(scaled)).toContain('source');
     expect(scaled.absorption).toBeGreaterThan(0);
   });
 
@@ -564,24 +651,25 @@ describe('named selectors and estimate-to-geometry', () => {
       heightM: 1.33,
       bandAbsorption: [0.2, 0.3, Number.NaN],
     };
-    const geometry = roomGeometryFromEstimate(estimate);
+    const geometry = roomGeometryFromEstimate({ estimate });
     expect(geometry.bandAbsorption).toBeUndefined();
     expect(geometry.absorption).toBeCloseTo(0.25, 6);
-    for (const key of [
-      'sourceX',
-      'sourceY',
-      'sourceZ',
-      'listenerX',
-      'listenerY',
-      'listenerZ',
-    ] as const) {
-      expect(geometry[key]).toBeGreaterThan(0);
-      expect(geometry[key]).toBeLessThan(1.33);
+    for (const placement of [geometry.source, geometry.listener]) {
+      for (const value of [placement?.x, placement?.y, placement?.z]) {
+        expect(value).toBeGreaterThan(0);
+        expect(value).toBeLessThan(1.33);
+      }
     }
-    expect(() => synthesizeRir({ ...geometry, maxSeconds: 0.1, ismOrder: 2 })).not.toThrow();
-    const full = roomGeometryFromEstimate({ lengthM: 7, widthM: 5, heightM: 3 });
-    expect([full.sourceX, full.sourceY, full.sourceZ]).toEqual([1, 1, expect.closeTo(1.2, 6)]);
-    expect([full.listenerX, full.listenerY]).toEqual([5, 4]);
+    expect(() =>
+      synthesizeRir({ sampleRate: 48000, ...geometry, maxSec: 0.1, ismOrder: 2 }),
+    ).not.toThrow();
+    const full = roomGeometryFromEstimate({ estimate: { lengthM: 7, widthM: 5, heightM: 3 } });
+    expect([full.source?.x, full.source?.y, full.source?.z]).toEqual([
+      1,
+      1,
+      expect.closeTo(1.2, 6),
+    ]);
+    expect([full.listener?.x, full.listener?.y]).toEqual([5, 4]);
     expect(full.absorption).toBeUndefined();
   });
 
@@ -589,15 +677,15 @@ describe('named selectors and estimate-to-geometry', () => {
     const silent = estimateRoom(new Float32Array(48000), 48000);
     expect(Number.isNaN(silent.lengthM)).toBe(true);
     // The library refuses the estimate's non-finite geometry as a refused argument.
-    expect(() => roomGeometryFromEstimate(silent)).toThrow(RangeError);
-    expect(() => roomGeometryFromEstimate(silent)).toThrow(
+    expect(() => roomGeometryFromEstimate({ estimate: silent })).toThrow(RangeError);
+    expect(() => roomGeometryFromEstimate({ estimate: silent })).toThrow(
       /^room estimate has no measurable dimensions/,
     );
   });
 });
 
 describe('roomMorphStereo', () => {
-  const room = { lengthM: 8, widthM: 6, heightM: 3, absorption: 0.2, wet: 1.0, maxSeconds: 0.3 };
+  const room = { lengthM: 8, widthM: 6, heightM: 3, absorption: 0.2, wet: 1.0, maxSec: 0.3 };
   const impulse = () => {
     const x = new Float32Array(2000);
     x[0] = 1.0;
@@ -656,12 +744,10 @@ describe('roomMorphStereo', () => {
         right: impulse(),
         sampleRate: 48000,
         ...room,
-        listenerX: 0.1,
-        listenerY: 3,
-        listenerZ: 1.5,
+        listener: { x: 0.1, y: 3, z: 1.5 },
       });
     expect(attempt).toThrow(RangeError);
-    // The core's receiver-pair check, not the facade's listenerX/Y/Z reader.
+    // The core's receiver-pair check, not the facade's listener reader.
     expect(attempt).toThrow(/receiver pair is invalid: acoustic\.receiver_outside_room/);
   });
 });

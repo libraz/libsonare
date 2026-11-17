@@ -45,13 +45,15 @@ describe('resolveTargetId reads both spellings through one rule', () => {
 
 describe('mixer lane ids are whole and positive', () => {
   it('keeps two distinct lanes distinct', () => {
-    expect(normalizeTrackLanes([], [1, 2]).ids).toEqual([1, 2]);
+    expect(normalizeTrackLanes([], [{ trackId: 1 }, { trackId: 2 }]).ids).toEqual([1, 2]);
   });
 
   it('refuses a fractional or non-positive lane id', () => {
-    expect(() => normalizeTrackLanes([], [1, 2.5])).toThrow(/Invalid track id for mixer lane/);
-    expect(() => normalizeTrackLanes([], [1, 0])).toThrow(RangeError);
-    expect(() => normalizeTrackLanes([], [1, -3])).toThrow(RangeError);
+    expect(() => normalizeTrackLanes([], [{ trackId: 1 }, { trackId: 2.5 }])).toThrow(
+      /Invalid track id for mixer lane/,
+    );
+    expect(() => normalizeTrackLanes([], [{ trackId: 1 }, { trackId: 0 }])).toThrow(RangeError);
+    expect(() => normalizeTrackLanes([], [{ trackId: 1 }, { trackId: -3 }])).toThrow(RangeError);
   });
 });
 

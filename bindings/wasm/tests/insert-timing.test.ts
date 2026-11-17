@@ -120,17 +120,17 @@ describe('insert timing takes the document an insert is built from (WASM)', () =
   });
 
   const sceneTiming = (processor: string, params: Record<string, unknown>) => {
-    const mixer = Mixer.fromSceneJson(
+    const mixer = Mixer.fromJson(
       JSON.stringify({
         version: 1,
         strips: [{ id: 'a', inserts: [{ slot: 'pre', processor, params }] }],
         buses: [{ id: 'master', role: 'master', inserts: [] }],
         connections: [{ source: 'a', destination: 'master' }],
       }),
-      48000,
+      { sampleRate: 48000 },
     );
     try {
-      return { latencySamples: mixer.latencySamples(), tailSamples: mixer.tailSamples() };
+      return { latencySamples: mixer.latencySamples, tailSamples: mixer.tailSamples };
     } finally {
       mixer.destroy();
     }

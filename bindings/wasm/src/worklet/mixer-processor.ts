@@ -111,9 +111,12 @@ export class SonareWorkletProcessor {
       : undefined;
     const spectrumBandCount = this.spectrumRing?.bands ?? Math.max(1, options.spectrumBands ?? 16);
     this.spectrumBands = new Float32Array(spectrumBandCount);
-    this.mixer = Mixer.fromSceneJson(options.sceneJson, this.sampleRate, this.blockSize);
+    this.mixer = Mixer.fromJson(options.sceneJson, {
+      sampleRate: this.sampleRate,
+      blockSize: this.blockSize,
+    });
     this.mixer.compile();
-    const sceneStripCount = this.mixer.stripCount();
+    const sceneStripCount = this.mixer.stripCount;
     const stripCount = options.stripCount ?? sceneStripCount;
     if (stripCount !== sceneStripCount) {
       throw new RangeError('stripCount must match the scene strip count.');
@@ -122,7 +125,10 @@ export class SonareWorkletProcessor {
     // The mixer meters the master it just produced, so the true-peak filter sees
     // every block without the worklet copying the output back in. 4x is the
     // BS.1770-4 Annex 2 minimum.
-    this.mixer.configureMeter(this.meterIntervalFrames > 0, 4);
+    this.mixer.configureMeter({
+      enabled: this.meterIntervalFrames > 0,
+      truePeakOversample: 4,
+    });
   }
 
   process(inputs: WorkletInput, outputs: WorkletOutput): boolean {
@@ -199,20 +205,18 @@ export class SonareWorkletProcessor {
       // the published snapshot are from before the gap, and carrying them
       // forward would report a peak the caller never asked to be measured.
       if (frames > 0 !== this.meterIntervalFrames > 0) {
-        this.mixer.configureMeter(frames > 0, 4);
+        this.mixer.configureMeter({ enabled: frames > 0, truePeakOversample: 4 });
       }
       this.meterIntervalFrames = frames;
       return;
     }
     if (message.type === 'scheduleInsertAutomation') {
-      this.mixer.scheduleInsertAutomation(
-        message.stripIndex,
-        message.insertIndex,
-        message.paramId,
-        message.samplePos ?? this.processedFrames,
-        message.value,
-        message.curve ?? 'linear',
-      );
+      this.mixer.scheduleInsertAutomation(message.stripIndex, message.insertIndex, {
+        paramId: message.paramId,
+        samplePos: message.samplePos ?? this.processedFrames,
+        value: message.value,
+        curve: message.curve ?? 'linear',
+      });
     }
   }
 

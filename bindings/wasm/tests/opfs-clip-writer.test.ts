@@ -219,7 +219,7 @@ describe('writeOpfsClip', () => {
       Float32Array.from({ length: 10 }, (_, i) => -i * 0.25),
     ];
     await writeOpfsClip('clips/rt.f32', channels, { worker: harness.asWorker() });
-    const engine = new RealtimeEngine(48000, 8);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     const supplied: Float32Array[][] = [];
     const binding = createOpfsClipPageProvider(engine, {
       path: 'clips/rt.f32',
@@ -248,7 +248,7 @@ describe('writeOpfsClip', () => {
   it('refuses a path an open page provider holds, and accepts it after close', async () => {
     const harness = new OpfsWorkerHarness();
     await writeOpfsClip('held.f32', [new Float32Array(8)], { worker: harness.asWorker() });
-    const engine = new RealtimeEngine(48000, 8);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     const binding = createOpfsClipPageProvider(engine, {
       path: '/held.f32',
       numChannels: 1,

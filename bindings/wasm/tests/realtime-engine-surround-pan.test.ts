@@ -17,7 +17,7 @@ const SOURCE_AMPLITUDE = 0.5;
 const [PLANE_L, _PLANE_R, PLANE_C, PLANE_LFE, PLANE_LS, PLANE_RS] = [0, 1, 2, 3, 4, 5];
 
 function makeEngine(): RealtimeEngine {
-  const engine = new RealtimeEngine(SR, BLOCK);
+  const engine = new RealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
   const frames = BLOCK * 64;
   engine.setClips([
     {
@@ -28,10 +28,10 @@ function makeEngine(): RealtimeEngine {
       lengthSamples: frames,
     },
   ]);
-  engine.setTrackLanes([TRACK]);
-  engine.setTrackStripJson(
+  engine.setTrackLanes([{ trackId: TRACK }]);
+  engine.setStrip(
     TRACK,
-    '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
+    JSON.parse('{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}').strips[0],
   );
   return engine;
 }
@@ -64,7 +64,7 @@ describe('RealtimeEngine.setTrackStripSurroundPan (WASM)', () => {
   it('places the lane in Ls, then glides it to Rs with constant-power bounds', () => {
     const engine = makeEngine();
     try {
-      engine.setTrackStripSurroundPan(TRACK, { azimuth: -110 });
+      engine.setStripSurroundPan(TRACK, { azimuth: -110 });
       engine.play();
       let out = renderBlock(engine);
       for (let i = 0; i < 3; i += 1) {
@@ -79,7 +79,7 @@ describe('RealtimeEngine.setTrackStripSurroundPan (WASM)', () => {
 
       // Move live. The placement glides with a ~5 ms time constant, so the
       // move spans a few blocks; check every frame's total power.
-      engine.setTrackStripSurroundPan(TRACK, { azimuth: 110 });
+      engine.setStripSurroundPan(TRACK, { azimuth: 110 });
       let minRatio = Number.POSITIVE_INFINITY;
       let maxRatio = 0;
       let crossfadeFrames = 0;
@@ -119,8 +119,8 @@ describe('RealtimeEngine.setTrackStripSurroundPan (WASM)', () => {
   it('defaults omitted fields and refuses bad input by name', () => {
     const engine = makeEngine();
     try {
-      expect(() => engine.setTrackStripSurroundPan(TRACK, {})).not.toThrow();
-      expect(() => engine.setTrackStripSurroundPan(TRACK, { distance: 0 })).not.toThrow();
+      expect(() => engine.setStripSurroundPan(TRACK, {})).not.toThrow();
+      expect(() => engine.setStripSurroundPan(TRACK, { distance: 0 })).not.toThrow();
 
       const refused = (fn: () => void): unknown => {
         try {
@@ -130,17 +130,15 @@ describe('RealtimeEngine.setTrackStripSurroundPan (WASM)', () => {
         }
         return undefined;
       };
-      const nan = refused(() => engine.setTrackStripSurroundPan(TRACK, { azimuth: Number.NaN }));
+      const nan = refused(() => engine.setStripSurroundPan(TRACK, { azimuth: Number.NaN }));
       expect(expectArgumentRefusal(nan).message).toMatch(/azimuth/);
-      expect(() =>
-        engine.setTrackStripSurroundPan(TRACK, { lfe: Number.POSITIVE_INFINITY }),
-      ).toThrow();
-      expect(() =>
-        engine.setTrackStripSurroundPan(TRACK, { lfe: '1' as unknown as number }),
-      ).toThrow(/lfe/);
-      expect(() => engine.setTrackStripSurroundPan(TRACK, null as never)).toThrow();
-      expect(() => engine.setTrackStripSurroundPan(999, { azimuth: 0 })).toThrow();
-      expect(() => engine.setTrackStripSurroundPan(Number.NaN, { azimuth: 0 })).toThrow();
+      expect(() => engine.setStripSurroundPan(TRACK, { lfe: Number.POSITIVE_INFINITY })).toThrow();
+      expect(() => engine.setStripSurroundPan(TRACK, { lfe: '1' as unknown as number })).toThrow(
+        /lfe/,
+      );
+      expect(() => engine.setStripSurroundPan(TRACK, null as never)).toThrow();
+      expect(() => engine.setStripSurroundPan(999, { azimuth: 0 })).toThrow();
+      expect(() => engine.setStripSurroundPan(Number.NaN, { azimuth: 0 })).toThrow();
     } finally {
       engine.destroy();
     }

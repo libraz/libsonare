@@ -27,7 +27,7 @@ describe('RealtimeEngine native render-frame default', () => {
   });
 
   it('play() with an omitted frame applies immediately', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     try {
       expect(() => nativeOf(engine).play()).not.toThrow();
       engine.process([new Float32Array(256)]);
@@ -38,7 +38,7 @@ describe('RealtimeEngine native render-frame default', () => {
   });
 
   it('stop() with an omitted frame applies immediately', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     try {
       nativeOf(engine).play();
       engine.process([new Float32Array(256)]);
@@ -51,7 +51,7 @@ describe('RealtimeEngine native render-frame default', () => {
   });
 
   it('seekSample() with an omitted frame applies immediately', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     try {
       expect(() => nativeOf(engine).seekSample(100)).not.toThrow();
       engine.process([new Float32Array(256)]);
@@ -62,7 +62,7 @@ describe('RealtimeEngine native render-frame default', () => {
   });
 
   it('refuses a negative frame instead of reading it as immediate', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     try {
       expect(() => nativeOf(engine).play(-1)).toThrow(RangeError);
       expect(() => nativeOf(engine).stop(-1)).toThrow(/renderFrame/);
@@ -75,7 +75,7 @@ describe('RealtimeEngine native render-frame default', () => {
   });
 
   it('pushMidiPanic() with an omitted frame does not throw', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     try {
       expect(() => nativeOf(engine).pushMidiPanic()).not.toThrow();
     } finally {
@@ -84,7 +84,7 @@ describe('RealtimeEngine native render-frame default', () => {
   });
 
   it('still refuses a non-integer or non-finite render frame', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     try {
       expect(() => nativeOf(engine).play(1.5)).toThrow(/renderFrame/);
       expect(() => nativeOf(engine).stop(Number.NaN)).toThrow(/renderFrame/);

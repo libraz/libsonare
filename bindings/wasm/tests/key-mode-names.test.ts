@@ -35,9 +35,10 @@ describe('key modes are reported by name', () => {
     expect(chordFunctions({ chords: [], key })).toEqual([]);
   });
 
-  it('the mode name and its ordinal select the same scale and labels', () => {
-    MODE_NAMES.forEach((name, ordinal) => {
-      expect(scaleMaskForMode(0, name as 'major')).toBe(scaleMaskForMode(0, ordinal as 0));
-    });
+  it('scaleMaskForMode refuses an ordinal', () => {
+    for (const name of MODE_NAMES) {
+      expect(scaleMaskForMode(0, name as 'major')).toBeGreaterThan(0);
+    }
+    expect(() => scaleMaskForMode(0, 0 as never)).toThrow(TypeError);
   });
 });

@@ -72,8 +72,8 @@ describe('remaining WASM mastering request objects', () => {
         masteringRepairDereverbClassical({ samples, sampleRate, nFft: 512 }),
       ],
       [
-        masteringRepairTrimSilence(samples, sampleRate, { threshold: 0.001 }),
-        masteringRepairTrimSilence({ samples, sampleRate, threshold: 0.001 }),
+        masteringRepairTrimSilence(samples, sampleRate, { thresholdDb: -60 }),
+        masteringRepairTrimSilence({ samples, sampleRate, thresholdDb: -60 }),
       ],
     ] as const;
     for (const [positional, request] of cases) {

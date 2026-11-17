@@ -94,13 +94,13 @@ function engineBounce(engine: RealtimeEngine): Float32Array {
   engine.stop();
   engine.seekSample(0);
   processBlock(engine);
-  expect(engine.getTransportState().playing).toBe(false);
+  expect(engine.transportState().playing).toBe(false);
   return result.interleaved;
 }
 
 /** Binds a fresh instrument so voice state from an earlier render cannot leak in. */
 function compileAndApply(engine: RealtimeEngine, project: Project): ProjectTimeline {
-  engine.setBuiltinInstrument({ ...SYNTH }, DESTINATION);
+  engine.setBuiltinInstrument(DESTINATION, { ...SYNTH });
   const { timeline, hasTimeline } = project.compileTimeline();
   expect(hasTimeline).toBe(true);
   expect(timeline).not.toBeNull();
@@ -118,7 +118,7 @@ describe('Project timeline applied to a RealtimeEngine', () => {
 
   it('renders bit-identically to the project bounce across edits', () => {
     const { project, audioClip } = buildProject();
-    const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE);
+    const engine = new RealtimeEngine({ sampleRate: SAMPLE_RATE, maxBlockSize: BLOCK_SIZE });
     try {
       const requireMatch = (): Float32Array => {
         compileAndApply(engine, project).destroy();
@@ -140,7 +140,7 @@ describe('Project timeline applied to a RealtimeEngine', () => {
 
   it('keeps rendering after the timeline handle is disposed right after apply', () => {
     const { project } = buildProject();
-    const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE);
+    const engine = new RealtimeEngine({ sampleRate: SAMPLE_RATE, maxBlockSize: BLOCK_SIZE });
     try {
       const timeline = compileAndApply(engine, project);
       timeline.destroy();
@@ -157,18 +157,18 @@ describe('Project timeline applied to a RealtimeEngine', () => {
 
   it('refuses to apply while the transport is playing and leaves the engine unchanged', () => {
     const { project } = buildProject();
-    const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE);
+    const engine = new RealtimeEngine({ sampleRate: SAMPLE_RATE, maxBlockSize: BLOCK_SIZE });
     try {
       const { timeline } = project.compileTimeline();
       expect(timeline).not.toBeNull();
       engine.play();
       processBlock(engine);
-      expect(engine.getTransportState().playing).toBe(true);
-      const before = engine.clipCount();
+      expect(engine.transportState().playing).toBe(true);
+      const before = engine.clipCount;
       expect(() => engine.applyProjectTimeline(timeline as ProjectTimeline)).toThrow(
         /transport is stopped/,
       );
-      expect(engine.clipCount()).toBe(before);
+      expect(engine.clipCount).toBe(before);
       (timeline as ProjectTimeline).destroy();
     } finally {
       engine.destroy();
@@ -190,7 +190,7 @@ describe('Project timeline applied to a RealtimeEngine', () => {
   });
 
   it('rejects anything but a live ProjectTimeline', () => {
-    const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE);
+    const engine = new RealtimeEngine({ sampleRate: SAMPLE_RATE, maxBlockSize: BLOCK_SIZE });
     try {
       expect(() => engine.applyProjectTimeline(null as never)).toThrow(TypeError);
       expect(() => engine.applyProjectTimeline({} as never)).toThrow(TypeError);
@@ -201,7 +201,7 @@ describe('Project timeline applied to a RealtimeEngine', () => {
 
   it('tells a released timeline id from one never issued at the native layer', () => {
     const { project } = buildProject();
-    const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE);
+    const engine = new RealtimeEngine({ sampleRate: SAMPLE_RATE, maxBlockSize: BLOCK_SIZE });
     try {
       const { timeline } = project.compileTimeline();
       expect(timeline).not.toBeNull();
@@ -223,7 +223,7 @@ describe('Project timeline applied to a RealtimeEngine', () => {
     const { project: current } = buildProject();
     const { project: forgedSource } = buildProject();
     forgedSource.addMidiClip(0, 1);
-    const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE);
+    const engine = new RealtimeEngine({ sampleRate: SAMPLE_RATE, maxBlockSize: BLOCK_SIZE });
     let currentTimeline: ProjectTimeline | null = null;
     let forgedTimeline: ProjectTimeline | null = null;
     try {
@@ -232,13 +232,13 @@ describe('Project timeline applied to a RealtimeEngine', () => {
       forgedTimeline = compiled.timeline;
       expect(forgedTimeline).not.toBeNull();
       const nativeId = (forgedTimeline as unknown as { nativeId: number }).nativeId;
-      const before = engine.clipCount();
+      const before = engine.clipCount;
       const copied = { nativeId } as unknown as ProjectTimeline;
       const inherited = Object.create({ nativeId }) as ProjectTimeline;
 
       expect(() => engine.applyProjectTimeline(copied)).toThrow(TypeError);
       expect(() => engine.applyProjectTimeline(inherited)).toThrow(TypeError);
-      expect(engine.clipCount()).toBe(before);
+      expect(engine.clipCount).toBe(before);
     } finally {
       forgedTimeline?.destroy();
       currentTimeline?.destroy();
@@ -255,19 +255,19 @@ describe('RealtimeEngine lane sidechain refusals', () => {
   });
 
   it('refuses a self key and a cycle, and keeps the existing bindings', () => {
-    const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE);
+    const engine = new RealtimeEngine({ sampleRate: SAMPLE_RATE, maxBlockSize: BLOCK_SIZE });
     try {
-      engine.setTrackLanes([1, 2]);
-      engine.setTrackStripJson(1, duckerStripJson(1));
-      engine.setTrackStripJson(2, duckerStripJson(2));
-      expect(() => engine.setLaneSidechain(1, 0, 1)).toThrow();
-      engine.setLaneSidechain(1, 0, 2);
+      engine.setTrackLanes([{ trackId: 1 }, { trackId: 2 }]);
+      engine.setStrip(1, JSON.parse(duckerStripJson(1)).strips[0]);
+      engine.setStrip(2, JSON.parse(duckerStripJson(2)).strips[0]);
+      expect(() => engine.setStripSidechain(1, 0, { kind: 'track', id: 1 })).toThrow();
+      engine.setStripSidechain(1, 0, { kind: 'track', id: 2 });
       // 2 keyed by 1 would close a cycle with the binding above.
-      expect(() => engine.setLaneSidechain(2, 0, 1)).toThrow();
+      expect(() => engine.setStripSidechain(2, 0, { kind: 'track', id: 1 })).toThrow();
       // The refusal left 1 <- 2 in place: removing it is what makes the reverse legal.
-      engine.setLaneSidechain(1, 0, 0);
-      engine.setLaneSidechain(2, 0, 1);
-      expect(() => engine.setLaneSidechain(1, 0, 2)).toThrow();
+      engine.setStripSidechain(1, 0, null);
+      engine.setStripSidechain(2, 0, { kind: 'track', id: 1 });
+      expect(() => engine.setStripSidechain(1, 0, { kind: 'track', id: 2 })).toThrow();
     } finally {
       engine.destroy();
     }

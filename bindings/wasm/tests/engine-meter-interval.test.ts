@@ -25,7 +25,7 @@ function readyNode(): AudioWorkletNode {
 
 function emptyOfflineEngine(): RealtimeEngine {
   return {
-    parameterCount: () => 0,
+    parameters: () => [],
     destroy: () => undefined,
   } as unknown as RealtimeEngine;
 }

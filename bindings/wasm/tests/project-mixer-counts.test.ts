@@ -258,10 +258,13 @@ describe('Mixer tail draining (WASM)', () => {
   });
 
   it('reports tailSamples as a number', () => {
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 512);
+    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      sampleRate: 48000,
+      blockSize: 512,
+    });
     try {
       mixer.compile();
-      const tail = mixer.tailSamples();
+      const tail = mixer.tailSamples;
       expect(typeof tail).toBe('number');
       expect(tail).toBeGreaterThanOrEqual(0);
     } finally {
@@ -270,10 +273,13 @@ describe('Mixer tail draining (WASM)', () => {
   });
 
   it('reports latencySamples as a number', () => {
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 512);
+    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      sampleRate: 48000,
+      blockSize: 512,
+    });
     try {
       mixer.compile();
-      const latency = mixer.latencySamples();
+      const latency = mixer.latencySamples;
       expect(typeof latency).toBe('number');
       expect(latency).toBeGreaterThanOrEqual(0);
     } finally {
@@ -282,7 +288,10 @@ describe('Mixer tail draining (WASM)', () => {
   });
 
   it('drainTailStereo returns stereo buffers of the requested length', () => {
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 512);
+    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      sampleRate: 48000,
+      blockSize: 512,
+    });
     try {
       mixer.compile();
       const result = mixer.drainTailStereo(256);

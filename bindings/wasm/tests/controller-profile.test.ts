@@ -20,7 +20,7 @@ import { setSonareModule } from '../src/module_state.js';
 const REED_PRESET = 'clarinet';
 
 function withEngine<T>(body: (engine: RealtimeEngine) => T): T {
-  const engine = new RealtimeEngine(48000, 128);
+  const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
   try {
     return body(engine);
   } finally {
@@ -36,7 +36,7 @@ function withEngine<T>(body: (engine: RealtimeEngine) => T): T {
  */
 function renderCcRamp(bindCc2ToExcitation: boolean): Float32Array {
   return withEngine((engine) => {
-    engine.setSynthInstrument(REED_PRESET, 0);
+    engine.setSynthInstrument(0, REED_PRESET);
     engine.clearControllerBindings(0);
     if (bindCc2ToExcitation) {
       engine.bindController(0, { input: 'control-change', index: 2, axis: 'excitation' });
@@ -80,7 +80,7 @@ describe('Sonare WASM controller profile', () => {
 
   it('installs a named preset and refuses an unknown one', () => {
     withEngine((engine) => {
-      engine.setSynthInstrument(REED_PRESET, 0);
+      engine.setSynthInstrument(0, REED_PRESET);
       engine.setControllerProfile(0, 'breath');
       expect(engine.controllerBindingCount(0)).toBeGreaterThan(0);
       expect(engine.controllerVelocityMeaningful(0)).toBe(false);
@@ -93,7 +93,7 @@ describe('Sonare WASM controller profile', () => {
 
   it('counts a bind and drops everything on clear', () => {
     withEngine((engine) => {
-      engine.setSynthInstrument(REED_PRESET, 0);
+      engine.setSynthInstrument(0, REED_PRESET);
       engine.clearControllerBindings(0);
       expect(engine.controllerBindingCount(0)).toBe(0);
       engine.bindController(0, { input: 'control-change', index: 2, axis: 'excitation' });
@@ -107,7 +107,7 @@ describe('Sonare WASM controller profile', () => {
 
   it('round-trips the velocity-meaningful flag', () => {
     withEngine((engine) => {
-      engine.setSynthInstrument(REED_PRESET, 0);
+      engine.setSynthInstrument(0, REED_PRESET);
       engine.setControllerVelocityMeaningful(0, false);
       expect(engine.controllerVelocityMeaningful(0)).toBe(false);
       engine.setControllerVelocityMeaningful(0, true);
@@ -117,7 +117,7 @@ describe('Sonare WASM controller profile', () => {
 
   it('round-trips a note-tracking rule per dimension', () => {
     withEngine((engine) => {
-      engine.setSynthInstrument(REED_PRESET, 0);
+      engine.setSynthInstrument(0, REED_PRESET);
       // Per dimension, so setting one leaves the other two on their default.
       engine.setControllerNoteTracking(0, 'pressure', 'highest');
       expect(engine.controllerNoteTracking(0, 'pressure')).toBe('highest');
@@ -137,7 +137,7 @@ describe('Sonare WASM controller profile', () => {
 
   it('refuses a binding rather than clamping or substituting it', () => {
     withEngine((engine) => {
-      engine.setSynthInstrument(REED_PRESET, 0);
+      engine.setSynthInstrument(0, REED_PRESET);
       const base = { input: 'control-change', index: 2, axis: 'excitation' } as const;
       expect(() =>
         // @ts-expect-error unknown axis name is rejected at runtime
@@ -162,9 +162,10 @@ describe('Sonare WASM controller profile', () => {
       // domain has to be refused on this side: 256 is CC 0 and input 0 once
       // narrowed, and 257 is a valid axis. embind does not narrow for us.
       expect(() => engine.bindController(0, { ...base, index: 256 })).toThrow(/out of range/);
-      expect(() => engine.bindController(0, { ...base, input: 256 })).toThrow(/out of range/);
-      expect(() => engine.bindController(0, { ...base, axis: 257 })).toThrow(/out of range/);
-      // input and axis have no default: ordinal 0 is a working value on both.
+      // input and axis are string tokens: an ordinal is a TypeError whatever its value.
+      expect(() => engine.bindController(0, { ...base, input: 256 as never })).toThrow(TypeError);
+      expect(() => engine.bindController(0, { ...base, axis: 257 as never })).toThrow(TypeError);
+      // input and axis have no default.
       // @ts-expect-error input is required
       expect(() => engine.bindController(0, { axis: 'excitation' })).toThrow();
       // @ts-expect-error axis is required
@@ -176,8 +177,8 @@ describe('Sonare WASM controller profile', () => {
     // Only NativeSynth answers a controller profile; the base MidiInstrument
     // returns none, so these two report it rather than succeeding quietly.
     for (const bind of [
-      (engine: RealtimeEngine) => engine.setBuiltinInstrument({}, 0),
-      (engine: RealtimeEngine) => engine.setSf2Instrument({}, 0),
+      (engine: RealtimeEngine) => engine.setBuiltinInstrument(0, {}),
+      (engine: RealtimeEngine) => engine.setSf2Instrument(0, {}),
     ]) {
       withEngine((engine) => {
         bind(engine);
@@ -195,7 +196,7 @@ describe('Sonare WASM controller profile', () => {
 
   it('names the cause of every refusal', () => {
     withEngine((engine) => {
-      engine.setSynthInstrument(REED_PRESET, 0);
+      engine.setSynthInstrument(0, REED_PRESET);
       const message = (fn: () => void): string => {
         try {
           fn();

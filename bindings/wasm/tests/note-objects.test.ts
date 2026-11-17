@@ -267,7 +267,7 @@ type RawNoteModule = Omit<
     frameRate: number,
     medianHz: number,
     vibratoCutoffHz: number,
-  ) => Omit<PitchSplit, 'centerHz'> & { centreHz: number };
+  ) => PitchSplit;
 };
 
 /** A renderable note carrying nothing but its span, its frames and its centre. */
@@ -927,10 +927,10 @@ describe('note input validation', () => {
 
   it('validates every scalar edit field on selected and pass-through rows', () => {
     const fields = [
-      'pitchShiftSemitones',
+      'pitchSemitones',
       'gainDb',
       'timeStretchRatio',
-      'formantShiftSemitones',
+      'formantSemitones',
       'vibratoDepthChange',
       'driftChange',
     ] as const;
@@ -977,10 +977,10 @@ describe('note input validation', () => {
     );
 
     const fields = [
-      'pitchShiftSemitones',
+      'pitchSemitones',
       'gainDb',
       'timeStretchRatio',
-      'formantShiftSemitones',
+      'formantSemitones',
       'vibratoDepthChange',
       'driftChange',
     ] as const;
@@ -1108,13 +1108,11 @@ describe('renderNotes amplitude envelope', () => {
 describe('renderNotes formant shift', () => {
   const source = vowelTone(200, 1200, 0.1, 6400);
 
-  const renderedWith = (formantShiftSemitones: number, gainDb: number): Float32Array =>
+  const renderedWith = (formantSemitones: number, gainDb: number): Float32Array =>
     renderNotes({
       samples: source,
       sampleRate: fixtureRate,
-      notes: [
-        { ...handNote(0, 6400, 200), edit: { formantSemitones: formantShiftSemitones, gainDb } },
-      ],
+      notes: [{ ...handNote(0, 6400, 200), edit: { formantSemitones: formantSemitones, gainDb } }],
     });
 
   it('runs no warp at all at 0, so the edit is still the identity', () => {
@@ -1278,7 +1276,7 @@ describe('renderNotes pitch curve edits', () => {
     // source, so the equality above is the identity rather than an edit nobody
     // read.
     for (const edit of [
-      { formantShiftSemitones: 2 },
+      { formantSemitones: 2 },
       { vibratoDepthChange: -1 },
       { driftChange: 1 },
       { amplitudeEnvelope: new Float32Array([0.25, 1]) },
@@ -1655,10 +1653,7 @@ describe('raw note pitch entry points', () => {
 
     const maskedSplit = module.decomposeNotePitch(track, voiced, fixtureFrameRate, 220, 3);
     const baselineSplit = module.decomposeNotePitch(zeroed, undefined, fixtureFrameRate, 220, 3);
-    expectPitchSplitClose(
-      { ...maskedSplit, centerHz: maskedSplit.centreHz },
-      { ...baselineSplit, centerHz: baselineSplit.centreHz },
-    );
+    expectPitchSplitClose(maskedSplit, baselineSplit);
   });
 
   it('enforces voiced shape requirements through raw calls', () => {
@@ -2113,7 +2108,7 @@ describe('mergeNotes', () => {
   it("takes the first note's edit", () => {
     const source = gappedSource();
     const before = extractNotes(source);
-    const edits = [{ gainDb: -3, pitchShiftSemitones: 2 }, { gainDb: 9, muted: true }, undefined];
+    const edits = [{ gainDb: -3, pitchSemitones: 2 }, { gainDb: 9, muted: true }, undefined];
     const edited = before.map((note, index) =>
       edits[index] ? { ...note, edit: edits[index] } : note,
     );
@@ -2255,8 +2250,13 @@ describe('the documented pitchPyin to extractNotes pipeline', () => {
 
     // The notes go back where they came from: the whole point of extracting
     // them is to edit and render them.
-    notes[0].edit.pitchSemitones = 1;
-    expect(renderNotes({ samples: gappedTone, sampleRate, notes })).toHaveLength(pipelineLength);
+    const edited = [
+      { ...notes[0], edit: { ...notes[0].edit, pitchSemitones: 1 } },
+      ...notes.slice(1),
+    ];
+    expect(renderNotes({ samples: gappedTone, sampleRate, notes: edited })).toHaveLength(
+      pipelineLength,
+    );
   });
 });
 

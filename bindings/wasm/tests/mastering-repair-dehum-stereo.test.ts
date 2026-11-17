@@ -70,38 +70,38 @@ describe('masteringRepairDehumStereo (WASM)', () => {
     const { left, right } = buildHumChannels();
     const result = masteringRepairDehumStereo({ left, right, sampleRate: SR });
 
-    expect(result.left).toBeInstanceOf(Float32Array);
-    expect(result.right).toBeInstanceOf(Float32Array);
-    expect(result.left.length).toBe(left.length);
-    expect(result.right.length).toBe(right.length);
+    expect(result.channels[0]).toBeInstanceOf(Float32Array);
+    expect(result.channels[1]).toBeInstanceOf(Float32Array);
+    expect(result.channels[0].length).toBe(left.length);
+    expect(result.channels[1].length).toBe(right.length);
     // Different hum frequencies and distinct high tones per channel: an
     // implementation that dehummed one channel and returned it for both
     // would make these equal.
-    expect(result.left).not.toEqual(result.right);
+    expect(result.channels[0]).not.toEqual(result.channels[1]);
     // The notch cascade only touches narrow bands around the hum harmonics;
     // the distinguishing high tone survives, so the repaired channel is not
     // simply zeroed out.
-    expect(Array.from(result.left).some((v) => v !== 0)).toBe(true);
-    expect(Array.from(result.right).some((v) => v !== 0)).toBe(true);
+    expect(Array.from(result.channels[0]).some((v) => v !== 0)).toBe(true);
+    expect(Array.from(result.channels[1]).some((v) => v !== 0)).toBe(true);
 
     // detect_hum always runs the estimation path on the channel's own raw
     // input, whatever `adaptive` says, so this holds in both configurations.
-    expect(result.leftReport.detected.fundamentalHz).toBeCloseTo(LEFT_FUNDAMENTAL_HZ, 3);
-    expect(result.rightReport.detected.fundamentalHz).toBeCloseTo(RIGHT_FUNDAMENTAL_HZ, 3);
-    expect(result.leftReport.detected.harmonics).toBeGreaterThanOrEqual(2);
-    expect(result.rightReport.detected.harmonics).toBeGreaterThanOrEqual(2);
+    expect(result.reports[0].detected.fundamentalHz).toBeCloseTo(LEFT_FUNDAMENTAL_HZ, 3);
+    expect(result.reports[1].detected.fundamentalHz).toBeCloseTo(RIGHT_FUNDAMENTAL_HZ, 3);
+    expect(result.reports[0].detected.harmonics).toBeGreaterThanOrEqual(2);
+    expect(result.reports[1].detected.harmonics).toBeGreaterThanOrEqual(2);
 
     // Fixed mode notches every configured harmonic (default 4) below Nyquist,
     // using the configured fundamental verbatim -- not the detected one.
-    expect(result.leftReport.notchedHarmonics).toBe(4);
-    expect(result.rightReport.notchedHarmonics).toBe(4);
-    expect(result.leftReport.appliedFundamentalHz).toBe(50);
-    expect(result.rightReport.appliedFundamentalHz).toBe(50);
+    expect(result.reports[0].notchedHarmonics).toBe(4);
+    expect(result.reports[1].notchedHarmonics).toBe(4);
+    expect(result.reports[0].appliedFundamentalHz).toBe(50);
+    expect(result.reports[1].appliedFundamentalHz).toBe(50);
     // The measurement, not an unset field: no tracking ran.
-    expect(result.leftReport.fundamentalDriftHz).toBe(0);
-    expect(result.rightReport.fundamentalDriftHz).toBe(0);
+    expect(result.reports[0].fundamentalDriftHz).toBe(0);
+    expect(result.reports[1].fundamentalDriftHz).toBe(0);
 
-    for (const report of [result.leftReport, result.rightReport]) {
+    for (const report of [result.reports[0], result.reports[1]]) {
       expect(report.detected.harmonicDbfs).toBeInstanceOf(Float32Array);
       expect(report.detected.harmonicDbfs.length).toBe(16);
       expect(Array.from(report.detected.harmonicDbfs).every((v) => Number.isFinite(v))).toBe(true);
@@ -116,61 +116,69 @@ describe('masteringRepairDehumStereo (WASM)', () => {
     const { left, right } = buildHumChannels();
     const result = masteringRepairDehumStereo({ left, right, sampleRate: SR, adaptive: true });
 
-    expect(result.left.length).toBe(left.length);
-    expect(result.right.length).toBe(right.length);
-    expect(result.left).not.toEqual(result.right);
+    expect(result.channels[0].length).toBe(left.length);
+    expect(result.channels[1].length).toBe(right.length);
+    expect(result.channels[0]).not.toEqual(result.channels[1]);
 
     // Pinned before the equality below, because two reports agreeing on a
     // frequency the tracker never left satisfies it while witnessing nothing.
     // Measured here: 50.71 against the configured 50.
     const fixedResult = masteringRepairDehumStereo({ left, right, sampleRate: SR });
-    expect(result.leftReport.appliedFundamentalHz).not.toBe(
-      fixedResult.leftReport.appliedFundamentalHz,
+    expect(result.reports[0].appliedFundamentalHz).not.toBe(
+      fixedResult.reports[0].appliedFundamentalHz,
     );
 
     // Mains hum is one physical source: the tracker reads the channel mean
     // and both cascades follow the one frequency it finds, so these agree
     // exactly by construction.
-    expect(result.leftReport.appliedFundamentalHz).toBe(result.rightReport.appliedFundamentalHz);
-    expect(result.leftReport.fundamentalDriftHz).toBe(result.rightReport.fundamentalDriftHz);
+    expect(result.reports[0].appliedFundamentalHz).toBe(result.reports[1].appliedFundamentalHz);
+    expect(result.reports[0].fundamentalDriftHz).toBe(result.reports[1].fundamentalDriftHz);
 
     // The drift cannot exceed the search range the tracker is allowed to roam,
     // and at the default range this fixture drives it to the boundary exactly,
     // so a bound on it here is a statement about the range rather than about
     // the signal. It becomes an independent measurement only past a range of
     // about 4 Hz, where the tracker stops hitting its rails.
-    expect(result.leftReport.fundamentalDriftHz).toBeLessThanOrEqual(2);
+    expect(result.reports[0].fundamentalDriftHz).toBeLessThanOrEqual(2);
 
     // Each report's detection still measures that channel's own input, so
     // the two channels' own hum frequencies remain visibly different even
     // though the applied frequency was shared.
-    expect(result.leftReport.detected.fundamentalHz).not.toBe(
-      result.rightReport.detected.fundamentalHz,
+    expect(result.reports[0].detected.fundamentalHz).not.toBe(
+      result.reports[1].detected.fundamentalHz,
     );
-    expect(result.leftReport.detected.fundamentalHz).toBeCloseTo(LEFT_FUNDAMENTAL_HZ, 3);
-    expect(result.rightReport.detected.fundamentalHz).toBeCloseTo(RIGHT_FUNDAMENTAL_HZ, 3);
+    expect(result.reports[0].detected.fundamentalHz).toBeCloseTo(LEFT_FUNDAMENTAL_HZ, 3);
+    expect(result.reports[1].detected.fundamentalHz).toBeCloseTo(RIGHT_FUNDAMENTAL_HZ, 3);
 
-    for (const report of [result.leftReport, result.rightReport]) {
+    for (const report of [result.reports[0], result.reports[1]]) {
       expect(report.detected.harmonicDbfs.length).toBe(16);
     }
   });
 
-  it('accepts the positional call form identically to the request form', () => {
+  it('is request-only and refuses the positional call form', () => {
     const { left, right } = buildHumChannels();
-    const positional = masteringRepairDehumStereo(left, right, SR);
-    const request = masteringRepairDehumStereo({ left, right, sampleRate: SR });
-    expect(positional.left).toEqual(request.left);
-    expect(positional.right).toEqual(request.right);
+    const positional = masteringRepairDehumStereo as unknown as (...args: unknown[]) => unknown;
+    expect(() => positional(left, right, SR)).toThrow(TypeError);
   });
 
   it('rejects mismatched channel lengths', () => {
     const { left, right } = buildHumChannels();
-    expect(() => masteringRepairDehumStereo(left, right.slice(0, right.length - 1), SR)).toThrow();
+    expect(() =>
+      masteringRepairDehumStereo({
+        left: left,
+        right: right.slice(0, right.length - 1),
+        sampleRate: SR,
+      }),
+    ).toThrow();
   });
 
   it('rejects an empty channel pair', () => {
     expect(() =>
-      masteringRepairDehumStereo(new Float32Array(0), new Float32Array(0), SR),
+      masteringRepairDehumStereo({
+        left: new Float32Array(0),
+        right: new Float32Array(0),
+        sampleRate: SR,
+      }),
     ).toThrow();
   });
 
@@ -178,22 +186,26 @@ describe('masteringRepairDehumStereo (WASM)', () => {
     const { left, right } = buildHumChannels();
     const badLeft = left.slice();
     badLeft[10] = Number.NaN;
-    expect(() => masteringRepairDehumStereo(badLeft, right, SR)).toThrow();
+    expect(() =>
+      masteringRepairDehumStereo({ left: badLeft, right: right, sampleRate: SR }),
+    ).toThrow();
 
     const badRight = right.slice();
     badRight[10] = Number.POSITIVE_INFINITY;
-    expect(() => masteringRepairDehumStereo(left, badRight, SR)).toThrow();
+    expect(() =>
+      masteringRepairDehumStereo({ left: left, right: badRight, sampleRate: SR }),
+    ).toThrow();
   });
 
   it('rejects a NaN sample rate', () => {
     const { left, right } = buildHumChannels();
-    expect(() => masteringRepairDehumStereo(left, right, Number.NaN)).toThrow();
+    expect(() => masteringRepairDehumStereo({ left, right, sampleRate: Number.NaN })).toThrow();
   });
 
   it('rejects a wrong-typed sample rate', () => {
     const { left, right } = buildHumChannels();
     expect(() =>
-      masteringRepairDehumStereo(left, right, 'not-a-number' as unknown as number),
+      masteringRepairDehumStereo({ left, right, sampleRate: 'not-a-number' as unknown as number }),
     ).toThrow();
   });
 });

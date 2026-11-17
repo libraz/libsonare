@@ -19,6 +19,9 @@ export interface ValidateOptions {
   validate?: boolean;
 }
 
+/** The options of request `R` in the positional form `(samples, sampleRate, options)`. */
+export type OptionsOf<R> = Omit<R, 'samples' | 'sampleRate'>;
+
 /**
  * Offline-analysis sample-rate bounds, mirroring the C++ core limits
  * (`sonare::kMinAudioSampleRate` / `kMaxAudioSampleRate` in `core/audio.h`).
@@ -795,14 +798,9 @@ export function requireToken<T extends string>(
   return value as T;
 }
 
-/** Native reports a tuning as a semitone fraction; the JS surface speaks cents. */
+/** `estimateTuning` / `pitchTuning` report a semitone fraction (librosa mirrors); the JS surface speaks cents. */
 export function tuningCentsFromNative(semitoneFraction: number): number {
   return semitoneFraction * 100;
-}
-
-/** Native takes a tuning as a semitone fraction; the JS surface speaks cents. */
-export function tuningCentsToNative(cents: number): number {
-  return cents / 100;
 }
 
 /** A request carrying audio plus the rate it was recorded at. */

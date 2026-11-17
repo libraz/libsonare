@@ -84,25 +84,25 @@ describe('masteringRepairDeclickStereo (WASM)', () => {
       ...DECLICK_CONFIG,
     });
 
-    expect(result.left).toBeInstanceOf(Float32Array);
-    expect(result.right).toBeInstanceOf(Float32Array);
-    expect(result.left.length).toBe(left.length);
-    expect(result.right.length).toBe(right.length);
+    expect(result.channels[0]).toBeInstanceOf(Float32Array);
+    expect(result.channels[1]).toBeInstanceOf(Float32Array);
+    expect(result.channels[0].length).toBe(left.length);
+    expect(result.channels[1].length).toBe(right.length);
     // Not the same data: an implementation that declicks one channel and
     // returns it for both would make these equal.
-    expect(result.left).not.toEqual(result.right);
+    expect(result.channels[0]).not.toEqual(result.channels[1]);
 
     // Each channel's own detection sees only its own planted click.
-    expect(result.leftReport.detected.count).toBe(1);
-    expect(result.rightReport.detected.count).toBe(1);
+    expect(result.reports[0].detected.count).toBe(1);
+    expect(result.reports[1].detected.count).toBe(1);
 
     // The union of both channels' selections is repaired in BOTH -- a
     // per-channel declick would stop at detected.count and never set
     // linkedRuns.
-    expect(result.leftReport.repairedRuns).toBeGreaterThan(result.leftReport.detected.count);
-    expect(result.rightReport.repairedRuns).toBeGreaterThan(result.rightReport.detected.count);
-    expect(result.leftReport.linkedRuns).toBeGreaterThan(0);
-    expect(result.rightReport.linkedRuns).toBeGreaterThan(0);
+    expect(result.reports[0].repairedRuns).toBeGreaterThan(result.reports[0].detected.count);
+    expect(result.reports[1].repairedRuns).toBeGreaterThan(result.reports[1].detected.count);
+    expect(result.reports[0].linkedRuns).toBeGreaterThan(0);
+    expect(result.reports[1].linkedRuns).toBeGreaterThan(0);
   });
 
   it('differs from the mono declick on the left channel alone, at the right channel click position', () => {
@@ -122,36 +122,39 @@ describe('masteringRepairDeclickStereo (WASM)', () => {
     // equal.
     let maxDiff = 0;
     for (let i = 0; i < CLICK_WIDTH; i++) {
-      const stereoValue = stereo.left[RIGHT_CLICK_POS + i] ?? 0;
+      const stereoValue = stereo.channels[0][RIGHT_CLICK_POS + i] ?? 0;
       const monoValue = mono[RIGHT_CLICK_POS + i] ?? 0;
       maxDiff = Math.max(maxDiff, Math.abs(stereoValue - monoValue));
     }
     expect(maxDiff).toBeGreaterThan(1e-4);
   });
 
-  it('accepts the positional call form identically to the request form', () => {
+  it('is request-only and refuses the positional call form', () => {
     const { left, right } = buildChannels();
-    const positional = masteringRepairDeclickStereo(left, right, SR, DECLICK_CONFIG);
-    const request = masteringRepairDeclickStereo({
-      left,
-      right,
-      sampleRate: SR,
-      ...DECLICK_CONFIG,
-    });
-    expect(positional.left).toEqual(request.left);
-    expect(positional.right).toEqual(request.right);
+    const positional = masteringRepairDeclickStereo as unknown as (...args: unknown[]) => unknown;
+    expect(() => positional(left, right, SR)).toThrow(TypeError);
   });
 
   it('rejects mismatched channel lengths', () => {
     const { left, right } = buildChannels();
     expect(() =>
-      masteringRepairDeclickStereo(left, right.slice(0, right.length - 1), SR, DECLICK_CONFIG),
+      masteringRepairDeclickStereo({
+        left: left,
+        right: right.slice(0, right.length - 1),
+        sampleRate: SR,
+        ...DECLICK_CONFIG,
+      }),
     ).toThrow();
   });
 
   it('rejects an empty channel pair', () => {
     expect(() =>
-      masteringRepairDeclickStereo(new Float32Array(0), new Float32Array(0), SR, DECLICK_CONFIG),
+      masteringRepairDeclickStereo({
+        left: new Float32Array(0),
+        right: new Float32Array(0),
+        sampleRate: SR,
+        ...DECLICK_CONFIG,
+      }),
     ).toThrow();
   });
 
@@ -159,17 +162,37 @@ describe('masteringRepairDeclickStereo (WASM)', () => {
     const { left, right } = buildChannels();
     const badLeft = left.slice();
     badLeft[10] = Number.NaN;
-    expect(() => masteringRepairDeclickStereo(badLeft, right, SR, DECLICK_CONFIG)).toThrow();
+    expect(() =>
+      masteringRepairDeclickStereo({
+        left: badLeft,
+        right: right,
+        sampleRate: SR,
+        ...DECLICK_CONFIG,
+      }),
+    ).toThrow();
 
     const badRight = right.slice();
     badRight[10] = Number.POSITIVE_INFINITY;
-    expect(() => masteringRepairDeclickStereo(left, badRight, SR, DECLICK_CONFIG)).toThrow();
+    expect(() =>
+      masteringRepairDeclickStereo({
+        left: left,
+        right: badRight,
+        sampleRate: SR,
+        ...DECLICK_CONFIG,
+      }),
+    ).toThrow();
   });
 
   it('rejects a non-positive maxClickSamples', () => {
     const { left, right } = buildChannels();
     expect(() =>
-      masteringRepairDeclickStereo(left, right, SR, { ...DECLICK_CONFIG, maxClickSamples: 0 }),
+      masteringRepairDeclickStereo({
+        left,
+        right,
+        sampleRate: SR,
+        ...DECLICK_CONFIG,
+        maxClickSamples: 0,
+      }),
     ).toThrow();
   });
 });

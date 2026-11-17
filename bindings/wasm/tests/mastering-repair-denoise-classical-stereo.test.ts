@@ -61,27 +61,29 @@ describe('masteringRepairDenoiseClassicalStereo (WASM)', () => {
     const { left, right } = buildNoisyChannels();
     const result = masteringRepairDenoiseClassicalStereo({ left, right, sampleRate: SR });
 
-    expect(result.left).toBeInstanceOf(Float32Array);
-    expect(result.right).toBeInstanceOf(Float32Array);
-    expect(result.left.length).toBe(left.length);
-    expect(result.right.length).toBe(right.length);
-    expect(result.left).not.toEqual(result.right);
+    expect(result.channels[0]).toBeInstanceOf(Float32Array);
+    expect(result.channels[1]).toBeInstanceOf(Float32Array);
+    expect(result.channels[0].length).toBe(left.length);
+    expect(result.channels[1].length).toBe(right.length);
+    expect(result.channels[0]).not.toEqual(result.channels[1]);
 
     // One shared report. The four earlier repair stereo entries carry a
     // leftReport/rightReport pair; pattern-matching them here would be wrong,
     // so their absence is asserted rather than assumed.
-    expect(result.report).toBeDefined();
+    expect(result.reports[0]).toBeDefined();
     expect('leftReport' in result).toBe(false);
     expect('rightReport' in result).toBe(false);
 
-    expect(result.report.detected.bandFloorDbfs).toBeInstanceOf(Float32Array);
-    expect(result.report.detected.bandFloorDbfs.length).toBe(32);
-    expect(Number.isFinite(result.report.detected.floorDbfs)).toBe(true);
-    expect(Array.from(result.report.detected.bandFloorDbfs).every((v) => Number.isFinite(v))).toBe(
-      true,
+    expect(result.reports[0].detected.bandFloorDbfs).toBeInstanceOf(Float32Array);
+    expect(result.reports[0].detected.bandFloorDbfs.length).toBe(32);
+    expect(Number.isFinite(result.reports[0].detected.floorDbfs)).toBe(true);
+    expect(
+      Array.from(result.reports[0].detected.bandFloorDbfs).every((v) => Number.isFinite(v)),
+    ).toBe(true);
+    expect(result.reports[0].meanReductionDb).toBeGreaterThan(0);
+    expect(result.reports[0].maxReductionDb).toBeGreaterThanOrEqual(
+      result.reports[0].meanReductionDb,
     );
-    expect(result.report.meanReductionDb).toBeGreaterThan(0);
-    expect(result.report.maxReductionDb).toBeGreaterThanOrEqual(result.report.meanReductionDb);
   });
 
   it('measures a pair-level absolute floor: two equal channels read 3 dB over one', () => {
@@ -96,7 +98,7 @@ describe('masteringRepairDenoiseClassicalStereo (WASM)', () => {
     // two, but the dB conversion is float32, which is what the tolerance below
     // is for. This is why a stereo floor is comparable only against another
     // stereo floor.
-    expect(pair.report.detected.floorDbfs - single.report.detected.floorDbfs).toBeCloseTo(
+    expect(pair.reports[0].detected.floorDbfs - single.reports[0].detected.floorDbfs).toBeCloseTo(
       10 * Math.log10(2),
       4,
     );
@@ -109,8 +111,8 @@ describe('masteringRepairDenoiseClassicalStereo (WASM)', () => {
     const options = { left, right, sampleRate: SR, reductionDb: 3 };
 
     const logMmse = masteringRepairDenoiseClassicalStereo(options);
-    expect(logMmse.report.floorLimitedFraction).toBeGreaterThan(0);
-    expect(logMmse.report.maxReductionDb).toBeCloseTo(3, 3);
+    expect(logMmse.reports[0].floorLimitedFraction).toBeGreaterThan(0);
+    expect(logMmse.reports[0].maxReductionDb).toBeCloseTo(3, 3);
 
     // Not a measurement of this material: spectralSubtraction floors on
     // spectralFloor instead and never fills this field, so 0 here is the mode.
@@ -118,7 +120,7 @@ describe('masteringRepairDenoiseClassicalStereo (WASM)', () => {
       ...options,
       mode: 'spectralSubtraction',
     });
-    expect(spectral.report.floorLimitedFraction).toBe(0);
+    expect(spectral.reports[0].floorLimitedFraction).toBe(0);
   });
 
   it('reads overSubtraction and spectralFloor only in spectralSubtraction mode', () => {
@@ -130,8 +132,8 @@ describe('masteringRepairDenoiseClassicalStereo (WASM)', () => {
     // for bit.
     const defaultMode = masteringRepairDenoiseClassicalStereo(base);
     const defaultModeWithKnobs = masteringRepairDenoiseClassicalStereo({ ...base, ...knobs });
-    expect(defaultModeWithKnobs.left).toEqual(defaultMode.left);
-    expect(defaultModeWithKnobs.right).toEqual(defaultMode.right);
+    expect(defaultModeWithKnobs.channels[0]).toEqual(defaultMode.channels[0]);
+    expect(defaultModeWithKnobs.channels[1]).toEqual(defaultMode.channels[1]);
 
     // The control: in the mode that does read them, the same two values move
     // the output, so the equality above is about the mode and not about the
@@ -145,38 +147,49 @@ describe('masteringRepairDenoiseClassicalStereo (WASM)', () => {
       mode: 'spectralSubtraction',
       ...knobs,
     });
-    expect(spectralWithKnobs.left).not.toEqual(spectral.left);
+    expect(spectralWithKnobs.channels[0]).not.toEqual(spectral.channels[0]);
   });
 
   it('pads an input shorter than nFft, as the dereverb pair does', () => {
     const { left, right } = buildNoisyChannels();
     const shortLeft = left.slice(0, 512);
     const shortRight = right.slice(0, 512);
-    const result = masteringRepairDenoiseClassicalStereo(shortLeft, shortRight, SR, { nFft: 1024 });
-    expect(result.left.length).toBe(512);
-    expect(result.right.length).toBe(512);
+    const result = masteringRepairDenoiseClassicalStereo({
+      left: shortLeft,
+      right: shortRight,
+      sampleRate: SR,
+      nFft: 1024,
+    });
+    expect(result.channels[0].length).toBe(512);
+    expect(result.channels[1].length).toBe(512);
   });
 
-  it('accepts the positional call form identically to the request form', () => {
+  it('refuses the positional call form', () => {
     const { left, right } = buildNoisyChannels();
-    const positional = masteringRepairDenoiseClassicalStereo(left, right, SR);
-    const request = masteringRepairDenoiseClassicalStereo({ left, right, sampleRate: SR });
-    expect(positional.left).toEqual(request.left);
-    expect(positional.right).toEqual(request.right);
-    expect(positional.report.detected.floorDbfs).toBe(request.report.detected.floorDbfs);
-    expect(positional.report.meanReductionDb).toBe(request.report.meanReductionDb);
+    const call = masteringRepairDenoiseClassicalStereo as unknown as (
+      ...args: unknown[]
+    ) => unknown;
+    expect(() => call(left, right, SR)).toThrow(TypeError);
   });
 
   it('rejects mismatched channel lengths', () => {
     const { left, right } = buildNoisyChannels();
     expect(() =>
-      masteringRepairDenoiseClassicalStereo(left, right.slice(0, right.length - 1), SR),
+      masteringRepairDenoiseClassicalStereo({
+        left,
+        right: right.slice(0, right.length - 1),
+        sampleRate: SR,
+      }),
     ).toThrow();
   });
 
   it('rejects an empty channel pair', () => {
     expect(() =>
-      masteringRepairDenoiseClassicalStereo(new Float32Array(0), new Float32Array(0), SR),
+      masteringRepairDenoiseClassicalStereo({
+        left: new Float32Array(0),
+        right: new Float32Array(0),
+        sampleRate: SR,
+      }),
     ).toThrow();
   });
 
@@ -184,42 +197,72 @@ describe('masteringRepairDenoiseClassicalStereo (WASM)', () => {
     const { left, right } = buildNoisyChannels();
     const badLeft = left.slice();
     badLeft[10] = Number.NaN;
-    expect(() => masteringRepairDenoiseClassicalStereo(badLeft, right, SR)).toThrow();
+    expect(() =>
+      masteringRepairDenoiseClassicalStereo({ left: badLeft, right, sampleRate: SR }),
+    ).toThrow();
 
     const badRight = right.slice();
     badRight[10] = Number.POSITIVE_INFINITY;
-    expect(() => masteringRepairDenoiseClassicalStereo(left, badRight, SR)).toThrow();
+    expect(() =>
+      masteringRepairDenoiseClassicalStereo({ left, right: badRight, sampleRate: SR }),
+    ).toThrow();
   });
 
   it('rejects a NaN sample rate', () => {
     const { left, right } = buildNoisyChannels();
-    expect(() => masteringRepairDenoiseClassicalStereo(left, right, Number.NaN)).toThrow();
+    expect(() =>
+      masteringRepairDenoiseClassicalStereo({ left, right, sampleRate: Number.NaN }),
+    ).toThrow();
   });
 
   it('rejects a wrong-typed sample rate', () => {
     const { left, right } = buildNoisyChannels();
     expect(() =>
-      masteringRepairDenoiseClassicalStereo(left, right, 'not-a-number' as unknown as number),
+      masteringRepairDenoiseClassicalStereo({
+        left,
+        right,
+        sampleRate: 'not-a-number' as unknown as number,
+      }),
     ).toThrow();
   });
 
   it('rejects a non-power-of-two nFft and a non-positive hopLength', () => {
     const { left, right } = buildNoisyChannels();
     expect(() =>
-      masteringRepairDenoiseClassicalStereo(left, right, SR, { nFft: 1500, hopLength: 256 }),
+      masteringRepairDenoiseClassicalStereo({
+        left,
+        right,
+        sampleRate: SR,
+        nFft: 1500,
+        hopLength: 256,
+      }),
     ).toThrow();
     expect(() =>
-      masteringRepairDenoiseClassicalStereo(left, right, SR, { nFft: 1024, hopLength: 0 }),
+      masteringRepairDenoiseClassicalStereo({
+        left,
+        right,
+        sampleRate: SR,
+        nFft: 1024,
+        hopLength: 0,
+      }),
     ).toThrow();
   });
 
   it('rejects an unknown mode or noise estimator', () => {
     const { left, right } = buildNoisyChannels();
     expect(() =>
-      masteringRepairDenoiseClassicalStereo(left, right, SR, { mode: 'not-a-mode' as never }),
+      masteringRepairDenoiseClassicalStereo({
+        left,
+        right,
+        sampleRate: SR,
+        mode: 'not-a-mode' as never,
+      }),
     ).toThrow();
     expect(() =>
-      masteringRepairDenoiseClassicalStereo(left, right, SR, {
+      masteringRepairDenoiseClassicalStereo({
+        left,
+        right,
+        sampleRate: SR,
         noiseEstimator: 'not-an-estimator' as never,
       }),
     ).toThrow();

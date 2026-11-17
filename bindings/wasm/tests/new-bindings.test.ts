@@ -160,11 +160,20 @@ describe('newly exposed WASM functions', () => {
     for (let i = 0; i < s.length; i++) {
       s[i] = Math.abs(Math.sin(i));
     }
-    const r = decompose(s, nFeatures, nFrames, nComponents, 20, 2.0);
-    expect(r.w.length).toBe(nFeatures * nComponents);
-    expect(r.h.length).toBe(nComponents * nFrames);
-    expect(allFinite(r.w)).toBe(true);
-    expect(allFinite(r.h)).toBe(true);
+    const r = decompose({
+      s: { data: s, rows: nFeatures, cols: nFrames },
+      nComponents,
+      nIter: 20,
+      beta: 2.0,
+    });
+    expect(r.w.rows).toBe(nFeatures);
+    expect(r.w.cols).toBe(nComponents);
+    expect(r.h.rows).toBe(nComponents);
+    expect(r.h.cols).toBe(nFrames);
+    expect(r.w.data.length).toBe(nFeatures * nComponents);
+    expect(r.h.data.length).toBe(nComponents * nFrames);
+    expect(allFinite(r.w.data)).toBe(true);
+    expect(allFinite(r.h.data)).toBe(true);
   });
 
   it('nnFilter preserves the spectrogram shape', () => {
@@ -174,7 +183,7 @@ describe('newly exposed WASM functions', () => {
     for (let i = 0; i < s.length; i++) {
       s[i] = Math.abs(Math.cos(i));
     }
-    const r = nnFilter(s, nFeatures, nFrames);
+    const r = nnFilter({ s: { data: s, rows: nFeatures, cols: nFrames } });
     expect(r.rows).toBe(nFeatures);
     expect(r.cols).toBe(nFrames);
     expect(allFinite(r.data)).toBe(true);
@@ -182,16 +191,23 @@ describe('newly exposed WASM functions', () => {
 
   it('decompose and nnFilter reject invalid dimensions', () => {
     const small = new Float32Array([1, 2, 3, 4]);
-    expect(() => decompose(small, 2, 2, 0, 20, 2.0)).toThrow();
-    expect(() => decompose(small, 2, 2, 2, 0, 2.0)).toThrow();
-    expect(() => decompose(small, 1000, 1000, 2, 20, 2.0)).toThrow();
-    expect(() => nnFilter(small, 1000, 1000)).toThrow();
+    const s2 = { data: small, rows: 2, cols: 2 };
+    const huge = { data: small, rows: 1000, cols: 1000 };
+    expect(() => decompose({ s: s2, nComponents: 0, nIter: 20, beta: 2.0 })).toThrow();
+    expect(() => decompose({ s: s2, nComponents: 2, nIter: 0, beta: 2.0 })).toThrow();
+    expect(() => decompose({ s: huge, nComponents: 2, nIter: 20, beta: 2.0 })).toThrow();
+    expect(() => nnFilter({ s: huge })).toThrow();
   });
 
   it('remix concatenates interval slices', () => {
     const x = makeSine(0.5, 440);
     const half = Math.floor(x.length / 2);
-    const out = remix(x, new Int32Array([half, x.length, 0, half]));
+    const out = remix({
+      samples: x,
+      sampleRate: SR,
+      intervals: new Int32Array([half, x.length, 0, half]),
+      alignZeros: false,
+    });
     expect(out.length).toBe(x.length);
     expect(allFinite(out)).toBe(true);
   });
@@ -200,6 +216,7 @@ describe('newly exposed WASM functions', () => {
     const x = makeSine(0.5, 440);
     const pairs = remixAlignedIntervals({
       samples: x,
+      sampleRate: SR,
       intervals: new Int32Array([0, 1000, 5000, 5500]),
     });
     expect(pairs.length).toBe(4);
@@ -212,13 +229,19 @@ describe('newly exposed WASM functions', () => {
   it('remix and remixAlignedIntervals refuse an odd-length interval list as RangeError', () => {
     const x = makeSine(0.5, 440);
     const odd = new Int32Array([0, 1000, 2000]);
-    expect(() => remix({ samples: x, intervals: odd })).toThrow(RangeError);
-    expect(() => remixAlignedIntervals({ samples: x, intervals: odd })).toThrow(RangeError);
+    expect(() => remix({ samples: x, sampleRate: SR, intervals: odd })).toThrow(RangeError);
+    expect(() => remixAlignedIntervals({ samples: x, sampleRate: SR, intervals: odd })).toThrow(
+      RangeError,
+    );
   });
 
   it('remixAlignedIntervals leaves a signal with no sign change unsnapped', () => {
     const flat = new Float32Array(4096).fill(0.25);
-    const pairs = remixAlignedIntervals({ samples: flat, intervals: new Int32Array([100, 200]) });
+    const pairs = remixAlignedIntervals({
+      samples: flat,
+      sampleRate: SR,
+      intervals: new Int32Array([100, 200]),
+    });
     expect(Array.from(pairs)).toEqual([100, 200]);
   });
 
@@ -271,7 +294,12 @@ describe('newly exposed WASM functions', () => {
     // trip exactly (they are small integers stored at large indices).
     x[boundary] = 1; // first sample of the [boundary, length) slice
     x[boundary - 1] = 2; // last sample that must be excluded
-    const out = remix(x, new Int32Array([boundary, length]));
+    const out = remix({
+      samples: x,
+      sampleRate: SR,
+      intervals: new Int32Array([boundary, length]),
+      alignZeros: false,
+    });
     expect(out.length).toBe(length - boundary);
     // Exact boundary => first output sample is x[boundary] (1), not x[boundary-1] (2).
     expect(out[0]).toBe(1);
@@ -279,19 +307,16 @@ describe('newly exposed WASM functions', () => {
 
   it('voiceCharacterPresetId maps known values and handles unknown values', () => {
     // Ordinal 1 == SONARE_VC_PRESET_BRIGHT_IDOL.
-    expect(voiceCharacterPresetId(1)).toBe('bright-idol');
-    expect(voiceCharacterPresetId(0)).toBe('neutral-monitor');
-    expect(voiceCharacterPresetId(999)).toBeNull();
-    expect(() => voiceCharacterPresetId('not-a-preset' as never)).toThrow(
-      /Unknown voice character preset/,
-    );
-    expect(() => realtimeVoiceChangerPresetConfig(-1)).toThrow(
-      /Unknown voice-character preset ordinal/,
-    );
+    expect(voiceCharacterPresetId(1)).toBe('brightIdol');
+    expect(voiceCharacterPresetId(0)).toBe('neutralMonitor');
+    expect(() => voiceCharacterPresetId(999)).toThrow(RangeError);
+    expect(() => voiceCharacterPresetId('not-a-preset' as never)).toThrow(TypeError);
+    expect(() => realtimeVoiceChangerPresetConfig(-1 as never)).toThrow(TypeError);
+    expect(() => realtimeVoiceChangerPresetConfig('not-a-preset' as never)).toThrow(RangeError);
   });
 
   it('realtimeVoiceChangerPresetConfig returns a POD object with expected fields', () => {
-    const cfg = realtimeVoiceChangerPresetConfig('bright-idol');
+    const cfg = realtimeVoiceChangerPresetConfig('brightIdol');
     expect(cfg).not.toBeNull();
     if (cfg === null) {
       return;
@@ -300,11 +325,11 @@ describe('newly exposed WASM functions', () => {
       'inputGainDb',
       'outputGainDb',
       'wetMix',
-      'retuneSemitones',
+      'retunePitchSemitones',
       'retuneMix',
-      'retuneGrainSize',
+      'retuneGrainSizeSamples',
       'formantFactor',
-      'eqHighpassHz',
+      'eqHighPassHz',
       'gateThresholdDb',
       'compressorThresholdDb',
       'deesserFrequencyHz',
@@ -325,7 +350,7 @@ describe('newly exposed WASM functions', () => {
 
   it('phaseVocoder time-scales the signal', () => {
     const x = makeSine(0.5, 440);
-    const out = phaseVocoder(x, SR, 2.0);
+    const out = phaseVocoder(x, SR, { speedRatio: 2.0 });
     expect(out.length).toBeGreaterThan(0);
     expect(out.length).toBeLessThan(x.length);
     expect(allFinite(out)).toBe(true);
@@ -333,7 +358,7 @@ describe('newly exposed WASM functions', () => {
 
   it('spectralEdit with no ops is an identity transform', () => {
     const x = makeSine(0.5, 440);
-    const out = spectralEdit(x, SR, []);
+    const out = spectralEdit(x, SR, { ops: [] });
     expect(out.length).toBe(x.length);
     expect(allFinite(out)).toBe(true);
     const skip = 2048;
@@ -355,9 +380,11 @@ describe('newly exposed WASM functions', () => {
         0.4 * Math.sin((2 * Math.PI * 1000 * i) / SR) +
         0.4 * Math.sin((2 * Math.PI * 5000 * i) / SR);
     }
-    const out = spectralEdit(x, SR, [
-      { startSample: 0, endSample: n, lowHz: 4000, highHz: 6000, gainDb: -24, mode: 'attenuate' },
-    ]);
+    const out = spectralEdit(x, SR, {
+      ops: [
+        { startSample: 0, endSample: n, lowHz: 4000, highHz: 6000, gainDb: -24, mode: 'attenuate' },
+      ],
+    });
     expect(out.length).toBe(n);
     // 5 kHz tone drops substantially; 1 kHz tone is preserved.
     expect(goertzelPower(out, 5000)).toBeLessThan(goertzelPower(x, 5000) * 0.1);
@@ -375,7 +402,9 @@ describe('newly exposed WASM functions', () => {
         0.4 * Math.sin((2 * Math.PI * 1000 * i) / SR) +
         0.4 * Math.sin((2 * Math.PI * 5000 * i) / SR);
     }
-    const out = spectralEdit(x, SR, [{ startSample: 0, lowHz: 4000, highHz: 6000, mode: 'mute' }]);
+    const out = spectralEdit(x, SR, {
+      ops: [{ startSample: 0, lowHz: 4000, highHz: 6000, mode: 'mute' }],
+    });
     expect(out.length).toBe(n);
     expect(goertzelPower(out, 5000)).toBeLessThan(goertzelPower(x, 5000) * 0.1);
   });
@@ -383,26 +412,26 @@ describe('newly exposed WASM functions', () => {
   it('spectralEdit healRadiusFrames:0 keeps the core default (matches C ABI)', () => {
     const x = makeSine(0.5, 440);
     // 0 means "keep the default" at the C-ABI oracle; WASM must not throw here.
-    const out = spectralEdit(x, SR, [], { healRadiusFrames: 0 });
+    const out = spectralEdit(x, SR, { ops: [], healRadiusFrames: 0 });
     expect(out.length).toBe(x.length);
     expect(allFinite(out)).toBe(true);
   });
 
   it('spectralEdit nFft:0 / hopLength:0 keep the core defaults', () => {
     const x = makeSine(0.5, 440);
-    const out = spectralEdit(x, SR, [], { nFft: 0, hopLength: 0 });
+    const out = spectralEdit(x, SR, { ops: [], nFft: 0, hopLength: 0 });
     expect(out.length).toBe(x.length);
     expect(allFinite(out)).toBe(true);
   });
 
   it('spectralEdit rejects an out-of-range sampleRate', () => {
     const x = makeSine(0.1, 440);
-    expect(() => spectralEdit(x, 10, [])).toThrow();
-    expect(() => spectralEdit(x, 1_000_000, [])).toThrow();
+    expect(() => spectralEdit(x, 10, { ops: [] })).toThrow();
+    expect(() => spectralEdit(x, 1_000_000, { ops: [] })).toThrow();
   });
 
   it('hpssWithResidual splits into three signals', () => {
-    const r = hpssWithResidual(makeSine(1, 440));
+    const r = hpssWithResidual(makeSine(1, 440), SR);
     expect(r.harmonic.length).toBe(r.percussive.length);
     expect(r.percussive.length).toBe(r.residual.length);
     expect(r.harmonic.length).toBeGreaterThan(0);

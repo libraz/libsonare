@@ -64,7 +64,7 @@ describe('bus automation ids (WASM)', () => {
   setupWorklet();
 
   it('keeps a fader id on its bus across a reorder and retires it with the bus', () => {
-    const engine = new RealtimeEngine(48000, kBlock);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: kBlock });
     try {
       // Only track 20 sounds and it feeds bus 200, so the output reads bus 200's fader alone.
       engine.setClips([
@@ -102,11 +102,11 @@ describe('bus automation ids (WASM)', () => {
 
   it('numbers bus fader ids on the mirror as the worklet engine does', async () => {
     const posted: unknown[] = [];
-    const offline = new RealtimeEngine(48000, kBlock);
+    const offline = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: kBlock });
     const engine = await SonareEngine.create(fakeContext(), {
       mode: 'postMessage',
       offlineEngine: offline as unknown as OfflineEngineOption,
-      offlineChannelCount: 1,
+      offlineNumChannels: 1,
       nodeFactory: () =>
         readyWorkletNode({
           postMessage: (message: unknown) => posted.push(message),
@@ -127,16 +127,16 @@ describe('bus automation ids (WASM)', () => {
       }
     };
     try {
-      const fader100 = engine.busAutomationParamId(100);
-      const fader200 = engine.busAutomationParamId(200);
+      const fader100 = engine.resolveBusAutomationId(100, 'faderDb');
+      const fader200 = engine.resolveBusAutomationId(200, 'faderDb');
       engine.setTrackLanes([{ trackId: 8, outputBusId: 200 }]);
       flush();
       expect(fader200).not.toBe(fader100);
       expect(liveEngine.resolveBusAutomationId(100, 'faderDb')).toBe(fader100);
       expect(liveEngine.resolveBusAutomationId(200, 'faderDb')).toBe(fader200);
 
-      // setBusGain sends the resolved id, so it drives bus 200 on the worklet engine.
-      expect(engine.setBusGain(200, -12)).toBe(true);
+      // setBusGainDb sends the resolved id, so it drives bus 200 on the worklet engine.
+      expect(engine.setBusGainDb(200, -12)).toBeUndefined();
       const sent = posted.filter(
         (message) =>
           (message as { type?: unknown }).type === SonareEngineCommandType.SetParamSmoothed,
@@ -157,10 +157,10 @@ describe('bus automation ids (WASM)', () => {
       live.receiveCommand({
         type: SonareEngineCommandType.SetParamSmoothed,
         targetId: fader200,
-        sampleTime: -1,
+        renderFrame: -1,
         argFloat: -12,
       });
-      live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
+      live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
       let actual = 0;
       for (let block = 0; block < 30; block += 1) {
         const output = [new Float32Array(kBlock)];

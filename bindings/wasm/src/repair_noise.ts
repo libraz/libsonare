@@ -2,15 +2,22 @@
  * Broadband and tonal noise repair: denoise and dehum, with their detectors.
  */
 
+import { pairedResult, repairNativeOptions, sharedReportResult } from './internal/repair_common.js';
 import { getSonareModule } from './module_state.js';
 import type {
   HumDetection,
-  MasteringRepairDehumStereoResult,
-  MasteringRepairDenoiseClassicalLinkedResult,
-  MasteringRepairDenoiseClassicalStereoResult,
+  MasteringRepairDehumResult,
+  MasteringRepairDenoiseClassicalResult,
   NoiseDetection,
 } from './public_types_repair.js';
-import { assertAudioChannels, assertAudioInput, optionsBag, requestObject } from './validation.js';
+import {
+  assertAudioChannels,
+  assertAudioInput,
+  assertPositiveInteger,
+  requestOnly,
+  sampleOneShot,
+  type ValidateOptions,
+} from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -23,7 +30,7 @@ export type DenoiseClassicalMode = 'logMmse' | 'mmseStsa' | 'spectralSubtraction
 export type DenoiseClassicalNoiseEstimator = 'quantile' | 'mcra' | 'imcra' | 'spp';
 
 /** Options for `masteringRepairDenoiseClassical`. */
-export interface DenoiseClassicalOptions {
+export interface DenoiseClassicalOptions extends ValidateOptions {
   mode?: DenoiseClassicalMode;
   noiseEstimator?: DenoiseClassicalNoiseEstimator;
   nFft?: number;
@@ -40,21 +47,21 @@ export interface DenoiseClassicalOptions {
 
 export interface MasteringRepairDenoiseClassicalRequest extends DenoiseClassicalOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /** Request form of `masteringRepairDenoiseClassicalStereo`. */
 export interface MasteringRepairDenoiseClassicalStereoRequest extends DenoiseClassicalOptions {
   left: Float32Array;
   right: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /** Request form of `masteringRepairDenoiseClassicalLinked`. */
 export interface MasteringRepairDenoiseClassicalLinkedRequest extends DenoiseClassicalOptions {
   /** At least one channel; all the same length. */
   channels: Float32Array[];
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /** Offline STFT-domain classical denoiser (LogMMSE / MMSE-STSA / SpectralSubtraction). */
@@ -63,23 +70,19 @@ export function masteringRepairDenoiseClassical(
 ): Float32Array;
 export function masteringRepairDenoiseClassical(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: DenoiseClassicalOptions,
 ): Float32Array;
-export function masteringRepairDenoiseClassical(
-  samples: Float32Array | MasteringRepairDenoiseClassicalRequest,
-  sampleRate?: number,
-  options: DenoiseClassicalOptions = {},
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('masteringRepairDenoiseClassical', options) }
-      : requestObject('masteringRepairDenoiseClassical', samples);
-  assertAudioInput('masteringRepairDenoiseClassical', request.samples, request.sampleRate ?? 22050);
+export function masteringRepairDenoiseClassical(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<MasteringRepairDenoiseClassicalRequest>(
+    'masteringRepairDenoiseClassical',
+    args,
+  );
+  assertAudioInput('masteringRepairDenoiseClassical', r.samples, r.sampleRate, r);
   return requireModule().masteringRepairDenoiseClassical(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request,
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDenoiseClassical', r),
   );
 }
 
@@ -89,10 +92,10 @@ export function masteringRepairDenoiseClassical(
  *
  * The mask is built from the channel-summed power and applied unchanged to both channels, so
  * the pass cannot move an interchannel level or phase difference. That is also why the result
- * carries a single `report` rather than one per channel: a pair would be two copies of one
+ * carries a single report rather than one per channel: a pair would be two copies of one
  * measurement and would read as though the two could differ.
  *
- * `report.detected` is therefore a *pair-level* measurement, and the only absolute one in the
+ * `reports[0].detected` is therefore a *pair-level* measurement, and the only absolute one in the
  * result. Its levels are dBFS on the channel-summed power, so two identical channels read
  * `10*log10(2)` — about 3.01 dB — above the same material through
  * {@link masteringRepairDenoiseClassical}. A stereo floor is comparable only against another
@@ -107,54 +110,34 @@ export function masteringRepairDenoiseClassical(
  *
  * @example
  * ```ts
- * const { left, right, report } = masteringRepairDenoiseClassicalStereo({
+ * const { channels, reports } = masteringRepairDenoiseClassicalStereo({
  *   left: leftSamples,
  *   right: rightSamples,
  *   sampleRate: 48000,
  *   reductionDb: 18,
  * });
- * console.log(report.detected.floorDbfs, report.meanReductionDb);
+ * console.log(reports[0].detected.floorDbfs, reports[0].meanReductionDb);
  * ```
  */
 export function masteringRepairDenoiseClassicalStereo(
   request: MasteringRepairDenoiseClassicalStereoRequest,
-): MasteringRepairDenoiseClassicalStereoResult;
+): MasteringRepairDenoiseClassicalResult;
 export function masteringRepairDenoiseClassicalStereo(
-  left: Float32Array,
-  right: Float32Array,
-  sampleRate?: number,
-  config?: DenoiseClassicalOptions,
-): MasteringRepairDenoiseClassicalStereoResult;
-export function masteringRepairDenoiseClassicalStereo(
-  left: Float32Array | MasteringRepairDenoiseClassicalStereoRequest,
-  right?: Float32Array,
-  sampleRate?: number,
-  config: DenoiseClassicalOptions = {},
-): MasteringRepairDenoiseClassicalStereoResult {
-  const request: MasteringRepairDenoiseClassicalStereoRequest =
-    left instanceof Float32Array
-      ? { left, right: right as Float32Array, sampleRate, ...config }
-      : requestObject('masteringRepairDenoiseClassicalStereo', left, 'left');
-  assertAudioInput(
+  ...args: unknown[]
+): MasteringRepairDenoiseClassicalResult {
+  const r = requestOnly<MasteringRepairDenoiseClassicalStereoRequest>(
     'masteringRepairDenoiseClassicalStereo',
-    request.left,
-    request.sampleRate ?? 22050,
-    {},
-    'left',
+    args,
   );
-  assertAudioInput(
-    'masteringRepairDenoiseClassicalStereo',
-    request.right,
-    request.sampleRate ?? 22050,
-    {},
-    'right',
-  );
-  const { left: leftSamples, right: rightSamples, sampleRate: rate, ...options } = request;
-  return requireModule().masteringRepairDenoiseClassicalStereo(
-    leftSamples,
-    rightSamples,
-    rate ?? 22050,
-    options,
+  assertAudioInput('masteringRepairDenoiseClassicalStereo', r.left, r.sampleRate, r, 'left');
+  assertAudioInput('masteringRepairDenoiseClassicalStereo', r.right, r.sampleRate, r, 'right');
+  return sharedReportResult(
+    requireModule().masteringRepairDenoiseClassicalStereo(
+      r.left,
+      r.right,
+      r.sampleRate,
+      repairNativeOptions('masteringRepairDenoiseClassicalStereo', r),
+    ),
   );
 }
 
@@ -165,13 +148,13 @@ export function masteringRepairDenoiseClassicalStereo(
  * The N-channel form of {@link masteringRepairDenoiseClassicalStereo}, carrying the same
  * guarantee over the whole set: the mask is built from the channel-summed power and applied
  * unchanged to every channel, so no interchannel level or phase difference moves however many
- * channels there are. One `report` for the set, and one output per input channel in input order.
+ * channels there are. One report for the set, and one output per input channel in input order.
  *
  * A single channel reproduces {@link masteringRepairDenoiseClassical} bit for bit, and two
  * reproduce {@link masteringRepairDenoiseClassicalStereo} plane for plane — `channels[0]` is the
  * left plane and `channels[1]` the right.
  *
- * `report.detected` carries absolute levels and they are the SET's: the floor is referred to the
+ * `reports[0].detected` carries absolute levels and they are the SET's: the floor is referred to the
  * summed mean square of every channel, so N identical channels read `10*log10(N)` above
  * one of them — about 3.01 dB at two channels and 4.77 dB at three. Compare a floor only against
  * one measured over the same number of channels. Every other field of the report is a fraction
@@ -182,37 +165,32 @@ export function masteringRepairDenoiseClassicalStereo(
  *
  * @example
  * ```ts
- * const { channels, report } = masteringRepairDenoiseClassicalLinked({
+ * const { channels, reports } = masteringRepairDenoiseClassicalLinked({
  *   channels: [frontLeft, frontRight, centre],
  *   sampleRate: 48000,
  *   reductionDb: 18,
  * });
- * console.log(channels.length, report.detected.floorDbfs);
+ * console.log(channels.length, reports[0].detected.floorDbfs);
  * ```
  */
 export function masteringRepairDenoiseClassicalLinked(
   request: MasteringRepairDenoiseClassicalLinkedRequest,
-): MasteringRepairDenoiseClassicalLinkedResult;
+): MasteringRepairDenoiseClassicalResult;
 export function masteringRepairDenoiseClassicalLinked(
-  channels: Float32Array[],
-  sampleRate?: number,
-  config?: DenoiseClassicalOptions,
-): MasteringRepairDenoiseClassicalLinkedResult;
-export function masteringRepairDenoiseClassicalLinked(
-  channels: Float32Array[] | MasteringRepairDenoiseClassicalLinkedRequest,
-  sampleRate?: number,
-  config: DenoiseClassicalOptions = {},
-): MasteringRepairDenoiseClassicalLinkedResult {
-  const request: MasteringRepairDenoiseClassicalLinkedRequest = Array.isArray(channels)
-    ? { channels, sampleRate, ...config }
-    : requestObject('masteringRepairDenoiseClassicalLinked', channels, 'request', true);
-  assertAudioChannels(
+  ...args: unknown[]
+): MasteringRepairDenoiseClassicalResult {
+  const r = requestOnly<MasteringRepairDenoiseClassicalLinkedRequest>(
     'masteringRepairDenoiseClassicalLinked',
-    request.channels,
-    request.sampleRate ?? 22050,
+    args,
   );
-  const { channels: input, sampleRate: rate, ...options } = request;
-  return requireModule().masteringRepairDenoiseClassicalLinked(input, rate ?? 22050, options);
+  assertAudioChannels('masteringRepairDenoiseClassicalLinked', r.channels, r.sampleRate, r);
+  return sharedReportResult(
+    requireModule().masteringRepairDenoiseClassicalLinked(
+      r.channels,
+      r.sampleRate,
+      repairNativeOptions('masteringRepairDenoiseClassicalLinked', r),
+    ),
+  );
 }
 
 /**
@@ -226,7 +204,7 @@ export function masteringRepairDenoiseClassicalLinked(
 export type DehumMode = 'subtract' | 'notch';
 
 /** Options for `masteringRepairDehum`. */
-export interface DehumOptions {
+export interface DehumOptions extends ValidateOptions {
   fundamentalHz?: number;
   harmonics?: number;
   q?: number;
@@ -241,37 +219,30 @@ export interface DehumOptions {
 
 export interface MasteringRepairDehumRequest extends DehumOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /** Request form of `masteringRepairDehumStereo`. */
 export interface MasteringRepairDehumStereoRequest extends DehumOptions {
   left: Float32Array;
   right: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /** Offline mains-hum remover. */
 export function masteringRepairDehum(request: MasteringRepairDehumRequest): Float32Array;
 export function masteringRepairDehum(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: DehumOptions,
 ): Float32Array;
-export function masteringRepairDehum(
-  samples: Float32Array | MasteringRepairDehumRequest,
-  sampleRate?: number,
-  options: DehumOptions = {},
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('masteringRepairDehum', options) }
-      : requestObject('masteringRepairDehum', samples);
-  assertAudioInput('masteringRepairDehum', request.samples, request.sampleRate ?? 22050);
+export function masteringRepairDehum(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<MasteringRepairDehumRequest>('masteringRepairDehum', args);
+  assertAudioInput('masteringRepairDehum', r.samples, r.sampleRate, r);
   return requireModule().masteringRepairDehum(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request,
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDehum', r),
   );
 }
 
@@ -288,62 +259,37 @@ export function masteringRepairDehum(
  */
 export function masteringRepairDehumStereo(
   request: MasteringRepairDehumStereoRequest,
-): MasteringRepairDehumStereoResult;
-export function masteringRepairDehumStereo(
-  left: Float32Array,
-  right: Float32Array,
-  sampleRate?: number,
-  config?: DehumOptions,
-): MasteringRepairDehumStereoResult;
-export function masteringRepairDehumStereo(
-  left: Float32Array | MasteringRepairDehumStereoRequest,
-  right?: Float32Array,
-  sampleRate?: number,
-  config: DehumOptions = {},
-): MasteringRepairDehumStereoResult {
-  const request: MasteringRepairDehumStereoRequest =
-    left instanceof Float32Array
-      ? { left, right: right as Float32Array, sampleRate, ...config }
-      : requestObject('masteringRepairDehumStereo', left, 'left');
-  assertAudioInput(
-    'masteringRepairDehumStereo',
-    request.left,
-    request.sampleRate ?? 22050,
-    {},
-    'left',
-  );
-  assertAudioInput(
-    'masteringRepairDehumStereo',
-    request.right,
-    request.sampleRate ?? 22050,
-    {},
-    'right',
-  );
-  const { left: leftSamples, right: rightSamples, sampleRate: rate, ...options } = request;
-  return requireModule().masteringRepairDehumStereo(
-    leftSamples,
-    rightSamples,
-    rate ?? 22050,
-    options,
+): MasteringRepairDehumResult;
+export function masteringRepairDehumStereo(...args: unknown[]): MasteringRepairDehumResult {
+  const r = requestOnly<MasteringRepairDehumStereoRequest>('masteringRepairDehumStereo', args);
+  assertAudioInput('masteringRepairDehumStereo', r.left, r.sampleRate, r, 'left');
+  assertAudioInput('masteringRepairDehumStereo', r.right, r.sampleRate, r, 'right');
+  return pairedResult(
+    requireModule().masteringRepairDehumStereo(
+      r.left,
+      r.right,
+      r.sampleRate,
+      repairNativeOptions('masteringRepairDehumStereo', r),
+    ),
   );
 }
 
 /** Request form of `masteringRepairDetectNoiseFloor`. */
 export interface MasteringRepairDetectNoiseFloorRequest extends DenoiseClassicalOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /** Request form of `masteringRepairNoiseBandBins`. */
 export interface MasteringRepairNoiseBandBinsRequest {
   nFft?: number;
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /** Request form of `masteringRepairDetectHum`. */
 export interface MasteringRepairDetectHumRequest extends DehumOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /**
@@ -364,23 +310,19 @@ export function masteringRepairDetectNoiseFloor(
 ): NoiseDetection;
 export function masteringRepairDetectNoiseFloor(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: DenoiseClassicalOptions,
 ): NoiseDetection;
-export function masteringRepairDetectNoiseFloor(
-  samples: Float32Array | MasteringRepairDetectNoiseFloorRequest,
-  sampleRate?: number,
-  options: DenoiseClassicalOptions = {},
-): NoiseDetection {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('masteringRepairDetectNoiseFloor', options) }
-      : requestObject('masteringRepairDetectNoiseFloor', samples);
-  assertAudioInput('masteringRepairDetectNoiseFloor', request.samples, request.sampleRate ?? 22050);
+export function masteringRepairDetectNoiseFloor(...args: unknown[]): NoiseDetection {
+  const r = sampleOneShot<MasteringRepairDetectNoiseFloorRequest>(
+    'masteringRepairDetectNoiseFloor',
+    args,
+  );
+  assertAudioInput('masteringRepairDetectNoiseFloor', r.samples, r.sampleRate, r);
   return requireModule().masteringRepairDetectNoiseFloor(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request,
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDetectNoiseFloor', r),
   );
 }
 
@@ -400,13 +342,12 @@ export function masteringRepairDetectNoiseFloor(
  * describes every floor measured at that `nFft` and `sampleRate`, whatever mode or estimator
  * produced it.
  *
- * @param nFft - STFT size the bins belong to; a positive power of two, the same rule
- *   {@link masteringRepairDetectNoiseFloor} applies to its config, so every grid returned here
- *   is one that entry can report on. Defaults to 1024.
- * @param sampleRate - Sample rate the bins belong to, in Hz; positive. Defaults to 22050.
+ * @param request - `nFft` is the STFT size the bins belong to (a positive power of two, the
+ *   same rule {@link masteringRepairDetectNoiseFloor} applies; default 1024). `sampleRate` is
+ *   required, in Hz, a positive integer.
  * @returns 33 bin indices, low to high — one more than the 32 bands: the first bin of every
  *   band plus the one-past-the-end bin of the last, which is `nFft / 2 + 1`. Non-decreasing.
- * @throws If `nFft` is not a positive power of two, or `sampleRate` is not positive.
+ * @throws `TypeError` for a missing `sampleRate`; `RangeError` if `nFft` is not a positive power of two or `sampleRate` is not positive.
  *
  * @example
  * ```ts
@@ -419,24 +360,16 @@ export function masteringRepairDetectNoiseFloor(
  * ```
  */
 export function masteringRepairNoiseBandBins(
-  request?: MasteringRepairNoiseBandBinsRequest,
+  request: MasteringRepairNoiseBandBinsRequest,
 ): Int32Array;
-export function masteringRepairNoiseBandBins(nFft?: number, sampleRate?: number): Int32Array;
-export function masteringRepairNoiseBandBins(
-  nFft?: number | MasteringRepairNoiseBandBinsRequest,
-  sampleRate?: number,
-): Int32Array {
-  // Both positional arguments are optional, so a default on `nFft` would swallow
-  // an explicit `undefined` and take the request branch with `sampleRate` in hand
-  // but unreachable. Discriminate on the value instead.
-  const request =
-    typeof nFft === 'object' && nFft !== null
-      ? requestObject('masteringRepairNoiseBandBins', nFft, 'nFft', true)
-      : { nFft, sampleRate };
-  return requireModule().masteringRepairNoiseBandBins(
-    request.nFft ?? 1024,
-    request.sampleRate ?? 22050,
-  );
+export function masteringRepairNoiseBandBins(...args: unknown[]): Int32Array {
+  const r = requestOnly<MasteringRepairNoiseBandBinsRequest>('masteringRepairNoiseBandBins', args);
+  // Geometry only: the core needs a positive rate, not the audio-analysis range.
+  if (typeof r.sampleRate !== 'number') {
+    throw new TypeError('masteringRepairNoiseBandBins: sampleRate must be a number');
+  }
+  assertPositiveInteger('masteringRepairNoiseBandBins', r.sampleRate, 'sampleRate');
+  return requireModule().masteringRepairNoiseBandBins(r.nFft ?? 1024, r.sampleRate);
 }
 
 /**
@@ -454,22 +387,15 @@ export function masteringRepairNoiseBandBins(
 export function masteringRepairDetectHum(request: MasteringRepairDetectHumRequest): HumDetection;
 export function masteringRepairDetectHum(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: DehumOptions,
 ): HumDetection;
-export function masteringRepairDetectHum(
-  samples: Float32Array | MasteringRepairDetectHumRequest,
-  sampleRate?: number,
-  options: DehumOptions = {},
-): HumDetection {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('masteringRepairDetectHum', options) }
-      : requestObject('masteringRepairDetectHum', samples);
-  assertAudioInput('masteringRepairDetectHum', request.samples, request.sampleRate ?? 22050);
+export function masteringRepairDetectHum(...args: unknown[]): HumDetection {
+  const r = sampleOneShot<MasteringRepairDetectHumRequest>('masteringRepairDetectHum', args);
+  assertAudioInput('masteringRepairDetectHum', r.samples, r.sampleRate, r);
   return requireModule().masteringRepairDetectHum(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request,
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDetectHum', r),
   );
 }

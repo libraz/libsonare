@@ -25,7 +25,7 @@ interface Expression {
 }
 
 function withEngine<T>(body: (engine: RealtimeEngine) => T): T {
-  const engine = new RealtimeEngine(48000, BLOCK);
+  const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: BLOCK });
   try {
     return body(engine);
   } finally {
@@ -40,7 +40,7 @@ function withEngine<T>(body: (engine: RealtimeEngine) => T): T {
  */
 function render(family: Family, expression: Expression): Float32Array {
   return withEngine((engine) => {
-    engine.setBuiltinInstrument({}, DESTINATION);
+    engine.setBuiltinInstrument(DESTINATION, {});
     const live = family === 'input-source';
     if (live) {
       engine.setMidiInputSource(DESTINATION);
@@ -126,7 +126,7 @@ describe('Sonare WASM live per-note expression', () => {
 
   it('refuses a value outside its dimension rather than narrowing it', () => {
     withEngine((engine) => {
-      engine.setBuiltinInstrument({}, DESTINATION);
+      engine.setBuiltinInstrument(DESTINATION, {});
       engine.setMidiInputSource(DESTINATION);
       // A bend is 14-bit, so 16384 is the first value a 7-bit-shaped check would
       // let through and the one that has to be refused.
@@ -147,7 +147,7 @@ describe('Sonare WASM live per-note expression', () => {
 
   it('refuses an input-source push before the source is enabled', () => {
     withEngine((engine) => {
-      engine.setBuiltinInstrument({}, DESTINATION);
+      engine.setBuiltinInstrument(DESTINATION, {});
       const disabled = expect.objectContaining({ code: ErrorCode.InvalidState });
       expect(() => engine.pushMidiInputPitchBend(0, 0, CENTRE_BEND)).toThrow(disabled);
       expect(() => engine.pushMidiInputChannelPressure(0, 0, 64)).toThrow(disabled);

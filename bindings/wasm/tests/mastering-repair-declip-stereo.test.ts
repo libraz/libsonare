@@ -21,9 +21,9 @@ const START = 5000;
 const SHORT_LEN = 6; // left's own clipped extent
 const LONG_LEN = 20; // right's own clipped extent -- the union run's width
 
-// clipThreshold sits strictly between BED_AMP and CLIP_VALUE so the bed never
+// clipThresholdDb (0.9 linear) sits strictly between BED_AMP and CLIP_VALUE so the bed never
 // registers as clipped and the plateau always does.
-const DECLIP_CONFIG = { clipThreshold: 0.9 };
+const DECLIP_CONFIG = { clipThresholdDb: -0.9151 };
 
 function sine(freq: number, frames: number, amp: number, phase: number): Float32Array {
   const out = new Float32Array(frames);
@@ -60,27 +60,27 @@ describe('masteringRepairDeclipStereo (WASM)', () => {
     const { left, right } = buildChannels();
     const result = masteringRepairDeclipStereo({ left, right, sampleRate: SR, ...DECLIP_CONFIG });
 
-    expect(result.left).toBeInstanceOf(Float32Array);
-    expect(result.right).toBeInstanceOf(Float32Array);
-    expect(result.left.length).toBe(left.length);
-    expect(result.right.length).toBe(right.length);
+    expect(result.channels[0]).toBeInstanceOf(Float32Array);
+    expect(result.channels[1]).toBeInstanceOf(Float32Array);
+    expect(result.channels[0].length).toBe(left.length);
+    expect(result.channels[1].length).toBe(right.length);
     // Not the same data: an implementation that declipped one channel and
     // returned it for both would make these equal.
-    expect(result.left).not.toEqual(result.right);
+    expect(result.channels[0]).not.toEqual(result.channels[1]);
 
     // Each channel's own detection sees only its own plateau -- both
     // non-zero, so neither report is witnessing an empty run.
-    expect(result.leftReport.detected.runCount).toBe(1);
-    expect(result.leftReport.detected.sampleCount).toBe(SHORT_LEN);
-    expect(result.rightReport.detected.runCount).toBe(1);
-    expect(result.rightReport.detected.sampleCount).toBe(LONG_LEN);
+    expect(result.reports[0].detected.runCount).toBe(1);
+    expect(result.reports[0].detected.sampleCount).toBe(SHORT_LEN);
+    expect(result.reports[1].detected.runCount).toBe(1);
+    expect(result.reports[1].detected.sampleCount).toBe(LONG_LEN);
 
     // The union run is right's own extent (LONG_LEN): left reconstructs the
     // whole of it, reaching past its own SHORT_LEN clip, so only left links.
-    expect(result.leftReport.repairedSamples).toBe(LONG_LEN);
-    expect(result.rightReport.repairedSamples).toBe(LONG_LEN);
-    expect(result.leftReport.linkedRuns).toBe(1);
-    expect(result.rightReport.linkedRuns).toBe(0);
+    expect(result.reports[0].repairedSamples).toBe(LONG_LEN);
+    expect(result.reports[1].repairedSamples).toBe(LONG_LEN);
+    expect(result.reports[0].linkedRuns).toBe(1);
+    expect(result.reports[1].linkedRuns).toBe(0);
   });
 
   it('differs from the mono declip on the left channel alone, past its own clipped extent', () => {
@@ -95,31 +95,33 @@ describe('masteringRepairDeclipStereo (WASM)', () => {
     // amounted to two independent mono passes would make these equal.
     let maxDiff = 0;
     for (let i = SHORT_LEN; i < LONG_LEN; i++) {
-      const stereoValue = stereo.left[START + i] ?? 0;
+      const stereoValue = stereo.channels[0][START + i] ?? 0;
       const monoValue = mono[START + i] ?? 0;
       maxDiff = Math.max(maxDiff, Math.abs(stereoValue - monoValue));
     }
     expect(maxDiff).toBeGreaterThan(1e-4);
   });
 
-  it('accepts the positional call form identically to the request form', () => {
-    const { left, right } = buildChannels();
-    const positional = masteringRepairDeclipStereo(left, right, SR, DECLIP_CONFIG);
-    const request = masteringRepairDeclipStereo({ left, right, sampleRate: SR, ...DECLIP_CONFIG });
-    expect(positional.left).toEqual(request.left);
-    expect(positional.right).toEqual(request.right);
-  });
-
   it('rejects mismatched channel lengths', () => {
     const { left, right } = buildChannels();
     expect(() =>
-      masteringRepairDeclipStereo(left, right.slice(0, right.length - 1), SR, DECLIP_CONFIG),
+      masteringRepairDeclipStereo({
+        left,
+        right: right.slice(0, right.length - 1),
+        sampleRate: SR,
+        ...DECLIP_CONFIG,
+      }),
     ).toThrow();
   });
 
   it('rejects an empty channel pair', () => {
     expect(() =>
-      masteringRepairDeclipStereo(new Float32Array(0), new Float32Array(0), SR, DECLIP_CONFIG),
+      masteringRepairDeclipStereo({
+        left: new Float32Array(0),
+        right: new Float32Array(0),
+        sampleRate: SR,
+        ...DECLIP_CONFIG,
+      }),
     ).toThrow();
   });
 
@@ -127,16 +129,24 @@ describe('masteringRepairDeclipStereo (WASM)', () => {
     const { left, right } = buildChannels();
     const badLeft = left.slice();
     badLeft[10] = Number.NaN;
-    expect(() => masteringRepairDeclipStereo(badLeft, right, SR, DECLIP_CONFIG)).toThrow();
+    expect(() =>
+      masteringRepairDeclipStereo({ left: badLeft, right, sampleRate: SR, ...DECLIP_CONFIG }),
+    ).toThrow();
 
     const badRight = right.slice();
     badRight[10] = Number.POSITIVE_INFINITY;
-    expect(() => masteringRepairDeclipStereo(left, badRight, SR, DECLIP_CONFIG)).toThrow();
+    expect(() =>
+      masteringRepairDeclipStereo({ left, right: badRight, sampleRate: SR, ...DECLIP_CONFIG }),
+    ).toThrow();
   });
 
-  it('rejects a clipThreshold outside (0, 1]', () => {
+  it('rejects a clipThresholdDb above 0 dBFS', () => {
     const { left, right } = buildChannels();
-    expect(() => masteringRepairDeclipStereo(left, right, SR, { clipThreshold: 0 })).toThrow();
-    expect(() => masteringRepairDeclipStereo(left, right, SR, { clipThreshold: 1.5 })).toThrow();
+    expect(() =>
+      masteringRepairDeclipStereo({ left, right, sampleRate: SR, clipThresholdDb: 0.5 }),
+    ).toThrow(RangeError);
+    expect(() =>
+      masteringRepairDeclipStereo({ left, right, sampleRate: SR, clipThresholdDb: 3 }),
+    ).toThrow(RangeError);
   });
 });

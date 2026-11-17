@@ -28,9 +28,9 @@ describe('RealtimeEngine offline bounce content', () => {
   });
 
   it('rejects a source rate different from the prepared rate without moving transport', () => {
-    const engine = new RealtimeEngine(44100, BLOCK_SIZE);
+    const engine = new RealtimeEngine({ sampleRate: 44100, maxBlockSize: BLOCK_SIZE });
     try {
-      const before = engine.getTransportState();
+      const before = engine.transportState();
       expect(() =>
         engine.bounceOffline({
           totalFrames: FRAMES,
@@ -40,18 +40,18 @@ describe('RealtimeEngine offline bounce content', () => {
           targetSampleRate: SAMPLE_RATE,
         }),
       ).toThrow();
-      expect(engine.getTransportState()).toEqual(before);
+      expect(engine.transportState()).toEqual(before);
     } finally {
       engine.destroy();
     }
   });
 
   it('refuses option-derived failures before consuming engine state', () => {
-    const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE);
+    const engine = new RealtimeEngine({ sampleRate: SAMPLE_RATE, maxBlockSize: BLOCK_SIZE });
     try {
-      const before = engine.getTransportState();
+      const before = engine.transportState();
       const base = { totalFrames: FRAMES, blockSize: BLOCK_SIZE, numChannels: 2 };
-      expect(() => engine.bounceOffline({ ...base, dither: 1, ditherBits: 99 })).toThrow(
+      expect(() => engine.bounceOffline({ ...base, dither: 'rpdf', ditherBits: 99 })).toThrow(
         RangeError,
       );
       expect(() => engine.bounceOffline({ ...base, blockSize: BLOCK_SIZE * 32 })).toThrow(
@@ -63,7 +63,7 @@ describe('RealtimeEngine offline bounce content', () => {
       expect(() => engine.freezeOffline({ ...base, blockSize: BLOCK_SIZE * 32 })).toThrow(
         RangeError,
       );
-      expect(engine.getTransportState()).toEqual(before);
+      expect(engine.transportState()).toEqual(before);
     } finally {
       engine.destroy();
     }
@@ -72,7 +72,7 @@ describe('RealtimeEngine offline bounce content', () => {
   it('resamples from the matching prepared source rate', () => {
     const sourceSampleRate = 44100;
     const targetSampleRate = 48000;
-    const engine = new RealtimeEngine(sourceSampleRate, BLOCK_SIZE);
+    const engine = new RealtimeEngine({ sampleRate: sourceSampleRate, maxBlockSize: BLOCK_SIZE });
     try {
       const result = engine.bounceOffline({
         totalFrames: sourceSampleRate,
@@ -90,7 +90,7 @@ describe('RealtimeEngine offline bounce content', () => {
   });
 
   it('defaults both rates to the prepared rate', () => {
-    const engine = new RealtimeEngine(44100, BLOCK_SIZE);
+    const engine = new RealtimeEngine({ sampleRate: 44100, maxBlockSize: BLOCK_SIZE });
     try {
       const result = engine.bounceOffline({ totalFrames: 441, blockSize: BLOCK_SIZE });
       expect(result.sampleRate).toBe(44100);
@@ -102,7 +102,7 @@ describe('RealtimeEngine offline bounce content', () => {
   });
 
   it('resamples to an explicit target from the defaulted prepared source rate', () => {
-    const engine = new RealtimeEngine(44100, BLOCK_SIZE);
+    const engine = new RealtimeEngine({ sampleRate: 44100, maxBlockSize: BLOCK_SIZE });
     try {
       const result = engine.bounceOffline({
         totalFrames: 44100,
@@ -127,7 +127,7 @@ describe('RealtimeEngine offline bounce content', () => {
   const bounce = (
     options: Partial<EngineBounceOptions> = {},
   ): { samples: Float32Array; lufs: number } => {
-    const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE);
+    const engine = new RealtimeEngine({ sampleRate: SAMPLE_RATE, maxBlockSize: BLOCK_SIZE });
     const channel = tone();
     engine.setClips([
       { id: 1, channels: [channel, channel.slice()], startPpq: 0, lengthSamples: FRAMES },
@@ -171,20 +171,23 @@ describe('RealtimeEngine offline bounce content', () => {
     }
   });
 
-  it('normalizes to the requested loudness and honours the default sentinel', () => {
+  it('normalizes to the requested loudness and refuses an explicit 0', () => {
     for (const targetLufs of [-20, -9]) {
       expect(bounce({ normalizeLufs: true, targetLufs }).lufs).toBeCloseTo(targetLufs, 1);
     }
-    // 0 is the documented "use default" sentinel, not a literal 0 LUFS target.
-    expect(bounce({ normalizeLufs: true, targetLufs: 0 }).lufs).toBeCloseTo(-14, 1);
+    // Omitting it takes the -14 default; an explicit 0 is refused, not read as the default.
+    expect(bounce({ normalizeLufs: true }).lufs).toBeCloseTo(-14, 1);
+    expect(() => bounce({ normalizeLufs: true, targetLufs: 0 })).toThrow(RangeError);
+    expect(() => bounce({ targetSampleRate: 0 })).toThrow(RangeError);
+    expect(() => bounce({ sourceSampleRate: 0 })).toThrow(RangeError);
   });
 
   it('applies each dither type as documented', () => {
     const plain = bounce();
-    const none = bounce({ dither: 0, ditherBits: DITHER_BITS, ditherSeed: 1 });
-    const rpdf = bounce({ dither: 1, ditherBits: DITHER_BITS, ditherSeed: 1 });
-    const tpdf = bounce({ dither: 2, ditherBits: DITHER_BITS, ditherSeed: 1 });
-    const shaped = bounce({ dither: 3, ditherBits: DITHER_BITS, ditherSeed: 1 });
+    const none = bounce({ ditherBits: DITHER_BITS, ditherSeed: 1 });
+    const rpdf = bounce({ dither: 'rpdf', ditherBits: DITHER_BITS, ditherSeed: 1 });
+    const tpdf = bounce({ dither: 'tpdf', ditherBits: DITHER_BITS, ditherSeed: 1 });
+    const shaped = bounce({ dither: 'noiseShaped', ditherBits: DITHER_BITS, ditherSeed: 1 });
 
     // Identifying each type by its effect keeps a remapped integer from
     // passing. Every non-None type lands the output on the target-depth grid --
@@ -201,39 +204,42 @@ describe('RealtimeEngine offline bounce content', () => {
   });
 
   it('reproduces a fixed dither seed and reacts to a different one', () => {
-    const first = bounce({ dither: 2, ditherBits: DITHER_BITS, ditherSeed: 1 });
-    const repeat = bounce({ dither: 2, ditherBits: DITHER_BITS, ditherSeed: 1 });
-    const other = bounce({ dither: 2, ditherBits: DITHER_BITS, ditherSeed: 2 });
+    const first = bounce({ dither: 'tpdf', ditherBits: DITHER_BITS, ditherSeed: 1 });
+    const repeat = bounce({ dither: 'tpdf', ditherBits: DITHER_BITS, ditherSeed: 1 });
+    const other = bounce({ dither: 'tpdf', ditherBits: DITHER_BITS, ditherSeed: 2 });
     expect(Array.from(repeat.samples)).toEqual(Array.from(first.samples));
     expect(maxAbsDiff(other.samples, first.samples)).toBeGreaterThan(0);
   });
 
-  it.each([2, 3] as const)('keeps dither type %i independent across output channels', (dither) => {
-    const renderSilence = (numChannels: number): Float32Array => {
-      const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE);
-      try {
-        return engine.bounceOffline({
-          totalFrames: FRAMES,
-          blockSize: BLOCK_SIZE,
-          numChannels,
-          sourceSampleRate: SAMPLE_RATE,
-          targetSampleRate: SAMPLE_RATE,
-          dither,
-          ditherBits: 16,
-          ditherSeed: 1234,
-        }).interleaved;
-      } finally {
-        engine.destroy();
+  it.each(['tpdf', 'noiseShaped'] as const)(
+    'keeps dither type %s independent across output channels',
+    (dither) => {
+      const renderSilence = (numChannels: number): Float32Array => {
+        const engine = new RealtimeEngine({ sampleRate: SAMPLE_RATE, maxBlockSize: BLOCK_SIZE });
+        try {
+          return engine.bounceOffline({
+            totalFrames: FRAMES,
+            blockSize: BLOCK_SIZE,
+            numChannels,
+            sourceSampleRate: SAMPLE_RATE,
+            targetSampleRate: SAMPLE_RATE,
+            dither,
+            ditherBits: 16,
+            ditherSeed: 1234,
+          }).interleaved;
+        } finally {
+          engine.destroy();
+        }
+      };
+      const mono = renderSilence(1);
+      expect(mono.some((sample) => sample !== 0)).toBe(true);
+      for (const width of [2, 6, 8]) {
+        const interleaved = renderSilence(width);
+        const left = Array.from({ length: FRAMES }, (_, frame) => interleaved[frame * width]);
+        const right = Array.from({ length: FRAMES }, (_, frame) => interleaved[frame * width + 1]);
+        expect(left).toEqual(Array.from(mono));
+        expect(right).not.toEqual(left);
       }
-    };
-    const mono = renderSilence(1);
-    expect(mono.some((sample) => sample !== 0)).toBe(true);
-    for (const width of [2, 6, 8]) {
-      const interleaved = renderSilence(width);
-      const left = Array.from({ length: FRAMES }, (_, frame) => interleaved[frame * width]);
-      const right = Array.from({ length: FRAMES }, (_, frame) => interleaved[frame * width + 1]);
-      expect(left).toEqual(Array.from(mono));
-      expect(right).not.toEqual(left);
-    }
-  });
+    },
+  );
 });

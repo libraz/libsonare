@@ -1,4 +1,4 @@
-import type { RealtimeVoiceChangerPodConfig } from '../src/public_types';
+import type { RealtimeVoiceChangerConfig } from '../src/public_types';
 import { isRealtimeVoiceChangerMessage } from '../src/worklet/guards';
 import {
   countFloat32Subarrays,
@@ -10,21 +10,21 @@ import {
   setupWorklet,
 } from './_worklet_helpers';
 
-function workletPod(): RealtimeVoiceChangerPodConfig {
+function workletPod(): RealtimeVoiceChangerConfig {
   return {
     inputGainDb: 0,
     outputGainDb: 0,
     wetMix: 1,
-    retuneSemitones: 0,
+    retunePitchSemitones: 0,
     retuneMix: 0,
-    retuneGrainSize: 0,
+    retuneGrainSizeSamples: 0,
     formantFactor: 1,
     formantAmount: 0,
     formantBody: 0,
     formantBrightness: 0,
     formantNasal: 0,
     formantMode: 'relative',
-    eqHighpassHz: 80,
+    eqHighPassHz: 80,
     eqBodyDb: 0,
     eqPresenceDb: 0,
     eqAirDb: 0,
@@ -49,7 +49,7 @@ function workletPod(): RealtimeVoiceChangerPodConfig {
     limiterReleaseMs: 50,
     limiterEnableIspLimiter: true,
     limiterIspCeilingDbtp: -1,
-    voiceEngineEngine: 'psola',
+    voiceEngine: 'psola',
     voiceEngineF0MinHz: 70,
     pitchCorrectionMode: 'off',
     pitchCorrectionAmount: 1,
@@ -58,9 +58,7 @@ function workletPod(): RealtimeVoiceChangerPodConfig {
     pitchCorrectionScale: 'major',
     pitchCorrectionRobotOctave: 0,
     harmonyVoices: 0,
-    harmonyStep1: 2,
-    harmonyStep2: 4,
-    harmonyStep3: -3,
+    harmonySteps: [2, 4, -3],
     harmonyLevel: 0.7,
     harmonyLeadLevel: 1,
     harmonyDetuneCents: 6,
@@ -77,7 +75,7 @@ function workletPod(): RealtimeVoiceChangerPodConfig {
     characterType: 'none',
     characterAmount: 0.5,
     characterTone: 0,
-    reverbVariationVariation: 'reverb',
+    reverbVariation: 'reverb',
     reverbVariationDelayMs: 250,
     reverbVariationFeedback: 0.35,
     reverbVariationTempoBpm: 120,
@@ -114,27 +112,27 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
   setupWorklet();
 
   describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
-    it('refuses a channelCount instead of rounding it into range', () => {
-      for (const channelCount of [1.5, 0, -1, Number.NaN]) {
+    it('refuses a numChannels instead of rounding it into range', () => {
+      for (const numChannels of [1.5, 0, -1, Number.NaN]) {
         expect(
           () =>
             new SonareRealtimeVoiceChangerWorkletProcessor({
-              preset: 'neutral-monitor',
+              config: 'neutralMonitor',
               sampleRate: 48000,
-              blockSize: 128,
-              channelCount,
+              maxBlockSize: 128,
+              numChannels: numChannels as never,
             }),
-        ).toThrow(/channelCount must be an integer of at least 1/);
+        ).toThrow(/numChannels must be an integer of at least 1/);
       }
     });
 
     it('processes mono render quanta through the unified realtime voice changer', () => {
       const blockSize = 128;
       const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
-        preset: 'bright-idol',
+        config: 'brightIdol',
         sampleRate: 48000,
-        blockSize,
-        channelCount: 1,
+        maxBlockSize: blockSize,
+        numChannels: 1,
       });
       try {
         const input = new Float32Array(blockSize);
@@ -164,10 +162,10 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
     it('processes stereo render quanta without allocating returned buffers', () => {
       const blockSize = 128;
       const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
-        preset: 'deep-narrator',
+        config: 'deepNarrator',
         sampleRate: 48000,
-        blockSize,
-        channelCount: 2,
+        maxBlockSize: blockSize,
+        numChannels: 2,
       });
       try {
         const left = new Float32Array(blockSize);
@@ -217,14 +215,14 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
 
     it('channel mismatch is handled gracefully (no throw, output is zeroed or projected)', () => {
       // Configure for 1 channel; send a 2-channel input layout.
-      // The worklet clips channels to min(channelCount, output.length) and should
+      // The worklet clips channels to min(numChannels, output.length) and should
       // not throw regardless of input shape.
       const blockSize = 128;
       const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
-        preset: 'neutral-monitor',
+        config: 'neutralMonitor',
         sampleRate: 48000,
-        blockSize,
-        channelCount: 1,
+        maxBlockSize: blockSize,
+        numChannels: 1,
       });
       try {
         const ch1 = new Float32Array(blockSize).fill(0.1);
@@ -232,7 +230,7 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
         const out1 = new Float32Array(blockSize);
         const out2 = new Float32Array(blockSize);
         // inputs has 2 channels but the processor was prepared for 1 — the
-        // worklet takes Math.min(channelCount, output.length) so it just uses ch1.
+        // worklet takes Math.min(numChannels, output.length) so it just uses ch1.
         expect(() => processor.process([[ch1, ch2]], [[out1, out2]])).not.toThrow();
         expect(out1.every((s) => Number.isFinite(s))).toBe(true);
         // The old assertion stopped here and never looked at out2, which is
@@ -245,17 +243,17 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
 
     // The processed voice used to reach only the left speaker: the mono branch
     // wrote output[0] and left every other output channel holding whatever the
-    // previous block put there. The default channelCount here is 1 while
+    // previous block put there. The default numChannels here is 1 while
     // AudioWorkletNode defaults to `channelCountMode: 'max'`, so a plain stereo
     // graph hit it. The engine worklet already fanned a single plane out to
     // every channel; the two now share one implementation.
     it('fans a mono plane out to every output channel instead of hard-panning left', () => {
       const blockSize = 128;
       const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
-        preset: 'neutral-monitor',
+        config: 'neutralMonitor',
         sampleRate: 48000,
-        blockSize,
-        channelCount: 1,
+        maxBlockSize: blockSize,
+        numChannels: 1,
       });
       try {
         const input = new Float32Array(blockSize);
@@ -290,10 +288,10 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
       // rear/centre channel and add energy the chain never produced.
       const blockSize = 128;
       const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
-        preset: 'neutral-monitor',
+        config: 'neutralMonitor',
         sampleRate: 48000,
-        blockSize,
-        channelCount: 2,
+        maxBlockSize: blockSize,
+        numChannels: 2,
       });
       try {
         const left = new Float32Array(blockSize).fill(0.3);
@@ -316,10 +314,10 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
     it('destroy then process returns false and does not throw', () => {
       const blockSize = 128;
       const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
-        preset: 'neutral-monitor',
+        config: 'neutralMonitor',
         sampleRate: 48000,
-        blockSize,
-        channelCount: 1,
+        maxBlockSize: blockSize,
+        numChannels: 1,
       });
       const input = new Float32Array(blockSize);
       const output = new Float32Array(blockSize);
@@ -358,10 +356,10 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
       // Construct with the unmocked Float32Array so the constructor can
       // legitimately allocate its scratch buffers.
       const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
-        preset: 'neutral-monitor',
+        config: 'neutralMonitor',
         sampleRate: 48000,
-        blockSize,
-        channelCount: 2,
+        maxBlockSize: blockSize,
+        numChannels: 2,
       });
       try {
         // Swap in the proxy only for the audio-thread loop.
@@ -402,10 +400,10 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
       });
       const blockSize = 128;
       const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
-        preset: 'neutral-monitor',
+        config: 'neutralMonitor',
         sampleRate: 48000,
-        blockSize,
-        channelCount: 1,
+        maxBlockSize: blockSize,
+        numChannels: 1,
       });
       try {
         (globalThis as { Float32Array: typeof Float32Array }).Float32Array =
@@ -430,15 +428,15 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
 
     it('creates no subarray view for a full render quantum in either mode', () => {
       const blockSize = 128;
-      for (const channelCount of [1, 2]) {
+      for (const numChannels of [1, 2] as const) {
         const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
-          preset: 'neutral-monitor',
+          config: 'neutralMonitor',
           sampleRate: 48000,
-          blockSize,
-          channelCount,
+          maxBlockSize: blockSize,
+          numChannels,
         });
         try {
-          const input = Array.from({ length: channelCount }, () => new Float32Array(blockSize));
+          const input = Array.from({ length: numChannels }, () => new Float32Array(blockSize));
           const output = [new Float32Array(blockSize), new Float32Array(blockSize)];
           const quantum = (): void => {
             processor.process([input], [output]);
@@ -462,18 +460,18 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
       //   2. Subsequent process() calls do NOT invoke setConfig at all.
       const blockSize = 128;
       const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
-        preset: 'neutral-monitor',
+        config: 'neutralMonitor',
         sampleRate: 48000,
-        blockSize,
-        channelCount: 1,
+        maxBlockSize: blockSize,
+        numChannels: 1,
       });
       try {
         const internal = processor as unknown as {
-          changer: { setPodConfig: (config: unknown) => void };
+          changer: { setConfig: (config: unknown) => void };
         };
-        const originalSetConfig = internal.changer.setPodConfig.bind(internal.changer);
+        const originalSetConfig = internal.changer.setConfig.bind(internal.changer);
         let setConfigCalls = 0;
-        internal.changer.setPodConfig = (config: unknown) => {
+        internal.changer.setConfig = (config: unknown) => {
           setConfigCalls++;
           originalSetConfig(config);
         };
@@ -505,17 +503,17 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
     it('ignores control-plane messages after destroy', () => {
       const blockSize = 128;
       const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
-        preset: 'neutral-monitor',
+        config: 'neutralMonitor',
         sampleRate: 48000,
-        blockSize,
-        channelCount: 1,
+        maxBlockSize: blockSize,
+        numChannels: 1,
       });
       const internal = processor as unknown as {
-        changer: { setPodConfig: (config: unknown) => void };
+        changer: { setConfig: (config: unknown) => void };
       };
       let setConfigCalls = 0;
-      const originalSetConfig = internal.changer.setPodConfig.bind(internal.changer);
-      internal.changer.setPodConfig = (config: unknown) => {
+      const originalSetConfig = internal.changer.setConfig.bind(internal.changer);
+      internal.changer.setConfig = (config: unknown) => {
         setConfigCalls++;
         originalSetConfig(config);
       };
@@ -557,10 +555,10 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
       });
       const blockSize = 128;
       const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
-        preset: 'neutral-monitor',
+        config: 'neutralMonitor',
         sampleRate: 48000,
-        blockSize,
-        channelCount: 1,
+        maxBlockSize: blockSize,
+        numChannels: 1,
       });
       try {
         (globalThis as { Float32Array: typeof Float32Array }).Float32Array =
@@ -594,10 +592,10 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
       const carrier = sawtooth(blockSize, 110, 0.3);
       const run = (withCarrier: boolean): number => {
         const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
-          preset: 'neutral-monitor',
+          config: 'neutralMonitor',
           sampleRate: 48000,
-          blockSize,
-          channelCount: 1,
+          maxBlockSize: blockSize,
+          numChannels: 1,
         });
         try {
           processor.receiveMessage({
@@ -629,10 +627,10 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
 
     it('applies note messages and leaves process() untouched by them', () => {
       const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
-        preset: 'neutral-monitor',
+        config: 'neutralMonitor',
         sampleRate: 48000,
-        blockSize: 128,
-        channelCount: 1,
+        maxBlockSize: 128,
+        numChannels: 1,
       });
       try {
         processor.receiveMessage({ type: 'setConfig', config: workletPod() });
@@ -691,24 +689,20 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
     });
 
     it('rejects an unknown preset id at construction', async () => {
-      // The contract is not implementation-dependent: the preset lookup in the
-      // core throws SonareException(InvalidFormat) for an id it does not
-      // recognize, the embind wrapper rethrows, and -fexceptions carries it to
-      // JS as a catchable InvalidFormat SonareError. Constructing with an unknown id must
-      // therefore fail rather than fall back to a default voice, which would
+      // An unknown id must fail rather than fall back to a default voice, which would
       // send a performer's audio through the wrong processing chain silently.
       let caught: unknown;
       try {
         new SonareRealtimeVoiceChangerWorkletProcessor({
-          preset: 'definitely-not-a-preset',
+          config: 'definitelyNotAPreset',
           sampleRate: 48000,
         } as never);
       } catch (error) {
         caught = error;
       }
       expect(caught, 'an unknown preset id must not construct silently').toBeDefined();
-      expect(caught).toMatchObject({ codeName: 'InvalidFormat' });
-      expect((caught as Error).message).toContain('unknown realtime voice changer preset');
+      expect(caught).toBeInstanceOf(RangeError);
+      expect((caught as Error).message).toContain('config must be one of');
     });
   });
 });

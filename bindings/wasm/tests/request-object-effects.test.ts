@@ -11,7 +11,6 @@ import {
   normalize,
   pitchCorrectTimevarying,
   pitchCorrectToMidi,
-  pitchCorrectToMidiTimevarying,
   pitchShift,
   spectralEdit,
   timeStretch,
@@ -56,17 +55,17 @@ describe('effects request-object compatibility (WASM)', () => {
   it('preserves positional results for basic transforms', () => {
     const samples = sine();
     expect(hpss({ samples, sampleRate, kernelHarmonic: 17, kernelPercussive: 17 })).toEqual(
-      hpss(samples, sampleRate, 17, 17),
+      hpss(samples, sampleRate, { kernelHarmonic: 17, kernelPercussive: 17 }),
     );
     expect(harmonic({ samples, sampleRate })).toEqual(harmonic(samples, sampleRate));
-    expect(timeStretch({ samples, sampleRate, rate: 1.1 })).toEqual(
-      timeStretch(samples, sampleRate, 1.1),
+    expect(timeStretch({ samples, sampleRate, speedRatio: 1.1 })).toEqual(
+      timeStretch(samples, sampleRate, { speedRatio: 1.1 }),
     );
-    expect(pitchShift({ samples, sampleRate, semitones: 2 })).toEqual(
-      pitchShift(samples, sampleRate, 2),
+    expect(pitchShift({ samples, sampleRate, pitchSemitones: 2 })).toEqual(
+      pitchShift(samples, sampleRate, { pitchSemitones: 2 }),
     );
     expect(normalize({ samples, sampleRate, targetDb: -3 })).toEqual(
-      normalize(samples, sampleRate, -3),
+      normalize(samples, sampleRate, { targetDb: -3 }),
     );
   });
 
@@ -74,20 +73,31 @@ describe('effects request-object compatibility (WASM)', () => {
     const samples = sine();
     const f0Hz = new Float32Array(Math.ceil(samples.length / 512)).fill(220);
     expect(pitchCorrectToMidi({ samples, sampleRate, currentMidi: 57, targetMidi: 60 })).toEqual(
-      pitchCorrectToMidi(samples, sampleRate, 57, 60),
+      pitchCorrectToMidi(samples, sampleRate, { currentMidi: 57, targetMidi: 60 }),
     );
     expect(
-      pitchCorrectToMidiTimevarying({ samples, f0Hz, targetMidi: 60, sampleRate, hopLength: 512 }),
-    ).toEqual(pitchCorrectToMidiTimevarying(samples, f0Hz, 60, sampleRate, 512));
-    expect(
-      pitchCorrectTimevarying({ samples, f0Hz, sampleRate, hopLength: 512, mode: 'midi' }),
-    ).toEqual(pitchCorrectTimevarying(samples, f0Hz, sampleRate, 512, { mode: 'midi' }));
+      pitchCorrectTimevarying({
+        samples,
+        f0Hz,
+        sampleRate,
+        hopLength: 512,
+        targetMode: 'midi',
+        targetMidi: 60,
+      }),
+    ).toEqual(
+      pitchCorrectTimevarying(samples, sampleRate, {
+        f0Hz,
+        hopLength: 512,
+        targetMode: 'midi',
+        targetMidi: 60,
+      }),
+    );
     expect(spectralEdit({ samples, sampleRate, ops: [] })).toEqual(
-      spectralEdit(samples, sampleRate, []),
+      spectralEdit(samples, sampleRate, { ops: [] }),
     );
   });
 
-  it('preserves positional results for one-shot voice-change requests', () => {
+  it('preserves positional results for one-shot voice-change requests and refuses a removed field', () => {
     const samples = sine(4096);
     expect(voiceChange({ samples, sampleRate, pitchSemitones: 2, formantFactor: 1.1 })).toEqual(
       voiceChange(samples, sampleRate, { pitchSemitones: 2, formantFactor: 1.1 }),
@@ -100,17 +110,15 @@ describe('effects request-object compatibility (WASM)', () => {
     expect(voiceChange({ samples, sampleRate, ...absolute })).toEqual(
       voiceChange(samples, sampleRate, absolute),
     );
-    expect(
+    // The render block is fixed, so a block size is no longer a request field.
+    expect(() =>
       voiceChangeRealtime({
-        samples,
+        channels: [samples],
         sampleRate,
-        preset: 'neutral-monitor',
+        config: 'neutralMonitor',
         blockSize: 256,
-      }),
-    ).toEqual(voiceChangeRealtime(samples, sampleRate, 'neutral-monitor', { blockSize: 256 }));
-    expect(voiceChangeRealtime(samples, sampleRate, 'neutral-monitor', { blockSize: 64 })).toEqual(
-      voiceChangeRealtime(samples, sampleRate, 'neutral-monitor', { blockSize: 256 }),
-    );
+      } as never),
+    ).toThrow(TypeError);
   });
 
   it('preserves positional results for one-shot stereo mix requests', () => {
@@ -132,13 +140,15 @@ describe('effects request-object compatibility (WASM)', () => {
   // not prove the error path stays in lockstep.
   it('throws identically on invalid input in both call forms', () => {
     const empty = new Float32Array(0);
-    const posShift = captureThrow(() => pitchShift(empty, sampleRate, 2));
-    const reqShift = captureThrow(() => pitchShift({ samples: empty, sampleRate, semitones: 2 }));
+    const posShift = captureThrow(() => pitchShift(empty, sampleRate, { pitchSemitones: 2 }));
+    const reqShift = captureThrow(() =>
+      pitchShift({ samples: empty, sampleRate, pitchSemitones: 2 }),
+    );
     expect(posShift.threw).toBe(true);
     expect(reqShift.threw).toBe(true);
     expect(reqShift.message).toBe(posShift.message);
 
-    const posNorm = captureThrow(() => normalize(empty, sampleRate, -3));
+    const posNorm = captureThrow(() => normalize(empty, sampleRate, { targetDb: -3 }));
     const reqNorm = captureThrow(() => normalize({ samples: empty, sampleRate, targetDb: -3 }));
     expect(posNorm.threw).toBe(true);
     expect(reqNorm.threw).toBe(true);
@@ -146,18 +156,14 @@ describe('effects request-object compatibility (WASM)', () => {
   });
 });
 
-describe('transform sampleRate defaults to 22050 (WASM parity with Node/Python)', () => {
-  it('pitchShift / timeStretch / normalize accept an omitted sampleRate', () => {
+describe('transform sampleRate is required (WASM parity with Node/Python)', () => {
+  it('pitchShift / timeStretch / normalize refuse an omitted sampleRate', () => {
     const samples = sine();
-    expect(pitchShift({ samples, semitones: 2 })).toEqual(
-      pitchShift({ samples, sampleRate, semitones: 2 }),
-    );
-    expect(timeStretch({ samples, rate: 1.1 })).toEqual(
-      timeStretch({ samples, sampleRate, rate: 1.1 }),
-    );
-    expect(normalize({ samples, targetDb: -3 })).toEqual(
-      normalize({ samples, sampleRate, targetDb: -3 }),
-    );
+    expect(() => pitchShift({ samples, pitchSemitones: 2 } as never)).toThrow(TypeError);
+    expect(() => timeStretch({ samples, speedRatio: 1.1 } as never)).toThrow(TypeError);
+    expect(() => normalize({ samples, targetDb: -3 } as never)).toThrow(TypeError);
+    // The control: the same requests with a sampleRate render.
+    expect(pitchShift({ samples, sampleRate, pitchSemitones: 2 }).length).toBeGreaterThan(0);
   });
 });
 
@@ -285,7 +291,9 @@ describe('voiceChangeRealtime default preset', () => {
         ),
       ) as { defaults: Record<string, VoicePresetId> }
     ).defaults['voice_change_realtime.preset'];
-    expect(expected).toBe('neutral-monitor');
+    // The corpus spells the id as the document does; the request takes the lowerCamel token.
+    const token = expected.replace(/-([a-z])/g, (_match, ch: string) => ch.toUpperCase());
+    expect(token).toBe('neutralMonitor');
 
     const sampleRate = 22050;
     const samples = new Float32Array(2048);
@@ -294,8 +302,12 @@ describe('voiceChangeRealtime default preset', () => {
     }
     // A TypeScript default parameter is not introspectable, so compare renders:
     // omitting the preset must produce exactly what naming the default produces.
-    expect(voiceChangeRealtime(samples, sampleRate)).toEqual(
-      voiceChangeRealtime(samples, sampleRate, expected),
+    expect(voiceChangeRealtime({ channels: [samples], sampleRate })).toEqual(
+      voiceChangeRealtime({
+        channels: [samples],
+        sampleRate,
+        config: token as VoicePresetId,
+      }),
     );
   });
 });

@@ -8,14 +8,14 @@
  *  - stripMeter accepts an optional tap argument;
  *  - one-shot mixStereo routes through the real graph (master output);
  *  - the four functions that round out WASM parity with Node/Python:
- *    decomposeWithInit, meteringVectorscopeDecimated,
+ *    decompose with init, meteringVectorscopeDecimated,
  *    meteringPhaseScopeDecimated, meteringSpectrumFrame.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { BuiltinSynthConfig } from '../dist/index.js';
 import {
-  decomposeWithInit,
+  decompose,
   init,
   Mixer,
   meteringPhaseScopeDecimated,
@@ -185,14 +185,17 @@ describe('WASM cross-binding consistency', () => {
 
   describe('mixer setPan keep-mode and stripMeter tap', () => {
     it('keeps the current pan mode when panMode is omitted', () => {
-      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), SR, BLOCK);
+      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+        sampleRate: SR,
+        blockSize: BLOCK,
+      });
       try {
         const vocal = mixer.stripById('vocal');
         assertStripIndex(vocal, 'vocal');
         // Force StereoPan, then nudge the position with no explicit mode.
         mixer.setPan(vocal, 0, 'stereoPan');
         mixer.setPan(vocal, 0.3);
-        const scene = JSON.parse(mixer.toSceneJson()) as {
+        const scene = JSON.parse(mixer.toJson()) as {
           strips: Array<{ id: string; panMode?: number }>;
         };
         const strip = scene.strips.find((s) => s.id === 'vocal');
@@ -200,7 +203,7 @@ describe('WASM cross-binding consistency', () => {
 
         // An explicit mode still switches it.
         mixer.setPan(vocal, 0.3, 'balance');
-        const scene2 = JSON.parse(mixer.toSceneJson()) as {
+        const scene2 = JSON.parse(mixer.toJson()) as {
           strips: Array<{ id: string; panMode?: number }>;
         };
         expect(scene2.strips.find((s) => s.id === 'vocal')?.panMode).toBe(0);
@@ -210,7 +213,10 @@ describe('WASM cross-binding consistency', () => {
     });
 
     it('stripMeter accepts an optional tap argument', () => {
-      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), SR, BLOCK);
+      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+        sampleRate: SR,
+        blockSize: BLOCK,
+      });
       try {
         const vocal = mixer.stripById('vocal');
         assertStripIndex(vocal, 'vocal');
@@ -249,18 +255,24 @@ describe('WASM cross-binding consistency', () => {
   });
 
   describe('functions matching the Node/Python surface', () => {
-    it('decomposeWithInit returns W and H factor matrices', () => {
+    it('decompose with an init returns W and H factor matrices', () => {
       const nFeatures = 8;
       const nFrames = 6;
       const s = new Float32Array(nFeatures * nFrames);
       for (let i = 0; i < s.length; i++) {
         s[i] = Math.abs(Math.sin(i * 0.7)) + 0.01;
       }
-      const { w, h } = decomposeWithInit(s, nFeatures, nFrames, 2, 20, 2.0, 'nndsvd');
-      expect(w).toBeInstanceOf(Float32Array);
-      expect(h).toBeInstanceOf(Float32Array);
-      expect(w.length).toBe(nFeatures * 2);
-      expect(h.length).toBe(2 * nFrames);
+      const { w, h } = decompose({
+        s: { data: s, rows: nFeatures, cols: nFrames },
+        nComponents: 2,
+        nIter: 20,
+        beta: 2.0,
+        init: 'nndsvd',
+      });
+      expect(w.data).toBeInstanceOf(Float32Array);
+      expect(h.data).toBeInstanceOf(Float32Array);
+      expect(w.data.length).toBe(nFeatures * 2);
+      expect(h.data.length).toBe(2 * nFrames);
     });
 
     it('meteringVectorscopeDecimated decimates the point series to maxPoints', () => {

@@ -1,7 +1,7 @@
 /**
  * Tests for the zero-copy "prepared" path on RealtimeVoiceChanger.
  *
- * The prepared API exposes the WASM-heap-backed input/output scratch as
+ * The realtime buffer API exposes the WASM-heap-backed input/output scratch as
  * typed_memory_view Float32Arrays, so AudioWorklet code can fill the input
  * view directly and read the output view back without any JS↔C++ per-sample
  * crossings or per-call allocations.
@@ -18,8 +18,16 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
     await init();
   });
 
-  it('can prepare directly from the constructor', () => {
-    const changer = new RealtimeVoiceChanger('neutral-monitor', SR, BLOCK, 1);
+  const make = (channels: 1 | 2 = 1, config: 'brightIdol' | 'neutralMonitor' = 'brightIdol') =>
+    new RealtimeVoiceChanger({
+      sampleRate: SR,
+      maxBlockSize: BLOCK,
+      numChannels: channels,
+      config,
+    });
+
+  it('is prepared directly by the constructor', () => {
+    const changer = make(1, 'neutralMonitor');
     try {
       expect(() => changer.processMono(new Float32Array(BLOCK))).not.toThrow();
     } finally {
@@ -27,20 +35,9 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
     }
   });
 
-  it('increments buffer generation when prepare can replace heap views', () => {
-    const changer = new RealtimeVoiceChanger('neutral-monitor');
-    changer.prepare(SR, BLOCK, 1);
-    const initial = changer.bufferGeneration();
-    changer.prepare(SR, BLOCK * 2, 1);
-    expect(changer.bufferGeneration()).toBeGreaterThan(initial);
-    changer.destroy();
-  });
-
   it('mono prepared path matches processMonoInto bit-for-bit', () => {
-    const changerA = new RealtimeVoiceChanger('bright-idol');
-    changerA.prepare(SR, BLOCK, 1);
-    const changerB = new RealtimeVoiceChanger('bright-idol');
-    changerB.prepare(SR, BLOCK, 1);
+    const changerA = make();
+    const changerB = make();
 
     const input = new Float32Array(BLOCK);
     for (let i = 0; i < BLOCK; i++) {
@@ -52,10 +49,10 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
     changerA.processMonoInto(input, outA);
 
     // Prepared path.
-    const inB = changerB.getMonoInputBuffer(BLOCK);
-    inB.set(input);
-    changerB.processPreparedMono(BLOCK);
-    const outB = changerB.getMonoOutputBuffer(BLOCK);
+    const bufB = changerB.createRealtimeMonoBuffer(BLOCK);
+    bufB.input.set(input);
+    bufB.process();
+    const outB = bufB.output;
 
     for (let i = 0; i < BLOCK; i++) {
       expect(outB[i]).toBe(outA[i]);
@@ -65,20 +62,20 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
   });
 
   it('input/output views are typed_memory_view onto the WASM heap', () => {
-    const changer = new RealtimeVoiceChanger('bright-idol');
-    changer.prepare(SR, BLOCK, 1);
-    const inView = changer.getMonoInputBuffer(BLOCK);
-    const outView = changer.getMonoOutputBuffer(BLOCK);
+    const changer = make();
+    const buf = changer.createRealtimeMonoBuffer(BLOCK);
+    const inView = buf.input;
+    const outView = buf.output;
     expect(inView).toBeInstanceOf(Float32Array);
     expect(outView).toBeInstanceOf(Float32Array);
     expect(inView.length).toBe(BLOCK);
     expect(outView.length).toBe(BLOCK);
     // typed_memory_view shares the heap ArrayBuffer; mutating inView before
     // the next call must persist into the C++ scratch and be visible to the
-    // next processPreparedMono.
+    // next process().
     inView.fill(0);
-    changer.processPreparedMono(BLOCK);
-    // outView is now valid; values must be finite (silent input → small but
+    buf.process();
+    // outView is now valid; values must be finite (silent input -> small but
     // finite output after the DSP chain settles).
     for (let i = 0; i < BLOCK; i++) {
       expect(Number.isFinite(outView[i])).toBe(true);
@@ -87,10 +84,9 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
   });
 
   it('rejects out-of-range prepared call', () => {
-    const changer = new RealtimeVoiceChanger('bright-idol');
-    changer.prepare(SR, BLOCK, 1);
+    const changer = make();
     // numSamples > maxBlockSize must throw.
-    expect(() => changer.processPreparedMono(BLOCK * 4)).toThrow();
+    expect(() => changer.createRealtimeMonoBuffer(BLOCK * 4).process()).toThrow();
     changer.destroy();
   });
 
@@ -100,48 +96,41 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
     // oracle, which rejects num_channels > handle->num_channels) instead of
     // silently growing the scratch buffers and processing a layout the changer
     // was never prepared for.
-    const changer = new RealtimeVoiceChanger('bright-idol');
-    changer.prepare(SR, BLOCK, 1);
+    const changer = make();
     const stereo = new Float32Array(BLOCK * 2);
-    expect(() => changer.processInterleaved(stereo, 2)).toThrow();
     expect(() => changer.processInterleavedInto(stereo, 2, new Float32Array(BLOCK * 2))).toThrow();
-    expect(() => changer.getInterleavedInputBuffer(BLOCK, 2)).toThrow();
-    expect(() => changer.getInterleavedOutputBuffer(BLOCK, 2)).toThrow();
-    expect(() => changer.processPreparedInterleaved(BLOCK, 2)).toThrow();
+    expect(() => changer.createRealtimeInterleavedBuffer(BLOCK, 2)).toThrow();
     // The prepared count still works.
-    expect(() => changer.processInterleaved(new Float32Array(BLOCK), 1)).not.toThrow();
+    expect(() =>
+      changer.processInterleavedInto(new Float32Array(BLOCK), 1, new Float32Array(BLOCK)),
+    ).not.toThrow();
     changer.destroy();
   });
 
   it('accepts a narrower interleaved channel count than the prepared layout', () => {
     // Prepared for stereo, but a mono block (channels=1) must be accepted, just
     // like the C ABI / Node / Python surfaces (which accept 1 <= channels <=
-    // prepared). Porting code that calls processInterleaved(buf, 1) on a
-    // stereo-prepared instance must not throw only on WASM.
-    const changer = new RealtimeVoiceChanger('bright-idol');
-    changer.prepare(SR, BLOCK, 2);
+    // prepared).
+    const changer = make(2);
     const mono = new Float32Array(BLOCK);
-    expect(() => changer.processInterleaved(mono, 1)).not.toThrow();
     expect(() => changer.processInterleavedInto(mono, 1, new Float32Array(BLOCK))).not.toThrow();
-    expect(() => changer.getInterleavedInputBuffer(BLOCK, 1)).not.toThrow();
-    expect(() => changer.getInterleavedOutputBuffer(BLOCK, 1)).not.toThrow();
-    expect(() => changer.processPreparedInterleaved(BLOCK, 1)).not.toThrow();
+    expect(() => changer.createRealtimeInterleavedBuffer(BLOCK, 1).process()).not.toThrow();
     // The full prepared width still works too.
-    expect(() => changer.processInterleaved(new Float32Array(BLOCK * 2), 2)).not.toThrow();
+    expect(() =>
+      changer.processInterleavedInto(new Float32Array(BLOCK * 2), 2, new Float32Array(BLOCK * 2)),
+    ).not.toThrow();
     // A count above the prepared maximum is still rejected.
     const wide = new Float32Array(BLOCK * 3);
-    expect(() => changer.processInterleaved(wide, 3)).toThrow();
+    expect(() => changer.processInterleavedInto(wide, 3 as never, wide.slice())).toThrow();
     // A non-positive count is still rejected.
-    expect(() => changer.processInterleaved(mono, 0)).toThrow();
+    expect(() => changer.processInterleavedInto(mono, 0 as never, mono.slice())).toThrow();
     changer.destroy();
   });
 
   it('interleaved stereo prepared path matches processInterleavedInto', () => {
     const channels = 2;
-    const changerA = new RealtimeVoiceChanger('bright-idol');
-    changerA.prepare(SR, BLOCK, channels);
-    const changerB = new RealtimeVoiceChanger('bright-idol');
-    changerB.prepare(SR, BLOCK, channels);
+    const changerA = make(channels);
+    const changerB = make(channels);
 
     const interleaved = new Float32Array(BLOCK * channels);
     for (let frame = 0; frame < BLOCK; frame++) {
@@ -152,10 +141,10 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
     const outA = new Float32Array(BLOCK * channels);
     changerA.processInterleavedInto(interleaved, channels, outA);
 
-    const inB = changerB.getInterleavedInputBuffer(BLOCK, channels);
-    inB.set(interleaved);
-    changerB.processPreparedInterleaved(BLOCK, channels);
-    const outB = changerB.getInterleavedOutputBuffer(BLOCK, channels);
+    const bufB = changerB.createRealtimeInterleavedBuffer(BLOCK, channels);
+    bufB.input.set(interleaved);
+    bufB.process();
+    const outB = bufB.output;
 
     for (let i = 0; i < BLOCK * channels; i++) {
       expect(outB[i]).toBe(outA[i]);
@@ -166,30 +155,30 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
 
   it('planar stereo prepared path matches the interleaved prepared path', () => {
     const channels = 2;
-    const changerA = new RealtimeVoiceChanger('bright-idol');
-    changerA.prepare(SR, BLOCK, channels);
-    const changerB = new RealtimeVoiceChanger('bright-idol');
-    changerB.prepare(SR, BLOCK, channels);
+    const changerA = make(channels);
+    const changerB = make(channels);
 
     // Reference: interleaved prepared path.
-    const inA = changerA.getInterleavedInputBuffer(BLOCK, channels);
+    const bufA = changerA.createRealtimeInterleavedBuffer(BLOCK, channels);
+    const inA = bufA.input;
     for (let frame = 0; frame < BLOCK; frame++) {
       inA[frame * 2 + 0] = 0.25 * Math.sin((2 * Math.PI * 440 * frame) / SR);
       inA[frame * 2 + 1] = 0.25 * Math.sin((2 * Math.PI * 660 * frame) / SR);
     }
-    changerA.processPreparedInterleaved(BLOCK, channels);
-    const outA = changerA.getInterleavedOutputBuffer(BLOCK, channels);
+    bufA.process();
+    const outA = bufA.output;
 
     // Planar prepared path.
-    const leftIn = changerB.getPlanarChannelBuffer(0, BLOCK);
-    const rightIn = changerB.getPlanarChannelBuffer(1, BLOCK);
+    const bufB = changerB.createRealtimePlanarBuffer(BLOCK, channels);
+    const leftIn = bufB.channels[0] as Float32Array;
+    const rightIn = bufB.channels[1] as Float32Array;
     for (let frame = 0; frame < BLOCK; frame++) {
       leftIn[frame] = 0.25 * Math.sin((2 * Math.PI * 440 * frame) / SR);
       rightIn[frame] = 0.25 * Math.sin((2 * Math.PI * 660 * frame) / SR);
     }
-    changerB.processPreparedPlanar(BLOCK);
+    bufB.process();
 
-    // Planar buffers carry output in place after processPreparedPlanar.
+    // Planar buffers carry output in place after process().
     for (let frame = 0; frame < BLOCK; frame++) {
       expect(leftIn[frame]).toBe(outA[frame * 2 + 0]);
       expect(rightIn[frame]).toBe(outA[frame * 2 + 1]);
@@ -200,8 +189,7 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
 
   it('createRealtimePlanarBuffer wires up reusable views and a process thunk', () => {
     const channels = 2;
-    const changer = new RealtimeVoiceChanger('bright-idol');
-    changer.prepare(SR, BLOCK, channels);
+    const changer = make(channels);
     const buf = changer.createRealtimePlanarBuffer(BLOCK, channels);
     expect(buf.channels.length).toBe(channels);
     expect(buf.channels[0]?.length).toBe(BLOCK);

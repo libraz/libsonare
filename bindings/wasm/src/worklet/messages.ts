@@ -13,13 +13,14 @@ import type {
   EngineTransportState,
   PlaybackDiagnostics,
   PlaybackRendererConfig,
+  ProjectMidiCcBinding,
   RealtimeVoiceChangerConfigInput,
-  RealtimeVoiceChangerPodConfig,
   StreamConfig,
   UmpWords,
 } from '../index.js';
 import type { SonareFailurePayload } from '../internal/failure_payload.js';
 import type { AutomationCurve, SurroundPan } from '../public_types.js';
+import type { ExternalMidiEvent } from '../public_types_engine.js';
 import type {
   SonareEngineCommandRecord,
   SonareEngineTelemetryRecord,
@@ -117,63 +118,31 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
  * configuration selects `vocoderCarrierSource: 'external'`.
  */
 export interface SonareRealtimeVoiceChangerWorkletProcessorOptions {
-  preset?: RealtimeVoiceChangerConfigInput;
+  /** Preset id, preset document or flat config. Default `'neutralMonitor'`. */
+  config?: RealtimeVoiceChangerConfigInput;
   /**
    * Defaults to the AudioWorkletGlobalScope `sampleRate`; any other value is
    * refused with a RangeError. Outside a worklet scope it is required.
    */
   sampleRate?: number;
-  blockSize?: number;
-  channelCount?: number;
+  /** Largest render quantum the processor accepts, a positive integer. Default 128. */
+  maxBlockSize?: number;
+  /** Channel count, 1 or 2. Default 1. */
+  numChannels?: 1 | 2;
   /** Compiled module bytes, used when the worklet realm has not initialized the module. */
   wasmBinary?: ArrayBuffer | Uint8Array;
 }
 
-export interface SonareRealtimeVoiceChangerSetConfigMessage {
-  type: 'setConfig';
-  /** Pre-normalized by the main thread; never JSON parsed in the worklet. */
-  config: RealtimeVoiceChangerPodConfig;
-}
-
-export interface SonareRealtimeVoiceChangerResetMessage {
-  type: 'reset';
-}
-
-export interface SonareRealtimeVoiceChangerDestroyMessage {
-  type: 'destroy';
-}
-
-/** Holds a MIDI note. `velocity` is in (0, 1] and defaults to 1. */
-export interface SonareRealtimeVoiceChangerNoteOnMessage {
-  type: 'noteOn';
-  note: number;
-  velocity?: number;
-}
-
-export interface SonareRealtimeVoiceChangerNoteOffMessage {
-  type: 'noteOff';
-  note: number;
-}
-
-export interface SonareRealtimeVoiceChangerAllNotesOffMessage {
-  type: 'allNotesOff';
-}
-
-export type SonareRealtimeVoiceChangerMessage =
-  | SonareRealtimeVoiceChangerSetConfigMessage
-  | SonareRealtimeVoiceChangerResetMessage
-  | SonareRealtimeVoiceChangerDestroyMessage
-  | SonareRealtimeVoiceChangerNoteOnMessage
-  | SonareRealtimeVoiceChangerNoteOffMessage
-  | SonareRealtimeVoiceChangerAllNotesOffMessage;
-
-/** Posted when a control message or the processor's construction is refused. */
-export interface SonareRealtimeVoiceChangerErrorMessage {
-  type: 'error';
-  request: SonareRealtimeVoiceChangerMessage['type'] | 'init' | 'invalid';
-  message: string;
-  failure: SonareFailurePayload;
-}
+export type {
+  SonareRealtimeVoiceChangerAllNotesOffMessage,
+  SonareRealtimeVoiceChangerDestroyMessage,
+  SonareRealtimeVoiceChangerErrorMessage,
+  SonareRealtimeVoiceChangerMessage,
+  SonareRealtimeVoiceChangerNoteOffMessage,
+  SonareRealtimeVoiceChangerNoteOnMessage,
+  SonareRealtimeVoiceChangerResetMessage,
+  SonareRealtimeVoiceChangerSetConfigMessage,
+} from '../internal/voice_changer_messages.js';
 
 export interface SonareStreamAnalyzerWorkletProcessorOptions {
   /** Mono samples per posted chunk. Integer of at least 128. Default 4096. */
@@ -320,7 +289,15 @@ export interface SonareRealtimeEngineNodeCapabilities {
 }
 
 export interface SonareRealtimeEngineNodeOptions
-  extends SonareRealtimeEngineWorkletProcessorOptions {
+  extends Omit<SonareRealtimeEngineWorkletProcessorOptions, 'channelCount'> {
+  /**
+   * Output plane count (default 2). Planes follow the canonical order
+   * L R C LFE Ls Rs [Lss Rss] for 6 (5.1) and 8 (7.1) planes. The Web Audio
+   * default destination is 2-channel `'speakers'`, so a wider output is mixed
+   * down to stereo unless the app raises `audioContext.destination.channelCount`
+   * to match.
+   */
+  numChannels?: number;
   processorName?: string;
   moduleUrl?: string | URL;
   mode?: 'auto' | 'sab' | 'postMessage';
@@ -332,16 +309,6 @@ export interface SonareRealtimeEngineNodeOptions
     processorName: string,
     options: AudioWorkletNodeOptions,
   ) => AudioWorkletNode;
-}
-
-export interface SonareEngineTransportFacade {
-  play(sampleTime?: number): boolean;
-  stop(sampleTime?: number): boolean;
-  seekPpq(ppq: number, sampleTime?: number): boolean;
-  seekSeconds(seconds: number, sampleTime?: number): boolean;
-  setTempo(bpm: number): void;
-  setTempoSegments(segments: readonly EngineTempoSegment[]): void;
-  setLoop(startPpq: number, endPpq: number, enabled?: boolean): boolean;
 }
 
 export interface SonareWorkletScheduleInsertAutomationMessage {
@@ -368,21 +335,10 @@ export type SonareWorkletMessage =
   | SonareWorkletSetMeterIntervalMessage
   | SonareWorkletDestroyMessage;
 
-/** One external-MIDI event delivered to the main thread, lowered to MIDI 1.0
- * bytes ready for a Web MIDI output port. */
-export interface SonareWorkletExternalMidiEvent {
-  /** Originating track lane, or 0xFFFFFFFF for transport/clock bytes. */
-  destinationId: number;
-  /** Absolute engine device frame at which the event fires, never an offset within a block. */
-  renderFrame: number;
-  /** MIDI 1.0 status + data bytes (1..3 entries). */
-  bytes: number[];
-}
-
 /** Batch of external-MIDI events posted from the worklet once per render block. */
 export interface SonareWorkletExternalMidiMessage {
   type: 'externalMidi';
-  events: SonareWorkletExternalMidiEvent[];
+  events: ExternalMidiEvent[];
 }
 
 /** A control-plane sync message that the worklet rejected without crashing, as posted. */
@@ -453,7 +409,7 @@ export function resolveMetronomeConfig(config: EngineMetronomeConfig): ResolvedM
     beatGain: config.beatGain ?? DEFAULT_METRONOME_CONFIG.beatGain,
     accentGain: config.accentGain ?? DEFAULT_METRONOME_CONFIG.accentGain,
     clickSamples: config.clickSamples ?? DEFAULT_METRONOME_CONFIG.clickSamples,
-    clickSeconds: config.clickSeconds ?? DEFAULT_METRONOME_CONFIG.clickSeconds,
+    clickSeconds: config.clickSec ?? DEFAULT_METRONOME_CONFIG.clickSeconds,
   };
   if (
     !Number.isFinite(resolved.beatGain) ||
@@ -465,8 +421,8 @@ export function resolveMetronomeConfig(config: EngineMetronomeConfig): ResolvedM
     !Number.isFinite(resolved.clickSeconds) ||
     resolved.clickSeconds < 0 ||
     resolved.clickSamples > 384000 ||
-    (config.clickSeconds !== undefined &&
-      (!Number.isFinite(config.clickSeconds) || config.clickSeconds < 0 || config.clickSeconds > 1))
+    (config.clickSec !== undefined &&
+      (!Number.isFinite(config.clickSec) || config.clickSec < 0 || config.clickSec > 1))
   ) {
     throw new RangeError('invalid metronome gains or click length');
   }
@@ -676,6 +632,8 @@ export interface SonareEngineSyncCaptureMessage {
   source: EngineCaptureStatus['source'];
   recordOffsetSamples: number;
   inputMonitor: { enabled: boolean; gain: number };
+  /** Punch window in timeline samples; absent means no punch window. */
+  punch?: { startSample: number; endSample: number };
 }
 
 export interface SonareEngineSyncTrackStripEqBandMessage {
@@ -929,11 +887,7 @@ export interface SonareEngineSyncMidiInputSourceMessage {
 
 export interface SonareEngineSyncMidiCcBindingMessage {
   type: 'syncMidiCcBinding';
-  channel: number;
-  controller: number;
-  paramId: number;
-  minValue: number;
-  maxValue: number;
+  binding: ProjectMidiCcBinding;
 }
 
 export interface SonareEngineSyncMidiInputEventMessage {

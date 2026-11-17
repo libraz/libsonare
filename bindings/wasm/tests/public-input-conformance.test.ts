@@ -32,8 +32,7 @@ const markerValue = (marker: CorpusMarker) => ({
   name: marker.name,
 });
 
-const snapshot = (engine: RealtimeEngine): string =>
-  JSON.stringify(Array.from({ length: engine.markerCount() }, (_, i) => engine.markerByIndex(i)));
+const snapshot = (engine: RealtimeEngine): string => JSON.stringify(engine.markers());
 
 const mixOptionValue = (value: MixOptionCase['value']): number | string => {
   if (value === 'nan') {
@@ -87,16 +86,16 @@ describe('shared public-input conformance corpus (WASM)', () => {
 
   for (const testCase of corpus.marker_transaction.cases) {
     it(`keeps marker transactions conformant: ${testCase.id}`, () => {
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       try {
         engine.setMarkers(corpus.marker_transaction.initial.map(markerValue));
         const before = snapshot(engine);
         const candidate = testCase.markers.map(markerValue);
         if (testCase.accepted) {
           engine.setMarkers(candidate);
-          expect(engine.markerCount()).toBe(candidate.length);
+          expect(engine.markers().length).toBe(candidate.length);
           for (let i = 0; i < candidate.length; i++) {
-            expect(engine.markerByIndex(i)).toMatchObject(candidate[i]);
+            expect(engine.markers()[i]).toMatchObject(candidate[i]);
           }
         } else {
           expect(() => engine.setMarkers(candidate)).toThrow();

@@ -107,14 +107,18 @@ describe('empty-sample guards (WASM)', () => {
     );
   });
   it('voiceChange rejects empty', () => {
-    expect(() => voiceChange(new Float32Array(0))).toThrow(
+    expect(() => voiceChange(new Float32Array(0), SR)).toThrow(
       /voiceChange: samples must not be empty/,
     );
   });
-  it('voiceChangeRealtime rejects invalid stereo length', () => {
+  it('voiceChangeRealtime rejects unequal channel lengths', () => {
     expect(() =>
-      voiceChangeRealtime(new Float32Array(3), 48000, 'neutral-monitor', { channels: 2 }),
-    ).toThrow(/multiple of 2/);
+      voiceChangeRealtime({
+        channels: [new Float32Array(3), new Float32Array(2)],
+        sampleRate: 48000,
+        config: 'neutralMonitor',
+      }),
+    ).toThrow(/equal lengths/);
   });
 });
 

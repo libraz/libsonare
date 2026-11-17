@@ -139,7 +139,7 @@ describe('RealtimeEngine raw UMP push', () => {
   const NOTE_ON_2W = [0x41923c00, 0xc0000000];
 
   function withEngine(body: (engine: RealtimeEngine) => void): void {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       body(engine);
     } finally {

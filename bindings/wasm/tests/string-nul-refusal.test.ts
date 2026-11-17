@@ -12,6 +12,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  type BuiltinSynthWaveform,
   init,
   type MasteringPreset,
   Mixer,
@@ -27,7 +28,7 @@ import {
   realtimeVoiceChangerPresetConfig,
   realtimeVoiceChangerPresetJson,
   realtimeVoiceChangerPresetNames,
-  validateRealtimeVoiceChangerPresetJson,
+  realtimeVoiceChangerValidatePresetJson,
 } from '../dist/index.js';
 import { getSonareModule, setSonareModule } from '../src/module_state.js';
 import { synthPatchRoundTripForTest } from '../src/project.js';
@@ -53,7 +54,7 @@ function expectNulRefusal(call: () => unknown, field: string): void {
 }
 
 function withEngine<T>(body: (engine: RealtimeEngine) => T): T {
-  const engine = new RealtimeEngine(48000, 256);
+  const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
   try {
     return body(engine);
   } finally {
@@ -62,7 +63,7 @@ function withEngine<T>(body: (engine: RealtimeEngine) => T): T {
 }
 
 function withMixer<T>(body: (mixer: Mixer) => T): T {
-  const mixer = Mixer.fromSceneJson(mixingScenePresetJson('drumBusSubgroup'));
+  const mixer = Mixer.fromJson(mixingScenePresetJson('drumBusSubgroup'), { sampleRate: 48000 });
   try {
     return body(mixer);
   } finally {
@@ -75,13 +76,19 @@ function stripId(): string {
   return JSON.parse(mixingScenePresetJson('drumBusSubgroup')).strips[0].id;
 }
 
+/**
+ * The embind object behind the facade. The facade serializes an object with
+ * `JSON.stringify`, which escapes a NUL, so a raw NUL can only reach the C
+ * reader through the native JSON entry points.
+ */
+function nativeOf(engine: RealtimeEngine): {
+  setBusStripEqBandJson(busId: number, bandIndex: number, bandJson: string): void;
+} {
+  return (engine as unknown as { native: ReturnType<typeof nativeOf> }).native;
+}
+
 const BAND_JSON = '{"type":"Peak","frequencyHz":1000,"gainDb":3,"q":1}';
-const SCENE_JSON = JSON.stringify({
-  version: 1,
-  strips: [],
-  buses: [{ id: '1', inserts: [] }],
-  connections: [],
-});
+const SCENE_BUS = { id: '1', inserts: [] } as never;
 
 function graph(inputNode: string) {
   return {
@@ -118,9 +125,9 @@ describe('embedded NUL refusal, by reader', () => {
 
   it('stringProperty names the key', () => {
     withEngine((engine) => {
-      expect(() => engine.setMarkers([{ id: 1, ppq: 0, name: 'a', kind: 0 }])).not.toThrow();
+      expect(() => engine.setMarkers([{ id: 1, ppq: 0, name: 'a', kind: 'marker' }])).not.toThrow();
       expectNulRefusal(
-        () => engine.setMarkers([{ id: 1, ppq: 0, name: `a${NUL}b`, kind: 0 }]),
+        () => engine.setMarkers([{ id: 1, ppq: 0, name: `a${NUL}b`, kind: 'marker' }]),
         'name',
       );
     });
@@ -138,9 +145,9 @@ describe('embedded NUL refusal, by reader', () => {
 
   it('the builtin waveform name names the field', () => {
     withEngine((engine) => {
-      expect(() => engine.setBuiltinInstrument({ waveform: 'sine' }, 0)).not.toThrow();
+      expect(() => engine.setBuiltinInstrument(0, { waveform: 'sine' })).not.toThrow();
       expectNulRefusal(
-        () => engine.setBuiltinInstrument({ waveform: `sine${NUL}x` }, 0),
+        () => engine.setBuiltinInstrument(0, { waveform: `sine${NUL}x` as BuiltinSynthWaveform }),
         'waveform',
       );
     });
@@ -153,8 +160,8 @@ describe('embedded NUL refusal, by reader', () => {
     });
     withEngine((engine) => {
       engine.setTrackBuses([{ busId: 1 }]);
-      engine.setBusStripJson(1, SCENE_JSON);
-      expectNulRefusal(() => engine.setBusStripEqBandJson(1, 0, `a${NUL}b`), 'bandJson');
+      engine.setBusStrip(1, SCENE_BUS);
+      expectNulRefusal(() => nativeOf(engine).setBusStripEqBandJson(1, 0, `a${NUL}b`), 'bandJson');
     });
   });
 });
@@ -177,7 +184,7 @@ describe('embedded NUL refusal, by handoff kind', () => {
   it('a name lookup (mixer strip id)', () => {
     withMixer((mixer) => {
       expect(mixer.stripById(stripId())).toBe(0);
-      expect(mixer.stripById(`${stripId()}x`)).toBeNull();
+      expect(() => mixer.stripById(`${stripId()}x`)).toThrow(RangeError);
       expectNulRefusal(() => mixer.stripById(`${stripId()}${NUL}x`), 'id');
     });
   });
@@ -185,11 +192,12 @@ describe('embedded NUL refusal, by handoff kind', () => {
   it('a JSON key (EQ band)', () => {
     withEngine((engine) => {
       engine.setTrackBuses([{ busId: 1 }]);
-      engine.setBusStripJson(1, SCENE_JSON);
-      expect(() => engine.setBusStripEqBandJson(1, 0, BAND_JSON)).not.toThrow();
-      expect(() => engine.setBusStripEqBandJson(1, 0, 'garbage')).toThrow();
+      engine.setBusStrip(1, SCENE_BUS);
+      const native = nativeOf(engine);
+      expect(() => native.setBusStripEqBandJson(1, 0, BAND_JSON)).not.toThrow();
+      expect(() => native.setBusStripEqBandJson(1, 0, 'garbage')).toThrow();
       expectNulRefusal(
-        () => engine.setBusStripEqBandJson(1, 0, `${BAND_JSON}${NUL}garbage`),
+        () => native.setBusStripEqBandJson(1, 0, `${BAND_JSON}${NUL}garbage`),
         'bandJson',
       );
     });
@@ -207,10 +215,10 @@ describe('embedded NUL refusal, by handoff kind', () => {
   it('an internal const char* (swap_graph node ids)', () => {
     withEngine((engine) => {
       engine.setGraph(graph('a'));
-      expect(engine.graphNodeCount()).toBe(1);
+      expect(engine.graphNodeCount).toBe(1);
       expect(() => engine.setGraph(graph('zz'))).toThrow();
       expectNulRefusal(() => engine.setGraph(graph(`a${NUL}b`)), 'inputNode');
-      expect(engine.graphNodeCount()).toBe(1);
+      expect(engine.graphNodeCount).toBe(1);
     });
   });
 });
@@ -271,14 +279,13 @@ describe('embedded NUL refusal, std::string entry points', () => {
     expect(mixingScenePresetJson('vocalReverbSend').length).toBeGreaterThan(0);
     expectNulRefusal(() => mixingScenePresetJson(`vocalReverbSend${NUL}junk`), 'preset');
     expect(realtimeVoiceChangerPresetJson(id).length).toBeGreaterThan(0);
-    expectNulRefusal(
-      () => realtimeVoiceChangerPresetJson(`${id}${NUL}junk` as typeof id),
-      'presetId',
-    );
-    expectNulRefusal(
-      () => realtimeVoiceChangerPresetConfig(`${id}${NUL}junk` as typeof id),
-      'preset',
-    );
+    // A preset id is a closed token, so the facade refuses the NUL form as an unknown id.
+    expect(
+      refusal(() => realtimeVoiceChangerPresetJson(`${id}${NUL}junk` as typeof id)),
+    ).toBeInstanceOf(RangeError);
+    expect(
+      refusal(() => realtimeVoiceChangerPresetConfig(`${id}${NUL}junk` as typeof id)),
+    ).toBeInstanceOf(RangeError);
   });
 
   it('a JSON text is refused by name, not reported as trailing data', () => {
@@ -286,13 +293,13 @@ describe('embedded NUL refusal, std::string entry points', () => {
     expect(() => Project.fromJson(json)).not.toThrow();
     expectNulRefusal(() => Project.fromJson(`${json}${NUL}junk`), 'json');
     expectNulRefusal(() => Project.fromJsonWithDiagnostics(`${json}${NUL}junk`), 'json');
-    expectNulRefusal(() => validateRealtimeVoiceChangerPresetJson(`{}${NUL}junk`), 'json');
+    expectNulRefusal(() => realtimeVoiceChangerValidatePresetJson(`{}${NUL}junk`), 'json');
   });
 
   it('an unknown voice preset name is a RangeError', () => {
     const error = refusal(() => realtimeVoiceChangerPresetConfig('no-such-preset' as never));
     expect(error).toBeInstanceOf(RangeError);
-    expect(error.message).toContain('Unknown voice character preset: no-such-preset');
+    expect(error.message).toContain('preset must be one of neutralMonitor');
   });
 });
 

@@ -16,11 +16,12 @@ export { init, isInitialized } from './index.js';
 // left main-thread-only so a live preview does not have to round-trip audio to
 // the main thread; see the class doc for the prepare/loudness/latency contract.
 export type { StreamingMasteringChainConfig } from './public_types.js';
+export type { CaptureOptions } from './public_types_engine.js';
 export { StreamingMasteringChain } from './streaming_processors.js';
 export { SonareEngine } from './worklet/engine.js';
 export type { SonareRenderOfflineRequest } from './worklet/engine-export.js';
 export { SonareRealtimeEngineNode } from './worklet/engine-node.js';
-export type { CaptureOptions } from './worklet/engine-offline.js';
+export type { SonareEngineTransportFacade } from './worklet/engine-offline.js';
 export type { SonareEngineOptions } from './worklet/engine-options.js';
 export { SonareRealtimeEngineWorkletProcessor } from './worklet/engine-processor.js';
 export { registerSonareRealtimeEngineWorkletProcessor } from './worklet/engine-register.js';
@@ -53,7 +54,6 @@ export type {
   SonareEngineSyncTempoMessage,
   SonareEngineSyncTrackStripEqBandMessage,
   SonareEngineSyncTrackStripInsertBypassedMessage,
-  SonareEngineTransportFacade,
   SonareEngineTransportRequestMessage,
   SonareEngineTransportResponseMessage,
   SonarePlaybackConfigMessage,
@@ -70,19 +70,10 @@ export type {
   SonareRealtimeEngineNodeCapabilities,
   SonareRealtimeEngineNodeOptions,
   SonareRealtimeEngineWorkletProcessorOptions,
-  SonareRealtimeVoiceChangerAllNotesOffMessage,
-  SonareRealtimeVoiceChangerDestroyMessage,
-  SonareRealtimeVoiceChangerErrorMessage,
-  SonareRealtimeVoiceChangerMessage,
-  SonareRealtimeVoiceChangerNoteOffMessage,
-  SonareRealtimeVoiceChangerNoteOnMessage,
-  SonareRealtimeVoiceChangerResetMessage,
-  SonareRealtimeVoiceChangerSetConfigMessage,
   SonareRealtimeVoiceChangerWorkletProcessorOptions,
   SonareStreamAnalyzerNodeOptions,
   SonareStreamAnalyzerWorkletProcessorOptions,
   SonareWorkletDestroyMessage,
-  SonareWorkletExternalMidiEvent,
   SonareWorkletMessage,
   SonareWorkletProcessorOptions,
   SonareWorkletScheduleInsertAutomationMessage,

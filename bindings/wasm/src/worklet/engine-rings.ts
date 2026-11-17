@@ -121,7 +121,8 @@ export enum SonareEngineTelemetryError {
 export interface SonareEngineCommandRecord {
   type: SonareEngineCommandType | number;
   targetId?: number;
-  sampleTime?: number | bigint;
+  /** Absolute render frame the command applies at; `-1` or absent: the next block head. */
+  renderFrame?: number | bigint;
   argFloat?: number;
   argInt?: number | bigint;
   /**
@@ -686,7 +687,7 @@ function writeEngineCommandRecord(
   // them to that domain; the command vocabulary itself is the node's check.
   view.setUint32(offset, toUint32Slot(command.type, 0, 'type'), true);
   view.setUint32(offset + 4, toUint32Slot(command.targetId, 0, 'targetId'), true);
-  writeInt64Words(view, offset + 8, toSafeInteger(command.sampleTime, -1));
+  writeInt64Words(view, offset + 8, toSafeInteger(command.renderFrame, -1));
   // argFloat occupies a full 8-byte Float64 slot (replacing the old Float32 +
   // 4-byte pad) so PPQ scalars carried here keep full double precision over the
   // SAB transport, matching the engine's double-precision seek/loop contract.
@@ -705,7 +706,7 @@ function readEngineCommandRecord(view: DataView, offset: number): SonareEngineCo
   const record: SonareEngineCommandRecord = {
     type,
     targetId: view.getUint32(offset + 4, true),
-    sampleTime: readInt64Words(view, offset + 8),
+    renderFrame: readInt64Words(view, offset + 8),
     argFloat: view.getFloat64(offset + 16, true),
   };
   // The shared 8-byte lane holds a double only for the command types that write one there.
@@ -752,14 +753,24 @@ function readEngineTelemetryRecord(view: DataView, offset: number): SonareEngine
   };
 }
 
+function upperFirst(name: string): string {
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+/** Converts a drained {@link EngineTelemetry} back to the wire record (ordinals, Q8 latency). */
 export function telemetryFromEngine(telemetry: EngineTelemetry): SonareEngineTelemetryRecord {
   return {
-    type: telemetry.type,
-    error: telemetry.error,
+    type: SonareEngineTelemetryType[
+      upperFirst(telemetry.type) as keyof typeof SonareEngineTelemetryType
+    ],
+    error:
+      SonareEngineTelemetryError[
+        upperFirst(telemetry.error) as keyof typeof SonareEngineTelemetryError
+      ],
     renderFrame: telemetry.renderFrame,
     timelineSample: telemetry.timelineSample,
     audibleTimelineSample: telemetry.audibleTimelineSample,
-    graphLatencySamplesQ8: telemetry.graphLatencySamplesQ8,
+    graphLatencySamplesQ8: Math.round(telemetry.graphLatencySamples * 256),
     value: telemetry.value,
   };
 }

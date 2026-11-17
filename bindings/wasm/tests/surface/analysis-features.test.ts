@@ -642,3 +642,34 @@ describe('analysis features: types', () => {
     expect(typeof typeOnly).toBe('function');
   });
 });
+
+describe('analysis features: note segments voicing', () => {
+  const frames = 40;
+  const f0Hz = new Float32Array(frames).fill(440);
+
+  it('takes voicedFlags in place of a probability', () => {
+    const voicedFlags = new Uint8Array(frames).fill(1);
+    const viaFlags = noteSegments({ f0Hz, voicedFlags, frameRate: 100 });
+    const viaProb = noteSegments({
+      f0Hz,
+      voicedProb: new Float32Array(frames).fill(1),
+      frameRate: 100,
+    });
+    expect(viaFlags).toEqual(viaProb);
+  });
+
+  it('requires exactly one of voicedFlags or voicedProb', () => {
+    expect(() => noteSegments({ f0Hz, frameRate: 100 } as never)).toThrow(RangeError);
+  });
+
+  it('segments a pitchPyin track through its voicedFlag', () => {
+    const sr = 22050;
+    const samples = new Float32Array(sr).map(
+      (_, i) => 0.4 * Math.sin((2 * Math.PI * 440 * i) / sr),
+    );
+    const track = pitchPyin(samples, sr);
+    const voicedFlags = Uint8Array.from(track.voicedFlag, Number);
+    const segments = noteSegments({ f0Hz: track.f0, voicedFlags, frameRate: sr / 512 });
+    expect(segments.length).toBeGreaterThan(0);
+  });
+});

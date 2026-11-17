@@ -2,19 +2,27 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   init,
   RealtimeVoiceChanger,
-  type RealtimeVoiceChangerPodConfig,
+  type RealtimeVoiceChangerConfig,
+  type RealtimeVoiceChangerConfigInput,
   realtimeVoiceChangerPresetConfig,
   realtimeVoiceChangerPresetJson,
   realtimeVoiceChangerPresetNames,
 } from '../src/index';
 
-describe('RealtimeVoiceChanger flat POD setConfig', () => {
+const SAMPLE_RATE = 48000;
+
+/** A changer prepared for mono blocks of at most 128 samples. */
+function make(config: RealtimeVoiceChangerConfigInput): RealtimeVoiceChanger {
+  return new RealtimeVoiceChanger({ sampleRate: SAMPLE_RATE, maxBlockSize: 128, config });
+}
+
+describe('RealtimeVoiceChanger flat config setConfig', () => {
   beforeAll(async () => {
     await init();
   });
 
   it('round-trips every field of a flat preset POD', () => {
-    const pod = realtimeVoiceChangerPresetConfig('bright-idol');
+    const pod = realtimeVoiceChangerPresetConfig('brightIdol');
     expect(pod).not.toBeNull();
     if (!pod) {
       return;
@@ -23,15 +31,15 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
       inputGainDb: 2.5,
       outputGainDb: -4,
       wetMix: 0.37,
-      retuneSemitones: -7,
+      retunePitchSemitones: -7,
       retuneMix: 0.61,
-      retuneGrainSize: 4096,
+      retuneGrainSizeSamples: 4096,
       formantFactor: 1.23,
       formantAmount: 0.41,
       formantBody: -0.21,
       formantBrightness: 0.31,
       formantNasal: -0.11,
-      eqHighpassHz: 123,
+      eqHighPassHz: 123,
       eqBodyDb: 1.2,
       eqPresenceDb: -2.3,
       eqAirDb: 3.4,
@@ -56,7 +64,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
       limiterReleaseMs: 123,
       limiterEnableIspLimiter: false,
       limiterIspCeilingDbtp: -2.7,
-      voiceEngineEngine: 'psola',
+      voiceEngine: 'psola',
       voiceEngineF0MinHz: 90,
       pitchCorrectionMode: 'auto',
       pitchCorrectionAmount: 0.65,
@@ -65,9 +73,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
       pitchCorrectionScale: 'naturalMinor',
       pitchCorrectionRobotOctave: -1,
       harmonyVoices: 2,
-      harmonyStep1: 3,
-      harmonyStep2: -5,
-      harmonyStep3: 6,
+      harmonySteps: [3, -5, 6],
       harmonyLevel: 0.45,
       harmonyLeadLevel: 0.85,
       harmonyDetuneCents: 9,
@@ -81,20 +87,17 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
       vocoderCarrierWave: 'ensemble',
       vocoderEnsembleDetuneCents: 15,
       vocoderLevel: 0.75,
-      characterType: 'bbd_chorus',
+      characterType: 'bbdChorus',
       characterAmount: 0.35,
       characterTone: -0.4,
-      reverbVariationVariation: 'tempo_delay',
+      reverbVariation: 'tempoDelay',
       reverbVariationDelayMs: 420,
       reverbVariationFeedback: 0.55,
       reverbVariationTempoBpm: 90,
-      reverbVariationDivision: 'dotted_eighth',
+      reverbVariationDivision: 'dottedEighth',
       midiRelease: 'input',
     });
-    // Construct before prepare so the structural grain size remains the exact
-    // requested value. After prepare, grain storage is intentionally fixed for
-    // RT safety and configJson reports the active grain size instead (#189).
-    const vc = new RealtimeVoiceChanger(pod);
+    const vc = make(pod);
     try {
       const f32 = Math.fround;
       expect(JSON.parse(vc.configJson()).dsp).toEqual({
@@ -102,9 +105,9 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
         outputGainDb: f32(pod.outputGainDb),
         wetMix: f32(pod.wetMix),
         retune: {
-          semitones: f32(pod.retuneSemitones),
+          semitones: f32(pod.retunePitchSemitones),
           mix: f32(pod.retuneMix),
-          grainSize: pod.retuneGrainSize,
+          grainSize: pod.retuneGrainSizeSamples,
         },
         formant: {
           factor: f32(pod.formantFactor),
@@ -115,7 +118,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
           mode: pod.formantMode,
         },
         eq: {
-          highpassHz: f32(pod.eqHighpassHz),
+          highpassHz: f32(pod.eqHighPassHz),
           bodyDb: f32(pod.eqBodyDb),
           presenceDb: f32(pod.eqPresenceDb),
           airDb: f32(pod.eqAirDb),
@@ -151,7 +154,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
           enableIspLimiter: pod.limiterEnableIspLimiter,
           ispCeilingDbtp: f32(pod.limiterIspCeilingDbtp),
         },
-        voiceEngine: { engine: pod.voiceEngineEngine, f0MinHz: f32(pod.voiceEngineF0MinHz) },
+        voiceEngine: { engine: pod.voiceEngine, f0MinHz: f32(pod.voiceEngineF0MinHz) },
         pitchCorrection: {
           mode: pod.pitchCorrectionMode,
           amount: f32(pod.pitchCorrectionAmount),
@@ -163,7 +166,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
         },
         harmony: {
           voices: pod.harmonyVoices,
-          steps: [pod.harmonyStep1, pod.harmonyStep2, pod.harmonyStep3],
+          steps: [...pod.harmonySteps],
           level: f32(pod.harmonyLevel),
           leadLevel: f32(pod.harmonyLeadLevel),
           detuneCents: f32(pod.harmonyDetuneCents),
@@ -181,16 +184,17 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
           level: f32(pod.vocoderLevel),
         },
         character: {
-          type: pod.characterType,
+          // The serialised document keeps the native token spellings.
+          type: 'bbd_chorus',
           amount: f32(pod.characterAmount),
           tone: f32(pod.characterTone),
         },
         reverbVariation: {
-          variation: pod.reverbVariationVariation,
+          variation: 'tempo_delay',
           delayMs: f32(pod.reverbVariationDelayMs),
           feedback: f32(pod.reverbVariationFeedback),
           tempoBpm: f32(pod.reverbVariationTempoBpm),
-          division: pod.reverbVariationDivision,
+          division: 'dotted_eighth',
         },
         midi: { release: pod.midiRelease },
       });
@@ -200,9 +204,8 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
   });
 
   it('applies a complete nested preset document', () => {
-    const vc = new RealtimeVoiceChanger('neutral-monitor');
-    vc.prepare(48000, 128, 1);
-    const preset = JSON.parse(realtimeVoiceChangerPresetJson('neutral-monitor'));
+    const vc = make('neutralMonitor');
+    const preset = JSON.parse(realtimeVoiceChangerPresetJson('neutralMonitor'));
     preset.dsp.retune.semitones = 3;
     vc.setConfig(preset);
     const applied = JSON.parse(vc.configJson()).dsp;
@@ -211,8 +214,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
   });
 
   it('rejects a partial nested preset instead of applying defaults', () => {
-    const vc = new RealtimeVoiceChanger('neutral-monitor');
-    vc.prepare(48000, 128, 1);
+    const vc = make('neutralMonitor');
     expect(() =>
       // @ts-expect-error preset metadata is deliberately omitted; the runtime rejects it
       vc.setConfig({ schemaVersion: 1, dsp: { retune: { semitones: 3 } } }),
@@ -221,35 +223,33 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
   });
 
   it('accepts a flat preset POD in the constructor', () => {
-    const pod = realtimeVoiceChangerPresetConfig('bright-idol');
+    const pod = realtimeVoiceChangerPresetConfig('brightIdol');
     expect(pod).not.toBeNull();
     if (!pod) {
       return;
     }
-    pod.retuneSemitones = -9;
-    const vc = new RealtimeVoiceChanger(pod);
+    pod.retunePitchSemitones = -9;
+    const vc = make(pod);
     expect(JSON.parse(vc.configJson()).dsp.retune.semitones).toBeCloseTo(-9, 4);
     vc.destroy();
   });
 
   it('carries the formant mode, fixed once the changer is prepared', () => {
-    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
+    const pod = realtimeVoiceChangerPresetConfig('neutralMonitor');
     expect(pod?.formantMode).toBe('relative');
     if (!pod) {
       return;
     }
-    const grain: RealtimeVoiceChangerPodConfig = { ...pod, voiceEngineEngine: 'grain' };
-    const relative = new RealtimeVoiceChanger(grain);
-    const absolute = new RealtimeVoiceChanger({
+    const grain: RealtimeVoiceChangerConfig = { ...pod, voiceEngine: 'grain' };
+    const relative = make(grain);
+    const absolute = make({
       ...grain,
       formantMode: 'absolute',
       formantFactor: 1.1,
     });
     try {
-      relative.prepare(48000, 128, 1);
-      absolute.prepare(48000, 128, 1);
       // One analysis frame (1024 samples at 48 kHz) more than the relative chain.
-      expect(absolute.latencySamples()).toBe(relative.latencySamples() + 1024);
+      expect(absolute.latencySamples).toBe(relative.latencySamples + 1024);
       absolute.setConfig({ ...grain, formantMode: 'absolute', formantFactor: 1.2 });
       expect(() => absolute.setConfig({ ...grain, formantMode: 'relative' })).toThrow();
       expect(() => relative.setConfig({ ...grain, formantMode: 'absolute' })).toThrow();
@@ -260,100 +260,99 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
   });
 
   it('refuses an unreachable absolute warp and names the formant factor range', () => {
-    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
+    const pod = realtimeVoiceChangerPresetConfig('neutralMonitor');
     if (!pod) {
       return;
     }
-    const unreachable: RealtimeVoiceChangerPodConfig = {
+    const unreachable: RealtimeVoiceChangerConfig = {
       ...pod,
-      voiceEngineEngine: 'grain',
+      voiceEngine: 'grain',
       formantMode: 'absolute',
-      retuneSemitones: -9,
+      retunePitchSemitones: -9,
     };
-    expect(() => new RealtimeVoiceChanger(unreachable)).toThrow(/\[0\.55, 0\.9811\]/);
-    expect(() => new RealtimeVoiceChanger(unreachable)).toThrow(
-      /limited by formantFactor's \[0\.55, 1\.65\]/,
-    );
+    expect(() => make(unreachable)).toThrow(/\[0\.55, 0\.9811\]/);
+    expect(() => make(unreachable)).toThrow(/limited by formantFactor's \[0\.55, 1\.65\]/);
   });
 
   it('refuses an out-of-range field instead of clamping it and keeps the previous config', () => {
-    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
+    const pod = realtimeVoiceChangerPresetConfig('neutralMonitor');
     if (!pod) {
       return;
     }
-    const changer = new RealtimeVoiceChanger(pod);
+    const changer = make(pod);
     try {
       const before = changer.configJson();
       expect(() => changer.setConfig({ ...pod, formantFactor: 3.0 })).toThrow(RangeError);
       expect(() => changer.setConfig({ ...pod, formantFactor: 3.0 })).toThrow(
         /formant\.factor out of range \[0\.55, 1\.65\], got 3/,
       );
-      expect(() => changer.setPodConfig({ ...pod, limiterCeilingDb: 0.5 })).toThrow(RangeError);
-      expect(() => changer.setPodConfig({ ...pod, limiterCeilingDb: 0.5 })).toThrow(
+      expect(() => changer.setConfig({ ...pod, limiterCeilingDb: 0.5 })).toThrow(RangeError);
+      expect(() => changer.setConfig({ ...pod, limiterCeilingDb: 0.5 })).toThrow(
         /limiter\.ceilingDb out of range/,
       );
       expect(changer.configJson()).toBe(before);
     } finally {
       changer.destroy();
     }
-    expect(() => new RealtimeVoiceChanger({ ...pod, formantFactor: 3.0 })).toThrow(RangeError);
-    expect(() => new RealtimeVoiceChanger({ ...pod, formantFactor: 3.0 })).toThrow(
-      /formant\.factor out of range/,
-    );
+    expect(() => make({ ...pod, formantFactor: 3.0 })).toThrow(RangeError);
+    expect(() => make({ ...pod, formantFactor: 3.0 })).toThrow(/formant\.factor out of range/);
   });
 
   it('requires formantMode on a flat POD in the constructor and in setConfig', () => {
-    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
+    const pod = realtimeVoiceChangerPresetConfig('neutralMonitor');
     if (!pod) {
       return;
     }
     const { formantMode: _omitted, ...partial } = pod;
-    const podWithoutMode = partial as unknown as RealtimeVoiceChangerPodConfig;
-    expect(() => new RealtimeVoiceChanger(podWithoutMode)).toThrow(TypeError);
-    expect(() => new RealtimeVoiceChanger(podWithoutMode)).toThrow(/formantMode is required/);
-    const changer = new RealtimeVoiceChanger(pod);
+    const podWithoutMode = partial as unknown as RealtimeVoiceChangerConfig;
+    expect(() => make(podWithoutMode)).toThrow(TypeError);
+    expect(() => make(podWithoutMode)).toThrow(/formantMode is required/);
+    const changer = make(pod);
     try {
       expect(() => changer.setConfig(podWithoutMode)).toThrow(TypeError);
       expect(() =>
-        changer.setConfig({ ...pod, formantMode: 3 } as unknown as RealtimeVoiceChangerPodConfig),
+        changer.setConfig({ ...pod, formantMode: 3 } as unknown as RealtimeVoiceChangerConfig),
       ).toThrow(/formantMode must be a string/);
       // A preset id and a nested preset document keep their own defaults.
-      expect(() => changer.setConfig('neutral-monitor')).not.toThrow();
+      expect(() => changer.setConfig('neutralMonitor')).not.toThrow();
     } finally {
       changer.destroy();
     }
   });
 
   it('refuses a POD without formantMode, as it refuses any partial POD', () => {
-    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
+    const pod = realtimeVoiceChangerPresetConfig('neutralMonitor');
     if (!pod) {
       return;
     }
     const { formantMode: _omitted, ...partial } = pod;
-    const changer = new RealtimeVoiceChanger(pod);
+    const changer = make(pod);
     try {
-      expect(() =>
-        changer.setPodConfig(partial as unknown as RealtimeVoiceChangerPodConfig),
-      ).toThrow(/formantMode/);
+      expect(() => changer.setConfig(partial as unknown as RealtimeVoiceChangerConfig)).toThrow(
+        /formantMode/,
+      );
     } finally {
       changer.destroy();
     }
   });
 
   it('requires every voice transformer key in both flat POD paths', () => {
-    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
+    const pod = realtimeVoiceChangerPresetConfig('neutralMonitor');
     const keys = Object.keys(pod);
-    expect(keys).toHaveLength(71);
-    const changer = new RealtimeVoiceChanger(pod);
+    expect(keys).toHaveLength(69);
+    const changer = make(pod);
     try {
       for (const key of keys) {
-        const { [key as keyof RealtimeVoiceChangerPodConfig]: _omitted, ...partial } = pod;
-        const incomplete = partial as unknown as RealtimeVoiceChangerPodConfig;
-        expect(() => changer.setPodConfig(incomplete), key).toThrow(new RegExp(key));
-        // Without retuneSemitones the object is no longer recognised as a flat POD.
-        if (key !== 'retuneSemitones') {
-          expect(() => new RealtimeVoiceChanger(incomplete), key).toThrow(new RegExp(key));
+        const { [key as keyof RealtimeVoiceChangerConfig]: _omitted, ...partial } = pod;
+        const incomplete = partial as unknown as RealtimeVoiceChangerConfig;
+        // Without retunePitchSemitones the object is no longer recognised as a flat config.
+        if (key === 'retunePitchSemitones') {
+          expect(() => changer.setConfig(incomplete), key).toThrow();
+          expect(() => make(incomplete), key).toThrow();
+          continue;
         }
+        expect(() => changer.setConfig(incomplete), key).toThrow(new RegExp(key));
+        expect(() => make(incomplete), key).toThrow(new RegExp(key));
       }
     } finally {
       changer.destroy();
@@ -361,19 +360,19 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
   });
 
   it('refuses a wrong-typed or out-of-domain voice transformer value by name', () => {
-    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
-    const changer = new RealtimeVoiceChanger(pod);
-    const bad = (patch: Record<string, unknown>): RealtimeVoiceChangerPodConfig =>
-      ({ ...pod, ...patch }) as unknown as RealtimeVoiceChangerPodConfig;
+    const pod = realtimeVoiceChangerPresetConfig('neutralMonitor');
+    const changer = make(pod);
+    const bad = (patch: Record<string, unknown>): RealtimeVoiceChangerConfig =>
+      ({ ...pod, ...patch }) as unknown as RealtimeVoiceChangerConfig;
     try {
       const before = changer.configJson();
-      expect(() => changer.setPodConfig(bad({ characterType: 'distortion' }))).toThrow(RangeError);
-      expect(() => changer.setPodConfig(bad({ characterType: 2 }))).toThrow(TypeError);
-      expect(() => changer.setPodConfig(bad({ vocoderEnabled: 1 }))).toThrow(TypeError);
-      expect(() => changer.setPodConfig(bad({ harmonyStep2: 1.5 }))).toThrow(RangeError);
-      expect(() => changer.setPodConfig(bad({ harmonyStep1: 8 }))).toThrow(RangeError);
-      expect(() => changer.setPodConfig(bad({ characterAmount: Number.NaN }))).toThrow(RangeError);
-      expect(() => changer.setPodConfig(bad({ pitchCorrectionAmount: 1.5 }))).toThrow(RangeError);
+      expect(() => changer.setConfig(bad({ characterType: 'distortion' }))).toThrow(RangeError);
+      expect(() => changer.setConfig(bad({ characterType: 2 }))).toThrow(TypeError);
+      expect(() => changer.setConfig(bad({ vocoderEnabled: 1 }))).toThrow(TypeError);
+      expect(() => changer.setConfig(bad({ harmonySteps: [0, 1.5, 0] }))).toThrow(RangeError);
+      expect(() => changer.setConfig(bad({ harmonySteps: [8, 0, 0] }))).toThrow(RangeError);
+      expect(() => changer.setConfig(bad({ characterAmount: Number.NaN }))).toThrow(RangeError);
+      expect(() => changer.setConfig(bad({ pitchCorrectionAmount: 1.5 }))).toThrow(RangeError);
       expect(changer.configJson()).toBe(before);
     } finally {
       changer.destroy();
@@ -381,39 +380,35 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
   });
 
   it('refuses to change a creation-time field on a live changer', () => {
-    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
-    const changer = new RealtimeVoiceChanger(pod);
+    const pod = realtimeVoiceChangerPresetConfig('neutralMonitor');
+    const changer = make(pod);
     try {
-      changer.prepare(48000, 128, 1);
-      expect(() => changer.setPodConfig({ ...pod, voiceEngineEngine: 'grain' })).toThrow(
-        /fixed at/,
-      );
-      expect(() => changer.setPodConfig({ ...pod, voiceEngineF0MinHz: 120 })).toThrow(/fixed at/);
-      expect(() => changer.setPodConfig({ ...pod, vocoderBands: 24 })).toThrow(/fixed at/);
+      expect(() => changer.setConfig({ ...pod, voiceEngine: 'grain' })).toThrow(/fixed at/);
+      expect(() => changer.setConfig({ ...pod, voiceEngineF0MinHz: 120 })).toThrow(/fixed at/);
+      expect(() => changer.setConfig({ ...pod, vocoderBands: 24 })).toThrow(/fixed at/);
     } finally {
       changer.destroy();
     }
   });
 
   it('refuses pitch correction on the grain engine', () => {
-    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
-    expect(
-      () =>
-        new RealtimeVoiceChanger({
-          ...pod,
-          voiceEngineEngine: 'grain',
-          pitchCorrectionMode: 'auto',
-        }),
+    const pod = realtimeVoiceChangerPresetConfig('neutralMonitor');
+    expect(() =>
+      make({
+        ...pod,
+        voiceEngine: 'grain',
+        pitchCorrectionMode: 'auto',
+      }),
     ).toThrow(/psola/);
   });
 
   it('describes every preset as a complete flat POD', () => {
     for (const id of realtimeVoiceChangerPresetNames()) {
       const pod = realtimeVoiceChangerPresetConfig(id);
-      expect(Object.keys(pod), id).toHaveLength(71);
-      const changer = new RealtimeVoiceChanger(pod);
+      expect(Object.keys(pod), id).toHaveLength(69);
+      const changer = make(pod);
       try {
-        changer.setPodConfig(pod);
+        changer.setConfig(pod);
       } finally {
         changer.destroy();
       }

@@ -16,7 +16,7 @@ describe('wide meter telemetry (WASM)', () => {
   });
 
   it('drains per-plane meters for a surround group bus', () => {
-    const engine = new RealtimeEngine(SR, BLOCK);
+    const engine = new RealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
     try {
       engine.setClips([
         {
@@ -27,12 +27,14 @@ describe('wide meter telemetry (WASM)', () => {
           lengthSamples: BLOCK,
         },
       ]);
-      // 5.1 group bus (channelLayout 2); the lane routes into it, panned to Ls.
-      engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 2 }]);
+      // 5.1 group bus (channelLayout '5.1'); the lane routes into it, panned to Ls.
+      engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: '5.1' }]);
       engine.setTrackLanes([{ trackId: 10, outputBusId: 1 }]);
-      engine.setTrackStripJson(
+      engine.setStrip(
         10,
-        '{"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"s","surroundPan":{"azimuth":-110}}]}',
+        JSON.parse(
+          '{"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"s","surroundPan":{"azimuth":-110}}]}',
+        ).strips[0],
       );
       engine.play();
       engine.process([

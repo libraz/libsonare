@@ -13944,7 +13944,7 @@ old = "VoiceScaleKind"
 changed = "'natural_minor' -> 'naturalMinor'"
 domain = "analysis"
 rule = "token-case"
-test = "bindings/wasm/tests/surface/analysis-stream.test.ts::narrows VoiceScaleKind"
+test = "bindings/wasm/tests/surface/analysis-stream.test.ts::narrows ScaleKind to the lowerCamel token set"
 
 [[entry]]
 kind = "type"
@@ -13953,7 +13953,7 @@ changed = "'natural_minor' -> 'naturalMinor'"
 domain = "analysis"
 rule = "token-case"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-stream.test.ts::narrows VoiceScaleKind"
+test = "bindings/wasm/tests/surface/analysis-stream.test.ts::narrows ScaleKind to the lowerCamel token set"
 
 [[entry]]
 kind = "field"
@@ -14379,14 +14379,14 @@ rule = "seconds-suffix"
 [[entry]]
 kind = "value"
 old = "VoiceScaleKind='natural_minor'"
-new = "VoiceScaleKind='naturalMinor'"
+new = "ScaleKind='naturalMinor'"
 domain = "analysis"
 rule = "token-case"
 
 [[entry]]
 kind = "value"
 old = "VoiceScaleKind='natural_minor'"
-new = "VoiceScaleKind='naturalMinor'"
+new = "ScaleKind='naturalMinor'"
 domain = "analysis"
 rule = "token-case"
 entry = "./analysis"
@@ -14904,3 +14904,6241 @@ new = "DynamicsResult.loudnessTimesSec"
 domain = "analysis"
 rule = "seconds-suffix"
 entry = "./analysis"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.constructor"
+changed = "new RealtimeEngine(config: RealtimeEngineConfig) replaces the five positional optionals; sampleRate is required, an unknown key is a TypeError and an explicit 0 on a defaulted field is a RangeError"
+domain = "engine"
+rule = "construction"
+test = "bindings/wasm/tests/surface/engine.test.ts::constructs from one config object"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.constructor(maxChannels)"
+removed = true
+domain = "engine"
+rule = "construction"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.prepare"
+changed = "prepare(config: RealtimeEngineConfig) takes the constructor object with the same defaults and validation"
+domain = "engine"
+rule = "construction"
+test = "bindings/wasm/tests/surface/engine.test.ts::prepares from the same config object"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.getTransportState"
+new = "RealtimeEngine.transportState"
+domain = "engine"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.graphLatencySamplesQ8"
+new = "RealtimeEngine.graphLatencySamples"
+domain = "engine"
+rule = "engine-vocabulary"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.tailSamples"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/surface/engine.test.ts::reads cheap scalar state as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setLoop"
+changed = "setLoop({ startPpq, endPpq, enabled? }) replaces (startPpq, endPpq, enabled)"
+domain = "engine"
+rule = "no-positional-bools"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes the loop as one object"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.parameterCount"
+removed = true
+domain = "engine"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.parameterInfoByIndex"
+removed = true
+domain = "engine"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.markerCount"
+removed = true
+domain = "engine"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.markerByIndex"
+removed = true
+domain = "engine"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setMarkers"
+changed = "returns the stored EngineMarker[] with their ids"
+domain = "engine"
+rule = "engine-vocabulary"
+test = "bindings/wasm/tests/surface/engine.test.ts::lists markers as an array"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.automationLaneCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/surface/engine.test.ts::reads cheap scalar state as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.clipCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/surface/engine.test.ts::reads cheap scalar state as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.midiInstrumentCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/surface/engine.test.ts::reads cheap scalar state as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.midiCcBindingCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/surface/engine.test.ts::reads cheap scalar state as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.graphNodeCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/surface/engine.test.ts::reads cheap scalar state as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.graphConnectionCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/surface/engine.test.ts::reads cheap scalar state as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.externalMidiDroppedCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/surface/engine.test.ts::reads cheap scalar state as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.externalMidiPendingCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/surface/engine.test.ts::reads cheap scalar state as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.midiInputPendingCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/surface/engine.test.ts::reads cheap scalar state as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.clipPageRequestOverflowCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/surface/engine.test.ts::reads cheap scalar state as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.warpStretchOverflowCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/surface/engine.test.ts::reads cheap scalar state as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.warpVoiceCapacity"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/surface/engine.test.ts::reads cheap scalar state as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.clipPagePrefetchFrames"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/surface/engine.test.ts::reads cheap scalar state as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.drainExternalMidi"
+changed = "events are the declared ExternalMidiEvent, and bytes is a Uint8Array (was number[])"
+domain = "engine"
+rule = "no-internal-types"
+test = "bindings/wasm/tests/surface/engine.test.ts::delivers external MIDI bytes as a Uint8Array"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.popClipPageRequest"
+changed = "returns undefined (was null) when no request is queued"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/engine.test.ts::pops clip page requests as undefined"
+
+[[entry]]
+kind = "field"
+old = "EngineMetronomeConfig.clickSeconds"
+new = "EngineMetronomeConfig.clickSec"
+domain = "engine"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "EngineMetronomeConfig.clickSamples"
+changed = "optional: give clickSamples or clickSec, never both; an explicit 0 is a RangeError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/engine.test.ts::names the click length in seconds or samples"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.metronome"
+changed = "returns EngineMetronomeConfig carrying only the click-length spelling that was set"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/engine.test.ts::names the click length in seconds or samples"
+
+[[entry]]
+kind = "field"
+old = "EngineTelemetry.graphLatencySamplesQ8"
+new = "EngineTelemetry.graphLatencySamples"
+domain = "engine"
+rule = "engine-vocabulary"
+
+[[entry]]
+kind = "field"
+old = "EngineTelemetry.type"
+changed = "'processBlock' | 'error' (was a number)"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::reports telemetry kinds as strings"
+
+[[entry]]
+kind = "field"
+old = "EngineTelemetry.error"
+changed = "a lowerCamel EngineTelemetryError name (was a number)"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::reports telemetry kinds as strings"
+
+[[entry]]
+kind = "field"
+old = "EngineMarker.kind"
+changed = "MarkerKind string: 'marker' | 'text' | 'lyric' | 'cuePoint' | 'keySignature'; a number is a TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for a marker kind"
+
+[[entry]]
+kind = "field"
+old = "EngineAutomationPoint.curveToNext"
+changed = "AutomationCurve string only; a number is a TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for an automation curve"
+
+[[entry]]
+kind = "field"
+old = "EngineParameterInfo.defaultCurve"
+changed = "AutomationCurve string (was a number)"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for an automation curve"
+
+[[entry]]
+kind = "field"
+old = "EngineGraphNode.type"
+changed = "'passThrough' | 'gain' (was a number)"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for a graph node type and mix"
+
+[[entry]]
+kind = "field"
+old = "EngineGraphConnection.mix"
+changed = "'replace' | 'add' (was a number); absent means add"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for a graph node type and mix"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceOptions.dither"
+changed = "'rpdf' | 'tpdf' | 'noiseShaped'; absent means none; a number is a TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for a dither type"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceOptions.targetSampleRate"
+changed = "absent keeps the source rate; an explicit 0 is a RangeError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/engine.test.ts::omits rate and loudness defaults and refuses an explicit zero"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceOptions.sourceSampleRate"
+changed = "absent means the engine rate; an explicit 0 is a RangeError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/engine.test.ts::omits rate and loudness defaults and refuses an explicit zero"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceOptions.targetLufs"
+changed = "absent means -14; an explicit 0 is a RangeError and a non-finite value is refused"
+domain = "engine"
+rule = "non-finite-is-absent"
+test = "bindings/wasm/tests/surface/engine.test.ts::omits rate and loudness defaults and refuses an explicit zero"
+
+[[entry]]
+kind = "field"
+old = "EngineClip.warpMode"
+changed = "'off' | 'repitch' | 'tempoSync' | 'timeStretch'; a number is a TypeError"
+domain = "engine"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for a warp mode"
+
+[[entry]]
+kind = "field"
+old = "EngineTrackLane.sourceChannelLayout"
+changed = "'mono' | 'stereo' | '5.1' | '7.1' (was a number)"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for a channel layout"
+
+[[entry]]
+kind = "field"
+old = "EngineBus.channelLayout"
+changed = "'mono' | 'stereo' | '5.1' | '7.1' (was a number)"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for a channel layout"
+
+[[entry]]
+kind = "field"
+old = "EngineTrackLane.outputBusId"
+changed = "absent routes to the master mix; an explicit 0 is a RangeError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/engine.test.ts::omits an unset bus output and refuses an explicit zero"
+
+[[entry]]
+kind = "field"
+old = "EngineBus.outputBusId"
+changed = "absent routes to the master mix; an explicit 0 is a RangeError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/engine.test.ts::omits an unset bus output and refuses an explicit zero"
+
+[[entry]]
+kind = "field"
+old = "EngineTrackSend.sendTiming"
+changed = "SendTiming string only (the number arm is removed)"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for a send timing"
+
+[[entry]]
+kind = "type"
+old = "EngineTrackMonitorMode"
+changed = "'off' | 'pfl' | 'afl' (the number arms are removed)"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for a monitor mode"
+
+[[entry]]
+kind = "type"
+old = "TrackMonitorMode"
+removed = true
+domain = "engine"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "type"
+old = "EngineCaptureSource"
+changed = "'output' | 'input' (the number arm is removed)"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for a capture source"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackStripPan"
+new = "RealtimeEngine.setStripPan"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackStripPanLaw"
+new = "RealtimeEngine.setStripPanLaw"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackStripPanMode"
+new = "RealtimeEngine.setStripPanMode"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackStripDualPan"
+new = "RealtimeEngine.setStripDualPan"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackStripSurroundPan"
+new = "RealtimeEngine.setStripSurroundPan"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackStripChannelDelaySamples"
+new = "RealtimeEngine.setStripChannelDelaySamples"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setBusStripPan"
+new = "RealtimeEngine.setBusPan"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setBusStripPanLaw"
+new = "RealtimeEngine.setBusPanLaw"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setBusStripPanMode"
+new = "RealtimeEngine.setBusPanMode"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setBusStripDualPan"
+new = "RealtimeEngine.setBusDualPan"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackStripJson"
+new = "RealtimeEngine.setStrip"
+domain = "engine"
+rule = "typed-results"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setMasterStripJson"
+removed = true
+domain = "engine"
+rule = "typed-results"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setBusStripJson"
+new = "RealtimeEngine.setBusStrip"
+domain = "engine"
+rule = "typed-results"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackStripEqBand"
+new = "RealtimeEngine.setStripEqBand"
+domain = "engine"
+rule = "typed-results"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setMasterStripEqBand"
+removed = true
+domain = "engine"
+rule = "typed-results"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackStripEqBandJson"
+removed = true
+domain = "engine"
+rule = "typed-results"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setMasterStripEqBandJson"
+removed = true
+domain = "engine"
+rule = "typed-results"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setBusStripEqBandJson"
+removed = true
+domain = "engine"
+rule = "typed-results"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setBusStripEqBand"
+new = "RealtimeEngine.setBusEqBand"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackStripInsertBypassed"
+new = "RealtimeEngine.setStripInsertBypassed"
+domain = "engine"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setMasterStripInsertBypassed"
+removed = true
+domain = "engine"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setBusStripInsertBypassed"
+new = "RealtimeEngine.setBusInsertBypassed"
+domain = "engine"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackStripInsertParamByName"
+new = "RealtimeEngine.setStripInsertParam"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setMasterStripInsertParamByName"
+removed = true
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.applyTrackStripInsertParamByNameNow"
+new = "RealtimeEngine.applyStripInsertParamNow"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.applyMasterStripInsertParamByNameNow"
+removed = true
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.restoreTrackStripInsertParamByName"
+new = "RealtimeEngine.restoreStripInsertParam"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.restoreMasterStripInsertParamByName"
+removed = true
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setBusStripInsertParamByName"
+new = "RealtimeEngine.setBusInsertParam"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.applyBusStripInsertParamByNameNow"
+new = "RealtimeEngine.applyBusInsertParamNow"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.restoreBusStripInsertParamByName"
+new = "RealtimeEngine.restoreBusInsertParam"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.clearTrackInsertParameterBases"
+new = "RealtimeEngine.clearStripInsertParameterBases"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.clearMasterInsertParameterBases"
+removed = true
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.resolveTrackInsertAutomationId"
+new = "RealtimeEngine.resolveStripInsertAutomationId"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.resolveMasterInsertAutomationId"
+removed = true
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.resolveTrackLaneAutomationId"
+new = "RealtimeEngine.resolveStripAutomationId"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.resolveMasterAutomationId"
+removed = true
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setSoloMute"
+new = "RealtimeEngine.setTrackSoloMute"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackMonitorMode"
+changed = "the first argument is a trackId (was a lane index); an unknown track is a RangeError"
+domain = "engine"
+rule = "strip-ref"
+test = "bindings/wasm/tests/surface/engine.test.ts::keys solo and mute by track id"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackLanes"
+changed = "takes readonly EngineTrackLane[]; the bare-number arm is removed"
+domain = "engine"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for a channel layout"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackOutputBus"
+changed = "setTrackOutputBus(trackId, busId: number | null): null routes to the master mix and 0 is a RangeError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/engine.test.ts::omits an unset bus output and refuses an explicit zero"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setLaneSidechain"
+new = "RealtimeEngine.setStripSidechain"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setMasterSidechain"
+removed = true
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setBusSidechain"
+changed = "setBusSidechain(busId, insertIndex, source: SidechainSource | null); removal is null and a source id of 0 is a RangeError"
+domain = "engine"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/engine.test.ts::keys a strip insert from a source object"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.canSetLaneSidechain"
+new = "RealtimeEngine.canSetStripSidechain"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.canSetMasterSidechain"
+removed = true
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.canSetBusSidechain"
+changed = "canSetBusSidechain(busId, insertIndex, source: SidechainSource)"
+domain = "engine"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/engine.test.ts::keys a strip insert from a source object"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setCaptureBuffer"
+removed = true
+domain = "engine"
+rule = "engine-vocabulary"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setCapturePunch"
+removed = true
+domain = "engine"
+rule = "engine-vocabulary"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setCaptureSource"
+removed = true
+domain = "engine"
+rule = "engine-vocabulary"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setRecordOffsetSamples"
+removed = true
+domain = "engine"
+rule = "engine-vocabulary"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setInputMonitor"
+removed = true
+domain = "engine"
+rule = "engine-vocabulary"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.armCapture"
+changed = "armCapture(state: { armed: boolean })"
+domain = "engine"
+rule = "no-positional-bools"
+test = "bindings/wasm/tests/surface/engine.test.ts::arms capture with a state object"
+
+[[entry]]
+kind = "type"
+old = "EngineCapturePunchRequest"
+new = "CapturePunch"
+domain = "engine"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.renderOffline"
+changed = "request-only renderOffline(request); the (channels, blockSize) overload is removed"
+domain = "engine"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/engine.test.ts::renders offline from one request object"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.getChannelBuffer"
+new = "RealtimeEngine.channelBuffer"
+domain = "engine"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.getMonitorChannelBuffer"
+new = "RealtimeEngine.monitorChannelBuffer"
+domain = "engine"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.popExternalMidiToScratch"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.popClipPageRequestToScratch"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.popTelemetryToScratch"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.popMeterTelemetryToScratch"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.popScopeTelemetryToScratch"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.consumeExternalMidiScratch"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.externalMidiScratchDestinationId"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.externalMidiScratchRenderFrame"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.externalMidiScratchByteWord"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.externalMidiScratchByteCount"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.clipPageRequestScratchClipId"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.clipPageRequestScratchSample"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.telemetryScratchType"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.telemetryScratchError"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.telemetryScratchRenderFrame"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.telemetryScratchTimelineSample"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.telemetryScratchAudibleTimelineSample"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.telemetryScratchGraphLatencySamplesQ8"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.telemetryScratchValue"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.meterScratchTargetId"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.meterScratchRenderFrame"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.meterScratchInputPeakDbL"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.meterScratchInputPeakDbR"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.meterScratchValue"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.scopeScratchTargetId"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.scopeScratchRenderFrame"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.scopeScratchBandCount"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.scopeScratchBand"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.scopeScratchPointCount"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.scopeScratchPointLeft"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.scopeScratchPointRight"
+removed = true
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setBuiltinInstrument"
+changed = "setBuiltinInstrument(destinationId, config?); config.destinationId is refused"
+domain = "engine"
+rule = "engine-vocabulary"
+test = "bindings/wasm/tests/surface/engine.test.ts::leads with the destination id on instrument setters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setSynthInstrument"
+changed = "setSynthInstrument(destinationId, patch?)"
+domain = "engine"
+rule = "engine-vocabulary"
+test = "bindings/wasm/tests/surface/engine.test.ts::leads with the destination id on instrument setters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setSf2Instrument"
+changed = "setSf2Instrument(destinationId, config?); config.destinationId is refused"
+domain = "engine"
+rule = "engine-vocabulary"
+test = "bindings/wasm/tests/surface/engine.test.ts::leads with the destination id on instrument setters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setPartRig"
+changed = "request-only; the positional (destinationId, part, mode, inserts) form is removed and an absent part means every part"
+domain = "engine"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/engine.test.ts::sets a part rig from one request"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.bindMidiCc"
+changed = "bindMidiCc(binding: ProjectMidiCcBinding) takes one descriptor"
+domain = "engine"
+rule = "one-entry-per-operation"
+test = "bindings/wasm/tests/surface/engine.test.ts::binds a MIDI controller from one descriptor"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.bindMidiCcBinding"
+removed = true
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "type"
+old = "MidiCcBindOptions"
+removed = true
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.pushMidiProgram"
+changed = "pushMidiProgram(destinationId, group, channel, program, bank?: { msb, lsb }, renderFrame?)"
+domain = "engine"
+rule = "no-positional-bools"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes a program bank as one object"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.pushMidiInputProgram"
+changed = "pushMidiInputProgram(group, channel, program, bank?: { msb, lsb }, offsetInBlockSamples?)"
+domain = "engine"
+rule = "no-positional-bools"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes a program bank as one object"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setArticulation"
+changed = "articulation is a string; an ordinal is a TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for an articulation and a note-tracking rule"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.articulation"
+changed = "returns the Articulation name, never an ordinal"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for an articulation and a note-tracking rule"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setControllerNoteTracking"
+changed = "dimension and tracking are strings; an ordinal is a TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for an articulation and a note-tracking rule"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.controllerNoteTracking"
+changed = "dimension is a string and the result a NoteTracking name"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for an articulation and a note-tracking rule"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.bindController"
+changed = "ControllerBinding input and axis are strings; an ordinal is a TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for an articulation and a note-tracking rule"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.setControllerVelocityMeaningful(meaningful)"
+new = "RealtimeEngine.setControllerVelocityMeaningful(controllerVelocityMeaningful)"
+domain = "engine"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.setMidiDestinationExternal(external)"
+new = "RealtimeEngine.setMidiDestinationExternal(midiDestinationExternal)"
+domain = "engine"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.setExternalMidiClockEnabled(enabled)"
+new = "RealtimeEngine.setExternalMidiClockEnabled(externalMidiClockEnabled)"
+domain = "engine"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "method"
+old = "WebMidiEngine.bindMidiCc"
+changed = "bindMidiCc(binding: ProjectMidiCcBinding); BindWebMidiOptions.ccBindings takes ProjectMidiCcBinding[]"
+domain = "engine"
+rule = "one-entry-per-operation"
+test = "bindings/wasm/tests/surface/engine.test.ts::binds a MIDI controller from one descriptor"
+
+[[entry]]
+kind = "type"
+old = "WebMidiCcBinding"
+removed = true
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "option"
+old = "WebMidiEngine.pushMidiInputNoteOn(time)"
+new = "WebMidiEngine.pushMidiInputNoteOn(offsetInBlockSamples)"
+domain = "engine"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "WebMidiEngine.pushMidiInputNoteOff(time)"
+new = "WebMidiEngine.pushMidiInputNoteOff(offsetInBlockSamples)"
+domain = "engine"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "WebMidiEngine.pushMidiInputCc(time)"
+new = "WebMidiEngine.pushMidiInputCc(offsetInBlockSamples)"
+domain = "engine"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "WebMidiEngine.pushMidiInputPitchBend(time)"
+new = "WebMidiEngine.pushMidiInputPitchBend(offsetInBlockSamples)"
+domain = "engine"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "WebMidiEngine.pushMidiInputChannelPressure(time)"
+new = "WebMidiEngine.pushMidiInputChannelPressure(offsetInBlockSamples)"
+domain = "engine"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "WebMidiEngine.pushMidiInputPolyPressure(time)"
+new = "WebMidiEngine.pushMidiInputPolyPressure(offsetInBlockSamples)"
+domain = "engine"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "WebMidiEngine.pushMidiInputUmp(time)"
+new = "WebMidiEngine.pushMidiInputUmp(offsetInBlockSamples)"
+domain = "engine"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.getTransportState"
+new = "SonareEngine.transportState"
+domain = "engine"
+rule = "getters"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.graphLatencySamplesQ8"
+new = "SonareEngine.graphLatencySamples"
+domain = "engine"
+rule = "engine-vocabulary"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.tailSamples"
+changed = "becomes the getter tailSamples"
+domain = "engine"
+rule = "getters"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::reads state through transportState and getters"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setLoop"
+changed = "setLoop(loop: EngineLoop) with { startPpq, endPpq, enabled? } returns void; an unknown key is a TypeError"
+domain = "engine"
+rule = "no-positional-bools"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::takes the loop as one EngineLoop object and returns nothing"
+
+[[entry]]
+kind = "method"
+old = "SonareEngineTransportFacade.setLoop"
+changed = "setLoop(loop: EngineLoop): void"
+domain = "engine"
+rule = "no-positional-bools"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::takes the loop as one EngineLoop object and returns nothing"
+
+[[entry]]
+kind = "method"
+old = "SonareEngineTransportFacade.seekSeconds"
+new = "SonareEngineTransportFacade.seekSec"
+domain = "engine"
+rule = "seconds-suffix"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareEngineTransportFacade.seekSeconds(seconds)"
+new = "SonareEngineTransportFacade.seekSec(timeSec)"
+domain = "engine"
+rule = "seconds-suffix"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareEngineTransportFacade.play(sampleTime)"
+new = "SonareEngineTransportFacade.play(renderFrame)"
+domain = "engine"
+rule = "unit-in-name"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareEngineTransportFacade.stop(sampleTime)"
+new = "SonareEngineTransportFacade.stop(renderFrame)"
+domain = "engine"
+rule = "unit-in-name"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareEngineTransportFacade.seekPpq(sampleTime)"
+new = "SonareEngineTransportFacade.seekPpq(renderFrame)"
+domain = "engine"
+rule = "unit-in-name"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareEngineTransportFacade.seekSeconds(sampleTime)"
+new = "SonareEngineTransportFacade.seekSec(renderFrame)"
+domain = "engine"
+rule = "unit-in-name"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngineTransportFacade.play"
+changed = "returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false"
+domain = "engine"
+rule = "engine-vocabulary"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::throws OutOfMemory instead of returning false when the command ring is full"
+
+[[entry]]
+kind = "method"
+old = "SonareEngineTransportFacade.stop"
+changed = "returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory"
+domain = "engine"
+rule = "engine-vocabulary"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::throws OutOfMemory instead of returning false when the command ring is full"
+
+[[entry]]
+kind = "method"
+old = "SonareEngineTransportFacade.seekPpq"
+changed = "returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory"
+domain = "engine"
+rule = "engine-vocabulary"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::throws OutOfMemory instead of returning false when the command ring is full"
+
+[[entry]]
+kind = "method"
+old = "SonareEngineTransportFacade.seekSec"
+changed = "returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory"
+domain = "engine"
+rule = "engine-vocabulary"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::names the render frame and the seconds suffix on the transport"
+
+[[entry]]
+kind = "option"
+old = "SonareRealtimeEngineNode.play(sampleTime)"
+new = "SonareRealtimeEngineNode.play(renderFrame)"
+domain = "engine"
+rule = "unit-in-name"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareRealtimeEngineNode.stop(sampleTime)"
+new = "SonareRealtimeEngineNode.stop(renderFrame)"
+domain = "engine"
+rule = "unit-in-name"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareRealtimeEngineNode.seekSample(sampleTime)"
+new = "SonareRealtimeEngineNode.seekSample(renderFrame)"
+domain = "engine"
+rule = "unit-in-name"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareRealtimeEngineNode.seekPpq(sampleTime)"
+new = "SonareRealtimeEngineNode.seekPpq(renderFrame)"
+domain = "engine"
+rule = "unit-in-name"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareRealtimeEngineNode.resetMasterLoudnessMeter(sampleTime)"
+new = "SonareRealtimeEngineNode.resetMasterLoudnessMeter(renderFrame)"
+domain = "engine"
+rule = "unit-in-name"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareRealtimeEngineNode.resetProcessorState(sampleTime)"
+new = "SonareRealtimeEngineNode.resetProcessorState(renderFrame)"
+domain = "engine"
+rule = "unit-in-name"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "SonareEngineCommandRecord.sampleTime"
+new = "SonareEngineCommandRecord.renderFrame"
+domain = "engine"
+rule = "unit-in-name"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.seekMarker"
+changed = "returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false; an unknown marker id is a RangeError"
+domain = "engine"
+rule = "engine-vocabulary"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::reads markers as a collection and returns the stored markers from setMarkers"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setLoopFromMarkers"
+changed = "returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false"
+domain = "engine"
+rule = "engine-vocabulary"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::reads markers as a collection and returns the stored markers from setMarkers"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setMetronome"
+changed = "returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false"
+domain = "engine"
+rule = "engine-vocabulary"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::throws OutOfMemory instead of returning false when the command ring is full"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.resetMasterLoudnessMeter"
+changed = "returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false"
+domain = "engine"
+rule = "engine-vocabulary"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::throws OutOfMemory instead of returning false when the command ring is full"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.resetProcessorState"
+changed = "returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false"
+domain = "engine"
+rule = "engine-vocabulary"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::throws OutOfMemory instead of returning false when the command ring is full"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setParam"
+changed = "returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false"
+domain = "engine"
+rule = "engine-vocabulary"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::throws OutOfMemory instead of returning false when the command ring is full"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.listParameters"
+new = "SonareEngine.parameters"
+domain = "engine"
+rule = "collections"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.markerCount"
+removed = true
+domain = "engine"
+rule = "collections"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.markerByIndex"
+removed = true
+domain = "engine"
+rule = "collections"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setMarkers"
+changed = "entries may carry kind, keyFifths and keyMinor; returns the stored EngineMarker[]"
+domain = "engine"
+rule = "engine-vocabulary"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::reads markers as a collection and returns the stored markers from setMarkers"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.automationLaneCount"
+changed = "becomes the getter automationLaneCount"
+domain = "engine"
+rule = "getters"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::reads state through transportState and getters"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.warpVoiceCapacity"
+changed = "becomes the getter warpVoiceCapacity"
+domain = "engine"
+rule = "getters"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::reads state through transportState and getters"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setStripGain"
+new = "SonareEngine.setStripFaderDb"
+domain = "engine"
+rule = "strip-ref"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setBusGain"
+new = "SonareEngine.setBusGainDb"
+domain = "engine"
+rule = "strip-ref"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setTrackStripJson"
+removed = true
+domain = "engine"
+rule = "typed-results"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setMasterStripJson"
+removed = true
+domain = "engine"
+rule = "typed-results"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setStripInserts"
+removed = true
+domain = "engine"
+rule = "typed-results"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setMasterChain"
+removed = true
+domain = "engine"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setBusStripJson"
+new = "SonareEngine.setBusStrip"
+domain = "engine"
+rule = "typed-results"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setStripEq"
+removed = true
+domain = "engine"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setTrackStripEqBand"
+removed = true
+domain = "engine"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setMasterStripEqBand"
+removed = true
+domain = "engine"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setBusStripEqBand"
+new = "SonareEngine.setBusEqBand"
+domain = "engine"
+rule = "strip-ref"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setStripInsertBypassed"
+changed = "setStripInsertBypassed(ref, insertIndex, state: { bypassed, resetOnBypass? }) replaces the positional booleans"
+domain = "engine"
+rule = "no-positional-bools"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::keeps a strip edit on the target and takes labelled objects"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setTrackStripInsertBypassed"
+removed = true
+domain = "engine"
+rule = "no-positional-bools"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setMasterStripInsertBypassed"
+removed = true
+domain = "engine"
+rule = "no-positional-bools"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setBusStripInsertBypassed"
+new = "SonareEngine.setBusInsertBypassed"
+domain = "engine"
+rule = "no-positional-bools"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setStripInsertParamByName"
+new = "SonareEngine.setStripInsertParam"
+domain = "engine"
+rule = "one-positional-form"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setTrackStripInsertParamByName"
+new = "SonareEngine.setStripInsertParam"
+domain = "engine"
+rule = "one-positional-form"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setMasterStripInsertParamByName"
+new = "SonareEngine.setStripInsertParam"
+domain = "engine"
+rule = "one-positional-form"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setBusStripInsertParamByName"
+new = "SonareEngine.setBusInsertParam"
+domain = "engine"
+rule = "one-positional-form"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.resolveTrackInsertAutomationId"
+new = "SonareEngine.resolveStripInsertAutomationId"
+domain = "engine"
+rule = "strip-ref"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.resolveMasterInsertAutomationId"
+new = "SonareEngine.resolveStripInsertAutomationId"
+domain = "engine"
+rule = "strip-ref"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.automationParamId"
+new = "SonareEngine.resolveStripAutomationId"
+domain = "engine"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.busAutomationParamId"
+new = "SonareEngine.resolveBusAutomationId"
+domain = "engine"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setTrackStripPan"
+removed = true
+domain = "engine"
+rule = "aliases-removed"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setStripPan"
+changed = "returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory"
+domain = "engine"
+rule = "engine-vocabulary"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::throws OutOfMemory instead of returning false when the command ring is full"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setTrackStripPanLaw"
+new = "SonareEngine.setStripPanLaw"
+domain = "engine"
+rule = "strip-ref"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setTrackStripPanMode"
+new = "SonareEngine.setStripPanMode"
+domain = "engine"
+rule = "strip-ref"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setTrackStripDualPan"
+new = "SonareEngine.setStripDualPan"
+domain = "engine"
+rule = "strip-ref"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setTrackStripSurroundPan"
+new = "SonareEngine.setStripSurroundPan"
+domain = "engine"
+rule = "strip-ref"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setTrackStripChannelDelaySamples"
+new = "SonareEngine.setStripChannelDelaySamples"
+domain = "engine"
+rule = "strip-ref"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setBusStripPan"
+new = "SonareEngine.setBusPan"
+domain = "engine"
+rule = "strip-ref"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setBusStripPanLaw"
+new = "SonareEngine.setBusPanLaw"
+domain = "engine"
+rule = "strip-ref"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setBusStripPanMode"
+new = "SonareEngine.setBusPanMode"
+domain = "engine"
+rule = "strip-ref"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setBusStripDualPan"
+new = "SonareEngine.setBusDualPan"
+domain = "engine"
+rule = "strip-ref"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setSoloMute"
+new = "SonareEngine.setTrackSoloMute"
+domain = "engine"
+rule = "strip-ref"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setTrackMonitorMode"
+changed = "returns void; the mode is a string only (a number is a TypeError)"
+domain = "engine"
+rule = "engine-vocabulary"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::keys track solo, mute and monitor by track id"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setTrackLanes"
+changed = "takes readonly EngineTrackLane[]; a bare track id is a TypeError"
+domain = "engine"
+rule = "one-positional-form"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::declares lanes as descriptors and routes to the master with null"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setTrackOutputBus"
+changed = "setTrackOutputBus(target, busId: number | null): null routes to the master, 0 is a RangeError"
+domain = "engine"
+rule = "absent-not-sentinel"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::declares lanes as descriptors and routes to the master with null"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setLaneSidechain"
+new = "SonareEngine.setStripSidechain"
+domain = "engine"
+rule = "one-positional-form"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setMasterSidechain"
+removed = true
+domain = "engine"
+rule = "strip-ref"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setBusSidechain"
+changed = "setBusSidechain(busId, insertIndex, source: SidechainSource | null); a source id of 0 is a RangeError"
+domain = "engine"
+rule = "one-positional-form"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::keys an insert from a source object and refuses id 0"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.canSetLaneSidechain"
+removed = true
+domain = "engine"
+rule = "strip-ref"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.canSetMasterSidechain"
+removed = true
+domain = "engine"
+rule = "strip-ref"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.canSetBusSidechain"
+changed = "canSetBusSidechain(busId, insertIndex, source: SidechainSource)"
+domain = "engine"
+rule = "one-positional-form"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::keys an insert from a source object and refuses id 0"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.armRecord"
+removed = true
+domain = "engine"
+rule = "engine-vocabulary"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.punch"
+removed = true
+domain = "engine"
+rule = "engine-vocabulary"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.configureCapture"
+changed = "takes CaptureOptions { capacityFrames, numChannels?, source?, recordOffsetSamples?, inputMonitor?, punch? }; the call states the whole setup"
+domain = "engine"
+rule = "engine-vocabulary"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::configures capture from one options object"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.renderOffline"
+changed = "request-only renderOffline(request: SonareRenderOfflineRequest) with validate; the frame-count number is a TypeError"
+domain = "engine"
+rule = "one-positional-form"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::renders from a request and refuses the positional frame count"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.addClip"
+changed = "addClip(trackId, clip: Omit<EngineClip, 'trackId'>) with exactly one of channels and pageProvider"
+domain = "engine"
+rule = "one-positional-form"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::adds a clip from one clip object"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.scheduleParam"
+changed = "scheduleParam(nodeId, param, point: EngineAutomationPoint); curveToNext is a curve string and a number is a TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::schedules automation points as objects with string curves"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.addAutomationPoint"
+changed = "addAutomationPoint(laneId, point: EngineAutomationPoint) with the same curve refusal"
+domain = "engine"
+rule = "string-closed-sets"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::schedules automation points as objects with string curves"
+
+[[entry]]
+kind = "field"
+old = "SonareEngineOptions.offlineChannelCount"
+new = "SonareEngineOptions.offlineNumChannels"
+domain = "engine"
+rule = "num-channels"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "SonareRealtimeEngineNodeOptions.channelCount"
+new = "SonareRealtimeEngineNodeOptions.numChannels"
+domain = "engine"
+rule = "num-channels"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setBuiltinInstrument"
+changed = "setBuiltinInstrument(trackId, config?: BuiltinSynthConfig) takes no destinationId in the config"
+domain = "engine"
+rule = "engine-vocabulary"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::binds instruments by track first and refuses a destinationId in the config"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setSynthInstrument"
+changed = "setSynthInstrument(trackId, patch?: SynthPatch | string)"
+domain = "engine"
+rule = "engine-vocabulary"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::binds instruments by track first and refuses a destinationId in the config"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setSf2Instrument"
+changed = "setSf2Instrument(trackId, config?: Sf2InstrumentConfig) takes no destinationId in the config"
+domain = "engine"
+rule = "engine-vocabulary"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::binds instruments by track first and refuses a destinationId in the config"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.pushMidiProgram"
+changed = "pushMidiProgram(trackId, group, channel, program, bank?: { msb, lsb }, renderFrame?)"
+domain = "engine"
+rule = "no-positional-bools"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::binds a controller from one binding and packs the program bank as an object"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.bindMidiCc"
+changed = "bindMidiCc(binding: ProjectMidiCcBinding) takes one entry"
+domain = "engine"
+rule = "one-entry-per-operation"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::binds a controller from one binding and packs the program bank as an object"
+
+[[entry]]
+kind = "option"
+old = "SonareEngine.setMidiDestinationExternal(external)"
+new = "SonareEngine.setMidiDestinationExternal(midiDestinationExternal)"
+domain = "engine"
+rule = "no-positional-bools"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "SonareEngine.setExternalMidiClockEnabled(enabled)"
+new = "SonareEngine.setExternalMidiClockEnabled(externalMidiClockEnabled)"
+domain = "engine"
+rule = "no-positional-bools"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.onMidiOut"
+changed = "delivers ExternalMidiEvent[] (bytes as a Uint8Array) instead of SonareWorkletExternalMidiEvent[]"
+domain = "engine"
+rule = "type-names"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::delivers telemetry and external MIDI as the public engine types"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.onTelemetry"
+changed = "delivers EngineTelemetry (string type and error, fractional graphLatencySamples) instead of the wire record"
+domain = "engine"
+rule = "type-names"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::delivers telemetry and external MIDI as the public engine types"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.pollTelemetry"
+changed = "returns EngineTelemetry[] instead of the wire records"
+domain = "engine"
+rule = "type-names"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::delivers telemetry and external MIDI as the public engine types"
+
+[[entry]]
+kind = "method"
+old = "SonareRealtimeEngineNode.onMidiOut"
+changed = "delivers ExternalMidiEvent[] (bytes as a Uint8Array) instead of the wire records"
+domain = "engine"
+rule = "type-names"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::delivers telemetry and external MIDI as the public engine types"
+
+[[entry]]
+kind = "method"
+old = "SonareRealtimeEngineNode.pollMidiOut"
+changed = "returns ExternalMidiEvent[] (bytes as a Uint8Array) instead of the wire records"
+domain = "engine"
+rule = "type-names"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::delivers telemetry and external MIDI as the public engine types"
+
+[[entry]]
+kind = "method"
+old = "SonareRealtimeEngineNode.onTelemetry"
+changed = "delivers EngineTelemetry instead of the wire records"
+domain = "engine"
+rule = "type-names"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::delivers telemetry and external MIDI as the public engine types"
+
+[[entry]]
+kind = "method"
+old = "SonareRealtimeEngineNode.pollTelemetry"
+changed = "returns EngineTelemetry[] instead of the wire records"
+domain = "engine"
+rule = "type-names"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::delivers telemetry and external MIDI as the public engine types"
+
+[[entry]]
+kind = "method"
+old = "Mixer.fromSceneJson"
+new = "Mixer.fromJson"
+domain = "engine"
+rule = "construction"
+
+[[entry]]
+kind = "method"
+old = "Mixer.constructor"
+changed = "public new Mixer({ scene?, sampleRate, blockSize? }); sampleRate is required, an absent scene gives an empty mixer, blockSize 0 is refused"
+domain = "engine"
+rule = "construction"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::builds an empty mixer from new Mixer"
+
+[[entry]]
+kind = "method"
+old = "Mixer.fromJson"
+changed = "static fromJson(json, { sampleRate, blockSize? }) replaces fromSceneJson(json, sampleRate = 48000, blockSize = 512); sampleRate is required"
+domain = "engine"
+rule = "construction"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::fromJson builds from a scene JSON string"
+
+[[entry]]
+kind = "method"
+old = "Mixer.toSceneJson"
+new = "Mixer.toJson"
+domain = "engine"
+rule = "typed-results"
+
+[[entry]]
+kind = "method"
+old = "Mixer.stripCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::reads counts, tail and latency as getters"
+
+[[entry]]
+kind = "method"
+old = "Mixer.busCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::reads counts, tail and latency as getters"
+
+[[entry]]
+kind = "method"
+old = "Mixer.vcaGroupCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::reads counts, tail and latency as getters"
+
+[[entry]]
+kind = "method"
+old = "Mixer.tailSamples"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::reads counts, tail and latency as getters"
+
+[[entry]]
+kind = "method"
+old = "Mixer.latencySamples"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::reads counts, tail and latency as getters"
+
+[[entry]]
+kind = "method"
+old = "Mixer.meterTap"
+new = "Mixer.stripMeter"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Mixer.stripMeter"
+changed = "stripMeter(strip, tap?: MeterTap); a numeric tap is a TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::stripMeter takes a tap token"
+
+[[entry]]
+kind = "method"
+old = "Mixer.addStrip"
+changed = "returns the new strip's index"
+domain = "engine"
+rule = "strip-ref"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::addStrip returns the new strip index"
+
+[[entry]]
+kind = "method"
+old = "Mixer.stripById"
+changed = "returns number; an unknown id is a RangeError instead of null"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::stripById returns the index"
+
+[[entry]]
+kind = "method"
+old = "Mixer.addBus"
+changed = "role is a MixBusRole token ('master' | 'aux' | 'submix'); an unknown role is a RangeError, a non-string a TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::addBus takes a role token"
+
+[[entry]]
+kind = "method"
+old = "Mixer.setPanLaw"
+changed = "takes a pan-law name only; a number is a TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::setPanLaw refuses a number"
+
+[[entry]]
+kind = "method"
+old = "Mixer.setPolarityInvert"
+changed = "setPolarityInvert(strip, { left, right }) replaces (strip, invertLeft, invertRight)"
+domain = "engine"
+rule = "no-positional-bools"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::setPolarityInvert takes a left/right object"
+
+[[entry]]
+kind = "method"
+old = "Mixer.addSend"
+changed = "addSend(strip, { id, destinationBusId, sendDb?, timing? }) replaces the positional list; a numeric timing is a TypeError"
+domain = "engine"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::addSend takes a send object"
+
+[[entry]]
+kind = "method"
+old = "Mixer.scheduleFaderAutomation"
+changed = "scheduleFaderAutomation(strip, { samplePos, faderDb, curve? }); a numeric curve is a TypeError"
+domain = "engine"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::scheduleFaderAutomation takes a point object"
+
+[[entry]]
+kind = "method"
+old = "Mixer.schedulePanAutomation"
+changed = "schedulePanAutomation(strip, { samplePos, pan, curve? }); a numeric curve is a TypeError"
+domain = "engine"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::schedulePanAutomation takes a point object"
+
+[[entry]]
+kind = "method"
+old = "Mixer.scheduleWidthAutomation"
+changed = "scheduleWidthAutomation(strip, { samplePos, width, curve? }); a numeric curve is a TypeError"
+domain = "engine"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::scheduleWidthAutomation takes a point object"
+
+[[entry]]
+kind = "method"
+old = "Mixer.scheduleSendAutomation"
+changed = "scheduleSendAutomation(strip, sendIndex, { samplePos, sendDb, curve? }) (db is now sendDb)"
+domain = "engine"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::scheduleSendAutomation takes sendDb"
+
+[[entry]]
+kind = "method"
+old = "Mixer.scheduleInsertAutomation"
+changed = "scheduleInsertAutomation(strip, insertIndex, { paramId, samplePos, value, curve? })"
+domain = "engine"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::scheduleInsertAutomation takes a point object"
+
+[[entry]]
+kind = "method"
+old = "Mixer.setMuted"
+changed = "strip is a StripRef (index or id); the single boolean stays positional"
+domain = "engine"
+rule = "no-positional-bools"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::keeps one boolean after the strip"
+
+[[entry]]
+kind = "method"
+old = "Mixer.setSoloed"
+changed = "strip is a StripRef (index or id); the single boolean stays positional"
+domain = "engine"
+rule = "no-positional-bools"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::keeps one boolean after the strip"
+
+[[entry]]
+kind = "method"
+old = "Mixer.setSoloSafe"
+changed = "strip is a StripRef (index or id); the single boolean stays positional"
+domain = "engine"
+rule = "no-positional-bools"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::keeps one boolean after the strip"
+
+[[entry]]
+kind = "option"
+old = "Mixer.setInputTrimDb(stripIndex)"
+new = "Mixer.setInputTrimDb(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.setFaderDb(stripIndex)"
+new = "Mixer.setFaderDb(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.setPan(stripIndex)"
+new = "Mixer.setPan(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.setWidth(stripIndex)"
+new = "Mixer.setWidth(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.settle(stripIndex)"
+new = "Mixer.settle(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.setMuted(stripIndex)"
+new = "Mixer.setMuted(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.setSoloed(stripIndex)"
+new = "Mixer.setSoloed(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.setSoloSafe(stripIndex)"
+new = "Mixer.setSoloSafe(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.setPolarityInvert(stripIndex)"
+new = "Mixer.setPolarityInvert(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.setPanLaw(stripIndex)"
+new = "Mixer.setPanLaw(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.setChannelDelaySamples(stripIndex)"
+new = "Mixer.setChannelDelaySamples(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.setVcaOffsetDb(stripIndex)"
+new = "Mixer.setVcaOffsetDb(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.setDualPan(stripIndex)"
+new = "Mixer.setDualPan(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.setSurroundPan(stripIndex)"
+new = "Mixer.setSurroundPan(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.addSend(stripIndex)"
+new = "Mixer.addSend(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.setSendDb(stripIndex)"
+new = "Mixer.setSendDb(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.removeSend(stripIndex)"
+new = "Mixer.removeSend(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.stripMeter(stripIndex)"
+new = "Mixer.stripMeter(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.stripNonFiniteDiscardCount(stripIndex)"
+new = "Mixer.stripNonFiniteDiscardCount(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.readGoniometerLatest(stripIndex)"
+new = "Mixer.readGoniometerLatest(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.scheduleFaderAutomation(stripIndex)"
+new = "Mixer.scheduleFaderAutomation(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.schedulePanAutomation(stripIndex)"
+new = "Mixer.schedulePanAutomation(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.scheduleWidthAutomation(stripIndex)"
+new = "Mixer.scheduleWidthAutomation(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.scheduleSendAutomation(stripIndex)"
+new = "Mixer.scheduleSendAutomation(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "Mixer.scheduleInsertAutomation(stripIndex)"
+new = "Mixer.scheduleInsertAutomation(strip)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "Mixer.configureMeter"
+changed = "configureMeter({ enabled, truePeakOversample? }) replaces (enabled, truePeakOversample = 4)"
+domain = "engine"
+rule = "no-positional-bools"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::configureMeter takes an options object"
+
+[[entry]]
+kind = "method"
+old = "Mixer.meterScratchValue"
+changed = "field is a MeterScratchField value (0 to 6); anything else is refused instead of reading 0"
+domain = "engine"
+rule = "individual"
+test = "bindings/wasm/tests/surface/engine-mixer.test.ts::meterScratchValue refuses a field"
+
+[[entry]]
+kind = "type"
+old = "ChannelLayout"
+changed = "'mono' | 'stereo' | '5.1' | '7.1' instead of 0 | 1 | 2 | 3"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/decode-channels.test.ts::refuses an upmix, an unknown layout"
+
+[[entry]]
+kind = "option"
+old = "downmix(targetLayout)"
+changed = "a ChannelLayout name ('mono' | 'stereo' | '5.1' | '7.1'); a number is a TypeError, an unknown name a RangeError"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/decode-channels.test.ts::refuses an upmix, an unknown layout"
+
+[[entry]]
+kind = "field"
+old = "DecomposeRequest.nFeatures"
+removed = true
+domain = "effects"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "DecomposeRequest.nFeatures"
+removed = true
+domain = "effects"
+rule = "matrix-2d"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "DecomposeRequest.nFrames"
+removed = true
+domain = "effects"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "DecomposeRequest.nFrames"
+removed = true
+domain = "effects"
+rule = "matrix-2d"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "DecomposeRequest.s"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = features, cols = frames"
+domain = "effects"
+rule = "matrix-2d"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "DecomposeRequest.s"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = features, cols = frames"
+domain = "effects"
+rule = "matrix-2d"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "DecomposeStemsLinkedRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "DecomposeStemsLinkedRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "DecomposeStemsRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "DecomposeStemsRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "EstimateRoomRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "HarmonicRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "HpssRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "HpssWithResidualRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "HpssWithResidualRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "NnFilterRequest.aggregate"
+changed = "string -> NnFilterAggregate ('mean'|'median'|'min'|'max'); other strings refused with RangeError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::nnFilter refuses aggregate"
+
+[[entry]]
+kind = "field"
+old = "NnFilterRequest.aggregate"
+changed = "string -> NnFilterAggregate ('mean'|'median'|'min'|'max'); other strings refused with RangeError"
+domain = "effects"
+rule = "string-closed-sets"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::nnFilter refuses aggregate"
+
+[[entry]]
+kind = "field"
+old = "NnFilterRequest.nFeatures"
+removed = true
+domain = "effects"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "NnFilterRequest.nFeatures"
+removed = true
+domain = "effects"
+rule = "matrix-2d"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "NnFilterRequest.nFrames"
+removed = true
+domain = "effects"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "NnFilterRequest.nFrames"
+removed = true
+domain = "effects"
+rule = "matrix-2d"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "NnFilterRequest.s"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = features, cols = frames"
+domain = "effects"
+rule = "matrix-2d"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "NnFilterRequest.s"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = features, cols = frames"
+domain = "effects"
+rule = "matrix-2d"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "NormalizeRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "NormalizeStereoRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "PercussiveRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "PhaseVocoderRequest.rate"
+changed = "rate -> speedRatio"
+domain = "effects"
+rule = "sample-rate-name"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::phaseVocoder takes speedRatio"
+
+[[entry]]
+kind = "field"
+old = "PhaseVocoderRequest.rate"
+changed = "rate -> speedRatio"
+domain = "effects"
+rule = "sample-rate-name"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::phaseVocoder takes speedRatio"
+
+[[entry]]
+kind = "field"
+old = "PhaseVocoderRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "PhaseVocoderRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "RemixRequest.alignZeros"
+changed = "default false -> true on remix (remixAlignedIntervals already true)"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::remix aligns cuts to zero crossings by default"
+
+[[entry]]
+kind = "field"
+old = "RemixRequest.alignZeros"
+changed = "default false -> true on remix (remixAlignedIntervals already true)"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::remix aligns cuts to zero crossings by default"
+
+[[entry]]
+kind = "field"
+old = "RemixRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "RemixRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.crossfadeMs"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.crossfadeMs"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.mixingTimeMs"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.mixingTimeMs"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateOptions.aspectHintLh"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::estimateRoom refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateOptions.aspectHintLh"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::estimateRoom refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateOptions.aspectHintLw"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::estimateRoom refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateOptions.aspectHintLw"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::estimateRoom refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateOptions.minDecayDb"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::estimateRoom refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateOptions.minDecayDb"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::estimateRoom refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateOptions.nOctaveBands"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::estimateRoom refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateOptions.nOctaveBands"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::estimateRoom refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateOptions.noiseFloorMarginDb"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::estimateRoom refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateOptions.noiseFloorMarginDb"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::estimateRoom refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateOptions.referenceAbsorption"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::estimateRoom refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateOptions.referenceAbsorption"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::estimateRoom refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.airHumidityPercent"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::refuses airHumidityPercent = 0"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.airHumidityPercent"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::refuses airHumidityPercent = 0"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.airTemperatureC"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::refuses airTemperatureC = 0"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.airTemperatureC"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::refuses airTemperatureC = 0"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.listenerX"
+changed = "listenerX -> listener (RoomPlacement {x, y, z} (metres))"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.listenerX"
+changed = "listenerX -> listener (RoomPlacement {x, y, z} (metres))"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.listenerY"
+changed = "listenerY -> listener (RoomPlacement {x, y, z} (metres))"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.listenerY"
+changed = "listenerY -> listener (RoomPlacement {x, y, z} (metres))"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.listenerZ"
+changed = "listenerZ -> listener (RoomPlacement {x, y, z} (metres))"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.listenerZ"
+changed = "listenerZ -> listener (RoomPlacement {x, y, z} (metres))"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.maxSec"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.maxSec"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.maxSeconds"
+changed = "maxSeconds -> maxSec"
+domain = "effects"
+rule = "seconds-suffix"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.maxSeconds"
+changed = "maxSeconds -> maxSec"
+domain = "effects"
+rule = "seconds-suffix"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.seed"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::refuses seed = 0"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.seed"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::refuses seed = 0"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.sourceX"
+changed = "sourceX -> source (RoomPlacement {x, y, z} (metres))"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.sourceX"
+changed = "sourceX -> source (RoomPlacement {x, y, z} (metres))"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.sourceY"
+changed = "sourceY -> source (RoomPlacement {x, y, z} (metres))"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.sourceY"
+changed = "sourceY -> source (RoomPlacement {x, y, z} (metres))"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.sourceZ"
+changed = "sourceZ -> source (RoomPlacement {x, y, z} (metres))"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.sourceZ"
+changed = "sourceZ -> source (RoomPlacement {x, y, z} (metres))"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphOptions.crossfadeMs"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::roomMorph refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphOptions.crossfadeMs"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::roomMorph refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphOptions.mixingTimeMs"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::roomMorph refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphOptions.mixingTimeMs"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::roomMorph refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphStereoRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "decompose"
+changed = "request-only: decompose(request: DecomposeRequest): DecomposeResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::decompose takes a Matrix2D"
+
+[[entry]]
+kind = "function"
+old = "decompose"
+changed = "request-only: decompose(request: DecomposeRequest): DecomposeResult"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::decompose takes a Matrix2D"
+
+[[entry]]
+kind = "function"
+old = "decomposeStems"
+changed = "one positional form (decomposeStems(samples, sampleRate, options?: Omit<DecomposeStemsRequest,'samples'|'sampleRate'>)); request form takes DecomposeStemsRequest; returns DecomposeStemsResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "decomposeStems"
+changed = "one positional form (decomposeStems(samples, sampleRate, options?: Omit<DecomposeStemsRequest,'samples'|'sampleRate'>)); request form takes DecomposeStemsRequest; returns DecomposeStemsResult"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "decomposeWithInit"
+removed = true
+domain = "effects"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "decomposeWithInit"
+removed = true
+domain = "effects"
+rule = "one-entry-per-operation"
+entry = "./analysis"
+
+[[entry]]
+kind = "function"
+old = "estimateRoom"
+changed = "one positional form (estimateRoom(samples, sampleRate, options?: RoomEstimateOptions)); request form takes EstimateRoomRequest; returns RoomEstimateResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "harmonic"
+changed = "one positional form (harmonic(samples, sampleRate, options?: Omit<HarmonicRequest,'samples'|'sampleRate'>)); request form takes HarmonicRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "hpss"
+changed = "one positional form (hpss(samples, sampleRate, options?: Omit<HpssRequest,'samples'|'sampleRate'>)); request form takes HpssRequest; returns HpssResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "hpssWithResidual"
+changed = "one positional form (hpssWithResidual(samples, sampleRate, options?: Omit<HpssWithResidualRequest,'samples'|'sampleRate'>)); request form takes HpssWithResidualRequest; returns HpssWithResidualResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "hpssWithResidual"
+changed = "one positional form (hpssWithResidual(samples, sampleRate, options?: Omit<HpssWithResidualRequest,'samples'|'sampleRate'>)); request form takes HpssWithResidualRequest; returns HpssWithResidualResult"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "nnFilter"
+changed = "request-only: nnFilter(request: NnFilterRequest): Matrix2D"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::nnFilter takes and returns a Matrix2D"
+
+[[entry]]
+kind = "function"
+old = "nnFilter"
+changed = "request-only: nnFilter(request: NnFilterRequest): Matrix2D"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::nnFilter takes and returns a Matrix2D"
+
+[[entry]]
+kind = "function"
+old = "normalize"
+changed = "one positional form (normalize(samples, sampleRate, options?: Omit<NormalizeRequest,'samples'|'sampleRate'>)); request form takes NormalizeRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "percussive"
+changed = "one positional form (percussive(samples, sampleRate, options?: Omit<PercussiveRequest,'samples'|'sampleRate'>)); request form takes PercussiveRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "phaseVocoder"
+changed = "one positional form (phaseVocoder(samples, sampleRate, options: Omit<PhaseVocoderRequest,'samples'|'sampleRate'>)); request form takes PhaseVocoderRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "phaseVocoder"
+changed = "one positional form (phaseVocoder(samples, sampleRate, options: Omit<PhaseVocoderRequest,'samples'|'sampleRate'>)); request form takes PhaseVocoderRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "remix"
+changed = "one positional form (remix(samples, sampleRate, options: Omit<RemixRequest,'samples'|'sampleRate'>)); request form takes RemixRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "remix"
+changed = "one positional form (remix(samples, sampleRate, options: Omit<RemixRequest,'samples'|'sampleRate'>)); request form takes RemixRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "remixAlignedIntervals"
+changed = "one positional form (remixAlignedIntervals(samples, sampleRate, options: Omit<RemixRequest,'samples'|'sampleRate'>)); request form takes RemixRequest; returns Int32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "remixAlignedIntervals"
+changed = "one positional form (remixAlignedIntervals(samples, sampleRate, options: Omit<RemixRequest,'samples'|'sampleRate'>)); request form takes RemixRequest; returns Int32Array"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "roomGeometryFromEstimate"
+changed = "request-only: roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometryOptions"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::roomGeometryFromEstimate is request-only"
+
+[[entry]]
+kind = "function"
+old = "synthesizeRir"
+changed = "request-only: synthesizeRir(request: SynthesizeRirRequest): RirResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir refuses"
+
+[[entry]]
+kind = "function"
+old = "trim"
+changed = "one positional form (trim(samples, sampleRate, options?: Omit<TrimRequest,'samples'|'sampleRate'>)); request form takes TrimRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "trim"
+changed = "one positional form (trim(samples, sampleRate, options?: Omit<TrimRequest,'samples'|'sampleRate'>)); request form takes TrimRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "DecomposeRequest"
+changed = "field list"
+domain = "effects"
+rule = "matrix-2d"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::Matrix2D"
+
+[[entry]]
+kind = "type"
+old = "DecomposeRequest"
+changed = "field list"
+domain = "effects"
+rule = "matrix-2d"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::Matrix2D"
+
+[[entry]]
+kind = "type"
+old = "DecomposeStemsLinkedRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "DecomposeStemsLinkedRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "DecomposeStemsRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "DecomposeStemsRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "DecomposeWithInitRequest"
+removed = true
+domain = "effects"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "type"
+old = "DecomposeWithInitRequest"
+removed = true
+domain = "effects"
+rule = "one-entry-per-operation"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "EstimateRoomRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "HarmonicRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "HpssRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "HpssWithResidualRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "HpssWithResidualRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "NnFilterRequest"
+changed = "field list"
+domain = "effects"
+rule = "matrix-2d"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::Matrix2D"
+
+[[entry]]
+kind = "type"
+old = "NnFilterRequest"
+changed = "field list"
+domain = "effects"
+rule = "matrix-2d"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::Matrix2D"
+
+[[entry]]
+kind = "type"
+old = "NormalizeRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "NormalizeStereoRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "PercussiveRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "PhaseVocoderRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "PhaseVocoderRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "RemixRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "RemixRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "RirSynthOptions"
+changed = "renamed to SynthesizeRirRequest"
+domain = "effects"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::declares the result and request types"
+
+[[entry]]
+kind = "type"
+old = "RirSynthOptions"
+changed = "renamed to SynthesizeRirRequest"
+domain = "effects"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::declares the result and request types"
+
+[[entry]]
+kind = "type"
+old = "RoomEstimateOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "RoomEstimateOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "RoomGeometryFromEstimateOptions"
+removed = true
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "type"
+old = "RoomGeometryFromEstimateOptions"
+removed = true
+domain = "effects"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "RoomGeometryOptions"
+changed = "field list"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "type"
+old = "RoomGeometryOptions"
+changed = "field list"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "type"
+old = "RoomMorphOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "RoomMorphOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "RoomMorphRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "RoomMorphStereoRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "value"
+old = "AcousticModeName='impulse_response'"
+changed = "AcousticModeName='impulseResponse'"
+domain = "effects"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::names the impulse-response mode impulseResponse"
+
+[[entry]]
+kind = "value"
+old = "AcousticModeName='impulse_response'"
+changed = "AcousticModeName='impulseResponse'"
+domain = "effects"
+rule = "token-case"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::names the impulse-response mode impulseResponse"
+
+[[entry]]
+kind = "field"
+old = "AutoTuneOptions.referenceMidi"
+changed = "referenceMidi -> scaleReferenceMidi"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed shape of"
+
+[[entry]]
+kind = "field"
+old = "AutoTuneOptions.referenceMidi"
+changed = "referenceMidi -> scaleReferenceMidi"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed shape of"
+
+[[entry]]
+kind = "field"
+old = "AutoTuneRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::requires sampleRate on"
+
+[[entry]]
+kind = "field"
+old = "NoteMoveRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::requires sampleRate on"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.amplitude"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.amplitude"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.edit"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.edit"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.f0Stability"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.f0Stability"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.frameEnd"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.frameEnd"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.frameStart"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.frameStart"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.medianCents"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.medianCents"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.medianHz"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.medianHz"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.offsetSample"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.offsetSample"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.onsetSample"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.onsetSample"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteStretchOptions.stretchRatio"
+changed = "optional -> required"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::requires the defining parameter of"
+
+[[entry]]
+kind = "field"
+old = "NoteStretchOptions.stretchRatio"
+changed = "optional -> required"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::requires the defining parameter of"
+
+[[entry]]
+kind = "field"
+old = "NoteStretchRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::requires sampleRate on"
+
+[[entry]]
+kind = "field"
+old = "PitchCorrectOptions.mode"
+changed = "mode -> targetMode (type PitchTargetMode = 'midi'|'scale')"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed shape of"
+
+[[entry]]
+kind = "field"
+old = "PitchCorrectOptions.mode"
+changed = "mode -> targetMode (type PitchTargetMode = 'midi'|'scale')"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed shape of"
+
+[[entry]]
+kind = "field"
+old = "PitchCorrectOptions.referenceMidi"
+changed = "referenceMidi -> scaleReferenceMidi"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed shape of"
+
+[[entry]]
+kind = "field"
+old = "PitchCorrectOptions.referenceMidi"
+changed = "referenceMidi -> scaleReferenceMidi"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed shape of"
+
+[[entry]]
+kind = "field"
+old = "PitchCorrectTimevaryingRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::requires sampleRate on"
+
+[[entry]]
+kind = "field"
+old = "PitchCorrectToMidiRequest.currentMidi"
+changed = "optional -> required"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::requires the defining parameter of"
+
+[[entry]]
+kind = "field"
+old = "PitchCorrectToMidiRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::requires sampleRate on"
+
+[[entry]]
+kind = "field"
+old = "PitchCorrectToMidiRequest.targetMidi"
+changed = "optional -> required"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::requires the defining parameter of"
+
+[[entry]]
+kind = "field"
+old = "PitchShiftRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::requires sampleRate on"
+
+[[entry]]
+kind = "field"
+old = "PitchShiftRequest.semitones"
+changed = "semitones -> pitchSemitones"
+domain = "effects"
+rule = "pitch-semitones"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed shape of"
+
+[[entry]]
+kind = "field"
+old = "SpectralEditRequest.ops"
+changed = "optional -> required (readonly SpectralRegionOp[]); empty array returns a copy"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::requires the defining parameter of"
+
+[[entry]]
+kind = "field"
+old = "SplitNoteRequest.frame"
+changed = "required -> optional; exactly one of frame / frameSec; both or neither -> RangeError"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::splitNote takes exactly one of frame and frameSec"
+
+[[entry]]
+kind = "field"
+old = "TimeStretchRequest.rate"
+changed = "rate -> speedRatio"
+domain = "effects"
+rule = "sample-rate-name"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed shape of"
+
+[[entry]]
+kind = "field"
+old = "TimeStretchRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::requires sampleRate on"
+
+[[entry]]
+kind = "function"
+old = "autoTune"
+changed = "one positional form (autoTune(samples, sampleRate, options?: AutoTuneOptions)); request form takes AutoTuneRequest; returns AutoTuneResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "extractNotes"
+changed = "one positional form (extractNotes(samples, sampleRate, options: Omit<ExtractNotesRequest,'samples'|'sampleRate'>)); request form takes ExtractNotesRequest; returns NoteObject[]"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "extractPercussiveEvents"
+changed = "one positional form (extractPercussiveEvents(samples, sampleRate, options?: Omit<ExtractPercussiveEventsRequest,'samples'|'sampleRate'>)); request form takes ExtractPercussiveEventsRequest; returns PercussiveEvent[]"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "mergeNotes"
+changed = "one positional form (mergeNotes(samples, sampleRate, options: Omit<MergeNotesRequest,'samples'|'sampleRate'>)); request form takes MergeNotesRequest; returns NoteObject[]"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "noteMove"
+changed = "one positional form (noteMove(samples, sampleRate, options?: NoteMoveOptions)); request form takes NoteMoveRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "noteStretch"
+changed = "one positional form (noteStretch(samples, sampleRate, options: NoteStretchOptions)); request form takes NoteStretchRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "pitchCorrectTimevarying"
+changed = "one positional form (pitchCorrectTimevarying(samples, sampleRate, options: PitchCorrectOptions)); request form takes PitchCorrectTimevaryingRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "pitchCorrectToMidi"
+changed = "one positional form (pitchCorrectToMidi(samples, sampleRate, options: Omit<PitchCorrectToMidiRequest,'samples'|'sampleRate'>)); request form takes PitchCorrectToMidiRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "pitchCorrectToMidiTimevarying"
+removed = true
+domain = "effects"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "pitchShift"
+changed = "one positional form (pitchShift(samples, sampleRate, options: Omit<PitchShiftRequest,'samples'|'sampleRate'>)); request form takes PitchShiftRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "renderNotes"
+changed = "one positional form (renderNotes(samples, sampleRate, options: Omit<RenderNotesRequest,'samples'|'sampleRate'>)); request form takes RenderNotesRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "renderPercussiveEvents"
+changed = "one positional form (renderPercussiveEvents(samples, sampleRate, options: Omit<RenderPercussiveEventsRequest,'samples'|'sampleRate'>)); request form takes RenderPercussiveEventsRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "scaleMaskForMode"
+changed = "scaleMaskForMode(root: PitchClass, mode: KeyMode): number; numbers and Mode refused (TypeError)"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses a closed-set value"
+
+[[entry]]
+kind = "function"
+old = "spectralEdit"
+changed = "one positional form (spectralEdit(samples, sampleRate, options: SpectralEditOptions)); request form takes SpectralEditRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "splitNote"
+changed = "one positional form (splitNote(samples, sampleRate, options: Omit<SplitNoteRequest,'samples'|'sampleRate'>)); request form takes SplitNoteRequest; returns NoteObject[]"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "timeStretch"
+changed = "one positional form (timeStretch(samples, sampleRate, options: Omit<TimeStretchRequest,'samples'|'sampleRate'>)); request form takes TimeStretchRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "method"
+old = "Audio.harmonic"
+changed = "harmonic(options?: Omit<HarmonicRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
+
+[[entry]]
+kind = "method"
+old = "Audio.hpss"
+changed = "hpss(options?: Omit<HpssRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
+
+[[entry]]
+kind = "method"
+old = "Audio.normalize"
+changed = "normalize(options?: Omit<NormalizeRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
+
+[[entry]]
+kind = "method"
+old = "Audio.noteMove"
+changed = "noteMove(options?: NoteMoveOptions)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
+
+[[entry]]
+kind = "method"
+old = "Audio.noteStretch"
+changed = "noteStretch(options: NoteStretchOptions)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
+
+[[entry]]
+kind = "method"
+old = "Audio.percussive"
+changed = "percussive(options?: Omit<PercussiveRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
+
+[[entry]]
+kind = "method"
+old = "Audio.pitchShift"
+changed = "pitchShift(options: Omit<PitchShiftRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "pitch-semitones"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
+
+[[entry]]
+kind = "method"
+old = "Audio.timeStretch"
+changed = "timeStretch(options: Omit<TimeStretchRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "sample-rate-name"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
+
+[[entry]]
+kind = "method"
+old = "Audio.trim"
+changed = "trim(options?: Omit<TrimRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
+
+[[entry]]
+kind = "method"
+old = "Audio.voiceChange"
+changed = "voiceChange(options?: VoiceChangeOptions)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
+
+[[entry]]
+kind = "option"
+old = "scaleCorrectionSemitones(referenceMidi)"
+changed = "scaleCorrectionSemitones(scaleReferenceMidi)"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::scale helpers keep their positional scalar form"
+
+[[entry]]
+kind = "option"
+old = "scaleQuantizeMidi(referenceMidi)"
+changed = "scaleQuantizeMidi(scaleReferenceMidi)"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::scale helpers keep their positional scalar form"
+
+[[entry]]
+kind = "type"
+old = "AutoTuneOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "AutoTuneOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "AutoTuneRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "NoteEdit"
+changed = "every field readonly"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "type"
+old = "NoteEdit"
+changed = "every field readonly"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "type"
+old = "NoteMoveOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "NoteMoveOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "NoteMoveRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "NoteSetRequest"
+removed = true
+domain = "effects"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "NoteStretchOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "NoteStretchOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "NoteStretchRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "PitchCorrectOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "PitchCorrectOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "PitchCorrectTimevaryingRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "PitchCorrectToMidiRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "PitchCorrectToMidiTimevaryingRequest"
+removed = true
+domain = "effects"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "type"
+old = "PitchShiftRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "SpectralEditOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "SpectralEditOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "SpectralEditRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "SplitNoteRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "TimeStretchRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "field"
+old = "DeclipOptions.clipThreshold"
+changed = "clipThreshold -> clipThresholdDb (linear clip level -> dBFS; default 20*log10(0.98) ~ -0.175 dBFS)"
+domain = "effects"
+rule = "unit-in-name"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::takes clipThresholdDb"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairAnalyzeRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairApplyRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclickRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclickStereoRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclipRequest.clipThreshold"
+changed = "clipThreshold -> clipThresholdDb"
+domain = "effects"
+rule = "unit-in-name"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::takes clipThresholdDb"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclipRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclipStereoRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDecrackleRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDecrackleStereoRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDehumRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDehumStereoRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDenoiseClassicalLinkedRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDenoiseClassicalRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDenoiseClassicalStereoRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDereverbClassicalLinkedRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDereverbClassicalRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDereverbClassicalStereoRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDetectClicksRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDetectClippingRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDetectCrackleRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDetectHumRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDetectNoiseFloorRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDetectReverbRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDetectTrimRangeRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDetectTrimRangeStereoRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairNoiseBandBinsRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairTrimSilenceRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairTrimSilenceRequest.threshold"
+changed = "threshold -> thresholdDb"
+domain = "effects"
+rule = "unit-in-name"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::takes thresholdDb and refuses threshold"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairTrimSilenceStereoRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "TrimSilenceOptions.threshold"
+changed = "threshold -> thresholdDb (linear peak threshold -> dBFS; default -60 dBFS (was 0.001))"
+domain = "analysis"
+rule = "unit-in-name"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::takes thresholdDb and refuses threshold"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDeclickStereo"
+changed = "request-only: masteringRepairDeclickStereo(request: MasteringRepairDeclickStereoRequest): MasteringRepairDeclickResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::is request-only"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDeclipStereo"
+changed = "request-only: masteringRepairDeclipStereo(request: MasteringRepairDeclipStereoRequest): MasteringRepairDeclipResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::is request-only"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDecrackleStereo"
+changed = "request-only: masteringRepairDecrackleStereo(request: MasteringRepairDecrackleStereoRequest): MasteringRepairDecrackleResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::is request-only"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDehumStereo"
+changed = "request-only: masteringRepairDehumStereo(request: MasteringRepairDehumStereoRequest): MasteringRepairDehumResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::is request-only"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDenoiseClassicalLinked"
+changed = "request-only: masteringRepairDenoiseClassicalLinked(request: MasteringRepairDenoiseClassicalLinkedRequest): MasteringRepairDenoiseClassicalResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::is request-only"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDenoiseClassicalStereo"
+changed = "request-only: masteringRepairDenoiseClassicalStereo(request: MasteringRepairDenoiseClassicalStereoRequest): MasteringRepairDenoiseClassicalResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::is request-only"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDereverbClassicalLinked"
+changed = "request-only: masteringRepairDereverbClassicalLinked(request: MasteringRepairDereverbClassicalLinkedRequest): MasteringRepairDereverbClassicalResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::is request-only"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDereverbClassicalStereo"
+changed = "request-only: masteringRepairDereverbClassicalStereo(request: MasteringRepairDereverbClassicalStereoRequest): MasteringRepairDereverbClassicalResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::is request-only"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDereverbConfigForRoom"
+changed = "request-only: masteringRepairDereverbConfigForRoom(request: MasteringRepairDereverbConfigForRoomRequest): Required<DereverbClassicalOptions>"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::masteringRepairDereverbConfigForRoom takes a request"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDetectClicks"
+changed = "one positional form (masteringRepairDetectClicks(samples, sampleRate, options?: DeclickOptions)); request form takes MasteringRepairDetectClicksRequest; returns ClickDetection"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::takes one positional form and a request, equivalently"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDetectClipping"
+changed = "one positional form (masteringRepairDetectClipping(samples, sampleRate, options?: DeclipOptions)); request form takes MasteringRepairDetectClippingRequest; returns ClipDetection"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::takes one positional form and a request, equivalently"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDetectCrackle"
+changed = "one positional form (masteringRepairDetectCrackle(samples, sampleRate, options?: DecrackleOptions)); request form takes MasteringRepairDetectCrackleRequest; returns CrackleDetection"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::takes one positional form and a request, equivalently"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDetectHum"
+changed = "one positional form (masteringRepairDetectHum(samples, sampleRate, options?: DehumOptions)); request form takes MasteringRepairDetectHumRequest; returns HumDetection"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::takes one positional form and a request, equivalently"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDetectNoiseFloor"
+changed = "one positional form (masteringRepairDetectNoiseFloor(samples, sampleRate, options?: DenoiseClassicalOptions)); request form takes MasteringRepairDetectNoiseFloorRequest; returns NoiseDetection"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::takes one positional form and a request, equivalently"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDetectReverb"
+changed = "one positional form (masteringRepairDetectReverb(samples, sampleRate, options?: DereverbClassicalOptions)); request form takes MasteringRepairDetectReverbRequest; returns ReverbDetection"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::takes one positional form and a request, equivalently"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDetectTrimRange"
+changed = "one positional form (masteringRepairDetectTrimRange(samples, sampleRate, options?: TrimSilenceOptions)); request form takes MasteringRepairDetectTrimRangeRequest; returns TrimRange"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::takes one positional form and a request, equivalently"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDetectTrimRangeStereo"
+changed = "request-only: masteringRepairDetectTrimRangeStereo(request: MasteringRepairDetectTrimRangeStereoRequest): TrimRange"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::is request-only"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairNoiseBandBins"
+changed = "request-only: masteringRepairNoiseBandBins(request: MasteringRepairNoiseBandBinsRequest): Int32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::masteringRepairNoiseBandBins takes a request"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairTrimSilenceStereo"
+changed = "request-only: masteringRepairTrimSilenceStereo(request: MasteringRepairTrimSilenceStereoRequest): MasteringRepairTrimSilenceResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::is request-only"
+
+[[entry]]
+kind = "type"
+old = "DeclickOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "DeclipOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "DecrackleOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "DehumOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "DenoiseClassicalOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "DereverbClassicalOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairAnalyzeRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairApplyRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDeclickRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDeclickStereoRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDeclickStereoResult"
+changed = "renamed to MasteringRepairDeclickResult; shape {channels, reports}"
+domain = "effects"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channels, reports}"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDeclickStereoResult"
+changed = "renamed to MasteringRepairDeclickResult; shape {channels, reports}"
+domain = "effects"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channels, reports}"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDeclipRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDeclipStereoRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDeclipStereoResult"
+changed = "renamed to MasteringRepairDeclipResult; shape {channels, reports}"
+domain = "effects"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channels, reports}"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDeclipStereoResult"
+changed = "renamed to MasteringRepairDeclipResult; shape {channels, reports}"
+domain = "effects"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channels, reports}"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDecrackleRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDecrackleStereoRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDecrackleStereoResult"
+changed = "renamed to MasteringRepairDecrackleResult; shape {channels, reports}"
+domain = "effects"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channels, reports}"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDecrackleStereoResult"
+changed = "renamed to MasteringRepairDecrackleResult; shape {channels, reports}"
+domain = "effects"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channels, reports}"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDehumRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDehumStereoRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDehumStereoResult"
+changed = "renamed to MasteringRepairDehumResult; shape {channels, reports}"
+domain = "effects"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channels, reports}"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDehumStereoResult"
+changed = "renamed to MasteringRepairDehumResult; shape {channels, reports}"
+domain = "effects"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channels, reports}"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDenoiseClassicalLinkedRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDenoiseClassicalLinkedResult"
+removed = true
+domain = "effects"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDenoiseClassicalLinkedResult"
+removed = true
+domain = "effects"
+rule = "type-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDenoiseClassicalRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDenoiseClassicalStereoRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDenoiseClassicalStereoResult"
+changed = "renamed to MasteringRepairDenoiseClassicalResult; shape {channels, reports}"
+domain = "effects"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channels, reports}"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDenoiseClassicalStereoResult"
+changed = "renamed to MasteringRepairDenoiseClassicalResult; shape {channels, reports}"
+domain = "effects"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channels, reports}"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDereverbClassicalLinkedRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDereverbClassicalLinkedResult"
+removed = true
+domain = "effects"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDereverbClassicalLinkedResult"
+removed = true
+domain = "effects"
+rule = "type-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDereverbClassicalRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDereverbClassicalStereoRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDereverbClassicalStereoResult"
+changed = "renamed to MasteringRepairDereverbClassicalResult; shape {channels, reports}"
+domain = "effects"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channels, reports}"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDereverbClassicalStereoResult"
+changed = "renamed to MasteringRepairDereverbClassicalResult; shape {channels, reports}"
+domain = "effects"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channels, reports}"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDetectClicksRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDetectClippingRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDetectCrackleRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDetectHumRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDetectNoiseFloorRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDetectReverbRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDetectTrimRangeRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDetectTrimRangeStereoRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairNoiseBandBinsRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::masteringRepairNoiseBandBins takes a request"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairStage"
+changed = "discriminated union: ({stage:'declick'} & Omit<DeclickOptions,'validate'>) | ({stage:'declip'} & Omit<DeclipOptions,'validate'>) | ({stage:'decrackle'} & Omit<DecrackleOptions,'validate'>) | ({stage:'dehum'} & Omit<DehumOptions,'validate'>) | ({stage:'denoise'} & Omit<DenoiseClassicalOptions,'validate'>) | ({stage:'dereverb'} & Omit<DereverbClassicalOptions,'validate'>)"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::stages are a discriminated union"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairTrimSilenceRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairTrimSilenceStereoRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairTrimSilenceStereoResult"
+changed = "renamed to MasteringRepairTrimSilenceResult; shape {channels, reports}"
+domain = "effects"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channels, reports}"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairTrimSilenceStereoResult"
+changed = "renamed to MasteringRepairTrimSilenceResult; shape {channels, reports}"
+domain = "effects"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channels, reports}"
+
+[[entry]]
+kind = "type"
+old = "TrimSilenceOptions"
+changed = "field list"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerInterleavedBuffer.channels"
+changed = "channels -> numChannels (readonly)"
+domain = "effects"
+rule = "num-channels"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::interleaved buffer reports numChannels"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerPodConfig.eqHighpassHz"
+changed = "eqHighpassHz -> eqHighPassHz"
+domain = "effects"
+rule = "high-pass"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerPodConfig.eqHighpassHz"
+changed = "eqHighpassHz -> eqHighPassHz"
+domain = "effects"
+rule = "high-pass"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerPodConfig.harmonyStep1"
+removed = true
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerPodConfig.harmonyStep1"
+removed = true
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerPodConfig.harmonyStep2"
+removed = true
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerPodConfig.harmonyStep2"
+removed = true
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerPodConfig.harmonyStep3"
+removed = true
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerPodConfig.harmonyStep3"
+removed = true
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerPodConfig.retuneGrainSize"
+changed = "retuneGrainSize -> retuneGrainSizeSamples"
+domain = "effects"
+rule = "unit-in-name"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerPodConfig.retuneGrainSize"
+changed = "retuneGrainSize -> retuneGrainSizeSamples"
+domain = "effects"
+rule = "unit-in-name"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerPodConfig.retuneSemitones"
+changed = "retuneSemitones -> retunePitchSemitones"
+domain = "effects"
+rule = "pitch-semitones"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerPodConfig.retuneSemitones"
+changed = "retuneSemitones -> retunePitchSemitones"
+domain = "effects"
+rule = "pitch-semitones"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerPodConfig.reverbVariationVariation"
+changed = "reverbVariationVariation -> reverbVariation"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerPodConfig.reverbVariationVariation"
+changed = "reverbVariationVariation -> reverbVariation"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerPodConfig.voiceEngineEngine"
+changed = "voiceEngineEngine -> voiceEngine"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerPodConfig.voiceEngineEngine"
+changed = "voiceEngineEngine -> voiceEngine"
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
+
+[[entry]]
+kind = "field"
+old = "SonareRealtimeVoiceChangerWorkletProcessorOptions.blockSize"
+changed = "blockSize -> maxBlockSize"
+domain = "effects"
+rule = "num-channels"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the processor options and drops the old spellings"
+
+[[entry]]
+kind = "field"
+old = "SonareRealtimeVoiceChangerWorkletProcessorOptions.channelCount"
+changed = "channelCount -> numChannels"
+domain = "effects"
+rule = "num-channels"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the processor options and drops the old spellings"
+
+[[entry]]
+kind = "field"
+old = "SonareRealtimeVoiceChangerWorkletProcessorOptions.preset"
+changed = "preset -> config"
+domain = "effects"
+rule = "num-channels"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the processor options and drops the old spellings"
+
+[[entry]]
+kind = "field"
+old = "StreamingRetuneConfig.grainSize"
+changed = "grainSize -> grainSizeSamples (grain size in samples; absent = derived from the sample rate; explicit 0 -> RangeError)"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names its controls pitchSemitones and grainSizeSamples"
+
+[[entry]]
+kind = "field"
+old = "StreamingRetuneConfig.grainSize"
+changed = "grainSize -> grainSizeSamples (grain size in samples; absent = derived from the sample rate; explicit 0 -> RangeError)"
+domain = "effects"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names its controls pitchSemitones and grainSizeSamples"
+
+[[entry]]
+kind = "field"
+old = "StreamingRetuneConfig.semitones"
+changed = "semitones -> pitchSemitones (renamed)"
+domain = "effects"
+rule = "pitch-semitones"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names its controls pitchSemitones and grainSizeSamples"
+
+[[entry]]
+kind = "field"
+old = "StreamingRetuneConfig.semitones"
+changed = "semitones -> pitchSemitones (renamed)"
+domain = "effects"
+rule = "pitch-semitones"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names its controls pitchSemitones and grainSizeSamples"
+
+[[entry]]
+kind = "field"
+old = "VoiceChangeRealtimeRequest.blockSize"
+changed = "blockSize -> maxBlockSize"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::voiceChangeRealtime is request-only and planar"
+
+[[entry]]
+kind = "field"
+old = "VoiceChangeRealtimeRequest.channels"
+changed = "the planar input itself, one or two Float32Array channels of equal length, instead of a channel count over interleaved samples"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::voiceChangeRealtime is request-only and planar"
+
+[[entry]]
+kind = "field"
+old = "VoiceChangeRealtimeRequest.preset"
+changed = "preset -> config (RealtimeVoiceChangerConfigInput; default 'neutralMonitor')"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::voiceChangeRealtime is request-only and planar"
+
+[[entry]]
+kind = "field"
+old = "VoiceChangeRealtimeRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::voiceChangeRealtime is request-only and planar"
+
+[[entry]]
+kind = "field"
+old = "VoiceChangeRealtimeRequest.samples"
+changed = "samples -> channels (Float32Array[] (1 or 2 planar channels, equal lengths); was interleaved `samples` + count `channels`)"
+domain = "effects"
+rule = "num-channels"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::voiceChangeRealtime is request-only and planar"
+
+[[entry]]
+kind = "field"
+old = "VoiceChangeRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::voiceChange requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "RealtimeVoiceChanger"
+changed = "constructor(options: RealtimeVoiceChangerOptions)"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::takes one options object with sampleRate required"
+
+[[entry]]
+kind = "function"
+old = "realtimeVoiceChangerPresetConfig"
+changed = "realtimeVoiceChangerPresetConfig(preset: VoicePresetId): RealtimeVoiceChangerConfig; numeric ordinals refused (TypeError)"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config and preset JSON refuse"
+
+[[entry]]
+kind = "function"
+old = "validateRealtimeVoiceChangerPresetJson"
+changed = "renamed to realtimeVoiceChangerValidatePresetJson(json: string): RealtimeVoiceChangerValidatePresetJsonResult"
+domain = "effects"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the validator to its C name"
+
+[[entry]]
+kind = "function"
+old = "voiceChange"
+changed = "one positional form (voiceChange(samples, sampleRate, options?: VoiceChangeOptions)); request form takes VoiceChangeRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::voiceChange requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "voiceChangeRealtime"
+changed = "request-only: voiceChangeRealtime(request: VoiceChangeRealtimeRequest): Float32Array[]"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::voiceChangeRealtime is request-only and planar"
+
+[[entry]]
+kind = "function"
+old = "voiceCharacterPresetId"
+changed = "voiceCharacterPresetId(ordinal: number): VoicePresetId; an unknown ordinal throws RangeError (was null); the string-identity input is removed"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::voiceCharacterPresetId refuses"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.bufferGeneration"
+removed = true
+domain = "effects"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.createRealtimeInterleavedBuffer"
+changed = "createRealtimeInterleavedBuffer(numFrames: number, numChannels: 1 | 2)"
+domain = "effects"
+rule = "num-channels"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::refuses a channel count outside 1 or 2"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.createRealtimePlanarBuffer"
+changed = "createRealtimePlanarBuffer(numFrames: number, numChannels: 1 | 2)"
+domain = "effects"
+rule = "num-channels"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::refuses a channel count outside 1 or 2"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.getCarrierBuffer"
+removed = true
+domain = "effects"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.getInterleavedInputBuffer"
+removed = true
+domain = "effects"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.getInterleavedOutputBuffer"
+removed = true
+domain = "effects"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.getMonoInputBuffer"
+removed = true
+domain = "effects"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.getMonoOutputBuffer"
+removed = true
+domain = "effects"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.getPlanarChannelBuffer"
+removed = true
+domain = "effects"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.latencySamples"
+changed = "readonly getter latencySamples: number"
+domain = "effects"
+rule = "getters"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::exposes latencySamples and nonFiniteDiscardCount as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.nonFiniteDiscardCount"
+changed = "readonly getter nonFiniteDiscardCount: number"
+domain = "effects"
+rule = "getters"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::exposes latencySamples and nonFiniteDiscardCount as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.prepare"
+removed = true
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.processInterleaved"
+removed = true
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.processInterleavedInto"
+changed = "processInterleavedInto(input: Float32Array, numChannels: 1 | 2, output: Float32Array): void"
+domain = "effects"
+rule = "num-channels"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::require numChannels 1 or 2"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.processInterleavedWithCarrier"
+removed = true
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.processInterleavedWithCarrierInto"
+changed = "processInterleavedWithCarrierInto(input: Float32Array, carrier: Float32Array, numChannels: 1 | 2, output: Float32Array): void"
+domain = "effects"
+rule = "num-channels"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::require numChannels 1 or 2"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.processPreparedInterleaved"
+removed = true
+domain = "effects"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.processPreparedInterleavedWithCarrier"
+removed = true
+domain = "effects"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.processPreparedMono"
+removed = true
+domain = "effects"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.processPreparedMonoWithCarrier"
+removed = true
+domain = "effects"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.processPreparedPlanar"
+removed = true
+domain = "effects"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.processPreparedPlanarWithCarrier"
+removed = true
+domain = "effects"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.setConfig"
+changed = "setConfig(config: RealtimeVoiceChangerConfigInput)"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::feeds a preset config back through the constructor and setConfig"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.setPodConfig"
+removed = true
+domain = "effects"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "StreamingRetune.grainSize"
+changed = "readonly getter grainSizeSamples: number"
+domain = "effects"
+rule = "getters"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names its controls pitchSemitones and grainSizeSamples"
+
+[[entry]]
+kind = "method"
+old = "StreamingRetune.latencySamples"
+changed = "readonly getter latencySamples: number"
+domain = "effects"
+rule = "getters"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names its controls pitchSemitones and grainSizeSamples"
+
+[[entry]]
+kind = "type"
+old = "DecomposeResult"
+changed = "declared interface {w: Matrix2D, h: Matrix2D} (was alias of WasmDecomposeResult)"
+domain = "effects"
+rule = "no-internal-types"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::declares the result and request types"
+
+[[entry]]
+kind = "type"
+old = "HpssWithResidualResult"
+changed = "declared interface {harmonic, percussive, residual, sampleRate} (was alias of WasmHpssWithResidualResult)"
+domain = "effects"
+rule = "no-internal-types"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::declares the result and request types"
+
+[[entry]]
+kind = "type"
+old = "RealtimeVoiceChangerPodConfig"
+changed = "renamed to RealtimeVoiceChangerConfig"
+domain = "effects"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
+
+[[entry]]
+kind = "type"
+old = "RealtimeVoiceChangerPodConfig"
+changed = "renamed to RealtimeVoiceChangerConfig"
+domain = "effects"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
+
+[[entry]]
+kind = "type"
+old = "SonareRealtimeVoiceChangerAllNotesOffMessage"
+removed = true
+domain = "effects"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareRealtimeVoiceChangerDestroyMessage"
+removed = true
+domain = "effects"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareRealtimeVoiceChangerErrorMessage"
+removed = true
+domain = "effects"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareRealtimeVoiceChangerMessage"
+removed = true
+domain = "effects"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareRealtimeVoiceChangerNoteOffMessage"
+removed = true
+domain = "effects"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareRealtimeVoiceChangerNoteOnMessage"
+removed = true
+domain = "effects"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareRealtimeVoiceChangerResetMessage"
+removed = true
+domain = "effects"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareRealtimeVoiceChangerSetConfigMessage"
+removed = true
+domain = "effects"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareRealtimeVoiceChangerWorkletProcessorOptions"
+changed = "field list"
+domain = "effects"
+rule = "num-channels"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the processor options and drops the old spellings"
+
+[[entry]]
+kind = "type"
+old = "StreamingRetuneConfig"
+changed = "field list"
+domain = "effects"
+rule = "pitch-semitones"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names its controls pitchSemitones and grainSizeSamples"
+
+[[entry]]
+kind = "type"
+old = "StreamingRetuneConfig"
+changed = "field list"
+domain = "effects"
+rule = "pitch-semitones"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names its controls pitchSemitones and grainSizeSamples"
+
+[[entry]]
+kind = "type"
+old = "VoiceChangeRealtimeOptions"
+removed = true
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "type"
+old = "VoiceChangeRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::voiceChange requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "VoiceCharacterType"
+changed = "renamed to CharacterType"
+domain = "core"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
+
+[[entry]]
+kind = "type"
+old = "VoiceCharacterType"
+changed = "renamed to CharacterType"
+domain = "core"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
+
+[[entry]]
+kind = "type"
+old = "VoiceMidiRelease"
+changed = "renamed to MidiRelease"
+domain = "engine"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
+
+[[entry]]
+kind = "type"
+old = "VoiceMidiRelease"
+changed = "renamed to MidiRelease"
+domain = "engine"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
+
+[[entry]]
+kind = "type"
+old = "VoiceNoteDivision"
+changed = "renamed to NoteDivision"
+domain = "core"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
+
+[[entry]]
+kind = "type"
+old = "VoiceNoteDivision"
+changed = "renamed to NoteDivision"
+domain = "core"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
+
+[[entry]]
+kind = "type"
+old = "VoicePitchCorrectionMode"
+changed = "renamed to PitchCorrectionMode"
+domain = "effects"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
+
+[[entry]]
+kind = "type"
+old = "VoicePitchCorrectionMode"
+changed = "renamed to PitchCorrectionMode"
+domain = "effects"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
+
+[[entry]]
+kind = "type"
+old = "VoicePitchEngine"
+changed = "renamed to VoiceEngine"
+domain = "engine"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
+
+[[entry]]
+kind = "type"
+old = "VoicePitchEngine"
+changed = "renamed to VoiceEngine"
+domain = "engine"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
+
+[[entry]]
+kind = "type"
+old = "VoiceReverbVariation"
+changed = "renamed to ReverbVariation"
+domain = "core"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
+
+[[entry]]
+kind = "type"
+old = "VoiceReverbVariation"
+changed = "renamed to ReverbVariation"
+domain = "core"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
+
+[[entry]]
+kind = "type"
+old = "VoiceScaleKind"
+changed = "renamed to ScaleKind"
+domain = "analysis"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
+
+[[entry]]
+kind = "type"
+old = "VoiceScaleKind"
+changed = "renamed to ScaleKind"
+domain = "analysis"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
+
+[[entry]]
+kind = "type"
+old = "VoiceVocoderCarrierSource"
+changed = "renamed to VocoderCarrierSource"
+domain = "core"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
+
+[[entry]]
+kind = "type"
+old = "VoiceVocoderCarrierSource"
+changed = "renamed to VocoderCarrierSource"
+domain = "core"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
+
+[[entry]]
+kind = "type"
+old = "VoiceVocoderCarrierWave"
+changed = "renamed to VocoderCarrierWave"
+domain = "core"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
+
+[[entry]]
+kind = "type"
+old = "VoiceVocoderCarrierWave"
+changed = "renamed to VocoderCarrierWave"
+domain = "core"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
+
+[[entry]]
+kind = "value"
+old = "VoiceCharacterType='bbd_chorus'"
+changed = "CharacterType='bbdChorus'"
+domain = "core"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::accepts the lowerCamel tokens"
+
+[[entry]]
+kind = "value"
+old = "VoiceCharacterType='bbd_chorus'"
+changed = "CharacterType='bbdChorus'"
+domain = "core"
+rule = "token-case"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::accepts the lowerCamel tokens"
+
+[[entry]]
+kind = "value"
+old = "VoiceNoteDivision='dotted_eighth'"
+changed = "NoteDivision='dottedEighth'"
+domain = "core"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::accepts the lowerCamel tokens"
+
+[[entry]]
+kind = "value"
+old = "VoiceNoteDivision='dotted_eighth'"
+changed = "NoteDivision='dottedEighth'"
+domain = "core"
+rule = "token-case"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::accepts the lowerCamel tokens"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='bright-idol'"
+changed = "VoicePresetId='brightIdol'"
+domain = "core"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='bright-idol'"
+changed = "VoicePresetId='brightIdol'"
+domain = "core"
+rule = "token-case"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='choir-harmony'"
+changed = "VoicePresetId='choirHarmony'"
+domain = "core"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='choir-harmony'"
+changed = "VoicePresetId='choirHarmony'"
+domain = "core"
+rule = "token-case"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='dark-villain'"
+changed = "VoicePresetId='darkVillain'"
+domain = "core"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='dark-villain'"
+changed = "VoicePresetId='darkVillain'"
+domain = "core"
+rule = "token-case"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='deep-narrator'"
+changed = "VoicePresetId='deepNarrator'"
+domain = "core"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='deep-narrator'"
+changed = "VoicePresetId='deepNarrator'"
+domain = "core"
+rule = "token-case"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='hard-tune'"
+changed = "VoicePresetId='hardTune'"
+domain = "core"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='hard-tune'"
+changed = "VoicePresetId='hardTune'"
+domain = "core"
+rule = "token-case"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='neutral-monitor'"
+changed = "VoicePresetId='neutralMonitor'"
+domain = "core"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='neutral-monitor'"
+changed = "VoicePresetId='neutralMonitor'"
+domain = "core"
+rule = "token-case"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='radio-voice'"
+changed = "VoicePresetId='radioVoice'"
+domain = "core"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='radio-voice'"
+changed = "VoicePresetId='radioVoice'"
+domain = "core"
+rule = "token-case"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='robot-mascot'"
+changed = "VoicePresetId='robotMascot'"
+domain = "core"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='robot-mascot'"
+changed = "VoicePresetId='robotMascot'"
+domain = "core"
+rule = "token-case"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='robot-monotone'"
+changed = "VoicePresetId='robotMonotone'"
+domain = "core"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='robot-monotone'"
+changed = "VoicePresetId='robotMonotone'"
+domain = "core"
+rule = "token-case"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='soft-whisper'"
+changed = "VoicePresetId='softWhisper'"
+domain = "core"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='soft-whisper'"
+changed = "VoicePresetId='softWhisper'"
+domain = "core"
+rule = "token-case"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='vocoder-strings'"
+changed = "VoicePresetId='vocoderStrings'"
+domain = "core"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='vocoder-strings'"
+changed = "VoicePresetId='vocoderStrings'"
+domain = "core"
+rule = "token-case"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoiceReverbVariation='dub_echo'"
+changed = "ReverbVariation='dubEcho'"
+domain = "core"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::accepts the lowerCamel tokens"
+
+[[entry]]
+kind = "value"
+old = "VoiceReverbVariation='dub_echo'"
+changed = "ReverbVariation='dubEcho'"
+domain = "core"
+rule = "token-case"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::accepts the lowerCamel tokens"
+
+[[entry]]
+kind = "value"
+old = "VoiceReverbVariation='tempo_delay'"
+changed = "ReverbVariation='tempoDelay'"
+domain = "core"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::accepts the lowerCamel tokens"
+
+[[entry]]
+kind = "value"
+old = "VoiceReverbVariation='tempo_delay'"
+changed = "ReverbVariation='tempoDelay'"
+domain = "core"
+rule = "token-case"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/effects-voice.test.ts::accepts the lowerCamel tokens"
+
+[[entry]]
+kind = "field"
+old = "SpectralEditOptions.window"
+changed = "a WindowType name only: an ordinal is refused (TypeError), an unknown name (RangeError)"
+domain = "effects"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/effects-notes.test.ts::spectralEdit takes a window by name only"

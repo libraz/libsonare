@@ -81,14 +81,26 @@ describe('offline render honours the prepared channel count', () => {
   const requestedChannels = 6;
 
   it('renderOffline rejects more planes than were prepared', () => {
-    const engine = new RealtimeEngine(48000, 128, 1024, 1024, preparedChannels);
+    const engine = new RealtimeEngine({
+      sampleRate: 48000,
+      maxBlockSize: 128,
+      commandCapacity: 1024,
+      telemetryCapacity: 1024,
+      maxNumChannels: preparedChannels,
+    });
     const channels = Array.from({ length: requestedChannels }, () => new Float32Array(128));
-    expectRangeRefusal(() => engine.renderOffline(channels, 128));
+    expectRangeRefusal(() => engine.renderOffline({ channels, blockSize: 128 }));
     engine.destroy();
   });
 
   it('bounceOffline rejects more planes than were prepared', () => {
-    const engine = new RealtimeEngine(48000, 128, 1024, 1024, preparedChannels);
+    const engine = new RealtimeEngine({
+      sampleRate: 48000,
+      maxBlockSize: 128,
+      commandCapacity: 1024,
+      telemetryCapacity: 1024,
+      maxNumChannels: preparedChannels,
+    });
     expectRangeRefusal(() =>
       engine.bounceOffline({
         totalFrames: 256,
@@ -102,7 +114,13 @@ describe('offline render honours the prepared channel count', () => {
   });
 
   it('freezeOffline rejects more planes than were prepared', () => {
-    const engine = new RealtimeEngine(48000, 128, 1024, 1024, preparedChannels);
+    const engine = new RealtimeEngine({
+      sampleRate: 48000,
+      maxBlockSize: 128,
+      commandCapacity: 1024,
+      telemetryCapacity: 1024,
+      maxNumChannels: preparedChannels,
+    });
     expectRangeRefusal(() =>
       engine.freezeOffline({
         totalFrames: 256,
@@ -113,30 +131,52 @@ describe('offline render honours the prepared channel count', () => {
     engine.destroy();
   });
 
-  it('bounceOffline rejects an out-of-range dither ordinal', () => {
-    // An unknown ordinal used to fall through to None, so the bounce succeeded
+  it('bounceOffline rejects an unknown dither name and any dither ordinal', () => {
+    // An unknown dither used to fall through to None, so the bounce succeeded
     // with undithered audio and no way to tell the request had been dropped.
-    // The C ABI rejects it, so Node and Python already do. The TS type narrows
-    // `dither` to 0..3, so this is the plain-JavaScript caller's path.
-    for (const dither of [-1, 4, 999] as unknown as Array<0 | 1 | 2 | 3>) {
-      const engine = new RealtimeEngine(48000, 128, 1024, 1024, preparedChannels);
-      expectRangeRefusal(() =>
+    // The facade takes a name: an unknown one is a RangeError, a number a
+    // TypeError. This is the plain-JavaScript caller's path.
+    const bounce = (dither: unknown) => {
+      const engine = new RealtimeEngine({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+        commandCapacity: 1024,
+        telemetryCapacity: 1024,
+        maxNumChannels: preparedChannels,
+      });
+      try {
         engine.bounceOffline({
           totalFrames: 256,
           blockSize: 128,
           numChannels: preparedChannels,
           sourceSampleRate: 48000,
           targetSampleRate: 48000,
-          dither,
-        }),
-      );
-      engine.destroy();
+          dither: dither as never,
+        });
+      } finally {
+        engine.destroy();
+      }
+    };
+    for (const dither of ['ordered', 'none', '']) {
+      expectRangeRefusal(() => bounce(dither));
+    }
+    for (const dither of [-1, 0, 1, 4, 999]) {
+      expectTypeRefusal(() => bounce(dither));
     }
   });
 
   it('still renders at the prepared width', () => {
-    const engine = new RealtimeEngine(48000, 128, 1024, 1024, preparedChannels);
-    const rendered = engine.renderOffline([new Float32Array(128), new Float32Array(128)], 128);
+    const engine = new RealtimeEngine({
+      sampleRate: 48000,
+      maxBlockSize: 128,
+      commandCapacity: 1024,
+      telemetryCapacity: 1024,
+      maxNumChannels: preparedChannels,
+    });
+    const rendered = engine.renderOffline({
+      channels: [new Float32Array(128), new Float32Array(128)],
+      blockSize: 128,
+    });
     expect(rendered.length).toBe(preparedChannels);
     engine.destroy();
   });
@@ -169,7 +209,7 @@ describe('analyze rejects the same configurations as the C ABI', () => {
 
 describe('drainExternalMidi lowers a MIDI 2.0 RPN to four MIDI 1.0 messages', () => {
   it('delivers CC 101, 100, 6 and 38 with a budget of 4', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     engine.setMidiDestinationExternal(5, true);
     const rpnWord0 = ((0x4 << 28) | (0x2 << 20) | (1 << 16)) >>> 0;
     engine.setMidiClips([
@@ -199,9 +239,9 @@ describe('drainExternalMidi reports a budget it can never make progress on', () 
   // budget consumed nothing and returned an empty array forever while the
   // queue grew and started dropping events.
   function engineWithPendingExternalMidi(): RealtimeEngine {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     engine.setTempo(120);
-    engine.setBuiltinInstrument({ gain: 0.5 }, 5);
+    engine.setBuiltinInstrument(5, { gain: 0.5 });
     engine.setMidiDestinationExternal(5, true);
     engine.setMidiClips([
       {
@@ -217,7 +257,7 @@ describe('drainExternalMidi reports a budget it can never make progress on', () 
     ]);
     engine.play();
     engine.process([new Float32Array(128), new Float32Array(128)]);
-    expect(engine.externalMidiPendingCount()).toBeGreaterThan(0);
+    expect(engine.externalMidiPendingCount).toBeGreaterThan(0);
     return engine;
   }
 
@@ -244,7 +284,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
 
   for (const [label, points, refusal] of rejectedPoints) {
     it(`setAutomationLane rejects ${label}`, () => {
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       expectRefusalOf(
         () => engine.setAutomationLane(paramId, points as EngineAutomationPoint[]),
         refusal,
@@ -275,12 +315,14 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
     const samples = new Float32Array(2048);
     for (const length of [2e9, -1, 1.5]) {
       expectRangeRefusal(() =>
-        spectralEdit(samples, SR, { length } as unknown as SpectralRegionOp[]),
+        spectralEdit(samples, SR, { ops: { length } as unknown as SpectralRegionOp[] }),
       );
     }
     // A genuine op list of the same shape still resolves.
     expect(
-      spectralEdit(samples, SR, [{ startSample: 0, lowHz: 100, highHz: 200, gainDb: -6 }]).length,
+      spectralEdit(samples, SR, {
+        ops: [{ startSample: 0, lowHz: 100, highHz: 200, gainDb: -6 }],
+      }).length,
     ).toBe(samples.length);
   });
 
@@ -305,8 +347,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
   });
 
   it('sizes RealtimeVoiceChanger.processMono from the real sample count', () => {
-    const vc = new RealtimeVoiceChanger('neutral-monitor');
-    vc.prepare(48000, 256, 1);
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, maxBlockSize: 256 });
     // The control: two legal block sizes select an output of that size.
     expect(vc.processMono(new Float32Array(4)).length).toBe(4);
     expect(vc.processMono(new Float32Array(8)).length).toBe(8);
@@ -316,8 +357,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
   });
 
   it("sizes RealtimeVoiceChanger.processMonoInto's output check from the real buffer", () => {
-    const vc = new RealtimeVoiceChanger('neutral-monitor');
-    vc.prepare(48000, 256, 1);
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, maxBlockSize: 256 });
     const input = new Float32Array(4);
     // The control: an output exactly the input's size accepts; one short refuses.
     expect(() => vc.processMonoInto(input, new Float32Array(4))).not.toThrow();
@@ -328,12 +368,14 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
   });
 
   it('reads setTrackBuses from the real array length, not a fabricated one', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       // The control: a lone valid bus accepts; a second bus with an invalid
       // layout trips the layout check, which only fires if it was actually read.
       expect(() => engine.setTrackBuses([{ busId: 1 }])).not.toThrow();
-      expect(() => engine.setTrackBuses([{ busId: 1 }, { busId: 2, channelLayout: 99 }])).toThrow();
+      expect(() =>
+        engine.setTrackBuses([{ busId: 1 }, { busId: 2, channelLayout: 99 as never }]),
+      ).toThrow(TypeError);
       for (const length of [-1, 1.5, 2e9]) {
         expectRangeRefusal(() =>
           engine.setTrackBuses({ length } as unknown as Parameters<typeof engine.setTrackBuses>[0]),
@@ -345,7 +387,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
   });
 
   it('counts setGraph nodes, connections and parameter bindings from the real arrays', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       // The control: two legal node lists report that many nodes.
       engine.setGraph({
@@ -355,7 +397,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
         outputNode: 'a',
         numChannels: 1,
       });
-      expect(engine.graphNodeCount()).toBe(1);
+      expect(engine.graphNodeCount).toBe(1);
       engine.setGraph({
         nodes: [
           { id: 'a', numPorts: 1 },
@@ -366,8 +408,8 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
         outputNode: 'b',
         numChannels: 1,
       });
-      expect(engine.graphNodeCount()).toBe(2);
-      expect(engine.graphConnectionCount()).toBe(1);
+      expect(engine.graphNodeCount).toBe(2);
+      expect(engine.graphConnectionCount).toBe(1);
       type GraphSpec = Parameters<typeof engine.setGraph>[0];
       for (const length of [-1, 1.5, 2e9]) {
         expectRangeRefusal(() =>
@@ -405,7 +447,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
   });
 
   it('reads setClips channels and warpAnchors from the real arrays, not a fabricated length', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       const chA = new Float32Array(128).fill(0.5);
       const chB = new Float32Array(64).fill(0.5);
@@ -514,10 +556,13 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
   });
 
   it('reads addVcaGroup/setVcaGroupMembers members from the real array length', () => {
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), SR, 512);
+    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      sampleRate: SR,
+      blockSize: 512,
+    });
     try {
       const membersOf = (id: string): string[] =>
-        JSON.parse(mixer.toSceneJson()).vcaGroups.find((group: { id: string }) => group.id === id)
+        JSON.parse(mixer.toJson()).vcaGroups.find((group: { id: string }) => group.id === id)
           .members;
       // The control: two legal member lists keep the members they carry.
       mixer.addVcaGroup('vg1', 0, ['a']);
@@ -834,9 +879,9 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
 
   it('sizes setMidiClips events per-clip from the real array length', () => {
     const rms = (events: unknown): number => {
-      const engine = new RealtimeEngine(48000, 2048);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 2048 });
       try {
-        engine.setBuiltinInstrument({ gain: 0.5 }, 0);
+        engine.setBuiltinInstrument(0, { gain: 0.5 });
         engine.setMidiClips([
           {
             id: 1,
@@ -863,9 +908,9 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       rms([{ renderFrame: 0, word0: (0x2 << 28) | (0x9 << 20) | (60 << 8) | 100, wordCount: 1 }]),
     ).toBeGreaterThan(0);
     for (const length of WRAPPING_LENGTHS) {
-      const engine = new RealtimeEngine(48000, 2048);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 2048 });
       try {
-        engine.setBuiltinInstrument({ gain: 0.5 }, 0);
+        engine.setBuiltinInstrument(0, { gain: 0.5 });
         expectRangeRefusal(() =>
           engine.setMidiClips([
             {

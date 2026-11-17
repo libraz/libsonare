@@ -663,7 +663,7 @@ export interface TranscribeOptions {
    * Tuning reference in Hz the MIDI note numbers are measured against, or
    * `'auto'` to measure it from the audio before any pitch is tracked. Default
    * `440`; a number must be finite and positive. {@link tuningToReferenceHz}
-   * converts a measured tuning to Hz, and {@link TranscribeResult.tuning}
+   * converts a measured tuning to Hz, and {@link TranscribeResult.tuningCents}
    * reports what was used either way, so a wrong transcription can be traced to it.
    */
   referenceHz?: number | 'auto';
@@ -769,11 +769,11 @@ export interface TranscribeResult {
   /** The tempo the PPQ coordinates were built on — yours when you gave one, the detected one otherwise. */
   tempoBpm: number;
   /**
-   * Tuning the note numbers were measured against, in fractions of a semitone
-   * from concert A440: the measured value under `referenceHz: 'auto'`,
-   * otherwise the one `referenceHz` amounts to ({@link referenceHzToTuning}).
+   * Tuning the note numbers were measured against, in cents from concert A440,
+   * in [-50, 50): the measured value under `referenceHz: 'auto'`, otherwise the
+   * one `referenceHz` amounts to ({@link referenceHzToTuning}).
    */
-  tuning: number;
+  tuningCents: number;
 }
 
 /**

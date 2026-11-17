@@ -1,25 +1,72 @@
 import type {
-  EngineCaptureStatus,
   EngineMarker,
+  EngineTempoSegment,
   EngineTrackLane,
   RealtimeEngine,
 } from '../index.js';
-import { secondsToSampleCount } from '../validation.js';
-import { commitCommand, type EngineCommitContext } from './engine-commit.js';
-import { requireChannelCount, requireInteger, requireIntegerOption } from './guards.js';
-import type { SonareEngineSyncCaptureMessage, SonareEngineTransportFacade } from './messages.js';
+import type { CaptureOptions, EngineLoop } from '../public_types_engine.js';
+import {
+  assertFloatValue,
+  requestObject,
+  requireBoolean,
+  resolveSampleBound,
+  secondsToSampleCount,
+} from '../validation.js';
+import { commitCommand, type EngineCommitContext, requireQueued } from './engine-commit.js';
+import { requireInteger, requireIntegerOption } from './guards.js';
+import type { SonareEngineSyncCaptureMessage } from './messages.js';
 import { SonareEngineCommandType } from './protocol.js';
 
-/** Capture configuration options accepted by the engine's `configureCapture`. */
-export interface CaptureOptions {
-  bufferFrames: number;
-  channels?: number;
-  source?: EngineCaptureStatus['source'];
-  recordOffsetSamples?: number;
-  inputMonitor?: { enabled: boolean; gain?: number };
+/** The resolved capture setup carried by the `syncCapture` message. */
+export type CaptureSyncConfig = Omit<SonareEngineSyncCaptureMessage, 'type'> & {
+  /** Punch window in timeline samples; absent when no punch is set. */
+  punch?: { startSample: number; endSample: number };
+};
+
+/** Refuses a value that is not a plain object, naming the argument. */
+export function requireObject(
+  method: string,
+  what: string,
+  value: unknown,
+): asserts value is object {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new TypeError(`${method}: ${what} must be an object`);
+  }
 }
 
-const FLOAT32_MAX = 3.4028234663852886e38;
+function punchBound(
+  ppq: number | undefined,
+  sample: number | undefined,
+  sec: number | undefined,
+  names: readonly [string, string, string],
+  sampleRate: number,
+  sampleAtPpq: (ppq: number) => number,
+): number {
+  const [ppqName, sampleName, secName] = names;
+  if (ppq === undefined || ppq === null) {
+    const bound = resolveSampleBound(
+      'configureCapture',
+      sample,
+      sec,
+      sampleRate,
+      `punch.${sampleName}`,
+      `punch.${secName}`,
+    );
+    if (bound === undefined) {
+      throw new RangeError(`configureCapture: punch needs ${ppqName}, ${sampleName} or ${secName}`);
+    }
+    return bound;
+  }
+  if ((sample !== undefined && sample !== null) || (sec !== undefined && sec !== null)) {
+    throw new RangeError(
+      `configureCapture: give one of punch.${ppqName}, punch.${sampleName} or punch.${secName}`,
+    );
+  }
+  if (typeof ppq !== 'number' || !Number.isFinite(ppq) || ppq < 0) {
+    throw new RangeError(`configureCapture: punch.${ppqName} must be a non-negative number`);
+  }
+  return sampleAtPpq(ppq);
+}
 
 /**
  * Normalizes capture options into the resolved config carried by the
@@ -28,36 +75,106 @@ const FLOAT32_MAX = 3.4028234663852886e38;
  * capture buffer was already replaced.
  *
  * @param options Raw capture options.
- * @param defaultChannels Channel count to use when `options.channels` is unset.
- * @throws RangeError if a frame count, channel count or offset is not an
- *   integer, the source is not 'output' or 'input', or the monitor gain is not
- *   a finite 32-bit float.
+ * @param defaultNumChannels Plane count to use when `options.numChannels` is unset.
+ * @param sampleRate Engine sample rate, for punch bounds given in seconds.
+ * @param sampleAtPpq Converts a quarter-note position to a timeline sample.
+ * @returns The wire config and the same setup spelled for the offline mirror.
+ * @throws TypeError for an unknown key; RangeError if a frame count, plane count or offset is
+ *   not an integer, the source is not `'output'` or `'input'`, the monitor gain is not a
+ *   finite 32-bit float, or a punch bound is missing, doubly spelled or negative.
  */
 export function buildCaptureConfig(
   options: CaptureOptions,
-  defaultChannels: number,
-): Omit<SonareEngineSyncCaptureMessage, 'type'> {
-  // The native reader also takes the ordinals 0 and 1; they resolve to the names here.
+  defaultNumChannels: number,
+  sampleRate: number,
+  sampleAtPpq: (ppq: number) => number,
+): { config: CaptureSyncConfig; offlineOptions: CaptureOptions } {
+  requestObject('configureCapture', options, 'options', true);
   const rawSource: unknown = options.source ?? 'output';
-  const source = rawSource === 0 ? 'output' : rawSource === 1 ? 'input' : rawSource;
-  if (source !== 'output' && source !== 'input') {
-    throw new RangeError("capture source must be 'output' or 'input' (or ordinal 0 or 1)");
+  if (typeof rawSource === 'number') {
+    throw new TypeError("configureCapture: source must be 'output' or 'input', not a number");
   }
-  const gain = options.inputMonitor?.gain ?? 1;
-  if (typeof gain !== 'number' || !Number.isFinite(gain) || Math.abs(gain) > FLOAT32_MAX) {
-    throw new RangeError('inputMonitor.gain must be a finite number within the 32-bit float range');
+  if (rawSource !== 'output' && rawSource !== 'input') {
+    throw new RangeError("capture source must be 'output' or 'input'");
   }
-  return {
-    // bufferFrames has no default; NaN makes the guard refuse an absent value.
-    bufferFrames: requireIntegerOption(options.bufferFrames, Number.NaN, 'bufferFrames', 1),
-    channels: requireChannelCount(options.channels, defaultChannels),
+  const source = rawSource;
+  let monitor = { enabled: true, gain: 1 };
+  if (options.inputMonitor !== undefined && options.inputMonitor !== null) {
+    requireObject('configureCapture', 'inputMonitor', options.inputMonitor);
+    const gain = options.inputMonitor.gain ?? 1;
+    assertFloatValue('configureCapture', gain, 'inputMonitor.gain');
+    monitor = {
+      enabled: requireBoolean(
+        'configureCapture',
+        options.inputMonitor.enabled,
+        'inputMonitor.enabled',
+      ),
+      gain,
+    };
+  }
+  let punch: { startSample: number; endSample: number } | undefined;
+  if (options.punch !== undefined && options.punch !== null) {
+    requireObject('configureCapture', 'punch', options.punch);
+    const { punch: window } = options;
+    punch = {
+      startSample: punchBound(
+        window.startPpq,
+        window.startSample,
+        window.startSec,
+        ['startPpq', 'startSample', 'startSec'],
+        sampleRate,
+        sampleAtPpq,
+      ),
+      endSample: punchBound(
+        window.endPpq,
+        window.endSample,
+        window.endSec,
+        ['endPpq', 'endSample', 'endSec'],
+        sampleRate,
+        sampleAtPpq,
+      ),
+    };
+  }
+  const config: CaptureSyncConfig = {
+    // capacityFrames has no default; NaN makes the guard refuse an absent value.
+    bufferFrames: requireIntegerOption(options.capacityFrames, Number.NaN, 'capacityFrames', 1),
+    channels: requireIntegerOption(options.numChannels, defaultNumChannels, 'numChannels', 1),
     source,
     recordOffsetSamples: requireInteger(options.recordOffsetSamples, 0, 'recordOffsetSamples'),
-    inputMonitor: {
-      enabled: Boolean(options.inputMonitor?.enabled),
-      gain,
+    inputMonitor: monitor,
+    ...(punch === undefined ? {} : { punch }),
+  };
+  return {
+    config,
+    offlineOptions: {
+      capacityFrames: config.bufferFrames,
+      numChannels: config.channels,
+      source,
+      recordOffsetSamples: config.recordOffsetSamples,
+      inputMonitor: monitor,
+      ...(punch === undefined ? {} : { punch }),
     },
   };
+}
+
+/**
+ * The transport methods of {@link SonareEngine.transport}. Each queues a
+ * sample-accurate command (`renderFrame` omitted: the next block head) and
+ * returns nothing; a full command ring throws a `SonareError` with
+ * `ErrorCode.OutOfMemory`.
+ */
+export interface SonareEngineTransportFacade {
+  /** Starts playback at `renderFrame`. */
+  play(renderFrame?: number): void;
+  /** Stops playback at `renderFrame`. */
+  stop(renderFrame?: number): void;
+  /** Moves the playhead to `ppq` quarter notes at `renderFrame`. */
+  seekPpq(ppq: number, renderFrame?: number): void;
+  /** Moves the playhead to `timeSec` seconds (non-negative, rounded to a sample) at `renderFrame`. */
+  seekSec(timeSec: number, renderFrame?: number): void;
+  setTempo(bpm: number): void;
+  setTempoSegments(segments: readonly EngineTempoSegment[]): void;
+  setLoop(loop: EngineLoop): void;
 }
 
 /**
@@ -68,58 +185,54 @@ export function buildCaptureConfig(
 export interface EngineTransportContext extends EngineCommitContext {
   readonly sampleRate: number;
   realtimeNode: {
-    play(sampleTime?: number): boolean;
-    stop(sampleTime?: number): boolean;
+    play(renderFrame?: number): boolean;
+    stop(renderFrame?: number): boolean;
   };
   offlineEngine: RealtimeEngine;
   setTempo(bpm: number): void;
-  setTempoSegments(segments: readonly { startPpq: number; bpm: number }[]): void;
-  setLoop(startPpq: number, endPpq: number, enabled?: boolean): boolean;
+  setTempoSegments(segments: readonly EngineTempoSegment[]): void;
+  setLoop(loop: EngineLoop): void;
 }
 
 /** Builds the public transport facade that fans control to both engines. */
 export function buildTransportFacade(ctx: EngineTransportContext): SonareEngineTransportFacade {
   return {
-    play: (sampleTime) => {
-      return ctx.realtimeNode.play(sampleTime);
+    play: (renderFrame) => {
+      requireQueued(ctx.realtimeNode.play(renderFrame), 'play');
     },
-    stop: (sampleTime) => {
-      return ctx.realtimeNode.stop(sampleTime);
+    stop: (renderFrame) => {
+      requireQueued(ctx.realtimeNode.stop(renderFrame), 'stop');
     },
-    seekPpq: (ppq, sampleTime) =>
+    seekPpq: (ppq, renderFrame) => {
       commitCommand(
         ctx,
         {
           type: SonareEngineCommandType.TransportSeekPpq,
-          sampleTime: sampleTime ?? -1,
+          renderFrame: renderFrame ?? -1,
           argFloat: ppq,
         },
-        (offline) => offline.seekPpq(ppq, sampleTime),
-      ),
-    seekSeconds: (seconds, sampleTime) => {
-      // A negative position is refused, never clamped onto the start.
-      if (seconds < 0) {
-        throw new RangeError('seekSeconds: seconds must be non-negative');
-      }
-      const timelineSample = secondsToSampleCount(
-        'seekSeconds',
-        seconds,
-        ctx.sampleRate,
-        'seconds',
+        (offline) => offline.seekPpq(ppq, renderFrame),
       );
-      return commitCommand(
+    },
+    seekSec: (timeSec, renderFrame) => {
+      // A negative position is refused, never clamped onto the start.
+      if (timeSec < 0) {
+        throw new RangeError('seekSec: timeSec must be non-negative');
+      }
+      const timelineSample = secondsToSampleCount('seekSec', timeSec, ctx.sampleRate, 'timeSec');
+      commitCommand(
         ctx,
         {
           type: SonareEngineCommandType.TransportSeekSample,
-          sampleTime: sampleTime ?? -1,
+          renderFrame: renderFrame ?? -1,
           argInt: timelineSample,
         },
-        (offline) => offline.seekSample(timelineSample, sampleTime),
+        (offline) => offline.seekSample(timelineSample, renderFrame),
       );
     },
     setTempo: (bpm) => ctx.setTempo(bpm),
     setTempoSegments: (segments) => ctx.setTempoSegments(segments),
-    setLoop: (startPpq, endPpq, enabled = true) => ctx.setLoop(startPpq, endPpq, enabled),
+    setLoop: (loop) => ctx.setLoop(loop),
   };
 }
 
@@ -128,17 +241,16 @@ export function buildTransportFacade(ctx: EngineTransportContext): SonareEngineT
  *
  * Lane indices are append-only: the new list must start with the already
  * declared lane ids in their current order and may only append new track ids.
- * Returns the normalized lane entries (numbers coerced to descriptors) and the
- * resulting ordered id list.
+ * Returns the lane entries and the resulting ordered id list.
  *
  * @throws if any track id is invalid, ids are duplicated, or the existing lane
  *   order is not preserved.
  */
 export function normalizeTrackLanes(
   existing: readonly number[],
-  lanes: ReadonlyArray<number | EngineTrackLane>,
-): { entries: EngineTrackLane[]; ids: number[] } {
-  const entries = lanes.map((lane) => (typeof lane === 'number' ? { trackId: lane } : lane));
+  lanes: readonly EngineTrackLane[],
+): { entries: readonly EngineTrackLane[]; ids: number[] } {
+  const entries = lanes;
   const ids: number[] = [];
   for (const entry of entries) {
     if (!Number.isInteger(entry.trackId) || entry.trackId <= 0) {
@@ -169,7 +281,7 @@ export function normalizeTrackLanes(
  * @throws on a non-finite ppq, an invalid id, or a duplicate id.
  */
 export function resolveMarkerSet(
-  markers: ReadonlyArray<{ ppq: number; name?: string; id?: number }>,
+  markers: ReadonlyArray<Omit<EngineMarker, 'id'> & { id?: number }>,
   nextMarkerId: number,
 ): { resolved: EngineMarker[]; nextMarkerId: number } {
   const resolved: EngineMarker[] = [];
@@ -195,7 +307,7 @@ export function resolveMarkerSet(
     if (id >= counter) {
       counter = id + 1;
     }
-    resolved.push({ id, ppq: marker.ppq, name: marker.name ?? '' });
+    resolved.push({ ...marker, id, name: marker.name ?? '' });
   }
   return { resolved, nextMarkerId: counter };
 }

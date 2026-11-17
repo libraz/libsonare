@@ -9,10 +9,11 @@ import type {
 } from '../index.js';
 import type { OpfsClipPageProviderBinding } from '../opfs_clip_pages.js';
 import type { OwnerEpoch } from '../owner_epoch.js';
+import { requestObject } from '../validation.js';
 import { commitSync } from './engine-commit.js';
 import { requireIntegerOption } from './guards.js';
 
-/** Request form of {@link SonareEngine.renderOffline}. */
+/** Request of {@link SonareEngine.renderOffline}. */
 export interface SonareRenderOfflineRequest {
   /** Length of the render in frames. */
   totalFrames: number;
@@ -28,6 +29,8 @@ export interface SonareRenderOfflineRequest {
    * The transport position is restored when the timeline ends, not between chunks.
    */
   finalize?: boolean;
+  /** Set `false` to skip the scan for NaN and infinities. Default `true`. */
+  validate?: boolean;
 }
 
 /** An OPFS-streamed clip's page bookkeeping, keyed by its page provider id. */
@@ -43,7 +46,7 @@ export interface OpfsExportSource {
 export interface EngineExportContext {
   readonly offlineEngine: RealtimeEngine;
   readonly offlineBlockSize: number;
-  readonly offlineChannelCount: number;
+  readonly offlineNumChannels: number;
   readonly clips: ReadonlyMap<number, EngineClip>;
   readonly opfsSources: ReadonlyMap<number, OpfsExportSource>;
   /** `chunkOrigin` is the transport position the mirror returns to once a chunked render ends. */
@@ -57,7 +60,7 @@ export interface EngineExportContext {
 
 function mirrorPosition(ctx: EngineExportContext): number {
   ctx.flushOfflineMirror();
-  return ctx.offlineEngine.getTransportState().samplePosition;
+  return ctx.offlineEngine.transportState().samplePosition;
 }
 
 function restorePosition(ctx: EngineExportContext, position: number): void {
@@ -92,10 +95,7 @@ function sourcePageRange(
     return null;
   }
   // A warped or looping clip reads the source out of timeline order.
-  if (
-    clip.loop ||
-    (clip.warpMode !== undefined && clip.warpMode !== 'off' && clip.warpMode !== 0)
-  ) {
+  if (clip.loop || (clip.warpMode !== undefined && clip.warpMode !== 'off')) {
     return [0, lastPage];
   }
   const offset = clip.clipOffsetSamples ?? 0;
@@ -173,30 +173,30 @@ function endTimeline(ctx: EngineExportContext, origin: number): void {
 
 export async function renderOffline(
   ctx: EngineExportContext,
-  request: number | SonareRenderOfflineRequest,
+  request: SonareRenderOfflineRequest,
 ): Promise<Float32Array[]> {
-  const numeric = typeof request === 'number';
-  const frames = requireIntegerOption(
-    numeric ? request : request.totalFrames,
-    Number.NaN,
-    'totalFrames',
-    0,
-  );
-  const blockSize = resolveBlockSize(ctx, numeric ? undefined : request.blockSize);
-  const finalize = numeric ? true : (request.finalize ?? true);
+  requestObject('SonareEngine.renderOffline', request, 'request', true);
+  const frames = requireIntegerOption(request.totalFrames, Number.NaN, 'totalFrames', 0);
+  const blockSize = resolveBlockSize(ctx, request.blockSize);
+  const finalize = request.finalize ?? true;
   const continuing = ctx.session.chunkOrigin !== undefined;
   const origin = ctx.session.chunkOrigin ?? mirrorPosition(ctx);
   const release = await prefetchOpfsSpan(ctx, mirrorPosition(ctx), frames);
   try {
     const channels: Float32Array[] = [];
-    for (let ch = 0; ch < ctx.offlineChannelCount; ch++) {
+    for (let ch = 0; ch < ctx.offlineNumChannels; ch++) {
       channels.push(new Float32Array(frames));
     }
     // A continuing chunk keeps the processor state the previous chunk left.
     if (!continuing) {
-      ctx.offlineEngine.primeOfflineParameters(ctx.offlineChannelCount, blockSize);
+      ctx.offlineEngine.primeOfflineParameters(ctx.offlineNumChannels, blockSize);
     }
-    const planes = ctx.offlineEngine.renderOffline({ channels, blockSize, finalize });
+    const planes = ctx.offlineEngine.renderOffline({
+      channels,
+      blockSize,
+      finalize,
+      ...(request.validate === undefined ? {} : { validate: request.validate }),
+    });
     if (finalize) {
       endTimeline(ctx, origin);
     } else {

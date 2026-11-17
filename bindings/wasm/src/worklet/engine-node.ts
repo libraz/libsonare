@@ -3,8 +3,10 @@ import type { EngineCaptureStatus, EngineTransportState } from '../index.js';
 import { failureFromPayload, isFailurePayload } from '../internal/failure_payload.js';
 import { assertHandleLive, releasedHandleError } from '../internal/handle_guard.js';
 import { OwnerEpoch } from '../owner_epoch.js';
+import type { EngineTelemetry, ExternalMidiEvent } from '../public_types_engine.js';
 import { engineCapabilities } from '../realtime_engine.js';
 import { resolveRenderFrame } from '../validation.js';
+import { externalMidiEventFromWire, telemetryFromRecord } from './engine-records.js';
 import {
   engineCaptureResponseRequestId,
   isClipPageRequestMessage,
@@ -31,7 +33,6 @@ import type {
   SonareRealtimeEngineNodeCapabilities,
   SonareRealtimeEngineNodeOptions,
   SonareRealtimeEngineWorkletProcessorOptions,
-  SonareWorkletExternalMidiEvent,
 } from './messages.js';
 import {
   createSonareClipPageRequestRingBuffer,
@@ -53,7 +54,6 @@ import {
   type SonareEngineCommandRecord,
   type SonareEngineCommandRingBuffer,
   SonareEngineCommandType,
-  type SonareEngineTelemetryRecord,
   type SonareEngineTelemetryRingBuffer,
   type SonareExternalMidiRingBuffer,
   type SonareMeterRingBuffer,
@@ -85,7 +85,8 @@ function isTrackMonitorMode(value: number | bigint | undefined): boolean {
   return typeof mode === 'number' && Number.isSafeInteger(mode) && mode >= 0 && mode <= 2;
 }
 
-function isValidCommandRecord(command: SonareEngineCommandRecord): boolean {
+/** Whether `command` is a well-formed record the ring and the worklet both accept. */
+export function isValidCommandRecord(command: SonareEngineCommandRecord): boolean {
   const type = Number(command.type);
   if (
     !Number.isSafeInteger(type) ||
@@ -103,7 +104,7 @@ function isValidCommandRecord(command: SonareEngineCommandRecord): boolean {
     (command.targetId === undefined || isUint32Slot(command.targetId)) &&
     (command.argFloat === undefined || Number.isFinite(command.argFloat)) &&
     isFiniteInteger(command.argInt) &&
-    isFiniteInteger(command.sampleTime) &&
+    isFiniteInteger(command.renderFrame) &&
     (command.syncSequence === undefined || isUint32Slot(command.syncSequence)) &&
     // A track-monitor command cannot infer a lane: its target is required.
     (type !== SonareEngineCommandType.SetTrackMonitorMode ||
@@ -162,10 +163,10 @@ export class SonareRealtimeEngineNode {
   private scopeReadIndex = 0;
   private clipPageRequestDroppedRead = 0;
   private ringPollTimer: ReturnType<typeof setInterval> | undefined;
-  private telemetryListeners = new Set<(telemetry: SonareEngineTelemetryRecord) => void>();
+  private telemetryListeners = new Set<(telemetry: EngineTelemetry) => void>();
   private meterListeners = new Set<(meter: SonareWorkletMeterSnapshot) => void>();
   private scopeListeners = new Set<(scope: SonareWorkletScopeSnapshot) => void>();
-  private midiOutListeners = new Set<(events: SonareWorkletExternalMidiEvent[]) => void>();
+  private midiOutListeners = new Set<(events: ExternalMidiEvent[]) => void>();
   private clipPageRequestListeners = new Set<
     (message: SonareEngineClipPageRequestMessage) => void
   >();
@@ -283,13 +284,13 @@ export class SonareRealtimeEngineNode {
           }
         }
       } else if (isEngineTelemetryRecord(event.data)) {
-        this.emitTelemetry(event.data);
+        this.emitTelemetry(telemetryFromRecord(event.data));
       } else if (isMeterSnapshot(event.data)) {
         this.emitMeter(event.data);
       } else if (isScopeSnapshot(event.data)) {
         this.emitScope(event.data);
       } else if (isExternalMidiBatchMessage(event.data)) {
-        this.emitMidiOut(event.data.events);
+        this.emitMidiOut(event.data.events.map(externalMidiEventFromWire));
       } else if (isClipPageRequestMessage(event.data)) {
         this.emitClipPageRequests(event.data);
       } else if (isRecord(event.data) && event.data.type === 'syncError') {
@@ -452,7 +453,7 @@ export class SonareRealtimeEngineNode {
       mode === 'sab'
         ? createSonareExternalMidiRingBuffer({ capacity: externalMidiRingCapacity })
         : undefined;
-    const channelCount = requireChannelCount(options.channelCount, 2);
+    const channelCount = requireChannelCount(options.numChannels, 2, 'numChannels');
     const cueOutput = options.cueOutput === true;
     const processorOptions: SonareRealtimeEngineWorkletProcessorOptions = {
       sampleRate,
@@ -519,53 +520,53 @@ export class SonareRealtimeEngineNode {
     );
   }
 
-  play(sampleTime?: number): boolean {
+  play(renderFrame?: number): boolean {
     return this.sendCommand({
       type: SonareEngineCommandType.TransportPlay,
-      sampleTime: resolveRenderFrame('play', sampleTime),
+      renderFrame: resolveRenderFrame('play', renderFrame),
     });
   }
 
   /** Queues a reset of the master's integrated-loudness accumulator. */
-  resetMasterLoudnessMeter(sampleTime?: number): boolean {
+  resetMasterLoudnessMeter(renderFrame?: number): boolean {
     return this.sendCommand({
       type: SonareEngineCommandType.ResetMasterLoudnessMeter,
-      sampleTime: resolveRenderFrame('resetMasterLoudnessMeter', sampleTime),
+      renderFrame: resolveRenderFrame('resetMasterLoudnessMeter', renderFrame),
     });
   }
 
   /** Queues a reset of every mixer and effect processor to its prepared state. */
-  resetProcessorState(sampleTime?: number): boolean {
+  resetProcessorState(renderFrame?: number): boolean {
     return this.sendCommand({
       type: SonareEngineCommandType.ResetProcessorState,
-      sampleTime: resolveRenderFrame('resetProcessorState', sampleTime),
+      renderFrame: resolveRenderFrame('resetProcessorState', renderFrame),
     });
   }
 
-  stop(sampleTime?: number): boolean {
+  stop(renderFrame?: number): boolean {
     return this.sendCommand({
       type: SonareEngineCommandType.TransportStop,
-      sampleTime: resolveRenderFrame('stop', sampleTime),
+      renderFrame: resolveRenderFrame('stop', renderFrame),
     });
   }
 
-  seekSample(timelineSample: number, sampleTime?: number): boolean {
+  seekSample(timelineSample: number, renderFrame?: number): boolean {
     return this.sendCommand({
       type: SonareEngineCommandType.TransportSeekSample,
-      sampleTime: resolveRenderFrame('seekSample', sampleTime),
+      renderFrame: resolveRenderFrame('seekSample', renderFrame),
       argInt: timelineSample,
     });
   }
 
-  seekPpq(ppq: number, sampleTime?: number): boolean {
-    const frame = resolveRenderFrame('seekPpq', sampleTime);
+  seekPpq(ppq: number, renderFrame?: number): boolean {
+    const frame = resolveRenderFrame('seekPpq', renderFrame);
     if (!isPublicPpq(ppq) || !Number.isSafeInteger(frame)) {
       this.assertOpen();
       return false;
     }
     return this.sendCommand({
       type: SonareEngineCommandType.TransportSeekPpq,
-      sampleTime: frame,
+      renderFrame: frame,
       argFloat: ppq,
     });
   }
@@ -665,16 +666,17 @@ export class SonareRealtimeEngineNode {
     });
   }
 
-  pollTelemetry(): SonareEngineTelemetryRecord[] {
+  pollTelemetry(): EngineTelemetry[] {
     if (!this.telemetryRing) {
       return [];
     }
     const read = readSonareEngineTelemetryRingBuffer(this.telemetryRing, this.telemetryReadIndex);
     this.telemetryReadIndex = read.nextReadIndex;
-    for (const telemetry of read.telemetry) {
+    const records = read.telemetry.map(telemetryFromRecord);
+    for (const telemetry of records) {
       this.emitTelemetry(telemetry);
     }
-    return read.telemetry;
+    return records;
   }
 
   // Drains any meters published into the SAB meter ring (embind SAB mode) and
@@ -708,15 +710,15 @@ export class SonareRealtimeEngineNode {
   }
 
   /** Drain lowered MIDI-1 records from the SAB ring on the main thread. */
-  pollMidiOut(): SonareWorkletExternalMidiEvent[] {
+  pollMidiOut(): ExternalMidiEvent[] {
     if (!this.externalMidiRing) {
       return [];
     }
     const read = readSonareExternalMidiRingBuffer(this.externalMidiRing);
     const events = read.events.map((event) => {
-      const bytes: number[] = [];
+      const bytes = new Uint8Array(event.byteCount);
       for (let index = 0; index < event.byteCount; index++) {
-        bytes.push((event.byteWord >>> (8 * index)) & 0xff);
+        bytes[index] = (event.byteWord >>> (8 * index)) & 0xff;
       }
       return {
         destinationId: event.destinationId,
@@ -754,7 +756,7 @@ export class SonareRealtimeEngineNode {
     return message;
   }
 
-  onTelemetry(callback: (telemetry: SonareEngineTelemetryRecord) => void): () => void {
+  onTelemetry(callback: (telemetry: EngineTelemetry) => void): () => void {
     this.telemetryListeners.add(callback);
     this.startRingPolling();
     return () => {
@@ -791,7 +793,7 @@ export class SonareRealtimeEngineNode {
    * manual {@link pollMidiOut} sees only what arrived since. Returns an
    * unsubscribe function.
    */
-  onMidiOut(callback: (events: SonareWorkletExternalMidiEvent[]) => void): () => void {
+  onMidiOut(callback: (events: ExternalMidiEvent[]) => void): () => void {
     this.midiOutListeners.add(callback);
     this.startRingPolling();
     return () => {
@@ -868,7 +870,7 @@ export class SonareRealtimeEngineNode {
     this.node.port.onmessage = null;
   }
 
-  private emitTelemetry(telemetry: SonareEngineTelemetryRecord): void {
+  private emitTelemetry(telemetry: EngineTelemetry): void {
     for (const listener of this.telemetryListeners) {
       listener(telemetry);
     }
@@ -916,7 +918,7 @@ export class SonareRealtimeEngineNode {
     }
   }
 
-  private emitMidiOut(events: SonareWorkletExternalMidiEvent[]): void {
+  private emitMidiOut(events: ExternalMidiEvent[]): void {
     for (const listener of this.midiOutListeners) {
       listener(events);
     }

@@ -1,4 +1,6 @@
 import {
+  AUTOMATION_CURVE_VALUES,
+  automationCurveCode,
   panLawCode,
   panModeCode,
   sendTimingCode,
@@ -7,18 +9,19 @@ import {
   trackMonitorModeCode,
 } from './codes.js';
 import { ErrorCode, SonareError } from './errors.js';
+import { CHANNEL_LAYOUT_VALUES } from './internal/channel_layout.js';
 import { eqBandJson } from './internal/eq_band_json.js';
 import { assertHandleLive, releasedHandleError } from './internal/handle_guard.js';
 import { getSonareModule } from './module_state.js';
 import type {
   Articulation,
+  BuiltinSynthConfig,
   ControllerBinding,
   MpeDimension,
   NoteTracking,
-  PartRigInsert,
-  PartRigMode,
   PartRigRequest,
   ProjectMidiCcBinding,
+  Sf2InstrumentConfig,
   SynthPatch,
 } from './project.js';
 import type { ProjectTimeline } from './project_class.js';
@@ -29,74 +32,89 @@ import {
 } from './project_internal.js';
 import type {
   EqBand,
-  PanLawInput,
+  MixSceneBus,
+  MixSceneStrip,
+  PanLaw,
   PanMode,
   SidechainCheck,
-  SidechainSourceKind,
   SurroundPan,
   UmpWords,
 } from './public_types.js';
 import type {
+  CaptureOptions,
   ClipPageRequest,
   EngineAutomationPoint,
   EngineBounceOptions,
   EngineBounceResult,
   EngineBus,
   EngineCapabilities,
-  EngineCapturePunchRequest,
-  EngineCaptureSource,
   EngineCaptureStatus,
   EngineClip,
   EngineFreezeOptions,
   EngineFreezeResult,
   EngineGraphSpec,
+  EngineLoop,
   EngineMarker,
   EngineMeterTelemetry,
   EngineMeterTelemetryWide,
   EngineMetronomeConfig,
   EngineMidiClipSchedule,
   EngineParameterInfo,
+  EngineProcessWithMonitorResult,
   EngineScopeTelemetry,
   EngineTelemetry,
+  EngineTelemetryError,
+  EngineTelemetryType,
   EngineTempoSegment,
   EngineTimeSignatureSegment,
   EngineTrackLane,
   EngineTrackMonitorMode,
   EngineTrackSend,
   EngineTransportState,
-  MidiCcBindOptions,
+  ExternalMidiEvent,
+  RealtimeEngineConfig,
   RenderOfflineRequest,
+  SidechainSource,
+  StripRef,
 } from './public_types_engine.js';
 import type {
   WasmEngineBus,
   WasmEngineClip,
-  WasmEngineProcessWithMonitorResult,
   WasmEngineTrackSend,
-  WasmExternalMidiEvent,
   WasmRealtimeEngine,
 } from './sonare.js';
 import {
+  assertFloatValue,
   assertSurroundPan,
   optionalBoolean,
+  requestObject,
   requireBoolean,
   resolveSampleBound,
   resolveRenderFrame as resolveWireRenderFrame,
 } from './validation.js';
 
 export type {
+  CaptureOptions,
+  CapturePunch,
   ClipPageRequest,
   EngineAutomationPoint,
   EngineBounceOptions,
   EngineBounceResult,
   EngineBus,
   EngineCapabilities,
-  EngineCapturePunchRequest,
   EngineCaptureSource,
   EngineCaptureStatus,
   EngineClip,
+  EngineDither,
   EngineFreezeOptions,
   EngineFreezeResult,
+  EngineGraphConnection,
+  EngineGraphMix,
+  EngineGraphNode,
+  EngineGraphNodeType,
+  EngineGraphParameterBinding,
   EngineGraphSpec,
+  EngineLoop,
   EngineMarker,
   EngineMeterTelemetry,
   EngineMeterTelemetryWide,
@@ -107,16 +125,20 @@ export type {
   EngineProcessWithMonitorResult,
   EngineScopeTelemetry,
   EngineTelemetry,
+  EngineTelemetryError,
+  EngineTelemetryType,
   EngineTempoSegment,
   EngineTimeSignatureSegment,
   EngineTrackLane,
   EngineTrackMonitorMode,
   EngineTrackSend,
   EngineTransportState,
+  EngineWarpMode,
   ExternalMidiEvent,
-  MidiCcBindOptions,
+  RealtimeEngineConfig,
   RenderOfflineRequest,
-  TrackMonitorMode,
+  SidechainSource,
+  StripRef,
 } from './public_types_engine.js';
 
 /** The native layer takes an absent frame as `undefined`; the shared resolver spells it -1. */
@@ -160,17 +182,156 @@ function assertUmpWords(fnName: string, words: UmpWords): UmpWords {
   return words;
 }
 
-/**
- * One normalizer for both call forms, so the request object and the positional
- * overload cannot drift in their defaults.
- */
-function normalizeRenderOfflineRequest(
-  channelsOrRequest: Float32Array[] | RenderOfflineRequest,
-  blockSize: number,
-): { channels: Float32Array[]; blockSize: number; finalize: boolean } {
-  const request = Array.isArray(channelsOrRequest)
-    ? { channels: channelsOrRequest, blockSize }
-    : channelsOrRequest;
+const MARKER_KINDS = { marker: 0, text: 1, lyric: 2, cuePoint: 3, keySignature: 4 } as const;
+const WARP_MODES = { off: 0, repitch: 1, tempoSync: 2, timeStretch: 3 } as const;
+const DITHERS = { rpdf: 1, tpdf: 2, noiseShaped: 3 } as const;
+const GRAPH_NODE_TYPES = { passThrough: 0, gain: 1 } as const;
+const GRAPH_MIXES = { replace: 0, add: 1 } as const;
+const CAPTURE_SOURCES = { output: 0, input: 1 } as const;
+const TELEMETRY_TYPES: readonly EngineTelemetryType[] = ['processBlock', 'error'];
+// Indexed by the native error ordinal; 19 is reserved by the worklet protocol.
+const TELEMETRY_ERRORS: readonly EngineTelemetryError[] = [
+  'none',
+  'commandQueueOverflow',
+  'pendingCommandOverflow',
+  'boundaryOverflow',
+  'telemetryOverflow',
+  'captureOverflow',
+  'maxBlockExceeded',
+  'unknownTarget',
+  'nonRealtimeSafeParameter',
+  'notPrepared',
+  'nonQueueableCommand',
+  'automationBindTargetOverflow',
+  'staleAutomationLanes',
+  'smoothedParameterCapacity',
+  'commandBacklogDeferred',
+  'clipPageUnderrun',
+  'insertAutomationOverflow',
+  'midiClockOverflow',
+  'metronomeOverflow',
+  'invalidCommand',
+  'maxChannelsExceeded',
+  'parameterBaseOverflow',
+];
+
+/** Resolves a closed-set string token; an ordinal is a `TypeError` and an unknown spelling a `RangeError`. */
+function tokenCode(
+  fnName: string,
+  argName: string,
+  value: unknown,
+  table: Readonly<Record<string, number>>,
+): number {
+  const accepted = Object.keys(table)
+    .map((key) => `'${key}'`)
+    .join(', ');
+  if (typeof value !== 'string') {
+    throw new TypeError(`${fnName}: ${argName} must be one of ${accepted}`);
+  }
+  // biome-ignore lint/suspicious/noPrototypeBuiltins: Object.hasOwn is newer than the ES2020 target.
+  if (!Object.prototype.hasOwnProperty.call(table, value)) {
+    throw new RangeError(`${fnName}: ${argName} must be one of ${accepted} (got '${value}')`);
+  }
+  return table[value];
+}
+
+function tokenName<T extends string>(table: Readonly<Record<T, number>>, ordinal: number): T {
+  const name = (Object.keys(table) as T[]).find((key) => table[key] === ordinal);
+  if (name === undefined) {
+    throw new RangeError(`unknown ordinal ${ordinal}`);
+  }
+  return name;
+}
+
+/** Runs an existing token resolver after refusing an ordinal, which is never a public spelling. */
+function noOrdinal(fnName: string, argName: string, value: unknown): void {
+  if (typeof value === 'number') {
+    throw new TypeError(`${fnName}: ${argName} must be a string token, not an ordinal`);
+  }
+}
+
+/** An optional positive integer count: absent takes `fallback`, and an explicit `0` is refused. */
+function optionalCount(fnName: string, argName: string, value: unknown, fallback: number): number {
+  if (value === undefined || value === null) {
+    return fallback;
+  }
+  if (typeof value !== 'number') {
+    throw new TypeError(`${fnName}: ${argName} must be a number`);
+  }
+  if (!Number.isFinite(value)) {
+    throw new RangeError(`${fnName}: ${argName} must be a finite number`);
+  }
+  if (value === 0) {
+    throw new RangeError(
+      `${fnName}: ${argName} must not be 0 (omit it for the default ${fallback})`,
+    );
+  }
+  if (value < 0 || !Number.isInteger(value)) {
+    throw new RangeError(`${fnName}: ${argName} must be a positive integer`);
+  }
+  return value;
+}
+
+/** An optional id that names a bus: absent routes to the master mix, so an explicit `0` is refused. */
+function optionalBusId(fnName: string, argName: string, value: unknown): number {
+  if (value === undefined || value === null) {
+    return 0;
+  }
+  if (typeof value !== 'number') {
+    throw new TypeError(`${fnName}: ${argName} must be a number`);
+  }
+  if (value === 0) {
+    throw new RangeError(
+      `${fnName}: ${argName} must not be 0 (omit it to route to the master mix)`,
+    );
+  }
+  return value;
+}
+
+function requireObject(fnName: string, argName: string, value: unknown): void {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new TypeError(`${fnName}: ${argName} must be an object`);
+  }
+}
+
+function normalizeEngineConfig(
+  fnName: 'RealtimeEngine' | 'prepare',
+  config: unknown,
+): Required<RealtimeEngineConfig> {
+  const request = requestObject(fnName, config as RealtimeEngineConfig, 'config', true);
+  const sampleRate = request.sampleRate;
+  if (typeof sampleRate !== 'number') {
+    throw new TypeError(`${fnName}: sampleRate must be a number`);
+  }
+  if (!Number.isFinite(sampleRate) || sampleRate <= 0) {
+    throw new RangeError(`${fnName}: sampleRate must be a positive finite number`);
+  }
+  return {
+    sampleRate,
+    maxBlockSize: optionalCount(fnName, 'maxBlockSize', request.maxBlockSize, 128),
+    commandCapacity: optionalCount(fnName, 'commandCapacity', request.commandCapacity, 1024),
+    telemetryCapacity: optionalCount(fnName, 'telemetryCapacity', request.telemetryCapacity, 1024),
+    maxNumChannels: optionalCount(fnName, 'maxNumChannels', request.maxNumChannels, 64),
+  };
+}
+
+function normalizeRenderOfflineRequest(request: RenderOfflineRequest): {
+  channels: Float32Array[];
+  blockSize: number;
+  finalize: boolean;
+} {
+  requestObject('renderOffline', request, 'request', true);
+  if (optionalBoolean('renderOffline', request.validate, 'validate', true)) {
+    for (const [plane, channel] of (request.channels ?? []).entries()) {
+      for (let i = 0; i < (channel?.length ?? 0); i++) {
+        if (!Number.isFinite(channel[i])) {
+          throw new RangeError(
+            `renderOffline: channels[${plane}] contains NaN or Inf at index ${i}`,
+          );
+        }
+      }
+    }
+  }
   return {
     channels: request.channels,
     blockSize: request.blockSize ?? 128,
@@ -198,37 +359,203 @@ export function engineCapabilities(): EngineCapabilities {
   };
 }
 
-/** Refuses unparseable JSON as InvalidFormat, keeping the parser message when it has one. */
-function assertSceneJson(json: string, fallbackMessage: string): void {
-  try {
-    JSON.parse(json);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : fallbackMessage;
-    throw new SonareError(ErrorCode.InvalidFormat, message);
-  }
+/** The clip shape the embind layer reads: the warp mode travels as its ordinal, a page provider as its id. */
+function nativeClip(clip: EngineClip): WasmEngineClip {
+  const { warpMode, pageProvider, ...rest } = clip;
+  return {
+    ...rest,
+    ...(warpMode === undefined
+      ? {}
+      : { warpMode: tokenCode('setClips', 'warpMode', warpMode, WARP_MODES) as 0 | 1 | 2 | 3 }),
+    pageProvider:
+      typeof pageProvider === 'object' && pageProvider !== null ? pageProvider.id : pageProvider,
+  };
 }
 
-/** The clip shape the embind layer reads: a page provider travels as its id. */
-function nativeClip(clip: EngineClip): WasmEngineClip {
+function nativeMarker(marker: EngineMarker): Record<string, unknown> {
+  const { kind, ...rest } = marker;
+  return kind === undefined
+    ? rest
+    : { ...rest, kind: tokenCode('setMarkers', 'kind', kind, MARKER_KINDS) };
+}
+
+function markerFromNative(marker: {
+  id: number;
+  ppq: number;
+  name?: string;
+  kind?: number;
+  keyFifths?: number;
+  keyMinor?: boolean;
+}): EngineMarker {
+  return { ...marker, kind: tokenName(MARKER_KINDS, marker.kind ?? 0) };
+}
+
+function curveFromNative(ordinal: number): NonNullable<EngineAutomationPoint['curveToNext']> {
+  const entry = Object.entries(AUTOMATION_CURVE_VALUES).find(([, value]) => value === ordinal);
+  if (entry === undefined) {
+    throw new RangeError(`unknown automation curve ordinal ${ordinal}`);
+  }
+  return entry[0] as NonNullable<EngineAutomationPoint['curveToNext']>;
+}
+
+function nativeAutomationPoint(fnName: string, point: EngineAutomationPoint) {
+  noOrdinal(fnName, 'curveToNext', point.curveToNext);
+  const { curveToNext, ...rest } = point;
+  return curveToNext === undefined
+    ? rest
+    : { ...rest, curveToNext: automationCurveCode(curveToNext) };
+}
+
+function parameterInfoFromNative(info: {
+  id: number;
+  name: string;
+  unit: string;
+  minValue: number;
+  maxValue: number;
+  defaultValue: number;
+  rtSafe: boolean;
+  defaultCurve: number;
+}): Required<EngineParameterInfo> {
+  return { ...info, defaultCurve: curveFromNative(info.defaultCurve) };
+}
+
+function telemetryFromNative(record: {
+  type: number;
+  error: number;
+  renderFrame: number;
+  timelineSample: number;
+  audibleTimelineSample: number;
+  graphLatencySamplesQ8: number;
+  value: number;
+}): EngineTelemetry {
+  const type = TELEMETRY_TYPES[record.type];
+  const error = TELEMETRY_ERRORS[record.error];
+  if (type === undefined || error === undefined) {
+    throw new RangeError(`unknown telemetry ordinal (type ${record.type}, error ${record.error})`);
+  }
   return {
-    ...clip,
-    pageProvider:
-      typeof clip.pageProvider === 'object' && clip.pageProvider !== null
-        ? clip.pageProvider.id
-        : clip.pageProvider,
-  } as WasmEngineClip;
+    type,
+    error,
+    renderFrame: record.renderFrame,
+    timelineSample: record.timelineSample,
+    audibleTimelineSample: record.audibleTimelineSample,
+    graphLatencySamples: record.graphLatencySamplesQ8 / 256,
+    value: record.value,
+  };
+}
+
+/** A strip address resolved against the engine: a track id or the master strip. */
+type StripTarget = { master: false; trackId: number } | { master: true };
+
+function stripTarget(fnName: string, ref: StripRef): StripTarget {
+  if (typeof ref === 'number') {
+    return { master: false, trackId: ref };
+  }
+  if (typeof ref !== 'string') {
+    throw new TypeError(`${fnName}: ref must be a track id or 'master'`);
+  }
+  if (ref === 'master') {
+    return { master: true };
+  }
+  throw new RangeError(`${fnName}: ref must be a track id or 'master' (got '${ref}')`);
+}
+
+function trackOnly(fnName: string, ref: StripRef): number {
+  const target = stripTarget(fnName, ref);
+  if (target.master) {
+    throw new RangeError(`${fnName}: the master strip has no such setter`);
+  }
+  return target.trackId;
+}
+
+function sidechainSourceArg(
+  fnName: 'setStripSidechain' | 'setBusSidechain' | 'canSetStripSidechain' | 'canSetBusSidechain',
+  source: SidechainSource,
+): { kind: number; id: number } {
+  requestObject(fnName, source, 'source', true);
+  noOrdinal(fnName, 'kind', source.kind);
+  if (typeof source.id !== 'number') {
+    throw new TypeError(`${fnName}: source.id must be a number`);
+  }
+  if (source.id === 0) {
+    throw new RangeError(`${fnName}: source.id must not be 0 (pass null to remove the binding)`);
+  }
+  return { kind: sidechainSourceKindCode(source.kind), id: source.id };
+}
+
+function bypassState(
+  fnName: 'setStripInsertBypassed' | 'setBusInsertBypassed',
+  state: { bypassed: boolean; resetOnBypass?: boolean },
+): { bypassed: boolean; resetOnBypass: boolean } {
+  requestObject(fnName, state, 'state', true);
+  return {
+    bypassed: requireBoolean(fnName, state.bypassed, 'bypassed'),
+    resetOnBypass: optionalBoolean(fnName, state.resetOnBypass, 'resetOnBypass', false),
+  };
+}
+
+function insertParam(
+  fnName:
+    | 'setStripInsertParam'
+    | 'setBusInsertParam'
+    | 'applyStripInsertParamNow'
+    | 'applyBusInsertParamNow'
+    | 'restoreStripInsertParam'
+    | 'restoreBusInsertParam',
+  param: { name: string; value: number },
+): { name: string; value: number } {
+  requestObject(fnName, param, 'param', true);
+  if (typeof param.name !== 'string') {
+    throw new TypeError(`${fnName}: param.name must be a string`);
+  }
+  if (typeof param.value !== 'number') {
+    throw new TypeError(`${fnName}: param.value must be a number`);
+  }
+  return param;
+}
+
+function programBank(
+  fnName: 'pushMidiProgram' | 'pushMidiInputProgram',
+  bank: { msb: number; lsb: number } | null | undefined,
+): { bankValid: boolean; bankMsb: number; bankLsb: number } {
+  if (bank === undefined || bank === null) {
+    return { bankValid: false, bankMsb: 0, bankLsb: 0 };
+  }
+  requestObject(fnName, bank, 'bank', true);
+  return { bankValid: true, bankMsb: bank.msb, bankLsb: bank.lsb };
+}
+
+function stripJson(fnName: string, argName: string, document: unknown, key: string): string {
+  requireObject(fnName, argName, document);
+  return JSON.stringify({ [key]: [document] });
+}
+
+function bandJson(fnName: string, band: unknown): string {
+  requireObject(fnName, 'band', band);
+  return eqBandJson(band as object);
+}
+
+/**
+ * The embind object behind an engine, for the worklet processor's allocation-free
+ * telemetry scratch path. Internal: it is not re-exported from the package entry.
+ */
+export function engineNativeHandle(engine: RealtimeEngine): WasmRealtimeEngine {
+  return (engine as unknown as { native: WasmRealtimeEngine }).native;
 }
 
 /**
  * Sample-accurate realtime engine: clips, MIDI instruments, a track mixer and
  * automation, rendered block by block or offline.
  *
+ * Strips are addressed by a {@link StripRef}: a number is a track id and
+ * `'master'` is the master strip; buses have their own `setBus*` family.
+ *
  * Errors follow one rule across the methods:
  * - A call refused for its own argument (an out-of-range value, an unknown or
  *   wrong-kind track, bus, insert, destination or parameter id or name, a
- *   malformed patch or strip, an unknown `engineParams` key) throws a
- *   `RangeError` (`TypeError` for a value of the wrong type), never a
- *   `SonareError`.
+ *   malformed patch or strip, an unknown request key or `engineParams` key)
+ *   throws a `RangeError` (`TypeError` for a value of the wrong type or an
+ *   unknown request key), never a `SonareError`.
  * - A call refused because of state earlier calls left (a full binding table,
  *   rack or pool, no master strip configured, a queued SysEx the new instrument
  *   cannot prepare) throws a `SonareError` with `ErrorCode.InvalidState`; a
@@ -246,14 +573,18 @@ export class RealtimeEngine {
     return this.nativeHandle;
   }
   private sampleRate: number;
+  private metronomeSpelling: 'samples' | 'sec' = 'samples';
+  private captureBuffer: { numChannels: number; capacityFrames: number } | undefined;
+  // Track ids in lane order, as the last `setTrackLanes` declared them; unknown once a
+  // project timeline installed its own lanes.
+  private laneOrder: number[] | undefined = [];
 
-  constructor(
-    sampleRate = 48000,
-    maxBlockSize = 128,
-    commandCapacity = 1024,
-    telemetryCapacity = 1024,
-    maxChannels = 64,
-  ) {
+  /**
+   * @param config - Engine settings; `sampleRate` is required and an unknown key
+   *   is a `TypeError`.
+   */
+  constructor(config: RealtimeEngineConfig) {
+    const settings = normalizeEngineConfig('RealtimeEngine', config);
     const module = getSonareModule();
     const capabilities = engineCapabilities();
     if (!capabilities.abiCompatible) {
@@ -262,18 +593,19 @@ export class RealtimeEngine {
         `Engine ABI mismatch: wasm=${capabilities.engineAbiVersion}, expected=${capabilities.expectedEngineAbiVersion}`,
       );
     }
-    this.sampleRate = sampleRate;
+    this.sampleRate = settings.sampleRate;
     this.nativeHandle = new module.RealtimeEngine(
-      sampleRate,
-      maxBlockSize,
-      commandCapacity,
-      telemetryCapacity,
-      maxChannels,
+      settings.sampleRate,
+      settings.maxBlockSize,
+      settings.commandCapacity,
+      settings.telemetryCapacity,
+      settings.maxNumChannels,
     );
   }
 
   /**
-   * Size the engine's queues and scratch for a sample rate and block size.
+   * Size the engine's queues and scratch for a sample rate and block size. It
+   * takes the same object, defaults and refusals as the constructor.
    *
    * `commandCapacity` must not exceed 65536 and `telemetryCapacity` must not
    * exceed 16384; a larger value throws and leaves the engine untouched. The
@@ -281,28 +613,23 @@ export class RealtimeEngine {
    * reserves that many meter records per metered lane, so its memory cost is
    * far larger than the number given here.
    */
-  prepare(
-    sampleRate: number,
-    maxBlockSize: number,
-    commandCapacity = 1024,
-    telemetryCapacity = 1024,
-    maxChannels = 64,
-  ): void {
+  prepare(config: RealtimeEngineConfig): void {
+    const settings = normalizeEngineConfig('prepare', config);
     this.native.prepareWithChannels(
-      sampleRate,
-      maxBlockSize,
-      commandCapacity,
-      telemetryCapacity,
-      maxChannels,
+      settings.sampleRate,
+      settings.maxBlockSize,
+      settings.commandCapacity,
+      settings.telemetryCapacity,
+      settings.maxNumChannels,
     );
-    this.sampleRate = sampleRate;
+    this.sampleRate = settings.sampleRate;
   }
 
   /**
    * Queue a sample-accurate parameter change (engine kSetParam).
    * A reserved mixer id (`0x4d58xxxx`) other than a master id names no strip and
-   * throws a `RangeError`; resolve ids with the `resolve*AutomationId`
-   * methods (`resolveMasterAutomationId` for the master fader, pan and width).
+   * throws a `RangeError`; resolve ids with {@link resolveStripAutomationId},
+   * {@link resolveBusAutomationId} and {@link resolveStripInsertAutomationId}.
    */
   setParameter(paramId: number, value: number, renderFrame?: number): void {
     this.native.setParameter(paramId, value, resolveRenderFrame('setParameter', renderFrame));
@@ -330,30 +657,60 @@ export class RealtimeEngine {
     this.native.setParamSmoothingMs(smoothingMs);
   }
 
+  /** Lane index of a declared track; the native setters still address lanes by position. */
+  private laneIndexOf(fnName: string, trackId: number): number {
+    if (typeof trackId !== 'number') {
+      throw new TypeError(`${fnName}: trackId must be a number`);
+    }
+    if (this.laneOrder === undefined) {
+      throw new SonareError(
+        ErrorCode.InvalidState,
+        `${fnName}: the lane order is unknown after a project timeline was applied; declare the lanes with setTrackLanes first`,
+      );
+    }
+    const index = this.laneOrder.indexOf(trackId);
+    if (index < 0) {
+      throw new RangeError(`${fnName}: trackId ${trackId} has no lane`);
+    }
+    return index;
+  }
+
   /**
-   * Queue a lane's solo/mute state. An armed PFL/AFL cue ({@link setTrackMonitorMode}) is folded
+   * Queue a track's solo/mute state. An armed PFL/AFL cue ({@link setTrackMonitorMode}) is folded
    * into the program output by `process()` / `processPrepared()` and kept separate by the
    * `WithMonitor` variants; offline renders, bounces and freezes never include it.
+   *
+   * The track must be declared through {@link setTrackLanes}: an unknown id is a `RangeError`,
+   * and after {@link applyProjectTimeline} the call throws `InvalidState` until the lanes are
+   * declared again.
    */
-  setSoloMute(laneIndex: number, solo: boolean, mute: boolean, renderFrame?: number): void {
+  setTrackSoloMute(
+    trackId: number,
+    state: { solo: boolean; mute: boolean },
+    renderFrame?: number,
+  ): void {
+    requestObject('setTrackSoloMute', state, 'state', true);
     this.native.setSoloMute(
-      laneIndex,
-      requireBoolean('setSoloMute', solo, 'solo'),
-      requireBoolean('setSoloMute', mute, 'mute'),
-      resolveRenderFrame('setSoloMute', renderFrame),
+      this.laneIndexOf('setTrackSoloMute', trackId),
+      requireBoolean('setTrackSoloMute', state.solo, 'solo'),
+      requireBoolean('setTrackSoloMute', state.mute, 'mute'),
+      resolveRenderFrame('setTrackSoloMute', renderFrame),
     );
   }
 
   /**
-   * Queue a per-track PFL/AFL monitor tap mode change.
+   * Queue a per-track PFL/AFL monitor tap mode change. `mode` is a string; an
+   * ordinal is a `TypeError`. The track must be declared through
+   * {@link setTrackLanes}, as for {@link setTrackSoloMute}.
    *
    * `process()` and `processPrepared()` fold the armed cue into the program output, so the
    * tapped lane is counted twice there; the `WithMonitor` variants keep the cue separate.
    * Offline renders, bounces and freezes never include the cue.
    */
-  setTrackMonitorMode(laneIndex: number, mode: EngineTrackMonitorMode, renderFrame?: number): void {
+  setTrackMonitorMode(trackId: number, mode: EngineTrackMonitorMode, renderFrame?: number): void {
+    noOrdinal('setTrackMonitorMode', 'mode', mode);
     this.native.setTrackMonitorMode(
-      laneIndex,
+      this.laneIndexOf('setTrackMonitorMode', trackId),
       trackMonitorModeCode(mode),
       resolveRenderFrame('setTrackMonitorMode', renderFrame),
     );
@@ -363,10 +720,16 @@ export class RealtimeEngine {
     this.native.setMidiClips(clips);
   }
 
+  /** Bind the built-in synth to a MIDI destination; `config` defaults to a sine patch. */
   setBuiltinInstrument(
-    config: { destinationId?: number } & Record<string, unknown> = {},
-    destinationId = config.destinationId ?? 0,
+    destinationId: number,
+    config: Omit<BuiltinSynthConfig, 'destinationId'> = {},
   ): void {
+    if (typeof config === 'object' && config !== null && 'destinationId' in config) {
+      throw new TypeError(
+        "setBuiltinInstrument: unknown config key 'destinationId' (pass it as the first argument)",
+      );
+    }
     this.native.setBuiltinInstrument(destinationId, config);
   }
 
@@ -376,8 +739,7 @@ export class RealtimeEngine {
    * `'va:saw-lead'`; see {@link synthPresetNames}), resolving exactly like
    * {@link Project.bounceWithSynthInstrument}. Live note/CC commands and
    * scheduled MIDI clips routed to that destination render through the synth.
-   * Unknown preset names throw. An object patch's `destinationId` is a JS
-   * binding convenience, not part of the NativeSynth patch itself.
+   * Unknown preset names throw.
    *
    * An `engineMode: 'sample'` patch also carries the {@link SampleBank} its
    * keymap names. The synth takes a share of the bank, so it may be released
@@ -389,10 +751,7 @@ export class RealtimeEngine {
    * default channel state (program, bank, controllers); a host that needs the
    * current position's state resends it with {@link pushMidiUmp} after this call.
    */
-  setSynthInstrument(
-    patch: SynthPatch | string = {},
-    destinationId = (typeof patch === 'object' ? patch.destinationId : undefined) ?? 0,
-  ): void {
+  setSynthInstrument(destinationId: number, patch: SynthPatch | string = {}): void {
     this.native.setSynthInstrument(destinationId, normalizeSynthInstrument(patch));
   }
 
@@ -422,16 +781,14 @@ export class RealtimeEngine {
    * current position's state resends it with {@link pushMidiUmp} after this call.
    */
   setSf2Instrument(
-    config: {
-      destinationId?: number;
-      gain?: number;
-      polyphony?: number;
-      preferModelForModeledFamilies?: boolean;
-      clearBankRig?: boolean;
-      gsEfxRealization?: 'modern' | 'classic';
-    } = {},
-    destinationId = config.destinationId ?? 0,
+    destinationId: number,
+    config: Omit<Sf2InstrumentConfig, 'destinationId'> = {},
   ): void {
+    if (typeof config === 'object' && config !== null && 'destinationId' in config) {
+      throw new TypeError(
+        "setSf2Instrument: unknown config key 'destinationId' (pass it as the first argument)",
+      );
+    }
     this.native.setSf2Instrument(destinationId, config);
   }
 
@@ -439,32 +796,18 @@ export class RealtimeEngine {
     this.native.clearMidiInstrument(destinationId);
   }
 
-  midiInstrumentCount(): number {
+  /** Number of bound MIDI instruments. */
+  get midiInstrumentCount(): number {
     return this.native.midiInstrumentCount();
   }
 
   /**
-   * Bind a live MIDI CC to an engine automation parameter. The MIDI event still
-   * reaches the destination instrument; when bound, its 7-bit value is also
-   * mapped into [minValue, maxValue] for `paramId`.
+   * Bind a live MIDI controller (7/14-bit CC, RPN or NRPN) to an engine
+   * automation parameter. The MIDI event still reaches the destination
+   * instrument; when bound, its value is also mapped into
+   * `[minValue, maxValue]` for `paramId`.
    */
-  bindMidiCc(
-    channel: number,
-    controller: number,
-    paramId: number,
-    options: MidiCcBindOptions = {},
-  ): void {
-    this.native.bindMidiCc(
-      channel,
-      controller,
-      paramId,
-      options.minValue ?? 0,
-      options.maxValue ?? 1,
-    );
-  }
-
-  /** Bind a 7/14-bit CC, RPN, or NRPN descriptor to a live parameter. */
-  bindMidiCcBinding(binding: ProjectMidiCcBinding): void {
+  bindMidiCc(binding: ProjectMidiCcBinding): void {
     this.native.bindMidiCcBinding(binding);
   }
 
@@ -472,7 +815,8 @@ export class RealtimeEngine {
     this.native.clearMidiCcBindings();
   }
 
-  midiCcBindingCount(): number {
+  /** Number of bound MIDI CC descriptors. */
+  get midiCcBindingCount(): number {
     return this.native.midiCcBindingCount();
   }
 
@@ -487,8 +831,10 @@ export class RealtimeEngine {
     this.native.setControllerProfile(destinationId, presetName);
   }
 
-  /** Add one {@link ControllerBinding} on top of the destination's current profile. */
+  /** Add one {@link ControllerBinding} on top of the destination's current profile; `input` and `axis` are strings. */
   bindController(destinationId: number, binding: ControllerBinding): void {
+    noOrdinal('bindController', 'input', binding?.input);
+    noOrdinal('bindController', 'axis', binding?.axis);
     this.native.bindController(destinationId, binding);
   }
 
@@ -511,10 +857,17 @@ export class RealtimeEngine {
    * and a host building its own profile sets it. When false the synth takes
    * every note at full scale and the bound axes carry the dynamics alone.
    */
-  setControllerVelocityMeaningful(destinationId: number, meaningful: boolean): void {
+  setControllerVelocityMeaningful(
+    destinationId: number,
+    controllerVelocityMeaningful: boolean,
+  ): void {
     this.native.setControllerVelocityMeaningful(
       destinationId,
-      requireBoolean('setControllerVelocityMeaningful', meaningful, 'meaningful'),
+      requireBoolean(
+        'setControllerVelocityMeaningful',
+        controllerVelocityMeaningful,
+        'controllerVelocityMeaningful',
+      ),
     );
   }
 
@@ -534,27 +887,25 @@ export class RealtimeEngine {
    * only while more than one note is sounding on the channel, which an MPE
    * sender avoids by giving each note its own member channel.
    *
-   * Both arguments are required and are a name or its ordinal; an unknown
-   * spelling is refused rather than resolved to a default, as are a destination
-   * with no instrument and one whose instrument holds no controller profile.
+   * Both arguments are required strings; an ordinal is a `TypeError` and an
+   * unknown spelling is refused rather than resolved to a default, as are a
+   * destination with no instrument and one whose instrument holds no controller
+   * profile.
    */
   setControllerNoteTracking(
     destinationId: number,
-    dimension: MpeDimension | number,
-    tracking: NoteTracking | number,
+    dimension: MpeDimension,
+    tracking: NoteTracking,
   ): void {
+    noOrdinal('setControllerNoteTracking', 'dimension', dimension);
+    noOrdinal('setControllerNoteTracking', 'tracking', tracking);
     this.native.setControllerNoteTracking(destinationId, dimension, tracking);
   }
 
-  /**
-   * Read back {@link setControllerNoteTracking} for one dimension, as the
-   * canonical name.
-   */
-  controllerNoteTracking(
-    destinationId: number,
-    dimension: MpeDimension | number,
-  ): NoteTracking | number {
-    return this.native.controllerNoteTracking(destinationId, dimension);
+  /** Read back {@link setControllerNoteTracking} for one dimension. */
+  controllerNoteTracking(destinationId: number, dimension: MpeDimension): NoteTracking {
+    noOrdinal('controllerNoteTracking', 'dimension', dimension);
+    return this.native.controllerNoteTracking(destinationId, dimension) as NoteTracking;
   }
 
   /**
@@ -571,48 +922,32 @@ export class RealtimeEngine {
    * which {@link legatoFallbackCount} counts. A channel outside [0,15] and an
    * articulation outside the enum are refused rather than clamped, and so is a
    * destination with no instrument or one whose instrument has no articulation
-   * of its own.
+   * of its own. An ordinal is a `TypeError`.
    */
-  setArticulation(
-    destinationId: number,
-    channel: number,
-    articulation: Articulation | number,
-  ): void {
+  setArticulation(destinationId: number, channel: number, articulation: Articulation): void {
+    noOrdinal('setArticulation', 'articulation', articulation);
     this.native.setArticulation(destinationId, channel, articulation);
   }
 
   /**
    * Set the rig of one part (0-15), or of the destination's default when `part`
-   * is `PART_RIG_ALL_PARTS`, on the instrument bound to `destinationId`. A
-   * direct call, not a stored edit: a destination with no instrument is an
-   * invalid parameter, and an instrument without part rigs (a builtin, a
-   * host-callback instrument) is refused as not implemented rather than
-   * succeeding quietly. `'chain'` takes 1-8 `inserts`; no other mode does.
+   * is omitted, on the instrument bound to `destinationId`. A direct call, not a
+   * stored edit: a destination with no instrument is an invalid parameter, and
+   * an instrument without part rigs (a builtin, a host-callback instrument) is
+   * refused as not implemented rather than succeeding quietly. `'chain'` takes
+   * 1-8 `inserts`; no other mode does.
    */
-  setPartRig(request: PartRigRequest): void;
-  setPartRig(
-    destinationId: number,
-    part: number,
-    mode: PartRigMode | number,
-    inserts?: PartRigInsert[],
-  ): void;
-  setPartRig(
-    requestOrDestinationId: PartRigRequest | number,
-    part?: number,
-    mode?: PartRigMode | number,
-    inserts?: PartRigInsert[],
-  ): void {
-    const rig = normalizePartRig('setPartRig', requestOrDestinationId, part, mode, inserts);
-    this.native.setPartRig(rig.destinationId, rig.part, rig.mode as PartRigMode, rig.insertsJson);
+  setPartRig(request: PartRigRequest): void {
+    requestObject('setPartRig', request, 'request', true);
+    noOrdinal('setPartRig', 'mode', request.mode);
+    // Absent part addresses the destination's default rig (the C ABI's 0xff).
+    const rig = normalizePartRig('setPartRig', { ...request, part: request.part ?? 0xff });
+    this.native.setPartRig(rig.destinationId, rig.part, rig.mode as never, rig.insertsJson);
   }
 
-  /**
-   * Read back {@link setArticulation} as the canonical name. An ordinal this
-   * build cannot spell is handed back as the number, the way every other enum
-   * leaves this surface.
-   */
-  articulation(destinationId: number, channel: number): Articulation | number {
-    return this.native.articulation(destinationId, channel);
+  /** Read back {@link setArticulation}. */
+  articulation(destinationId: number, channel: number): Articulation {
+    return this.native.articulation(destinationId, channel) as Articulation;
   }
 
   /**
@@ -651,7 +986,8 @@ export class RealtimeEngine {
     this.native.clearMidiInputSource();
   }
 
-  midiInputPendingCount(): number {
+  /** Live MIDI input events queued and not yet drained. */
+  get midiInputPendingCount(): number {
     return this.native.midiInputPendingCount();
   }
 
@@ -663,10 +999,14 @@ export class RealtimeEngine {
    * destination's route first releases its notes and resets its controllers
    * through the old route, and drops its pending MIDI-FX events. Single writer.
    */
-  setMidiDestinationExternal(destinationId: number, external: boolean): void {
+  setMidiDestinationExternal(destinationId: number, midiDestinationExternal: boolean): void {
     this.native.setMidiDestinationExternal(
       destinationId,
-      requireBoolean('setMidiDestinationExternal', external, 'external'),
+      requireBoolean(
+        'setMidiDestinationExternal',
+        midiDestinationExternal,
+        'midiDestinationExternal',
+      ),
     );
   }
 
@@ -674,18 +1014,23 @@ export class RealtimeEngine {
    * Enable/disable forwarding MIDI clock + transport (start/continue/stop) to
    * the external output queue so external gear tracks the transport tempo.
    */
-  setExternalMidiClockEnabled(enabled: boolean): void {
+  setExternalMidiClockEnabled(externalMidiClockEnabled: boolean): void {
     this.native.setExternalMidiClockEnabled(
-      requireBoolean('setExternalMidiClockEnabled', enabled, 'enabled'),
+      requireBoolean(
+        'setExternalMidiClockEnabled',
+        externalMidiClockEnabled,
+        'externalMidiClockEnabled',
+      ),
     );
   }
 
   /** Count of external-MIDI events dropped because the output queue was full. */
-  externalMidiDroppedCount(): number {
+  get externalMidiDroppedCount(): number {
     return this.native.externalMidiDroppedCount();
   }
 
-  externalMidiPendingCount(): number {
+  /** External-MIDI events queued and not yet drained. */
+  get externalMidiPendingCount(): number {
     return this.native.externalMidiPendingCount();
   }
 
@@ -701,37 +1046,12 @@ export class RealtimeEngine {
    * Entry 6/38), so a positive `maxRecords` below 4 could never consume a record
    * and is rejected with a `RangeError` instead of returning nothing forever.
    */
-  drainExternalMidi(maxRecords = 1024): WasmExternalMidiEvent[] {
-    return this.native.drainExternalMidi(maxRecords);
-  }
-
-  /** Scalar, allocation-free external-MIDI drain for AudioWorklet SAB output. */
-  popExternalMidiToScratch(): boolean {
-    return this.native.popExternalMidiToScratch();
-  }
-
-  externalMidiScratchDestinationId(): number {
-    return this.native.externalMidiScratchDestinationId();
-  }
-
-  externalMidiScratchRenderFrame(): number {
-    // embind marshals the int64 render frame as a BigInt; the declared `number`
-    // has to be a real number or the first consumer that does arithmetic on it
-    // dies with "Cannot mix BigInt". Same normalization as the telemetry, meter
-    // and scope scratch frames.
-    return Number(this.native.externalMidiScratchRenderFrame());
-  }
-
-  externalMidiScratchByteWord(): number {
-    return this.native.externalMidiScratchByteWord();
-  }
-
-  externalMidiScratchByteCount(): number {
-    return this.native.externalMidiScratchByteCount();
-  }
-
-  consumeExternalMidiScratch(): void {
-    this.native.consumeExternalMidiScratch();
+  drainExternalMidi(maxRecords = 1024): ExternalMidiEvent[] {
+    return this.native.drainExternalMidi(maxRecords).map((event) => ({
+      destinationId: event.destinationId,
+      renderFrame: event.renderFrame,
+      bytes: Uint8Array.from(event.bytes),
+    }));
   }
 
   /**
@@ -983,30 +1303,29 @@ export class RealtimeEngine {
 
   /**
    * Queue a live MIDI 2.0 Program Change, with an optional bank, to a MIDI
-   * destination. The bank is applied only when `bankValid` is true; a non-zero
-   * `bankMsb`/`bankLsb` with `bankValid` false is refused. `group`/`channel` are
-   * 0..15, `program`/`bankMsb`/`bankLsb` 0..127. The message takes the same
-   * receive path as {@link pushMidiUmp}. Which receivers select programs: the
-   * SoundFont player (`setSf2Instrument`) selects bank and program under its own
-   * RX PROGRAM CHANGE / RX BANK SELECT gates; a NativeSynth bound with
-   * `useGmPrograms: true` (`setSynthInstrument`) resolves each channel's voice
-   * from the bank and program; a NativeSynth whose patch plays the GM kit (the
-   * `drum-kit` preset, or a percussion patch with `gmKit` on) takes the program
-   * as the GS drum-set select on every channel. Every other receiver accepts the
-   * message and ignores it: the built-in synth, any other NativeSynth patch, a
-   * part with RX PROGRAM CHANGE off, and an MPE member channel. Throws when the slot ring or command queue is full.
-   * `renderFrame` is the frame to fire at (omit for immediate).
+   * destination. `bank` carries `msb` and `lsb` (0..127); omit it to leave the
+   * bank unchanged. `group`/`channel` are 0..15 and `program` 0..127. The
+   * message takes the same receive path as {@link pushMidiUmp}. Which receivers
+   * select programs: the SoundFont player (`setSf2Instrument`) selects bank and
+   * program under its own RX PROGRAM CHANGE / RX BANK SELECT gates; a NativeSynth
+   * bound with `useGmPrograms: true` (`setSynthInstrument`) resolves each
+   * channel's voice from the bank and program; a NativeSynth whose patch plays
+   * the GM kit (the `drum-kit` preset, or a percussion patch with `gmKit` on)
+   * takes the program as the GS drum-set select on every channel. Every other
+   * receiver accepts the message and ignores it: the built-in synth, any other
+   * NativeSynth patch, a part with RX PROGRAM CHANGE off, and an MPE member
+   * channel. Throws when the slot ring or command queue is full. `renderFrame`
+   * is the frame to fire at (omit for immediate).
    */
   pushMidiProgram(
     destinationId: number,
     group: number,
     channel: number,
     program: number,
-    bankValid = false,
-    bankMsb = 0,
-    bankLsb = 0,
+    bank?: { msb: number; lsb: number },
     renderFrame?: number,
   ): void {
+    const { bankValid, bankMsb, bankLsb } = programBank('pushMidiProgram', bank);
     this.native.pushMidiProgram(
       destinationId,
       group,
@@ -1029,11 +1348,10 @@ export class RealtimeEngine {
     group: number,
     channel: number,
     program: number,
-    bankValid = false,
-    bankMsb = 0,
-    bankLsb = 0,
+    bank?: { msb: number; lsb: number },
     offsetInBlockSamples = 0,
   ): void {
+    const { bankValid, bankMsb, bankLsb } = programBank('pushMidiInputProgram', bank);
     this.native.pushMidiInputProgram(
       group,
       channel,
@@ -1090,8 +1408,24 @@ export class RealtimeEngine {
   }
 
   /** Read back the current transport state snapshot. */
-  getTransportState(): EngineTransportState {
-    return this.native.getTransportState();
+  transportState(): EngineTransportState {
+    const state = this.native.getTransportState();
+    return {
+      playing: state.playing,
+      looping: state.looping,
+      renderFrame: state.renderFrame,
+      samplePosition: state.samplePosition,
+      ppq: state.ppq,
+      bpm: state.bpm,
+      loopStartPpq: state.loopStartPpq,
+      loopEndPpq: state.loopEndPpq,
+      sampleRate: state.sampleRate,
+      barStartPpq: state.barStartPpq,
+      barCount: state.barCount,
+      timeSignature: { ...state.timeSignature },
+      beat: state.beat,
+      beatFraction: state.beatFraction,
+    };
   }
 
   /** Queues an integrated-loudness reset; short-term and momentary windows are retained. */
@@ -1187,13 +1521,13 @@ export class RealtimeEngine {
    * `2147483647` means the tail is unbounded. Control-thread only: must not be
    * called concurrently with {@link process}.
    */
-  tailSamples(): number {
+  get tailSamples(): number {
     return this.native.tailSamples();
   }
 
-  /** Processing latency of the engine in 1/256 samples, as telemetry reports it. */
-  graphLatencySamplesQ8(): number {
-    return this.native.graphLatencySamplesQ8();
+  /** Processing latency of the engine in samples, fractional. */
+  get graphLatencySamples(): number {
+    return this.native.graphLatencySamplesQ8() / 256;
   }
 
   /** Snap only insert automation slots after structural replay. */
@@ -1238,54 +1572,81 @@ export class RealtimeEngine {
   }
 
   /** Sets the loop region between two quarter-note positions and enables or disables it. */
-  setLoop(startPpq: number, endPpq: number, enabled = true): void {
-    this.native.setLoop(startPpq, endPpq, requireBoolean('setLoop', enabled, 'enabled'));
+  setLoop(loop: EngineLoop): void {
+    requestObject('setLoop', loop, 'loop', true);
+    this.native.setLoop(
+      loop.startPpq,
+      loop.endPpq,
+      optionalBoolean('setLoop', loop.enabled, 'enabled', true),
+    );
   }
 
   addParameter(info: EngineParameterInfo): void {
-    this.native.addParameter(info);
+    noOrdinal('addParameter', 'defaultCurve', info?.defaultCurve);
+    const { defaultCurve, ...rest } = info;
+    this.native.addParameter(
+      defaultCurve === undefined
+        ? rest
+        : { ...rest, defaultCurve: automationCurveCode(defaultCurve) },
+    );
   }
 
-  parameterCount(): number {
-    return this.native.parameterCount();
+  /** Every registered parameter, in registration order. */
+  parameters(): Required<EngineParameterInfo>[] {
+    const native = this.native;
+    const count = native.parameterCount();
+    const out: Required<EngineParameterInfo>[] = [];
+    for (let index = 0; index < count; index++) {
+      out.push(parameterInfoFromNative(native.parameterInfoByIndex(index) as never));
+    }
+    return out;
   }
 
-  parameterInfoByIndex(index: number): Required<EngineParameterInfo> {
-    return this.native.parameterInfoByIndex(index);
-  }
-
+  /** One registered parameter by id; an unknown id is a `RangeError`. */
   parameterInfo(id: number): Required<EngineParameterInfo> {
-    return this.native.parameterInfo(id);
+    return parameterInfoFromNative(this.native.parameterInfo(id) as never);
   }
 
   /**
    * Replaces the automation lane driving `paramId`.
    * A reserved mixer id (`0x4d58xxxx`) other than a master id names no strip and
-   * throws a `RangeError`; resolve ids with the `resolve*AutomationId`
-   * methods (`resolveMasterAutomationId` for the master fader, pan and width).
+   * throws a `RangeError`; resolve ids with {@link resolveStripAutomationId}.
+   * `curveToNext` is an {@link AutomationCurve} string; an ordinal is a `TypeError`.
    */
   setAutomationLane(paramId: number, points: EngineAutomationPoint[]): void {
-    this.native.setAutomationLane(paramId, points);
+    this.native.setAutomationLane(
+      paramId,
+      Array.isArray(points)
+        ? points.map((point) => nativeAutomationPoint('setAutomationLane', point) as never)
+        : points,
+    );
   }
 
-  automationLaneCount(): number {
+  /** Number of automation lanes. */
+  get automationLaneCount(): number {
     return this.native.automationLaneCount();
   }
 
-  setMarkers(markers: EngineMarker[]): void {
-    this.native.setMarkers(markers);
+  /** Replaces the markers and returns the stored ones with their ids. */
+  setMarkers(markers: EngineMarker[]): EngineMarker[] {
+    this.native.setMarkers((Array.isArray(markers) ? markers.map(nativeMarker) : markers) as never);
+    return this.markers();
   }
 
-  markerCount(): number {
-    return this.native.markerCount();
+  /** Every stored marker, in timeline order. */
+  markers(): EngineMarker[] {
+    const native = this.native;
+    const count = native.markerCount();
+    const out: EngineMarker[] = [];
+    for (let index = 0; index < count; index++) {
+      out.push(markerFromNative(native.markerByIndex(index)));
+    }
+    return out;
   }
 
-  markerByIndex(index: number): EngineMarker {
-    return this.native.markerByIndex(index);
-  }
-
+  /** One stored marker by id; an unknown id is a `RangeError`. */
   marker(id: number): EngineMarker {
-    return this.native.marker(id);
+    return markerFromNative(this.native.marker(id));
   }
 
   seekMarker(markerId: number, renderFrame?: number): void {
@@ -1296,13 +1657,41 @@ export class RealtimeEngine {
     this.native.setLoopFromMarkers(startMarkerId, endMarkerId);
   }
 
-  /** Set a metronome config; click lengths are limited to one second. */
+  /**
+   * Set a metronome config. The click length is `clickSamples` or `clickSec`
+   * (at most one second), never both; an explicit `0` is refused, so omit the
+   * field for the 2 ms default.
+   */
   setMetronome(config: EngineMetronomeConfig): void {
-    this.native.setMetronome(config);
+    requestObject('setMetronome', config, 'config', true);
+    const { clickSamples, clickSec, ...rest } = config;
+    const hasSamples = clickSamples !== undefined && clickSamples !== null;
+    const hasSec = clickSec !== undefined && clickSec !== null;
+    if (hasSamples && hasSec) {
+      throw new RangeError('setMetronome: give clickSamples or clickSec, not both');
+    }
+    for (const [name, value] of [
+      ['clickSamples', clickSamples],
+      ['clickSec', clickSec],
+    ] as const) {
+      if (value === 0) {
+        throw new RangeError(`setMetronome: ${name} must not be 0 (omit it for the default)`);
+      }
+    }
+    this.native.setMetronome({
+      ...rest,
+      ...(hasSamples ? { clickSamples } : {}),
+      ...(hasSec ? { clickSeconds: clickSec } : {}),
+    });
+    this.metronomeSpelling = hasSec ? 'sec' : 'samples';
   }
 
-  metronome(): Required<EngineMetronomeConfig> {
-    return this.native.metronome();
+  /** The metronome config, carrying only the click-length spelling that was set. */
+  metronome(): EngineMetronomeConfig {
+    const { clickSamples, clickSeconds, ...rest } = this.native.metronome();
+    return this.metronomeSpelling === 'sec'
+      ? { ...rest, clickSec: clickSeconds }
+      : { ...rest, clickSamples };
   }
 
   /**
@@ -1316,14 +1705,33 @@ export class RealtimeEngine {
   }
 
   setGraph(spec: EngineGraphSpec): void {
-    this.native.setGraph(spec);
+    requireObject('setGraph', 'spec', spec);
+    this.native.setGraph({
+      ...spec,
+      nodes: Array.isArray(spec.nodes)
+        ? spec.nodes.map(({ type, ...node }) => ({
+            ...node,
+            ...(type === undefined
+              ? {}
+              : { type: tokenCode('setGraph', 'node type', type, GRAPH_NODE_TYPES) }),
+          }))
+        : spec.nodes,
+      connections: Array.isArray(spec.connections)
+        ? spec.connections.map(({ mix, ...connection }) => ({
+            ...connection,
+            ...(mix === undefined ? {} : { mix: tokenCode('setGraph', 'mix', mix, GRAPH_MIXES) }),
+          }))
+        : spec.connections,
+    } as never);
   }
 
-  graphNodeCount(): number {
+  /** Number of nodes in the installed graph. */
+  get graphNodeCount(): number {
     return this.native.graphNodeCount();
   }
 
-  graphConnectionCount(): number {
+  /** Number of connections in the installed graph. */
+  get graphConnectionCount(): number {
     return this.native.graphConnectionCount();
   }
 
@@ -1359,7 +1767,8 @@ export class RealtimeEngine {
     return this.native.prebakedClipChannels(clipId);
   }
 
-  clipCount(): number {
+  /** Number of published clips. */
+  get clipCount(): number {
     return this.native.clipCount();
   }
 
@@ -1368,30 +1777,43 @@ export class RealtimeEngine {
    * reads (defaults to post-fader when omitted). Shared by track lanes and
    * buses, which carry the same send shape.
    */
-  private static normalizeSends(sends: EngineTrackSend[]): WasmEngineTrackSend[] {
-    return sends.map((send) => ({
-      ...send,
-      // Post-fader (0) is the default for an omitted sendTiming.
-      sendTiming: send.sendTiming === undefined ? 0 : sendTimingCode(send.sendTiming),
-    }));
+  private static normalizeSends(fnName: string, sends: EngineTrackSend[]): WasmEngineTrackSend[] {
+    return sends.map((send) => {
+      noOrdinal(fnName, 'sendTiming', send.sendTiming);
+      return {
+        ...send,
+        // Post-fader (0) is the default for an omitted sendTiming.
+        sendTiming: send.sendTiming === undefined ? 0 : sendTimingCode(send.sendTiming),
+      };
+    });
   }
 
   /**
    * Declares the mixer track lanes in their order. Throws a `RangeError` when
-   * the list holds more than {@link MAX_TRACK_LANES} lanes.
+   * the list holds more than {@link MAX_TRACK_LANES} lanes, and when a lane's
+   * `outputBusId` is an explicit `0` (omit it to stay on the master mix).
    */
-  setTrackLanes(lanes: Array<number | EngineTrackLane>): void {
-    this.native.setTrackLanes(
-      lanes.map((lane) => {
-        if (typeof lane === 'number') {
-          return { trackId: lane };
-        }
-        return {
-          ...lane,
-          sends: lane.sends ? RealtimeEngine.normalizeSends(lane.sends) : undefined,
-        };
-      }),
-    );
+  setTrackLanes(lanes: readonly EngineTrackLane[]): void {
+    const nativeLanes = lanes.map((lane) => {
+      const { sourceChannelLayout, outputBusId, ...rest } = lane;
+      return {
+        ...rest,
+        sends: lane.sends ? RealtimeEngine.normalizeSends('setTrackLanes', lane.sends) : undefined,
+        outputBusId: optionalBusId('setTrackLanes', 'outputBusId', outputBusId),
+        ...(sourceChannelLayout === undefined
+          ? {}
+          : {
+              sourceChannelLayout: tokenCode(
+                'setTrackLanes',
+                'sourceChannelLayout',
+                sourceChannelLayout,
+                CHANNEL_LAYOUT_VALUES,
+              ),
+            }),
+      };
+    });
+    this.native.setTrackLanes(nativeLanes);
+    this.laneOrder = lanes.map((lane) => lane.trackId);
   }
 
   /**
@@ -1403,30 +1825,42 @@ export class RealtimeEngine {
    * declared through {@link setTrackLanes}.
    */
   setTrackSends(trackId: number, sends: EngineTrackSend[]): void {
-    this.native.setTrackSends(trackId, RealtimeEngine.normalizeSends(sends));
+    this.native.setTrackSends(trackId, RealtimeEngine.normalizeSends('setTrackSends', sends));
   }
 
   /**
-   * Sets the output bus of one lane (`0` = master mix), leaving its sends,
-   * layout and every other lane unchanged. Throws for an unknown track id or an
-   * undeclared bus; the lane must already be declared through {@link setTrackLanes}.
+   * Sets the output bus of one lane, leaving its sends, layout and every other
+   * lane unchanged; `null` routes to the master mix and `0` is a `RangeError`.
+   * Throws for an unknown track id or an undeclared bus; the lane must already
+   * be declared through {@link setTrackLanes}.
    */
-  setTrackOutputBus(trackId: number, busId: number): void {
-    this.native.setTrackOutputBus(trackId, busId);
+  setTrackOutputBus(trackId: number, busId: number | null): void {
+    this.native.setTrackOutputBus(trackId, optionalBusId('setTrackOutputBus', 'busId', busId));
   }
 
   /**
-   * Keys one insert of a lane strip from another lane's post-strip audio
-   * (ducking/sidechainRouter inserts). sourceTrackId 0 removes the binding.
-   * Lanes are processed in key order and the key is delay-compensated to the
-   * destination strip input, so the result depends on neither the lane order
-   * nor the block size. Throws, leaving the bindings unchanged, for a lane
-   * keying itself, a binding that would close a cycle over the lane bindings,
-   * a full binding table and an alignment past the delay ceiling. Not callable
-   * while a block is being processed.
+   * Keys one insert of a strip from another source (ducking/sidechainRouter
+   * inserts); `null` removes the binding. A track ref accepts only a `'track'`
+   * source, the master strip a track or a bus. Lanes are processed in key order
+   * and the key is delay-compensated to the destination strip input, so the
+   * result depends on neither the lane order nor the block size. Throws,
+   * leaving the bindings unchanged, for a lane keying itself, a binding that
+   * would close a cycle over the lane bindings, a full binding table and an
+   * alignment past the delay ceiling. Not callable while a block is being
+   * processed.
    */
-  setLaneSidechain(trackId: number, insertIndex: number, sourceTrackId: number): void {
-    this.native.setLaneSidechain(trackId, insertIndex, sourceTrackId);
+  setStripSidechain(ref: StripRef, insertIndex: number, source: SidechainSource | null): void {
+    const target = stripTarget('setStripSidechain', ref);
+    const key =
+      source === null ? { kind: 0, id: 0 } : sidechainSourceArg('setStripSidechain', source);
+    if (target.master) {
+      this.native.setMasterSidechain(insertIndex, key.kind, key.id);
+      return;
+    }
+    if (key.kind !== 0) {
+      throw new RangeError("setStripSidechain: a track strip accepts only a 'track' source");
+    }
+    this.native.setLaneSidechain(target.trackId, insertIndex, key.id);
   }
 
   /**
@@ -1454,6 +1888,7 @@ export class RealtimeEngine {
       throw new TypeError('timeline must be a ProjectTimeline instance');
     }
     this.native.applyProjectTimeline(timelineId);
+    this.laneOrder = undefined;
   }
 
   setTrackBuses(buses: EngineBus[]): void {
@@ -1463,146 +1898,135 @@ export class RealtimeEngine {
     // failing here on a `.map` that array-likes do not implement.
     this.native.setTrackBuses(
       Array.isArray(buses)
-        ? buses.map((bus) => ({
-            ...bus,
-            sends: bus.sends ? RealtimeEngine.normalizeSends(bus.sends) : undefined,
-          }))
+        ? buses.map((bus) => {
+            const { channelLayout, outputBusId, ...rest } = bus;
+            return {
+              ...rest,
+              sends: bus.sends
+                ? RealtimeEngine.normalizeSends('setTrackBuses', bus.sends)
+                : undefined,
+              outputBusId: optionalBusId('setTrackBuses', 'outputBusId', outputBusId),
+              ...(channelLayout === undefined
+                ? {}
+                : {
+                    channelLayout: tokenCode(
+                      'setTrackBuses',
+                      'channelLayout',
+                      channelLayout,
+                      CHANNEL_LAYOUT_VALUES,
+                    ),
+                  }),
+            };
+          })
         : (buses as WasmEngineBus[]),
     );
   }
 
   /**
    * Keys one insert of a bus strip from a track lane or another bus
-   * (ducking/sidechainRouter inserts). `sourceId` 0 removes the binding.
+   * (ducking/sidechainRouter inserts); `null` removes the binding.
    */
-  setBusSidechain(
-    busId: number,
-    insertIndex: number,
-    sourceKind: SidechainSourceKind | number,
-    sourceId: number,
-  ): void {
-    this.native.setBusSidechain(busId, insertIndex, sidechainSourceKindCode(sourceKind), sourceId);
+  setBusSidechain(busId: number, insertIndex: number, source: SidechainSource | null): void {
+    const key =
+      source === null ? { kind: 0, id: 0 } : sidechainSourceArg('setBusSidechain', source);
+    this.native.setBusSidechain(busId, insertIndex, key.kind, key.id);
   }
 
   /**
-   * Keys one insert of the master strip from a track lane or a bus. Same
-   * source rules as {@link setBusSidechain}.
-   */
-  setMasterSidechain(
-    insertIndex: number,
-    sourceKind: SidechainSourceKind | number,
-    sourceId: number,
-  ): void {
-    this.native.setMasterSidechain(insertIndex, sidechainSourceKindCode(sourceKind), sourceId);
-  }
-
-  /**
-   * Reports whether {@link setLaneSidechain} would accept the binding, without
+   * Reports whether {@link setStripSidechain} would accept the binding, without
    * changing anything. `reason` names the first check the setter would fail.
    * Control-thread only: must not be called concurrently with {@link process}.
    */
-  canSetLaneSidechain(trackId: number, insertIndex: number, sourceTrackId: number): SidechainCheck {
+  canSetStripSidechain(
+    ref: StripRef,
+    insertIndex: number,
+    source: SidechainSource,
+  ): SidechainCheck {
+    const target = stripTarget('canSetStripSidechain', ref);
+    const key = sidechainSourceArg('canSetStripSidechain', source);
+    if (target.master) {
+      return sidechainCheckFromCode(
+        this.native.canSetMasterSidechain(insertIndex, key.kind, key.id),
+      );
+    }
+    if (key.kind !== 0) {
+      throw new RangeError("canSetStripSidechain: a track strip accepts only a 'track' source");
+    }
     return sidechainCheckFromCode(
-      this.native.canSetLaneSidechain(trackId, insertIndex, sourceTrackId),
+      this.native.canSetLaneSidechain(target.trackId, insertIndex, key.id),
     );
   }
 
   /** Reports whether {@link setBusSidechain} would accept the binding, without changing anything. */
-  canSetBusSidechain(
-    busId: number,
-    insertIndex: number,
-    sourceKind: SidechainSourceKind | number,
-    sourceId: number,
-  ): SidechainCheck {
+  canSetBusSidechain(busId: number, insertIndex: number, source: SidechainSource): SidechainCheck {
+    const key = sidechainSourceArg('canSetBusSidechain', source);
     return sidechainCheckFromCode(
-      this.native.canSetBusSidechain(
-        busId,
-        insertIndex,
-        sidechainSourceKindCode(sourceKind),
-        sourceId,
-      ),
+      this.native.canSetBusSidechain(busId, insertIndex, key.kind, key.id),
     );
   }
 
-  /** Reports whether {@link setMasterSidechain} would accept the binding, without changing anything. */
-  canSetMasterSidechain(
-    insertIndex: number,
-    sourceKind: SidechainSourceKind | number,
-    sourceId: number,
-  ): SidechainCheck {
-    return sidechainCheckFromCode(
-      this.native.canSetMasterSidechain(insertIndex, sidechainSourceKindCode(sourceKind), sourceId),
-    );
-  }
-
-  setBusStripJson(busId: number, sceneJson: string): void {
-    assertSceneJson(sceneJson, 'invalid bus strip JSON');
-    this.native.setBusStripJson(busId, sceneJson);
-  }
-
-  setTrackStripJson(trackId: number, sceneJson: string): void {
-    assertSceneJson(sceneJson, 'invalid track strip JSON');
-    this.native.setTrackStripJson(trackId, sceneJson);
-  }
-
-  setTrackStripEqBand(trackId: number, bandIndex: number, band: EqBand | string): void {
-    this.native.setTrackStripEqBandJson(trackId, bandIndex, eqBandJson(band));
-  }
-
-  setTrackStripEqBandJson(trackId: number, bandIndex: number, bandJson: string): void {
-    this.native.setTrackStripEqBandJson(trackId, bandIndex, bandJson);
-  }
-
-  setTrackStripInsertBypassed(
-    trackId: number,
-    insertIndex: number,
-    bypassed: boolean,
-    resetOnBypass = false,
-  ): void {
-    this.native.setTrackStripInsertBypassed(
-      trackId,
-      insertIndex,
-      requireBoolean('setTrackStripInsertBypassed', bypassed, 'bypassed'),
-      requireBoolean('setTrackStripInsertBypassed', resetOnBypass, 'resetOnBypass'),
-    );
-  }
-
-  /** Bus-strip counterpart of {@link setTrackStripEqBand}. */
-  setBusStripEqBand(busId: number, bandIndex: number, band: EqBand | string): void {
-    this.native.setBusStripEqBandJson(busId, bandIndex, eqBandJson(band));
-  }
-
-  setBusStripEqBandJson(busId: number, bandIndex: number, bandJson: string): void {
-    this.native.setBusStripEqBandJson(busId, bandIndex, bandJson);
-  }
-
-  setMasterStripJson(sceneJson: string): void {
-    assertSceneJson(sceneJson, 'invalid master strip JSON');
-    this.native.setMasterStripJson(sceneJson);
-  }
-
-  setMasterStripEqBand(bandIndex: number, band: EqBand | string): void {
-    this.native.setMasterStripEqBandJson(bandIndex, eqBandJson(band));
-  }
-
-  setMasterStripEqBandJson(bandIndex: number, bandJson: string): void {
-    this.native.setMasterStripEqBandJson(bandIndex, bandJson);
-  }
-
-  setMasterStripInsertBypassed(
-    insertIndex: number,
-    bypassed: boolean,
-    resetOnBypass = false,
-  ): void {
-    this.native.setMasterStripInsertBypassed(
-      insertIndex,
-      requireBoolean('setMasterStripInsertBypassed', bypassed, 'bypassed'),
-      requireBoolean('setMasterStripInsertBypassed', resetOnBypass, 'resetOnBypass'),
-    );
+  /** Replaces a bus strip with the given scene bus; the document is sent as `{ buses: [bus] }`. */
+  setBusStrip(busId: number, bus: MixSceneBus): void {
+    this.native.setBusStripJson(busId, stripJson('setBusStrip', 'bus', bus, 'buses'));
   }
 
   /**
-   * Changes one track-strip insert parameter in realtime, addressed by the
+   * Replaces a strip (a track's, or the master) with the given scene strip; the
+   * document is sent as `{ strips: [strip] }`.
+   */
+  setStrip(ref: StripRef, strip: MixSceneStrip): void {
+    const target = stripTarget('setStrip', ref);
+    const json = stripJson('setStrip', 'strip', strip, 'strips');
+    if (target.master) {
+      this.native.setMasterStripJson(json);
+    } else {
+      this.native.setTrackStripJson(target.trackId, json);
+    }
+  }
+
+  /** Sets one EQ band of a strip (a track's, or the master). */
+  setStripEqBand(ref: StripRef, bandIndex: number, band: EqBand): void {
+    const target = stripTarget('setStripEqBand', ref);
+    const json = bandJson('setStripEqBand', band);
+    if (target.master) {
+      this.native.setMasterStripEqBandJson(bandIndex, json);
+    } else {
+      this.native.setTrackStripEqBandJson(target.trackId, bandIndex, json);
+    }
+  }
+
+  /** Sets one EQ band of a bus strip. */
+  setBusEqBand(busId: number, bandIndex: number, band: EqBand): void {
+    this.native.setBusStripEqBandJson(busId, bandIndex, bandJson('setBusEqBand', band));
+  }
+
+  /** Bypasses or re-enables one insert of a strip; `resetOnBypass` defaults to `false`. */
+  setStripInsertBypassed(
+    ref: StripRef,
+    insertIndex: number,
+    state: { bypassed: boolean; resetOnBypass?: boolean },
+  ): void {
+    const target = stripTarget('setStripInsertBypassed', ref);
+    const { bypassed, resetOnBypass } = bypassState('setStripInsertBypassed', state);
+    if (target.master) {
+      this.native.setMasterStripInsertBypassed(insertIndex, bypassed, resetOnBypass);
+    } else {
+      this.native.setTrackStripInsertBypassed(target.trackId, insertIndex, bypassed, resetOnBypass);
+    }
+  }
+
+  /** Bus-strip counterpart of {@link setStripInsertBypassed}. */
+  setBusInsertBypassed(
+    busId: number,
+    insertIndex: number,
+    state: { bypassed: boolean; resetOnBypass?: boolean },
+  ): void {
+    const { bypassed, resetOnBypass } = bypassState('setBusInsertBypassed', state);
+    this.native.setBusStripInsertBypassed(busId, insertIndex, bypassed, resetOnBypass);
+  }
+
+  /**
+   * Changes one strip insert parameter in realtime, addressed by the
    * processor's JSON-key parameter name — one of the entries
    * {@link masteringInsertParamInfo} reports with a non-null `id`; a
    * construction-only entry (`id` null) takes effect only when the insert is
@@ -1610,120 +2034,107 @@ export class RealtimeEngine {
    * during playback. Throws if the track, insert, or name is unknown, the
    * param is not realtime-safe, or the command queue is full.
    */
-  setTrackStripInsertParamByName(
-    trackId: number,
+  setStripInsertParam(
+    ref: StripRef,
     insertIndex: number,
-    paramName: string,
-    value: number,
+    param: { name: string; value: number },
   ): void {
-    this.native.setTrackStripInsertParamByName(trackId, insertIndex, paramName, value);
-  }
-
-  /** Apply a live insert edit on this engine's owning thread without draining its command queue. */
-  applyTrackStripInsertParamByNameNow(
-    trackId: number,
-    insertIndex: number,
-    paramName: string,
-    value: number,
-  ): boolean {
-    return this.native.applyTrackStripInsertParamByNameNow(trackId, insertIndex, paramName, value);
-  }
-
-  /** Restore a retained insert value exactly after a strip scene is replayed. */
-  restoreTrackStripInsertParamByName(
-    trackId: number,
-    insertIndex: number,
-    paramName: string,
-    value: number,
-  ): void {
-    this.native.restoreTrackStripInsertParamByName(trackId, insertIndex, paramName, value);
-  }
-
-  /** Master-strip counterpart of {@link setTrackStripInsertParamByName}. */
-  setMasterStripInsertParamByName(insertIndex: number, paramName: string, value: number): void {
-    this.native.setMasterStripInsertParamByName(insertIndex, paramName, value);
-  }
-
-  applyMasterStripInsertParamByNameNow(
-    insertIndex: number,
-    paramName: string,
-    value: number,
-  ): boolean {
-    return this.native.applyMasterStripInsertParamByNameNow(insertIndex, paramName, value);
-  }
-
-  restoreMasterStripInsertParamByName(insertIndex: number, paramName: string, value: number): void {
-    this.native.restoreMasterStripInsertParamByName(insertIndex, paramName, value);
-  }
-
-  /** Bus-strip counterpart of {@link setTrackStripInsertParamByName}. */
-  setBusStripInsertParamByName(
-    busId: number,
-    insertIndex: number,
-    paramName: string,
-    value: number,
-  ): void {
-    this.native.setBusStripInsertParamByName(busId, insertIndex, paramName, value);
-  }
-
-  applyBusStripInsertParamByNameNow(
-    busId: number,
-    insertIndex: number,
-    paramName: string,
-    value: number,
-  ): boolean {
-    return this.native.applyBusStripInsertParamByNameNow(busId, insertIndex, paramName, value);
-  }
-
-  restoreBusStripInsertParamByName(
-    busId: number,
-    insertIndex: number,
-    paramName: string,
-    value: number,
-  ): void {
-    this.native.restoreBusStripInsertParamByName(busId, insertIndex, paramName, value);
+    const target = stripTarget('setStripInsertParam', ref);
+    const { name, value } = insertParam('setStripInsertParam', param);
+    if (target.master) {
+      this.native.setMasterStripInsertParamByName(insertIndex, name, value);
+    } else {
+      this.native.setTrackStripInsertParamByName(target.trackId, insertIndex, name, value);
+    }
   }
 
   /**
-   * Forgets the remembered manual insert-parameter values of one track strip
-   * and discards its queued insert edits. Call before {@link setTrackStripJson}
-   * replaces the strip when its old values must not carry over; the setter
-   * never does this itself, since a queued edit may already target the new chain.
+   * Apply a live insert edit on this engine's owning thread without draining its
+   * command queue. Returns `false` when the smoother slots are exhausted.
    */
-  clearTrackInsertParameterBases(trackId: number): void {
-    this.native.clearTrackInsertParameterBases(trackId);
+  applyStripInsertParamNow(
+    ref: StripRef,
+    insertIndex: number,
+    param: { name: string; value: number },
+  ): boolean {
+    const target = stripTarget('applyStripInsertParamNow', ref);
+    const { name, value } = insertParam('applyStripInsertParamNow', param);
+    return target.master
+      ? this.native.applyMasterStripInsertParamByNameNow(insertIndex, name, value)
+      : this.native.applyTrackStripInsertParamByNameNow(target.trackId, insertIndex, name, value);
+  }
+
+  /** Restore a retained insert value exactly after a strip scene is replayed. */
+  restoreStripInsertParam(
+    ref: StripRef,
+    insertIndex: number,
+    param: { name: string; value: number },
+  ): void {
+    const target = stripTarget('restoreStripInsertParam', ref);
+    const { name, value } = insertParam('restoreStripInsertParam', param);
+    if (target.master) {
+      this.native.restoreMasterStripInsertParamByName(insertIndex, name, value);
+    } else {
+      this.native.restoreTrackStripInsertParamByName(target.trackId, insertIndex, name, value);
+    }
+  }
+
+  /** Bus-strip counterpart of {@link setStripInsertParam}. */
+  setBusInsertParam(
+    busId: number,
+    insertIndex: number,
+    param: { name: string; value: number },
+  ): void {
+    const { name, value } = insertParam('setBusInsertParam', param);
+    this.native.setBusStripInsertParamByName(busId, insertIndex, name, value);
+  }
+
+  /** Bus-strip counterpart of {@link applyStripInsertParamNow}. */
+  applyBusInsertParamNow(
+    busId: number,
+    insertIndex: number,
+    param: { name: string; value: number },
+  ): boolean {
+    const { name, value } = insertParam('applyBusInsertParamNow', param);
+    return this.native.applyBusStripInsertParamByNameNow(busId, insertIndex, name, value);
+  }
+
+  /** Bus-strip counterpart of {@link restoreStripInsertParam}. */
+  restoreBusInsertParam(
+    busId: number,
+    insertIndex: number,
+    param: { name: string; value: number },
+  ): void {
+    const { name, value } = insertParam('restoreBusInsertParam', param);
+    this.native.restoreBusStripInsertParamByName(busId, insertIndex, name, value);
+  }
+
+  /**
+   * Forgets the remembered manual insert-parameter values of one strip and
+   * discards its queued insert edits. Call before {@link setStrip} replaces the
+   * strip when its old values must not carry over; the setter never does this
+   * itself, since a queued edit may already target the new chain.
+   */
+  clearStripInsertParameterBases(ref: StripRef): void {
+    const target = stripTarget('clearStripInsertParameterBases', ref);
+    if (target.master) {
+      this.native.clearMasterInsertParameterBases();
+    } else {
+      this.native.clearTrackInsertParameterBases(target.trackId);
+    }
   }
 
   clearBusInsertParameterBases(busId: number): void {
     this.native.clearBusInsertParameterBases(busId);
   }
 
-  clearMasterInsertParameterBases(): void {
-    this.native.clearMasterInsertParameterBases();
-  }
-
-  /** Bus-strip counterpart of {@link setTrackStripInsertBypassed}. */
-  setBusStripInsertBypassed(
-    busId: number,
-    insertIndex: number,
-    bypassed: boolean,
-    resetOnBypass = false,
-  ): void {
-    this.native.setBusStripInsertBypassed(
-      busId,
-      insertIndex,
-      requireBoolean('setBusStripInsertBypassed', bypassed, 'bypassed'),
-      requireBoolean('setBusStripInsertBypassed', resetOnBypass, 'resetOnBypass'),
-    );
-  }
-
   /**
-   * Resolves a track-lane insert parameter (by its JSON-key name) to the
-   * reserved automation id usable with `setAutomationLane` / `setParameter`.
-   * Throws `RangeError` when the track, insert, or name is unknown, as Node does and as
+   * Resolves a strip insert parameter (by its JSON-key name) to the reserved
+   * automation id usable with `setAutomationLane` / `setParameter`. Throws
+   * `RangeError` when the track, insert, or name is unknown, as Node does and as
    * Python raises `SonareValueError`; no surface returns a `-1` sentinel.
    *
-   * This trio is how a mastering processor gets time-varying automation: the
+   * This is how a mastering processor gets time-varying automation: the
    * `eq.*`, `dynamics.*`, `saturation.*`, `spectral.*`, `stereo.*`,
    * `maximizer.*` and `multiband.*` processors are all available as strip
    * inserts, so placing one on a strip and resolving its parameter here drives
@@ -1745,33 +2156,41 @@ export class RealtimeEngine {
    * resolve again for the new processor. A change that would take the engine
    * past its 8192 insert-id entries is refused.
    */
-  resolveTrackInsertAutomationId(trackId: number, insertIndex: number, paramName: string): number {
-    return this.native.resolveTrackInsertAutomationId(trackId, insertIndex, paramName);
+  resolveStripInsertAutomationId(ref: StripRef, insertIndex: number, paramName: string): number {
+    const target = stripTarget('resolveStripInsertAutomationId', ref);
+    return target.master
+      ? this.native.resolveMasterInsertAutomationId(insertIndex, paramName)
+      : this.native.resolveTrackInsertAutomationId(target.trackId, insertIndex, paramName);
   }
 
-  resolveMasterInsertAutomationId(insertIndex: number, paramName: string): number {
-    return this.native.resolveMasterInsertAutomationId(insertIndex, paramName);
-  }
-
+  /** Bus-strip counterpart of {@link resolveStripInsertAutomationId}. */
   resolveBusInsertAutomationId(busId: number, insertIndex: number, paramName: string): number {
     return this.native.resolveBusInsertAutomationId(busId, insertIndex, paramName);
   }
 
   /**
-   * Resolve a track lane's fader (`'faderDb'`) or pan (`'pan'`) to its reserved
-   * automation id. Same lifetime rule as {@link resolveTrackInsertAutomationId}:
-   * the id names the track, not its lane position, so it keeps driving that
-   * track across {@link setTrackLanes} reorders and applies nothing once the
-   * track is removed. Throws `RangeError` when the track has no lane or the name is
-   * neither.
+   * Resolve a strip's fader (`'faderDb'`), pan (`'pan'`) or width (`'width'`) to
+   * its reserved automation id, usable with `setAutomationLane` / `setParameter`.
+   * A track ref has no width, so `'width'` on one is a `RangeError`. The id
+   * names the track, not its lane position, so it keeps driving that track
+   * across {@link setTrackLanes} reorders and applies nothing once the track is
+   * removed; the master strip always exists, so its id never goes stale. Throws
+   * `RangeError` when the track has no lane or the name is none of the three.
    */
-  resolveTrackLaneAutomationId(trackId: number, paramName: 'faderDb' | 'pan'): number {
-    return this.native.resolveTrackLaneAutomationId(trackId, paramName);
+  resolveStripAutomationId(ref: StripRef, kind: 'faderDb' | 'pan' | 'width'): number {
+    const target = stripTarget('resolveStripAutomationId', ref);
+    if (target.master) {
+      return this.native.resolveMasterAutomationId(kind);
+    }
+    if (kind === 'width') {
+      throw new RangeError("resolveStripAutomationId: a track strip has no 'width' parameter");
+    }
+    return this.native.resolveTrackLaneAutomationId(target.trackId, kind);
   }
 
   /**
    * Resolve a bus's fader (`'faderDb'`) to its reserved automation id. Same
-   * lifetime rule as {@link resolveTrackInsertAutomationId}: the id names the
+   * lifetime rule as {@link resolveStripInsertAutomationId}: the id names the
    * bus, not its position in the bus list, so it keeps driving that bus across
    * {@link setTrackBuses} reorders and the removal of other buses, and applies
    * nothing once the bus is removed. Throws `RangeError` when the bus is not
@@ -1782,13 +2201,16 @@ export class RealtimeEngine {
   }
 
   /**
-   * Resolve the master strip's fader (`'faderDb'`), pan (`'pan'`) or width
-   * (`'width'`) to its reserved automation id, usable with `setAutomationLane` /
-   * `setParameter`. The master strip always exists, so the id never goes stale.
-   * Throws `RangeError` when the name is none of the three.
+   * Queue a strip fader change in dB: the strip's `'faderDb'` automation id plus
+   * {@link setParameter}.
    */
-  resolveMasterAutomationId(paramName: 'faderDb' | 'pan' | 'width'): number {
-    return this.native.resolveMasterAutomationId(paramName);
+  setStripFaderDb(ref: StripRef, faderDb: number, renderFrame?: number): void {
+    this.setParameter(this.resolveStripAutomationId(ref, 'faderDb'), faderDb, renderFrame);
+  }
+
+  /** Queue a bus gain change in dB: the bus's `'faderDb'` automation id plus {@link setParameter}. */
+  setBusGainDb(busId: number, gainDb: number, renderFrame?: number): void {
+    this.setParameter(this.resolveBusAutomationId(busId, 'faderDb'), gainDb, renderFrame);
   }
 
   /**
@@ -1825,69 +2247,79 @@ export class RealtimeEngine {
     return this.native.resolveInstrumentAutomationId(destinationId, paramName);
   }
 
-  /** Sets a track lane strip's pan position in realtime (glitch-free). */
-  setTrackStripPan(trackId: number, pan: number): void {
-    this.native.setTrackStripPan(trackId, pan);
+  /** Sets a track strip's pan position in realtime (glitch-free). The master strip has no setter: drive `resolveStripAutomationId('master', 'pan')`. */
+  setStripPan(ref: StripRef, pan: number): void {
+    this.native.setTrackStripPan(trackOnly('setStripPan', ref), pan);
   }
 
-  /** Sets a track lane strip's pan law in realtime. */
-  setTrackStripPanLaw(trackId: number, panLaw: PanLawInput): void {
+  /** Sets a track strip's pan law in realtime; an ordinal is a `TypeError`. */
+  setStripPanLaw(ref: StripRef, panLaw: PanLaw): void {
+    const trackId = trackOnly('setStripPanLaw', ref);
+    noOrdinal('setStripPanLaw', 'panLaw', panLaw);
     this.native.setTrackStripPanLaw(trackId, panLawCode(panLaw));
   }
 
-  /** Sets a track lane strip's pan mode in realtime. */
-  setTrackStripPanMode(trackId: number, panMode: PanMode | number): void {
+  /** Sets a track strip's pan mode in realtime; an ordinal is a `TypeError`. */
+  setStripPanMode(ref: StripRef, panMode: PanMode): void {
+    const trackId = trackOnly('setStripPanMode', ref);
+    noOrdinal('setStripPanMode', 'panMode', panMode);
     this.native.setTrackStripPanMode(trackId, panModeCode(panMode));
   }
 
-  /** Sets a track lane strip's dual-pan left/right positions in realtime. */
-  setTrackStripDualPan(trackId: number, leftPan: number, rightPan: number): void {
-    this.native.setTrackStripDualPan(trackId, leftPan, rightPan);
+  /** Sets a track strip's dual-pan left/right positions in realtime. */
+  setStripDualPan(ref: StripRef, leftPan: number, rightPan: number): void {
+    this.native.setTrackStripDualPan(trackOnly('setStripDualPan', ref), leftPan, rightPan);
   }
 
   /**
-   * Sets a track lane strip's surround placement in realtime (glitch-free; a
+   * Sets a track strip's surround placement in realtime (glitch-free; a
    * constant-power 5 ms one-pole glide). Used when the destination has more than
    * two channels. Omitted fields default to a centered point source
    * (`distance` 1); a `distance` of 0 or less is treated as 1. Throws a RangeError
    * for `azimuth` outside [-180, 180] or `divergence`/`lfe` outside [0, 1], and for an
    * unknown track, a track without a lane strip, or a non-finite field.
    */
-  setTrackStripSurroundPan(trackId: number, pan: SurroundPan): void {
-    assertSurroundPan('setTrackStripSurroundPan', pan);
+  setStripSurroundPan(ref: StripRef, pan: SurroundPan): void {
+    const trackId = trackOnly('setStripSurroundPan', ref);
+    assertSurroundPan('setStripSurroundPan', pan);
     this.native.setTrackStripSurroundPan(trackId, pan);
+  }
+
+  /**
+   * Sets a track strip's alignment delay (whole samples), moving this lane
+   * later relative to every other lane. It is not latency: PDC does not
+   * compensate it and the reported graph latency is unchanged.
+   */
+  setStripChannelDelaySamples(ref: StripRef, delaySamples: number): void {
+    this.native.setTrackStripChannelDelaySamples(
+      trackOnly('setStripChannelDelaySamples', ref),
+      delaySamples,
+    );
   }
 
   /**
    * Sets a bus strip's output pan position in realtime (glitch-free). Throws
    * for an unknown bus or one wider than stereo.
    */
-  setBusStripPan(busId: number, pan: number): void {
+  setBusPan(busId: number, pan: number): void {
     this.native.setBusStripPan(busId, pan);
   }
 
-  /** Sets a bus strip's pan law in realtime. */
-  setBusStripPanLaw(busId: number, panLaw: PanLawInput): void {
+  /** Sets a bus strip's pan law in realtime; an ordinal is a `TypeError`. */
+  setBusPanLaw(busId: number, panLaw: PanLaw): void {
+    noOrdinal('setBusPanLaw', 'panLaw', panLaw);
     this.native.setBusStripPanLaw(busId, panLawCode(panLaw));
   }
 
-  /** Sets a bus strip's pan mode in realtime. */
-  setBusStripPanMode(busId: number, panMode: PanMode | number): void {
+  /** Sets a bus strip's pan mode in realtime; an ordinal is a `TypeError`. */
+  setBusPanMode(busId: number, panMode: PanMode): void {
+    noOrdinal('setBusPanMode', 'panMode', panMode);
     this.native.setBusStripPanMode(busId, panModeCode(panMode));
   }
 
   /** Sets a bus strip's dual-pan left/right positions in realtime. */
-  setBusStripDualPan(busId: number, leftPan: number, rightPan: number): void {
+  setBusDualPan(busId: number, leftPan: number, rightPan: number): void {
     this.native.setBusStripDualPan(busId, leftPan, rightPan);
-  }
-
-  /**
-   * Sets a track lane strip's alignment delay (whole samples), moving this lane
-   * later relative to every other lane. It is not latency: PDC does not
-   * compensate it and the reported graph latency is unchanged.
-   */
-  setTrackStripChannelDelaySamples(trackId: number, delaySamples: number): void {
-    this.native.setTrackStripChannelDelaySamples(trackId, delaySamples);
   }
 
   createClipPageProvider(
@@ -1911,33 +2343,18 @@ export class RealtimeEngine {
     this.native.destroyClipPageProvider(providerId);
   }
 
-  popClipPageRequest(): ClipPageRequest | null {
-    return this.native.popClipPageRequest();
-  }
-
-  /**
-   * Moves one native request into the binding's persistent scalar scratch.
-   * This avoids creating an embind JS object in AudioWorklet process().
-   */
-  popClipPageRequestToScratch(): boolean {
-    return this.native.popClipPageRequestToScratch();
-  }
-
-  clipPageRequestScratchClipId(): number {
-    return this.native.clipPageRequestScratchClipId();
-  }
-
-  clipPageRequestScratchSample(): number {
-    return this.native.clipPageRequestScratchSample();
+  /** Pops the oldest clip-page request, or `undefined` when none is queued. */
+  popClipPageRequest(): ClipPageRequest | undefined {
+    return this.native.popClipPageRequest() ?? undefined;
   }
 
   /** Cumulative page misses dropped because the native bounded request queue was full. */
-  clipPageRequestOverflowCount(): number {
+  get clipPageRequestOverflowCount(): number {
     return this.native.clipPageRequestOverflowCount();
   }
 
   /** Cumulative warp-stretch requests dropped because the native queue was full. */
-  warpStretchOverflowCount(): number {
+  get warpStretchOverflowCount(): number {
     return this.native.warpStretchOverflowCount();
   }
 
@@ -1954,8 +2371,8 @@ export class RealtimeEngine {
     this.native.setWarpVoiceCapacity(voices);
   }
 
-  /** Reads the current time-stretch voice capacity (default 8). */
-  warpVoiceCapacity(): number {
+  /** The current time-stretch voice capacity (default 8). */
+  get warpVoiceCapacity(): number {
     return this.native.warpVoiceCapacity();
   }
 
@@ -1983,79 +2400,134 @@ export class RealtimeEngine {
   }
 
   /** Current clip-page look-ahead window in timeline frames. */
-  clipPagePrefetchFrames(): number {
+  get clipPagePrefetchFrames(): number {
     return this.native.clipPagePrefetchFrames();
   }
 
-  setCaptureBuffer(numChannels: number, capacityFrames: number): void {
-    this.native.setCaptureBuffer(numChannels, capacityFrames);
-  }
-
-  armCapture(armed = true): void {
-    this.native.armCapture(requireBoolean('armCapture', armed, 'armed'));
-  }
-
   /**
-   * Set the punch-in window, half-open `[start, end)` in timeline samples.
-   *
-   * Each bound is samples or seconds (rounded to the nearest sample at the
-   * engine's sample rate), one spelling each; both bounds are required and a
-   * negative one is refused.
+   * Resolves one punch bound spelled as quarter notes, samples or seconds; a
+   * negative value is refused and giving more than one spelling is a `RangeError`.
    */
-  setCapturePunch(request: EngineCapturePunchRequest): void;
-  setCapturePunch(startSample: number, endSample: number, enabled?: boolean): void;
-  setCapturePunch(
-    first: EngineCapturePunchRequest | number,
-    endSample?: number,
-    enabled = true,
-  ): void {
-    const request: EngineCapturePunchRequest =
-      typeof first === 'object' && first !== null
-        ? first
-        : { startSample: first, endSample, enabled };
-    const start = resolveSampleBound(
-      'setCapturePunch',
-      request.startSample,
-      request.startSec,
-      this.sampleRate,
-      'startSample',
-      'startSec',
-    );
-    const end = resolveSampleBound(
-      'setCapturePunch',
-      request.endSample,
-      request.endSec,
-      this.sampleRate,
-      'endSample',
-      'endSec',
-    );
-    if (start === undefined || end === undefined) {
+  private punchBound(
+    ppq: number | undefined,
+    sample: number | undefined,
+    sec: number | undefined,
+    names: readonly [string, string, string],
+  ): number {
+    const [ppqName, sampleName, secName] = names;
+    if (ppq === undefined || ppq === null) {
+      const bound = resolveSampleBound(
+        'configureCapture',
+        sample,
+        sec,
+        this.sampleRate,
+        `punch.${sampleName}`,
+        `punch.${secName}`,
+      );
+      if (bound === undefined) {
+        throw new RangeError(
+          `configureCapture: punch needs ${ppqName}, ${sampleName} or ${secName}`,
+        );
+      }
+      return bound;
+    }
+    if ((sample !== undefined && sample !== null) || (sec !== undefined && sec !== null)) {
       throw new RangeError(
-        'setCapturePunch: both bounds are required (startSample or startSec, endSample or endSec)',
+        `configureCapture: give one of punch.${ppqName}, punch.${sampleName} or punch.${secName}`,
       );
     }
-    this.native.setCapturePunch(
-      start,
-      end,
-      optionalBoolean('setCapturePunch', request.enabled, 'enabled', true),
-    );
-  }
-
-  setCaptureSource(source: EngineCaptureSource): void {
-    this.native.setCaptureSource(source);
+    if (typeof ppq !== 'number' || !Number.isFinite(ppq) || ppq < 0) {
+      throw new RangeError(`configureCapture: punch.${ppqName} must be a non-negative number`);
+    }
+    return this.sampleAtPpq(ppq);
   }
 
   /**
-   * Positive values delay capture relative to the punch window. Input arriving
-   * within the offset after a loop wrap belongs to the end of the pass played
-   * before it, so every pass captures the whole loop range.
+   * Sets up capture in one call: buffer, source, record offset, input monitor
+   * and punch window. The call states the whole setup, so an omitted field
+   * returns to its default and an omitted `punch` clears the punch window. The
+   * buffer is reallocated only when `numChannels` or `capacityFrames` changes,
+   * and doing that while capture is armed is a `SonareError` with
+   * `ErrorCode.InvalidState`.
    */
-  setRecordOffsetSamples(offsetSamples: number): void {
-    this.native.setRecordOffsetSamples(offsetSamples);
+  configureCapture(options: CaptureOptions): void {
+    requestObject('configureCapture', options, 'options', true);
+    if (typeof options.capacityFrames !== 'number') {
+      throw new TypeError('configureCapture: capacityFrames must be a number');
+    }
+    const numChannels = optionalCount('configureCapture', 'numChannels', options.numChannels, 2);
+    const source = tokenCode(
+      'configureCapture',
+      'source',
+      options.source ?? 'output',
+      CAPTURE_SOURCES,
+    );
+    const offset = options.recordOffsetSamples ?? 0;
+    if (typeof offset !== 'number') {
+      throw new TypeError('configureCapture: recordOffsetSamples must be a number');
+    }
+    let monitor = { enabled: true, gain: 1 };
+    if (options.inputMonitor !== undefined && options.inputMonitor !== null) {
+      requireObject('configureCapture', 'inputMonitor', options.inputMonitor);
+      const gain = options.inputMonitor.gain ?? 1;
+      assertFloatValue('configureCapture', gain, 'inputMonitor.gain');
+      monitor = {
+        enabled: requireBoolean(
+          'configureCapture',
+          options.inputMonitor.enabled,
+          'inputMonitor.enabled',
+        ),
+        gain,
+      };
+    }
+    let punch: { start: number; end: number } | undefined;
+    if (options.punch !== undefined && options.punch !== null) {
+      requireObject('configureCapture', 'punch', options.punch);
+      punch = {
+        start: this.punchBound(
+          options.punch.startPpq,
+          options.punch.startSample,
+          options.punch.startSec,
+          ['startPpq', 'startSample', 'startSec'],
+        ),
+        end: this.punchBound(options.punch.endPpq, options.punch.endSample, options.punch.endSec, [
+          'endPpq',
+          'endSample',
+          'endSec',
+        ]),
+      };
+    }
+    const native = this.native;
+    // Applied first: a window the engine refuses leaves the rest of the setup untouched.
+    if (punch === undefined) {
+      native.setCapturePunch(0, 1, false);
+    } else {
+      native.setCapturePunch(punch.start, punch.end, true);
+    }
+    const current = this.captureBuffer;
+    if (
+      current === undefined ||
+      current.numChannels !== numChannels ||
+      current.capacityFrames !== options.capacityFrames
+    ) {
+      if (current !== undefined && native.captureStatus().armed) {
+        throw new SonareError(
+          ErrorCode.InvalidState,
+          'configureCapture: the capture buffer cannot change while capture is armed',
+        );
+      }
+      native.setCaptureBuffer(numChannels, options.capacityFrames);
+      this.captureBuffer = { numChannels, capacityFrames: options.capacityFrames };
+    }
+    native.setCaptureSource(source === CAPTURE_SOURCES.input ? 'input' : 'output');
+    native.setRecordOffsetSamples(offset);
+    native.setInputMonitor(monitor.enabled, monitor.gain);
   }
 
-  setInputMonitor(enabled: boolean, gain = 1): void {
-    this.native.setInputMonitor(requireBoolean('setInputMonitor', enabled, 'enabled'), gain);
+  /** Arms or disarms capture. */
+  armCapture(state: { armed: boolean }): void {
+    requestObject('armCapture', state, 'state', true);
+    this.native.armCapture(requireBoolean('armCapture', state.armed, 'armed'));
   }
 
   resetCapture(): void {
@@ -2080,7 +2552,7 @@ export class RealtimeEngine {
 
   /**
    * Allocates persistent per-channel WASM-heap scratch for the zero-copy
-   * `getChannelBuffer` / `processPrepared` realtime path. Call once (off the
+   * `channelBuffer` / `processPrepared` realtime path. Call once (off the
    * audio thread) before driving `processPrepared` from an AudioWorklet so the
    * render callback never allocates on the C++/JS heap.
    */
@@ -2093,7 +2565,7 @@ export class RealtimeEngine {
    * channel (valid for up to `numFrames`). Fill it, call `processPrepared`, then
    * read the same view back. Re-acquire after WASM memory growth.
    */
-  getChannelBuffer(channel: number, numFrames: number): Float32Array {
+  channelBuffer(channel: number, numFrames: number): Float32Array {
     return this.native.getChannelBuffer(channel, numFrames);
   }
 
@@ -2123,7 +2595,7 @@ export class RealtimeEngine {
    * channel (valid for up to `numFrames`). Read it after
    * {@link processPreparedWithMonitor}. Re-acquire after WASM memory growth.
    */
-  getMonitorChannelBuffer(channel: number, numFrames: number): Float32Array {
+  monitorChannelBuffer(channel: number, numFrames: number): Float32Array {
     return this.native.getMonitorChannelBuffer(channel, numFrames);
   }
 
@@ -2137,26 +2609,25 @@ export class RealtimeEngine {
     this.native.processPreparedWithMonitor(numFrames);
   }
 
-  processWithMonitor(channels: Float32Array[]): WasmEngineProcessWithMonitorResult {
+  processWithMonitor(channels: Float32Array[]): EngineProcessWithMonitorResult {
     return this.native.processWithMonitor(channels);
   }
 
   /**
-   * Render `channels` offline from the current transport position. Requesting
-   * more planes than `prepare` reserved throws a `RangeError` rather than
-   * returning silence that reads as a finished render.
+   * Render `request.channels` offline from the current transport position.
+   * Requesting more planes than `prepare` reserved throws a `RangeError` rather
+   * than returning silence that reads as a finished render.
    *
    * Set `finalize: false` to render one chunk of a longer timeline; see
    * {@link RenderOfflineRequest.finalize} and {@link finishOfflineRender}.
    */
-  renderOffline(request: RenderOfflineRequest): Float32Array[];
-  renderOffline(channels: Float32Array[], blockSize?: number): Float32Array[];
-  renderOffline(
-    channelsOrRequest: Float32Array[] | RenderOfflineRequest,
-    blockSize = 128,
-  ): Float32Array[] {
-    const request = normalizeRenderOfflineRequest(channelsOrRequest, blockSize);
-    return this.native.renderOffline(request.channels, request.blockSize, request.finalize);
+  renderOffline(request: RenderOfflineRequest): Float32Array[] {
+    const normalized = normalizeRenderOfflineRequest(request);
+    return this.native.renderOffline(
+      normalized.channels,
+      normalized.blockSize,
+      normalized.finalize,
+    );
   }
 
   /**
@@ -2177,10 +2648,32 @@ export class RealtimeEngine {
 
   /**
    * Bounce the timeline to an interleaved buffer. `numChannels` above the
-   * prepared channel count throws a `RangeError`.
+   * prepared channel count throws a `RangeError`. `targetSampleRate`,
+   * `sourceSampleRate` and `targetLufs` are omitted for their defaults (the
+   * source rate, the engine rate, -14 LUFS); an explicit `0` is a `RangeError`.
    */
   bounceOffline(options: EngineBounceOptions): EngineBounceResult {
-    return this.native.bounceOffline(options);
+    requireObject('bounceOffline', 'options', options);
+    noOrdinal('bounceOffline', 'dither', options.dither);
+    for (const name of ['targetSampleRate', 'sourceSampleRate', 'targetLufs'] as const) {
+      const value = options[name];
+      if (value === undefined || value === null) {
+        continue;
+      }
+      if (typeof value === 'number' && value === 0) {
+        throw new RangeError(`bounceOffline: ${name} must not be 0 (omit it for the default)`);
+      }
+      if (typeof value === 'number' && !Number.isFinite(value)) {
+        throw new RangeError(`bounceOffline: ${name} must be a finite number`);
+      }
+    }
+    const { dither, ...rest } = options;
+    return this.native.bounceOffline({
+      ...rest,
+      ...(dither === undefined
+        ? {}
+        : { dither: tokenCode('bounceOffline', 'dither', dither, DITHERS) as 1 | 2 | 3 }),
+    });
   }
 
   /**
@@ -2198,58 +2691,7 @@ export class RealtimeEngine {
   }
 
   drainTelemetry(maxRecords = 1024): EngineTelemetry[] {
-    return this.native.drainTelemetry(maxRecords);
-  }
-
-  popTelemetryToScratch(): boolean {
-    return this.native.popTelemetryToScratch();
-  }
-
-  telemetryScratchType(): number {
-    return this.native.telemetryScratchType();
-  }
-
-  telemetryScratchError(): number {
-    return this.native.telemetryScratchError();
-  }
-
-  telemetryScratchRenderFrame(): number {
-    return Number(this.native.telemetryScratchRenderFrame());
-  }
-
-  telemetryScratchTimelineSample(): number {
-    return Number(this.native.telemetryScratchTimelineSample());
-  }
-
-  telemetryScratchAudibleTimelineSample(): number {
-    return Number(this.native.telemetryScratchAudibleTimelineSample());
-  }
-
-  telemetryScratchGraphLatencySamplesQ8(): number {
-    return this.native.telemetryScratchGraphLatencySamplesQ8();
-  }
-
-  telemetryScratchValue(): number {
-    return this.native.telemetryScratchValue();
-  }
-
-  popMeterTelemetryToScratch(): boolean {
-    return this.native.popMeterTelemetryToScratch();
-  }
-  meterScratchTargetId(): number {
-    return this.native.meterScratchTargetId();
-  }
-  meterScratchRenderFrame(): number {
-    return Number(this.native.meterScratchRenderFrame());
-  }
-  meterScratchInputPeakDbL(): number {
-    return this.native.meterScratchInputPeakDbL();
-  }
-  meterScratchInputPeakDbR(): number {
-    return this.native.meterScratchInputPeakDbR();
-  }
-  meterScratchValue(field: number): number {
-    return this.native.meterScratchValue(field);
+    return this.native.drainTelemetry(maxRecords).map(telemetryFromNative);
   }
 
   drainMeterTelemetry(maxRecords = 1024): EngineMeterTelemetry[] {
@@ -2292,31 +2734,6 @@ export class RealtimeEngine {
   /** Drains pending spectrum + vectorscope snapshots (per mix target). */
   drainScopeTelemetry(maxRecords = 1024): EngineScopeTelemetry[] {
     return this.native.drainScopeTelemetry(maxRecords);
-  }
-
-  popScopeTelemetryToScratch(): boolean {
-    return this.native.popScopeTelemetryToScratch();
-  }
-  scopeScratchTargetId(): number {
-    return this.native.scopeScratchTargetId();
-  }
-  scopeScratchRenderFrame(): number {
-    return Number(this.native.scopeScratchRenderFrame());
-  }
-  scopeScratchBandCount(): number {
-    return this.native.scopeScratchBandCount();
-  }
-  scopeScratchBand(index: number): number {
-    return this.native.scopeScratchBand(index);
-  }
-  scopeScratchPointCount(): number {
-    return this.native.scopeScratchPointCount();
-  }
-  scopeScratchPointLeft(index: number): number {
-    return this.native.scopeScratchPointLeft(index);
-  }
-  scopeScratchPointRight(index: number): number {
-    return this.native.scopeScratchPointRight(index);
   }
 
   /** Release the underlying WASM object. Idempotent, as the Node facade is. */

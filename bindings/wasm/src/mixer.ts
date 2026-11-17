@@ -13,12 +13,199 @@ import type {
   MeterTap,
   MixerProcessResult,
   MixMeterSnapshot,
-  PanLawInput,
+  MixSceneDocument,
+  PanLawName,
   PanMode,
   SendTiming,
   SurroundPan,
 } from './public_types.js';
-import { assertSampleRate, assertSurroundPan, requireBoolean } from './validation.js';
+import {
+  assertFloatValue,
+  assertIntegerValue,
+  assertSampleRate,
+  assertString,
+  assertSurroundPan,
+  requestObject,
+  requireBoolean,
+  requireToken,
+} from './validation.js';
+
+/** A strip addressed by 0-based index or by its scene id (a digit-only id is still an id). */
+export type StripRef = number | string;
+
+/** Role of a bus added with {@link Mixer.addBus}. */
+export type MixBusRole = 'master' | 'aux' | 'submix';
+
+const MIX_BUS_ROLES: readonly MixBusRole[] = ['master', 'aux', 'submix'];
+
+/** Default maximum block size of a {@link Mixer}, in samples. */
+const DEFAULT_BLOCK_SIZE = 512;
+
+/**
+ * Field of the meter snapshot latched by {@link Mixer.latchMeterSnapshot}, as
+ * read by {@link Mixer.meterScratchValue}.
+ */
+export const MeterScratchField = {
+  peakDbL: 0,
+  peakDbR: 1,
+  rmsDbL: 2,
+  rmsDbR: 3,
+  correlation: 4,
+  truePeakDbL: 5,
+  truePeakDbR: 6,
+} as const;
+
+/** A value of {@link MeterScratchField}. */
+export type MeterScratchField = (typeof MeterScratchField)[keyof typeof MeterScratchField];
+
+const METER_SCRATCH_FIELD_COUNT = Object.keys(MeterScratchField).length;
+
+/** Construction options of a {@link Mixer}. */
+export interface MixerConfig {
+  /** Scene to build the mixer from; omitted gives an empty mixer. */
+  scene?: MixSceneDocument;
+  /** Sample rate in Hz, integer in `[8000, 384000]`. Required; there is no default rate. */
+  sampleRate: number;
+  /** Maximum block size per {@link Mixer.processStereo} call, in samples. Default `512`; `0` is refused. */
+  blockSize?: number;
+}
+
+/** Options of {@link Mixer.fromJson}; the same rate and block size as {@link MixerConfig}. */
+export interface MixerJsonOptions {
+  /** Sample rate in Hz, integer in `[8000, 384000]`. Required. */
+  sampleRate: number;
+  /** Maximum block size per {@link Mixer.processStereo} call, in samples. Default `512`; `0` is refused. */
+  blockSize?: number;
+}
+
+/** Master-meter options of {@link Mixer.configureMeter}. */
+export interface MixerMeterOptions {
+  /** Whether to meter the master output. Required. */
+  enabled: boolean;
+  /** True-peak oversampling factor, `4` or `8`. Default `4`; any other value is a `RangeError`. */
+  truePeakOversample?: number;
+}
+
+/** Polarity of a strip's channels for {@link Mixer.setPolarityInvert}. */
+export interface PolarityInvert {
+  /** Invert the left channel. */
+  left: boolean;
+  /** Invert the right channel. */
+  right: boolean;
+}
+
+/** A send added with {@link Mixer.addSend}; mirrors the scene document's send. */
+export interface MixerSend {
+  /** Send id. */
+  id: string;
+  /** Destination bus id. */
+  destinationBusId: string;
+  /** Initial send level in dB. Default `0`. */
+  sendDb?: number;
+  /** Tap point, a {@link SendTiming} token. Default `'postFader'`; a number is refused. */
+  timing?: SendTiming;
+}
+
+/** One automation event; `curve` is an {@link AutomationCurve} token, default `'linear'`. */
+export interface MixerAutomationPointBase {
+  /** Absolute sample position from the start of processing. */
+  samplePos: number;
+  /** Interpolation curve toward the value. A number is refused. */
+  curve?: AutomationCurve;
+}
+
+/** Fader automation event for {@link Mixer.scheduleFaderAutomation}. */
+export interface FaderAutomationPoint extends MixerAutomationPointBase {
+  /** Target fader level in dB. */
+  faderDb: number;
+}
+
+/** Pan automation event for {@link Mixer.schedulePanAutomation}. */
+export interface PanAutomationPoint extends MixerAutomationPointBase {
+  /** Target pan position in `[-1, 1]`. */
+  pan: number;
+}
+
+/** Width automation event for {@link Mixer.scheduleWidthAutomation}. */
+export interface WidthAutomationPoint extends MixerAutomationPointBase {
+  /** Target stereo width in `[0, 2]`. */
+  width: number;
+}
+
+/** Send-level automation event for {@link Mixer.scheduleSendAutomation}. */
+export interface SendAutomationPoint extends MixerAutomationPointBase {
+  /** Target send level in dB. */
+  sendDb: number;
+}
+
+/** Insert-parameter automation event for {@link Mixer.scheduleInsertAutomation}. */
+export interface InsertAutomationPoint extends MixerAutomationPointBase {
+  /** Processor-specific parameter id. */
+  paramId: number;
+  /** Target parameter value. */
+  value: number;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    !ArrayBuffer.isView(value)
+  );
+}
+
+function isAbsent(value: unknown): value is undefined | null {
+  return value === undefined || value === null;
+}
+
+/** A required finite number field of an object argument. */
+function requiredNumber(fnName: string, value: unknown, name: string): number {
+  assertFloatValue(fnName, value, name);
+  return value as number;
+}
+
+/** An optional finite number field; absent takes `fallback`. */
+function optionalNumber(fnName: string, value: unknown, name: string, fallback: number): number {
+  return isAbsent(value) ? fallback : requiredNumber(fnName, value, name);
+}
+
+/** A closed token: a non-string is a `TypeError` (a number never selects an ordinal), an unknown string a `RangeError`. */
+function tokenArg(
+  fnName: string,
+  value: unknown,
+  name: string,
+  resolve: (token: string) => number,
+  fallback?: string,
+): number {
+  if (isAbsent(value)) {
+    if (fallback === undefined) {
+      throw new TypeError(`${fnName}: ${name} must be a string`);
+    }
+    return resolve(fallback);
+  }
+  assertString(fnName, value, name);
+  return resolve(value as string);
+}
+
+const curveToken = (token: string): number => automationCurveCode(token as AutomationCurve);
+
+function blockSizeOf(fnName: string, value: unknown): number {
+  if (isAbsent(value)) {
+    return DEFAULT_BLOCK_SIZE;
+  }
+  assertIntegerValue(fnName, value, 'blockSize');
+  if (value === 0) {
+    throw new RangeError(`${fnName}: blockSize must not be 0 (omit it for the default)`);
+  }
+  if (value < 0) {
+    throw new RangeError(`${fnName}: blockSize must be a positive integer`);
+  }
+  return value;
+}
+
+/** Scene JSON handed from {@link Mixer.fromJson} to the constructor; consumed there. */
+let adoptedSceneJson: string | undefined;
 
 /**
  * One master-output meter reading. All dB fields are finite and floored at
@@ -77,10 +264,11 @@ export interface MixerRealtimeBuffer {
 /**
  * Persistent, scene-based stereo mixer.
  *
- * Build one from a scene JSON string (e.g. {@link mixingScenePresetJson} or a
- * hand-authored scene), then feed per-strip stereo blocks through
- * {@link processStereo} to get the routed stereo master. Strips, sends, buses,
- * and inserts are described entirely by the scene; the routing graph is
+ * Build one with `new Mixer({ scene, sampleRate })` (e.g. a scene from
+ * {@link mixingScenePresetJson}, or none for an empty mixer) or with
+ * {@link Mixer.fromJson}, then feed per-strip stereo blocks through
+ * {@link processStereo} to get the routed stereo master. Strips are addressed
+ * by 0-based index or by scene id ({@link StripRef}). The routing graph is
  * compiled lazily on the first {@link processStereo} call (or eagerly via
  * {@link compile}).
  *
@@ -89,7 +277,7 @@ export interface MixerRealtimeBuffer {
  *
  * @example
  * ```typescript
- * const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 512);
+ * const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), { sampleRate: 48000 });
  * try {
  *   const out = mixer.processStereo([stripL], [stripR]);
  * } finally {
@@ -107,32 +295,71 @@ export class Mixer {
   }
   private readonly blockSize: number;
 
-  private constructor(mixer: import('./sonare.js').WasmMixer, blockSize: number) {
-    this.mixerHandle = mixer;
+  /**
+   * Build a mixer from a scene document.
+   *
+   * A strip's meters are sized when the strip is built, so this is where their
+   * configuration is chosen: an optional `metering` object on the strip
+   * (`enabled` / `lufs` / `truePeak` / `truePeakOversample`) selects it, and
+   * leaving it out keeps the full default (LUFS + true peak at 4x, about 1.4 MB
+   * per strip at 48 kHz).
+   *
+   * @param config - See {@link MixerConfig}. An absent `scene` gives an empty mixer.
+   * @throws TypeError for a wrong-typed field or an unknown key; RangeError for
+   *   a sample rate outside `[8000, 384000]` or a `blockSize` of `0` or below.
+   */
+  constructor(config: MixerConfig) {
+    const json = adoptedSceneJson;
+    adoptedSceneJson = undefined;
+    const bag = requestObject('Mixer', config, 'config', true);
+    assertSampleRate('Mixer', bag.sampleRate);
+    const blockSize = blockSizeOf('Mixer', bag.blockSize);
+    let sceneJson = json;
+    if (sceneJson === undefined) {
+      if (!isAbsent(bag.scene) && !isObject(bag.scene)) {
+        throw new TypeError('Mixer: scene must be an object');
+      }
+      sceneJson = JSON.stringify(bag.scene ?? { strips: [], buses: [] });
+    }
+    const module = getSonareModule();
+    this.mixerHandle = module.createMixerFromSceneJson(
+      sceneJson,
+      bag.sampleRate as number,
+      blockSize,
+    );
     this.blockSize = blockSize;
   }
 
   /**
    * Build a mixer from a scene JSON string.
    *
-   * A strip's meters are sized when the strip is built, so this is where their
-   * configuration is chosen: an optional `metering` object on the strip
-   * (`enabled` / `lufs` / `truePeak` / `truePeakOversample`) selects it, and
-   * leaving it out keeps the full default (LUFS + true peak at 4x, about 1.4 MB
-   * per strip at 48 kHz). `{"enabled": false}` drops both meters for a strip
-   * whose snapshots are never read.
-   *
    * @param json - Scene JSON (strips, buses, sends, connections, inserts)
-   * @param sampleRate - Sample rate in Hz, `[8000, 384000]` (default: 48000)
-   * @param blockSize - Maximum block size per {@link processStereo} call (default: 512)
+   * @param options - Sample rate (required) and block size, see {@link MixerJsonOptions}
+   * @throws TypeError for a non-string `json`, a wrong-typed field or an unknown key;
+   *   RangeError for a sample rate outside `[8000, 384000]` or a `blockSize` of `0` or below.
    */
-  static fromSceneJson(json: string, sampleRate = 48000, blockSize = 512): Mixer {
-    if (typeof json !== 'string') {
-      throw new TypeError('Mixer.fromSceneJson: json must be a string');
+  static fromJson(json: string, options: MixerJsonOptions): Mixer {
+    assertString('Mixer.fromJson', json, 'json');
+    const bag = requestObject('Mixer.fromJson', options, 'options', true);
+    adoptedSceneJson = json;
+    try {
+      return new Mixer({ sampleRate: bag.sampleRate, blockSize: bag.blockSize } as MixerConfig);
+    } finally {
+      adoptedSceneJson = undefined;
     }
-    assertSampleRate('Mixer.fromSceneJson', sampleRate);
-    const module = getSonareModule();
-    return new Mixer(module.createMixerFromSceneJson(json, sampleRate, blockSize), blockSize);
+  }
+
+  /** Resolve a strip reference to its index; an unknown id is a `RangeError`. */
+  private stripIndex(fnName: string, strip: StripRef): number {
+    if (typeof strip === 'string') {
+      const index = this.mixer.stripById(strip);
+      if (index < 0) {
+        throw new RangeError(`${fnName}: no strip with id '${strip}'`);
+      }
+      return index;
+    }
+    assertIntegerValue(fnName, strip, 'strip');
+    return strip;
   }
 
   /**
@@ -211,7 +438,7 @@ export class Mixer {
     const viewsDetached = (): boolean => outLeft.byteLength === 0 || outRight.byteLength === 0;
 
     const acquire = (): void => {
-      const stripCount = this.stripCount();
+      const stripCount = this.stripCount;
       const detached = viewsDetached();
       if (detached) {
         // A heap growth detached every view: reacquire all planes.
@@ -240,7 +467,7 @@ export class Mixer {
     // module is built ALLOW_MEMORY_GROWTH). Also refresh the view list when a
     // caller adds a strip and recompiles the graph after this buffer was made.
     const acquireIfNeeded = (): void => {
-      if (acquiredStripCount !== this.stripCount() || viewsDetached()) {
+      if (acquiredStripCount !== this.stripCount || viewsDetached()) {
         acquire();
       }
     };
@@ -281,13 +508,15 @@ export class Mixer {
    * Enabling resets the meter, so a reading never mixes in audio from a period
    * when metering was off.
    *
-   * @param enabled - Whether to meter the master output.
-   * @param truePeakOversample - `4` or `8`; any other value throws a RangeError.
+   * @param options - See {@link MixerMeterOptions}.
+   * @throws TypeError for a wrong-typed field or an unknown key; RangeError when
+   *   `truePeakOversample` is not `4` or `8`.
    */
-  configureMeter(enabled: boolean, truePeakOversample = 4): void {
+  configureMeter(options: MixerMeterOptions): void {
+    const bag = requestObject('configureMeter', options, 'options', true);
     this.mixer.configureMeter(
-      requireBoolean('configureMeter', enabled, 'enabled'),
-      truePeakOversample,
+      requireBoolean('configureMeter', bag.enabled, 'enabled'),
+      optionalNumber('configureMeter', bag.truePeakOversample, 'truePeakOversample', 4),
     );
   }
 
@@ -318,59 +547,67 @@ export class Mixer {
   /**
    * Read one field of the snapshot latched by {@link latchMeterSnapshot}.
    *
-   * @param field - `0` peakDbL, `1` peakDbR, `2` rmsDbL, `3` rmsDbR,
-   *   `4` correlation, `5` truePeakDbL, `6` truePeakDbR. Any other index
-   *   reads `0`.
+   * @param field - A {@link MeterScratchField} value (`0` to `6`).
+   * @throws TypeError for a non-number; RangeError for a value outside `[0, 6]`.
    */
-  meterScratchValue(field: number): number {
+  meterScratchValue(field: MeterScratchField): number {
+    assertIntegerValue('meterScratchValue', field, 'field');
+    if (field < 0 || field >= METER_SCRATCH_FIELD_COUNT) {
+      throw new RangeError(
+        `meterScratchValue: field must be in [0, ${METER_SCRATCH_FIELD_COUNT - 1}]`,
+      );
+    }
     return this.mixer.meterScratchValue(field);
   }
 
   /** Number of strips in the mixer (e.g. strips loaded from the scene). */
-  stripCount(): number {
+  get stripCount(): number {
     return this.mixer.stripCount();
   }
 
   /**
    * Schedule sample-accurate insert-parameter automation on a strip's insert.
    *
-   * @param stripIndex - Strip index in `[0, stripCount())`
+   * @param strip - Strip index or id
    * @param insertIndex - Index into the strip's combined insert sequence
    *   (`[pre-inserts... post-inserts...]`)
-   * @param paramId - Processor-specific parameter id
-   * @param samplePos - Absolute samples from the start of processing (the mixer
-   *   advances an internal position from 0 on the first {@link processStereo}
-   *   call; recompiling resets it to 0)
-   * @param value - Target parameter value
-   * @param curve - Interpolation curve (default: `'linear'`)
-   * @throws If the strip index is out of range or the schedule call fails
-   *   (unknown curve, out-of-range insert index, or full event lane)
+   * @param point - `paramId` (processor-specific parameter id), `samplePos`
+   *   (absolute samples from the start of processing; the mixer advances an
+   *   internal position from 0 on the first {@link processStereo} call and
+   *   recompiling resets it to 0), `value` (target) and `curve` (default `'linear'`)
+   * @throws TypeError for a wrong-typed field or an unknown key; RangeError for
+   *   an unknown strip or curve token, an out-of-range insert index, or a full
+   *   event lane
    */
   scheduleInsertAutomation(
-    stripIndex: number,
+    strip: StripRef,
     insertIndex: number,
-    paramId: number,
-    samplePos: number,
-    value: number,
-    curve: AutomationCurve = 'linear',
+    point: InsertAutomationPoint,
   ): void {
+    const fn = 'scheduleInsertAutomation';
+    const bag = requestObject(fn, point, 'point', true);
     this.mixer.scheduleInsertAutomation(
-      stripIndex,
+      this.stripIndex(fn, strip),
       insertIndex,
-      paramId,
-      samplePos,
-      value,
-      automationCurveCode(curve),
+      requiredNumber(fn, bag.paramId, 'paramId'),
+      requiredNumber(fn, bag.samplePos, 'samplePos'),
+      requiredNumber(fn, bag.value, 'value'),
+      tokenArg(fn, bag.curve, 'curve', curveToken, 'linear'),
     );
   }
 
   /**
-   * Resolve a strip's index in `[0, stripCount())` from its scene id, or `null`
-   * when no strip with that id exists (matches the Node binding's `number | null`).
+   * Resolve a strip's index in `[0, stripCount)` from its scene id.
+   *
+   * @throws RangeError when no strip has that id
    */
-  stripById(id: string): number | null {
+  stripById(id: string): number {
+    assertString('stripById', id, 'id');
     const index = this.mixer.stripById(id);
-    return index < 0 ? null : index;
+    if (index < 0) {
+      throw new RangeError(`stripById: no strip with id '${id}'`);
+    }
+    return index;
   }
 
   /**
@@ -379,19 +616,21 @@ export class Mixer {
    * about 1.4 MB per strip at 48 kHz). Marks the routing graph dirty; call
    * {@link compile} (or {@link processStereo}) to rebuild.
    *
+   * @returns The new strip's index
    * @throws If the id is already taken, or `truePeakOversample` is not 0 (default), 4 or 8
    */
-  addStrip(id: string, metering: StripMeteringOptions = {}): void {
+  addStrip(id: string, metering: StripMeteringOptions = {}): number {
     this.mixer.addStrip(id, metering);
+    return this.mixer.stripById(id);
   }
 
   /**
-   * Add a bus to the mixer topology. `role` is one of `'master'`, `'aux'`, or
-   * `'submix'` (defaults to `'aux'`). Marks the routing graph dirty; call
-   * {@link compile} (or {@link processStereo}) to rebuild.
+   * Add a bus to the mixer topology. `role` is a {@link MixBusRole} (defaults
+   * to `'aux'`); an unknown value is a `RangeError`. Marks the routing graph
+   * dirty; call {@link compile} (or {@link processStereo}) to rebuild.
    */
-  addBus(id: string, role = 'aux'): void {
-    this.mixer.addBus(id, role);
+  addBus(id: string, role?: MixBusRole): void {
+    this.mixer.addBus(id, requireToken('addBus', role, 'role', MIX_BUS_ROLES, 'aux'));
   }
 
   /** Remove a bus by id. Marks the routing graph dirty. */
@@ -416,7 +655,7 @@ export class Mixer {
   }
 
   /** Number of buses in the mixer topology. */
-  busCount(): number {
+  get busCount(): number {
     return this.mixer.busCount();
   }
 
@@ -444,24 +683,24 @@ export class Mixer {
   }
 
   /** Number of VCA groups in the mixer topology. */
-  vcaGroupCount(): number {
+  get vcaGroupCount(): number {
     return this.mixer.vcaGroupCount();
   }
 
   /** Set the strip's input trim in dB. */
-  setInputTrimDb(stripIndex: number, db: number): void {
-    this.mixer.setInputTrimDb(stripIndex, db);
+  setInputTrimDb(strip: StripRef, db: number): void {
+    this.mixer.setInputTrimDb(this.stripIndex('setInputTrimDb', strip), db);
   }
 
   /** Set the strip's fader level in dB. */
-  setFaderDb(stripIndex: number, db: number): void {
-    this.mixer.setFaderDb(stripIndex, db);
+  setFaderDb(strip: StripRef, db: number): void {
+    this.mixer.setFaderDb(this.stripIndex('setFaderDb', strip), db);
   }
 
   /**
    * Set the strip's pan position.
    *
-   * @param stripIndex - Strip index in `[0, stripCount())`
+   * @param strip - Strip index or id
    * @param pan - Pan position in `[-1, 1]`
    * @param panMode - Optional pan mode. When omitted the strip's current pan
    *   mode is kept (passes `SONARE_PAN_MODE_KEEP`), so a plain pan nudge does
@@ -469,10 +708,10 @@ export class Mixer {
    *   balance. Pass `'balance'` (or `0`) explicitly to force balance mode.
    * @throws {RangeError} when `pan` is outside `[-1, 1]` or non-finite.
    */
-  setPan(stripIndex: number, pan: number, panMode?: PanMode | number): void {
+  setPan(strip: StripRef, pan: number, panMode?: PanMode | number): void {
     // SONARE_PAN_MODE_KEEP (-1) = keep the strip's current pan mode.
     const mode = panMode === undefined ? -1 : panModeCode(panMode);
-    this.mixer.setPan(stripIndex, pan, mode);
+    this.mixer.setPan(this.stripIndex('setPan', strip), pan, mode);
   }
 
   /**
@@ -480,8 +719,8 @@ export class Mixer {
    *
    * @throws {RangeError} when `width` is outside `[0, 2]` or non-finite.
    */
-  setWidth(stripIndex: number, width: number): void {
-    this.mixer.setWidth(stripIndex, width);
+  setWidth(strip: StripRef, width: number): void {
+    this.mixer.setWidth(this.stripIndex('setWidth', strip), width);
   }
 
   /**
@@ -495,7 +734,7 @@ export class Mixer {
    * its output. Unlike a reset it clears nothing — automation, meters and
    * insert state are untouched.
    *
-   * @param stripIndex - Strip index in `[0, stripCount())`
+   * @param strip - Strip index or id
    *
    * @example
    * ```typescript
@@ -505,61 +744,85 @@ export class Mixer {
    * const { left, right } = mixer.processStereo([dryLeft], [dryRight]);
    * ```
    */
-  settle(stripIndex: number): void {
-    this.mixer.settle(stripIndex);
+  settle(strip: StripRef): void {
+    this.mixer.settle(this.stripIndex('settle', strip));
   }
 
   /** Set the strip's mute state. */
-  setMuted(stripIndex: number, muted: boolean): void {
-    this.mixer.setMuted(stripIndex, requireBoolean('setMuted', muted, 'muted'));
+  setMuted(strip: StripRef, muted: boolean): void {
+    this.mixer.setMuted(
+      this.stripIndex('setMuted', strip),
+      requireBoolean('setMuted', muted, 'muted'),
+    );
   }
 
   /**
    * Set a strip's solo state. Takes effect on the next process without a
    * graph recompile.
    */
-  setSoloed(stripIndex: number, soloed: boolean): void {
-    this.mixer.setSoloed(stripIndex, requireBoolean('setSoloed', soloed, 'soloed'));
+  setSoloed(strip: StripRef, soloed: boolean): void {
+    this.mixer.setSoloed(
+      this.stripIndex('setSoloed', strip),
+      requireBoolean('setSoloed', soloed, 'soloed'),
+    );
   }
 
   /**
    * Mark a strip solo-safe so it is never implied-muted by another strip's
    * solo. Takes effect on the next process without a graph recompile.
    */
-  setSoloSafe(stripIndex: number, soloSafe: boolean): void {
-    this.mixer.setSoloSafe(stripIndex, requireBoolean('setSoloSafe', soloSafe, 'soloSafe'));
-  }
-
-  /** Invert the polarity of the left and/or right channel of a strip. */
-  setPolarityInvert(stripIndex: number, invertLeft: boolean, invertRight: boolean): void {
-    this.mixer.setPolarityInvert(
-      stripIndex,
-      requireBoolean('setPolarityInvert', invertLeft, 'invertLeft'),
-      requireBoolean('setPolarityInvert', invertRight, 'invertRight'),
+  setSoloSafe(strip: StripRef, soloSafe: boolean): void {
+    this.mixer.setSoloSafe(
+      this.stripIndex('setSoloSafe', strip),
+      requireBoolean('setSoloSafe', soloSafe, 'soloSafe'),
     );
   }
 
-  /** Set the strip's pan law (a {@link PanLawName} alias or raw C ABI ordinal). */
-  setPanLaw(stripIndex: number, panLaw: PanLawInput): void {
-    this.mixer.setPanLaw(stripIndex, panLawCode(panLaw));
+  /**
+   * Invert the polarity of the left and/or right channel of a strip.
+   *
+   * @throws TypeError when `left` or `right` is not a boolean, or for an unknown key
+   */
+  setPolarityInvert(strip: StripRef, invert: PolarityInvert): void {
+    const bag = requestObject('setPolarityInvert', invert, 'invert', true);
+    this.mixer.setPolarityInvert(
+      this.stripIndex('setPolarityInvert', strip),
+      requireBoolean('setPolarityInvert', bag.left, 'left'),
+      requireBoolean('setPolarityInvert', bag.right, 'right'),
+    );
+  }
+
+  /**
+   * Set the strip's pan law.
+   *
+   * @throws TypeError for a non-string (a number never selects a law); RangeError for an unknown name
+   */
+  setPanLaw(strip: StripRef, panLaw: PanLawName): void {
+    this.mixer.setPanLaw(
+      this.stripIndex('setPanLaw', strip),
+      tokenArg('setPanLaw', panLaw, 'panLaw', (token) => panLawCode(token as PanLawName)),
+    );
   }
 
   /**
    * Set a per-strip channel delay in samples, moving the strip later relative to
    * the others. It is not latency: latency compensation does not undo it.
    */
-  setChannelDelaySamples(stripIndex: number, delaySamples: number): void {
-    this.mixer.setChannelDelaySamples(stripIndex, delaySamples);
+  setChannelDelaySamples(strip: StripRef, delaySamples: number): void {
+    this.mixer.setChannelDelaySamples(
+      this.stripIndex('setChannelDelaySamples', strip),
+      delaySamples,
+    );
   }
 
   /** Set the strip's direct VCA trim in dB (persisted as the scene's `vcaOffsetDb`). */
-  setVcaOffsetDb(stripIndex: number, offsetDb: number): void {
-    this.mixer.setVcaOffsetDb(stripIndex, offsetDb);
+  setVcaOffsetDb(strip: StripRef, offsetDb: number): void {
+    this.mixer.setVcaOffsetDb(this.stripIndex('setVcaOffsetDb', strip), offsetDb);
   }
 
   /** Set independent left/right pan positions (dual-pan mode). */
-  setDualPan(stripIndex: number, leftPan: number, rightPan: number): void {
-    this.mixer.setDualPan(stripIndex, leftPan, rightPan);
+  setDualPan(strip: StripRef, leftPan: number, rightPan: number): void {
+    this.mixer.setDualPan(this.stripIndex('setDualPan', strip), leftPan, rightPan);
   }
 
   /**
@@ -570,34 +833,43 @@ export class Mixer {
    * block entry points ignore it. `azimuth` outside [-180, 180] or `divergence`/`lfe`
    * outside [0, 1] throws a RangeError.
    */
-  setSurroundPan(stripIndex: number, pan: SurroundPan): void {
+  setSurroundPan(strip: StripRef, pan: SurroundPan): void {
     assertSurroundPan('setSurroundPan', pan);
-    this.mixer.setSurroundPan(stripIndex, pan);
+    this.mixer.setSurroundPan(this.stripIndex('setSurroundPan', strip), pan);
   }
 
   /**
    * Add a send to a strip after construction.
    *
-   * @param stripIndex - Strip index in `[0, stripCount())`
-   * @param id - Send id
-   * @param destinationBusId - Destination bus id
-   * @param sendDb - Initial send level in dB
-   * @param timing - `'preFader'` or `'postFader'` (default: `'postFader'`)
+   * @param strip - Strip index or id
+   * @param send - See {@link MixerSend}; mirrors the scene document's send
    * @returns The new send's index
+   * @throws TypeError for a wrong-typed field, a numeric `timing` or an unknown key;
+   *   RangeError for an unknown strip or timing token
    */
-  addSend(
-    stripIndex: number,
-    id: string,
-    destinationBusId: string,
-    sendDb = 0.0,
-    timing: SendTiming | number = 'postFader',
-  ): number {
-    return this.mixer.addSend(stripIndex, id, destinationBusId, sendDb, sendTimingCode(timing));
+  addSend(strip: StripRef, send: MixerSend): number {
+    const fn = 'addSend';
+    const bag = requestObject(fn, send, 'send', true);
+    assertString(fn, bag.id, 'id');
+    assertString(fn, bag.destinationBusId, 'destinationBusId');
+    return this.mixer.addSend(
+      this.stripIndex(fn, strip),
+      bag.id as string,
+      bag.destinationBusId as string,
+      optionalNumber(fn, bag.sendDb, 'sendDb', 0),
+      tokenArg(
+        fn,
+        bag.timing,
+        'timing',
+        (token) => sendTimingCode(token as SendTiming),
+        'postFader',
+      ),
+    );
   }
 
   /** Set the send level (in dB) for an existing send by index. */
-  setSendDb(stripIndex: number, sendIndex: number, sendDb: number): void {
-    this.mixer.setSendDb(stripIndex, sendIndex, sendDb);
+  setSendDb(strip: StripRef, sendIndex: number, sendDb: number): void {
+    this.mixer.setSendDb(this.stripIndex('setSendDb', strip), sendIndex, sendDb);
   }
 
   /**
@@ -607,40 +879,31 @@ export class Mixer {
    * than `sendIndex` shift down by one. Recompile (or process) before reading
    * results so the routing graph rebuilds.
    *
-   * @param stripIndex - Strip index in `[0, stripCount())`
+   * @param strip - Strip index or id
    * @param sendIndex - Send index in add order
    */
-  removeSend(stripIndex: number, sendIndex: number): void {
-    this.mixer.removeSend(stripIndex, sendIndex);
-  }
-
-  /**
-   * Read a strip's meter snapshot at the given tap point.
-   *
-   * @param stripIndex - Strip index in `[0, stripCount())`
-   * @param tap - `'preFader'` or `'postFader'` (default: `'postFader'`)
-   */
-  meterTap(stripIndex: number, tap: MeterTap = 'postFader'): MixMeterSnapshot {
-    return this.mixer.meterTap(stripIndex, meterTapCode(tap));
+  removeSend(strip: StripRef, sendIndex: number): void {
+    this.mixer.removeSend(this.stripIndex('removeSend', strip), sendIndex);
   }
 
   /**
    * Read a strip's meter snapshot.
    *
-   * With no `tap` argument this reads the strip's own (post-fader) meter,
-   * matching the Node/Python tap-less `stripMeter` contract. Pass an optional
-   * `tap` (`'preFader'` / `'postFader'`) to read the tap-selectable snapshot
-   * instead — the same backing call as {@link meterTap}.
+   * With no `tap` this reads the strip's own (post-fader) meter. Pass a
+   * {@link MeterTap} to read the tap-selectable snapshot instead.
    *
-   * @param stripIndex - Strip index in `[0, stripCount())`
-   * @param tap - Optional tap point (`'preFader'` / `'postFader'`); when omitted
-   *   the tap-less post-fader strip meter is read.
+   * @param strip - Strip index or id
+   * @param tap - `'preFader'` or `'postFader'`; a number is refused with a `TypeError`
    */
-  stripMeter(stripIndex: number, tap?: MeterTap | number): MixMeterSnapshot {
-    if (tap === undefined) {
-      return this.mixer.stripMeter(stripIndex);
+  stripMeter(strip: StripRef, tap?: MeterTap): MixMeterSnapshot {
+    const index = this.stripIndex('stripMeter', strip);
+    if (isAbsent(tap)) {
+      return this.mixer.stripMeter(index);
     }
-    return this.mixer.meterTap(stripIndex, meterTapCode(tap));
+    return this.mixer.meterTap(
+      index,
+      tokenArg('stripMeter', tap, 'tap', (token) => meterTapCode(token as MeterTap)),
+    );
   }
 
   /** Read the post-insert meter for a compiled bus, including master. */
@@ -677,10 +940,12 @@ export class Mixer {
    * a channel, so a stereo block that discards on both channels adds one and
    * the number does not depend on a dimension the caller did not choose.
    *
-   * @param stripIndex - Strip index in `[0, stripCount())`
+   * @param strip - Strip index or id
    */
-  stripNonFiniteDiscardCount(stripIndex: number): number {
-    return this.mixer.stripNonFiniteDiscardCount(stripIndex);
+  stripNonFiniteDiscardCount(strip: StripRef): number {
+    return this.mixer.stripNonFiniteDiscardCount(
+      this.stripIndex('stripNonFiniteDiscardCount', strip),
+    );
   }
 
   /**
@@ -706,76 +971,78 @@ export class Mixer {
   /**
    * Schedule sample-accurate fader automation on a strip.
    *
-   * @param stripIndex - Strip index in `[0, stripCount())`
-   * @param samplePos - Absolute samples from the start of processing
-   * @param faderDb - Target fader level in dB
-   * @param curve - Interpolation curve (default: `'linear'`)
+   * @param strip - Strip index or id
+   * @param point - See {@link FaderAutomationPoint}; `curve` defaults to `'linear'`
+   * @throws TypeError for a wrong-typed field, a numeric `curve` or an unknown key;
+   *   RangeError for an unknown strip or curve token
    */
-  scheduleFaderAutomation(
-    stripIndex: number,
-    samplePos: number,
-    faderDb: number,
-    curve: AutomationCurve = 'linear',
-  ): void {
-    this.mixer.scheduleFaderAutomation(stripIndex, samplePos, faderDb, automationCurveCode(curve));
+  scheduleFaderAutomation(strip: StripRef, point: FaderAutomationPoint): void {
+    const fn = 'scheduleFaderAutomation';
+    const bag = requestObject(fn, point, 'point', true);
+    this.mixer.scheduleFaderAutomation(
+      this.stripIndex(fn, strip),
+      requiredNumber(fn, bag.samplePos, 'samplePos'),
+      requiredNumber(fn, bag.faderDb, 'faderDb'),
+      tokenArg(fn, bag.curve, 'curve', curveToken, 'linear'),
+    );
   }
 
   /**
    * Schedule sample-accurate pan automation on a strip.
    *
-   * @param stripIndex - Strip index in `[0, stripCount())`
-   * @param samplePos - Absolute samples from the start of processing
-   * @param pan - Target pan position
-   * @param curve - Interpolation curve (default: `'linear'`)
+   * @param strip - Strip index or id
+   * @param point - See {@link PanAutomationPoint}; `curve` defaults to `'linear'`
+   * @throws TypeError for a wrong-typed field, a numeric `curve` or an unknown key;
+   *   RangeError for an unknown strip or curve token
    */
-  schedulePanAutomation(
-    stripIndex: number,
-    samplePos: number,
-    pan: number,
-    curve: AutomationCurve = 'linear',
-  ): void {
-    this.mixer.schedulePanAutomation(stripIndex, samplePos, pan, automationCurveCode(curve));
+  schedulePanAutomation(strip: StripRef, point: PanAutomationPoint): void {
+    const fn = 'schedulePanAutomation';
+    const bag = requestObject(fn, point, 'point', true);
+    this.mixer.schedulePanAutomation(
+      this.stripIndex(fn, strip),
+      requiredNumber(fn, bag.samplePos, 'samplePos'),
+      requiredNumber(fn, bag.pan, 'pan'),
+      tokenArg(fn, bag.curve, 'curve', curveToken, 'linear'),
+    );
   }
 
   /**
    * Schedule sample-accurate width automation on a strip.
    *
-   * @param stripIndex - Strip index in `[0, stripCount())`
-   * @param samplePos - Absolute samples from the start of processing
-   * @param width - Target stereo width
-   * @param curve - Interpolation curve (default: `'linear'`)
+   * @param strip - Strip index or id
+   * @param point - See {@link WidthAutomationPoint}; `curve` defaults to `'linear'`
+   * @throws TypeError for a wrong-typed field, a numeric `curve` or an unknown key;
+   *   RangeError for an unknown strip or curve token
    */
-  scheduleWidthAutomation(
-    stripIndex: number,
-    samplePos: number,
-    width: number,
-    curve: AutomationCurve = 'linear',
-  ): void {
-    this.mixer.scheduleWidthAutomation(stripIndex, samplePos, width, automationCurveCode(curve));
+  scheduleWidthAutomation(strip: StripRef, point: WidthAutomationPoint): void {
+    const fn = 'scheduleWidthAutomation';
+    const bag = requestObject(fn, point, 'point', true);
+    this.mixer.scheduleWidthAutomation(
+      this.stripIndex(fn, strip),
+      requiredNumber(fn, bag.samplePos, 'samplePos'),
+      requiredNumber(fn, bag.width, 'width'),
+      tokenArg(fn, bag.curve, 'curve', curveToken, 'linear'),
+    );
   }
 
   /**
-   * Schedule sample-accurate send-level automation on a strip's send.
+   * Schedule sample-accurate send-level automation on a strip.
    *
-   * @param stripIndex - Strip index in `[0, stripCount())`
+   * @param strip - Strip index or id
    * @param sendIndex - Send index in the strip's add order
-   * @param samplePos - Absolute samples from the start of processing
-   * @param db - Target send level in dB
-   * @param curve - Interpolation curve (default: `'linear'`)
+   * @param point - See {@link SendAutomationPoint}; `curve` defaults to `'linear'`
+   * @throws TypeError for a wrong-typed field, a numeric `curve` or an unknown key;
+   *   RangeError for an unknown strip or curve token
    */
-  scheduleSendAutomation(
-    stripIndex: number,
-    sendIndex: number,
-    samplePos: number,
-    db: number,
-    curve: AutomationCurve = 'linear',
-  ): void {
+  scheduleSendAutomation(strip: StripRef, sendIndex: number, point: SendAutomationPoint): void {
+    const fn = 'scheduleSendAutomation';
+    const bag = requestObject(fn, point, 'point', true);
     this.mixer.scheduleSendAutomation(
-      stripIndex,
+      this.stripIndex(fn, strip),
       sendIndex,
-      samplePos,
-      db,
-      automationCurveCode(curve),
+      requiredNumber(fn, bag.samplePos, 'samplePos'),
+      requiredNumber(fn, bag.sendDb, 'sendDb'),
+      tokenArg(fn, bag.curve, 'curve', curveToken, 'linear'),
     );
   }
 
@@ -788,12 +1055,15 @@ export class Mixer {
    * a value beyond the strip's goniometer ring simply returns every point the
    * ring holds.
    */
-  readGoniometerLatest(stripIndex: number, maxPoints: number): GoniometerPoint[] {
-    return this.mixer.readGoniometerLatest(stripIndex, maxPoints);
+  readGoniometerLatest(strip: StripRef, maxPoints: number): GoniometerPoint[] {
+    return this.mixer.readGoniometerLatest(
+      this.stripIndex('readGoniometerLatest', strip),
+      maxPoints,
+    );
   }
 
   /** Serialize the current scene (strips, buses, sends, connections) to JSON. */
-  toSceneJson(): string {
+  toJson(): string {
     return this.mixer.toSceneJson();
   }
 
@@ -801,7 +1071,7 @@ export class Mixer {
    * Longest audible serial processor-tail path to the master, in samples. Lazily
    * compiles the routing graph if the topology is dirty.
    */
-  tailSamples(): number {
+  get tailSamples(): number {
     return this.mixer.tailSamples();
   }
 
@@ -809,7 +1079,7 @@ export class Mixer {
    * Reported latency (samples) of the compiled mixer graph, for aligning
    * dry/wet material. Lazily compiles the routing graph if the topology is dirty.
    */
-  latencySamples(): number {
+  get latencySamples(): number {
     return this.mixer.latencySamples();
   }
 

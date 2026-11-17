@@ -306,11 +306,11 @@ describe('Sonare WASM Module', () => {
     });
 
     it('should stream mono blocks through StreamingRetune', () => {
-      const retune = new StreamingRetune({ semitones: 12, mix: 1, grainSize: 512 });
+      const retune = new StreamingRetune({ pitchSemitones: 12, mix: 1, grainSizeSamples: 512 });
       try {
         retune.prepare(48000, 128);
-        expect(retune.config().semitones).toBe(12);
-        expect(retune.grainSize()).toBe(512);
+        expect(retune.config().pitchSemitones).toBe(12);
+        expect(retune.grainSizeSamples).toBe(512);
 
         const block = new Float32Array(128);
         for (let i = 0; i < block.length; i += 1) {
@@ -322,7 +322,7 @@ describe('Sonare WASM Module', () => {
         expect(out.length).toBe(block.length);
         expect(Array.from(out).every(Number.isFinite)).toBe(true);
 
-        retune.setConfig({ semitones: -5, mix: 0.5, grainSize: 512 });
+        retune.setConfig({ pitchSemitones: -5, mix: 0.5, grainSizeSamples: 512 });
         expect(retune.config().mix).toBeCloseTo(0.5, 6);
       } finally {
         retune.destroy();

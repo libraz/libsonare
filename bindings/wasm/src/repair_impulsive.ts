@@ -2,23 +2,29 @@
  * Impulsive-defect repair: declick, declip and decrackle, with their detectors.
  */
 
+import { pairedResult, repairNativeOptions } from './internal/repair_common.js';
 import { getSonareModule } from './module_state.js';
 import type {
   ClickDetection,
   ClipDetection,
   CrackleDetection,
-  MasteringRepairDeclickStereoResult,
-  MasteringRepairDeclipStereoResult,
-  MasteringRepairDecrackleStereoResult,
+  MasteringRepairDeclickResult,
+  MasteringRepairDeclipResult,
+  MasteringRepairDecrackleResult,
 } from './public_types_repair.js';
-import { assertAudioInput, optionsBag, requestObject } from './validation.js';
+import {
+  assertAudioInput,
+  requestOnly,
+  sampleOneShot,
+  type ValidateOptions,
+} from './validation.js';
 
 function requireModule() {
   return getSonareModule();
 }
 
 /** Options for `masteringRepairDeclick`. */
-export interface DeclickOptions {
+export interface DeclickOptions extends ValidateOptions {
   threshold?: number;
   neighborRatio?: number;
   maxClickSamples?: number;
@@ -28,14 +34,14 @@ export interface DeclickOptions {
 
 export interface MasteringRepairDeclickRequest extends DeclickOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /** Request form of `masteringRepairDeclickStereo`. */
 export interface MasteringRepairDeclickStereoRequest extends DeclickOptions {
   left: Float32Array;
   right: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /**
@@ -44,50 +50,25 @@ export interface MasteringRepairDeclickStereoRequest extends DeclickOptions {
  * A run either channel's own detection selects is repaired in BOTH channels —
  * a common-mode click repaired on one side only would move the stereo image.
  * Only the selection is shared: each channel's fill is computed from its own
- * samples and its own AR model, which is why `leftReport` and `rightReport`
+ * samples and its own AR model, which is why `reports[0]` and `reports[1]`
  * genuinely differ. Prefer this over calling `masteringRepairDeclick` on each
  * channel separately whenever a click may land in only one channel — a
  * per-channel pass never repairs the other side's image-shifting click.
  */
 export function masteringRepairDeclickStereo(
   request: MasteringRepairDeclickStereoRequest,
-): MasteringRepairDeclickStereoResult;
-export function masteringRepairDeclickStereo(
-  left: Float32Array,
-  right: Float32Array,
-  sampleRate?: number,
-  config?: DeclickOptions,
-): MasteringRepairDeclickStereoResult;
-export function masteringRepairDeclickStereo(
-  left: Float32Array | MasteringRepairDeclickStereoRequest,
-  right?: Float32Array,
-  sampleRate?: number,
-  config: DeclickOptions = {},
-): MasteringRepairDeclickStereoResult {
-  const request: MasteringRepairDeclickStereoRequest =
-    left instanceof Float32Array
-      ? { left, right: right as Float32Array, sampleRate, ...config }
-      : requestObject('masteringRepairDeclickStereo', left, 'left');
-  assertAudioInput(
-    'masteringRepairDeclickStereo',
-    request.left,
-    request.sampleRate ?? 22050,
-    {},
-    'left',
-  );
-  assertAudioInput(
-    'masteringRepairDeclickStereo',
-    request.right,
-    request.sampleRate ?? 22050,
-    {},
-    'right',
-  );
-  const { left: leftSamples, right: rightSamples, sampleRate: rate, ...options } = request;
-  return requireModule().masteringRepairDeclickStereo(
-    leftSamples,
-    rightSamples,
-    rate ?? 22050,
-    options,
+): MasteringRepairDeclickResult;
+export function masteringRepairDeclickStereo(...args: unknown[]): MasteringRepairDeclickResult {
+  const r = requestOnly<MasteringRepairDeclickStereoRequest>('masteringRepairDeclickStereo', args);
+  assertAudioInput('masteringRepairDeclickStereo', r.left, r.sampleRate, r, 'left');
+  assertAudioInput('masteringRepairDeclickStereo', r.right, r.sampleRate, r, 'right');
+  return pairedResult(
+    requireModule().masteringRepairDeclickStereo(
+      r.left,
+      r.right,
+      r.sampleRate,
+      repairNativeOptions('masteringRepairDeclickStereo', r),
+    ),
   );
 }
 
@@ -95,29 +76,23 @@ export function masteringRepairDeclickStereo(
 export function masteringRepairDeclick(request: MasteringRepairDeclickRequest): Float32Array;
 export function masteringRepairDeclick(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: DeclickOptions,
 ): Float32Array;
-export function masteringRepairDeclick(
-  samples: Float32Array | MasteringRepairDeclickRequest,
-  sampleRate?: number,
-  options: DeclickOptions = {},
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('masteringRepairDeclick', options) }
-      : requestObject('masteringRepairDeclick', samples);
-  assertAudioInput('masteringRepairDeclick', request.samples, request.sampleRate ?? 22050);
+export function masteringRepairDeclick(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<MasteringRepairDeclickRequest>('masteringRepairDeclick', args);
+  assertAudioInput('masteringRepairDeclick', r.samples, r.sampleRate, r);
   return requireModule().masteringRepairDeclick(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request,
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDeclick', r),
   );
 }
 
 /** Options for `masteringRepairDeclip`. */
-export interface DeclipOptions {
-  clipThreshold?: number;
+export interface DeclipOptions extends ValidateOptions {
+  /** Clip level in dBFS, at most 0. Default about -0.175 (0.98 linear). */
+  clipThresholdDb?: number;
   lpcOrder?: number;
   iterations?: number;
   lpcBlend?: number;
@@ -125,21 +100,21 @@ export interface DeclipOptions {
 
 export interface MasteringRepairDeclipRequest extends DeclipOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /** Request form of `masteringRepairDeclipStereo`. */
 export interface MasteringRepairDeclipStereoRequest extends DeclipOptions {
   left: Float32Array;
   right: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /** Algorithms accepted by `masteringRepairDecrackle`. */
 export type DecrackleMode = 'median' | 'waveletShrinkage';
 
 /** Options for `masteringRepairDecrackle`. */
-export interface DecrackleOptions {
+export interface DecrackleOptions extends ValidateOptions {
   threshold?: number;
   mode?: DecrackleMode;
   levels?: number;
@@ -147,14 +122,14 @@ export interface DecrackleOptions {
 
 export interface MasteringRepairDecrackleRequest extends DecrackleOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /** Request form of `masteringRepairDecrackleStereo`. */
 export interface MasteringRepairDecrackleStereoRequest extends DecrackleOptions {
   left: Float32Array;
   right: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /**
@@ -171,23 +146,16 @@ export interface MasteringRepairDecrackleStereoRequest extends DecrackleOptions 
 export function masteringRepairDeclip(request: MasteringRepairDeclipRequest): Float32Array;
 export function masteringRepairDeclip(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: DeclipOptions,
 ): Float32Array;
-export function masteringRepairDeclip(
-  samples: Float32Array | MasteringRepairDeclipRequest,
-  sampleRate?: number,
-  options: DeclipOptions = {},
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('masteringRepairDeclip', options) }
-      : requestObject('masteringRepairDeclip', samples);
-  assertAudioInput('masteringRepairDeclip', request.samples, request.sampleRate ?? 22050);
+export function masteringRepairDeclip(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<MasteringRepairDeclipRequest>('masteringRepairDeclip', args);
+  assertAudioInput('masteringRepairDeclip', r.samples, r.sampleRate, r);
   return requireModule().masteringRepairDeclip(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request,
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDeclip', r),
   );
 }
 
@@ -204,43 +172,18 @@ export function masteringRepairDeclip(
  */
 export function masteringRepairDeclipStereo(
   request: MasteringRepairDeclipStereoRequest,
-): MasteringRepairDeclipStereoResult;
-export function masteringRepairDeclipStereo(
-  left: Float32Array,
-  right: Float32Array,
-  sampleRate?: number,
-  config?: DeclipOptions,
-): MasteringRepairDeclipStereoResult;
-export function masteringRepairDeclipStereo(
-  left: Float32Array | MasteringRepairDeclipStereoRequest,
-  right?: Float32Array,
-  sampleRate?: number,
-  config: DeclipOptions = {},
-): MasteringRepairDeclipStereoResult {
-  const request: MasteringRepairDeclipStereoRequest =
-    left instanceof Float32Array
-      ? { left, right: right as Float32Array, sampleRate, ...config }
-      : requestObject('masteringRepairDeclipStereo', left, 'left');
-  assertAudioInput(
-    'masteringRepairDeclipStereo',
-    request.left,
-    request.sampleRate ?? 22050,
-    {},
-    'left',
-  );
-  assertAudioInput(
-    'masteringRepairDeclipStereo',
-    request.right,
-    request.sampleRate ?? 22050,
-    {},
-    'right',
-  );
-  const { left: leftSamples, right: rightSamples, sampleRate: rate, ...options } = request;
-  return requireModule().masteringRepairDeclipStereo(
-    leftSamples,
-    rightSamples,
-    rate ?? 22050,
-    options,
+): MasteringRepairDeclipResult;
+export function masteringRepairDeclipStereo(...args: unknown[]): MasteringRepairDeclipResult {
+  const r = requestOnly<MasteringRepairDeclipStereoRequest>('masteringRepairDeclipStereo', args);
+  assertAudioInput('masteringRepairDeclipStereo', r.left, r.sampleRate, r, 'left');
+  assertAudioInput('masteringRepairDeclipStereo', r.right, r.sampleRate, r, 'right');
+  return pairedResult(
+    requireModule().masteringRepairDeclipStereo(
+      r.left,
+      r.right,
+      r.sampleRate,
+      repairNativeOptions('masteringRepairDeclipStereo', r),
+    ),
   );
 }
 
@@ -248,23 +191,16 @@ export function masteringRepairDeclipStereo(
 export function masteringRepairDecrackle(request: MasteringRepairDecrackleRequest): Float32Array;
 export function masteringRepairDecrackle(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: DecrackleOptions,
 ): Float32Array;
-export function masteringRepairDecrackle(
-  samples: Float32Array | MasteringRepairDecrackleRequest,
-  sampleRate?: number,
-  options: DecrackleOptions = {},
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('masteringRepairDecrackle', options) }
-      : requestObject('masteringRepairDecrackle', samples);
-  assertAudioInput('masteringRepairDecrackle', request.samples, request.sampleRate ?? 22050);
+export function masteringRepairDecrackle(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<MasteringRepairDecrackleRequest>('masteringRepairDecrackle', args);
+  assertAudioInput('masteringRepairDecrackle', r.samples, r.sampleRate, r);
   return requireModule().masteringRepairDecrackle(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request,
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDecrackle', r),
   );
 }
 
@@ -279,62 +215,40 @@ export function masteringRepairDecrackle(
  */
 export function masteringRepairDecrackleStereo(
   request: MasteringRepairDecrackleStereoRequest,
-): MasteringRepairDecrackleStereoResult;
-export function masteringRepairDecrackleStereo(
-  left: Float32Array,
-  right: Float32Array,
-  sampleRate?: number,
-  config?: DecrackleOptions,
-): MasteringRepairDecrackleStereoResult;
-export function masteringRepairDecrackleStereo(
-  left: Float32Array | MasteringRepairDecrackleStereoRequest,
-  right?: Float32Array,
-  sampleRate?: number,
-  config: DecrackleOptions = {},
-): MasteringRepairDecrackleStereoResult {
-  const request: MasteringRepairDecrackleStereoRequest =
-    left instanceof Float32Array
-      ? { left, right: right as Float32Array, sampleRate, ...config }
-      : requestObject('masteringRepairDecrackleStereo', left, 'left');
-  assertAudioInput(
+): MasteringRepairDecrackleResult;
+export function masteringRepairDecrackleStereo(...args: unknown[]): MasteringRepairDecrackleResult {
+  const r = requestOnly<MasteringRepairDecrackleStereoRequest>(
     'masteringRepairDecrackleStereo',
-    request.left,
-    request.sampleRate ?? 22050,
-    {},
-    'left',
+    args,
   );
-  assertAudioInput(
-    'masteringRepairDecrackleStereo',
-    request.right,
-    request.sampleRate ?? 22050,
-    {},
-    'right',
-  );
-  const { left: leftSamples, right: rightSamples, sampleRate: rate, ...options } = request;
-  return requireModule().masteringRepairDecrackleStereo(
-    leftSamples,
-    rightSamples,
-    rate ?? 22050,
-    options,
+  assertAudioInput('masteringRepairDecrackleStereo', r.left, r.sampleRate, r, 'left');
+  assertAudioInput('masteringRepairDecrackleStereo', r.right, r.sampleRate, r, 'right');
+  return pairedResult(
+    requireModule().masteringRepairDecrackleStereo(
+      r.left,
+      r.right,
+      r.sampleRate,
+      repairNativeOptions('masteringRepairDecrackleStereo', r),
+    ),
   );
 }
 
 /** Request form of `masteringRepairDetectClicks`. */
 export interface MasteringRepairDetectClicksRequest extends DeclickOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /** Request form of `masteringRepairDetectClipping`. */
 export interface MasteringRepairDetectClippingRequest extends DeclipOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /** Request form of `masteringRepairDetectCrackle`. */
 export interface MasteringRepairDetectCrackleRequest extends DecrackleOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /**
@@ -357,30 +271,23 @@ export function masteringRepairDetectClicks(
 ): ClickDetection;
 export function masteringRepairDetectClicks(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: DeclickOptions,
 ): ClickDetection;
-export function masteringRepairDetectClicks(
-  samples: Float32Array | MasteringRepairDetectClicksRequest,
-  sampleRate?: number,
-  options: DeclickOptions = {},
-): ClickDetection {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('masteringRepairDetectClicks', options) }
-      : requestObject('masteringRepairDetectClicks', samples);
-  assertAudioInput('masteringRepairDetectClicks', request.samples, request.sampleRate ?? 22050);
+export function masteringRepairDetectClicks(...args: unknown[]): ClickDetection {
+  const r = sampleOneShot<MasteringRepairDetectClicksRequest>('masteringRepairDetectClicks', args);
+  assertAudioInput('masteringRepairDetectClicks', r.samples, r.sampleRate, r);
   return requireModule().masteringRepairDetectClicks(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request,
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDetectClicks', r),
   );
 }
 
 /**
  * Measures clipping without repairing.
  *
- * Counts samples at or past `clipThreshold`. No other option reaches the result — `lpcOrder`,
+ * Counts samples at or past `clipThresholdDb`. No other option reaches the result — `lpcOrder`,
  * `iterations` and `lpcBlend` are validated and then unread, since nothing here is
  * reconstructed. `sampleRate` is validated without being read for the same reason: no field of
  * the result is a rate.
@@ -389,7 +296,7 @@ export function masteringRepairDetectClicks(
  * {@link masteringRepairDeclip} would fill by interpolation rather than with the solver.
  *
  * `flatRunCount`, `longestFlatRunSamples`, `flatSampleCount` and `flatLevel` answer a different
- * question from the four fields above: those are read against `clipThreshold`, so they count the
+ * question from the four fields above: those are read against `clipThresholdDb`, so they count the
  * apex of any waveform that reaches it — a full-scale sine reports thousands of "clipped" samples
  * having never been clipped — and they miss material clipped in one tool and attenuated in the
  * next, which leaves nothing at the threshold. The flat-top fields instead count runs of at least
@@ -412,23 +319,19 @@ export function masteringRepairDetectClipping(
 ): ClipDetection;
 export function masteringRepairDetectClipping(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: DeclipOptions,
 ): ClipDetection;
-export function masteringRepairDetectClipping(
-  samples: Float32Array | MasteringRepairDetectClippingRequest,
-  sampleRate?: number,
-  options: DeclipOptions = {},
-): ClipDetection {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('masteringRepairDetectClipping', options) }
-      : requestObject('masteringRepairDetectClipping', samples);
-  assertAudioInput('masteringRepairDetectClipping', request.samples, request.sampleRate ?? 22050);
+export function masteringRepairDetectClipping(...args: unknown[]): ClipDetection {
+  const r = sampleOneShot<MasteringRepairDetectClippingRequest>(
+    'masteringRepairDetectClipping',
+    args,
+  );
+  assertAudioInput('masteringRepairDetectClipping', r.samples, r.sampleRate, r);
   return requireModule().masteringRepairDetectClipping(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request,
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDetectClipping', r),
   );
 }
 
@@ -445,22 +348,18 @@ export function masteringRepairDetectCrackle(
 ): CrackleDetection;
 export function masteringRepairDetectCrackle(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: DecrackleOptions,
 ): CrackleDetection;
-export function masteringRepairDetectCrackle(
-  samples: Float32Array | MasteringRepairDetectCrackleRequest,
-  sampleRate?: number,
-  options: DecrackleOptions = {},
-): CrackleDetection {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('masteringRepairDetectCrackle', options) }
-      : requestObject('masteringRepairDetectCrackle', samples);
-  assertAudioInput('masteringRepairDetectCrackle', request.samples, request.sampleRate ?? 22050);
+export function masteringRepairDetectCrackle(...args: unknown[]): CrackleDetection {
+  const r = sampleOneShot<MasteringRepairDetectCrackleRequest>(
+    'masteringRepairDetectCrackle',
+    args,
+  );
+  assertAudioInput('masteringRepairDetectCrackle', r.samples, r.sampleRate, r);
   return requireModule().masteringRepairDetectCrackle(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request,
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDetectCrackle', r),
   );
 }

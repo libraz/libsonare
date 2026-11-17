@@ -34,7 +34,7 @@ describe('SonareError', () => {
   it('carries the C-ABI code of a failed scene load, keeping the detail text', () => {
     const load = (json: string): SonareError => {
       try {
-        Mixer.fromSceneJson(json, 48000, 128);
+        Mixer.fromJson(json, { sampleRate: 48000, blockSize: 128 });
       } catch (e) {
         return e as SonareError;
       }
@@ -51,10 +51,10 @@ describe('SonareError', () => {
 
   it('rethrows a native C++ exception as a coded SonareError', () => {
     // A master-strip edit before any master strip exists is the engine's state, not the argument.
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     let caught: unknown;
     try {
-      engine.setMasterStripInsertBypassed(0, true);
+      engine.setStripInsertBypassed('master', 0, { bypassed: true });
     } catch (e) {
       caught = e;
     } finally {
@@ -82,7 +82,7 @@ describe('SonareError', () => {
     expect(isSonareError(caught)).toBe(false);
     expect((caught as Error).message).toContain('preset');
 
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     let wrongType: unknown;
     try {
       engine.setMarkers([{ id: 1, ppq: 'x' as unknown as number }]);
@@ -112,10 +112,10 @@ describe('SonareError is a value class with brand-based instanceof', () => {
   });
 
   it('narrows a native failure through instanceof as well as isSonareError', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     let caught: unknown;
     try {
-      engine.setMasterStripInsertBypassed(0, true);
+      engine.setStripInsertBypassed('master', 0, { bypassed: true });
     } catch (e) {
       caught = e;
     } finally {

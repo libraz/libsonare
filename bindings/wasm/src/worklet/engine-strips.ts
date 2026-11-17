@@ -1,10 +1,20 @@
 import { panLawCode, panModeCode } from '../codes.js';
 import { ErrorCode, SonareError } from '../errors.js';
-import type { EqBand, PanLawInput, PanMode, RealtimeEngine, UmpWords } from '../index.js';
+import type {
+  BuiltinSynthConfig,
+  EqBand,
+  PanLaw,
+  PanMode,
+  RealtimeEngine,
+  Sf2InstrumentConfig,
+  SynthPatch,
+  UmpWords,
+} from '../index.js';
 import { eqBandJson } from '../internal/eq_band_json.js';
 import { packMidi2Program } from '../internal/midi_program_pack.js';
 import type { SurroundPan } from '../public_types.js';
-import { resolveRenderFrame } from '../validation.js';
+import type { RequestFn } from '../request_keys.js';
+import { requestObject, resolveRenderFrame } from '../validation.js';
 import { commitSync } from './engine-commit.js';
 import type { InsertParamOverrideMap } from './engine-mixer-facade.js';
 import {
@@ -103,35 +113,113 @@ export function setTrackStripJson(
   return result;
 }
 
-export function setTrackStripEqBand(
+/** Refuses `'master'` for a setter the master strip has no form of. */
+function trackTarget(ctx: EngineStripContext, method: string, target: string | number): number {
+  if (target === 'master') {
+    throw new RangeError(`${method}: the master strip has no such setter`);
+  }
+  return trackIdFor(ctx, target);
+}
+
+function requireBand(method: string, band: unknown): asserts band is EqBand {
+  if (typeof band !== 'object' || band === null) {
+    throw new TypeError(`${method}: band must be an object`);
+  }
+}
+
+/** The bypass state as `{ bypassed, resetOnBypass }`, refusing any other shape. */
+function bypassState(
+  method: RequestFn,
+  state: { bypassed: boolean; resetOnBypass?: boolean },
+): { bypassed: boolean; resetOnBypass: boolean } {
+  requestObject(method, state, 'state', true);
+  return { bypassed: state.bypassed, resetOnBypass: state.resetOnBypass ?? false };
+}
+
+/** The insert parameter as `{ name, value }`, refusing any other shape. */
+function insertParam(
+  method: RequestFn,
+  param: { name: string; value: number },
+): { name: string; value: number } {
+  requestObject(method, param, 'param', true);
+  return { name: param.name, value: param.value };
+}
+
+export function setStripEqBand(
   ctx: EngineStripContext,
   target: string | number,
   bandIndex: number,
-  band: EqBand | string,
+  band: EqBand,
 ): void {
+  requireBand('setStripEqBand', band);
+  if (target === 'master') {
+    const bandJson = eqBandJson(band);
+    commitSync(
+      ctx,
+      (offline) => offline.setStripEqBand('master', bandIndex, band),
+      () => {
+        mergeEqBand(ctx, { kind: 'master' }, bandIndex, bandJson);
+        ctx.postSync({ type: 'syncMasterStripEqBand', bandIndex, bandJson });
+      },
+    );
+    return;
+  }
   const trackId = trackIdFor(ctx, target);
-  const bandJson = eqBandJson(band);
   commitSync(
     ctx,
-    (offline) => offline.setTrackStripEqBandJson(trackId, bandIndex, bandJson),
+    (offline) => offline.setStripEqBand(trackId, bandIndex, band),
     () => {
+      const bandJson = eqBandJson(band);
       mergeEqBand(ctx, { kind: 'track', trackId }, bandIndex, bandJson);
       ctx.postSync({ type: 'syncTrackStripEqBand', trackId, bandIndex, bandJson });
     },
   );
 }
 
-export function setTrackStripInsertBypassed(
+export function setBusEqBand(
+  ctx: EngineStripContext,
+  busId: number,
+  bandIndex: number,
+  band: EqBand,
+): void {
+  requireBand('setBusEqBand', band);
+  commitSync(
+    ctx,
+    (offline) => offline.setBusEqBand(busId, bandIndex, band),
+    () => {
+      const bandJson = eqBandJson(band);
+      mergeEqBand(ctx, { kind: 'bus', busId }, bandIndex, bandJson);
+      ctx.postSync({ type: 'syncBusStripEqBand', busId, bandIndex, bandJson });
+    },
+  );
+}
+
+export function setStripInsertBypassed(
   ctx: EngineStripContext,
   target: string | number,
   insertIndex: number,
-  bypassed: boolean,
-  resetOnBypass: boolean,
+  state: { bypassed: boolean; resetOnBypass?: boolean },
 ): void {
+  const { bypassed, resetOnBypass } = bypassState('setStripInsertBypassed', state);
+  if (target === 'master') {
+    commitSync(
+      ctx,
+      (offline) => offline.setStripInsertBypassed('master', insertIndex, state),
+      () => {
+        ctx.postSync({
+          type: 'syncMasterStripInsertBypassed',
+          insertIndex,
+          bypassed,
+          resetOnBypass,
+        });
+      },
+    );
+    return;
+  }
   const trackId = trackIdFor(ctx, target);
   commitSync(
     ctx,
-    (offline) => offline.setTrackStripInsertBypassed(trackId, insertIndex, bypassed, resetOnBypass),
+    (offline) => offline.setStripInsertBypassed(trackId, insertIndex, state),
     () => {
       ctx.postSync({
         type: 'syncTrackStripInsertBypassed',
@@ -144,54 +232,87 @@ export function setTrackStripInsertBypassed(
   );
 }
 
-export function setTrackStripInsertParamByName(
+export function setBusInsertBypassed(
+  ctx: EngineStripContext,
+  busId: number,
+  insertIndex: number,
+  state: { bypassed: boolean; resetOnBypass?: boolean },
+): void {
+  const { bypassed, resetOnBypass } = bypassState('setBusInsertBypassed', state);
+  commitSync(
+    ctx,
+    (offline) => offline.setBusInsertBypassed(busId, insertIndex, state),
+    () => {
+      ctx.postSync({
+        type: 'syncBusStripInsertBypassed',
+        busId,
+        insertIndex,
+        bypassed,
+        resetOnBypass,
+      });
+    },
+  );
+}
+
+export function setStripInsertParam(
   ctx: EngineStripContext,
   target: string | number,
   insertIndex: number,
-  paramName: string,
-  value: number,
+  param: { name: string; value: number },
 ): void {
+  const { name, value } = insertParam('setStripInsertParam', param);
+  if (target === 'master') {
+    setInsertParamByName(
+      ctx,
+      { kind: 'master' },
+      insertIndex,
+      name,
+      value,
+      () => ctx.offlineEngine.restoreStripInsertParam('master', insertIndex, param),
+      { type: 'syncMasterStripInsertParamByName', insertIndex, paramName: name, value },
+    );
+    return;
+  }
   const trackId = trackIdFor(ctx, target);
   setInsertParamByName(
     ctx,
     { kind: 'track', trackId },
     insertIndex,
-    paramName,
+    name,
     value,
-    () =>
-      ctx.offlineEngine.restoreTrackStripInsertParamByName(trackId, insertIndex, paramName, value),
-    { type: 'syncTrackStripInsertParamByName', trackId, insertIndex, paramName, value },
+    () => ctx.offlineEngine.restoreStripInsertParam(trackId, insertIndex, param),
+    { type: 'syncTrackStripInsertParamByName', trackId, insertIndex, paramName: name, value },
   );
 }
 
-export function setTrackStripPan(
+export function setBusInsertParam(
   ctx: EngineStripContext,
-  target: string | number,
-  pan: number,
+  busId: number,
+  insertIndex: number,
+  param: { name: string; value: number },
 ): void {
-  const trackId = trackIdFor(ctx, target);
-  commitSync(
+  const { name, value } = insertParam('setBusInsertParam', param);
+  setInsertParamByName(
     ctx,
-    (offline) => offline.setTrackStripPan(trackId, pan),
-    () => {
-      mergeStripJson(ctx, { kind: 'track', trackId }, (entry) => {
-        entry.pan = pan;
-      });
-      ctx.postSync({ type: 'syncTrackStripPan', trackId, pan });
-    },
+    { kind: 'bus', busId },
+    insertIndex,
+    name,
+    value,
+    () => ctx.offlineEngine.restoreBusInsertParam(busId, insertIndex, param),
+    { type: 'syncBusStripInsertParamByName', busId, insertIndex, paramName: name, value },
   );
 }
 
-export function setTrackStripPanLaw(
+export function setStripPanLaw(
   ctx: EngineStripContext,
   target: string | number,
-  panLaw: PanLawInput,
+  panLaw: PanLaw,
 ): void {
-  const trackId = trackIdFor(ctx, target);
+  const trackId = trackTarget(ctx, 'setStripPanLaw', target);
   const code = panLawCode(panLaw);
   commitSync(
     ctx,
-    (offline) => offline.setTrackStripPanLaw(trackId, code),
+    (offline) => offline.setStripPanLaw(trackId, panLaw),
     () => {
       mergeStripJson(ctx, { kind: 'track', trackId }, (entry) => {
         entry.panLaw = code;
@@ -201,16 +322,16 @@ export function setTrackStripPanLaw(
   );
 }
 
-export function setTrackStripPanMode(
+export function setStripPanMode(
   ctx: EngineStripContext,
   target: string | number,
-  panMode: PanMode | number,
+  panMode: PanMode,
 ): void {
-  const trackId = trackIdFor(ctx, target);
+  const trackId = trackTarget(ctx, 'setStripPanMode', target);
   const code = panModeCode(panMode);
   commitSync(
     ctx,
-    (offline) => offline.setTrackStripPanMode(trackId, code),
+    (offline) => offline.setStripPanMode(trackId, panMode),
     () => {
       mergeStripJson(ctx, { kind: 'track', trackId }, (entry) => {
         entry.panMode = code;
@@ -220,16 +341,16 @@ export function setTrackStripPanMode(
   );
 }
 
-export function setTrackStripDualPan(
+export function setStripDualPan(
   ctx: EngineStripContext,
   target: string | number,
   leftPan: number,
   rightPan: number,
 ): void {
-  const trackId = trackIdFor(ctx, target);
+  const trackId = trackTarget(ctx, 'setStripDualPan', target);
   commitSync(
     ctx,
-    (offline) => offline.setTrackStripDualPan(trackId, leftPan, rightPan),
+    (offline) => offline.setStripDualPan(trackId, leftPan, rightPan),
     () => {
       mergeStripJson(ctx, { kind: 'track', trackId }, (entry) => {
         entry.dualPanLeft = leftPan;
@@ -240,15 +361,15 @@ export function setTrackStripDualPan(
   );
 }
 
-export function setTrackStripSurroundPan(
+export function setStripSurroundPan(
   ctx: EngineStripContext,
   target: string | number,
   pan: SurroundPan,
 ): void {
-  const trackId = trackIdFor(ctx, target);
+  const trackId = trackTarget(ctx, 'setStripSurroundPan', target);
   commitSync(
     ctx,
-    (offline) => offline.setTrackStripSurroundPan(trackId, pan),
+    (offline) => offline.setStripSurroundPan(trackId, pan),
     () => {
       const resolved = {
         azimuth: pan.azimuth ?? 0,
@@ -265,15 +386,15 @@ export function setTrackStripSurroundPan(
   );
 }
 
-export function setTrackStripChannelDelaySamples(
+export function setStripChannelDelaySamples(
   ctx: EngineStripContext,
   target: string | number,
   delaySamples: number,
 ): void {
-  const trackId = trackIdFor(ctx, target);
+  const trackId = trackTarget(ctx, 'setStripChannelDelaySamples', target);
   commitSync(
     ctx,
-    (offline) => offline.setTrackStripChannelDelaySamples(trackId, delaySamples),
+    (offline) => offline.setStripChannelDelaySamples(trackId, delaySamples),
     () => {
       mergeStripJson(ctx, { kind: 'track', trackId }, (entry) => {
         entry.channelDelaySamples = delaySamples;
@@ -297,115 +418,10 @@ export function cacheMasterStripScalar(
   });
 }
 
-export function setMasterStripEqBand(
-  ctx: EngineStripContext,
-  bandIndex: number,
-  band: EqBand | string,
-): void {
-  const bandJson = eqBandJson(band);
+export function setBusPan(ctx: EngineStripContext, busId: number, pan: number): void {
   commitSync(
     ctx,
-    (offline) => offline.setMasterStripEqBandJson(bandIndex, bandJson),
-    () => {
-      mergeEqBand(ctx, { kind: 'master' }, bandIndex, bandJson);
-      ctx.postSync({ type: 'syncMasterStripEqBand', bandIndex, bandJson });
-    },
-  );
-}
-
-export function setMasterStripInsertBypassed(
-  ctx: EngineStripContext,
-  insertIndex: number,
-  bypassed: boolean,
-  resetOnBypass: boolean,
-): void {
-  commitSync(
-    ctx,
-    (offline) => offline.setMasterStripInsertBypassed(insertIndex, bypassed, resetOnBypass),
-    () => {
-      ctx.postSync({ type: 'syncMasterStripInsertBypassed', insertIndex, bypassed, resetOnBypass });
-    },
-  );
-}
-
-export function setMasterStripInsertParamByName(
-  ctx: EngineStripContext,
-  insertIndex: number,
-  paramName: string,
-  value: number,
-): void {
-  setInsertParamByName(
-    ctx,
-    { kind: 'master' },
-    insertIndex,
-    paramName,
-    value,
-    () => ctx.offlineEngine.restoreMasterStripInsertParamByName(insertIndex, paramName, value),
-    { type: 'syncMasterStripInsertParamByName', insertIndex, paramName, value },
-  );
-}
-
-export function setBusStripInsertParamByName(
-  ctx: EngineStripContext,
-  busId: number,
-  insertIndex: number,
-  paramName: string,
-  value: number,
-): void {
-  setInsertParamByName(
-    ctx,
-    { kind: 'bus', busId },
-    insertIndex,
-    paramName,
-    value,
-    () => ctx.offlineEngine.restoreBusStripInsertParamByName(busId, insertIndex, paramName, value),
-    { type: 'syncBusStripInsertParamByName', busId, insertIndex, paramName, value },
-  );
-}
-
-export function setBusStripInsertBypassed(
-  ctx: EngineStripContext,
-  busId: number,
-  insertIndex: number,
-  bypassed: boolean,
-  resetOnBypass: boolean,
-): void {
-  commitSync(
-    ctx,
-    (offline) => offline.setBusStripInsertBypassed(busId, insertIndex, bypassed, resetOnBypass),
-    () => {
-      ctx.postSync({
-        type: 'syncBusStripInsertBypassed',
-        busId,
-        insertIndex,
-        bypassed,
-        resetOnBypass,
-      });
-    },
-  );
-}
-
-export function setBusStripEqBand(
-  ctx: EngineStripContext,
-  busId: number,
-  bandIndex: number,
-  band: EqBand | string,
-): void {
-  const bandJson = eqBandJson(band);
-  commitSync(
-    ctx,
-    (offline) => offline.setBusStripEqBandJson(busId, bandIndex, bandJson),
-    () => {
-      mergeEqBand(ctx, { kind: 'bus', busId }, bandIndex, bandJson);
-      ctx.postSync({ type: 'syncBusStripEqBand', busId, bandIndex, bandJson });
-    },
-  );
-}
-
-export function setBusStripPan(ctx: EngineStripContext, busId: number, pan: number): void {
-  commitSync(
-    ctx,
-    (offline) => offline.setBusStripPan(busId, pan),
+    (offline) => offline.setBusPan(busId, pan),
     () => {
       mergeStripJson(ctx, { kind: 'bus', busId }, (entry) => {
         entry.pan = pan;
@@ -415,15 +431,11 @@ export function setBusStripPan(ctx: EngineStripContext, busId: number, pan: numb
   );
 }
 
-export function setBusStripPanLaw(
-  ctx: EngineStripContext,
-  busId: number,
-  panLaw: PanLawInput,
-): void {
+export function setBusPanLaw(ctx: EngineStripContext, busId: number, panLaw: PanLaw): void {
   const code = panLawCode(panLaw);
   commitSync(
     ctx,
-    (offline) => offline.setBusStripPanLaw(busId, code),
+    (offline) => offline.setBusPanLaw(busId, panLaw),
     () => {
       mergeStripJson(ctx, { kind: 'bus', busId }, (entry) => {
         entry.panLaw = code;
@@ -433,15 +445,11 @@ export function setBusStripPanLaw(
   );
 }
 
-export function setBusStripPanMode(
-  ctx: EngineStripContext,
-  busId: number,
-  panMode: PanMode | number,
-): void {
+export function setBusPanMode(ctx: EngineStripContext, busId: number, panMode: PanMode): void {
   const code = panModeCode(panMode);
   commitSync(
     ctx,
-    (offline) => offline.setBusStripPanMode(busId, code),
+    (offline) => offline.setBusPanMode(busId, panMode),
     () => {
       mergeStripJson(ctx, { kind: 'bus', busId }, (entry) => {
         entry.panMode = code;
@@ -451,7 +459,7 @@ export function setBusStripPanMode(
   );
 }
 
-export function setBusStripDualPan(
+export function setBusDualPan(
   ctx: EngineStripContext,
   busId: number,
   leftPan: number,
@@ -459,7 +467,7 @@ export function setBusStripDualPan(
 ): void {
   commitSync(
     ctx,
-    (offline) => offline.setBusStripDualPan(busId, leftPan, rightPan),
+    (offline) => offline.setBusDualPan(busId, leftPan, rightPan),
     () => {
       mergeStripJson(ctx, { kind: 'bus', busId }, (entry) => {
         entry.dualPanLeft = leftPan;
@@ -640,19 +648,20 @@ export function pushMidiProgram(
   group: number,
   channel: number,
   program: number,
-  bankValid: boolean,
-  bankMsb: number,
-  bankLsb: number,
+  bank: { msb: number; lsb: number } | undefined,
   renderFrame: number | undefined,
 ): void {
+  if (bank !== undefined && bank !== null) {
+    requestObject('pushMidiProgram', bank, 'bank', true);
+  }
   const words = packMidi2Program(
     'pushMidiProgram',
     group,
     channel,
     program,
-    bankValid,
-    bankMsb,
-    bankLsb,
+    bank !== undefined && bank !== null,
+    bank?.msb ?? 0,
+    bank?.lsb ?? 0,
   );
   pushMidiUmp(ctx, trackId, Uint32Array.from(words), renderFrame);
 }
@@ -660,14 +669,14 @@ export function pushMidiProgram(
 export function setBuiltinInstrument(
   ctx: EngineStripContext,
   trackId: string | number,
-  config: { destinationId?: number } & Record<string, unknown>,
+  config: Omit<BuiltinSynthConfig, 'destinationId'>,
 ): void {
   const destinationId = ctx.resolveTargetId(trackId);
   commitSync(
     ctx,
-    (offline) => offline.setBuiltinInstrument(config, destinationId),
+    (offline) => offline.setBuiltinInstrument(destinationId, config),
     () => {
-      ctx.postSync({ type: 'syncBuiltinInstrument', destinationId, config });
+      ctx.postSync({ type: 'syncBuiltinInstrument', destinationId, config: { ...config } });
     },
   );
 }
@@ -675,7 +684,7 @@ export function setBuiltinInstrument(
 export function setSynthInstrument(
   ctx: EngineStripContext,
   trackId: string | number,
-  patch: Record<string, unknown> | string,
+  patch: SynthPatch | string,
 ): void {
   const destinationId = ctx.resolveTargetId(trackId);
   // A SampleBank handle cannot cross to the worklet, so refuse it before the
@@ -688,9 +697,13 @@ export function setSynthInstrument(
   }
   commitSync(
     ctx,
-    (offline) => offline.setSynthInstrument(patch, destinationId),
+    (offline) => offline.setSynthInstrument(destinationId, patch),
     () => {
-      ctx.postSync({ type: 'syncSynthInstrument', destinationId, patch });
+      ctx.postSync({
+        type: 'syncSynthInstrument',
+        destinationId,
+        patch: typeof patch === 'string' ? patch : { ...patch },
+      });
     },
   );
 }
@@ -703,21 +716,14 @@ export function loadSoundFont(ctx: EngineStripContext, data: Uint8Array): void {
 export function setSf2Instrument(
   ctx: EngineStripContext,
   trackId: string | number,
-  config: {
-    destinationId?: number;
-    gain?: number;
-    polyphony?: number;
-    preferModelForModeledFamilies?: boolean;
-    clearBankRig?: boolean;
-    gsEfxRealization?: 'modern' | 'classic';
-  },
+  config: Omit<Sf2InstrumentConfig, 'destinationId'>,
 ): void {
   const destinationId = ctx.resolveTargetId(trackId);
   commitSync(
     ctx,
-    (offline) => offline.setSf2Instrument(config, destinationId),
+    (offline) => offline.setSf2Instrument(destinationId, config),
     () => {
-      ctx.postSync({ type: 'syncSf2Instrument', destinationId, config });
+      ctx.postSync({ type: 'syncSf2Instrument', destinationId, config: { ...config } });
     },
   );
 }
@@ -725,24 +731,31 @@ export function setSf2Instrument(
 export function setMidiDestinationExternal(
   ctx: EngineStripContext,
   trackId: string | number,
-  external: boolean,
+  midiDestinationExternal: boolean,
 ): void {
   const destinationId = ctx.resolveTargetId(trackId);
   commitSync(
     ctx,
-    (offline) => offline.setMidiDestinationExternal(destinationId, external),
+    (offline) => offline.setMidiDestinationExternal(destinationId, midiDestinationExternal),
     () => {
-      ctx.postSync({ type: 'syncMidiDestinationExternal', destinationId, external });
+      ctx.postSync({
+        type: 'syncMidiDestinationExternal',
+        destinationId,
+        external: midiDestinationExternal,
+      });
     },
   );
 }
 
-export function setExternalMidiClockEnabled(ctx: EngineStripContext, enabled: boolean): void {
+export function setExternalMidiClockEnabled(
+  ctx: EngineStripContext,
+  externalMidiClockEnabled: boolean,
+): void {
   commitSync(
     ctx,
-    (offline) => offline.setExternalMidiClockEnabled(enabled),
+    (offline) => offline.setExternalMidiClockEnabled(externalMidiClockEnabled),
     () => {
-      ctx.postSync({ type: 'syncExternalMidiClock', enabled });
+      ctx.postSync({ type: 'syncExternalMidiClock', enabled: externalMidiClockEnabled });
     },
   );
 }

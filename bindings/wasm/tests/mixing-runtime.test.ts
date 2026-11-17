@@ -68,7 +68,7 @@ describe('Mixer runtime controls (WASM)', () => {
 
   describe('type contracts of readers and setters', () => {
     it('forwards asymmetric dual-pan and polarity fields through scene JSON', () => {
-      const mixer = Mixer.fromSceneJson(
+      const mixer = Mixer.fromJson(
         JSON.stringify({
           version: 1,
           strips: [
@@ -84,11 +84,10 @@ describe('Mixer runtime controls (WASM)', () => {
           buses: [{ id: 'master', role: 'master' }],
           connections: [],
         }),
-        SR,
-        BLOCK,
+        { sampleRate: SR, blockSize: BLOCK },
       );
       try {
-        const scene = JSON.parse(mixer.toSceneJson()) as {
+        const scene = JSON.parse(mixer.toJson()) as {
           strips: Array<{
             id: string;
             panMode: number;
@@ -113,16 +112,19 @@ describe('Mixer runtime controls (WASM)', () => {
     });
 
     it('reports the longest serial send tail', () => {
-      const mixer = Mixer.fromSceneJson(serialTailScene(), SR, BLOCK);
+      const mixer = Mixer.fromJson(serialTailScene(), { sampleRate: SR, blockSize: BLOCK });
       try {
-        expect(mixer.tailSamples()).toBeGreaterThan(1440);
+        expect(mixer.tailSamples).toBeGreaterThan(1440);
       } finally {
         mixer.destroy();
       }
     });
 
     it('exposes setters, meter readers, and goniometer with the documented shapes', () => {
-      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), SR, BLOCK);
+      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+        sampleRate: SR,
+        blockSize: BLOCK,
+      });
       try {
         // stripById resolves a scene id to a numeric index in [0, stripCount()).
         const vocal = mixer.stripById('vocal');
@@ -130,12 +132,12 @@ describe('Mixer runtime controls (WASM)', () => {
         expect(typeof vocal).toBe('number');
         expect(Number.isInteger(vocal)).toBe(true);
         expect(vocal).toBeGreaterThanOrEqual(0);
-        expect(vocal).toBeLessThan(mixer.stripCount());
+        expect(vocal).toBeLessThan(mixer.stripCount);
 
         // Every new setter must accept its documented arguments without throwing.
         expect(() => mixer.setSoloed(vocal, false)).not.toThrow();
         expect(() => mixer.setSoloSafe(vocal, true)).not.toThrow();
-        expect(() => mixer.setPolarityInvert(vocal, false, true)).not.toThrow();
+        expect(() => mixer.setPolarityInvert(vocal, { left: false, right: true })).not.toThrow();
         expect(() => mixer.setPanLaw(vocal, 'const4.5dB')).not.toThrow();
         expect(() => mixer.setChannelDelaySamples(vocal, 0)).not.toThrow();
         expect(() => mixer.setVcaOffsetDb(vocal, -1.5)).not.toThrow();
@@ -144,27 +146,52 @@ describe('Mixer runtime controls (WASM)', () => {
           mixer.setSurroundPan(vocal, { azimuth: -45, divergence: 0.25, lfe: 0.5 }),
         ).not.toThrow();
 
-        const sendIndex = mixer.addSend(vocal, 'rt-send', 'vocal-verb', -20, 'postFader');
+        const sendIndex = mixer.addSend(vocal, {
+          id: 'rt-send',
+          destinationBusId: 'vocal-verb',
+          sendDb: -20,
+          timing: 'postFader',
+        });
         expect(typeof sendIndex).toBe('number');
         expect(Number.isInteger(sendIndex)).toBe(true);
         expect(sendIndex).toBeGreaterThanOrEqual(0);
         expect(() => mixer.setSendDb(vocal, sendIndex, -12)).not.toThrow();
 
         // Automation schedulers accept the union curve type.
-        expect(() => mixer.scheduleFaderAutomation(vocal, 0, -6, 'linear')).not.toThrow();
-        expect(() => mixer.schedulePanAutomation(vocal, 0, 0.1, 'exponential')).not.toThrow();
-        expect(() => mixer.scheduleWidthAutomation(vocal, 0, 1.2, 'linear')).not.toThrow();
         expect(() =>
-          mixer.scheduleSendAutomation(vocal, sendIndex, 0, -18, 'exponential'),
+          mixer.scheduleFaderAutomation(vocal, { samplePos: 0, faderDb: -6, curve: 'linear' }),
+        ).not.toThrow();
+        expect(() =>
+          mixer.schedulePanAutomation(vocal, { samplePos: 0, pan: 0.1, curve: 'exponential' }),
+        ).not.toThrow();
+        expect(() =>
+          mixer.scheduleWidthAutomation(vocal, { samplePos: 0, width: 1.2, curve: 'linear' }),
+        ).not.toThrow();
+        expect(() =>
+          mixer.scheduleSendAutomation(vocal, sendIndex, {
+            samplePos: 0,
+            sendDb: -18,
+            curve: 'exponential',
+          }),
         ).not.toThrow();
 
         expect(() => mixer.setFaderDb(vocal, Number.NaN)).toThrow();
         expect(() => mixer.setPan(vocal, Number.POSITIVE_INFINITY)).toThrow();
         expect(() => mixer.setPan(vocal, 1.5)).toThrow(RangeError);
         expect(() => mixer.setWidth(vocal, 3)).toThrow(RangeError);
-        expect(() => mixer.schedulePanAutomation(vocal, 0, -1.5, 'linear')).toThrow(RangeError);
-        expect(() => mixer.scheduleWidthAutomation(vocal, 0, 2.5, 'linear')).toThrow(RangeError);
-        expect(() => mixer.scheduleFaderAutomation(vocal, 0, Number.NaN, 'linear')).toThrow();
+        expect(() =>
+          mixer.schedulePanAutomation(vocal, { samplePos: 0, pan: -1.5, curve: 'linear' }),
+        ).toThrow(RangeError);
+        expect(() =>
+          mixer.scheduleWidthAutomation(vocal, { samplePos: 0, width: 2.5, curve: 'linear' }),
+        ).toThrow(RangeError);
+        expect(() =>
+          mixer.scheduleFaderAutomation(vocal, {
+            samplePos: 0,
+            faderDb: Number.NaN,
+            curve: 'linear',
+          }),
+        ).toThrow();
         expect(() => mixer.setFaderDb(vocal, -3)).not.toThrow();
         expect(() => mixer.setPan(vocal, 0.25)).not.toThrow();
 
@@ -183,7 +210,7 @@ describe('Mixer runtime controls (WASM)', () => {
         mixer.processStereo([vocalL, returnL], [vocalR, returnR]);
 
         for (const tap of ['preFader', 'postFader'] as const) {
-          const meter = mixer.meterTap(vocal, tap);
+          const meter = mixer.stripMeter(vocal, tap);
           expect(typeof meter).toBe('object');
           for (const field of ['peakDbL', 'peakDbR', 'rmsDbL', 'rmsDbR', 'correlation'] as const) {
             expect(Number.isFinite(meter[field])).toBe(true);
@@ -247,7 +274,10 @@ describe('Mixer runtime controls (WASM)', () => {
     });
 
     it('accepts every pan-law, meter-tap, and send-timing string union value', () => {
-      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), SR, BLOCK);
+      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+        sampleRate: SR,
+        blockSize: BLOCK,
+      });
       try {
         const vocal = mixer.stripById('vocal');
         assertStripIndex(vocal, 'vocal');
@@ -255,9 +285,14 @@ describe('Mixer runtime controls (WASM)', () => {
           expect(() => mixer.setPanLaw(vocal, law)).not.toThrow();
         }
         for (const timing of ['preFader', 'postFader'] as const) {
-          expect(typeof mixer.addSend(vocal, `s-${timing}`, 'vocal-verb', -18, timing)).toBe(
-            'number',
-          );
+          expect(
+            typeof mixer.addSend(vocal, {
+              id: `s-${timing}`,
+              destinationBusId: 'vocal-verb',
+              sendDb: -18,
+              timing,
+            }),
+          ).toBe('number');
         }
         mixer.compile();
         const vocalL = new Float32Array(BLOCK);
@@ -268,21 +303,34 @@ describe('Mixer runtime controls (WASM)', () => {
         );
         // 'const6dB' / 'postFader' resolved end-to-end and produced audio.
         expect(blockEnergy(out)).toBeGreaterThan(0);
-        expect(Number.isFinite(mixer.meterTap(vocal, 'preFader').peakDbL)).toBe(true);
+        expect(Number.isFinite(mixer.stripMeter(vocal, 'preFader').peakDbL)).toBe(true);
       } finally {
         mixer.destroy();
       }
     });
 
     it('removeSend drops a previously-added send and shifts higher indices down', () => {
-      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), SR, BLOCK);
+      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+        sampleRate: SR,
+        blockSize: BLOCK,
+      });
       try {
         const vocal = mixer.stripById('vocal');
         assertStripIndex(vocal, 'vocal');
         // Add two sends to the same bus; remove the first so the second shifts
         // down into index 0.
-        const first = mixer.addSend(vocal, 'rt-send-a', 'vocal-verb', -20, 'postFader');
-        const second = mixer.addSend(vocal, 'rt-send-b', 'vocal-verb', -24, 'postFader');
+        const first = mixer.addSend(vocal, {
+          id: 'rt-send-a',
+          destinationBusId: 'vocal-verb',
+          sendDb: -20,
+          timing: 'postFader',
+        });
+        const second = mixer.addSend(vocal, {
+          id: 'rt-send-b',
+          destinationBusId: 'vocal-verb',
+          sendDb: -24,
+          timing: 'postFader',
+        });
         expect(second).toBeGreaterThan(first);
 
         // setSendDb on the highest index is valid before removal.
@@ -337,7 +385,7 @@ describe('Mixer runtime controls (WASM)', () => {
     }
 
     it('reports the EQ and meter discards on the poisoned block and nothing after it', () => {
-      const mixer = Mixer.fromSceneJson(highGainEqScene(), SR, BLOCK);
+      const mixer = Mixer.fromJson(highGainEqScene(), { sampleRate: SR, blockSize: BLOCK });
       try {
         mixer.compile();
 
@@ -378,9 +426,9 @@ describe('Mixer runtime controls (WASM)', () => {
     });
 
     it('rejects an out-of-range strip index', () => {
-      const mixer = Mixer.fromSceneJson(highGainEqScene(), SR, BLOCK);
+      const mixer = Mixer.fromJson(highGainEqScene(), { sampleRate: SR, blockSize: BLOCK });
       try {
-        expect(() => mixer.stripNonFiniteDiscardCount(mixer.stripCount())).toThrow();
+        expect(() => mixer.stripNonFiniteDiscardCount(mixer.stripCount)).toThrow();
       } finally {
         mixer.destroy();
       }
@@ -390,7 +438,7 @@ describe('Mixer runtime controls (WASM)', () => {
       // 'src' has no explicit connection but auto-routes to 'master' (see the
       // asymmetric-strip fixture above); 'master' itself owns no insert, so
       // only its post-insert meter is in play.
-      const mixer = Mixer.fromSceneJson(highGainEqScene(), SR, BLOCK);
+      const mixer = Mixer.fromJson(highGainEqScene(), { sampleRate: SR, blockSize: BLOCK });
       try {
         mixer.compile();
 
@@ -423,7 +471,7 @@ describe('Mixer runtime controls (WASM)', () => {
     });
 
     it('throws for a bus declared but not yet compiled, rather than reading zero', () => {
-      const mixer = Mixer.fromSceneJson(highGainEqScene(), SR, BLOCK);
+      const mixer = Mixer.fromJson(highGainEqScene(), { sampleRate: SR, blockSize: BLOCK });
       try {
         mixer.compile();
         // 'late' is now in the topology, but the graph has not recompiled
@@ -437,7 +485,7 @@ describe('Mixer runtime controls (WASM)', () => {
     });
 
     it('rejects an unknown bus id', () => {
-      const mixer = Mixer.fromSceneJson(highGainEqScene(), SR, BLOCK);
+      const mixer = Mixer.fromJson(highGainEqScene(), { sampleRate: SR, blockSize: BLOCK });
       try {
         expect(() => mixer.busNonFiniteDiscardCount('does-not-exist')).toThrow();
       } finally {
@@ -448,11 +496,14 @@ describe('Mixer runtime controls (WASM)', () => {
 
   describe('imperative strip topology', () => {
     it('adds a strip to a live mixer', () => {
-      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('commentaryDucking'), SR, BLOCK);
+      const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+        sampleRate: SR,
+        blockSize: BLOCK,
+      });
       try {
-        const before = mixer.stripCount();
+        const before = mixer.stripCount;
         mixer.addStrip('late-arrival');
-        expect(mixer.stripCount()).toBe(before + 1);
+        expect(mixer.stripCount).toBe(before + 1);
         expect(mixer.stripById('late-arrival')).toBe(before);
         expect(() => mixer.compile()).not.toThrow();
         // The C call answers a failure with a NULL strip rather than an error
@@ -466,16 +517,19 @@ describe('Mixer runtime controls (WASM)', () => {
         expect(() => mixer.addStrip('wrong-type', { lufs: 'yes' as unknown as boolean })).toThrow(
           /lufs/,
         );
-        expect(mixer.stripCount()).toBe(before + 1);
+        expect(mixer.stripCount).toBe(before + 1);
       } finally {
         mixer.destroy();
       }
     });
 
     it('refuses a metering argument that is not a plain object', () => {
-      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('commentaryDucking'), SR, BLOCK);
+      const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+        sampleRate: SR,
+        blockSize: BLOCK,
+      });
       try {
-        const before = mixer.stripCount();
+        const before = mixer.stripCount;
         // A wrong-typed BAG would otherwise read as an empty one and put the
         // caller on the full default metering, the field readers' failure mode
         // one level up.
@@ -483,15 +537,15 @@ describe('Mixer runtime controls (WASM)', () => {
         expect(() => mixer.addStrip('number-bag', 5)).toThrow(/metering must be a plain object/);
         // @ts-expect-error an array is not a plain object, though `typeof []` is 'object'
         expect(() => mixer.addStrip('array-bag', [])).toThrow(/metering must be a plain object/);
-        expect(mixer.stripCount()).toBe(before);
+        expect(mixer.stripCount).toBe(before);
 
         // Absent and explicit undefined are the omitted default, which the scene
         // document spells by carrying no metering object at all.
         mixer.addStrip('omitted');
         mixer.addStrip('explicit-undefined', undefined);
-        expect(mixer.stripCount()).toBe(before + 2);
+        expect(mixer.stripCount).toBe(before + 2);
         const strips = (
-          JSON.parse(mixer.toSceneJson()) as {
+          JSON.parse(mixer.toJson()) as {
             strips: Array<{ id: string; metering?: Record<string, unknown> }>;
           }
         ).strips;
@@ -503,14 +557,17 @@ describe('Mixer runtime controls (WASM)', () => {
     });
 
     it('round-trips an added strip metering configuration through the scene', () => {
-      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('commentaryDucking'), SR, BLOCK);
+      const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+        sampleRate: SR,
+        blockSize: BLOCK,
+      });
       try {
         mixer.addStrip('metered', { lufs: false, truePeakOversample: 8 });
         // The document omits the object at the full default, so a strip added
         // with no metering argument carries none and only the opted-out one shows.
         mixer.addStrip('plain');
         const strips = (
-          JSON.parse(mixer.toSceneJson()) as {
+          JSON.parse(mixer.toJson()) as {
             strips: Array<{ id: string; metering?: Record<string, unknown> }>;
           }
         ).strips;
@@ -532,7 +589,7 @@ describe('Mixer runtime controls (WASM)', () => {
     const tone = sine(440, BLOCK / SR, { amp: 0.5, sampleRate: SR });
 
     function connections(mixer: Mixer): Array<{ source: string; destination: string }> {
-      return (JSON.parse(mixer.toSceneJson()) as { connections: never[] }).connections;
+      return (JSON.parse(mixer.toJson()) as { connections: never[] }).connections;
     }
 
     function refusal(call: () => void): { message: string } {
@@ -549,7 +606,7 @@ describe('Mixer runtime controls (WASM)', () => {
     }
 
     it('sends a strip into a submix and the submix on to the master', () => {
-      const mixer = Mixer.fromSceneJson(emptyScene, SR, BLOCK);
+      const mixer = Mixer.fromJson(emptyScene, { sampleRate: SR, blockSize: BLOCK });
       try {
         mixer.addStrip('a');
         mixer.addBus('sub', 'submix');
@@ -572,13 +629,13 @@ describe('Mixer runtime controls (WASM)', () => {
     });
 
     it('refuses an invalid edit with a RangeError naming the ids and changes nothing', () => {
-      const mixer = Mixer.fromSceneJson(emptyScene, SR, BLOCK);
+      const mixer = Mixer.fromJson(emptyScene, { sampleRate: SR, blockSize: BLOCK });
       try {
         mixer.addStrip('a');
         mixer.addBus('sub', 'submix');
         mixer.addBus('sub2', 'submix');
         mixer.setOutputBus('sub', 'sub2');
-        const before = mixer.toSceneJson();
+        const before = mixer.toJson();
         const cases: Array<[string, string, RegExp]> = [
           ['nope', 'sub', /nope/],
           ['a', 'nope', /nope/],
@@ -589,7 +646,7 @@ describe('Mixer runtime controls (WASM)', () => {
         for (const [source, bus, pattern] of cases) {
           const { message } = refusal(() => mixer.setOutputBus(source, bus));
           expect(message, `${source} -> ${bus}`).toMatch(pattern);
-          expect(mixer.toSceneJson()).toBe(before);
+          expect(mixer.toJson()).toBe(before);
         }
         // No compile ran in any refused call: the buses were never compiled.
         expect(() => mixer.busNonFiniteDiscardCount('sub')).toThrow();
@@ -605,7 +662,10 @@ describe('Mixer runtime controls (WASM)', () => {
     // input strips without cross-contamination, each measurement uses a fresh
     // mixer with kick soloed and the bus return marked solo-safe.
     function measureWithSoloedKick(feedStripId: string): number {
-      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('drumBusSubgroup'), SR, BLOCK);
+      const mixer = Mixer.fromJson(mixingScenePresetJson('drumBusSubgroup'), {
+        sampleRate: SR,
+        blockSize: BLOCK,
+      });
       try {
         const kick = mixer.stripById('kick');
         const busReturn = mixer.stripById('drum-bus-return');
@@ -622,7 +682,7 @@ describe('Mixer runtime controls (WASM)', () => {
         mixer.setSoloed(kick, true);
         mixer.compile();
 
-        const stripCount = mixer.stripCount();
+        const stripCount = mixer.stripCount;
         const left = silentBlocks(stripCount);
         const right = silentBlocks(stripCount);
         for (let i = 0; i < BLOCK; i++) {
@@ -712,7 +772,10 @@ describe('Mixer runtime controls (WASM)', () => {
   });
 
   it("flushes a streaming mixer's meters on request", () => {
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 256);
+    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      sampleRate: 48000,
+      blockSize: 256,
+    });
     try {
       expect(() => mixer.flushMeters()).not.toThrow();
     } finally {
@@ -722,13 +785,12 @@ describe('Mixer runtime controls (WASM)', () => {
 
   it("folds the master-output meter's pending true peak into its snapshot on flushMeters", () => {
     const block = 256;
-    const mixer = Mixer.fromSceneJson(
-      JSON.stringify({ version: 1, strips: [{ id: 'a' }] }),
-      48000,
-      block,
-    );
+    const mixer = Mixer.fromJson(JSON.stringify({ version: 1, strips: [{ id: 'a' }] }), {
+      sampleRate: 48000,
+      blockSize: block,
+    });
     try {
-      mixer.configureMeter(true, 4);
+      mixer.configureMeter({ enabled: true, truePeakOversample: 4 });
       const realtime = mixer.createRealtimeBuffer();
       realtime.leftInputs[0].fill(0);
       realtime.rightInputs[0].fill(0);
@@ -752,16 +814,17 @@ describe('Mixer runtime controls (WASM)', () => {
   });
 
   it('accepts exactly 4x and 8x for the master-output meter', () => {
-    const mixer = Mixer.fromSceneJson(
-      JSON.stringify({ version: 1, strips: [{ id: 'a' }] }),
-      48000,
-      256,
-    );
+    const mixer = Mixer.fromJson(JSON.stringify({ version: 1, strips: [{ id: 'a' }] }), {
+      sampleRate: 48000,
+      blockSize: 256,
+    });
     try {
-      expect(() => mixer.configureMeter(true, 4)).not.toThrow();
-      expect(() => mixer.configureMeter(true, 8)).not.toThrow();
+      expect(() => mixer.configureMeter({ enabled: true, truePeakOversample: 4 })).not.toThrow();
+      expect(() => mixer.configureMeter({ enabled: true, truePeakOversample: 8 })).not.toThrow();
       for (const factor of [0, 1, 2, 3, 5, 16]) {
-        expect(() => mixer.configureMeter(true, factor)).toThrow(/truePeakOversample/);
+        expect(() => mixer.configureMeter({ enabled: true, truePeakOversample: factor })).toThrow(
+          /truePeakOversample/,
+        );
       }
     } finally {
       mixer.destroy();

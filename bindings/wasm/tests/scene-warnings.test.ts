@@ -19,13 +19,13 @@ describe('unknown mixing scene keys (WASM)', () => {
   });
 
   it('engine strip setters refuse an unknown key by name', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     try {
-      engine.setTrackLanes([10]);
+      engine.setTrackLanes([{ trackId: 10 }]);
       const typo = '{"version":1,"strips":[{"id":"s","faderDB":-3}],"buses":[]}';
       for (const call of [
-        () => engine.setTrackStripJson(10, typo),
-        () => engine.setMasterStripJson(typo),
+        () => engine.setStrip(10, JSON.parse(typo).strips[0]),
+        () => engine.setStrip('master', JSON.parse(typo).strips[0]),
       ]) {
         let error: unknown;
         try {
@@ -38,7 +38,7 @@ describe('unknown mixing scene keys (WASM)', () => {
         expect((error as Error).message).toContain("unknown strip key 'strips[0].faderDB'");
       }
       const annotated = '{"$schema":"s","version":1,"strips":[{"id":"s","faderDb":-3,"x-t":1}]}';
-      expect(() => engine.setTrackStripJson(10, annotated)).not.toThrow();
+      expect(() => engine.setStrip(10, JSON.parse(annotated).strips[0])).not.toThrow();
     } finally {
       engine.destroy();
     }

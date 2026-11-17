@@ -387,7 +387,7 @@ export interface MixSceneConnection {
 }
 
 /**
- * A mixer scene document, in the schema {@link Mixer.fromSceneJson} reads.
+ * A mixer scene document, in the schema {@link Mixer.fromJson} reads.
  * {@link suggestMixSceneJson} returns the same document as its JSON text.
  */
 export interface MixSceneDocument {
@@ -482,11 +482,11 @@ export interface MixAssistantMixProfile {
 
 /**
  * What {@link suggestMixScene} produces. Nothing has been applied: feeding
- * `scene` to {@link Mixer.fromSceneJson} is the caller's separate step, and
+ * `scene` to {@link Mixer.fromJson} is the caller's separate step, and
  * {@link suggestMixSceneJson} returns it already serialized for that.
  */
 export interface MixAssistantResult {
-  /** The suggested scene, in the schema {@link Mixer.fromSceneJson} reads. */
+  /** The suggested scene, in the schema {@link Mixer.fromJson} reads. */
   scene: MixSceneDocument;
   /** One entry per input track, in input order. */
   tracks: MixAssistantTrackProfile[];

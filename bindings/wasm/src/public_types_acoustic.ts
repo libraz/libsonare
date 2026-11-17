@@ -46,7 +46,7 @@ export interface AcousticResult {
 export type MaterialPresetName = 'none' | 'concrete' | 'wood' | 'curtain' | 'carpet' | 'glass';
 
 /** Names accepted for the room-estimate `mode`. */
-export type AcousticModeName = 'auto' | 'blind' | 'impulse_response';
+export type AcousticModeName = 'auto' | 'blind' | 'impulseResponse';
 
 /** Shoebox geometry + placement shared by RIR synthesis and the room morph. */
 export interface RoomGeometryOptions {
@@ -84,15 +84,19 @@ export interface RoomGeometryOptions {
    * number a `TypeError`, both listing the valid names.
    */
   materialPreset?: MaterialPresetName;
-  sourceX?: number;
-  sourceY?: number;
-  sourceZ?: number;
-  listenerX?: number;
-  listenerY?: number;
-  listenerZ?: number;
+  /** Source position in metres. Default: the 7 x 5 x 3 room's default placement scaled into the room. */
+  source?: RoomPlacement;
+  /** Listener position in metres. Default: the default placement scaled into the room. */
+  listener?: RoomPlacement;
+  /** Image-source reflection order; clamped to the safe maximum. */
   ismOrder?: number;
+  /**
+   * Seed of the diffuse tail, a uint32. Omit to derive one; an explicit 0 is
+   * refused until the native room config can carry an absent seed.
+   */
   seed?: number;
-  maxSeconds?: number;
+  /** Maximum RIR length in seconds. Omit for the library default; an explicit 0 is refused. */
+  maxSec?: number;
   /**
    * Add the ISO 9613-1 atmospheric-absorption term to the late tail's per-band
    * RT60. On by default; it mainly shortens the high bands of a large room.
@@ -100,27 +104,28 @@ export interface RoomGeometryOptions {
    */
   airAbsorptionEnabled?: boolean;
   /**
-   * Air temperature in degrees Celsius; 0 (or omitted) selects the ISO
-   * reference climate's 20 degC. A literal 0 degC is therefore not
-   * distinguishable from unset -- use 0.01 for a freezing room, which absorbs
-   * identically.
+   * Air temperature in degrees Celsius. Omit for the ISO reference climate's
+   * 20 degC; an explicit 0 is refused until the native room config can carry an
+   * absent temperature (use 0.01 for a freezing room).
    */
   airTemperatureC?: number;
   /**
-   * Relative humidity in percent; 0 (or omitted) selects the ISO reference
-   * climate's 50 %. Both climate values are read only while
-   * `airAbsorptionEnabled` is set.
+   * Relative humidity in percent. Omit for the ISO reference climate's 50 %; an
+   * explicit 0 is refused until the native room config can carry an absent
+   * humidity. Both climate values are read only while `airAbsorptionEnabled` is set.
    */
   airHumidityPercent?: number;
 }
 
-export interface RirSynthOptions extends RoomGeometryOptions {
-  sampleRate?: number;
+/** Request for {@link synthesizeRir}. */
+export interface SynthesizeRirRequest extends RoomGeometryOptions {
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
   /** Use the Eyring statistical late-tail model (default true); false = Sabine. */
   preferEyring?: boolean;
-  /** Early/late crossover in ms (0 = auto, ~sqrt(V) ms). */
+  /** Early/late crossover in ms. Omit for auto (~sqrt(V) ms); an explicit 0 is refused. */
   mixingTimeMs?: number;
-  /** Equal-power crossfade width around the mixing time in ms (0 = default). */
+  /** Equal-power crossfade width around the mixing time in ms. Omit for the default; an explicit 0 is refused. */
   crossfadeMs?: number;
 }
 
@@ -138,34 +143,39 @@ export interface RirResult {
   /**
    * Every diagnostic the synthesizer reported, in order. A refused synthesis
    * throws instead, so every entry is a warning — a
-   * `maxSeconds` clamp that cut the tail is one, and is otherwise
+   * `maxSec` clamp that cut the tail is one, and is otherwise
    * indistinguishable from an untruncated RIR.
    */
   diagnostics: RirDiagnostic[];
 }
 
-export interface RoomEstimateOptions {
+/** Settings of {@link estimateRoom}. */
+export interface RoomEstimateOptions extends ValidateOptions {
+  /** Length/width ratio hint of the room. Omit for no hint; an explicit 0 is refused. */
   aspectHintLw?: number;
+  /** Length/height ratio hint of the room. Omit for no hint; an explicit 0 is refused. */
   aspectHintLh?: number;
   /**
-   * Mean-absorption prior anchoring the volume scale (0 = library default,
-   * 0.15). Clamped into `[0.01, 0.99]` rather than refused: a value outside that
+   * Mean-absorption prior anchoring the volume scale. Omit for the library
+   * default, 0.15; an explicit 0 is refused. Clamped into `[0.01, 0.99]` rather than refused: a value outside that
    * range still returns a successful estimate, computed from the clamped prior.
    * The reported volume scales with the cube of the prior, so the substitution
    * is worth three orders of magnitude at the low end.
    */
   referenceAbsorption?: number;
+  /** Use the Eyring statistical late-tail model (default true); false = Sabine. */
   preferEyring?: boolean;
+  /** Octave bands analysed. Omit for the library default; an explicit 0 is refused. */
   nOctaveBands?: number;
   /**
-   * Analyzer routing, by name: `'auto'`, `'blind'`, `'impulse_response'`. An
+   * Analyzer routing, by name: `'auto'`, `'blind'`, `'impulseResponse'`. An
    * unknown name throws a `RangeError` and a number a `TypeError`, both listing
    * the valid names.
    */
   mode?: AcousticModeName;
-  /** Analyzer decay-fit span in dB (0 = library default). */
+  /** Analyzer decay-fit span in dB. Omit for the library default; an explicit 0 is refused. */
   minDecayDb?: number;
-  /** Analyzer noise-floor margin in dB (0 = library default). */
+  /** Analyzer noise-floor margin in dB. Omit for the library default; an explicit 0 is refused. */
   noiseFloorMarginDb?: number;
 }
 
@@ -194,23 +204,20 @@ export interface RoomPlacement {
   z: number;
 }
 
-/** Positions for `roomGeometryFromEstimate`; each one given replaces the placement scaled into the estimated room. */
-export interface RoomGeometryFromEstimateOptions {
-  source?: RoomPlacement;
-  listener?: RoomPlacement;
-}
-
-export interface RoomMorphOptions extends RoomGeometryOptions {
+/** Settings of {@link roomMorph} and {@link roomMorphStereo}. */
+export interface RoomMorphOptions extends RoomGeometryOptions, ValidateOptions {
+  /** Wet level of the target room. */
   wet?: number;
+  /** How far the source recording's own room tail is suppressed. */
   sourceTailSuppression?: number;
   /**
    * Use the Eyring statistical late-tail model for the target room (default
-   * true); false = Sabine. Matches {@link RirSynthOptions.preferEyring}.
+   * true); false = Sabine. Matches {@link SynthesizeRirRequest.preferEyring}.
    */
   preferEyring?: boolean;
-  /** Early/late crossover in ms (0 = auto, ~sqrt(V) ms). */
+  /** Early/late crossover in ms. Omit for auto (~sqrt(V) ms); an explicit 0 is refused. */
   mixingTimeMs?: number;
-  /** Equal-power crossfade width around the mixing time in ms (0 = default). */
+  /** Equal-power crossfade width around the mixing time in ms. Omit for the default; an explicit 0 is refused. */
   crossfadeMs?: number;
 }
 
@@ -229,16 +236,16 @@ export interface RoomMorphResult {
    * Every diagnostic the target-room synthesis reported, in order. Each says the
    * morph went through a room other than the one requested — an image-source
    * order reduced to the safe maximum (`acoustic.ism_order_clamped`), a tail cut
-   * against `maxSeconds` (`acoustic.rir_length_clamped`), a `maxSeconds` shorter
+   * against `maxSec` (`acoustic.rir_length_clamped`), a `maxSec` shorter
    * than the direct sound's flight time and extended to fit it
-   * (`acoustic.rir_length_floored`), a `maxSeconds` shorter than the longest
+   * (`acoustic.rir_length_floored`), a `maxSec` shorter than the longest
    * band's RT60, which cuts that band before it decays by 60 dB so its
    * reverberation time cannot be measured from the RIR
    * (`acoustic.rir_tail_truncated`), a request that produced no diffuse tail
    * (`acoustic.no_late_tail`) — and is otherwise invisible.
    *
    * These are the five codes the synthesis can emit here, so a `switch` over
-   * them needs no fall-through case. `roomMorph` forwards `maxSeconds`
+   * them needs no fall-through case. `roomMorph` forwards `maxSec`
    * unchanged, which is why the floored one reaches a morph at all.
    */
   diagnostics: RirDiagnostic[];

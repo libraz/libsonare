@@ -23,7 +23,7 @@ describe('Sonare WASM Module', () => {
 
   describe('sends, buses and strips', () => {
     it('routes track sends through buses', () => {
-      const engine = new RealtimeEngine(48000, 256);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
       const frames = 256 * 40;
       engine.setClips([
         {
@@ -92,26 +92,17 @@ describe('Sonare WASM Module', () => {
       expect(out.at(-1)).toBeGreaterThan(0.99);
       expect(out.at(-1)).toBeLessThan(1.01);
 
-      let badJsonError: unknown;
-      try {
-        engine.setBusStripJson(1, '{bad json');
-      } catch (error) {
-        badJsonError = error;
-      }
-      expect(isSonareError(badJsonError)).toBe(true);
-      if (!isSonareError(badJsonError)) {
-        throw new Error('expected SonareError');
-      }
-      expect(badJsonError.code).toBe(ErrorCode.InvalidFormat);
-      engine.setBusStripJson(
+      expect(() => engine.setBusStrip(1, '{bad json' as never)).toThrow(TypeError);
+      engine.setBusStrip(
         1,
-        '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
+        JSON.parse('{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}')
+          .buses[0],
       );
       engine.destroy();
     });
 
     it('applies track strip JSON to a lane', () => {
-      const engine = new RealtimeEngine(48000, 256);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
       const frames = 256 * 4;
       engine.setClips([
         {
@@ -129,26 +120,18 @@ describe('Sonare WASM Module', () => {
           lengthSamples: frames,
         },
       ]);
-      engine.setTrackLanes([10, 20]);
+      engine.setTrackLanes([{ trackId: 10 }, { trackId: 20 }]);
       const sceneJson =
         '{"version":1,"strips":[{"id":"track-10","faderDb":-12,"panLaw":3}],"buses":[],"connections":[]}';
-      engine.setTrackStripJson(10, sceneJson);
-      let badJsonError: unknown;
-      try {
-        engine.setTrackStripJson(10, '{bad json');
-      } catch (error) {
-        badJsonError = error;
-      }
-      expect(isSonareError(badJsonError)).toBe(true);
-      if (!isSonareError(badJsonError)) {
-        throw new Error('expected SonareError');
-      }
-      expect(badJsonError.code).toBe(ErrorCode.InvalidFormat);
+      engine.setStrip(10, JSON.parse(sceneJson).strips[0]);
+      expect(() => engine.setStrip(10, '{bad json' as never)).toThrow(TypeError);
       let badProcessorError: unknown;
       try {
-        engine.setTrackStripJson(
+        engine.setStrip(
           10,
-          '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"missing.processor","params":"{}"}]}],"buses":[],"connections":[]}',
+          JSON.parse(
+            '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"missing.processor","params":"{}"}]}],"buses":[],"connections":[]}',
+          ).strips[0],
         );
       } catch (error) {
         badProcessorError = error;
@@ -157,9 +140,11 @@ describe('Sonare WASM Module', () => {
       expect(isSonareError(badProcessorError)).toBe(false);
       let badParamError: unknown;
       try {
-        engine.setTrackStripJson(
+        engine.setStrip(
           10,
-          '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.gainDb\\":\\"loud\\"}"}]}],"buses":[],"connections":[]}',
+          JSON.parse(
+            '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.gainDb\\":\\"loud\\"}"}]}],"buses":[],"connections":[]}',
+          ).strips[0],
         );
       } catch (error) {
         badParamError = error;
@@ -168,7 +153,7 @@ describe('Sonare WASM Module', () => {
       expect(isSonareError(badParamError)).toBe(false);
       let badBypassError: unknown;
       try {
-        engine.setMasterStripInsertBypassed(0, true);
+        engine.setStripInsertBypassed('master', 0, { bypassed: true });
       } catch (error) {
         badBypassError = error;
       }
@@ -187,7 +172,7 @@ describe('Sonare WASM Module', () => {
     });
 
     it('toggles track strip insert bypass', () => {
-      const engine = new RealtimeEngine(48000, 256);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
       const frames = 256 * 16;
       const source = new Float32Array(frames);
       for (let i = 0; i < frames; i += 1) {
@@ -202,14 +187,16 @@ describe('Sonare WASM Module', () => {
           lengthSamples: frames,
         },
       ]);
-      engine.setTrackLanes([10]);
-      engine.setTrackStripJson(
+      engine.setTrackLanes([{ trackId: 10 }]);
+      engine.setStrip(
         10,
-        '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":12,\\"band0.enabled\\":1}"}]}],"buses":[],"connections":[]}',
+        JSON.parse(
+          '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":12,\\"band0.enabled\\":1}"}]}],"buses":[],"connections":[]}',
+        ).strips[0],
       );
       let badIndexError: unknown;
       try {
-        engine.setTrackStripInsertBypassed(10, 7, true);
+        engine.setStripInsertBypassed(10, 7, { bypassed: true });
       } catch (error) {
         badIndexError = error;
       }
@@ -221,7 +208,7 @@ describe('Sonare WASM Module', () => {
       for (let block = 0; block < 6; block += 1) {
         [eqOut] = engine.process([new Float32Array(256)]);
       }
-      engine.setTrackStripInsertBypassed(10, 0, true, true);
+      engine.setStripInsertBypassed(10, 0, { bypassed: true, resetOnBypass: true });
       engine.seekSample(0);
       const [bypassedOut] = engine.process([new Float32Array(256)]);
       expect(rms(eqOut)).toBeGreaterThan(rms(bypassedOut) * 1.5);
@@ -229,7 +216,7 @@ describe('Sonare WASM Module', () => {
     });
 
     it('updates track strip EQ band', () => {
-      const engine = new RealtimeEngine(48000, 256);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
       const frames = 256 * 16;
       const source = new Float32Array(frames);
       for (let i = 0; i < frames; i += 1) {
@@ -244,14 +231,15 @@ describe('Sonare WASM Module', () => {
           lengthSamples: frames,
         },
       ]);
-      engine.setTrackLanes([10]);
-      engine.setTrackStripJson(
+      engine.setTrackLanes([{ trackId: 10 }]);
+      engine.setStrip(
         10,
-        '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
+        JSON.parse('{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}')
+          .strips[0],
       );
       let badIndexError: unknown;
       try {
-        engine.setTrackStripEqBand(10, 99, { type: 'Peak', enabled: true });
+        engine.setStripEqBand(10, 99, { type: 'Peak', enabled: true });
       } catch (error) {
         badIndexError = error;
       }
@@ -260,7 +248,7 @@ describe('Sonare WASM Module', () => {
 
       engine.play();
       const [flatOut] = engine.process([new Float32Array(256)]);
-      engine.setTrackStripEqBand(10, 0, {
+      engine.setStripEqBand(10, 0, {
         type: 'Peak',
         frequencyHz: 1000,
         gainDb: 12,
@@ -277,7 +265,7 @@ describe('Sonare WASM Module', () => {
     });
 
     it('applies master strip JSON after lane mix', () => {
-      const engine = new RealtimeEngine(48000, 256);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
       const frames = 256 * 16;
       engine.setClips([
         {
@@ -295,22 +283,15 @@ describe('Sonare WASM Module', () => {
       ]);
       const sceneJson =
         '{"version":1,"strips":[{"id":"master","faderDb":-12,"panLaw":3}],"buses":[],"connections":[]}';
-      engine.setMasterStripJson(sceneJson);
-      let badJsonError: unknown;
-      try {
-        engine.setMasterStripJson('{bad json');
-      } catch (error) {
-        badJsonError = error;
-      }
-      expect(isSonareError(badJsonError)).toBe(true);
-      if (!isSonareError(badJsonError)) {
-        throw new Error('expected SonareError');
-      }
-      expect(badJsonError.code).toBe(ErrorCode.InvalidFormat);
+      engine.setStrip('master', JSON.parse(sceneJson).strips[0]);
+      expect(() => engine.setStrip('master', '{bad json' as never)).toThrow(TypeError);
       let badParamError: unknown;
       try {
-        engine.setMasterStripJson(
-          '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.gainDb\\":\\"loud\\"}"}]}],"buses":[],"connections":[]}',
+        engine.setStrip(
+          'master',
+          JSON.parse(
+            '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.gainDb\\":\\"loud\\"}"}]}],"buses":[],"connections":[]}',
+          ).strips[0],
         );
       } catch (error) {
         badParamError = error;
@@ -334,7 +315,7 @@ describe('Sonare WASM Module', () => {
     });
 
     it('updates master strip EQ band', () => {
-      const engine = new RealtimeEngine(48000, 256);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
       const frames = 256 * 16;
       const source = new Float32Array(frames);
       for (let i = 0; i < frames; i += 1) {
@@ -348,12 +329,14 @@ describe('Sonare WASM Module', () => {
           lengthSamples: frames,
         },
       ]);
-      engine.setMasterStripJson(
-        '{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}',
+      engine.setStrip(
+        'master',
+        JSON.parse('{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}')
+          .strips[0],
       );
       let badIndexError: unknown;
       try {
-        engine.setMasterStripEqBand(99, { type: 'Peak', enabled: true });
+        engine.setStripEqBand('master', 99, { type: 'Peak', enabled: true });
       } catch (error) {
         badIndexError = error;
       }
@@ -362,7 +345,7 @@ describe('Sonare WASM Module', () => {
 
       engine.play();
       const [flatOut] = engine.process([new Float32Array(256)]);
-      engine.setMasterStripEqBand(0, {
+      engine.setStripEqBand('master', 0, {
         type: 'Peak',
         frequencyHz: 1000,
         gainDb: 12,
@@ -381,7 +364,7 @@ describe('Sonare WASM Module', () => {
     it('updates bus strip pan and EQ band', () => {
       // Four whole 1 kHz periods per block, so a block's RMS is phase-independent.
       const blockSize = 192;
-      const engine = new RealtimeEngine(48000, blockSize);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: blockSize });
       const frames = blockSize * 128;
       const source = new Float32Array(frames);
       for (let i = 0; i < frames; i += 1) {
@@ -410,23 +393,23 @@ describe('Sonare WASM Module', () => {
       expect(rms(flatLeft)).toBeGreaterThan(0.05);
       expect(rms(flatRight)).toBeCloseTo(rms(flatLeft), 5);
 
-      engine.setBusStripPan(1, 1);
+      engine.setBusPan(1, 1);
       const [pannedLeft, pannedRight] = settle();
       expect(rms(pannedLeft)).toBeLessThan(rms(flatLeft) * 0.01);
       expect(rms(pannedRight)).toBeGreaterThan(rms(flatRight) * 0.9);
 
-      engine.setBusStripPanMode(1, 'dualPan');
-      engine.setBusStripDualPan(1, -1, -1);
+      engine.setBusPanMode(1, 'dualPan');
+      engine.setBusDualPan(1, -1, -1);
       const [dualLeft, dualRight] = settle();
       expect(rms(dualRight)).toBeLessThan(rms(flatRight) * 0.01);
       expect(rms(dualLeft)).toBeGreaterThan(rms(flatLeft) * 0.9);
-      engine.setBusStripPanLaw(1, 'const6dB');
-      engine.setBusStripPanMode(1, 'balance');
-      engine.setBusStripPan(1, 0);
+      engine.setBusPanLaw(1, 'const6dB');
+      engine.setBusPanMode(1, 'balance');
+      engine.setBusPan(1, 0);
       const [centredLeft] = settle();
       expect(rms(centredLeft)).toBeCloseTo(rms(flatLeft), 3);
 
-      engine.setBusStripEqBand(1, 0, {
+      engine.setBusEqBand(1, 0, {
         type: 'Peak',
         frequencyHz: 1000,
         gainDb: 12,
@@ -435,30 +418,30 @@ describe('Sonare WASM Module', () => {
       });
       const [boostedLeft] = settle();
       expect(rms(boostedLeft)).toBeGreaterThan(rms(flatLeft) * 1.5);
-      engine.setBusStripEqBandJson(1, 0, '{"type":"Peak","frequencyHz":1000,"gainDb":0}');
+      engine.setBusEqBand(1, 0, { type: 'Peak', frequencyHz: 1000, gainDb: 0 });
       const [restoredLeft] = settle();
       expect(rms(restoredLeft)).toBeCloseTo(rms(flatLeft), 3);
 
-      expectRefusalOf(() => engine.setBusStripPan(99, 0.5));
-      expectRefusalOf(() => engine.setBusStripPanLaw(99, 'const3dB'));
-      expectRefusalOf(() => engine.setBusStripPanMode(99, 'balance'));
-      expectRefusalOf(() => engine.setBusStripDualPan(99, -1, 1));
-      expectRefusalOf(() => engine.setBusStripEqBand(99, 0, { type: 'Peak' }));
-      expectRefusalOf(() => engine.setBusStripEqBand(1, 99, { type: 'Peak' }));
-      expectRefusalOf(() => engine.setBusStripEqBandJson(1, -1, '{"type":"Peak"}'));
+      expectRefusalOf(() => engine.setBusPan(99, 0.5));
+      expectRefusalOf(() => engine.setBusPanLaw(99, 'const3dB'));
+      expectRefusalOf(() => engine.setBusPanMode(99, 'balance'));
+      expectRefusalOf(() => engine.setBusDualPan(99, -1, 1));
+      expectRefusalOf(() => engine.setBusEqBand(99, 0, { type: 'Peak' }));
+      expectRefusalOf(() => engine.setBusEqBand(1, 99, { type: 'Peak' }));
+      expectRefusalOf(() => engine.setBusEqBand(1, -1, { type: 'Peak' }));
       // A surround bus has no stereo image to pan; its EQ is still addressable.
       engine.setTrackBuses([
         { busId: 1, gainDb: 0 },
-        { busId: 2, gainDb: 0, channelLayout: 2 },
+        { busId: 2, gainDb: 0, channelLayout: '5.1' },
       ]);
-      expectRefusalOf(() => engine.setBusStripPan(2, 0.5));
-      expectRefusalOf(() => engine.setBusStripDualPan(2, -1, 0));
-      engine.setBusStripEqBand(2, 0, { type: 'Peak', frequencyHz: 500, gainDb: 3 });
+      expectRefusalOf(() => engine.setBusPan(2, 0.5));
+      expectRefusalOf(() => engine.setBusDualPan(2, -1, 0));
+      engine.setBusEqBand(2, 0, { type: 'Peak', frequencyHz: 500, gainDb: 3 });
       engine.destroy();
     });
 
     it('processWithMonitor returns output and monitor buses', () => {
-      const engine = new RealtimeEngine(48000, 16);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 16 });
       const result = engine.processWithMonitor([
         new Float32Array(16).fill(0.25),
         new Float32Array(16).fill(-0.25),
@@ -500,10 +483,10 @@ describe('Sonare WASM Module', () => {
     };
 
     const plateEngine = (): RealtimeEngine => {
-      const engine = new RealtimeEngine(SR, BLOCK);
+      const engine = new RealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
       engine.setClips([{ trackId: TRACK, channels: burst(), startPpq: 0, lengthSamples: 96000 }]);
       engine.setTrackLanes([{ trackId: TRACK }]);
-      engine.setTrackStripJson(TRACK, stripJson('s', PLATE));
+      engine.setStrip(TRACK, JSON.parse(stripJson('s', PLATE)).strips[0]);
       return engine;
     };
 
@@ -541,7 +524,10 @@ describe('Sonare WASM Module', () => {
       const fresh = plateEngine();
       fresh.seekSample(START);
       fresh.primeOfflineParameters(2, BLOCK);
-      const out = fresh.renderOffline([new Float32Array(RENDER), new Float32Array(RENDER)], BLOCK);
+      const out = fresh.renderOffline({
+        channels: [new Float32Array(RENDER), new Float32Array(RENDER)],
+        blockSize: BLOCK,
+      });
       fresh.destroy();
       return out;
     };
@@ -579,23 +565,23 @@ describe('Sonare WASM Module', () => {
       engine.stop();
       engine.seekSample(START);
       engine.primeOfflineParameters(2, BLOCK);
-      const first = engine.renderOffline(
-        [new Float32Array(RENDER), new Float32Array(RENDER)],
-        BLOCK,
-      );
+      const first = engine.renderOffline({
+        channels: [new Float32Array(RENDER), new Float32Array(RENDER)],
+        blockSize: BLOCK,
+      });
       engine.seekSample(START);
       engine.primeOfflineParameters(2, BLOCK);
-      const second = engine.renderOffline(
-        [new Float32Array(RENDER), new Float32Array(RENDER)],
-        BLOCK,
-      );
+      const second = engine.renderOffline({
+        channels: [new Float32Array(RENDER), new Float32Array(RENDER)],
+        blockSize: BLOCK,
+      });
       engine.destroy();
       const { diff, tol } = maxDiff(second, first);
       expect(diff).toBeLessThanOrEqual(tol);
     });
 
     it('primeOfflineParameters refuses bad counts and resetProcessorState a full queue', () => {
-      const engine = new RealtimeEngine(SR, BLOCK);
+      const engine = new RealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
       expectRefusalOf(() => engine.primeOfflineParameters(0, BLOCK));
       expectRefusalOf(() => engine.primeOfflineParameters(2, 0));
       expectRefusalOf(() => engine.primeOfflineParameters(10_000, BLOCK));
@@ -612,7 +598,7 @@ describe('Sonare WASM Module', () => {
     });
 
     it('names every sidechain refusal and keeps the setter in agreement', () => {
-      const engine = new RealtimeEngine(SR, BLOCK);
+      const engine = new RealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
       engine.setTrackBuses([
         { busId: 1, gainDb: 0 },
         { busId: 2, gainDb: 0 },
@@ -620,57 +606,80 @@ describe('Sonare WASM Module', () => {
       engine.setTrackLanes([{ trackId: 10 }, { trackId: 11 }]);
       const busStrip = (id: string): string =>
         `{"version":1,"strips":[],"buses":[{"id":"${id}","inserts":[${limiter}]}]}`;
-      engine.setBusStripJson(1, busStrip('1'));
-      engine.setBusStripJson(2, busStrip('2'));
-      engine.setMasterStripJson(stripJson('master', limiter));
-      engine.setTrackStripJson(10, stripJson('t10', limiter));
-      engine.setTrackStripJson(11, stripJson('t11', limiter));
+      engine.setBusStrip(1, JSON.parse(busStrip('1')).buses[0]);
+      engine.setBusStrip(2, JSON.parse(busStrip('2')).buses[0]);
+      engine.setStrip('master', JSON.parse(stripJson('master', limiter)).strips[0]);
+      engine.setStrip(10, JSON.parse(stripJson('t10', limiter)).strips[0]);
+      engine.setStrip(11, JSON.parse(stripJson('t11', limiter)).strips[0]);
 
       const ok = { ok: true, reason: null };
       const no = (reason: string) => ({ ok: false, reason });
-      expect(engine.canSetLaneSidechain(0, 0, 11)).toEqual(no('invalidTarget'));
-      expect(engine.canSetLaneSidechain(10, 0, 10)).toEqual(no('selfKey'));
-      expect(engine.canSetLaneSidechain(10, 0, 11)).toEqual(ok);
-      expect(engine.canSetLaneSidechain(10, 0, 0)).toEqual(ok);
-      expect(engine.canSetLaneSidechain(10, 0, 99)).toEqual(no('undeclaredSource'));
-      expect(engine.canSetLaneSidechain(10, 1, 11)).toEqual(no('insertOutOfRange'));
-      expectRefusalOf(() => engine.setLaneSidechain(10, 0, 99));
-      expectRefusalOf(() => engine.setLaneSidechain(10, 1, 11));
-      engine.setLaneSidechain(10, 0, 11);
-      expect(engine.canSetLaneSidechain(11, 0, 10)).toEqual(no('cycle'));
-      expectRefusalOf(() => engine.setLaneSidechain(11, 0, 10));
+      expect(engine.canSetStripSidechain(0, 0, { kind: 'track', id: 11 })).toEqual(
+        no('invalidTarget'),
+      );
+      expect(engine.canSetStripSidechain(10, 0, { kind: 'track', id: 10 })).toEqual(no('selfKey'));
+      expect(engine.canSetStripSidechain(10, 0, { kind: 'track', id: 11 })).toEqual(ok);
+      // Removal is spelled null; a source id of 0 is refused.
+      expect(() => engine.canSetStripSidechain(10, 0, { kind: 'track', id: 0 })).toThrow(
+        RangeError,
+      );
+      expect(engine.canSetStripSidechain(10, 0, { kind: 'track', id: 99 })).toEqual(
+        no('undeclaredSource'),
+      );
+      expect(engine.canSetStripSidechain(10, 1, { kind: 'track', id: 11 })).toEqual(
+        no('insertOutOfRange'),
+      );
+      expectRefusalOf(() => engine.setStripSidechain(10, 0, { kind: 'track', id: 99 }));
+      expectRefusalOf(() => engine.setStripSidechain(10, 1, { kind: 'track', id: 11 }));
+      engine.setStripSidechain(10, 0, { kind: 'track', id: 11 });
+      expect(engine.canSetStripSidechain(11, 0, { kind: 'track', id: 10 })).toEqual(no('cycle'));
+      expectRefusalOf(() => engine.setStripSidechain(11, 0, { kind: 'track', id: 10 }));
 
-      expect(engine.canSetBusSidechain(99, 0, 'bus', 1)).toEqual(no('invalidTarget'));
-      expect(engine.canSetBusSidechain(1, 5, 'bus', 2)).toEqual(no('insertOutOfRange'));
-      expect(engine.canSetBusSidechain(1, 0, 'bus', 77)).toEqual(no('undeclaredSource'));
+      expect(engine.canSetBusSidechain(99, 0, { kind: 'bus', id: 1 })).toEqual(no('invalidTarget'));
+      expect(engine.canSetBusSidechain(1, 5, { kind: 'bus', id: 2 })).toEqual(
+        no('insertOutOfRange'),
+      );
+      expect(engine.canSetBusSidechain(1, 0, { kind: 'bus', id: 77 })).toEqual(
+        no('undeclaredSource'),
+      );
       // The TypeScript layer refuses an unknown kind by name before the engine is asked.
-      expect(() => engine.canSetBusSidechain(1, 0, 7, 2)).toThrow(RangeError);
-      expect(engine.canSetBusSidechain(1, 0, 'bus', 1)).toEqual(no('selfKey'));
-      expect(engine.canSetBusSidechain(1, 0, 'bus', 2)).toEqual(ok);
-      engine.setBusSidechain(1, 0, 'bus', 2);
-      expect(engine.canSetBusSidechain(2, 0, 'bus', 1)).toEqual(no('cycle'));
-      expectRefusalOf(() => engine.setBusSidechain(2, 0, 'bus', 1));
+      expect(() => engine.canSetBusSidechain(1, 0, { kind: 7 as never, id: 2 })).toThrow(TypeError);
+      expect(engine.canSetBusSidechain(1, 0, { kind: 'bus', id: 1 })).toEqual(no('selfKey'));
+      expect(engine.canSetBusSidechain(1, 0, { kind: 'bus', id: 2 })).toEqual(ok);
+      engine.setBusSidechain(1, 0, { kind: 'bus', id: 2 });
+      expect(engine.canSetBusSidechain(2, 0, { kind: 'bus', id: 1 })).toEqual(no('cycle'));
+      expectRefusalOf(() => engine.setBusSidechain(2, 0, { kind: 'bus', id: 1 }));
 
-      expect(engine.canSetMasterSidechain(5, 'bus', 1)).toEqual(no('insertOutOfRange'));
-      expect(engine.canSetMasterSidechain(0, 'bus', 77)).toEqual(no('undeclaredSource'));
-      expect(() => engine.canSetMasterSidechain(0, 7, 1)).toThrow(RangeError);
-      expect(engine.canSetMasterSidechain(0, 'track', 10)).toEqual(ok);
+      expect(engine.canSetStripSidechain('master', 5, { kind: 'bus', id: 1 })).toEqual(
+        no('insertOutOfRange'),
+      );
+      expect(engine.canSetStripSidechain('master', 0, { kind: 'bus', id: 77 })).toEqual(
+        no('undeclaredSource'),
+      );
+      expect(() => engine.canSetStripSidechain('master', 0, { kind: 7 as never, id: 1 })).toThrow(
+        TypeError,
+      );
+      expect(engine.canSetStripSidechain('master', 0, { kind: 'track', id: 10 })).toEqual(ok);
 
-      expect(() => engine.canSetLaneSidechain('10' as unknown as number, 0, 11)).toThrow(/trackId/);
-      expect(() => engine.canSetBusSidechain(1, 0, 'bus', '2' as unknown as number)).toThrow();
+      expect(() =>
+        engine.canSetStripSidechain('10' as unknown as number, 0, { kind: 'track', id: 11 }),
+      ).toThrow(/ref must be a track id/);
+      expect(() =>
+        engine.canSetBusSidechain(1, 0, { kind: 'bus', id: '2' as unknown as number }),
+      ).toThrow();
       engine.destroy();
     });
 
     it('refuses a reserved mixer id that names no strip and keeps the live ids', () => {
-      const engine = new RealtimeEngine(SR, BLOCK);
+      const engine = new RealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
       engine.setTrackLanes([{ trackId: 5 }, { trackId: 7 }]);
-      const point = [{ ppq: 0, value: -6, curveToNext: 0 }];
+      const point = [{ ppq: 0, value: -6, curveToNext: 'linear' as const }];
       for (const positional of [0x4d580101, 0x4d580001, 0x4d58fe00]) {
         expectRefusalOf(() => engine.setParameterSmoothed(positional, -6));
         expectRefusalOf(() => engine.setParameter(positional, -6));
         expectRefusalOf(() => engine.setAutomationLane(positional, point));
       }
-      const laneFader = engine.resolveTrackLaneAutomationId(7, 'faderDb');
+      const laneFader = engine.resolveStripAutomationId(7, 'faderDb');
       expect(() => engine.setParameterSmoothed(laneFader, -6)).not.toThrow();
       expect(() => engine.setAutomationLane(laneFader, point)).not.toThrow();
       expect(() => engine.setParameterSmoothed(0x4d58ff01, -6)).not.toThrow();
@@ -679,7 +688,7 @@ describe('Sonare WASM Module', () => {
     });
 
     it('refuses a negative render frame on the raw embind class', () => {
-      const engine = new RealtimeEngine(SR, BLOCK);
+      const engine = new RealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
       const native = (
         engine as unknown as {
           native: {
@@ -732,22 +741,24 @@ describe('Sonare WASM Module', () => {
     });
 
     it('reports a tail from a delay insert and a latency in 1/256 samples', () => {
-      const bare = new RealtimeEngine(SR, BLOCK);
-      expect(bare.tailSamples()).toBe(0);
-      expect(bare.graphLatencySamplesQ8()).toBe(0);
+      const bare = new RealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
+      expect(bare.tailSamples).toBe(0);
+      expect(bare.graphLatencySamples).toBe(0);
       bare.destroy();
 
-      const engine = new RealtimeEngine(SR, BLOCK);
+      const engine = new RealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
       engine.setTrackLanes([{ trackId: TRACK }]);
-      engine.setTrackStripJson(
+      engine.setStrip(
         TRACK,
-        stripJson(
-          's',
-          '{"slot":"pre","processor":"effects.delay.stereo","params":{"feedback":0.6,"delayTimeLMs":37,"delayTimeRMs":53,"dryWet":0.5}}',
-        ),
+        JSON.parse(
+          stripJson(
+            's',
+            '{"slot":"pre","processor":"effects.delay.stereo","params":{"feedback":0.6,"delayTimeLMs":37,"delayTimeRMs":53,"dryWet":0.5}}',
+          ),
+        ).strips[0],
       );
       // The longer channel is 53 ms, so any bound is at least that long.
-      expect(engine.tailSamples()).toBeGreaterThanOrEqual(Math.round(0.053 * SR));
+      expect(engine.tailSamples).toBeGreaterThanOrEqual(Math.round(0.053 * SR));
       engine.destroy();
     });
   });
@@ -769,25 +780,25 @@ describe('Sonare WASM Module', () => {
       return undefined;
     };
 
-    it('refuses a bad slot in a well-formed document and codes a malformed one', () => {
-      const engine = new RealtimeEngine(48000, 256);
+    it('refuses a bad slot in a well-formed document and a non-object strip', () => {
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
       try {
         engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
         engine.setTrackLanes([{ trackId: 10 }]);
         // A bad slot name is a content defect of the document, coded InvalidFormat.
-        expect(codeOf(() => engine.setBusStripJson(1, scene('buses', '1', 'sideways')))).toBe(
-          ErrorCode.InvalidFormat,
-        );
-        expect(codeOf(() => engine.setTrackStripJson(10, scene('strips', 't', 'sideways')))).toBe(
-          ErrorCode.InvalidFormat,
-        );
-        expect(codeOf(() => engine.setMasterStripJson(scene('strips', 'm', 'sideways')))).toBe(
-          ErrorCode.InvalidFormat,
-        );
-        // A non-object element is a structural failure the reader codes InvalidFormat.
-        const nonObject = JSON.stringify({ version: 1, strips: [7], buses: [], connections: [] });
-        expect(codeOf(() => engine.setMasterStripJson(nonObject))).toBe(ErrorCode.InvalidFormat);
-        expect(codeOf(() => engine.setMasterStripJson('{'))).toBe(ErrorCode.InvalidFormat);
+        expect(
+          codeOf(() => engine.setBusStrip(1, JSON.parse(scene('buses', '1', 'sideways')).buses[0])),
+        ).toBe(ErrorCode.InvalidFormat);
+        expect(
+          codeOf(() => engine.setStrip(10, JSON.parse(scene('strips', 't', 'sideways')).strips[0])),
+        ).toBe(ErrorCode.InvalidFormat);
+        expect(
+          codeOf(() =>
+            engine.setStrip('master', JSON.parse(scene('strips', 'm', 'sideways')).strips[0]),
+          ),
+        ).toBe(ErrorCode.InvalidFormat);
+        // A non-object strip is an argument of the wrong type.
+        expect(() => engine.setStrip('master', 7 as never)).toThrow(TypeError);
       } finally {
         engine.destroy();
       }

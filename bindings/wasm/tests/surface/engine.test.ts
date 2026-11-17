@@ -1,0 +1,827 @@
+import { beforeAll, describe, expect, it } from 'vitest';
+import {
+  ErrorCode,
+  init,
+  isSonareError,
+  PART_RIG_ALL_PARTS,
+  RealtimeEngine,
+} from '../../dist/index.js';
+
+const BLOCK = 128;
+
+function newEngine(maxBlockSize = BLOCK): RealtimeEngine {
+  return new RealtimeEngine({ sampleRate: 48000, maxBlockSize });
+}
+
+function withEngine(fn: (engine: RealtimeEngine) => void, maxBlockSize = BLOCK): void {
+  const engine = newEngine(maxBlockSize);
+  try {
+    fn(engine);
+  } finally {
+    engine.destroy();
+  }
+}
+
+function caught(fn: () => unknown): unknown {
+  try {
+    fn();
+  } catch (error) {
+    return error;
+  }
+  return undefined;
+}
+
+/** The engine as an untyped bag, for old names and wrong-typed arguments. */
+function loose(engine: RealtimeEngine): Record<string, (...args: unknown[]) => unknown> {
+  return engine as unknown as Record<string, (...args: unknown[]) => unknown>;
+}
+
+beforeAll(async () => {
+  await init();
+});
+
+describe('construction', () => {
+  it('constructs from one config object', () => {
+    expect(
+      () => new (RealtimeEngine as unknown as new (...a: unknown[]) => unknown)(48000, 128),
+    ).toThrow(TypeError);
+    expect(() => new RealtimeEngine({} as never)).toThrow(TypeError);
+    expect(() => new RealtimeEngine({ sampleRate: 48000, maxChannels: 8 } as never)).toThrow(
+      /maxChannels/,
+    );
+    expect(() => new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 0 })).toThrow(
+      /omit it for the default/,
+    );
+    expect(() => new RealtimeEngine({ sampleRate: Number.NaN })).toThrow(RangeError);
+    const engine = new RealtimeEngine({ sampleRate: 48000 });
+    try {
+      expect(engine.transportState().sampleRate).toBe(48000);
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('refuses an explicit 0 for a count field', () => {
+    for (const field of [
+      'maxBlockSize',
+      'commandCapacity',
+      'telemetryCapacity',
+      'maxNumChannels',
+    ]) {
+      const error = caught(() => new RealtimeEngine({ sampleRate: 48000, [field]: 0 } as never));
+      expect(error).toBeInstanceOf(RangeError);
+      expect((error as Error).message).toContain(field);
+    }
+    const engine = new RealtimeEngine({
+      sampleRate: 48000,
+      maxBlockSize: 64,
+      commandCapacity: 256,
+      telemetryCapacity: 256,
+      maxNumChannels: 8,
+    });
+    engine.destroy();
+  });
+
+  it('prepares from the same config object', () => {
+    withEngine((engine) => {
+      expect(() => engine.prepare({ sampleRate: 44100, maxBlockSize: 256 })).not.toThrow();
+      expect(engine.transportState().sampleRate).toBe(44100);
+      expect(() => engine.prepare(48000 as never)).toThrow(TypeError);
+      expect(() => engine.prepare({ sampleRate: 48000, blockSize: 128 } as never)).toThrow(
+        /blockSize/,
+      );
+      expect(() => engine.prepare({ sampleRate: 48000, maxBlockSize: 0 })).toThrow(RangeError);
+    });
+  });
+});
+
+describe('transport and counts', () => {
+  it('reads the transport state with transportState()', () => {
+    withEngine((engine) => {
+      const state = engine.transportState();
+      expect(state.playing).toBe(false);
+      expect(state.timeSignature.numerator).toBeGreaterThan(0);
+      expect('getTransportState' in engine).toBe(false);
+    });
+  });
+
+  it('reads graph latency in samples as a getter', () => {
+    withEngine((engine) => {
+      expect(typeof engine.graphLatencySamples).toBe('number');
+      expect(engine.graphLatencySamples).toBe(0);
+      expect('graphLatencySamplesQ8' in engine).toBe(false);
+    });
+  });
+
+  it('reads cheap scalar state as getters', () => {
+    const names = [
+      'tailSamples',
+      'automationLaneCount',
+      'clipCount',
+      'midiInstrumentCount',
+      'midiCcBindingCount',
+      'graphNodeCount',
+      'graphConnectionCount',
+      'externalMidiDroppedCount',
+      'externalMidiPendingCount',
+      'midiInputPendingCount',
+      'clipPageRequestOverflowCount',
+      'warpStretchOverflowCount',
+      'warpVoiceCapacity',
+      'clipPagePrefetchFrames',
+    ] as const;
+    withEngine((engine) => {
+      for (const name of names) {
+        expect(
+          Object.getOwnPropertyDescriptor(RealtimeEngine.prototype, name)?.get,
+          name,
+        ).toBeTypeOf('function');
+        expect(typeof engine[name], name).toBe('number');
+      }
+      expect(engine.warpVoiceCapacity).toBe(8);
+      expect(engine.clipCount).toBe(0);
+    });
+  });
+
+  it('takes the loop as one object', () => {
+    withEngine((engine) => {
+      expect(() => engine.setLoop({ startPpq: 0, endPpq: 4 })).not.toThrow();
+      expect(() => engine.setLoop({ startPpq: 0, endPpq: 4, enabled: false })).not.toThrow();
+      expect(() => loose(engine).setLoop(0, 4)).toThrow(TypeError);
+      expect(() => engine.setLoop({ startPpq: 0, endPpq: 4, enabled: 1 as never })).toThrow(
+        TypeError,
+      );
+      expect(() => engine.setLoop({ startPpq: 0, endPpq: 4, loop: true } as never)).toThrow(/loop/);
+    });
+  });
+});
+
+describe('collections', () => {
+  it('lists parameters as an array', () => {
+    withEngine((engine) => {
+      expect(engine.parameters()).toEqual([]);
+      engine.addParameter({
+        id: 7,
+        name: 'gain',
+        minValue: -60,
+        maxValue: 12,
+        defaultCurve: 'hold',
+      });
+      expect(engine.parameters().map((p) => p.id)).toEqual([7]);
+      expect(engine.parameterInfo(7).defaultCurve).toBe('hold');
+      for (const name of ['parameterCount', 'parameterInfoByIndex']) {
+        expect(name in engine, name).toBe(false);
+      }
+    });
+  });
+
+  it('lists markers as an array and returns the stored markers from setMarkers', () => {
+    withEngine((engine) => {
+      expect(engine.markers()).toEqual([]);
+      const stored = engine.setMarkers([
+        { id: 11, ppq: 0, name: 'intro' },
+        { id: 12, ppq: 2, kind: 'lyric' },
+      ]);
+      expect(stored.map((m) => [m.id, m.kind])).toEqual([
+        [11, 'marker'],
+        [12, 'lyric'],
+      ]);
+      expect(engine.markers()).toEqual(stored);
+      expect(engine.marker(12).kind).toBe('lyric');
+      for (const name of ['markerCount', 'markerByIndex']) {
+        expect(name in engine, name).toBe(false);
+      }
+    });
+  });
+
+  it('pops clip page requests as undefined when none is queued', () => {
+    withEngine((engine) => {
+      expect(engine.popClipPageRequest()).toBeUndefined();
+    });
+  });
+});
+
+describe('metronome', () => {
+  it('names the click length in seconds or samples, never both', () => {
+    withEngine((engine) => {
+      engine.setMetronome({ enabled: true, clickSec: 0.01 });
+      const bySec = engine.metronome();
+      expect(typeof bySec.clickSec).toBe('number');
+      expect('clickSamples' in bySec).toBe(false);
+      expect('clickSeconds' in bySec).toBe(false);
+      engine.setMetronome({ enabled: true, clickSamples: 16 });
+      const bySamples = engine.metronome();
+      expect(bySamples.clickSamples).toBe(16);
+      expect('clickSec' in bySamples).toBe(false);
+      const both = caught(() =>
+        engine.setMetronome({ enabled: true, clickSamples: 16, clickSec: 0.01 }),
+      );
+      expect(both).toBeInstanceOf(RangeError);
+      expect(caught(() => engine.setMetronome({ enabled: true, clickSamples: 0 }))).toBeInstanceOf(
+        RangeError,
+      );
+      expect(caught(() => engine.setMetronome({ enabled: true, clickSec: 0 }))).toBeInstanceOf(
+        RangeError,
+      );
+      expect(() => engine.setMetronome({ enabled: true, clickSeconds: 0.01 } as never)).toThrow(
+        /clickSeconds/,
+      );
+    });
+  });
+});
+
+describe('telemetry', () => {
+  it('reports telemetry kinds as strings and latency in samples', () => {
+    withEngine((engine) => {
+      engine.process([new Float32Array(256)]);
+      const records = engine.drainTelemetry(16);
+      expect(records.length).toBeGreaterThan(0);
+      for (const record of records) {
+        expect(['processBlock', 'error']).toContain(record.type);
+        expect(typeof record.error).toBe('string');
+        expect(typeof record.graphLatencySamples).toBe('number');
+        expect('graphLatencySamplesQ8' in record).toBe(false);
+      }
+      expect(records.some((record) => record.error === 'maxBlockExceeded')).toBe(true);
+    }, 64);
+  });
+});
+
+describe('closed-set tokens', () => {
+  it('refuses an ordinal for a marker kind', () => {
+    withEngine((engine) => {
+      expect(() => engine.setMarkers([{ id: 1, ppq: 0, kind: 2 as never }])).toThrow(TypeError);
+      expect(() => engine.setMarkers([{ id: 1, ppq: 0, kind: 'chapter' as never }])).toThrow(
+        RangeError,
+      );
+    });
+  });
+
+  it('refuses an ordinal for an automation curve', () => {
+    withEngine((engine) => {
+      engine.addParameter({ id: 7, name: 'gain', minValue: -60, maxValue: 12 });
+      expect(() =>
+        engine.setAutomationLane(7, [{ ppq: 0, value: 0, curveToNext: 1 as never }]),
+      ).toThrow(TypeError);
+      expect(() =>
+        engine.setAutomationLane(7, [
+          { ppq: 0, value: 0, curveToNext: 'linear' },
+          { ppq: 1, value: 1 },
+        ]),
+      ).not.toThrow();
+      expect(() => engine.addParameter({ id: 8, name: 'x', defaultCurve: 1 as never })).toThrow(
+        TypeError,
+      );
+    });
+  });
+
+  it('refuses an ordinal for a graph node type and mix', () => {
+    const graph = (type: unknown, mix: unknown) => ({
+      nodes: [
+        { id: 'in', numPorts: 2 },
+        { id: 'gain', type, gainDb: 0, numPorts: 2 },
+        { id: 'out', numPorts: 2 },
+      ],
+      connections: [{ sourceNode: 'in', sourcePort: 0, destNode: 'out', destPort: 0, mix }],
+      inputNode: 'in',
+      outputNode: 'out',
+      numChannels: 2,
+    });
+    withEngine((engine) => {
+      expect(() => engine.setGraph(graph('gain', 'replace') as never)).not.toThrow();
+      expect(() => engine.setGraph(graph(1, 'add') as never)).toThrow(TypeError);
+      expect(() => engine.setGraph(graph('gain', 0) as never)).toThrow(TypeError);
+      expect(() => engine.setGraph(graph('gain', 'merge') as never)).toThrow(RangeError);
+    });
+  });
+
+  it('refuses an ordinal for a dither type', () => {
+    withEngine((engine) => {
+      const base = { totalFrames: 128, blockSize: BLOCK, numChannels: 2 };
+      expect(() => engine.bounceOffline({ ...base, dither: 'tpdf', ditherBits: 16 })).not.toThrow();
+      expect(() => engine.bounceOffline({ ...base, dither: 2 as never })).toThrow(TypeError);
+      expect(() => engine.bounceOffline({ ...base, dither: 'shaped' as never })).toThrow(
+        RangeError,
+      );
+    });
+  });
+
+  it('refuses an ordinal for a warp mode', () => {
+    withEngine((engine) => {
+      const clip = (warpMode: unknown) => [
+        {
+          id: 1,
+          channels: [new Float32Array(BLOCK)],
+          startPpq: 0,
+          lengthSamples: BLOCK,
+          warpMode,
+        },
+      ];
+      expect(() => engine.setClips(clip('repitch') as never)).not.toThrow();
+      expect(() => engine.setClips(clip(1) as never)).toThrow(TypeError);
+      expect(() => engine.setClips(clip('tempo-sync') as never)).toThrow(RangeError);
+    });
+  });
+
+  it('refuses an ordinal for a channel layout', () => {
+    withEngine((engine) => {
+      expect(() =>
+        engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 'stereo' }]),
+      ).not.toThrow();
+      expect(() =>
+        engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 1 as never }]),
+      ).toThrow(TypeError);
+      expect(() => engine.setTrackBuses([{ busId: 1, channelLayout: 0 as never }])).toThrow(
+        TypeError,
+      );
+      expect(() => engine.setTrackBuses([{ busId: 1, channelLayout: 'quad' as never }])).toThrow(
+        RangeError,
+      );
+      expect(() => engine.setTrackBuses([{ busId: 1, channelLayout: 'mono' }])).not.toThrow();
+    });
+  });
+
+  it('refuses an ordinal for a send timing', () => {
+    withEngine((engine) => {
+      engine.setTrackBuses([{ busId: 1 }]);
+      const lane = (sendTiming: unknown) => [{ trackId: 10, sends: [{ busId: 1, sendTiming }] }];
+      expect(() => engine.setTrackLanes(lane('preFader') as never)).not.toThrow();
+      expect(() => engine.setTrackLanes(lane(1) as never)).toThrow(TypeError);
+      expect(() => engine.setTrackLanes(lane('early') as never)).toThrow(RangeError);
+    });
+  });
+
+  it('refuses an ordinal for a monitor mode', () => {
+    withEngine((engine) => {
+      engine.setTrackLanes([{ trackId: 10 }]);
+      expect(() => engine.setTrackMonitorMode(10, 'pfl')).not.toThrow();
+      expect(() => engine.setTrackMonitorMode(10, 1 as never)).toThrow(TypeError);
+      expect(() => engine.setTrackMonitorMode(10, 'cue' as never)).toThrow(RangeError);
+    });
+  });
+
+  it('refuses an ordinal for a capture source', () => {
+    withEngine((engine) => {
+      expect(() => engine.configureCapture({ capacityFrames: 128, source: 'input' })).not.toThrow();
+      expect(engine.captureStatus().source).toBe('input');
+      expect(() => engine.configureCapture({ capacityFrames: 128, source: 1 as never })).toThrow(
+        TypeError,
+      );
+      expect(() =>
+        engine.configureCapture({ capacityFrames: 128, source: 'both' as never }),
+      ).toThrow(RangeError);
+    });
+  });
+});
+
+describe('absent versus zero', () => {
+  it('omits an unset bus output and refuses an explicit zero', () => {
+    withEngine((engine) => {
+      engine.setTrackBuses([{ busId: 1 }]);
+      expect(() => engine.setTrackLanes([{ trackId: 10, outputBusId: 1 }])).not.toThrow();
+      expect(() => engine.setTrackLanes([{ trackId: 10, outputBusId: 0 }])).toThrow(
+        /omit it to route to the master mix/,
+      );
+      expect(() => engine.setTrackBuses([{ busId: 1, outputBusId: 0 }])).toThrow(RangeError);
+      expect(() => engine.setTrackOutputBus(10, null)).not.toThrow();
+      expect(() => engine.setTrackOutputBus(10, 0)).toThrow(RangeError);
+    });
+  });
+
+  it('omits rate and loudness defaults and refuses an explicit zero', () => {
+    withEngine((engine) => {
+      const base = { totalFrames: 128, blockSize: BLOCK, numChannels: 2 };
+      for (const field of ['targetSampleRate', 'sourceSampleRate', 'targetLufs']) {
+        const error = caught(() => engine.bounceOffline({ ...base, [field]: 0 }));
+        expect(error, field).toBeInstanceOf(RangeError);
+        expect((error as Error).message).toContain('omit it for the default');
+      }
+      expect(() =>
+        engine.bounceOffline({ ...base, normalizeLufs: true, targetLufs: Number.NaN }),
+      ).toThrow(/targetLufs/);
+    });
+  });
+});
+
+describe('track solo and mute', () => {
+  it('keys solo and mute by track id', () => {
+    withEngine((engine) => {
+      engine.setTrackLanes([{ trackId: 10 }, { trackId: 20 }]);
+      expect(() => engine.setTrackSoloMute(20, { solo: true, mute: false })).not.toThrow();
+      expect(() => engine.setTrackSoloMute(20, { solo: false, mute: true }, 256)).not.toThrow();
+      expect(() => engine.setTrackSoloMute(30, { solo: true, mute: false })).toThrow(RangeError);
+      expect(() => engine.setTrackSoloMute(1, { solo: true, mute: false })).toThrow(RangeError);
+      expect(() => engine.setTrackSoloMute(20, { solo: true } as never)).toThrow(TypeError);
+      expect(() => engine.setTrackSoloMute(20, true as never)).toThrow(TypeError);
+      expect(() =>
+        engine.setTrackSoloMute(20, { solo: true, mute: false, safe: true } as never),
+      ).toThrow(/safe/);
+      expect('setSoloMute' in engine).toBe(false);
+      engine.setTrackLanes([{ trackId: 20 }]);
+      expect(() => engine.setTrackSoloMute(10, { solo: true, mute: false })).toThrow(RangeError);
+    });
+  });
+});
+
+describe('strip addressing', () => {
+  it('addresses strips by track id or master', () => {
+    withEngine((engine) => {
+      engine.setTrackLanes([{ trackId: 10 }]);
+      const track = engine.resolveStripAutomationId(10, 'faderDb');
+      const master = engine.resolveStripAutomationId('master', 'faderDb');
+      expect(track).not.toBe(master);
+      expect(engine.resolveStripAutomationId('master', 'width')).not.toBe(master);
+      expect(() => engine.resolveStripAutomationId(10, 'width')).toThrow(RangeError);
+      expect(() => engine.resolveStripAutomationId('10', 'faderDb')).toThrow(RangeError);
+      expect(() => engine.resolveStripAutomationId('bus', 'faderDb')).toThrow(RangeError);
+      expect(() => engine.resolveStripAutomationId({} as never, 'faderDb')).toThrow(TypeError);
+      expect(() => engine.setStripFaderDb(10, -6)).not.toThrow();
+      expect(() => engine.setStripFaderDb('master', -3)).not.toThrow();
+      expect(() => engine.setStripFaderDb('10', -3)).toThrow(RangeError);
+      engine.setTrackBuses([{ busId: 1 }]);
+      expect(() => engine.setBusGainDb(1, -4)).not.toThrow();
+      expect(() => engine.setBusGainDb(99, -4)).toThrow(RangeError);
+    });
+  });
+
+  it('replaces a strip with a scene strip object', () => {
+    withEngine((engine) => {
+      engine.setTrackLanes([{ trackId: 10 }]);
+      engine.setTrackBuses([{ busId: 1 }]);
+      expect(() => engine.setStrip(10, { id: 'track-10', faderDb: -6 } as never)).not.toThrow();
+      expect(() => engine.setStrip('master', { id: 'master', faderDb: -3 } as never)).not.toThrow();
+      expect(() => engine.setBusStrip(1, { id: '1', inserts: [] } as never)).not.toThrow();
+      expect(() => engine.setStrip(10, '{"strips":[]}' as never)).toThrow(TypeError);
+      expect(() => engine.setBusStrip(1, null as never)).toThrow(TypeError);
+      expect(() => engine.setStrip('10', {} as never)).toThrow(RangeError);
+    });
+  });
+
+  it('takes an EQ band as an object', () => {
+    withEngine((engine) => {
+      engine.setTrackLanes([{ trackId: 10 }]);
+      expect(() => engine.setStripEqBand(10, 0, '{"type":"Peak"}' as never)).toThrow(TypeError);
+      expect(() => engine.setBusEqBand(1, 0, '{"type":"Peak"}' as never)).toThrow(TypeError);
+      expect(() => engine.setStripEqBand('10', 0, { type: 'Peak' })).toThrow(RangeError);
+    });
+  });
+
+  it('takes bypass state and insert parameters as objects', () => {
+    withEngine((engine) => {
+      engine.setTrackLanes([{ trackId: 10 }]);
+      expect(() => engine.setStripInsertBypassed(10, 0, { bypassed: 'yes' as never })).toThrow(
+        TypeError,
+      );
+      expect(() =>
+        engine.setStripInsertBypassed(10, 0, { bypassed: true, reset: true } as never),
+      ).toThrow(/reset/);
+      expect(() => engine.setBusInsertBypassed(1, 0, true as never)).toThrow(TypeError);
+      expect(() => engine.setStripInsertParam(10, 0, { name: 'levelDb' } as never)).toThrow(
+        TypeError,
+      );
+      expect(() =>
+        engine.setStripInsertParam(10, 0, { name: 'levelDb', value: 1, extra: 1 } as never),
+      ).toThrow(/extra/);
+      expect(() => engine.applyStripInsertParamNow(10, 0, { name: 1, value: 1 } as never)).toThrow(
+        TypeError,
+      );
+      expect(() => engine.restoreStripInsertParam('10', 0, { name: 'levelDb', value: 1 })).toThrow(
+        RangeError,
+      );
+      expect(() => engine.setBusInsertParam(1, 0, 'levelDb' as never)).toThrow(TypeError);
+    });
+  });
+
+  it('sets pan on a track strip and refuses the master strip', () => {
+    withEngine((engine) => {
+      engine.setTrackLanes([{ trackId: 10 }]);
+      // The native pan setters address a declared strip.
+      engine.setStrip(10, { id: 'track-10' } as never);
+      expect(() => engine.setStripPan(10, 0.25)).not.toThrow();
+      expect(() => engine.setStripPan('master', 0.25)).toThrow(RangeError);
+      expect(() => engine.setStripPanLaw(10, 'const6dB')).not.toThrow();
+      expect(() => engine.setStripPanLaw(10, 1 as never)).toThrow(TypeError);
+      expect(() => engine.setStripPanMode(10, 'dualPan')).not.toThrow();
+      expect(() => engine.setStripPanMode(10, 2 as never)).toThrow(TypeError);
+      expect(() => engine.setStripDualPan(10, -1, 1)).not.toThrow();
+      expect(() => engine.setStripSurroundPan('master', {})).toThrow(RangeError);
+      expect(() => engine.setStripChannelDelaySamples(10, 4)).not.toThrow();
+      expect(() => engine.setStripChannelDelaySamples('master', 4)).toThrow(RangeError);
+      engine.setTrackBuses([{ busId: 1 }]);
+      engine.setBusStrip(1, { id: '1' } as never);
+      expect(() => engine.setBusPan(1, 0.5)).not.toThrow();
+      expect(() => engine.setBusPanLaw(1, 'const3dB')).not.toThrow();
+      expect(() => engine.setBusPanLaw(1, 0 as never)).toThrow(TypeError);
+      expect(() => engine.setBusPanMode(1, 'balance')).not.toThrow();
+      expect(() => engine.setBusDualPan(1, -1, 1)).not.toThrow();
+    });
+  });
+
+  it('keys a strip insert from a source object', () => {
+    withEngine((engine) => {
+      engine.setTrackLanes([{ trackId: 10 }, { trackId: 11 }]);
+      expect(() => engine.setStripSidechain(10, 0, { kind: 'bus', id: 1 })).toThrow(RangeError);
+      expect(() => engine.setStripSidechain(10, 0, { kind: 1 as never, id: 1 })).toThrow(TypeError);
+      expect(() => engine.setStripSidechain('10', 0, null)).toThrow(RangeError);
+      expect(() => engine.setStripSidechain(10, 0, { kind: 'track', id: 0 })).toThrow(
+        /pass null to remove the binding/,
+      );
+      expect(() =>
+        engine.setStripSidechain(10, 0, { kind: 'track', id: 11, extra: 1 } as never),
+      ).toThrow(/extra/);
+      expect(() => engine.canSetStripSidechain(10, 0, { kind: 2 as never, id: 11 })).toThrow(
+        TypeError,
+      );
+      expect(typeof engine.canSetStripSidechain(10, 0, { kind: 'track', id: 11 }).ok).toBe(
+        'boolean',
+      );
+      expect(() => engine.setBusSidechain(1, 0, { kind: 'lane' as never, id: 1 })).toThrow(
+        RangeError,
+      );
+      expect(() => engine.canSetBusSidechain(1, 0, { kind: 7 as never, id: 2 })).toThrow(TypeError);
+    });
+  });
+});
+
+describe('capture', () => {
+  it('sets up capture in one call', () => {
+    withEngine((engine) => {
+      engine.configureCapture({
+        capacityFrames: 128,
+        numChannels: 2,
+        recordOffsetSamples: -4,
+        inputMonitor: { enabled: true, gain: 0.5 },
+        punch: { startSample: 100, endSec: 1 },
+      });
+      const status = engine.captureStatus();
+      expect(status.punchEnabled).toBe(true);
+      expect(status.recordOffsetSamples).toBe(-4);
+      expect(status.source).toBe('output');
+      engine.configureCapture({ capacityFrames: 128 });
+      expect(engine.captureStatus().punchEnabled).toBe(false);
+      expect(engine.captureStatus().recordOffsetSamples).toBe(0);
+      expect(caught(() => engine.configureCapture({ numChannels: 2 } as never))).toBeInstanceOf(
+        TypeError,
+      );
+      expect(() => engine.configureCapture({ capacityFrames: 128, numChannels: 0 })).toThrow(
+        /omit it for the default/,
+      );
+      expect(() =>
+        engine.configureCapture({ capacityFrames: 128, bufferFrames: 1 } as never),
+      ).toThrow(/bufferFrames/);
+      for (const name of [
+        'setCaptureBuffer',
+        'setCapturePunch',
+        'setCaptureSource',
+        'setRecordOffsetSamples',
+        'setInputMonitor',
+      ]) {
+        expect(name in engine, name).toBe(false);
+      }
+    });
+  });
+
+  it('reallocates the capture buffer only while disarmed', () => {
+    withEngine((engine) => {
+      engine.configureCapture({ capacityFrames: 128 });
+      engine.armCapture({ armed: true });
+      expect(engine.captureStatus().armed).toBe(true);
+      expect(() => engine.configureCapture({ capacityFrames: 128, source: 'input' })).not.toThrow();
+      const error = caught(() => engine.configureCapture({ capacityFrames: 256 }));
+      expect(isSonareError(error)).toBe(true);
+      expect((error as { code: number }).code).toBe(ErrorCode.InvalidState);
+      engine.armCapture({ armed: false });
+      expect(() => engine.configureCapture({ capacityFrames: 256 })).not.toThrow();
+    });
+  });
+
+  it('takes the punch window as one spelling per bound', () => {
+    withEngine((engine) => {
+      const punch = (p: Record<string, number>) =>
+        engine.configureCapture({ capacityFrames: 128, punch: p });
+      expect(() => punch({ startPpq: 2, endPpq: 4 })).not.toThrow();
+      expect(() => punch({ startPpq: 1, startSample: 1, endSample: 2 })).toThrow(RangeError);
+      expect(() => punch({ startSample: 1 })).toThrow(RangeError);
+      expect(() => punch({ startSample: -1, endSample: 2 })).toThrow(RangeError);
+      expect(() => punch({ startSample: 1, endSample: 2, enabled: 1 })).toThrow(TypeError);
+      expect(() => punch({ startSample: 5, endSample: 5 })).toThrow(RangeError);
+    });
+  });
+
+  it('arms capture with a state object', () => {
+    withEngine((engine) => {
+      engine.configureCapture({ capacityFrames: 128 });
+      expect(() => engine.armCapture(true as never)).toThrow(TypeError);
+      expect(() => engine.armCapture({ armed: 1 as never })).toThrow(TypeError);
+      expect(() => engine.armCapture({ armed: true, punch: true } as never)).toThrow(/punch/);
+      engine.armCapture({ armed: true });
+      expect(engine.captureStatus().armed).toBe(true);
+    });
+  });
+});
+
+describe('offline render and process', () => {
+  it('renders offline from one request object', () => {
+    withEngine((engine) => {
+      const plane = () => new Float32Array(BLOCK);
+      expect(() => engine.renderOffline({ channels: [plane(), plane()] })).not.toThrow();
+      expect(() => loose(engine).renderOffline([plane()], BLOCK)).toThrow(TypeError);
+      expect(() =>
+        engine.renderOffline({ channels: [plane()], sampleRate: 48000 } as never),
+      ).toThrow(/sampleRate/);
+      const poisoned = plane();
+      poisoned[3] = Number.NaN;
+      const error = caught(() => engine.renderOffline({ channels: [poisoned] }));
+      expect(error).toBeInstanceOf(RangeError);
+      expect((error as Error).message).toContain('index 3');
+      expect(() => engine.renderOffline({ channels: [plane()], validate: 1 as never })).toThrow(
+        TypeError,
+      );
+    });
+  });
+
+  it('names the zero-copy buffer accessors without get', () => {
+    withEngine((engine) => {
+      engine.prepareChannels(2, BLOCK);
+      expect(engine.channelBuffer(0, BLOCK)).toBeInstanceOf(Float32Array);
+      engine.prepareMonitorChannels(2, BLOCK);
+      expect(engine.monitorChannelBuffer(0, BLOCK)).toBeInstanceOf(Float32Array);
+      expect('getChannelBuffer' in engine).toBe(false);
+      expect('getMonitorChannelBuffer' in engine).toBe(false);
+    });
+  });
+
+  it('keeps the scratch accessors off the public class', () => {
+    withEngine((engine) => {
+      for (const name of [
+        'popExternalMidiToScratch',
+        'popClipPageRequestToScratch',
+        'popTelemetryToScratch',
+        'popMeterTelemetryToScratch',
+        'popScopeTelemetryToScratch',
+        'consumeExternalMidiScratch',
+        'telemetryScratchType',
+        'meterScratchValue',
+        'scopeScratchBand',
+        'externalMidiScratchByteWord',
+        'clipPageRequestScratchSample',
+      ]) {
+        expect(name in engine, name).toBe(false);
+      }
+    });
+  });
+
+  it('delivers external MIDI bytes as a Uint8Array', () => {
+    withEngine((engine) => {
+      engine.setBuiltinInstrument(5, { gain: 0.5 });
+      engine.setMidiDestinationExternal(5, true);
+      engine.setMidiClips([
+        {
+          id: 1,
+          trackId: 5,
+          destinationId: 5,
+          lengthSamples: 8192,
+          events: [
+            { renderFrame: 0, word0: (0x2 << 28) | (0x90 << 16) | (60 << 8) | 100, wordCount: 1 },
+          ],
+        },
+      ]);
+      engine.play();
+      engine.process([new Float32Array(BLOCK), new Float32Array(BLOCK)]);
+      const events = engine.drainExternalMidi(16);
+      expect(events.length).toBe(1);
+      expect(events[0].bytes).toBeInstanceOf(Uint8Array);
+      expect(events[0].bytes).toEqual(Uint8Array.of(0x90, 60, 100));
+    });
+  });
+});
+
+describe('instruments and MIDI', () => {
+  it('leads with the destination id on instrument setters', () => {
+    withEngine((engine) => {
+      expect(() => engine.setBuiltinInstrument(3, { gain: 0.5 })).not.toThrow();
+      expect(() => engine.setSynthInstrument(4, { engineMode: 'reed' })).not.toThrow();
+      expect(() => engine.setSf2Instrument(5, {})).not.toThrow();
+      expect(engine.midiInstrumentCount).toBe(3);
+      const builtin = caught(() => engine.setBuiltinInstrument(3, { destinationId: 3 } as never));
+      expect(builtin).toBeInstanceOf(TypeError);
+      expect((builtin as Error).message).toContain('destinationId');
+      expect(() => engine.setSf2Instrument(5, { destinationId: 5 } as never)).toThrow(
+        /destinationId/,
+      );
+    });
+  });
+
+  it('sets a part rig from one request', () => {
+    withEngine((engine) => {
+      engine.setSynthInstrument(0, { engineMode: 'reed' });
+      expect(() =>
+        engine.setPartRig({
+          destinationId: 0,
+          part: PART_RIG_ALL_PARTS,
+          mode: 'chain',
+          inserts: [{ processor: 'dynamics.limiter', params: { thresholdDb: -6 } }],
+        }),
+      ).not.toThrow();
+      expect(() => loose(engine).setPartRig(0, 0, 'none')).toThrow(TypeError);
+      expect(() => engine.setPartRig({ destinationId: 0, part: 0, mode: 0 as never })).toThrow(
+        TypeError,
+      );
+      expect(() =>
+        engine.setPartRig({ destinationId: 0, part: 0, mode: 'none', extra: 1 } as never),
+      ).toThrow(/extra/);
+    });
+  });
+
+  it('binds a MIDI controller from one descriptor', () => {
+    withEngine((engine) => {
+      engine.addParameter({ id: 5, name: 'p', minValue: 0, maxValue: 1 });
+      engine.bindMidiCc({ ccNumber: 7, channel: 0, paramId: 5, minValue: 0, maxValue: 1 });
+      expect(engine.midiCcBindingCount).toBe(1);
+      expect('bindMidiCcBinding' in engine).toBe(false);
+    });
+  });
+
+  it('takes a program bank as one object', () => {
+    withEngine((engine) => {
+      engine.setSf2Instrument(0, {});
+      expect(() => engine.pushMidiProgram(0, 0, 0, 5)).not.toThrow();
+      expect(() => engine.pushMidiProgram(0, 0, 0, 5, { msb: 1, lsb: 2 }, 256)).not.toThrow();
+      expect(() => engine.pushMidiProgram(0, 0, 0, 5, { msb: 128, lsb: 0 })).toThrow(RangeError);
+      expect(() =>
+        engine.pushMidiProgram(0, 0, 0, 5, { msb: 1, lsb: 2, valid: true } as never),
+      ).toThrow(/valid/);
+      engine.setMidiInputSource(0);
+      expect(() => engine.pushMidiInputProgram(0, 0, 5, { msb: 1, lsb: 2 }, 64)).not.toThrow();
+      expect(() => engine.pushMidiInputProgram(0, 0, 5)).not.toThrow();
+    });
+  });
+
+  it('refuses an ordinal for an articulation and a note-tracking rule', () => {
+    withEngine((engine) => {
+      engine.setSynthInstrument(0, { engineMode: 'reed' });
+      expect(() => engine.setArticulation(0, 0, 2 as never)).toThrow(TypeError);
+      expect(() => engine.setControllerNoteTracking(0, 0 as never, 'last')).toThrow(TypeError);
+      expect(() => engine.setControllerNoteTracking(0, 'bend', 1 as never)).toThrow(TypeError);
+      expect(() => engine.bindController(0, { input: 2 as never, axis: 'excitation' })).toThrow(
+        TypeError,
+      );
+      expect(() =>
+        engine.bindController(0, { input: 'control-change', index: 2, axis: 3 as never }),
+      ).toThrow(TypeError);
+    });
+  });
+});
+
+describe('removed names', () => {
+  it('no longer exposes the one-off and per-strip-kind spellings', () => {
+    const removed = [
+      'setTrackStripJson',
+      'setMasterStripJson',
+      'setBusStripJson',
+      'setTrackStripEqBand',
+      'setMasterStripEqBand',
+      'setBusStripEqBand',
+      'setTrackStripEqBandJson',
+      'setMasterStripEqBandJson',
+      'setBusStripEqBandJson',
+      'setTrackStripInsertBypassed',
+      'setMasterStripInsertBypassed',
+      'setBusStripInsertBypassed',
+      'setTrackStripInsertParamByName',
+      'setMasterStripInsertParamByName',
+      'setBusStripInsertParamByName',
+      'applyTrackStripInsertParamByNameNow',
+      'applyMasterStripInsertParamByNameNow',
+      'applyBusStripInsertParamByNameNow',
+      'restoreTrackStripInsertParamByName',
+      'restoreMasterStripInsertParamByName',
+      'restoreBusStripInsertParamByName',
+      'clearTrackInsertParameterBases',
+      'clearMasterInsertParameterBases',
+      'resolveTrackInsertAutomationId',
+      'resolveMasterInsertAutomationId',
+      'resolveTrackLaneAutomationId',
+      'resolveMasterAutomationId',
+      'setTrackStripPan',
+      'setTrackStripPanLaw',
+      'setTrackStripPanMode',
+      'setTrackStripDualPan',
+      'setTrackStripSurroundPan',
+      'setTrackStripChannelDelaySamples',
+      'setBusStripPan',
+      'setBusStripPanLaw',
+      'setBusStripPanMode',
+      'setBusStripDualPan',
+      'setLaneSidechain',
+      'setMasterSidechain',
+      'canSetLaneSidechain',
+      'canSetMasterSidechain',
+    ];
+    withEngine((engine) => {
+      for (const name of removed) {
+        expect(name in engine, name).toBe(false);
+      }
+    });
+  });
+});

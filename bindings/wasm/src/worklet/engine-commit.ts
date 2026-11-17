@@ -1,5 +1,7 @@
+import { ErrorCode, SonareError } from '../errors.js';
 import type { RealtimeEngine } from '../index.js';
-import type { SonareEngineCommandRecord } from './protocol.js';
+import { isValidCommandRecord } from './engine-node.js';
+import { type SonareEngineCommandRecord, SonareEngineCommandType } from './protocol.js';
 
 /**
  * The one transaction every SonareEngine control edit goes through: validate,
@@ -7,7 +9,7 @@ import type { SonareEngineCommandRecord } from './protocol.js';
  * from here, and only once the edit can no longer be refused, so a refused
  * edit leaves the mirror, the caches and the worklet exactly as they were.
  *
- * A command edit is refused (returns false) before anything changes when the
+ * A command edit is refused (throws) before anything changes when the
  * live engine would not take the command — a record outside the wire domain,
  * or no room for it; the offline engine then validates and applies it, and the
  * command is queued last. A destroyed engine throws `InvalidState` instead. A
@@ -25,20 +27,45 @@ export interface EngineCommitContext {
   sendCommand(command: SonareEngineCommandRecord): boolean;
 }
 
-/** Applies `applyOffline` to the mirror and queues `command` live, or changes nothing. */
+/**
+ * Throws `ErrorCode.OutOfMemory` when a command that was well formed did not
+ * fit the live command ring; `method` names the call that sent it.
+ */
+export function requireQueued(accepted: boolean, method: string): void {
+  if (!accepted) {
+    throw new SonareError(ErrorCode.OutOfMemory, `${method}: the engine command queue is full`);
+  }
+}
+
+/** The refusal for a command the live engine would not take: a bad value or a full ring. */
+function refusedCommand(command: SonareEngineCommandRecord): Error {
+  const name = SonareEngineCommandType[command.type] ?? `command ${String(command.type)}`;
+  if (!isValidCommandRecord(command)) {
+    return new RangeError(`${name}: a value is outside the range the engine accepts`);
+  }
+  return new SonareError(ErrorCode.OutOfMemory, `${name}: the engine command queue is full`);
+}
+
+/**
+ * Applies `applyOffline` to the mirror and queues `command` live, or changes
+ * nothing and throws: a `RangeError` for a value the live engine cannot carry,
+ * `ErrorCode.OutOfMemory` for a full command ring.
+ */
 export function commitCommand(
   ctx: EngineCommitContext,
   command: SonareEngineCommandRecord,
   applyOffline: (offline: RealtimeEngine) => void,
   commitCache?: () => void,
-): boolean {
+): void {
   if (!ctx.canSend(command)) {
-    return false;
+    throw refusedCommand(command);
   }
   applyOffline(ctx.offlineEngine);
   commitCache?.();
   // The main thread is the only producer, so what was checked above still holds.
-  return ctx.sendCommand(command);
+  if (!ctx.sendCommand(command)) {
+    throw refusedCommand(command);
+  }
 }
 
 /**

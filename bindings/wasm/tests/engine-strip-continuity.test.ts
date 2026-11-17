@@ -9,6 +9,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { init, RealtimeEngine } from '../dist/index.js';
+import type { ChannelLayout } from '../src/audio';
 import type {
   EngineBus,
   EngineTrackLane,
@@ -88,10 +89,13 @@ function makeFixture(constantSource = false, includeTail = true, symmetricSource
   const editedScene = stripScene(1.25, true, includeTail);
   // The checked-in dist can lag the source declarations between a core and JS
   // build.  The focused runtime build supplies the complete source surface.
-  const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE) as unknown as RealtimeEngineType;
+  const engine = new RealtimeEngine({
+    sampleRate: SAMPLE_RATE,
+    maxBlockSize: BLOCK_SIZE,
+  }) as unknown as RealtimeEngineType;
   const [left, right] = makeSource(constantSource, symmetricSource);
   engine.setTrackLanes([{ trackId: TRACK_ID }]);
-  engine.setTrackStripJson(TRACK_ID, scene);
+  engine.setStrip(TRACK_ID, JSON.parse(scene).strips[0]);
   engine.setClips([
     {
       id: 1,
@@ -106,7 +110,7 @@ function makeFixture(constantSource = false, includeTail = true, symmetricSource
   const trackLaneIds = [TRACK_ID];
   const trackSends = new Map<number, EngineTrackSend[]>();
   const trackOutputBus = new Map<number, number>();
-  const trackSourceChannelLayout = new Map<number, number>();
+  const trackSourceChannelLayout = new Map<number, ChannelLayout>();
   const laneSidechains = new Map<
     string,
     { trackId: number; insertIndex: number; sourceTrackId: number }
@@ -133,7 +137,7 @@ function makeFixture(constantSource = false, includeTail = true, symmetricSource
       return existing;
     }
     trackLaneIds.push(trackId);
-    engine.setTrackLanes(trackLaneIds);
+    engine.setTrackLanes(trackLaneIds.map((trackId) => ({ trackId })));
     return trackLaneIds.length - 1;
   };
   const clearInsertAutomationLanes = (_target: StripJsonTarget): void => {
@@ -267,7 +271,7 @@ describe('strip continuity (real WASM engine)', () => {
     const edited = makeFixture(true, false, true);
     const control = makeFixture(true, false, true);
     try {
-      const gainId = edited.engine.resolveTrackInsertAutomationId(TRACK_ID, 0, 'levelDb');
+      const gainId = edited.engine.resolveStripInsertAutomationId(TRACK_ID, 0, 'levelDb');
       expect(gainId).toBeGreaterThan(0);
       edited.engine.setParameterSmoothed(gainId, -12);
       control.engine.setParameterSmoothed(gainId, -12);

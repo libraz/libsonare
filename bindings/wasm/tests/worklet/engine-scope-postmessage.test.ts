@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { init as initSource } from '../../src/index';
-import { RealtimeEngine } from '../../src/realtime_engine';
+import { engineNativeHandle, RealtimeEngine } from '../../src/realtime_engine';
 import { SonareRealtimeEngineWorkletProcessor as SourceSonareRealtimeEngineWorkletProcessor } from '../../src/worklet/engine-processor';
 import { isScopeSnapshot } from '../../src/worklet/guards';
 import type { SonareWorkletScopeSnapshot } from '../../src/worklet/protocol';
@@ -117,8 +117,8 @@ describe('realtime engine scope postMessage transport', () => {
       scopeIntervalFrames: 0,
     });
     try {
-      processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
-      control.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
+      processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
+      control.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
       let phase = 0;
       let audiblePeak = 0;
       for (let block = 0; block < 12; block++) {
@@ -194,7 +194,7 @@ describe('realtime engine scope postMessage transport', () => {
     try {
       processor.receiveCommand({
         type: SourceSonareEngineCommandType.TransportPlay,
-        sampleTime: -1,
+        renderFrame: -1,
       });
       for (let block = 0; block < 12; block++) {
         expect(
@@ -218,12 +218,15 @@ describe('realtime engine scope postMessage transport', () => {
       { postMessage: (message) => posted.push(message) },
     );
     const engine = (processor as unknown as { engine: RealtimeEngine }).engine;
-    const popScopeTelemetryToScratch = vi.spyOn(engine, 'popScopeTelemetryToScratch');
+    const popScopeTelemetryToScratch = vi.spyOn(
+      engineNativeHandle(engine),
+      'popScopeTelemetryToScratch',
+    );
     try {
       expect(configureScopeTelemetry).not.toHaveBeenCalled();
       processor.receiveCommand({
         type: SourceSonareEngineCommandType.TransportPlay,
-        sampleTime: -1,
+        renderFrame: -1,
       });
       for (let block = 0; block < 8; block++) {
         expect(
@@ -251,12 +254,15 @@ describe('realtime engine scope postMessage transport', () => {
       scopeIntervalFrames: 128,
     });
     const engine = (processor as unknown as { engine: RealtimeEngine }).engine;
-    const popScopeTelemetryToScratch = vi.spyOn(engine, 'popScopeTelemetryToScratch');
+    const popScopeTelemetryToScratch = vi.spyOn(
+      engineNativeHandle(engine),
+      'popScopeTelemetryToScratch',
+    );
     try {
       expect(configureScopeTelemetry).not.toHaveBeenCalled();
       processor.receiveCommand({
         type: SourceSonareEngineCommandType.TransportPlay,
-        sampleTime: -1,
+        renderFrame: -1,
       });
       for (let block = 0; block < 4; block++) {
         expect(

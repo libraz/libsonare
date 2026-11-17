@@ -103,10 +103,10 @@ describe('masteringRepairDenoiseClassicalLinked (WASM)', () => {
     // The two planes genuinely differ, so a wrapper that swapped them would
     // fail the two equalities below rather than satisfy both.
     expect(linked.channels[0]).not.toEqual(linked.channels[1]);
-    expect(linked.channels[0]).toEqual(stereo.left);
-    expect(linked.channels[1]).toEqual(stereo.right);
-    expect(linked.report.detected.floorDbfs).toBe(stereo.report.detected.floorDbfs);
-    expect(linked.report.meanReductionDb).toBe(stereo.report.meanReductionDb);
+    expect(linked.channels[0]).toEqual(stereo.channels[0]);
+    expect(linked.channels[1]).toEqual(stereo.channels[1]);
+    expect(linked.reports[0].detected.floorDbfs).toBe(stereo.reports[0].detected.floorDbfs);
+    expect(linked.reports[0].meanReductionDb).toBe(stereo.reports[0].meanReductionDb);
   });
 
   it('reports a set-level absolute floor: three equal channels read 10*log10(3) over one', () => {
@@ -121,17 +121,17 @@ describe('masteringRepairDenoiseClassicalLinked (WASM)', () => {
     // summed mean square of the whole set. A "call the stereo path twice"
     // implementation cannot produce this, and a pair cannot distinguish the two
     // constants, which is why the case needs a third channel.
-    expect(three.report.detected.floorDbfs - one.report.detected.floorDbfs).toBeCloseTo(
+    expect(three.reports[0].detected.floorDbfs - one.reports[0].detected.floorDbfs).toBeCloseTo(
       10 * Math.log10(3),
       3,
     );
 
     // The shape of the set-level detection, and the fields that are fractions
     // and therefore do NOT move with the count.
-    expect(three.report.detected.bandFloorDbfs).toBeInstanceOf(Float32Array);
-    expect(three.report.detected.bandFloorDbfs.length).toBe(32);
-    expect(three.report.meanReductionDb).toBeCloseTo(one.report.meanReductionDb, 5);
-    expect(three.report.maxReductionDb).toBeCloseTo(one.report.maxReductionDb, 5);
+    expect(three.reports[0].detected.bandFloorDbfs).toBeInstanceOf(Float32Array);
+    expect(three.reports[0].detected.bandFloorDbfs.length).toBe(32);
+    expect(three.reports[0].meanReductionDb).toBeCloseTo(one.reports[0].meanReductionDb, 5);
+    expect(three.reports[0].maxReductionDb).toBeCloseTo(one.reports[0].maxReductionDb, 5);
   });
 
   it('returns three identical channels identical to each other', () => {
@@ -195,23 +195,18 @@ describe('masteringRepairDenoiseClassicalLinked (WASM)', () => {
     ).not.toThrow();
   });
 
-  it('accepts the positional call form identically to the request form', () => {
+  it('forwards reductionDb to the pass', () => {
     const channels = [noisyTone(440, 1), noisyTone(660, 7)];
-    const positional = masteringRepairDenoiseClassicalLinked(channels, SR, { reductionDb: 18 });
     const request = masteringRepairDenoiseClassicalLinked({
       channels,
       sampleRate: SR,
       reductionDb: 18,
     });
-
-    expect(positional.channels[0]).toEqual(request.channels[0]);
-    expect(positional.channels[1]).toEqual(request.channels[1]);
-    expect(positional.report.detected.floorDbfs).toBe(request.report.detected.floorDbfs);
-    expect(positional.report.meanReductionDb).toBe(request.report.meanReductionDb);
-    // reductionDb reached the pass through both forms rather than being dropped
-    // by the destructuring on either.
     const atDefault = masteringRepairDenoiseClassicalLinked({ channels, sampleRate: SR });
-    expect(request.report.maxReductionDb).not.toBeCloseTo(atDefault.report.maxReductionDb, 3);
+    expect(request.reports[0].maxReductionDb).not.toBeCloseTo(
+      atDefault.reports[0].maxReductionDb,
+      3,
+    );
   });
 
   it('rejects an empty channel array', () => {
@@ -236,7 +231,12 @@ describe('masteringRepairDenoiseClassicalLinked (WASM)', () => {
       masteringRepairDenoiseClassicalLinked({ channels, sampleRate: Number.NaN }),
     ).toThrow();
     expect(() =>
-      masteringRepairDenoiseClassicalLinked(channels, SR, { nFft: 1500, hopLength: 256 }),
+      masteringRepairDenoiseClassicalLinked({
+        channels,
+        sampleRate: SR,
+        nFft: 1500,
+        hopLength: 256,
+      }),
     ).toThrow();
   });
 });
@@ -272,9 +272,9 @@ describe('masteringRepairDereverbClassicalLinked (WASM)', () => {
 
     expect(linked.channels).toHaveLength(2);
     expect(linked.channels[0]).not.toEqual(linked.channels[1]);
-    expect(linked.channels[0]).toEqual(stereo.left);
-    expect(linked.channels[1]).toEqual(stereo.right);
-    expect(linked.report.wpePredictorNorm).toBe(stereo.report.wpePredictorNorm);
+    expect(linked.channels[0]).toEqual(stereo.channels[0]);
+    expect(linked.channels[1]).toEqual(stereo.channels[1]);
+    expect(linked.reports[0].wpePredictorNorm).toBe(stereo.reports[0].wpePredictorNorm);
   });
 
   it('reports the same figures at three channels as at one', () => {
@@ -289,25 +289,25 @@ describe('masteringRepairDereverbClassicalLinked (WASM)', () => {
     // Non-vacuity first: every field asserted below has a value to be equal
     // about. The WPE stage is enabled so the two predictor fields are
     // measurements rather than the 0 a default-config pass reports.
-    expect(one.report.detected.lateDecayRatioDb).not.toBe(0);
-    expect(one.report.detected.latePredictability).toBeGreaterThan(0);
-    expect(one.report.wpePredictorNorm).toBeGreaterThan(0);
-    expect(one.report.meanReductionDb).toBeGreaterThan(0);
-    expect(one.report.suppressedFraction).toBeGreaterThan(0);
+    expect(one.reports[0].detected.lateDecayRatioDb).not.toBe(0);
+    expect(one.reports[0].detected.latePredictability).toBeGreaterThan(0);
+    expect(one.reports[0].wpePredictorNorm).toBeGreaterThan(0);
+    expect(one.reports[0].meanReductionDb).toBeGreaterThan(0);
+    expect(one.reports[0].suppressedFraction).toBeGreaterThan(0);
 
     // Every field is a ratio or a fraction, so unlike the denoise floor nothing
     // here shifts with the channel count.
-    expect(three.report.detected.lateDecayRatioDb).toBeCloseTo(
-      one.report.detected.lateDecayRatioDb,
+    expect(three.reports[0].detected.lateDecayRatioDb).toBeCloseTo(
+      one.reports[0].detected.lateDecayRatioDb,
       6,
     );
-    expect(three.report.detected.latePredictability).toBeCloseTo(
-      one.report.detected.latePredictability,
+    expect(three.reports[0].detected.latePredictability).toBeCloseTo(
+      one.reports[0].detected.latePredictability,
       6,
     );
-    expect(three.report.meanReductionDb).toBeCloseTo(one.report.meanReductionDb, 6);
-    expect(three.report.suppressedFraction).toBeCloseTo(one.report.suppressedFraction, 6);
-    expect(three.report.wpePredictorNorm).toBeCloseTo(one.report.wpePredictorNorm, 6);
+    expect(three.reports[0].meanReductionDb).toBeCloseTo(one.reports[0].meanReductionDb, 6);
+    expect(three.reports[0].suppressedFraction).toBeCloseTo(one.reports[0].suppressedFraction, 6);
+    expect(three.reports[0].wpePredictorNorm).toBeCloseTo(one.reports[0].wpePredictorNorm, 6);
   });
 
   it('returns three identical channels identical to each other', () => {
@@ -360,23 +360,17 @@ describe('masteringRepairDereverbClassicalLinked (WASM)', () => {
     ).not.toThrow();
   });
 
-  it('accepts the positional call form identically to the request form', () => {
+  it('forwards wpeEnabled to the pass', () => {
     const channels = [reverberant(1), reverberant(7)];
-    const positional = masteringRepairDereverbClassicalLinked(channels, SR, { wpeEnabled: true });
     const request = masteringRepairDereverbClassicalLinked({
       channels,
       sampleRate: SR,
       wpeEnabled: true,
     });
-
-    expect(positional.channels[0]).toEqual(request.channels[0]);
-    expect(positional.channels[1]).toEqual(request.channels[1]);
-    expect(positional.report.wpePredictorNorm).toBe(request.report.wpePredictorNorm);
-    // wpeEnabled reached the pass through both forms: with the stage off the
-    // predictor norm is exactly 0.
+    // With the stage off the predictor norm is exactly 0.
     const atDefault = masteringRepairDereverbClassicalLinked({ channels, sampleRate: SR });
-    expect(atDefault.report.wpePredictorNorm).toBe(0);
-    expect(request.report.wpePredictorNorm).toBeGreaterThan(0);
+    expect(atDefault.reports[0].wpePredictorNorm).toBe(0);
+    expect(request.reports[0].wpePredictorNorm).toBeGreaterThan(0);
   });
 
   it('rejects an empty channel array', () => {
@@ -401,7 +395,12 @@ describe('masteringRepairDereverbClassicalLinked (WASM)', () => {
       masteringRepairDereverbClassicalLinked({ channels, sampleRate: Number.NaN }),
     ).toThrow();
     expect(() =>
-      masteringRepairDereverbClassicalLinked(channels, SR, { nFft: 1500, hopLength: 256 }),
+      masteringRepairDereverbClassicalLinked({
+        channels,
+        sampleRate: SR,
+        nFft: 1500,
+        hopLength: 256,
+      }),
     ).toThrow();
   });
 });
@@ -416,8 +415,8 @@ describe('the two linked entries answer a short input alike', () => {
     const options = { nFft: 1024, hopLength: 256 };
 
     for (const result of [
-      masteringRepairDenoiseClassicalLinked(short, SR, options),
-      masteringRepairDereverbClassicalLinked(short, SR, options),
+      masteringRepairDenoiseClassicalLinked({ channels: short, sampleRate: SR, ...options }),
+      masteringRepairDereverbClassicalLinked({ channels: short, sampleRate: SR, ...options }),
     ]) {
       expect(result.channels).toHaveLength(2);
       // Padded for ANALYSIS only: the outputs come back at the input length.

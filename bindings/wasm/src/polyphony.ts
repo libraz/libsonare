@@ -1,5 +1,4 @@
 import { releasedHandleError } from './internal/handle_guard.js';
-import { noteEditToNative, notesFromNative } from './internal/note_native_keys.js';
 import { getSonareModule } from './module_state.js';
 import type {
   NoteEditInput,
@@ -8,7 +7,7 @@ import type {
   PolyphonicRenderOptions,
 } from './public_types.js';
 import type { WasmPolyphonicAnalysis } from './sonare.js';
-import type { ValidateOptions } from './validation.js';
+import type { OptionsOf, ValidateOptions } from './validation.js';
 import {
   assertAudioInput,
   assertFloatValue,
@@ -150,7 +149,7 @@ export class PolyphonicAnalysis {
    * curve, read once per note.
    */
   notes(): NoteObject[] {
-    return notesFromNative(this.handle().notes());
+    return this.handle().notes();
   }
 
   /**
@@ -188,7 +187,7 @@ export class PolyphonicAnalysis {
         ),
       };
     }
-    this.handle().setNoteEdit(note, noteEditToNative(nativeEdit));
+    this.handle().setNoteEdit(note, nativeEdit);
   }
 
   /**
@@ -357,7 +356,7 @@ export function analyzePolyphonic(request: AnalyzePolyphonicRequest): Polyphonic
 export function analyzePolyphonic(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<AnalyzePolyphonicRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<AnalyzePolyphonicRequest>,
 ): PolyphonicAnalysis;
 export function analyzePolyphonic(...args: unknown[]): PolyphonicAnalysis {
   return new PolyphonicAnalysis(sampleOneShot<AnalyzePolyphonicRequest>('analyzePolyphonic', args));

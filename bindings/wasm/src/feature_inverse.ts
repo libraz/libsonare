@@ -8,14 +8,17 @@ import { validatePositiveIntegers } from './internal/feature_validation.js';
 import { resolveFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type { Matrix2D } from './public_types.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertFiniteScalar,
   assertFloatFields,
   assertMatrix2D,
+  assertNumber,
+  assertPositiveFloatValue,
   assertSampleRate,
-  requestObject,
   requestOnly,
+  sampleOneShot,
   toMatrix2D,
 } from './validation.js';
 
@@ -263,48 +266,48 @@ export function mfccToAudio(...args: unknown[]): Float32Array {
   );
 }
 
+/** Request for {@link phaseVocoder}. */
 export interface PhaseVocoderRequest extends GuardedOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
+  /**
+   * Playback speed as a ratio, finite: above 1 is faster and shorter, below 1
+   * slower and longer, the opposite sense of a note's `stretchRatio`. Required.
+   */
+  speedRatio: number;
+  /** FFT size in samples. Default 2048. */
   nFft?: number;
+  /** Hop in samples. Default 512. */
   hopLength?: number;
-  rate: number;
 }
 
 /**
- * Phase-vocoder time-scale modification. `rate` is a speed (> 1 faster and
- * shorter, < 1 slower and longer), the opposite sense of a note's `stretchRatio`.
+ * Phase-vocoder time-scale modification by `speedRatio`.
+ *
+ * @throws {TypeError} when `sampleRate` or `speedRatio` is missing
+ * @throws {RangeError} on audio out of domain, an out-of-range `sampleRate` or a non-finite `speedRatio`
  */
 export function phaseVocoder(request: PhaseVocoderRequest): Float32Array;
 export function phaseVocoder(
   samples: Float32Array,
   sampleRate: number,
-  rate: number,
-  nFft?: number,
-  hopLength?: number,
+  options: OptionsOf<PhaseVocoderRequest>,
 ): Float32Array;
-export function phaseVocoder(
-  samples: Float32Array | PhaseVocoderRequest,
-  sampleRate = 22050,
-  rate = Number.NaN,
-  nFft = 2048,
-  hopLength = 512,
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, rate, nFft, hopLength }
-      : requestObject('phaseVocoder', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('phaseVocoder', request.samples, resolvedSampleRate, request);
+export function phaseVocoder(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<PhaseVocoderRequest>('phaseVocoder', args);
+  assertAudioInput('phaseVocoder', r.samples, r.sampleRate, r);
+  assertNumber('phaseVocoder', r.speedRatio, 'speedRatio');
   // Matches the addon. A finite value too wide for a float is not covered here
   // and cannot be — it is still finite to Number.isFinite; the core's own guard
   // refuses the infinity it becomes.
-  assertFiniteScalar('phaseVocoder', request.rate, 'rate');
+  assertFiniteScalar('phaseVocoder', r.speedRatio, 'speedRatio');
+  assertPositiveFloatValue('phaseVocoder', r.speedRatio, 'speedRatio');
   return requireModule().phaseVocoder(
-    request.samples,
-    resolvedSampleRate,
-    request.rate,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
+    r.samples,
+    r.sampleRate,
+    r.speedRatio,
+    r.nFft ?? 2048,
+    r.hopLength ?? 512,
   );
 }

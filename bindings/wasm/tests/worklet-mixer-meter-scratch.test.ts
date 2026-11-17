@@ -1,3 +1,4 @@
+import type { MeterScratchField } from '../dist/index.js';
 import {
   createSonareMeterRingBuffer,
   describe,
@@ -61,7 +62,7 @@ describe('SonareWorkletProcessor meter scratch', () => {
       calls.valuesPerLatch.push([]);
       return realLatch.call(this);
     };
-    mixer.meterScratchValue = function (this: Mixer, field: number) {
+    mixer.meterScratchValue = function (this: Mixer, field: MeterScratchField) {
       const value = realValue.call(this, field);
       calls.fieldsPerLatch[calls.fieldsPerLatch.length - 1]?.push(field);
       calls.valuesPerLatch[calls.valuesPerLatch.length - 1]?.push(value);
@@ -225,7 +226,7 @@ describe('SonareWorkletProcessor meter scratch', () => {
         new Uint8Array(ring.sharedBuffer, ring.header.byteLength, ring.records.byteLength),
       );
 
-      mixer.meterScratchValue = function (this: Mixer, field: number) {
+      mixer.meterScratchValue = function (this: Mixer, field: MeterScratchField) {
         if (field === 6) {
           throw new Error('late mixer scratch getter');
         }

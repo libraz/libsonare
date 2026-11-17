@@ -93,7 +93,8 @@ function estimate(volume?: unknown): RoomEstimateResult {
   return out as unknown as RoomEstimateResult;
 }
 
-const configForRoom = (volume?: unknown) => masteringRepairDereverbConfigForRoom(estimate(volume));
+const configForRoom = (volume?: unknown) =>
+  masteringRepairDereverbConfigForRoom({ estimate: estimate(volume) });
 
 const pcenWith = (gain?: unknown, spectrogram: Float32Array = matrix) =>
   pcen({

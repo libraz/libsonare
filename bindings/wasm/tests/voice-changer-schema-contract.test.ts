@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   init,
   realtimeVoiceChangerPresetJson,
-  validateRealtimeVoiceChangerPresetJson,
+  realtimeVoiceChangerValidatePresetJson,
 } from '../src/index';
 
 const presetSchemaUrl = new URL(
@@ -32,7 +32,7 @@ const validatePackSchema = ajv.compile(presetPackSchema);
 function expectBothValidatorsToReject(preset: object): void {
   const json = JSON.stringify(preset);
   expect(validateSchema(preset)).toBe(false);
-  expect(validateRealtimeVoiceChangerPresetJson(json).ok).toBe(false);
+  expect(realtimeVoiceChangerValidatePresetJson(json).ok).toBe(false);
 }
 
 describe('Realtime Voice Changer preset JSON Schema contract', () => {
@@ -55,17 +55,17 @@ describe('Realtime Voice Changer preset JSON Schema contract', () => {
         validateSchema(preset),
         validateSchema.errors?.map((error) => error.message).join(', '),
       ).toBe(true);
-      expect(validateRealtimeVoiceChangerPresetJson(json).ok).toBe(true);
+      expect(realtimeVoiceChangerValidatePresetJson(json).ok).toBe(true);
     }
   });
 
   it('accepts schema versions 1 and 2, and a version 2 document needs the transformer sections', () => {
-    const preset = JSON.parse(realtimeVoiceChangerPresetJson('neutral-monitor')) as {
+    const preset = JSON.parse(realtimeVoiceChangerPresetJson('neutralMonitor')) as {
       dsp: Record<string, unknown>;
       schemaVersion: number;
     };
     expect(validateSchema(preset), JSON.stringify(validateSchema.errors)).toBe(true);
-    expect(validateRealtimeVoiceChangerPresetJson(JSON.stringify(preset)).ok).toBe(true);
+    expect(realtimeVoiceChangerValidatePresetJson(JSON.stringify(preset)).ok).toBe(true);
 
     const transformerSections = [
       'voiceEngine',
@@ -81,13 +81,13 @@ describe('Realtime Voice Changer preset JSON Schema contract', () => {
     );
     const legacy = { ...preset, schemaVersion: 1, dsp: legacyDsp };
     expect(validateSchema(legacy), JSON.stringify(validateSchema.errors)).toBe(true);
-    expect(validateRealtimeVoiceChangerPresetJson(JSON.stringify(legacy)).ok).toBe(true);
+    expect(realtimeVoiceChangerValidatePresetJson(JSON.stringify(legacy)).ok).toBe(true);
 
     expectBothValidatorsToReject({ ...preset, dsp: legacyDsp });
   });
 
   it('rejects representative schema violations through both validators', () => {
-    const factoryPreset = JSON.parse(realtimeVoiceChangerPresetJson('neutral-monitor')) as {
+    const factoryPreset = JSON.parse(realtimeVoiceChangerPresetJson('neutralMonitor')) as {
       dsp: { retune: { grainSize: number } };
       id: string;
       schemaVersion: number;

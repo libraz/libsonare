@@ -22,19 +22,21 @@ describe('decomposeStemsLinked', () => {
     await init();
   });
 
-  it('defaults mono and linked stems to the same sample rate', () => {
+  it('carries the same sample rate through mono and linked stems', () => {
     const samples = tone(440);
-    const options = { nComponents: 2, nIter: 8, nFft: 512, hopLength: 128 };
-    const implicit = decomposeStems({ samples, ...options });
-    const explicit = decomposeStems({ samples, sampleRate: SAMPLE_RATE, ...options });
+    const options = {
+      sampleRate: SAMPLE_RATE,
+      nComponents: 2,
+      nIter: 8,
+      nFft: 512,
+      hopLength: 128,
+    };
+    const mono = decomposeStems({ samples, ...options });
     const linked = decomposeStemsLinked({ channels: [samples], ...options });
 
-    expect(implicit.sampleRate).toBe(SAMPLE_RATE);
+    expect(mono.sampleRate).toBe(SAMPLE_RATE);
     expect(linked.sampleRate).toBe(SAMPLE_RATE);
-    expect(implicit.components).toEqual(explicit.components);
-    expect(implicit.w).toEqual(explicit.w);
-    expect(implicit.h).toEqual(explicit.h);
-    expect(linked.components.map((component) => component[0])).toEqual(implicit.components);
+    expect(linked.components.map((component) => component[0])).toEqual(mono.components);
   });
 
   it('reproduces decomposeStems bit for bit for a single channel', () => {

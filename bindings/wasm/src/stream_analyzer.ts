@@ -1,7 +1,8 @@
 import { chordQualityToken } from './analysis_helpers.js';
 import { assertHandleLive } from './internal/handle_guard.js';
+import { WINDOW_TYPES, windowOrdinal } from './internal/window_type.js';
 import { getSonareModule } from './module_state.js';
-import type { Key, PitchClass, WindowType } from './public_types.js';
+import type { Key, PitchClass } from './public_types.js';
 import type {
   WasmAnalyzerStats,
   WasmBarChord,
@@ -24,7 +25,6 @@ import type {
 } from './stream_types.js';
 import { assertFloatValue, assertIntegerValue, assertSampleRate } from './validation.js';
 
-const WINDOW_TOKENS: readonly WindowType[] = ['hann', 'hamming', 'blackman', 'rectangular'];
 const REFERENCE_HZ_RANGE = [220, 880] as const;
 const CONFIG_KEYS: ReadonlySet<string> = new Set([
   'sampleRate',
@@ -73,7 +73,7 @@ interface NativeFrames<T extends Float32Array | Uint8Array | Int16Array> {
   nMels: number;
   nChroma: number;
   featureFlags: number;
-  timestamps: Float32Array;
+  timestampsSec: Float32Array;
   mel: T;
   chroma: T;
   onsetStrength: T;
@@ -122,8 +122,7 @@ function quantizedFrames<T extends Uint8Array | Int16Array>(
     nFrames: native.nFrames,
     nMels: native.nMels,
     nChroma: native.nChroma,
-    // Native names the per-frame time `timestamps`.
-    timestampsSec: native.timestamps,
+    timestampsSec: native.timestampsSec,
   };
   if (native.featureFlags & FEATURE_MEL) {
     out.mel = bandMajor(native.mel, native.nFrames, native.nMels);
@@ -139,8 +138,7 @@ function chordChange(c: WasmChordChange): StreamChordChange {
     root: c.root as PitchClass,
     quality: chordQualityToken(c.quality),
     name: c.name,
-    // Native names the chord start `startTime`.
-    startSec: c.startTime,
+    startSec: c.startSec,
     confidence: c.confidence,
   };
 }
@@ -151,8 +149,7 @@ function barChord(c: WasmBarChord): StreamBarChord {
     root: c.root as PitchClass,
     quality: chordQualityToken(c.quality),
     name: c.name,
-    // Native names the bar start `startTime`.
-    startSec: c.startTime,
+    startSec: c.startSec,
     confidence: c.confidence,
   };
 }
@@ -165,8 +162,7 @@ function estimateOf(e: WasmAnalyzerStats['estimate']): StreamProgressiveEstimate
     votedPattern: (e.votedPattern || []).map(barChord),
     patternLength: e.patternLength,
     allPatternScores: (e.allPatternScores || []).map((p) => ({ name: p.name, score: p.score })),
-    // Native names the accumulated duration `accumulatedSeconds`.
-    accumulatedSec: e.accumulatedSeconds,
+    accumulatedSec: e.accumulatedSec,
     usedFrames: e.usedFrames,
     updated: e.updated,
   };
@@ -189,15 +185,13 @@ function estimateOf(e: WasmAnalyzerStats['estimate']): StreamProgressiveEstimate
       root: e.chordRoot as PitchClass,
       quality: chordQualityToken(e.chordQuality),
       name: e.chordName,
-      // Native names the chord start `chordStartTime`.
-      startSec: e.chordStartTime,
+      startSec: e.chordStartSec,
       confidence: e.chordConfidence,
     };
   }
   if (e.currentBar >= 0) {
     out.currentBar = e.currentBar;
-    // Native names the bar length `barDuration`.
-    out.barDurationSec = e.barDuration;
+    out.barDurationSec = e.barDurationSec;
   }
   if (e.detectedPatternName) {
     out.detectedPatternName = e.detectedPatternName;
@@ -222,17 +216,6 @@ function assertReferenceHz(fnName: string, referenceHz: unknown): asserts refere
   }
 }
 
-function windowOrdinal(window: unknown): number {
-  if (typeof window !== 'string') {
-    throw new TypeError(`StreamAnalyzer: window must be one of ${WINDOW_TOKENS.join(', ')}`);
-  }
-  const ordinal = WINDOW_TOKENS.indexOf(window as WindowType);
-  if (ordinal < 0) {
-    throw new RangeError(`StreamAnalyzer: window must be one of ${WINDOW_TOKENS.join(', ')}`);
-  }
-  return ordinal;
-}
-
 /**
  * The native configuration defaults. `fmaxHz` is Nyquist, the value the
  * analyzer reads an absent upper edge as.
@@ -246,7 +229,7 @@ export function streamAnalyzerConfigDefault(): Required<StreamConfig> {
     nMels: d.nMels,
     fminHz: d.fmin,
     fmaxHz: d.fmax > 0 ? d.fmax : d.sampleRate / 2,
-    referenceHz: d.tuningRefHz,
+    referenceHz: d.referenceHz,
     computeMel: d.computeMel,
     computeChroma: d.computeChroma,
     computeOnset: d.computeOnset,
@@ -257,7 +240,7 @@ export function streamAnalyzerConfigDefault(): Required<StreamConfig> {
     maxProgressionEntries: d.maxProgressionEntries,
     keyUpdateIntervalSec: d.keyUpdateIntervalSec,
     bpmUpdateIntervalSec: d.bpmUpdateIntervalSec,
-    window: WINDOW_TOKENS[d.window],
+    window: WINDOW_TYPES[d.window],
   };
 }
 
@@ -319,7 +302,7 @@ export class StreamAnalyzer {
     }
     assertSampleRate('StreamAnalyzer', config.sampleRate);
     if (config.window !== undefined) {
-      windowOrdinal(config.window);
+      windowOrdinal('StreamAnalyzer', config.window);
     }
     if (config.fminHz !== undefined) {
       assertFloatValue('StreamAnalyzer', config.fminHz, 'fminHz');
@@ -355,7 +338,7 @@ export class StreamAnalyzer {
       config.nMels ?? defaults.nMels,
       config.fminHz ?? defaults.fmin,
       config.fmaxHz ?? defaults.fmax,
-      config.referenceHz ?? defaults.tuningRefHz,
+      config.referenceHz ?? defaults.referenceHz,
       defaults.computeMagnitude,
       config.computeMel ?? defaults.computeMel,
       config.computeChroma ?? defaults.computeChroma,
@@ -367,7 +350,9 @@ export class StreamAnalyzer {
       config.maxProgressionEntries ?? defaults.maxProgressionEntries,
       config.keyUpdateIntervalSec ?? defaults.keyUpdateIntervalSec,
       config.bpmUpdateIntervalSec ?? defaults.bpmUpdateIntervalSec,
-      config.window === undefined ? defaults.window : windowOrdinal(config.window),
+      config.window === undefined
+        ? defaults.window
+        : windowOrdinal('StreamAnalyzer', config.window),
       defaults.outputFormat,
     );
   }
@@ -427,8 +412,7 @@ export class StreamAnalyzer {
     const flags = native.featureFlags;
     const out: StreamFrames = {
       nFrames: native.nFrames,
-      // Native names the per-frame time `timestamps`.
-      timestampsSec: native.timestamps,
+      timestampsSec: native.timestampsSec,
       ...sharedFrameArrays(native),
     };
     if (flags & FEATURE_MEL) {
@@ -498,8 +482,7 @@ export class StreamAnalyzer {
     return {
       totalFrames: s.totalFrames,
       totalSamples: s.totalSamples,
-      // Native names the duration `durationSeconds`.
-      durationSec: s.durationSeconds,
+      durationSec: s.durationSec,
       pendingFrames: s.pendingFrames,
       droppedOutputFrames: s.droppedOutputFrames,
       droppedChordProgressionEntries: s.droppedChordProgressionEntries,
@@ -516,8 +499,7 @@ export class StreamAnalyzer {
 
   /** Current time position in seconds. */
   get currentTimeSec(): number {
-    // Native names the position `currentTime`.
-    return this.analyzer.currentTime();
+    return this.analyzer.currentTimeSec();
   }
 
   /** Sample rate in Hz. */
@@ -565,8 +547,7 @@ export class StreamAnalyzer {
    */
   setReferenceHz(referenceHz: number): void {
     assertReferenceHz('StreamAnalyzer.setReferenceHz', referenceHz);
-    // Native names the setter `setTuningRefHz`.
-    this.analyzer.setTuningRefHz(referenceHz);
+    this.analyzer.setReferenceHz(referenceHz);
   }
 
   /** Release the underlying WASM object. Idempotent, as the Node facade is. */

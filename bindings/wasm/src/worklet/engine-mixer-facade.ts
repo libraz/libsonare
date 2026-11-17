@@ -1,12 +1,11 @@
+import type { ChannelLayout } from '../audio.js';
 import { sidechainSourceKindCode } from '../codes.js';
 import { ErrorCode, SonareError } from '../errors.js';
-import type {
-  EngineBus,
-  EngineTrackLane,
-  EngineTrackSend,
-  RealtimeEngine,
-  SidechainSourceKind,
-} from '../index.js';
+import type { EngineBus, EngineTrackLane, EngineTrackSend, RealtimeEngine } from '../index.js';
+import type { SidechainSource } from '../public_types_engine.js';
+import { engineNativeHandle } from '../realtime_engine.js';
+import type { RequestFn } from '../request_keys.js';
+import { requestObject } from '../validation.js';
 import { commitSync } from './engine-commit.js';
 import { normalizeTrackLanes } from './engine-offline.js';
 import { buildMixerLanes, resolveTargetId } from './engine-sync.js';
@@ -36,7 +35,7 @@ export interface EngineMixerContext {
   readonly trackLaneIds: number[];
   readonly trackSends: Map<number, EngineTrackSend[]>;
   readonly trackOutputBus: Map<number, number>;
-  readonly trackSourceChannelLayout: Map<number, number>;
+  readonly trackSourceChannelLayout: Map<number, ChannelLayout>;
   readonly laneSidechains: Map<
     string,
     { trackId: number; insertIndex: number; sourceTrackId: number }
@@ -64,7 +63,7 @@ export interface EngineMixerContext {
     oneShotInsertParamOverrides?: InsertParamOverride[],
   ): void;
   /** Commits a smoothed parameter edit; `commitCache` runs only once the edit is accepted. */
-  sendSmoothedParam(paramId: number, value: number, commitCache?: () => void): boolean;
+  sendSmoothedParam(paramId: number, value: number, commitCache?: () => void): void;
   getMasterStripJson(): string | undefined;
   cacheMasterStripJson(sceneJson: string): void;
 }
@@ -200,7 +199,7 @@ function constructionValue(
   try {
     switch (target.kind) {
       case 'track':
-        parameterId = engine.resolveTrackInsertAutomationId(
+        parameterId = engine.resolveStripInsertAutomationId(
           target.trackId,
           override.insertIndex,
           override.paramName,
@@ -214,7 +213,8 @@ function constructionValue(
         );
         break;
       case 'master':
-        parameterId = engine.resolveMasterInsertAutomationId(
+        parameterId = engine.resolveStripInsertAutomationId(
+          'master',
           override.insertIndex,
           override.paramName,
         );
@@ -250,29 +250,16 @@ export function constructionInsertOverrides(
 }
 
 function applyInsertParamOverride(engine: RealtimeEngine, override: InsertParamOverride): void {
+  const param = { name: override.paramName, value: override.value };
   switch (override.target.kind) {
     case 'track':
-      engine.restoreTrackStripInsertParamByName(
-        override.target.trackId,
-        override.insertIndex,
-        override.paramName,
-        override.value,
-      );
+      engine.restoreStripInsertParam(override.target.trackId, override.insertIndex, param);
       break;
     case 'bus':
-      engine.restoreBusStripInsertParamByName(
-        override.target.busId,
-        override.insertIndex,
-        override.paramName,
-        override.value,
-      );
+      engine.restoreBusInsertParam(override.target.busId, override.insertIndex, param);
       break;
     case 'master':
-      engine.restoreMasterStripInsertParamByName(
-        override.insertIndex,
-        override.paramName,
-        override.value,
-      );
+      engine.restoreStripInsertParam('master', override.insertIndex, param);
       break;
   }
 }
@@ -291,13 +278,13 @@ export function applyConstructionInsertOverrides(
 export function clearInsertParameterBases(engine: RealtimeEngine, target: StripJsonTarget): void {
   switch (target.kind) {
     case 'track':
-      engine.clearTrackInsertParameterBases(target.trackId);
+      engine.clearStripInsertParameterBases(target.trackId);
       break;
     case 'bus':
       engine.clearBusInsertParameterBases(target.busId);
       break;
     case 'master':
-      engine.clearMasterInsertParameterBases();
+      engine.clearStripInsertParameterBases('master');
       break;
   }
 }
@@ -306,7 +293,7 @@ interface MixerRoutingDraft {
   trackLaneIds: number[];
   trackSends: Map<number, EngineTrackSend[]>;
   trackOutputBus: Map<number, number>;
-  trackSourceChannelLayout: Map<number, number>;
+  trackSourceChannelLayout: Map<number, ChannelLayout>;
 }
 
 /** An empty construction scene used only within an explicit strip replacement. */
@@ -372,16 +359,18 @@ export function applyFullStripJson(
   target: StripJsonTarget,
   sceneJson: string,
 ): void {
+  // The scene text is already the native document, so it goes in without a parse round trip.
   const apply = (json: string): void => {
+    const native = engineNativeHandle(engine);
     switch (target.kind) {
       case 'track':
-        engine.setTrackStripJson(target.trackId, json);
+        native.setTrackStripJson(target.trackId, json);
         break;
       case 'bus':
-        engine.setBusStripJson(target.busId, json);
+        native.setBusStripJson(target.busId, json);
         break;
       case 'master':
-        engine.setMasterStripJson(json);
+        native.setMasterStripJson(json);
         break;
     }
   };
@@ -651,27 +640,22 @@ export function replayInsertParamOverrides(
     }
     switch (override.target.kind) {
       case 'track':
-        ctx.offlineEngine.restoreTrackStripInsertParamByName(
-          override.target.trackId,
-          override.insertIndex,
-          override.paramName,
-          override.value,
-        );
+        ctx.offlineEngine.restoreStripInsertParam(override.target.trackId, override.insertIndex, {
+          name: override.paramName,
+          value: override.value,
+        });
         break;
       case 'bus':
-        ctx.offlineEngine.restoreBusStripInsertParamByName(
-          override.target.busId,
-          override.insertIndex,
-          override.paramName,
-          override.value,
-        );
+        ctx.offlineEngine.restoreBusInsertParam(override.target.busId, override.insertIndex, {
+          name: override.paramName,
+          value: override.value,
+        });
         break;
       case 'master':
-        ctx.offlineEngine.restoreMasterStripInsertParamByName(
-          override.insertIndex,
-          override.paramName,
-          override.value,
-        );
+        ctx.offlineEngine.restoreStripInsertParam('master', override.insertIndex, {
+          name: override.paramName,
+          value: override.value,
+        });
         break;
     }
   }
@@ -686,20 +670,16 @@ export function replayInsertParamOverrides(
  * append new track ids after them. Entries carrying `sends` replace that
  * track's send list; entries without `sends` leave existing sends untouched.
  * The same omission rule preserves an existing source channel layout.
- * A `sourceChannelLayout` other than stereo (1) throws a `RangeError`.
+ * A `sourceChannelLayout` other than `'stereo'` throws a `RangeError`.
  *
- * @param lanes Track ids or lane descriptors in the desired lane order.
+ * @param lanes Lane descriptors in the desired lane order.
  */
-export function setTrackLanes(
-  ctx: EngineMixerContext,
-  lanes: ReadonlyArray<number | EngineTrackLane>,
-): void {
+export function setTrackLanes(ctx: EngineMixerContext, lanes: readonly EngineTrackLane[]): void {
   for (const lane of lanes) {
-    if (
-      typeof lane === 'object' &&
-      lane.sourceChannelLayout !== undefined &&
-      lane.sourceChannelLayout !== 1
-    ) {
+    if (typeof lane !== 'object' || lane === null) {
+      throw new TypeError('setTrackLanes: each lane must be an EngineTrackLane object');
+    }
+    if (lane.sourceChannelLayout !== undefined && lane.sourceChannelLayout !== 'stereo') {
       throw new RangeError(
         'track lane sourceChannelLayout must be stereo; multichannel lanes are not implemented',
       );
@@ -715,11 +695,7 @@ export function setTrackLanes(
       );
     }
     if (entry.outputBusId !== undefined) {
-      if (entry.outputBusId === 0) {
-        draft.trackOutputBus.delete(entry.trackId);
-      } else {
-        draft.trackOutputBus.set(entry.trackId, entry.outputBusId);
-      }
+      draft.trackOutputBus.set(entry.trackId, entry.outputBusId);
     }
     if (entry.sourceChannelLayout !== undefined) {
       draft.trackSourceChannelLayout.set(entry.trackId, entry.sourceChannelLayout);
@@ -754,17 +730,21 @@ export function ensureTrackLane(ctx: EngineMixerContext, target: string | number
 
 /**
  * Routes a track lane's post-fader output into a declared bus instead of
- * the master mix (group/folder routing); busId 0 restores the master mix.
+ * the master mix (group/folder routing); `null` restores the master mix and
+ * `0` is a `RangeError`.
  */
 export function setTrackOutputBus(
   ctx: EngineMixerContext,
   target: string | number,
-  busId: number,
+  busId: number | null,
 ): void {
+  if (busId === 0) {
+    throw new RangeError('setTrackOutputBus: busId must not be 0 (pass null for the master mix)');
+  }
   const draft = cloneMixerRouting(ctx);
   const laneIndex = ensureTrackLaneInDraft(draft, target);
   const trackId = draft.trackLaneIds[laneIndex];
-  if (busId === 0) {
+  if (busId === null || busId === undefined) {
     draft.trackOutputBus.delete(trackId);
   } else {
     draft.trackOutputBus.set(trackId, busId);
@@ -772,34 +752,82 @@ export function setTrackOutputBus(
   syncMixerDraft(ctx, draft, true);
 }
 
+/** A validated sidechain source: kind ordinal and a positive id. */
+function sidechainKey(method: RequestFn, source: SidechainSource): { kind: number; id: number } {
+  requestObject(method, source, 'source', true);
+  if (typeof source.kind === 'number') {
+    throw new TypeError(`${method}: source.kind must be a string`);
+  }
+  if (typeof source.id !== 'number') {
+    throw new TypeError(`${method}: source.id must be a number`);
+  }
+  if (source.id === 0) {
+    throw new RangeError(`${method}: source.id must not be 0 (pass null to remove the binding)`);
+  }
+  return { kind: sidechainSourceKindCode(source.kind), id: source.id };
+}
+
 /**
- * Keys one insert of a lane strip from another lane's post-strip pre-fader
- * audio (ducking/sidechainRouter inserts). sourceTarget null removes the
- * binding. The binding is cached for resync only once the engine has accepted
- * it, so a refused (self-keyed or cyclic) binding throws and is never replayed.
+ * Keys one insert of a strip (a track lane, or the master) from another source
+ * (ducking/sidechainRouter inserts); `null` removes the binding. The binding is
+ * cached for resync only once the engine has accepted it, so a refused
+ * (self-keyed or cyclic) binding throws and is never replayed.
  */
-export function setLaneSidechain(
+export function setStripSidechain(
   ctx: EngineMixerContext,
   target: string | number,
   insertIndex: number,
-  sourceTarget: string | number | null,
+  source: SidechainSource | null,
 ): void {
+  const key = source === null ? { kind: 0, id: 0 } : sidechainKey('setStripSidechain', source);
+  if (target === 'master') {
+    ensureSidechainSource(ctx, key.kind, key.id);
+    commitSync(
+      ctx,
+      (offline) => offline.setStripSidechain('master', insertIndex, source),
+      () => {
+        if (key.id === 0) {
+          ctx.masterSidechains.delete(insertIndex);
+        } else {
+          ctx.masterSidechains.set(insertIndex, {
+            insertIndex,
+            sourceKind: key.kind,
+            sourceId: key.id,
+          });
+        }
+        ctx.postSync({
+          type: 'syncMixer',
+          sidechainDelta: true,
+          lanes: ctx.mixerLanes(),
+          masterSidechains: [{ insertIndex, sourceKind: key.kind, sourceId: key.id }],
+        });
+      },
+    );
+    return;
+  }
+  if (key.kind !== 0) {
+    throw new RangeError("setStripSidechain: a track strip accepts only a 'track' source");
+  }
   const laneIndex = ctx.ensureTrackLane(target);
   const trackId = ctx.trackLaneIds[laneIndex];
-  const key = `${trackId}:${insertIndex}`;
+  const cacheKey = `${trackId}:${insertIndex}`;
   let sourceTrackId = 0;
-  if (sourceTarget !== null) {
-    const sourceIndex = ctx.ensureTrackLane(sourceTarget);
-    sourceTrackId = ctx.trackLaneIds[sourceIndex];
+  if (source !== null) {
+    sourceTrackId = ctx.trackLaneIds[ctx.ensureTrackLane(key.id)];
   }
   commitSync(
     ctx,
-    (offline) => offline.setLaneSidechain(trackId, insertIndex, sourceTrackId),
+    (offline) =>
+      offline.setStripSidechain(
+        trackId,
+        insertIndex,
+        source && { kind: 'track', id: sourceTrackId },
+      ),
     () => {
       if (sourceTrackId === 0) {
-        ctx.laneSidechains.delete(key);
+        ctx.laneSidechains.delete(cacheKey);
       } else {
-        ctx.laneSidechains.set(key, { trackId, insertIndex, sourceTrackId });
+        ctx.laneSidechains.set(cacheKey, { trackId, insertIndex, sourceTrackId });
       }
       ctx.postSync({
         type: 'syncMixer',
@@ -813,65 +841,38 @@ export function setLaneSidechain(
 
 /**
  * Keys one insert of a bus strip from a track lane or another bus
- * (ducking/sidechainRouter inserts). `sourceId` 0 removes the binding. The
- * binding is cached for resync only once the engine has accepted it.
+ * (ducking/sidechainRouter inserts); `null` removes the binding. The binding
+ * is cached for resync only once the engine has accepted it.
  */
 export function setBusSidechain(
   ctx: EngineMixerContext,
   busId: number,
   insertIndex: number,
-  kind: SidechainSourceKind | number,
-  sourceId: number,
+  source: SidechainSource | null,
 ): void {
-  const sourceKind = sidechainSourceKindCode(kind);
+  const key = source === null ? { kind: 0, id: 0 } : sidechainKey('setBusSidechain', source);
   ctx.ensureBus(busId);
-  ensureSidechainSource(ctx, sourceKind, sourceId);
+  ensureSidechainSource(ctx, key.kind, key.id);
   commitSync(
     ctx,
-    (offline) => offline.setBusSidechain(busId, insertIndex, sourceKind, sourceId),
+    (offline) => offline.setBusSidechain(busId, insertIndex, source),
     () => {
-      const key = `${busId}:${insertIndex}`;
-      if (sourceId === 0) {
-        ctx.busSidechains.delete(key);
+      const cacheKey = `${busId}:${insertIndex}`;
+      if (key.id === 0) {
+        ctx.busSidechains.delete(cacheKey);
       } else {
-        ctx.busSidechains.set(key, { busId, insertIndex, sourceKind, sourceId });
+        ctx.busSidechains.set(cacheKey, {
+          busId,
+          insertIndex,
+          sourceKind: key.kind,
+          sourceId: key.id,
+        });
       }
       ctx.postSync({
         type: 'syncMixer',
         sidechainDelta: true,
         lanes: ctx.mixerLanes(),
-        busSidechains: [{ busId, insertIndex, sourceKind, sourceId }],
-      });
-    },
-  );
-}
-
-/**
- * Keys one insert of the master strip from a track lane or a bus. Same source
- * rules as {@link setBusSidechain}.
- */
-export function setMasterSidechain(
-  ctx: EngineMixerContext,
-  insertIndex: number,
-  kind: SidechainSourceKind | number,
-  sourceId: number,
-): void {
-  const sourceKind = sidechainSourceKindCode(kind);
-  ensureSidechainSource(ctx, sourceKind, sourceId);
-  commitSync(
-    ctx,
-    (offline) => offline.setMasterSidechain(insertIndex, sourceKind, sourceId),
-    () => {
-      if (sourceId === 0) {
-        ctx.masterSidechains.delete(insertIndex);
-      } else {
-        ctx.masterSidechains.set(insertIndex, { insertIndex, sourceKind, sourceId });
-      }
-      ctx.postSync({
-        type: 'syncMixer',
-        sidechainDelta: true,
-        lanes: ctx.mixerLanes(),
-        masterSidechains: [{ insertIndex, sourceKind, sourceId }],
+        busSidechains: [{ busId, insertIndex, sourceKind: key.kind, sourceId: key.id }],
       });
     },
   );
@@ -946,17 +947,13 @@ export function setTrackBuses(ctx: EngineMixerContext, buses: EngineBus[]): void
   );
 }
 
-export function setBusGain(ctx: EngineMixerContext, busId: number, db: number): boolean {
+export function setBusGain(ctx: EngineMixerContext, busId: number, db: number): void {
   const busIndex = ctx.ensureBus(busId);
   // The reserved smoothed parameter updates both engines. Rebuilding the bus
   // topology for every fader tick would reset insert slots and their tails.
-  return ctx.sendSmoothedParam(
-    ctx.offlineEngine.resolveBusAutomationId(busId, 'faderDb'),
-    db,
-    () => {
-      ctx.buses[busIndex] = { ...ctx.buses[busIndex], busId, gainDb: db };
-    },
-  );
+  ctx.sendSmoothedParam(ctx.offlineEngine.resolveBusAutomationId(busId, 'faderDb'), db, () => {
+    ctx.buses[busIndex] = { ...ctx.buses[busIndex], busId, gainDb: db };
+  });
 }
 
 /** Control-side state a strip-scene replacement reads and updates. */

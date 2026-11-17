@@ -112,20 +112,31 @@ describe('Sonare WASM part rig', () => {
   });
 
   it('engine.setPartRig keeps its refusals apart', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       // Nothing is bound to destination 0 yet.
-      expect(() => engine.setPartRig(0, 0, 'none')).toThrow(/no MIDI instrument/);
+      expect(() => engine.setPartRig({ destinationId: 0, part: 0, mode: 'none' })).toThrow(
+        /no MIDI instrument/,
+      );
 
       // A builtin has no part rigs: refused rather than accepted quietly.
-      engine.setBuiltinInstrument({});
-      expect(() => engine.setPartRig(0, 0, 'none')).toThrow(/no part rigs/);
+      engine.setBuiltinInstrument(0, {});
+      expect(() => engine.setPartRig({ destinationId: 0, part: 0, mode: 'none' })).toThrow(
+        /no part rigs/,
+      );
 
       // The shape is judged before the instrument is consulted.
-      expect(() => engine.setPartRig(0, 16, 'none')).toThrow(/out of range/);
-      expect(() => engine.setPartRig(0, 0, 'chain')).toThrow();
+      expect(() => engine.setPartRig({ destinationId: 0, part: 16, mode: 'none' })).toThrow(
+        /out of range/,
+      );
+      expect(() => engine.setPartRig({ destinationId: 0, part: 0, mode: 'chain' })).toThrow();
       expect(() =>
-        engine.setPartRig(0, 0, 'chain', [{ processor: 'no.such.processor' }]),
+        engine.setPartRig({
+          destinationId: 0,
+          part: 0,
+          mode: 'chain',
+          inserts: [{ processor: 'no.such.processor' }],
+        }),
       ).toThrow();
     } finally {
       engine.destroy();
@@ -133,12 +144,17 @@ describe('Sonare WASM part rig', () => {
   });
 
   it('engine.setPartRig reaches a NativeSynth', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
-      engine.setSynthInstrument({ engineMode: 'reed' });
-      engine.setPartRig(0, 0, 'none');
-      engine.setPartRig(0, PART_RIG_ALL_PARTS, 'chain', [LIMITER]);
-      engine.setPartRig(0, 0, 'bank');
+      engine.setSynthInstrument(0, { engineMode: 'reed' });
+      engine.setPartRig({ destinationId: 0, part: 0, mode: 'none' });
+      engine.setPartRig({
+        destinationId: 0,
+        part: PART_RIG_ALL_PARTS,
+        mode: 'chain',
+        inserts: [LIMITER],
+      });
+      engine.setPartRig({ destinationId: 0, part: 0, mode: 'bank' });
     } finally {
       engine.destroy();
     }
@@ -230,18 +246,27 @@ describe('Sonare WASM part rig request and positional forms', () => {
     }
   });
 
-  it('answers the engine the same through either form', () => {
-    const engine = new RealtimeEngine(48000, 128);
+  it('takes the engine rig as a request only', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
-      engine.setBuiltinInstrument({});
-      expect(capture(() => engine.setPartRig({ destinationId: 0, part: 0, mode: 'none' }))).toBe(
-        capture(() => engine.setPartRig(0, 0, 'none')),
-      );
-      engine.setSynthInstrument({ engineMode: 'reed' });
+      engine.setSynthInstrument(0, { engineMode: 'reed' });
       expect(() =>
-        engine.setPartRig({ destinationId: 0, part: 0, mode: 'chain', inserts: [LIMITER] }),
+        engine.setPartRig({
+          destinationId: 0,
+          part: PART_RIG_ALL_PARTS,
+          mode: 'chain',
+          inserts: [LIMITER],
+        }),
       ).not.toThrow();
-      expect(() => engine.setPartRig(0, 0, 'none', [LIMITER])).toThrow();
+      expect(() =>
+        engine.setPartRig({ destinationId: 0, part: 0, mode: 'none', inserts: [LIMITER] }),
+      ).toThrow();
+      expect(() =>
+        engine.setPartRig({ destinationId: 0, part: 0, mode: 'none', extra: 1 } as never),
+      ).toThrow(TypeError);
+      expect(() => engine.setPartRig({ destinationId: 0, part: 0, mode: 0 as never })).toThrow(
+        TypeError,
+      );
     } finally {
       engine.destroy();
     }

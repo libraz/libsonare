@@ -33,8 +33,8 @@ function midi1Word(status: number, channel: number, data1: number, data2: number
  * the state a non-finalizing render has to preserve.
  */
 function padEngine(): RealtimeEngine {
-  const engine = new RealtimeEngine(SR, BLOCK);
-  engine.setBuiltinInstrument({ gain: 0.5 }, 5);
+  const engine = new RealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
+  engine.setBuiltinInstrument(5, { gain: 0.5 });
   engine.setMidiClips([
     {
       id: 1,
@@ -70,10 +70,10 @@ describe('chunked renderOffline', () => {
   it('accepts a request object identically to the positional form', () => {
     const frames = 2048;
     const positionalEngine = padEngine();
-    const positional = positionalEngine.renderOffline(
-      [new Float32Array(frames), new Float32Array(frames)],
-      BLOCK,
-    );
+    const positional = positionalEngine.renderOffline({
+      channels: [new Float32Array(frames), new Float32Array(frames)],
+      blockSize: BLOCK,
+    });
     positionalEngine.destroy();
 
     const requestEngine = padEngine();
@@ -95,10 +95,9 @@ describe('chunked renderOffline', () => {
     const total = chunk * chunks;
 
     const continuousEngine = padEngine();
-    const [continuous] = continuousEngine.renderOffline([
-      new Float32Array(total),
-      new Float32Array(total),
-    ]);
+    const [continuous] = continuousEngine.renderOffline({
+      channels: [new Float32Array(total), new Float32Array(total)],
+    });
     continuousEngine.destroy();
     expect(rms(continuous)).toBeGreaterThan(0);
 

@@ -11,6 +11,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
+import type { ExtractNotesRequest } from '../dist/index.js';
 import {
   dbToAmplitude,
   detectChords,
@@ -54,7 +55,7 @@ function thrown(call: () => unknown): unknown {
 }
 
 function withEngine<T>(body: (engine: RealtimeEngine) => T): T {
-  const engine = new RealtimeEngine(48000, 256);
+  const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
   try {
     return body(engine);
   } finally {
@@ -70,7 +71,7 @@ describe('argument refusal error class', () => {
   it('refuses a wrong-typed field with a TypeError', () => {
     withEngine((engine) => {
       const error = thrown(() =>
-        engine.setMarkers([{ id: 1, ppq: 'x' as unknown as number, name: 'a', kind: 0 }]),
+        engine.setMarkers([{ id: 1, ppq: 'x' as unknown as number, name: 'a', kind: 'marker' }]),
       );
       expect(error).toBeInstanceOf(TypeError);
       expect(isSonareError(error)).toBe(false);
@@ -80,7 +81,9 @@ describe('argument refusal error class', () => {
 
   it('refuses an out-of-domain field with a RangeError', () => {
     withEngine((engine) => {
-      const error = thrown(() => engine.setMarkers([{ id: 1, ppq: -1, name: 'a', kind: 0 }]));
+      const error = thrown(() =>
+        engine.setMarkers([{ id: 1, ppq: -1, name: 'a', kind: 'marker' }]),
+      );
       expect(error).toBeInstanceOf(RangeError);
       expect(isSonareError(error)).toBe(false);
       expect((error as Error).message).toBe(
@@ -116,7 +119,7 @@ describe('argument refusal error class', () => {
   });
 
   it('keeps an object-state failure a coded SonareError, and an unknown bus a refusal', () => {
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('drumBusSubgroup'));
+    const mixer = Mixer.fromJson(mixingScenePresetJson('drumBusSubgroup'), { sampleRate: 48000 });
     try {
       // The library reports INVALID_PARAMETER for an unknown bus: refused by cause.
       const refusal = thrown(() => mixer.busMeter('no-such-bus'));
@@ -169,7 +172,7 @@ describe('argument refusal classes shared with the Node surface', () => {
       sampleRate: 22050,
       f0Hz: new Float32Array(4),
       voiced: new Uint8Array(4),
-    } as unknown as Parameters<typeof extractNotes>[0];
+    } as unknown as ExtractNotesRequest;
     expect(thrown(() => extractNotes(request))).toBeInstanceOf(RangeError);
   });
 
@@ -200,11 +203,19 @@ describe('argument refusal classes shared with the Node surface', () => {
 
   it('refuses a bad realtime voice-changer channel count and stereo length with a RangeError', () => {
     expect(
-      thrown(() => voiceChangeRealtime({ samples, sampleRate: 48000, channels: 3 as never })),
+      thrown(() =>
+        voiceChangeRealtime({
+          channels: [samples, samples, samples],
+          sampleRate: 48000,
+        }),
+      ),
     ).toBeInstanceOf(RangeError);
     expect(
       thrown(() =>
-        voiceChangeRealtime({ samples: new Float32Array(2205), sampleRate: 48000, channels: 2 }),
+        voiceChangeRealtime({
+          channels: [new Float32Array(2205), new Float32Array(2204)],
+          sampleRate: 48000,
+        }),
       ),
     ).toBeInstanceOf(RangeError);
   });
@@ -234,10 +245,10 @@ describe('argument refusal classes shared with the Node surface', () => {
   });
 
   it('refuses a bad truePeakOversample with the same class on addStrip and configureMeter', () => {
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('drumBusSubgroup'));
+    const mixer = Mixer.fromJson(mixingScenePresetJson('drumBusSubgroup'), { sampleRate: 48000 });
     try {
       const strip = thrown(() => mixer.addStrip('extra', { truePeakOversample: 3 }));
-      const meter = thrown(() => mixer.configureMeter(true, 3));
+      const meter = thrown(() => mixer.configureMeter({ enabled: true, truePeakOversample: 3 }));
       expect(strip).toBeInstanceOf(RangeError);
       expect(meter).toBeInstanceOf(RangeError);
     } finally {
@@ -265,10 +276,6 @@ describe('argument refusal classes shared with the Node surface', () => {
     refused(() => masteringRepairNoiseBandBins({ nfft: 4096 } as never), 'nfft');
     refused(
       () => masteringRepairDereverbConfigForRoom({ estimate: {}, bogus: 1 } as never),
-      'bogus',
-    );
-    refused(
-      () => masteringRepairDereverbConfigForRoom({} as never, { bogus: 1 } as never),
       'bogus',
     );
   });

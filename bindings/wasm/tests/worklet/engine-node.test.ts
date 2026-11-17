@@ -56,13 +56,13 @@ async function createNode(): Promise<SonareRealtimeEngineNode> {
   });
 }
 
-describe('SonareRealtimeEngineNode channelCount', () => {
-  async function capture(channelCount: number | undefined): Promise<AudioWorkletNodeOptions> {
+describe('SonareRealtimeEngineNode numChannels', () => {
+  async function capture(numChannels: number | undefined): Promise<AudioWorkletNodeOptions> {
     let captured: AudioWorkletNodeOptions | undefined;
     const node = await SonareRealtimeEngineNode.create(fakeContext(), {
       mode: 'sab',
       engineAbiVersion: 1,
-      channelCount,
+      numChannels,
       nodeFactory: (_ctx, _name, nodeOptions) => {
         captured = nodeOptions;
         return fakeNode();
@@ -80,10 +80,10 @@ describe('SonareRealtimeEngineNode channelCount', () => {
 
   it.each([2.7, 0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
     'refuses %p rather than resolving it to a count the caller did not ask for',
-    async (channelCount) => {
-      await expect(capture(channelCount)).rejects.toThrow(RangeError);
-      await expect(capture(channelCount)).rejects.toThrow(
-        /channelCount must be an integer of at least 1/,
+    async (numChannels) => {
+      await expect(capture(numChannels)).rejects.toThrow(RangeError);
+      await expect(capture(numChannels)).rejects.toThrow(
+        /numChannels must be an integer of at least 1/,
       );
     },
   );

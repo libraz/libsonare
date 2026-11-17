@@ -21,8 +21,8 @@ function midi1Word(status: number, channel: number, data1: number, data2: number
 
 /** An engine holding a pad whose note never ends inside any render span. */
 function padEngine(): RawRealtimeEngine {
-  const engine = new RawRealtimeEngine(SR, BLOCK);
-  engine.setBuiltinInstrument({ gain: 0.5 }, 5);
+  const engine = new RawRealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
+  engine.setBuiltinInstrument(5, { gain: 0.5 });
   engine.setMidiClips([
     {
       id: 1,
@@ -69,7 +69,7 @@ async function createFacade(
   const engine = await SonareEngine.create({ sampleRate: SR } as BaseAudioContext, {
     mode: options.mode ?? 'postMessage',
     offlineEngine: mirror as unknown as OfflineEngineOption,
-    offlineChannelCount: 2,
+    offlineNumChannels: 2,
     offlineBlockSize: options.offlineBlockSize ?? BLOCK,
     nodeFactory: () => {
       queueMicrotask(() => port.onmessage?.({ data: { type: 'ready' } } as MessageEvent));
@@ -102,12 +102,11 @@ describe('SonareEngine offline export', () => {
         expect(run).toThrow(RangeError);
       };
       const planes = () => [new Float32Array(256), new Float32Array(256)];
-      refused(() => raw.renderOffline(planes(), BLOCK + 1));
       refused(() => raw.renderOffline({ channels: planes(), blockSize: BLOCK + 1 }));
       refused(() => raw.primeOfflineParameters(2, BLOCK + 1));
       refused(() => raw.bounceOffline({ totalFrames: 256, blockSize: BLOCK + 1 }));
       refused(() => raw.freezeOffline({ totalFrames: 256, blockSize: BLOCK + 1 }));
-      expect(() => raw.renderOffline(planes(), BLOCK)).not.toThrow();
+      expect(() => raw.renderOffline({ channels: planes(), blockSize: BLOCK })).not.toThrow();
     } finally {
       raw.destroy();
     }
@@ -124,35 +123,36 @@ describe('SonareEngine offline export', () => {
     const mirror = padEngine();
     const { engine } = await createFacade(mirror);
     try {
-      engine.transport.seekSeconds(12000 / SR);
+      engine.transport.seekSec(12000 / SR);
       const bounced = await engine.bounceOffline({ totalFrames: frames, numChannels: 2 });
       // Non-vacuity: a silent pair would compare equal to anything silent.
       expect(rms(expected.interleaved)).toBeGreaterThan(0);
       expect(bounced.frames).toBe(frames);
       expect(bounced.numChannels).toBe(2);
       expect(maxAbsDiff(bounced.interleaved, expected.interleaved)).toBeLessThan(1e-6);
-      expect(mirror.getTransportState().samplePosition).toBe(12000);
+      expect(mirror.transportState().samplePosition).toBe(12000);
     } finally {
       engine.destroy();
     }
   });
 
-  it('renders the request form like the numeric form and restores the position', async () => {
+  it('renders with the default block size like an explicit one and restores the position', async () => {
     const frames = 2048;
-    const renderWith = async (
-      request: number | { totalFrames: number; blockSize?: number },
-    ): Promise<Float32Array[]> => {
+    const renderWith = async (request: {
+      totalFrames: number;
+      blockSize?: number;
+    }): Promise<Float32Array[]> => {
       const mirror = padEngine();
       const { engine } = await createFacade(mirror);
       try {
         const planes = await engine.renderOffline(request);
-        expect(mirror.getTransportState().samplePosition).toBe(0);
+        expect(mirror.transportState().samplePosition).toBe(0);
         return planes;
       } finally {
         engine.destroy();
       }
     };
-    const numeric = await renderWith(frames);
+    const numeric = await renderWith({ totalFrames: frames });
     const request = await renderWith({ totalFrames: frames, blockSize: BLOCK });
     expect(rms(numeric[0])).toBeGreaterThan(0);
     expect(request).toHaveLength(2);
@@ -169,7 +169,7 @@ describe('SonareEngine offline export', () => {
     const continuous = await (async () => {
       const { engine } = await createFacade(continuousMirror);
       try {
-        return Array.from((await engine.renderOffline(total))[0]);
+        return Array.from((await engine.renderOffline({ totalFrames: total }))[0]);
       } finally {
         engine.destroy();
       }
@@ -188,10 +188,10 @@ describe('SonareEngine offline export', () => {
         });
         joined.push(...left);
         // The mirror advances between chunks; rewinding there would re-render chunk 0.
-        expect(mirror.getTransportState().samplePosition).toBe(chunk * (i + 1));
+        expect(mirror.transportState().samplePosition).toBe(chunk * (i + 1));
       }
       engine.finishOfflineRender();
-      expect(mirror.getTransportState().samplePosition).toBe(0);
+      expect(mirror.transportState().samplePosition).toBe(0);
       expect(maxAbsDiff(joined, continuous)).toBeLessThan(1e-6);
     } finally {
       engine.destroy();
@@ -199,12 +199,12 @@ describe('SonareEngine offline export', () => {
   });
 
   it('freezes into a single clip held by the facade, the mirror and the worklet', async () => {
-    const mirror = new RawRealtimeEngine(SR, BLOCK);
+    const mirror = new RawRealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
     const { engine, posted } = await createFacade(mirror);
     try {
       const tone = new Float32Array(2048).map((_, i) => 0.25 * Math.sin(i * 0.05));
-      engine.setTrackLanes([10]);
-      const sourceId = engine.addClip(10, [tone, tone], 0, { id: 11 });
+      engine.setTrackLanes([{ trackId: 10 }]);
+      const sourceId = engine.addClip(10, { channels: [tone, tone], startPpq: 0, id: 11 });
       expect(sourceId).toBe(11);
       posted.length = 0;
 
@@ -215,8 +215,8 @@ describe('SonareEngine offline export', () => {
         startPpq: 0,
       });
       expect(frozen).toEqual({ clipId: 42, frames: 1024, numChannels: 2 });
-      expect(mirror.clipCount()).toBe(1);
-      expect(mirror.getTransportState().samplePosition).toBe(0);
+      expect(mirror.clipCount).toBe(1);
+      expect(mirror.transportState().samplePosition).toBe(0);
 
       const delta = posted.find((message) => message.type === 'syncClipsDelta') as
         | { upserts: Array<{ id: number; channels: Float32Array[] }>; removeIds: number[] }
@@ -235,9 +235,9 @@ describe('SonareEngine offline export', () => {
   });
 
   it('withdraws the MIDI a freeze baked, so a frozen MIDI lane plays once', async () => {
-    const mirror = new RawRealtimeEngine(SR, BLOCK);
+    const mirror = new RawRealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
     // A near-instant release, so no tail of the earlier render rings into the replay.
-    mirror.setBuiltinInstrument({ gain: 0.5, sustain: 1, releaseMs: 0.01 }, 5);
+    mirror.setBuiltinInstrument(5, { gain: 0.5, sustain: 1, releaseMs: 0.01 });
     const { engine, posted } = await createFacade(mirror);
     try {
       engine.setMidiClips([
@@ -331,10 +331,10 @@ describe('SonareEngine offline export of OPFS-streamed clips', () => {
     const pageFrames = 128;
     const numSamples = 4 * pageFrames;
     const worker = new FakeClipPageWorker();
-    const mirror = new RawRealtimeEngine(SR, BLOCK);
+    const mirror = new RawRealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
     const { engine } = await createFacade(mirror, { mode: 'sab' });
     try {
-      engine.setTrackLanes([10]);
+      engine.setTrackLanes([{ trackId: 10 }]);
       const { provider } = await engine.attachOpfsClipStream({
         path: 'clips/clip.f32',
         clipId: 702,
@@ -344,7 +344,7 @@ describe('SonareEngine offline export of OPFS-streamed clips', () => {
         primePages: 1,
         worker: worker as unknown as Worker,
       });
-      engine.addClip(10, provider, 0, { id: 702 });
+      engine.addClip(10, { pageProvider: provider, startPpq: 0, id: 702 });
 
       const [left] = await engine.renderOffline({ totalFrames: numSamples });
       for (let page = 0; page < 4; page++) {
@@ -352,7 +352,7 @@ describe('SonareEngine offline export of OPFS-streamed clips', () => {
       }
 
       worker.failPages.add(2);
-      engine.transport.seekSeconds(0);
+      engine.transport.seekSec(0);
       await expect(engine.renderOffline({ totalFrames: numSamples })).rejects.toThrow(/page 2/);
     } finally {
       engine.destroy();
@@ -363,10 +363,10 @@ describe('SonareEngine offline export of OPFS-streamed clips', () => {
     const pageFrames = 128;
     const numSamples = 4 * pageFrames;
     const worker = new FakeClipPageWorker();
-    const mirror = new RawRealtimeEngine(SR, BLOCK);
+    const mirror = new RawRealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
     const { engine, posted } = await createFacade(mirror, { mode: 'sab' });
     try {
-      engine.setTrackLanes([10]);
+      engine.setTrackLanes([{ trackId: 10 }]);
       const { provider } = await engine.attachOpfsClipStream({
         path: 'clips/clip.f32',
         clipId: 701,
@@ -376,7 +376,7 @@ describe('SonareEngine offline export of OPFS-streamed clips', () => {
         primePages: 0,
         worker: worker as unknown as Worker,
       });
-      engine.addClip(10, provider, 0, { id: 701 });
+      engine.addClip(10, { pageProvider: provider, startPpq: 0, id: 701 });
       expect(worker.pages).toEqual([]);
 
       const bounced = await engine.bounceOffline({ totalFrames: numSamples, numChannels: 2 });

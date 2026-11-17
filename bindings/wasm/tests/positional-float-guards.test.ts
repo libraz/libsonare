@@ -202,7 +202,8 @@ const FLOAT_FIELDS: FloatField[] = [
   {
     entry: 'trim',
     key: 'thresholdDb',
-    run: (value) => trim(silenceSignal, SR, value, 2048, 512),
+    run: (value) =>
+      trim(silenceSignal, SR, { thresholdDb: value, frameLength: 2048, hopLength: 512 }),
     nonFiniteRefusedInJs: true,
   },
   {
@@ -440,8 +441,12 @@ describe('the refusal is the same one the shared readers already raised', () => 
 
 describe('trim consumes the thresholdDb it accepts', () => {
   it('reads two legitimate thresholdDb values as two different trims', () => {
-    const strict = trim(silenceSignal, SR, -6, 2048, 512);
-    const lenient = trim(silenceSignal, SR, -80, 2048, 512);
+    const strict = trim(silenceSignal, SR, { thresholdDb: -6, frameLength: 2048, hopLength: 512 });
+    const lenient = trim(silenceSignal, SR, {
+      thresholdDb: -80,
+      frameLength: 2048,
+      hopLength: 512,
+    });
     expect(strict.length).toBeLessThan(lenient.length);
   });
 });

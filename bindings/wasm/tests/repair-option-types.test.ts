@@ -45,7 +45,7 @@ const entries: Array<{
     name: 'declip',
     run: (o) => masteringRepairDeclip(samples, SR, o as never),
     fields: [
-      { key: 'clipThreshold', wrong: '0.9', type: 'number' },
+      { key: 'clipThresholdDb', wrong: '0.9', type: 'number' },
       { key: 'iterations', wrong: '3', type: 'number' },
     ],
   },

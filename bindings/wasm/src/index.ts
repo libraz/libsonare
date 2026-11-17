@@ -19,26 +19,14 @@
  */
 
 import './lifetime.js';
-import { podConfigFromNative } from './internal/pod_config.js';
 import {
   assertAbiCompatible,
   assertSameInitOptions,
   notInitializedError,
   setSonareModule,
 } from './module_state.js';
-import type {
-  Capabilities,
-  CapabilityCatalog,
-  RealtimeVoiceChangerPodConfig,
-  SonareModuleHandle,
-  VoicePresetId,
-} from './public_types.js';
-import type {
-  SonareModule,
-  WasmDecomposeResult,
-  WasmFrameResult,
-  WasmHpssWithResidualResult,
-} from './sonare.js';
+import type { Capabilities, CapabilityCatalog, SonareModuleHandle } from './public_types.js';
+import type { SonareModule, WasmFrameResult } from './sonare.js';
 
 export { alignTakeToReference } from './align_take.js';
 export type {
@@ -142,7 +130,6 @@ export type {
   TrimSilenceMode,
   TrimSilenceOptions,
   VoiceChangeOptions,
-  VoiceChangeRealtimeOptions,
   VoiceChangeRealtimeRequest,
   VoiceChangeRequest,
 } from './effects_mastering.js';
@@ -235,7 +222,6 @@ export {
   percussive,
   pitchCorrectTimevarying,
   pitchCorrectToMidi,
-  pitchCorrectToMidiTimevarying,
   pitchShift,
   renderNotes,
   renderPercussiveEvents,
@@ -253,7 +239,6 @@ export type {
   ExtractNotesRequest,
   MergeNotesRequest,
   NoteMoveRequest,
-  NoteSetRequest,
   NoteStretchRequest,
   NoteTargetsFromSmfRequest,
   RenderNotesRequest,
@@ -270,7 +255,6 @@ export type {
   AutoTuneRequest,
   PitchCorrectTimevaryingRequest,
   PitchCorrectToMidiRequest,
-  PitchCorrectToMidiTimevaryingRequest,
   PitchShiftRequest,
   TimeStretchRequest,
 } from './effects_timepitch.js';
@@ -307,12 +291,14 @@ export type {
 } from './feature_core.js';
 export type {
   DecomposeRequest,
+  DecomposeResult,
   DecomposeStemsLinkedRequest,
   DecomposeStemsLinkedResult,
   DecomposeStemsRequest,
   DecomposeStemsResult,
-  DecomposeWithInitRequest,
   HpssWithResidualRequest,
+  HpssWithResidualResult,
+  NnFilterAggregate,
   NnFilterRequest,
   RemixRequest,
   SegmentAgglomerativeRequest,
@@ -389,6 +375,7 @@ export type {
   StftDbRequest,
   StftRequest,
   TrimRequest,
+  TrimResult,
 } from './feature_spectrogram.js';
 export {
   amplitudeToDb,
@@ -408,7 +395,6 @@ export {
   decompose,
   decomposeStems,
   decomposeStemsLinked,
-  decomposeWithInit,
   deemphasis,
   detectBoundaries,
   ebur128LoudnessRange,
@@ -561,6 +547,22 @@ export {
   waveformPeakPyramid,
   waveformPeaks,
 } from './metering.js';
+export type {
+  FaderAutomationPoint,
+  InsertAutomationPoint,
+  MixBusRole,
+  MixerAutomationPointBase,
+  MixerConfig,
+  MixerJsonOptions,
+  MixerMeterOptions,
+  MixerSend,
+  PanAutomationPoint,
+  PolarityInvert,
+  SendAutomationPoint,
+  StripRef,
+  WidthAutomationPoint,
+} from './mixer.js';
+export { MeterScratchField } from './mixer.js';
 export type { SuggestMixSceneRequest } from './mixing_assistant.js';
 export {
   mixSourceClassFromName,
@@ -751,6 +753,7 @@ export type {
   CapabilityCatalogChainList,
   CapabilityCatalogChainStage,
   CapabilityCatalogPresets,
+  CharacterType,
   Chord,
   ChordAnalysisResult,
   ChordChromaMethod,
@@ -813,15 +816,13 @@ export type {
   MasteringPreset,
   MasteringPresetCatalogEntry,
   MasteringProcessorParams,
-  MasteringRepairDeclickStereoResult,
-  MasteringRepairDeclipStereoResult,
-  MasteringRepairDecrackleStereoResult,
-  MasteringRepairDehumStereoResult,
-  MasteringRepairDenoiseClassicalLinkedResult,
-  MasteringRepairDenoiseClassicalStereoResult,
-  MasteringRepairDereverbClassicalLinkedResult,
-  MasteringRepairDereverbClassicalStereoResult,
-  MasteringRepairTrimSilenceStereoResult,
+  MasteringRepairDeclickResult,
+  MasteringRepairDeclipResult,
+  MasteringRepairDecrackleResult,
+  MasteringRepairDehumResult,
+  MasteringRepairDenoiseClassicalResult,
+  MasteringRepairDereverbClassicalResult,
+  MasteringRepairTrimSilenceResult,
   MasteringReport,
   MasteringResult,
   MasteringSoloProcessorParams,
@@ -843,6 +844,7 @@ export type {
   MeterEstimate,
   MeterTap,
   MfccResult,
+  MidiRelease,
   MixAnalysisBand,
   MixAssistantMixProfile,
   MixAssistantOptions,
@@ -868,6 +870,7 @@ export type {
   MultibandCompressorBand,
   NoiseDetection,
   NormType,
+  NoteDivision,
   NoteEdit,
   NoteEditInput,
   NoteExtractorOptions,
@@ -891,9 +894,11 @@ export type {
   PercussiveEventEditInput,
   PercussiveEventInput,
   PiptrackResult,
+  PitchCorrectionMode,
   PitchCorrectOptions,
   PitchDecompositionResult,
   PitchResult,
+  PitchTargetMode,
   PlaybackBassManagementConfig,
   PlaybackChannelRole,
   PlaybackDiagnostics,
@@ -912,24 +917,24 @@ export type {
   PlaybackUpmixConfig,
   PolyphonicAnalysisOptions,
   PolyphonicRenderOptions,
+  RealtimeVoiceChangerConfig,
   RealtimeVoiceChangerConfigInput,
-  RealtimeVoiceChangerPodConfig,
   ReassignedSpectrogramResult,
   RenderPlaybackRequest,
   RenderPlaybackResult,
   ReverbDetection,
+  ReverbVariation,
   RhythmResult,
   RirDiagnostic,
   RirResult,
-  RirSynthOptions,
   RoomEstimateOptions,
   RoomEstimateResult,
-  RoomGeometryFromEstimateOptions,
   RoomGeometryOptions,
   RoomMorphOptions,
   RoomMorphResult,
   RoomMorphStereoResult,
   RoomPlacement,
+  ScaleKind,
   Section,
   SectionType,
   SendTiming,
@@ -955,6 +960,7 @@ export type {
   StreamingPlatform,
   StreamingRetuneConfig,
   SurroundPan,
+  SynthesizeRirRequest,
   TempogramMode,
   TimbreFrame,
   TimbreResult,
@@ -963,17 +969,11 @@ export type {
   TrimReport,
   TypedJson,
   UmpWords,
-  VoiceCharacterType,
+  VocoderCarrierSource,
+  VocoderCarrierWave,
   VoicedFlags,
-  VoiceMidiRelease,
-  VoiceNoteDivision,
-  VoicePitchCorrectionMode,
-  VoicePitchEngine,
+  VoiceEngine,
   VoicePresetId,
-  VoiceReverbVariation,
-  VoiceScaleKind,
-  VoiceVocoderCarrierSource,
-  VoiceVocoderCarrierWave,
   WindowType,
 } from './public_types.js';
 export { CHORD_QUALITIES, Mode, PitchClass } from './public_types.js';
@@ -1004,6 +1004,7 @@ export type {
   RoomGeometryFromEstimateRequest,
   RoomMorphRequest,
   RoomMorphStereoRequest,
+  TempoRangeOptions,
 } from './quick_analysis.js';
 export {
   analyze,
@@ -1030,18 +1031,26 @@ export {
   synthesizeRir,
 } from './quick_analysis.js';
 export type {
+  CaptureOptions,
+  CapturePunch,
   ClipPageRequest,
   EngineAutomationPoint,
   EngineBounceOptions,
   EngineBounceResult,
   EngineBus,
-  EngineCapturePunchRequest,
   EngineCaptureSource,
   EngineCaptureStatus,
   EngineClip,
+  EngineDither,
   EngineFreezeOptions,
   EngineFreezeResult,
+  EngineGraphConnection,
+  EngineGraphMix,
+  EngineGraphNode,
+  EngineGraphNodeType,
+  EngineGraphParameterBinding,
   EngineGraphSpec,
+  EngineLoop,
   EngineMarker,
   EngineMeterTelemetry,
   EngineMeterTelemetryWide,
@@ -1052,22 +1061,26 @@ export type {
   EngineProcessWithMonitorResult,
   EngineScopeTelemetry,
   EngineTelemetry,
+  EngineTelemetryError,
+  EngineTelemetryType,
   EngineTempoSegment,
   EngineTimeSignatureSegment,
   EngineTrackLane,
   EngineTrackMonitorMode,
   EngineTrackSend,
   EngineTransportState,
+  EngineWarpMode,
   ExternalMidiEvent,
-  MidiCcBindOptions,
+  RealtimeEngineConfig,
   RenderOfflineRequest,
-  TrackMonitorMode,
+  SidechainSource,
 } from './realtime_engine.js';
 export {
   ClipPageProvider,
   MAX_TRACK_LANES,
   RealtimeEngine,
 } from './realtime_engine.js';
+export type { DereverbClassicalConfig } from './repair_dereverb.js';
 export {
   scaleCorrectionSemitones,
   scaleMaskForMode,
@@ -1093,22 +1106,26 @@ export type {
   MixerRealtimeBuffer,
   RealtimeVoiceChangerInterleavedBuffer,
   RealtimeVoiceChangerMonoBuffer,
+  RealtimeVoiceChangerOptions,
   RealtimeVoiceChangerPlanarBuffer,
+  RealtimeVoiceChangerValidatePresetJsonResult,
   StripMeteringOptions,
 } from './streaming_mixing.js';
 export {
   Mixer,
   RealtimeVoiceChanger,
+  realtimeVoiceChangerPresetConfig,
   realtimeVoiceChangerPresetJson,
   realtimeVoiceChangerPresetNames,
+  realtimeVoiceChangerValidatePresetJson,
   StreamingEqualizer,
   StreamingMasteringChain,
   StreamingRetune,
-  validateRealtimeVoiceChangerPresetJson,
+  voiceCharacterPresetId,
 } from './streaming_mixing.js';
 export type { TranscribeRequest } from './transcribe.js';
 export { transcribe } from './transcribe.js';
-export type { ValidateOptions } from './validation.js';
+export type { OptionsOf, ValidateOptions } from './validation.js';
 export {
   createVocalEditSession,
   restoreVocalEditSession,
@@ -1135,7 +1152,6 @@ export type * from './vocal_edit_worker_protocol.js';
 export type {
   BindWebMidiOptions,
   WebMidiBinding,
-  WebMidiCcBinding,
   WebMidiEngine,
   WebMidiInputInfo,
 } from './web_midi.js';
@@ -1147,18 +1163,8 @@ export type {
 } from './worker_client.js';
 export { OfflineWorkerClient } from './worker_client.js';
 
-/** NMF factor matrices { w, h } from {@link decompose}. */
-export type DecomposeResult = WasmDecomposeResult;
-/** Harmonic / percussive / residual signals from {@link hpssWithResidual}. */
-export type HpssWithResidualResult = WasmHpssWithResidualResult;
 /** Framed signal from {@link frameSignal}. */
 export type FrameResult = WasmFrameResult;
-/** Trimmed signal and its bounds, in samples of the input. */
-export interface TrimResult {
-  audio: Float32Array;
-  startSample: number;
-  endSample: number;
-}
 
 // ============================================================================
 // Module State
@@ -1285,74 +1291,6 @@ export function voiceChangerAbiVersion(): number {
     throw notInitializedError();
   }
   return module.voiceChangerAbiVersion();
-}
-
-// Canonical ordinal order of the built-in voice-character presets, matching the
-// C ABI SonareVoiceCharacterPreset enum and SONARE_REALTIME_VOICE_CHANGER_PRESET_IDS.
-const VOICE_PRESET_ORDINALS: readonly VoicePresetId[] = [
-  'neutral-monitor',
-  'bright-idol',
-  'soft-whisper',
-  'deep-narrator',
-  'robot-mascot',
-  'dark-villain',
-  'hard-tune',
-  'robot-monotone',
-  'choir-harmony',
-  'vocoder-strings',
-  'megaphone',
-  'radio-voice',
-];
-
-function resolveVoicePresetOrdinal(preset: VoicePresetId | number): number {
-  if (typeof preset === 'number') {
-    if (!Number.isSafeInteger(preset) || preset < 0 || preset >= VOICE_PRESET_ORDINALS.length) {
-      throw new RangeError(`Unknown voice-character preset ordinal: ${String(preset)}`);
-    }
-    return preset;
-  }
-  if (preset.includes('\0')) {
-    throw new RangeError('preset must not contain NUL');
-  }
-  const ordinal = VOICE_PRESET_ORDINALS.indexOf(preset);
-  if (ordinal < 0) {
-    throw new RangeError(`Unknown voice character preset: ${preset}`);
-  }
-  return ordinal;
-}
-
-/**
- * Map a voice-character preset ordinal (or canonical id) to its canonical id
- * string (e.g. `'bright-idol'`). Unknown numeric ordinals return `null`;
- * unknown preset ids throw.
- */
-export function voiceCharacterPresetId(preset: VoicePresetId | number): VoicePresetId | null {
-  if (!module) {
-    throw notInitializedError();
-  }
-  if (
-    typeof preset === 'number' &&
-    (!Number.isSafeInteger(preset) || preset < 0 || preset >= VOICE_PRESET_ORDINALS.length)
-  ) {
-    return null;
-  }
-  return module.voiceCharacterPresetId(resolveVoicePresetOrdinal(preset)) as VoicePresetId;
-}
-
-/**
- * Return the canonical (normalized) flat POD config for a built-in voice
- * preset, skipping the JSON round-trip. Accepts a canonical preset id or its
- * integer ordinal. Invalid ordinals throw.
- */
-export function realtimeVoiceChangerPresetConfig(
-  preset: VoicePresetId | number,
-): RealtimeVoiceChangerPodConfig {
-  if (!module) {
-    throw notInitializedError();
-  }
-  return podConfigFromNative(
-    module.realtimeVoiceChangerPresetConfig(resolveVoicePresetOrdinal(preset)),
-  );
 }
 
 // ============================================================================

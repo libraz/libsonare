@@ -79,22 +79,22 @@ describe('masteringRepairDereverbClassicalStereo (WASM)', () => {
     const { left, right } = buildWetChannels();
     const result = masteringRepairDereverbClassicalStereo({ left, right, sampleRate: SR });
 
-    expect(result.left).toBeInstanceOf(Float32Array);
-    expect(result.right).toBeInstanceOf(Float32Array);
-    expect(result.left.length).toBe(left.length);
-    expect(result.right.length).toBe(right.length);
-    expect(result.left).not.toEqual(result.right);
+    expect(result.channels[0]).toBeInstanceOf(Float32Array);
+    expect(result.channels[1]).toBeInstanceOf(Float32Array);
+    expect(result.channels[0].length).toBe(left.length);
+    expect(result.channels[1].length).toBe(right.length);
+    expect(result.channels[0]).not.toEqual(result.channels[1]);
 
     // One shared report, as on the denoise pair and unlike the four earlier
     // repair stereo entries, whose reports come in a per-channel pair.
-    expect(result.report).toBeDefined();
+    expect(result.reports[0]).toBeDefined();
     expect('leftReport' in result).toBe(false);
     expect('rightReport' in result).toBe(false);
 
-    expect(Number.isFinite(result.report.detected.lateDecayRatioDb)).toBe(true);
-    expect(Number.isFinite(result.report.meanReductionDb)).toBe(true);
-    expect(result.report.suppressedFraction).toBeGreaterThanOrEqual(0);
-    expect(result.report.suppressedFraction).toBeLessThanOrEqual(1);
+    expect(Number.isFinite(result.reports[0].detected.lateDecayRatioDb)).toBe(true);
+    expect(Number.isFinite(result.reports[0].meanReductionDb)).toBe(true);
+    expect(result.reports[0].suppressedFraction).toBeGreaterThanOrEqual(0);
+    expect(result.reports[0].suppressedFraction).toBeLessThanOrEqual(1);
   });
 
   it('reports no absolute level: doubling the pair moves nothing', () => {
@@ -112,8 +112,10 @@ describe('masteringRepairDereverbClassicalStereo (WASM)', () => {
     // 3.0103 dB. Every field here is a ratio or a fraction, so both come back
     // identical -- which is why a stereo figure from this entry is comparable
     // against a mono one.
-    expect(pair.report.detected.lateDecayRatioDb).toBe(single.report.detected.lateDecayRatioDb);
-    expect(pair.report.meanReductionDb).toBe(single.report.meanReductionDb);
+    expect(pair.reports[0].detected.lateDecayRatioDb).toBe(
+      single.reports[0].detected.lateDecayRatioDb,
+    );
+    expect(pair.reports[0].meanReductionDb).toBe(single.reports[0].meanReductionDb);
   });
 
   it('reads a reverberant input higher on lateDecayRatioDb than the same material dry', () => {
@@ -132,8 +134,8 @@ describe('masteringRepairDereverbClassicalStereo (WASM)', () => {
     // was one comb: -13.07 against -15.31, a 2.2 dB gap that says almost
     // nothing. The margin is what makes this an observation of the property
     // rather than of a rounding direction. Measured -3.99 against -22.91.
-    expect(wetResult.report.detected.lateDecayRatioDb).toBeGreaterThan(
-      dryResult.report.detected.lateDecayRatioDb + 5,
+    expect(wetResult.reports[0].detected.lateDecayRatioDb).toBeGreaterThan(
+      dryResult.reports[0].detected.lateDecayRatioDb + 5,
     );
   });
 
@@ -143,8 +145,8 @@ describe('masteringRepairDereverbClassicalStereo (WASM)', () => {
     // wpeEnabled is clear by default, so these two zeros are the measurement,
     // not unfilled fields.
     const off = masteringRepairDereverbClassicalStereo({ left, right, sampleRate: SR });
-    expect(off.report.detected.latePredictability).toBe(0);
-    expect(off.report.wpePredictorNorm).toBe(0);
+    expect(off.reports[0].detected.latePredictability).toBe(0);
+    expect(off.reports[0].wpePredictorNorm).toBe(0);
 
     // The control: with the stage on, both fill in, and the post-clamp figure
     // sits below the pre-clamp one, which is the only observation of that
@@ -155,9 +157,9 @@ describe('masteringRepairDereverbClassicalStereo (WASM)', () => {
       sampleRate: SR,
       wpeEnabled: true,
     });
-    expect(on.report.detected.latePredictability).toBeGreaterThan(0);
-    expect(on.report.wpePredictorNorm).toBeGreaterThan(0);
-    expect(on.report.wpePredictorNorm).toBeLessThan(on.report.detected.latePredictability);
+    expect(on.reports[0].detected.latePredictability).toBeGreaterThan(0);
+    expect(on.reports[0].wpePredictorNorm).toBeGreaterThan(0);
+    expect(on.reports[0].wpePredictorNorm).toBeLessThan(on.reports[0].detected.latePredictability);
   });
 
   it('validates threshold and attenuation to a closed [0, 1], so 1 is the strongest gate', () => {
@@ -175,8 +177,8 @@ describe('masteringRepairDereverbClassicalStereo (WASM)', () => {
     // below is one step short of the knob's real range.
     const open = masteringRepairDereverbClassicalStereo({ ...base, threshold: 0 });
     const tight = masteringRepairDereverbClassicalStereo({ ...base, threshold: 1 });
-    expect(open.report.suppressedFraction).toBeGreaterThan(0);
-    expect(tight.report.suppressedFraction).toBeLessThan(open.report.suppressedFraction);
+    expect(open.reports[0].suppressedFraction).toBeGreaterThan(0);
+    expect(tight.reports[0].suppressedFraction).toBeLessThan(open.reports[0].suppressedFraction);
   });
 
   it('pads an input shorter than nFft instead of rejecting it, as the denoise pair does', () => {
@@ -184,35 +186,34 @@ describe('masteringRepairDereverbClassicalStereo (WASM)', () => {
     const shortLeft = left.slice(0, 512);
     const shortRight = right.slice(0, 512);
 
-    const result = masteringRepairDereverbClassicalStereo(shortLeft, shortRight, SR, {
+    const result = masteringRepairDereverbClassicalStereo({
+      left: shortLeft,
+      right: shortRight,
+      sampleRate: SR,
       nFft: 1024,
     });
-    expect(result.left.length).toBe(512);
-    expect(result.right.length).toBe(512);
-  });
-
-  it('accepts the positional call form identically to the request form', () => {
-    const { left, right } = buildWetChannels();
-    const positional = masteringRepairDereverbClassicalStereo(left, right, SR);
-    const request = masteringRepairDereverbClassicalStereo({ left, right, sampleRate: SR });
-    expect(positional.left).toEqual(request.left);
-    expect(positional.right).toEqual(request.right);
-    expect(positional.report.meanReductionDb).toBe(request.report.meanReductionDb);
-    expect(positional.report.detected.lateDecayRatioDb).toBe(
-      request.report.detected.lateDecayRatioDb,
-    );
+    expect(result.channels[0].length).toBe(512);
+    expect(result.channels[1].length).toBe(512);
   });
 
   it('rejects mismatched channel lengths', () => {
     const { left, right } = buildWetChannels();
     expect(() =>
-      masteringRepairDereverbClassicalStereo(left, right.slice(0, right.length - 1), SR),
+      masteringRepairDereverbClassicalStereo({
+        left,
+        right: right.slice(0, right.length - 1),
+        sampleRate: SR,
+      }),
     ).toThrow();
   });
 
   it('rejects an empty channel pair', () => {
     expect(() =>
-      masteringRepairDereverbClassicalStereo(new Float32Array(0), new Float32Array(0), SR),
+      masteringRepairDereverbClassicalStereo({
+        left: new Float32Array(0),
+        right: new Float32Array(0),
+        sampleRate: SR,
+      }),
     ).toThrow();
   });
 
@@ -220,35 +221,63 @@ describe('masteringRepairDereverbClassicalStereo (WASM)', () => {
     const { left, right } = buildWetChannels();
     const badLeft = left.slice();
     badLeft[10] = Number.NaN;
-    expect(() => masteringRepairDereverbClassicalStereo(badLeft, right, SR)).toThrow();
+    expect(() =>
+      masteringRepairDereverbClassicalStereo({ left: badLeft, right, sampleRate: SR }),
+    ).toThrow();
 
     const badRight = right.slice();
     badRight[10] = Number.POSITIVE_INFINITY;
-    expect(() => masteringRepairDereverbClassicalStereo(left, badRight, SR)).toThrow();
+    expect(() =>
+      masteringRepairDereverbClassicalStereo({ left, right: badRight, sampleRate: SR }),
+    ).toThrow();
   });
 
   it('rejects a NaN sample rate', () => {
     const { left, right } = buildWetChannels();
-    expect(() => masteringRepairDereverbClassicalStereo(left, right, Number.NaN)).toThrow();
+    expect(() =>
+      masteringRepairDereverbClassicalStereo({ left, right, sampleRate: Number.NaN }),
+    ).toThrow();
   });
 
   it('rejects a wrong-typed sample rate', () => {
     const { left, right } = buildWetChannels();
     expect(() =>
-      masteringRepairDereverbClassicalStereo(left, right, 'not-a-number' as unknown as number),
+      masteringRepairDereverbClassicalStereo({
+        left,
+        right,
+        sampleRate: 'not-a-number' as unknown as number,
+      }),
     ).toThrow();
   });
 
   it('rejects a non-power-of-two nFft and a hopLength outside (0, nFft / 2]', () => {
     const { left, right } = buildWetChannels();
     expect(() =>
-      masteringRepairDereverbClassicalStereo(left, right, SR, { nFft: 1500, hopLength: 256 }),
+      masteringRepairDereverbClassicalStereo({
+        left,
+        right,
+        sampleRate: SR,
+        nFft: 1500,
+        hopLength: 256,
+      }),
     ).toThrow();
     expect(() =>
-      masteringRepairDereverbClassicalStereo(left, right, SR, { nFft: 1024, hopLength: 0 }),
+      masteringRepairDereverbClassicalStereo({
+        left,
+        right,
+        sampleRate: SR,
+        nFft: 1024,
+        hopLength: 0,
+      }),
     ).toThrow();
     expect(() =>
-      masteringRepairDereverbClassicalStereo(left, right, SR, { nFft: 1024, hopLength: 2048 }),
+      masteringRepairDereverbClassicalStereo({
+        left,
+        right,
+        sampleRate: SR,
+        nFft: 1024,
+        hopLength: 2048,
+      }),
     ).toThrow();
   });
 });

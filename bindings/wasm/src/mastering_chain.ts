@@ -9,8 +9,8 @@ import type {
 } from './public_types.js';
 import type { RequestFn } from './request_keys.js';
 import type { ProgressCallback } from './sonare.js';
-import type { ValidateOptions } from './validation.js';
-import { assertAudioInput, assertString, optionsBag, requestObject } from './validation.js';
+import type { OptionsOf, ValidateOptions } from './validation.js';
+import { assertAudioInput, assertString, requestObject, sampleOneShot } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -34,83 +34,58 @@ function resolveNormalizeMode(value: unknown, context = 'normalize'): NormalizeM
   return value;
 }
 
+/** Request for {@link normalize}. */
 export interface NormalizeRequest extends ValidateOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
   /**
    * Finite target level at or below 0 dBFS. Defaults to 0 for `mode: 'peak'` and
    * -20 for `mode: 'rms'`.
    */
   targetDb?: number;
+  /** Normalization statistic. Default `'peak'`. */
   mode?: NormalizeMode;
 }
 
 /**
  * Normalize audio to a target peak or RMS level.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param targetDb - Finite target at or below 0 dBFS. For `mode: 'peak'`, this is the
- *   peak target (default 0 dB = full scale); for `mode: 'rms'`, this is the RMS target
- *   (default -20 dB).
- * @param mode - Normalization mode: `'peak'` (default) or `'rms'`.
  * @returns Normalized audio
+ * @throws {TypeError} when `sampleRate` is missing or `mode` is not a string
+ * @throws {RangeError} on audio out of domain, an out-of-range `sampleRate`, an unknown `mode`
+ *   or a `targetDb` that is not finite or sits above 0 dBFS
  */
 export function normalize(request: NormalizeRequest): Float32Array;
 export function normalize(
   samples: Float32Array,
   sampleRate: number,
-  targetDb?: number,
-  options?: ValidateOptions,
+  options?: OptionsOf<NormalizeRequest>,
 ): Float32Array;
-export function normalize(
-  samples: Float32Array,
-  sampleRate: number,
-  targetDb?: number,
-  mode?: NormalizeMode,
-  options?: ValidateOptions,
-): Float32Array;
-export function normalize(
-  samples: Float32Array | NormalizeRequest,
-  sampleRate?: number,
-  targetDb?: number,
-  modeOrOptions: NormalizeMode | ValidateOptions = 'peak',
-  options: ValidateOptions = {},
-): Float32Array {
-  optionsBag('normalize', options);
-  if (
-    modeOrOptions !== undefined &&
-    modeOrOptions !== null &&
-    typeof modeOrOptions !== 'string' &&
-    typeof modeOrOptions !== 'object'
-  ) {
-    throw new TypeError("normalize: mode must be the string 'peak' or 'rms'");
-  }
-  if (modeOrOptions === null) {
-    throw new TypeError("normalize: mode must be the string 'peak' or 'rms'");
-  }
-  const positionalOptions =
-    typeof modeOrOptions === 'object' && modeOrOptions !== null ? modeOrOptions : options;
-  const positionalMode = typeof modeOrOptions === 'string' ? modeOrOptions : undefined;
-  const request: NormalizeRequest =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, targetDb, mode: positionalMode, ...positionalOptions }
-      : requestObject('normalize', samples);
-  assertAudioInput('normalize', request.samples, request.sampleRate ?? 22050, request);
-  const mode = resolveNormalizeMode(request.mode);
+export function normalize(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<NormalizeRequest>('normalize', args);
+  assertAudioInput('normalize', r.samples, r.sampleRate, r);
+  const mode = resolveNormalizeMode(r.mode);
   return requireModule().normalizeEx(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request.targetDb ?? (mode === 'rms' ? -20.0 : 0.0),
+    r.samples,
+    r.sampleRate,
+    r.targetDb ?? (mode === 'rms' ? -20.0 : 0.0),
     mode,
   );
 }
 
+/** Request for {@link normalizeStereo}. */
 export interface NormalizeStereoRequest extends ValidateOptions {
   left: Float32Array;
   right: Float32Array;
-  sampleRate?: number;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
+  /**
+   * Finite target level at or below 0 dBFS. Defaults to 0 for `mode: 'peak'` and
+   * -20 for `mode: 'rms'`.
+   */
   targetDb?: number;
+  /** Normalization statistic. Default `'peak'`. */
   mode?: NormalizeMode;
 }
 
@@ -139,13 +114,14 @@ export interface NormalizeStereoResult {
  *
  * @param request.left - Left channel samples (float32)
  * @param request.right - Right channel samples, same length as `left`
- * @param request.sampleRate - Sample rate in Hz (default: 22050)
+ * @param request.sampleRate - Sample rate in Hz, required
  * @param request.targetDb - Finite target at or below 0 dBFS. Defaults to 0 for
  *   `mode: 'peak'` and -20 for `mode: 'rms'`, matching the library and the other
  *   language surfaces.
  * @param request.mode - `'peak'` (default) or `'rms'`
  * @returns The normalized pair and the shared gain in dB
- * @throws RangeError when the two channels differ in length
+ * @throws {TypeError} when `sampleRate` is missing
+ * @throws {RangeError} when the two channels differ in length
  *
  * @example
  * ```ts
@@ -159,8 +135,8 @@ export interface NormalizeStereoResult {
  */
 export function normalizeStereo(request: NormalizeStereoRequest): NormalizeStereoResult {
   requestObject('normalizeStereo', request, 'request', true);
-  assertAudioInput('normalizeStereo', request.left, request.sampleRate ?? 22050, request, 'left');
-  assertAudioInput('normalizeStereo', request.right, request.sampleRate ?? 22050, request, 'right');
+  assertAudioInput('normalizeStereo', request.left, request.sampleRate, request, 'left');
+  assertAudioInput('normalizeStereo', request.right, request.sampleRate, request, 'right');
   if (request.left.length !== request.right.length) {
     throw new RangeError('Stereo channel lengths must match.');
   }
@@ -171,7 +147,7 @@ export function normalizeStereo(request: NormalizeStereoRequest): NormalizeStere
   return requireModule().normalizeStereo(
     request.left,
     request.right,
-    request.sampleRate ?? 22050,
+    request.sampleRate,
     targetDb,
     mode,
   );

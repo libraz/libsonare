@@ -142,7 +142,7 @@ describe('createOpfsClipPageProvider', () => {
   });
 
   it('feeds page requests through a worker-backed provider', async () => {
-    const engine = new RealtimeEngine(48000, 8);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     const worker = new FakeClipPageWorker();
     const binding = createOpfsClipPageProvider(engine, {
       path: 'clips/clip.f32',
@@ -172,7 +172,7 @@ describe('createOpfsClipPageProvider', () => {
   });
 
   it('applies each reply of a shared worker only to the binding that asked for it', async () => {
-    const engine = new RealtimeEngine(48000, 8);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     const worker = new DeferredClipPageWorker();
     const suppliedA: number[] = [];
     const suppliedB: number[] = [];
@@ -218,7 +218,7 @@ describe('createOpfsClipPageProvider', () => {
   });
 
   it('rejects a pending read and a later supplyPage with InvalidState once closed', async () => {
-    const engine = new RealtimeEngine(48000, 8);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     const worker = new DeferredClipPageWorker();
     const binding = createOpfsClipPageProvider(engine, {
       path: 'clips/closing.f32',
@@ -241,7 +241,7 @@ describe('createOpfsClipPageProvider', () => {
   });
 
   it('refuses an offline render that would read a page no one supplied', async () => {
-    const engine = new RealtimeEngine(48000, 8);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     const worker = new FakeClipPageWorker();
     const binding = createOpfsClipPageProvider(engine, {
       path: 'clips/clip.f32',
@@ -267,7 +267,7 @@ describe('createOpfsClipPageProvider', () => {
   });
 
   it('rejects the request and settles its pending entry when the worker refuses the post', async () => {
-    const engine = new RealtimeEngine(48000, 8);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     const worker = new FakeClipPageWorker();
     const binding = createOpfsClipPageProvider(engine, {
       path: 'clips/clip.f32',
@@ -291,7 +291,7 @@ describe('createOpfsClipPageProvider', () => {
   });
 
   it('rejects short non-final pages returned by the worker', async () => {
-    const engine = new RealtimeEngine(48000, 8);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     const worker = new FakeClipPageWorker();
     worker.framesOverride = 2;
     const binding = createOpfsClipPageProvider(engine, {
@@ -309,7 +309,7 @@ describe('createOpfsClipPageProvider', () => {
   });
 
   it('serializes concurrent page reads sent to the worker', async () => {
-    const engine = new RealtimeEngine(48000, 8);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     const worker = new FakeClipPageWorker();
     const binding = createOpfsClipPageProvider(engine, {
       path: 'clips/clip.f32',
@@ -357,9 +357,9 @@ async function createWiredSabEngine(): Promise<{
   };
   const engine = await SonareEngine.create({ sampleRate: 48000 } as BaseAudioContext, {
     mode: 'sab',
-    offlineChannelCount: 1,
+    offlineNumChannels: 1,
     blockSize: 128,
-    channelCount: 1,
+    numChannels: 1,
     nodeFactory: (_context, _name, options) => {
       processor = new SonareRealtimeEngineWorkletProcessor(
         options.processorOptions as ConstructorParameters<
@@ -414,9 +414,9 @@ describe('worklet attachOpfsClipStream', () => {
     const context = { sampleRate: 48000 } as BaseAudioContext;
     const engine = await SonareEngine.create(context, {
       mode: 'sab',
-      offlineChannelCount: 1,
+      offlineNumChannels: 1,
       blockSize,
-      channelCount: 1,
+      numChannels: 1,
       nodeFactory: (_context, _name, options) => {
         processor = new SonareRealtimeEngineWorkletProcessor(
           options.processorOptions as ConstructorParameters<
@@ -436,7 +436,7 @@ describe('worklet attachOpfsClipStream', () => {
       if (!processor) {
         throw new Error('expected a worklet processor');
       }
-      engine.setTrackLanes([10]);
+      engine.setTrackLanes([{ trackId: 10 }]);
       const { provider } = await attachWorkletOpfsClipStream(engine, {
         path: 'clips/clip.f32',
         clipId: 701,
@@ -446,8 +446,10 @@ describe('worklet attachOpfsClipStream', () => {
         worker: worker as unknown as Worker,
       });
       // An id other than the stream's own is an argument refusal, not a bare Error.
-      expect(() => engine.addClip(10, provider, 0, { id: 702 })).toThrow(RangeError);
-      engine.addClip(10, provider, 0, { id: 701 });
+      expect(() => engine.addClip(10, { pageProvider: provider, startPpq: 0, id: 702 })).toThrow(
+        RangeError,
+      );
+      engine.addClip(10, { pageProvider: provider, startPpq: 0, id: 701 });
       engine.transport.play();
 
       const first = new Float32Array(blockSize);
@@ -467,7 +469,7 @@ describe('worklet attachOpfsClipStream', () => {
 
       processor.receiveCommand({
         type: SonareEngineCommandType.TransportSeekSample,
-        sampleTime: -1,
+        renderFrame: -1,
         argInt: 0,
       });
       const replayedFirst = new Float32Array(blockSize);
@@ -518,7 +520,7 @@ describe('worklet attachOpfsClipStream', () => {
     const wired = await createWiredSabEngine();
     const { engine, processor } = wired;
     try {
-      engine.setTrackLanes([10]);
+      engine.setTrackLanes([{ trackId: 10 }]);
       const stream = await attachWorkletOpfsClipStream(engine, {
         path: 'clips/clip.f32',
         clipId: 704,
@@ -527,8 +529,8 @@ describe('worklet attachOpfsClipStream', () => {
         pageFrames: 4,
         worker: new FakeClipPageWorker() as unknown as Worker,
       });
-      engine.addClip(10, stream.provider, 0, { id: 704 });
-      engine.addClip(10, [new Float32Array(8).fill(0.5)], 0, { id: 704 });
+      engine.addClip(10, { pageProvider: stream.provider, startPpq: 0, id: 704 });
+      engine.addClip(10, { channels: [new Float32Array(8).fill(0.5)], startPpq: 0, id: 704 });
       stream.binding.close();
       engine.transport.play();
       const out = new Float32Array(128);
@@ -544,7 +546,7 @@ describe('worklet attachOpfsClipStream', () => {
     const wired = await createWiredSabEngine();
     const { engine, processor } = wired;
     try {
-      engine.setTrackLanes([10]);
+      engine.setTrackLanes([{ trackId: 10 }]);
       const stream = await attachWorkletOpfsClipStream(engine, {
         path: 'clips/clip.f32',
         clipId: 705,
@@ -553,9 +555,9 @@ describe('worklet attachOpfsClipStream', () => {
         pageFrames: 4,
         worker: new FakeClipPageWorker() as unknown as Worker,
       });
-      engine.addClip(10, stream.provider, 0, { id: 705 });
+      engine.addClip(10, { pageProvider: stream.provider, startPpq: 0, id: 705 });
       engine.removeClip(705);
-      engine.addClip(10, stream.provider, 0, { id: 705 });
+      engine.addClip(10, { pageProvider: stream.provider, startPpq: 0, id: 705 });
       engine.transport.play();
       const out = new Float32Array(128);
       expect(processor.process([[]], [[out]])).toBe(true);
@@ -633,7 +635,7 @@ describe('attachOpfsClipStream', () => {
   });
 
   it('rejects and closes the binding when the streamer closes while priming', async () => {
-    const engine = new RealtimeEngine(48000, 8);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     const worker = new DeferredClipPageWorker();
     const streamer = new ClipPageStreamer(engine);
     try {
@@ -667,7 +669,7 @@ describe('attachOpfsClipStream', () => {
   });
 
   it('wires a streaming clip in one call and feeds it within the window', async () => {
-    const engine = new RealtimeEngine(48000, 8);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     const worker = new FakeClipPageWorker();
     // Default window retains page 0 behind the frontier, so a seek back replays it.
     const streamer = new ClipPageStreamer(engine);

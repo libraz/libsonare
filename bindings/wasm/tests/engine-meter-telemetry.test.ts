@@ -8,9 +8,9 @@ beforeAll(async () => {
 it.each(['lane', 'bus', 'master'] as const)(
   '%s telemetry exposes pre-trim input peaks and audible gain reduction',
   (target) => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     try {
-      engine.setTrackBuses([{ busId: 1, channelLayout: 0 }]);
+      engine.setTrackBuses([{ busId: 1, channelLayout: 'mono' }]);
       engine.setTrackLanes([{ trackId: 10, outputBusId: 1 }]);
       const strip = {
         id: 'measured',
@@ -29,13 +29,13 @@ it.each(['lane', 'bus', 'master'] as const)(
         connections: [],
       });
       if (target === 'lane') {
-        engine.setTrackStripJson(10, scene);
+        engine.setStrip(10, JSON.parse(scene).strips[0]);
       }
       if (target === 'bus') {
-        engine.setBusStripJson(1, scene);
+        engine.setBusStrip(1, JSON.parse(scene).buses[0]);
       }
       if (target === 'master') {
-        engine.setMasterStripJson(scene);
+        engine.setStrip('master', JSON.parse(scene).strips[0]);
       }
       engine.setClips([
         {
@@ -66,7 +66,7 @@ it.each(['lane', 'bus', 'master'] as const)(
 
 it('resets master integrated loudness while retaining the other meter windows', () => {
   const blockSize = 1024;
-  const engine = new RealtimeEngine(48000, blockSize);
+  const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: blockSize });
   try {
     const source = Float32Array.from(
       { length: blockSize * 170 },

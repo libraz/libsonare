@@ -94,7 +94,9 @@ describe('spectralEdit time bounds', () => {
 
   it('keeps the positional form equivalent to the request form', () => {
     const ops = [{ ...op, startSec: 0.1, endSec: 0.4 }];
-    expect(spectralEdit(samples, SR, ops)).toEqual(spectralEdit({ samples, sampleRate: SR, ops }));
+    expect(spectralEdit(samples, SR, { ops })).toEqual(
+      spectralEdit({ samples, sampleRate: SR, ops }),
+    );
   });
 });
 
@@ -144,7 +146,9 @@ describe('note stretch and move time bounds', () => {
     expect(() =>
       noteStretch({ samples, sampleRate: SR, onsetSample: 0, onsetSec: 0, stretchRatio: 1 }),
     ).toThrow(/onsetSample.*onsetSec/);
-    expect(() => noteStretch({ samples, sampleRate: SR, offsetSample: -1 })).toThrow(RangeError);
+    expect(() =>
+      noteStretch({ samples, sampleRate: SR, offsetSample: -1, stretchRatio: 1 }),
+    ).toThrow(RangeError);
     expect(() =>
       noteMove({ samples, sampleRate: SR, targetOnsetSample: 5, targetOnsetSec: 1 }),
     ).toThrow(/targetOnsetSample.*targetOnsetSec/);
@@ -260,36 +264,61 @@ describe('trim padding in seconds', () => {
 });
 
 describe('engine punch-in window', () => {
+  const capacityFrames = 128;
+
   it('seconds equal samples at the engine rate, and bounds are required and non-negative', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
-      engine.setCapturePunch({ startSec: 1, endSample: 48128 });
+      engine.configureCapture({ capacityFrames, punch: { startSec: 1, endSample: 48128 } });
       expect(engine.captureStatus().punchEnabled).toBe(true);
-      engine.setCapturePunch({ startSample: 48000, endSample: 48128, enabled: false });
+      engine.configureCapture({ capacityFrames });
       expect(engine.captureStatus().punchEnabled).toBe(false);
-      engine.setCapturePunch(48000, 48128);
+      engine.configureCapture({ capacityFrames, punch: { startSample: 48000, endSec: 1.0027 } });
       expect(engine.captureStatus().punchEnabled).toBe(true);
-      expect(() => engine.setCapturePunch({ startSample: 1, startSec: 1, endSample: 2 })).toThrow(
-        /startSample.*startSec/,
+      engine.configureCapture({ capacityFrames, punch: { startPpq: 2, endPpq: 4 } });
+      expect(engine.captureStatus().punchEnabled).toBe(true);
+      expect(() =>
+        engine.configureCapture({
+          capacityFrames,
+          punch: { startSample: 1, startSec: 1, endSample: 2 },
+        }),
+      ).toThrow(/startSample.*startSec/);
+      expect(() =>
+        engine.configureCapture({
+          capacityFrames,
+          punch: { startPpq: 1, startSample: 1, endSample: 2 },
+        }),
+      ).toThrow(RangeError);
+      expect(() =>
+        engine.configureCapture({ capacityFrames, punch: { startSample: -1, endSample: 2 } }),
+      ).toThrow(RangeError);
+      expect(() => engine.configureCapture({ capacityFrames, punch: { startSample: 1 } })).toThrow(
+        RangeError,
       );
-      expect(() => engine.setCapturePunch({ startSample: -1, endSample: 2 })).toThrow(RangeError);
-      expect(() => engine.setCapturePunch({ startSample: 1 })).toThrow(RangeError);
+      expect(() =>
+        engine.configureCapture({
+          capacityFrames,
+          punch: { startSample: 1, endSample: 2, enabled: false } as never,
+        }),
+      ).toThrow(TypeError);
     } finally {
       engine.destroy();
     }
   });
 
   it('refuses an enabled empty window, which would otherwise record every frame', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
-      engine.setCapturePunch(100, 200);
-      expect(() => engine.setCapturePunch(48000, 48000)).toThrow(RangeError);
-      expect(() => engine.setCapturePunch({ startSample: 48000, endSample: 48000 })).toThrow(
-        RangeError,
-      );
+      engine.configureCapture({ capacityFrames, punch: { startSample: 100, endSample: 200 } });
+      expect(() =>
+        engine.configureCapture({
+          capacityFrames,
+          punch: { startSample: 48000, endSample: 48000 },
+        }),
+      ).toThrow(RangeError);
       // The refused window left the previous one in force.
       expect(engine.captureStatus().punchEnabled).toBe(true);
-      engine.setCapturePunch(48000, 48000, false);
+      engine.configureCapture({ capacityFrames });
       expect(engine.captureStatus().punchEnabled).toBe(false);
     } finally {
       engine.destroy();
@@ -299,14 +328,14 @@ describe('engine punch-in window', () => {
 
 describe('engine transport positions', () => {
   it('seekSample refuses a negative position instead of clamping it to the start', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       engine.seekSample(480);
       engine.process([new Float32Array(128)]);
-      const before = engine.getTransportState().samplePosition;
+      const before = engine.transportState().samplePosition;
       expect(() => engine.seekSample(-1)).toThrow(RangeError);
       engine.process([new Float32Array(128)]);
-      expect(engine.getTransportState().samplePosition).toBe(before);
+      expect(engine.transportState().samplePosition).toBe(before);
       expect(before).toBe(480);
     } finally {
       engine.destroy();
@@ -314,7 +343,7 @@ describe('engine transport positions', () => {
   });
 
   it('countInEndSample answers the start for bars <= 0 and refuses a negative start', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       expect(engine.countInEndSample(4800, 0)).toBe(4800);
       expect(engine.countInEndSample(4800, -3)).toBe(4800);
@@ -327,7 +356,7 @@ describe('engine transport positions', () => {
 
 describe('absent is omission and -1 is refused', () => {
   it('engine renderFrame: omitted is immediate, negative is refused', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       expect(() => engine.play()).not.toThrow();
       expect(() => engine.play(0)).not.toThrow();
@@ -391,7 +420,7 @@ describe('mono normalize RMS default', () => {
     const samples = noise(SR, 7);
     const explicit = normalize({ samples, sampleRate: SR, targetDb: -20, mode: 'rms' });
     expect(normalize({ samples, sampleRate: SR, mode: 'rms' })).toEqual(explicit);
-    expect(normalize(samples, SR, undefined, 'rms')).toEqual(explicit);
+    expect(normalize(samples, SR, { mode: 'rms' })).toEqual(explicit);
     expect(normalize({ samples, sampleRate: SR })).toEqual(
       normalize({ samples, sampleRate: SR, targetDb: 0, mode: 'peak' }),
     );

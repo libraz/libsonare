@@ -73,23 +73,16 @@ describe('scaleMaskForMode (WASM)', () => {
 
   it('returns each mode as its 12-bit mask, for every root', () => {
     for (const [name, mask] of Object.entries(MASKS)) {
-      for (const root of [0, 5, 11]) {
+      for (const root of [0, 5, 11] as const) {
         expect(scaleMaskForMode(root, name as KeyMode)).toBe(mask);
       }
     }
   });
 
-  it('accepts the Mode ordinal detectKey reports', () => {
-    expect(scaleMaskForMode(0, Mode.Major)).toBe(MASKS.major);
-    expect(scaleMaskForMode(0, Mode.Locrian)).toBe(MASKS.locrian);
-  });
-
   it('refuses an unknown mode and an out-of-range root', () => {
     expect(() => scaleMaskForMode(0, 'whole-tone' as KeyMode)).toThrow();
-    expect(() => scaleMaskForMode(12, 'major')).toThrow();
-    expect(() => scaleMaskForMode(-1, 'major')).toThrow();
-    expect(() => scaleMaskForMode(0, 7 as Mode)).toThrow();
-    expect(() => scaleMaskForMode(0, 1.5 as Mode)).toThrow();
+    expect(() => scaleMaskForMode(12 as PitchClass, 'major')).toThrow();
+    expect(() => scaleMaskForMode(-1 as PitchClass, 'major')).toThrow();
   });
 });
 
@@ -105,7 +98,7 @@ describe('scaleModeMask as a mode name (WASM)', () => {
       sampleRate: SR,
       f0Hz: pitch.f0,
       voiced: Uint8Array.from(pitch.voicedFlag, (flag) => (flag ? 1 : 0)),
-      mode: 'scale',
+      targetMode: 'scale',
     };
   });
 

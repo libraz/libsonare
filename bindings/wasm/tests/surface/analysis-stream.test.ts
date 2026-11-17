@@ -5,6 +5,7 @@ import {
   type ChordQuality,
   init,
   type Matrix2D,
+  type ScaleKind,
   StreamAnalyzer,
   type StreamBarChord,
   type StreamChordChange,
@@ -16,7 +17,6 @@ import {
   type StreamProgressiveEstimate,
   type StreamStats,
   streamAnalyzerConfigDefault,
-  type VoiceScaleKind,
 } from '../../dist/index.js';
 import * as workletModule from '../../dist/worklet.js';
 import {
@@ -410,8 +410,8 @@ describe('stream analyzer surface', () => {
 });
 
 describe('voice scale tokens', () => {
-  it('narrows VoiceScaleKind to the lowerCamel token set', () => {
-    expectTypeOf<VoiceScaleKind>().toEqualTypeOf<'major' | 'naturalMinor' | 'chromatic'>();
+  it('narrows ScaleKind to the lowerCamel token set', () => {
+    expectTypeOf<ScaleKind>().toEqualTypeOf<'major' | 'naturalMinor' | 'chromatic'>();
   });
 });
 

@@ -5,7 +5,7 @@
 
 /**
  * What a declick analysis found in one channel of a
- * {@link MasteringRepairDeclickStereoResult}. Runs, not samples.
+ * {@link MasteringRepairDeclickResult}. Runs, not samples.
  */
 export interface ClickDetection {
   /** Runs meeting the repair criteria. A run inside a broadband transient such as a drum hit is not counted; the repair still acts on it. */
@@ -24,7 +24,7 @@ export interface ClickDetection {
 
 /**
  * What a declick pass found in one channel of a
- * {@link MasteringRepairDeclickStereoResult} and what it did to it.
+ * {@link MasteringRepairDeclickResult} and what it did to it.
  */
 export interface DeclickReport {
   /** This channel's own analysis of the input. */
@@ -54,22 +54,22 @@ export interface DeclickReport {
  * A run either channel's detector selects is repaired in BOTH channels — a
  * common-mode click repaired on one side only would move the stereo image.
  * Only the selection is shared: each channel's fill is computed from its own
- * samples and its own AR model, which is why `leftReport` and `rightReport`
+ * samples and its own AR model, which is why `reports[0]` and `reports[1]`
  * genuinely differ. `linkedRuns` is the part of `repairedRuns` this channel's
  * own detection did not produce, so it is normally non-zero here. Merged runs
  * can exceed `maxClickSamples`: that cap governs what may be selected, not
  * how far a selection reaches once both channels agree a click is there.
  */
-export interface MasteringRepairDeclickStereoResult {
-  left: Float32Array;
-  right: Float32Array;
-  leftReport: DeclickReport;
-  rightReport: DeclickReport;
+export interface MasteringRepairDeclickResult {
+  /** Output planes in input order: `[left, right]` for a stereo pair. */
+  channels: Float32Array[];
+  /** One report per channel: `[left, right]`. */
+  reports: DeclickReport[];
 }
 
 /**
  * What a declip analysis found in one channel of a
- * {@link MasteringRepairDeclipStereoResult}.
+ * {@link MasteringRepairDeclipResult}.
  */
 export interface ClipDetection {
   /** Samples at or past `clipThreshold`. */
@@ -102,7 +102,7 @@ export interface ClipDetection {
 
 /**
  * What a declip pass found in one channel of a
- * {@link MasteringRepairDeclipStereoResult} and what it did to it.
+ * {@link MasteringRepairDeclipResult} and what it did to it.
  */
 export interface DeclipReport {
   /** This channel's own analysis of the input. */
@@ -135,16 +135,16 @@ export interface DeclipReport {
  * extents — the narrower channel is what reaches past its own clipped
  * samples.
  */
-export interface MasteringRepairDeclipStereoResult {
-  left: Float32Array;
-  right: Float32Array;
-  leftReport: DeclipReport;
-  rightReport: DeclipReport;
+export interface MasteringRepairDeclipResult {
+  /** Output planes in input order: `[left, right]` for a stereo pair. */
+  channels: Float32Array[];
+  /** One report per channel: `[left, right]`. */
+  reports: DeclipReport[];
 }
 
 /**
  * What a decrackle analysis found in one channel of a
- * {@link MasteringRepairDecrackleStereoResult}.
+ * {@link MasteringRepairDecrackleResult}.
  *
  * Crackle is measured by the median criterion regardless of the configured `DecrackleMode` --
  * wavelet shrinkage is a removal method, not a detection method, so this is the module's only
@@ -161,7 +161,7 @@ export interface CrackleDetection {
 
 /**
  * What a decrackle pass found in one channel of a
- * {@link MasteringRepairDecrackleStereoResult} and what it did to it.
+ * {@link MasteringRepairDecrackleResult} and what it did to it.
  *
  * The two modes remove crackle by different means and report through different fields. A field
  * belonging to the other mode reads zero because that mode did not run -- the caller knows this
@@ -187,18 +187,18 @@ export interface DecrackleReport {
  * Crackle is surface damage: the two channels carry different scratches at different instants,
  * so there is no common event for a shared decision to agree about. Both modes are memoryless
  * across channels, so the pair is processed independently and there is no `linkedRuns` field,
- * unlike {@link MasteringRepairDeclickStereoResult} and {@link MasteringRepairDeclipStereoResult}.
+ * unlike {@link MasteringRepairDeclickResult} and {@link MasteringRepairDeclipResult}.
  */
-export interface MasteringRepairDecrackleStereoResult {
-  left: Float32Array;
-  right: Float32Array;
-  leftReport: DecrackleReport;
-  rightReport: DecrackleReport;
+export interface MasteringRepairDecrackleResult {
+  /** Output planes in input order: `[left, right]` for a stereo pair. */
+  channels: Float32Array[];
+  /** One report per channel: `[left, right]`. */
+  reports: DecrackleReport[];
 }
 
 /**
  * What a dehum analysis found in one channel of a
- * {@link MasteringRepairDehumStereoResult}.
+ * {@link MasteringRepairDehumResult}.
  *
  * Always measured through the estimation path, whatever `DehumOptions.adaptive` says: the
  * fixed path notches the configured frequency without ever looking for hum, so a detector
@@ -220,7 +220,7 @@ export interface HumDetection {
 
 /**
  * What a dehum pass found in one channel of a
- * {@link MasteringRepairDehumStereoResult} and what it did to it.
+ * {@link MasteringRepairDehumResult} and what it did to it.
  */
 export interface DehumReport {
   /** This channel's own analysis, before filtering. */
@@ -245,16 +245,16 @@ export interface DehumReport {
  * filter state. With `adaptive` clear, which is the default, nothing is shared and the two
  * channels are filtered independently at the configured frequency.
  */
-export interface MasteringRepairDehumStereoResult {
-  left: Float32Array;
-  right: Float32Array;
-  leftReport: DehumReport;
-  rightReport: DehumReport;
+export interface MasteringRepairDehumResult {
+  /** Output planes in input order: `[left, right]` for a stereo pair. */
+  channels: Float32Array[];
+  /** One report per channel: `[left, right]`. */
+  reports: DehumReport[];
 }
 
 /**
  * What a denoise analysis found in a
- * {@link MasteringRepairDenoiseClassicalStereoResult}.
+ * {@link MasteringRepairDenoiseClassicalResult}.
  *
  * A pair-level measurement, and the only absolute one in that result: the estimator runs on
  * the channel-summed power, so two identical channels read `10*log10(2)` -- about
@@ -272,7 +272,7 @@ export interface NoiseDetection {
 
 /**
  * What a denoise pass found in a
- * {@link MasteringRepairDenoiseClassicalStereoResult} and what it removed.
+ * {@link MasteringRepairDenoiseClassicalResult} and what it removed.
  */
 export interface DenoiseReport {
   /** The pair's analysis, before the mask. */
@@ -292,40 +292,23 @@ export interface DenoiseReport {
 /**
  * A denoised stereo pair and the one mask that produced it.
  *
- * One `report` rather than a per-channel pair: the gain mask is built from the channel-summed
+ * One report (`reports` holds only it) rather than a per-channel pair: the gain mask is built from the channel-summed
  * power and applied unchanged to both channels, so the pass cannot move an interchannel level
  * or phase difference, and a pair would be two copies of one measurement.
  *
  * An input shorter than `nFft` is padded for analysis and the output trimmed back to the input
- * length, as {@link MasteringRepairDereverbClassicalStereoResult}'s entry point does.
+ * length, as {@link MasteringRepairDereverbClassicalResult}'s entry point does.
  */
-export interface MasteringRepairDenoiseClassicalStereoResult {
-  left: Float32Array;
-  right: Float32Array;
-  report: DenoiseReport;
-}
-
-/**
- * A denoised channel set and the one mask that produced it.
- *
- * The N-channel form of {@link MasteringRepairDenoiseClassicalStereoResult}: one mask over the
- * channel-summed power, applied unchanged to every channel, so no interchannel level or phase
- * difference moves however many channels there are. One channel reproduces
- * `masteringRepairDenoiseClassical` bit for bit; two reproduce the stereo entry plane for plane.
- *
- * `report.detected` is the SET's and absolute: N identical channels read `10*log10(N)` above one
- * of them — about 3.01 dB for a pair and 4.77 dB for three. Every other field of the report is a
- * fraction and does not move with the channel count.
- */
-export interface MasteringRepairDenoiseClassicalLinkedResult {
-  /** One output per input channel, in input order. */
+export interface MasteringRepairDenoiseClassicalResult {
+  /** Output planes in input order: `[left, right]` for a stereo pair. */
   channels: Float32Array[];
-  report: DenoiseReport;
+  /** The one shared report: `[report]`. */
+  reports: DenoiseReport[];
 }
 
 /**
  * What a dereverb analysis found in a
- * {@link MasteringRepairDereverbClassicalStereoResult}.
+ * {@link MasteringRepairDereverbClassicalResult}.
  *
  * NOT an ISO 3382 reverberation time: no Schroeder integration, no noise-floor truncation,
  * STFT bins rather than octave bands, and music is not a free decay. Use `estimateRoom` for a
@@ -345,7 +328,7 @@ export interface ReverbDetection {
 
 /**
  * What a dereverb pass found in a
- * {@link MasteringRepairDereverbClassicalStereoResult} and what it removed.
+ * {@link MasteringRepairDereverbClassicalResult} and what it removed.
  */
 export interface DereverbReport {
   /** The pair's analysis. */
@@ -365,37 +348,20 @@ export interface DereverbReport {
 /**
  * A dereverberated stereo pair and the one mask that produced it.
  *
- * One `report` rather than a per-channel pair: the mask is built from the channel-summed power
+ * One report (`reports` holds only it) rather than a per-channel pair: the mask is built from the channel-summed power
  * and the WPE stage accumulates over both channels and applies one predictor set to each, so
  * neither stage can move an interchannel level or phase difference.
  *
  * Every field of that report is a ratio or a fraction, so unlike {@link NoiseDetection}
  * nothing here shifts with the channel count and a stereo figure is comparable against a mono
  * one. An input shorter than `nFft` is padded for analysis, as
- * {@link MasteringRepairDenoiseClassicalStereoResult}'s entry point does.
+ * {@link MasteringRepairDenoiseClassicalResult}'s entry point does.
  */
-export interface MasteringRepairDereverbClassicalStereoResult {
-  left: Float32Array;
-  right: Float32Array;
-  report: DereverbReport;
-}
-
-/**
- * A dereverberated channel set and the one mask that produced it.
- *
- * The N-channel form of {@link MasteringRepairDereverbClassicalStereoResult}: one mask over the
- * channel-summed power, and one WPE predictor set fitted over every channel's statistics, so
- * neither stage can move an interchannel level or phase difference. One channel reproduces
- * `masteringRepairDereverbClassical` bit for bit; two reproduce the stereo entry plane for plane.
- *
- * Every field of the report is a ratio or a fraction, so unlike
- * {@link MasteringRepairDenoiseClassicalLinkedResult} nothing here shifts with the channel count.
- * An input shorter than `nFft` is padded for analysis, as that entry does.
- */
-export interface MasteringRepairDereverbClassicalLinkedResult {
-  /** One output per input channel, in input order. */
+export interface MasteringRepairDereverbClassicalResult {
+  /** Output planes in input order: `[left, right]` for a stereo pair. */
   channels: Float32Array[];
-  report: DereverbReport;
+  /** The one shared report: `[report]`. */
+  reports: DereverbReport[];
 }
 
 /** One half-open sample range, in INPUT-buffer coordinates. */
@@ -427,23 +393,24 @@ export interface TrimReport {
  * A trimmed stereo pair, the range both channels were cut to, and the two per-channel scans
  * that range is the union of.
  *
- * The only repair stereo result whose arrays are SHORTER than the input, so `left.length` is
+ * The only repair stereo result whose arrays are SHORTER than the input, so `channels[0].length` is
  * the output length and the input's says nothing about it. Both channels come back the same
  * length, because one range cuts both.
  *
  * A pair in which NEITHER channel carries signal comes back as two empty arrays and a success,
  * not an error.
  *
- * One `report` plus two ranges, which is neither of the earlier repair stereo shapes:
- * `report.range` is the union that was applied to both channels, while `leftRange` and
- * `rightRange` are the per-channel scans it was formed from, so a caller can see which channel
+ * One report plus two ranges:
+ * `reports[0].range` is the union that was applied to both channels, while `ranges[0]` and
+ * `ranges[1]` are the per-channel scans it was formed from, so a caller can see which channel
  * decided each edge. A channel carrying nothing reports an empty range and contributes nothing
  * to the union.
  */
-export interface MasteringRepairTrimSilenceStereoResult {
-  left: Float32Array;
-  right: Float32Array;
-  report: TrimReport;
-  leftRange: TrimRange;
-  rightRange: TrimRange;
+export interface MasteringRepairTrimSilenceResult {
+  /** `[left, right]`, both cut to the one shared range. */
+  channels: Float32Array[];
+  /** The one shared report: `[report]`. */
+  reports: TrimReport[];
+  /** The per-channel scans the shared range is the union of: `[leftRange, rightRange]`. */
+  ranges: TrimRange[];
 }

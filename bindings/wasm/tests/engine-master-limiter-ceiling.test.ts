@@ -62,7 +62,7 @@ describe('master limiter ceiling (real WASM engine)', () => {
   });
 
   it('changes the rendered peak through a resolved master insert id', () => {
-    const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE);
+    const engine = new RealtimeEngine({ sampleRate: SAMPLE_RATE, maxBlockSize: BLOCK_SIZE });
     try {
       const frames = BLOCK_SIZE * 32;
       engine.setTrackLanes([{ trackId: TRACK_ID }]);
@@ -75,7 +75,7 @@ describe('master limiter ceiling (real WASM engine)', () => {
           lengthSamples: frames,
         },
       ]);
-      engine.setMasterStripJson(masterLimiterScene);
+      engine.setStrip('master', JSON.parse(masterLimiterScene).strips[0]);
       engine.play();
 
       // Let the initial lookahead pipeline fill before measuring the -1 dB
@@ -84,7 +84,7 @@ describe('master limiter ceiling (real WASM engine)', () => {
       expect(initialPeak).toBeGreaterThan(0.7);
       expect(initialPeak).toBeLessThan(1.05);
 
-      const ceilingId = engine.resolveMasterInsertAutomationId(0, 'ceilingDb');
+      const ceilingId = engine.resolveStripInsertAutomationId('master', 0, 'ceilingDb');
       expect(ceilingId).toBeGreaterThan(0);
       engine.setParameter(ceilingId, -12);
       // A queued ceiling change must pass through the limiter's lookahead and
@@ -99,12 +99,16 @@ describe('master limiter ceiling (real WASM engine)', () => {
   });
 
   it('rejects construction-only master parameters before queueing them', () => {
-    const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE);
+    const engine = new RealtimeEngine({ sampleRate: SAMPLE_RATE, maxBlockSize: BLOCK_SIZE });
     try {
       engine.setTrackLanes([{ trackId: TRACK_ID }]);
-      engine.setMasterStripJson(masterLimiterScene);
-      expect(() => engine.resolveMasterInsertAutomationId(0, 'lookaheadMs')).toThrow(RangeError);
-      expect(() => engine.setMasterStripInsertParamByName(0, 'lookaheadMs', 1)).toThrow();
+      engine.setStrip('master', JSON.parse(masterLimiterScene).strips[0]);
+      expect(() => engine.resolveStripInsertAutomationId('master', 0, 'lookaheadMs')).toThrow(
+        RangeError,
+      );
+      expect(() =>
+        engine.setStripInsertParam('master', 0, { name: 'lookaheadMs', value: 1 }),
+      ).toThrow();
     } finally {
       engine.destroy();
     }

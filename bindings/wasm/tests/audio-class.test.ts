@@ -312,21 +312,21 @@ describe('Audio class', () => {
 
     it('should time stretch', () => {
       const audio = Audio.fromBuffer(sine(), SR);
-      const stretched = audio.timeStretch(1.5);
+      const stretched = audio.timeStretch({ speedRatio: 1.5 });
       expect(stretched).toBeInstanceOf(Float32Array);
       expect(stretched.length).toBeLessThan(audio.length);
     });
 
     it('should pitch shift', () => {
       const audio = Audio.fromBuffer(sine(), SR);
-      const shifted = audio.pitchShift(2);
+      const shifted = audio.pitchShift({ pitchSemitones: 2 });
       expect(shifted).toBeInstanceOf(Float32Array);
       expect(shifted.length).toBeGreaterThan(0);
     });
 
     it('should normalize', () => {
       const audio = Audio.fromBuffer(sine(), SR);
-      const normalized = audio.normalize(-3.0);
+      const normalized = audio.normalize({ targetDb: -3.0 });
       expect(normalized).toBeInstanceOf(Float32Array);
       expect(normalized.length).toBe(audio.length);
     });
@@ -360,7 +360,7 @@ describe('Audio class', () => {
 
     it('should trim', () => {
       const audio = Audio.fromBuffer(sine(), SR);
-      const trimmed = audio.trim(-60.0);
+      const trimmed = audio.trim({ thresholdDb: -60.0 });
       expect(trimmed).toBeInstanceOf(Float32Array);
       expect(trimmed.length).toBeGreaterThan(0);
       expect(trimmed.length).toBeLessThanOrEqual(audio.length);

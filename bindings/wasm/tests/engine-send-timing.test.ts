@@ -7,18 +7,20 @@ beforeAll(async () => {
 
 it('lane pre-fader sends retain their level when the strip fader is lowered', () => {
   const renderBusPeak = (sendTiming: 'preFader' | 'postFader', faderDb: number): number => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     try {
       engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
       engine.setTrackLanes([{ trackId: 10, sends: [{ busId: 1, sendTiming }] }]);
-      engine.setTrackStripJson(
+      engine.setStrip(
         10,
-        JSON.stringify({
-          version: 1,
-          strips: [{ id: 'track-10', faderDb, panLaw: 3 }],
-          buses: [],
-          connections: [],
-        }),
+        JSON.parse(
+          JSON.stringify({
+            version: 1,
+            strips: [{ id: 'track-10', faderDb, panLaw: 3 }],
+            buses: [],
+            connections: [],
+          }),
+        ).strips[0],
       );
       engine.setClips([
         {

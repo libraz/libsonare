@@ -9,7 +9,6 @@ import {
   resolveEntryTimes,
   toVoicedFloat32,
 } from './internal/effects_common.js';
-import { notesFromNative, notesToNative } from './internal/note_native_keys.js';
 import { getSonareModule } from './module_state.js';
 import type {
   AssignNoteTargetsResult,
@@ -24,13 +23,14 @@ import type {
   PitchDecompositionResult,
   VoicedFlags,
 } from './public_types.js';
-import type { ValidateOptions } from './validation.js';
+import type { OptionsOf, ValidateOptions } from './validation.js';
 import {
   assertAudioInput,
   assertFiniteScalar,
-  optionsBag,
+  assertFloatValue,
   requestObject,
   resolveSampleBound,
+  sampleOneShot,
 } from './validation.js';
 
 function requireModule() {
@@ -52,14 +52,16 @@ function assertNoteTrack(
   return voicedF32;
 }
 
-export interface NoteStretchRequest extends NoteStretchOptions, ValidateOptions {
+/** Note-region stretch request: the audio and rate (Hz, required) plus {@link NoteStretchOptions}. */
+export interface NoteStretchRequest extends NoteStretchOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
 }
 
-export interface NoteMoveRequest extends NoteMoveOptions, ValidateOptions {
+/** Note-region move request: the audio and rate (Hz, required) plus {@link NoteMoveOptions}. */
+export interface NoteMoveRequest extends NoteMoveOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /** Canonical request form for {@link extractNotes}. */
@@ -150,7 +152,7 @@ export interface DecomposeNotePitchRequest {
 }
 
 /** The audio, track and note set the two note-set reshaping calls share. */
-export interface NoteSetRequest extends NoteExtractorOptions, ValidateOptions {
+interface NoteSetRequest extends NoteExtractorOptions, ValidateOptions {
   /**
    * The audio the set was extracted from. Every note is re-measured against it,
    * so a different buffer re-derives the whole set against something else.
@@ -179,8 +181,10 @@ export interface NoteSetRequest extends NoteExtractorOptions, ValidateOptions {
 export interface SplitNoteRequest extends NoteSetRequest {
   /** Index of the note to split. */
   index: number;
-  /** Track frame to cut at, strictly inside that note's own span. */
-  frame: number;
+  /** Track frame to cut at, strictly inside that note's own span. Give this or `frameSec`, not both. */
+  frame?: number;
+  /** The cut in seconds, rounded to the nearest track frame (`round(frameSec * frameRate)`). Give this or `frame`. */
+  frameSec?: number;
 }
 
 /** Canonical request form for {@link mergeNotes}. */
@@ -236,28 +240,22 @@ export interface AssignNoteTargetsRequest {
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz
- * @param onsetSample - Note onset position in samples
- * @param offsetSample - Note offset position in samples
- * @param stretchRatio - Stretch ratio (0.5 = half duration, 2.0 = double duration)
+ * @param options - The region (`onsetSample`/`onsetSec`, `offsetSample`/`offsetSec`)
+ *   and `stretchRatio` (0.5 = half duration, 2.0 = double duration), which is required
  * @returns Audio with the note region stretched
+ * @throws TypeError for a missing `sampleRate` or `stretchRatio`
  */
 export function noteStretch(request: NoteStretchRequest): Float32Array;
 export function noteStretch(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: NoteStretchOptions & ValidateOptions,
+  sampleRate: number,
+  options: NoteStretchOptions,
 ): Float32Array;
-export function noteStretch(
-  samples: Float32Array | NoteStretchRequest,
-  sampleRate = 22050,
-  options: NoteStretchOptions & ValidateOptions = {},
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('noteStretch', options) }
-      : requestObject('noteStretch', samples);
-  assertAudioInput('noteStretch', request.samples, request.sampleRate ?? 22050, request);
-  const rate = request.sampleRate ?? 22050;
+export function noteStretch(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<NoteStretchRequest>('noteStretch', args);
+  assertAudioInput('noteStretch', request.samples, request.sampleRate, request);
+  assertFloatValue('noteStretch', request.stretchRatio, 'stretchRatio');
+  const rate = request.sampleRate;
   return requireModule().noteStretch(
     request.samples,
     rate,
@@ -277,28 +275,41 @@ export function noteStretch(
       'offsetSample',
       'offsetSec',
     ) ?? request.samples.length,
-    request.stretchRatio ?? 1.0,
+    request.stretchRatio,
   );
 }
 
-/** Move a note region to a new onset without changing its duration. */
+/**
+ * Move a note region to a new onset without changing its duration.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz
+ * @param options - The region and the destination: `targetOnsetSample` or
+ *   `targetOnsetSec` is required
+ * @returns Audio with the note region moved
+ * @throws TypeError for a missing `sampleRate` or target onset
+ */
 export function noteMove(request: NoteMoveRequest): Float32Array;
 export function noteMove(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: NoteMoveOptions & ValidateOptions,
+  sampleRate: number,
+  options: NoteMoveOptions,
 ): Float32Array;
-export function noteMove(
-  samples: Float32Array | NoteMoveRequest,
-  sampleRate = 22050,
-  options: NoteMoveOptions & ValidateOptions = {},
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('noteMove', options) }
-      : requestObject('noteMove', samples);
-  assertAudioInput('noteMove', request.samples, request.sampleRate ?? 22050, request);
-  const rate = request.sampleRate ?? 22050;
+export function noteMove(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<NoteMoveRequest>('noteMove', args);
+  assertAudioInput('noteMove', request.samples, request.sampleRate, request);
+  const rate = request.sampleRate;
+  const target = resolveSampleBound(
+    'noteMove',
+    request.targetOnsetSample,
+    request.targetOnsetSec,
+    rate,
+    'targetOnsetSample',
+    'targetOnsetSec',
+  );
+  if (target === undefined) {
+    throw new TypeError('noteMove: targetOnsetSample or targetOnsetSec is required');
+  }
   return requireModule().noteMove(
     request.samples,
     rate,
@@ -318,14 +329,7 @@ export function noteMove(
       'offsetSample',
       'offsetSec',
     ) ?? request.samples.length,
-    resolveSampleBound(
-      'noteMove',
-      request.targetOnsetSample,
-      request.targetOnsetSec,
-      rate,
-      'targetOnsetSample',
-      'targetOnsetSec',
-    ) ?? 0,
+    target,
   );
 }
 
@@ -372,24 +376,34 @@ export function noteMove(
  *   minNoteMs: 40,
  * });
  * // Lift the second note by a semitone and mute the third.
- * notes[1].edit.pitchSemitones = 1;
- * notes[2].edit.muted = true;
- * const edited = renderNotes({ samples, sampleRate, notes });
+ * const edited = renderNotes({
+ *   samples,
+ *   sampleRate,
+ *   notes: notes.map((note, i) =>
+ *     i === 1 ? { ...note, edit: { ...note.edit, pitchSemitones: 1 } }
+ *     : i === 2 ? { ...note, edit: { ...note.edit, muted: true } }
+ *     : note,
+ *   ),
+ * });
  * ```
  */
-export function extractNotes(request: ExtractNotesRequest): NoteObject[] {
-  requestObject('extractNotes', request, 'request', true);
+export function extractNotes(request: ExtractNotesRequest): NoteObject[];
+export function extractNotes(
+  samples: Float32Array,
+  sampleRate: number,
+  options: OptionsOf<ExtractNotesRequest>,
+): NoteObject[];
+export function extractNotes(...args: unknown[]): NoteObject[] {
+  const request = sampleOneShot<ExtractNotesRequest>('extractNotes', args);
   const voicedF32 = assertNoteTrack('extractNotes', request);
-  return notesFromNative(
-    requireModule().extractNotes(
-      request.samples,
-      request.sampleRate,
-      request.f0Hz,
-      request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
-      voicedF32,
-      request.frameRate,
-      request,
-    ),
+  return requireModule().extractNotes(
+    request.samples,
+    request.sampleRate,
+    request.f0Hz,
+    request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
+    voicedF32,
+    request.frameRate,
+    request,
   );
 }
 
@@ -451,8 +465,14 @@ export function extractNotes(request: ExtractNotesRequest): NoteObject[] {
  * });
  * ```
  */
-export function renderNotes(request: RenderNotesRequest): Float32Array {
-  requestObject('renderNotes', request, 'request', true);
+export function renderNotes(request: RenderNotesRequest): Float32Array;
+export function renderNotes(
+  samples: Float32Array,
+  sampleRate: number,
+  options: OptionsOf<RenderNotesRequest>,
+): Float32Array;
+export function renderNotes(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<RenderNotesRequest>('renderNotes', args);
   assertAudioInput('renderNotes', request.samples, request.sampleRate, request);
   if (!Array.isArray(request.notes)) {
     throw new TypeError('renderNotes: notes must be an array');
@@ -474,12 +494,7 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
   }
   const options = { ...withoutVoiced, voiced };
   const notes = resolveEntryTimes('renderNotes', request.notes, 'notes', request.sampleRate, true);
-  return requireModule().renderNotes(
-    request.samples,
-    request.sampleRate,
-    notesToNative(notes),
-    options,
-  );
+  return requireModule().renderNotes(request.samples, request.sampleRate, notes, options);
 }
 
 /**
@@ -530,15 +545,13 @@ export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDec
   const voiced =
     request.voiced == null ? undefined : toVoicedFloat32('decomposeNotePitch', request.voiced);
   assertPitchTrackLengths('decomposeNotePitch', request.f0Hz, request.voiced);
-  // Native reports the steady pitch as `centreHz`.
-  const { centreHz, ...curves } = requireModule().decomposeNotePitch(
+  return requireModule().decomposeNotePitch(
     request.f0Hz,
     voiced,
     request.frameRate,
     request.medianHz,
     request.vibratoCutoffHz ?? 0,
-  ) as unknown as { centreHz: number };
-  return { centerHz: centreHz, ...curves } as PitchDecompositionResult;
+  );
 }
 
 /**
@@ -570,6 +583,7 @@ export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDec
  *   length (`voiced`, or `voicedProb` when `voiced` is omitted or `null`), or the
  *   samples/sample rate fail the shared input checks
  * @throws RangeError on the track arguments {@link extractNotes} itself rejects
+ * @throws RangeError when both or neither of `frame` and `frameSec` are given
  * @throws RangeError on an out-of-range `index`, a `frame`
  *   that is not strictly inside that note's own span, or a note whose frame span
  *   is empty or runs past the track
@@ -589,25 +603,42 @@ export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDec
  * });
  * ```
  */
-export function splitNote(request: SplitNoteRequest): NoteObject[] {
-  requestObject('splitNote', request, 'request', true);
+export function splitNote(request: SplitNoteRequest): NoteObject[];
+export function splitNote(
+  samples: Float32Array,
+  sampleRate: number,
+  options: OptionsOf<SplitNoteRequest>,
+): NoteObject[];
+export function splitNote(...args: unknown[]): NoteObject[] {
+  const request = sampleOneShot<SplitNoteRequest>('splitNote', args);
   const voicedF32 = assertNoteTrack('splitNote', request);
+  const hasFrame = request.frame !== undefined && request.frame !== null;
+  const hasFrameSec = request.frameSec !== undefined && request.frameSec !== null;
+  if (hasFrame === hasFrameSec) {
+    throw new RangeError('splitNote: give exactly one of frame or frameSec');
+  }
+  assertFloatValue(
+    'splitNote',
+    hasFrame ? request.frame : request.frameSec,
+    hasFrame ? 'frame' : 'frameSec',
+  );
+  const frame = hasFrame
+    ? (request.frame as number)
+    : Math.round((request.frameSec as number) * request.frameRate);
   const notes = Array.isArray(request.notes)
     ? resolveEntryTimes('splitNote', request.notes, 'notes', request.sampleRate, false)
     : request.notes;
-  return notesFromNative(
-    requireModule().splitNote(
-      request.samples,
-      request.sampleRate,
-      request.f0Hz,
-      request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
-      voicedF32,
-      request.frameRate,
-      notesToNative(notes),
-      request.index,
-      request.frame,
-      request,
-    ),
+  return requireModule().splitNote(
+    request.samples,
+    request.sampleRate,
+    request.f0Hz,
+    request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
+    voicedF32,
+    request.frameRate,
+    notes,
+    request.index,
+    frame,
+    request,
   );
 }
 
@@ -650,25 +681,29 @@ export function splitNote(request: SplitNoteRequest): NoteObject[] {
  * });
  * ```
  */
-export function mergeNotes(request: MergeNotesRequest): NoteObject[] {
-  requestObject('mergeNotes', request, 'request', true);
+export function mergeNotes(request: MergeNotesRequest): NoteObject[];
+export function mergeNotes(
+  samples: Float32Array,
+  sampleRate: number,
+  options: OptionsOf<MergeNotesRequest>,
+): NoteObject[];
+export function mergeNotes(...args: unknown[]): NoteObject[] {
+  const request = sampleOneShot<MergeNotesRequest>('mergeNotes', args);
   const voicedF32 = assertNoteTrack('mergeNotes', request);
   const notes = Array.isArray(request.notes)
     ? resolveEntryTimes('mergeNotes', request.notes, 'notes', request.sampleRate, false)
     : request.notes;
-  return notesFromNative(
-    requireModule().mergeNotes(
-      request.samples,
-      request.sampleRate,
-      request.f0Hz,
-      request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
-      voicedF32,
-      request.frameRate,
-      notesToNative(notes),
-      request.first,
-      request.last,
-      request,
-    ),
+  return requireModule().mergeNotes(
+    request.samples,
+    request.sampleRate,
+    request.f0Hz,
+    request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
+    voicedF32,
+    request.frameRate,
+    notes,
+    request.first,
+    request.last,
+    request,
   );
 }
 
@@ -760,11 +795,10 @@ export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarg
  */
 export function assignNoteTargets(request: AssignNoteTargetsRequest): AssignNoteTargetsResult {
   requestObject('assignNoteTargets', request, 'request', true);
-  const result = requireModule().assignNoteTargets(
-    notesToNative(request.notes),
+  return requireModule().assignNoteTargets(
+    request.notes,
     request.sampleRate,
     request.targets,
     request,
   );
-  return { ...result, notes: notesFromNative(result.notes) };
 }

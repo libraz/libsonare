@@ -166,13 +166,13 @@ describe("transcribe referenceHz: 'auto'", () => {
       referenceHz: 'auto',
     });
     expect(result.noteCount).toBeGreaterThan(0);
-    expect(result.tuning).toBeCloseTo(0.3, 1);
+    expect(Math.abs(result.tuningCents - 30)).toBeLessThan(5);
   });
 
   it('reports the tuning a given reference amounts to', () => {
     const result = transcribe({ samples: tones(1), sampleRate, tempoBpm: 120, referenceHz: 432 });
-    expect(result.tuning).toBeCloseTo(referenceHzToTuning(432) / 100, 4);
-    expect(transcribe({ samples: tones(1), sampleRate, tempoBpm: 120 }).tuning).toBe(0);
+    expect(result.tuningCents).toBeCloseTo(referenceHzToTuning(432), 2);
+    expect(transcribe({ samples: tones(1), sampleRate, tempoBpm: 120 }).tuningCents).toBe(0);
   });
 
   it('refuses a reference that is neither a number nor auto', () => {

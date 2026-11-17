@@ -256,7 +256,7 @@ describe('Sonare WASM sample bank', () => {
   it('tells a released bank id from one never issued at the native layer', () => {
     // The facade swaps the handle for its id, so only the native layer ever sees
     // a bare id; a released one is the bank's state, an unissued one the argument.
-    const engine = new RealtimeEngine(SAMPLE_RATE, 128);
+    const engine = new RealtimeEngine({ sampleRate: SAMPLE_RATE, maxBlockSize: 128 });
     const bank = new SampleBank();
     try {
       const releasedId = bank.nativeId;
@@ -281,12 +281,12 @@ describe('Sonare WASM sample bank', () => {
     // The realtime path resolves `sampleBank` through the same normalizer as
     // the bounce, so a patch that sounds offline sounds live. The synth takes a
     // share of the bank, which is why releasing the handle first still renders.
-    const engine = new RealtimeEngine(SAMPLE_RATE, 128);
+    const engine = new RealtimeEngine({ sampleRate: SAMPLE_RATE, maxBlockSize: 128 });
     const bank = new SampleBank();
     try {
       const index = bank.addSample(tone(261.6256, 0.2));
       bank.addZone({ sampleIndex: index });
-      engine.setSynthInstrument({ engineMode: 'sample', sampleBank: bank }, 7);
+      engine.setSynthInstrument(7, { engineMode: 'sample', sampleBank: bank });
       bank.destroy();
 
       engine.pushMidiNoteOn(7, 0, 0, 60, 100);
@@ -301,10 +301,10 @@ describe('Sonare WASM sample bank', () => {
       expect(p).toBeGreaterThan(0);
 
       expect(() =>
-        engine.setSynthInstrument(
-          { engineMode: 'sample', sampleBank: {} as unknown as SampleBank },
-          7,
-        ),
+        engine.setSynthInstrument(7, {
+          engineMode: 'sample',
+          sampleBank: {} as unknown as SampleBank,
+        }),
       ).toThrow(TypeError);
     } finally {
       engine.destroy();

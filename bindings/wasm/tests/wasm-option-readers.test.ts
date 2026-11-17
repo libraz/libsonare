@@ -17,7 +17,6 @@ import {
   mixStereo,
   RealtimeEngine,
 } from '../dist/index.js';
-import { assertStripIndex } from './_helpers';
 
 const SR = 48000;
 const BLOCK = 512;
@@ -113,10 +112,12 @@ describe('wrong-typed option values are refused by name', () => {
       ['lfe', 'x'],
       ['distance', {}],
     ])('refuses %s = %j', (key, value) => {
-      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), SR, BLOCK);
+      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+        sampleRate: SR,
+        blockSize: BLOCK,
+      });
       try {
         const vocal = mixer.stripById('vocal');
-        assertStripIndex(vocal, 'vocal');
         expectInvalid(
           () => mixer.setSurroundPan(vocal, { [key]: value } as never),
           new RegExp(key),
@@ -127,10 +128,12 @@ describe('wrong-typed option values are refused by name', () => {
     });
 
     it('refuses a non-object pan and still accepts absent fields', () => {
-      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), SR, BLOCK);
+      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+        sampleRate: SR,
+        blockSize: BLOCK,
+      });
       try {
         const vocal = mixer.stripById('vocal');
-        assertStripIndex(vocal, 'vocal');
         expectInvalid(() => mixer.setSurroundPan(vocal, 5 as never), /pan must be an object/);
         expect(() =>
           mixer.setSurroundPan(vocal, { azimuth: undefined, lfe: null } as never),
@@ -143,7 +146,7 @@ describe('wrong-typed option values are refused by name', () => {
 
   describe('flags on a property bag', () => {
     it('refuses a string for a boolean bounce flag', () => {
-      const engine = new RealtimeEngine(SR, 128);
+      const engine = new RealtimeEngine({ sampleRate: SR, maxBlockSize: 128 });
       try {
         expectInvalid(
           () =>
@@ -175,21 +178,28 @@ describe('sample-rate range', () => {
     );
   });
 
-  it.each([7999, 384001])('Mixer.fromSceneJson refuses %s', (rate) => {
+  it.each([7999, 384001])('Mixer.fromJson refuses %s', (rate) => {
     expectInvalid(
-      () => Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), rate, BLOCK),
+      () =>
+        Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+          sampleRate: rate,
+          blockSize: BLOCK,
+        }),
       /sampleRate/,
     );
   });
 
   it('accepts the range ends', () => {
     expect(() => mixStereo([leftOnly()], [silence()], 8000)).not.toThrow();
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 384000, BLOCK);
+    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      sampleRate: 384000,
+      blockSize: BLOCK,
+    });
     mixer.destroy();
   });
 });
 
-describe('mono repair and dynamics default sampleRate', () => {
+describe('mono repair and dynamics sampleRate', () => {
   beforeAll(async () => {
     await init();
   });
@@ -207,19 +217,15 @@ describe('mono repair and dynamics default sampleRate', () => {
     expect(Array.from(a)).toEqual(Array.from(b));
   };
 
-  it('resolves an omitted rate to 22050 on every entry shape', () => {
+  it('refuses an omitted rate on the mono repair entries and still resolves it to 22050 on the compressor', () => {
     const samples = tone();
-    same(
-      masteringRepairDeclick({ samples }),
-      masteringRepairDeclick({ samples, sampleRate: 22050 }),
-    );
-    same(masteringRepairDeclick(samples), masteringRepairDeclick(samples, 22050));
-    same(masteringRepairDeclip({ samples }), masteringRepairDeclip({ samples, sampleRate: 22050 }));
-    same(masteringRepairDeclip(samples), masteringRepairDeclip(samples, 22050));
-    same(
-      masteringRepairDecrackle({ samples }),
-      masteringRepairDecrackle({ samples, sampleRate: 22050 }),
-    );
+    for (const repair of [
+      masteringRepairDeclick,
+      masteringRepairDeclip,
+      masteringRepairDecrackle,
+    ] as unknown as Array<(request: unknown) => unknown>) {
+      expect(() => repair({ samples })).toThrow(TypeError);
+    }
     const compressed = masteringDynamicsCompressor({ samples });
     const explicit = masteringDynamicsCompressor({ samples, sampleRate: 22050 });
     same(compressed.samples, explicit.samples);
@@ -232,7 +238,7 @@ describe('RealtimeEngine.loadSoundFont failures', () => {
   });
 
   it('refuses empty bytes as a RangeError and answers unparsable bytes with InvalidFormat', () => {
-    const engine = new RealtimeEngine(SR, 128);
+    const engine = new RealtimeEngine({ sampleRate: SR, maxBlockSize: 128 });
     try {
       let empty: unknown;
       try {
@@ -254,7 +260,7 @@ describe('RealtimeEngine.loadSoundFont failures', () => {
   });
 });
 
-describe('mixStereo and Mixer.fromSceneJson share the supported sample-rate range', () => {
+describe('mixStereo and Mixer.fromJson share the supported sample-rate range', () => {
   // No inserts, so no band frequency can fall above Nyquist at the lowest rate.
   const plainScene = JSON.stringify({
     version: 1,
@@ -269,12 +275,14 @@ describe('mixStereo and Mixer.fromSceneJson share the supported sample-rate rang
 
   it.each([7999, 384001, 1e6])('refuses sampleRate %d', (rate) => {
     expect(() => mixStereo([leftOnly()], [silence()], rate)).toThrow(/sampleRate/);
-    expect(() => Mixer.fromSceneJson(plainScene, rate, BLOCK)).toThrow(/sampleRate/);
+    expect(() => Mixer.fromJson(plainScene, { sampleRate: rate, blockSize: BLOCK })).toThrow(
+      /sampleRate/,
+    );
   });
 
   it.each([8000, 48000, 384000])('accepts sampleRate %d', (rate) => {
     expect(() => mixStereo([leftOnly()], [silence()], rate)).not.toThrow();
-    const mixer = Mixer.fromSceneJson(plainScene, rate, BLOCK);
+    const mixer = Mixer.fromJson(plainScene, { sampleRate: rate, blockSize: BLOCK });
     mixer.destroy();
   });
 });

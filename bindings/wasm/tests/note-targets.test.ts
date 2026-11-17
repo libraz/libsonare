@@ -264,8 +264,7 @@ describe('WASM note targets', () => {
           const row = note(0, 1, medianHz);
           // A pending edit, so "never edited" is visible as it surviving rather
           // than as a zero that could have been written.
-          row.edit.pitchSemitones = 5;
-          return row;
+          return { ...row, edit: { ...row.edit, pitchSemitones: 5 } };
         });
         const result = assignNoteTargets({ notes, sampleRate, targets, unmatchedPolicy });
         expect(result.assignedCount).toBe(0);
@@ -353,11 +352,17 @@ describe('WASM note targets', () => {
 
     it('returns every other field of a note exactly as it went in', () => {
       const notes = threeNotes();
-      notes[0].edit.gainDb = -3;
-      notes[0].edit.timeStretchRatio = 1.25;
-      notes[0].edit.formantSemitones = 2;
-      notes[0].edit.timeOffsetSamples = 512;
-      notes[0].edit.amplitudeEnvelope = new Float32Array([0.5, 1]);
+      notes[0] = {
+        ...notes[0],
+        edit: {
+          ...notes[0].edit,
+          gainDb: -3,
+          timeStretchRatio: 1.25,
+          formantSemitones: 2,
+          timeOffsetSamples: 512,
+          amplitudeEnvelope: new Float32Array([0.5, 1]),
+        },
+      };
       const result = assignNoteTargets({
         notes,
         sampleRate,

@@ -15,7 +15,7 @@ export interface EngineMarkerContext extends EngineCommitContext {
   getNextMarkerId(): number;
   setNextMarkerId(value: number): void;
   postSync(message: SonareEngineSyncMessage): void;
-  setLoop(startPpq: number, endPpq: number, enabled: boolean): boolean;
+  setLoop(startPpq: number, endPpq: number, enabled: boolean): void;
 }
 
 export function addMarker(ctx: EngineMarkerContext, ppq: number, name = ''): number {
@@ -40,7 +40,7 @@ export function addMarker(ctx: EngineMarkerContext, ppq: number, name = ''): num
  */
 export function setMarkers(
   ctx: EngineMarkerContext,
-  markers: ReadonlyArray<{ ppq: number; name?: string; id?: number }>,
+  markers: ReadonlyArray<Omit<EngineMarker, 'id'> & { id?: number }>,
 ): EngineMarker[] {
   const { resolved, nextMarkerId } = resolveMarkerSet(markers, ctx.getNextMarkerId());
   commitMarkers(ctx, new Map(resolved.map((marker) => [marker.id, marker])));
@@ -48,24 +48,22 @@ export function setMarkers(
   return resolved.map((marker) => ({ ...marker }));
 }
 
-export function markerCount(ctx: EngineMarkerContext): number {
-  return ctx.offlineEngine.markerCount();
-}
-
-export function markerByIndex(ctx: EngineMarkerContext, index: number): EngineMarker {
-  return ctx.offlineEngine.markerByIndex(index);
+export function markers(ctx: EngineMarkerContext): EngineMarker[] {
+  return ctx.offlineEngine.markers();
 }
 
 export function marker(ctx: EngineMarkerContext, markerId: number): EngineMarker {
   return ctx.offlineEngine.marker(markerId);
 }
 
-export function seekMarker(ctx: EngineMarkerContext, markerId: number): boolean {
+export function seekMarker(ctx: EngineMarkerContext, markerId: number): void {
+  // Resolving the id first makes an unknown marker a RangeError instead of a silent no-op.
+  ctx.offlineEngine.marker(markerId);
   // The live marker set arrives through 'syncMarkers', so a queued kSeekMarker
   // resolves the id to its frame on the audio thread.
-  return commitCommand(
+  commitCommand(
     ctx,
-    { type: SonareEngineCommandType.SeekMarker, targetId: markerId, sampleTime: -1 },
+    { type: SonareEngineCommandType.SeekMarker, targetId: markerId, renderFrame: -1 },
     (offline) => offline.seekMarker(markerId),
   );
 }
@@ -74,11 +72,11 @@ export function setLoopFromMarkers(
   ctx: EngineMarkerContext,
   startMarkerId: number,
   endMarkerId: number,
-): boolean {
+): void {
   // Resolving both ids first refuses an unknown marker before either engine changes.
   const start = ctx.offlineEngine.marker(startMarkerId);
   const end = ctx.offlineEngine.marker(endMarkerId);
-  return ctx.setLoop(start.ppq, end.ppq, true);
+  ctx.setLoop(start.ppq, end.ppq, true);
 }
 
 /** Lets the offline engine validate the staged marker set, then caches and posts it. */

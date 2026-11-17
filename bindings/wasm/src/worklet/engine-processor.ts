@@ -1,6 +1,7 @@
-import type { EngineClip } from '../index.js';
+import type { EngineClip, SynthPatch } from '../index.js';
 import { RealtimeEngine } from '../index.js';
 import { failurePayload } from '../internal/failure_payload.js';
+import { engineNativeHandle } from '../realtime_engine.js';
 import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types.js';
 import { buildCaptureConfig } from './engine-offline.js';
 import {
@@ -109,6 +110,8 @@ export class SonareRealtimeEngineWorkletProcessor {
   readonly blockSize: number;
   readonly channelCount: number;
   private engine: RealtimeEngine;
+  /** The embind object behind `engine`: scratch reads and the code-carrying sync messages. */
+  private native: ReturnType<typeof engineNativeHandle>;
   private closed = false;
   private commandRing?: SonareEngineCommandRingBuffer;
   /** Sequence number of the last control sync received; SAB commands wait for theirs. */
@@ -253,26 +256,27 @@ export class SonareRealtimeEngineWorkletProcessor {
     if (this.commandRing && this.commandRing.capacity > 65536) {
       throw new RangeError('commandRingCapacity must be at most 65536');
     }
-    this.engine = new RealtimeEngine(
-      this.sampleRate,
-      this.blockSize,
-      Math.max(1024, this.commandRing?.capacity ?? 0),
-      1024,
-      this.channelCount,
-    );
+    this.engine = new RealtimeEngine({
+      sampleRate: this.sampleRate,
+      maxBlockSize: this.blockSize,
+      commandCapacity: Math.max(1024, this.commandRing?.capacity ?? 0),
+      telemetryCapacity: 1024,
+      maxNumChannels: this.channelCount,
+    });
+    this.native = engineNativeHandle(this.engine);
     // Allocate persistent WASM-heap scratch (worst case: channelCount channels x
     // blockSize frames) and acquire the per-channel heap views once.
     this.engine.prepareChannels(this.channelCount, this.blockSize);
     this.channelBuffers = new Array(this.channelCount);
     for (let ch = 0; ch < this.channelCount; ch++) {
-      this.channelBuffers[ch] = this.engine.getChannelBuffer(ch, this.blockSize);
+      this.channelBuffers[ch] = this.engine.channelBuffer(ch, this.blockSize);
     }
     this.cueOutput = options.cueOutput === true;
     if (this.cueOutput) {
       this.engine.prepareMonitorChannels(this.channelCount, this.blockSize);
       this.monitorBuffers = new Array(this.channelCount);
       for (let ch = 0; ch < this.channelCount; ch++) {
-        this.monitorBuffers[ch] = this.engine.getMonitorChannelBuffer(ch, this.blockSize);
+        this.monitorBuffers[ch] = this.engine.monitorChannelBuffer(ch, this.blockSize);
       }
     }
     // Arm the native scope producer only when a SAB ring or postMessage sink exists.
@@ -356,13 +360,13 @@ export class SonareRealtimeEngineWorkletProcessor {
 
   private reacquireChannelBuffers(): void {
     for (let ch = 0; ch < this.channelCount; ch++) {
-      this.channelBuffers[ch] = this.engine.getChannelBuffer(ch, this.blockSize);
+      this.channelBuffers[ch] = this.engine.channelBuffer(ch, this.blockSize);
     }
   }
 
   private reacquireMonitorBuffers(): void {
     for (let ch = 0; ch < this.channelCount; ch++) {
-      this.monitorBuffers[ch] = this.engine.getMonitorChannelBuffer(ch, this.blockSize);
+      this.monitorBuffers[ch] = this.engine.monitorChannelBuffer(ch, this.blockSize);
     }
   }
 
@@ -533,8 +537,8 @@ export class SonareRealtimeEngineWorkletProcessor {
           break;
         }
         const registered = new Set<number>();
-        for (let index = 0; index < this.engine.parameterCount(); index++) {
-          registered.add(this.engine.parameterInfoByIndex(index).id);
+        for (const info of this.engine.parameters()) {
+          registered.add(info.id);
         }
         for (const info of message.parameters) {
           if (!registered.has(info.id)) {
@@ -564,14 +568,14 @@ export class SonareRealtimeEngineWorkletProcessor {
           // Their `lanes` field is context, not a request to rebuild routing;
           // rebuilding it here would discard live insert smoother slots.
           for (const binding of message.laneSidechains ?? []) {
-            this.engine.setLaneSidechain(
+            this.native.setLaneSidechain(
               binding.trackId,
               binding.insertIndex,
               binding.sourceTrackId,
             );
           }
           for (const binding of message.busSidechains ?? []) {
-            this.engine.setBusSidechain(
+            this.native.setBusSidechain(
               binding.busId,
               binding.insertIndex,
               binding.sourceKind,
@@ -579,7 +583,7 @@ export class SonareRealtimeEngineWorkletProcessor {
             );
           }
           for (const binding of message.masterSidechains ?? []) {
-            this.engine.setMasterSidechain(
+            this.native.setMasterSidechain(
               binding.insertIndex,
               binding.sourceKind,
               binding.sourceId,
@@ -604,32 +608,32 @@ export class SonareRealtimeEngineWorkletProcessor {
         }
         this.engine.setTrackLanes(message.lanes);
         for (const strip of message.trackStrips ?? []) {
-          this.engine.setTrackStripJson(strip.trackId, strip.sceneJson);
+          this.native.setTrackStripJson(strip.trackId, strip.sceneJson);
         }
         for (const strip of message.busStrips ?? []) {
-          this.engine.setBusStripJson(strip.busId, strip.sceneJson);
+          this.native.setBusStripJson(strip.busId, strip.sceneJson);
         }
         if (message.masterStripJson) {
-          this.engine.setMasterStripJson(message.masterStripJson);
+          this.native.setMasterStripJson(message.masterStripJson);
         }
         for (const target of message.insertBaseResets ?? []) {
           switch (target.kind) {
             case 'track':
-              this.engine.clearTrackInsertParameterBases(target.trackId);
+              this.native.clearTrackInsertParameterBases(target.trackId);
               break;
             case 'bus':
-              this.engine.clearBusInsertParameterBases(target.busId);
+              this.native.clearBusInsertParameterBases(target.busId);
               break;
             case 'master':
-              this.engine.clearMasterInsertParameterBases();
+              this.native.clearMasterInsertParameterBases();
               break;
           }
         }
         for (const binding of message.laneSidechains ?? []) {
-          this.engine.setLaneSidechain(binding.trackId, binding.insertIndex, binding.sourceTrackId);
+          this.native.setLaneSidechain(binding.trackId, binding.insertIndex, binding.sourceTrackId);
         }
         for (const binding of message.busSidechains ?? []) {
-          this.engine.setBusSidechain(
+          this.native.setBusSidechain(
             binding.busId,
             binding.insertIndex,
             binding.sourceKind,
@@ -637,12 +641,12 @@ export class SonareRealtimeEngineWorkletProcessor {
           );
         }
         for (const binding of message.masterSidechains ?? []) {
-          this.engine.setMasterSidechain(binding.insertIndex, binding.sourceKind, binding.sourceId);
+          this.native.setMasterSidechain(binding.insertIndex, binding.sourceKind, binding.sourceId);
         }
         for (const override of message.insertParamOverrides ?? []) {
           switch (override.kind) {
             case 'track':
-              this.engine.restoreTrackStripInsertParamByName(
+              this.native.restoreTrackStripInsertParamByName(
                 override.trackId,
                 override.insertIndex,
                 override.paramName,
@@ -650,7 +654,7 @@ export class SonareRealtimeEngineWorkletProcessor {
               );
               break;
             case 'bus':
-              this.engine.restoreBusStripInsertParamByName(
+              this.native.restoreBusStripInsertParamByName(
                 override.busId,
                 override.insertIndex,
                 override.paramName,
@@ -658,7 +662,7 @@ export class SonareRealtimeEngineWorkletProcessor {
               );
               break;
             case 'master':
-              this.engine.restoreMasterStripInsertParamByName(
+              this.native.restoreMasterStripInsertParamByName(
                 override.insertIndex,
                 override.paramName,
                 override.value,
@@ -670,24 +674,42 @@ export class SonareRealtimeEngineWorkletProcessor {
       }
       case 'syncCapture': {
         // Validate every field before the buffer replacement discards the recording.
-        const config = buildCaptureConfig(message, message.channels);
-        this.engine.setCaptureBuffer(config.channels, config.bufferFrames);
-        this.engine.setCaptureSource(config.source);
-        this.engine.setRecordOffsetSamples(config.recordOffsetSamples);
-        this.engine.setInputMonitor(config.inputMonitor.enabled, config.inputMonitor.gain);
+        const { offlineOptions } = buildCaptureConfig(
+          {
+            capacityFrames: message.bufferFrames,
+            numChannels: message.channels,
+            source: message.source,
+            recordOffsetSamples: message.recordOffsetSamples,
+            inputMonitor: message.inputMonitor,
+          },
+          message.channels,
+          this.sampleRate,
+          (ppq) => this.engine.sampleAtPpq(ppq),
+        );
+        this.engine.configureCapture({
+          ...offlineOptions,
+          ...(message.punch === undefined
+            ? {}
+            : {
+                punch: {
+                  startSample: message.punch.startSample,
+                  endSample: message.punch.endSample,
+                },
+              }),
+        });
         break;
       }
       case 'syncTrackStripEqBand':
-        this.engine.setTrackStripEqBandJson(message.trackId, message.bandIndex, message.bandJson);
+        this.native.setTrackStripEqBandJson(message.trackId, message.bandIndex, message.bandJson);
         break;
       case 'syncMasterStripEqBand':
-        this.engine.setMasterStripEqBandJson(message.bandIndex, message.bandJson);
+        this.native.setMasterStripEqBandJson(message.bandIndex, message.bandJson);
         break;
       case 'syncBusStripEqBand':
-        this.engine.setBusStripEqBandJson(message.busId, message.bandIndex, message.bandJson);
+        this.native.setBusStripEqBandJson(message.busId, message.bandIndex, message.bandJson);
         break;
       case 'syncTrackStripInsertBypassed':
-        this.engine.setTrackStripInsertBypassed(
+        this.native.setTrackStripInsertBypassed(
           message.trackId,
           message.insertIndex,
           message.bypassed,
@@ -695,7 +717,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         );
         break;
       case 'syncMasterStripInsertBypassed':
-        this.engine.setMasterStripInsertBypassed(
+        this.native.setMasterStripInsertBypassed(
           message.insertIndex,
           message.bypassed,
           message.resetOnBypass,
@@ -704,7 +726,7 @@ export class SonareRealtimeEngineWorkletProcessor {
       case 'syncTrackStripInsertParamByName':
         this.engine.applyCommandsDueNowPreservingFuture();
         if (
-          !this.engine.applyTrackStripInsertParamByNameNow(
+          !this.native.applyTrackStripInsertParamByNameNow(
             message.trackId,
             message.insertIndex,
             message.paramName,
@@ -713,7 +735,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         ) {
           // A burst can exhaust the fixed smoother slots before the next
           // render quantum. Apply the last knob value exactly in that case.
-          this.engine.restoreTrackStripInsertParamByName(
+          this.native.restoreTrackStripInsertParamByName(
             message.trackId,
             message.insertIndex,
             message.paramName,
@@ -724,13 +746,13 @@ export class SonareRealtimeEngineWorkletProcessor {
       case 'syncMasterStripInsertParamByName':
         this.engine.applyCommandsDueNowPreservingFuture();
         if (
-          !this.engine.applyMasterStripInsertParamByNameNow(
+          !this.native.applyMasterStripInsertParamByNameNow(
             message.insertIndex,
             message.paramName,
             message.value,
           )
         ) {
-          this.engine.restoreMasterStripInsertParamByName(
+          this.native.restoreMasterStripInsertParamByName(
             message.insertIndex,
             message.paramName,
             message.value,
@@ -740,14 +762,14 @@ export class SonareRealtimeEngineWorkletProcessor {
       case 'syncBusStripInsertParamByName':
         this.engine.applyCommandsDueNowPreservingFuture();
         if (
-          !this.engine.applyBusStripInsertParamByNameNow(
+          !this.native.applyBusStripInsertParamByNameNow(
             message.busId,
             message.insertIndex,
             message.paramName,
             message.value,
           )
         ) {
-          this.engine.restoreBusStripInsertParamByName(
+          this.native.restoreBusStripInsertParamByName(
             message.busId,
             message.insertIndex,
             message.paramName,
@@ -756,7 +778,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         }
         break;
       case 'syncBusStripInsertBypassed':
-        this.engine.setBusStripInsertBypassed(
+        this.native.setBusStripInsertBypassed(
           message.busId,
           message.insertIndex,
           message.bypassed,
@@ -764,46 +786,49 @@ export class SonareRealtimeEngineWorkletProcessor {
         );
         break;
       case 'syncTrackStripPan':
-        this.engine.setTrackStripPan(message.trackId, message.pan);
+        this.native.setTrackStripPan(message.trackId, message.pan);
         break;
       case 'syncTrackStripPanLaw':
-        this.engine.setTrackStripPanLaw(message.trackId, message.panLaw);
+        this.native.setTrackStripPanLaw(message.trackId, message.panLaw);
         break;
       case 'syncTrackStripPanMode':
-        this.engine.setTrackStripPanMode(message.trackId, message.panMode);
+        this.native.setTrackStripPanMode(message.trackId, message.panMode);
         break;
       case 'syncTrackStripDualPan':
-        this.engine.setTrackStripDualPan(message.trackId, message.leftPan, message.rightPan);
+        this.native.setTrackStripDualPan(message.trackId, message.leftPan, message.rightPan);
         break;
       case 'syncTrackStripSurroundPan':
-        this.engine.setTrackStripSurroundPan(message.trackId, message.pan);
+        this.native.setTrackStripSurroundPan(message.trackId, message.pan);
         break;
       case 'syncBusStripPan':
-        this.engine.setBusStripPan(message.busId, message.pan);
+        this.native.setBusStripPan(message.busId, message.pan);
         break;
       case 'syncBusStripPanLaw':
-        this.engine.setBusStripPanLaw(message.busId, message.panLaw);
+        this.native.setBusStripPanLaw(message.busId, message.panLaw);
         break;
       case 'syncBusStripPanMode':
-        this.engine.setBusStripPanMode(message.busId, message.panMode);
+        this.native.setBusStripPanMode(message.busId, message.panMode);
         break;
       case 'syncBusStripDualPan':
-        this.engine.setBusStripDualPan(message.busId, message.leftPan, message.rightPan);
+        this.native.setBusStripDualPan(message.busId, message.leftPan, message.rightPan);
         break;
       case 'syncTrackStripChannelDelaySamples':
-        this.engine.setTrackStripChannelDelaySamples(message.trackId, message.delaySamples);
+        this.native.setTrackStripChannelDelaySamples(message.trackId, message.delaySamples);
         break;
       case 'syncBuiltinInstrument':
-        this.engine.setBuiltinInstrument(message.config, message.destinationId);
+        this.engine.setBuiltinInstrument(
+          message.destinationId,
+          message.config as Parameters<RealtimeEngine['setBuiltinInstrument']>[1],
+        );
         break;
       case 'syncSynthInstrument':
-        this.engine.setSynthInstrument(message.patch, message.destinationId);
+        this.engine.setSynthInstrument(message.destinationId, message.patch as SynthPatch | string);
         break;
       case 'syncLoadSoundFont':
         this.engine.loadSoundFont(message.data);
         break;
       case 'syncSf2Instrument':
-        this.engine.setSf2Instrument(message.config, message.destinationId);
+        this.engine.setSf2Instrument(message.destinationId, message.config);
         break;
       case 'syncMidiFx':
         this.engine.setMidiFx(message.destinationId, message.configJson ?? '');
@@ -899,10 +924,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         this.engine.clearMidiInputSource();
         break;
       case 'syncMidiCcBinding':
-        this.engine.bindMidiCc(message.channel, message.controller, message.paramId, {
-          minValue: message.minValue,
-          maxValue: message.maxValue,
-        });
+        this.engine.bindMidiCc(message.binding);
         break;
       case 'syncMidiInputNoteOn':
         this.engine.pushMidiInputNoteOn(
@@ -1027,7 +1049,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         type: 'transportResponse',
         requestId: message.requestId,
         ok: true,
-        state: this.engine.getTransportState(),
+        state: this.engine.transportState(),
       } satisfies SonareEngineTransportResponseMessage);
     } catch (error) {
       this.transport?.postMessage?.({
@@ -1113,45 +1135,45 @@ export class SonareRealtimeEngineWorkletProcessor {
   }
 
   private applyCommand(command: SonareEngineCommandRecord): void {
-    const sampleTime = wireRenderFrame(command.sampleTime);
+    const renderFrame = wireRenderFrame(command.renderFrame);
     switch (command.type) {
       case SonareEngineCommandType.SetParam:
         // paramId is carried in targetId, the new value in argFloat (matches the
-        // SonareEngine.setParam producer). sampleTime is the render frame.
+        // SonareEngine.setParam producer). renderFrame is the render frame.
         this.engine.setParameter(
           Math.trunc(Number(command.targetId ?? 0)),
           Number(command.argFloat ?? 0),
-          sampleTime,
+          renderFrame,
         );
         break;
       case SonareEngineCommandType.SetParamSmoothed:
         this.engine.setParameterSmoothed(
           Math.trunc(Number(command.targetId ?? 0)),
           Number(command.argFloat ?? 0),
-          sampleTime,
+          renderFrame,
         );
         break;
       case SonareEngineCommandType.TransportPlay:
-        this.engine.play(sampleTime);
+        this.engine.play(renderFrame);
         break;
       case SonareEngineCommandType.TransportStop:
-        this.engine.stop(sampleTime);
+        this.engine.stop(renderFrame);
         break;
       case SonareEngineCommandType.TransportSeekSample:
-        this.engine.seekSample(Number(command.argInt ?? 0), sampleTime);
+        this.engine.seekSample(Number(command.argInt ?? 0), renderFrame);
         break;
       case SonareEngineCommandType.TransportSeekPpq:
-        this.engine.seekPpq(Number(command.argFloat ?? 0), sampleTime);
+        this.engine.seekPpq(Number(command.argFloat ?? 0), renderFrame);
         break;
       case SonareEngineCommandType.SetLoop:
-        this.engine.setLoop(
-          Number(command.argFloat ?? 0),
-          Number(command.argFloat2 ?? 0),
-          command.targetId !== 0,
-        );
+        this.engine.setLoop({
+          startPpq: Number(command.argFloat ?? 0),
+          endPpq: Number(command.argFloat2 ?? 0),
+          enabled: command.targetId !== 0,
+        });
         break;
       case SonareEngineCommandType.ArmRecord:
-        this.engine.armCapture(Boolean(command.argInt));
+        this.engine.armCapture({ armed: Boolean(command.argInt) });
         break;
       case SonareEngineCommandType.Punch: {
         // Both endpoints already arrive as samples (see SonareEngine.punch);
@@ -1161,11 +1183,11 @@ export class SonareRealtimeEngineWorkletProcessor {
         if (!Number.isSafeInteger(outSample) || outSample < 0) {
           throw new RangeError('Punch out sample must be a non-negative integer');
         }
-        this.engine.setCapturePunch(Number(command.argInt ?? 0), outSample, true);
+        this.native.setCapturePunch(Number(command.argInt ?? 0), outSample, true);
         break;
       }
       case SonareEngineCommandType.SetMetronome:
-        // Metronome config (beatGain/accentGain/clickSamples/clickSeconds) is
+        // Metronome config (beatGain/accentGain/clickSamples/clickSec) is
         // delivered out-of-band via the 'syncMetronome' message so it carries
         // the caller's full config; the command only toggles enabled state as a
         // sample-aligned fallback.
@@ -1173,21 +1195,26 @@ export class SonareRealtimeEngineWorkletProcessor {
           enabled: Boolean(command.argInt),
           beatGain: this.metronomeConfig.beatGain,
           accentGain: this.metronomeConfig.accentGain,
-          clickSamples: this.metronomeConfig.clickSamples,
-          clickSeconds: this.metronomeConfig.clickSeconds,
+          // An unset length is 0 here; the engine refuses an explicit 0, so it is left out.
+          ...(this.metronomeConfig.clickSamples > 0
+            ? { clickSamples: this.metronomeConfig.clickSamples }
+            : {}),
+          ...(this.metronomeConfig.clickSeconds > 0
+            ? { clickSec: this.metronomeConfig.clickSeconds }
+            : {}),
         });
         break;
       case SonareEngineCommandType.SeekMarker:
         // The realtime engine's markers are kept in sync via 'syncMarkers'
         // (RtPublisher-style swap), so a queued kSeekMarker resolves correctly.
-        this.engine.seekMarker(Math.trunc(Number(command.targetId ?? 0)), sampleTime);
+        this.engine.seekMarker(Math.trunc(Number(command.targetId ?? 0)), renderFrame);
         break;
       case SonareEngineCommandType.SetSoloMute:
-        this.engine.setSoloMute(
+        this.native.setSoloMute(
           Math.trunc(Number(command.targetId ?? 0)),
           Boolean((Number(command.argInt ?? 0) & 0x2) !== 0),
           Boolean((Number(command.argInt ?? 0) & 0x1) !== 0),
-          sampleTime,
+          renderFrame,
         );
         break;
       case SonareEngineCommandType.SetTrackMonitorMode: {
@@ -1205,14 +1232,14 @@ export class SonareRealtimeEngineWorkletProcessor {
         ) {
           throw new RangeError(`Invalid track monitor lane index: ${String(laneIndex)}`);
         }
-        this.engine.setTrackMonitorMode(laneIndex, mode as 0 | 1 | 2, sampleTime);
+        this.native.setTrackMonitorMode(laneIndex, mode, renderFrame);
         break;
       }
       case SonareEngineCommandType.ResetMasterLoudnessMeter:
-        this.engine.resetMasterLoudnessMeter(sampleTime);
+        this.engine.resetMasterLoudnessMeter(renderFrame);
         break;
       case SonareEngineCommandType.ResetProcessorState:
-        this.engine.resetProcessorState(sampleTime);
+        this.engine.resetProcessorState(renderFrame);
         break;
       default:
         this.publishTelemetryRecord({
@@ -1231,7 +1258,7 @@ export class SonareRealtimeEngineWorkletProcessor {
   private publishTelemetry(): void {
     const ring = this.telemetryRing;
     if (ring) {
-      for (let count = 0; count < 64 && this.engine.popTelemetryToScratch(); count++) {
+      for (let count = 0; count < 64 && this.native.popTelemetryToScratch(); count++) {
         this.writeTelemetryScratch(ring);
       }
       return;
@@ -1249,16 +1276,14 @@ export class SonareRealtimeEngineWorkletProcessor {
     const capacity = ring.capacity;
     // All facade calls and checked conversions happen before the claim. The
     // native scratch remains untouched by the fixed primitive store region.
-    const type = +this.engine.telemetryScratchType();
-    const error = +this.engine.telemetryScratchError();
-    const renderFrame = toSafeInteger(this.engine.telemetryScratchRenderFrame(), 0);
-    const timelineSample = toSafeInteger(this.engine.telemetryScratchTimelineSample(), 0);
-    const audibleTimelineSample = toSafeInteger(
-      this.engine.telemetryScratchAudibleTimelineSample(),
-      0,
-    );
-    const graphLatencySamplesQ8 = +this.engine.telemetryScratchGraphLatencySamplesQ8();
-    const value = +this.engine.telemetryScratchValue();
+    const type = +this.native.telemetryScratchType();
+    const error = +this.native.telemetryScratchError();
+    const renderFrame = toSafeInteger(this.native.telemetryScratchRenderFrame(), 0);
+    const timelineSample = toSafeInteger(this.native.telemetryScratchTimelineSample(), 0);
+    const scratch = this.native;
+    const audibleTimelineSample = toSafeInteger(scratch.telemetryScratchAudibleTimelineSample(), 0);
+    const graphLatencySamplesQ8 = +this.native.telemetryScratchGraphLatencySamplesQ8();
+    const value = +this.native.telemetryScratchValue();
     const writeIndex = tryBeginOverwriteWrite(header, slotStates, capacity);
     if (writeIndex === undefined) {
       Atomics.add(header, 4, 1);
@@ -1301,9 +1326,12 @@ export class SonareRealtimeEngineWorkletProcessor {
       return;
     }
     if (this.meterRing) {
-      for (let count = 0; count < 64 && this.engine.popMeterTelemetryToScratch(); count++) {
+      for (let count = 0; count < 64 && this.native.popMeterTelemetryToScratch(); count++) {
         if (
-          !this.meterDue(this.engine.meterScratchTargetId(), this.engine.meterScratchRenderFrame())
+          !this.meterDue(
+            this.native.meterScratchTargetId(),
+            Number(this.native.meterScratchRenderFrame()),
+          )
         ) {
           continue;
         }
@@ -1358,23 +1386,23 @@ export class SonareRealtimeEngineWorkletProcessor {
     const slotStates = ring.slotStates;
     const capacity = ring.capacity;
     const scratch = this.meterRingScratch;
-    const frame = Number(this.engine.meterScratchRenderFrame());
+    const frame = Number(this.native.meterScratchRenderFrame());
     scratch[0] = encodeFrameLo(frame);
     scratch[1] = encodeFrameHi(frame);
-    scratch[2] = +this.engine.meterScratchTargetId();
+    scratch[2] = +this.native.meterScratchTargetId();
     for (let field = 0; field < 11; field++) {
-      scratch[3 + field] = +this.engine.meterScratchValue(field);
+      scratch[3 + field] = +this.native.meterScratchValue(field);
     }
-    scratch[14] = +this.engine.meterScratchInputPeakDbL();
-    scratch[15] = +this.engine.meterScratchInputPeakDbR();
-    const channelCount = +this.engine.meterScratchValue(METER_SCRATCH_CHANNEL_COUNT);
+    scratch[14] = +this.native.meterScratchInputPeakDbL();
+    scratch[15] = +this.native.meterScratchInputPeakDbR();
+    const channelCount = +this.native.meterScratchValue(METER_SCRATCH_CHANNEL_COUNT);
     scratch[SONARE_METER_RING_CHANNEL_COUNT_OFFSET] = channelCount;
     const planes = channelCount > 2 ? Math.min(channelCount, SONARE_METER_RING_MAX_CHANNELS) : 0;
     for (let kind = 0; kind < 4 && planes > 0; kind++) {
       const out = SONARE_METER_RING_PLANES_OFFSET + kind * SONARE_METER_RING_MAX_CHANNELS;
       const field = METER_SCRATCH_PLANES + kind * SONARE_METER_RING_MAX_CHANNELS;
       for (let ch = 0; ch < planes; ch++) {
-        scratch[out + ch] = +this.engine.meterScratchValue(field + ch);
+        scratch[out + ch] = +this.native.meterScratchValue(field + ch);
       }
     }
     const writeIndex = tryBeginOverwriteWrite(header, slotStates, capacity);
@@ -1415,7 +1443,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
     const ring = this.scopeRing;
     const transport = this.transport;
-    for (let count = 0; count < 64 && this.engine.popScopeTelemetryToScratch(); count++) {
+    for (let count = 0; count < 64 && this.native.popScopeTelemetryToScratch(); count++) {
       if (ring) {
         this.writeScopeScratch(ring);
       } else {
@@ -1430,25 +1458,25 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
     const bandCount = Math.min(
       SONARE_SCOPE_MAX_BANDS,
-      Math.max(0, Math.trunc(Number(this.engine.scopeScratchBandCount()))),
+      Math.max(0, Math.trunc(Number(this.native.scopeScratchBandCount()))),
     );
     const pointCount = Math.min(
       SONARE_SCOPE_MAX_POINTS,
-      Math.max(0, Math.trunc(Number(this.engine.scopeScratchPointCount()))),
+      Math.max(0, Math.trunc(Number(this.native.scopeScratchPointCount()))),
     );
     const bands = new Float32Array(bandCount);
     for (let i = 0; i < bandCount; i++) {
-      bands[i] = this.engine.scopeScratchBand(i);
+      bands[i] = this.native.scopeScratchBand(i);
     }
     const points = new Float32Array(pointCount * 2);
     for (let i = 0; i < pointCount; i++) {
-      points[2 * i] = this.engine.scopeScratchPointLeft(i);
-      points[2 * i + 1] = this.engine.scopeScratchPointRight(i);
+      points[2 * i] = this.native.scopeScratchPointLeft(i);
+      points[2 * i + 1] = this.native.scopeScratchPointRight(i);
     }
     const scope: SonareWorkletScopeSnapshot = {
       type: 'scope',
-      targetId: this.engine.scopeScratchTargetId(),
-      frame: Number(this.engine.scopeScratchRenderFrame()),
+      targetId: this.native.scopeScratchTargetId(),
+      frame: Number(this.native.scopeScratchRenderFrame()),
       bands,
       points,
     };
@@ -1465,21 +1493,21 @@ export class SonareRealtimeEngineWorkletProcessor {
     const ringMaxPoints = ring.maxPoints;
     const bandScratch = this.scopeRingBandScratch;
     const pointScratch = this.scopeRingPointScratch;
-    const frame = Number(this.engine.scopeScratchRenderFrame());
+    const frame = Number(this.native.scopeScratchRenderFrame());
     const frameLo = encodeFrameLo(frame);
     const frameHi = encodeFrameHi(frame);
-    const targetId = +this.engine.scopeScratchTargetId();
-    const bandCount = Math.min(ringBands, +this.engine.scopeScratchBandCount());
-    const pointCount = Math.min(ringMaxPoints, +this.engine.scopeScratchPointCount());
+    const targetId = +this.native.scopeScratchTargetId();
+    const bandCount = Math.min(ringBands, +this.native.scopeScratchBandCount());
+    const pointCount = Math.min(ringMaxPoints, +this.native.scopeScratchPointCount());
     if (bandCount > SONARE_SCOPE_MAX_BANDS || pointCount > SONARE_SCOPE_MAX_POINTS) {
       throw new RangeError('scope scratch exceeds the processor scratch capacity.');
     }
     for (let i = 0; i < bandCount; i++) {
-      bandScratch[i] = +this.engine.scopeScratchBand(i);
+      bandScratch[i] = +this.native.scopeScratchBand(i);
     }
     for (let i = 0; i < pointCount; i++) {
-      pointScratch[2 * i] = +this.engine.scopeScratchPointLeft(i);
-      pointScratch[2 * i + 1] = +this.engine.scopeScratchPointRight(i);
+      pointScratch[2 * i] = +this.native.scopeScratchPointLeft(i);
+      pointScratch[2 * i + 1] = +this.native.scopeScratchPointRight(i);
     }
     const writeIndex = tryBeginOverwriteWrite(header, slotStates, capacity);
     if (writeIndex === undefined) {
@@ -1510,7 +1538,7 @@ export class SonareRealtimeEngineWorkletProcessor {
   private publishExternalMidi(): void {
     const ring = this.externalMidiRing;
     if (ring) {
-      for (let count = 0; count < 256 && this.engine.popExternalMidiToScratch(); count++) {
+      for (let count = 0; count < 256 && this.native.popExternalMidiToScratch(); count++) {
         // A full ring leaves the event in the scratch for the next quantum; only
         // a record the ring refuses as malformed is consumed and counted.
         if (!sonareExternalMidiRingHasRoom(ring)) {
@@ -1518,19 +1546,19 @@ export class SonareRealtimeEngineWorkletProcessor {
         }
         pushSonareExternalMidiRingBuffer(
           ring,
-          this.engine.externalMidiScratchDestinationId(),
-          this.engine.externalMidiScratchRenderFrame(),
-          this.engine.externalMidiScratchByteWord(),
-          this.engine.externalMidiScratchByteCount(),
+          this.native.externalMidiScratchDestinationId(),
+          Number(this.native.externalMidiScratchRenderFrame()),
+          this.native.externalMidiScratchByteWord(),
+          this.native.externalMidiScratchByteCount(),
         );
-        this.engine.consumeExternalMidiScratch();
+        this.native.consumeExternalMidiScratch();
       }
       return;
     }
     if (!this.transport?.postMessage) {
       return;
     }
-    if (this.engine.externalMidiPendingCount() === 0) {
+    if (this.engine.externalMidiPendingCount === 0) {
       return;
     }
     const events = this.engine.drainExternalMidi(256);
@@ -1556,11 +1584,11 @@ export class SonareRealtimeEngineWorkletProcessor {
     while (drained < this.clipPageRequestClipIds.length) {
       drained += 1;
       // The scratch pop avoids embind materialising an object per page miss.
-      if (!this.engine.popClipPageRequestToScratch()) {
+      if (!this.native.popClipPageRequestToScratch()) {
         break;
       }
-      const clipId = this.engine.clipPageRequestScratchClipId();
-      const sample = this.engine.clipPageRequestScratchSample();
+      const clipId = this.native.clipPageRequestScratchClipId();
+      const sample = Number(this.native.clipPageRequestScratchSample());
       const pageFrames = this.pagedClipPageFrames.get(clipId);
       if (!pageFrames) {
         continue;
@@ -1582,7 +1610,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         count += 1;
       }
     }
-    const overflowCount = this.engine.clipPageRequestOverflowCount();
+    const overflowCount = this.engine.clipPageRequestOverflowCount;
     // The native counter is uint32_t; preserve a correct delta across its
     // defined unsigned wraparound instead of emitting a negative count.
     const dropped = (overflowCount - this.clipPageRequestOverflowReported) >>> 0;

@@ -33,8 +33,6 @@ const BUFFER_FIRST: Array<[string, string]> = [
   ['chromaCens', 'samples'],
   ['chromaCqt', 'samples'],
   ['cqt', 'samples'],
-  ['decompose', 's'],
-  ['decomposeWithInit', 's'],
   ['deemphasis', 'samples'],
   ['detectAcoustic', 'samples'],
   ['detectBeats', 'samples'],
@@ -66,17 +64,11 @@ const BUFFER_FIRST: Array<[string, string]> = [
   ['masteringDynamicsGate', 'samples'],
   ['masteringDynamicsTransientShaper', 'samples'],
   ['masteringRepairDeclick', 'samples'],
-  ['masteringRepairDeclickStereo', 'left'],
   ['masteringRepairDeclip', 'samples'],
-  ['masteringRepairDeclipStereo', 'left'],
   ['masteringRepairDecrackle', 'samples'],
-  ['masteringRepairDecrackleStereo', 'left'],
   ['masteringRepairDehum', 'samples'],
-  ['masteringRepairDehumStereo', 'left'],
   ['masteringRepairDenoiseClassical', 'samples'],
-  ['masteringRepairDenoiseClassicalStereo', 'left'],
   ['masteringRepairDereverbClassical', 'samples'],
-  ['masteringRepairDereverbClassicalStereo', 'left'],
   ['masteringRepairDetectClicks', 'samples'],
   ['masteringRepairDetectClipping', 'samples'],
   ['masteringRepairDetectCrackle', 'samples'],
@@ -84,9 +76,7 @@ const BUFFER_FIRST: Array<[string, string]> = [
   ['masteringRepairDetectNoiseFloor', 'samples'],
   ['masteringRepairDetectReverb', 'samples'],
   ['masteringRepairDetectTrimRange', 'samples'],
-  ['masteringRepairDetectTrimRangeStereo', 'left'],
   ['masteringRepairTrimSilence', 'samples'],
-  ['masteringRepairTrimSilenceStereo', 'left'],
   ['masteringStreamingPreview', 'samples'],
   ['melSpectrogram', 'samples'],
   ['meteringCrestFactorDb', 'samples'],
@@ -107,7 +97,6 @@ const BUFFER_FIRST: Array<[string, string]> = [
   ['meteringVectorscopeDecimated', 'left'],
   ['mfcc', 'samples'],
   ['momentaryLufs', 'samples'],
-  ['nnFilter', 's'],
   ['nnlsChroma', 'samples'],
   ['normalize', 'samples'],
   ['noteMove', 'samples'],
@@ -119,7 +108,6 @@ const BUFFER_FIRST: Array<[string, string]> = [
   ['piptrack', 'samples'],
   ['pitchCorrectTimevarying', 'samples'],
   ['pitchCorrectToMidi', 'samples'],
-  ['pitchCorrectToMidiTimevarying', 'samples'],
   ['pitchPyin', 'samples'],
   ['pitchShift', 'samples'],
   ['pitchYin', 'samples'],
@@ -146,12 +134,19 @@ const BUFFER_FIRST: Array<[string, string]> = [
   ['trim', 'samples'],
   ['trimSilence', 'samples'],
   ['voiceChange', 'samples'],
-  ['voiceChangeRealtime', 'samples'],
   ['vqt', 'samples'],
   ['waveformPeakPyramid', 'samples'],
   ['waveformPeaks', 'samples'],
   ['zeroCrossingRate', 'samples'],
   ['zeroCrossings', 'samples'],
+  ['autoTune', 'samples'],
+  ['decomposeStems', 'samples'],
+  ['extractNotes', 'samples'],
+  ['extractPercussiveEvents', 'samples'],
+  ['mergeNotes', 'samples'],
+  ['renderNotes', 'samples'],
+  ['renderPercussiveEvents', 'samples'],
+  ['splitNote', 'samples'],
 ];
 
 /** [entry point, call that hands a number where a string belongs, argument name]. */
@@ -164,8 +159,8 @@ const STRING_ARGUMENT: Array<[string, () => unknown, string]> = [
   ['mixingScenePresetJson', () => sonare.mixingScenePresetJson(5 as never), 'presetName'],
   ['synthPresetPatch', () => sonare.synthPresetPatch(5 as never), 'name'],
   [
-    'validateRealtimeVoiceChangerPresetJson',
-    () => sonare.validateRealtimeVoiceChangerPresetJson(5 as never),
+    'realtimeVoiceChangerValidatePresetJson',
+    () => sonare.realtimeVoiceChangerValidatePresetJson(5 as never),
     'json',
   ],
   [
@@ -175,23 +170,33 @@ const STRING_ARGUMENT: Array<[string, () => unknown, string]> = [
   ],
 ];
 
+/** Sample-taking entry points that also accept a plain number array as the audio. */
+const ARRAY_SAMPLES = new Set(['extractPercussiveEvents', 'renderPercussiveEvents']);
+
 /** Entry points that take a request object, alone or beside a positional form. */
 const REQUEST_ONLY: string[] = [
+  'decompose',
+  'nnFilter',
+  'voiceChangeRealtime',
+  'masteringRepairDeclickStereo',
+  'masteringRepairDeclipStereo',
+  'masteringRepairDecrackleStereo',
+  'masteringRepairDehumStereo',
+  'masteringRepairDenoiseClassicalStereo',
+  'masteringRepairDereverbClassicalStereo',
+  'masteringRepairDetectTrimRangeStereo',
+  'masteringRepairTrimSilenceStereo',
   'alignTakeToReference',
   'amplitudeToDb',
   'assignNoteTargets',
-  'autoTune',
   'chirp',
   'chordFunctions',
   'clicks',
   'cqtToAudio',
   'cyclicTempogram',
   'decomposeNotePitch',
-  'decomposeStems',
   'decomposeStemsLinked',
   'estimateMeter',
-  'extractNotes',
-  'extractPercussiveEvents',
   'fixFrames',
   'fixLength',
   'fourierTempogram',
@@ -210,7 +215,6 @@ const REQUEST_ONLY: string[] = [
   'masteringRepairDereverbClassicalLinked',
   'masteringStereoAnalyze',
   'melDelta',
-  'mergeNotes',
   'meteringCrestFactorDbStereo',
   'mixStereo',
   'normalizeStereo',
@@ -223,8 +227,6 @@ const REQUEST_ONLY: string[] = [
   'pitchTuning',
   'plp',
   'powerToDb',
-  'renderNotes',
-  'renderPercussiveEvents',
   'renderPlayback',
   'resample',
   'restoreVocalEditSession',
@@ -235,7 +237,6 @@ const REQUEST_ONLY: string[] = [
   'segmentRecurrenceMatrix',
   'segmentRecurrenceToLag',
   'segmentSubsegment',
-  'splitNote',
   'splitSilenceCommon',
   'splitSilenceCommonWithReport',
   'streamingLoudnessGain',
@@ -287,9 +288,14 @@ describe('wrong-typed first argument of a buffer-or-request entry point', () => 
       ['a number', 5],
       ['an array', [1, 2, 3]],
       ['a Float64Array', new Float64Array(8)],
-    ])('refuses %s as a TypeError naming %s', (_label, value) => {
+    ])('refuses %s as a TypeError naming %s', (label, value) => {
       expect(() => fn(name)(value)).toThrow(TypeError);
-      expect(() => fn(name)(value)).toThrow(`${name}: ${argName} must be a Float32Array`);
+      // A number array is a legal sample buffer there, so the missing rate is what is refused.
+      const expected =
+        label === 'an array' && ARRAY_SAMPLES.has(name)
+          ? `${name}: sampleRate must be a number`
+          : `${name}: ${argName} must be a Float32Array`;
+      expect(() => fn(name)(value)).toThrow(expected);
     });
   });
 });

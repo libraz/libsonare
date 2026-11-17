@@ -5,15 +5,10 @@ import type {
   EngineTrackMonitorMode,
   RealtimeEngine,
 } from '../index.js';
-import { resolveRenderFrame } from '../validation.js';
+import { requestObject, resolveRenderFrame } from '../validation.js';
 import { commitCommand, commitSync, type EngineCommitContext } from './engine-commit.js';
 import type { SonareEngineSyncMessage } from './messages.js';
-import {
-  ENGINE_MIXER_PARAM_FADER_DB,
-  ENGINE_MIXER_PARAM_PAN,
-  engineMixerMasterTarget,
-  SonareEngineCommandType,
-} from './protocol.js';
+import { SonareEngineCommandType } from './protocol.js';
 
 /**
  * Collaborator surface the parameter / automation-id resolution helpers need
@@ -36,31 +31,32 @@ export function setParam(
   nodeId: string,
   param: string | number,
   value: number,
-): boolean {
+): void {
   const paramId = ctx.resolveParamId(nodeId, param);
-  return commitCommand(
+  commitCommand(
     ctx,
-    { type: SonareEngineCommandType.SetParam, targetId: paramId, sampleTime: -1, argFloat: value },
+    { type: SonareEngineCommandType.SetParam, targetId: paramId, renderFrame: -1, argFloat: value },
     (offline) => offline.setParameter(paramId, value),
   );
 }
 
-export function setSoloMute(
+export function setTrackSoloMute(
   ctx: EngineParameterContext,
   target: string | number,
-  solo: boolean,
-  mute: boolean,
-): boolean {
+  state: { solo: boolean; mute: boolean },
+): void {
+  requestObject('setTrackSoloMute', state, 'state', true);
   const laneIndex = ctx.ensureTrackLane(target);
-  return commitCommand(
+  const { solo, mute } = state;
+  commitCommand(
     ctx,
     {
       type: SonareEngineCommandType.SetSoloMute,
       targetId: laneIndex,
-      sampleTime: -1,
+      renderFrame: -1,
       argInt: (mute ? 0x1 : 0) | (solo ? 0x2 : 0),
     },
-    (offline) => offline.setSoloMute(laneIndex, solo, mute),
+    (offline) => offline.setTrackSoloMute(ctx.trackLaneIds[laneIndex], state),
   );
 }
 
@@ -69,105 +65,93 @@ export function setTrackMonitorMode(
   target: string | number,
   mode: EngineTrackMonitorMode,
   renderFrame?: number,
-): boolean {
+): void {
   // Resolve the mode before declaring a lane or touching either engine. This
-  // keeps booleans, fractions, and unknown spellings from reaching the queue.
+  // keeps numbers, booleans and unknown spellings from reaching the queue.
+  if (typeof mode === 'number') {
+    throw new TypeError("setTrackMonitorMode: mode must be 'off', 'pfl' or 'afl', not a number");
+  }
   const modeOrdinal = trackMonitorModeCode(mode);
   const laneIndex = ctx.ensureTrackLane(target);
-  return commitCommand(
+  commitCommand(
     ctx,
     {
       type: SonareEngineCommandType.SetTrackMonitorMode,
       targetId: laneIndex,
-      sampleTime: resolveRenderFrame('setTrackMonitorMode', renderFrame),
+      renderFrame: resolveRenderFrame('setTrackMonitorMode', renderFrame),
       argInt: modeOrdinal,
     },
-    (offline) =>
-      offline.setTrackMonitorMode(laneIndex, modeOrdinal as EngineTrackMonitorMode, renderFrame),
+    (offline) => offline.setTrackMonitorMode(ctx.trackLaneIds[laneIndex], mode, renderFrame),
   );
 }
 
 /**
- * Returns the automation target id for a mixer strip parameter.
- *
- * The id addresses the engine's reserved mixer namespace, so it can be fed
- * straight to setAutomationLane to automate a fader or pan without
- * registering a parameter. A track's id is resolved on the offline engine,
- * which numbers it as the worklet engine does, and keeps naming that track
- * across lane reorders (see `resolveTrackLaneAutomationId`).
+ * Resolves a strip's fader (`'faderDb'`), pan (`'pan'`) or width (`'width'`) to
+ * its reserved automation id, which can be fed straight to setAutomationLane.
+ * A track's id is resolved on the offline engine, which numbers it as the
+ * worklet engine does, and keeps naming that track across lane reorders.
  *
  * @param target Track id (declares a mixer lane on first use) or 'master'.
- * @param kind Strip parameter to address.
+ * @param kind Strip parameter to address; a track has no `'width'`.
  * @returns Reserved engine parameter id for the strip parameter.
  */
-export function automationParamId(
+export function resolveStripAutomationId(
   ctx: EngineParameterContext,
   target: string | number,
-  kind: 'faderDb' | 'pan',
+  kind: 'faderDb' | 'pan' | 'width',
 ): number {
   if (target === 'master') {
-    return engineMixerMasterTarget(
-      kind === 'pan' ? ENGINE_MIXER_PARAM_PAN : ENGINE_MIXER_PARAM_FADER_DB,
-    );
+    return ctx.offlineEngine.resolveStripAutomationId('master', kind);
   }
   const laneIndex = ctx.ensureTrackLane(target);
-  return ctx.offlineEngine.resolveTrackLaneAutomationId(ctx.trackLaneIds[laneIndex], kind);
+  return ctx.offlineEngine.resolveStripAutomationId(ctx.trackLaneIds[laneIndex], kind);
 }
 
 /**
- * Returns the automation target id for a bus fader. The id is resolved on the
+ * Resolves a bus fader to its reserved automation id. The id is resolved on the
  * offline engine, which numbers it as the worklet engine does, and keeps naming
- * that bus across bus reorders (see `resolveBusAutomationId`).
+ * that bus across bus reorders.
  *
  * @param busId Bus id (declares the mixer bus on first use).
+ * @param paramName Bus parameter; only `'faderDb'`.
  * @returns Reserved engine parameter id for the bus fader gain (dB).
  */
-export function busAutomationParamId(ctx: EngineParameterContext, busId: number): number {
+export function resolveBusAutomationId(
+  ctx: EngineParameterContext,
+  busId: number,
+  paramName: 'faderDb',
+): number {
   ctx.ensureBus(busId);
-  return ctx.offlineEngine.resolveBusAutomationId(busId, 'faderDb');
+  return ctx.offlineEngine.resolveBusAutomationId(busId, paramName);
 }
 
 /**
- * Resolves a track-lane insert parameter (JSON-key name) to the reserved
- * insert-automation id fed straight to setAutomationLane. Declares the track's
- * mixer lane first (like automationParamId) so the offline engine resolves the
- * same strip selector the realtime engine uses.
+ * Resolves a strip insert parameter (JSON-key name) to the reserved
+ * insert-automation id fed straight to setAutomationLane. A track is declared
+ * first so the offline engine resolves the same strip selector the realtime
+ * engine uses.
  *
- * @param target Track id (declares a mixer lane on first use).
+ * @param target Track id (declares a mixer lane on first use) or 'master'.
  * @param insertIndex Index into the strip's combined insert sequence.
  * @param paramName Processor JSON-key parameter name.
  * @returns Reserved insert-automation id.
  * @throws RangeError when the strip, insert or key is unknown.
  */
-export function resolveTrackInsertAutomationId(
+export function resolveStripInsertAutomationId(
   ctx: EngineParameterContext,
   target: string | number,
   insertIndex: number,
   paramName: string,
 ): number {
+  if (target === 'master') {
+    return ctx.offlineEngine.resolveStripInsertAutomationId('master', insertIndex, paramName);
+  }
   const laneIndex = ctx.ensureTrackLane(target);
-  return ctx.offlineEngine.resolveTrackInsertAutomationId(
+  return ctx.offlineEngine.resolveStripInsertAutomationId(
     ctx.trackLaneIds[laneIndex],
     insertIndex,
     paramName,
   );
-}
-
-/**
- * Resolves a master-strip insert parameter to its reserved insert-automation
- * id.
- *
- * @param insertIndex Index into the master strip's insert sequence.
- * @param paramName Processor JSON-key parameter name.
- * @returns Reserved insert-automation id.
- * @throws RangeError when the insert or key is unknown.
- */
-export function resolveMasterInsertAutomationId(
-  ctx: EngineParameterContext,
-  insertIndex: number,
-  paramName: string,
-): number {
-  return ctx.offlineEngine.resolveMasterInsertAutomationId(insertIndex, paramName);
 }
 
 /**
@@ -221,15 +205,11 @@ export function resolveInstrumentAutomationId(
  * @returns Engine-side automation lane count.
  */
 export function automationLaneCount(ctx: EngineParameterContext): number {
-  return ctx.offlineEngine.automationLaneCount();
+  return ctx.offlineEngine.automationLaneCount;
 }
 
-export function listParameters(ctx: EngineParameterContext): EngineParameterInfo[] {
-  const parameters: EngineParameterInfo[] = [];
-  for (let index = 0; index < ctx.offlineEngine.parameterCount(); index++) {
-    parameters.push(ctx.offlineEngine.parameterInfoByIndex(index));
-  }
-  return parameters;
+export function parameters(ctx: EngineParameterContext): EngineParameterInfo[] {
+  return ctx.offlineEngine.parameters();
 }
 
 /** Registers a parameter on both the offline mirror and live worklet engine. */
@@ -237,7 +217,7 @@ export function addParameter(ctx: EngineParameterContext, info: EngineParameterI
   commitSync(
     ctx,
     (offline) => offline.addParameter(info),
-    () => ctx.postSync({ type: 'syncParameters', parameters: listParameters(ctx) }),
+    () => ctx.postSync({ type: 'syncParameters', parameters: parameters(ctx) }),
   );
 }
 

@@ -33,7 +33,6 @@ import {
   splitSilence,
   trimSilence,
 } from '../dist/index.js';
-import { SonareEngineTelemetryError } from '../dist/worklet.js';
 import { expectRefusalOf } from './_helpers';
 
 beforeAll(async () => {
@@ -52,25 +51,67 @@ function expectTypeRefusal(action: () => void): void {
 
 describe('RealtimeEngine prepare/time-signature/loop guards', () => {
   it('rejects invalid sample rates or block sizes in the constructor', () => {
-    expect(() => new RealtimeEngine(0, 128)).toThrow();
-    expect(() => new RealtimeEngine(Number.NaN, 128)).toThrow();
-    expect(() => new RealtimeEngine(7999, 128)).toThrow();
-    expect(() => new RealtimeEngine(384001, 128)).toThrow();
-    expect(() => new RealtimeEngine(48000, 0)).toThrow();
-    expect(() => new RealtimeEngine(48000, 128, 1024, 1024, 0)).toThrow();
-    expect(() => new RealtimeEngine(48000, 128, 1024, 1024, 65)).toThrow();
+    expect(() => new RealtimeEngine({ sampleRate: 0, maxBlockSize: 128 })).toThrow();
+    expect(() => new RealtimeEngine({ sampleRate: Number.NaN, maxBlockSize: 128 })).toThrow();
+    expect(() => new RealtimeEngine({ sampleRate: 7999, maxBlockSize: 128 })).toThrow();
+    expect(() => new RealtimeEngine({ sampleRate: 384001, maxBlockSize: 128 })).toThrow();
+    expect(() => new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 0 })).toThrow();
+    expect(
+      () =>
+        new RealtimeEngine({
+          sampleRate: 48000,
+          maxBlockSize: 128,
+          commandCapacity: 1024,
+          telemetryCapacity: 1024,
+          maxNumChannels: 0,
+        }),
+    ).toThrow();
+    expect(
+      () =>
+        new RealtimeEngine({
+          sampleRate: 48000,
+          maxBlockSize: 128,
+          commandCapacity: 1024,
+          telemetryCapacity: 1024,
+          maxNumChannels: 65,
+        }),
+    ).toThrow();
   });
 
   it('rejects invalid sample rates or block sizes in prepare()', () => {
-    const engine = new RealtimeEngine(48000, 128);
-    expect(() => engine.prepare(0, 0)).toThrow();
-    expect(() => engine.prepare(Number.NaN, 128)).toThrow();
-    expect(() => engine.prepare(7999, 128)).toThrow();
-    expect(() => engine.prepare(384001, 128)).toThrow();
-    expect(() => engine.prepare(48000, 0)).toThrow();
-    expect(() => engine.prepare(48000, 128, 1024, 1024, 0)).toThrow();
-    expect(() => engine.prepare(48000, 128, 1024, 1024, 65)).toThrow();
-    expect(() => engine.prepare(48000, 128, 1024, 1024, 2)).not.toThrow();
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    expect(() => engine.prepare({ sampleRate: 0, maxBlockSize: 0 })).toThrow();
+    expect(() => engine.prepare({ sampleRate: Number.NaN, maxBlockSize: 128 })).toThrow();
+    expect(() => engine.prepare({ sampleRate: 7999, maxBlockSize: 128 })).toThrow();
+    expect(() => engine.prepare({ sampleRate: 384001, maxBlockSize: 128 })).toThrow();
+    expect(() => engine.prepare({ sampleRate: 48000, maxBlockSize: 0 })).toThrow();
+    expect(() =>
+      engine.prepare({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+        commandCapacity: 1024,
+        telemetryCapacity: 1024,
+        maxNumChannels: 0,
+      }),
+    ).toThrow();
+    expect(() =>
+      engine.prepare({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+        commandCapacity: 1024,
+        telemetryCapacity: 1024,
+        maxNumChannels: 65,
+      }),
+    ).toThrow();
+    expect(() =>
+      engine.prepare({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+        commandCapacity: 1024,
+        telemetryCapacity: 1024,
+        maxNumChannels: 2,
+      }),
+    ).not.toThrow();
   });
 
   it('puts the channel ceiling exactly where the engine constant puts it', () => {
@@ -90,14 +131,51 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
     const maxChannels = Number(declared);
     expect(maxChannels).toBeGreaterThan(2);
 
-    const atLimit = new RealtimeEngine(48000, 128, 1024, 1024, maxChannels);
+    const atLimit = new RealtimeEngine({
+      sampleRate: 48000,
+      maxBlockSize: 128,
+      commandCapacity: 1024,
+      telemetryCapacity: 1024,
+      maxNumChannels: maxChannels,
+    });
     atLimit.destroy();
-    expect(() => new RealtimeEngine(48000, 128, 1024, 1024, maxChannels + 1)).toThrow();
+    expect(
+      () =>
+        new RealtimeEngine({
+          sampleRate: 48000,
+          maxBlockSize: 128,
+          commandCapacity: 1024,
+          telemetryCapacity: 1024,
+          maxNumChannels: maxChannels + 1,
+        }),
+    ).toThrow();
 
-    const engine = new RealtimeEngine(48000, 128, 1024, 1024, 2);
+    const engine = new RealtimeEngine({
+      sampleRate: 48000,
+      maxBlockSize: 128,
+      commandCapacity: 1024,
+      telemetryCapacity: 1024,
+      maxNumChannels: 2,
+    });
     try {
-      expect(() => engine.prepare(48000, 128, 1024, 1024, maxChannels)).not.toThrow();
-      expect(() => engine.prepare(48000, 128, 1024, 1024, maxChannels + 1)).toThrow();
+      expect(() =>
+        engine.prepare({
+          sampleRate: 48000,
+          maxBlockSize: 128,
+          commandCapacity: 1024,
+          telemetryCapacity: 1024,
+          maxNumChannels: maxChannels,
+        }),
+      ).not.toThrow();
+      expect(() =>
+        engine.prepare({
+          sampleRate: 48000,
+          maxBlockSize: 128,
+          commandCapacity: 1024,
+          telemetryCapacity: 1024,
+          maxNumChannels: maxChannels + 1,
+        }),
+      ).toThrow();
       // The prepared scratch rows share the same ceiling and the same constant.
       expect(() => engine.prepareChannels(maxChannels, 128)).not.toThrow();
       expect(() => engine.prepareChannels(maxChannels + 1, 128)).toThrow();
@@ -109,9 +187,15 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
   });
 
   it('forwards prepare() maxChannels and reports an over-limit process block', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
-      engine.prepare(48000, 128, 1024, 1024, 2);
+      engine.prepare({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+        commandCapacity: 1024,
+        telemetryCapacity: 1024,
+        maxNumChannels: 2,
+      });
       expect(() =>
         engine.process([new Float32Array(128), new Float32Array(128), new Float32Array(128)]),
       ).not.toThrow();
@@ -119,7 +203,7 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
       expect(engine.drainTelemetry()).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            error: SonareEngineTelemetryError.MaxChannelsExceeded,
+            error: 'maxChannelsExceeded',
             value: 3,
           }),
         ]),
@@ -130,7 +214,7 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
   });
 
   it('rejects a non-positive time signature', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     expect(() => engine.setTimeSignature(0, 4)).toThrow();
     expect(() => engine.setTimeSignature(4, 0)).toThrow();
     // A valid signature does not throw.
@@ -138,7 +222,7 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
   });
 
   it('rejects tempos above the realtime-safe public range', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     expect(() => engine.setTempo(100000)).not.toThrow();
     expect(() => engine.setTempo(100000.1)).toThrow();
     expect(() => engine.setTempoSegments([{ startPpq: 0, bpm: 100000.1 }])).toThrow();
@@ -146,20 +230,23 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
   });
 
   it('rejects an invalid loop range', () => {
-    const engine = new RealtimeEngine(48000, 128);
-    expect(() => engine.setLoop(-1, 4, true)).toThrow();
-    expect(() => engine.setLoop(4, 4, true)).toThrow(); // empty
-    expect(() => engine.setLoop(8, 4, true)).toThrow(); // inverted
-    expect(() => engine.setLoop(0, 4, true)).not.toThrow();
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    expect(() => engine.setLoop({ startPpq: -1, endPpq: 4, enabled: true })).toThrow();
+    expect(() => engine.setLoop({ startPpq: 4, endPpq: 4, enabled: true })).toThrow(); // empty
+    expect(() => engine.setLoop({ startPpq: 8, endPpq: 4, enabled: true })).toThrow(); // inverted
+    expect(() => engine.setLoop({ startPpq: 0, endPpq: 4, enabled: true })).not.toThrow();
   });
 });
 
 describe('RealtimeEngine track monitor mode guard', () => {
   it('rejects non-canonical mode values before embind', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    // A declared track keeps the refusals below about the mode, not an unknown track.
+    engine.setTrackLanes([{ trackId: 10 }]);
     for (const mode of [true, false]) {
-      expect(() => engine.setTrackMonitorMode(0, mode as never)).toThrow(TypeError);
+      expect(() => engine.setTrackMonitorMode(10, mode as never)).toThrow(TypeError);
     }
+    // A number never selects a mode, whatever its value.
     for (const mode of [
       0.5,
       Number.NaN,
@@ -167,18 +254,23 @@ describe('RealtimeEngine track monitor mode guard', () => {
       Number.NEGATIVE_INFINITY,
       -1,
       3,
-      'PFL',
-      'post-fader',
     ]) {
-      expect(() => engine.setTrackMonitorMode(0, mode as never)).toThrow(RangeError);
+      expect(() => engine.setTrackMonitorMode(10, mode as never)).toThrow(TypeError);
+    }
+    for (const mode of ['PFL', 'post-fader']) {
+      expect(() => engine.setTrackMonitorMode(10, mode as never)).toThrow(RangeError);
     }
     engine.destroy();
   });
 
-  it('accepts only the documented strings and ordinals', () => {
-    const engine = new RealtimeEngine(48000, 128);
-    for (const mode of ['off', 'pfl', 'afl', 0, 1, 2] as const) {
-      expect(() => engine.setTrackMonitorMode(0, mode)).not.toThrow();
+  it('accepts only the documented strings', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    engine.setTrackLanes([{ trackId: 10 }]);
+    for (const mode of ['off', 'pfl', 'afl'] as const) {
+      expect(() => engine.setTrackMonitorMode(10, mode)).not.toThrow();
+    }
+    for (const mode of [0, 1, 2]) {
+      expect(() => engine.setTrackMonitorMode(10, mode as never)).toThrow(TypeError);
     }
     engine.destroy();
   });
@@ -292,40 +384,40 @@ describe('StreamAnalyzer rejects a window that is not a known name instead of si
   });
 });
 
-describe('RealtimeVoiceChanger.setPodConfig rejects a partial POD instead of zero-filling it', () => {
+describe('RealtimeVoiceChanger.setConfig rejects a partial POD instead of zero-filling it', () => {
   // Priority fix: a partial POD used to silently zero-fill missing fields —
   // a missing limiterEnableIspLimiter read as JS `false`, which can turn the
   // ISP limiter off and let the DAC clip. Every field is now required.
   function fullPod() {
-    return { ...realtimeVoiceChangerPresetConfig('neutral-monitor') };
+    return { ...realtimeVoiceChangerPresetConfig('neutralMonitor') };
   }
 
   it('rejects a POD missing limiterEnableIspLimiter instead of silently turning the ISP limiter off', () => {
-    const vc = new RealtimeVoiceChanger('neutral-monitor');
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, config: 'neutralMonitor' });
     const { limiterEnableIspLimiter: _omitted, ...partial } = fullPod();
-    expect(() => vc.setPodConfig(partial as never)).toThrow(/limiterEnableIspLimiter/);
+    expect(() => vc.setConfig(partial as never)).toThrow(/limiterEnableIspLimiter/);
   });
 
   it('rejects a POD missing any other required numeric field', () => {
-    const vc = new RealtimeVoiceChanger('neutral-monitor');
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, config: 'neutralMonitor' });
     const { wetMix: _omitted, ...partial } = fullPod();
-    expect(() => vc.setPodConfig(partial as never)).toThrow(/wetMix/);
+    expect(() => vc.setConfig(partial as never)).toThrow(/wetMix/);
   });
 
   it('rejects a POD with a wrong-typed field instead of coercing it', () => {
-    const vc = new RealtimeVoiceChanger('neutral-monitor');
-    expect(() => vc.setPodConfig({ ...fullPod(), wetMix: 'loud' as unknown as number })).toThrow(
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, config: 'neutralMonitor' });
+    expect(() => vc.setConfig({ ...fullPod(), wetMix: 'loud' as unknown as number })).toThrow(
       /wetMix/,
     );
   });
 
   it('accepts a fully specified POD', () => {
-    const vc = new RealtimeVoiceChanger('neutral-monitor');
-    expect(() => vc.setPodConfig(fullPod())).not.toThrow();
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, config: 'neutralMonitor' });
+    expect(() => vc.setConfig(fullPod())).not.toThrow();
   });
 
   it('reports a refused preset-or-config document as InvalidFormat on setConfig', () => {
-    const vc = new RealtimeVoiceChanger('neutral-monitor');
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, config: 'neutralMonitor' });
     let caught: unknown;
     try {
       vc.setConfig({ schemaVersion: 1, dsp: { retune: { semitones: 3 } } } as never);
@@ -338,8 +430,7 @@ describe('RealtimeVoiceChanger.setPodConfig rejects a partial POD instead of zer
 
 describe('RealtimeVoiceChanger legacy block-size guard', () => {
   it('rejects a block larger than the prepared max block size', () => {
-    const vc = new RealtimeVoiceChanger('neutral-monitor');
-    vc.prepare(48000, 128, 1);
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, maxBlockSize: 128 });
     // Within the prepared max: fine.
     expect(() => vc.processMono(new Float32Array(128))).not.toThrow();
     // Larger than the prepared max: must throw, not emit stale/garbage scratch.
@@ -356,7 +447,7 @@ describe('RealtimeEngine clip/parameter/metronome guards mirror the C ABI', () =
   });
 
   it('rejects a non-finite or negative clip gain', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     expect(() => engine.setClips([{ ...validClip(), gain: Number.NaN }])).toThrow();
     expect(() => engine.setClips([{ ...validClip(), gain: -1 }])).toThrow();
     // A valid non-negative gain is accepted.
@@ -364,25 +455,25 @@ describe('RealtimeEngine clip/parameter/metronome guards mirror the C ABI', () =
   });
 
   it('rejects negative clip fade lengths', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     expect(() => engine.setClips([{ ...validClip(), fadeInSamples: -1 }])).toThrow();
     expect(() => engine.setClips([{ ...validClip(), fadeOutSamples: -1 }])).toThrow();
   });
 
   it('treats zero clip length as the auto-derived source length', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     expect(() => engine.setClips([{ ...validClip(), lengthSamples: 0 }])).not.toThrow();
   });
 
   it('rejects a non-finite setParameter / setParameterSmoothed value', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     expect(() => engine.setParameter(7, Number.NaN, 0)).toThrow();
     expect(() => engine.setParameter(7, Number.POSITIVE_INFINITY, 0)).toThrow();
     expect(() => engine.setParameterSmoothed(7, Number.NaN, 0)).toThrow();
   });
 
   it('rejects an inverted addParameter range', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     expect(() =>
       engine.addParameter({
         id: 7,
@@ -392,28 +483,25 @@ describe('RealtimeEngine clip/parameter/metronome guards mirror the C ABI', () =
         maxValue: 0,
         defaultValue: 0,
         rtSafe: true,
+        // @ts-expect-error a numeric curve is refused; curves are named tokens
         defaultCurve: 1,
       }),
     ).toThrow();
   });
 
   it('rejects invalid metronome gains or click length', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     expect(() => engine.setMetronome({ enabled: true, beatGain: -1 })).toThrow();
     expect(() => engine.setMetronome({ enabled: true, clickSamples: -1 })).toThrow();
     expect(() => engine.setMetronome({ enabled: true, clickSamples: 2_000_000_000 })).toThrow();
-    expect(() =>
-      engine.setMetronome({ enabled: true, clickSamples: 0, clickSeconds: 2 }),
-    ).toThrow();
-    expect(() =>
-      engine.setMetronome({ enabled: true, clickSamples: 0, clickSeconds: Number.NaN }),
-    ).toThrow();
+    expect(() => engine.setMetronome({ enabled: true, clickSec: 2 })).toThrow();
+    expect(() => engine.setMetronome({ enabled: true, clickSec: Number.NaN })).toThrow();
     expect(() => engine.setMetronome({ enabled: true, beatGain: 0.3 })).not.toThrow();
   });
 
   it('rejects a non-finite MIDI clip startPpq', () => {
-    const engine = new RealtimeEngine(48000, 128);
-    engine.setBuiltinInstrument({ gain: 0.5 }, 5);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    engine.setBuiltinInstrument(5, { gain: 0.5 });
     expect(() =>
       engine.setMidiClips([
         {
@@ -429,8 +517,8 @@ describe('RealtimeEngine clip/parameter/metronome guards mirror the C ABI', () =
   });
 
   it('rejects null array-like realtime inputs with a binding error', () => {
-    const engine = new RealtimeEngine(48000, 128);
-    engine.setBuiltinInstrument({ gain: 0.5 }, 5);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    engine.setBuiltinInstrument(5, { gain: 0.5 });
 
     // These C++ entry points used to read `.length` before checking for null,
     // letting an unwrapped JavaScript TypeError escape the binding boundary.
@@ -441,13 +529,17 @@ describe('RealtimeEngine clip/parameter/metronome guards mirror the C ABI', () =
   });
 
   it('rejects a non-positive renderOffline block size', () => {
-    const engine = new RealtimeEngine(48000, 128);
-    expect(() => engine.renderOffline([new Float32Array(128)], 0)).toThrow();
-    expect(() => engine.renderOffline([new Float32Array(128)], -1)).toThrow();
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    expect(() =>
+      engine.renderOffline({ channels: [new Float32Array(128)], blockSize: 0 }),
+    ).toThrow();
+    expect(() =>
+      engine.renderOffline({ channels: [new Float32Array(128)], blockSize: -1 }),
+    ).toThrow();
   });
 });
 
-describe('RealtimeEngine.bindMidiCcBinding defaults omitted descriptor fields', () => {
+describe('RealtimeEngine.bindMidiCc defaults omitted descriptor fields', () => {
   // `ccNumber` and `paramId` are the only required fields; the rest fall back
   // to the CcBinding defaults (channel = any, kind = 7-bit CC, range 0..1),
   // matching the Node addon reader and the Project-side descriptor reader.
@@ -457,91 +549,89 @@ describe('RealtimeEngine.bindMidiCcBinding defaults omitted descriptor fields', 
   //
   // The public descriptor type marks the defaulted fields as required, so the
   // partial literals below are cast; what is under test is the runtime reader.
-  type CcBindingDescriptor = Parameters<RealtimeEngine['bindMidiCcBinding']>[0];
+  type CcBindingDescriptor = Parameters<RealtimeEngine['bindMidiCc']>[0];
 
   it('accepts a descriptor carrying only ccNumber and paramId', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     expect(() =>
-      engine.bindMidiCcBinding({ ccNumber: 7, paramId: 1 } as CcBindingDescriptor),
+      engine.bindMidiCc({ ccNumber: 7, paramId: 1 } as CcBindingDescriptor),
     ).not.toThrow();
-    expect(engine.midiCcBindingCount()).toBe(1);
+    expect(engine.midiCcBindingCount).toBe(1);
   });
 
   it('defaults an omitted kind to 7-bit Control Change', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     // A kind of 1 (14-bit CC) additionally requires ccLsbNumber === ccNumber + 32,
     // so the descriptor below is accepted only while the default kind is 0.
     expect(() =>
-      engine.bindMidiCcBinding({ ccNumber: 7, paramId: 1 } as CcBindingDescriptor),
+      engine.bindMidiCc({ ccNumber: 7, paramId: 1 } as CcBindingDescriptor),
     ).not.toThrow();
     // The explicit spelling of the same default behaves identically. A distinct
     // ccNumber is used because binding an existing (ccNumber, channel) replaces
     // it rather than appending.
     expect(() =>
-      engine.bindMidiCcBinding({ ccNumber: 8, kind: 0, paramId: 2 } as CcBindingDescriptor),
+      engine.bindMidiCc({ ccNumber: 8, kind: 0, paramId: 2 } as CcBindingDescriptor),
     ).not.toThrow();
-    expect(engine.midiCcBindingCount()).toBe(2);
+    expect(engine.midiCcBindingCount).toBe(2);
   });
 
   it('defaults an omitted minValue to 0 and an omitted maxValue to 1', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     // maxValue defaults to exactly 1: a minValue of 1 is still a valid
     // (degenerate) range, a minValue of 2 inverts it.
     expect(() =>
-      engine.bindMidiCcBinding({ ccNumber: 7, paramId: 1, minValue: 1 } as CcBindingDescriptor),
+      engine.bindMidiCc({ ccNumber: 7, paramId: 1, minValue: 1 } as CcBindingDescriptor),
     ).not.toThrow();
     expectRangeRefusal(() =>
-      engine.bindMidiCcBinding({ ccNumber: 7, paramId: 1, minValue: 2 } as CcBindingDescriptor),
+      engine.bindMidiCc({ ccNumber: 7, paramId: 1, minValue: 2 } as CcBindingDescriptor),
     );
     // minValue defaults to exactly 0, bracketed the same way.
     expect(() =>
-      engine.bindMidiCcBinding({ ccNumber: 7, paramId: 1, maxValue: 0 } as CcBindingDescriptor),
+      engine.bindMidiCc({ ccNumber: 7, paramId: 1, maxValue: 0 } as CcBindingDescriptor),
     ).not.toThrow();
     expectRangeRefusal(() =>
-      engine.bindMidiCcBinding({ ccNumber: 7, paramId: 1, maxValue: -1 } as CcBindingDescriptor),
+      engine.bindMidiCc({ ccNumber: 7, paramId: 1, maxValue: -1 } as CcBindingDescriptor),
     );
   });
 
   it('still rejects a supplied non-finite range instead of defaulting it', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     expectRangeRefusal(() =>
-      engine.bindMidiCcBinding({
+      engine.bindMidiCc({
         ccNumber: 7,
         paramId: 1,
         minValue: Number.NaN,
       } as CcBindingDescriptor),
     );
     expectRangeRefusal(() =>
-      engine.bindMidiCcBinding({
+      engine.bindMidiCc({
         ccNumber: 7,
         paramId: 1,
         maxValue: Number.POSITIVE_INFINITY,
       } as CcBindingDescriptor),
     );
     expectRangeRefusal(() =>
-      engine.bindMidiCcBinding({
+      engine.bindMidiCc({
         ccNumber: 7,
         paramId: 1,
         minValue: Number.NEGATIVE_INFINITY,
         maxValue: 1,
       } as CcBindingDescriptor),
     );
-    expect(engine.midiCcBindingCount()).toBe(0);
+    expect(engine.midiCcBindingCount).toBe(0);
   });
 
   it('still requires paramId and range-checks a supplied kind', () => {
-    const engine = new RealtimeEngine(48000, 128);
-    expectTypeRefusal(() =>
-      engine.bindMidiCcBinding({ ccNumber: 7 } as unknown as CcBindingDescriptor),
-    );
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    expectTypeRefusal(() => engine.bindMidiCc({ ccNumber: 7 } as unknown as CcBindingDescriptor));
     expectRangeRefusal(() =>
-      engine.bindMidiCcBinding({
+      engine.bindMidiCc({
         ccNumber: 7,
         kind: 9,
         paramId: 1,
       } as unknown as CcBindingDescriptor),
     );
-    expect(engine.midiCcBindingCount()).toBe(0);
+    expect(engine.midiCcBindingCount).toBe(0);
   });
 });
 
@@ -555,7 +645,7 @@ describe('RealtimeEngine.bindMidiCcBinding defaults omitted descriptor fields', 
 describe('StreamingRetune refuses non-finite input and clamps finite ranges', () => {
   it('requires prepare and rejects blocks above the prepared maximum', async () => {
     const { StreamingRetune } = await import('../dist/index.js');
-    const retune = new StreamingRetune({ semitones: 2 });
+    const retune = new StreamingRetune({ pitchSemitones: 2 });
     try {
       expect(() => retune.processMono(new Float32Array(64))).toThrow(/prepared/);
       retune.prepare(48000, 64);
@@ -568,7 +658,7 @@ describe('StreamingRetune refuses non-finite input and clamps finite ranges', ()
 
   it('rejects a non-finite input sample and leaves the caller buffer untouched', async () => {
     const { StreamingRetune } = await import('../dist/index.js');
-    const retune = new StreamingRetune({ semitones: 2 });
+    const retune = new StreamingRetune({ pitchSemitones: 2 });
     try {
       retune.prepare(48000, 256);
       const bad = new Float32Array(256).fill(0.1);
@@ -595,15 +685,15 @@ describe('StreamingRetune refuses non-finite input and clamps finite ranges', ()
   it('rejects a non-finite control and keeps the value it already had', async () => {
     const { StreamingRetune } = await import('../dist/index.js');
     // Construction refuses each of the three controls on its own.
-    expectRangeRefusal(() => new StreamingRetune({ semitones: Number.NaN }));
+    expectRangeRefusal(() => new StreamingRetune({ pitchSemitones: Number.NaN }));
     expectRangeRefusal(() => new StreamingRetune({ mix: Number.POSITIVE_INFINITY }));
-    expectRangeRefusal(() => new StreamingRetune({ grainSize: Number.NaN }));
+    expectRangeRefusal(() => new StreamingRetune({ grainSizeSamples: Number.NaN }));
 
-    const retune = new StreamingRetune({ semitones: 5, mix: 0.25, grainSize: 512 });
+    const retune = new StreamingRetune({ pitchSemitones: 5, mix: 0.25, grainSizeSamples: 512 });
     try {
       retune.prepare(48000, 128);
       const before = retune.config();
-      expectRangeRefusal(() => retune.setConfig({ semitones: Number.NaN }));
+      expectRangeRefusal(() => retune.setConfig({ pitchSemitones: Number.NaN }));
       expectRangeRefusal(() => retune.setConfig({ mix: Number.NEGATIVE_INFINITY }));
       // A rejected update leaves the whole config as it was: the refusal is not
       // a partial write that applied the keys it read before the bad one.
@@ -615,13 +705,17 @@ describe('StreamingRetune refuses non-finite input and clamps finite ranges', ()
 
   it('still clamps a finite out-of-range control', async () => {
     const { StreamingRetune } = await import('../dist/index.js');
-    const retune = new StreamingRetune({ semitones: 500, mix: 4, grainSize: 1_000_000 });
+    const retune = new StreamingRetune({
+      pitchSemitones: 500,
+      mix: 4,
+      grainSizeSamples: 1_000_000,
+    });
     try {
       retune.prepare(48000, 128);
       const config = retune.config();
-      expect(config.semitones).toBe(24);
+      expect(config.pitchSemitones).toBe(24);
       expect(config.mix).toBe(1);
-      expect(retune.grainSize()).toBeLessThanOrEqual(8192);
+      expect(retune.grainSizeSamples).toBeLessThanOrEqual(8192);
       expect(
         Array.from(retune.processMono(new Float32Array(128).fill(0.1))).every(Number.isFinite),
       ).toBe(true);
@@ -673,20 +767,29 @@ describe('offline boundary validation is enforced by the native WASM layer', () 
 
   it('rejects invalid time-varying pitch tracks and configuration', () => {
     const samples = new Float32Array(2048).fill(0.1);
-    expect(() => pitchCorrectTimevarying(samples, new Float32Array(), 22050, 256)).toThrow();
-    expect(() => pitchCorrectTimevarying(samples, new Float32Array([440]), 22050, 0)).toThrow();
+    const f0Hz = new Float32Array([440]);
     expect(() =>
-      pitchCorrectTimevarying(samples, new Float32Array([440]), 22050, 256, {
+      pitchCorrectTimevarying(samples, 22050, { f0Hz: new Float32Array(), hopLength: 256 }),
+    ).toThrow();
+    expect(() => pitchCorrectTimevarying(samples, 22050, { f0Hz, hopLength: 0 })).toThrow();
+    expect(() =>
+      pitchCorrectTimevarying(samples, 22050, {
+        f0Hz,
+        hopLength: 256,
         maxCorrectionSemitones: -1,
       }),
     ).toThrow();
     expect(() =>
-      pitchCorrectTimevarying(samples, new Float32Array([440]), 22050, 256, {
+      pitchCorrectTimevarying(samples, 22050, {
+        f0Hz,
+        hopLength: 256,
         retuneSpeedMs: Number.NaN,
       }),
     ).toThrow();
     expect(() =>
-      pitchCorrectTimevarying(samples, new Float32Array([440]), 22050, 256, {
+      pitchCorrectTimevarying(samples, 22050, {
+        f0Hz,
+        hopLength: 256,
         scaleModeMask: 0,
       }),
     ).toThrow();
@@ -724,10 +827,9 @@ describe('offline boundary validation is enforced by the native WASM layer', () 
   });
 
   it('accepts a zero-strip processStereo call and returns an empty master', () => {
-    const mixer = Mixer.fromSceneJson(
+    const mixer = Mixer.fromJson(
       '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
-      48000,
-      128,
+      { sampleRate: 48000, blockSize: 128 },
     );
     const result = mixer.processStereo([], []);
     expect(result.left).toHaveLength(0);

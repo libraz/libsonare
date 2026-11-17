@@ -3,19 +3,19 @@
  * STFT and resynthesized.
  */
 
+import { windowOrdinal } from './internal/window_type.js';
 import { getSonareModule } from './module_state.js';
 import type { SpectralEditOptions, SpectralRegionOp } from './public_types.js';
-import type { ValidateOptions } from './validation.js';
-import { assertAudioInput, optionsBag, requestObject, resolveSampleBound } from './validation.js';
+import { assertAudioInput, resolveSampleBound, sampleOneShot } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
 }
 
-export interface SpectralEditRequest extends SpectralEditOptions, ValidateOptions {
+/** Spectral edit request: the audio and rate (Hz, required) plus {@link SpectralEditOptions}. */
+export interface SpectralEditRequest extends SpectralEditOptions {
   samples: Float32Array;
   sampleRate: number;
-  ops?: SpectralRegionOp[];
 }
 
 function resolveRegionTimes(
@@ -52,37 +52,33 @@ function resolveRegionTimes(
  * STFT buffer, so a later op observes the result of earlier ops. An op's time
  * bounds are samples (`startSample` / `endSample`) or seconds (`startSec` /
  * `endSec`), one spelling per bound; an omitted end is the end of the signal and
- * a negative bound is refused. The output has
- * the same length and sample rate as the input; an empty `ops` list is an
- * identity transform (within the iSTFT's own tolerance).
+ * a negative bound is refused. The output has the same length and sample rate as
+ * the input; an empty `ops` list returns a copy of the input.
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz
- * @param ops - Region edit ops applied in order ({@link SpectralRegionOp})
- * @param options - STFT + heal configuration ({@link SpectralEditOptions})
+ * @param options - `ops` (required, {@link SpectralRegionOp}) plus the STFT and heal configuration
  * @returns Edited audio
+ * @throws TypeError for a missing `sampleRate` or `ops`
  */
 export function spectralEdit(request: SpectralEditRequest): Float32Array;
 export function spectralEdit(
   samples: Float32Array,
   sampleRate: number,
-  ops?: SpectralRegionOp[],
-  options?: SpectralEditOptions & ValidateOptions,
+  options: SpectralEditOptions,
 ): Float32Array;
-export function spectralEdit(
-  samples: Float32Array | SpectralEditRequest,
-  sampleRate?: number,
-  ops: SpectralRegionOp[] = [],
-  options: SpectralEditOptions & ValidateOptions = {},
-): Float32Array {
-  const request: SpectralEditRequest =
-    samples instanceof Float32Array
-      ? { samples, sampleRate: sampleRate as number, ops, ...optionsBag('spectralEdit', options) }
-      : requestObject('spectralEdit', samples);
+export function spectralEdit(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<SpectralEditRequest>('spectralEdit', args);
   assertAudioInput('spectralEdit', request.samples, request.sampleRate, request);
-  const requestOps = request.ops ?? [];
-  if (requestOps === null || typeof requestOps !== 'object') {
+  const requestOps = request.ops;
+  if (requestOps === undefined || requestOps === null) {
+    throw new TypeError('spectralEdit: ops is required');
+  }
+  if (typeof requestOps !== 'object') {
     throw new TypeError('spectralEdit: ops must be an array');
+  }
+  if (request.window !== undefined) {
+    windowOrdinal('spectralEdit', request.window);
   }
   // A non-Array array-like goes to the native reader, which bounds its length.
   const nativeOps = Array.isArray(requestOps)
@@ -92,7 +88,7 @@ export function spectralEdit(
         }
         return resolveRegionTimes(op, index, request.sampleRate);
       })
-    : requestOps;
+    : (requestOps as SpectralRegionOp[]);
   return requireModule().spectralEdit(
     request.samples,
     request.sampleRate,

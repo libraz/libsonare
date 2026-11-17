@@ -148,9 +148,9 @@ describe('setSf2Instrument gain', () => {
 
   /** One held note through the GM fallback bank (no SoundFont needed). */
   function render(config: Record<string, number> | undefined): Float32Array {
-    const engine = new RealtimeEngine(48000, BLOCK);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: BLOCK });
     try {
-      engine.setSf2Instrument(config ?? {}, DESTINATION);
+      engine.setSf2Instrument(DESTINATION, config ?? {});
       engine.pushMidiNoteOn(DESTINATION, 0, 0, 60, 100);
       const left = new Float32Array(BLOCK * 8);
       for (let block = 0; block < 8; block++) {
@@ -220,9 +220,9 @@ describe('setBuiltinInstrument optional scalars', () => {
 
   /** Four notes at once, so the summed peak reads the voice count too. */
   function chordPeak(config: Record<string, number> | undefined): number {
-    const engine = new RealtimeEngine(48000, BLOCK);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: BLOCK });
     try {
-      engine.setBuiltinInstrument(config ?? {}, DESTINATION);
+      engine.setBuiltinInstrument(DESTINATION, config ?? {});
       for (const note of [60, 64, 67, 72]) {
         engine.pushMidiNoteOn(DESTINATION, 0, 0, note, 100);
       }

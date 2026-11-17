@@ -157,30 +157,32 @@ describe('every WASM offline render reaches the core entry point that validates 
   });
 });
 
-describe('every int64 scratch scalar is normalized before it is declared a number', () => {
-  // `protocol.ts` states the convention: embind can hand an int64 scalar to JS
-  // as a BigInt, so a facade accessor declaring `: number` has to coerce. The
-  // failure is invisible until a second consumer does arithmetic on the value
-  // and the AudioWorklet dies with "Cannot mix BigInt", which is why this is a
-  // source register rather than a behavioural test — the shipped build's one
-  // consumer happens to re-normalize downstream.
-  function scratchScalarAccessors(): { name: string; body: string }[] {
+describe('every int64 scratch scalar is normalized before it is used as a number', () => {
+  // embind can hand an int64 scalar to JS as a BigInt, and the engine's scratch
+  // accessors are read straight off the embind object by the worklet processor,
+  // so the processor is where the coercion has to happen. The failure is
+  // invisible until a second consumer does arithmetic on the value and the
+  // AudioWorklet dies with "Cannot mix BigInt", which is why this is a source
+  // register rather than a behavioural test.
+  const WRAPPERS = ['Number(', 'toSafeInteger(', '+'];
+
+  function scratchScalarReads(): { call: string; wrapped: boolean }[] {
     const source = readFileSync(
-      new URL('../src/realtime_engine.ts', import.meta.url).pathname,
+      new URL('../src/worklet/engine-processor.ts', import.meta.url).pathname,
       'utf8',
     );
-    const pattern =
-      /^ {2}(\w*(?:RenderFrame|TimelineSample))\(\): number \{\n(?:[^\n]*\/\/[^\n]*\n)*\s*return ([^\n]*);/gm;
-    return [...source.matchAll(pattern)].map((match) => ({
-      name: match[1],
-      body: match[2].trim(),
-    }));
+    const pattern = /(.{0,16})\b\w+(?:\.\w+)*\.(\w*(?:RenderFrame|TimelineSample))\(\)/g;
+    return [...source.matchAll(pattern)]
+      .filter((match) => /Scratch/.test(match[2]))
+      .map((match) => ({
+        call: match[2],
+        wrapped: WRAPPERS.some((wrapper) => match[1].trimEnd().endsWith(wrapper.trimEnd())),
+      }));
   }
 
   it('self-checks the scanner against the known scratch accessors', () => {
-    expect(scratchScalarAccessors().map((accessor) => accessor.name)).toEqual(
+    expect(scratchScalarReads().map((read) => read.call)).toEqual(
       expect.arrayContaining([
-        'externalMidiScratchRenderFrame',
         'meterScratchRenderFrame',
         'scopeScratchRenderFrame',
         'telemetryScratchRenderFrame',
@@ -188,14 +190,14 @@ describe('every int64 scratch scalar is normalized before it is declared a numbe
     );
   });
 
-  it('no accessor returns the raw native int64 scalar', () => {
-    const unnormalized = scratchScalarAccessors()
-      .filter((accessor) => !accessor.body.startsWith('Number('))
-      .map((accessor) => `realtime_engine.ts ${accessor.name} -> ${accessor.body}`);
+  it('no read uses the raw native int64 scalar', () => {
+    const unnormalized = scratchScalarReads()
+      .filter((read) => !read.wrapped)
+      .map((read) => `engine-processor.ts ${read.call}`);
     expect(
       unnormalized,
-      'These accessors declare `: number` but hand back whatever embind produced. ' +
-        'Wrap the native call in Number(...), the way the sibling scratch accessors do.',
+      'These reads take a scratch scalar straight from the embind object. ' +
+        'Wrap the native call in Number(...) or toSafeInteger(...).',
     ).toEqual([]);
   });
 });

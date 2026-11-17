@@ -11,7 +11,9 @@ import {
   chordSymbolFromAnalysis,
   cqt,
   cqtToAudio,
+  detectBeats,
   detectBoundaries,
+  detectBpm,
   detectChords,
   detectKey,
   estimateMeter,
@@ -645,5 +647,38 @@ describe('types', () => {
       keyRoot: 'C',
     };
     void named;
+  });
+});
+
+/** A click train at 120 BPM, two seconds long. */
+function clicks(): Float32Array {
+  const out = new Float32Array(sampleRate * 2);
+  for (let beat = 0; beat < 4; beat++) {
+    out[Math.round(beat * 0.5 * sampleRate)] = 1;
+  }
+  return out;
+}
+
+describe('tempo range bounds on the one-shot detectors', () => {
+  it.each([
+    ['detectBpm', (extra: object) => detectBpm({ samples: clicks(), sampleRate, ...extra })],
+    ['detectBeats', (extra: object) => detectBeats({ samples: clicks(), sampleRate, ...extra })],
+  ])('%s takes bpmMin and bpmMax and refuses an inverted range', (_name, call) => {
+    expect(() => call({ bpmMin: 60, bpmMax: 200 })).not.toThrow();
+    expect(() => call({ bpmMin: 200, bpmMax: 60 })).toThrow(RangeError);
+  });
+
+  it('detectBpm searches 60-200 BPM by default', () => {
+    const samples = clicks();
+    expect(detectBpm({ samples, sampleRate })).toBe(
+      detectBpm({ samples, sampleRate, bpmMin: 60, bpmMax: 200 }),
+    );
+  });
+
+  it('detectBeats searches 60-200 BPM by default', () => {
+    const samples = clicks();
+    expect(detectBeats({ samples, sampleRate })).toEqual(
+      detectBeats({ samples, sampleRate, bpmMin: 60, bpmMax: 200 }),
+    );
   });
 });

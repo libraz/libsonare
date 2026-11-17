@@ -99,23 +99,23 @@ describe('masteringRepairDecrackleStereo (WASM)', () => {
       threshold: LOW_THRESHOLD,
     });
 
-    expect(result.left).toBeInstanceOf(Float32Array);
-    expect(result.right).toBeInstanceOf(Float32Array);
-    expect(result.left.length).toBe(left.length);
-    expect(result.right.length).toBe(right.length);
+    expect(result.channels[0]).toBeInstanceOf(Float32Array);
+    expect(result.channels[1]).toBeInstanceOf(Float32Array);
+    expect(result.channels[0].length).toBe(left.length);
+    expect(result.channels[1].length).toBe(right.length);
     // Different spike counts and positions per channel: an implementation
     // that decrackled one channel and returned it for both would make these
     // equal.
-    expect(result.left).not.toEqual(result.right);
+    expect(result.channels[0]).not.toEqual(result.channels[1]);
 
-    expect(result.leftReport.detected.sampleCount).toBe(LEFT_SPIKE_POSITIONS.length);
-    expect(result.rightReport.detected.sampleCount).toBe(RIGHT_SPIKE_POSITIONS.length);
+    expect(result.reports[0].detected.sampleCount).toBe(LEFT_SPIKE_POSITIONS.length);
+    expect(result.reports[1].detected.sampleCount).toBe(RIGHT_SPIKE_POSITIONS.length);
     // Median mode: the detector and the repair share one criterion, so every
     // detected sample is also replaced.
-    expect(result.leftReport.replacedSamples).toBe(LEFT_SPIKE_POSITIONS.length);
-    expect(result.rightReport.replacedSamples).toBe(RIGHT_SPIKE_POSITIONS.length);
+    expect(result.reports[0].replacedSamples).toBe(LEFT_SPIKE_POSITIONS.length);
+    expect(result.reports[1].replacedSamples).toBe(RIGHT_SPIKE_POSITIONS.length);
     // Wavelet-only fields stay at their zero default -- that mode never ran.
-    for (const report of [result.leftReport, result.rightReport]) {
+    for (const report of [result.reports[0], result.reports[1]]) {
       expect(report.detailCoefficients).toBe(0);
       expect(report.shrunkCoefficients).toBe(0);
       expect(report.noiseSigma).toBe(0);
@@ -137,12 +137,12 @@ describe('masteringRepairDecrackleStereo (WASM)', () => {
       threshold: HIGH_THRESHOLD,
     });
 
-    expect(caught.leftReport.detected.sampleCount).toBe(LEFT_SPIKE_POSITIONS.length);
-    expect(caught.rightReport.detected.sampleCount).toBe(RIGHT_SPIKE_POSITIONS.length);
+    expect(caught.reports[0].detected.sampleCount).toBe(LEFT_SPIKE_POSITIONS.length);
+    expect(caught.reports[1].detected.sampleCount).toBe(RIGHT_SPIKE_POSITIONS.length);
     // Every spike's deviation from its window's median is exactly
     // SPIKE_VALUE, so a threshold above it catches none.
-    expect(missed.leftReport.detected.sampleCount).toBe(0);
-    expect(missed.rightReport.detected.sampleCount).toBe(0);
+    expect(missed.reports[0].detected.sampleCount).toBe(0);
+    expect(missed.reports[1].detected.sampleCount).toBe(0);
   });
 
   it('detects by the median criterion regardless of mode, but only median mode replaces', () => {
@@ -163,21 +163,21 @@ describe('masteringRepairDecrackleStereo (WASM)', () => {
     });
 
     // Detection does not depend on the removal method.
-    expect(wavelet.leftReport.detected.sampleCount).toBe(median.leftReport.detected.sampleCount);
-    expect(wavelet.rightReport.detected.sampleCount).toBe(median.rightReport.detected.sampleCount);
+    expect(wavelet.reports[0].detected.sampleCount).toBe(median.reports[0].detected.sampleCount);
+    expect(wavelet.reports[1].detected.sampleCount).toBe(median.reports[1].detected.sampleCount);
 
     // Wavelet mode never runs the median replacement loop.
-    expect(wavelet.leftReport.replacedSamples).toBe(0);
-    expect(wavelet.rightReport.replacedSamples).toBe(0);
+    expect(wavelet.reports[0].replacedSamples).toBe(0);
+    expect(wavelet.reports[1].replacedSamples).toBe(0);
 
     // The Haar analysis over FRAMES=2000 at the default levels=4 produces a
     // fixed coefficient count independent of content or threshold:
     // active sizes [2000, 1000, 500, 250] halve to detail-band sizes
     // [1000, 500, 250, 125], which sum to 1875.
-    expect(wavelet.leftReport.detailCoefficients).toBe(1875);
-    expect(wavelet.rightReport.detailCoefficients).toBe(1875);
-    expect(wavelet.leftReport.noiseSigma).toBeGreaterThanOrEqual(0);
-    expect(Number.isFinite(wavelet.leftReport.noiseSigma)).toBe(true);
+    expect(wavelet.reports[0].detailCoefficients).toBe(1875);
+    expect(wavelet.reports[1].detailCoefficients).toBe(1875);
+    expect(wavelet.reports[0].noiseSigma).toBeGreaterThanOrEqual(0);
+    expect(Number.isFinite(wavelet.reports[0].noiseSigma)).toBe(true);
   });
 
   it('binds the wavelet shrinkage cap only when the configured threshold is low enough', () => {
@@ -201,33 +201,27 @@ describe('masteringRepairDecrackleStereo (WASM)', () => {
       threshold: 1000,
     });
 
-    expect(uncapped.leftReport.shrunkCoefficients).toBeGreaterThan(
-      capped.leftReport.shrunkCoefficients,
+    expect(uncapped.reports[0].shrunkCoefficients).toBeGreaterThan(
+      capped.reports[0].shrunkCoefficients,
     );
-    expect(uncapped.rightReport.shrunkCoefficients).toBeGreaterThan(
-      capped.rightReport.shrunkCoefficients,
+    expect(uncapped.reports[1].shrunkCoefficients).toBeGreaterThan(
+      capped.reports[1].shrunkCoefficients,
     );
   });
 
-  it('accepts the positional call form identically to the request form', () => {
+  it('is request-only and refuses the positional call form', () => {
     const { left, right } = buildSpikeChannels();
-    const positional = masteringRepairDecrackleStereo(left, right, SR, {
-      threshold: LOW_THRESHOLD,
-    });
-    const request = masteringRepairDecrackleStereo({
-      left,
-      right,
-      sampleRate: SR,
-      threshold: LOW_THRESHOLD,
-    });
-    expect(positional.left).toEqual(request.left);
-    expect(positional.right).toEqual(request.right);
+    const positional = masteringRepairDecrackleStereo as unknown as (...args: unknown[]) => unknown;
+    expect(() => positional(left, right, SR)).toThrow(TypeError);
   });
 
   it('rejects mismatched channel lengths', () => {
     const { left, right } = buildSpikeChannels();
     expect(() =>
-      masteringRepairDecrackleStereo(left, right.slice(0, right.length - 1), SR, {
+      masteringRepairDecrackleStereo({
+        left: left,
+        right: right.slice(0, right.length - 1),
+        sampleRate: SR,
         threshold: LOW_THRESHOLD,
       }),
     ).toThrow();
@@ -235,7 +229,10 @@ describe('masteringRepairDecrackleStereo (WASM)', () => {
 
   it('rejects an empty channel pair', () => {
     expect(() =>
-      masteringRepairDecrackleStereo(new Float32Array(0), new Float32Array(0), SR, {
+      masteringRepairDecrackleStereo({
+        left: new Float32Array(0),
+        right: new Float32Array(0),
+        sampleRate: SR,
         threshold: LOW_THRESHOLD,
       }),
     ).toThrow();
@@ -246,34 +243,52 @@ describe('masteringRepairDecrackleStereo (WASM)', () => {
     const badLeft = left.slice();
     badLeft[10] = Number.NaN;
     expect(() =>
-      masteringRepairDecrackleStereo(badLeft, right, SR, { threshold: LOW_THRESHOLD }),
+      masteringRepairDecrackleStereo({
+        left: badLeft,
+        right: right,
+        sampleRate: SR,
+        threshold: LOW_THRESHOLD,
+      }),
     ).toThrow();
 
     const badRight = right.slice();
     badRight[10] = Number.POSITIVE_INFINITY;
     expect(() =>
-      masteringRepairDecrackleStereo(left, badRight, SR, { threshold: LOW_THRESHOLD }),
+      masteringRepairDecrackleStereo({
+        left: left,
+        right: badRight,
+        sampleRate: SR,
+        threshold: LOW_THRESHOLD,
+      }),
     ).toThrow();
   });
 
   it('rejects an unknown mode', () => {
     const { left, right } = buildSpikeChannels();
     expect(() =>
-      masteringRepairDecrackleStereo(left, right, SR, { mode: 'not-a-mode' as never }),
+      masteringRepairDecrackleStereo({ left, right, sampleRate: SR, mode: 'not-a-mode' as never }),
     ).toThrow();
   });
 
   it('rejects a NaN sample rate', () => {
     const { left, right } = buildSpikeChannels();
     expect(() =>
-      masteringRepairDecrackleStereo(left, right, Number.NaN, { threshold: LOW_THRESHOLD }),
+      masteringRepairDecrackleStereo({
+        left,
+        right,
+        sampleRate: Number.NaN,
+        threshold: LOW_THRESHOLD,
+      }),
     ).toThrow();
   });
 
   it('rejects a wrong-typed sample rate', () => {
     const { left, right } = buildSpikeChannels();
     expect(() =>
-      masteringRepairDecrackleStereo(left, right, 'not-a-number' as unknown as number, {
+      masteringRepairDecrackleStereo({
+        left,
+        right,
+        sampleRate: 'not-a-number' as unknown as number,
         threshold: LOW_THRESHOLD,
       }),
     ).toThrow();

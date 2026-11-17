@@ -38,7 +38,7 @@ describe('WASM exception scope', () => {
     // SONARE_ERROR_INVALID_FORMAT. It is an inline function, so the catch
     // belongs to every unit that includes it rather than to the header -- the
     // reason a unit can be uncovered while its own text spells no catch at all.
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       let thrown: unknown;
       try {

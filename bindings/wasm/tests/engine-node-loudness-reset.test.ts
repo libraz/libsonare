@@ -22,7 +22,7 @@ it('queues a master loudness reset through the postMessage node transport', asyn
     expect(node.resetMasterLoudnessMeter(512)).toBe(true);
     expect(posted).toContainEqual({
       type: 28,
-      sampleTime: 512,
+      renderFrame: 512,
     });
   } finally {
     node.destroy();

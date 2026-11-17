@@ -54,7 +54,7 @@ describe('registered voice changer worklet processor', () => {
   it('answers a refused control message with an error reply and keeps rendering', () => {
     const { ctor, posted, send } = register();
     const instance = new ctor({
-      processorOptions: { preset: 'neutral-monitor', sampleRate: 48000, blockSize: 128 },
+      processorOptions: { config: 'neutralMonitor', sampleRate: 48000, maxBlockSize: 128 },
     });
     send({ type: 'noteOn', note: 60, velocity: 2 });
     send({ type: 'setConfig', config: {} });
@@ -73,7 +73,7 @@ describe('registered voice changer worklet processor', () => {
   it('reports a refused construction as an error reply and renders silence', () => {
     const { ctor, posted } = register();
     const instance = new ctor({
-      processorOptions: { preset: 'neutral-monitor', sampleRate: 48000, channelCount: 0 },
+      processorOptions: { config: 'neutralMonitor', sampleRate: 48000, numChannels: 0 },
     });
     expect(posted.map((message) => [message.type, message.request])).toEqual([['error', 'init']]);
     const out = [new Float32Array(128).fill(1)];

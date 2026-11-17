@@ -13,9 +13,9 @@ function render(
   setup: (engine: RealtimeEngine) => void,
   strike: (engine: RealtimeEngine) => void = (engine) => engine.pushMidiNoteOn(DEST, 0, 0, 60, 100),
 ): Float32Array {
-  const engine = new RealtimeEngine(48000, BLOCK);
+  const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: BLOCK });
   try {
-    engine.setSf2Instrument({}, DEST);
+    engine.setSf2Instrument(DEST, {});
     setup(engine);
     strike(engine);
     const out = new Float32Array(BLOCKS * BLOCK);
@@ -44,10 +44,10 @@ function errorCode(call: () => void): ErrorCode | undefined {
 
 describe('RealtimeEngine.pushMidiProgram', () => {
   it('renders bit-identically to the raw MIDI 2.0 Program Change and differently from bank 0 and none', () => {
-    const typed = render((e) => e.pushMidiProgram(DEST, 0, 0, 0, true, 8, 0));
+    const typed = render((e) => e.pushMidiProgram(DEST, 0, 0, 0, { msb: 8, lsb: 0 }));
     const [w0, w1] = [0x40c00001, 0x00000800];
     const raw = render((e) => e.pushMidiUmp(DEST, [w0, w1]));
-    const bank0 = render((e) => e.pushMidiProgram(DEST, 0, 0, 0, true, 0, 0));
+    const bank0 = render((e) => e.pushMidiProgram(DEST, 0, 0, 0, { msb: 0, lsb: 0 }));
     const none = render(() => undefined);
     expect(peak(typed)).toBeGreaterThan(0);
     expect(typed).toEqual(raw);
@@ -55,33 +55,22 @@ describe('RealtimeEngine.pushMidiProgram', () => {
     expect(typed).not.toEqual(none);
   });
 
-  it('refuses a bank with bank-valid false, naming the function', () => {
-    const engine = new RealtimeEngine(48000, BLOCK);
-    try {
-      for (const [msb, lsb] of [
-        [1, 0],
-        [0, 1],
-      ]) {
-        expect(() => engine.pushMidiProgram(DEST, 0, 0, 5, false, msb, lsb)).toThrow(
-          /pushMidiProgram: .*bank MSB and LSB must be 0 when bank-valid is false/,
-        );
-      }
-      expect(() => engine.pushMidiProgram(DEST, 0, 0, 5)).not.toThrow();
-    } finally {
-      engine.destroy();
-    }
-  });
-
   it('refuses out-of-range arguments with a range error naming the function', () => {
-    const engine = new RealtimeEngine(48000, BLOCK);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: BLOCK });
     try {
       const calls: Array<[() => void, string]> = [
         [() => engine.pushMidiProgram(DEST, 16, 0, 0), 'group must be in [0, 15]'],
         [() => engine.pushMidiProgram(DEST, -1, 0, 0), 'group must be in [0, 15]'],
         [() => engine.pushMidiProgram(DEST, 0, 16, 0), 'channel must be in [0, 15]'],
         [() => engine.pushMidiProgram(DEST, 0, 0, 128), 'program must be in [0, 127]'],
-        [() => engine.pushMidiProgram(DEST, 0, 0, 0, true, 128, 0), 'bank_msb must be in [0, 127]'],
-        [() => engine.pushMidiProgram(DEST, 0, 0, 0, true, 0, 128), 'bank_lsb must be in [0, 127]'],
+        [
+          () => engine.pushMidiProgram(DEST, 0, 0, 0, { msb: 128, lsb: 0 }),
+          'bank_msb must be in [0, 127]',
+        ],
+        [
+          () => engine.pushMidiProgram(DEST, 0, 0, 0, { msb: 0, lsb: 128 }),
+          'bank_lsb must be in [0, 127]',
+        ],
       ];
       for (const [call, message] of calls) {
         expect(call).toThrow(new RangeError(`pushMidiProgram: ${message}`));
@@ -92,11 +81,11 @@ describe('RealtimeEngine.pushMidiProgram', () => {
   });
 
   it('reports a full queue as OutOfMemory', () => {
-    const engine = new RealtimeEngine(48000, BLOCK);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: BLOCK });
     try {
       let code: ErrorCode | undefined;
       for (let i = 0; i < 100000 && code === undefined; i++) {
-        code = errorCode(() => engine.pushMidiProgram(DEST, 0, 0, 0, true, 8, 0));
+        code = errorCode(() => engine.pushMidiProgram(DEST, 0, 0, 0, { msb: 8, lsb: 0 }));
       }
       expect(code).toBe(ErrorCode.OutOfMemory);
     } finally {
@@ -107,16 +96,17 @@ describe('RealtimeEngine.pushMidiProgram', () => {
 
 describe('RealtimeEngine.pushMidiInputProgram', () => {
   it('needs an enabled input source, refuses like the destination op and reaches the synth', () => {
-    const engine = new RealtimeEngine(48000, BLOCK);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: BLOCK });
     try {
-      expect(errorCode(() => engine.pushMidiInputProgram(0, 0, 0, true, 8, 0))).toBe(
+      expect(errorCode(() => engine.pushMidiInputProgram(0, 0, 0, { msb: 8, lsb: 0 }))).toBe(
         ErrorCode.InvalidState,
       );
       engine.setMidiInputSource(DEST);
-      expect(() => engine.pushMidiInputProgram(0, 0, 5, true, 1, 2, 64)).not.toThrow();
-      expect(() => engine.pushMidiInputProgram(0, 0, 5, false, 1, 0)).toThrow(
-        /pushMidiInputProgram: .*bank MSB and LSB must be 0 when bank-valid is false/,
-      );
+      expect(() => engine.pushMidiInputProgram(0, 0, 5, { msb: 1, lsb: 2 }, 64)).not.toThrow();
+      expect(() => engine.pushMidiInputProgram(0, 0, 5)).not.toThrow();
+      expect(() =>
+        engine.pushMidiInputProgram(0, 0, 5, { msb: 1, lsb: 2, valid: false } as never),
+      ).toThrow(TypeError);
       expect(() => engine.pushMidiInputProgram(0, 16, 0)).toThrow(
         new RangeError('pushMidiInputProgram: channel must be in [0, 15]'),
       );
@@ -133,7 +123,7 @@ describe('RealtimeEngine.pushMidiInputProgram', () => {
     const enable = (e: RealtimeEngine) => e.setMidiInputSource(DEST);
     const viaInput = render((e) => {
       enable(e);
-      e.pushMidiInputProgram(0, 0, 0, true, 8, 0);
+      e.pushMidiInputProgram(0, 0, 0, { msb: 8, lsb: 0 });
     }, inputNote);
     const viaRaw = render((e) => {
       enable(e);
@@ -180,18 +170,16 @@ describe('SonareEngine.pushMidiProgram (worklet facade)', () => {
     });
     try {
       const built = Project.midi2Program(0, 1, 2, 5, true, 1, 2);
-      engine.pushMidiProgram(DEST, 1, 2, 5, true, 1, 2, 256);
+      engine.pushMidiProgram(DEST, 1, 2, 5, { msb: 1, lsb: 2 }, 256);
       expect(posted).toContainEqual({
         type: 'syncMidiUmp',
         destinationId: DEST,
         words: Uint32Array.from([built.data0, built.data1 ?? 0]),
         renderFrame: 256,
       });
-      expect(() => engine.pushMidiProgram(DEST, 0, 0, 5, false, 1, 0)).toThrow(
-        /pushMidiProgram: .*bank MSB and LSB must be 0 when bank-valid is false/,
-      );
+      expect(() => engine.pushMidiProgram(DEST, 0, 0, 5)).not.toThrow();
       expect(() => engine.pushMidiProgram(DEST, 0, 16, 0)).toThrow(RangeError);
-      expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, true, 128, 0)).toThrow(
+      expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, { msb: 128, lsb: 0 })).toThrow(
         new RangeError('pushMidiProgram: bank_msb must be in [0, 127]'),
       );
       expect(() => engine.pushMidiProgram(DEST, 16, 0, 0)).toThrow(

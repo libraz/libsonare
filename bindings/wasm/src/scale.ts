@@ -1,5 +1,6 @@
+import { keyModeOrdinal } from './analysis_helpers.js';
 import { getSonareModule } from './module_state.js';
-import type { KeyMode, Mode } from './public_types_music.js';
+import type { KeyMode, PitchClass } from './public_types_music.js';
 import { assertFiniteScalar } from './validation.js';
 
 // ============================================================================
@@ -12,42 +13,43 @@ import { assertFiniteScalar } from './validation.js';
  *
  * The mask is relative to the root, so it is the same for every `root`, which
  * is still validated. `mode` is a church-mode name (`'major'`, `'minor'`,
- * `'dorian'`, `'phrygian'`, `'lydian'`, `'mixolydian'`, `'locrian'`) or the
- * `Mode` ordinal `detectKey` reports; minor is the natural minor.
+ * `'dorian'`, `'phrygian'`, `'lydian'`, `'mixolydian'`, `'locrian'`); minor is
+ * the natural minor. A number or an unknown name is refused (`TypeError` for a
+ * non-string, `RangeError` for an unknown token).
  *
  * @example
  * scaleMaskForMode(0, 'major'); // 0b101010110101
  */
-export function scaleMaskForMode(root: number, mode: KeyMode | Mode): number {
-  return getSonareModule().scaleMaskForMode(root, mode);
+export function scaleMaskForMode(root: PitchClass, mode: KeyMode): number {
+  return getSonareModule().scaleMaskForMode(root, keyModeOrdinal(mode, 'mode'));
 }
 
 /**
  * Snap a MIDI value to the nearest pitch class enabled by `modeMask`.
  *
  * `modeMask` is a 12-bit mask. For natural C major use `0b101010110101`.
- * `referenceMidi` defaults to A4 (69) when passed as 0.
+ * `scaleReferenceMidi` defaults to A4 (69) when passed as 0.
  */
 export function scaleQuantizeMidi(
   root: number,
   modeMask: number,
   midi: number,
-  referenceMidi = 0,
+  scaleReferenceMidi = 0,
 ): number {
   assertFiniteScalar('scaleQuantizeMidi', midi, 'midi');
-  assertFiniteScalar('scaleQuantizeMidi', referenceMidi, 'referenceMidi');
-  return getSonareModule().scaleQuantizeMidi(root, modeMask, midi, referenceMidi);
+  assertFiniteScalar('scaleQuantizeMidi', scaleReferenceMidi, 'scaleReferenceMidi');
+  return getSonareModule().scaleQuantizeMidi(root, modeMask, midi, scaleReferenceMidi);
 }
 
 export function scaleCorrectionSemitones(
   root: number,
   modeMask: number,
   midi: number,
-  referenceMidi = 0,
+  scaleReferenceMidi = 0,
 ): number {
   assertFiniteScalar('scaleCorrectionSemitones', midi, 'midi');
-  assertFiniteScalar('scaleCorrectionSemitones', referenceMidi, 'referenceMidi');
-  return getSonareModule().scaleCorrectionSemitones(root, modeMask, midi, referenceMidi);
+  assertFiniteScalar('scaleCorrectionSemitones', scaleReferenceMidi, 'scaleReferenceMidi');
+  return getSonareModule().scaleCorrectionSemitones(root, modeMask, midi, scaleReferenceMidi);
 }
 
 export function scalePitchClassEnabled(

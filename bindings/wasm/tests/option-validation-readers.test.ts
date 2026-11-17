@@ -69,23 +69,35 @@ describe('boolean options', () => {
     const project = Project.create();
     expect(() => project.setTrackMute(1, 'false' as never)).toThrow(TypeError);
     expect(() => project.setTrackSolo(1, 1 as never)).toThrow(TypeError);
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), SR, 512);
+    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      sampleRate: SR,
+      blockSize: 512,
+    });
     try {
       expect(() => mixer.setMuted(0, 'false' as never)).toThrow(TypeError);
       expect(() => mixer.setSoloed(0, 'false' as never)).toThrow(TypeError);
       expect(() => mixer.setSoloSafe(0, 'false' as never)).toThrow(TypeError);
-      expect(() => mixer.setPolarityInvert(0, true, 'x' as never)).toThrow(TypeError);
-      expect(() => mixer.configureMeter('on' as never)).toThrow(TypeError);
+      expect(() => mixer.setPolarityInvert(0, { left: true, right: 'x' as never })).toThrow(
+        TypeError,
+      );
+      expect(() => mixer.configureMeter({ enabled: 'on' as never })).toThrow(TypeError);
     } finally {
       mixer.destroy();
     }
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
-      expect(() => engine.setLoop(0, 4, 'off' as never)).toThrow(TypeError);
-      expect(() => engine.armCapture('yes' as never)).toThrow(TypeError);
-      expect(() => engine.setInputMonitor('yes' as never)).toThrow(TypeError);
+      expect(() => engine.setLoop({ startPpq: 0, endPpq: 4, enabled: 'off' as never })).toThrow(
+        TypeError,
+      );
+      expect(() => engine.armCapture({ armed: 'yes' as never })).toThrow(TypeError);
       expect(() =>
-        engine.setCapturePunch({ startSample: 0, endSample: 10, enabled: 'false' as never }),
+        engine.configureCapture({ capacityFrames: 8, inputMonitor: { enabled: 'yes' as never } }),
+      ).toThrow(TypeError);
+      expect(() =>
+        engine.configureCapture({
+          capacityFrames: 8,
+          punch: { startSample: 0, endSample: 10, enabled: 'false' } as never,
+        }),
       ).toThrow(TypeError);
       expect(() =>
         engine.renderOffline({ channels: [new Float32Array(8)], finalize: 1 as never }),
@@ -183,12 +195,15 @@ describe('createVocalEditSession limits', () => {
 
 describe('surround pan', () => {
   it('refuses an out-of-range field instead of clamping it', () => {
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), SR, 512);
-    const engine = new RealtimeEngine(48000, 128);
+    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      sampleRate: SR,
+      blockSize: 512,
+    });
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       for (const pan of [{ azimuth: 200 }, { divergence: 2 }, { lfe: -0.5 }]) {
         expect(() => mixer.setSurroundPan(0, pan)).toThrow(RangeError);
-        expect(() => engine.setTrackStripSurroundPan(1, pan)).toThrow(RangeError);
+        expect(() => engine.setStripSurroundPan(1, pan)).toThrow(RangeError);
       }
       expect(() => mixer.setSurroundPan(0, { azimuth: 'x' as never })).toThrow(TypeError);
     } finally {
@@ -198,6 +213,8 @@ describe('surround pan', () => {
   });
 
   it('refuses a prepare block size past the realtime ceiling', () => {
-    expect(() => new RealtimeEngine(48000, (1 << 20) + 1)).toThrow(RangeError);
+    expect(() => new RealtimeEngine({ sampleRate: 48000, maxBlockSize: (1 << 20) + 1 })).toThrow(
+      RangeError,
+    );
   });
 });

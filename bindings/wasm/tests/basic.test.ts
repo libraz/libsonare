@@ -138,9 +138,11 @@ describe('Sonare WASM Module', () => {
       expect(engineAbiVersion()).toBe(EXPECTED_ENGINE_ABI_VERSION);
     });
 
-    it('exports the track monitor mode type with the C-ABI ordinals', () => {
-      const modes: EngineTrackMonitorMode[] = ['off', 'pfl', 'afl', 0, 1, 2];
-      expect(modes).toEqual(['off', 'pfl', 'afl', 0, 1, 2]);
+    it('exports the track monitor mode type as named tokens only', () => {
+      const modes: EngineTrackMonitorMode[] = ['off', 'pfl', 'afl'];
+      // @ts-expect-error a C-ABI ordinal is not a monitor mode
+      const ordinal: EngineTrackMonitorMode = 0;
+      expect([...modes, ordinal]).toEqual(['off', 'pfl', 'afl', 0]);
     });
 
     it('keeps worklet telemetry error ordinals stable when appending channel limits', () => {
@@ -158,13 +160,13 @@ describe('Sonare WASM Module', () => {
       // is the mirror of the same C-ABI shape and was the surface's only gap.
       // A fresh engine has dropped nothing, so this asserts the method EXISTS
       // and reads zero -- a missing embind registration is a TypeError.
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       try {
-        expect(engine.warpStretchOverflowCount()).toBe(0);
-        expect(typeof engine.warpStretchOverflowCount()).toBe('number');
+        expect(engine.warpStretchOverflowCount).toBe(0);
+        expect(typeof engine.warpStretchOverflowCount).toBe('number');
         // Positive control: the sibling that has always been registered reads
         // the same way, so zero is the counter answering rather than a stub.
-        expect(engine.clipPageRequestOverflowCount()).toBe(0);
+        expect(engine.clipPageRequestOverflowCount).toBe(0);
       } finally {
         engine.destroy();
       }

@@ -15,31 +15,33 @@ const LANE_TARGET = 1;
 
 type EngineLike = Pick<
   RealtimeEngine,
-  'setTrackBuses' | 'setTrackLanes' | 'setTrackStripJson' | 'setClips' | 'play'
+  'setTrackBuses' | 'setTrackLanes' | 'setStrip' | 'setClips' | 'play'
 >;
 
 function seedCompressorLimiterLane(engine: EngineLike): void {
-  engine.setTrackBuses([{ busId: 1, channelLayout: 0 }]);
+  engine.setTrackBuses([{ busId: 1, channelLayout: 'mono' }]);
   engine.setTrackLanes([{ trackId: 10, outputBusId: 1 }]);
-  engine.setTrackStripJson(
+  engine.setStrip(
     10,
-    JSON.stringify({
-      version: 1,
-      strips: [
-        {
-          id: 'rack',
-          inserts: [
-            {
-              processor: 'dynamics.compressor',
-              params: { thresholdDb: -30, ratio: 10, attackMs: 0.1, releaseMs: 100 },
-            },
-            { processor: 'dynamics.limiter', params: { thresholdDb: -20 } },
-          ],
-        },
-      ],
-      buses: [],
-      connections: [],
-    }),
+    JSON.parse(
+      JSON.stringify({
+        version: 1,
+        strips: [
+          {
+            id: 'rack',
+            inserts: [
+              {
+                processor: 'dynamics.compressor',
+                params: { thresholdDb: -30, ratio: 10, attackMs: 0.1, releaseMs: 100 },
+              },
+              { processor: 'dynamics.limiter', params: { thresholdDb: -20 } },
+            ],
+          },
+        ],
+        buses: [],
+        connections: [],
+      }),
+    ).strips[0],
   );
   engine.setClips([
     {
@@ -57,7 +59,7 @@ describe('insert gain reduction query', () => {
   setupWorklet();
 
   it('returns per-insert entries whose minimum tracks the strip record', () => {
-    const engine = new RealtimeEngine(48000, BLOCK);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: BLOCK });
     try {
       seedCompressorLimiterLane(engine);
       for (let block = 0; block < 20; ++block) {
@@ -82,7 +84,7 @@ describe('insert gain reduction query', () => {
   });
 
   it('returns an empty array for the monitor target and throws out of range', () => {
-    const engine = new RealtimeEngine(48000, BLOCK);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: BLOCK });
     try {
       expect(engine.meterTargetInsertGainReduction(0xffff)).toEqual([]);
       expect(() => engine.meterTargetInsertGainReduction(41)).toThrow();
@@ -238,7 +240,7 @@ describe('insert gain reduction query', () => {
       // An argument refusal keeps its class.
       await expect(node.pollInsertGainReduction(41)).rejects.toBeInstanceOf(RangeError);
       engine.meterTargetInsertGainReduction = notSupported;
-      engine.getTransportState = notSupported;
+      engine.transportState = notSupported;
       engine.captureStatus = notSupported;
       for (const request of [
         () => node.pollInsertGainReduction(LANE_TARGET),

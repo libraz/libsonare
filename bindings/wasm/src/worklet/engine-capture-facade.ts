@@ -1,12 +1,14 @@
 import { ErrorCode, SonareError } from '../errors.js';
 import type { EngineCaptureStatus, RealtimeEngine } from '../index.js';
+import type { CaptureOptions } from '../public_types_engine.js';
+import { requestObject, requireBoolean } from '../validation.js';
 import { commitCommand, commitSync, type EngineCommitContext } from './engine-commit.js';
 import type { SonareRealtimeEngineNode } from './engine-node.js';
-import { buildCaptureConfig, type CaptureOptions } from './engine-offline.js';
-import type { SonareEngineSyncCaptureMessage, SonareEngineSyncMessage } from './messages.js';
+import { buildCaptureConfig, type CaptureSyncConfig } from './engine-offline.js';
+import type { SonareEngineSyncMessage } from './messages.js';
 import { SonareEngineCommandType } from './protocol.js';
 
-type CaptureConfig = Omit<SonareEngineSyncCaptureMessage, 'type'>;
+type CaptureConfig = CaptureSyncConfig;
 
 /**
  * Collaborator surface the capture/record/punch setters need from the owning
@@ -17,7 +19,8 @@ type CaptureConfig = Omit<SonareEngineSyncCaptureMessage, 'type'>;
 export interface EngineCaptureContext extends EngineCommitContext {
   readonly offlineEngine: RealtimeEngine;
   readonly realtimeNode: SonareRealtimeEngineNode;
-  readonly offlineChannelCount: number;
+  readonly sampleRate: number;
+  readonly offlineNumChannels: number;
   postSync(message: SonareEngineSyncMessage): void;
   getCaptureConfig(): CaptureConfig | undefined;
   setCaptureConfig(config: CaptureConfig): void;
@@ -26,15 +29,15 @@ export interface EngineCaptureContext extends EngineCommitContext {
 export function configureCapture(ctx: EngineCaptureContext, options: CaptureOptions): void {
   // Every field is validated here, so the buffer replacement below cannot be
   // followed by a refusal that leaves the earlier recording discarded.
-  const config = buildCaptureConfig(options, ctx.offlineChannelCount);
+  const { config, offlineOptions } = buildCaptureConfig(
+    options,
+    ctx.offlineNumChannels,
+    ctx.sampleRate,
+    (ppq) => ctx.offlineEngine.sampleAtPpq(ppq),
+  );
   commitSync(
     ctx,
-    (offline) => {
-      offline.setCaptureBuffer(config.channels, config.bufferFrames);
-      offline.setCaptureSource(config.source);
-      offline.setRecordOffsetSamples(config.recordOffsetSamples);
-      offline.setInputMonitor(config.inputMonitor.enabled, config.inputMonitor.gain);
-    },
+    (offline) => offline.configureCapture(offlineOptions),
     () => {
       ctx.setCaptureConfig(config);
       ctx.postSync({ type: 'syncCapture', ...config });
@@ -42,41 +45,22 @@ export function configureCapture(ctx: EngineCaptureContext, options: CaptureOpti
   );
 }
 
-export function armRecord(
-  ctx: EngineCaptureContext,
-  trackId: string | number,
-  enabled: boolean,
-): boolean {
-  if (trackId !== 0) {
-    throw new RangeError('Capture is global; armRecord only accepts trackId 0');
-  }
-  if (enabled && !ctx.getCaptureConfig()) {
+/** Arms or disarms the engine-global capture path; per-track capture is not implemented. */
+export function armCapture(ctx: EngineCaptureContext, state: { armed: boolean }): void {
+  requestObject('armCapture', state, 'state', true);
+  const armed = requireBoolean('armCapture', state.armed, 'armed');
+  if (armed && !ctx.getCaptureConfig()) {
     throw new SonareError(ErrorCode.InvalidState, 'Capture buffer is not configured');
   }
-  return commitCommand(
+  commitCommand(
     ctx,
     {
       type: SonareEngineCommandType.ArmRecord,
       targetId: 0,
-      sampleTime: -1,
-      argInt: enabled ? 1 : 0,
+      renderFrame: -1,
+      argInt: armed ? 1 : 0,
     },
-    (offline) => offline.armCapture(enabled),
-  );
-}
-
-export function punch(ctx: EngineCaptureContext, inPpq: number, outPpq: number): boolean {
-  const inSample = ctx.offlineEngine.sampleAtPpq(inPpq);
-  const outSample = ctx.offlineEngine.sampleAtPpq(outPpq);
-  // Carry BOTH endpoints as already-converted SAMPLES so the realtime engine
-  // agrees with the offline engine. The previous code sent the raw PPQ out
-  // point and let the consumer multiply by sampleRate (treating PPQ as
-  // seconds), which ignored tempo and produced a punch-out ~2x too large at
-  // 120 BPM. argInt = in sample, argFloat = out sample (full-precision double).
-  return commitCommand(
-    ctx,
-    { type: SonareEngineCommandType.Punch, sampleTime: -1, argInt: inSample, argFloat: outSample },
-    (offline) => offline.setCapturePunch(inSample, outSample, true),
+    (offline) => offline.armCapture({ armed }),
   );
 }
 

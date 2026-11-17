@@ -26,7 +26,10 @@ describe('Mixer realtime topology and heap views (WASM)', () => {
   });
 
   it('refreshes an existing realtime buffer after adding a strip and processes its audio', () => {
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('commentaryDucking'), SR, BLOCK);
+    const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+      sampleRate: SR,
+      blockSize: BLOCK,
+    });
     const realtime = mixer.createRealtimeBuffer();
     try {
       const existingLeft = realtime.leftInputs[0];
@@ -63,7 +66,10 @@ describe('Mixer realtime topology and heap views (WASM)', () => {
   });
 
   it('grows native scratch pointer arrays before processStereoInto uses the new strip count', () => {
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('commentaryDucking'), SR, BLOCK);
+    const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+      sampleRate: SR,
+      blockSize: BLOCK,
+    });
     try {
       mixer.addStrip('direct-late-arrival', { enabled: false });
       mixer.compile();
@@ -85,7 +91,10 @@ describe('Mixer realtime topology and heap views (WASM)', () => {
   });
 
   it('reacquires detached views before resolving the implicit prepared block length', () => {
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('commentaryDucking'), SR, BLOCK);
+    const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+      sampleRate: SR,
+      blockSize: BLOCK,
+    });
     const realtime = mixer.createRealtimeBuffer();
     try {
       const oldOutput = realtime.outLeft;
@@ -102,7 +111,7 @@ describe('Mixer realtime topology and heap views (WASM)', () => {
       expect(() => realtime.process()).not.toThrow();
       const leftInputs = realtime.leftInputs;
       const rightInputs = realtime.rightInputs;
-      expect(leftInputs.length).toBe(mixer.stripCount());
+      expect(leftInputs.length).toBe(mixer.stripCount);
       leftInputs[leftInputs.length - 1].fill(0.25);
       rightInputs[rightInputs.length - 1].fill(0.25);
       realtime.process();

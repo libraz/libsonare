@@ -18,7 +18,6 @@ import type {
   WasmKeyCandidateResult,
   WasmSectionResult,
 } from './sonare.js';
-import { tuningCentsFromNative } from './validation.js';
 
 const PITCH_CLASS_NAMES = [
   'C',
@@ -207,7 +206,7 @@ function convertChord(c: WasmChordResult) {
 export function convertChordAnalysisResult(wasm: WasmChordAnalysisResult): ChordAnalysisResult {
   return {
     chords: wasm.chords.map(convertChord),
-    tuningCents: tuningCentsFromNative(wasm.tuning),
+    tuningCents: wasm.tuningCents,
   };
 }
 
@@ -263,6 +262,6 @@ export function convertAnalysisResult(wasm: WasmAnalysisResult): AnalysisResult 
       ),
     },
     form: wasm.form,
-    tuningCents: tuningCentsFromNative(wasm.tuning),
+    tuningCents: wasm.tuningCents,
   };
 }

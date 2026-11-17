@@ -59,7 +59,10 @@ describe('Symbol.dispose / using', () => {
   });
 
   it('Mixer, SampleBank and StreamAnalyzer release through Symbol.dispose', () => {
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), SR, BLOCK);
+    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      sampleRate: SR,
+      blockSize: BLOCK,
+    });
     const bank = new SampleBank();
     const analyzer = new StreamAnalyzer({ sampleRate: SR });
     for (const handle of [mixer, bank, analyzer]) {
@@ -113,12 +116,12 @@ describe('Symbol.dispose / using', () => {
     },
     {
       name: 'RealtimeEngine',
-      make: () => new RealtimeEngine(SR, BLOCK),
-      call: (h: RealtimeEngine) => h.midiInstrumentCount(),
+      make: () => new RealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK }),
+      call: (h: RealtimeEngine) => h.midiInstrumentCount,
     },
     {
       name: 'RealtimeVoiceChanger',
-      make: () => new RealtimeVoiceChanger(),
+      make: () => new RealtimeVoiceChanger({ sampleRate: 48000 }),
       call: (h: RealtimeVoiceChanger) => h.reset(),
     },
     {
@@ -138,7 +141,11 @@ describe('Symbol.dispose / using', () => {
     },
     {
       name: 'Mixer',
-      make: () => Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), SR, BLOCK),
+      make: () =>
+        Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+          sampleRate: SR,
+          blockSize: BLOCK,
+        }),
       call: (h: Mixer) => h.drainTailStereo(BLOCK),
     },
     { name: 'SampleBank', make: () => new SampleBank(), call: (h: SampleBank) => h.sampleCount() },

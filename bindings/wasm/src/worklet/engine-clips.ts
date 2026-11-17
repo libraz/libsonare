@@ -1,5 +1,4 @@
 import type { EngineClip, EngineMidiClipSchedule, RealtimeEngine } from '../index.js';
-import type { ClipPageProvider } from '../realtime_engine.js';
 import { commitStore } from './engine-commit.js';
 import type { SonareEngineSyncMessage } from './messages.js';
 
@@ -31,24 +30,26 @@ export interface EngineClipContext {
 const PREBAKED_CLIP_PAGE_THRESHOLD = 16_384;
 const PREBAKED_CLIP_PAGE_FRAMES = 4_096;
 
-/** Omitted, `0` and `'off'` all mean an unwarped clip, as the native reader treats them. */
+/** Omitted and `'off'` both mean an unwarped clip. */
 function isWarpOff(mode: EngineClip['warpMode']): boolean {
-  return mode === undefined || mode === 'off' || mode === 0;
+  return mode === undefined || mode === 'off';
 }
 
 export function addClip(
   ctx: EngineClipContext,
   trackId: string | number,
-  buffer: Float32Array[] | ClipPageProvider,
-  startPpq: number,
-  opts: Partial<Omit<EngineClip, 'channels' | 'pageProvider' | 'startPpq'>> = {},
+  request: Omit<EngineClip, 'trackId'>,
 ): number {
-  const id = opts.id ?? ctx.allocateClipId();
+  if (typeof request !== 'object' || request === null) {
+    throw new TypeError('addClip: clip must be an object');
+  }
+  if ((request.channels === undefined) === (request.pageProvider === undefined)) {
+    throw new TypeError('addClip: give exactly one of clip.channels and clip.pageProvider');
+  }
+  const id = request.id ?? ctx.allocateClipId();
   const clip: EngineClip = {
-    ...opts,
+    ...request,
     id,
-    ...(Array.isArray(buffer) ? { channels: buffer } : { pageProvider: buffer }),
-    startPpq,
     trackId: ctx.resolveTargetId(trackId),
   };
   ctx.ensureTrackLane(trackId);

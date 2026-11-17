@@ -5,6 +5,7 @@
  */
 
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import type { PitchCorrectOptions } from '../dist/index.js';
 import {
   Audio,
   analyzeMelody,
@@ -37,7 +38,6 @@ import {
   onsetStrengthMulti,
   pitchCorrectTimevarying,
   pitchCorrectToMidi,
-  pitchCorrectToMidiTimevarying,
   pitchPyin,
   plp,
   pseudoCqt,
@@ -271,7 +271,7 @@ describe('v1.2 feature additions (WASM)', () => {
     }
 
     it('pitchCorrectToMidi preserves length and stays within audio range', () => {
-      const out = pitchCorrectToMidi(signal, SR, 57, 60);
+      const out = pitchCorrectToMidi(signal, SR, { currentMidi: 57, targetMidi: 60 });
       expect(out).toBeInstanceOf(Float32Array);
       // Phase-vocoder pitch correction returns the input length verbatim.
       expect(out.length).toBe(signal.length);
@@ -294,17 +294,30 @@ describe('v1.2 feature additions (WASM)', () => {
     });
 
     it('rejects out-of-range MIDI targets', () => {
-      expect(() => pitchCorrectToMidi(signal, SR, 57, 200)).toThrow();
-      expect(() => pitchCorrectToMidi(signal, SR, 57, -1)).toThrow();
-      expect(() => pitchCorrectToMidi(signal, SR, -1, 60)).toThrow();
-      expect(() => pitchCorrectToMidi(signal, SR, 200, 60)).toThrow();
+      expect(() => pitchCorrectToMidi(signal, SR, { currentMidi: 57, targetMidi: 200 })).toThrow();
+      expect(() => pitchCorrectToMidi(signal, SR, { currentMidi: 57, targetMidi: -1 })).toThrow();
+      expect(() => pitchCorrectToMidi(signal, SR, { currentMidi: -1, targetMidi: 60 })).toThrow();
+      expect(() => pitchCorrectToMidi(signal, SR, { currentMidi: 200, targetMidi: 60 })).toThrow();
     });
 
-    it('pitchCorrectToMidiTimevarying follows a caller-supplied F0 contour', () => {
+    /** Positional form over a caller-supplied F0 contour. */
+    const timevarying = (
+      f0Hz: Float32Array,
+      hopLength: number,
+      options: Partial<PitchCorrectOptions> = {},
+    ) => pitchCorrectTimevarying(signal, SR, { f0Hz, hopLength, ...options });
+    /** Request form of the same call. */
+    const timevaryingRequest = (
+      f0Hz: Float32Array,
+      hopLength: number,
+      options: Partial<PitchCorrectOptions> = {},
+    ) => pitchCorrectTimevarying({ samples: signal, sampleRate: SR, f0Hz, hopLength, ...options });
+
+    it('pitchCorrectTimevarying follows a caller-supplied F0 contour', () => {
       const hop = 512;
       const nFrames = Math.floor(signal.length / hop) + 1;
       const f0 = new Float32Array(nFrames).fill(220);
-      const out = pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop);
+      const out = timevarying(f0, hop, { targetMidi: 60 });
       expect(out).toBeInstanceOf(Float32Array);
       expect(out.length).toBe(signal.length);
       expect(allFinite(out)).toBe(true);
@@ -312,17 +325,17 @@ describe('v1.2 feature additions (WASM)', () => {
       // Optional voiced / voicedProb arrays are accepted.
       const voiced = new Int32Array(nFrames).fill(1);
       const voicedProb = new Float32Array(nFrames).fill(1);
-      const out2 = pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, voiced, voicedProb);
+      const out2 = timevarying(f0, hop, { targetMidi: 60, voiced, voicedProb });
       expect(out2.length).toBe(signal.length);
 
       // pYIN emits NaN F0 for unvoiced frames by default.
       f0[0] = Number.NaN;
       voiced[0] = 0;
-      const pyinOut = pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, voiced, voicedProb);
+      const pyinOut = timevarying(f0, hop, { targetMidi: 60, voiced, voicedProb });
       expect(allFinite(pyinOut)).toBe(true);
     });
 
-    it('pitchCorrectToMidiTimevarying takes a PitchResult voicedFlag array directly', () => {
+    it('pitchCorrectTimevarying takes a PitchResult voicedFlag array directly', () => {
       const hop = 512;
       const nFrames = Math.floor(signal.length / hop) + 1;
       const f0 = new Float32Array(nFrames).fill(220);
@@ -332,23 +345,19 @@ describe('v1.2 feature additions (WASM)', () => {
       const flags = Array.from({ length: nFrames }, (_, i) => i % 3 !== 0);
       const numeric = Int32Array.from(flags, (voiced) => (voiced ? 1 : 0));
 
-      const fromBooleans = pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, flags);
-      const fromInt32 = pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, numeric);
+      const fromBooleans = timevarying(f0, hop, { targetMidi: 60, voiced: flags });
+      const fromInt32 = timevarying(f0, hop, { targetMidi: 60, voiced: numeric });
       expect(Array.from(fromBooleans)).toEqual(Array.from(fromInt32));
 
       // The flags must actually reach the core rather than being dropped.
-      const allVoiced = pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop);
+      const allVoiced = timevarying(f0, hop, { targetMidi: 60 });
       expect(fromBooleans.some((x, i) => Math.abs(x - allVoiced[i]) > 1e-6)).toBe(true);
 
-      const optionForm = pitchCorrectTimevarying(signal, f0, SR, hop, {
-        targetMidi: 60,
-        voiced: flags,
-      });
-      const optionNumeric = pitchCorrectTimevarying(signal, f0, SR, hop, {
-        targetMidi: 60,
-        voiced: numeric,
-      });
-      expect(Array.from(optionForm)).toEqual(Array.from(optionNumeric));
+      // The request form agrees with the positional form.
+      const requestForm = timevaryingRequest(f0, hop, { targetMidi: 60, voiced: flags });
+      const requestNumeric = timevaryingRequest(f0, hop, { targetMidi: 60, voiced: numeric });
+      expect(Array.from(requestForm)).toEqual(Array.from(fromBooleans));
+      expect(Array.from(requestNumeric)).toEqual(Array.from(fromInt32));
     });
 
     it('pitchCorrectTimevarying supports scale mode and retune-strength knobs', () => {
@@ -356,54 +365,44 @@ describe('v1.2 feature additions (WASM)', () => {
       const nFrames = Math.floor(signal.length / hop) + 1;
       const f0 = new Float32Array(nFrames).fill(220);
 
-      const base = pitchCorrectTimevarying(signal, f0, SR, hop);
+      const base = timevarying(f0, hop);
       expect(base.length).toBe(signal.length);
       expect(allFinite(base)).toBe(true);
 
-      const scaled = pitchCorrectTimevarying(signal, f0, SR, hop, { mode: 'scale', scaleRoot: 0 });
+      const scaled = timevarying(f0, hop, { targetMode: 'scale', scaleRoot: 0 });
       expect(scaled.length).toBe(signal.length);
       expect(allFinite(scaled)).toBe(true);
 
-      const full = pitchCorrectTimevarying(signal, f0, SR, hop, {
-        targetMidi: 59,
-        retuneAmount: 1,
-      });
-      const gentle = pitchCorrectTimevarying(signal, f0, SR, hop, {
-        targetMidi: 59,
-        retuneAmount: 0.25,
-      });
+      const full = timevarying(f0, hop, { targetMidi: 59, retuneAmount: 1 });
+      const gentle = timevarying(f0, hop, { targetMidi: 59, retuneAmount: 0.25 });
       expect(full.some((x, i) => Math.abs(x - gentle[i]) > 1e-6)).toBe(true);
 
-      expect(() =>
-        pitchCorrectTimevarying(signal, f0, SR, hop, { targetMidi: 59, retuneAmount: 2 }),
-      ).toThrow();
-      expect(() => pitchCorrectTimevarying(signal, f0, SR, hop, { targetMidi: 200 })).toThrow();
-      expect(() =>
-        pitchCorrectTimevarying(signal, f0, SR, hop, { mode: 'Scale' as never }),
-      ).toThrow(/pitch correction mode/);
+      expect(() => timevarying(f0, hop, { targetMidi: 59, retuneAmount: 2 })).toThrow();
+      expect(() => timevarying(f0, hop, { targetMidi: 200 })).toThrow();
+      expect(() => timevarying(f0, hop, { targetMode: 'Scale' as never })).toThrow(RangeError);
     });
 
-    it('pitchCorrectToMidiTimevarying rejects mismatched companion arrays', () => {
+    it('pitchCorrectTimevarying rejects mismatched companion arrays', () => {
       const hop = 512;
       const nFrames = Math.floor(signal.length / hop) + 1;
       const f0 = new Float32Array(nFrames).fill(220);
       const tooShortVoiced = new Int32Array(nFrames - 1).fill(1);
       const tooShortProb = new Float32Array(nFrames - 1).fill(1);
-      expect(() => pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, tooShortVoiced)).toThrow(
-        'pitchCorrectToMidiTimevarying: voiced must have the same length as f0Hz',
+      expect(() => timevarying(f0, hop, { targetMidi: 60, voiced: tooShortVoiced })).toThrow(
+        'pitchCorrectTimevarying: voiced must have the same length as f0Hz',
       );
-      expect(() =>
-        pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, undefined, tooShortProb),
-      ).toThrow('pitchCorrectToMidiTimevarying: voicedProb must have the same length as f0Hz');
-      expect(() =>
-        pitchCorrectTimevarying(signal, f0, SR, hop, { voiced: tooShortVoiced }),
-      ).toThrow('pitchCorrectTimevarying: voiced must have the same length as f0Hz');
-      expect(() =>
-        pitchCorrectTimevarying(signal, f0, SR, hop, { voicedProb: tooShortProb }),
-      ).toThrow('pitchCorrectTimevarying: voicedProb must have the same length as f0Hz');
+      expect(() => timevarying(f0, hop, { targetMidi: 60, voicedProb: tooShortProb })).toThrow(
+        'pitchCorrectTimevarying: voicedProb must have the same length as f0Hz',
+      );
+      expect(() => timevaryingRequest(f0, hop, { voiced: tooShortVoiced })).toThrow(
+        'pitchCorrectTimevarying: voiced must have the same length as f0Hz',
+      );
+      expect(() => timevaryingRequest(f0, hop, { voicedProb: tooShortProb })).toThrow(
+        'pitchCorrectTimevarying: voicedProb must have the same length as f0Hz',
+      );
     });
 
-    it('pitchCorrectToMidiTimevarying derives voicing from voicedProb when voiced is omitted', () => {
+    it('pitchCorrectTimevarying derives voicing from voicedProb when voiced is omitted', () => {
       // voicedProb below 0.5 must behave exactly like an explicit all-unvoiced
       // array, and at/above 0.5 exactly like an explicit all-voiced one --
       // never like "every frame voiced" regardless of what voicedProb says.
@@ -414,43 +413,24 @@ describe('v1.2 feature additions (WASM)', () => {
       const highProb = new Float32Array(nFrames).fill(0.9);
       const allUnvoiced = new Int32Array(nFrames).fill(0);
       const allVoiced = new Int32Array(nFrames).fill(1);
+      const midi = { targetMidi: 60 };
 
-      const viaLowProb = pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, undefined, lowProb);
-      const viaExplicitUnvoiced = pitchCorrectToMidiTimevarying(
-        signal,
-        f0,
-        60,
-        SR,
-        hop,
-        allUnvoiced,
-      );
+      const viaLowProb = timevarying(f0, hop, { ...midi, voicedProb: lowProb });
+      const viaExplicitUnvoiced = timevarying(f0, hop, { ...midi, voiced: allUnvoiced });
       expect(Array.from(viaLowProb)).toEqual(Array.from(viaExplicitUnvoiced));
 
-      const viaHighProb = pitchCorrectToMidiTimevarying(
-        signal,
-        f0,
-        60,
-        SR,
-        hop,
-        undefined,
-        highProb,
-      );
-      const viaExplicitVoiced = pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, allVoiced);
+      const viaHighProb = timevarying(f0, hop, { ...midi, voicedProb: highProb });
+      const viaExplicitVoiced = timevarying(f0, hop, { ...midi, voiced: allVoiced });
       expect(Array.from(viaHighProb)).toEqual(Array.from(viaExplicitVoiced));
 
       // The two derived answers must actually differ, or this proves nothing.
       expect(viaLowProb.some((x, i) => Math.abs(x - viaHighProb[i]) > 1e-6)).toBe(true);
 
-      // The options-object form (pitchCorrectTimevarying) must agree.
-      const optLow = pitchCorrectTimevarying(signal, f0, SR, hop, {
-        targetMidi: 60,
-        voicedProb: lowProb,
-      });
-      const optUnvoiced = pitchCorrectTimevarying(signal, f0, SR, hop, {
-        targetMidi: 60,
-        voiced: allUnvoiced,
-      });
+      // The request form must agree.
+      const optLow = timevaryingRequest(f0, hop, { ...midi, voicedProb: lowProb });
+      const optUnvoiced = timevaryingRequest(f0, hop, { ...midi, voiced: allUnvoiced });
       expect(Array.from(optLow)).toEqual(Array.from(optUnvoiced));
+      expect(Array.from(optLow)).toEqual(Array.from(viaLowProb));
     });
 
     it('treats a null voiced field as omitted while using voicedProb', () => {
@@ -459,31 +439,12 @@ describe('v1.2 feature additions (WASM)', () => {
       const f0 = new Float32Array(nFrames).fill(220);
       const voicedProb = new Float32Array(nFrames).fill(0.9);
 
-      const positionalOmitted = pitchCorrectToMidiTimevarying(
-        signal,
-        f0,
-        60,
-        SR,
-        hop,
-        undefined,
-        voicedProb,
-      );
-      const positionalNull = pitchCorrectToMidiTimevarying(
-        signal,
-        f0,
-        60,
-        SR,
-        hop,
-        null,
-        voicedProb,
-      );
+      const positionalOmitted = timevarying(f0, hop, { targetMidi: 60, voicedProb });
+      const positionalNull = timevarying(f0, hop, { targetMidi: 60, voiced: null, voicedProb });
       expect(Array.from(positionalNull)).toEqual(Array.from(positionalOmitted));
 
-      const optionsOmitted = pitchCorrectTimevarying(signal, f0, SR, hop, {
-        targetMidi: 60,
-        voicedProb,
-      });
-      const optionsNull = pitchCorrectTimevarying(signal, f0, SR, hop, {
+      const optionsOmitted = timevaryingRequest(f0, hop, { targetMidi: 60, voicedProb });
+      const optionsNull = timevaryingRequest(f0, hop, {
         targetMidi: 60,
         voiced: null,
         voicedProb,
@@ -496,8 +457,8 @@ describe('v1.2 feature additions (WASM)', () => {
       const nFrames = Math.floor(signal.length / hop) + 1;
       const f0 = new Float32Array(nFrames).fill(220);
       const voiced = new Int32Array(nFrames).fill(1);
-      const withoutProb = pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, voiced);
-      const generalWithoutProb = pitchCorrectTimevarying(signal, f0, SR, hop, { voiced });
+      const withoutProb = timevarying(f0, hop, { targetMidi: 60, voiced });
+      const generalWithoutProb = timevaryingRequest(f0, hop, { voiced });
 
       // Once voiced is supplied, voicedProb is ignored completely, including
       // its shape and value-domain checks.
@@ -507,16 +468,12 @@ describe('v1.2 feature additions (WASM)', () => {
         new Float32Array(nFrames).fill(1.1),
       ];
       for (const invalidProb of invalidProbabilities) {
-        const withInvalidProb = pitchCorrectToMidiTimevarying(
-          signal,
-          f0,
-          60,
-          SR,
-          hop,
+        const withInvalidProb = timevarying(f0, hop, {
+          targetMidi: 60,
           voiced,
-          invalidProb,
-        );
-        const generalWithInvalidProb = pitchCorrectTimevarying(signal, f0, SR, hop, {
+          voicedProb: invalidProb,
+        });
+        const generalWithInvalidProb = timevaryingRequest(f0, hop, {
           voiced,
           voicedProb: invalidProb,
         });
@@ -528,20 +485,13 @@ describe('v1.2 feature additions (WASM)', () => {
       // probability-only path.
       for (const invalid of [Number.NaN, -0.1, 1.1]) {
         expect(() =>
-          pitchCorrectToMidiTimevarying(
-            signal,
-            f0,
-            60,
-            SR,
-            hop,
-            undefined,
-            new Float32Array(nFrames).fill(invalid),
-          ),
-        ).toThrow();
-        expect(() =>
-          pitchCorrectTimevarying(signal, f0, SR, hop, {
+          timevarying(f0, hop, {
+            targetMidi: 60,
             voicedProb: new Float32Array(nFrames).fill(invalid),
           }),
+        ).toThrow();
+        expect(() =>
+          timevaryingRequest(f0, hop, { voicedProb: new Float32Array(nFrames).fill(invalid) }),
         ).toThrow();
       }
     });
@@ -560,18 +510,11 @@ describe('v1.2 feature additions (WASM)', () => {
 
       for (const voiced of invalid) {
         expectVoicedTypeError(
-          () =>
-            pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, voiced as never, undefined, {
-              validate: false,
-            }),
-          'pitchCorrectToMidiTimevarying',
+          () => timevarying(f0, hop, { targetMidi: 60, voiced: voiced as never, validate: false }),
+          'pitchCorrectTimevarying',
         );
         expectVoicedTypeError(
-          () =>
-            pitchCorrectTimevarying(signal, f0, SR, hop, {
-              voiced: voiced as never,
-              validate: false,
-            }),
+          () => timevaryingRequest(f0, hop, { voiced: voiced as never, validate: false }),
           'pitchCorrectTimevarying',
         );
       }
@@ -585,18 +528,11 @@ describe('v1.2 feature additions (WASM)', () => {
 
       for (const voiced of invalid) {
         expectVoicedTypeError(
-          () =>
-            pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, voiced as never, undefined, {
-              validate: false,
-            }),
-          'pitchCorrectToMidiTimevarying',
+          () => timevarying(f0, hop, { targetMidi: 60, voiced: voiced as never, validate: false }),
+          'pitchCorrectTimevarying',
         );
         expectVoicedTypeError(
-          () =>
-            pitchCorrectTimevarying(signal, f0, SR, hop, {
-              voiced: voiced as never,
-              validate: false,
-            }),
+          () => timevaryingRequest(f0, hop, { voiced: voiced as never, validate: false }),
           'pitchCorrectTimevarying',
         );
       }
@@ -620,8 +556,8 @@ describe('v1.2 feature additions (WASM)', () => {
     });
 
     it('noteStretch and noteMove default offset to the input length', () => {
-      const stretched = noteStretch(signal, SR);
-      const moved = noteMove(signal, SR);
+      const stretched = noteStretch(signal, SR, { stretchRatio: 1.5 });
+      const moved = noteMove(signal, SR, { targetOnsetSample: 500 });
       expect(stretched).toBeInstanceOf(Float32Array);
       expect(stretched.length).toBeGreaterThan(0);
       expect(moved).toBeInstanceOf(Float32Array);
@@ -691,7 +627,7 @@ describe('v1.2 feature additions (WASM)', () => {
 
     it('exposes the editing methods on the Audio class with the same shapes', () => {
       const audio = Audio.fromBuffer(signal, SR);
-      const corrected = audio.pitchCorrectToMidi(57, 60);
+      const corrected = audio.pitchCorrectToMidi({ currentMidi: 57, targetMidi: 60 });
       const stretched = audio.noteStretch({
         onsetSample: 0,
         offsetSample: signal.length,
@@ -719,7 +655,10 @@ describe('v1.2 feature additions (WASM)', () => {
     }
 
     it('routes a send through reverb and back to master', () => {
-      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, BLOCK);
+      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+        sampleRate: 48000,
+        blockSize: BLOCK,
+      });
       mixer.compile();
 
       // Strip 0 = vocal, strip 1 = reverb return. Impulse into vocal, silence into return.
@@ -750,20 +689,37 @@ describe('v1.2 feature additions (WASM)', () => {
     });
 
     it('schedules insert-parameter automation without throwing', () => {
-      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, BLOCK);
+      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+        sampleRate: 48000,
+        blockSize: BLOCK,
+      });
       mixer.compile();
 
-      expect(mixer.stripCount()).toBeGreaterThan(0);
+      expect(mixer.stripCount).toBeGreaterThan(0);
 
       // Strip 0 (vocal) has pre-fader inserts (insert 0 = eq.parametric).
       // Schedule a linear ramp on param 0 over the first second of audio.
-      expect(() => mixer.scheduleInsertAutomation(0, 0, 0, 0, 0.0, 'linear')).not.toThrow();
       expect(() =>
-        mixer.scheduleInsertAutomation(0, 0, 0, 48000, 1.0, 'exponential'),
+        mixer.scheduleInsertAutomation(0, 0, {
+          paramId: 0,
+          samplePos: 0,
+          value: 0.0,
+          curve: 'linear',
+        }),
+      ).not.toThrow();
+      expect(() =>
+        mixer.scheduleInsertAutomation(0, 0, {
+          paramId: 0,
+          samplePos: 48000,
+          value: 1.0,
+          curve: 'exponential',
+        }),
       ).not.toThrow();
 
       // Out-of-range strip index must throw.
-      expect(() => mixer.scheduleInsertAutomation(999, 0, 0, 0, 0.0)).toThrow();
+      expect(() =>
+        mixer.scheduleInsertAutomation(999, 0, { paramId: 0, samplePos: 0, value: 0.0 }),
+      ).toThrow();
 
       // Processing after scheduling still produces output.
       const vocalL = new Float32Array(BLOCK);
@@ -779,13 +735,16 @@ describe('v1.2 feature additions (WASM)', () => {
     });
 
     it('round-trips the scene topology to JSON', () => {
-      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, BLOCK);
-      const scene = mixer.toSceneJson();
+      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+        sampleRate: 48000,
+        blockSize: BLOCK,
+      });
+      const scene = mixer.toJson();
       expect(scene).toContain('"vocal-verb"');
       expect(scene).toContain('"vocal-verb-return"');
       expect(scene).toContain('"destinationBusId":"vocal-verb"');
 
-      const restored = Mixer.fromSceneJson(scene, 48000, BLOCK);
+      const restored = Mixer.fromJson(scene, { sampleRate: 48000, blockSize: BLOCK });
       restored.compile();
       restored.destroy();
       mixer.destroy();
@@ -793,7 +752,10 @@ describe('v1.2 feature additions (WASM)', () => {
 
     it('processes 128-sample render quanta through the single WASM module', () => {
       const quantum = 128;
-      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, quantum);
+      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+        sampleRate: 48000,
+        blockSize: quantum,
+      });
       mixer.compile();
 
       const vocalL = new Float32Array(quantum);
@@ -814,8 +776,8 @@ describe('v1.2 feature additions (WASM)', () => {
     it('can render a block into caller-owned output arrays', () => {
       const quantum = 128;
       const scene = mixingScenePresetJson('vocalReverbSend');
-      const offline = Mixer.fromSceneJson(scene, 48000, quantum);
-      const inplace = Mixer.fromSceneJson(scene, 48000, quantum);
+      const offline = Mixer.fromJson(scene, { sampleRate: 48000, blockSize: quantum });
+      const inplace = Mixer.fromJson(scene, { sampleRate: 48000, blockSize: quantum });
       offline.compile();
       inplace.compile();
 
@@ -841,8 +803,8 @@ describe('v1.2 feature additions (WASM)', () => {
     it('bulk-copies processStereoInto with frame-independent boundary calls', () => {
       const quantum = 128;
       const scene = mixingScenePresetJson('vocalReverbSend');
-      const reference = Mixer.fromSceneJson(scene, 48000, quantum);
-      const inplace = Mixer.fromSceneJson(scene, 48000, quantum);
+      const reference = Mixer.fromJson(scene, { sampleRate: 48000, blockSize: quantum });
+      const inplace = Mixer.fromJson(scene, { sampleRate: 48000, blockSize: quantum });
       reference.compile();
       inplace.compile();
 
@@ -880,7 +842,7 @@ describe('v1.2 feature additions (WASM)', () => {
           inplace.processStereoInto(short.left, short.right, shortOutL, shortOutR);
           expect(Array.from(shortOutL)).toEqual(Array.from(expectedShort.left));
           expect(Array.from(shortOutR)).toEqual(Array.from(expectedShort.right));
-          expect(setSpy).toHaveBeenCalledTimes(2 * inplace.stripCount() + 2);
+          expect(setSpy).toHaveBeenCalledTimes(2 * inplace.stripCount + 2);
           setSpy.mockClear();
 
           const longOutL = new Float32Array(quantum);
@@ -888,7 +850,7 @@ describe('v1.2 feature additions (WASM)', () => {
           inplace.processStereoInto(long.left, long.right, longOutL, longOutR);
           expect(Array.from(longOutL)).toEqual(Array.from(expectedLong.left));
           expect(Array.from(longOutR)).toEqual(Array.from(expectedLong.right));
-          expect(setSpy).toHaveBeenCalledTimes(2 * inplace.stripCount() + 2);
+          expect(setSpy).toHaveBeenCalledTimes(2 * inplace.stripCount + 2);
         } finally {
           // Always restore the native method, even when a parity assertion
           // fails, so later tests cannot inherit a spied TypedArray prototype.
@@ -903,8 +865,8 @@ describe('v1.2 feature additions (WASM)', () => {
     it('can render through reusable WASM-heap realtime buffers', () => {
       const quantum = 128;
       const scene = mixingScenePresetJson('vocalReverbSend');
-      const offline = Mixer.fromSceneJson(scene, 48000, quantum);
-      const realtime = Mixer.fromSceneJson(scene, 48000, quantum);
+      const offline = Mixer.fromJson(scene, { sampleRate: 48000, blockSize: quantum });
+      const realtime = Mixer.fromJson(scene, { sampleRate: 48000, blockSize: quantum });
       offline.compile();
       realtime.compile();
 
@@ -931,26 +893,38 @@ describe('v1.2 feature additions (WASM)', () => {
     });
 
     it('exposes live mixer controls and meter readers', () => {
-      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, BLOCK);
+      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+        sampleRate: 48000,
+        blockSize: BLOCK,
+      });
       const vocalIndex = mixer.stripById('vocal');
       expect(vocalIndex).toBe(0);
-      // stripById returns number | null; an unknown id resolves to null.
-      expect(mixer.stripById('definitely-not-a-strip')).toBeNull();
+      // An unknown id is refused rather than resolved to a sentinel.
+      expect(() => mixer.stripById('definitely-not-a-strip')).toThrow(RangeError);
       const vocal = vocalIndex as number;
 
       mixer.setSoloSafe(vocal, true);
       mixer.setSoloed(vocal, false);
-      mixer.setPolarityInvert(vocal, false, true);
+      mixer.setPolarityInvert(vocal, { left: false, right: true });
       mixer.setPanLaw(vocal, 'linear0dB');
       mixer.setChannelDelaySamples(vocal, 0);
       mixer.setVcaOffsetDb(vocal, -1);
       mixer.setDualPan(vocal, -0.2, 0.2);
-      const sendIndex = mixer.addSend(vocal, 'wasm-extra-send', 'vocal-verb', -24, 'postFader');
+      const sendIndex = mixer.addSend(vocal, {
+        id: 'wasm-extra-send',
+        destinationBusId: 'vocal-verb',
+        sendDb: -24,
+        timing: 'postFader',
+      });
       mixer.setSendDb(vocal, sendIndex, -18);
-      mixer.scheduleFaderAutomation(vocal, 0, -6, 'linear');
-      mixer.schedulePanAutomation(vocal, 0, 0, 'linear');
-      mixer.scheduleWidthAutomation(vocal, 0, 1, 'linear');
-      mixer.scheduleSendAutomation(vocal, sendIndex, 0, -12, 'linear');
+      mixer.scheduleFaderAutomation(vocal, { samplePos: 0, faderDb: -6, curve: 'linear' });
+      mixer.schedulePanAutomation(vocal, { samplePos: 0, pan: 0, curve: 'linear' });
+      mixer.scheduleWidthAutomation(vocal, { samplePos: 0, width: 1, curve: 'linear' });
+      mixer.scheduleSendAutomation(vocal, sendIndex, {
+        samplePos: 0,
+        sendDb: -12,
+        curve: 'linear',
+      });
       mixer.compile();
 
       const vocalL = new Float32Array(BLOCK);
@@ -962,7 +936,7 @@ describe('v1.2 feature additions (WASM)', () => {
       const out = mixer.processStereo([vocalL, returnL], [vocalR, returnR]);
       expect(blockEnergy(out)).toBeGreaterThan(0);
 
-      expect(Number.isFinite(mixer.meterTap(vocal, 'preFader').peakDbL)).toBe(true);
+      expect(Number.isFinite(mixer.stripMeter(vocal, 'preFader').peakDbL)).toBe(true);
       expect(Number.isFinite(mixer.stripMeter(vocal, 'postFader').rmsDbL)).toBe(true);
       expect(mixer.readGoniometerLatest(vocal, 8).length).toBeGreaterThan(0);
 
@@ -998,7 +972,12 @@ describe('v1.2 feature additions (WASM)', () => {
 
   describe('RealtimeEngine parameter/transport parity', () => {
     it('honors tunable queue capacities and reads back transport state', () => {
-      const engine = new RealtimeEngine(48000, 128, 32, 32);
+      const engine = new RealtimeEngine({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+        commandCapacity: 32,
+        telemetryCapacity: 32,
+      });
       engine.setTempo(120);
       engine.addParameter({
         id: 5,
@@ -1008,17 +987,19 @@ describe('v1.2 feature additions (WASM)', () => {
         maxValue: 12,
         defaultValue: 0,
         rtSafe: true,
-        defaultCurve: 0, // canonical AutomationCurve::Linear
+        defaultCurve: 'linear', // canonical AutomationCurve::Linear
       });
 
       // Sample-accurate + smoothed parameter changes queue without throwing.
       expect(() => engine.setParameter(5, 6)).not.toThrow();
       expect(() => engine.setParameterSmoothed(5, -3)).not.toThrow();
-      expect(engine.midiCcBindingCount()).toBe(0);
-      expect(() => engine.bindMidiCc(0, 74, 5, { minValue: -60, maxValue: 12 })).not.toThrow();
-      expect(engine.midiCcBindingCount()).toBe(1);
+      expect(engine.midiCcBindingCount).toBe(0);
       expect(() =>
-        engine.bindMidiCcBinding({
+        engine.bindMidiCc({ channel: 0, ccNumber: 74, paramId: 5, minValue: -60, maxValue: 12 }),
+      ).not.toThrow();
+      expect(engine.midiCcBindingCount).toBe(1);
+      expect(() =>
+        engine.bindMidiCc({
           ccNumber: 1,
           ccLsbNumber: 33,
           channel: 0,
@@ -1028,9 +1009,9 @@ describe('v1.2 feature additions (WASM)', () => {
           maxValue: 1,
         }),
       ).not.toThrow();
-      expect(engine.midiCcBindingCount()).toBe(2);
+      expect(engine.midiCcBindingCount).toBe(2);
       engine.clearMidiCcBindings();
-      expect(engine.midiCcBindingCount()).toBe(0);
+      expect(engine.midiCcBindingCount).toBe(0);
       expect(() => engine.setMidiFx(0, '{"transpose_semitones":12}')).not.toThrow();
       expect(() =>
         engine.setMidiFx(
@@ -1051,19 +1032,19 @@ describe('v1.2 feature additions (WASM)', () => {
         engine.setMidiFx(0, '{"arpeggiator_intervals":[0],"arpeggiator_step_ppq":0}'),
       ).toThrow();
       engine.setMidiInputSource(0);
-      expect(engine.midiInputPendingCount()).toBe(0);
+      expect(engine.midiInputPendingCount).toBe(0);
       engine.pushMidiInputNoteOn(0, 0, 60, 100, 3);
-      expect(engine.midiInputPendingCount()).toBe(1);
+      expect(engine.midiInputPendingCount).toBe(1);
 
       engine.play();
       engine.process([new Float32Array(128), new Float32Array(128)]);
-      expect(engine.midiInputPendingCount()).toBe(0);
+      expect(engine.midiInputPendingCount).toBe(0);
       engine.clearMidiInputSource();
       expect(() => engine.pushMidiInputNoteOff(0, 0, 60, 0, 0)).toThrow(
         expect.objectContaining({ code: ErrorCode.InvalidState }),
       );
 
-      const state = engine.getTransportState();
+      const state = engine.transportState();
       expect(state.playing).toBe(true);
       expect(state.sampleRate).toBe(48000);
       expect(state.bpm).toBe(120);
@@ -1077,7 +1058,7 @@ describe('v1.2 feature additions (WASM)', () => {
     });
 
     it('reports external-destination table overflow and validates smoothing ms', () => {
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       for (let id = 0; id < 16; id++) {
         engine.setMidiDestinationExternal(id, true);
       }
@@ -1094,10 +1075,12 @@ describe('v1.2 feature additions (WASM)', () => {
     });
 
     it('accepts only a stereo lane sourceChannelLayout and rejects an out-of-range one', () => {
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       // Stereo and an omitted layout are accepted; mono, 5.1 and 7.1 are refused.
-      expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 1 }])).not.toThrow();
-      for (const layout of [0, 2, 3]) {
+      expect(() =>
+        engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 'stereo' }]),
+      ).not.toThrow();
+      for (const layout of ['mono', '5.1', '7.1'] as const) {
         expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: layout }])).toThrow(
           /must be stereo/,
         );
@@ -1109,37 +1092,47 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(() => engine.setTrackLanes(lanes.slice(0, MAX_TRACK_LANES))).not.toThrow();
       expect(() => engine.setTrackLanes(lanes)).toThrow(/at most 32 track lanes/);
       expect(() => engine.setTrackLanes([{ trackId: 10 }])).not.toThrow();
-      // Out-of-range layout is rejected like the C ABI is_valid_channel_layout.
-      expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 9 }])).toThrow();
-      // 257 narrows to 1 (Stereo, valid) if the full-range bound is checked
-      // AFTER truncating to uint8_t instead of before -- the wrap this guards.
-      expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 257 }])).toThrow();
-      expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: -255 }])).toThrow();
+      // An unknown name is a RangeError and an ordinal, wrapping ones included
+      // (257 narrows to 1 if the bound is checked after truncating to uint8_t),
+      // is a TypeError.
+      expect(() =>
+        engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 'quad' as never }]),
+      ).toThrow(RangeError);
+      for (const ordinal of [1, 9, 257, -255]) {
+        expect(() =>
+          engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: ordinal as never }]),
+        ).toThrow(TypeError);
+      }
       engine.destroy();
     });
 
     it('accepts a bus channelLayout and rejects an out-of-range or wrapping one', () => {
-      const engine = new RealtimeEngine(48000, 128);
-      expect(() => engine.setTrackBuses([{ busId: 1, channelLayout: 2 }])).not.toThrow();
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+      expect(() => engine.setTrackBuses([{ busId: 1, channelLayout: '5.1' }])).not.toThrow();
       expect(() => engine.setTrackBuses([{ busId: 1 }])).not.toThrow();
-      expect(() => engine.setTrackBuses([{ busId: 1, channelLayout: 9 }])).toThrow();
-      expect(() => engine.setTrackBuses([{ busId: 1, channelLayout: 257 }])).toThrow();
-      expect(() => engine.setTrackBuses([{ busId: 1, channelLayout: -255 }])).toThrow();
+      expect(() => engine.setTrackBuses([{ busId: 1, channelLayout: 'quad' as never }])).toThrow(
+        RangeError,
+      );
+      for (const ordinal of [2, 9, 257, -255]) {
+        expect(() => engine.setTrackBuses([{ busId: 1, channelLayout: ordinal as never }])).toThrow(
+          TypeError,
+        );
+      }
       engine.destroy();
     });
 
     it('settles smoothed lane faders before an offline render starts', () => {
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       engine.setTempo(120);
-      engine.setTrackLanes([10]);
+      engine.setTrackLanes([{ trackId: 10 }]);
       const frames = 128 * 8;
       const ones = new Float32Array(frames).fill(1);
       engine.setClips([
         { trackId: 10, channels: [ones, ones], startPpq: 0, lengthSamples: frames },
       ]);
       // Track 10's fader held at -60 dB from ppq 0.
-      engine.setAutomationLane(engine.resolveTrackLaneAutomationId(10, 'faderDb'), [
-        { ppq: 0, value: -60, curveToNext: 2 },
+      engine.setAutomationLane(engine.resolveStripAutomationId(10, 'faderDb'), [
+        { ppq: 0, value: -60, curveToNext: 'hold' },
       ]);
       engine.seekSample(0);
       // Priming block with the transport stopped applies the automation target;
@@ -1155,32 +1148,39 @@ describe('v1.2 feature additions (WASM)', () => {
     });
 
     it('rejects non-finite automation breakpoints like the C ABI oracle', () => {
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       // Seed a valid lane so failed replacements must leave published state intact.
-      engine.setAutomationLane(0x4d58ff01, [{ ppq: 0, value: -6, curveToNext: 0 }]);
-      expect(engine.automationLaneCount()).toBe(1);
+      engine.setAutomationLane(0x4d58ff01, [{ ppq: 0, value: -6, curveToNext: 'linear' }]);
+      expect(engine.automationLaneCount).toBe(1);
       // Non-finite ppq is rejected.
       expect(() =>
-        engine.setAutomationLane(0x4d58ff01, [{ ppq: Number.NaN, value: -6, curveToNext: 0 }]),
+        engine.setAutomationLane(0x4d58ff01, [
+          { ppq: Number.NaN, value: -6, curveToNext: 'linear' },
+        ]),
       ).toThrow();
       // Non-finite value is rejected.
       expect(() =>
         engine.setAutomationLane(0x4d58ff01, [
-          { ppq: 0, value: Number.POSITIVE_INFINITY, curveToNext: 0 },
+          { ppq: 0, value: Number.POSITIVE_INFINITY, curveToNext: 'linear' },
         ]),
       ).toThrow();
-      expect(engine.automationLaneCount()).toBe(1);
+      expect(engine.automationLaneCount).toBe(1);
       engine.destroy();
     });
 
     it('rejects an out-of-range automation curve ordinal instead of clamping it', () => {
-      const engine = new RealtimeEngine(48000, 128);
-      // curveToNext outside the AutomationCurve enum (0..3) is rejected, not
-      // silently clamped to Linear.
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+      // An unknown curve name is a RangeError and an ordinal a TypeError; neither
+      // is clamped to Linear.
       expect(() =>
-        engine.setAutomationLane(0x4d58ff01, [{ ppq: 0, value: -6, curveToNext: 4 }]),
-      ).toThrow();
-      // A defaultCurve outside the enum is rejected at addParameter.
+        engine.setAutomationLane(0x4d58ff01, [
+          { ppq: 0, value: -6, curveToNext: 'bounce' as never },
+        ]),
+      ).toThrow(RangeError);
+      expect(() =>
+        engine.setAutomationLane(0x4d58ff01, [{ ppq: 0, value: -6, curveToNext: 4 as never }]),
+      ).toThrow(TypeError);
+      // The same refusals apply to a defaultCurve at addParameter.
       expect(() =>
         engine.addParameter({
           id: 9,
@@ -1190,14 +1190,14 @@ describe('v1.2 feature additions (WASM)', () => {
           maxValue: 12,
           defaultValue: 0,
           rtSafe: true,
-          defaultCurve: 5,
+          defaultCurve: 5 as never,
         }),
-      ).toThrow();
+      ).toThrow(TypeError);
       engine.destroy();
     });
 
     it('preserves parameters and markers after transactional setter failures', () => {
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       const parameter = {
         id: 17,
         name: 'original gain',
@@ -1206,7 +1206,7 @@ describe('v1.2 feature additions (WASM)', () => {
         maxValue: 12,
         defaultValue: -3,
         rtSafe: true,
-        defaultCurve: 0,
+        defaultCurve: 'linear' as const,
       };
       engine.addParameter(parameter);
       expect(() =>
@@ -1218,7 +1218,7 @@ describe('v1.2 feature additions (WASM)', () => {
           maxValue: 3,
           defaultValue: 2,
           rtSafe: false,
-          defaultCurve: 2,
+          defaultCurve: 'hold',
         }),
       ).toThrow();
       expect(engine.parameterInfo(17)).toEqual(parameter);
@@ -1233,12 +1233,12 @@ describe('v1.2 feature additions (WASM)', () => {
           { id: 22, ppq: Number.NaN, name: 'bridge' },
         ]),
       ).toThrow();
-      expect(engine.markerCount()).toBe(2);
-      expect(engine.markerByIndex(0)).toEqual({
+      expect(engine.markers()).toHaveLength(2);
+      expect(engine.markers()[0]).toEqual({
         id: 11,
         ppq: 1,
         name: 'intro',
-        kind: 0,
+        kind: 'marker',
         keyFifths: 0,
         keyMinor: false,
       });
@@ -1250,13 +1250,13 @@ describe('v1.2 feature additions (WASM)', () => {
           { id: 31, ppq: 4, name: 'duplicate b' },
         ]),
       ).toThrow();
-      expect(engine.markerCount()).toBe(2);
+      expect(engine.markers()).toHaveLength(2);
       expect(engine.marker(11).name).toBe('intro');
       engine.destroy();
     });
 
     it('routes a lane through its group bus and ducks a lane from a sidechain key', () => {
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       engine.setTempo(120);
       const frames = 128 * 64;
       const pad = new Float32Array(frames).fill(0.5);
@@ -1268,30 +1268,20 @@ describe('v1.2 feature additions (WASM)', () => {
         { trackId: 20, channels: [key, key], startPpq: 0, lengthSamples: frames },
       ]);
       // Ducking insert on the grouped lane keyed from the other lane.
-      engine.setTrackStripJson(
-        10,
-        JSON.stringify({
-          version: 1,
-          strips: [
-            {
-              id: 'track-10',
-              inserts: [
-                {
-                  slot: 'post',
-                  processor: 'dynamics.duckingProcessor',
-                  params: { thresholdDb: -30, ratio: 20, attackMs: 1, releaseMs: 50, rangeDb: 24 },
-                },
-              ],
-            },
-          ],
-          buses: [],
-          connections: [],
-        }),
-      );
-      engine.setLaneSidechain(10, 0, 20);
+      engine.setStrip(10, {
+        id: 'track-10',
+        inserts: [
+          {
+            slot: 'post',
+            processor: 'dynamics.duckingProcessor',
+            params: { thresholdDb: -30, ratio: 20, attackMs: 1, releaseMs: 50, rangeDb: 24 },
+          },
+        ],
+      } as never);
+      engine.setStripSidechain(10, 0, { kind: 'track', id: 20 });
       // Keep the key lane out of the measured mix; the key snapshot is
       // pre-fader, so the binding still sees it at full level.
-      engine.setParameter(engine.resolveTrackLaneAutomationId(20, 'faderDb'), -120);
+      engine.setParameter(engine.resolveStripAutomationId(20, 'faderDb'), -120);
       engine.seekSample(0);
       engine.process([new Float32Array(128), new Float32Array(128)]);
       engine.settleParameters();
@@ -1304,12 +1294,12 @@ describe('v1.2 feature additions (WASM)', () => {
       // Pad 0.5 through the -6 dB group bus would sit at ~0.25 unducked; the
       // hot key must push it far below that.
       expect(ducked).toBeLessThan(0.07);
-      engine.setLaneSidechain(10, 0, 0);
+      engine.setStripSidechain(10, 0, null);
       engine.destroy();
     });
 
     it('seeks markers at a scheduled render frame', () => {
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       engine.setTempo(60);
       engine.setMarkers([{ id: 9, ppq: 4, name: 'verse' }]);
       // Seek to marker 9 (4 quarter notes at 60bpm = 4s = 192000 samples),
@@ -1317,13 +1307,13 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(() => engine.seekMarker(9)).not.toThrow();
       engine.play();
       engine.process([new Float32Array(128), new Float32Array(128)]);
-      const state = engine.getTransportState();
+      const state = engine.transportState();
       expect(state.samplePosition).toBe(192000 + 128);
       engine.destroy();
     });
 
     it('rejects invalid tempo without replacing the active tempo map', () => {
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       engine.setTempo(60);
       expect(engine.sampleAtPpq(1)).toBe(48000);
       for (const invalid of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
@@ -1336,7 +1326,7 @@ describe('v1.2 feature additions (WASM)', () => {
     });
 
     it('rejects an oversized segment/marker list before allocating', () => {
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       // A crafted length past the shared buffer cap (500e6) must be rejected up
       // front, matching the C ABI, instead of driving an unbounded reserve. Use a
       // fake array-like so no real 500M-element allocation is attempted.
@@ -1347,20 +1337,19 @@ describe('v1.2 feature additions (WASM)', () => {
       engine.destroy();
     });
 
-    it('round-trips marker kind and key signature through setMarkers/markerByIndex', () => {
-      const engine = new RealtimeEngine(48000, 128);
+    it('round-trips marker kind and key signature through setMarkers/markers', () => {
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       engine.setMarkers([
         { id: 1, ppq: 0, name: 'intro' },
-        { id: 2, ppq: 4, name: 'Bb minor', kind: 4, keyFifths: -2, keyMinor: true },
+        { id: 2, ppq: 4, name: 'Bb minor', kind: 'keySignature', keyFifths: -2, keyMinor: true },
       ]);
-      expect(engine.markerCount()).toBe(2);
-      const plain = engine.markerByIndex(0);
-      expect(plain.kind).toBe(0);
+      expect(engine.markers()).toHaveLength(2);
+      const [plain, key] = engine.markers();
+      expect(plain.kind).toBe('marker');
       expect(plain.keyFifths).toBe(0);
       expect(plain.keyMinor).toBe(false);
-      const key = engine.markerByIndex(1);
       expect(key.name).toBe('Bb minor');
-      expect(key.kind).toBe(4);
+      expect(key.kind).toBe('keySignature');
       expect(key.keyFifths).toBe(-2);
       expect(key.keyMinor).toBe(true);
       engine.destroy();
@@ -1388,25 +1377,28 @@ describe('v1.2 feature additions (WASM)', () => {
 
   describe('Mixer imperative topology', () => {
     it('adds/removes buses and VCA groups and reports counts', () => {
-      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 128);
+      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+        sampleRate: 48000,
+        blockSize: 128,
+      });
       try {
-        const busesBefore = mixer.busCount();
+        const busesBefore = mixer.busCount;
         mixer.addBus('parallel-comp', 'aux');
-        expect(mixer.busCount()).toBe(busesBefore + 1);
+        expect(mixer.busCount).toBe(busesBefore + 1);
         mixer.removeBus('parallel-comp');
-        expect(mixer.busCount()).toBe(busesBefore);
+        expect(mixer.busCount).toBe(busesBefore);
 
-        const vcasBefore = mixer.vcaGroupCount();
+        const vcasBefore = mixer.vcaGroupCount;
         mixer.addVcaGroup('all', -3, ['vocal']);
-        expect(mixer.vcaGroupCount()).toBe(vcasBefore + 1);
+        expect(mixer.vcaGroupCount).toBe(vcasBefore + 1);
         mixer.setVcaGroupGainDb('all', -8);
         mixer.setVcaGroupMembers('all', []);
-        const scene = JSON.parse(mixer.toSceneJson());
+        const scene = JSON.parse(mixer.toJson());
         const group = scene.vcaGroups.find((entry: { id: string }) => entry.id === 'all');
         expect(group.gainDb).toBe(-8);
         expect(group.members).toEqual([]);
         mixer.removeVcaGroup('all');
-        expect(mixer.vcaGroupCount()).toBe(vcasBefore);
+        expect(mixer.vcaGroupCount).toBe(vcasBefore);
 
         mixer.compile();
       } finally {

@@ -56,7 +56,7 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
   setupWorklet();
 
   function makeRoutingEngine(tracks: Array<{ trackId: number; gain: number }>): RealtimeEngine {
-    const engine = new RealtimeEngine(48000, kBlock);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: kBlock });
     engine.setClips(
       tracks.map(({ trackId, gain }) => ({
         trackId,
@@ -95,7 +95,7 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
     it('routes a bus output into another bus', () => {
       const x = directLevel();
       const half = dbToLinear(-6);
-      const run = (bus1Output: number): number => {
+      const run = (bus1Output: number | undefined): number => {
         const engine = makeRoutingEngine([{ trackId: 10, gain: 1 }]);
         engine.setTrackBuses([
           { busId: 1, gainDb: 0, outputBusId: bus1Output },
@@ -106,7 +106,7 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
         engine.destroy();
         return level;
       };
-      closeRel(run(0), x);
+      closeRel(run(undefined), x);
       // Through bus 2, its -6 dB gainDb applies on top.
       closeRel(run(2), x * half);
     });
@@ -114,7 +114,11 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
     it('taps a bus send before or after the bus gain', () => {
       const x = directLevel();
       const g1 = dbToLinear(-12);
-      const run = (sendTiming: number, levelDb: number, enabled: boolean): number => {
+      const run = (
+        sendTiming: 'preFader' | 'postFader',
+        levelDb: number,
+        enabled: boolean,
+      ): number => {
         const engine = makeRoutingEngine([{ trackId: 10, gain: 1 }]);
         engine.setTrackBuses([
           { busId: 1, gainDb: -12, sends: [{ busId: 2, levelDb, enabled, sendTiming }] },
@@ -125,13 +129,13 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
         engine.destroy();
         return level;
       };
-      // sendTiming 1 = pre-fader (taps before bus 1's gainDb).
-      closeRel(run(1, 0, true), x * (g1 + 1), 1e-2);
-      // sendTiming 0 = post-fader (taps after bus 1's gainDb, same as output).
-      closeRel(run(0, 0, true), x * 2 * g1, 1e-2);
+      // 'preFader' taps before bus 1's gainDb.
+      closeRel(run('preFader', 0, true), x * (g1 + 1), 1e-2);
+      // 'postFader' taps after bus 1's gainDb, same as output.
+      closeRel(run('postFader', 0, true), x * 2 * g1, 1e-2);
       const half = dbToLinear(-6);
-      closeRel(run(1, -6, true), x * (g1 + half), 1e-2);
-      closeRel(run(0, 0, false), x * g1, 1e-2);
+      closeRel(run('preFader', -6, true), x * (g1 + half), 1e-2);
+      closeRel(run('postFader', 0, false), x * g1, 1e-2);
     });
   });
 
@@ -193,7 +197,7 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
       replaced.setTrackLanes([{ trackId: 10, outputBusId: 1, sends: [send(2)] }, { trackId: 20 }]);
       expectSame(render(edited), render(replaced));
       // Output 0 returns the lane to the master mix.
-      edited.setTrackOutputBus(10, 0);
+      edited.setTrackOutputBus(10, null);
       const master = rig();
       master.setTrackLanes([{ trackId: 10, sends: [send(2)] }, { trackId: 20 }]);
       expectSame(render(edited), render(master));
@@ -232,7 +236,7 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
     it('refuses the positional ops on an engine with no lanes and on a missing argument', () => {
       const engine = rig();
       expect(() => engine.setTrackSends(10, [send(2)])).toThrow();
-      engine.setTrackLanes([10]);
+      engine.setTrackLanes([{ trackId: 10 }]);
       // @ts-expect-error sends is required; undefined is not "clear"
       expect(() => engine.setTrackSends(10)).toThrow();
       engine.destroy();
@@ -321,17 +325,17 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
         { trackId: 10, outputBusId: 2 },
         { trackId: 30, outputBusId: 1 },
       ]);
-      engine.setBusStripJson(1, limiterBusJson);
-      engine.setBusStripJson(2, duckerBusJson);
-      engine.setMasterStripJson(duckerMasterJson);
+      engine.setBusStrip(1, JSON.parse(limiterBusJson).buses[0]);
+      engine.setBusStrip(2, JSON.parse(duckerBusJson).buses[0]);
+      engine.setStrip('master', JSON.parse(duckerMasterJson).strips[0]);
       // Bus 2 insert 0 keyed from bus 1 (sourceKind 1 = bus).
-      engine.setBusSidechain(2, 0, 1, 1);
+      engine.setBusSidechain(2, 0, { kind: 'bus', id: 1 });
       return engine;
     }
 
     it('keys and clears bus and master sidechain', () => {
       const reference = makeKeyedRig();
-      reference.setBusSidechain(2, 0, 1, 0);
+      reference.setBusSidechain(2, 0, null);
       const unkeyed = settled(reference);
       reference.destroy();
       expect(unkeyed).toBeGreaterThan(0.02);
@@ -341,20 +345,20 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
       expect(Math.abs(settled(engine))).toBeLessThan(unkeyed * 0.3);
 
       // A track-sourced key on bus 2 ducks it the same way.
-      engine.setBusSidechain(2, 0, 'track', 30);
+      engine.setBusSidechain(2, 0, { kind: 'track', id: 30 });
       expect(Math.abs(settled(engine))).toBeLessThan(unkeyed * 0.3);
 
       // The master ducker keyed from a track or a bus pulls the whole mix down.
-      engine.setMasterSidechain(0, 0, 30);
+      engine.setStripSidechain('master', 0, { kind: 'track', id: 30 });
       expect(Math.abs(settled(engine))).toBeLessThan(unkeyed * 0.3);
-      engine.setMasterSidechain(0, 'bus', 1);
+      engine.setStripSidechain('master', 0, { kind: 'bus', id: 1 });
       expect(Math.abs(settled(engine))).toBeLessThan(unkeyed * 0.3);
 
       // sourceId 0 clears a binding: the master one leaves bus 2 keyed alone,
       // and clearing that too returns the render to the unkeyed level.
-      engine.setMasterSidechain(0, 1, 0);
+      engine.setStripSidechain('master', 0, null);
       expect(Math.abs(settled(engine))).toBeLessThan(unkeyed * 0.3);
-      engine.setBusSidechain(2, 0, 0, 0);
+      engine.setBusSidechain(2, 0, null);
       // Replay until the duckers' 80 ms release has run out.
       for (let pass = 0; pass < 8; pass += 1) {
         settled(engine);
@@ -365,12 +369,17 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
 
     it('rejects an invalid sidechain source kind', () => {
       const engine = makeKeyedRig();
-      expect(() => engine.setBusSidechain(2, 0, 2, 30)).toThrow();
-      expect(() => engine.setBusSidechain(2, 0, -1, 30)).toThrow();
-      expect(() => engine.setMasterSidechain(0, 2, 30)).toThrow();
-      expect(() => engine.setMasterSidechain(0, -1, 30)).toThrow();
+      // An ordinal is a TypeError, an unknown spelling a RangeError.
+      expect(() => engine.setBusSidechain(2, 0, { kind: 2 as never, id: 30 })).toThrow(TypeError);
+      expect(() => engine.setBusSidechain(2, 0, { kind: -1 as never, id: 30 })).toThrow(TypeError);
+      expect(() => engine.setStripSidechain('master', 0, { kind: 2 as never, id: 30 })).toThrow(
+        TypeError,
+      );
+      expect(() => engine.setStripSidechain('master', 0, { kind: -1 as never, id: 30 })).toThrow(
+        TypeError,
+      );
       expect(() =>
-        engine.setBusSidechain(2, 0, 'lane' as unknown as SidechainSourceKind, 30),
+        engine.setBusSidechain(2, 0, { kind: 'lane' as unknown as SidechainSourceKind, id: 30 }),
       ).toThrow();
       engine.destroy();
     });
@@ -381,8 +390,8 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
     const heldNoteEvents = [{ renderFrame: 0, word0: midi1Word(0x9, 0, 60, 100), wordCount: 1 }];
 
     function renderMidiClip(clip: Record<string, unknown>): Float32Array {
-      const engine = new RealtimeEngine(48000, kBlock);
-      engine.setBuiltinInstrument({ gain: 0.5 }, kMidiDestination);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: kBlock });
+      engine.setBuiltinInstrument(kMidiDestination, { gain: 0.5 });
       engine.setMidiClips([
         {
           id: 42,
@@ -419,7 +428,7 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
     });
 
     it('rejects a bad gain or fade, and an open-ended fade-out', () => {
-      const engine = new RealtimeEngine(48000, kBlock);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: kBlock });
       const good = {
         id: 1,
         trackId: kMidiDestination,
@@ -468,10 +477,10 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
   describe('worklet syncMixer replay', () => {
     it('replays bus and master sidechain bindings across a syncMixer re-post', async () => {
       const posted: unknown[] = [];
-      const offline = new (await import('../dist/index.js')).RealtimeEngine(
-        48000,
-        128,
-      ) as unknown as OfflineEngineOption;
+      const offline = new (await import('../dist/index.js')).RealtimeEngine({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+      }) as unknown as OfflineEngineOption;
       const engine = await SonareEngine.create(fakeContext(), {
         mode: 'postMessage',
         offlineEngine: offline,
@@ -507,28 +516,31 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
           { busId: 1, gainDb: 0 },
           { busId: 2, gainDb: 0 },
         ]);
-        engine.setBusStripJson(2, oneInsertJson('2'));
-        engine.setMasterStripJson(
-          JSON.stringify({
-            version: 1,
-            strips: [
-              {
-                id: 'master',
-                inserts: [
-                  {
-                    slot: 'pre',
-                    processor: 'dynamics.limiter',
-                    params: JSON.stringify({ thresholdDb: 0, lookaheadMs: 0, releaseMs: 50 }),
-                  },
-                ],
-              },
-            ],
-            buses: [],
-            connections: [],
-          }),
+        engine.setBusStrip(2, JSON.parse(oneInsertJson('2')).buses[0]);
+        engine.setStrip(
+          'master',
+          JSON.parse(
+            JSON.stringify({
+              version: 1,
+              strips: [
+                {
+                  id: 'master',
+                  inserts: [
+                    {
+                      slot: 'pre',
+                      processor: 'dynamics.limiter',
+                      params: JSON.stringify({ thresholdDb: 0, lookaheadMs: 0, releaseMs: 50 }),
+                    },
+                  ],
+                },
+              ],
+              buses: [],
+              connections: [],
+            }),
+          ).strips[0],
         );
-        engine.setBusSidechain(2, 0, 1, 1);
-        engine.setMasterSidechain(0, 1, 2);
+        engine.setBusSidechain(2, 0, { kind: 'bus', id: 1 });
+        engine.setStripSidechain('master', 0, { kind: 'bus', id: 2 });
         // A later routing change re-posts every cached binding via syncMixer.
         engine.setTrackBuses([
           { busId: 1, gainDb: -3 },
@@ -552,7 +564,7 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
         expect(last.masterSidechains).toEqual([{ insertIndex: 0, sourceKind: 1, sourceId: 2 }]);
 
         // Clearing a binding removes it from the next full replay.
-        engine.setMasterSidechain(0, 1, 0);
+        engine.setStripSidechain('master', 0, null);
         engine.setTrackBuses([
           { busId: 1, gainDb: -3 },
           { busId: 2, gainDb: -1 },

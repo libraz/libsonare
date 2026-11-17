@@ -1,3 +1,4 @@
+import type { ChannelLayout } from '../audio.js';
 import {
   ClipPageStreamer,
   type ClipPageStreamerRequest,
@@ -5,6 +6,7 @@ import {
 } from '../clip_page_streamer.js';
 import { ErrorCode, SonareError } from '../errors.js';
 import type {
+  BuiltinSynthConfig,
   EngineAutomationPoint,
   EngineBounceOptions,
   EngineBounceResult,
@@ -17,6 +19,7 @@ import type {
   EngineMetronomeConfig,
   EngineMidiClipSchedule,
   EngineParameterInfo,
+  EngineTelemetry,
   EngineTempoSegment,
   EngineTimeSignatureSegment,
   EngineTrackLane,
@@ -24,11 +27,14 @@ import type {
   EngineTrackSend,
   EngineTransportState,
   EqBand,
-  MidiCcBindOptions,
+  MixSceneBus,
+  MixSceneStrip,
   PanLaw,
   PanMode,
+  ProjectMidiCcBinding,
+  Sf2InstrumentConfig,
   SidechainCheck,
-  SidechainSourceKind,
+  SynthPatch,
   UmpWords,
 } from '../index.js';
 import { RealtimeEngine } from '../index.js';
@@ -39,6 +45,12 @@ import {
 } from '../opfs_clip_pages.js';
 import { OwnerEpoch } from '../owner_epoch.js';
 import type { SurroundPan } from '../public_types.js';
+import type {
+  CaptureOptions,
+  EngineLoop,
+  ExternalMidiEvent,
+  SidechainSource,
+} from '../public_types_engine.js';
 import type { ClipPageProvider } from '../realtime_engine.js';
 import { resolveRenderFrame } from '../validation.js';
 import type { EngineAutomationContext } from './engine-automation.js';
@@ -55,11 +67,16 @@ import type {
 } from './engine-export.js';
 import * as exporter from './engine-export.js';
 import type { EngineMarkerContext } from './engine-markers.js';
-import * as markers from './engine-markers.js';
+import * as markerOps from './engine-markers.js';
 import type { EngineMixerContext, InsertParamOverrideMap } from './engine-mixer-facade.js';
 import * as mixer from './engine-mixer-facade.js';
 import { SonareRealtimeEngineNode } from './engine-node.js';
-import { buildTransportFacade, type CaptureOptions } from './engine-offline.js';
+import {
+  buildTransportFacade,
+  type CaptureSyncConfig,
+  requireObject,
+  type SonareEngineTransportFacade,
+} from './engine-offline.js';
 import type { SonareEngineOptions, SuspendableAudioContext } from './engine-options.js';
 import type { EngineParameterContext } from './engine-parameter-facade.js';
 import * as parameter from './engine-parameter-facade.js';
@@ -69,16 +86,9 @@ import { resolveParamId, resolveTargetId } from './engine-sync.js';
 import type { EngineTempoContext } from './engine-tempo-facade.js';
 import * as tempo from './engine-tempo-facade.js';
 import { requireChannelCount, resolveContextSampleRate } from './guards.js';
-import type {
-  SonareEngineSyncCaptureMessage,
-  SonareEngineSyncMessage,
-  SonareEngineTransportFacade,
-  SonareRealtimeEngineNodeCapabilities,
-  SonareWorkletExternalMidiEvent,
-} from './messages.js';
+import type { SonareEngineSyncMessage, SonareRealtimeEngineNodeCapabilities } from './messages.js';
 import {
   SonareEngineCommandType,
-  type SonareEngineTelemetryRecord,
   type SonareWorkletMeterSnapshot,
   type SonareWorkletScopeSnapshot,
 } from './protocol.js';
@@ -101,6 +111,24 @@ function transferableAudioBuffers(channels: readonly Float32Array[]): Transferab
   return transfers;
 }
 
+/**
+ * The main-thread facade of a DAW engine running in an AudioWorklet.
+ *
+ * It shares one vocabulary with {@link RealtimeEngine}: the same method names,
+ * target id first, the same request and config types, the same units. Every
+ * edit applies to an offline mirror engine on this thread and is forwarded to
+ * the worklet's live engine, so a refused edit changes neither.
+ *
+ * A track is addressed by its id (a number, or a numeric string naming it) and
+ * the master strip by `'master'`. Setters return `void`; one that cannot queue
+ * its command because the command ring is full throws a `SonareError` with
+ * `ErrorCode.OutOfMemory`. Calls that need the worklet's answer return a
+ * `Promise` because the audio thread cannot be read synchronously
+ * ({@link transportState}, {@link captureStatus}, {@link capturedAudio},
+ * {@link resetCapture}, {@link pollInsertGainReduction}); every other read is
+ * answered synchronously from the offline mirror, which holds the same state.
+ * Argument refusals are `TypeError` / `RangeError`, as on {@link RealtimeEngine}.
+ */
 export class SonareEngine {
   readonly node: AudioWorkletNode;
   readonly capabilities: SonareRealtimeEngineNodeCapabilities;
@@ -110,16 +138,16 @@ export class SonareEngine {
   private readonly context: SuspendableAudioContext;
   private readonly sampleRate: number;
   private readonly offlineBlockSize: number;
-  private readonly offlineChannelCount: number;
+  private readonly offlineNumChannels: number;
   private readonly automationLanes = new Map<number, EngineAutomationPoint[]>();
   private readonly insertAutomationIdsByTarget = new Map<string, Set<number>>();
   private readonly clips = new Map<number, EngineClip>();
   private readonly midiClips = new Map<number, EngineMidiClipSchedule>();
-  private readonly markers = new Map<number, EngineMarker>();
+  private readonly markerStore = new Map<number, EngineMarker>();
   private readonly trackLaneIds: number[] = [];
   private readonly trackSends = new Map<number, EngineTrackSend[]>();
   private readonly trackOutputBus = new Map<number, number>();
-  private readonly trackSourceChannelLayout = new Map<number, number>();
+  private readonly trackSourceChannelLayout = new Map<number, ChannelLayout>();
   private readonly laneSidechains = new Map<
     string,
     { trackId: number; insertIndex: number; sourceTrackId: number }
@@ -137,7 +165,7 @@ export class SonareEngine {
   private readonly busStripJson = new Map<number, string>();
   private readonly insertParamOverrides: InsertParamOverrideMap = new Map();
   private masterStripJson: string | undefined;
-  private captureConfig: Omit<SonareEngineSyncCaptureMessage, 'type'> | undefined;
+  private captureConfig: CaptureSyncConfig | undefined;
   private tempoBpm = 120;
   private timeSignature = { numerator: 4, denominator: 4 };
   private tempoSegments: EngineTempoSegment[] = [{ startPpq: 0, bpm: 120 }];
@@ -170,7 +198,7 @@ export class SonareEngine {
     offlineEngine: RealtimeEngine,
     sampleRate: number,
     offlineBlockSize: number,
-    offlineChannelCount: number,
+    offlineNumChannels: number,
   ) {
     this.context = context;
     this.realtimeNode = realtimeNode;
@@ -179,7 +207,7 @@ export class SonareEngine {
     this.capabilities = realtimeNode.capabilities;
     this.sampleRate = sampleRate;
     this.offlineBlockSize = offlineBlockSize;
-    this.offlineChannelCount = offlineChannelCount;
+    this.offlineNumChannels = offlineNumChannels;
     this.unsubscribeWorkletClipRequests = this.realtimeNode.onClipPageRequests((message) => {
       for (const request of message.requests) {
         this.enqueueWorkletClipPageRequest(request);
@@ -194,7 +222,7 @@ export class SonareEngine {
       sendCommand: (command) => this.sendMirroredCommand(command),
       setTempo: (bpm) => this.setTempo(bpm),
       setTempoSegments: (segments) => this.setTempoSegments(segments),
-      setLoop: (startPpq, endPpq, enabled) => this.setLoop(startPpq, endPpq, enabled),
+      setLoop: (loop) => this.setLoop(loop),
     });
   }
 
@@ -204,9 +232,10 @@ export class SonareEngine {
   ): Promise<SonareEngine> {
     const sampleRate = resolveContextSampleRate(options.sampleRate, context, 'SonareEngine.create');
     const blockSize = options.offlineBlockSize ?? options.blockSize ?? 128;
-    const channelCount = requireChannelCount(
-      options.offlineChannelCount ?? options.channelCount,
+    const numChannels = requireChannelCount(
+      options.offlineNumChannels ?? options.numChannels,
       2,
+      options.offlineNumChannels === undefined ? 'numChannels' : 'offlineNumChannels',
     );
     const realtimeNode = await SonareRealtimeEngineNode.create(context, options);
     try {
@@ -218,14 +247,15 @@ export class SonareEngine {
       await realtimeNode.destroy();
       throw error;
     }
-    const offlineEngine = options.offlineEngine ?? new RealtimeEngine(sampleRate, blockSize);
+    const offlineEngine =
+      options.offlineEngine ?? new RealtimeEngine({ sampleRate, maxBlockSize: blockSize });
     const engine = new SonareEngine(
       context,
       realtimeNode,
       offlineEngine,
       sampleRate,
       blockSize,
-      channelCount,
+      numChannels,
     );
     engine.syncParameters();
     return engine;
@@ -262,49 +292,44 @@ export class SonareEngine {
   }
 
   /**
-   * A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
-   * centred pitch bend on every channel played since the last reset. When
-   * playback next rolls, the controller, program, channel pressure and pitch
-   * bend values the clips set before the new position are sent again, so each
-   * loop pass and each seek starts from the state continuous playback reaches.
+   * Sets the loop region. A loop wrap, seek or stop sends note-offs plus CC64=0,
+   * CC121, CC123 and a centred pitch bend on every channel played since the last
+   * reset. When playback next rolls, the controller, program, channel pressure
+   * and pitch bend values the clips set before the new position are sent again,
+   * so each loop pass and each seek starts from the state continuous playback
+   * reaches.
    */
-  setLoop(startPpq: number, endPpq: number, enabled = true): boolean {
-    return tempo.setLoop(this.tempoContext, startPpq, endPpq, enabled);
+  setLoop(loop: EngineLoop): void {
+    tempo.setLoop(this.tempoContext, loop);
   }
 
   countInEndSample(startSample: number, bars: number): number {
     return tempo.countInEndSample(this.tempoContext, startSample, bars);
   }
 
-  getTransportState(): Promise<EngineTransportState> {
-    return tempo.getTransportState(this.tempoContext);
+  /** Reads the transport from the worklet's live engine; the answer arrives asynchronously. */
+  transportState(): Promise<EngineTransportState> {
+    return tempo.transportState(this.tempoContext);
   }
 
+  /** The latest {@link transportState} answer, or `undefined` before the first one. */
   cachedTransportState(): EngineTransportState | undefined {
     return tempo.cachedTransportState(this.tempoContext);
   }
 
-  setParam(nodeId: string, param: string | number, value: number): boolean {
-    return parameter.setParam(this.parameterContext, nodeId, param, value);
+  /** Sets one registered parameter by id or name, at the next block head. */
+  setParam(nodeId: string, param: string | number, value: number): void {
+    parameter.setParam(this.parameterContext, nodeId, param, value);
   }
 
-  scheduleParam(
-    nodeId: string,
-    param: string | number,
-    ppq: number,
-    value: number,
-    curve: number | 'linear' | 'exponential' = 'linear',
-  ): void {
-    automation.scheduleParam(this.automationContext, nodeId, param, ppq, value, curve);
+  /** Adds one breakpoint to the automation lane of a registered parameter. */
+  scheduleParam(nodeId: string, param: string | number, point: EngineAutomationPoint): void {
+    automation.scheduleParam(this.automationContext, nodeId, param, point);
   }
 
-  addAutomationPoint(
-    laneId: string | number,
-    ppq: number,
-    value: number,
-    curve: number | 'linear' | 'exponential' = 'linear',
-  ): void {
-    automation.addAutomationPoint(this.automationContext, laneId, ppq, value, curve);
+  /** Adds one breakpoint to an automation lane, addressed by lane id. */
+  addAutomationPoint(laneId: string | number, point: EngineAutomationPoint): void {
+    automation.addAutomationPoint(this.automationContext, laneId, point);
   }
 
   /**
@@ -317,18 +342,18 @@ export class SonareEngine {
   }
 
   /**
-   * Returns the automation target id for a mixer strip parameter.
+   * Returns the automation target id for a strip's fader, pan or width.
    *
    * The id addresses the engine's reserved mixer namespace, so it can be fed
    * straight to setAutomationLane to automate a fader or pan without
    * registering a parameter.
    *
    * @param target Track id (declares a mixer lane on first use) or 'master'.
-   * @param kind Strip parameter to address.
+   * @param kind Strip parameter to address; a track has no `'width'` (`RangeError`).
    * @returns Reserved engine parameter id for the strip parameter.
    */
-  automationParamId(target: string | number, kind: 'faderDb' | 'pan'): number {
-    return parameter.automationParamId(this.parameterContext, target, kind);
+  resolveStripAutomationId(target: string | number, kind: 'faderDb' | 'pan' | 'width'): number {
+    return parameter.resolveStripAutomationId(this.parameterContext, target, kind);
   }
 
   /**
@@ -337,16 +362,17 @@ export class SonareEngine {
    * buses, and applies nothing once the bus is removed.
    *
    * @param busId Bus id (declares the mixer bus on first use).
+   * @param paramName Bus parameter; only `'faderDb'`.
    * @returns Reserved engine parameter id for the bus fader gain (dB).
    */
-  busAutomationParamId(busId: number): number {
-    return parameter.busAutomationParamId(this.parameterContext, busId);
+  resolveBusAutomationId(busId: number, paramName: 'faderDb'): number {
+    return parameter.resolveBusAutomationId(this.parameterContext, busId, paramName);
   }
 
   /**
-   * Resolves a track-lane insert parameter (JSON-key name) to the reserved
-   * insert-automation id fed straight to setAutomationLane. Declares the track's
-   * mixer lane first (like automationParamId). The offline engine and the
+   * Resolves a strip insert parameter (JSON-key name) to the reserved
+   * insert-automation id fed straight to setAutomationLane. Declares a track's
+   * mixer lane first (like resolveStripAutomationId). The offline engine and the
    * worklet's engine receive the same mixer configuration in the same order, so
    * they number insert ids identically and an id resolved here drives the
    * worklet.
@@ -360,44 +386,29 @@ export class SonareEngine {
    * resolve again for the new processor. A change that would take the engine
    * past its 8192 insert-id entries is refused.
    *
-   * @param target Track id (declares a mixer lane on first use).
+   * @param target Track id (declares a mixer lane on first use) or 'master'.
    * @param insertIndex Index into the strip's combined insert sequence.
    * @param paramName Processor JSON-key parameter name.
    * @returns Reserved insert-automation id.
    * @throws RangeError when the strip, insert or key is unknown.
    */
-  resolveTrackInsertAutomationId(
+  resolveStripInsertAutomationId(
     target: string | number,
     insertIndex: number,
     paramName: string,
   ): number {
-    const id = parameter.resolveTrackInsertAutomationId(
+    const id = parameter.resolveStripInsertAutomationId(
       this.parameterContext,
       target,
       insertIndex,
       paramName,
     );
-    const trackId = this.trackLaneIds[this.ensureTrackLane(target)];
-    this.rememberInsertAutomationId({ kind: 'track', trackId }, id);
-    return id;
-  }
-
-  /**
-   * Resolves a master-strip insert parameter to its reserved insert-automation
-   * id.
-   *
-   * @param insertIndex Index into the master strip's insert sequence.
-   * @param paramName Processor JSON-key parameter name.
-   * @returns Reserved insert-automation id.
-   * @throws RangeError when the insert or key is unknown.
-   */
-  resolveMasterInsertAutomationId(insertIndex: number, paramName: string): number {
-    const id = parameter.resolveMasterInsertAutomationId(
-      this.parameterContext,
-      insertIndex,
-      paramName,
+    this.rememberInsertAutomationId(
+      target === 'master'
+        ? { kind: 'master' }
+        : { kind: 'track', trackId: this.trackLaneIds[this.ensureTrackLane(target)] },
+      id,
     );
-    this.rememberInsertAutomationId({ kind: 'master' }, id);
     return id;
   }
 
@@ -439,17 +450,16 @@ export class SonareEngine {
   }
 
   /**
-   * Returns the number of automation lanes installed on the engine, including
-   * lanes whose breakpoint list is currently empty.
-   *
-   * @returns Engine-side automation lane count.
+   * The number of automation lanes installed on the engine, including lanes
+   * whose breakpoint list is currently empty.
    */
-  automationLaneCount(): number {
+  get automationLaneCount(): number {
     return parameter.automationLaneCount(this.parameterContext);
   }
 
-  listParameters(): EngineParameterInfo[] {
-    return parameter.listParameters(this.parameterContext);
+  /** The registered parameters, read from the offline mirror. */
+  parameters(): EngineParameterInfo[] {
+    return parameter.parameters(this.parameterContext);
   }
 
   /** Registers a custom parameter on the offline mirror and worklet engine. */
@@ -463,36 +473,39 @@ export class SonareEngine {
   }
 
   /**
-   * Queues a lane's solo/mute state. An armed PFL/AFL cue ({@link setTrackMonitorMode}) stays off
+   * Queues a track's solo/mute state. An armed PFL/AFL cue ({@link setTrackMonitorMode}) stays off
    * the program output here, which the facade renders with the cue kept separate; offline renders,
    * bounces and freezes never include it.
    */
-  setSoloMute(target: string | number, solo: boolean, mute: boolean): boolean {
-    return parameter.setSoloMute(this.parameterContext, target, solo, mute);
+  setTrackSoloMute(target: string | number, state: { solo: boolean; mute: boolean }): void {
+    parameter.setTrackSoloMute(this.parameterContext, target, state);
   }
 
   /**
-   * Queues a per-track PFL/AFL monitor tap mode change. The facade renders with the cue kept
-   * separate from the program output; offline renders, bounces and freezes never include it.
+   * Queues a per-track PFL/AFL monitor tap mode change; `mode` is a string and an
+   * ordinal is a `TypeError`. The facade renders with the cue kept separate from
+   * the program output; offline renders, bounces and freezes never include it.
    */
   setTrackMonitorMode(
     target: string | number,
     mode: EngineTrackMonitorMode,
     renderFrame?: number,
-  ): boolean {
-    return parameter.setTrackMonitorMode(this.parameterContext, target, mode, renderFrame);
+  ): void {
+    parameter.setTrackMonitorMode(this.parameterContext, target, mode, renderFrame);
   }
 
-  setStripGain(target: string | number, db: number): boolean {
-    return this.sendSmoothedParam(this.automationParamId(target, 'faderDb'), db, () => {
+  /** Queues a strip fader change in dB, smoothed on the audio thread. */
+  setStripFaderDb(target: string | number, faderDb: number): void {
+    this.sendSmoothedParam(this.resolveStripAutomationId(target, 'faderDb'), faderDb, () => {
       if (target === 'master') {
-        strips.cacheMasterStripScalar(this.stripContext, 'faderDb', db);
+        strips.cacheMasterStripScalar(this.stripContext, 'faderDb', faderDb);
       }
     });
   }
 
-  setStripPan(target: string | number, pan: number): boolean {
-    return this.sendSmoothedParam(this.automationParamId(target, 'pan'), pan, () => {
+  /** Queues a strip pan change, smoothed on the audio thread. */
+  setStripPan(target: string | number, pan: number): void {
+    this.sendSmoothedParam(this.resolveStripAutomationId(target, 'pan'), pan, () => {
       if (target === 'master') {
         strips.cacheMasterStripScalar(this.stripContext, 'pan', pan);
       }
@@ -500,11 +513,11 @@ export class SonareEngine {
   }
 
   /** Resets the master's integrated loudness accumulator in both engine mirrors. */
-  resetMasterLoudnessMeter(renderFrame?: number): boolean {
+  resetMasterLoudnessMeter(renderFrame?: number): void {
     const frame = resolveRenderFrame('resetMasterLoudnessMeter', renderFrame);
-    return commitCommand(
+    commitCommand(
       this.commitContext,
-      { type: SonareEngineCommandType.ResetMasterLoudnessMeter, sampleTime: frame },
+      { type: SonareEngineCommandType.ResetMasterLoudnessMeter, renderFrame: frame },
       (offline) => offline.resetMasterLoudnessMeter(renderFrame),
     );
   }
@@ -516,14 +529,12 @@ export class SonareEngine {
    * follows it on the queue, such as `play()`, starts from the state an offline
    * render starts from. Instruments are not reset. During playback it cuts
    * running insert tails and delay lines mid-sound, like a seek.
-   *
-   * @returns Whether the live command was queued
    */
-  resetProcessorState(renderFrame?: number): boolean {
+  resetProcessorState(renderFrame?: number): void {
     const frame = resolveRenderFrame('resetProcessorState', renderFrame);
-    return commitCommand(
+    commitCommand(
       this.commitContext,
-      { type: SonareEngineCommandType.ResetProcessorState, sampleTime: frame },
+      { type: SonareEngineCommandType.ResetProcessorState, renderFrame: frame },
       (offline) => offline.resetProcessorState(renderFrame),
     );
   }
@@ -536,37 +547,39 @@ export class SonareEngine {
    * a reorder or removal throws. (The raw `RealtimeEngine.setTrackLanes` does
    * accept both.) Existing queued and published track automation follows the
    * track id, and so do track insert automation ids (see
-   * resolveTrackInsertAutomationId). Entries carrying
+   * resolveStripInsertAutomationId). Entries carrying
    * `sends` replace that track's send list; entries without `sends` leave
    * existing sends untouched. At most `MAX_TRACK_LANES` (32) lanes are accepted.
    *
-   * @param lanes Track ids or lane descriptors in the desired lane order.
+   * @param lanes Lane descriptors in the desired lane order.
    */
-  setTrackLanes(lanes: ReadonlyArray<number | EngineTrackLane>): void {
+  setTrackLanes(lanes: readonly EngineTrackLane[]): void {
     mixer.setTrackLanes(this.mixerContext, lanes);
   }
 
   /**
    * Routes a track lane's post-fader output into a declared bus instead of
-   * the master mix (group/folder routing); busId 0 restores the master mix.
+   * the master mix (group/folder routing); `null` restores the master mix and
+   * `0` is a `RangeError`.
    */
-  setTrackOutputBus(target: string | number, busId: number): void {
+  setTrackOutputBus(target: string | number, busId: number | null): void {
     mixer.setTrackOutputBus(this.mixerContext, target, busId);
   }
 
   /**
-   * Keys one insert of a lane strip from another lane's post-strip pre-fader
-   * audio (ducking/sidechainRouter inserts). sourceTarget null removes the
-   * binding. Throws, leaving the existing bindings unchanged, for a lane keying
-   * itself or a binding that would close a cycle over the lane bindings; a
-   * refused binding is never recorded, so it is not replayed on resync.
+   * Keys one insert of a strip from another source (ducking/sidechainRouter
+   * inserts); `null` removes the binding. A track strip accepts only a `'track'`
+   * source, the master strip a track or a bus; a source `id` of `0` is a
+   * `RangeError`. Throws, leaving the existing bindings unchanged, for a lane
+   * keying itself or a binding that would close a cycle over the lane bindings;
+   * a refused binding is never recorded, so it is not replayed on resync.
    */
-  setLaneSidechain(
+  setStripSidechain(
     target: string | number,
     insertIndex: number,
-    sourceTarget: string | number | null,
+    source: SidechainSource | null,
   ): void {
-    mixer.setLaneSidechain(this.mixerContext, target, insertIndex, sourceTarget);
+    mixer.setStripSidechain(this.mixerContext, target, insertIndex, source);
   }
 
   setTrackSends(target: string | number, sends: EngineTrackSend[]): void {
@@ -579,59 +592,32 @@ export class SonareEngine {
 
   /**
    * Keys one insert of a bus strip from a track lane or another bus
-   * (ducking/sidechainRouter inserts). `sourceId` 0 removes the binding.
+   * (ducking/sidechainRouter inserts); `null` removes the binding.
    */
-  setBusSidechain(
-    busId: number,
-    insertIndex: number,
-    sourceKind: SidechainSourceKind | number,
-    sourceId: number,
-  ): void {
-    mixer.setBusSidechain(this.mixerContext, busId, insertIndex, sourceKind, sourceId);
+  setBusSidechain(busId: number, insertIndex: number, source: SidechainSource | null): void {
+    mixer.setBusSidechain(this.mixerContext, busId, insertIndex, source);
   }
 
   /**
-   * Keys one insert of the master strip from a track lane or a bus. Same
-   * source rules as {@link setBusSidechain}.
-   */
-  setMasterSidechain(
-    insertIndex: number,
-    sourceKind: SidechainSourceKind | number,
-    sourceId: number,
-  ): void {
-    mixer.setMasterSidechain(this.mixerContext, insertIndex, sourceKind, sourceId);
-  }
-
-  /**
-   * Reports whether {@link setBusSidechain} would accept the binding, without
+   * Reports whether {@link setStripSidechain} would accept the binding, without
    * changing anything. Answers from the offline mirror, which holds the same
    * configuration as the live engine, and never declares a missing lane or bus.
    */
-  canSetBusSidechain(
-    busId: number,
+  canSetStripSidechain(
+    target: string | number,
     insertIndex: number,
-    sourceKind: SidechainSourceKind | number,
-    sourceId: number,
+    source: SidechainSource,
   ): SidechainCheck {
-    return this.offlineEngine.canSetBusSidechain(busId, insertIndex, sourceKind, sourceId);
+    return this.offlineEngine.canSetStripSidechain(
+      target === 'master' ? target : this.resolveTargetId(target),
+      insertIndex,
+      source,
+    );
   }
 
-  /** Reports whether {@link setMasterSidechain} would accept the binding, without changing anything. */
-  canSetMasterSidechain(
-    insertIndex: number,
-    sourceKind: SidechainSourceKind | number,
-    sourceId: number,
-  ): SidechainCheck {
-    return this.offlineEngine.canSetMasterSidechain(insertIndex, sourceKind, sourceId);
-  }
-
-  /**
-   * Reports whether {@link setLaneSidechain} would accept the binding, without
-   * changing anything. Takes numeric track ids and, unlike the setter, never
-   * declares a missing lane or bus; `sourceTrackId` 0 asks about an unbind.
-   */
-  canSetLaneSidechain(trackId: number, insertIndex: number, sourceTrackId: number): SidechainCheck {
-    return this.offlineEngine.canSetLaneSidechain(trackId, insertIndex, sourceTrackId);
+  /** Reports whether {@link setBusSidechain} would accept the binding, without changing anything. */
+  canSetBusSidechain(busId: number, insertIndex: number, source: SidechainSource): SidechainCheck {
+    return this.offlineEngine.canSetBusSidechain(busId, insertIndex, source);
   }
 
   /**
@@ -639,20 +625,32 @@ export class SonareEngine {
    * unbounded), answered from the offline mirror. The bound is conservative
    * before the first note and narrows once a patch has sounded.
    */
-  tailSamples(): number {
-    return this.offlineEngine.tailSamples();
+  get tailSamples(): number {
+    return this.offlineEngine.tailSamples;
   }
 
-  /** Processing latency in 1/256 samples, answered from the offline mirror. */
-  graphLatencySamplesQ8(): number {
-    return this.offlineEngine.graphLatencySamplesQ8();
+  /** Processing latency in samples (fractional), answered from the offline mirror. */
+  get graphLatencySamples(): number {
+    return this.offlineEngine.graphLatencySamples;
   }
 
-  setBusGain(busId: number, db: number): boolean {
-    return mixer.setBusGain(this.mixerContext, busId, db);
+  /** Queues a bus fader change in dB, smoothed on the audio thread. */
+  setBusGainDb(busId: number, gainDb: number): void {
+    mixer.setBusGain(this.mixerContext, busId, gainDb);
   }
 
-  setTrackStripJson(target: string | number, sceneJson: string): void {
+  /**
+   * Replaces a strip (a track's, or the master) with the given scene strip; the
+   * document is sent as `{ strips: [strip] }`. A track is declared first when it
+   * has no lane yet.
+   */
+  setStrip(target: string | number, strip: MixSceneStrip): void {
+    requireObject('setStrip', 'strip', strip);
+    const sceneJson = JSON.stringify({ strips: [strip] });
+    if (target === 'master') {
+      mixer.setMasterStripJson(this.mixerContext, sceneJson);
+      return;
+    }
     // Parse before declaring a new lane so malformed text cannot declare one.
     mixer.decodedInsertSignature(sceneJson, { kind: 'track', trackId: 0 });
     const laneIndex = this.ensureTrackLane(target);
@@ -667,193 +665,115 @@ export class SonareEngine {
     this.syncMixer(insertBaseResets, constructionOverrides);
   }
 
-  setTrackStripEqBand(target: string | number, bandIndex: number, band: EqBand | string): void {
-    strips.setTrackStripEqBand(this.stripContext, target, bandIndex, band);
+  /** Replaces a bus strip with the given scene bus; the document is sent as `{ buses: [bus] }`. */
+  setBusStrip(busId: number, bus: MixSceneBus): void {
+    requireObject('setBusStrip', 'bus', bus);
+    mixer.setBusStripJson(this.mixerContext, busId, JSON.stringify({ buses: [bus] }));
   }
 
-  setTrackStripInsertBypassed(
-    target: string | number,
-    insertIndex: number,
-    bypassed: boolean,
-    resetOnBypass = false,
-  ): void {
-    strips.setTrackStripInsertBypassed(
-      this.stripContext,
-      target,
-      insertIndex,
-      bypassed,
-      resetOnBypass,
-    );
+  /** Sets one EQ band of a strip (a track's, or the master). */
+  setStripEqBand(target: string | number, bandIndex: number, band: EqBand): void {
+    strips.setStripEqBand(this.stripContext, target, bandIndex, band);
   }
 
-  setTrackStripInsertParamByName(
-    target: string | number,
-    insertIndex: number,
-    paramName: string,
-    value: number,
-  ): void {
-    strips.setTrackStripInsertParamByName(this.stripContext, target, insertIndex, paramName, value);
-  }
-
-  setTrackStripPan(target: string | number, pan: number): void {
-    strips.setTrackStripPan(this.stripContext, target, pan);
-  }
-
-  setTrackStripPanLaw(target: string | number, panLaw: PanLaw | number): void {
-    strips.setTrackStripPanLaw(this.stripContext, target, panLaw);
-  }
-
-  setTrackStripPanMode(target: string | number, panMode: PanMode | number): void {
-    strips.setTrackStripPanMode(this.stripContext, target, panMode);
-  }
-
-  setTrackStripDualPan(target: string | number, leftPan: number, rightPan: number): void {
-    strips.setTrackStripDualPan(this.stripContext, target, leftPan, rightPan);
+  /** Sets one EQ band of a bus strip. */
+  setBusEqBand(busId: number, bandIndex: number, band: EqBand): void {
+    this.ensureBus(busId);
+    strips.setBusEqBand(this.stripContext, busId, bandIndex, band);
   }
 
   /**
-   * Sets a track lane strip's surround placement (glitch-free, 5 ms placement
-   * glide). Takes effect on a destination wider than stereo, so set `channelCount`
-   * to the layout's plane count. Omitted fields default to a centered point source.
+   * Bypasses or re-enables one insert of a strip. Bypassing keeps the insert's
+   * internal state (reverb tail, compressor envelope) unless `resetOnBypass`
+   * (default `false`) is set; re-posting the scene, the only alternative,
+   * rebuilds the chain and loses it.
    */
-  setTrackStripSurroundPan(target: string | number, pan: SurroundPan): void {
-    strips.setTrackStripSurroundPan(this.stripContext, target, pan);
-  }
-
-  setTrackStripChannelDelaySamples(target: string | number, delaySamples: number): void {
-    strips.setTrackStripChannelDelaySamples(this.stripContext, target, delaySamples);
-  }
-
-  setStripEq(target: string | number, bandIndex: number, band: EqBand | string): void {
-    if (target === 'master') {
-      this.setMasterStripEqBand(bandIndex, band);
-      return;
-    }
-    this.setTrackStripEqBand(target, bandIndex, band);
-  }
-
   setStripInsertBypassed(
     target: string | number,
     insertIndex: number,
-    bypassed: boolean,
-    resetOnBypass = false,
+    state: { bypassed: boolean; resetOnBypass?: boolean },
   ): void {
-    if (target === 'master') {
-      this.setMasterStripInsertBypassed(insertIndex, bypassed, resetOnBypass);
-      return;
-    }
-    this.setTrackStripInsertBypassed(target, insertIndex, bypassed, resetOnBypass);
+    strips.setStripInsertBypassed(this.stripContext, target, insertIndex, state);
   }
 
-  setStripInserts(target: string | number, sceneJson: string): void {
-    if (target === 'master') {
-      this.setMasterStripJson(sceneJson);
-      return;
-    }
-    this.setTrackStripJson(target, sceneJson);
-  }
-
-  setBusStripJson(busId: number, sceneJson: string): void {
-    mixer.setBusStripJson(this.mixerContext, busId, sceneJson);
-  }
-
-  setMasterStripJson(sceneJson: string): void {
-    mixer.setMasterStripJson(this.mixerContext, sceneJson);
-  }
-
-  setMasterStripEqBand(bandIndex: number, band: EqBand | string): void {
-    strips.setMasterStripEqBand(this.stripContext, bandIndex, band);
-  }
-
-  setMasterStripInsertBypassed(
-    insertIndex: number,
-    bypassed: boolean,
-    resetOnBypass = false,
-  ): void {
-    strips.setMasterStripInsertBypassed(this.stripContext, insertIndex, bypassed, resetOnBypass);
-  }
-
-  setMasterStripInsertParamByName(insertIndex: number, paramName: string, value: number): void {
-    strips.setMasterStripInsertParamByName(this.stripContext, insertIndex, paramName, value);
-  }
-
-  setBusStripInsertParamByName(
+  /** Bus counterpart of {@link setStripInsertBypassed}. */
+  setBusInsertBypassed(
     busId: number,
     insertIndex: number,
-    paramName: string,
-    value: number,
+    state: { bypassed: boolean; resetOnBypass?: boolean },
   ): void {
     this.ensureBus(busId);
-    strips.setBusStripInsertParamByName(this.stripContext, busId, insertIndex, paramName, value);
+    strips.setBusInsertBypassed(this.stripContext, busId, insertIndex, state);
+  }
+
+  /** Sets one insert parameter of a strip by its JSON-key name. */
+  setStripInsertParam(
+    target: string | number,
+    insertIndex: number,
+    param: { name: string; value: number },
+  ): void {
+    strips.setStripInsertParam(this.stripContext, target, insertIndex, param);
+  }
+
+  /** Bus counterpart of {@link setStripInsertParam}. */
+  setBusInsertParam(
+    busId: number,
+    insertIndex: number,
+    param: { name: string; value: number },
+  ): void {
+    this.ensureBus(busId);
+    strips.setBusInsertParam(this.stripContext, busId, insertIndex, param);
+  }
+
+  /** Sets a track strip's pan law; `'master'` is a `RangeError`. */
+  setStripPanLaw(target: string | number, panLaw: PanLaw): void {
+    strips.setStripPanLaw(this.stripContext, target, panLaw);
+  }
+
+  /** Sets a track strip's pan mode; `'master'` is a `RangeError`. */
+  setStripPanMode(target: string | number, panMode: PanMode): void {
+    strips.setStripPanMode(this.stripContext, target, panMode);
+  }
+
+  /** Sets a track strip's dual-pan positions; `'master'` is a `RangeError`. */
+  setStripDualPan(target: string | number, leftPan: number, rightPan: number): void {
+    strips.setStripDualPan(this.stripContext, target, leftPan, rightPan);
   }
 
   /**
-   * Bus-strip counterpart of {@link setStripInsertBypassed}. A bus is addressed
-   * by its numeric id, which the `target` of the track/master form cannot
-   * express, so it is its own method exactly like
-   * {@link setBusStripInsertParamByName}. Bypassing keeps the insert's internal
-   * state (reverb tail, compressor envelope) unless `resetOnBypass` is set;
-   * re-posting the bus scene JSON, the only workaround before this existed,
-   * rebuilds the chain and loses it.
+   * Sets a track strip's surround placement (glitch-free, 5 ms placement
+   * glide). Takes effect on a destination wider than stereo, so set `numChannels`
+   * to the layout's plane count. Omitted fields default to a centered point
+   * source. `'master'` is a `RangeError`.
    */
-  setBusStripInsertBypassed(
-    busId: number,
-    insertIndex: number,
-    bypassed: boolean,
-    resetOnBypass = false,
-  ): void {
+  setStripSurroundPan(target: string | number, pan: SurroundPan): void {
+    strips.setStripSurroundPan(this.stripContext, target, pan);
+  }
+
+  /** Sets a track strip's channel delay in samples; `'master'` is a `RangeError`. */
+  setStripChannelDelaySamples(target: string | number, delaySamples: number): void {
+    strips.setStripChannelDelaySamples(this.stripContext, target, delaySamples);
+  }
+
+  /** Bus counterpart of {@link setStripPan}'s scene form; refused on a surround bus. */
+  setBusPan(busId: number, pan: number): void {
     this.ensureBus(busId);
-    strips.setBusStripInsertBypassed(
-      this.stripContext,
-      busId,
-      insertIndex,
-      bypassed,
-      resetOnBypass,
-    );
+    strips.setBusPan(this.stripContext, busId, pan);
   }
 
-  /** Bus-strip counterpart of {@link setTrackStripEqBand}. */
-  setBusStripEqBand(busId: number, bandIndex: number, band: EqBand | string): void {
+  setBusPanLaw(busId: number, panLaw: PanLaw): void {
     this.ensureBus(busId);
-    strips.setBusStripEqBand(this.stripContext, busId, bandIndex, band);
+    strips.setBusPanLaw(this.stripContext, busId, panLaw);
   }
 
-  /** Bus-strip counterpart of {@link setTrackStripPan}; refused on a surround bus. */
-  setBusStripPan(busId: number, pan: number): void {
+  setBusPanMode(busId: number, panMode: PanMode): void {
     this.ensureBus(busId);
-    strips.setBusStripPan(this.stripContext, busId, pan);
+    strips.setBusPanMode(this.stripContext, busId, panMode);
   }
 
-  setBusStripPanLaw(busId: number, panLaw: PanLaw | number): void {
+  setBusDualPan(busId: number, leftPan: number, rightPan: number): void {
     this.ensureBus(busId);
-    strips.setBusStripPanLaw(this.stripContext, busId, panLaw);
-  }
-
-  setBusStripPanMode(busId: number, panMode: PanMode | number): void {
-    this.ensureBus(busId);
-    strips.setBusStripPanMode(this.stripContext, busId, panMode);
-  }
-
-  setBusStripDualPan(busId: number, leftPan: number, rightPan: number): void {
-    this.ensureBus(busId);
-    strips.setBusStripDualPan(this.stripContext, busId, leftPan, rightPan);
-  }
-
-  setStripInsertParamByName(
-    target: string | number,
-    insertIndex: number,
-    paramName: string,
-    value: number,
-  ): void {
-    if (target === 'master') {
-      this.setMasterStripInsertParamByName(insertIndex, paramName, value);
-      return;
-    }
-    this.setTrackStripInsertParamByName(target, insertIndex, paramName, value);
-  }
-
-  setMasterChain(sceneJson: string): void {
-    this.setMasterStripJson(sceneJson);
+    strips.setBusDualPan(this.stripContext, busId, leftPan, rightPan);
   }
 
   /**
@@ -1003,18 +923,19 @@ export class SonareEngine {
     );
   }
 
-  /** Reads the current time-stretch voice capacity (default 8). */
-  warpVoiceCapacity(): number {
-    return this.offlineEngine.warpVoiceCapacity();
+  /** The current time-stretch voice capacity (default 8). */
+  get warpVoiceCapacity(): number {
+    return this.offlineEngine.warpVoiceCapacity;
   }
 
-  addClip(
-    trackId: string | number,
-    buffer: Float32Array[] | ClipPageProvider,
-    startPpq: number,
-    opts: Partial<Omit<EngineClip, 'channels' | 'pageProvider' | 'startPpq'>> = {},
-  ): number {
-    return clips.addClip(this.clipContext, trackId, buffer, startPpq, opts);
+  /**
+   * Adds a clip to a track and returns its id (`clip.id`, or a fresh one).
+   * Give exactly one of `clip.channels` and `clip.pageProvider`; a page provider
+   * must come from {@link attachOpfsClipStream}, with `clip.id` equal to the
+   * stream's `clipId`.
+   */
+  addClip(trackId: string | number, clip: Omit<EngineClip, 'trackId'>): number {
+    return clips.addClip(this.clipContext, trackId, clip);
   }
 
   removeClip(clipId: number): void {
@@ -1035,13 +956,13 @@ export class SonareEngine {
    */
   setBuiltinInstrument(
     trackId: string | number,
-    config: { destinationId?: number } & Record<string, unknown> = {},
+    config: Omit<BuiltinSynthConfig, 'destinationId'> = {},
   ): void {
     strips.setBuiltinInstrument(this.stripContext, trackId, config);
   }
 
   /** Binds a NativeSynth patch; see {@link setBuiltinInstrument} for swap timing. */
-  setSynthInstrument(trackId: string | number, patch: Record<string, unknown> | string = {}): void {
+  setSynthInstrument(trackId: string | number, patch: SynthPatch | string = {}): void {
     strips.setSynthInstrument(this.stripContext, trackId, patch);
   }
 
@@ -1052,14 +973,7 @@ export class SonareEngine {
   /** Binds a SoundFont player; see {@link setBuiltinInstrument} for swap timing. */
   setSf2Instrument(
     trackId: string | number,
-    config: {
-      destinationId?: number;
-      gain?: number;
-      polyphony?: number;
-      preferModelForModeledFamilies?: boolean;
-      clearBankRig?: boolean;
-      gsEfxRealization?: 'modern' | 'classic';
-    } = {},
+    config: Omit<Sf2InstrumentConfig, 'destinationId'> = {},
   ): void {
     strips.setSf2Instrument(this.stripContext, trackId, config);
   }
@@ -1067,13 +981,13 @@ export class SonareEngine {
   /**
    * Route a track's MIDI to the external output (drained via {@link onMidiOut})
    * instead of an internal instrument, so the track plays an external device.
-   * Pass `external=false` to restore internal-synth playback. The change takes
+   * Pass `false` to restore internal-synth playback. The change takes
    * effect at the next processed block; switching a destination's route first
    * releases its notes and resets its controllers through the old route, and
    * drops its pending MIDI-FX events.
    */
-  setMidiDestinationExternal(trackId: string | number, external: boolean): void {
-    strips.setMidiDestinationExternal(this.stripContext, trackId, external);
+  setMidiDestinationExternal(trackId: string | number, midiDestinationExternal: boolean): void {
+    strips.setMidiDestinationExternal(this.stripContext, trackId, midiDestinationExternal);
   }
 
   /**
@@ -1081,8 +995,8 @@ export class SonareEngine {
    * the external output so external gear tracks the transport tempo. The bytes
    * arrive through {@link onMidiOut} tagged with the transport destination.
    */
-  setExternalMidiClockEnabled(enabled: boolean): void {
-    strips.setExternalMidiClockEnabled(this.stripContext, enabled);
+  setExternalMidiClockEnabled(externalMidiClockEnabled: boolean): void {
+    strips.setExternalMidiClockEnabled(this.stripContext, externalMidiClockEnabled);
   }
 
   /**
@@ -1187,8 +1101,7 @@ export class SonareEngine {
 
   /**
    * Queues a live MIDI 2.0 Program Change, with an optional bank, to a track's
-   * MIDI destination; arguments follow the main-thread engine's
-   * `pushMidiProgram`. Which receivers select programs: the SoundFont player
+   * MIDI destination; arguments follow {@link RealtimeEngine.pushMidiProgram}. Which receivers select programs: the SoundFont player
    * (`setSf2Instrument`) selects bank and program under its own RX PROGRAM
    * CHANGE / RX BANK SELECT gates; a NativeSynth bound with
    * `useGmPrograms: true` (`setSynthInstrument`) resolves each channel's voice
@@ -1203,38 +1116,20 @@ export class SonareEngine {
     group: number,
     channel: number,
     program: number,
-    bankValid = false,
-    bankMsb = 0,
-    bankLsb = 0,
+    bank?: { msb: number; lsb: number },
     renderFrame?: number,
   ): void {
-    strips.pushMidiProgram(
-      this.stripContext,
-      trackId,
-      group,
-      channel,
-      program,
-      bankValid,
-      bankMsb,
-      bankLsb,
-      renderFrame,
-    );
+    strips.pushMidiProgram(this.stripContext, trackId, group, channel, program, bank, renderFrame);
   }
 
   pushMidiSysex(trackId: string | number, data: Uint8Array, renderFrame?: number): void {
     strips.pushMidiSysex(this.stripContext, trackId, data, renderFrame);
   }
 
-  bindMidiCc(
-    channel: number,
-    controller: number,
-    paramId: number,
-    options: MidiCcBindOptions = {},
-  ): void {
-    const minValue = options.minValue ?? 0;
-    const maxValue = options.maxValue ?? 1;
-    this.offlineEngine.bindMidiCc(channel, controller, paramId, { minValue, maxValue });
-    this.postSync({ type: 'syncMidiCcBinding', channel, controller, paramId, minValue, maxValue });
+  /** Maps a MIDI controller to an engine parameter, on both engines. */
+  bindMidiCc(binding: ProjectMidiCcBinding): void {
+    this.offlineEngine.bindMidiCc(binding);
+    this.postSync({ type: 'syncMidiCcBinding', binding: { ...binding } });
   }
 
   setMidiInputSource(destinationId = 0): void {
@@ -1461,20 +1356,19 @@ export class SonareEngine {
     this.postSync({ type: 'syncMidiPanic', renderFrame: frame });
   }
 
+  /**
+   * Sets up capture in one call: buffer, source, record offset, input monitor
+   * and punch window, on both engines. The call states the whole setup, so an
+   * omitted field returns to its default and an omitted `punch` clears the
+   * punch window. `numChannels` defaults to the offline plane count.
+   */
   configureCapture(options: CaptureOptions): void {
     capture.configureCapture(this.captureContext, options);
   }
 
-  /**
-   * Arms the engine-global capture path. `trackId` is retained for source
-   * compatibility and must be `0`; per-track capture is not implemented.
-   */
-  armRecord(trackId: string | number, enabled: boolean): boolean {
-    return capture.armRecord(this.captureContext, trackId, enabled);
-  }
-
-  punch(inPpq: number, outPpq: number): boolean {
-    return capture.punch(this.captureContext, inPpq, outPpq);
+  /** Arms or disarms the engine-global capture path; per-track capture is not implemented. */
+  armCapture(state: { armed: boolean }): void {
+    capture.armCapture(this.captureContext, state);
   }
 
   captureStatus(): Promise<EngineCaptureStatus> {
@@ -1489,25 +1383,21 @@ export class SonareEngine {
     return capture.resetCapture(this.captureContext);
   }
 
-  /**
-   * Configures the metronome on both engines.
-   *
-   * @returns Whether the live command was queued; on false neither engine changed.
-   */
-  setMetronome(opts: EngineMetronomeConfig): boolean {
-    // The full config (beatGain/accentGain/clickSamples/clickSeconds) cannot fit
+  /** Configures the metronome on both engines; if the command ring is full neither changes. */
+  setMetronome(opts: EngineMetronomeConfig): void {
+    // The full config (beatGain/accentGain/clickSamples/clickSec) cannot fit
     // the fixed-size SAB command record, so it is delivered out-of-band; the
     // SetMetronome command then toggles enabled state on the audio thread.
-    return commitCommand(
+    commitCommand(
       this.commitContext,
-      { type: SonareEngineCommandType.SetMetronome, sampleTime: -1, argInt: opts.enabled ? 1 : 0 },
+      { type: SonareEngineCommandType.SetMetronome, renderFrame: -1, argInt: opts.enabled ? 1 : 0 },
       (offline) => offline.setMetronome(opts),
       () => this.postSync({ type: 'syncMetronome', config: opts }),
     );
   }
 
   addMarker(ppq: number, name = ''): number {
-    return markers.addMarker(this.markerContext, ppq, name);
+    return markerOps.addMarker(this.markerContext, ppq, name);
   }
 
   /**
@@ -1515,28 +1405,27 @@ export class SonareEngine {
    * assigned fresh ids; entries carrying an `id` keep it. Returns the resolved
    * markers in the order given.
    */
-  setMarkers(entries: ReadonlyArray<{ ppq: number; name?: string; id?: number }>): EngineMarker[] {
-    return markers.setMarkers(this.markerContext, entries);
+  setMarkers(entries: ReadonlyArray<Omit<EngineMarker, 'id'> & { id?: number }>): EngineMarker[] {
+    return markerOps.setMarkers(this.markerContext, entries);
   }
 
-  markerCount(): number {
-    return markers.markerCount(this.markerContext);
-  }
-
-  markerByIndex(index: number): EngineMarker {
-    return markers.markerByIndex(this.markerContext, index);
+  /** The stored markers in timeline order, read from the offline mirror. */
+  markers(): EngineMarker[] {
+    return markerOps.markers(this.markerContext);
   }
 
   marker(markerId: number): EngineMarker {
-    return markers.marker(this.markerContext, markerId);
+    return markerOps.marker(this.markerContext, markerId);
   }
 
-  seekMarker(markerId: number): boolean {
-    return markers.seekMarker(this.markerContext, markerId);
+  /** Seeks to a marker; an unknown id is a `RangeError`. */
+  seekMarker(markerId: number): void {
+    markerOps.seekMarker(this.markerContext, markerId);
   }
 
-  setLoopFromMarkers(startMarkerId: number, endMarkerId: number): boolean {
-    return markers.setLoopFromMarkers(this.markerContext, startMarkerId, endMarkerId);
+  /** Loops between two markers. */
+  setLoopFromMarkers(startMarkerId: number, endMarkerId: number): void {
+    markerOps.setLoopFromMarkers(this.markerContext, startMarkerId, endMarkerId);
   }
 
   /**
@@ -1546,14 +1435,15 @@ export class SonareEngine {
    * span. Runs synchronously on the calling thread: the thread is blocked for
    * the whole render.
    *
-   * The request form takes `blockSize` (default and ceiling: the offline block
-   * size; a larger value throws `RangeError`) and `finalize`. With
+   * The request takes `totalFrames`, `blockSize` (default and ceiling: the
+   * offline block size; a larger value throws `RangeError`), `finalize` and
+   * `validate`. With
    * `finalize: false` a chunk leaves held notes and delay tails running into
    * the next call, which does not prime again; end the series with
    * {@link finishOfflineRender}. The mirror's transport position is restored
    * when the timeline ends.
    */
-  async renderOffline(request: number | SonareRenderOfflineRequest): Promise<Float32Array[]> {
+  async renderOffline(request: SonareRenderOfflineRequest): Promise<Float32Array[]> {
     return exporter.renderOffline(this.exportContext, request);
   }
 
@@ -1596,7 +1486,7 @@ export class SonareEngine {
    * accumulated since the previous poll, which may span many blocks. Returns an
    * unsubscribe function.
    */
-  onMidiOut(callback: (events: SonareWorkletExternalMidiEvent[]) => void): () => void {
+  onMidiOut(callback: (events: ExternalMidiEvent[]) => void): () => void {
     return this.realtimeNode.onMidiOut(callback);
   }
 
@@ -1608,11 +1498,11 @@ export class SonareEngine {
     return this.realtimeNode.onScope(callback);
   }
 
-  onTelemetry(callback: (telemetry: SonareEngineTelemetryRecord) => void): () => void {
+  onTelemetry(callback: (telemetry: EngineTelemetry) => void): () => void {
     return this.realtimeNode.onTelemetry(callback);
   }
 
-  pollTelemetry(): SonareEngineTelemetryRecord[] {
+  pollTelemetry(): EngineTelemetry[] {
     return this.realtimeNode.pollTelemetry();
   }
 
@@ -1645,7 +1535,7 @@ export class SonareEngine {
     // Reclaims bindings still priming in attachOpfsClipStream while the
     // engines their providers live on still exist.
     this.epoch.close();
-    this.transport.stop();
+    this.realtimeNode.stop();
     this.realtimeNode.pollTelemetry();
     void this.realtimeNode.destroy();
     this.offlineEngine.destroy();
@@ -1900,7 +1790,8 @@ export class SonareEngine {
       realtimeNode: this.realtimeNode,
       sendCommand: (command) => this.sendMirroredCommand(command),
       canSend: (command) => this.realtimeNode.canSendCommand(command),
-      offlineChannelCount: this.offlineChannelCount,
+      sampleRate: this.sampleRate,
+      offlineNumChannels: this.offlineNumChannels,
       postSync: (message) => this.postSync(message),
       getCaptureConfig: () => this.captureConfig,
       setCaptureConfig: (config) => {
@@ -1964,7 +1855,7 @@ export class SonareEngine {
     return {
       offlineEngine: this.offlineEngine,
       offlineBlockSize: this.offlineBlockSize,
-      offlineChannelCount: this.offlineChannelCount,
+      offlineNumChannels: this.offlineNumChannels,
       clips: this.clips,
       opfsSources: this.opfsExportSources,
       session: this.exportSession,
@@ -2002,7 +1893,7 @@ export class SonareEngine {
   private get markerContext(): EngineMarkerContext {
     return {
       offlineEngine: this.offlineEngine,
-      markers: this.markers,
+      markers: this.markerStore,
       getNextMarkerId: () => this.nextMarkerId,
       setNextMarkerId: (value) => {
         this.nextMarkerId = value;
@@ -2010,19 +1901,20 @@ export class SonareEngine {
       postSync: (message) => this.postSync(message),
       sendCommand: (command) => this.sendMirroredCommand(command),
       canSend: (command) => this.realtimeNode.canSendCommand(command),
-      setLoop: (startPpq, endPpq, enabled) => this.setLoop(startPpq, endPpq, enabled),
+      setLoop: (startPpq, endPpq, enabled) =>
+        tempo.setLoop(this.tempoContext, { startPpq, endPpq, enabled }),
     };
   }
 
   // Mirrors a smoothed parameter into the offline engine and pushes a
   // sample-accurate smoothed-param command to the realtime runtime.
-  private sendSmoothedParam(paramId: number, value: number, commitCache?: () => void): boolean {
-    return commitCommand(
+  private sendSmoothedParam(paramId: number, value: number, commitCache?: () => void): void {
+    commitCommand(
       this.commitContext,
       {
         type: SonareEngineCommandType.SetParamSmoothed,
         targetId: paramId,
-        sampleTime: -1,
+        renderFrame: -1,
         argFloat: value,
       },
       (offline) => offline.setParameter(paramId, value),
@@ -2040,11 +1932,11 @@ export class SonareEngine {
   }
 
   private resolveParamId(nodeId: string, param: string | number): number {
-    return resolveParamId(this.listParameters(), nodeId, param);
+    return resolveParamId(this.parameters(), nodeId, param);
   }
 
   private syncParameters(): void {
-    const parameters = this.listParameters();
+    const parameters = this.parameters();
     if (parameters.length > 0) {
       this.postSync({ type: 'syncParameters', parameters });
     }

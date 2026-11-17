@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SonareRealtimeEngineNode } from '../../dist/worklet.js';
+import type { CaptureOptions } from '../../src/public_types_engine';
 import { buildCaptureConfig } from '../../src/worklet/engine-offline';
 import {
   isEngineCaptureResponseForOperation,
@@ -149,50 +150,70 @@ describe('worklet capture response protocol', () => {
   });
 });
 
+/** The wire config `buildCaptureConfig` resolves, with a 48 kHz engine whose tempo is 120 bpm. */
+function buildConfig(options: CaptureOptions, defaultNumChannels: number) {
+  return buildCaptureConfig(options, defaultNumChannels, 48000, (ppq) => ppq * 24000).config;
+}
+
 describe('buildCaptureConfig', () => {
-  const base = { bufferFrames: 1024 };
+  const base = { capacityFrames: 1024 };
 
   it('carries the resolved counts through rather than a rounded stand-in', () => {
-    expect(buildCaptureConfig({ ...base, channels: 2 }, 4).channels).toBe(2);
-    expect(buildCaptureConfig({ ...base, channels: 3 }, 4).channels).toBe(3);
+    expect(buildConfig({ ...base, numChannels: 2 }, 4).channels).toBe(2);
+    expect(buildConfig({ ...base, numChannels: 3 }, 4).channels).toBe(3);
     // An absent channel count falls back to the engine's own.
-    expect(buildCaptureConfig(base, 4).channels).toBe(4);
-    expect(buildCaptureConfig({ bufferFrames: 512 }, 2).bufferFrames).toBe(512);
-    expect(buildCaptureConfig({ bufferFrames: 2048 }, 2).bufferFrames).toBe(2048);
-    expect(buildCaptureConfig({ ...base, recordOffsetSamples: -12 }, 2).recordOffsetSamples).toBe(
-      -12,
-    );
-    expect(buildCaptureConfig({ ...base, recordOffsetSamples: 24 }, 2).recordOffsetSamples).toBe(
-      24,
-    );
+    expect(buildConfig(base, 4).channels).toBe(4);
+    expect(buildConfig({ capacityFrames: 512 }, 2).bufferFrames).toBe(512);
+    expect(buildConfig({ capacityFrames: 2048 }, 2).bufferFrames).toBe(2048);
+    expect(buildConfig({ ...base, recordOffsetSamples: -12 }, 2).recordOffsetSamples).toBe(-12);
+    expect(buildConfig({ ...base, recordOffsetSamples: 24 }, 2).recordOffsetSamples).toBe(24);
   });
 
   it.each([1024.5, 0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
-    'refuses a bufferFrames of %p',
-    (bufferFrames) => {
-      expect(() => buildCaptureConfig({ bufferFrames }, 2)).toThrow(RangeError);
-      expect(() => buildCaptureConfig({ bufferFrames }, 2)).toThrow(
-        /bufferFrames must be an integer of at least 1/,
+    'refuses a capacityFrames of %p',
+    (capacityFrames) => {
+      expect(() => buildConfig({ capacityFrames }, 2)).toThrow(RangeError);
+      expect(() => buildConfig({ capacityFrames }, 2)).toThrow(
+        /capacityFrames must be an integer of at least 1/,
       );
     },
   );
 
-  it('refuses an absent bufferFrames, which has no default', () => {
-    expect(() => buildCaptureConfig({ bufferFrames: undefined as unknown as number }, 2)).toThrow(
-      /bufferFrames must be an integer of at least 1/,
+  it('refuses an absent capacityFrames, which has no default', () => {
+    expect(() => buildConfig({ capacityFrames: undefined as unknown as number }, 2)).toThrow(
+      /capacityFrames must be an integer of at least 1/,
     );
   });
 
-  it.each([2.5, 0, -2, Number.NaN])('refuses a capture channel count of %p', (channels) => {
-    expect(() => buildCaptureConfig({ ...base, channels }, 2)).toThrow(
-      /channelCount must be an integer of at least 1/,
+  it('refuses an unknown key, a numeric source and a doubly spelled punch bound', () => {
+    expect(() => buildConfig({ ...base, bufferFrames: 8 } as never, 2)).toThrow(TypeError);
+    expect(() => buildConfig({ ...base, source: 1 as never }, 2)).toThrow(TypeError);
+    expect(() =>
+      buildConfig({ ...base, punch: { startSample: 1, startSec: 1, endSample: 2 } }, 2),
+    ).toThrow(RangeError);
+  });
+
+  it('resolves a punch window to timeline samples', () => {
+    expect(
+      buildCaptureConfig(
+        { ...base, punch: { startPpq: 1, endSec: 2 } },
+        2,
+        48000,
+        (ppq) => ppq * 24000,
+      ).config.punch,
+    ).toEqual({ startSample: 24000, endSample: 96000 });
+  });
+
+  it.each([2.5, 0, -2, Number.NaN])('refuses a capture plane count of %p', (numChannels) => {
+    expect(() => buildConfig({ ...base, numChannels }, 2)).toThrow(
+      /numChannels must be an integer of at least 1/,
     );
   });
 
   it.each([-12.5, Number.NaN, Number.NEGATIVE_INFINITY])(
     'refuses a recordOffsetSamples of %p while keeping both signs legal',
     (recordOffsetSamples) => {
-      expect(() => buildCaptureConfig({ ...base, recordOffsetSamples }, 2)).toThrow(
+      expect(() => buildConfig({ ...base, recordOffsetSamples }, 2)).toThrow(
         /recordOffsetSamples must be an integer/,
       );
     },

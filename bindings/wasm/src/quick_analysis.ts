@@ -40,40 +40,40 @@ import type {
   PitchClass,
   RhythmResult,
   RirResult,
-  RirSynthOptions,
   RoomEstimateOptions,
   RoomEstimateResult,
-  RoomGeometryFromEstimateOptions,
   RoomGeometryOptions,
   RoomMorphOptions,
   RoomMorphResult,
   RoomMorphStereoResult,
+  RoomPlacement,
+  SynthesizeRirRequest,
   TimbreResult,
 } from './public_types.js';
 import type { ProgressCallback, WasmAcousticResult } from './sonare.js';
-import type { ValidateOptions } from './validation.js';
+import type { OptionsOf, ValidateOptions } from './validation.js';
 import {
   assertAudioInput,
   assertFiniteScalar,
   assertFloatFields,
   assertFloatValue,
+  assertFrequencyBounds,
   assertNonNegativeFloatValue,
   assertNonNegativeInteger,
   assertNumber,
+  assertSampleRate,
   assertU32,
   optionalBoolean,
-  optionsBag,
   requestObject,
+  requestOnly,
   sampleOneShot,
-  tuningCentsFromNative,
-  tuningCentsToNative,
 } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
 }
 
-/** The tuning argument the module reads: a semitone fraction, or `'auto'` (absent or `'auto'`). */
+/** The tuning argument the module reads: cents, or `'auto'` (absent or `'auto'`). */
 function nativeTuning(cents: number | 'auto' | undefined | null): number | 'auto' {
   if (cents === undefined || cents === null || cents === 'auto') {
     return 'auto';
@@ -84,54 +84,158 @@ function nativeTuning(cents: number | 'auto' | undefined | null): number | 'auto
   if (typeof cents !== 'number') {
     throw new TypeError("tuningCents must be a number of cents or 'auto'");
   }
-  return tuningCentsToNative(cents);
+  return cents;
 }
 
-type NamedSelectors<T> = Omit<T, 'materialPreset' | 'mode'> & {
+type NamedSelectors<T> = Omit<T, 'materialPreset' | 'mode' | 'source' | 'listener' | 'maxSec'> & {
   materialPreset?: number;
   mode?: number;
+  maxSeconds?: number;
 };
 
+// The native room options still spell the analyzer mode `impulse_response`.
+const ACOUSTIC_MODE_NATIVE: Readonly<Record<string, string>> = {
+  impulseResponse: 'impulse_response',
+};
+
+function publicAcousticMode(nativeName: string): string {
+  return (
+    Object.entries(ACOUSTIC_MODE_NATIVE).find(([, native]) => native === nativeName)?.[0] ??
+    nativeName
+  );
+}
+
+/** Fields whose 0 the core reads as "use the library default": absent is the default, 0 is refused. */
+const ZERO_IS_DEFAULT_FIELDS = [
+  'mixingTimeMs',
+  'crossfadeMs',
+  'maxSec',
+  'aspectHintLw',
+  'aspectHintLh',
+  'referenceAbsorption',
+  'nOctaveBands',
+  'minDecayDb',
+  'noiseFloorMarginDb',
+] as const;
+
+/** Fields where 0 is a real quantity the native config cannot yet tell from absent. */
+const ZERO_UNSUPPORTED_FIELDS = ['airTemperatureC', 'airHumidityPercent', 'seed'] as const;
+
+/** Reads the room fields of one call: `undefined` and `null` are absent, a non-number is a `TypeError`. */
+function optionalRoomNumber(fnName: string, options: object, field: string): number | undefined {
+  const value = (options as Record<string, unknown>)[field];
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== 'number') {
+    throw new TypeError(`${fnName}: ${field} must be a number`);
+  }
+  return value;
+}
+
+/** A placement the caller gave, checked; absent (`undefined` / `null`) stays `undefined`. */
+function checkedPlacement(
+  fnName: string,
+  name: 'source' | 'listener',
+  placement: unknown,
+): RoomPlacement | undefined {
+  if (placement === undefined || placement === null) {
+    return undefined;
+  }
+  if (typeof placement !== 'object') {
+    throw new TypeError(`${fnName}: ${name} must be an object with x, y and z`);
+  }
+  const { x, y, z } = placement as Record<string, unknown>;
+  assertFloatValue(fnName, x, `${name}.x`);
+  assertFloatValue(fnName, y, `${name}.y`);
+  assertFloatValue(fnName, z, `${name}.z`);
+  return { x, y, z } as RoomPlacement;
+}
+
 /**
- * Replaces a `materialPreset` / `mode` name with its integer value for the
- * module; a number is refused. The names are the core's, read from the module
- * so no second table exists here. A present `seed` that is not a uint32 is
- * refused here too, since the module would otherwise fall back to its default.
+ * Turns the public room options into the module's: `source` / `listener` become
+ * the flat position fields, `maxSec` becomes `maxSeconds`, the `materialPreset`
+ * and `mode` names become their integer values (a number is refused), and an
+ * explicit 0 on a zero-means-default field is refused. The names are the core's,
+ * read from the module so no second table exists here.
  */
-function resolveAcousticSelectors<
-  T extends { materialPreset?: unknown; mode?: unknown; seed?: unknown },
->(options: T): NamedSelectors<T> {
-  if (options.seed !== undefined && options.seed !== null) {
-    if (typeof options.seed !== 'number') {
-      throw new TypeError('seed must be a number');
+function nativeRoomOptions<T extends object>(fnName: string, options: T): NamedSelectors<T> {
+  const resolved: Record<string, unknown> = { ...(options as Record<string, unknown>) };
+  for (const field of ZERO_IS_DEFAULT_FIELDS) {
+    const value = optionalRoomNumber(fnName, options, field);
+    if (value === 0) {
+      throw new RangeError(`${fnName}: ${field} must not be 0; omit it for the default`);
     }
-    assertU32('acoustic', options.seed, 'seed');
   }
-  if (options.materialPreset === undefined && options.mode === undefined) {
-    return options as NamedSelectors<T>;
-  }
-  const tables = requireModule().acousticSelectorNames();
-  const resolve = (key: 'materialPreset' | 'mode') => {
-    const value = options[key];
-    const names = tables[key];
-    const valid = names.map((name) => `'${name}'`).join(', ');
-    if (typeof value !== 'string') {
-      throw new TypeError(`${key} must be one of ${valid} (a name, not a number)`);
+  for (const field of ZERO_UNSUPPORTED_FIELDS) {
+    if (optionalRoomNumber(fnName, options, field) === 0) {
+      throw new RangeError(`${fnName}: ${field} = 0 is not supported yet; omit it for the default`);
     }
-    const index = names.indexOf(value);
-    if (index < 0) {
-      throw new RangeError(`${key} must be one of ${valid}, got '${value}'`);
-    }
-    return index;
-  };
-  const resolved = { ...options };
-  if (options.materialPreset !== undefined) {
-    resolved.materialPreset = resolve('materialPreset');
   }
-  if (options.mode !== undefined) {
-    resolved.mode = resolve('mode');
+  const seed = optionalRoomNumber(fnName, options, 'seed');
+  if (seed !== undefined) {
+    assertU32(fnName, seed, 'seed');
+  }
+  const maxSec = optionalRoomNumber(fnName, options, 'maxSec');
+  delete resolved.maxSec;
+  if (maxSec !== undefined) {
+    resolved.maxSeconds = maxSec;
+  }
+  for (const name of ['source', 'listener'] as const) {
+    const placement = checkedPlacement(fnName, name, (options as Record<string, unknown>)[name]);
+    delete resolved[name];
+    if (placement !== undefined) {
+      resolved[`${name}X`] = placement.x;
+      resolved[`${name}Y`] = placement.y;
+      resolved[`${name}Z`] = placement.z;
+    }
+  }
+  const { materialPreset, mode } = options as { materialPreset?: unknown; mode?: unknown };
+  if (materialPreset !== undefined || mode !== undefined) {
+    const tables = requireModule().acousticSelectorNames();
+    const resolve = (key: 'materialPreset' | 'mode', value: unknown) => {
+      const names =
+        key === 'mode' ? tables.mode.map((name: string) => publicAcousticMode(name)) : tables[key];
+      const valid = names.map((name: string) => `'${name}'`).join(', ');
+      if (typeof value !== 'string') {
+        throw new TypeError(`${fnName}: ${key} must be one of ${valid} (a name, not a number)`);
+      }
+      const index = names.indexOf(value);
+      if (index < 0) {
+        throw new RangeError(`${fnName}: ${key} must be one of ${valid}, got '${value}'`);
+      }
+      return index;
+    };
+    if (materialPreset !== undefined) {
+      resolved.materialPreset = resolve('materialPreset', materialPreset);
+    }
+    if (mode !== undefined) {
+      resolved.mode = resolve('mode', mode);
+    }
   }
   return resolved as NamedSelectors<T>;
+}
+
+/** The module's flat estimate geometry as the public `source` / `listener` placements. */
+function publicRoomGeometry(native: Record<string, unknown>): RoomGeometryOptions {
+  const { sourceX, sourceY, sourceZ, listenerX, listenerY, listenerZ, ...rest } = native;
+  return {
+    ...rest,
+    source: { x: sourceX, y: sourceY, z: sourceZ },
+    listener: { x: listenerX, y: listenerY, z: listenerZ },
+  } as RoomGeometryOptions;
+}
+
+/** Runs a room call whose refusal of its arguments is a `RangeError`, whatever layer refused. */
+function refusingInvalidGeometry<T>(fnName: string, call: () => T): T {
+  try {
+    return call();
+  } catch (error) {
+    if (error instanceof SonareError && error.code === ErrorCode.InvalidParameter) {
+      throw new RangeError(`${fnName}: ${error.message}`);
+    }
+    throw error;
+  }
 }
 
 type GuardedOptions = ValidateOptions;
@@ -143,14 +247,30 @@ interface SampleInput {
   sampleRate: number;
 }
 
-/** The settings of a request, as the positional form takes them. */
-type OptionsOf<R> = Omit<R, 'samples' | 'sampleRate'>;
+/** Tempo search range shared by {@link detectBpm} and {@link detectBeats}. */
+export interface TempoRangeOptions {
+  /** Lowest tempo searched, in BPM; default 60. Finite and positive, below `bpmMax`; a `RangeError` otherwise. */
+  bpmMin?: number;
+  /** Highest tempo searched, in BPM; default 200. Finite and positive, above `bpmMin`; a `RangeError` otherwise. */
+  bpmMax?: number;
+}
+
+const DEFAULT_BPM_MIN = 60;
+const DEFAULT_BPM_MAX = 200;
+
+/** The search range the module requires, defaults filled in and checked as one pair. */
+function tempoRange(fnName: string, request: TempoRangeOptions): [number, number] {
+  const bpmMin = request.bpmMin ?? DEFAULT_BPM_MIN;
+  const bpmMax = request.bpmMax ?? DEFAULT_BPM_MAX;
+  assertFrequencyBounds(fnName, bpmMin, bpmMax, 'bpmMin', 'bpmMax');
+  return [bpmMin, bpmMax];
+}
 
 /** Canonical request form for {@link detectBpm}. */
-export interface DetectBpmRequest extends SampleInput, GuardedOptions {}
+export interface DetectBpmRequest extends SampleInput, GuardedOptions, TempoRangeOptions {}
 
 /** Canonical request form for {@link detectBeats}. */
-export interface DetectBeatsRequest extends SampleInput, GuardedOptions {}
+export interface DetectBeatsRequest extends SampleInput, GuardedOptions, TempoRangeOptions {}
 
 /** Canonical request form for {@link detectDownbeats}. */
 export interface DetectDownbeatsRequest extends SampleInput, GuardedOptions {}
@@ -206,10 +326,7 @@ export interface AnalyzeImpulseResponseRequest extends SampleInput, GuardedOptio
 export interface DetectAcousticRequest extends SampleInput, AcousticOptions {}
 
 /** Canonical request form for equivalent-room estimation. */
-export interface EstimateRoomRequest extends RoomEstimateOptions, GuardedOptions {
-  samples: Float32Array;
-  sampleRate?: number;
-}
+export interface EstimateRoomRequest extends SampleInput, RoomEstimateOptions {}
 
 /** The room fields of an estimate that {@link roomGeometryFromEstimate} reads. */
 export type RoomGeometryEstimate = Pick<RoomEstimateResult, 'lengthM' | 'widthM' | 'heightM'> & {
@@ -217,21 +334,23 @@ export type RoomGeometryEstimate = Pick<RoomEstimateResult, 'lengthM' | 'widthM'
 };
 
 /** Canonical request form for {@link roomGeometryFromEstimate}. */
-export interface RoomGeometryFromEstimateRequest extends RoomGeometryFromEstimateOptions {
+export interface RoomGeometryFromEstimateRequest {
   estimate: RoomGeometryEstimate;
+  /** Replaces the source placement scaled into the estimated room. */
+  source?: RoomPlacement;
+  /** Replaces the listener placement scaled into the estimated room. */
+  listener?: RoomPlacement;
 }
 
 /** Canonical request form for room-reverb morphing. */
-export interface RoomMorphRequest extends RoomMorphOptions, GuardedOptions {
-  samples: Float32Array;
-  sampleRate: number;
-}
+export interface RoomMorphRequest extends SampleInput, RoomMorphOptions {}
 
 /** Canonical request form for stereo room-reverb morphing. */
-export interface RoomMorphStereoRequest extends RoomMorphOptions, GuardedOptions {
+export interface RoomMorphStereoRequest extends RoomMorphOptions {
   left: Float32Array;
   right: Float32Array;
-  sampleRate?: number;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
   /** Receiver spacing in metres, in (0, 4]; omitted = 0.5. */
   receiverSpacingM?: number;
 }
@@ -264,7 +383,8 @@ export function detectBpm(
 export function detectBpm(...args: unknown[]): number {
   const request = sampleOneShot<DetectBpmRequest>('detectBpm', args);
   assertAudioInput('detectBpm', request.samples, request.sampleRate, request);
-  return requireModule().detectBpm(request.samples, request.sampleRate);
+  const [bpmMin, bpmMax] = tempoRange('detectBpm', request);
+  return requireModule().detectBpm(request.samples, request.sampleRate, bpmMin, bpmMax);
 }
 
 /**
@@ -310,7 +430,7 @@ export function detectKey(...args: unknown[]): KeyDetection {
     confidence: result.confidence,
     name: result.name,
     shortName: result.shortName,
-    tuningCents: tuningCentsFromNative(result.tuning),
+    tuningCents: result.tuningCents,
   };
 }
 
@@ -387,7 +507,8 @@ export function detectBeats(
 export function detectBeats(...args: unknown[]): Float32Array {
   const request = sampleOneShot<DetectBeatsRequest>('detectBeats', args);
   assertAudioInput('detectBeats', request.samples, request.sampleRate, request);
-  return requireModule().detectBeats(request.samples, request.sampleRate);
+  const [bpmMin, bpmMax] = tempoRange('detectBeats', request);
+  return requireModule().detectBeats(request.samples, request.sampleRate, bpmMin, bpmMax);
 }
 
 /**
@@ -642,7 +763,7 @@ export function analyze(
 export function analyze(...args: unknown[]): AnalysisResult {
   const request = sampleOneShot<AnalyzeRequest>('analyze', args);
   assertAudioInput('analyze', request.samples, request.sampleRate, request);
-  const { onProgress, cancel, chromaHighPassHz, tuningCents, ...rest } = request;
+  const { onProgress, cancel, tuningCents, ...rest } = request;
   for (const [name, callback] of [
     ['onProgress', onProgress],
     ['cancel', cancel],
@@ -651,16 +772,12 @@ export function analyze(...args: unknown[]): AnalysisResult {
       throw new TypeError(`analyze: ${name} must be a function`);
     }
   }
-  // Native keeps its own spellings for the high-pass cutoff and the tuning.
-  const nativeOptions: Record<string, unknown> = { ...rest };
-  if (chromaHighPassHz !== undefined) {
-    if (chromaHighPassHz !== null) {
-      assertFloatValue('analyze', chromaHighPassHz, 'chromaHighPassHz');
-    }
-    nativeOptions.chromaHighpassHz = chromaHighPassHz;
+  if (rest.chromaHighPassHz !== undefined && rest.chromaHighPassHz !== null) {
+    assertFloatValue('analyze', rest.chromaHighPassHz, 'chromaHighPassHz');
   }
+  const nativeOptions: Record<string, unknown> = { ...rest };
   if (tuningCents !== undefined) {
-    nativeOptions.tuning = nativeTuning(tuningCents);
+    nativeOptions.tuningCents = nativeTuning(tuningCents);
   }
   const module = requireModule();
   const result =
@@ -842,12 +959,16 @@ export function detectAcoustic(...args: unknown[]): AcousticResult {
 /**
  * Synthesize a room impulse response from shoebox geometry.
  *
- * @throws SonareError when the geometry, placement or timing is unusable (for
- *   example a source outside the room); the message leads with the diagnostic
- *   code, such as `acoustic.source_outside_room`.
+ * @throws {TypeError} when `sampleRate` is missing
+ * @throws {RangeError} when the geometry, placement or timing is unusable (for
+ *   example a source outside the room: the message leads with the diagnostic code,
+ *   such as `acoustic.source_outside_room`), on an out-of-range `sampleRate`, or
+ *   on an explicit 0 where omission selects the default
  */
-export function synthesizeRir(options: RirSynthOptions = {}): RirResult {
-  requestObject('synthesizeRir', options, 'request', true);
+export function synthesizeRir(request: SynthesizeRirRequest): RirResult;
+export function synthesizeRir(...args: unknown[]): RirResult {
+  const r = requestOnly<SynthesizeRirRequest>('synthesizeRir', args);
+  assertSampleRate('synthesizeRir', r.sampleRate);
   const module = requireModule();
   if (typeof module.synthesizeRir !== 'function') {
     throw new SonareError(
@@ -855,24 +976,26 @@ export function synthesizeRir(options: RirSynthOptions = {}): RirResult {
       'libsonare was built without acoustic-simulation support',
     );
   }
-  return module.synthesizeRir(resolveAcousticSelectors(options));
+  const native = nativeRoomOptions('synthesizeRir', r);
+  const synthesize = module.synthesizeRir;
+  return refusingInvalidGeometry('synthesizeRir', () => synthesize.call(module, native));
 }
 
 /**
  * Estimate an equivalent room (volume/dimensions/absorption/DRR) from a
  * recording or impulse response.
+ *
+ * @throws {TypeError} when `sampleRate` is missing
+ * @throws {RangeError} on audio out of domain, an out-of-range `sampleRate`, an
+ *   unknown `mode`, or an explicit 0 where omission selects the default
  */
 export function estimateRoom(request: EstimateRoomRequest): RoomEstimateResult;
 export function estimateRoom(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: RoomEstimateOptions,
 ): RoomEstimateResult;
-export function estimateRoom(
-  samples: Float32Array | EstimateRoomRequest,
-  sampleRate = 48000,
-  options: RoomEstimateOptions = {},
-): RoomEstimateResult {
+export function estimateRoom(...args: unknown[]): RoomEstimateResult {
   const module = requireModule();
   if (typeof module.estimateRoom !== 'function') {
     throw new SonareError(
@@ -880,16 +1003,9 @@ export function estimateRoom(
       'libsonare was built without acoustic-simulation support',
     );
   }
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('estimateRoom', options) }
-      : requestObject('estimateRoom', samples);
-  assertAudioInput('estimateRoom', request.samples, request.sampleRate ?? 48000, request);
-  return module.estimateRoom(
-    request.samples,
-    request.sampleRate ?? 48000,
-    resolveAcousticSelectors(request),
-  );
+  const r = sampleOneShot<EstimateRoomRequest>('estimateRoom', args);
+  assertAudioInput('estimateRoom', r.samples, r.sampleRate, r);
+  return module.estimateRoom(r.samples, r.sampleRate, nativeRoomOptions('estimateRoom', r));
 }
 
 /**
@@ -897,25 +1013,20 @@ export function estimateRoom(
  *
  * The pair to {@link estimateRoom}: the estimate's `lengthM`, `widthM`,
  * `heightM` and `bandAbsorption` are already `synthesizeRir`'s names. The
- * result also carries a placement, the default source and listener positions
- * scaled per axis into the estimated room (the default 7 x 5 x 3 room maps to
- * the default placement exactly), and `absorption` as the mean of the finite
- * bands. `source` and `listener` override the scaled placement when given.
- * Absorption bands that did not converge are left out of `bandAbsorption`.
+ * result also carries a placement, the default `source` and `listener`
+ * positions scaled per axis into the estimated room (the default 7 x 5 x 3 room
+ * maps to the default placement exactly), and `absorption` as the mean of the
+ * finite bands. `source` and `listener` of the request override the scaled
+ * placement when given. Absorption bands that did not converge are left out of
+ * `bandAbsorption`.
  *
  * @throws SonareError when the estimate has no measurable dimensions (NaN).
  */
 export function roomGeometryFromEstimate(
   request: RoomGeometryFromEstimateRequest,
 ): RoomGeometryOptions;
-export function roomGeometryFromEstimate(
-  estimate: RoomGeometryEstimate,
-  options?: RoomGeometryFromEstimateOptions,
-): RoomGeometryOptions;
-export function roomGeometryFromEstimate(
-  estimate: RoomGeometryEstimate | RoomGeometryFromEstimateRequest,
-  options: RoomGeometryFromEstimateOptions = {},
-): RoomGeometryOptions {
+export function roomGeometryFromEstimate(...args: unknown[]): RoomGeometryOptions {
+  const request = requestOnly<RoomGeometryFromEstimateRequest>('roomGeometryFromEstimate', args);
   const module = requireModule();
   if (typeof module.roomGeometryFromEstimate !== 'function') {
     throw new SonareError(
@@ -923,33 +1034,25 @@ export function roomGeometryFromEstimate(
       'libsonare was built without acoustic-simulation support',
     );
   }
-  if (typeof estimate !== 'object' || estimate === null) {
-    throw new TypeError('roomGeometryFromEstimate: estimate must be an object');
-  }
-  const request: RoomGeometryFromEstimateRequest =
-    'estimate' in estimate
-      ? requestObject('roomGeometryFromEstimate', estimate, 'request', true)
-      : { estimate, ...optionsBag('roomGeometryFromEstimate', options) };
   if (typeof request.estimate !== 'object' || request.estimate === null) {
     throw new TypeError('roomGeometryFromEstimate: estimate must be an object');
   }
   const { bandAbsorption, lengthM, widthM, heightM } = request.estimate;
-  const geometry: RoomGeometryOptions = module.roomGeometryFromEstimate({
-    lengthM,
-    widthM,
-    heightM,
-    ...(bandAbsorption === undefined ? {} : { bandAbsorption: Float32Array.from(bandAbsorption) }),
-  });
-  const { source, listener } = request;
-  if (source !== undefined) {
-    geometry.sourceX = source.x;
-    geometry.sourceY = source.y;
-    geometry.sourceZ = source.z;
-  }
-  if (listener !== undefined) {
-    geometry.listenerX = listener.x;
-    geometry.listenerY = listener.y;
-    geometry.listenerZ = listener.z;
+  const geometry = publicRoomGeometry(
+    module.roomGeometryFromEstimate({
+      lengthM,
+      widthM,
+      heightM,
+      ...(bandAbsorption === undefined
+        ? {}
+        : { bandAbsorption: Float32Array.from(bandAbsorption) }),
+    }),
+  );
+  for (const name of ['source', 'listener'] as const) {
+    const placement = checkedPlacement('roomGeometryFromEstimate', name, request[name]);
+    if (placement !== undefined) {
+      geometry[name] = placement;
+    }
   }
   return geometry;
 }
@@ -961,6 +1064,10 @@ export function roomGeometryFromEstimate(
  * Returns the morphed samples in `audio` (input length plus the target room's
  * reverb tail) alongside the target-room synthesis's own `diagnostics`, which
  * report a room other than the one requested — see {@link RoomMorphResult}.
+ *
+ * @throws {TypeError} when `sampleRate` is missing
+ * @throws {RangeError} on audio out of domain, an out-of-range `sampleRate`, an
+ *   unusable room geometry, or an explicit 0 where omission selects the default
  */
 export function roomMorph(request: RoomMorphRequest): RoomMorphResult;
 export function roomMorph(
@@ -968,11 +1075,7 @@ export function roomMorph(
   sampleRate: number,
   options?: RoomMorphOptions,
 ): RoomMorphResult;
-export function roomMorph(
-  samples: Float32Array | RoomMorphRequest,
-  sampleRate?: number,
-  options: RoomMorphOptions = {},
-): RoomMorphResult {
+export function roomMorph(...args: unknown[]): RoomMorphResult {
   const module = requireModule();
   if (typeof module.roomMorph !== 'function') {
     throw new SonareError(
@@ -980,12 +1083,13 @@ export function roomMorph(
       'libsonare was built without acoustic-simulation support',
     );
   }
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate: sampleRate as number, ...optionsBag('roomMorph', options) }
-      : requestObject('roomMorph', samples);
-  assertAudioInput('roomMorph', request.samples, request.sampleRate, request);
-  return module.roomMorph(request.samples, request.sampleRate, resolveAcousticSelectors(request));
+  const r = sampleOneShot<RoomMorphRequest>('roomMorph', args);
+  assertAudioInput('roomMorph', r.samples, r.sampleRate, r);
+  const native = nativeRoomOptions('roomMorph', r);
+  const morph = module.roomMorph;
+  return refusingInvalidGeometry('roomMorph', () =>
+    morph.call(module, r.samples, r.sampleRate, native),
+  );
 }
 
 /**
@@ -995,12 +1099,13 @@ export function roomMorph(
  *
  * Returns both channels (input length plus the reverb tail) and the target-room
  * synthesis `diagnostics`, with the same codes as {@link RoomMorphResult}.
- * `sampleRate` defaults to 48000.
  *
- * @throws RangeError if the channel lengths differ or `receiverSpacingM` is
- *   non-finite or outside (0, 4].
+ * @throws {TypeError} when `sampleRate` is missing
+ * @throws {RangeError} if the channel lengths differ, `receiverSpacingM` is
+ *   non-finite or outside (0, 4], or the room geometry is unusable.
  */
-export function roomMorphStereo(request: RoomMorphStereoRequest): RoomMorphStereoResult {
+export function roomMorphStereo(request: RoomMorphStereoRequest): RoomMorphStereoResult;
+export function roomMorphStereo(...args: unknown[]): RoomMorphStereoResult {
   const module = requireModule();
   if (typeof module.roomMorphStereo !== 'function') {
     throw new SonareError(
@@ -1008,10 +1113,9 @@ export function roomMorphStereo(request: RoomMorphStereoRequest): RoomMorphStere
       'libsonare was built without acoustic-simulation support',
     );
   }
-  requestObject('roomMorphStereo', request, 'request', true);
-  const sampleRate = request.sampleRate ?? 48000;
-  assertAudioInput('roomMorphStereo', request.left, sampleRate, request, 'left');
-  assertAudioInput('roomMorphStereo', request.right, sampleRate, request, 'right');
+  const request = requestOnly<RoomMorphStereoRequest>('roomMorphStereo', args);
+  assertAudioInput('roomMorphStereo', request.left, request.sampleRate, request, 'left');
+  assertAudioInput('roomMorphStereo', request.right, request.sampleRate, request, 'right');
   if (request.left.length !== request.right.length) {
     throw new RangeError('Stereo channel lengths must match.');
   }
@@ -1021,11 +1125,10 @@ export function roomMorphStereo(request: RoomMorphStereoRequest): RoomMorphStere
       `receiverSpacingM must be a finite number in (0, 4] metres; omitted = 0.5 (got ${spacing})`,
     );
   }
-  return module.roomMorphStereo(
-    request.left,
-    request.right,
-    sampleRate,
-    resolveAcousticSelectors(request),
+  const native = nativeRoomOptions('roomMorphStereo', request);
+  const morphStereo = module.roomMorphStereo;
+  return refusingInvalidGeometry('roomMorphStereo', () =>
+    morphStereo.call(module, request.left, request.right, request.sampleRate, native),
   );
 }
 
@@ -1124,7 +1227,7 @@ export function analyzeDynamics(...args: unknown[]): DynamicsResult {
     crestFactor: result.crestFactor,
     loudnessRangeLu: result.loudnessRangeDb,
     isCompressed: result.isCompressed,
-    loudnessTimesSec: result.loudnessTimes,
+    loudnessTimesSec: result.loudnessTimesSec,
     loudnessRmsDb: result.loudnessRmsDb,
   };
 }

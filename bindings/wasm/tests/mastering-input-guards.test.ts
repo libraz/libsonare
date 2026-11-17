@@ -174,7 +174,7 @@ describe('masteringStreamingPreview platform-field guards', () => {
 
 describe('RealtimeEngine pushMidiSysex empty-frame guard', () => {
   it('rejects an empty SysEx frame', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     // The empty-frame check runs before any queue interaction, so a bare engine
     // is enough to exercise the InvalidParameter rejection path.
     expect(() => engine.pushMidiSysex(0, new Uint8Array(0))).toThrow();

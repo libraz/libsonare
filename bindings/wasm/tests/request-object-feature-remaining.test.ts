@@ -61,17 +61,17 @@ describe('remaining feature request-object compatibility', () => {
     expect(tuning).toBeGreaterThanOrEqual(-50);
     expect(tuning).toBeLessThan(50);
     expect(pitchTuning({ frequencies: freqs, resolution: 0.01, binsPerOctave: 12 })).toBe(tuning);
-    expect(nnFilter({ s: new Float32Array(12).fill(1), nFeatures: 3, nFrames: 4 })).toEqual(
-      nnFilter(new Float32Array(12).fill(1), 3, 4),
-    );
-    expect(phaseVocoder({ samples, rate: 1.1, sampleRate, nFft: 512, hopLength: 128 })).toEqual(
-      phaseVocoder(samples, sampleRate, 1.1, 512, 128),
-    );
+    const filtered = nnFilter({ s: { data: new Float32Array(12).fill(1), rows: 3, cols: 4 } });
+    expect([filtered.rows, filtered.cols]).toEqual([3, 4]);
+    expect(Array.from(filtered.data).every((v) => Math.abs(v - 1) < 1e-6)).toBe(true);
+    expect(
+      phaseVocoder({ samples, speedRatio: 1.1, sampleRate, nFft: 512, hopLength: 128 }),
+    ).toEqual(phaseVocoder(samples, sampleRate, { speedRatio: 1.1, nFft: 512, hopLength: 128 }));
     expect(hpssWithResidual({ samples, sampleRate })).toEqual(
       hpssWithResidual(samples, sampleRate),
     );
-    expect(remix({ samples, intervals: new Int32Array([0, 100]) })).toEqual(
-      remix(samples, new Int32Array([0, 100])),
+    expect(remix({ samples, sampleRate, intervals: new Int32Array([0, 100]) })).toEqual(
+      remix(samples, sampleRate, { intervals: new Int32Array([0, 100]) }),
     );
   });
 
@@ -168,11 +168,13 @@ describe('remaining feature request-object compatibility', () => {
   // must fail identically either way — the positive-path equivalence above does
   // not prove the error path stays in lockstep.
   it('throws identically on invalid input in both call forms', () => {
-    const posRate = captureThrow(() => phaseVocoder(samples, sampleRate, 0, 512, 128));
-    const reqRate = captureThrow(() =>
-      phaseVocoder({ samples, rate: 0, sampleRate, nFft: 512, hopLength: 128 }),
+    const posRate = captureThrow(() =>
+      phaseVocoder(samples, sampleRate, { speedRatio: 0, nFft: 512, hopLength: 128 }),
     );
-    // A missing rate is refused in both forms, never defaulted to a no-op stretch.
+    const reqRate = captureThrow(() =>
+      phaseVocoder({ samples, speedRatio: 0, sampleRate, nFft: 512, hopLength: 128 }),
+    );
+    // A missing speedRatio is refused in both forms, never defaulted to a no-op stretch.
     const posMissing = captureThrow(() =>
       (phaseVocoder as (...args: unknown[]) => unknown)(samples, sampleRate),
     );
@@ -182,10 +184,12 @@ describe('remaining feature request-object compatibility', () => {
     // `validate: false` is honoured on the request form: the finiteness scan is skipped.
     const dirty = Float32Array.from(samples);
     dirty[3] = Number.NaN;
-    const scanned = captureThrow(() => phaseVocoder({ samples: dirty, rate: 1.1, sampleRate }));
+    const scanned = captureThrow(() =>
+      phaseVocoder({ samples: dirty, speedRatio: 1.1, sampleRate }),
+    );
     expect(scanned.message).toMatch(/contains NaN/);
     const unscanned = captureThrow(() =>
-      phaseVocoder({ samples: dirty, rate: 1.1, sampleRate, validate: false }),
+      phaseVocoder({ samples: dirty, speedRatio: 1.1, sampleRate, validate: false }),
     );
     expect(unscanned.message).not.toMatch(/contains NaN/);
     expect(posRate.threw).toBe(true);

@@ -17,7 +17,7 @@ describe('scope telemetry (WASM)', () => {
   });
 
   it('reports a tone spectrum and goniometer per target', () => {
-    const engine = new RealtimeEngine(SR, BLOCK);
+    const engine = new RealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
     try {
       expect(engine.configureScopeTelemetry(BLOCK, 32)).toBe(32);
       engine.play();

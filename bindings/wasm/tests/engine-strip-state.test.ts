@@ -47,22 +47,22 @@ function masterScene(inserts: unknown[]): string {
 function fakeEngine(calls: string[]): RealtimeEngine {
   return {
     applyCommandsDueNowPreservingFuture: () => undefined,
-    setTrackStripJson: (_trackId: number, json: string) => calls.push(json),
-    setBusStripJson: (_busId: number, json: string) => calls.push(json),
-    setMasterStripJson: (json: string) => calls.push(json),
+    // The strip scene text reaches the embind object behind the facade.
+    native: {
+      setTrackStripJson: (_trackId: number, json: string) => calls.push(json),
+      setBusStripJson: (_busId: number, json: string) => calls.push(json),
+      setMasterStripJson: (json: string) => calls.push(json),
+    },
     setTrackBuses: () => calls.push('buses'),
     setTrackLanes: () => calls.push('lanes'),
     settleInsertParameters: () => calls.push('settle'),
-    clearTrackInsertParameterBases: () => undefined,
+    clearStripInsertParameterBases: () => undefined,
     clearBusInsertParameterBases: () => undefined,
-    clearMasterInsertParameterBases: () => undefined,
-    resolveTrackInsertAutomationId: () => 101,
+    resolveStripInsertAutomationId: (ref: number | 'master') => (ref === 'master' ? 103 : 101),
     resolveBusInsertAutomationId: () => 102,
-    resolveMasterInsertAutomationId: () => 103,
     insertParameterConstructedValue: (id: number) => id / 100,
-    restoreTrackStripInsertParamByName: () => undefined,
-    restoreBusStripInsertParamByName: () => undefined,
-    restoreMasterStripInsertParamByName: () => undefined,
+    restoreStripInsertParam: () => undefined,
+    restoreBusInsertParam: () => undefined,
   } as unknown as RealtimeEngine;
 }
 
@@ -271,7 +271,7 @@ describe('strip state retention', () => {
     const trackStripJson = new Map([[10, oldJson]]);
     const engine = {
       ...fakeEngine(calls),
-      restoreTrackStripInsertParamByName: (...args: unknown[]) => restoreCalls.push(args),
+      restoreStripInsertParam: (...args: unknown[]) => restoreCalls.push(args),
     } as unknown as RealtimeEngine;
     const ctx = fakeStripContext(engine, trackStripJson);
     ctx.insertParamOverrides.set(JSON.stringify(['track', 10, 0, 'timeMs']), {
@@ -287,7 +287,7 @@ describe('strip state retention', () => {
     expect(result.constructionOverrides).toEqual([
       { target: trackTarget, insertIndex: 0, paramName: 'timeMs', value: 1.01 },
     ]);
-    expect(restoreCalls).toEqual([[10, 0, 'timeMs', 1.01]]);
+    expect(restoreCalls).toEqual([[10, 0, { name: 'timeMs', value: 1.01 }]]);
     expect(ctx.insertParamOverrides.size).toBe(0);
     expect(calls).toEqual([oldJson]);
   });
@@ -331,7 +331,7 @@ describe('strip state retention', () => {
     const offlineFrames: number[] = [];
     const posted: unknown[] = [];
     const offlineEngine = {
-      parameterCount: () => 0,
+      parameters: () => [],
       applyCommandsDueNowPreservingFuture: () => undefined,
       resetMasterLoudnessMeter: (renderFrame: number) => offlineFrames.push(renderFrame),
       destroy: () => undefined,
@@ -343,15 +343,15 @@ describe('strip state retention', () => {
       nodeFactory: () => readyNode(posted),
     });
     try {
-      expect(engine.resetMasterLoudnessMeter(123)).toBe(true);
+      expect(engine.resetMasterLoudnessMeter(123)).toBeUndefined();
       expect(offlineFrames).toEqual([123]);
       expect(
         posted.some(
           (message) =>
             typeof message === 'object' &&
             message !== null &&
-            'sampleTime' in message &&
-            (message as { sampleTime: number }).sampleTime === 123,
+            'renderFrame' in message &&
+            (message as { renderFrame: number }).renderFrame === 123,
         ),
       ).toBe(true);
     } finally {
@@ -362,7 +362,7 @@ describe('strip state retention', () => {
   it('rejects malformed scene text before declaring a lane or bus', async () => {
     const posted: unknown[] = [];
     const offlineEngine = {
-      parameterCount: () => 0,
+      parameters: () => [],
       destroy: () => undefined,
     } as unknown as RealtimeEngine;
     const engine = await SonareEngine.create(fakeAudioContext(), {
@@ -373,8 +373,8 @@ describe('strip state retention', () => {
     });
     try {
       const before = posted.length;
-      expect(() => engine.setTrackStripJson(10, '{')).toThrow();
-      expect(() => engine.setBusStripJson(20, '{')).toThrow();
+      expect(() => engine.setStrip(10, '{' as never)).toThrow();
+      expect(() => engine.setBusStrip(20, '{' as never)).toThrow();
       const routing = engine as unknown as { trackLaneIds: number[]; buses: unknown[] };
       expect(posted.length).toBe(before);
       expect(routing.trackLaneIds).toEqual([]);

@@ -1,11 +1,11 @@
 /**
- * The AudioWorklet engine at channelCount 6: a lane placed with
- * `SonareEngine.setTrackStripSurroundPan` lands in the matching output plane of
+ * The AudioWorklet engine at numChannels 6: a lane placed with
+ * `SonareEngine.setStripSurroundPan` lands in the matching output plane of
  * the processor's render, after the sync message crosses the guarded handler.
  */
 
 import { describe, expect, it } from 'vitest';
-import type { RealtimeEngine } from '../dist/index.js';
+import type { MixSceneStrip, RealtimeEngine } from '../dist/index.js';
 import { isEngineSyncMessage } from '../src/worklet/guards';
 import {
   SonareEngine,
@@ -42,19 +42,19 @@ function readyWorkletNode(port: {
 
 const energy = (plane: Float32Array): number => plane.reduce((sum, v) => sum + v * v, 0);
 
-describe('SonareEngine surround pan at channelCount 6', () => {
+describe('SonareEngine surround pan at numChannels 6', () => {
   setupWorklet();
 
   it('routes a surround-panned lane to the matching output plane', async () => {
     const posted: unknown[] = [];
-    const offline = new (await import('../dist/index.js')).RealtimeEngine(
-      SR,
-      BLOCK,
-    ) as unknown as OfflineEngineOption;
+    const offline = new (await import('../dist/index.js')).RealtimeEngine({
+      sampleRate: SR,
+      maxBlockSize: BLOCK,
+    }) as unknown as OfflineEngineOption;
     const engine = await SonareEngine.create(fakeContext(), {
       mode: 'postMessage',
       offlineEngine: offline,
-      channelCount: PLANES,
+      numChannels: PLANES,
       nodeFactory: () =>
         readyWorkletNode({
           postMessage: (message: unknown) => posted.push(message),
@@ -62,13 +62,14 @@ describe('SonareEngine surround pan at channelCount 6', () => {
         }),
     });
     const frames = BLOCK * 64;
-    engine.addClip(TRACK, [new Float32Array(frames).fill(0.5)], 0, { lengthSamples: frames });
-    engine.setTrackLanes([TRACK]);
-    engine.setTrackStripJson(
-      TRACK,
-      '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
-    );
-    engine.setTrackStripSurroundPan(TRACK, { azimuth: -110 });
+    engine.addClip(TRACK, {
+      channels: [new Float32Array(frames).fill(0.5)],
+      startPpq: 0,
+      lengthSamples: frames,
+    });
+    engine.setTrackLanes([{ trackId: TRACK }]);
+    engine.setStrip(TRACK, { id: 'track-10' } as MixSceneStrip);
+    engine.setStripSurroundPan(TRACK, { azimuth: -110 });
     const surroundMessage = posted.find(
       (m) => (m as { type?: unknown }).type === 'syncTrackStripSurroundPan',
     );
@@ -109,7 +110,7 @@ describe('SonareEngine surround pan at channelCount 6', () => {
       }
 
       posted.length = 0;
-      engine.setTrackStripSurroundPan(TRACK, { azimuth: 110 });
+      engine.setStripSurroundPan(TRACK, { azimuth: 110 });
       replay(posted);
       for (let i = 0; i < 24; i += 1) {
         planes = render()[0];

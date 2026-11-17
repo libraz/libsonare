@@ -13,7 +13,7 @@ import type {
   Section,
 } from './public_types.js';
 import type { WasmCqtResult } from './sonare.js';
-import type { ValidateOptions } from './validation.js';
+import type { OptionsOf, ValidateOptions } from './validation.js';
 import {
   assertAudioInput,
   assertFiniteScalar,
@@ -43,9 +43,6 @@ interface SampleInput {
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
 }
-
-/** The settings of a request, as the positional form takes them. */
-type OptionsOf<R> = Omit<R, 'samples' | 'sampleRate'>;
 
 /** Canonical request form shared by the Constant-Q transform variants. */
 export interface CqtRequest extends SampleInput, GuardedOptions {

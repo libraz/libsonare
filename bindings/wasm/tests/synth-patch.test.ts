@@ -661,17 +661,17 @@ describe('Sonare WASM NativeSynth', () => {
   });
 
   it('applies engineParams on the realtime engine path too', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
-      engine.setSynthInstrument({ engineMode: 'bowed-string', engineParams: { bowForce: 0.5 } }, 7);
+      engine.setSynthInstrument(7, { engineMode: 'bowed-string', engineParams: { bowForce: 0.5 } });
       engine.pushMidiNoteOn(7, 0, 0, 60, 100);
       const out = engine.process([new Float32Array(128), new Float32Array(128)]);
       expect(Math.max(...out.map((channel) => peak(channel)))).toBeGreaterThan(0);
       const error = thrownBy(() =>
-        engine.setSynthInstrument(
-          { engineMode: 'bowed-string', engineParams: { noSuchKey: 1 } },
-          8,
-        ),
+        engine.setSynthInstrument(8, {
+          engineMode: 'bowed-string',
+          engineParams: { noSuchKey: 1 },
+        }),
       );
       expect(error).toBeInstanceOf(RangeError);
       expect(isSonareError(error)).toBe(false);
@@ -737,9 +737,9 @@ describe('Sonare WASM NativeSynth', () => {
   });
 
   it('renders live MIDI through the engine synth instrument', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
-      engine.setSynthInstrument('saw-lead', 7);
+      engine.setSynthInstrument(7, 'saw-lead');
       engine.pushMidiNoteOn(7, 0, 0, 60, 100);
       const out = engine.process([new Float32Array(128), new Float32Array(128)]);
       let p = 0;
@@ -749,8 +749,8 @@ describe('Sonare WASM NativeSynth', () => {
         }
       }
       expect(p).toBeGreaterThan(0);
-      expect(() => engine.setSynthInstrument('no-such-preset', 7)).toThrow();
-      expect(engine.midiInstrumentCount()).toBe(1);
+      expect(() => engine.setSynthInstrument(7, 'no-such-preset')).toThrow();
+      expect(engine.midiInstrumentCount).toBe(1);
     } finally {
       engine.destroy();
     }

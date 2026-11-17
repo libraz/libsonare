@@ -14,25 +14,25 @@ describe('Sonare WASM Module', () => {
 
   describe('warp voice capacity', () => {
     it('sets and reads the capacity, rejecting out-of-domain values', () => {
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       try {
-        expect(engine.warpVoiceCapacity()).toBe(8);
+        expect(engine.warpVoiceCapacity).toBe(8);
 
         engine.setWarpVoiceCapacity(12);
-        expect(engine.warpVoiceCapacity()).toBe(12);
+        expect(engine.warpVoiceCapacity).toBe(12);
 
         engine.setWarpVoiceCapacity(0);
-        expect(engine.warpVoiceCapacity()).toBe(0);
+        expect(engine.warpVoiceCapacity).toBe(0);
 
         // Rejected values leave the previously accepted capacity (0) in place.
         expect(() => engine.setWarpVoiceCapacity(65)).toThrow();
-        expect(engine.warpVoiceCapacity()).toBe(0);
+        expect(engine.warpVoiceCapacity).toBe(0);
 
         expect(() => engine.setWarpVoiceCapacity(-1)).toThrow();
-        expect(engine.warpVoiceCapacity()).toBe(0);
+        expect(engine.warpVoiceCapacity).toBe(0);
 
         expect(() => engine.setWarpVoiceCapacity(1.5)).toThrow();
-        expect(engine.warpVoiceCapacity()).toBe(0);
+        expect(engine.warpVoiceCapacity).toBe(0);
       } finally {
         engine.destroy();
       }
@@ -41,9 +41,9 @@ describe('Sonare WASM Module', () => {
 
   describe('parameterInfo over the reserved namespaces', () => {
     it('describes a NativeSynth continuous parameter', () => {
-      const engine = new RealtimeEngine(48000, 256);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
       try {
-        engine.setSynthInstrument('saw-lead', 1);
+        engine.setSynthInstrument(1, 'saw-lead');
         const id = engine.resolveInstrumentAutomationId(1, 'cutoffHz');
         expect(id).toBeGreaterThanOrEqual(0);
         // An unknown name or an unbound destination is a RangeError, never -1.
@@ -67,7 +67,7 @@ describe('Sonare WASM Module', () => {
     });
 
     it('describes a compressor insert identically on a track, bus and master strip', () => {
-      const engine = new RealtimeEngine(48000, 256);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
       try {
         const compressorInsert = (slot: string) =>
           `{"slot":"${slot}","processor":"dynamics.compressor","params":"{\\"thresholdDb\\":-18,\\"ratio\\":2,\\"attackMs\\":10,\\"releaseMs\\":100,\\"kneeDb\\":0}"}`;
@@ -75,25 +75,32 @@ describe('Sonare WASM Module', () => {
         // track/master strips, exercising the PreFader-then-PostFader count.
         const eqInsert = '{"slot":"pre","processor":"eq.parametric","params":"{}"}';
 
-        engine.setTrackLanes([10]);
-        engine.setTrackStripJson(
+        engine.setTrackLanes([{ trackId: 10 }]);
+        engine.setStrip(
           10,
-          `{"version":1,"strips":[{"id":"track-10","inserts":[${eqInsert},${compressorInsert('post')}]}],"buses":[],"connections":[]}`,
+          JSON.parse(
+            `{"version":1,"strips":[{"id":"track-10","inserts":[${eqInsert},${compressorInsert('post')}]}],"buses":[],"connections":[]}`,
+          ).strips[0],
         );
 
         engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
-        engine.setBusStripJson(
+        engine.setBusStrip(
           1,
-          `{"version":1,"strips":[],"buses":[{"id":"1","inserts":[${compressorInsert('post')}]}],"connections":[]}`,
+          JSON.parse(
+            `{"version":1,"strips":[],"buses":[{"id":"1","inserts":[${compressorInsert('post')}]}],"connections":[]}`,
+          ).buses[0],
         );
 
-        engine.setMasterStripJson(
-          `{"version":1,"strips":[{"id":"master","inserts":[${eqInsert},${compressorInsert('post')}]}],"buses":[],"connections":[]}`,
+        engine.setStrip(
+          'master',
+          JSON.parse(
+            `{"version":1,"strips":[{"id":"master","inserts":[${eqInsert},${compressorInsert('post')}]}],"buses":[],"connections":[]}`,
+          ).strips[0],
         );
 
-        const trackId = engine.resolveTrackInsertAutomationId(10, 1, 'thresholdDb');
+        const trackId = engine.resolveStripInsertAutomationId(10, 1, 'thresholdDb');
         const busId = engine.resolveBusInsertAutomationId(1, 0, 'thresholdDb');
-        const masterId = engine.resolveMasterInsertAutomationId(1, 'thresholdDb');
+        const masterId = engine.resolveStripInsertAutomationId('master', 1, 'thresholdDb');
         expect(trackId).toBeGreaterThanOrEqual(0);
         expect(busId).toBeGreaterThanOrEqual(0);
         expect(masterId).toBeGreaterThanOrEqual(0);
@@ -127,10 +134,10 @@ describe('Sonare WASM Module', () => {
     });
 
     it('describes the lane fader target and rejects an unassigned reserved id', () => {
-      const engine = new RealtimeEngine(48000, 256);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
       try {
-        engine.setTrackLanes([10]);
-        const laneFaderId = engine.resolveTrackLaneAutomationId(10, 'faderDb');
+        engine.setTrackLanes([{ trackId: 10 }]);
+        const laneFaderId = engine.resolveStripAutomationId(10, 'faderDb');
         const fader = engine.parameterInfo(laneFaderId);
         expect(fader).toMatchObject({
           name: 'faderDb',

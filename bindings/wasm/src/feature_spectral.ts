@@ -5,6 +5,7 @@
 
 import { getSonareModule } from './module_state.js';
 import type { Matrix2D } from './public_types.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertPositiveFloatValue,
@@ -16,9 +17,6 @@ import {
 function requireModule() {
   return getSonareModule();
 }
-
-/** The request fields a positional overload carries in its options bag. */
-type SampleOptions<R> = Omit<R, 'samples' | 'sampleRate'>;
 
 /** Spectral centroid request. */
 export interface SpectralCentroidRequest extends ValidateOptions {
@@ -147,7 +145,7 @@ export function spectralCentroid(request: SpectralCentroidRequest): Float32Array
 export function spectralCentroid(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<SpectralCentroidRequest>,
+  options?: OptionsOf<SpectralCentroidRequest>,
 ): Float32Array;
 export function spectralCentroid(...args: unknown[]): Float32Array {
   const r = sampleOneShot<SpectralCentroidRequest>('spectralCentroid', args);
@@ -177,7 +175,7 @@ export function spectralContrast(request: SpectralContrastRequest): Matrix2D;
 export function spectralContrast(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<SpectralContrastRequest>,
+  options?: OptionsOf<SpectralContrastRequest>,
 ): Matrix2D;
 export function spectralContrast(...args: unknown[]): Matrix2D {
   const r = sampleOneShot<SpectralContrastRequest>('spectralContrast', args);
@@ -204,7 +202,7 @@ export function polyFeatures(request: PolyFeaturesRequest): Matrix2D;
 export function polyFeatures(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<PolyFeaturesRequest>,
+  options?: OptionsOf<PolyFeaturesRequest>,
 ): Matrix2D;
 export function polyFeatures(...args: unknown[]): Matrix2D {
   const r = sampleOneShot<PolyFeaturesRequest>('polyFeatures', args);
@@ -225,7 +223,7 @@ export function zeroCrossings(request: ZeroCrossingsRequest): Int32Array;
 export function zeroCrossings(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<ZeroCrossingsRequest>,
+  options?: OptionsOf<ZeroCrossingsRequest>,
 ): Int32Array;
 export function zeroCrossings(...args: unknown[]): Int32Array {
   const r = sampleOneShot<ZeroCrossingsRequest>('zeroCrossings', args);
@@ -246,7 +244,7 @@ export function spectralBandwidth(request: SpectralBandwidthRequest): Float32Arr
 export function spectralBandwidth(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<SpectralBandwidthRequest>,
+  options?: OptionsOf<SpectralBandwidthRequest>,
 ): Float32Array;
 export function spectralBandwidth(...args: unknown[]): Float32Array {
   const r = sampleOneShot<SpectralBandwidthRequest>('spectralBandwidth', args);
@@ -267,7 +265,7 @@ export function spectralRolloff(request: SpectralRolloffRequest): Float32Array;
 export function spectralRolloff(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<SpectralRolloffRequest>,
+  options?: OptionsOf<SpectralRolloffRequest>,
 ): Float32Array;
 export function spectralRolloff(...args: unknown[]): Float32Array {
   const r = sampleOneShot<SpectralRolloffRequest>('spectralRolloff', args);
@@ -288,7 +286,7 @@ export function spectralFlatness(request: SpectralFlatnessRequest): Float32Array
 export function spectralFlatness(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<SpectralFlatnessRequest>,
+  options?: OptionsOf<SpectralFlatnessRequest>,
 ): Float32Array;
 export function spectralFlatness(...args: unknown[]): Float32Array {
   const r = sampleOneShot<SpectralFlatnessRequest>('spectralFlatness', args);
@@ -308,7 +306,7 @@ export function spectralFlux(request: SpectralFluxRequest): Float32Array;
 export function spectralFlux(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<SpectralFluxRequest>,
+  options?: OptionsOf<SpectralFluxRequest>,
 ): Float32Array;
 export function spectralFlux(...args: unknown[]): Float32Array {
   const r = sampleOneShot<SpectralFluxRequest>('spectralFlux', args);
@@ -329,7 +327,7 @@ export function zeroCrossingRate(request: ZeroCrossingRateRequest): Float32Array
 export function zeroCrossingRate(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<ZeroCrossingRateRequest>,
+  options?: OptionsOf<ZeroCrossingRateRequest>,
 ): Float32Array;
 export function zeroCrossingRate(...args: unknown[]): Float32Array {
   const r = sampleOneShot<ZeroCrossingRateRequest>('zeroCrossingRate', args);
@@ -349,7 +347,7 @@ export function rmsEnergy(request: RmsEnergyRequest): Float32Array;
 export function rmsEnergy(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<RmsEnergyRequest>,
+  options?: OptionsOf<RmsEnergyRequest>,
 ): Float32Array;
 export function rmsEnergy(...args: unknown[]): Float32Array {
   const r = sampleOneShot<RmsEnergyRequest>('rmsEnergy', args);

@@ -26,15 +26,15 @@ describe('Sonare WASM Module', () => {
 
   describe('clip, lane and MIDI routing', () => {
     it('processes realtime engine clips, capture, and telemetry', () => {
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       engine.setTempo(60);
       engine.setTimeSignature(3, 4);
       engine.setMarkers([
         { id: 11, ppq: 1, name: 'intro' },
         { id: 12, ppq: 2, name: 'out' },
       ]);
-      expect(engine.markerCount()).toBe(2);
-      expect(engine.markerByIndex(0).name).toBe('intro');
+      expect(engine.markers().length).toBe(2);
+      expect(engine.markers()[0].name).toBe('intro');
       expect(engine.marker(12).ppq).toBe(2);
       engine.setLoopFromMarkers(11, 12);
       engine.setMetronome({ enabled: true, beatGain: 0.25, accentGain: 0.75, clickSamples: 16 });
@@ -65,7 +65,7 @@ describe('Sonare WASM Module', () => {
       expectArgumentRefusal(badPpqError);
       expect(() => engine.sampleAtPpq(1e300)).toThrow();
       expect(() => engine.seekPpq(1e300)).toThrow();
-      expect(() => engine.setLoop(0, 1e300, true)).toThrow();
+      expect(() => engine.setLoop({ startPpq: 0, endPpq: 1e300, enabled: true })).toThrow();
       engine.setMetronome({ enabled: false });
       engine.addParameter({
         id: 7,
@@ -75,20 +75,20 @@ describe('Sonare WASM Module', () => {
         maxValue: 12,
         defaultValue: 0,
         rtSafe: true,
-        defaultCurve: 0, // canonical AutomationCurve::Linear
+        defaultCurve: 'linear',
       });
-      expect(engine.parameterCount()).toBe(1);
+      expect(engine.parameters().length).toBe(1);
       expect(engine.parameterInfo(7).name).toBe('gain');
-      expect(engine.parameterInfoByIndex(0).unit).toBe('dB');
+      expect(engine.parameters()[0].unit).toBe('dB');
       engine.setAutomationLane(7, [
         { ppq: 0, value: 0 },
-        { ppq: 1, value: 6.0205999, curveToNext: 0 }, // Linear
+        { ppq: 1, value: 6.0205999, curveToNext: 'linear' },
       ]);
-      expect(engine.automationLaneCount()).toBe(1);
+      expect(engine.automationLaneCount).toBe(1);
       engine.setGraph({
         nodes: [
           { id: 'in', numPorts: 2 },
-          { id: 'gain', type: 1, gainDb: 0, numPorts: 2 },
+          { id: 'gain', type: 'gain', gainDb: 0, numPorts: 2 },
           { id: 'out', numPorts: 2 },
         ],
         connections: [
@@ -102,8 +102,8 @@ describe('Sonare WASM Module', () => {
         numChannels: 2,
         parameterBindings: [{ paramId: 7, nodeId: 'gain' }],
       });
-      expect(engine.graphNodeCount()).toBe(3);
-      expect(engine.graphConnectionCount()).toBe(4);
+      expect(engine.graphNodeCount).toBe(3);
+      expect(engine.graphConnectionCount).toBe(4);
       engine.setClips([
         {
           id: 101,
@@ -112,11 +112,22 @@ describe('Sonare WASM Module', () => {
           lengthSamples: 128,
         },
       ]);
-      expect(engine.clipCount()).toBe(1);
-      engine.setCaptureBuffer(2, 128);
-      engine.setCapturePunch(48000, 48128);
-      expect(() => engine.setCapturePunch(-1, 128)).toThrow();
-      expect(() => engine.setCapturePunch(128, 127)).toThrow();
+      expect(engine.clipCount).toBe(1);
+      const capture = { capacityFrames: 128, punch: { startSample: 48000, endSample: 48128 } };
+      engine.configureCapture(capture);
+      expect(() =>
+        engine.configureCapture({
+          capacityFrames: 128,
+          punch: { startSample: -1, endSample: 128 },
+        }),
+      ).toThrow();
+      expect(() =>
+        engine.configureCapture({
+          capacityFrames: 128,
+          punch: { startSample: 128, endSample: 127 },
+        }),
+      ).toThrow();
+      engine.configureCapture(capture);
       engine.seekMarker(11);
       engine.play();
 
@@ -127,7 +138,7 @@ describe('Sonare WASM Module', () => {
       expect(processed[0][0]).toBeCloseTo(0.75, 4);
       expect(processed[1][0]).toBeCloseTo(-0.75, 4);
 
-      const warpEngine = new RealtimeEngine(48000, 4);
+      const warpEngine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 4 });
       warpEngine.setClips([
         {
           id: 303,
@@ -156,14 +167,14 @@ describe('Sonare WASM Module', () => {
       for (let i = 0; i < stretchSource; i++) {
         tone[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / sr);
       }
-      const stretchEngine = new RealtimeEngine(sr, stretchOutput);
+      const stretchEngine = new RealtimeEngine({ sampleRate: sr, maxBlockSize: stretchOutput });
       stretchEngine.setClips([
         {
           id: 305,
           channels: [tone],
           startPpq: 0,
           lengthSamples: stretchOutput,
-          warpMode: 'time-stretch',
+          warpMode: 'timeStretch',
           warpAnchors: [
             { warpSample: 0, sourceSample: 0 },
             { warpSample: stretchOutput, sourceSample: stretchSource },
@@ -190,7 +201,7 @@ describe('Sonare WASM Module', () => {
       expect(stretchPower(440)).toBeGreaterThan(100 * stretchPower(220));
       stretchEngine.destroy();
 
-      const fadeEngine = new RealtimeEngine(48000, 4);
+      const fadeEngine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 4 });
       fadeEngine.setClips([
         {
           id: 302,
@@ -208,7 +219,7 @@ describe('Sonare WASM Module', () => {
       expect(faded[2]).toBeGreaterThan(faded[3]);
       fadeEngine.destroy();
 
-      const loopLengthEngine = new RealtimeEngine(48000, 6);
+      const loopLengthEngine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 6 });
       loopLengthEngine.setClips([
         {
           id: 3021,
@@ -225,7 +236,7 @@ describe('Sonare WASM Module', () => {
       expect(Array.from(looped)).toEqual([1, 2, 3, 4, 1, 2]);
       loopLengthEngine.destroy();
 
-      const badWarpModeEngine = new RealtimeEngine(48000, 4);
+      const badWarpModeEngine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 4 });
       expect(() =>
         badWarpModeEngine.setClips([
           {
@@ -244,13 +255,13 @@ describe('Sonare WASM Module', () => {
             channels: [new Float32Array([0, 10, 20, 30])],
             startPpq: 0,
             lengthSamples: 4,
-            warpMode: 99 as 1,
+            warpMode: 99 as never,
           },
         ]),
       ).toThrow();
       badWarpModeEngine.destroy();
 
-      const badLoopWarpEngine = new RealtimeEngine(48000, 4);
+      const badLoopWarpEngine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 4 });
       expect(() =>
         badLoopWarpEngine.setClips([
           {
@@ -269,7 +280,7 @@ describe('Sonare WASM Module', () => {
       ).toThrow();
       badLoopWarpEngine.destroy();
 
-      const failedSetClipsEngine = new RealtimeEngine(48000, 4);
+      const failedSetClipsEngine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 4 });
       failedSetClipsEngine.setClips([
         {
           id: 3032,
@@ -295,13 +306,13 @@ describe('Sonare WASM Module', () => {
           },
         ]),
       ).toThrow();
-      expect(failedSetClipsEngine.clipCount()).toBe(1);
+      expect(failedSetClipsEngine.clipCount).toBe(1);
       failedSetClipsEngine.seekSample(0);
       const afterFailedSet = failedSetClipsEngine.process([new Float32Array(4)]);
       expect(Array.from(afterFailedSet[0])).toEqual([0.25, 0.5, 0.75, 1.0]);
       failedSetClipsEngine.destroy();
 
-      const badOffsetEngine = new RealtimeEngine(48000, 4);
+      const badOffsetEngine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 4 });
       expect(() =>
         badOffsetEngine.setClips([
           {
@@ -314,7 +325,7 @@ describe('Sonare WASM Module', () => {
       ).toThrow();
       badOffsetEngine.destroy();
 
-      const tempoEngine = new RealtimeEngine(48000, 8192);
+      const tempoEngine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8192 });
       const tempoSource = new Float32Array(4096);
       for (let i = 0; i < tempoSource.length; i++) {
         tempoSource[i] = Math.sin(i * 0.02);
@@ -325,7 +336,7 @@ describe('Sonare WASM Module', () => {
           channels: [tempoSource],
           startPpq: 0,
           lengthSamples: 8192,
-          warpMode: 'tempo-sync',
+          warpMode: 'tempoSync',
           warpAnchors: [
             { warpSample: 0, sourceSample: 0 },
             { warpSample: 2048, sourceSample: 1024 },
@@ -338,14 +349,14 @@ describe('Sonare WASM Module', () => {
       expect(Array.from(tempoSynced[0]).some((v) => Math.abs(v) > 0.1)).toBe(true);
       tempoEngine.destroy();
 
-      const shortTempoEngine = new RealtimeEngine(48000, 8192);
+      const shortTempoEngine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8192 });
       shortTempoEngine.setClips([
         {
           id: 3041,
           channels: [tempoSource],
           startPpq: 0,
           lengthSamples: 4096,
-          warpMode: 'tempo-sync',
+          warpMode: 'tempoSync',
           warpAnchors: [
             { warpSample: 0, sourceSample: 0 },
             { warpSample: 2048, sourceSample: 1024 },
@@ -361,7 +372,7 @@ describe('Sonare WASM Module', () => {
       );
       shortTempoEngine.destroy();
 
-      const pagedEngine = new RealtimeEngine(48000, 8);
+      const pagedEngine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
       expect(() => pagedEngine.createClipPageProvider(1, 1_000_000_000_000, 1)).toThrow();
       expect(() => pagedEngine.createClipPageProvider(65, 8, 4)).toThrow();
       const provider = pagedEngine.createClipPageProvider(1, 8, 4);
@@ -382,7 +393,7 @@ describe('Sonare WASM Module', () => {
             id: 3051,
             pageProvider: provider,
             startPpq: 0,
-            warpMode: 'tempo-sync',
+            warpMode: 'tempoSync',
           },
         ]),
       ).toThrow();
@@ -399,7 +410,9 @@ describe('Sonare WASM Module', () => {
       expect(Array.from(firstPaged[0])).toEqual([1, 2, 3, 4, 0, 0, 0, 0]);
       expect(pagedEngine.popClipPageRequest()).toEqual({ clipId: 305, channel: 0, sample: 4 });
       expect(
-        pagedEngine.drainTelemetry().some((record) => record.type === 1 && record.value === 305),
+        pagedEngine
+          .drainTelemetry()
+          .some((record) => record.type === 'error' && record.value === 305),
       ).toBe(true);
       provider.supply(1, [new Float32Array([5, 6, 7, 8])]);
       pagedEngine.seekSample(0);
@@ -413,7 +426,7 @@ describe('Sonare WASM Module', () => {
       recycledProvider.destroy();
       pagedEngine.destroy();
 
-      engine.armCapture();
+      engine.armCapture({ armed: true });
       engine.seekMarker(11);
       const capturedBlock = engine.process([
         new Float32Array(128).fill(0.25),
@@ -433,9 +446,8 @@ describe('Sonare WASM Module', () => {
       expect(telemetry.length).toBeGreaterThan(0);
       expect(telemetry.at(-1)?.timelineSample).toBe(48000 + 128);
 
-      engine.setCaptureSource('input');
-      engine.setRecordOffsetSamples(-37);
-      engine.armCapture();
+      engine.configureCapture({ ...capture, source: 'input', recordOffsetSamples: -37 });
+      engine.armCapture({ armed: true });
       engine.seekMarker(11);
       engine.process([new Float32Array(128).fill(0.25), new Float32Array(128).fill(-0.25)]);
       const inputCaptureStatus = engine.captureStatus();
@@ -444,15 +456,22 @@ describe('Sonare WASM Module', () => {
       expect(engine.capturedAudio()[0][0]).toBeCloseTo(0.25, 4);
       expect(engine.drainMeterTelemetry().some((record) => record.targetId === 0xffff)).toBe(true);
 
-      engine.setCaptureSource(0);
+      engine.configureCapture({ ...capture, source: 'output' });
       expect(engine.captureStatus().source).toBe('output');
-      engine.setCaptureSource(1);
+      engine.configureCapture({ ...capture, source: 'input' });
       expect(engine.captureStatus().source).toBe('input');
-      expect(() => engine.setCaptureSource(2)).toThrow(/capture source/);
+      expect(() => engine.configureCapture({ ...capture, source: 2 as never })).toThrow(TypeError);
+      expect(() => engine.configureCapture({ ...capture, source: 'both' as never })).toThrow(
+        RangeError,
+      );
 
-      engine.setInputMonitor(false);
+      engine.configureCapture({
+        ...capture,
+        source: 'input',
+        inputMonitor: { enabled: false },
+      });
       engine.resetCapture();
-      engine.armCapture();
+      engine.armCapture({ armed: true });
       engine.seekMarker(11);
       let monitored = engine.process([
         new Float32Array(128).fill(0.25),
@@ -462,7 +481,11 @@ describe('Sonare WASM Module', () => {
       expect(monitored[1][0]).toBeCloseTo(-0.25, 4);
       expect(engine.capturedAudio()[0][0]).toBeCloseTo(0.25, 4);
 
-      engine.setInputMonitor(true, 0.5);
+      engine.configureCapture({
+        ...capture,
+        source: 'input',
+        inputMonitor: { enabled: true, gain: 0.5 },
+      });
       engine.seekMarker(11);
       monitored = engine.process([
         new Float32Array(128).fill(0.25),
@@ -470,8 +493,15 @@ describe('Sonare WASM Module', () => {
       ]);
       expect(monitored[0][0]).toBeCloseTo(0.5, 4);
       expect(monitored[1][0]).toBeCloseTo(-0.5, 4);
-      expect(() => engine.setInputMonitor(true, Number.NaN)).toThrow();
-      expect(() => engine.setInputMonitor(true, Number.POSITIVE_INFINITY)).toThrow();
+      expect(() =>
+        engine.configureCapture({ ...capture, inputMonitor: { enabled: true, gain: Number.NaN } }),
+      ).toThrow();
+      expect(() =>
+        engine.configureCapture({
+          ...capture,
+          inputMonitor: { enabled: true, gain: Number.POSITIVE_INFINITY },
+        }),
+      ).toThrow();
 
       const meters = engine.drainMeterTelemetry();
       expect(meters.length).toBeGreaterThan(0);
@@ -502,18 +532,24 @@ describe('Sonare WASM Module', () => {
           targetLufs: Number.NaN,
         }),
       ).toThrow(/targetLufs/);
-      for (const targetLufs of [0]) {
-        const normalized = engine.bounceOffline({
+      const normalized = engine.bounceOffline({
+        totalFrames: 256,
+        blockSize: 128,
+        numChannels: 2,
+        sourceSampleRate: 48000,
+        targetSampleRate: 48000,
+        normalizeLufs: true,
+      });
+      expect(Array.from(normalized.interleaved).every(Number.isFinite)).toBe(true);
+      expect(() =>
+        engine.bounceOffline({
           totalFrames: 256,
           blockSize: 128,
           numChannels: 2,
-          sourceSampleRate: 48000,
-          targetSampleRate: 48000,
           normalizeLufs: true,
-          targetLufs,
-        });
-        expect(Array.from(normalized.interleaved).every(Number.isFinite)).toBe(true);
-      }
+          targetLufs: 0,
+        }),
+      ).toThrow(RangeError);
       engine.setClips([
         {
           id: 202,
@@ -533,7 +569,9 @@ describe('Sonare WASM Module', () => {
       expect(frozen.frames).toBe(128);
       expect(frozen.numChannels).toBe(2);
       engine.seekSample(0);
-      const frozenRendered = engine.renderOffline([new Float32Array(128), new Float32Array(128)]);
+      const frozenRendered = engine.renderOffline({
+        channels: [new Float32Array(128), new Float32Array(128)],
+      });
       expect(frozenRendered[0][0]).toBeCloseTo(0.125, 4);
       expect(frozenRendered[1][0]).toBeCloseTo(-0.25, 4);
       engine.setClips([
@@ -553,7 +591,9 @@ describe('Sonare WASM Module', () => {
         gain: 0,
       });
       engine.seekSample(0);
-      const zeroGainFrozen = engine.renderOffline([new Float32Array(128), new Float32Array(128)]);
+      const zeroGainFrozen = engine.renderOffline({
+        channels: [new Float32Array(128), new Float32Array(128)],
+      });
       expect(zeroGainFrozen[0][0]).toBeCloseTo(0, 4);
       expect(zeroGainFrozen[1][0]).toBeCloseTo(0, 4);
       // Unsupported bounce channel counts (3/4/5/7 have no speaker layout) must
@@ -631,17 +671,17 @@ describe('Sonare WASM Module', () => {
         startPpq: 0,
         lengthSamples: sourceLength,
         gain,
-        warpMode: 'time-stretch' as const,
+        warpMode: 'timeStretch' as const,
         warpAnchors: anchors,
       });
 
-      const referenceEngine = new RealtimeEngine(sampleRate, blockSize);
+      const referenceEngine = new RealtimeEngine({ sampleRate, maxBlockSize: blockSize });
       referenceEngine.setClips([clip([source])]);
       referenceEngine.play();
       const referenceFirst = referenceEngine.process([new Float32Array(blockSize)])[0];
       const referenceSecond = referenceEngine.process([new Float32Array(blockSize)])[0];
 
-      const editedEngine = new RealtimeEngine(sampleRate, blockSize);
+      const editedEngine = new RealtimeEngine({ sampleRate, maxBlockSize: blockSize });
       editedEngine.setClips([clip([source])]);
       editedEngine.play();
       const editedFirst = editedEngine.process([new Float32Array(blockSize)])[0];
@@ -678,7 +718,7 @@ describe('Sonare WASM Module', () => {
     });
 
     it('[audio_workflow] clears prebaked metadata when freeze replaces a tempo-baked clip', () => {
-      const engine = new RealtimeEngine(48000, 512);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 512 });
       const source = new Float32Array(2048);
       for (let i = 0; i < source.length; i += 1) {
         source[i] = 0.25 * Math.sin((2 * Math.PI * 220 * i) / 48000);
@@ -689,7 +729,7 @@ describe('Sonare WASM Module', () => {
           channels: [source],
           startPpq: 0,
           lengthSamples: source.length,
-          warpMode: 'tempo-sync',
+          warpMode: 'tempoSync',
           warpAnchors: [
             { warpSample: 0, sourceSample: 0 },
             { warpSample: source.length, sourceSample: source.length },
@@ -719,14 +759,14 @@ describe('Sonare WASM Module', () => {
     });
 
     it('treats an explicit numPorts of 0 as a fallback to numChannels like the C ABI', () => {
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       // The C ABI resolves a non-positive num_ports to num_channels; a plain-JS
       // caller who writes numPorts:0 must get the same fallback, not a throw.
       expect(() =>
         engine.setGraph({
           nodes: [
             { id: 'in', numPorts: 0 },
-            { id: 'gain', type: 1, gainDb: 0, numPorts: 0 },
+            { id: 'gain', type: 'gain', gainDb: 0, numPorts: 0 },
             { id: 'out', numPorts: 0 },
           ],
           connections: [
@@ -738,28 +778,33 @@ describe('Sonare WASM Module', () => {
           numChannels: 2,
         }),
       ).not.toThrow();
-      expect(engine.graphNodeCount()).toBe(3);
+      expect(engine.graphNodeCount).toBe(3);
       engine.destroy();
     });
 
-    it('reads a graph connection mix of 0 (replace) or 1 (add) and refuses any other value', () => {
-      const graph = (mix: number | undefined) => ({
+    it('reads a graph connection mix of replace or add and refuses any other value', () => {
+      const graph = (mix: string | number | undefined) => ({
         nodes: [
           { id: 'in', numPorts: 2 },
           { id: 'out', numPorts: 2 },
         ],
-        connections: [{ sourceNode: 'in', sourcePort: 0, destNode: 'out', destPort: 0, mix }],
+        connections: [
+          { sourceNode: 'in', sourcePort: 0, destNode: 'out', destPort: 0, mix: mix as never },
+        ],
         inputNode: 'in',
         outputNode: 'out',
         numChannels: 2,
       });
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       try {
-        for (const mix of [0, 1, undefined]) {
+        for (const mix of ['replace', 'add', undefined]) {
           expect(() => engine.setGraph(graph(mix))).not.toThrow();
         }
-        for (const mix of [2, -1, 7]) {
+        for (const mix of ['merge', 'ADD']) {
           expect(() => engine.setGraph(graph(mix))).toThrow(RangeError);
+        }
+        for (const mix of [0, 1, 2, -1]) {
+          expect(() => engine.setGraph(graph(mix))).toThrow(TypeError);
         }
       } finally {
         engine.destroy();
@@ -767,7 +812,7 @@ describe('Sonare WASM Module', () => {
     });
 
     it('routes track clips through lanes and lane commands', () => {
-      const engine = new RealtimeEngine(48000, 256);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
       const frames = 256 * 10;
       engine.setClips([
         {
@@ -785,7 +830,7 @@ describe('Sonare WASM Module', () => {
           lengthSamples: frames,
         },
       ]);
-      engine.setTrackLanes([10, { trackId: 20 }]);
+      engine.setTrackLanes([{ trackId: 10 }, { trackId: 20 }]);
       let duplicateLaneError: unknown;
       try {
         engine.setTrackLanes([{ trackId: 10 }, { trackId: 10 }]);
@@ -794,28 +839,28 @@ describe('Sonare WASM Module', () => {
       }
       expect(duplicateLaneError).toBeInstanceOf(RangeError);
       expect(isSonareError(duplicateLaneError)).toBe(false);
-      engine.setTrackLanes([10, { trackId: 20 }]);
+      engine.setTrackLanes([{ trackId: 10 }, { trackId: 20 }]);
 
       engine.play();
       let processed = engine.process([new Float32Array(256), new Float32Array(256)]);
       expect(processed[0].at(-1)).toBeCloseTo(2, 4);
       expect(processed[1].at(-1)).toBeCloseTo(2, 4);
 
-      engine.setTrackMonitorMode(0, 'pfl');
+      engine.setTrackMonitorMode(10, 'pfl');
       const withPfl = engine.processWithMonitor([new Float32Array(256), new Float32Array(256)]);
       expect(withPfl.output[0].at(-1)).toBeCloseTo(2, 4);
       expect(withPfl.monitor[0].at(-1)).toBeCloseTo(1, 4);
       expect(withPfl.monitor[1].at(-1)).toBeCloseTo(1, 4);
 
-      engine.setTrackMonitorMode(0, 'off');
-      engine.setSoloMute(0, true, false);
+      engine.setTrackMonitorMode(10, 'off');
+      engine.setTrackSoloMute(10, { solo: true, mute: false });
       for (let block = 0; block < 4; block += 1) {
         processed = engine.process([new Float32Array(256), new Float32Array(256)]);
       }
       expect(processed[0].at(-1)).toBeGreaterThan(0.75);
       expect(processed[0].at(-1)).toBeLessThan(1.25);
 
-      engine.setParameterSmoothed(engine.resolveTrackLaneAutomationId(10, 'faderDb'), -12);
+      engine.setParameterSmoothed(engine.resolveStripAutomationId(10, 'faderDb'), -12);
       for (let block = 0; block < 6; block += 1) {
         processed = engine.process([new Float32Array(256), new Float32Array(256)]);
       }
@@ -825,7 +870,7 @@ describe('Sonare WASM Module', () => {
     });
 
     it('keeps the cue bus out of the program output on the prepared path', () => {
-      const engine = new RealtimeEngine(48000, 256);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
       const frames = 256 * 10;
       const blockSize = 256;
       engine.setClips([
@@ -844,33 +889,33 @@ describe('Sonare WASM Module', () => {
           lengthSamples: frames,
         },
       ]);
-      engine.setTrackLanes([10, { trackId: 20 }]);
+      engine.setTrackLanes([{ trackId: 10 }, { trackId: 20 }]);
       engine.prepareChannels(2, blockSize);
       engine.prepareMonitorChannels(2, blockSize);
-      engine.setTrackMonitorMode(0, 'pfl');
+      engine.setTrackMonitorMode(10, 'pfl');
       engine.play();
 
       for (let ch = 0; ch < 2; ch += 1) {
-        engine.getChannelBuffer(ch, blockSize).fill(0);
-        engine.getMonitorChannelBuffer(ch, blockSize).fill(0);
+        engine.channelBuffer(ch, blockSize).fill(0);
+        engine.monitorChannelBuffer(ch, blockSize).fill(0);
       }
       engine.processPreparedWithMonitor(blockSize);
 
       // Same split processWithMonitor produces: both lanes in the program
       // output, only the PFL-tapped lane in the cue.
-      expect(engine.getChannelBuffer(0, blockSize).at(-1)).toBeCloseTo(2, 4);
-      expect(engine.getChannelBuffer(1, blockSize).at(-1)).toBeCloseTo(2, 4);
-      expect(engine.getMonitorChannelBuffer(0, blockSize).at(-1)).toBeCloseTo(1, 4);
-      expect(engine.getMonitorChannelBuffer(1, blockSize).at(-1)).toBeCloseTo(1, 4);
+      expect(engine.channelBuffer(0, blockSize).at(-1)).toBeCloseTo(2, 4);
+      expect(engine.channelBuffer(1, blockSize).at(-1)).toBeCloseTo(2, 4);
+      expect(engine.monitorChannelBuffer(0, blockSize).at(-1)).toBeCloseTo(1, 4);
+      expect(engine.monitorChannelBuffer(1, blockSize).at(-1)).toBeCloseTo(1, 4);
 
       engine.destroy();
     });
 
     it('rejects a prepared monitor call that was never prepared or is too narrow', () => {
-      const engine = new RealtimeEngine(48000, 256);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
       engine.prepareChannels(2, 256);
       expect(() => engine.processPreparedWithMonitor(256)).toThrow();
-      expect(() => engine.getMonitorChannelBuffer(0, 256)).toThrow();
+      expect(() => engine.monitorChannelBuffer(0, 256)).toThrow();
       engine.prepareMonitorChannels(1, 256);
       // One cue plane cannot hold the two the engine writes.
       expect(() => engine.processPreparedWithMonitor(256)).toThrow();
@@ -881,7 +926,7 @@ describe('Sonare WASM Module', () => {
     });
 
     it('routes asymmetric left-only sources through dual-pan and reverses them', () => {
-      const engine = new RealtimeEngine(48000, 256);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
       const frames = 256 * 12;
       engine.setClips([
         {
@@ -892,13 +937,14 @@ describe('Sonare WASM Module', () => {
           lengthSamples: frames,
         },
       ]);
-      engine.setTrackLanes([10]);
-      engine.setTrackStripJson(
+      engine.setTrackLanes([{ trackId: 10 }]);
+      engine.setStrip(
         10,
-        '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
+        JSON.parse('{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}')
+          .strips[0],
       );
-      engine.setTrackStripPanMode(10, 'dualPan');
-      engine.setTrackStripDualPan(10, 1, -1);
+      engine.setStripPanMode(10, 'dualPan');
+      engine.setStripDualPan(10, 1, -1);
       engine.settleParameters();
       engine.play();
 
@@ -911,7 +957,7 @@ describe('Sonare WASM Module', () => {
       expect(rightEnergy).toBeGreaterThan(1);
       expect(leftEnergy).toBeLessThan(rightEnergy * 1e-6);
 
-      engine.setTrackStripDualPan(10, -1, 1);
+      engine.setStripDualPan(10, -1, 1);
       engine.seekSample(0);
       engine.settleParameters();
       let routedLeft: Float32Array[] = [new Float32Array(256), new Float32Array(256)];
@@ -926,9 +972,9 @@ describe('Sonare WASM Module', () => {
     });
 
     it('plays a frozen MIDI lane once: freeze withdraws the MIDI it baked', () => {
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       // A near-instant release, so no tail of the earlier render rings into the replay.
-      engine.setBuiltinInstrument({ gain: 0.5, sustain: 1, releaseMs: 0.01 }, 5);
+      engine.setBuiltinInstrument(5, { gain: 0.5, sustain: 1, releaseMs: 0.01 });
       engine.setMidiClips([
         {
           id: 1,
@@ -939,17 +985,21 @@ describe('Sonare WASM Module', () => {
         },
       ]);
       engine.seekSample(0);
-      const live = engine.renderOffline([new Float32Array(128), new Float32Array(128)]);
+      const live = engine.renderOffline({
+        channels: [new Float32Array(128), new Float32Array(128)],
+      });
       expect(rms(live[0])).toBeGreaterThan(0);
       engine.seekSample(0);
       engine.freezeOffline({ totalFrames: 128, blockSize: 128, numChannels: 2, clipId: 9 });
-      expect(engine.clipCount()).toBe(1);
+      expect(engine.clipCount).toBe(1);
       const frozen = engine.prebakedClipChannels(9);
       expect(frozen).not.toBeNull();
       expect(rms(frozen?.[0] ?? new Float32Array(1))).toBeGreaterThan(0);
       engine.seekSample(0);
       // The replay is the frozen audio alone: the MIDI it baked no longer plays live.
-      const replay = engine.renderOffline([new Float32Array(128), new Float32Array(128)]);
+      const replay = engine.renderOffline({
+        channels: [new Float32Array(128), new Float32Array(128)],
+      });
       for (let i = 0; i < 128; i += 1) {
         expect(replay[0][i]).toBeCloseTo(frozen?.[0][i] ?? Number.NaN, 5);
         expect(replay[1][i]).toBeCloseTo(frozen?.[1][i] ?? Number.NaN, 5);
@@ -958,8 +1008,8 @@ describe('Sonare WASM Module', () => {
     });
 
     it('renders scheduled MIDI clips through built-in instruments', () => {
-      const engine = new RealtimeEngine(48000, 128);
-      engine.setBuiltinInstrument({ gain: 0.5 }, 5);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+      engine.setBuiltinInstrument(5, { gain: 0.5 });
       engine.setMidiClips([
         {
           id: 1,
@@ -1018,12 +1068,12 @@ describe('Sonare WASM Module', () => {
     });
 
     it('routes a destination marked external to the MIDI output queue, bypassing its instrument', () => {
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       engine.setTempo(120);
       // Bind an instrument to destination 5, then mark it external: the
       // instrument must be bypassed (silence) and its MIDI must queue instead,
       // already lowered to MIDI 1.0 bytes.
-      engine.setBuiltinInstrument({ gain: 0.5 }, 5);
+      engine.setBuiltinInstrument(5, { gain: 0.5 });
       engine.setMidiDestinationExternal(5, true);
       engine.setMidiClips([
         {
@@ -1045,14 +1095,14 @@ describe('Sonare WASM Module', () => {
       expect(events.length).toBe(2);
       expect(events[0].destinationId).toBe(5);
       expect(events[0].renderFrame).toBe(0);
-      expect(events[0].bytes).toEqual([0x90, 60, 100]);
-      expect(events[1].bytes).toEqual([0x80, 60, 0]);
+      expect(events[0].bytes).toEqual(Uint8Array.of(0x90, 60, 100));
+      expect(events[1].bytes).toEqual(Uint8Array.of(0x80, 60, 0));
       expect(engine.drainExternalMidi(256).length).toBe(0);
       engine.destroy();
     });
 
     it('forwards transport and clock bytes to the MIDI output queue when enabled', () => {
-      const engine = new RealtimeEngine(48000, 2400);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 2400 });
       engine.setTempo(120);
       engine.setExternalMidiClockEnabled(true);
       engine.seekSample(0);
@@ -1065,17 +1115,19 @@ describe('Sonare WASM Module', () => {
         expect(event.destinationId).toBe(0xffffffff);
       }
       // Start (0xFA) first, then at least one clock tick (0xF8).
-      expect(events[0].bytes).toEqual([0xfa]);
+      expect(events[0].bytes).toEqual(Uint8Array.of(0xfa));
       expect(events.some((event) => event.bytes[0] === 0xf8)).toBe(true);
       engine.destroy();
     });
 
     it('prepares only at a whole number of hertz within the supported range', () => {
       for (const rate of [44100.5, 7999, 384001, Number.NaN]) {
-        expect(() => new RealtimeEngine(rate, 128)).toThrow(RangeError);
+        expect(() => new RealtimeEngine({ sampleRate: rate, maxBlockSize: 128 })).toThrow(
+          RangeError,
+        );
       }
-      new RealtimeEngine(8000, 128).destroy();
-      new RealtimeEngine(384000, 128).destroy();
+      new RealtimeEngine({ sampleRate: 8000, maxBlockSize: 128 }).destroy();
+      new RealtimeEngine({ sampleRate: 384000, maxBlockSize: 128 }).destroy();
     });
 
     it('upserts and removes one clip while every other clip keeps sounding', () => {
@@ -1083,27 +1135,27 @@ describe('Sonare WASM Module', () => {
         engine.seekSample(0);
         return engine.renderOffline({ channels: [new Float32Array(128)], blockSize: 128 })[0];
       };
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       try {
         engine.setClips([{ id: 1, channels: [new Float32Array(128).fill(0.25)], startPpq: 0 }]);
         engine.upsertClip({ id: 2, channels: [new Float32Array(128).fill(0.125)], startPpq: 0 });
-        expect(engine.clipCount()).toBe(2);
+        expect(engine.clipCount).toBe(2);
         expect(render(engine)[0]).toBeCloseTo(0.375, 5);
 
         // Same id: replaced, not added.
         engine.upsertClip({ id: 2, channels: [new Float32Array(128).fill(0.5)], startPpq: 0 });
-        expect(engine.clipCount()).toBe(2);
+        expect(engine.clipCount).toBe(2);
         expect(render(engine)[0]).toBeCloseTo(0.75, 5);
 
         // A refused clip leaves the published set as it was.
         expect(() =>
           engine.upsertClip({ id: 3, channels: [new Float32Array(0)], startPpq: 0 }),
         ).toThrow();
-        expect(engine.clipCount()).toBe(2);
+        expect(engine.clipCount).toBe(2);
         expect(render(engine)[0]).toBeCloseTo(0.75, 5);
 
         engine.removeClip(2);
-        expect(engine.clipCount()).toBe(1);
+        expect(engine.clipCount).toBe(1);
         expect(render(engine)[0]).toBeCloseTo(0.25, 5);
         let caught: unknown;
         try {

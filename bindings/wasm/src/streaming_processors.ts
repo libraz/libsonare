@@ -516,6 +516,38 @@ export class StreamingEqualizer {
  * before processing, and call {@link destroy} (or use `try/finally`) to release
  * the underlying WASM object.
  */
+// Native still spells these controls `semitones` and `grainSize`.
+function retuneConfigToNative(
+  fnName: string,
+  config: StreamingRetuneConfig,
+): Record<string, unknown> {
+  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+    throw new TypeError(`${fnName}: config must be an object`);
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(config)) {
+    if (value === undefined || value === null) {
+      continue;
+    }
+    if (key === 'pitchSemitones') {
+      out.semitones = value;
+    } else if (key === 'grainSizeSamples') {
+      if (typeof value !== 'number') {
+        throw new TypeError(`${fnName}: grainSizeSamples must be a number`);
+      }
+      if (value === 0) {
+        throw new RangeError(`${fnName}: grainSizeSamples must not be 0 (omit it for the default)`);
+      }
+      out.grainSize = value;
+    } else if (key === 'mix') {
+      out.mix = value;
+    } else {
+      throw new TypeError(`${fnName}: unknown config key '${key}'`);
+    }
+  }
+  return out;
+}
+
 export class StreamingRetune {
   private retuneHandle: import('./sonare.js').WasmStreamingRetune;
   private released = false;
@@ -527,7 +559,9 @@ export class StreamingRetune {
 
   constructor(config: StreamingRetuneConfig = {}) {
     const module = getSonareModule();
-    this.retuneHandle = module.createStreamingRetune(config as Record<string, unknown>);
+    this.retuneHandle = module.createStreamingRetune(
+      retuneConfigToNative('StreamingRetune', config),
+    );
   }
 
   /**
@@ -545,26 +579,34 @@ export class StreamingRetune {
 
   /**
    * Update the live controls; omitted keys keep their current value. Changing
-   * `grainSize` takes effect after the next {@link prepare} call, and an
-   * omitted `grainSize` keeps whatever was last requested — including the `0`
-   * sentinel, so a re-{@link prepare} at another sample rate re-derives it.
+   * `grainSizeSamples` takes effect after the next {@link prepare} call, and an
+   * omitted `grainSizeSamples` keeps whatever was last requested, so a
+   * re-{@link prepare} at another sample rate re-derives a derived grain.
+   *
+   * @throws TypeError for a wrong-typed or unknown key; RangeError for an explicit 0
+   *   `grainSizeSamples` or a non-finite control.
    */
   setConfig(config: StreamingRetuneConfig): void {
-    this.retune.setConfig(config as Record<string, unknown>);
+    this.retune.setConfig(retuneConfigToNative('StreamingRetune.setConfig', config));
   }
 
-  /** The currently applied controls, with `grainSize` as the effective one. */
+  /** The currently applied controls, with `grainSizeSamples` as the effective one. */
   config(): Required<StreamingRetuneConfig> {
-    return this.retune.config();
+    const native = this.retune.config();
+    return {
+      pitchSemitones: native.semitones,
+      mix: native.mix,
+      grainSizeSamples: native.grainSize,
+    };
   }
 
-  /** Resolved grain size in samples after {@link prepare}. */
-  grainSize(): number {
+  /** Resolved grain size in samples after {@link prepare}; 0 before. */
+  get grainSizeSamples(): number {
     return this.retune.grainSize();
   }
 
   /** Fixed overlap-add latency in samples (one grain); 0 before prepare. */
-  latencySamples(): number {
+  get latencySamples(): number {
     return this.retune.latencySamples();
   }
 

@@ -163,10 +163,10 @@ describe('Sonare WASM SoundFont (SF2)', () => {
   });
 
   it('renders live MIDI input through an engine-bound SF2 instrument', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     // Binding before a SoundFont is loaded is allowed: live MIDI plays through
     // the built-in synthesizer GM fallback (the data-free floor).
-    engine.setSf2Instrument({}, 7);
+    engine.setSf2Instrument(7, {});
     engine.pushMidiNoteOn(7, 0, 0, 60, 100);
     const fb = engine.process([new Float32Array(128), new Float32Array(128)]);
     expect(Math.max(peak(fb[0]), peak(fb[1]))).toBeGreaterThan(0);
@@ -175,15 +175,15 @@ describe('Sonare WASM SoundFont (SF2)', () => {
     expect(() => engine.loadSoundFont(new Uint8Array([9, 9, 9]))).toThrow();
 
     engine.loadSoundFont(sf2Bytes);
-    engine.setSf2Instrument({ gain: 1 }, 7);
-    expect(engine.midiInstrumentCount()).toBe(1);
+    engine.setSf2Instrument(7, { gain: 1 });
+    expect(engine.midiInstrumentCount).toBe(1);
 
     engine.pushMidiNoteOn(7, 0, 0, 60, 100);
     const out = engine.process([new Float32Array(128), new Float32Array(128)]);
     expect(Math.max(peak(out[0]), peak(out[1]))).toBeGreaterThan(0);
 
     engine.clearMidiInstrument(7);
-    expect(engine.midiInstrumentCount()).toBe(0);
+    expect(engine.midiInstrumentCount).toBe(0);
     engine.destroy();
   });
 });
@@ -207,10 +207,10 @@ function gsDt1(a0: number, a1: number, a2: number, data: number[]): Uint8Array {
 
 // One held note on part 1 through an Overdrive insertion effect, realised as asked.
 function renderOverdrive(gsEfxRealization?: 'modern' | 'classic'): Float32Array {
-  const engine = new RealtimeEngine(48000, 128);
+  const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
   try {
     engine.loadSoundFont(sf2Bytes);
-    engine.setSf2Instrument(gsEfxRealization === undefined ? {} : { gsEfxRealization }, 7);
+    engine.setSf2Instrument(7, gsEfxRealization === undefined ? {} : { gsEfxRealization });
     engine.pushMidiSysex(7, gsDt1(0x40, 0x03, 0x00, [0x01, 0x10]));
     engine.pushMidiSysex(7, gsDt1(0x40, 0x41, 0x22, [0x01]));
     engine.pushMidiNoteOn(7, 0, 0, 60, 100);
@@ -231,13 +231,13 @@ describe('SF2 instrument gsEfxRealization', () => {
   });
 
   it('refuses a value other than modern or classic by name', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     for (const bad of ['Classic', '', 'vintage', 1, true]) {
-      expect(() => engine.setSf2Instrument({ gsEfxRealization: bad as never }, 7)).toThrow(
+      expect(() => engine.setSf2Instrument(7, { gsEfxRealization: bad as never })).toThrow(
         /gsEfxRealization/,
       );
     }
-    engine.setSf2Instrument({ gsEfxRealization: 'classic' }, 7);
+    engine.setSf2Instrument(7, { gsEfxRealization: 'classic' });
     engine.destroy();
     const project = new Project();
     for (const bad of ['vintage', 1]) {

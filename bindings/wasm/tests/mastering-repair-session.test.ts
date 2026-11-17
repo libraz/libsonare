@@ -56,10 +56,10 @@ describe('masteringRepairAnalyze', () => {
     );
   });
 
-  it('defaults the sample rate and streaming-safe preference', () => {
+  it('defaults the streaming-safe preference', () => {
     const channels = [clicked(material(440, 3), 2000, 3500)];
-    expect(masteringRepairAnalyze({ channels })).toEqual(
-      masteringRepairAnalyze({ channels, sampleRate: 22050, preferStreamingSafe: true }),
+    expect(masteringRepairAnalyze({ channels, sampleRate: SR })).toEqual(
+      masteringRepairAnalyze({ channels, sampleRate: SR, preferStreamingSafe: true }),
     );
   });
 });
@@ -90,9 +90,9 @@ describe('masteringRepairApply', () => {
       stages: [{ stage: 'declick', lpcOrder: 16 }],
     });
     const pair = masteringRepairDeclickStereo({ left, right, sampleRate: SR, lpcOrder: 16 });
-    expect(declick.channels[0]).toEqual(pair.left);
-    expect(declick.channels[1]).toEqual(pair.right);
-    expect(declick.reports[0]?.reports[0]).toEqual(pair.leftReport);
+    expect(declick.channels[0]).toEqual(pair.channels[0]);
+    expect(declick.channels[1]).toEqual(pair.channels[1]);
+    expect(declick.reports[0]?.reports[0]).toEqual(pair.reports[0]);
 
     const denoise = masteringRepairApply({
       channels: [left, right, left],
@@ -110,7 +110,7 @@ describe('masteringRepairApply', () => {
     expect(report?.stage).toBe('denoise');
     if (report?.stage === 'denoise') {
       expect(report.reports[0].detected.bandFloorDbfs).toBeInstanceOf(Float32Array);
-      expect(report.reports[0]).toEqual(linked.report);
+      expect(report.reports[0]).toEqual(linked.reports[0]);
     }
   });
 
@@ -142,7 +142,7 @@ describe('masteringRepairApply', () => {
       masteringRepairApply({
         channels,
         sampleRate: SR,
-        stages: [{ stage: 'declick', lpcOdrer: 8 }],
+        stages: [{ stage: 'declick', lpcOdrer: 8 } as never],
       }),
     ).toThrow(/declick: unknown setting 'lpcOdrer'/);
   });

@@ -14,7 +14,7 @@ import { assertNonNegativeInteger, assertPositiveInteger } from './validation.js
  */
 export interface ClipPageStreamerEngine {
   /** Drain one pending audio-thread page-miss request, or `null` when empty. */
-  popClipPageRequest(): ClipPageStreamerRequest | null;
+  popClipPageRequest(): ClipPageStreamerRequest | null | undefined;
 }
 
 /**

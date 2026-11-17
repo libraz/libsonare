@@ -1,15 +1,11 @@
 import { ErrorCode, SonareError } from './errors.js';
 import { OwnerEpoch } from './owner_epoch.js';
-import type { MidiCcBindOptions } from './realtime_engine.js';
+import type { ProjectMidiCcBinding } from './project_types.js';
 import { assertNibble } from './validation.js';
 
+/** The slice of {@link RealtimeEngine} that {@link bindWebMidi} drives. */
 export interface WebMidiEngine {
-  bindMidiCc(
-    channel: number,
-    controller: number,
-    paramId: number,
-    options?: MidiCcBindOptions,
-  ): void;
+  bindMidiCc(binding: ProjectMidiCcBinding): void;
   setMidiInputSource(destinationId?: number): void;
   clearMidiInputSource(): void;
   pushMidiInputNoteOn(
@@ -17,37 +13,42 @@ export interface WebMidiEngine {
     channel: number,
     note: number,
     velocity: number,
-    time?: number,
+    offsetInBlockSamples?: number,
   ): void;
   pushMidiInputNoteOff(
     group: number,
     channel: number,
     note: number,
     velocity?: number,
-    time?: number,
+    offsetInBlockSamples?: number,
   ): void;
   pushMidiInputCc(
     group: number,
     channel: number,
     controller: number,
     value: number,
-    time?: number,
+    offsetInBlockSamples?: number,
   ): void;
-  pushMidiInputPitchBend?(group: number, channel: number, bend14: number, time?: number): void;
+  pushMidiInputPitchBend?(
+    group: number,
+    channel: number,
+    bend14: number,
+    offsetInBlockSamples?: number,
+  ): void;
   pushMidiInputChannelPressure?(
     group: number,
     channel: number,
     pressure: number,
-    time?: number,
+    offsetInBlockSamples?: number,
   ): void;
   pushMidiInputPolyPressure?(
     group: number,
     channel: number,
     note: number,
     pressure: number,
-    time?: number,
+    offsetInBlockSamples?: number,
   ): void;
-  pushMidiInputUmp?(words: Uint32Array | readonly number[], time?: number): void;
+  pushMidiInputUmp?(words: Uint32Array | readonly number[], offsetInBlockSamples?: number): void;
 }
 
 type MidiInputState = 'connected' | 'disconnected';
@@ -101,13 +102,6 @@ interface NavigatorWithMidi {
   }) => Promise<MidiAccessLike>;
 }
 
-export interface WebMidiCcBinding {
-  channel: number;
-  controller: number;
-  paramId: number;
-  options?: MidiCcBindOptions;
-}
-
 export interface WebMidiInputInfo {
   id: string;
   name: string;
@@ -127,7 +121,7 @@ export interface BindWebMidiOptions {
   /** Request software ports from the browser where supported. Default `true`. */
   software?: boolean;
   /** Bind CC-to-parameter mappings before ports are connected. */
-  ccBindings?: readonly WebMidiCcBinding[];
+  ccBindings?: readonly ProjectMidiCcBinding[];
   /**
    * Convert a Web MIDI event timestamp to an offset in samples into the next block drained (clamped
    * to its last frame, negative reads as 0). Return a block-relative offset, not the timestamp
@@ -190,7 +184,7 @@ export async function bindWebMidi(
   });
 
   for (const binding of options.ccBindings ?? []) {
-    engine.bindMidiCc(binding.channel, binding.controller, binding.paramId, binding.options);
+    engine.bindMidiCc(binding);
   }
   engine.setMidiInputSource(destinationId);
   const sourceOwner = midiInputSourceOwner(engine);

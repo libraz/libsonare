@@ -25,15 +25,15 @@ import {
   SonareRealtimeVoiceChangerWorkletProcessor,
 } from '../dist/worklet.js';
 import { init, RealtimeVoiceChanger, realtimeVoiceChangerPresetConfig } from '../src/index';
-import type { RealtimeVoiceChangerPodConfig } from '../src/public_types';
+import type { RealtimeVoiceChangerConfig } from '../src/public_types';
 
 const SR = 48000;
 const BLOCK = 128;
 
-function workletPod(semitones = 0): RealtimeVoiceChangerPodConfig {
+function workletPod(semitones = 0): RealtimeVoiceChangerConfig {
   return {
-    ...realtimeVoiceChangerPresetConfig('neutral-monitor'),
-    retuneSemitones: semitones,
+    ...realtimeVoiceChangerPresetConfig('neutralMonitor'),
+    retunePitchSemitones: semitones,
   };
 }
 
@@ -71,14 +71,18 @@ describe('RealtimeVoiceChanger setConfig / process() interleaving (regression)',
     // Mirrors the original crash: process is running, host posts a config
     // change, process continues. The fix requires setConfig to be safe to
     // call between two process() invocations on the same instance.
-    const changer = new RealtimeVoiceChanger('bright-idol');
-    changer.prepare(SR, BLOCK, 1);
+    const changer = new RealtimeVoiceChanger({
+      sampleRate: SR,
+      maxBlockSize: BLOCK,
+      numChannels: 1,
+      config: 'brightIdol',
+    });
     try {
       const input = new Float32Array(BLOCK);
       fillSine(input, 440, SR);
       const output = new Float32Array(BLOCK);
 
-      const presets = ['bright-idol', 'dark-villain', 'soft-whisper', 'deep-narrator'] as const;
+      const presets = ['brightIdol', 'darkVillain', 'softWhisper', 'deepNarrator'] as const;
       const totalBlocks = 16;
       for (let block = 0; block < totalBlocks; block++) {
         // Swap presets every 4 blocks, right between process() calls. This is
@@ -98,20 +102,24 @@ describe('RealtimeVoiceChanger setConfig / process() interleaving (regression)',
     // Exercises the high-frequency switching case where a UI control fires
     // setConfig on every render quantum. setConfig must be idempotent enough
     // and the DSP state must not accumulate NaN over many transitions.
-    const changer = new RealtimeVoiceChanger('neutral-monitor');
-    changer.prepare(SR, BLOCK, 1);
+    const changer = new RealtimeVoiceChanger({
+      sampleRate: SR,
+      maxBlockSize: BLOCK,
+      numChannels: 1,
+      config: 'neutralMonitor',
+    });
     try {
       const input = new Float32Array(BLOCK);
       fillSine(input, 220, SR);
       const output = new Float32Array(BLOCK);
 
       const presets = [
-        'neutral-monitor',
-        'bright-idol',
-        'dark-villain',
-        'soft-whisper',
-        'deep-narrator',
-        'robot-mascot',
+        'neutralMonitor',
+        'brightIdol',
+        'darkVillain',
+        'softWhisper',
+        'deepNarrator',
+        'robotMascot',
       ] as const;
       for (let i = 0; i < 100; i++) {
         changer.setConfig(presets[i % presets.length]);
@@ -128,14 +136,18 @@ describe('RealtimeVoiceChanger setConfig / process() interleaving (regression)',
     // no log(0), no runaway feedback). We do not assert preset *equality*
     // — different presets legitimately produce different gain — only that
     // every block's RMS sits inside a sane band.
-    const changer = new RealtimeVoiceChanger('neutral-monitor');
-    changer.prepare(SR, BLOCK, 1);
+    const changer = new RealtimeVoiceChanger({
+      sampleRate: SR,
+      maxBlockSize: BLOCK,
+      numChannels: 1,
+      config: 'neutralMonitor',
+    });
     try {
       const input = new Float32Array(BLOCK);
       fillSine(input, 330, SR, 0.15);
       const output = new Float32Array(BLOCK);
 
-      const presets = ['neutral-monitor', 'bright-idol', 'dark-villain', 'soft-whisper'] as const;
+      const presets = ['neutralMonitor', 'brightIdol', 'darkVillain', 'softWhisper'] as const;
       let maxBlockRms = 0;
       for (let block = 0; block < 32; block++) {
         if (block % 2 === 0) {
@@ -165,15 +177,19 @@ describe('RealtimeVoiceChanger setConfig / process() interleaving (regression)',
     // Same shape as scenario A but on the planar stereo path the worklet
     // actually uses, so a regression that only shows up under the planar
     // codepath (e.g. per-channel scratch lifetime mismatch) is caught.
-    const changer = new RealtimeVoiceChanger('bright-idol');
-    changer.prepare(SR, BLOCK, 2);
+    const changer = new RealtimeVoiceChanger({
+      sampleRate: SR,
+      maxBlockSize: BLOCK,
+      numChannels: 2,
+      config: 'brightIdol',
+    });
     try {
-      const leftIn = changer.getPlanarChannelBuffer(0, BLOCK);
-      const rightIn = changer.getPlanarChannelBuffer(1, BLOCK);
+      const planar = changer.createRealtimePlanarBuffer(BLOCK, 2);
+      const [leftIn, rightIn] = planar.channels;
       fillSine(leftIn, 440, SR);
       fillSine(rightIn, 660, SR);
 
-      const presets = ['bright-idol', 'dark-villain', 'deep-narrator'] as const;
+      const presets = ['brightIdol', 'darkVillain', 'deepNarrator'] as const;
       for (let block = 0; block < 12; block++) {
         if (block > 0 && block % 3 === 0) {
           changer.setConfig(presets[(block / 3) % presets.length]);
@@ -181,7 +197,7 @@ describe('RealtimeVoiceChanger setConfig / process() interleaving (regression)',
         // Re-prime input buffers (output overwrites them in place).
         fillSine(leftIn, 440, SR);
         fillSine(rightIn, 660, SR);
-        expect(() => changer.processPreparedPlanar(BLOCK)).not.toThrow();
+        expect(() => planar.process()).not.toThrow();
         expect(isAllFinite(leftIn)).toBe(true);
         expect(isAllFinite(rightIn)).toBe(true);
       }
@@ -202,10 +218,10 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor setConfig interleaving (reg
     // applies the config synchronously, then the next process() must keep
     // running on the new config without producing NaN / Inf.
     const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
-      preset: 'neutral-monitor',
+      config: 'neutralMonitor',
       sampleRate: SR,
-      blockSize: BLOCK,
-      channelCount: 1,
+      maxBlockSize: BLOCK,
+      numChannels: 1,
     });
     try {
       const input = new Float32Array(BLOCK);
@@ -234,10 +250,10 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor setConfig interleaving (reg
 
   it('100x setConfig/process alternation through the worklet is stable', () => {
     const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
-      preset: 'neutral-monitor',
+      config: 'neutralMonitor',
       sampleRate: SR,
-      blockSize: BLOCK,
-      channelCount: 2,
+      maxBlockSize: BLOCK,
+      numChannels: 2,
     });
     try {
       const left = new Float32Array(BLOCK);

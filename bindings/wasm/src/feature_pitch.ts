@@ -1,5 +1,6 @@
 import { getSonareModule } from './module_state.js';
 import type { NoteSegment, PiptrackResult, PitchResult } from './public_types.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertFrequencyBounds,
@@ -7,16 +8,12 @@ import {
   sampleOneShot,
   toMatrix2D,
   tuningCentsFromNative,
-  tuningCentsToNative,
   type ValidateOptions,
 } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
 }
-
-/** The request fields a positional overload carries in its options bag. */
-type SampleOptions<R> = Omit<R, 'samples' | 'sampleRate'>;
 
 // ============================================================================
 // Features - Pitch
@@ -83,7 +80,7 @@ export function piptrack(request: PiptrackRequest): PiptrackResult;
 export function piptrack(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<PiptrackRequest>,
+  options?: OptionsOf<PiptrackRequest>,
 ): PiptrackResult;
 export function piptrack(...args: unknown[]): PiptrackResult {
   const r = sampleOneShot<PiptrackRequest>('piptrack', args);
@@ -111,7 +108,7 @@ export function pitchYin(request: PitchYinRequest): PitchResult;
 export function pitchYin(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<PitchYinRequest>,
+  options?: OptionsOf<PitchYinRequest>,
 ): PitchResult;
 export function pitchYin(...args: unknown[]): PitchResult {
   const r = sampleOneShot<PitchYinRequest>('pitchYin', args);
@@ -136,7 +133,7 @@ export function pitchPyin(request: PitchPyinRequest): PitchResult;
 export function pitchPyin(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<PitchPyinRequest>,
+  options?: OptionsOf<PitchPyinRequest>,
 ): PitchResult;
 export function pitchPyin(...args: unknown[]): PitchResult {
   const r = sampleOneShot<PitchPyinRequest>('pitchPyin', args);
@@ -156,20 +153,30 @@ export function pitchPyin(...args: unknown[]): PitchResult {
   );
 }
 
-/** Parameters for segmenting an F0 track into stable monophonic notes. */
+/**
+ * Parameters for segmenting an F0 track into stable monophonic notes. Give
+ * exactly one of `voicedProb` and `voicedFlags`.
+ */
 export interface NoteSegmentsRequest {
   f0Hz: Float32Array;
   /**
    * Per-frame voicing values in `[0, 1]`; anything below `voicedThreshold` is
    * unvoiced.
    *
-   * Pass {@link PitchResult.voicedFlag} converted to `0`/`1`. Do **not** pass
-   * {@link pitchPyin}'s `voicedProb`: that value is the frame's voiced
-   * observation mass and rises with F0 for a fixed `frameLength`, so a fixed
-   * threshold silently returns no segments at all for low-register material
-   * (a steady tone below roughly C5 never reaches 0.5).
+   * Pass {@link PitchResult.voicedFlag} converted to `0`/`1`, or give it as
+   * `voicedFlags`. Do **not** pass {@link pitchPyin}'s `voicedProb`: that value
+   * is the frame's voiced observation mass and rises with F0 for a fixed
+   * `frameLength`, so a fixed threshold silently returns no segments at all for
+   * low-register material (a steady tone below roughly C5 never reaches 0.5).
    */
-  voicedProb: Float32Array;
+  voicedProb?: Float32Array;
+  /**
+   * Per-frame voiced flags, nonzero = voiced, the same length as `f0Hz`;
+   * `voicedThreshold` does not apply. Build it from {@link PitchResult.voicedFlag}
+   * with `Uint8Array.from(flags, Number)`. A `RangeError` when both or neither of
+   * `voicedProb` and `voicedFlags` is given, or the length differs.
+   */
+  voicedFlags?: Uint8Array;
   frameRate: number;
   /** Cents of pitch change that start a new segment. Default 50. */
   segmentationThresholdCents?: number;
@@ -184,25 +191,42 @@ export interface NoteSegmentsRequest {
 /**
  * Segment a caller-supplied monophonic F0 track into stable note regions.
  *
- * `f0Hz` and `voicedProb` must have the same non-zero length. Zero-Hz frames
- * and values below `voicedThreshold` (default `0.5`) are treated as unvoiced.
+ * `f0Hz` and the voicing input (`voicedProb` or `voicedFlags`) must have the
+ * same non-zero length. Zero-Hz frames and unvoiced frames (a `voicedProb`
+ * below `voicedThreshold`, default `0.5`, or a zero flag) are treated as unvoiced.
  */
 export function noteSegments(request: NoteSegmentsRequest): NoteSegment[];
 export function noteSegments(...args: unknown[]): NoteSegment[] {
   const r = requestOnly<NoteSegmentsRequest>('noteSegments', args);
-  const native = requireModule().noteSegments(r.f0Hz, r.voicedProb, r.frameRate, {
-    segmentationThresholdCents: r.segmentationThresholdCents,
-    minNoteMs: r.minNoteMs,
-    referenceHz: r.referenceHz,
-    voicedThreshold: r.voicedThreshold,
-  });
-  return native.map((segment) => ({
-    frameStart: segment.frameStart,
-    frameEnd: segment.frameEnd,
-    startSec: segment.startSeconds,
-    endSec: segment.endSeconds,
-    medianCents: segment.medianCents,
-  }));
+  const hasProb = r.voicedProb !== undefined && r.voicedProb !== null;
+  const hasFlags = r.voicedFlags !== undefined && r.voicedFlags !== null;
+  if (hasProb === hasFlags) {
+    throw new RangeError('noteSegments: exactly one of voicedProb and voicedFlags must be given');
+  }
+  if (hasProb && !(r.voicedProb instanceof Float32Array)) {
+    throw new TypeError('noteSegments: voicedProb must be a Float32Array');
+  }
+  if (hasFlags && !(r.voicedFlags instanceof Uint8Array)) {
+    throw new TypeError('noteSegments: voicedFlags must be a Uint8Array');
+  }
+  const voicing = (hasProb ? r.voicedProb : r.voicedFlags) as Float32Array | Uint8Array;
+  if (r.f0Hz?.length !== voicing.length) {
+    throw new RangeError(
+      `noteSegments: ${hasProb ? 'voicedProb' : 'voicedFlags'} must have the same length as f0Hz`,
+    );
+  }
+  return requireModule().noteSegments(
+    r.f0Hz,
+    r.voicedProb ?? null,
+    r.voicedFlags ?? null,
+    r.frameRate,
+    {
+      segmentationThresholdCents: r.segmentationThresholdCents,
+      minNoteMs: r.minNoteMs,
+      referenceHz: r.referenceHz,
+      voicedThreshold: r.voicedThreshold,
+    },
+  );
 }
 
 // ============================================================================
@@ -256,7 +280,7 @@ export function pitchTuning(...args: unknown[]): number {
  * @throws `RangeError` for a non-finite `tuningCents`, `SonareError` for a non-positive `a4Hz`.
  */
 export function tuningToReferenceHz(tuningCents: number, a4Hz = 440): number {
-  return requireModule().tuningToReferenceHz(tuningCentsToNative(tuningCents), a4Hz);
+  return requireModule().tuningToReferenceHz(tuningCents, a4Hz);
 }
 
 /**
@@ -268,7 +292,7 @@ export function tuningToReferenceHz(tuningCents: number, a4Hz = 440): number {
  * @throws `RangeError` for a non-finite `referenceHz` or `a4Hz`, `SonareError` for a non-positive one.
  */
 export function referenceHzToTuning(referenceHz: number, a4Hz = 440): number {
-  return tuningCentsFromNative(requireModule().referenceHzToTuning(referenceHz, a4Hz));
+  return requireModule().referenceHzToTuning(referenceHz, a4Hz);
 }
 
 /**
@@ -282,7 +306,7 @@ export function estimateTuning(request: EstimateTuningRequest): number;
 export function estimateTuning(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<EstimateTuningRequest>,
+  options?: OptionsOf<EstimateTuningRequest>,
 ): number;
 export function estimateTuning(...args: unknown[]): number {
   const r = sampleOneShot<EstimateTuningRequest>('estimateTuning', args);

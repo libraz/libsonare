@@ -1,5 +1,7 @@
+import type { TrimResult } from './feature_spectrogram.js';
 import { getSonareModule } from './module_state.js';
 import type { Matrix2D, NormType, TempogramMode } from './public_types.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertAudioSamples,
@@ -23,16 +25,6 @@ import {
 function requireModule() {
   return getSonareModule();
 }
-
-/** Trimmed audio and the half-open sample span `[startSample, endSample)` it was cut from. */
-interface TrimSilenceResult {
-  audio: Float32Array;
-  startSample: number;
-  endSample: number;
-}
-
-/** The request fields a positional overload carries in its options bag. */
-type SampleOptions<R> = Omit<R, 'samples' | 'sampleRate'>;
 
 /** Sine tone request. Every field is optional. */
 export interface ToneRequest {
@@ -593,7 +585,7 @@ export function preemphasis(request: PreemphasisRequest): Float32Array;
 export function preemphasis(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<PreemphasisRequest>,
+  options?: OptionsOf<PreemphasisRequest>,
 ): Float32Array;
 export function preemphasis(...args: unknown[]): Float32Array {
   const r = sampleOneShot<PreemphasisRequest>('preemphasis', args);
@@ -606,7 +598,7 @@ export function deemphasis(request: DeemphasisRequest): Float32Array;
 export function deemphasis(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<DeemphasisRequest>,
+  options?: OptionsOf<DeemphasisRequest>,
 ): Float32Array;
 export function deemphasis(...args: unknown[]): Float32Array {
   const r = sampleOneShot<DeemphasisRequest>('deemphasis', args);
@@ -615,13 +607,13 @@ export function deemphasis(...args: unknown[]): Float32Array {
 }
 
 /** Trim leading and trailing silence. */
-export function trimSilence(request: TrimSilenceRequest): TrimSilenceResult;
+export function trimSilence(request: TrimSilenceRequest): TrimResult;
 export function trimSilence(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<TrimSilenceRequest>,
-): TrimSilenceResult;
-export function trimSilence(...args: unknown[]): TrimSilenceResult {
+  options?: OptionsOf<TrimSilenceRequest>,
+): TrimResult;
+export function trimSilence(...args: unknown[]): TrimResult {
   const r = sampleOneShot<TrimSilenceRequest>('trimSilence', args);
   assertAudioInput('trimSilence', r.samples, r.sampleRate, r);
   return requireModule().trimSilence(
@@ -637,7 +629,7 @@ export function splitSilence(request: SplitSilenceRequest): Int32Array;
 export function splitSilence(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<SplitSilenceRequest>,
+  options?: OptionsOf<SplitSilenceRequest>,
 ): Int32Array;
 export function splitSilence(...args: unknown[]): Int32Array {
   const r = sampleOneShot<SplitSilenceRequest>('splitSilence', args);
@@ -718,7 +710,7 @@ export function frameSignal(request: FrameSignalRequest): Matrix2D;
 export function frameSignal(
   samples: Float32Array,
   sampleRate: number,
-  options: SampleOptions<FrameSignalRequest>,
+  options: OptionsOf<FrameSignalRequest>,
 ): Matrix2D;
 export function frameSignal(...args: unknown[]): Matrix2D {
   const r = sampleOneShot<FrameSignalRequest>('frameSignal', args);

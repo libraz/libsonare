@@ -51,13 +51,26 @@ describe('WASM handle teardown names', () => {
   const handles: ReadonlyArray<[string, () => Disposable]> = [
     ['StreamingMasteringChain', () => new StreamingMasteringChain({ 'eq.tilt.tiltDb': 0.5 })],
     ['StreamingEqualizer', () => new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 })],
-    ['StreamingRetune', () => new StreamingRetune({ semitones: 12, mix: 1, grainSize: 512 })],
-    ['RealtimeVoiceChanger', () => new RealtimeVoiceChanger('neutral-monitor')],
+    [
+      'StreamingRetune',
+      () => new StreamingRetune({ pitchSemitones: 12, mix: 1, grainSizeSamples: 512 }),
+    ],
+    [
+      'RealtimeVoiceChanger',
+      () => new RealtimeVoiceChanger({ sampleRate: 48000, config: 'neutralMonitor' }),
+    ],
     ['StreamAnalyzer', () => new StreamAnalyzer({ sampleRate: 22050 })],
-    ['RealtimeEngine', () => new RealtimeEngine(48000, 128)],
+    ['RealtimeEngine', () => new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 })],
     ['Project', () => new Project()],
     ['SampleBank', () => new SampleBank()],
-    ['Mixer', () => Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 512)],
+    [
+      'Mixer',
+      () =>
+        Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+          sampleRate: 48000,
+          blockSize: 512,
+        }),
+    ],
     ['PolyphonicAnalysis', () => analyzePolyphonic({ samples: tone(), sampleRate: 22050 })],
     ['HrtfSet', () => HrtfSet.fromBytes(hrtfBytes())],
     [

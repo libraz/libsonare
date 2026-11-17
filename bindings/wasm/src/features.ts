@@ -39,7 +39,6 @@ export {
   decompose,
   decomposeStems,
   decomposeStemsLinked,
-  decomposeWithInit,
   hpssWithResidual,
   nnFilter,
   remix,

@@ -135,7 +135,7 @@ const TABLE: Entry[] = [
     'hpss',
     'harmonic',
     'percussive',
-  ].map((name) => mono(name, name === 'phaseVocoder' ? { rate: 1.1 } : {})),
+  ].map((name) => mono(name, name === 'phaseVocoder' ? { speedRatio: 1.1 } : {})),
   mono('lufsInterleaved', { channels: 1 }),
   mono('lufsSeriesInterleaved', { channels: 1 }),
   mono('remix', { intervals: [0, 4096] }),
@@ -160,17 +160,20 @@ const TABLE: Entry[] = [
     }),
   ),
   // Effects
-  mono('timeStretch', { rate: 1.1 }),
-  mono('pitchShift', { semitones: 1 }),
-  mono('pitchCorrectToMidi'),
-  mono('pitchCorrectToMidiTimevarying', { f0Hz: f0(), targetMidi: 57 }),
-  mono('pitchCorrectTimevarying', { f0Hz: f0() }),
+  mono('timeStretch', { speedRatio: 1.1 }),
+  mono('pitchShift', { pitchSemitones: 1 }),
+  mono('pitchCorrectToMidi', { currentMidi: 57, targetMidi: 60 }),
+  mono('pitchCorrectTimevarying', { f0Hz: f0(), targetMidi: 57 }),
   mono('autoTune'),
   mono('voiceChange'),
-  mono('voiceChangeRealtime'),
-  mono('spectralEdit'),
-  mono('noteStretch'),
-  mono('noteMove'),
+  // Request-only and planar: `{ channels, sampleRate }`.
+  {
+    name: 'voiceChangeRealtime',
+    call: (samples, sampleRate) => fn('voiceChangeRealtime')({ channels: [samples], sampleRate }),
+  },
+  mono('spectralEdit', { ops: [] }),
+  mono('noteStretch', { stretchRatio: 1.2 }),
+  mono('noteMove', { targetOnsetSample: 100 }),
   mono('extractPercussiveEvents'),
   mono('renderPercussiveEvents', { events: [] }),
   notes('extractNotes', { voicedProb: new Float32Array(FRAMES).fill(1) }),
@@ -398,7 +401,7 @@ const NOT_AUDIO: string[] = [
     'synthGsVariationIsVoicedApart',
     'synthPresetNames',
     'synthPresetPatch',
-    'validateRealtimeVoiceChangerPresetJson',
+    'realtimeVoiceChangerValidatePresetJson',
     'voiceCharacterPresetId',
     'masteringRepairDereverbConfigForRoom',
     'masteringRepairNoiseBandBins',
@@ -449,7 +452,6 @@ const NOT_AUDIO: string[] = [
     'melDelta',
     'nnFilter',
     'decompose',
-    'decomposeWithInit',
     'downmix',
   ],
   // Input is an onset envelope, a spectrogram, a chroma matrix or an F0 track rather than audio.
@@ -600,7 +602,9 @@ describe('wrong-typed arguments are TypeErrors that name the argument', () => {
   });
 
   it('a string the native layer reads is refused before embind sees it', () => {
-    expect(() => sonare.Mixer.fromSceneJson(null as never, SR, 512)).toThrow(TypeError);
+    expect(() => sonare.Mixer.fromJson(null as never, { sampleRate: SR, blockSize: 512 })).toThrow(
+      TypeError,
+    );
     expect(() => sonare.masteringPresetParams(5 as never)).toThrow(
       new TypeError('masteringPresetParams: preset must be a string'),
     );

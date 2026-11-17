@@ -4,6 +4,8 @@ import type {
   EngineTransportState,
   RealtimeEngine,
 } from '../index.js';
+import type { EngineLoop } from '../public_types_engine.js';
+import { requestObject } from '../validation.js';
 import { commitCommand, commitSync, type EngineCommitContext } from './engine-commit.js';
 import type { SonareRealtimeEngineNode } from './engine-node.js';
 import { buildTempoSync } from './engine-sync.js';
@@ -113,24 +115,23 @@ export function setTimeSignatureSegments(
   );
 }
 
-export function setLoop(
-  ctx: EngineTempoContext,
-  startPpq: number,
-  endPpq: number,
-  enabled = true,
-): boolean {
+export function setLoop(ctx: EngineTempoContext, loop: EngineLoop): void {
+  // The mirror validates the whole object, but only after the command record
+  // below is built, so a non-object is refused here first.
+  requestObject('setLoop', loop, 'loop', true);
+  const { startPpq, endPpq, enabled = true } = loop;
   // Both bounds travel as full doubles (argFloat and argFloat2), so the live
   // loop is bit-identical to the offline one.
-  return commitCommand(
+  commitCommand(
     ctx,
     {
       type: SonareEngineCommandType.SetLoop,
       targetId: enabled ? 1 : 0,
-      sampleTime: -1,
+      renderFrame: -1,
       argFloat: startPpq,
       argFloat2: endPpq,
     },
-    (offline) => offline.setLoop(startPpq, endPpq, enabled),
+    (offline) => offline.setLoop(loop),
   );
 }
 
@@ -142,7 +143,7 @@ export function countInEndSample(
   return ctx.offlineEngine.countInEndSample(startSample, bars);
 }
 
-export async function getTransportState(ctx: EngineTempoContext): Promise<EngineTransportState> {
+export async function transportState(ctx: EngineTempoContext): Promise<EngineTransportState> {
   const state = await ctx.realtimeNode.requestTransportState();
   ctx.setLatestTransportState(state);
   return state;

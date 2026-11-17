@@ -88,7 +88,7 @@ function mixerProcessorOutput(processor: SonareWorkletProcessor): Float32Array {
 
 /** The same scene rendered by a Mixer built explicitly at `rate`. */
 function mixerReference(rate: number): Float32Array {
-  const mixer = Mixer.fromSceneJson(mixerScene(), rate, BLOCK);
+  const mixer = Mixer.fromJson(mixerScene(), { sampleRate: rate, blockSize: BLOCK });
   try {
     mixer.compile();
     const buffer = mixer.createRealtimeBuffer();
@@ -124,10 +124,9 @@ function voiceChangerReference(
   rate: number,
   blocks: number,
 ): { output: Float32Array; latency: number } {
-  const changer = new RealtimeVoiceChanger('neutral-monitor');
+  const changer = new RealtimeVoiceChanger({ sampleRate: rate, maxBlockSize: BLOCK });
   try {
-    changer.prepare(rate, BLOCK, 1);
-    const latency = changer.latencySamples();
+    const latency = changer.latencySamples;
     return { output: renderBlocks((input) => changer.processMono(input), blocks), latency };
   } finally {
     changer.destroy();
@@ -166,8 +165,8 @@ const cases = [
     make: (sampleRate?: number) =>
       new SonareRealtimeVoiceChangerWorkletProcessor({
         sampleRate,
-        blockSize: BLOCK,
-        channelCount: 1,
+        maxBlockSize: BLOCK,
+        numChannels: 1,
       }),
     rate: (p: SonareRealtimeVoiceChangerWorkletProcessor) =>
       (p as unknown as { sampleRate: number }).sampleRate,
@@ -244,7 +243,7 @@ describe('worklet processors take their rate from the AudioWorkletGlobalScope', 
     it('SonareRealtimeEngineWorkletProcessor maps beats to samples at that rate', () => {
       for (const scopeRate of SCOPE_RATES) {
         setScopeRate(scopeRate);
-        const reference = new RealtimeEngine(scopeRate, BLOCK);
+        const reference = new RealtimeEngine({ sampleRate: scopeRate, maxBlockSize: BLOCK });
         try {
           const expected = reference.sampleAtPpq(3);
           const actual = observe(
@@ -258,7 +257,7 @@ describe('worklet processors take their rate from the AudioWorkletGlobalScope', 
       }
       // The control: the reference itself moves with the rate.
       const at = (rate: number) => {
-        const engine = new RealtimeEngine(rate, BLOCK);
+        const engine = new RealtimeEngine({ sampleRate: rate, maxBlockSize: BLOCK });
         try {
           return engine.sampleAtPpq(3);
         } finally {
@@ -281,7 +280,7 @@ describe('worklet processors take their rate from the AudioWorkletGlobalScope', 
         setScopeRate(scopeRate);
         const output = observe(
           () =>
-            new SonareRealtimeVoiceChangerWorkletProcessor({ blockSize: BLOCK, channelCount: 1 }),
+            new SonareRealtimeVoiceChangerWorkletProcessor({ maxBlockSize: BLOCK, numChannels: 1 }),
           (processor) => voiceChangerProcessorOutput(processor, blocks),
         );
         expectCloseSignals(output, references[index]);

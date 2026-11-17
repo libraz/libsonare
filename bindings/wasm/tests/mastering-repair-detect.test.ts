@@ -88,7 +88,7 @@ const CLIP_BED_AMP = 0.3;
 const CLIP_VALUE = 0.95;
 const CLIP_START = 5000;
 const CLIP_LEN = 20;
-const CLIP_THRESHOLD = 0.9;
+const CLIP_THRESHOLD_DB = 20 * Math.log10(0.9);
 
 function clippedSignal(): Float32Array {
   const out = sine(440, CLIP_FRAMES, CLIP_BED_AMP);
@@ -302,7 +302,7 @@ describe('repair detection (WASM)', () => {
       const detected = masteringRepairDetectClipping({
         samples: clippedSignal(),
         sampleRate: SR,
-        clipThreshold: CLIP_THRESHOLD,
+        clipThresholdDb: CLIP_THRESHOLD_DB,
       });
 
       expect(detected.sampleCount).toBe(CLIP_LEN);
@@ -311,12 +311,16 @@ describe('repair detection (WASM)', () => {
       expect(detected.sampleFraction).toBeCloseTo(CLIP_LEN / CLIP_FRAMES, 8);
     });
 
-    it('reads clipThreshold and nothing else from the config', () => {
+    it('reads clipThresholdDb and nothing else from the config', () => {
       const samples = clippedSignal();
-      const base = masteringRepairDetectClipping(samples, SR, { clipThreshold: CLIP_THRESHOLD });
+      const base = masteringRepairDetectClipping(samples, SR, {
+        clipThresholdDb: CLIP_THRESHOLD_DB,
+      });
 
       // The plateau sits below a threshold above CLIP_VALUE, so the knob is live.
-      const above = masteringRepairDetectClipping(samples, SR, { clipThreshold: 0.99 });
+      const above = masteringRepairDetectClipping(samples, SR, {
+        clipThresholdDb: 20 * Math.log10(0.99),
+      });
       expect(above.sampleCount).toBe(0);
       expect(above.runCount).toBe(0);
 
@@ -324,7 +328,7 @@ describe('repair detection (WASM)', () => {
       // they are validated and then unread rather than read and rounded away --
       // and `base` is non-empty, so the equality is not two empty answers.
       const reshaped = masteringRepairDetectClipping(samples, SR, {
-        clipThreshold: CLIP_THRESHOLD,
+        clipThresholdDb: CLIP_THRESHOLD_DB,
         lpcOrder: 8,
         iterations: 7,
         lpcBlend: 0.1,
@@ -582,26 +586,31 @@ describe('repair detection (WASM)', () => {
 
     it('reports (length, length) when neither channel carries signal', () => {
       const silence = new Float32Array(TRIM_FRAMES);
-      const range = masteringRepairDetectTrimRangeStereo(silence, silence.slice(), TRIM_SR);
+      const range = masteringRepairDetectTrimRangeStereo({
+        left: silence,
+        right: silence.slice(),
+        sampleRate: TRIM_SR,
+      });
       expect(range.first).toBe(TRIM_FRAMES);
       expect(range.lastExclusive).toBe(TRIM_FRAMES);
     });
 
     it('agrees with the mono entry when both channels are the same', () => {
       const samples = burstChannel(2000, 8000);
-      const stereo = masteringRepairDetectTrimRangeStereo(samples, samples.slice(), TRIM_SR);
+      const stereo = masteringRepairDetectTrimRangeStereo({
+        left: samples,
+        right: samples.slice(),
+        sampleRate: TRIM_SR,
+      });
       const mono = masteringRepairDetectTrimRange(samples, TRIM_SR);
       expect(stereo).toEqual(mono);
       expect(mono.first).toBe(2000);
     });
 
-    it('accepts the positional call form identically to the request form', () => {
+    it('is request-only and applies the padding', () => {
       const left = burstChannel(1000, 3000);
       const right = burstChannel(9000, 11000);
 
-      const positional = masteringRepairDetectTrimRangeStereo(left, right, TRIM_SR, {
-        paddingSamples: 200,
-      });
       const request = masteringRepairDetectTrimRangeStereo({
         left,
         right,
@@ -609,17 +618,23 @@ describe('repair detection (WASM)', () => {
         paddingSamples: 200,
       });
 
-      expect(positional).toEqual(request);
-      // The equality is worthless if the padding was dropped on both paths.
       expect(request.first).toBe(800);
       expect(request.lastExclusive).toBe(11200);
+      const positional = masteringRepairDetectTrimRangeStereo as unknown as (
+        ...args: unknown[]
+      ) => unknown;
+      expect(() => positional(left, right, TRIM_SR)).toThrow(TypeError);
     });
 
     it('rejects mismatched channel lengths', () => {
       const left = burstChannel(1000, 3000);
       const right = burstChannel(1000, 3000);
       expect(() =>
-        masteringRepairDetectTrimRangeStereo(left, right.slice(0, right.length - 1), TRIM_SR),
+        masteringRepairDetectTrimRangeStereo({
+          left,
+          right: right.slice(0, right.length - 1),
+          sampleRate: TRIM_SR,
+        }),
       ).toThrow();
     });
   });
@@ -641,7 +656,13 @@ describe('repair detection (WASM)', () => {
       expect(() => masteringRepairDetectHum(empty, TRIM_SR)).toThrow();
       expect(() => masteringRepairDetectReverb(empty, TRIM_SR)).toThrow();
       expect(() => masteringRepairDetectTrimRange(empty, TRIM_SR)).toThrow();
-      expect(() => masteringRepairDetectTrimRangeStereo(empty, empty.slice(), TRIM_SR)).toThrow();
+      expect(() =>
+        masteringRepairDetectTrimRangeStereo({
+          left: empty,
+          right: empty.slice(),
+          sampleRate: TRIM_SR,
+        }),
+      ).toThrow();
     });
 
     it('refuses a non-finite sample at every entry', () => {
@@ -657,7 +678,9 @@ describe('repair detection (WASM)', () => {
       expect(() => masteringRepairDetectHum(bad, TRIM_SR)).toThrow();
       expect(() => masteringRepairDetectReverb(bad, TRIM_SR)).toThrow();
       expect(() => masteringRepairDetectTrimRange(bad, TRIM_SR)).toThrow();
-      expect(() => masteringRepairDetectTrimRangeStereo(bad, badInf, TRIM_SR)).toThrow();
+      expect(() =>
+        masteringRepairDetectTrimRangeStereo({ left: bad, right: badInf, sampleRate: TRIM_SR }),
+      ).toThrow();
     });
 
     it('refuses a NaN and a wrong-typed sample rate', () => {
@@ -671,7 +694,7 @@ describe('repair detection (WASM)', () => {
 
     it('refuses a non-finite option value', () => {
       const samples = burstChannel(100, 900);
-      expect(() => masteringRepairDetectTrimRange(samples, TRIM_SR, { threshold: -1 })).toThrow();
+      expect(() => masteringRepairDetectTrimRange(samples, TRIM_SR, { thresholdDb: 1 })).toThrow();
       expect(() =>
         masteringRepairDetectCrackle(samples, TRIM_SR, { threshold: Number.NaN }),
       ).toThrow();

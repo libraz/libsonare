@@ -6,8 +6,8 @@
 import { resolveEntryTimes } from './internal/effects_common.js';
 import { getSonareModule } from './module_state.js';
 import type { PercussiveEvent, PercussiveEventInput } from './public_types.js';
-import type { ValidateOptions } from './validation.js';
-import { assertAudioInput, assertPercussiveSeparation, requestObject } from './validation.js';
+import type { OptionsOf, ValidateOptions } from './validation.js';
+import { assertAudioInput, assertPercussiveSeparation, sampleOneShot } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -21,6 +21,15 @@ function requireModule() {
 /** A plain numeric array is read as the Float32Array it stands for; anything else is left to the preflight. */
 function asFloat32(samples: Float32Array | readonly number[]): Float32Array | readonly number[] {
   return Array.isArray(samples) ? Float32Array.from(samples) : samples;
+}
+
+// The plain-array samples form is read as the Float32Array it stands for before the shared normalizer sees it.
+function percussiveRequest<
+  R extends { samples: Float32Array | readonly number[]; sampleRate: number },
+>(fnName: 'extractPercussiveEvents' | 'renderPercussiveEvents', args: unknown[]): R {
+  const first = args[0];
+  const widened = Array.isArray(first) ? [Float32Array.from(first), ...args.slice(1)] : args;
+  return sampleOneShot<R & { samples: Float32Array }>(fnName, widened);
 }
 
 export interface PercussiveSeparationOptions {
@@ -156,10 +165,17 @@ export interface RenderPercussiveEventsRequest
  * const edited = renderPercussiveEvents({ samples, sampleRate, events });
  * ```
  */
+export function extractPercussiveEvents(request: ExtractPercussiveEventsRequest): PercussiveEvent[];
 export function extractPercussiveEvents(
-  request: ExtractPercussiveEventsRequest,
-): PercussiveEvent[] {
-  requestObject('extractPercussiveEvents', request, 'request', true);
+  samples: Float32Array | readonly number[],
+  sampleRate: number,
+  options?: OptionsOf<ExtractPercussiveEventsRequest>,
+): PercussiveEvent[];
+export function extractPercussiveEvents(...args: unknown[]): PercussiveEvent[] {
+  const request = percussiveRequest<ExtractPercussiveEventsRequest>(
+    'extractPercussiveEvents',
+    args,
+  );
   const samples = asFloat32(request.samples);
   assertAudioInput('extractPercussiveEvents', samples, request.sampleRate, request);
   assertPercussiveSeparation('extractPercussiveEvents', request);
@@ -212,8 +228,14 @@ export function extractPercussiveEvents(
  * const rendered = renderPercussiveEvents({ samples, sampleRate, events: edited });
  * ```
  */
-export function renderPercussiveEvents(request: RenderPercussiveEventsRequest): Float32Array {
-  requestObject('renderPercussiveEvents', request, 'request', true);
+export function renderPercussiveEvents(request: RenderPercussiveEventsRequest): Float32Array;
+export function renderPercussiveEvents(
+  samples: Float32Array | readonly number[],
+  sampleRate: number,
+  options: OptionsOf<RenderPercussiveEventsRequest>,
+): Float32Array;
+export function renderPercussiveEvents(...args: unknown[]): Float32Array {
+  const request = percussiveRequest<RenderPercussiveEventsRequest>('renderPercussiveEvents', args);
   const samples = asFloat32(request.samples);
   assertAudioInput('renderPercussiveEvents', samples, request.sampleRate, request);
   assertPercussiveSeparation('renderPercussiveEvents', request);

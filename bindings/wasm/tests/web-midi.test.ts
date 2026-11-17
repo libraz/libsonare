@@ -118,8 +118,8 @@ class FakeEngine {
     this.sourceDestination = null;
   }
 
-  bindMidiCc(channel: number, controller: number, paramId: number, options?: unknown) {
-    this.ccBindings.push({ channel, controller, paramId, options });
+  bindMidiCc(binding: unknown) {
+    this.ccBindings.push(binding);
   }
 
   pushMidiInputNoteOn(group: number, channel: number, note: number, velocity: number, time = 0) {
@@ -224,9 +224,7 @@ describe('Web MIDI helper', () => {
       group: 2,
       inputIds: ['a'],
       sysex: true,
-      ccBindings: [
-        { channel: 0, controller: 74, paramId: 5, options: { minValue: -60, maxValue: 12 } },
-      ],
+      ccBindings: [{ ccNumber: 74, channel: 0, paramId: 5, minValue: -60, maxValue: 12 }],
       timestampToOffsetInBlockSamples: blockOffset,
       onInputsChanged: (inputs) => changed.push(inputs.map((input) => input.id)),
     });
@@ -234,7 +232,7 @@ describe('Web MIDI helper', () => {
     expect(calls).toEqual([{ sysex: true, software: true }]);
     expect(engine.sourceDestination).toBe(7);
     expect(engine.ccBindings).toEqual([
-      { channel: 0, controller: 74, paramId: 5, options: { minValue: -60, maxValue: 12 } },
+      { ccNumber: 74, channel: 0, paramId: 5, minValue: -60, maxValue: 12 },
     ]);
     expect(binding.inputs().map((input) => input.id)).toEqual(['a', 'b']);
 

@@ -32,13 +32,45 @@ function message(call: () => unknown): string {
 
 // Shapes of class-method requests; their methods carry their own unknown-key cases.
 const METHOD_SHAPES = [
+  'Mixer',
+  'Mixer.fromJson',
+  'RealtimeEngine',
+  'SonareEngine.renderOffline',
+  'addSend',
+  'applyBusInsertParamNow',
   'applyProjectVocalEdit',
+  'applyStripInsertParamNow',
+  'armCapture',
   'bakeMidiFx',
+  'canSetBusSidechain',
+  'canSetStripSidechain',
+  'configureCapture',
+  'configureMeter',
   'importExternalSeparatedStem',
+  'prepare',
   'previewMidiFx',
+  'pushMidiInputProgram',
+  'pushMidiProgram',
   'renderOffline',
-  'setCapturePunch',
+  'restoreBusInsertParam',
+  'restoreStripInsertParam',
+  'scheduleFaderAutomation',
+  'scheduleInsertAutomation',
+  'schedulePanAutomation',
+  'scheduleSendAutomation',
+  'scheduleWidthAutomation',
+  'setBusInsertBypassed',
+  'setBusInsertParam',
+  'setBusSidechain',
+  'setLoop',
+  'setMetronome',
   'setPartRig',
+  'setPolarityInvert',
+  'setStripInsertBypassed',
+  'setStripInsertParam',
+  'setStripSidechain',
+  'scheduleParam',
+  'setTrackSoloMute',
   'transcribeToClip',
   'vocalApply',
   'vocalRender',
@@ -91,31 +123,43 @@ describe('request objects refuse unknown keys', () => {
   });
 });
 
-/** Positional overloads and the index of their options bag. */
+describe('a class-method request refuses its keys through an instance', () => {
+  beforeAll(async () => {
+    await api.init();
+  });
+
+  it('configureCapture refuses an unknown punch or input-monitor key by name', () => {
+    const engine = new api.RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    try {
+      expect(() =>
+        engine.configureCapture({ capacityFrames: 128, punch: { notAnOption: 1 } } as never),
+      ).toThrow("configureCapture: unknown option 'notAnOption' in 'punch'");
+      expect(() =>
+        engine.configureCapture({ capacityFrames: 128, inputMonitor: { notAnOption: 1 } } as never),
+      ).toThrow("configureCapture: unknown option 'notAnOption' in 'inputMonitor'");
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('the engine and mixer constructors refuse an undeclared key by name', () => {
+    expect(() => new api.RealtimeEngine({ sampleRate: 48000, bogus: 1 } as never)).toThrow(
+      "RealtimeEngine: unknown request key 'bogus'",
+    );
+    expect(() => new api.Mixer({ sampleRate: 48000, bogus: 1 } as never)).toThrow(
+      "Mixer: unknown request key 'bogus'",
+    );
+  });
+});
+
+/** Positional overloads still read by `optionsBag`, and the index of their options bag. */
 const POSITIONAL_OPTIONS: ReadonlyArray<readonly [string, number]> = [
-  ['estimateRoom', 2],
-  ['harmonic', 2],
   ['lufsInterleaved', 3],
   ['lufsSeriesInterleaved', 3],
   ['mastering', 2],
   ['masteringDynamicsCompressor', 2],
   ['masteringDynamicsGate', 2],
   ['masteringDynamicsTransientShaper', 2],
-  ['masteringRepairDeclick', 2],
-  ['masteringRepairDeclip', 2],
-  ['masteringRepairDecrackle', 2],
-  ['masteringRepairDehum', 2],
-  ['masteringRepairDenoiseClassical', 2],
-  ['masteringRepairDereverbClassical', 2],
-  ['masteringRepairDereverbConfigForRoom', 1],
-  ['masteringRepairDetectClicks', 2],
-  ['masteringRepairDetectClipping', 2],
-  ['masteringRepairDetectCrackle', 2],
-  ['masteringRepairDetectHum', 2],
-  ['masteringRepairDetectNoiseFloor', 2],
-  ['masteringRepairDetectReverb', 2],
-  ['masteringRepairDetectTrimRange', 2],
-  ['masteringRepairTrimSilence', 2],
   ['meteringCrestFactorDb', 2],
   ['meteringDcOffset', 2],
   ['meteringDetectClipping', 2],
@@ -133,26 +177,11 @@ const POSITIONAL_OPTIONS: ReadonlyArray<readonly [string, number]> = [
   ['meteringVectorscope', 3],
   ['meteringVectorscopeDecimated', 4],
   ['mixStereo', 3],
-  ['normalize', 4],
-  ['noteMove', 2],
-  ['noteStretch', 2],
-  ['percussive', 2],
-  ['pitchCorrectTimevarying', 4],
-  ['pitchCorrectToMidi', 4],
-  ['pitchCorrectToMidiTimevarying', 7],
-  ['pitchShift', 5],
-  ['roomGeometryFromEstimate', 1],
-  ['roomMorph', 2],
-  ['spectralEdit', 3],
-  ['timeStretch', 5],
-  ['trim', 5],
-  ['voiceChange', 2],
-  ['voiceChangeRealtime', 3],
   ['waveformPeakPyramid', 2],
   ['waveformPeaks', 2],
 ];
 
-/** Sample-taking entry points whose options bag is read by the shared `(samples, sampleRate, options)` normalizer. */
+/** Sample-taking entry points whose options bag is read by the shared `(samples, sampleRate, options)` normalizer, which refuses an unknown key before any defining field. */
 const SAMPLE_OPTIONS = [
   'analyze',
   'analyzeBpm',
@@ -175,16 +204,44 @@ const SAMPLE_OPTIONS = [
   'detectKey',
   'detectKeyCandidates',
   'detectOnsets',
+  'estimateRoom',
+  'harmonic',
   'hybridCqt',
   'lufs',
+  'masteringRepairDeclick',
+  'masteringRepairDeclip',
+  'masteringRepairDecrackle',
+  'masteringRepairDehum',
+  'masteringRepairDenoiseClassical',
+  'masteringRepairDereverbClassical',
+  'masteringRepairDetectClicks',
+  'masteringRepairDetectClipping',
+  'masteringRepairDetectCrackle',
+  'masteringRepairDetectHum',
+  'masteringRepairDetectNoiseFloor',
+  'masteringRepairDetectReverb',
+  'masteringRepairDetectTrimRange',
+  'masteringRepairTrimSilence',
   'melSpectrogram',
   'mfcc',
   'momentaryLufs',
+  'normalize',
+  'noteMove',
+  'noteStretch',
   'onsetStrengthMulti',
+  'percussive',
+  'pitchCorrectTimevarying',
+  'pitchCorrectToMidi',
+  'pitchShift',
   'pseudoCqt',
+  'roomMorph',
   'shortTermLufs',
+  'spectralEdit',
   'stft',
   'stftDb',
+  'timeStretch',
+  'trim',
+  'voiceChange',
   'vqt',
 ];
 
@@ -229,6 +286,50 @@ describe('positional options bags refuse unknown keys', () => {
   });
 });
 
+/** Entry points that take only a request object, with a valid request body to add the bogus key to. */
+const REQUEST_ONLY: ReadonlyArray<readonly [string, () => Record<string, unknown>]> = [
+  ['masteringRepairDereverbConfigForRoom', () => ({ estimate: {} })],
+  ['roomGeometryFromEstimate', () => ({ estimate: {} })],
+  ['voiceChangeRealtime', () => ({ channels: [new Float32Array(2205)], sampleRate: 22050 })],
+];
+
+describe('request-only entry points refuse unknown keys', () => {
+  beforeAll(async () => {
+    await api.init();
+  });
+
+  it.each(REQUEST_ONLY)('%s refuses an undeclared key by name', (name, body) => {
+    const call = () => entry(name)({ ...body(), bogus: 1 });
+    expect(call).toThrow(TypeError);
+    expect(message(call)).toBe(`${name}: unknown request key 'bogus'`);
+  });
+
+  it.each(REQUEST_ONLY)('%s reports an unknown key before a missing field', (name) => {
+    expect(message(() => entry(name)({ bogus: 1 }))).toBe(`${name}: unknown request key 'bogus'`);
+  });
+
+  it.each(REQUEST_ONLY)('%s takes no positional form', (name) => {
+    const call = () =>
+      (entry(name) as (...a: unknown[]) => unknown)(new Float32Array(2205), 22050, { bogus: 1 });
+    expect(call).toThrow(TypeError);
+    expect(message(call)).toBe(`${name}: request must be an object`);
+  });
+
+  it('pitchCorrectToMidiTimevarying is gone; pitchCorrectTimevarying takes targetMidi', () => {
+    expect(
+      (api as unknown as Record<string, unknown>).pitchCorrectToMidiTimevarying,
+    ).toBeUndefined();
+    expect(REQUEST_SHAPES.pitchCorrectTimevarying.keys).toContain('targetMidi');
+    const call = () =>
+      api.pitchCorrectTimevarying({
+        samples: new Float32Array(2205),
+        sampleRate: 22050,
+        bogus: 1,
+      } as never);
+    expect(message(call)).toBe("pitchCorrectTimevarying: unknown request key 'bogus'");
+  });
+});
+
 describe('reported mistakes', () => {
   const samples = new Float32Array(2205);
 
@@ -268,10 +369,19 @@ describe('reported mistakes', () => {
     );
   });
 
-  it('detectBpm refuses a range it does not take', () => {
-    expect(message(() => api.detectBpm({ samples, sampleRate: 22050, bpmMin: 60 } as never))).toBe(
-      "detectBpm: unknown request key 'bpmMin'",
-    );
+  it('detectBpm takes a tempo range and refuses a key it does not take', () => {
+    expect(
+      message(() => api.detectBpm({ samples, sampleRate: 22050, bpmMin: 60, bpmMax: 180 })),
+    ).not.toMatch(/unknown/);
+    expect(
+      message(() => api.detectBpm({ samples, sampleRate: 22050, hopLength: 512 } as never)),
+    ).toBe("detectBpm: unknown request key 'hopLength'");
+  });
+
+  it('detectBeats takes a tempo range', () => {
+    expect(
+      message(() => api.detectBeats({ samples, sampleRate: 22050, bpmMin: 60, bpmMax: 180 })),
+    ).not.toMatch(/unknown/);
   });
 
   it('a declared key set to undefined is absent', () => {

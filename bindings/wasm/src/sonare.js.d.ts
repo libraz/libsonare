@@ -46,7 +46,8 @@ export interface WasmKeyResult {
 
 /** A detected key with the tuning its chroma was built with. */
 export interface WasmKeyDetectionResult extends WasmKeyResult {
-  tuning: number;
+  /** Cents from A440. */
+  tuningCents: number;
 }
 
 export interface WasmKeyCandidateResult {
@@ -239,7 +240,7 @@ export interface WasmAnalysisResult {
   rhythm: WasmRhythmResult;
   melody: WasmMelodyContourResult;
   form: string;
-  tuning: number;
+  tuningCents: number;
 }
 
 export interface WasmBpmHypothesis {
@@ -278,7 +279,7 @@ export interface WasmDynamicsAnalysisResult {
   crestFactor: number;
   loudnessRangeDb: number;
   isCompressed: boolean;
-  loudnessTimes: Float32Array;
+  loudnessTimesSec: Float32Array;
   loudnessRmsDb: Float32Array;
 }
 
@@ -290,7 +291,7 @@ export interface WasmStreamConfigDefaults {
   nMels: number;
   fmin: number;
   fmax: number;
-  tuningRefHz: number;
+  referenceHz: number;
   computeMagnitude: boolean;
   computeMel: boolean;
   computeChroma: boolean;
@@ -328,7 +329,7 @@ export interface WasmTimbreAnalysisResult {
 
 export interface WasmChordAnalysisResult {
   chords: WasmChordResult[];
-  tuning: number;
+  tuningCents: number;
 }
 
 export interface WasmAcousticResult {
@@ -739,8 +740,8 @@ export interface WasmPitchResult {
 export interface WasmNoteSegment {
   frameStart: number;
   frameEnd: number;
-  startSeconds: number;
-  endSeconds: number;
+  startSec: number;
+  endSec: number;
   medianCents: number;
 }
 
@@ -1931,7 +1932,7 @@ export interface SonareModule {
   ) => Float32Array[];
 
   // Quick API (high-level)
-  detectBpm: (samples: Float32Array, sampleRate: number) => number;
+  detectBpm: (samples: Float32Array, sampleRate: number, bpmMin: number, bpmMax: number) => number;
   detectKey: (samples: Float32Array, sampleRate: number) => WasmKeyResult;
   _detectKeyWithOptions: (
     samples: Float32Array,
@@ -1940,11 +1941,11 @@ export interface SonareModule {
     hopLength: number,
     useHpss: boolean,
     loudnessWeighted: boolean,
-    highPassHz: number,
+    chromaHighPassHz: number,
     modes: number[],
     profileType: number,
     genreHint: string,
-    tuning: number | 'auto',
+    tuningCents: number | 'auto',
   ) => WasmKeyDetectionResult;
   _detectKeyCandidates: (
     samples: Float32Array,
@@ -1953,14 +1954,19 @@ export interface SonareModule {
     hopLength: number,
     useHpss: boolean,
     loudnessWeighted: boolean,
-    highPassHz: number,
+    chromaHighPassHz: number,
     modes: number[],
     profileType: number,
     genreHint: string,
-    tuning: number | 'auto',
+    tuningCents: number | 'auto',
   ) => WasmKeyCandidateResult[];
   detectOnsets: (samples: Float32Array, sampleRate: number, options: object) => Float32Array;
-  detectBeats: (samples: Float32Array, sampleRate: number) => Float32Array;
+  detectBeats: (
+    samples: Float32Array,
+    sampleRate: number,
+    bpmMin: number,
+    bpmMax: number,
+  ) => Float32Array;
   detectDownbeats: (samples: Float32Array, sampleRate: number) => Float32Array;
   detectChords: (
     samples: Float32Array,
@@ -1979,7 +1985,7 @@ export interface SonareModule {
     keyMode: number,
     detectInversions: boolean,
     chromaMethod: number,
-    tuning: number | 'auto',
+    tuningCents: number | 'auto',
   ) => WasmChordAnalysisResult;
   chordFunctionalAnalysis: (
     samples: Float32Array,
@@ -1998,7 +2004,7 @@ export interface SonareModule {
     useKeyContext: boolean,
     detectInversions: boolean,
     chromaMethod: number,
-    tuning: number | 'auto',
+    tuningCents: number | 'auto',
   ) => WasmChordAnalysisResult & { roman: string[]; functions: string[] };
   chordFunctions: (
     chords: ArrayLike<{ root: number; quality: number }>,
@@ -2402,7 +2408,7 @@ export interface SonareModule {
     samples: Float32Array,
     intervals: Int32Array,
     sampleRate: number,
-    alignZeros: boolean,
+    alignZeros?: boolean | null,
   ) => Float32Array;
   decomposeStems: (
     samples: Float32Array,
@@ -2444,7 +2450,7 @@ export interface SonareModule {
     samples: Float32Array,
     intervals: Int32Array,
     sampleRate: number,
-    alignZeros: boolean,
+    alignZeros?: boolean | null,
   ) => Int32Array;
   phaseVocoder: (
     samples: Float32Array,
@@ -3324,8 +3330,8 @@ export interface SonareModule {
     zeroPos: boolean,
   ) => Int32Array;
   pitchTuning: (frequencies: Float32Array, resolution: number, binsPerOctave: number) => number;
-  tuningToReferenceHz: (tuning: number, a4: number) => number;
-  referenceHzToTuning: (hz: number, a4: number) => number;
+  tuningToReferenceHz: (tuningCents: number, a4Hz: number) => number;
+  referenceHzToTuning: (referenceHz: number, a4Hz: number) => number;
   estimateTuning: (
     samples: Float32Array,
     sampleRate: number,
@@ -3372,7 +3378,8 @@ export interface SonareModule {
   };
   noteSegments: (
     f0Hz: Float32Array,
-    voicedProb: Float32Array,
+    voicedProb: Float32Array | null,
+    voicedFlags: Uint8Array | null,
     frameRate: number,
     options: {
       segmentationThresholdCents?: number;
@@ -3715,7 +3722,7 @@ export interface SonareModule {
     nMels: number,
     fmin: number,
     fmax: number,
-    tuningRefHz: number,
+    referenceHz: number,
     computeMagnitude: boolean,
     computeMel: boolean,
     computeChroma: boolean,
@@ -4095,7 +4102,7 @@ export interface WasmChordChange {
   root: number;
   quality: number;
   name: string;
-  startTime: number;
+  startSec: number;
   confidence: number;
 }
 
@@ -4104,7 +4111,7 @@ export interface WasmBarChord {
   root: number;
   quality: number;
   name: string;
-  startTime: number;
+  startSec: number;
   confidence: number;
 }
 
@@ -4126,17 +4133,17 @@ export interface WasmProgressiveEstimate {
   chordQuality: number;
   chordName: string;
   chordConfidence: number;
-  chordStartTime: number;
+  chordStartSec: number;
   chordProgression: WasmChordChange[];
   barChordProgression: WasmBarChord[];
   currentBar: number;
-  barDuration: number;
+  barDurationSec: number;
   votedPattern: WasmBarChord[];
   patternLength: number;
   detectedPatternName: string;
   detectedPatternScore: number;
   allPatternScores: WasmPatternScore[];
-  accumulatedSeconds: number;
+  accumulatedSec: number;
   usedFrames: number;
   updated: boolean;
 }
@@ -4144,7 +4151,7 @@ export interface WasmProgressiveEstimate {
 export interface WasmAnalyzerStats {
   totalFrames: number;
   totalSamples: number;
-  durationSeconds: number;
+  durationSec: number;
   pendingFrames: number;
   droppedOutputFrames: number;
   droppedChordProgressionEntries: number;
@@ -4159,7 +4166,7 @@ export interface WasmFrameBuffer {
   nMels: number;
   nChroma: number;
   featureFlags: number;
-  timestamps: Float32Array;
+  timestampsSec: Float32Array;
   mel: Float32Array;
   chroma: Float32Array;
   onsetStrength: Float32Array;
@@ -4176,7 +4183,7 @@ export interface WasmStreamFramesU8 {
   nMels: number;
   nChroma: number;
   featureFlags: number;
-  timestamps: Float32Array;
+  timestampsSec: Float32Array;
   mel: Uint8Array;
   chroma: Uint8Array;
   onsetStrength: Uint8Array;
@@ -4190,7 +4197,7 @@ export interface WasmStreamFramesI16 {
   nMels: number;
   nChroma: number;
   featureFlags: number;
-  timestamps: Float32Array;
+  timestampsSec: Float32Array;
   mel: Int16Array;
   chroma: Int16Array;
   onsetStrength: Int16Array;
@@ -4213,13 +4220,13 @@ export interface WasmStreamAnalyzer {
   reset: (baseSampleOffset?: number) => void;
   stats: () => WasmAnalyzerStats;
   frameCount: () => number;
-  currentTime: () => number;
+  currentTimeSec: () => number;
   sampleRate: () => number;
-  setExpectedDuration: (durationSeconds: number) => void;
+  setExpectedDuration: (durationSec: number) => void;
   /** Throws outside 0.01..100; the request is refused, never clamped. */
   setNormalizationGain: (gain: number) => void;
   /** Throws outside 220..880 Hz; the request is refused, never clamped. */
-  setTuningRefHz: (refHz: number) => void;
+  setReferenceHz: (referenceHz: number) => void;
   delete: () => void;
 }
 

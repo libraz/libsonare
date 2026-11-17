@@ -29,7 +29,7 @@ const LIMITER_MASTER = JSON.stringify({
 });
 
 function withEngine(body: (engine: RealtimeEngine) => void): void {
-  const engine = new RealtimeEngine(48000, 128);
+  const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
   try {
     body(engine);
   } finally {
@@ -60,9 +60,9 @@ beforeAll(async () => {
 describe('RealtimeEngine value refusals are RangeErrors', () => {
   it('refuses unknown mixer, clip and marker ids', () => {
     withEngine((engine) => {
-      engine.setTrackLanes([10]);
+      engine.setTrackLanes([{ trackId: 10 }]);
       for (const call of [
-        () => engine.setTrackStripPan(99, 0),
+        () => engine.setStripPan(99, 0),
         () => engine.setTrackLanes([{ trackId: 10 }, { trackId: 10 }]),
         () => engine.removeClip(42),
         () => engine.marker(999),
@@ -76,19 +76,19 @@ describe('RealtimeEngine value refusals are RangeErrors', () => {
 
   it('refuses a malformed patch and strip, including what the library reader refuses', () => {
     withEngine((engine) => {
-      engine.setTrackLanes([10]);
+      engine.setTrackLanes([{ trackId: 10 }]);
       const patch = thrown(() =>
-        engine.setSynthInstrument(
-          { engineMode: 'bowed-string', engineParams: { noSuchKey: 1 } },
-          8,
-        ),
+        engine.setSynthInstrument(8, {
+          engineMode: 'bowed-string',
+          engineParams: { noSuchKey: 1 },
+        }),
       );
       expect(patch).toBeInstanceOf(RangeError);
       expect(isSonareError(patch)).toBe(false);
       expect((patch as Error).message).toContain('noSuchKey');
       const typo = '{"version":1,"strips":[{"id":"s","faderDB":-3}],"buses":[]}';
       // A document content defect is the loader's InvalidFormat, a coded SonareError.
-      const strip = thrown(() => engine.setTrackStripJson(10, typo));
+      const strip = thrown(() => engine.setStrip(10, JSON.parse(typo).strips[0]));
       expect(isSonareError(strip)).toBe(true);
       expect((strip as { code: number }).code).toBe(ErrorCode.InvalidFormat);
       expect((strip as Error).message).toContain("unknown strip key 'strips[0].faderDB'");
@@ -97,8 +97,8 @@ describe('RealtimeEngine value refusals are RangeErrors', () => {
 
   it('refuses a destination with no instrument and a binding with no axis', () => {
     withEngine((engine) => {
-      expectRefusalOf(() => engine.setPartRig(0, 0, 'none'));
-      engine.setSynthInstrument('clarinet', 0);
+      expectRefusalOf(() => engine.setPartRig({ destinationId: 0, part: 0, mode: 'none' }));
+      engine.setSynthInstrument(0, 'clarinet');
       expectRefusalOf(() =>
         engine.bindController(0, { input: 'control-change', index: 2, axis: 'none' }),
       );
@@ -113,18 +113,18 @@ describe('RealtimeEngine value refusals are RangeErrors', () => {
 describe('RealtimeEngine state refusals stay a coded InvalidState', () => {
   it('refuses master-strip edits before a master strip is configured', () => {
     withEngine((engine) => {
-      expectInvalidState(() => engine.setMasterStripInsertBypassed(0, true));
-      expectInvalidState(() => engine.setMasterStripEqBand(0, { type: 'Peak' }));
-      expectInvalidState(() => engine.resolveMasterInsertAutomationId(0, 'thresholdDb'));
+      expectInvalidState(() => engine.setStripInsertBypassed('master', 0, { bypassed: true }));
+      expectInvalidState(() => engine.setStripEqBand('master', 0, { type: 'Peak' }));
+      expectInvalidState(() => engine.resolveStripInsertAutomationId('master', 0, 'thresholdDb'));
       // Once a master strip exists, the same setter refuses a bad index as the argument.
-      engine.setMasterStripJson(LIMITER_MASTER);
-      expect(() => engine.setMasterStripInsertBypassed(0, true)).not.toThrow();
-      expectRefusalOf(() => engine.setMasterStripInsertBypassed(99, true));
+      engine.setStrip('master', JSON.parse(LIMITER_MASTER).strips[0]);
+      expect(() => engine.setStripInsertBypassed('master', 0, { bypassed: true })).not.toThrow();
+      expectRefusalOf(() => engine.setStripInsertBypassed('master', 99, { bypassed: true }));
     });
   });
 
   it('refuses a call on a destroyed engine', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     engine.destroy();
     expectInvalidState(() => engine.marker(1));
   });

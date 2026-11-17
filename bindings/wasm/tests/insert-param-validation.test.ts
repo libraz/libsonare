@@ -215,7 +215,7 @@ describe('insert param validation (WASM)', () => {
       ],
       connections: [{ source: 'vocal', destination: 'master' }],
     });
-    const mixer = Mixer.fromSceneJson(ignored, SR, BLOCK);
+    const mixer = Mixer.fromJson(ignored, { sampleRate: SR, blockSize: BLOCK });
     const warnings = mixer.sceneWarnings();
     expect(warnings.length).toBe(1);
     expect(warnings[0]).toContain('eq.parametric');
@@ -240,7 +240,7 @@ describe('insert param validation (WASM)', () => {
       ],
       connections: [{ source: 'vocal', destination: 'master' }],
     });
-    expect(Mixer.fromSceneJson(clean, SR, BLOCK).sceneWarnings()).toEqual([]);
+    expect(Mixer.fromJson(clean, { sampleRate: SR, blockSize: BLOCK }).sceneWarnings()).toEqual([]);
   });
 
   it('reports an unknown scene key by path and exempts $ and x- keys', () => {
@@ -252,10 +252,15 @@ describe('insert param validation (WASM)', () => {
         strips: [{ id: 'vocal', ...stripExtra }],
         connections: [{ source: 'vocal', destination: 'master' }],
       });
-    expect(Mixer.fromSceneJson(scene({}, { faderDB: -3 }), SR, BLOCK).sceneWarnings()).toEqual([
-      "unknown scene key 'strips[0].faderDB'",
-    ]);
+    expect(
+      Mixer.fromJson(scene({}, { faderDB: -3 }), {
+        sampleRate: SR,
+        blockSize: BLOCK,
+      }).sceneWarnings(),
+    ).toEqual(["unknown scene key 'strips[0].faderDB'"]);
     const annotated = scene({ $schema: 'x', 'x-note': 1 }, { 'x-color': 'red' });
-    expect(Mixer.fromSceneJson(annotated, SR, BLOCK).sceneWarnings()).toEqual([]);
+    expect(Mixer.fromJson(annotated, { sampleRate: SR, blockSize: BLOCK }).sceneWarnings()).toEqual(
+      [],
+    );
   });
 });

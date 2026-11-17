@@ -49,13 +49,15 @@ describe('RealtimeVoiceChanger construction failure', () => {
       return handle;
     };
     try {
-      // 3 channels is outside the [1, 2] the native prepare() accepts.
-      expect(() => new RealtimeVoiceChanger('neutral-monitor', SR, BLOCK, 3)).toThrow();
+      // A block size the native prepare() refuses although the facade lets it through.
+      expect(
+        () => new RealtimeVoiceChanger({ sampleRate: SR, maxBlockSize: 2 ** 30, numChannels: 1 }),
+      ).toThrow();
       expect(created).toBe(1);
       expect(deleted).toBe(1);
 
       // The success path must not release anything early.
-      const ok = new RealtimeVoiceChanger('neutral-monitor', SR, BLOCK, 1);
+      const ok = new RealtimeVoiceChanger({ sampleRate: SR, maxBlockSize: BLOCK, numChannels: 1 });
       expect(created).toBe(2);
       expect(deleted).toBe(1);
       ok.destroy();

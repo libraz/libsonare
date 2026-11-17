@@ -14,7 +14,6 @@ import {
   cqt,
   cqtToAudio,
   decompose,
-  decomposeWithInit,
   detectAcoustic,
   detectBeats,
   detectBpm,
@@ -155,7 +154,7 @@ describe('WASM basic analysis request objects', () => {
     expect(estimateRoom({ samples: impulse, sampleRate: acousticRate })).toEqual(
       estimateRoom(impulse, acousticRate),
     );
-    const options = { lengthM: 7, widthM: 5, heightM: 3, maxSeconds: 0.1 };
+    const options = { lengthM: 7, widthM: 5, heightM: 3, maxSec: 0.1 };
     expect(roomMorph({ samples: impulse, sampleRate: acousticRate, ...options })).toEqual(
       roomMorph(impulse, acousticRate, options),
     );
@@ -275,13 +274,15 @@ describe('WASM basic analysis request objects', () => {
     expect(ratio.every(Number.isFinite)).toBe(true);
   });
 
-  it('keeps decomposition request objects equivalent', () => {
+  it('keeps the default decomposition init equal to an explicit random init', () => {
     const matrix = new Float32Array([1, 2, 3, 4, 5, 6]);
-    const options = { s: matrix, nFeatures: 2, nFrames: 3, nComponents: 1, nIter: 2, beta: 2 };
-    expect(decompose(options)).toEqual(decompose(matrix, 2, 3, 1, 2, 2));
-    expect(decomposeWithInit({ ...options, init: 'random' })).toEqual(
-      decomposeWithInit(matrix, 2, 3, 1, 2, 2, 'random'),
-    );
+    const options = {
+      s: { data: matrix, rows: 2, cols: 3 },
+      nComponents: 1,
+      nIter: 2,
+      beta: 2,
+    };
+    expect(decompose(options)).toEqual(decompose({ ...options, init: 'random' }));
   });
 
   it('keeps Mel spectrogram request objects equivalent', () => {

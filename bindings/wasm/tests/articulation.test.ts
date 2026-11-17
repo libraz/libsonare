@@ -24,7 +24,7 @@ import { setSonareModule } from '../src/module_state.js';
 const BLOCK = 128;
 
 function withEngine<T>(body: (engine: RealtimeEngine) => T): T {
-  const engine = new RealtimeEngine(48000, BLOCK);
+  const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: BLOCK });
   try {
     return body(engine);
   } finally {
@@ -51,7 +51,7 @@ function renderSlur(
   articulation: Articulation,
 ): { audio: Float32Array; fallbacks: number } {
   return withEngine((engine) => {
-    engine.setSynthInstrument({ engineMode });
+    engine.setSynthInstrument(0, { engineMode });
     engine.setArticulation(0, 0, articulation);
     engine.pushMidiNoteOn(0, 0, 0, 60, 100);
     const head = renderBlocks(engine, 96);
@@ -91,7 +91,7 @@ describe('Sonare WASM articulation', () => {
 
   it('round-trips per channel', () => {
     withEngine((engine) => {
-      engine.setSynthInstrument({ engineMode: 'reed' });
+      engine.setSynthInstrument(0, { engineMode: 'reed' });
       expect(engine.articulation(0, 0)).toBe('poly');
 
       engine.setArticulation(0, 0, 'mono-legato');
@@ -105,10 +105,9 @@ describe('Sonare WASM articulation', () => {
       expect(engine.articulation(0, 1)).toBe('mono-retrigger');
       expect(engine.articulation(0, 0)).toBe('mono-legato');
 
-      // The C ordinal is accepted wherever the name is, the way every other
-      // enum on this surface reads.
-      engine.setArticulation(0, 2, 2);
-      expect(engine.articulation(0, 2)).toBe('mono-legato');
+      // An ordinal is not a spelling of the enum: it is a TypeError.
+      expect(() => engine.setArticulation(0, 2, 2 as never)).toThrow(TypeError);
+      expect(engine.articulation(0, 2)).toBe('poly');
 
       // Nothing has been asked for and declined yet, so the counter starts
       // where a later case can see it move.
@@ -118,12 +117,12 @@ describe('Sonare WASM articulation', () => {
 
   it('refuses a mode rather than clamping or substituting it', () => {
     withEngine((engine) => {
-      engine.setSynthInstrument({ engineMode: 'reed' });
-      // An ordinal past the enum is refused rather than clamped: poly
+      engine.setSynthInstrument(0, { engineMode: 'reed' });
+      // An ordinal is refused rather than clamped or substituted: poly
       // substituted for a misspelled mono-legato plays every note and slurs
       // none of them, which the caller cannot tell from a request that took.
-      expect(() => engine.setArticulation(0, 0, ARTICULATIONS.length)).toThrow(/out of range/);
-      expect(() => engine.setArticulation(0, 0, -1)).toThrow(/out of range/);
+      expect(() => engine.setArticulation(0, 0, ARTICULATIONS.length as never)).toThrow(TypeError);
+      expect(() => engine.setArticulation(0, 0, -1 as never)).toThrow(TypeError);
       // @ts-expect-error an unknown articulation name is rejected at runtime
       expect(() => engine.setArticulation(0, 0, 'legato')).toThrow(/legato/);
       // Checked before the byte it narrows into: 256 is channel 0 once
@@ -146,7 +145,7 @@ describe('Sonare WASM articulation', () => {
       ['legatoFallbackCount', (engine) => engine.legatoFallbackCount(5)],
     ];
     withEngine((engine) => {
-      engine.setSynthInstrument({ engineMode: 'reed' });
+      engine.setSynthInstrument(0, { engineMode: 'reed' });
       // Nothing is bound to destination 5 — an error, not a default mode.
       for (const [name, call] of entries) {
         expect(() => call(engine), name).toThrow(/no MIDI instrument is bound/);
@@ -156,7 +155,7 @@ describe('Sonare WASM articulation', () => {
       // that is a different answer. The counter is included rather than
       // reporting 0, because a 0 from an instrument that was never asked reads
       // as "every slur took" — the reading it exists to prevent.
-      engine.setBuiltinInstrument({}, 5);
+      engine.setBuiltinInstrument(5, {});
       for (const [name, call] of entries) {
         expect(() => call(engine), name).toThrow(/no articulation of its own/);
       }

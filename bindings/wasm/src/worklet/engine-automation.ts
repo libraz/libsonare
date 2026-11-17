@@ -1,6 +1,6 @@
 import type { EngineAutomationPoint, RealtimeEngine } from '../index.js';
+import { requestObject } from '../validation.js';
 import { commitStore } from './engine-commit.js';
-import { curveCode } from './engine-sync.js';
 import type { SonareEngineSyncMessage } from './messages.js';
 
 /**
@@ -19,13 +19,12 @@ export function scheduleParam(
   ctx: EngineAutomationContext,
   nodeId: string,
   param: string | number,
-  ppq: number,
-  value: number,
-  curve: number | 'linear' | 'exponential' = 'linear',
+  point: EngineAutomationPoint,
 ): void {
+  requestObject('scheduleParam', point, 'point', true);
   const paramId = ctx.resolveParamId(nodeId, param);
   const lane = [...(ctx.automationLanes.get(paramId) ?? [])];
-  lane.push({ ppq, value, curveToNext: curveCode(curve) });
+  lane.push({ ...point });
   lane.sort((a, b) => a.ppq - b.ppq);
   // Lanes can exceed the fixed-size SAB command record, so the live engine gets
   // them through an out-of-band 'syncAutomation' message.
@@ -35,11 +34,9 @@ export function scheduleParam(
 export function addAutomationPoint(
   ctx: EngineAutomationContext,
   laneId: string | number,
-  ppq: number,
-  value: number,
-  curve: number | 'linear' | 'exponential' = 'linear',
+  point: EngineAutomationPoint,
 ): void {
-  scheduleParam(ctx, '', laneId, ppq, value, curve);
+  scheduleParam(ctx, '', laneId, point);
 }
 
 /**
@@ -51,7 +48,7 @@ export function addAutomationPoint(
  * the live worklet engine.
  *
  * @param paramId Automation target id (registered parameter or a reserved
- *   engine mixer target from automationParamId/busAutomationParamId).
+ *   engine mixer target from resolveStripAutomationId/resolveBusAutomationId).
  * @param points Lane breakpoints; order does not matter.
  */
 export function setAutomationLane(

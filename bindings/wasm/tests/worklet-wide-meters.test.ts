@@ -4,7 +4,7 @@
  * keeps its stereo-only snapshot, and the interval gate is kept per target.
  */
 
-import { RealtimeEngine } from '../dist/index.js';
+import { type MixSceneStrip, RealtimeEngine } from '../dist/index.js';
 import type { SonareWorkletMeterSnapshot } from '../src/worklet/protocol';
 import {
   createSonareMeterRingBuffer,
@@ -24,10 +24,14 @@ const BUS_TARGET = 33;
 
 type EngineLike = Pick<
   RealtimeEngine,
-  'setTrackBuses' | 'setTrackLanes' | 'setTrackStripJson' | 'setClips' | 'play'
+  'setTrackBuses' | 'setTrackLanes' | 'setStrip' | 'setClips' | 'play'
 >;
 
-function seedBus(engine: EngineLike, channelLayout: number, strip?: string): void {
+function seedBus(
+  engine: EngineLike,
+  channelLayout: 'mono' | 'stereo' | '5.1',
+  strip?: MixSceneStrip,
+): void {
   engine.setClips([
     {
       id: 1,
@@ -40,21 +44,27 @@ function seedBus(engine: EngineLike, channelLayout: number, strip?: string): voi
   engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout }]);
   engine.setTrackLanes([{ trackId: 10, outputBusId: 1 }]);
   if (strip) {
-    engine.setTrackStripJson(10, strip);
+    engine.setStrip(10, strip);
   }
   engine.play();
 }
 
-const SURROUND_STRIP =
-  '{"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"s","surroundPan":{"azimuth":-110}}]}';
+const SURROUND_STRIP: MixSceneStrip = {
+  id: 's',
+  surroundPan: { azimuth: -110, elevation: 0, divergence: 0, lfe: 0, distance: 1 },
+} as MixSceneStrip;
 
 function silent(channels: number): Float32Array[] {
   return Array.from({ length: channels }, () => new Float32Array(BLOCK));
 }
 
 /** The first bus meter a plain engine reads through the wide drain, as the reference. */
-function referenceBusMeter(channelLayout: number, strip: string | undefined, channels: number) {
-  const engine = new RealtimeEngine(SR, BLOCK);
+function referenceBusMeter(
+  channelLayout: 'mono' | 'stereo' | '5.1',
+  strip: MixSceneStrip | undefined,
+  channels: number,
+) {
+  const engine = new RealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
   try {
     seedBus(engine, channelLayout, strip);
     engine.process(silent(channels));
@@ -83,14 +93,14 @@ describe('wide meters on the live worklet engine', () => {
   setupWorklet();
 
   it('delivers every plane of a 5.1 bus over postMessage', () => {
-    const reference = referenceBusMeter(2, SURROUND_STRIP, 6);
+    const reference = referenceBusMeter('5.1', SURROUND_STRIP, 6);
     const meters: SonareWorkletMeterSnapshot[] = [];
     const processor = new SonareRealtimeEngineWorkletProcessor(
       { sampleRate: SR, blockSize: BLOCK, channelCount: 6, meterIntervalFrames: BLOCK },
       { onMeter: (meter) => meters.push(meter) },
     );
     try {
-      seedBus(engineOf(processor), 2, SURROUND_STRIP);
+      seedBus(engineOf(processor), '5.1', SURROUND_STRIP);
       processor.process([[]], [silent(6)]);
       const bus = meters.find((m) => m.targetId === BUS_TARGET);
       expect(bus?.channelCount).toBe(6);
@@ -108,7 +118,7 @@ describe('wide meters on the live worklet engine', () => {
   });
 
   it('delivers every plane of a 5.1 bus over the shared meter ring', () => {
-    const reference = referenceBusMeter(2, SURROUND_STRIP, 6);
+    const reference = referenceBusMeter('5.1', SURROUND_STRIP, 6);
     const ring = createSonareMeterRingBuffer({ capacity: 64 });
     const processor = new SonareRealtimeEngineWorkletProcessor(
       {
@@ -121,7 +131,7 @@ describe('wide meters on the live worklet engine', () => {
       { postMessage: () => undefined },
     );
     try {
-      seedBus(engineOf(processor), 2, SURROUND_STRIP);
+      seedBus(engineOf(processor), '5.1', SURROUND_STRIP);
       processor.process([[]], [silent(6)]);
       expect(ring.header[3]).toBe(SONARE_METER_RING_PROTOCOL_VERSION);
       const bus = readSonareMeterRingBuffer(ring).meters.find((m) => m.targetId === BUS_TARGET);
@@ -137,7 +147,7 @@ describe('wide meters on the live worklet engine', () => {
   });
 
   it('keeps a stereo engine snapshot stereo-only and identical across both paths', () => {
-    const reference = referenceBusMeter(0, undefined, 2);
+    const reference = referenceBusMeter('mono', undefined, 2);
     const posted: SonareWorkletMeterSnapshot[] = [];
     const viaMessage = new SonareRealtimeEngineWorkletProcessor(
       { sampleRate: SR, blockSize: BLOCK, channelCount: 2, meterIntervalFrames: BLOCK },
@@ -155,8 +165,8 @@ describe('wide meters on the live worklet engine', () => {
       { postMessage: () => undefined },
     );
     try {
-      seedBus(engineOf(viaMessage), 0);
-      seedBus(engineOf(viaRing), 0);
+      seedBus(engineOf(viaMessage), 'mono');
+      seedBus(engineOf(viaRing), 'mono');
       viaMessage.process([[]], [silent(2)]);
       viaRing.process([[]], [silent(2)]);
       const message = posted.find((m) => m.targetId === BUS_TARGET);
@@ -213,7 +223,7 @@ describe('wide meters on the live worklet engine', () => {
       { onMeter: (meter) => meters.push(meter) },
     );
     try {
-      seedBus(engineOf(processor), 0);
+      seedBus(engineOf(processor), 'mono');
       for (let block = 0; block < 9; ++block) {
         processor.process([[]], [silent(2)]);
       }

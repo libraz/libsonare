@@ -1,7 +1,14 @@
+import { deinterleavePlanes, interleavePlanes, nativeVoiceConfig } from './internal/pod_config.js';
 import { getSonareModule } from './module_state.js';
 import type { RealtimeVoiceChangerConfigInput } from './public_types.js';
 import type { ValidateOptions } from './validation.js';
-import { assertAudioInput, assertString, optionsBag, requestObject } from './validation.js';
+import {
+  assertAudioChannels,
+  assertAudioInput,
+  assertString,
+  requestOnly,
+  sampleOneShot,
+} from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -34,102 +41,82 @@ export interface VoiceChangeOptions extends ValidateOptions {
 /** Canonical request form for one-shot voice changing. */
 export interface VoiceChangeRequest extends VoiceChangeOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  /** Sample rate in Hz, an integer in [8000, 384000]. Required. */
+  sampleRate: number;
 }
 
 /**
  * Apply a voice change by shifting pitch and formants independently.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (required)
  * @param options - Pitch/formant settings ({@link VoiceChangeOptions})
  * @returns Voice-changed audio
+ * @throws TypeError for a wrong-typed argument, a missing `sampleRate` or an unknown key;
+ *   RangeError for out-of-domain audio, rate or setting.
  */
 export function voiceChange(request: VoiceChangeRequest): Float32Array;
 export function voiceChange(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: VoiceChangeOptions,
 ): Float32Array;
-export function voiceChange(
-  samples: Float32Array | VoiceChangeRequest,
-  sampleRate = 22050,
-  options: VoiceChangeOptions = {},
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('voiceChange', options) }
-      : requestObject('voiceChange', samples);
-  assertAudioInput('voiceChange', request.samples, request.sampleRate ?? 22050, request);
+export function voiceChange(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<VoiceChangeRequest>('voiceChange', args);
+  assertAudioInput('voiceChange', request.samples, request.sampleRate, request);
   const formantMode = request.formantMode ?? 'relative';
   assertString('voiceChange', formantMode, 'formantMode');
   return requireModule().voiceChange(
     request.samples,
-    request.sampleRate ?? 22050,
+    request.sampleRate,
     request.pitchSemitones ?? 0.0,
     request.formantFactor ?? 1.0,
     formantMode,
   );
 }
 
-/** Options for the offline {@link voiceChangeRealtime} convenience wrapper. */
-export interface VoiceChangeRealtimeOptions extends ValidateOptions {
-  /** Channel count (1 = mono, 2 = interleaved stereo). */
-  channels?: 1 | 2;
-  /** @deprecated The shared C-ABI renderer uses a fixed cross-surface block size. */
-  blockSize?: number;
-}
-
 /** Canonical request form for offline realtime voice changing. */
-export interface VoiceChangeRealtimeRequest extends VoiceChangeRealtimeOptions {
-  samples: Float32Array;
-  sampleRate?: number;
-  preset?: RealtimeVoiceChangerConfigInput;
+export interface VoiceChangeRealtimeRequest extends ValidateOptions {
+  /** One (mono) or two (stereo) planar channels of equal length. */
+  channels: Float32Array[];
+  /** Sample rate in Hz, an integer in [8000, 384000]. Required. */
+  sampleRate: number;
+  /** Preset id, preset document or flat config. Default `'neutralMonitor'`. */
+  config?: RealtimeVoiceChangerConfigInput;
 }
 
 /**
- * Applies the realtime voice-changer chain to a whole buffer in one call.
+ * Applies the realtime voice-changer chain to whole planar buffers in one call.
  *
  * Uses the shared C-ABI renderer, so Python, Node, and WASM use the same
- * fixed block size and latency compensation. For mono, `samples` is a plain
- * buffer; for stereo, it is interleaved (L0,R0,L1,R1,...).
+ * fixed block size and latency compensation.
  *
- * @param samples - Audio samples (mono, or interleaved stereo when channels=2)
- * @param sampleRate - Sample rate in Hz (default 48000, matching Python/Node)
- * @param preset - Voice-changer preset id or full config object
- * @param options - Channel count and block size ({@link VoiceChangeRealtimeOptions})
- * @returns The processed buffer (same layout/length as the input).
+ * @returns The processed channels, with the layout and length of the input.
+ * @throws TypeError for a wrong-typed field, a missing `sampleRate` or an unknown key;
+ *   RangeError for a channel count other than 1 or 2, unequal channel lengths, out-of-domain
+ *   audio or rate, or an unknown preset id or token.
  */
-export function voiceChangeRealtime(request: VoiceChangeRealtimeRequest): Float32Array;
-export function voiceChangeRealtime(
-  samples: Float32Array,
-  sampleRate?: number,
-  preset?: RealtimeVoiceChangerConfigInput,
-  options?: VoiceChangeRealtimeOptions,
-): Float32Array;
-export function voiceChangeRealtime(
-  samples: Float32Array | VoiceChangeRealtimeRequest,
-  sampleRate = 48000,
-  preset: RealtimeVoiceChangerConfigInput = 'neutral-monitor',
-  options: VoiceChangeRealtimeOptions = {},
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, preset, ...optionsBag('voiceChangeRealtime', options) }
-      : requestObject('voiceChangeRealtime', samples);
-  assertAudioInput('voiceChangeRealtime', request.samples, request.sampleRate ?? 48000, request);
-  const channels = request.channels ?? 1;
-  if (channels !== 1 && channels !== 2) {
-    throw new RangeError('voiceChangeRealtime: channels must be 1 or 2.');
+export function voiceChangeRealtime(request: VoiceChangeRealtimeRequest): Float32Array[] {
+  const fnName = 'voiceChangeRealtime';
+  const req = requestOnly<VoiceChangeRealtimeRequest>(fnName, [request]);
+  if (req.sampleRate === undefined || req.sampleRate === null) {
+    throw new TypeError(`${fnName}: sampleRate is required`);
   }
-  if (channels === 2 && request.samples.length % 2 !== 0) {
-    throw new RangeError('voiceChangeRealtime: stereo input length must be a multiple of 2.');
+  assertAudioChannels(fnName, req.channels, req.sampleRate, req);
+  const planes = req.channels;
+  if (planes.length > 2) {
+    throw new RangeError(`${fnName}: channels must hold 1 or 2 planes`);
   }
-  const presetConfig = request.preset ?? 'neutral-monitor';
-  return requireModule().voiceChangeRealtime(
-    request.samples,
-    request.sampleRate ?? 48000,
-    typeof presetConfig === 'string' ? presetConfig : JSON.stringify(presetConfig),
-    channels,
+  const frames = (planes[0] as Float32Array).length;
+  if (planes.some((plane) => plane.length !== frames)) {
+    throw new RangeError(`${fnName}: channels must have equal lengths`);
+  }
+  const native = nativeVoiceConfig(fnName, req.config ?? 'neutralMonitor');
+  const out = requireModule().voiceChangeRealtime(
+    interleavePlanes(planes),
+    req.sampleRate,
+    typeof native === 'string' ? native : JSON.stringify(native),
+    planes.length,
   );
+  return deinterleavePlanes(out, planes.length);
 }

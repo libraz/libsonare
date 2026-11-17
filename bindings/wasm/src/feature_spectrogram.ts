@@ -16,14 +16,13 @@ import type {
   StftResult,
 } from './public_types.js';
 import type { WasmChromaResult } from './sonare.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertFiniteScalar,
   assertFloatFields,
   assertMatrix2D,
   assertPositiveInteger,
-  optionsBag,
-  requestObject,
   requestOnly,
   sampleOneShot,
   toMatrix2D,
@@ -32,9 +31,6 @@ import {
 function requireModule() {
   return getSonareModule();
 }
-
-/** The request fields a positional overload carries in its options bag. */
-type SampleOptions<R> = Omit<R, 'samples' | 'sampleRate'>;
 
 /** STFT request. */
 export interface StftRequest extends GuardedOptions {
@@ -168,83 +164,49 @@ export interface ReassignedSpectrogramRequest extends GuardedOptions {
   fillNan?: boolean;
 }
 
+/** Request for {@link trim}. */
 export interface TrimRequest extends GuardedOptions {
   samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
+  /** Silence threshold in dBFS. Default -60. */
   thresholdDb?: number;
+  /** Analysis frame in samples. Default 2048. */
   frameLength?: number;
+  /** Hop in samples. Default 512. */
   hopLength?: number;
 }
 
+/** Trimmed signal and its bounds, in samples of the input. */
+export interface TrimResult {
+  audio: Float32Array;
+  startSample: number;
+  endSample: number;
+}
+
 /**
- * Trim silence from beginning and end of audio.
+ * Trim silence from the beginning and end of audio.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
- * @param thresholdDb - Silence threshold in dB (default: -60 dB)
  * @returns Trimmed audio
+ * @throws {TypeError} when `sampleRate` is missing
+ * @throws {RangeError} on audio out of domain, an out-of-range `sampleRate` or a non-positive frame or hop
  */
 export function trim(request: TrimRequest): Float32Array;
 export function trim(
   samples: Float32Array,
   sampleRate: number,
-  thresholdDb?: number,
-  options?: GuardedOptions,
+  options?: OptionsOf<TrimRequest>,
 ): Float32Array;
-export function trim(
-  samples: Float32Array,
-  sampleRate: number,
-  thresholdDb?: number,
-  frameLength?: number,
-  hopLength?: number,
-  options?: GuardedOptions,
-): Float32Array;
-export function trim(
-  samples: Float32Array | TrimRequest,
-  sampleRate = 22050,
-  thresholdDb = -60.0,
-  frameLengthOrOptions?: number | GuardedOptions,
-  hopLength?: number,
-  options: GuardedOptions = {},
-): Float32Array {
-  optionsBag('trim', options);
-  if (!(samples instanceof Float32Array)) {
-    requestObject('trim', samples);
-    const r = samples;
-    return trim(r.samples, r.sampleRate, r.thresholdDb, r.frameLength, r.hopLength, r);
-  }
-  if (frameLengthOrOptions === null) {
-    throw new TypeError('trim: frameLength must be an integer or options object');
-  }
-  if (
-    frameLengthOrOptions !== undefined &&
-    typeof frameLengthOrOptions !== 'number' &&
-    typeof frameLengthOrOptions !== 'object'
-  ) {
-    throw new TypeError('trim: frameLength must be an integer or options object');
-  }
-  const positionalOptions =
-    typeof frameLengthOrOptions === 'object' && frameLengthOrOptions !== null
-      ? frameLengthOrOptions
-      : options;
-  const positionalFrameLength =
-    typeof frameLengthOrOptions === 'number' ? frameLengthOrOptions : undefined;
-  const resolvedFrameLength = positionalFrameLength ?? 2048;
-  const resolvedHopLength = hopLength === undefined ? 512 : hopLength;
-  assertAudioInput('trim', samples, sampleRate, positionalOptions);
+export function trim(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<TrimRequest>('trim', args);
+  const thresholdDb = r.thresholdDb ?? -60.0;
+  const frameLength = r.frameLength ?? 2048;
+  const hopLength = r.hopLength ?? 512;
+  assertAudioInput('trim', r.samples, r.sampleRate, r);
   assertFiniteScalar('trim', thresholdDb, 'thresholdDb');
-  assertPositiveInteger('trim', resolvedFrameLength, 'frameLength');
-  assertPositiveInteger('trim', resolvedHopLength, 'hopLength');
-  if (resolvedFrameLength > 2 ** 31 - 1 || resolvedHopLength > 2 ** 31 - 1) {
-    throw new RangeError('trim: frameLength and hopLength must fit in a signed 32-bit integer');
-  }
-  return requireModule().trimEx(
-    samples,
-    sampleRate,
-    thresholdDb,
-    resolvedFrameLength,
-    resolvedHopLength,
-  );
+  assertPositiveInteger('trim', frameLength, 'frameLength');
+  assertPositiveInteger('trim', hopLength, 'hopLength');
+  return requireModule().trimEx(r.samples, r.sampleRate, thresholdDb, frameLength, hopLength);
 }
 
 // ============================================================================
@@ -260,7 +222,7 @@ export function stft(request: StftRequest): StftResult;
 export function stft(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<StftRequest>,
+  options?: OptionsOf<StftRequest>,
 ): StftResult;
 export function stft(...args: unknown[]): StftResult {
   const r = sampleOneShot<StftRequest>('stft', args);
@@ -285,7 +247,7 @@ export function stftDb(request: StftDbRequest): Matrix2D;
 export function stftDb(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<StftDbRequest>,
+  options?: OptionsOf<StftDbRequest>,
 ): Matrix2D;
 export function stftDb(...args: unknown[]): Matrix2D {
   const r = sampleOneShot<StftDbRequest>('stftDb', args);
@@ -313,7 +275,7 @@ export function chromaCens(request: ChromaCensRequest): ChromaResult;
 export function chromaCens(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<ChromaCensRequest>,
+  options?: OptionsOf<ChromaCensRequest>,
 ): ChromaResult;
 export function chromaCens(...args: unknown[]): ChromaResult {
   const r = sampleOneShot<ChromaCensRequest>('chromaCens', args);
@@ -339,7 +301,7 @@ export function chromaCqt(request: ChromaCqtRequest): ChromaResult;
 export function chromaCqt(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<ChromaCqtRequest>,
+  options?: OptionsOf<ChromaCqtRequest>,
 ): ChromaResult;
 export function chromaCqt(...args: unknown[]): ChromaResult {
   const r = sampleOneShot<ChromaCqtRequest>('chromaCqt', args);
@@ -365,7 +327,7 @@ export function bassChroma(request: BassChromaRequest): ChromaResult;
 export function bassChroma(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<BassChromaRequest>,
+  options?: OptionsOf<BassChromaRequest>,
 ): ChromaResult;
 export function bassChroma(...args: unknown[]): ChromaResult {
   const r = sampleOneShot<BassChromaRequest>('bassChroma', args);
@@ -391,7 +353,7 @@ export function melSpectrogram(request: MelSpectrogramRequest): MelSpectrogramRe
 export function melSpectrogram(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<MelSpectrogramRequest>,
+  options?: OptionsOf<MelSpectrogramRequest>,
 ): MelSpectrogramResult;
 export function melSpectrogram(...args: unknown[]): MelSpectrogramResult {
   const r = sampleOneShot<MelSpectrogramRequest>('melSpectrogram', args);
@@ -433,7 +395,7 @@ export function mfcc(request: MfccRequest): MfccResult;
 export function mfcc(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<MfccRequest>,
+  options?: OptionsOf<MfccRequest>,
 ): MfccResult;
 export function mfcc(...args: unknown[]): MfccResult {
   const r = sampleOneShot<MfccRequest>('mfcc', args);
@@ -499,7 +461,7 @@ export function reassignedSpectrogram(
 export function reassignedSpectrogram(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<ReassignedSpectrogramRequest>,
+  options?: OptionsOf<ReassignedSpectrogramRequest>,
 ): ReassignedSpectrogramResult;
 export function reassignedSpectrogram(...args: unknown[]): ReassignedSpectrogramResult {
   const r = sampleOneShot<ReassignedSpectrogramRequest>('reassignedSpectrogram', args);
@@ -548,7 +510,7 @@ export function chroma(request: ChromaRequest): ChromaResult;
 export function chroma(
   samples: Float32Array,
   sampleRate: number,
-  options?: SampleOptions<ChromaRequest>,
+  options?: OptionsOf<ChromaRequest>,
 ): ChromaResult;
 export function chroma(...args: unknown[]): ChromaResult {
   const r = sampleOneShot<ChromaRequest>('chroma', args);

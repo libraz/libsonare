@@ -2,6 +2,7 @@
  * One repair analysis and one repair application over any number of channels.
  */
 
+import { dbFromLinear, linearFromDb } from './internal/repair_common.js';
 import type { MasteringAudioProfileDefects } from './mastering_core.js';
 import { getSonareModule } from './module_state.js';
 import type { ProgressCallback } from './public_types.js';
@@ -13,7 +14,10 @@ import type {
   DenoiseReport,
   DereverbReport,
 } from './public_types_repair.js';
-import { assertAudioChannels, requestObject } from './validation.js';
+import type { DereverbClassicalOptions } from './repair_dereverb.js';
+import type { DeclickOptions, DeclipOptions, DecrackleOptions } from './repair_impulsive.js';
+import type { DehumOptions, DenoiseClassicalOptions } from './repair_noise.js';
+import { assertAudioChannels, requestOnly, type ValidateOptions } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -29,14 +33,45 @@ export type MasteringRepairStageName =
   | 'dereverb';
 
 /**
- * One stage to apply, with any of its settings. The settings are the stage's catalog parameters
- * (`repair.declip`, `repair.declick`, `repair.decrackle`, `repair.dehum`,
- * `repair.denoiseClassical`, `repair.dereverbClassical`); an enum takes its choice name or wire
- * value. A setting left out takes the stage's default, and an unknown one is refused.
+ * One stage to apply: the stage name plus that stage's own options (without `validate`). A
+ * setting left out takes the stage's default; a misspelt one is a type error and, at runtime,
+ * refused by name. `declip` takes `clipThresholdDb` in dBFS.
  */
-export interface MasteringRepairStage {
-  stage: MasteringRepairStageName;
-  [setting: string]: number | boolean | string;
+export type MasteringRepairStage =
+  | ({ stage: 'declip' } & Omit<DeclipOptions, 'validate'>)
+  | ({ stage: 'declick' } & Omit<DeclickOptions, 'validate'>)
+  | ({ stage: 'decrackle' } & Omit<DecrackleOptions, 'validate'>)
+  | ({ stage: 'dehum' } & Omit<DehumOptions, 'validate'>)
+  | ({ stage: 'denoise' } & Omit<DenoiseClassicalOptions, 'validate'>)
+  | ({ stage: 'dereverb' } & Omit<DereverbClassicalOptions, 'validate'>);
+
+/** Native stage settings still carry the declip level as the linear `clipThreshold`. */
+function stageToNative(stage: MasteringRepairStage): Record<string, unknown> {
+  const native: Record<string, unknown> = { ...stage };
+  if ('clipThreshold' in native) {
+    throw new TypeError(
+      "masteringRepairApply: unknown setting 'clipThreshold' (use clipThresholdDb)",
+    );
+  }
+  if (native.stage === 'declip' && native.clipThresholdDb !== undefined) {
+    native.clipThreshold = linearFromDb(
+      'masteringRepairApply',
+      'clipThresholdDb',
+      native.clipThresholdDb,
+    );
+  }
+  delete native.clipThresholdDb;
+  return native;
+}
+
+/** The inverse of {@link stageToNative}, for the stages the analysis recommends. */
+function stageFromNative(native: Record<string, unknown>): MasteringRepairStage {
+  const stage = { ...native };
+  if (stage.stage === 'declip' && typeof stage.clipThreshold === 'number') {
+    stage.clipThresholdDb = dbFromLinear(stage.clipThreshold);
+    delete stage.clipThreshold;
+  }
+  return stage as unknown as MasteringRepairStage;
 }
 
 /**
@@ -83,19 +118,21 @@ export interface MasteringRepairApplyResult {
 }
 
 /** Request for {@link masteringRepairAnalyze}. */
-export interface MasteringRepairAnalyzeRequest {
+export interface MasteringRepairAnalyzeRequest extends ValidateOptions {
   /** One plane per channel, all of the same length. At least one. */
   channels: Float32Array[];
-  sampleRate?: number;
+  /** Sample rate in Hz. Required. */
+  sampleRate: number;
   /** When a denoise is recommended, track the noise frame by frame. Default true. */
   preferStreamingSafe?: boolean;
 }
 
 /** Request for {@link masteringRepairApply}. */
-export interface MasteringRepairApplyRequest {
+export interface MasteringRepairApplyRequest extends ValidateOptions {
   /** One plane per channel, all of the same length. At least one. */
   channels: Float32Array[];
-  sampleRate?: number;
+  /** Sample rate in Hz. Required. */
+  sampleRate: number;
   /** Stages to apply; each at most once. Their order does not matter. */
   stages: MasteringRepairStage[];
   /** Called after each stage with the fraction done and `repair.<stage>`. */
@@ -139,25 +176,25 @@ function toStageReports(entry: StageReportsJson): MasteringRepairStageReports {
  */
 export function masteringRepairAnalyze(
   request: MasteringRepairAnalyzeRequest,
-): MasteringRepairAnalysis {
-  requestObject('masteringRepairAnalyze', request, 'request', true);
-  assertAudioChannels(
-    'masteringRepairAnalyze',
-    request.channels,
-    request.sampleRate ?? 22050,
-    request,
-  );
+): MasteringRepairAnalysis;
+export function masteringRepairAnalyze(...args: unknown[]): MasteringRepairAnalysis {
+  const request = requestOnly<MasteringRepairAnalyzeRequest>('masteringRepairAnalyze', args);
+  assertAudioChannels('masteringRepairAnalyze', request.channels, request.sampleRate, request);
   const options =
     request.preferStreamingSafe === undefined
       ? {}
       : { preferStreamingSafe: request.preferStreamingSafe };
-  return JSON.parse(
+  const analysis = JSON.parse(
     requireModule().masteringRepairAnalyze(
       request.channels,
-      request.sampleRate ?? 22050,
+      request.sampleRate,
       JSON.stringify(options),
     ),
   ) as MasteringRepairAnalysis;
+  analysis.recommended = (analysis.recommended as unknown as Record<string, unknown>[]).map(
+    stageFromNative,
+  );
+  return analysis;
 }
 
 /**
@@ -181,21 +218,17 @@ export function masteringRepairAnalyze(
  */
 export function masteringRepairApply(
   request: MasteringRepairApplyRequest,
-): MasteringRepairApplyResult {
-  requestObject('masteringRepairApply', request, 'request', true);
-  assertAudioChannels(
-    'masteringRepairApply',
-    request.channels,
-    request.sampleRate ?? 22050,
-    request,
-  );
+): MasteringRepairApplyResult;
+export function masteringRepairApply(...args: unknown[]): MasteringRepairApplyResult {
+  const request = requestOnly<MasteringRepairApplyRequest>('masteringRepairApply', args);
+  assertAudioChannels('masteringRepairApply', request.channels, request.sampleRate, request);
   if (!Array.isArray(request.stages)) {
     throw new TypeError('masteringRepairApply: stages must be an array');
   }
   const result = requireModule().masteringRepairApply(
     request.channels,
-    request.sampleRate ?? 22050,
-    JSON.stringify(request.stages),
+    request.sampleRate,
+    JSON.stringify(request.stages.map(stageToNative)),
     request.onProgress ?? null,
     request.cancel ?? null,
   );

@@ -8,7 +8,8 @@ import {
   ErrorCode,
   init,
   RealtimeVoiceChanger,
-  type RealtimeVoiceChangerPodConfig,
+  type RealtimeVoiceChangerConfig,
+  type RealtimeVoiceChangerConfigInput,
   realtimeVoiceChangerPresetConfig,
   realtimeVoiceChangerPresetNames,
   SonareError,
@@ -18,11 +19,19 @@ import {
 const SR = 48000;
 const BLOCK = 128;
 
-function basePod(): RealtimeVoiceChangerPodConfig {
-  return realtimeVoiceChangerPresetConfig('neutral-monitor');
+/** Builds a changer prepared for `SR` and `BLOCK`. */
+function make(
+  config: RealtimeVoiceChangerConfigInput,
+  numChannels: 1 | 2 = 1,
+): RealtimeVoiceChanger {
+  return new RealtimeVoiceChanger({ sampleRate: SR, maxBlockSize: BLOCK, numChannels, config });
 }
 
-function externalPod(): RealtimeVoiceChangerPodConfig {
+function basePod(): RealtimeVoiceChangerConfig {
+  return realtimeVoiceChangerPresetConfig('neutralMonitor');
+}
+
+function externalPod(): RealtimeVoiceChangerConfig {
   return {
     ...basePod(),
     wetMix: 1,
@@ -96,18 +105,16 @@ describe('RealtimeVoiceChanger voice transformer', () => {
       expect(names).toHaveLength(12);
       for (const [ordinal, id] of names.entries()) {
         expect(voiceCharacterPresetId(ordinal)).toBe(id);
-        expect(realtimeVoiceChangerPresetConfig(ordinal)).toEqual(
-          realtimeVoiceChangerPresetConfig(id),
-        );
+        expect(() => realtimeVoiceChangerPresetConfig(ordinal as never)).toThrow(TypeError);
       }
-      expect(voiceCharacterPresetId(12)).toBeNull();
-      expect(() => realtimeVoiceChangerPresetConfig(12)).toThrow(RangeError);
+      expect(() => voiceCharacterPresetId(12)).toThrow(RangeError);
+      expect(() => realtimeVoiceChangerPresetConfig(12 as never)).toThrow(TypeError);
     });
 
     it('builds the same chain from a preset id and from its flat POD', () => {
       for (const id of realtimeVoiceChangerPresetNames()) {
-        const fromId = new RealtimeVoiceChanger(id);
-        const fromPod = new RealtimeVoiceChanger(realtimeVoiceChangerPresetConfig(id));
+        const fromId = make(id);
+        const fromPod = make(realtimeVoiceChangerPresetConfig(id));
         try {
           expect(fromPod.configJson(), id).toBe(fromId.configJson());
         } finally {
@@ -120,7 +127,7 @@ describe('RealtimeVoiceChanger voice transformer', () => {
 
   describe('MIDI notes', () => {
     it('accepts note events on a prepared psola changer', () => {
-      const changer = new RealtimeVoiceChanger(basePod(), SR, BLOCK, 1);
+      const changer = make(basePod());
       try {
         expect(() => changer.noteOn(60)).not.toThrow();
         expect(() => changer.noteOn(64, 0.5)).not.toThrow();
@@ -137,7 +144,7 @@ describe('RealtimeVoiceChanger voice transformer', () => {
     });
 
     it('refuses an out-of-domain note or velocity with RangeError and a wrong type with TypeError', () => {
-      const changer = new RealtimeVoiceChanger(basePod(), SR, BLOCK, 1);
+      const changer = make(basePod());
       try {
         for (const note of [-1, 128, 60.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 31]) {
           expect(() => changer.noteOn(note), String(note)).toThrow(RangeError);
@@ -155,19 +162,12 @@ describe('RealtimeVoiceChanger voice transformer', () => {
       }
     });
 
-    it('reports InvalidState for a grain engine, an unprepared changer and a full event queue', () => {
-      const grain = new RealtimeVoiceChanger(
-        { ...basePod(), voiceEngineEngine: 'grain' },
-        SR,
-        BLOCK,
-        1,
-      );
-      const unprepared = new RealtimeVoiceChanger(basePod());
-      const psola = new RealtimeVoiceChanger(basePod(), SR, BLOCK, 1);
+    it('reports InvalidState for a grain engine and a full event queue', () => {
+      const grain = make({ ...basePod(), voiceEngine: 'grain' });
+      const psola = make(basePod());
       try {
         expectInvalidState(() => grain.noteOn(60));
         expectInvalidState(() => grain.noteOff(60));
-        expectInvalidState(() => unprepared.noteOn(60));
 
         // Nothing drains the queue while no block is processed.
         let refused: unknown;
@@ -184,13 +184,12 @@ describe('RealtimeVoiceChanger voice transformer', () => {
         expect(() => psola.allNotesOff()).not.toThrow();
       } finally {
         grain.destroy();
-        unprepared.destroy();
         psola.destroy();
       }
     });
 
     it('refuses note calls after delete', () => {
-      const changer = new RealtimeVoiceChanger(basePod(), SR, BLOCK, 1);
+      const changer = make(basePod());
       changer.destroy();
       expectInvalidState(() => changer.noteOn(60));
       expectInvalidState(() => changer.noteOff(60));
@@ -200,14 +199,18 @@ describe('RealtimeVoiceChanger voice transformer', () => {
 
   describe('external vocoder carrier', () => {
     it('refuses a carrier-less block while an external carrier is configured', () => {
-      const changer = new RealtimeVoiceChanger(externalPod(), SR, BLOCK, 2);
+      const changer = make(externalPod(), 2);
       try {
         expectInvalidState(() => changer.processMono(new Float32Array(BLOCK)));
-        expectInvalidState(() => changer.processInterleaved(new Float32Array(BLOCK * 2), 2));
-        expectInvalidState(() => changer.processPreparedMono(BLOCK));
-        changer.getPlanarChannelBuffer(0, BLOCK);
-        changer.getPlanarChannelBuffer(1, BLOCK);
-        expectInvalidState(() => changer.processPreparedPlanar(BLOCK));
+        expectInvalidState(() =>
+          changer.processInterleavedInto(
+            new Float32Array(BLOCK * 2),
+            2,
+            new Float32Array(BLOCK * 2),
+          ),
+        );
+        expectInvalidState(() => changer.createRealtimeMonoBuffer(BLOCK).process());
+        expectInvalidState(() => changer.createRealtimePlanarBuffer(BLOCK, 2).process());
         const output = new Float32Array(BLOCK).fill(7);
         expectInvalidState(() => changer.processMonoInto(new Float32Array(BLOCK), output));
         expect(output.every((sample) => sample === 7)).toBe(true);
@@ -217,17 +220,18 @@ describe('RealtimeVoiceChanger voice transformer', () => {
     });
 
     it('refuses a carrier whose length differs from the input', () => {
-      const changer = new RealtimeVoiceChanger(externalPod(), SR, BLOCK, 2);
+      const changer = make(externalPod(), 2);
       try {
         const voice = new Float32Array(BLOCK);
         expect(() => changer.processMonoWithCarrier(voice, new Float32Array(BLOCK - 1))).toThrow(
           RangeError,
         );
         expect(() =>
-          changer.processInterleavedWithCarrier(
+          changer.processInterleavedWithCarrierInto(
             new Float32Array(BLOCK * 2),
             new Float32Array(BLOCK * 2),
             2,
+            new Float32Array(BLOCK * 2),
           ),
         ).toThrow(RangeError);
       } finally {
@@ -236,8 +240,8 @@ describe('RealtimeVoiceChanger voice transformer', () => {
     });
 
     it('lets the carrier shape the vocoded output', () => {
-      const low = new RealtimeVoiceChanger(externalPod(), SR, BLOCK, 1);
-      const high = new RealtimeVoiceChanger(externalPod(), SR, BLOCK, 1);
+      const low = make(externalPod());
+      const high = make(externalPod());
       try {
         const lowOut = renderMono(low, 60, 110);
         const highOut = renderMono(high, 60, 440);
@@ -252,8 +256,8 @@ describe('RealtimeVoiceChanger voice transformer', () => {
 
     it('ignores the carrier while the source is internal', () => {
       const pod = { ...basePod(), vocoderEnabled: true };
-      const plain = new RealtimeVoiceChanger(pod, SR, BLOCK, 1);
-      const withCarrier = new RealtimeVoiceChanger(pod, SR, BLOCK, 1);
+      const plain = make(pod);
+      const withCarrier = make(pod);
       try {
         const expected = renderMono(plain, 20, null);
         const actual = renderMono(withCarrier, 20, 330);
@@ -265,19 +269,17 @@ describe('RealtimeVoiceChanger voice transformer', () => {
     });
 
     it('matches across the copying and the zero-copy mono paths', () => {
-      const copying = new RealtimeVoiceChanger(externalPod(), SR, BLOCK, 1);
-      const prepared = new RealtimeVoiceChanger(externalPod(), SR, BLOCK, 1);
+      const copying = make(externalPod());
+      const prepared = make(externalPod());
       try {
         const expected = renderMono(copying, 20, 220);
-        const input = prepared.getMonoInputBuffer(BLOCK);
-        const output = prepared.getMonoOutputBuffer(BLOCK);
-        const carrier = prepared.getCarrierBuffer(BLOCK);
+        const buffer = prepared.createRealtimeMonoBuffer(BLOCK);
         const actual = new Float32Array(20 * BLOCK);
         for (let block = 0; block < 20; block++) {
-          input.set(sine(BLOCK, 220, 0.3, block * BLOCK));
-          carrier.set(saw(BLOCK, 220, 0.3, block * BLOCK));
-          prepared.processPreparedMonoWithCarrier(BLOCK);
-          actual.set(output, block * BLOCK);
+          buffer.input.set(sine(BLOCK, 220, 0.3, block * BLOCK));
+          buffer.carrier.set(saw(BLOCK, 220, 0.3, block * BLOCK));
+          buffer.processWithCarrier();
+          actual.set(buffer.output, block * BLOCK);
         }
         expect(Array.from(actual)).toEqual(Array.from(expected));
       } finally {
@@ -287,8 +289,8 @@ describe('RealtimeVoiceChanger voice transformer', () => {
     });
 
     it('shares one mono carrier across the channels of the interleaved and planar paths', () => {
-      const interleaved = new RealtimeVoiceChanger(externalPod(), SR, BLOCK, 2);
-      const planar = new RealtimeVoiceChanger(externalPod(), SR, BLOCK, 2);
+      const interleaved = make(externalPod(), 2);
+      const planar = make(externalPod(), 2);
       try {
         const left = sine(BLOCK, 220, 0.3);
         const right = sine(BLOCK, 330, 0.3);
@@ -298,22 +300,18 @@ describe('RealtimeVoiceChanger voice transformer', () => {
           frames[i * 2] = left[i];
           frames[i * 2 + 1] = right[i];
         }
-        let interleavedOut: Float32Array<ArrayBufferLike> = new Float32Array(0);
+        const interleavedOut = new Float32Array(BLOCK * 2);
         let planarLeft = new Float32Array(0);
         let planarRight = new Float32Array(0);
-        const planarCarrier = planar.getCarrierBuffer(BLOCK);
-        const planes = [
-          planar.getPlanarChannelBuffer(0, BLOCK),
-          planar.getPlanarChannelBuffer(1, BLOCK),
-        ];
+        const planarBuffer = planar.createRealtimePlanarBuffer(BLOCK, 2);
         for (let block = 0; block < 8; block++) {
-          interleavedOut = interleaved.processInterleavedWithCarrier(frames, carrier, 2);
-          planes[0].set(left);
-          planes[1].set(right);
-          planarCarrier.set(carrier);
-          planar.processPreparedPlanarWithCarrier(BLOCK);
-          planarLeft = planes[0].slice();
-          planarRight = planes[1].slice();
+          interleaved.processInterleavedWithCarrierInto(frames, carrier, 2, interleavedOut);
+          planarBuffer.channels[0]?.set(left);
+          planarBuffer.channels[1]?.set(right);
+          planarBuffer.carrier.set(carrier);
+          planarBuffer.processWithCarrier();
+          planarLeft = (planarBuffer.channels[0] as Float32Array).slice();
+          planarRight = (planarBuffer.channels[1] as Float32Array).slice();
         }
         for (let i = 0; i < BLOCK; i++) {
           expect(interleavedOut[i * 2]).toBe(planarLeft[i]);

@@ -16,14 +16,12 @@ export {
   autoTune,
   pitchCorrectTimevarying,
   pitchCorrectToMidi,
-  pitchCorrectToMidiTimevarying,
   pitchShift,
   timeStretch,
 } from './effects_timepitch.js';
 export type {
   FormantMode,
   VoiceChangeOptions,
-  VoiceChangeRealtimeOptions,
   VoiceChangeRealtimeRequest,
   VoiceChangeRequest,
 } from './effects_voice_change.js';

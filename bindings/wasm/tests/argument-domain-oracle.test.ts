@@ -124,11 +124,15 @@ describe('spectralEdit op fields', () => {
   const whole = { startSample: 0, endSample: samples.length };
 
   it('refuses an overflowing gain and a band edge the reader lets through', () => {
-    expectRefusalOf(() => spectralEdit(samples, SR, [{ ...whole, gainDb: 1000, mode: 'gain' }]));
+    expectRefusalOf(() =>
+      spectralEdit(samples, SR, { ops: [{ ...whole, gainDb: 1000, mode: 'gain' }] }),
+    );
   });
 
   it('returns finite audio for a band edge far past the Nyquist', () => {
-    const out = spectralEdit(samples, SR, [{ ...whole, lowHz: 1e30, gainDb: 12, mode: 'gain' }]);
+    const out = spectralEdit(samples, SR, {
+      ops: [{ ...whole, lowHz: 1e30, gainDb: 12, mode: 'gain' }],
+    });
     expect(out.every(Number.isFinite)).toBe(true);
   });
 });

@@ -182,7 +182,7 @@ describe('mixer worklet true-peak metering', () => {
       expect(value).toBe(FLOOR_DB);
     }
 
-    const engine = new RealtimeEngine(SR, BLOCK);
+    const engine = new RealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
     try {
       engine.play();
       for (let block = 0; block < 4; block++) {
@@ -221,7 +221,7 @@ describe('mixer worklet true-peak metering', () => {
       throw new Error('expected the worklet to publish a meter');
     }
 
-    const engine = new RealtimeEngine(SR, BLOCK);
+    const engine = new RealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
     try {
       engine.play();
       for (let block = 0; block < blocks; block++) {

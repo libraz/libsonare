@@ -909,7 +909,12 @@ describe('Sonare WASM RealtimeEngine MIDI / parameter ops', () => {
   });
 
   it('pushMidiCc / pushMidiPanic queue without throwing', () => {
-    const engine = new RealtimeEngine(48000, 128, 1024, 1024);
+    const engine = new RealtimeEngine({
+      sampleRate: 48000,
+      maxBlockSize: 128,
+      commandCapacity: 1024,
+      telemetryCapacity: 1024,
+    });
     try {
       expect(() => engine.pushMidiCc(0, 0, 0, 7, 100)).not.toThrow();
       expect(() => engine.pushMidiPanic()).not.toThrow();
@@ -919,7 +924,12 @@ describe('Sonare WASM RealtimeEngine MIDI / parameter ops', () => {
   });
 
   it('pushMidiCc rejects out-of-range values', () => {
-    const engine = new RealtimeEngine(48000, 128, 1024, 1024);
+    const engine = new RealtimeEngine({
+      sampleRate: 48000,
+      maxBlockSize: 128,
+      commandCapacity: 1024,
+      telemetryCapacity: 1024,
+    });
     try {
       expect(() => engine.pushMidiCc(0, 0, 0, 7, 200)).toThrow();
       expect(() => engine.pushMidiCc(0, 99, 0, 7, 10)).toThrow();
@@ -929,7 +939,12 @@ describe('Sonare WASM RealtimeEngine MIDI / parameter ops', () => {
   });
 
   it('clearParameters empties the registry', () => {
-    const engine = new RealtimeEngine(48000, 128, 1024, 1024);
+    const engine = new RealtimeEngine({
+      sampleRate: 48000,
+      maxBlockSize: 128,
+      commandCapacity: 1024,
+      telemetryCapacity: 1024,
+    });
     try {
       engine.addParameter({
         id: 1,
@@ -939,11 +954,11 @@ describe('Sonare WASM RealtimeEngine MIDI / parameter ops', () => {
         maxValue: 12,
         defaultValue: 0,
         rtSafe: true,
-        defaultCurve: 1,
+        defaultCurve: 'exponential',
       });
-      expect(engine.parameterCount()).toBe(1);
+      expect(engine.parameters().length).toBe(1);
       engine.clearParameters();
-      expect(engine.parameterCount()).toBe(0);
+      expect(engine.parameters().length).toBe(0);
       // The id is free to re-register after a clear.
       expect(() =>
         engine.addParameter({
@@ -954,7 +969,7 @@ describe('Sonare WASM RealtimeEngine MIDI / parameter ops', () => {
           maxValue: 12,
           defaultValue: 0,
           rtSafe: true,
-          defaultCurve: 1,
+          defaultCurve: 'exponential',
         }),
       ).not.toThrow();
     } finally {

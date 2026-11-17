@@ -1,3 +1,5 @@
+import type { FormantMode } from './effects_voice_change.js';
+
 /**
  * Realtime equalizer snapshot.
  *
@@ -114,12 +116,15 @@ export interface StreamingEqualizerConfig {
 
 /** Configuration for {@link StreamingRetune}. */
 export interface StreamingRetuneConfig {
-  /** Pitch shift in semitones, clamped by the native processor to +/-24. */
-  semitones?: number;
-  /** Wet/dry mix, clamped by the native processor to 0..1. */
+  /** Pitch shift in semitones, clamped by the native processor to +/-24. Default 0. */
+  pitchSemitones?: number;
+  /** Wet/dry mix, clamped by the native processor to 0..1. Default 1. */
   mix?: number;
-  /** Grain size in samples. Use 0/omit to derive it from the sample rate. */
-  grainSize?: number;
+  /**
+   * Grain size in samples. Omit to derive it from the sample rate; an explicit 0 throws
+   * `RangeError`.
+   */
+  grainSizeSamples?: number;
 }
 
 /** Options for {@link StreamingEqualizer.match}. */
@@ -136,18 +141,18 @@ export interface EqMatchOptions {
 }
 
 export type VoicePresetId =
-  | 'neutral-monitor'
-  | 'bright-idol'
-  | 'soft-whisper'
-  | 'deep-narrator'
-  | 'robot-mascot'
-  | 'dark-villain'
-  | 'hard-tune'
-  | 'robot-monotone'
-  | 'choir-harmony'
-  | 'vocoder-strings'
+  | 'neutralMonitor'
+  | 'brightIdol'
+  | 'softWhisper'
+  | 'deepNarrator'
+  | 'robotMascot'
+  | 'darkVillain'
+  | 'hardTune'
+  | 'robotMonotone'
+  | 'choirHarmony'
+  | 'vocoderStrings'
   | 'megaphone'
-  | 'radio-voice';
+  | 'radioVoice';
 
 export type VoicePresetCategory =
   | 'monitor'
@@ -180,47 +185,53 @@ export type RealtimeVoiceChangerPreset =
       dsp?: never;
     });
 
-export type RealtimeVoiceChangerConfigInput = VoicePresetId | RealtimeVoiceChangerPreset;
+/** A built-in preset id, a preset document, or the flat {@link RealtimeVoiceChangerConfig}. */
+export type RealtimeVoiceChangerConfigInput =
+  | VoicePresetId
+  | RealtimeVoiceChangerPreset
+  | RealtimeVoiceChangerConfig;
 
 /** Pitch engine of the voice stage. Fixed when the changer is created. */
-export type VoicePitchEngine = 'grain' | 'psola';
+export type VoiceEngine = 'grain' | 'psola';
 
 /** How the target pitch is chosen. */
-export type VoicePitchCorrectionMode = 'off' | 'auto' | 'robot';
+export type PitchCorrectionMode = 'off' | 'auto' | 'robot';
 
 /** Scale used by auto pitch and harmony. */
-export type VoiceScaleKind = 'major' | 'naturalMinor' | 'chromatic';
+export type ScaleKind = 'major' | 'naturalMinor' | 'chromatic';
 
 /** Where the vocoder carrier comes from. */
-export type VoiceVocoderCarrierSource = 'internal' | 'external';
+export type VocoderCarrierSource = 'internal' | 'external';
 
 /** Waveform of the internal vocoder carrier. */
-export type VoiceVocoderCarrierWave = 'saw' | 'pulse' | 'ensemble';
+export type VocoderCarrierWave = 'saw' | 'pulse' | 'ensemble';
 
 /** Colouration applied after the voice stage. */
-export type VoiceCharacterType = 'none' | 'megaphone' | 'radio' | 'bbd_chorus' | 'strobo';
+export type CharacterType = 'none' | 'megaphone' | 'radio' | 'bbdChorus' | 'strobo';
 
 /** Space effect selected by the reverb stage. */
-export type VoiceReverbVariation = 'reverb' | 'echo' | 'tempo_delay' | 'dub_echo';
+export type ReverbVariation = 'reverb' | 'echo' | 'tempoDelay' | 'dubEcho';
 
 /** Note value of the tempo-synced delay. */
-export type VoiceNoteDivision = 'quarter' | 'eighth' | 'dotted_eighth' | 'sixteenth';
+export type NoteDivision = 'quarter' | 'eighth' | 'dottedEighth' | 'sixteenth';
 
 /** What the voices do once every held MIDI note has been released. */
-export type VoiceMidiRelease = 'hold' | 'input';
+export type MidiRelease = 'hold' | 'input';
 
 /**
- * Flat (POD) realtime voice-changer configuration. Keys are camelCase to match
+ * Flat realtime voice-changer configuration. Keys are camelCase to match
  * the Node addon getter, so a preset config reads identically across both JS
  * surfaces (the underlying C ABI / Python POD uses the snake_case equivalents).
  */
-export interface RealtimeVoiceChangerPodConfig {
+export interface RealtimeVoiceChangerConfig {
   inputGainDb: number;
   outputGainDb: number;
   wetMix: number;
-  retuneSemitones: number;
+  /** Retune pitch shift in semitones. */
+  retunePitchSemitones: number;
   retuneMix: number;
-  retuneGrainSize: number;
+  /** Retune grain length in samples. */
+  retuneGrainSizeSamples: number;
   formantFactor: number;
   /** Strength of the formant displacement in [0, 1]. Ignored when `formantMode` is `'absolute'`. */
   formantAmount: number;
@@ -231,12 +242,12 @@ export interface RealtimeVoiceChangerPodConfig {
    * How `formantFactor` acts. `'relative'` leaves it to the colour stage
    * after the retune. `'absolute'` warps the formants to `formantFactor` times the input's ahead
    * of the retune, adds one analysis frame of latency and ignores `formantAmount`; it needs
-   * `formantFactor / 2^(retuneSemitones / 12)` within [0.55, 1.65], else the call is refused
+   * `formantFactor / 2^(retunePitchSemitones / 12)` within [0.55, 1.65], else the call is refused
    * with an error naming the reachable `formantFactor` range. Fixed when the changer is prepared:
    * a config carrying a different mode is refused. Required, like every POD field.
    */
-  formantMode: 'relative' | 'absolute';
-  eqHighpassHz: number;
+  formantMode: FormantMode;
+  eqHighPassHz: number;
   eqBodyDb: number;
   eqPresenceDb: number;
   eqAirDb: number;
@@ -272,25 +283,23 @@ export interface RealtimeVoiceChangerPodConfig {
    * Pitch engine. `'psola'` tracks f0; `'grain'` is the f0-less retune and refuses pitch
    * correction, harmony and the vocoder. Fixed when the changer is created.
    */
-  voiceEngineEngine: VoicePitchEngine;
+  voiceEngine: VoiceEngine;
   /** Lowest tracked f0 in Hz, [50, 200]; sets the psola latency. Fixed at creation. */
   voiceEngineF0MinHz: number;
-  pitchCorrectionMode: VoicePitchCorrectionMode;
+  pitchCorrectionMode: PitchCorrectionMode;
   /** Correction strength in [0, 1]. */
   pitchCorrectionAmount: number;
   /** Glide time to the target in ms, [0, 400]. */
   pitchCorrectionSpeedMs: number;
   /** Scale root, 0 = C .. 11 = B; validated but unused for a chromatic scale. */
   pitchCorrectionKeyRoot: number;
-  pitchCorrectionScale: VoiceScaleKind;
+  pitchCorrectionScale: ScaleKind;
   /** Octave shift of the robot target, [-1, 1]. */
   pitchCorrectionRobotOctave: number;
   /** Harmony voices beside the lead, [0, 3]. */
   harmonyVoices: number;
-  /** Scale degrees of harmony voice 1 from the lead, [-7, 7] (0 = unison, +2 = a third up). */
-  harmonyStep1: number;
-  harmonyStep2: number;
-  harmonyStep3: number;
+  /** Scale degrees of harmony voices 1 to 3 from the lead, each in [-7, 7] (0 = unison, +2 = a third up). */
+  harmonySteps: readonly [number, number, number];
   harmonyLevel: number;
   harmonyLeadLevel: number;
   /** Detune of the harmony voices in cents, [0, 30]. */
@@ -307,21 +316,21 @@ export interface RealtimeVoiceChangerPodConfig {
    * `'external'` reads the carrier passed to the `*WithCarrier` process methods (the worklet's
    * second input); a carrier-less process call is then refused with an `InvalidState` error.
    */
-  vocoderCarrierSource: VoiceVocoderCarrierSource;
-  vocoderCarrierWave: VoiceVocoderCarrierWave;
+  vocoderCarrierSource: VocoderCarrierSource;
+  vocoderCarrierWave: VocoderCarrierWave;
   vocoderEnsembleDetuneCents: number;
   vocoderLevel: number;
-  characterType: VoiceCharacterType;
+  characterType: CharacterType;
   characterAmount: number;
   /** Tone tilt in [-1, 1]. */
   characterTone: number;
-  reverbVariationVariation: VoiceReverbVariation;
+  reverbVariation: ReverbVariation;
   /** Echo delay in ms, [1, 3000]. */
   reverbVariationDelayMs: number;
   /** Echo feedback in [0, 0.95]. */
   reverbVariationFeedback: number;
   /** Tempo of the tempo-synced delay, [30, 300]. */
   reverbVariationTempoBpm: number;
-  reverbVariationDivision: VoiceNoteDivision;
-  midiRelease: VoiceMidiRelease;
+  reverbVariationDivision: NoteDivision;
+  midiRelease: MidiRelease;
 }

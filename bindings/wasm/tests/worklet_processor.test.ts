@@ -38,7 +38,7 @@ describe('SonareWorkletProcessor', () => {
     const blockSize = 128;
     const sceneJson = mixingScenePresetJson('vocalReverbSend');
 
-    const offline = Mixer.fromSceneJson(sceneJson, sampleRate, blockSize);
+    const offline = Mixer.fromJson(sceneJson, { sampleRate: sampleRate, blockSize: blockSize });
     const processor = new SonareWorkletProcessor({ sceneJson, sampleRate, blockSize });
     try {
       const vocalL = new Float32Array(blockSize);
@@ -102,13 +102,16 @@ describe('SonareWorkletProcessor', () => {
       });
       try {
         const mixer = (processor as unknown as { mixer: Mixer }).mixer;
-        expect(mixer.stripCount()).toBe(strips);
+        expect(mixer.stripCount).toBe(strips);
         const realStripCount = mixer.stripCount;
         let checks = 0;
-        mixer.stripCount = function (this: Mixer) {
-          checks++;
-          return realStripCount.call(this);
-        };
+        Object.defineProperty(mixer, 'stripCount', {
+          configurable: true,
+          get: () => {
+            checks++;
+            return realStripCount;
+          },
+        });
         const inputs = Array.from({ length: strips }, () => [
           new Float32Array(blockSize),
           new Float32Array(blockSize),

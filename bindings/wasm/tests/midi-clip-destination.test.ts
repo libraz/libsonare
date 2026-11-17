@@ -41,10 +41,10 @@ describe('RealtimeEngine MIDI clip destination routing', () => {
   };
 
   it('forwards an explicit destinationId of 0 rather than rewriting it to the track id', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     // Only destination 0 carries an instrument, and the track id differs from
     // it, so a rewrite to trackId would leave the note unheard.
-    engine.setBuiltinInstrument({ gain: 0.5 }, 0);
+    engine.setBuiltinInstrument(0, { gain: 0.5 });
     engine.setMidiClips([
       { id: 1, trackId: 6, destinationId: 0, lengthSamples: 8192, events: heldNote },
     ]);
@@ -53,11 +53,11 @@ describe('RealtimeEngine MIDI clip destination routing', () => {
   });
 
   it('does not sound the track-id instrument when destination 0 is explicit', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     // The mirror image: the instrument sits at the track id and destination 0
     // is empty, so the same clip must render silence. A rewrite of 0 to trackId
     // is audible here, which is what the previous case alone cannot catch.
-    engine.setBuiltinInstrument({ gain: 0.5 }, 6);
+    engine.setBuiltinInstrument(6, { gain: 0.5 });
     engine.setMidiClips([
       { id: 1, trackId: 6, destinationId: 0, lengthSamples: 8192, events: heldNote },
     ]);
@@ -66,8 +66,8 @@ describe('RealtimeEngine MIDI clip destination routing', () => {
   });
 
   it('falls back to the track id when destinationId is omitted', () => {
-    const engine = new RealtimeEngine(48000, 128);
-    engine.setBuiltinInstrument({ gain: 0.5 }, 6);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    engine.setBuiltinInstrument(6, { gain: 0.5 });
     engine.setMidiClips([{ id: 1, trackId: 6, lengthSamples: 8192, events: heldNote }]);
     expect(renderOneBlock(engine)).toBeGreaterThan(0);
     engine.destroy();

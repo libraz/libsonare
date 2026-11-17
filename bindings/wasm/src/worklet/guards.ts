@@ -544,6 +544,10 @@ export function requireInteger(value: number | undefined, fallback: number, name
 }
 
 /** Resolves the channel count every worklet entry point accepts on its options. */
-export function requireChannelCount(channelCount: number | undefined, fallback: number): number {
-  return requireIntegerOption(channelCount, fallback, 'channelCount', 1);
+export function requireChannelCount(
+  channelCount: number | undefined,
+  fallback: number,
+  name = 'channelCount',
+): number {
+  return requireIntegerOption(channelCount, fallback, name, 1);
 }

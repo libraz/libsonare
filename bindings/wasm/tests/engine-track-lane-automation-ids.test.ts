@@ -65,7 +65,7 @@ describe('track lane automation ids (WASM)', () => {
   setupWorklet();
 
   it('keeps a fader id on its track across a reorder and retires it with the track', () => {
-    const engine = new RealtimeEngine(48000, kBlock);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: kBlock });
     try {
       // Only track 20 sounds, so the output reads track 20's fader alone.
       engine.setClips([
@@ -77,13 +77,13 @@ describe('track lane automation ids (WASM)', () => {
         },
       ]);
       engine.setTrackLanes([{ trackId: 10 }, { trackId: 20 }]);
-      const fader10 = engine.resolveTrackLaneAutomationId(10, 'faderDb');
+      const fader10 = engine.resolveStripAutomationId(10, 'faderDb');
       expect(fader10).toBeGreaterThan(0);
-      expect(engine.resolveTrackLaneAutomationId(10, 'pan')).not.toBe(fader10);
-      expect(() => engine.resolveTrackLaneAutomationId(30, 'faderDb')).toThrow(RangeError);
+      expect(engine.resolveStripAutomationId(10, 'pan')).not.toBe(fader10);
+      expect(() => engine.resolveStripAutomationId(30, 'faderDb')).toThrow(RangeError);
 
       engine.setTrackLanes([{ trackId: 20 }, { trackId: 10 }]);
-      expect(engine.resolveTrackLaneAutomationId(10, 'faderDb')).toBe(fader10);
+      expect(engine.resolveStripAutomationId(10, 'faderDb')).toBe(fader10);
       engine.setParameter(fader10, -60);
       engine.play();
       expect(settled(engine)).toBeCloseTo(1, 3);
@@ -99,11 +99,11 @@ describe('track lane automation ids (WASM)', () => {
 
   it('numbers fader and instrument ids on the mirror as the worklet engine does', async () => {
     const posted: unknown[] = [];
-    const offline = new RealtimeEngine(48000, kBlock);
+    const offline = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: kBlock });
     const engine = await SonareEngine.create(fakeContext(), {
       mode: 'postMessage',
       offlineEngine: offline as unknown as OfflineEngineOption,
-      offlineChannelCount: 1,
+      offlineNumChannels: 1,
       nodeFactory: () =>
         readyWorkletNode({
           postMessage: (message: unknown) => posted.push(message),
@@ -132,11 +132,11 @@ describe('track lane automation ids (WASM)', () => {
       expect(cutoff6).toBeGreaterThan(0);
       expect(alive(liveEngine, cutoff6)).toBe(true);
 
-      const fader8 = engine.automationParamId(8, 'faderDb');
-      const fader7 = engine.automationParamId(7, 'faderDb');
+      const fader8 = engine.resolveStripAutomationId(8, 'faderDb');
+      const fader7 = engine.resolveStripAutomationId(7, 'faderDb');
       flush();
-      expect(liveEngine.resolveTrackLaneAutomationId(8, 'faderDb')).toBe(fader8);
-      expect(liveEngine.resolveTrackLaneAutomationId(7, 'faderDb')).toBe(fader7);
+      expect(liveEngine.resolveStripAutomationId(8, 'faderDb')).toBe(fader8);
+      expect(liveEngine.resolveStripAutomationId(7, 'faderDb')).toBe(fader7);
 
       // Only track 8 sounds; the id resolved on the mirror drives it on the worklet engine.
       const clips = [
@@ -152,10 +152,10 @@ describe('track lane automation ids (WASM)', () => {
       live.receiveCommand({
         type: SonareEngineCommandType.SetParam,
         targetId: fader8,
-        sampleTime: -1,
+        renderFrame: -1,
         argFloat: -12,
       });
-      live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
+      live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
       let actual = 0;
       for (let block = 0; block < 30; block += 1) {
         const output = [new Float32Array(kBlock)];

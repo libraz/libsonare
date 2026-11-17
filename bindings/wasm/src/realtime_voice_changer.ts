@@ -1,40 +1,81 @@
 import { assertHandleLive } from './internal/handle_guard.js';
-import { podConfigToNative } from './internal/pod_config.js';
+import {
+  deinterleavePlanes,
+  interleavePlanes,
+  nativeVoiceConfig,
+  podConfigFromNative,
+} from './internal/pod_config.js';
+import {
+  VOICE_PRESET_IDS,
+  voicePresetIdFromNative,
+  voicePresetIdToNative,
+  voicePresetOrdinal,
+} from './internal/voice_preset_ids.js';
 import { getSonareModule } from './module_state.js';
 import type {
+  RealtimeVoiceChangerConfig,
   RealtimeVoiceChangerConfigInput,
-  RealtimeVoiceChangerPodConfig,
   VoicePresetId,
 } from './public_types.js';
-import { assertString } from './validation.js';
+import { assertPositiveInteger, assertSampleRate, assertString } from './validation.js';
+
+/** Construction options for {@link RealtimeVoiceChanger}. */
+export interface RealtimeVoiceChangerOptions {
+  /** Sample rate in Hz, an integer in [8000, 384000]. Required. */
+  sampleRate: number;
+  /** Largest block the process calls accept, a positive integer. Default 128. */
+  maxBlockSize?: number;
+  /** Channel count, 1 or 2. Default 1. */
+  numChannels?: 1 | 2;
+  /** Preset id, preset document or flat config. Default `'neutralMonitor'`. */
+  config?: RealtimeVoiceChangerConfigInput;
+}
+
+/** Result of {@link realtimeVoiceChangerValidatePresetJson}. */
+export interface RealtimeVoiceChangerValidatePresetJsonResult {
+  ok: boolean;
+  /** The document with defaults filled in; present when `ok`. */
+  normalizedJson?: string;
+  /** Why the document was refused; present when not `ok`. */
+  error?: string;
+}
 
 /**
- * Zero-copy realtime buffer pair for {@link RealtimeVoiceChanger} mono
- * processing. The `input` / `output` `Float32Array`s are typed-memory views
- * onto the WASM heap — write samples into `input`, call `process()`, then
- * read from `output`. The views are owned by the {@link RealtimeVoiceChanger}
- * and remain valid until `destroy()` is called on it.
+ * Zero-copy realtime buffer set for {@link RealtimeVoiceChanger} mono
+ * processing. `input`, `output` and `carrier` are typed-memory views onto the
+ * WASM heap: write samples into `input` (and `carrier` for an external vocoder
+ * carrier), call `process()` or `processWithCarrier()`, then read `output`.
+ * The views are owned by the {@link RealtimeVoiceChanger} and remain valid
+ * until `destroy()` is called on it.
  */
 export interface RealtimeVoiceChangerMonoBuffer {
   input: Float32Array;
   output: Float32Array;
+  /** Mono external vocoder carrier, one sample per frame. */
+  carrier: Float32Array;
   process: () => void;
+  /** Like `process()`, reading the external carrier from `carrier`. */
+  processWithCarrier: () => void;
 }
 
 /**
- * Zero-copy realtime buffer pair for {@link RealtimeVoiceChanger} interleaved
+ * Zero-copy realtime buffer set for {@link RealtimeVoiceChanger} interleaved
  * multi-channel processing. Layout is L0,R0,L1,R1,... for stereo. The views
  * are owned by the {@link RealtimeVoiceChanger}.
  */
 export interface RealtimeVoiceChangerInterleavedBuffer {
   input: Float32Array;
   output: Float32Array;
-  channels: number;
+  /** Mono external vocoder carrier, one sample per frame, shared by every channel. */
+  carrier: Float32Array;
+  readonly numChannels: 1 | 2;
   process: () => void;
+  /** Like `process()`, reading the external carrier from `carrier`. */
+  processWithCarrier: () => void;
 }
 
 /**
- * Zero-copy realtime buffer for {@link RealtimeVoiceChanger} planar stereo
+ * Zero-copy realtime buffer for {@link RealtimeVoiceChanger} planar
  * processing. Each entry in `channels` is a heap-backed `Float32Array` for one
  * channel (matching AudioWorklet's native layout). Process happens in place:
  * write samples into each channel view, call `process()`, then read back from
@@ -42,43 +83,45 @@ export interface RealtimeVoiceChangerInterleavedBuffer {
  */
 export interface RealtimeVoiceChangerPlanarBuffer {
   channels: Float32Array[];
+  /** Mono external vocoder carrier, one sample per frame, shared by every channel. */
+  carrier: Float32Array;
   process: () => void;
+  /** Like `process()`, reading the external carrier from `carrier`. */
+  processWithCarrier: () => void;
+}
+
+function assertChannelCount(fnName: string, numChannels: unknown): asserts numChannels is 1 | 2 {
+  if (typeof numChannels !== 'number') {
+    throw new TypeError(`${fnName}: numChannels must be 1 or 2`);
+  }
+  if (numChannels !== 1 && numChannels !== 2) {
+    throw new RangeError(`${fnName}: numChannels must be 1 or 2`);
+  }
+}
+
+/** Checks a planar channel list (1 or 2 equal-length planes) and the optional carrier. */
+function assertPlanes(fnName: string, channels: unknown, carrier?: unknown): Float32Array[] {
+  if (!Array.isArray(channels)) {
+    throw new TypeError(`${fnName}: channels must be an array of Float32Array`);
+  }
+  assertChannelCount(fnName, channels.length);
+  channels.forEach((plane, i) => {
+    if (!(plane instanceof Float32Array)) {
+      throw new TypeError(`${fnName}: channels[${i}] must be a Float32Array`);
+    }
+    if (plane.length !== channels[0].length) {
+      throw new RangeError(`${fnName}: channels must have equal lengths`);
+    }
+  });
+  if (carrier !== undefined && !(carrier instanceof Float32Array)) {
+    throw new TypeError(`${fnName}: carrier must be a Float32Array`);
+  }
+  return channels as Float32Array[];
 }
 
 // ============================================================================
 // RealtimeVoiceChanger Class
 // ============================================================================
-
-/**
- * The flat POD shape (recognised by its `retuneSemitones` key) must carry `formantMode`,
- * exactly as {@link RealtimeVoiceChanger.setPodConfig} requires; a preset id or a nested
- * preset document keeps its own defaults.
- */
-function requirePodFormantMode(config: unknown): void {
-  if (config === null || typeof config !== 'object' || !('retuneSemitones' in config)) {
-    return;
-  }
-  const pod = config as { formantMode?: unknown };
-  if (!('formantMode' in pod)) {
-    throw new TypeError('voice changer POD config.formantMode is required');
-  }
-  if (typeof pod.formantMode !== 'string') {
-    throw new TypeError('voice changer POD config.formantMode must be a string');
-  }
-}
-
-/** Maps the scale token of a flat POD config; preset ids and nested documents pass through. */
-function configToNative(
-  config: RealtimeVoiceChangerConfigInput | RealtimeVoiceChangerPodConfig,
-): Record<string, unknown> | string {
-  if (config !== null && typeof config === 'object' && 'retuneSemitones' in config) {
-    return podConfigToNative(config as RealtimeVoiceChangerPodConfig) as unknown as Record<
-      string,
-      unknown
-    >;
-  }
-  return config as Record<string, unknown> | string;
-}
 
 export class RealtimeVoiceChanger {
   private changerHandle: import('./sonare.js').WasmRealtimeVoiceChanger;
@@ -90,70 +133,65 @@ export class RealtimeVoiceChanger {
   }
 
   /**
-   * Creates a voice changer. Supplying `sampleRate` prepares it immediately,
-   * matching the Node and Python constructors; omitting it preserves the
-   * explicit {@link prepare} lifecycle for callers that configure later.
+   * Creates a voice changer prepared for `options.sampleRate`.
+   *
+   * @throws TypeError for a wrong-typed or unknown option, or a missing `sampleRate`;
+   *   RangeError for an out-of-domain `sampleRate`, `maxBlockSize` (explicit 0 included),
+   *   `numChannels` or an unknown preset id or token.
    */
-  constructor(
-    config: RealtimeVoiceChangerConfigInput | RealtimeVoiceChangerPodConfig = 'neutral-monitor',
-    sampleRate?: number,
-    maxBlockSize = 128,
-    channels = 1,
-  ) {
-    requirePodFormantMode(config);
-    const module = getSonareModule();
-    this.changerHandle = module.createRealtimeVoiceChanger(configToNative(config));
-    if (sampleRate !== undefined) {
-      // `prepare` rejects a non-positive sample rate, a negative block size and
-      // a channel count outside [1, 2]. The handle is already allocated by
-      // then, and a throwing constructor leaves `this` unreachable, so release
-      // it here — embind has no GC finalizer, and a device-change handler that
-      // retries on failure would otherwise leak one whole DSP chain per attempt
-      // (retune ring, ISP limiter, reverb, scratch).
-      let prepared = false;
-      try {
-        this.changer.prepare(sampleRate, maxBlockSize, channels);
-        prepared = true;
-      } finally {
-        if (!prepared) {
-          this.changerHandle.delete();
-        }
+  constructor(options: RealtimeVoiceChangerOptions) {
+    const fnName = 'RealtimeVoiceChanger';
+    if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+      throw new TypeError(`${fnName}: options must be an object with a sampleRate`);
+    }
+    for (const key of Object.keys(options)) {
+      if (!CONSTRUCTOR_KEYS.includes(key)) {
+        throw new TypeError(`${fnName}: unknown option '${key}'`);
       }
     }
-  }
-
-  prepare(sampleRate: number, maxBlockSize = 128, channels = 1): void {
-    this.changer.prepare(sampleRate, maxBlockSize, channels);
+    assertSampleRate(fnName, options.sampleRate);
+    const maxBlockSize = options.maxBlockSize ?? 128;
+    if (typeof maxBlockSize !== 'number') {
+      throw new TypeError(`${fnName}: maxBlockSize must be a number`);
+    }
+    assertPositiveInteger(fnName, maxBlockSize, 'maxBlockSize');
+    const numChannels = options.numChannels ?? 1;
+    assertChannelCount(fnName, numChannels);
+    const nativeConfig = nativeVoiceConfig(fnName, options.config ?? 'neutralMonitor');
+    this.changerHandle = getSonareModule().createRealtimeVoiceChanger(nativeConfig);
+    // The handle is already allocated; a throwing constructor leaves `this` unreachable and
+    // embind has no GC finalizer, so release it here.
+    let prepared = false;
+    try {
+      this.changerHandle.prepare(options.sampleRate, maxBlockSize, numChannels);
+      prepared = true;
+    } finally {
+      if (!prepared) {
+        this.changerHandle.delete();
+      }
+    }
   }
 
   reset(): void {
     this.changer.reset();
   }
 
-  setConfig(config: RealtimeVoiceChangerConfigInput | RealtimeVoiceChangerPodConfig): void {
-    // The shared native parser recognizes the flat POD produced by
-    // realtimeVoiceChangerPresetConfig, so bindings never duplicate its field mapping.
-    requirePodFormantMode(config);
-    this.changer.setConfig(configToNative(config));
-  }
-
   /**
-   * Apply a flat, pre-normalized config without JSON serialization. Intended
-   * for AudioWorklet control messages whose sender prepared the POD on the
-   * main thread.
+   * Replaces the configuration.
    *
-   * A non-finite or out-of-range field throws, naming the field and its range,
-   * and the previous configuration stays in effect; nothing is clamped.
+   * @throws TypeError for a wrong-typed config; RangeError for an unknown preset id or token or
+   *   a field outside its range (nothing is clamped); the previous configuration stays in effect.
    */
-  setPodConfig(config: RealtimeVoiceChangerPodConfig): void {
-    this.changer.setPodConfig(podConfigToNative(config));
+  setConfig(config: RealtimeVoiceChangerConfigInput): void {
+    this.changer.setConfig(nativeVoiceConfig('RealtimeVoiceChanger.setConfig', config));
   }
 
   configJson(): string {
     return this.changer.configJson();
   }
 
-  latencySamples(): number {
+  /** Latency of the chain in samples. */
+  get latencySamples(): number {
     return this.changer.latencySamples();
   }
 
@@ -163,35 +201,24 @@ export class RealtimeVoiceChanger {
    *
    * Advisory telemetry, and the only thing that separates a degraded stream
    * from a clean one. Every stage of this chain leaves an in-domain finite
-   * value where a non-finite one was — the input scrub and the
-   * inter-sample-peak limiter substitute silence, the sample-domain limiter
-   * folds an infinity onto its ceiling — so the output stays finite, in range
+   * value where a non-finite one was, so the output stays finite, in range
    * and free of any error while carrying samples unrelated to the input. A
    * non-zero count is what says the samples in between were not computed from
    * what you supplied.
    *
    * Monotonic for the lifetime of the instance. The unit is one processed
-   * block, never a channel, so a stereo block that discards on both channels
-   * adds one and the number does not depend on a dimension you did not choose.
+   * block, never a channel.
    *
    * @example
    * ```ts
-   * changer.processInterleaved(block, 2);
-   * if (changer.nonFiniteDiscardCount() > 0) {
-   *   // the audio just produced is not a function of `block`
+   * changer.processPlanar([left, right]);
+   * if (changer.nonFiniteDiscardCount > 0) {
+   *   // the audio just produced is not a function of the input
    * }
    * ```
    */
-  nonFiniteDiscardCount(): number {
+  get nonFiniteDiscardCount(): number {
     return this.changer.nonFiniteDiscardCount();
-  }
-
-  /**
-   * Monotonically increases whenever {@link prepare} can replace the native
-   * scratch buffers. Cached WASM heap views must be reacquired after it changes.
-   */
-  bufferGeneration(): number {
-    return this.changer.bufferGeneration();
   }
 
   processMono(samples: Float32Array): Float32Array {
@@ -200,14 +227,6 @@ export class RealtimeVoiceChanger {
 
   processMonoInto(samples: Float32Array, output: Float32Array): void {
     this.changer.processMonoInto(samples, output);
-  }
-
-  processInterleaved(samples: Float32Array, channels: number): Float32Array {
-    return this.changer.processInterleaved(samples, channels);
-  }
-
-  processInterleavedInto(samples: Float32Array, channels: number, output: Float32Array): void {
-    this.changer.processInterleavedInto(samples, channels, output);
   }
 
   /**
@@ -228,22 +247,57 @@ export class RealtimeVoiceChanger {
     this.changer.processMonoWithCarrierInto(samples, carrier, output);
   }
 
-  /** Interleaved block with a mono carrier of one sample per frame, shared by every channel. */
-  processInterleavedWithCarrier(
-    samples: Float32Array,
-    carrier: Float32Array,
-    channels: number,
-  ): Float32Array {
-    return this.changer.processInterleavedWithCarrier(samples, carrier, channels);
+  /**
+   * Processes planar blocks (one `Float32Array` per channel, 1 or 2, equal lengths) and returns
+   * the processed planes without touching the inputs.
+   *
+   * @throws TypeError for a wrong-typed argument; RangeError for another channel count or
+   *   unequal lengths; SonareError `InvalidState` when more channels are given than the changer
+   *   was prepared for.
+   */
+  processPlanar(channels: Float32Array[]): Float32Array[] {
+    const planes = assertPlanes('RealtimeVoiceChanger.processPlanar', channels);
+    if (planes.length === 1) {
+      return [this.changer.processMono(planes[0] as Float32Array)];
+    }
+    return deinterleavePlanes(this.changer.processInterleaved(interleavePlanes(planes), 2), 2);
   }
 
+  /**
+   * {@link processPlanar} with one mono external vocoder `carrier` of one sample per frame,
+   * shared by every channel.
+   */
+  processPlanarWithCarrier(channels: Float32Array[], carrier: Float32Array): Float32Array[] {
+    const planes = assertPlanes('RealtimeVoiceChanger.processPlanarWithCarrier', channels, carrier);
+    if (planes.length === 1) {
+      return [this.changer.processMonoWithCarrier(planes[0] as Float32Array, carrier)];
+    }
+    return deinterleavePlanes(
+      this.changer.processInterleavedWithCarrier(interleavePlanes(planes), carrier, 2),
+      2,
+    );
+  }
+
+  /**
+   * Realtime hot path: processes an interleaved block (L0,R0,L1,R1,...) into `output`, which has
+   * the length of `input`.
+   *
+   * @throws RangeError unless `numChannels` is 1 or 2.
+   */
+  processInterleavedInto(input: Float32Array, numChannels: 1 | 2, output: Float32Array): void {
+    assertChannelCount('RealtimeVoiceChanger.processInterleavedInto', numChannels);
+    this.changer.processInterleavedInto(input, numChannels, output);
+  }
+
+  /** {@link processInterleavedInto} with a mono carrier of one sample per frame shared by every channel. */
   processInterleavedWithCarrierInto(
-    samples: Float32Array,
+    input: Float32Array,
     carrier: Float32Array,
-    channels: number,
+    numChannels: 1 | 2,
     output: Float32Array,
   ): void {
-    this.changer.processInterleavedWithCarrierInto(samples, carrier, channels, output);
+    assertChannelCount('RealtimeVoiceChanger.processInterleavedWithCarrierInto', numChannels);
+    this.changer.processInterleavedWithCarrierInto(input, carrier, numChannels, output);
   }
 
   /**
@@ -269,129 +323,54 @@ export class RealtimeVoiceChanger {
   }
 
   /**
-   * Mono carrier view for the prepared path: fill it, then call
-   * {@link processPreparedMonoWithCarrier}, {@link processPreparedInterleavedWithCarrier} or
-   * {@link processPreparedPlanarWithCarrier}. Re-acquire it after {@link bufferGeneration} changes.
-   */
-  getCarrierBuffer(numFrames: number): Float32Array {
-    return this.changer.getCarrierBuffer(numFrames);
-  }
-
-  /** {@link processPreparedMono} reading the external carrier from {@link getCarrierBuffer}. */
-  processPreparedMonoWithCarrier(numSamples: number): void {
-    this.changer.processPreparedMonoWithCarrier(numSamples);
-  }
-
-  /** {@link processPreparedInterleaved} reading the external carrier from {@link getCarrierBuffer}. */
-  processPreparedInterleavedWithCarrier(numFrames: number, numChannels: number): void {
-    this.changer.processPreparedInterleavedWithCarrier(numFrames, numChannels);
-  }
-
-  /** {@link processPreparedPlanar} reading the external carrier from {@link getCarrierBuffer}. */
-  processPreparedPlanarWithCarrier(numFrames: number): void {
-    this.changer.processPreparedPlanarWithCarrier(numFrames);
-  }
-
-  /**
-   * Acquire a typed-memory view onto the WASM heap for mono input.
-   *
-   * Write your input samples into the returned `Float32Array` directly (e.g.
-   * via `input.set(source)`); no copy crosses the JS↔C++ bridge until
-   * {@link processPreparedMono} is called. The view is owned by this
-   * RealtimeVoiceChanger and becomes invalid after {@link destroy}; it may
-   * also be invalidated if you later call this method with a larger
-   * `numSamples` value (the underlying buffer may be reallocated).
-   */
-  getMonoInputBuffer(numSamples: number): Float32Array {
-    return this.changer.getMonoInputBuffer(numSamples);
-  }
-
-  /** Mono output view counterpart to {@link getMonoInputBuffer}. */
-  getMonoOutputBuffer(numSamples: number): Float32Array {
-    return this.changer.getMonoOutputBuffer(numSamples);
-  }
-
-  /**
-   * Process the previously-acquired mono input buffer in place. The output
-   * appears in the buffer returned by {@link getMonoOutputBuffer}. No JS↔C++
-   * sample-level crossings happen on this call — it just hands control to
-   * the underlying DSP on already-on-heap data.
-   */
-  processPreparedMono(numSamples: number): void {
-    this.changer.processPreparedMono(numSamples);
-  }
-
-  /** Interleaved input view (layout L0,R0,L1,R1,...). */
-  getInterleavedInputBuffer(numFrames: number, numChannels: number): Float32Array {
-    return this.changer.getInterleavedInputBuffer(numFrames, numChannels);
-  }
-
-  /** Interleaved output view counterpart. */
-  getInterleavedOutputBuffer(numFrames: number, numChannels: number): Float32Array {
-    return this.changer.getInterleavedOutputBuffer(numFrames, numChannels);
-  }
-
-  /**
-   * Process the previously-acquired interleaved buffer in place. Output
-   * appears in the buffer returned by {@link getInterleavedOutputBuffer}.
-   */
-  processPreparedInterleaved(numFrames: number, numChannels: number): void {
-    this.changer.processPreparedInterleaved(numFrames, numChannels);
-  }
-
-  /**
-   * Planar-channel input/output view (one Float32Array per channel). Matches
-   * AudioWorklet's native layout; processing happens in place.
-   */
-  getPlanarChannelBuffer(channel: number, numFrames: number): Float32Array {
-    return this.changer.getPlanarChannelBuffer(channel, numFrames);
-  }
-
-  /**
-   * Process the previously-acquired planar channel buffers in place. Each
-   * channel must have been obtained from {@link getPlanarChannelBuffer}
-   * with the same `numFrames`. Output replaces input in the same buffers.
-   */
-  processPreparedPlanar(numFrames: number): void {
-    this.changer.processPreparedPlanar(numFrames);
-  }
-
-  /**
-   * Convenience factory for the mono zero-copy path: returns the input/output
-   * heap views plus a `process()` thunk wired to the same `numSamples`. The
-   * views are reused across calls and become invalid after {@link destroy}.
+   * Zero-copy mono path: returns heap views for input, output and the external carrier plus
+   * `process()` / `processWithCarrier()` thunks wired to `numSamples`. The views are reused
+   * across calls and become invalid after {@link destroy}.
    */
   createRealtimeMonoBuffer(numSamples: number): RealtimeVoiceChangerMonoBuffer {
-    let input = this.getMonoInputBuffer(numSamples);
-    let output = this.getMonoOutputBuffer(numSamples);
-    let generation = this.bufferGeneration();
-    // The cached heap views can detach if WASM linear memory grows (the embind
-    // module is built ALLOW_MEMORY_GROWTH). Re-acquire them if detached
-    // (byteLength === 0) before use, mirroring the worklet RT path. In the
-    // common no-growth case this is a cheap branch with no allocation.
-    const reacquireIfDetached = (): void => {
+    let input: Float32Array;
+    let output: Float32Array;
+    let carrier: Float32Array;
+    let generation = -1;
+    // The cached views detach if WASM memory grows or prepare replaces the scratch buffers.
+    const acquire = (): void => {
+      const changer = this.changer;
+      input = changer.getMonoInputBuffer(numSamples);
+      output = changer.getMonoOutputBuffer(numSamples);
+      carrier = changer.getCarrierBuffer(numSamples);
+      generation = changer.bufferGeneration();
+    };
+    const fresh = (): void => {
       if (
-        generation !== this.bufferGeneration() ||
+        generation !== this.changer.bufferGeneration() ||
         input.byteLength === 0 ||
-        output.byteLength === 0
+        output.byteLength === 0 ||
+        carrier.byteLength === 0
       ) {
-        input = this.getMonoInputBuffer(numSamples);
-        output = this.getMonoOutputBuffer(numSamples);
-        generation = this.bufferGeneration();
+        acquire();
       }
     };
+    acquire();
     return {
       get input(): Float32Array {
-        reacquireIfDetached();
+        fresh();
         return input;
       },
       get output(): Float32Array {
-        reacquireIfDetached();
+        fresh();
         return output;
       },
+      get carrier(): Float32Array {
+        fresh();
+        return carrier;
+      },
       process: () => {
-        reacquireIfDetached();
-        this.processPreparedMono(numSamples);
+        fresh();
+        this.changer.processPreparedMono(numSamples);
+      },
+      processWithCarrier: () => {
+        fresh();
+        this.changer.processPreparedMonoWithCarrier(numSamples);
       },
     };
   }
@@ -399,76 +378,103 @@ export class RealtimeVoiceChanger {
   /** Same as {@link createRealtimeMonoBuffer} but for interleaved I/O. */
   createRealtimeInterleavedBuffer(
     numFrames: number,
-    numChannels: number,
+    numChannels: 1 | 2,
   ): RealtimeVoiceChangerInterleavedBuffer {
-    let input = this.getInterleavedInputBuffer(numFrames, numChannels);
-    let output = this.getInterleavedOutputBuffer(numFrames, numChannels);
-    let generation = this.bufferGeneration();
-    // Re-acquire detached views after WASM memory growth (see
-    // createRealtimeMonoBuffer for rationale).
-    const reacquireIfDetached = (): void => {
+    assertChannelCount('RealtimeVoiceChanger.createRealtimeInterleavedBuffer', numChannels);
+    let input: Float32Array;
+    let output: Float32Array;
+    let carrier: Float32Array;
+    let generation = -1;
+    const acquire = (): void => {
+      const changer = this.changer;
+      input = changer.getInterleavedInputBuffer(numFrames, numChannels);
+      output = changer.getInterleavedOutputBuffer(numFrames, numChannels);
+      carrier = changer.getCarrierBuffer(numFrames);
+      generation = changer.bufferGeneration();
+    };
+    const fresh = (): void => {
       if (
-        generation !== this.bufferGeneration() ||
+        generation !== this.changer.bufferGeneration() ||
         input.byteLength === 0 ||
-        output.byteLength === 0
+        output.byteLength === 0 ||
+        carrier.byteLength === 0
       ) {
-        input = this.getInterleavedInputBuffer(numFrames, numChannels);
-        output = this.getInterleavedOutputBuffer(numFrames, numChannels);
-        generation = this.bufferGeneration();
+        acquire();
       }
     };
+    acquire();
     return {
       get input(): Float32Array {
-        reacquireIfDetached();
+        fresh();
         return input;
       },
       get output(): Float32Array {
-        reacquireIfDetached();
+        fresh();
         return output;
       },
-      channels: numChannels,
+      get carrier(): Float32Array {
+        fresh();
+        return carrier;
+      },
+      numChannels,
       process: () => {
-        reacquireIfDetached();
-        this.processPreparedInterleaved(numFrames, numChannels);
+        fresh();
+        this.changer.processPreparedInterleaved(numFrames, numChannels);
+      },
+      processWithCarrier: () => {
+        fresh();
+        this.changer.processPreparedInterleavedWithCarrier(numFrames, numChannels);
       },
     };
   }
 
   /**
-   * Convenience factory for the planar zero-copy path. Acquires one
-   * heap-backed Float32Array per channel and returns a `process()` thunk
-   * wired to the same `numFrames`. Buffers are reused across calls and
-   * become invalid after {@link destroy}.
+   * Same as {@link createRealtimeMonoBuffer} for planar I/O: one heap-backed `Float32Array` per
+   * channel, processed in place.
    */
   createRealtimePlanarBuffer(
     numFrames: number,
-    numChannels: number,
+    numChannels: 1 | 2,
   ): RealtimeVoiceChangerPlanarBuffer {
+    assertChannelCount('RealtimeVoiceChanger.createRealtimePlanarBuffer', numChannels);
     let channels: Float32Array[] = [];
-    let generation = this.bufferGeneration();
+    let carrier: Float32Array;
+    let generation = -1;
     const acquire = (): void => {
+      const changer = this.changer;
       channels = [];
       for (let ch = 0; ch < numChannels; ch++) {
-        channels.push(this.getPlanarChannelBuffer(ch, numFrames));
+        channels.push(changer.getPlanarChannelBuffer(ch, numFrames));
       }
-      generation = this.bufferGeneration();
+      carrier = changer.getCarrierBuffer(numFrames);
+      generation = changer.bufferGeneration();
     };
-    acquire();
-    // Re-acquire detached views after WASM memory growth (see
-    // createRealtimeMonoBuffer for rationale).
-    const reacquireIfDetached = (): void => {
-      if (generation !== this.bufferGeneration() || (channels[0]?.byteLength ?? 0) === 0) {
+    const fresh = (): void => {
+      if (
+        generation !== this.changer.bufferGeneration() ||
+        (channels[0]?.byteLength ?? 0) === 0 ||
+        carrier.byteLength === 0
+      ) {
         acquire();
       }
     };
+    acquire();
     return {
       get channels(): Float32Array[] {
-        reacquireIfDetached();
+        fresh();
         return channels;
       },
+      get carrier(): Float32Array {
+        fresh();
+        return carrier;
+      },
       process: () => {
-        reacquireIfDetached();
-        this.processPreparedPlanar(numFrames);
+        fresh();
+        this.changer.processPreparedPlanar(numFrames);
+      },
+      processWithCarrier: () => {
+        fresh();
+        this.changer.processPreparedPlanarWithCarrier(numFrames);
       },
     };
   }
@@ -488,21 +494,73 @@ export class RealtimeVoiceChanger {
   }
 }
 
+const CONSTRUCTOR_KEYS: readonly string[] = ['sampleRate', 'maxBlockSize', 'numChannels', 'config'];
+
+/** The built-in preset ids, in preset-ordinal order. */
 export function realtimeVoiceChangerPresetNames(): VoicePresetId[] {
   // Array.from re-roots embind's vector as a plain, structured-cloneable Array.
-  return Array.from(getSonareModule().realtimeVoiceChangerPresetNames()) as VoicePresetId[];
+  return Array.from(getSonareModule().realtimeVoiceChangerPresetNames(), (native) => {
+    const id = voicePresetIdFromNative(native as string);
+    if (id === undefined) {
+      throw new RangeError(`realtimeVoiceChangerPresetNames: unknown native preset '${native}'`);
+    }
+    return id;
+  });
 }
 
+/**
+ * The preset document of a built-in preset, as JSON.
+ *
+ * @throws TypeError unless `name` is a string; RangeError for an unknown id.
+ */
 export function realtimeVoiceChangerPresetJson(name: VoicePresetId): string {
-  assertString('realtimeVoiceChangerPresetJson', name, 'name');
-  return getSonareModule().realtimeVoiceChangerPresetJson(name);
+  return getSonareModule().realtimeVoiceChangerPresetJson(
+    voicePresetIdToNative('realtimeVoiceChangerPresetJson', name, 'name'),
+  );
 }
 
-export function validateRealtimeVoiceChangerPresetJson(json: string): {
-  ok: boolean;
-  normalizedJson?: string;
-  error?: string;
-} {
-  assertString('validateRealtimeVoiceChangerPresetJson', json, 'json');
+/**
+ * Checks a preset document and returns it normalised.
+ *
+ * @throws TypeError unless `json` is a string.
+ */
+export function realtimeVoiceChangerValidatePresetJson(
+  json: string,
+): RealtimeVoiceChangerValidatePresetJsonResult {
+  assertString('realtimeVoiceChangerValidatePresetJson', json, 'json');
   return getSonareModule().validateRealtimeVoiceChangerPresetJson(json);
+}
+
+/**
+ * The preset id of a voice-character preset ordinal.
+ *
+ * @throws TypeError unless `ordinal` is a number; RangeError for a non-integer or unknown ordinal.
+ */
+export function voiceCharacterPresetId(ordinal: number): VoicePresetId {
+  if (typeof ordinal !== 'number') {
+    throw new TypeError('voiceCharacterPresetId: ordinal must be a number');
+  }
+  if (!Number.isSafeInteger(ordinal) || ordinal < 0 || ordinal >= VOICE_PRESET_IDS.length) {
+    throw new RangeError(
+      `voiceCharacterPresetId: ordinal must be an integer in [0, ${VOICE_PRESET_IDS.length - 1}]`,
+    );
+  }
+  const id = voicePresetIdFromNative(getSonareModule().voiceCharacterPresetId(ordinal));
+  return id as VoicePresetId;
+}
+
+/**
+ * The flat config of a built-in preset, skipping the JSON round trip.
+ *
+ * @throws TypeError unless `preset` is a string (an ordinal is refused); RangeError for an
+ *   unknown id.
+ */
+export function realtimeVoiceChangerPresetConfig(
+  preset: VoicePresetId,
+): RealtimeVoiceChangerConfig {
+  return podConfigFromNative(
+    getSonareModule().realtimeVoiceChangerPresetConfig(
+      voicePresetOrdinal('realtimeVoiceChangerPresetConfig', preset),
+    ),
+  );
 }

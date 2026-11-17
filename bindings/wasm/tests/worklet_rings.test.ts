@@ -454,8 +454,8 @@ describe('Sonare worklet ring buffers', () => {
         ring.header[0] = seed;
         ring.header[3] = SONARE_METER_RING_PROTOCOL_VERSION;
         const sceneJson = mixingScenePresetJson('vocalReverbSend');
-        const reference = Mixer.fromSceneJson(sceneJson, 48000, 128);
-        const stripCount = reference.stripCount();
+        const reference = Mixer.fromJson(sceneJson, { sampleRate: 48000, blockSize: 128 });
+        const stripCount = reference.stripCount;
         reference.destroy();
         const processor = new SonareWorkletProcessor(
           {
@@ -561,8 +561,8 @@ describe('Sonare worklet ring buffers', () => {
         {},
       );
       // One meter record is published per processed block.
-      const reference = Mixer.fromSceneJson(sceneJson, sampleRate, blockSize);
-      const stripCount = reference.stripCount();
+      const reference = Mixer.fromJson(sceneJson, { sampleRate: sampleRate, blockSize: blockSize });
+      const stripCount = reference.stripCount;
       reference.destroy();
       return { processor, stripCount };
     }
@@ -799,21 +799,21 @@ describe('Sonare worklet ring buffers', () => {
       expect(
         pushSonareEngineCommandRingBuffer(ring, {
           type: SonareEngineCommandType.TransportPlay,
-          sampleTime: 128,
+          renderFrame: 128,
         }),
       ).toBe(true);
       expect(
         pushSonareEngineCommandRingBuffer(ring, {
           type: SonareEngineCommandType.TransportSeekSample,
           targetId: 7,
-          sampleTime: 256n,
+          renderFrame: 256n,
           argInt: 48000n,
         }),
       ).toBe(true);
       expect(
         pushSonareEngineCommandRingBuffer(ring, {
           type: SonareEngineCommandType.TransportStop,
-          sampleTime: 384,
+          renderFrame: 384,
         }),
       ).toBe(false);
       expect(ring.header[4]).toBe(1);
@@ -821,12 +821,12 @@ describe('Sonare worklet ring buffers', () => {
       expect(popSonareEngineCommandRingBuffer(ring)).toMatchObject({
         type: SonareEngineCommandType.TransportPlay,
         targetId: 0,
-        sampleTime: 128,
+        renderFrame: 128,
       });
       expect(popSonareEngineCommandRingBuffer(ring)).toMatchObject({
         type: SonareEngineCommandType.TransportSeekSample,
         targetId: 7,
-        sampleTime: 256,
+        renderFrame: 256,
         argInt: 48000,
       });
       expect(popSonareEngineCommandRingBuffer(ring)).toBeNull();

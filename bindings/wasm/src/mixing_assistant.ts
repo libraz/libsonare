@@ -119,7 +119,7 @@ function suggestJson(fnName: string, request: SuggestMixSceneRequest, sceneOnly:
  *
  * The assistant suggests, it does not apply. Nothing is processed and no audio
  * is returned; realizing the suggestion means handing the scene to
- * {@link Mixer.fromSceneJson} as an explicit second step, for which
+ * {@link Mixer.fromJson} as an explicit second step, for which
  * {@link suggestMixSceneJson} returns the scene already serialized.
  *
  * Degenerate input is not an error: no tracks, all-silent tracks or tracks too
@@ -138,7 +138,7 @@ export function suggestMixScene(request: SuggestMixSceneRequest): MixAssistantRe
  * Suggest a mixer scene and return only the scene, as JSON.
  *
  * The same analysis as {@link suggestMixScene}, serialized in the schema
- * {@link Mixer.fromSceneJson} reads, so a caller that only wants to apply the
+ * {@link Mixer.fromJson} reads, so a caller that only wants to apply the
  * suggestion neither digs the scene out of the fuller result nor re-serializes
  * it.
  *

@@ -1,3 +1,4 @@
+import type { ChannelLayout } from '../audio.js';
 import type {
   EngineParameterInfo,
   EngineTempoSegment,
@@ -24,7 +25,7 @@ export function buildMixerLanes(
   trackLaneIds: readonly number[],
   trackSends: ReadonlyMap<number, EngineTrackSend[]>,
   trackOutputBus: ReadonlyMap<number, number>,
-  trackSourceChannelLayout: ReadonlyMap<number, number>,
+  trackSourceChannelLayout: ReadonlyMap<number, ChannelLayout>,
 ): EngineTrackLane[] {
   return trackLaneIds.map((trackId) => {
     const sends = trackSends.get(trackId);
@@ -92,12 +93,4 @@ export function resolveParamId(
     return byName.id;
   }
   throw new RangeError(`Unknown engine parameter ${JSON.stringify(param)} for node ${nodeId}`);
-}
-
-/** Encodes an automation curve descriptor to the engine's numeric curve code. */
-export function curveCode(curve: number | 'linear' | 'exponential'): number {
-  if (typeof curve === 'number') {
-    return curve;
-  }
-  return curve === 'exponential' ? 1 : 0;
 }

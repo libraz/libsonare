@@ -34,6 +34,7 @@ import {
   detectOnsets,
   extractPercussiveEvents,
   init,
+  type MeterScratchField,
   Mixer,
   masteringDynamicsCompressor,
   mixingScenePresetJson,
@@ -165,11 +166,11 @@ describe('a synth patch mod routing refuses an ordinal outside its enum', () => 
   const base = { engineMode: 1, waveform: 2, cutoffHz: 600, resonanceQ: 6 };
 
   const render = (routing: Record<string, unknown>): string => {
-    const engine = new RealtimeEngine(48000, 4096);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 4096 });
     try {
       // The out-of-domain ordinals under test are what the declared type exists
       // to forbid; the C++ reader, not the type, is the subject here.
-      engine.setSynthInstrument({
+      engine.setSynthInstrument(0, {
         ...base,
         modRoutings: [routing as unknown as SynthModRouting],
       });
@@ -511,27 +512,42 @@ describe('module ordinals past their set are refused, not mapped to a default', 
 
 describe('telemetry scratch readers refuse an index past their record instead of reading 0', () => {
   it('RealtimeEngine meter and scope scratch', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    // The scratch readers belong to the embind object behind the facade.
+    const native = (
+      engine as unknown as {
+        native: {
+          meterScratchValue(field: number): number;
+          scopeScratchBand(index: number): number;
+          scopeScratchPointLeft(index: number): number;
+          scopeScratchPointRight(index: number): number;
+        };
+      }
+    ).native;
     try {
       // The control: the last per-plane field reads without throwing.
-      expect(() => engine.meterScratchValue(43)).not.toThrow();
+      expect(() => native.meterScratchValue(43)).not.toThrow();
       for (const field of [44, 1000]) {
-        expect(() => engine.meterScratchValue(field)).toThrow(RangeError);
+        expect(() => native.meterScratchValue(field)).toThrow(RangeError);
       }
-      expect(() => engine.scopeScratchBand(1_000_000)).toThrow(RangeError);
-      expect(() => engine.scopeScratchPointLeft(1_000_000)).toThrow(RangeError);
-      expect(() => engine.scopeScratchPointRight(1_000_000)).toThrow(RangeError);
+      expect(() => native.scopeScratchBand(1_000_000)).toThrow(RangeError);
+      expect(() => native.scopeScratchPointLeft(1_000_000)).toThrow(RangeError);
+      expect(() => native.scopeScratchPointRight(1_000_000)).toThrow(RangeError);
     } finally {
       engine.destroy();
     }
   });
 
   it('Mixer meter scratch', () => {
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 128);
+    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      sampleRate: 48000,
+      blockSize: 128,
+    });
     try {
       expect(() => mixer.meterScratchValue(6)).not.toThrow();
       for (const field of [7, -1]) {
-        expect(() => mixer.meterScratchValue(field)).toThrow(RangeError);
+        // A field outside the enum is what is under test.
+        expect(() => mixer.meterScratchValue(field as MeterScratchField)).toThrow(RangeError);
       }
     } finally {
       mixer.destroy();

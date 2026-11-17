@@ -117,7 +117,7 @@ const shaperWith = (options: TransientShaperOptions, samples = tone): Float32Arr
   masteringDynamicsTransientShaper(samples, SR, options).samples;
 
 const spectralEditWith = (op: SpectralRegionOp, samples = tone): Float32Array =>
-  spectralEdit(samples, SR, [op]);
+  spectralEdit(samples, SR, { ops: [op] });
 
 /** One float field of one entry point, and how to drive it with a value. */
 interface FloatField {

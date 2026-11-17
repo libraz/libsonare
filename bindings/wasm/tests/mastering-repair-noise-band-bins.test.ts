@@ -126,9 +126,6 @@ describe('masteringRepairNoiseBandBins', () => {
     expect(() => masteringRepairNoiseBandBins({ nFft: 1000, sampleRate: SR })).toThrow(
       /masteringRepairNoiseBandBins: nFft/,
     );
-    expect(() => masteringRepairNoiseBandBins(1000, SR)).toThrow(
-      /masteringRepairNoiseBandBins: nFft/,
-    );
   });
 
   it('rejects a non-positive, non-finite or wrong-typed argument', () => {
@@ -152,37 +149,12 @@ describe('masteringRepairNoiseBandBins', () => {
     );
   });
 
-  it('answers the positional and the request form identically', () => {
-    expect(Array.from(masteringRepairNoiseBandBins(2048, 44100))).toEqual(
-      Array.from(masteringRepairNoiseBandBins({ nFft: 2048, sampleRate: 44100 })),
-    );
-    expect(Array.from(masteringRepairNoiseBandBins(256, 8000))).toEqual(
-      Array.from(masteringRepairNoiseBandBins({ nFft: 256, sampleRate: 8000 })),
-    );
-  });
-
-  it('defaults to nFft 1024 at 22050 Hz, in both forms and in a partial request', () => {
+  it('defaults nFft to 1024 and answers differently at a different rate', () => {
     const expected = Array.from(masteringRepairNoiseBandBins({ nFft: 1024, sampleRate: 22050 }));
-    expect(Array.from(masteringRepairNoiseBandBins())).toEqual(expected);
-    expect(Array.from(masteringRepairNoiseBandBins({}))).toEqual(expected);
-    expect(Array.from(masteringRepairNoiseBandBins(1024))).toEqual(expected);
     expect(Array.from(masteringRepairNoiseBandBins({ sampleRate: 22050 }))).toEqual(expected);
-    expect(Array.from(masteringRepairNoiseBandBins({ nFft: 1024 }))).toEqual(expected);
 
-    // The defaults are a real choice rather than whatever the last call used:
+    // The default is a real choice rather than whatever the last call used:
     // a different rate answers differently.
     expect(Array.from(masteringRepairNoiseBandBins({ sampleRate: 48000 }))).not.toEqual(expected);
-  });
-
-  it('keeps a positional sampleRate when nFft is left undefined', () => {
-    // Both positional arguments are optional, which the type signature allows a
-    // caller to exploit. Defaulting the first one away would take the request
-    // branch and answer at 22050 instead -- a different grid, not an error.
-    expect(Array.from(masteringRepairNoiseBandBins(undefined, 48000))).toEqual(
-      Array.from(masteringRepairNoiseBandBins({ nFft: 1024, sampleRate: 48000 })),
-    );
-    expect(Array.from(masteringRepairNoiseBandBins(undefined, 48000))).not.toEqual(
-      Array.from(masteringRepairNoiseBandBins({ nFft: 1024, sampleRate: 22050 })),
-    );
   });
 });

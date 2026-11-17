@@ -19,9 +19,17 @@ import {
   writeSonareEngineTelemetryRingBuffer,
 } from './_worklet_helpers';
 
+/** The first strip of a scene document, as `setStrip` takes it. */
+const stripDocument = (json: string) => JSON.parse(json).strips[0];
+/** The first bus of a scene document, as `setBusStrip` takes it. */
+const busDocument = (json: string) => JSON.parse(json).buses[0];
+/** The scene text the facade sends for one strip or bus taken from a document. */
+const sceneOf = (key: 'strips' | 'buses', json: string): string =>
+  JSON.stringify({ [key]: [JSON.parse(json)[key][0]] });
+
 /** The offline mirror's read side the commit tests inspect. */
 type RealtimeEngineLike = {
-  getTransportState(): { loopStartPpq: number; loopEndPpq: number; samplePosition: number };
+  transportState(): { loopStartPpq: number; loopEndPpq: number; samplePosition: number };
 };
 
 /** The engine `SonareEngine.create` accepts as its offline mirror. */
@@ -121,7 +129,7 @@ describe('SonareRealtimeEngineNode', () => {
         const unsubscribeScope = node.onScope(() => undefined);
         await new Promise((resolve) => setTimeout(resolve, 40));
         expect(node.pollMidiOut()).toEqual([
-          { destinationId: 3, renderFrame: 64, bytes: [0x80, 0x3c, 0] },
+          { destinationId: 3, renderFrame: 64, bytes: Uint8Array.of(0x80, 0x3c, 0) },
         ]);
         expect(node.pollMidiOut()).toEqual([]);
 
@@ -157,7 +165,7 @@ describe('SonareRealtimeEngineNode', () => {
         nodeFactory: () => readyWorkletNode(port),
       });
       try {
-        engine.setTrackLanes([3]);
+        engine.setTrackLanes([{ trackId: 3 }]);
         engine.transport.play();
         posted.length = 0;
         const sf2 = new Uint8Array(
@@ -215,18 +223,18 @@ describe('SonareRealtimeEngineNode', () => {
     it('changes one clip on the offline mirror without resending the rest', async () => {
       const { engine, offline } = await recordingEngine();
       try {
-        engine.setTrackLanes([3]);
-        engine.addClip(3, [new Float32Array(64).fill(0.25)], 0, { id: 1 });
+        engine.setTrackLanes([{ trackId: 3 }]);
+        engine.addClip(3, { channels: [new Float32Array(64).fill(0.25)], startPpq: 0, id: 1 });
         const setClips = vi.spyOn(offline as never, 'setClips' as never);
         const upsertClip = vi.spyOn(offline as never, 'upsertClip' as never);
         const removeClip = vi.spyOn(offline as never, 'removeClip' as never);
-        engine.addClip(3, [new Float32Array(64).fill(0.5)], 0, { id: 2 });
+        engine.addClip(3, { channels: [new Float32Array(64).fill(0.5)], startPpq: 0, id: 2 });
         engine.removeClip(2);
         engine.removeClip(99);
         expect(setClips).not.toHaveBeenCalled();
         expect(upsertClip).toHaveBeenCalledTimes(1);
         expect(removeClip).toHaveBeenCalledTimes(1);
-        expect((offline.clipCount as () => number)()).toBe(1);
+        expect(offline.clipCount as unknown as number).toBe(1);
       } finally {
         engine.destroy();
       }
@@ -235,44 +243,44 @@ describe('SonareRealtimeEngineNode', () => {
     it('changes neither engine when the live command ring has no room', async () => {
       const { engine, offline } = await recordingEngine({ mode: 'sab', commandRingCapacity: 1 });
       try {
-        engine.setTrackLanes([3]);
+        engine.setTrackLanes([{ trackId: 3 }]);
         engine.addParameter({ id: 7, name: 'p' });
         engine.addMarker(0, 'a');
-        engine.configureCapture({ bufferFrames: 128 });
+        engine.configureCapture({ capacityFrames: 128 });
         // Nothing drains the ring here, so one queued command fills it.
-        expect(engine.transport.play()).toBe(true);
+        expect(engine.transport.play()).toBeUndefined();
         const mutators = [
           'setParameter',
-          'setSoloMute',
+          'setTrackSoloMute',
           'setTrackMonitorMode',
           'setLoop',
           'seekMarker',
           'seekPpq',
           'seekSample',
           'armCapture',
-          'setCapturePunch',
           'setMetronome',
           'resetProcessorState',
           'resetMasterLoudnessMeter',
         ];
         const spies = mutators.map((name) => vi.spyOn(offline as never, name as never));
-        const before = (offline.getTransportState as () => unknown)();
-        expect(engine.setParam('', 7, 0.5)).toBe(false);
-        expect(engine.setSoloMute(3, true, true)).toBe(false);
-        expect(engine.setTrackMonitorMode(3, 'pfl')).toBe(false);
-        expect(engine.setLoop(0, 4)).toBe(false);
-        expect(engine.seekMarker(engine.markerByIndex(0).id)).toBe(false);
-        expect(engine.transport.seekPpq(8)).toBe(false);
-        expect(engine.transport.seekSeconds(1)).toBe(false);
-        expect(engine.armRecord(0, true)).toBe(false);
-        expect(engine.punch(0, 4)).toBe(false);
-        expect(engine.setMetronome({ enabled: true })).toBe(false);
-        expect(engine.resetProcessorState()).toBe(false);
-        expect(engine.resetMasterLoudnessMeter()).toBe(false);
+        const before = (offline.transportState as () => unknown)();
+        expect(() => engine.setParam('', 7, 0.5)).toThrow(/command queue is full/);
+        expect(() => engine.setTrackSoloMute(3, { solo: true, mute: true })).toThrow(
+          /command queue is full/,
+        );
+        expect(() => engine.setTrackMonitorMode(3, 'pfl')).toThrow(/command queue is full/);
+        expect(() => engine.setLoop({ startPpq: 0, endPpq: 4 })).toThrow(/command queue is full/);
+        expect(() => engine.seekMarker(engine.markers()[0].id)).toThrow(/command queue is full/);
+        expect(() => engine.transport.seekPpq(8)).toThrow(/command queue is full/);
+        expect(() => engine.transport.seekSec(1)).toThrow(/command queue is full/);
+        expect(() => engine.armCapture({ armed: true })).toThrow(/command queue is full/);
+        expect(() => engine.setMetronome({ enabled: true })).toThrow(/command queue is full/);
+        expect(() => engine.resetProcessorState()).toThrow(/command queue is full/);
+        expect(() => engine.resetMasterLoudnessMeter()).toThrow(/command queue is full/);
         for (const spy of spies) {
           expect(spy).not.toHaveBeenCalled();
         }
-        expect((offline.getTransportState as () => unknown)()).toEqual(before);
+        expect((offline.transportState as () => unknown)()).toEqual(before);
         expect((offline.captureStatus as () => { armed: boolean })().armed).toBe(false);
       } finally {
         engine.destroy();
@@ -282,10 +290,13 @@ describe('SonareRealtimeEngineNode', () => {
     it('leaves caches, mirror and worklet untouched when the offline engine refuses an edit', async () => {
       const { engine, offline, postedTypes } = await recordingEngine();
       try {
-        engine.setTrackLanes([3]);
+        engine.setTrackLanes([{ trackId: 3 }]);
         engine.setTempo(100);
         engine.setAutomationLane(7, [{ ppq: 0, value: 0.25 }]);
-        const clipId = engine.addClip(3, [new Float32Array(64).fill(0.5)], 0);
+        const clipId = engine.addClip(3, {
+          channels: [new Float32Array(64).fill(0.5)],
+          startPpq: 0,
+        });
         engine.setMidiClips([{ id: 50, destinationId: 3, startPpq: 0, events: [] }]);
         const state = engine as unknown as {
           tempoBpm: number;
@@ -306,8 +317,8 @@ describe('SonareRealtimeEngineNode', () => {
 
         expect(() => engine.setTempo(Number.NaN)).toThrow();
         expect(() => engine.setAutomationLane(7, [{ ppq: 0, value: Number.NaN }])).toThrow();
-        expect(() => engine.scheduleParam('', 7, 1, Number.NaN)).toThrow();
-        expect(() => engine.addClip(3, [new Float32Array(0)], 0)).toThrow();
+        expect(() => engine.scheduleParam('', 7, { ppq: 1, value: Number.NaN })).toThrow();
+        expect(() => engine.addClip(3, { channels: [new Float32Array(0)], startPpq: 0 })).toThrow();
         expect(() =>
           engine.setMidiClips([{ id: 51, destinationId: 3, startPpq: 0, gain: -1, events: [] }]),
         ).toThrow();
@@ -318,7 +329,7 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setTimeSignature(3, 4);
         engine.removeClip(clipId);
         expect(state.clips.size).toBe(0);
-        expect((offline.getTransportState as () => { bpm: number })().bpm).toBe(100);
+        expect((offline.transportState as () => { bpm: number })().bpm).toBe(100);
       } finally {
         engine.destroy();
       }
@@ -327,15 +338,15 @@ describe('SonareRealtimeEngineNode', () => {
     it('keeps the recording when a capture configuration is refused', async () => {
       const { engine, offline, postedTypes } = await recordingEngine();
       try {
-        engine.configureCapture({ bufferFrames: 256, channels: 1, source: 'input' });
+        engine.configureCapture({ capacityFrames: 256, numChannels: 1, source: 'input' });
         const capture = offline as unknown as {
-          armCapture(armed: boolean): void;
+          armCapture(state: { armed: boolean }): void;
           play(): void;
           process(inputs: Float32Array[]): Float32Array[];
           captureStatus(): { capturedFrames: number; source: string };
           capturedAudio(): Float32Array[];
         };
-        capture.armCapture(true);
+        capture.armCapture({ armed: true });
         capture.play();
         capture.process([new Float32Array(128).fill(0.5), new Float32Array(128).fill(0.5)]);
         const frames = capture.captureStatus().capturedFrames;
@@ -343,9 +354,9 @@ describe('SonareRealtimeEngineNode', () => {
         const audio = capture.capturedAudio();
         const posted = postedTypes().length;
         for (const bad of [
-          { bufferFrames: 512, inputMonitor: { enabled: true, gain: Number.NaN } },
-          { bufferFrames: 512, inputMonitor: { enabled: true, gain: 1e39 } },
-          { bufferFrames: 512, source: 'sideways' as never },
+          { capacityFrames: 512, inputMonitor: { enabled: true, gain: Number.NaN } },
+          { capacityFrames: 512, inputMonitor: { enabled: true, gain: 1e39 } },
+          { capacityFrames: 512, source: 'sideways' as never },
         ]) {
           expect(() => engine.configureCapture(bad)).toThrow(RangeError);
         }
@@ -353,7 +364,10 @@ describe('SonareRealtimeEngineNode', () => {
         expect(capture.captureStatus().source).toBe('input');
         expect(capture.capturedAudio()).toEqual(audio);
         expect(postedTypes().length).toBe(posted);
-        expect(() => engine.configureCapture({ bufferFrames: 512 })).not.toThrow();
+        // The buffer shape cannot change while armed, so the accepted call keeps it.
+        expect(() =>
+          engine.configureCapture({ capacityFrames: 256, numChannels: 1 }),
+        ).not.toThrow();
       } finally {
         engine.destroy();
       }
@@ -388,12 +402,12 @@ describe('SonareRealtimeEngineNode', () => {
         nodeFactory: () => readyWorkletNode(port),
       });
       try {
-        engine.setTrackLanes([3]);
-        const spellings = [{}, { warpMode: 0 as const }, { warpMode: 'off' as const }];
+        engine.setTrackLanes([{ trackId: 3 }]);
+        const spellings = [{}, { warpMode: 'off' as const }];
         for (const [index, spelling] of spellings.entries()) {
           posted.length = 0;
           const id = 900 + index;
-          engine.addClip(3, [new Float32Array(20_000)], 0, { id, ...spelling });
+          engine.addClip(3, { channels: [new Float32Array(20_000)], startPpq: 0, id, ...spelling });
           const types = posted
             .filter((message) => (message as { clipId?: unknown }).clipId === id)
             .map((message) => (message as { type: string }).type);
@@ -416,7 +430,7 @@ describe('SonareRealtimeEngineNode', () => {
         nodeFactory: () => readyWorkletNode(port),
       });
       try {
-        engine.setTrackLanes([3]);
+        engine.setTrackLanes([{ trackId: 3 }]);
         const offline = (engine as unknown as { offlineEngine: { setSynthInstrument: unknown } })
           .offlineEngine;
         const offlineSet = vi.spyOn(
@@ -458,7 +472,7 @@ describe('SonareRealtimeEngineNode', () => {
       const node = await SonareRealtimeEngineNode.create(fakeContext(), {
         moduleUrl: 'sonare-worklet.js',
         blockSize: 128,
-        channelCount: 2,
+        numChannels: 2,
         commandRingCapacity: 4,
         telemetryRingCapacity: 4,
         nodeFactory: (_context, processorName, options) => {
@@ -498,24 +512,24 @@ describe('SonareRealtimeEngineNode', () => {
         node.sendCommand({
           type: SonareEngineCommandType.SetTrackMonitorMode,
           targetId: 3,
-          sampleTime: 256,
+          renderFrame: 256,
           argInt: 1,
         }),
       ).toBe(true);
       expect(popSonareEngineCommandRingBuffer(commandRing)).toEqual({
         type: SonareEngineCommandType.SetTrackMonitorMode,
         targetId: 3,
-        sampleTime: 256,
+        renderFrame: 256,
         argFloat: 0,
         argInt: 1,
         syncSequence: 0,
       });
       // 18..25 are intentionally not part of the worklet command vocabulary.
-      expect(node.sendCommand({ type: 18, sampleTime: -1 })).toBe(false);
+      expect(node.sendCommand({ type: 18, renderFrame: -1 })).toBe(false);
       expect(
         node.sendCommand({
           type: SonareEngineCommandType.SetTrackMonitorMode,
-          sampleTime: -1,
+          renderFrame: -1,
           argInt: 0.5,
         }),
       ).toBe(false);
@@ -524,7 +538,7 @@ describe('SonareRealtimeEngineNode', () => {
           node.sendCommand({
             type: SonareEngineCommandType.SetTrackMonitorMode,
             targetId,
-            sampleTime: -1,
+            renderFrame: -1,
             argInt: 1,
           }),
         ).toBe(false);
@@ -566,7 +580,7 @@ describe('SonareRealtimeEngineNode', () => {
         expect(
           node.sendCommand({
             type: SonareEngineCommandType.Punch,
-            sampleTime: -1,
+            renderFrame: -1,
             argInt: inSample,
             argFloat: outSample,
           }),
@@ -721,11 +735,16 @@ describe('SonareRealtimeEngineNode', () => {
       // The index and worklet bundles each emit a self-contained .d.ts, so
       // RealtimeEngine is declared twice and its private field makes the two
       // copies nominally distinct. Same class at runtime.
-      const offline = new (await import('../dist/index.js')).RealtimeEngine(
-        48000,
-        128,
-      ) as unknown as OfflineEngineOption;
-      offline.prepare(48000, 128, 4, 4);
+      const offline = new (await import('../dist/index.js')).RealtimeEngine({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+      }) as unknown as OfflineEngineOption;
+      offline.prepare({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+        commandCapacity: 4,
+        telemetryCapacity: 4,
+      });
       offline.addParameter({
         id: 7,
         name: 'gain',
@@ -734,7 +753,7 @@ describe('SonareRealtimeEngineNode', () => {
         maxValue: 12,
         defaultValue: 0,
         rtSafe: true,
-        defaultCurve: 2,
+        defaultCurve: 'hold',
       });
       const originalFlush = offline.applyCommandsDueNowPreservingFuture.bind(offline);
       let flushCount = 0;
@@ -752,7 +771,7 @@ describe('SonareRealtimeEngineNode', () => {
         // this assertion measures only the subsequent command-side flushes.
         flushCount = 0;
         for (let index = 0; index < 32; index++) {
-          expect(engine.setParam('gain-node', 'gain', index - 60)).toBe(true);
+          expect(engine.setParam('gain-node', 'gain', index - 60)).toBeUndefined();
         }
         expect(flushCount).toBe(32);
       } finally {
@@ -779,19 +798,19 @@ describe('SonareRealtimeEngineNode', () => {
           maxValue: 12,
           defaultValue: 0,
           rtSafe: true,
-          defaultCurve: 2,
+          defaultCurve: 'hold',
         });
-        expect(engine.setParam('gain-node', 'gain', -6)).toBe(true);
+        expect(engine.setParam('gain-node', 'gain', -6)).toBeUndefined();
         expect(() => engine.setParam('gain-node', 'missing', -6)).toThrow(
           /Unknown engine parameter/,
         );
         engine.setMidiInputSource(3);
-        engine.bindMidiCc(0, 74, 7, { minValue: -60, maxValue: 12 });
+        engine.bindMidiCc({ channel: 0, ccNumber: 74, paramId: 7, minValue: -60, maxValue: 12 });
         engine.pushMidiInputNoteOn(0, 0, 60, 100, 128);
         engine.pushMidiInputCc(0, 0, 74, 96, 128);
         engine.clearMidiInputSource();
         engine.clearParameters();
-        expect(engine.listParameters()).toHaveLength(0);
+        expect(engine.parameters()).toHaveLength(0);
         expect(posted).toEqual(
           expect.arrayContaining([
             expect.objectContaining({
@@ -802,11 +821,7 @@ describe('SonareRealtimeEngineNode', () => {
             expect.objectContaining({ type: 'syncMidiInputSource', destinationId: 3 }),
             expect.objectContaining({
               type: 'syncMidiCcBinding',
-              channel: 0,
-              controller: 74,
-              paramId: 7,
-              minValue: -60,
-              maxValue: 12,
+              binding: { channel: 0, ccNumber: 74, paramId: 7, minValue: -60, maxValue: 12 },
             }),
             expect.objectContaining({
               type: 'syncMidiInputNoteOn',
@@ -825,10 +840,10 @@ describe('SonareRealtimeEngineNode', () => {
 
     it('mirrors scalar and multiword UMP plus raw input without aliasing caller buffers', async () => {
       const posted: unknown[] = [];
-      const offline = new (await import('../dist/index.js')).RealtimeEngine(
-        48000,
-        128,
-      ) as unknown as OfflineEngineOption;
+      const offline = new (await import('../dist/index.js')).RealtimeEngine({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+      }) as unknown as OfflineEngineOption;
       const destinationUmp = vi.spyOn(offline, 'pushMidiUmp').mockImplementation(() => undefined);
       const inputUmp = vi.spyOn(offline, 'pushMidiInputUmp').mockImplementation(() => undefined);
       const engine = await SonareEngine.create(fakeContext(), {
@@ -885,7 +900,7 @@ describe('SonareRealtimeEngineNode', () => {
         SonareRealtimeEngineNode.create(fakeContext(), {
           moduleUrl: 'sonare-worklet.js',
           blockSize: 128,
-          channelCount: 2,
+          numChannels: 2,
           scopeIntervalFrames,
           scopeBands: 32,
           nodeFactory: (_context, _name, options) => {
@@ -1011,10 +1026,10 @@ describe('SonareRealtimeEngineNode', () => {
       // The index and worklet bundles each emit a self-contained .d.ts, so
       // RealtimeEngine is declared twice and its private field makes the two
       // copies nominally distinct. Same class at runtime.
-      const offline = new (await import('../dist/index.js')).RealtimeEngine(
-        48000,
-        128,
-      ) as unknown as OfflineEngineOption;
+      const offline = new (await import('../dist/index.js')).RealtimeEngine({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+      }) as unknown as OfflineEngineOption;
       offline.addParameter({
         id: 7,
         name: 'gain',
@@ -1023,12 +1038,12 @@ describe('SonareRealtimeEngineNode', () => {
         maxValue: 12,
         defaultValue: 0,
         rtSafe: true,
-        defaultCurve: 2, // canonical AutomationCurve::Hold (preserve original semantic)
+        defaultCurve: 'hold', // canonical AutomationCurve::Hold (preserve original semantic)
       });
       const engine = await SonareEngine.create(fakeContext(), {
         mode: 'postMessage',
         offlineEngine: offline,
-        offlineChannelCount: 2,
+        offlineNumChannels: 2,
         nodeFactory: () =>
           readyWorkletNode({
             postMessage: (message: unknown) => posted.push(message),
@@ -1037,7 +1052,7 @@ describe('SonareRealtimeEngineNode', () => {
       });
       try {
         expect(engine.capabilities.mode).toBe('postMessage');
-        expect(engine.listParameters()).toHaveLength(1);
+        expect(engine.parameters()).toHaveLength(1);
         expect(posted).toEqual(
           expect.arrayContaining([
             expect.objectContaining({
@@ -1046,51 +1061,51 @@ describe('SonareRealtimeEngineNode', () => {
             }),
           ]),
         );
-        expect(engine.transport.play()).toBe(true);
-        expect(engine.transport.seekSeconds(1)).toBe(true);
+        expect(engine.transport.play()).toBeUndefined();
+        expect(engine.transport.seekSec(1)).toBeUndefined();
         engine.transport.setTempo(90);
         engine.transport.setTempoSegments([
           { startPpq: 0, bpm: 90 },
           { startPpq: 4, bpm: 60 },
         ]);
-        expect(engine.transport.setLoop(0, 1, true)).toBe(true);
-        expect(engine.setParam('gain-node', 'gain', -6)).toBe(true);
-        engine.scheduleParam('gain-node', 'gain', 0.5, -3);
-        engine.addAutomationPoint(7, 1, 0);
-        expect(engine.setSoloMute(3, true, false)).toBe(true);
-        expect(engine.setStripGain(3, -6)).toBe(true);
-        expect(engine.setStripPan(3, 0.25)).toBe(true);
+        expect(engine.transport.setLoop({ startPpq: 0, endPpq: 1, enabled: true })).toBeUndefined();
+        expect(engine.setParam('gain-node', 'gain', -6)).toBeUndefined();
+        engine.scheduleParam('gain-node', 'gain', { ppq: 0.5, value: -3 });
+        engine.addAutomationPoint(7, { ppq: 1, value: 0 });
+        expect(engine.setTrackSoloMute(3, { solo: true, mute: false })).toBeUndefined();
+        expect(engine.setStripFaderDb(3, -6)).toBeUndefined();
+        expect(engine.setStripPan(3, 0.25)).toBeUndefined();
         const trackStripJson =
           '{"version":1,"strips":[{"id":"track-3","faderDb":-6,"panLaw":3,"inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":12,\\"band0.enabled\\":1}"}]}],"buses":[],"connections":[]}';
         const masterStripJson =
           '{"version":1,"strips":[{"id":"master","faderDb":-3,"panLaw":3,"inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":12,\\"band0.enabled\\":1}"}]}],"buses":[],"connections":[]}';
-        engine.setTrackStripJson(3, trackStripJson);
-        engine.setMasterStripJson(masterStripJson);
-        expect(engine.setStripGain('master', -3)).toBe(true);
-        expect(engine.setStripPan('master', -0.25)).toBe(true);
-        engine.setTrackStripEqBand(3, 0, { type: 'Peak', frequencyHz: 1000, gainDb: 6 });
-        engine.setMasterStripEqBand(0, { type: 'Peak', frequencyHz: 1000, gainDb: 3 });
-        engine.setTrackStripInsertBypassed(3, 0, true, true);
-        engine.setMasterStripInsertBypassed(0, true, true);
-        engine.setStripEq(3, 0, { type: 'Peak', frequencyHz: 2000, gainDb: 2 });
-        engine.setStripEq('master', 0, { type: 'Peak', frequencyHz: 3000, gainDb: 1 });
-        engine.setStripInsertBypassed(3, 0, false);
-        engine.setStripInsertBypassed('master', 0, false);
-        engine.setStripInserts(3, trackStripJson);
-        engine.setMasterChain(masterStripJson);
+        engine.setStrip(3, stripDocument(trackStripJson));
+        engine.setStrip('master', stripDocument(masterStripJson));
+        expect(engine.setStripFaderDb('master', -3)).toBeUndefined();
+        expect(engine.setStripPan('master', -0.25)).toBeUndefined();
+        engine.setStripEqBand(3, 0, { type: 'Peak', frequencyHz: 1000, gainDb: 6 });
+        engine.setStripEqBand('master', 0, { type: 'Peak', frequencyHz: 1000, gainDb: 3 });
+        engine.setStripInsertBypassed(3, 0, { bypassed: true, resetOnBypass: true });
+        engine.setStripInsertBypassed('master', 0, { bypassed: true, resetOnBypass: true });
+        engine.setStripEqBand(3, 0, { type: 'Peak', frequencyHz: 2000, gainDb: 2 });
+        engine.setStripEqBand('master', 0, { type: 'Peak', frequencyHz: 3000, gainDb: 1 });
+        engine.setStripInsertBypassed(3, 0, { bypassed: false });
+        engine.setStripInsertBypassed('master', 0, { bypassed: false });
+        engine.setStrip(3, stripDocument(trackStripJson));
+        engine.setStrip('master', stripDocument(masterStripJson));
         engine.setTrackBuses([{ busId: 100, gainDb: -3 }]);
         engine.setTrackSends(3, [{ busId: 100, levelDb: -6, enabled: true }]);
-        expect(engine.setBusGain(100, -9)).toBe(true);
+        expect(engine.setBusGainDb(100, -9)).toBeUndefined();
         // Realtime strip panner / channel-delay controls (R5).
-        engine.setTrackStripPan(3, -1);
-        engine.setTrackStripPanLaw(3, 'const6dB');
-        engine.setTrackStripPanMode(3, 'dualPan');
-        engine.setTrackStripDualPan(3, -1, 1);
-        engine.setTrackStripChannelDelaySamples(3, 32);
+        engine.setStripPan(3, -1);
+        engine.setStripPanLaw(3, 'const6dB');
+        engine.setStripPanMode(3, 'dualPan');
+        engine.setStripDualPan(3, -1, 1);
+        engine.setStripChannelDelaySamples(3, 32);
         const busStripJson =
           '{"version":1,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":0,\\"band0.enabled\\":1}"}]}],"connections":[]}';
-        engine.setBusStripJson(100, busStripJson);
-        engine.setBusStripInsertParamByName(100, 0, 'band0.gainDb', 1);
+        engine.setBusStrip(100, busDocument(busStripJson));
+        engine.setBusInsertParam(100, 0, { name: 'band0.gainDb', value: 1 });
         engine.setBuiltinInstrument(3, { gain: 0.5 });
         engine.setSynthInstrument(3, 'saw-lead');
         engine.setSf2Instrument(3, { gain: 0.5 });
@@ -1129,33 +1144,40 @@ describe('SonareRealtimeEngineNode', () => {
           new Uint8Array([0xf0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, 0x01, 0x10, 0x2c, 0xf7]),
         );
         engine.pushMidiPanic();
-        const clipId = engine.addClip(
-          3,
-          [new Float32Array(128).fill(0.25), new Float32Array(128).fill(-0.25)],
-          0,
-        );
+        const clipId = engine.addClip(3, {
+          channels: [new Float32Array(128).fill(0.25), new Float32Array(128).fill(-0.25)],
+          startPpq: 0,
+        });
         expect(clipId).toBeGreaterThan(0);
         engine.removeClip(clipId);
-        expect(() => engine.armRecord(0, true)).toThrow(/Capture buffer is not configured/);
+        expect(() => engine.armCapture({ armed: true })).toThrow(
+          /Capture buffer is not configured/,
+        );
         engine.configureCapture({
-          bufferFrames: 4096,
-          channels: 2,
+          capacityFrames: 4096,
+          numChannels: 2,
           source: 'input',
           recordOffsetSamples: -32,
           inputMonitor: { enabled: true, gain: 0.5 },
         });
         engine.setTempo(60);
         expect(engine.countInEndSample(0, 2)).toBe(384000);
-        expect(() => engine.armRecord(3, true)).toThrow(/Capture is global/);
-        expect(engine.armRecord(0, true)).toBe(true);
-        expect(engine.punch(1, 1.5)).toBe(true);
+        expect(engine.armCapture({ armed: true })).toBeUndefined();
+        engine.configureCapture({
+          capacityFrames: 4096,
+          numChannels: 2,
+          source: 'input',
+          recordOffsetSamples: -32,
+          inputMonitor: { enabled: true, gain: 0.5 },
+          punch: { startPpq: 1, endPpq: 1.5 },
+        });
         engine.setMetronome({ enabled: true, clickSamples: 16 });
         const markerId = engine.addMarker(0, 'start');
         expect(markerId).toBeGreaterThan(0);
         // seekMarker now reaches the realtime engine (previously a no-op that
         // always returned false); it returns true like the sibling transport ops.
-        expect(engine.seekMarker(markerId)).toBe(true);
-        const rendered = await engine.renderOffline(128);
+        expect(engine.seekMarker(markerId)).toBeUndefined();
+        const rendered = await engine.renderOffline({ totalFrames: 128 });
         expect(rendered).toHaveLength(2);
         expect(rendered[0]).toHaveLength(128);
         expect(
@@ -1166,11 +1188,11 @@ describe('SonareRealtimeEngineNode', () => {
               (message as { type?: unknown }).type === 'syncBuiltinInstrument',
           ),
         ).toBe(true);
-        expect(engine.transport.stop()).toBe(true);
+        expect(engine.transport.stop()).toBeUndefined();
 
-        const track3Fader = engine.automationParamId(3, 'faderDb');
-        const track3Pan = engine.automationParamId(3, 'pan');
-        const bus100Fader = engine.busAutomationParamId(100);
+        const track3Fader = engine.resolveStripAutomationId(3, 'faderDb');
+        const track3Pan = engine.resolveStripAutomationId(3, 'pan');
+        const bus100Fader = engine.resolveBusAutomationId(100, 'faderDb');
         expect(posted).toEqual(
           expect.arrayContaining([
             expect.objectContaining({ type: SonareEngineCommandType.TransportPlay }),
@@ -1178,9 +1200,8 @@ describe('SonareRealtimeEngineNode', () => {
             expect.objectContaining({ type: SonareEngineCommandType.SetLoop }),
             expect.objectContaining({ type: SonareEngineCommandType.ArmRecord }),
             expect.objectContaining({
-              type: SonareEngineCommandType.Punch,
-              argInt: 48000,
-              argFloat: 72000,
+              type: 'syncCapture',
+              punch: { startSample: 48000, endSample: 72000 },
             }),
             expect.objectContaining({ type: SonareEngineCommandType.SetMetronome }),
             expect.objectContaining({ type: SonareEngineCommandType.TransportStop }),
@@ -1229,8 +1250,8 @@ describe('SonareRealtimeEngineNode', () => {
             }),
             expect.objectContaining({
               type: 'syncMixer',
-              trackStrips: [{ trackId: 3, sceneJson: trackStripJson }],
-              masterStripJson,
+              trackStrips: [{ trackId: 3, sceneJson: sceneOf('strips', trackStripJson) }],
+              masterStripJson: sceneOf('strips', masterStripJson),
             }),
             expect.objectContaining({
               type: 'syncTrackStripEqBand',
@@ -1256,7 +1277,11 @@ describe('SonareRealtimeEngineNode', () => {
               bypassed: true,
               resetOnBypass: true,
             }),
-            expect.objectContaining({ type: 'syncTrackStripPan', trackId: 3, pan: -1 }),
+            expect.objectContaining({
+              type: SonareEngineCommandType.SetParamSmoothed,
+              targetId: track3Pan,
+              argFloat: -1,
+            }),
             expect.objectContaining({ type: 'syncTrackStripPanLaw', trackId: 3, panLaw: 2 }),
             expect.objectContaining({ type: 'syncTrackStripPanMode', trackId: 3, panMode: 2 }),
             expect.objectContaining({
@@ -1272,7 +1297,7 @@ describe('SonareRealtimeEngineNode', () => {
             }),
             expect.objectContaining({
               type: 'syncMixer',
-              busStrips: [{ busId: 100, sceneJson: busStripJson }],
+              busStrips: [{ busId: 100, sceneJson: sceneOf('buses', busStripJson) }],
             }),
             expect.objectContaining({
               type: 'syncClipsDelta',
@@ -1337,14 +1362,14 @@ describe('SonareRealtimeEngineNode', () => {
       // The index and worklet bundles each emit a self-contained .d.ts, so
       // RealtimeEngine is declared twice and its private field makes the two
       // copies nominally distinct. Same class at runtime.
-      const offline = new (await import('../dist/index.js')).RealtimeEngine(
-        48000,
-        128,
-      ) as unknown as OfflineEngineOption;
+      const offline = new (await import('../dist/index.js')).RealtimeEngine({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+      }) as unknown as OfflineEngineOption;
       const engine = await SonareEngine.create(fakeContext(), {
         mode: 'postMessage',
         offlineEngine: offline,
-        offlineChannelCount: 1,
+        offlineNumChannels: 1,
         nodeFactory: () =>
           readyWorkletNode({
             postMessage: (message: unknown) => posted.push(message),
@@ -1352,14 +1377,16 @@ describe('SonareRealtimeEngineNode', () => {
           }),
       });
       try {
-        engine.setTrackLanes([1]);
+        engine.setTrackLanes([{ trackId: 1 }]);
         const source = new Float32Array(4096);
         for (let i = 0; i < source.length; i++) {
           source[i] = Math.sin(i * 0.02);
         }
-        const clipId = engine.addClip(1, [source], 0, {
+        const clipId = engine.addClip(1, {
+          channels: [source],
+          startPpq: 0,
           lengthSamples: 8192,
-          warpMode: 'tempo-sync',
+          warpMode: 'tempoSync',
           warpAnchors: [
             { warpSample: 0, sourceSample: 0 },
             { warpSample: 2048, sourceSample: 1024 },
@@ -1400,7 +1427,7 @@ describe('SonareRealtimeEngineNode', () => {
       const posted: unknown[] = [];
       const engine = await SonareEngine.create(fakeContext(), {
         mode: 'postMessage',
-        offlineChannelCount: 1,
+        offlineNumChannels: 1,
         nodeFactory: () =>
           readyWorkletNode({
             postMessage: (message: unknown) => posted.push(message),
@@ -1408,11 +1435,13 @@ describe('SonareRealtimeEngineNode', () => {
           }),
       });
       try {
-        engine.setTrackLanes([1]);
+        engine.setTrackLanes([{ trackId: 1 }]);
         const source = new Float32Array(8192).fill(0.25);
-        const clipId = engine.addClip(1, [source], 0, {
+        const clipId = engine.addClip(1, {
+          channels: [source],
+          startPpq: 0,
           lengthSamples: 16_385,
-          warpMode: 'tempo-sync',
+          warpMode: 'tempoSync',
           warpAnchors: [
             { warpSample: 0, sourceSample: 0 },
             { warpSample: 16_385, sourceSample: 8192 },
@@ -1466,7 +1495,7 @@ describe('SonareRealtimeEngineNode', () => {
       try {
         engine.setTrackBuses([{ busId: 7 }]);
         engine.setTrackLanes([
-          2,
+          { trackId: 2 },
           { trackId: 5, sends: [{ busId: 7, levelDb: -6, enabled: true }] },
         ]);
         expect(posted).toEqual(
@@ -1481,7 +1510,7 @@ describe('SonareRealtimeEngineNode', () => {
           ]),
         );
         // Lane indices follow the declared order: track 5 occupies lane 1.
-        expect(engine.setSoloMute(5, false, true)).toBe(true);
+        expect(engine.setTrackSoloMute(5, { solo: false, mute: true })).toBeUndefined();
         expect(posted).toEqual(
           expect.arrayContaining([
             expect.objectContaining({
@@ -1491,25 +1520,25 @@ describe('SonareRealtimeEngineNode', () => {
             }),
           ]),
         );
-        expect(engine.setTrackMonitorMode(5, 'pfl', 321)).toBe(true);
+        expect(engine.setTrackMonitorMode(5, 'pfl', 321)).toBeUndefined();
         expect(posted).toEqual(
           expect.arrayContaining([
             expect.objectContaining({
               type: SonareEngineCommandType.SetTrackMonitorMode,
               targetId: 1,
-              sampleTime: 321,
+              renderFrame: 321,
               argInt: 1,
             }),
           ]),
         );
-        for (const mode of [true, false]) {
+        for (const mode of [true, false, 0.5, -1, 3]) {
           expect(() => engine.setTrackMonitorMode(5, mode as never)).toThrow(TypeError);
         }
-        for (const mode of [0.5, -1, 3, 'PFL', 'post-fader']) {
+        for (const mode of ['PFL', 'post-fader']) {
           expect(() => engine.setTrackMonitorMode(5, mode as never)).toThrow(RangeError);
         }
         // Appending keeps existing lanes; entries without sends keep prior sends.
-        engine.setTrackLanes([2, 5, 9]);
+        engine.setTrackLanes([{ trackId: 2 }, { trackId: 5 }, { trackId: 9 }]);
         expect(posted).toEqual(
           expect.arrayContaining([
             expect.objectContaining({
@@ -1522,10 +1551,16 @@ describe('SonareRealtimeEngineNode', () => {
             }),
           ]),
         );
-        expect(() => engine.setTrackLanes([5, 2, 9])).toThrow(/append-only/);
-        expect(() => engine.setTrackLanes([2, 5])).toThrow(/append-only/);
-        expect(() => engine.setTrackLanes([2, 5, 9, 9])).toThrow(/Duplicate track id/);
-        expect(() => engine.setTrackLanes([2, 5, 9, 0])).toThrow(/Invalid track id/);
+        expect(() =>
+          engine.setTrackLanes([{ trackId: 5 }, { trackId: 2 }, { trackId: 9 }]),
+        ).toThrow(/append-only/);
+        expect(() => engine.setTrackLanes([{ trackId: 2 }, { trackId: 5 }])).toThrow(/append-only/);
+        expect(() =>
+          engine.setTrackLanes([{ trackId: 2 }, { trackId: 5 }, { trackId: 9 }, { trackId: 9 }]),
+        ).toThrow(/Duplicate track id/);
+        expect(() =>
+          engine.setTrackLanes([{ trackId: 2 }, { trackId: 5 }, { trackId: 9 }, { trackId: 0 }]),
+        ).toThrow(/Invalid track id/);
       } finally {
         engine.destroy();
       }
@@ -1549,20 +1584,20 @@ describe('SonareRealtimeEngineNode', () => {
       };
       try {
         engine.setTrackBuses([{ busId: 100 }]);
-        engine.setTrackLanes([{ trackId: 1, sourceChannelLayout: 1 }]);
-        expect(latestSync().lanes[0]).toMatchObject({ trackId: 1, sourceChannelLayout: 1 });
+        engine.setTrackLanes([{ trackId: 1, sourceChannelLayout: 'stereo' }]);
+        expect(latestSync().lanes[0]).toMatchObject({ trackId: 1, sourceChannelLayout: 'stereo' });
 
         engine.setTrackSends(1, [{ busId: 100, levelDb: -6, enabled: true }]);
         expect(latestSync().lanes[0]).toMatchObject({
           trackId: 1,
-          sourceChannelLayout: 1,
+          sourceChannelLayout: 'stereo',
           sends: [{ busId: 100, levelDb: -6, enabled: true }],
         });
 
         // An omitted layout on an existing lane keeps the previous explicit
         // value, while a newly appended lane remains on the native default.
-        engine.setTrackLanes([{ trackId: 1 }, 2]);
-        expect(latestSync().lanes[0]).toMatchObject({ trackId: 1, sourceChannelLayout: 1 });
+        engine.setTrackLanes([{ trackId: 1 }, { trackId: 2 }]);
+        expect(latestSync().lanes[0]).toMatchObject({ trackId: 1, sourceChannelLayout: 'stereo' });
         expect(latestSync().lanes[1]).toEqual({ trackId: 2 });
       } finally {
         engine.destroy();
@@ -1580,15 +1615,17 @@ describe('SonareRealtimeEngineNode', () => {
           }),
       });
       try {
-        engine.setTrackLanes([1]);
+        engine.setTrackLanes([{ trackId: 1 }]);
         const before = posted.length;
-        for (const layout of [0, 2, 3]) {
+        for (const layout of ['mono', '5.1', '7.1'] as const) {
           expect(() => engine.setTrackLanes([{ trackId: 1, sourceChannelLayout: layout }])).toThrow(
             RangeError,
           );
         }
         expect(posted).toHaveLength(before);
-        expect(() => engine.setTrackLanes([{ trackId: 1, sourceChannelLayout: 1 }])).not.toThrow();
+        expect(() =>
+          engine.setTrackLanes([{ trackId: 1, sourceChannelLayout: 'stereo' }]),
+        ).not.toThrow();
       } finally {
         engine.destroy();
       }
@@ -1610,7 +1647,7 @@ describe('SonareRealtimeEngineNode', () => {
         };
       try {
         engine.setTrackBuses([{ busId: 100 }]);
-        engine.setTrackLanes([{ trackId: 1, outputBusId: 100, sourceChannelLayout: 1 }]);
+        engine.setTrackLanes([{ trackId: 1, outputBusId: 100, sourceChannelLayout: 'stereo' }]);
         const beforeRejectedRoute = posted.length;
         expect(() => engine.setTrackOutputBus(1, 999)).toThrow();
         expect(posted).toHaveLength(beforeRejectedRoute);
@@ -1618,7 +1655,7 @@ describe('SonareRealtimeEngineNode', () => {
         // A valid no-op topology sync must still use the prior route.
         expect(() => engine.setTrackSends(1, [])).not.toThrow();
         expect(latestSync().lanes).toEqual([
-          { trackId: 1, outputBusId: 100, sourceChannelLayout: 1 },
+          { trackId: 1, outputBusId: 100, sourceChannelLayout: 'stereo' },
         ]);
       } finally {
         engine.destroy();
@@ -1646,7 +1683,7 @@ describe('SonareRealtimeEngineNode', () => {
         expect(() => engine.setTrackSends(1, [{ busId: 999, levelDb: -6 }])).toThrow();
         expect(posted).toHaveLength(beforeRejectedSend);
 
-        expect(() => engine.setTrackLanes([1])).not.toThrow();
+        expect(() => engine.setTrackLanes([{ trackId: 1 }])).not.toThrow();
         expect(latestSync().lanes).toEqual([{ trackId: 1, outputBusId: 100 }]);
       } finally {
         engine.destroy();
@@ -1669,14 +1706,14 @@ describe('SonareRealtimeEngineNode', () => {
         };
       try {
         engine.setTrackBuses([{ busId: 100 }]);
-        engine.setTrackLanes([{ trackId: 1, outputBusId: 100, sourceChannelLayout: 1 }]);
+        engine.setTrackLanes([{ trackId: 1, outputBusId: 100, sourceChannelLayout: 'stereo' }]);
         const beforeRejectedLanes = posted.length;
         expect(() =>
           engine.setTrackLanes([
             {
               trackId: 1,
               outputBusId: 999,
-              sourceChannelLayout: 1,
+              sourceChannelLayout: 'stereo',
               sends: [{ busId: 999, levelDb: -6 }],
             },
           ]),
@@ -1685,7 +1722,7 @@ describe('SonareRealtimeEngineNode', () => {
 
         expect(() => engine.setTrackSends(1, [])).not.toThrow();
         expect(latestSync().lanes).toEqual([
-          { trackId: 1, outputBusId: 100, sourceChannelLayout: 1 },
+          { trackId: 1, outputBusId: 100, sourceChannelLayout: 'stereo' },
         ]);
       } finally {
         engine.destroy();
@@ -1708,7 +1745,7 @@ describe('SonareRealtimeEngineNode', () => {
         };
       try {
         const lanes = Array.from({ length: 32 }, (_, index) => index + 1);
-        engine.setTrackLanes(lanes);
+        engine.setTrackLanes(lanes.map((trackId) => ({ trackId })));
         const beforeRejectedLane = posted.length;
         expect(() => engine.setTrackSends(33, [])).toThrow();
         expect(posted).toHaveLength(beforeRejectedLane);
@@ -1749,23 +1786,23 @@ describe('SonareRealtimeEngineNode', () => {
         offline: OfflineEngineOption;
         automationId: number;
       }> => {
-        const offline = new (await import('../dist/index.js')).RealtimeEngine(
-          48000,
-          blockSize,
-        ) as unknown as OfflineEngineOption;
+        const offline = new (await import('../dist/index.js')).RealtimeEngine({
+          sampleRate: 48000,
+          maxBlockSize: blockSize,
+        }) as unknown as OfflineEngineOption;
         const engine = await SonareEngine.create(fakeContext(), {
           mode: 'postMessage',
           offlineEngine: offline,
-          offlineChannelCount: 2,
+          offlineNumChannels: 2,
           nodeFactory: () =>
             readyWorkletNode({
               postMessage: () => undefined,
               onmessage: undefined,
             }),
         });
-        engine.setTrackLanes([7]);
-        engine.setTrackStripJson(7, scene);
-        const automationId = engine.resolveTrackInsertAutomationId(7, 0, 'levelDb');
+        engine.setTrackLanes([{ trackId: 7 }]);
+        engine.setStrip(7, stripDocument(scene));
+        const automationId = engine.resolveStripInsertAutomationId(7, 0, 'levelDb');
         expect(automationId).toBeGreaterThan(0);
         offline.setClips(clips);
         offline.play();
@@ -1843,23 +1880,23 @@ describe('SonareRealtimeEngineNode', () => {
         offline: OfflineEngineOption;
         automationId: number;
       }> => {
-        const offline = new (await import('../dist/index.js')).RealtimeEngine(
-          48000,
-          blockSize,
-        ) as unknown as OfflineEngineOption;
+        const offline = new (await import('../dist/index.js')).RealtimeEngine({
+          sampleRate: 48000,
+          maxBlockSize: blockSize,
+        }) as unknown as OfflineEngineOption;
         const engine = await SonareEngine.create(fakeContext(), {
           mode: 'postMessage',
           offlineEngine: offline,
-          offlineChannelCount: 2,
+          offlineNumChannels: 2,
           nodeFactory: () =>
             readyWorkletNode({
               postMessage: () => undefined,
               onmessage: undefined,
             }),
         });
-        engine.setTrackLanes([7]);
-        engine.setTrackStripJson(7, scene);
-        const automationId = engine.resolveTrackInsertAutomationId(7, 0, 'levelDb');
+        engine.setTrackLanes([{ trackId: 7 }]);
+        engine.setStrip(7, stripDocument(scene));
+        const automationId = engine.resolveStripInsertAutomationId(7, 0, 'levelDb');
         expect(automationId).toBeGreaterThan(0);
         offline.setClips(clips);
         offline.play();
@@ -1880,7 +1917,7 @@ describe('SonareRealtimeEngineNode', () => {
         }
         // The accepted topology change keeps the in-flight ramp instead of snapping it.
         const expected = untouchedBaseline.offline.process(zeroes());
-        expect(() => accepted.engine.setTrackLanes([7])).not.toThrow();
+        expect(() => accepted.engine.setTrackLanes([{ trackId: 7 }])).not.toThrow();
         const actual = accepted.offline.process(zeroes());
         let maxDiff = 0;
         for (let channel = 0; channel < actual.length; channel += 1) {
@@ -1906,14 +1943,14 @@ describe('SonareRealtimeEngineNode', () => {
       // rebuilds the chain, so a reverb tail or compressor envelope disappears
       // and the result is audibly not a bypass.
       const posted: unknown[] = [];
-      const offline = new (await import('../dist/index.js')).RealtimeEngine(
-        48000,
-        128,
-      ) as unknown as OfflineEngineOption;
+      const offline = new (await import('../dist/index.js')).RealtimeEngine({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+      }) as unknown as OfflineEngineOption;
       const engine = await SonareEngine.create(fakeContext(), {
         mode: 'postMessage',
         offlineEngine: offline,
-        offlineChannelCount: 2,
+        offlineNumChannels: 2,
         nodeFactory: () =>
           readyWorkletNode({
             postMessage: (message: unknown) => posted.push(message),
@@ -1921,18 +1958,20 @@ describe('SonareRealtimeEngineNode', () => {
           }),
       });
       try {
-        engine.setBusStripJson(
+        engine.setBusStrip(
           100,
-          '{"version":1,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":6,\\"band0.enabled\\":1}"}]}],"connections":[]}',
+          busDocument(
+            '{"version":1,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":6,\\"band0.enabled\\":1}"}]}],"connections":[]}',
+          ),
         );
-        engine.setBusStripInsertBypassed(100, 0, true, true);
-        engine.setBusStripInsertBypassed(100, 0, false);
+        engine.setBusInsertBypassed(100, 0, { bypassed: true, resetOnBypass: true });
+        engine.setBusInsertBypassed(100, 0, { bypassed: false });
         // A fractional bus id used to be truncated before the check that would
         // have refused it, so 200.7 registered a bus 200 nobody asked for and
         // synced it -- a record left behind by a call that went on to throw.
         // An id no earlier line registered is what makes the leftover visible.
         const before = posted.length;
-        expect(() => engine.setBusStripInsertBypassed(200.7, 0, true)).toThrow(RangeError);
+        expect(() => engine.setBusInsertBypassed(200.7, 0, { bypassed: true })).toThrow(RangeError);
         expect(posted.length).toBe(before);
         expect(posted).toEqual(
           expect.arrayContaining([
@@ -1955,12 +1994,10 @@ describe('SonareRealtimeEngineNode', () => {
         // Every strip class the live facade addresses carries both live insert
         // operations; a class with only one of them is the gap this covers.
         for (const method of [
-          'setTrackStripInsertParamByName',
-          'setTrackStripInsertBypassed',
-          'setMasterStripInsertParamByName',
-          'setMasterStripInsertBypassed',
-          'setBusStripInsertParamByName',
-          'setBusStripInsertBypassed',
+          'setStripInsertParam',
+          'setStripInsertBypassed',
+          'setBusInsertParam',
+          'setBusInsertBypassed',
         ]) {
           expect(typeof (engine as unknown as Record<string, unknown>)[method]).toBe('function');
         }
@@ -1972,14 +2009,14 @@ describe('SonareRealtimeEngineNode', () => {
     it('drops removed bus scenes before replaying a neutral master strip', async () => {
       const posted: unknown[] = [];
       const livePosted: unknown[] = [];
-      const offline = new (await import('../dist/index.js')).RealtimeEngine(
-        48000,
-        128,
-      ) as unknown as OfflineEngineOption;
+      const offline = new (await import('../dist/index.js')).RealtimeEngine({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+      }) as unknown as OfflineEngineOption;
       const engine = await SonareEngine.create(fakeContext(), {
         mode: 'postMessage',
         offlineEngine: offline,
-        offlineChannelCount: 2,
+        offlineNumChannels: 2,
         nodeFactory: () =>
           readyWorkletNode({
             postMessage: (message: unknown) => posted.push(message),
@@ -1992,13 +2029,18 @@ describe('SonareRealtimeEngineNode', () => {
       );
       try {
         engine.setTrackBuses([{ busId: 100 }]);
-        engine.setBusStripJson(
+        engine.setBusStrip(
           100,
-          '{"version":1,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":0}}]}],"connections":[]}',
+          busDocument(
+            '{"version":1,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":0}}]}],"connections":[]}',
+          ),
         );
-        engine.setBusStripInsertParamByName(100, 0, 'band0.gainDb', 5);
-        engine.setMasterStripJson(
-          '{"version":1,"strips":[{"id":"master","inputTrimDb":-30}],"buses":[],"connections":[]}',
+        engine.setBusInsertParam(100, 0, { name: 'band0.gainDb', value: 5 });
+        engine.setStrip(
+          'master',
+          stripDocument(
+            '{"version":1,"strips":[{"id":"master","inputTrimDb":-30}],"buses":[],"connections":[]}',
+          ),
         );
         engine.setTrackOutputBus(7, 100);
         const beforeRejectedRemoval = posted.length;
@@ -2017,10 +2059,11 @@ describe('SonareRealtimeEngineNode', () => {
         expect(retained.insertParamOverrides).toEqual([
           expect.objectContaining({ kind: 'bus', busId: 100 }),
         ]);
-        engine.setTrackOutputBus(7, 0);
+        engine.setTrackOutputBus(7, null);
         engine.setTrackBuses([]);
-        engine.setMasterStripJson(
-          '{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}',
+        engine.setStrip(
+          'master',
+          stripDocument('{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}'),
         );
 
         const syncs = posted.filter(
@@ -2059,14 +2102,14 @@ describe('SonareRealtimeEngineNode', () => {
     it('keeps a pending bus insert command on its bus when buses are reordered', async () => {
       const blockSize = 128;
       const posted: unknown[] = [];
-      const offline = new (await import('../dist/index.js')).RealtimeEngine(
-        48000,
-        blockSize,
-      ) as unknown as OfflineEngineOption;
+      const offline = new (await import('../dist/index.js')).RealtimeEngine({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+      }) as unknown as OfflineEngineOption;
       const engine = await SonareEngine.create(fakeContext(), {
         mode: 'postMessage',
         offlineEngine: offline,
-        offlineChannelCount: 2,
+        offlineNumChannels: 2,
         nodeFactory: () =>
           readyWorkletNode({
             postMessage: (message: unknown) => posted.push(message),
@@ -2082,30 +2125,32 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setTrackOutputBus(7, 100);
         engine.setTrackOutputBus(8, 200);
         for (const busId of [100, 200]) {
-          engine.setBusStripJson(
+          engine.setBusStrip(
             busId,
-            JSON.stringify({
-              version: 1,
-              strips: [],
-              buses: [
-                {
-                  id: String(busId),
-                  inserts: [
-                    {
-                      slot: 'pre',
-                      processor: 'eq.parametric',
-                      params: {
-                        'band0.type': 1,
-                        'band0.frequencyHz': busId === 100 ? 800 : 3000,
-                        'band0.gainDb': 0,
-                        'band0.enabled': 1,
+            busDocument(
+              JSON.stringify({
+                version: 1,
+                strips: [],
+                buses: [
+                  {
+                    id: String(busId),
+                    inserts: [
+                      {
+                        slot: 'pre',
+                        processor: 'eq.parametric',
+                        params: {
+                          'band0.type': 1,
+                          'band0.frequencyHz': busId === 100 ? 800 : 3000,
+                          'band0.gainDb': 0,
+                          'band0.enabled': 1,
+                        },
                       },
-                    },
-                  ],
-                },
-              ],
-              connections: [],
-            }),
+                    ],
+                  },
+                ],
+                connections: [],
+              }),
+            ),
           );
         }
         const automationId = offline.resolveBusInsertAutomationId(100, 0, 'band0.gainDb');
@@ -2114,7 +2159,7 @@ describe('SonareRealtimeEngineNode', () => {
         live.receiveCommand({
           type: SonareEngineCommandType.SetParam,
           targetId: automationId,
-          sampleTime: 64,
+          renderFrame: 64,
           argFloat: 12,
         });
         // No process block between the scheduled command and topology edit.
@@ -2139,7 +2184,7 @@ describe('SonareRealtimeEngineNode', () => {
         offline.setClips(clips);
         live.receiveSync({ type: 'syncClips', clips });
         offline.play();
-        live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
+        live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
         let maxDiff = 0;
         let maxAbs = 0;
         // Bus 100's republished -96 dB gain ramps over 5 ms (two blocks) before it is silent.
@@ -2172,7 +2217,10 @@ describe('SonareRealtimeEngineNode', () => {
     });
 
     it('keeps queued bus insert automation IDs stable across reorder and retires removed IDs', async () => {
-      const realtime = new (await import('../dist/index.js')).RealtimeEngine(48000, 128);
+      const realtime = new (await import('../dist/index.js')).RealtimeEngine({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+      });
       const scene = (busId: number) =>
         JSON.stringify({
           version: 1,
@@ -2198,8 +2246,8 @@ describe('SonareRealtimeEngineNode', () => {
         });
       try {
         realtime.setTrackBuses([{ busId: 100 }, { busId: 200 }]);
-        realtime.setBusStripJson(100, scene(100));
-        realtime.setBusStripJson(200, scene(200));
+        realtime.setBusStrip(100, busDocument(scene(100)));
+        realtime.setBusStrip(200, busDocument(scene(200)));
         const oldId = realtime.resolveBusInsertAutomationId(100, 0, 'band0.gainDb');
         expect(oldId).toBeGreaterThan(0);
         realtime.setParameter(oldId, 12, 64);
@@ -2210,7 +2258,7 @@ describe('SonareRealtimeEngineNode', () => {
         expect(otherId).not.toBe(oldId);
         realtime.setTrackBuses([{ busId: 200 }]);
         realtime.setTrackBuses([{ busId: 200 }, { busId: 100 }]);
-        realtime.setBusStripJson(100, scene(100));
+        realtime.setBusStrip(100, busDocument(scene(100)));
         const replacementId = realtime.resolveBusInsertAutomationId(100, 0, 'band0.gainDb');
         expect(replacementId).toBeGreaterThan(0);
         expect(replacementId).not.toBe(oldId);
@@ -2224,14 +2272,14 @@ describe('SonareRealtimeEngineNode', () => {
       const blockSize = 128;
       const posted: unknown[] = [];
       const livePosted: unknown[] = [];
-      const offline = new (await import('../dist/index.js')).RealtimeEngine(
-        48000,
-        blockSize,
-      ) as unknown as OfflineEngineOption;
+      const offline = new (await import('../dist/index.js')).RealtimeEngine({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+      }) as unknown as OfflineEngineOption;
       const engine = await SonareEngine.create(fakeContext(), {
         mode: 'postMessage',
         offlineEngine: offline,
-        offlineChannelCount: 2,
+        offlineNumChannels: 2,
         nodeFactory: () =>
           readyWorkletNode({
             postMessage: (message: unknown) => posted.push(message),
@@ -2251,16 +2299,24 @@ describe('SonareRealtimeEngineNode', () => {
         }
       };
       try {
-        engine.setTrackLanes([7]);
-        engine.setMasterStripJson(
-          '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":{}}]}],"buses":[],"connections":[]}',
+        engine.setTrackLanes([{ trackId: 7 }]);
+        engine.setStrip(
+          'master',
+          stripDocument(
+            '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":{}}]}],"buses":[],"connections":[]}',
+          ),
         );
         replay(posted);
-        const liveEngine = (live as unknown as { engine: OfflineEngineOption }).engine;
-        const exactFallback = vi.spyOn(liveEngine, 'restoreMasterStripInsertParamByName');
+        const liveNative = (
+          live as unknown as { native: Record<string, (...args: unknown[]) => unknown> }
+        ).native;
+        const exactFallback = vi.spyOn(liveNative, 'restoreMasterStripInsertParamByName');
         for (let band = 0; band < 17; band += 1) {
           const before = posted.length;
-          engine.setMasterStripInsertParamByName(0, `band${band}.gainDb`, 1 + band / 10);
+          engine.setStripInsertParam('master', 0, {
+            name: `band${band}.gainDb`,
+            value: 1 + band / 10,
+          });
           replay(posted.slice(before));
         }
         expect(exactFallback).toHaveBeenCalledTimes(1);
@@ -2275,9 +2331,7 @@ describe('SonareRealtimeEngineNode', () => {
           live.process([[]], [[new Float32Array(blockSize), new Float32Array(blockSize)]]),
         ).toBe(true);
         expect(
-          offline
-            .drainTelemetry()
-            .filter((item) => item.error === SonareEngineTelemetryError.InsertAutomationOverflow),
+          offline.drainTelemetry().filter((item) => item.error === 'insertAutomationOverflow'),
         ).toEqual([]);
         expect(
           livePosted.filter((item) => (item as { type?: unknown }).type === 'syncError'),
@@ -2291,14 +2345,14 @@ describe('SonareRealtimeEngineNode', () => {
     it('returns an automated insert to the replacement scene value', async () => {
       const blockSize = 128;
       const posted: unknown[] = [];
-      const offline = new (await import('../dist/index.js')).RealtimeEngine(
-        48000,
-        blockSize,
-      ) as unknown as OfflineEngineOption;
+      const offline = new (await import('../dist/index.js')).RealtimeEngine({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+      }) as unknown as OfflineEngineOption;
       const engine = await SonareEngine.create(fakeContext(), {
         mode: 'postMessage',
         offlineEngine: offline,
-        offlineChannelCount: 2,
+        offlineNumChannels: 2,
         nodeFactory: () =>
           readyWorkletNode({
             postMessage: (message: unknown) => posted.push(message),
@@ -2333,10 +2387,10 @@ describe('SonareRealtimeEngineNode', () => {
           connections: [],
         });
       try {
-        engine.setTrackLanes([7]);
-        engine.setTrackStripJson(7, scene(0));
-        engine.setTrackStripInsertParamByName(7, 0, 'levelDb', 6);
-        engine.setTrackStripJson(7, scene(-12));
+        engine.setTrackLanes([{ trackId: 7 }]);
+        engine.setStrip(7, stripDocument(scene(0)));
+        engine.setStripInsertParam(7, 0, { name: 'levelDb', value: 6 });
+        engine.setStrip(7, stripDocument(scene(-12)));
         replay(posted);
         const frames = blockSize * 180;
         const tone = new Float32Array(frames);
@@ -2349,7 +2403,7 @@ describe('SonareRealtimeEngineNode', () => {
         offline.setClips(clips);
         live.receiveSync({ type: 'syncClips', clips });
         offline.play();
-        live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
+        live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
         const power = (): number => {
           let sum = 0;
           let liveSum = 0;
@@ -2370,7 +2424,7 @@ describe('SonareRealtimeEngineNode', () => {
         };
         const scenePower = power();
         expect(scenePower).toBeGreaterThan(0.01);
-        const id = engine.resolveTrackInsertAutomationId(7, 0, 'levelDb');
+        const id = engine.resolveStripInsertAutomationId(7, 0, 'levelDb');
         const beforeAutomation = posted.length;
         engine.setAutomationLane(id, [{ ppq: 0, value: 0 }]);
         replay(posted.slice(beforeAutomation));
@@ -2394,14 +2448,14 @@ describe('SonareRealtimeEngineNode', () => {
       // mirror keeps it, so the live output and an offline render disagree.
       const blockSize = 128;
       const posted: unknown[] = [];
-      const offline = new (await import('../dist/index.js')).RealtimeEngine(
-        48000,
-        blockSize,
-      ) as unknown as OfflineEngineOption;
+      const offline = new (await import('../dist/index.js')).RealtimeEngine({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+      }) as unknown as OfflineEngineOption;
       const engine = await SonareEngine.create(fakeContext(), {
         mode: 'postMessage',
         offlineEngine: offline,
-        offlineChannelCount: 2,
+        offlineNumChannels: 2,
         nodeFactory: () =>
           readyWorkletNode({
             postMessage: (message: unknown) => posted.push(message),
@@ -2445,65 +2499,66 @@ describe('SonareRealtimeEngineNode', () => {
           ],
           connections: [],
         });
-        engine.setBusStripJson(100, busStripJson);
-        engine.setMasterStripJson(
-          JSON.stringify({
-            version: 1,
-            strips: [
-              {
-                id: 'master',
-                // The canonical key may still carry the legacy JSON-string
-                // value. It must remain a string after a by-name edit.
-                inserts: [
-                  {
-                    slot: 'pre',
-                    processor: 'eq.parametric',
-                    params: JSON.stringify(eqParams(0)),
-                  },
-                ],
-              },
-            ],
-            buses: [],
-            connections: [],
-          }),
+        engine.setBusStrip(100, busDocument(busStripJson));
+        engine.setStrip(
+          'master',
+          stripDocument(
+            JSON.stringify({
+              version: 1,
+              strips: [
+                {
+                  id: 'master',
+                  // The canonical key may still carry the legacy JSON-string
+                  // value. It must remain a string after a by-name edit.
+                  inserts: [
+                    {
+                      slot: 'pre',
+                      processor: 'eq.parametric',
+                      params: JSON.stringify(eqParams(0)),
+                    },
+                  ],
+                },
+              ],
+              buses: [],
+              connections: [],
+            }),
+          ),
         );
-        engine.setTrackStripJson(
+        engine.setStrip(
           7,
-          JSON.stringify({
-            version: 1,
-            strips: [
-              {
-                id: 'track-7',
-                // Current scene files use an object-valued params bag.
-                inserts: [{ slot: 'pre', processor: 'eq.parametric', params: eqParams(0) }],
-              },
-            ],
-            buses: [],
-            connections: [],
-          }),
+          stripDocument(
+            JSON.stringify({
+              version: 1,
+              strips: [
+                {
+                  id: 'track-7',
+                  // Current scene files use an object-valued params bag.
+                  inserts: [{ slot: 'pre', processor: 'eq.parametric', params: eqParams(0) }],
+                },
+              ],
+              buses: [],
+              connections: [],
+            }),
+          ),
         );
-        engine.setBusStripPanMode(100, 'stereoPan');
-        engine.setBusStripPan(100, 0.6);
-        engine.setBusStripPanLaw(100, 'const6dB');
-        engine.setBusStripEqBand(100, 2, {
+        engine.setBusPanMode(100, 'stereoPan');
+        engine.setBusPan(100, 0.6);
+        engine.setBusPanLaw(100, 'const6dB');
+        engine.setBusEqBand(100, 2, {
           type: 'Peak',
           frequencyHz: 800,
           gainDb: 9,
           q: 1,
           enabled: true,
         });
-        engine.setMasterStripEqBand(1, {
+        engine.setStripEqBand('master', 1, {
           type: 'Peak',
           frequencyHz: 3000,
           gainDb: -6,
           q: 2,
           enabled: true,
         });
-        engine.setTrackStripEqBand(
-          7,
-          0,
-          '{"type":"Peak","frequencyHz":1500,"gainDb":6,"enabled":true}',
-        );
+        engine.setStripEqBand(7, 0, { type: 'Peak', frequencyHz: 1500, gainDb: 6, enabled: true });
         const replay = (messages: unknown[]): void => {
           for (const message of messages) {
             const type = (message as { type?: unknown }).type;
@@ -2518,9 +2573,9 @@ describe('SonareRealtimeEngineNode', () => {
         // smoother slots at values far from the intended targets.
         const beforeInsert = posted.length;
         replay(posted);
-        engine.setTrackStripInsertParamByName(7, 0, 'band0.gainDb', -6);
-        engine.setMasterStripInsertParamByName(0, 'band0.gainDb', 3);
-        engine.setBusStripInsertParamByName(100, 0, 'band0.gainDb', -12);
+        engine.setStripInsertParam(7, 0, { name: 'band0.gainDb', value: -6 });
+        engine.setStripInsertParam('master', 0, { name: 'band0.gainDb', value: 3 });
+        engine.setBusInsertParam(100, 0, { name: 'band0.gainDb', value: -12 });
         replay(posted.slice(beforeInsert));
         offline.process([new Float32Array(blockSize), new Float32Array(blockSize)]);
         expect(
@@ -2530,9 +2585,9 @@ describe('SonareRealtimeEngineNode', () => {
         // bus topology update drops its active slot while the processor still
         // holds an intermediate value; replay must restore the final target.
         const beforeTarget = posted.length;
-        engine.setTrackStripInsertParamByName(7, 0, 'band0.gainDb', 6);
-        engine.setMasterStripInsertParamByName(0, 'band0.gainDb', -3);
-        engine.setBusStripInsertParamByName(100, 0, 'band0.gainDb', 12);
+        engine.setStripInsertParam(7, 0, { name: 'band0.gainDb', value: 6 });
+        engine.setStripInsertParam('master', 0, { name: 'band0.gainDb', value: -3 });
+        engine.setBusInsertParam(100, 0, { name: 'band0.gainDb', value: 12 });
         replay(posted.slice(beforeTarget));
         offline.process([new Float32Array(blockSize), new Float32Array(blockSize)]);
         expect(
@@ -2543,8 +2598,8 @@ describe('SonareRealtimeEngineNode', () => {
         await Promise.resolve();
         const beforeRouting = posted.length;
         // Bus 200 never received scene JSON, so its cache entry is synthesized.
-        engine.setBusStripDualPan(200, -0.7, -0.2);
-        engine.setBusStripPanMode(200, 'dualPan');
+        engine.setBusDualPan(200, -0.7, -0.2);
+        engine.setBusPanMode(200, 'dualPan');
         // Any routing change re-posts every cached strip.
         engine.setTrackSends(7, [{ busId: 200, levelDb: -6, enabled: true }]);
 
@@ -2611,7 +2666,7 @@ describe('SonareRealtimeEngineNode', () => {
           live.process([[]], [[new Float32Array(blockSize), new Float32Array(blockSize)]]),
         ).toBe(true);
         offline.play();
-        live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
+        live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
         let maxDiff = 0;
         let maxAbs = 0;
         let imbalance = 0;
@@ -2643,7 +2698,7 @@ describe('SonareRealtimeEngineNode', () => {
         // settled audio. Without structural replay, the cleared bus slot
         // freezes at its intermediate value and this second set changes it.
         const beforeRepeat = posted.length;
-        engine.setBusStripInsertParamByName(100, 0, 'band0.gainDb', 12);
+        engine.setBusInsertParam(100, 0, { name: 'band0.gainDb', value: 12 });
         replay(posted.slice(beforeRepeat));
         let afterRepeatEnergy = 0;
         for (let block = 0; block < 40; block += 1) {
@@ -2752,16 +2807,23 @@ describe('SonareRealtimeEngineNode', () => {
         // Replacing a full strip scene is the new source of truth and clears
         // only that target's retained by-name values.
         const beforeReplacement = posted.length;
-        engine.setTrackStripJson(
+        engine.setStrip(
           7,
-          '{"version":1,"strips":[{"id":"track-7","inserts":[{"slot":"pre","processor":"eq.parametric","params":{}}]}],"buses":[],"connections":[]}',
+          stripDocument(
+            '{"version":1,"strips":[{"id":"track-7","inserts":[{"slot":"pre","processor":"eq.parametric","params":{}}]}],"buses":[],"connections":[]}',
+          ),
         );
-        engine.setMasterStripJson(
-          '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":0}}]}],"buses":[],"connections":[]}',
+        engine.setStrip(
+          'master',
+          stripDocument(
+            '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":0}}]}],"buses":[],"connections":[]}',
+          ),
         );
-        engine.setBusStripJson(
+        engine.setBusStrip(
           100,
-          '{"version":1,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":0}}]}],"connections":[]}',
+          busDocument(
+            '{"version":1,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":0}}]}],"connections":[]}',
+          ),
         );
         const clearedSync = posted.at(-1) as {
           type: string;
@@ -2807,7 +2869,7 @@ describe('SonareRealtimeEngineNode', () => {
         }
         expect(afterResetEnergy / beforeRepeatEnergy).toBeLessThan(0.8);
         expect(resetMaxDiff).toBeLessThanOrEqual(1e-6 * Math.max(1, maxAbs));
-        const insertAutomationId = engine.resolveTrackInsertAutomationId(7, 0, 'band0.gainDb');
+        const insertAutomationId = engine.resolveStripInsertAutomationId(7, 0, 'band0.gainDb');
         expect(insertAutomationId).toBeGreaterThan(0);
         let beforeAutomation = posted.length;
         engine.setAutomationLane(insertAutomationId, [{ ppq: 0, value: -12 }]);
@@ -2851,20 +2913,20 @@ describe('SonareRealtimeEngineNode', () => {
         // A later full replacement may remove a sidechained insert entirely.
         // Its cached binding must be pruned before offline replay and posting.
         let beforeChange = posted.length;
-        engine.setTrackStripInsertParamByName(7, 0, 'band0.gainDb', -6);
+        engine.setStripInsertParam(7, 0, { name: 'band0.gainDb', value: -6 });
         replay(posted.slice(beforeChange));
         offline.process([new Float32Array(blockSize), new Float32Array(blockSize)]);
         expect(
           live.process([[]], [[new Float32Array(blockSize), new Float32Array(blockSize)]]),
         ).toBe(true);
         beforeChange = posted.length;
-        engine.setTrackStripInsertParamByName(7, 0, 'band0.gainDb', 6);
+        engine.setStripInsertParam(7, 0, { name: 'band0.gainDb', value: 6 });
         replay(posted.slice(beforeChange));
         // These messages are sidechain deltas while the track insert is
         // gliding. They must not rebuild lanes and freeze that glide live.
         beforeChange = posted.length;
-        engine.setBusSidechain(100, 0, 'track', 7);
-        engine.setMasterSidechain(0, 'bus', 100);
+        engine.setBusSidechain(100, 0, { kind: 'track', id: 7 });
+        engine.setStripSidechain('master', 0, { kind: 'bus', id: 100 });
         replay(posted.slice(beforeChange));
         let sidechainMaxDiff = 0;
         let sidechainMaxAbs = 0;
@@ -2893,20 +2955,21 @@ describe('SonareRealtimeEngineNode', () => {
         expect(sidechainMaxAbs).toBeGreaterThan(0.01);
         expect(sidechainMaxDiff).toBeLessThanOrEqual(1e-6 * Math.max(1, maxAbs));
         beforeChange = posted.length;
-        engine.setBusStripInsertParamByName(100, 0, 'band0.gainDb', 12);
-        engine.setMasterStripInsertParamByName(0, 'band0.gainDb', -3);
+        engine.setBusInsertParam(100, 0, { name: 'band0.gainDb', value: 12 });
+        engine.setStripInsertParam('master', 0, { name: 'band0.gainDb', value: -3 });
         replay(posted.slice(beforeChange));
         offline.process([new Float32Array(blockSize), new Float32Array(blockSize)]);
         expect(
           live.process([[]], [[new Float32Array(blockSize), new Float32Array(blockSize)]]),
         ).toBe(true);
         beforeChange = posted.length;
-        engine.setBusStripJson(
+        engine.setBusStrip(
           100,
-          '{"version":1,"strips":[],"buses":[{"id":"100"}],"connections":[]}',
+          busDocument('{"version":1,"strips":[],"buses":[{"id":"100"}],"connections":[]}'),
         );
-        engine.setMasterStripJson(
-          '{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}',
+        engine.setStrip(
+          'master',
+          stripDocument('{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}'),
         );
         replay(posted.slice(beforeChange));
         const noInserts = posted.at(-1) as {
@@ -2934,14 +2997,14 @@ describe('SonareRealtimeEngineNode', () => {
       // so a setter the cache did not absorb is reverted on the worklet only.
       const blockSize = 128;
       const posted: unknown[] = [];
-      const offline = new (await import('../dist/index.js')).RealtimeEngine(
-        48000,
-        blockSize,
-      ) as unknown as OfflineEngineOption;
+      const offline = new (await import('../dist/index.js')).RealtimeEngine({
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+      }) as unknown as OfflineEngineOption;
       const engine = await SonareEngine.create(fakeContext(), {
         mode: 'postMessage',
         offlineEngine: offline,
-        offlineChannelCount: 2,
+        offlineNumChannels: 2,
         nodeFactory: () =>
           readyWorkletNode({
             postMessage: (message: unknown) => posted.push(message),
@@ -2954,26 +3017,27 @@ describe('SonareRealtimeEngineNode', () => {
         { postMessage: (message) => livePosted.push(message) },
       );
       try {
-        engine.setTrackLanes([7, 8]);
-        engine.setTrackStripJson(
+        engine.setTrackLanes([{ trackId: 7 }, { trackId: 8 }]);
+        engine.setStrip(
           7,
-          '{"version":1,"strips":[{"id":"track-7"}],"buses":[],"connections":[]}',
+          stripDocument('{"version":1,"strips":[{"id":"track-7"}],"buses":[],"connections":[]}'),
         );
-        engine.setTrackStripJson(
+        engine.setStrip(
           8,
-          '{"version":1,"strips":[{"id":"track-8"}],"buses":[],"connections":[]}',
+          stripDocument('{"version":1,"strips":[{"id":"track-8"}],"buses":[],"connections":[]}'),
         );
-        engine.setMasterStripJson(
-          '{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}',
+        engine.setStrip(
+          'master',
+          stripDocument('{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}'),
         );
-        engine.setTrackStripPanMode(7, 'stereoPan');
-        engine.setTrackStripPan(7, -0.5);
-        engine.setTrackStripPanLaw(7, 'const6dB');
-        engine.setTrackStripPanMode(8, 'dualPan');
-        engine.setTrackStripDualPan(8, 0.2, 0.9);
-        engine.setTrackStripChannelDelaySamples(8, 16);
-        expect(engine.setStripGain('master', -4)).toBe(true);
-        expect(engine.setStripPan('master', 0.3)).toBe(true);
+        engine.setStripPanMode(7, 'stereoPan');
+        engine.setStripPan(7, -0.5);
+        engine.setStripPanLaw(7, 'const6dB');
+        engine.setStripPanMode(8, 'dualPan');
+        engine.setStripDualPan(8, 0.2, 0.9);
+        engine.setStripChannelDelaySamples(8, 16);
+        expect(engine.setStripFaderDb('master', -4)).toBeUndefined();
+        expect(engine.setStripPan('master', 0.3)).toBeUndefined();
         const replay = (messages: unknown[]): void => {
           for (const message of messages) {
             const type = (message as { type?: unknown }).type;
@@ -3012,7 +3076,7 @@ describe('SonareRealtimeEngineNode', () => {
         offline.setClips(clips);
         live.receiveSync({ type: 'syncClips', clips });
         offline.play();
-        live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
+        live.receiveCommand({ type: SonareEngineCommandType.TransportPlay, renderFrame: -1 });
         let maxDiff = 0;
         let maxAbs = 0;
         for (let block = 0; block < 40; block += 1) {
@@ -3207,11 +3271,11 @@ describe('SonareRealtimeEngineNode', () => {
       ]);
       const firstMarker = engine.addMarker(1, 'in');
       const secondMarker = engine.addMarker(3, 'out');
-      expect(engine.markerCount()).toBe(2);
-      expect(engine.markerByIndex(0)).toMatchObject({ id: firstMarker, ppq: 1, name: 'in' });
+      expect(engine.markers().length).toBe(2);
+      expect(engine.markers()[0]).toMatchObject({ id: firstMarker, ppq: 1, name: 'in' });
       expect(engine.marker(secondMarker)).toMatchObject({ id: secondMarker, ppq: 3 });
-      expect(engine.setLoopFromMarkers(firstMarker, secondMarker)).toBe(true);
-      await expect(engine.getTransportState()).resolves.toMatchObject({
+      expect(engine.setLoopFromMarkers(firstMarker, secondMarker)).toBeUndefined();
+      await expect(engine.transportState()).resolves.toMatchObject({
         playing: true,
         bpm: 90,
         timeSignature: { numerator: 7, denominator: 8 },
@@ -3263,8 +3327,8 @@ describe('SonareRealtimeEngineNode', () => {
       ]);
       expect(resolved).toHaveLength(2);
       expect(resolved[0].id).not.toBe(stale);
-      expect(engine.markerCount()).toBe(2);
-      expect(engine.markerByIndex(0)).toMatchObject({ ppq: 1, name: 'verse' });
+      expect(engine.markers().length).toBe(2);
+      expect(engine.markers()[0]).toMatchObject({ ppq: 1, name: 'verse' });
       expect(engine.marker(resolved[1].id)).toMatchObject({ ppq: 5, name: 'chorus' });
       expect(() => engine.marker(stale)).toThrow();
 
@@ -3284,7 +3348,7 @@ describe('SonareRealtimeEngineNode', () => {
 
       // Clearing posts an empty replace-all sync to the worklet.
       engine.setMarkers([]);
-      expect(engine.markerCount()).toBe(0);
+      expect(engine.markers().length).toBe(0);
       expect(posted).toEqual(
         expect.arrayContaining([expect.objectContaining({ type: 'syncMarkers', markers: [] })]),
       );
@@ -3307,19 +3371,19 @@ describe('SonareRealtimeEngineNode', () => {
       // Reserved mixer namespace encoding: master = lane 0xff; kind 1 = faderDb,
       // kind 2 = pan. Track and bus ids are resolved by track or bus and stay put
       // when another lane or bus is declared.
-      const masterFader = engine.automationParamId('master', 'faderDb');
+      const masterFader = engine.resolveStripAutomationId('master', 'faderDb');
       expect(masterFader).toBe(0x4d58ff01);
-      expect(engine.automationParamId('master', 'pan')).toBe(0x4d58ff02);
-      const track10Fader = engine.automationParamId(10, 'faderDb');
-      const track10Pan = engine.automationParamId(10, 'pan');
+      expect(engine.resolveStripAutomationId('master', 'pan')).toBe(0x4d58ff02);
+      const track10Fader = engine.resolveStripAutomationId(10, 'faderDb');
+      const track10Pan = engine.resolveStripAutomationId(10, 'pan');
       expect(track10Fader).toBeGreaterThan(0);
       expect(track10Pan).not.toBe(track10Fader);
-      expect(engine.automationParamId(20, 'faderDb')).not.toBe(track10Fader);
-      expect(engine.automationParamId(10, 'faderDb')).toBe(track10Fader);
-      const bus1Fader = engine.busAutomationParamId(1);
+      expect(engine.resolveStripAutomationId(20, 'faderDb')).not.toBe(track10Fader);
+      expect(engine.resolveStripAutomationId(10, 'faderDb')).toBe(track10Fader);
+      const bus1Fader = engine.resolveBusAutomationId(1, 'faderDb');
       expect(bus1Fader).toBeGreaterThan(0);
-      expect(engine.busAutomationParamId(2)).not.toBe(bus1Fader);
-      expect(engine.busAutomationParamId(1)).toBe(bus1Fader);
+      expect(engine.resolveBusAutomationId(2, 'faderDb')).not.toBe(bus1Fader);
+      expect(engine.resolveBusAutomationId(1, 'faderDb')).toBe(bus1Fader);
 
       // Replace-all installs the sorted lane on the offline engine and mirrors
       // it to the live worklet via syncAutomation.
@@ -3327,7 +3391,7 @@ describe('SonareRealtimeEngineNode', () => {
         { ppq: 4, value: -12 },
         { ppq: 0, value: 0 },
       ]);
-      expect(engine.automationLaneCount()).toBe(1);
+      expect(engine.automationLaneCount).toBe(1);
       expect(posted).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -3343,7 +3407,7 @@ describe('SonareRealtimeEngineNode', () => {
 
       // A second replace overwrites rather than appends.
       engine.setAutomationLane(masterFader, [{ ppq: 1, value: -6 }]);
-      expect(engine.automationLaneCount()).toBe(1);
+      expect(engine.automationLaneCount).toBe(1);
 
       // Clearing posts an empty replace-all sync to the worklet.
       engine.setAutomationLane(masterFader, []);
@@ -3393,31 +3457,31 @@ describe('SonareRealtimeEngineNode', () => {
           connections: [],
         });
       try {
-        engine.setTrackLanes([7]);
-        engine.setTrackStripJson(7, scene('track', true));
-        engine.setBusStripJson(100, scene('bus', true));
-        engine.setMasterStripJson(scene('master', true));
+        engine.setTrackLanes([{ trackId: 7 }]);
+        engine.setStrip(7, stripDocument(scene('track', true)));
+        engine.setBusStrip(100, busDocument(scene('bus', true)));
+        engine.setStrip('master', stripDocument(scene('master', true)));
         const ids = [
-          engine.resolveTrackInsertAutomationId(7, 0, 'band0.gainDb'),
+          engine.resolveStripInsertAutomationId(7, 0, 'band0.gainDb'),
           engine.resolveBusInsertAutomationId(100, 0, 'band0.gainDb'),
-          engine.resolveMasterInsertAutomationId(0, 'band0.gainDb'),
+          engine.resolveStripInsertAutomationId('master', 0, 'band0.gainDb'),
         ];
         expect(ids.every((id) => id >= 0)).toBe(true);
         expect(new Set(ids).size).toBe(3);
         for (const id of ids) {
           engine.setAutomationLane(id, [{ ppq: 0, value: 6 }]);
         }
-        expect(engine.automationLaneCount()).toBe(3);
+        expect(engine.automationLaneCount).toBe(3);
 
         const replace = [
-          () => engine.setTrackStripJson(7, scene('track', false)),
-          () => engine.setBusStripJson(100, scene('bus', false)),
-          () => engine.setMasterStripJson(scene('master', false)),
+          () => engine.setStrip(7, stripDocument(scene('track', false))),
+          () => engine.setBusStrip(100, busDocument(scene('bus', false))),
+          () => engine.setStrip('master', stripDocument(scene('master', false))),
         ];
         for (let index = 0; index < replace.length; index += 1) {
           const before = posted.length;
           replace[index]();
-          expect(engine.automationLaneCount()).toBe(2 - index);
+          expect(engine.automationLaneCount).toBe(2 - index);
           expect(posted.slice(before)).toEqual(
             expect.arrayContaining([
               expect.objectContaining({ type: 'syncAutomation', paramId: ids[index], points: [] }),
@@ -3440,11 +3504,11 @@ describe('SonareRealtimeEngineNode', () => {
         // A UI may cache the resolved id while repeatedly editing the same
         // slot. Reinstalling a lane through that id must remain associated
         // with the strip for the next full replacement.
-        engine.setTrackStripJson(7, scene('track', true));
+        engine.setStrip(7, stripDocument(scene('track', true)));
         engine.setAutomationLane(ids[0], [{ ppq: 0, value: 3 }]);
-        expect(engine.automationLaneCount()).toBe(1);
-        engine.setTrackStripJson(7, scene('track', false));
-        expect(engine.automationLaneCount()).toBe(0);
+        expect(engine.automationLaneCount).toBe(1);
+        engine.setStrip(7, stripDocument(scene('track', false)));
+        expect(engine.automationLaneCount).toBe(0);
       } finally {
         engine.destroy();
       }
@@ -3472,26 +3536,26 @@ describe('SonareRealtimeEngineNode', () => {
         connections: [],
       });
       try {
-        engine.setBusStripJson(100, scene);
+        engine.setBusStrip(100, busDocument(scene));
         const oldId = engine.resolveBusInsertAutomationId(100, 0, 'band0.gainDb');
         expect(oldId).toBeGreaterThanOrEqual(0);
         engine.setAutomationLane(oldId, [{ ppq: 0, value: 5 }]);
-        expect(engine.automationLaneCount()).toBe(1);
+        expect(engine.automationLaneCount).toBe(1);
 
         const beforeRemoval = posted.length;
         engine.setTrackBuses([]);
-        expect(engine.automationLaneCount()).toBe(0);
+        expect(engine.automationLaneCount).toBe(0);
         expect(posted.slice(beforeRemoval)).toEqual(
           expect.arrayContaining([
             expect.objectContaining({ type: 'syncAutomation', paramId: oldId, points: [] }),
           ]),
         );
 
-        engine.setBusStripJson(100, scene);
+        engine.setBusStrip(100, busDocument(scene));
         const newId = engine.resolveBusInsertAutomationId(100, 0, 'band0.gainDb');
         expect(newId).toBeGreaterThanOrEqual(0);
         expect(newId).not.toBe(oldId);
-        expect(engine.automationLaneCount()).toBe(0);
+        expect(engine.automationLaneCount).toBe(0);
       } finally {
         engine.destroy();
       }
@@ -3510,10 +3574,10 @@ describe('SonareRealtimeEngineNode', () => {
           }),
       });
 
-      expect(engine.warpVoiceCapacity()).toBe(8);
+      expect(engine.warpVoiceCapacity).toBe(8);
 
       engine.setWarpVoiceCapacity(12);
-      expect(engine.warpVoiceCapacity()).toBe(12);
+      expect(engine.warpVoiceCapacity).toBe(12);
       expect(posted).toEqual(
         expect.arrayContaining([{ type: 'syncWarpVoiceCapacity', voices: 12 }]),
       );
@@ -3522,7 +3586,7 @@ describe('SonareRealtimeEngineNode', () => {
       // both the offline mirror and the worklet (no further sync is posted).
       posted.length = 0;
       expect(() => engine.setWarpVoiceCapacity(65)).toThrow();
-      expect(engine.warpVoiceCapacity()).toBe(12);
+      expect(engine.warpVoiceCapacity).toBe(12);
       expect(posted).toEqual([]);
 
       engine.destroy();
@@ -3558,7 +3622,7 @@ describe('SonareRealtimeEngineNode', () => {
       await engine.suspend();
       await engine.resume();
       expect(lifecycle).toEqual(['suspend', 'resume']);
-      expect(engine.transport.play()).toBe(true);
+      expect(engine.transport.play()).toBeUndefined();
       engine.destroy();
       expect(disconnected).toEqual([true]);
       expect(posted.at(-1)).toMatchObject({ type: 'destroy' });
@@ -3631,31 +3695,31 @@ describe('SonareRealtimeEngineNode', () => {
       const offline = (engine as unknown as { offlineEngine: RealtimeEngineLike }).offlineEngine;
       try {
         // Both bounds reach the live command as the exact doubles the mirror receives.
-        expect(engine.setLoop(0, 4 / 3)).toBe(true);
+        expect(engine.setLoop({ startPpq: 0, endPpq: 4 / 3 })).toBeUndefined();
         expect(posted.at(-1)).toMatchObject({ argFloat: 0, argFloat2: 4 / 3 });
-        expect(offline.getTransportState().loopEndPpq).toBeCloseTo(4 / 3, 12);
-        expect(engine.setLoop(0, 1e10)).toBe(true);
+        expect(offline.transportState().loopEndPpq).toBeCloseTo(4 / 3, 12);
+        expect(engine.setLoop({ startPpq: 0, endPpq: 1e10 })).toBeUndefined();
         expect(posted.at(-1)).toMatchObject({ argFloat2: 1e10 });
         // A loop end the live engine refuses changes neither engine.
         posted.length = 0;
-        expect(engine.setLoop(0, 2e12)).toBe(false);
+        expect(() => engine.setLoop({ startPpq: 0, endPpq: 2e12 })).toThrow(RangeError);
         expect(posted).toEqual([]);
-        expect(offline.getTransportState().loopEndPpq).toBeCloseTo(1e10, 0);
+        expect(offline.transportState().loopEndPpq).toBeCloseTo(1e10, 0);
 
         // A refused seek in seconds changes neither engine.
-        engine.transport.seekSeconds(1);
-        const position = offline.getTransportState().samplePosition;
+        engine.transport.seekSec(1);
+        const position = offline.transportState().samplePosition;
         expect(position).toBe(48000);
         for (const seconds of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
-          expect(() => engine.transport.seekSeconds(seconds)).toThrow(RangeError);
+          expect(() => engine.transport.seekSec(seconds)).toThrow(RangeError);
         }
-        expect(offline.getTransportState().samplePosition).toBe(position);
+        expect(offline.transportState().samplePosition).toBe(position);
 
         // A refused bus gain leaves the cached bus, so a later mixer sync does not replay it.
-        expect(engine.setBusGain(1, -6)).toBe(true);
-        expect(engine.setBusGain(1, Number.NaN)).toBe(false);
+        expect(engine.setBusGainDb(1, -6)).toBeUndefined();
+        expect(() => engine.setBusGainDb(1, Number.NaN)).toThrow(RangeError);
         posted.length = 0;
-        engine.setTrackLanes([7]);
+        engine.setTrackLanes([{ trackId: 7 }]);
         const mixer = posted
           .filter((message) => (message as { type?: unknown }).type === 'syncMixer')
           .at(-1) as { buses?: Array<{ busId: number; gainDb?: number }> } | undefined;

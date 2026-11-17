@@ -23,8 +23,11 @@ describe('Mixer input count (WASM)', () => {
 
   beforeAll(async () => {
     await init();
-    mixer = Mixer.fromSceneJson(mixingScenePresetJson('commentaryDucking'), SR, BLOCK);
-    strips = mixer.stripCount();
+    mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+      sampleRate: SR,
+      blockSize: BLOCK,
+    });
+    strips = mixer.stripCount;
   });
 
   it('processStereo takes fewer, equal and refuses more inputs than strips', () => {
@@ -48,7 +51,11 @@ describe('Mixer input count (WASM)', () => {
   });
 
   it('a missing strip is silent: fewer inputs match explicit silence on the rest', () => {
-    const fresh = () => Mixer.fromSceneJson(mixingScenePresetJson('commentaryDucking'), SR, BLOCK);
+    const fresh = () =>
+      Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+        sampleRate: SR,
+        blockSize: BLOCK,
+      });
     const silent = () => Array.from({ length: strips - 1 }, () => new Float32Array(BLOCK));
     const a = fresh();
     const b = fresh();

@@ -23,7 +23,6 @@ import type {
   AutoTuneRequest,
   PitchCorrectTimevaryingRequest,
   PitchCorrectToMidiRequest,
-  PitchCorrectToMidiTimevaryingRequest,
   PitchShiftRequest,
   TimeStretchRequest,
 } from './effects_timepitch.js';
@@ -59,7 +58,6 @@ import type {
   DecomposeRequest,
   DecomposeStemsLinkedRequest,
   DecomposeStemsRequest,
-  DecomposeWithInitRequest,
   HpssWithResidualRequest,
   NnFilterRequest,
   RemixRequest,
@@ -183,6 +181,18 @@ import type {
   WaveformPeakPyramidRequest,
   WaveformPeaksRequest,
 } from './metering.js';
+import type {
+  FaderAutomationPoint,
+  InsertAutomationPoint,
+  MixerConfig,
+  MixerJsonOptions,
+  MixerMeterOptions,
+  MixerSend,
+  PanAutomationPoint,
+  PolarityInvert,
+  SendAutomationPoint,
+  WidthAutomationPoint,
+} from './mixer.js';
 import type { SuggestMixSceneRequest } from './mixing_assistant.js';
 import type { MixStereoRequest } from './mixing_oneshot.js';
 import type { AnalyzePolyphonicRequest } from './polyphony.js';
@@ -193,8 +203,17 @@ import type {
   ProjectMidiFxPreviewRequest,
   ProjectTranscribeRequest,
 } from './project_types.js';
-import type { RirSynthOptions, RoomPlacement } from './public_types_acoustic.js';
-import type { EngineCapturePunchRequest, RenderOfflineRequest } from './public_types_engine.js';
+import type { RoomPlacement, SynthesizeRirRequest } from './public_types_acoustic.js';
+import type {
+  CaptureOptions,
+  CapturePunch,
+  EngineAutomationPoint,
+  EngineLoop,
+  EngineMetronomeConfig,
+  RealtimeEngineConfig,
+  RenderOfflineRequest,
+  SidechainSource,
+} from './public_types_engine.js';
 import type {
   MasteringChainConfig,
   PairAnalysis,
@@ -275,6 +294,7 @@ import type {
   MasteringRepairTrimSilenceStereoRequest,
 } from './repair_trim.js';
 import type { TranscribeRequest } from './transcribe.js';
+import type { SonareRenderOfflineRequest } from './worklet/engine-export.js';
 
 /** Declared keys of `T`, without the index-signature widening. */
 type KnownKeys<T> = keyof {
@@ -418,8 +438,20 @@ const RmsEnergyRequestKeys = keysOf<RmsEnergyRequest>()([
   'hopLength',
   'validate',
 ]);
-const DetectBpmRequestKeys = keysOf<DetectBpmRequest>()(['samples', 'sampleRate', 'validate']);
-const DetectBeatsRequestKeys = keysOf<DetectBeatsRequest>()(['samples', 'sampleRate', 'validate']);
+const DetectBpmRequestKeys = keysOf<DetectBpmRequest>()([
+  'samples',
+  'sampleRate',
+  'bpmMin',
+  'bpmMax',
+  'validate',
+]);
+const DetectBeatsRequestKeys = keysOf<DetectBeatsRequest>()([
+  'samples',
+  'sampleRate',
+  'bpmMin',
+  'bpmMax',
+  'validate',
+]);
 const DetectDownbeatsRequestKeys = keysOf<DetectDownbeatsRequest>()([
   'samples',
   'sampleRate',
@@ -612,7 +644,7 @@ const AutoTuneRequestKeys = keysOf<AutoTuneRequest>()([
   'retuneSpeedMs',
   'vibratoThresholdCents',
   'maxCorrectionSemitones',
-  'referenceMidi',
+  'scaleReferenceMidi',
   'validate',
 ]);
 const AutoTuneKeyKeys = keysOf<AutoTuneKey>()(['root', 'mode']);
@@ -724,11 +756,10 @@ const CyclicTempogramRequestKeys = keysOf<CyclicTempogramRequest>()([
 ]);
 const DecomposeRequestKeys = keysOf<DecomposeRequest>()([
   's',
-  'nFeatures',
-  'nFrames',
   'nComponents',
   'nIter',
   'beta',
+  'init',
 ]);
 const DecomposeNotePitchRequestKeys = keysOf<DecomposeNotePitchRequest>()([
   'f0Hz',
@@ -747,6 +778,7 @@ const DecomposeStemsRequestKeys = keysOf<DecomposeStemsRequest>()([
   'beta',
   'init',
   'maskPower',
+  'validate',
 ]);
 const DecomposeStemsLinkedRequestKeys = keysOf<DecomposeStemsLinkedRequest>()([
   'channels',
@@ -758,15 +790,7 @@ const DecomposeStemsLinkedRequestKeys = keysOf<DecomposeStemsLinkedRequest>()([
   'beta',
   'init',
   'maskPower',
-]);
-const DecomposeWithInitRequestKeys = keysOf<DecomposeWithInitRequest>()([
-  'init',
-  's',
-  'nFeatures',
-  'nFrames',
-  'nComponents',
-  'nIter',
-  'beta',
+  'validate',
 ]);
 const DetectAcousticRequestKeys = keysOf<DetectAcousticRequest>()([
   'nOctaveBands',
@@ -954,6 +978,7 @@ const HpssRequestKeys = keysOf<HpssRequest>()([
   'nFft',
   'hopLength',
   'hardMask',
+  'validate',
 ]);
 const HpssWithResidualRequestKeys = keysOf<HpssWithResidualRequest>()([
   'samples',
@@ -963,6 +988,7 @@ const HpssWithResidualRequestKeys = keysOf<HpssWithResidualRequest>()([
   'nFft',
   'hopLength',
   'hardMask',
+  'validate',
 ]);
 const LufsRequestKeys = keysOf<LufsRequest>()(['samples', 'sampleRate', 'validate']);
 const LufsInterleavedRequestKeys = keysOf<LufsInterleavedRequest>()([
@@ -1152,6 +1178,7 @@ const MasteringRepairAnalyzeRequestKeys = keysOf<MasteringRepairAnalyzeRequest>(
   'channels',
   'sampleRate',
   'preferStreamingSafe',
+  'validate',
 ]);
 const MasteringRepairApplyRequestKeys = keysOf<MasteringRepairApplyRequest>()([
   'channels',
@@ -1159,6 +1186,7 @@ const MasteringRepairApplyRequestKeys = keysOf<MasteringRepairApplyRequest>()([
   'stages',
   'onProgress',
   'cancel',
+  'validate',
 ]);
 const MasteringRepairDeclickRequestKeys = keysOf<MasteringRepairDeclickRequest>()([
   'samples',
@@ -1168,6 +1196,7 @@ const MasteringRepairDeclickRequestKeys = keysOf<MasteringRepairDeclickRequest>(
   'maxClickSamples',
   'lpcOrder',
   'residualRatio',
+  'validate',
 ]);
 const MasteringRepairDeclickStereoRequestKeys = keysOf<MasteringRepairDeclickStereoRequest>()([
   'left',
@@ -1178,23 +1207,26 @@ const MasteringRepairDeclickStereoRequestKeys = keysOf<MasteringRepairDeclickSte
   'maxClickSamples',
   'lpcOrder',
   'residualRatio',
+  'validate',
 ]);
 const MasteringRepairDeclipRequestKeys = keysOf<MasteringRepairDeclipRequest>()([
   'samples',
   'sampleRate',
-  'clipThreshold',
+  'clipThresholdDb',
   'lpcOrder',
   'iterations',
   'lpcBlend',
+  'validate',
 ]);
 const MasteringRepairDeclipStereoRequestKeys = keysOf<MasteringRepairDeclipStereoRequest>()([
   'left',
   'right',
   'sampleRate',
-  'clipThreshold',
+  'clipThresholdDb',
   'lpcOrder',
   'iterations',
   'lpcBlend',
+  'validate',
 ]);
 const MasteringRepairDecrackleRequestKeys = keysOf<MasteringRepairDecrackleRequest>()([
   'samples',
@@ -1202,6 +1234,7 @@ const MasteringRepairDecrackleRequestKeys = keysOf<MasteringRepairDecrackleReque
   'threshold',
   'mode',
   'levels',
+  'validate',
 ]);
 const MasteringRepairDecrackleStereoRequestKeys = keysOf<MasteringRepairDecrackleStereoRequest>()([
   'left',
@@ -1210,6 +1243,7 @@ const MasteringRepairDecrackleStereoRequestKeys = keysOf<MasteringRepairDecrackl
   'threshold',
   'mode',
   'levels',
+  'validate',
 ]);
 const MasteringRepairDehumRequestKeys = keysOf<MasteringRepairDehumRequest>()([
   'samples',
@@ -1223,6 +1257,7 @@ const MasteringRepairDehumRequestKeys = keysOf<MasteringRepairDehumRequest>()([
   'frameSize',
   'pllBandwidth',
   'mode',
+  'validate',
 ]);
 const MasteringRepairDehumStereoRequestKeys = keysOf<MasteringRepairDehumStereoRequest>()([
   'left',
@@ -1237,6 +1272,7 @@ const MasteringRepairDehumStereoRequestKeys = keysOf<MasteringRepairDehumStereoR
   'frameSize',
   'pllBandwidth',
   'mode',
+  'validate',
 ]);
 const MasteringRepairDenoiseClassicalRequestKeys = keysOf<MasteringRepairDenoiseClassicalRequest>()(
   [
@@ -1253,6 +1289,7 @@ const MasteringRepairDenoiseClassicalRequestKeys = keysOf<MasteringRepairDenoise
     'noiseEstimationQuantile',
     'speechPresenceGain',
     'gainSmoothing',
+    'validate',
   ],
 );
 const MasteringRepairDenoiseClassicalLinkedRequestKeys =
@@ -1270,6 +1307,7 @@ const MasteringRepairDenoiseClassicalLinkedRequestKeys =
     'noiseEstimationQuantile',
     'speechPresenceGain',
     'gainSmoothing',
+    'validate',
   ]);
 const MasteringRepairDenoiseClassicalStereoRequestKeys =
   keysOf<MasteringRepairDenoiseClassicalStereoRequest>()([
@@ -1287,6 +1325,7 @@ const MasteringRepairDenoiseClassicalStereoRequestKeys =
     'noiseEstimationQuantile',
     'speechPresenceGain',
     'gainSmoothing',
+    'validate',
   ]);
 const MasteringRepairDereverbClassicalRequestKeys =
   keysOf<MasteringRepairDereverbClassicalRequest>()([
@@ -1304,6 +1343,7 @@ const MasteringRepairDereverbClassicalRequestKeys =
     'wpeIterations',
     'wpeTaps',
     'wpeStrength',
+    'validate',
   ]);
 const MasteringRepairDereverbClassicalLinkedRequestKeys =
   keysOf<MasteringRepairDereverbClassicalLinkedRequest>()([
@@ -1321,6 +1361,7 @@ const MasteringRepairDereverbClassicalLinkedRequestKeys =
     'wpeIterations',
     'wpeTaps',
     'wpeStrength',
+    'validate',
   ]);
 const MasteringRepairDereverbClassicalStereoRequestKeys =
   keysOf<MasteringRepairDereverbClassicalStereoRequest>()([
@@ -1339,6 +1380,7 @@ const MasteringRepairDereverbClassicalStereoRequestKeys =
     'wpeIterations',
     'wpeTaps',
     'wpeStrength',
+    'validate',
   ]);
 const MasteringRepairDetectClicksRequestKeys = keysOf<MasteringRepairDetectClicksRequest>()([
   'samples',
@@ -1348,14 +1390,16 @@ const MasteringRepairDetectClicksRequestKeys = keysOf<MasteringRepairDetectClick
   'maxClickSamples',
   'lpcOrder',
   'residualRatio',
+  'validate',
 ]);
 const MasteringRepairDetectClippingRequestKeys = keysOf<MasteringRepairDetectClippingRequest>()([
   'samples',
   'sampleRate',
-  'clipThreshold',
+  'clipThresholdDb',
   'lpcOrder',
   'iterations',
   'lpcBlend',
+  'validate',
 ]);
 const MasteringRepairDetectCrackleRequestKeys = keysOf<MasteringRepairDetectCrackleRequest>()([
   'samples',
@@ -1363,6 +1407,7 @@ const MasteringRepairDetectCrackleRequestKeys = keysOf<MasteringRepairDetectCrac
   'threshold',
   'mode',
   'levels',
+  'validate',
 ]);
 const MasteringRepairDetectHumRequestKeys = keysOf<MasteringRepairDetectHumRequest>()([
   'samples',
@@ -1376,6 +1421,7 @@ const MasteringRepairDetectHumRequestKeys = keysOf<MasteringRepairDetectHumReque
   'frameSize',
   'pllBandwidth',
   'mode',
+  'validate',
 ]);
 const MasteringRepairDetectNoiseFloorRequestKeys = keysOf<MasteringRepairDetectNoiseFloorRequest>()(
   [
@@ -1392,6 +1438,7 @@ const MasteringRepairDetectNoiseFloorRequestKeys = keysOf<MasteringRepairDetectN
     'noiseEstimationQuantile',
     'speechPresenceGain',
     'gainSmoothing',
+    'validate',
   ],
 );
 const MasteringRepairDetectReverbRequestKeys = keysOf<MasteringRepairDetectReverbRequest>()([
@@ -1409,50 +1456,55 @@ const MasteringRepairDetectReverbRequestKeys = keysOf<MasteringRepairDetectRever
   'wpeIterations',
   'wpeTaps',
   'wpeStrength',
+  'validate',
 ]);
 const MasteringRepairDetectTrimRangeRequestKeys = keysOf<MasteringRepairDetectTrimRangeRequest>()([
   'samples',
   'sampleRate',
-  'threshold',
+  'thresholdDb',
   'paddingSamples',
   'paddingSec',
   'mode',
   'gateLufs',
   'windowMs',
+  'validate',
 ]);
 const MasteringRepairDetectTrimRangeStereoRequestKeys =
   keysOf<MasteringRepairDetectTrimRangeStereoRequest>()([
     'left',
     'right',
     'sampleRate',
-    'threshold',
+    'thresholdDb',
     'paddingSamples',
     'paddingSec',
     'mode',
     'gateLufs',
     'windowMs',
+    'validate',
   ]);
 const MasteringRepairTrimSilenceRequestKeys = keysOf<MasteringRepairTrimSilenceRequest>()([
   'samples',
   'sampleRate',
-  'threshold',
+  'thresholdDb',
   'paddingSamples',
   'paddingSec',
   'mode',
   'gateLufs',
   'windowMs',
+  'validate',
 ]);
 const MasteringRepairTrimSilenceStereoRequestKeys =
   keysOf<MasteringRepairTrimSilenceStereoRequest>()([
     'left',
     'right',
     'sampleRate',
-    'threshold',
+    'thresholdDb',
     'paddingSamples',
     'paddingSec',
     'mode',
     'gateLufs',
     'windowMs',
+    'validate',
   ]);
 const MasteringStereoAnalyzeRequestKeys = keysOf<MasteringStereoAnalyzeRequest<StereoAnalysis>>()([
   'analysisName',
@@ -1649,14 +1701,7 @@ const MixStereoRequestKeys = keysOf<MixStereoRequest>()([
   'width',
   'muted',
 ]);
-const NnFilterRequestKeys = keysOf<NnFilterRequest>()([
-  's',
-  'nFeatures',
-  'nFrames',
-  'aggregate',
-  'k',
-  'width',
-]);
+const NnFilterRequestKeys = keysOf<NnFilterRequest>()(['s', 'aggregate', 'k', 'width']);
 const NnlsChromaRequestKeys = keysOf<NnlsChromaRequest>()([
   'samples',
   'sampleRate',
@@ -1695,6 +1740,7 @@ const NoteMoveRequestKeys = keysOf<NoteMoveRequest>()([
 const NoteSegmentsRequestKeys = keysOf<NoteSegmentsRequest>()([
   'f0Hz',
   'voicedProb',
+  'voicedFlags',
   'frameRate',
   'segmentationThresholdCents',
   'minNoteMs',
@@ -1744,7 +1790,7 @@ const PeakPickRequestKeys = keysOf<PeakPickRequest>()([
 ]);
 const PercussiveRequestKeys = keysOf<PercussiveRequest>()(['samples', 'sampleRate', 'validate']);
 const PhaseVocoderRequestKeys = keysOf<PhaseVocoderRequest>()([
-  'rate',
+  'speedRatio',
   'samples',
   'sampleRate',
   'nFft',
@@ -1766,11 +1812,11 @@ const PitchCorrectTimevaryingRequestKeys = keysOf<PitchCorrectTimevaryingRequest
   'f0Hz',
   'sampleRate',
   'hopLength',
-  'mode',
+  'targetMode',
   'targetMidi',
   'scaleRoot',
   'scaleModeMask',
-  'referenceMidi',
+  'scaleReferenceMidi',
   'retuneAmount',
   'maxCorrectionSemitones',
   'retuneSpeedMs',
@@ -1784,16 +1830,6 @@ const PitchCorrectToMidiRequestKeys = keysOf<PitchCorrectToMidiRequest>()([
   'sampleRate',
   'currentMidi',
   'targetMidi',
-  'validate',
-]);
-const PitchCorrectToMidiTimevaryingRequestKeys = keysOf<PitchCorrectToMidiTimevaryingRequest>()([
-  'samples',
-  'f0Hz',
-  'targetMidi',
-  'sampleRate',
-  'hopLength',
-  'voiced',
-  'voicedProb',
   'validate',
 ]);
 const PitchPyinRequestKeys = keysOf<PitchPyinRequest>()([
@@ -1810,7 +1846,7 @@ const PitchPyinRequestKeys = keysOf<PitchPyinRequest>()([
 const PitchShiftRequestKeys = keysOf<PitchShiftRequest>()([
   'samples',
   'sampleRate',
-  'semitones',
+  'pitchSemitones',
   'nFft',
   'hopLength',
   'validate',
@@ -1861,6 +1897,7 @@ const RemixRequestKeys = keysOf<RemixRequest>()([
   'intervals',
   'sampleRate',
   'alignZeros',
+  'validate',
 ]);
 const RenderNotesRequestKeys = keysOf<RenderNotesRequest>()([
   'samples',
@@ -1942,15 +1979,11 @@ const RoomMorphRequestKeys = keysOf<RoomMorphRequest>()([
   'bandAbsorption',
   'bandScattering',
   'materialPreset',
-  'sourceX',
-  'sourceY',
-  'sourceZ',
-  'listenerX',
-  'listenerY',
-  'listenerZ',
+  'source',
+  'listener',
   'ismOrder',
   'seed',
-  'maxSeconds',
+  'maxSec',
   'airAbsorptionEnabled',
   'airTemperatureC',
   'airHumidityPercent',
@@ -1973,15 +2006,11 @@ const RoomMorphStereoRequestKeys = keysOf<RoomMorphStereoRequest>()([
   'bandAbsorption',
   'bandScattering',
   'materialPreset',
-  'sourceX',
-  'sourceY',
-  'sourceZ',
-  'listenerX',
-  'listenerY',
-  'listenerZ',
+  'source',
+  'listener',
   'ismOrder',
   'seed',
-  'maxSeconds',
+  'maxSec',
   'airAbsorptionEnabled',
   'airTemperatureC',
   'airHumidityPercent',
@@ -2071,6 +2100,7 @@ const SpectralRolloffRequestKeys = keysOf<SpectralRolloffRequest>()([
 const SplitNoteRequestKeys = keysOf<SplitNoteRequest>()([
   'index',
   'frame',
+  'frameSec',
   'samples',
   'sampleRate',
   'f0Hz',
@@ -2122,7 +2152,7 @@ const MixAssistantOptionsKeys = keysOf<MixAssistantOptions>()([
   'nFft',
   'hopLength',
 ]);
-const RirSynthOptionsKeys = keysOf<RirSynthOptions>()([
+const SynthesizeRirRequestKeys = keysOf<SynthesizeRirRequest>()([
   'sampleRate',
   'preferEyring',
   'mixingTimeMs',
@@ -2134,15 +2164,11 @@ const RirSynthOptionsKeys = keysOf<RirSynthOptions>()([
   'bandAbsorption',
   'bandScattering',
   'materialPreset',
-  'sourceX',
-  'sourceY',
-  'sourceZ',
-  'listenerX',
-  'listenerY',
-  'listenerZ',
+  'source',
+  'listener',
   'ismOrder',
   'seed',
-  'maxSeconds',
+  'maxSec',
   'airAbsorptionEnabled',
   'airTemperatureC',
   'airHumidityPercent',
@@ -2166,7 +2192,7 @@ const TempogramRatioRequestKeys = keysOf<TempogramRatioRequest>()([
 const TimeStretchRequestKeys = keysOf<TimeStretchRequest>()([
   'samples',
   'sampleRate',
-  'rate',
+  'speedRatio',
   'nFft',
   'hopLength',
   'validate',
@@ -2223,11 +2249,9 @@ const VoiceChangeRequestKeys = keysOf<VoiceChangeRequest>()([
   'validate',
 ]);
 const VoiceChangeRealtimeRequestKeys = keysOf<VoiceChangeRealtimeRequest>()([
-  'samples',
-  'sampleRate',
-  'preset',
   'channels',
-  'blockSize',
+  'sampleRate',
+  'config',
   'validate',
 ]);
 const VqtRequestKeys = keysOf<VqtRequest>()([
@@ -2278,17 +2302,93 @@ const SetPartRigRequestKeys = keysOf<PartRigRequest>()([
   'mode',
   'inserts',
 ]);
-const SetCapturePunchRequestKeys = keysOf<EngineCapturePunchRequest>()([
-  'startSample',
-  'startSec',
-  'endSample',
-  'endSec',
-  'enabled',
-]);
 const RenderOfflineRequestKeys = keysOf<RenderOfflineRequest>()([
   'channels',
   'blockSize',
   'finalize',
+  'validate',
+]);
+const EngineConfigRequestKeys = keysOf<RealtimeEngineConfig>()([
+  'sampleRate',
+  'maxBlockSize',
+  'commandCapacity',
+  'telemetryCapacity',
+  'maxNumChannels',
+]);
+const SidechainSourceRequestKeys = keysOf<SidechainSource>()(['kind', 'id']);
+const InsertBypassRequestKeys = keysOf<{ bypassed: boolean; resetOnBypass?: boolean }>()([
+  'bypassed',
+  'resetOnBypass',
+]);
+const InsertParamRequestKeys = keysOf<{ name: string; value: number }>()(['name', 'value']);
+const ConfigureCaptureRequestKeys = keysOf<CaptureOptions>()([
+  'capacityFrames',
+  'numChannels',
+  'source',
+  'recordOffsetSamples',
+  'inputMonitor',
+  'punch',
+]);
+const CaptureInputMonitorKeys = keysOf<NonNullable<CaptureOptions['inputMonitor']>>()([
+  'enabled',
+  'gain',
+]);
+const CapturePunchKeys = keysOf<CapturePunch>()([
+  'startPpq',
+  'startSample',
+  'startSec',
+  'endPpq',
+  'endSample',
+  'endSec',
+]);
+const ArmCaptureRequestKeys = keysOf<{ armed: boolean }>()(['armed']);
+const ScheduleParamRequestKeys = keysOf<EngineAutomationPoint>()(['ppq', 'value', 'curveToNext']);
+const SonareEngineRenderOfflineRequestKeys = keysOf<SonareRenderOfflineRequest>()([
+  'totalFrames',
+  'blockSize',
+  'finalize',
+  'validate',
+]);
+const SetLoopRequestKeys = keysOf<EngineLoop>()(['startPpq', 'endPpq', 'enabled']);
+const SetMetronomeRequestKeys = keysOf<EngineMetronomeConfig>()([
+  'enabled',
+  'beatGain',
+  'accentGain',
+  'clickSamples',
+  'clickSec',
+]);
+const SetTrackSoloMuteRequestKeys = keysOf<{ solo: boolean; mute: boolean }>()(['solo', 'mute']);
+const MidiBankRequestKeys = keysOf<{ msb: number; lsb: number }>()(['msb', 'lsb']);
+const MixerConfigRequestKeys = keysOf<MixerConfig>()(['scene', 'sampleRate', 'blockSize']);
+const MixerJsonOptionsRequestKeys = keysOf<MixerJsonOptions>()(['sampleRate', 'blockSize']);
+const ConfigureMeterRequestKeys = keysOf<MixerMeterOptions>()(['enabled', 'truePeakOversample']);
+const SetPolarityInvertRequestKeys = keysOf<PolarityInvert>()(['left', 'right']);
+const MixerAddSendRequestKeys = keysOf<MixerSend>()(['id', 'destinationBusId', 'sendDb', 'timing']);
+const ScheduleInsertAutomationRequestKeys = keysOf<InsertAutomationPoint>()([
+  'paramId',
+  'samplePos',
+  'value',
+  'curve',
+]);
+const ScheduleFaderAutomationRequestKeys = keysOf<FaderAutomationPoint>()([
+  'samplePos',
+  'faderDb',
+  'curve',
+]);
+const SchedulePanAutomationRequestKeys = keysOf<PanAutomationPoint>()([
+  'samplePos',
+  'pan',
+  'curve',
+]);
+const ScheduleWidthAutomationRequestKeys = keysOf<WidthAutomationPoint>()([
+  'samplePos',
+  'width',
+  'curve',
+]);
+const ScheduleSendAutomationRequestKeys = keysOf<SendAutomationPoint>()([
+  'samplePos',
+  'sendDb',
+  'curve',
 ]);
 const ImportExternalSeparatedStemRequestKeys = keysOf<ExternalSeparatedStemImportRequest>()([
   'sampleRate',
@@ -2342,8 +2442,43 @@ const VocalRenderRequestKeys = keysOf<VocalRenderRequest>()(['range', 'requestId
 /** Request shape of every entry point that takes a request object, by entry-point name. */
 export const REQUEST_SHAPES = {
   setPartRig: { keys: SetPartRigRequestKeys },
-  setCapturePunch: { keys: SetCapturePunchRequestKeys },
   renderOffline: { keys: RenderOfflineRequestKeys },
+  RealtimeEngine: { keys: EngineConfigRequestKeys },
+  prepare: { keys: EngineConfigRequestKeys },
+  setBusSidechain: { keys: SidechainSourceRequestKeys },
+  setStripSidechain: { keys: SidechainSourceRequestKeys },
+  canSetBusSidechain: { keys: SidechainSourceRequestKeys },
+  canSetStripSidechain: { keys: SidechainSourceRequestKeys },
+  setStripInsertBypassed: { keys: InsertBypassRequestKeys },
+  setBusInsertBypassed: { keys: InsertBypassRequestKeys },
+  setStripInsertParam: { keys: InsertParamRequestKeys },
+  setBusInsertParam: { keys: InsertParamRequestKeys },
+  applyStripInsertParamNow: { keys: InsertParamRequestKeys },
+  applyBusInsertParamNow: { keys: InsertParamRequestKeys },
+  restoreStripInsertParam: { keys: InsertParamRequestKeys },
+  restoreBusInsertParam: { keys: InsertParamRequestKeys },
+  configureCapture: {
+    keys: ConfigureCaptureRequestKeys,
+    nested: { inputMonitor: CaptureInputMonitorKeys, punch: CapturePunchKeys },
+  },
+  armCapture: { keys: ArmCaptureRequestKeys },
+  scheduleParam: { keys: ScheduleParamRequestKeys },
+  'SonareEngine.renderOffline': { keys: SonareEngineRenderOfflineRequestKeys },
+  setLoop: { keys: SetLoopRequestKeys },
+  setMetronome: { keys: SetMetronomeRequestKeys },
+  setTrackSoloMute: { keys: SetTrackSoloMuteRequestKeys },
+  pushMidiProgram: { keys: MidiBankRequestKeys },
+  pushMidiInputProgram: { keys: MidiBankRequestKeys },
+  Mixer: { keys: MixerConfigRequestKeys },
+  'Mixer.fromJson': { keys: MixerJsonOptionsRequestKeys },
+  configureMeter: { keys: ConfigureMeterRequestKeys },
+  setPolarityInvert: { keys: SetPolarityInvertRequestKeys },
+  addSend: { keys: MixerAddSendRequestKeys },
+  scheduleInsertAutomation: { keys: ScheduleInsertAutomationRequestKeys },
+  scheduleFaderAutomation: { keys: ScheduleFaderAutomationRequestKeys },
+  schedulePanAutomation: { keys: SchedulePanAutomationRequestKeys },
+  scheduleWidthAutomation: { keys: ScheduleWidthAutomationRequestKeys },
+  scheduleSendAutomation: { keys: ScheduleSendAutomationRequestKeys },
   importExternalSeparatedStem: { keys: ImportExternalSeparatedStemRequestKeys },
   bakeMidiFx: { keys: BakeMidiFxRequestKeys },
   previewMidiFx: { keys: PreviewMidiFxRequestKeys },
@@ -2384,7 +2519,6 @@ export const REQUEST_SHAPES = {
   decomposeNotePitch: { keys: DecomposeNotePitchRequestKeys },
   decomposeStems: { keys: DecomposeStemsRequestKeys },
   decomposeStemsLinked: { keys: DecomposeStemsLinkedRequestKeys },
-  decomposeWithInit: { keys: DecomposeWithInitRequestKeys },
   deemphasis: { keys: DeemphasisRequestKeys },
   detectAcoustic: { keys: DetectAcousticRequestKeys },
   detectBeats: { keys: DetectBeatsRequestKeys },
@@ -2541,7 +2675,6 @@ export const REQUEST_SHAPES = {
   piptrack: { keys: PiptrackRequestKeys },
   pitchCorrectTimevarying: { keys: PitchCorrectTimevaryingRequestKeys },
   pitchCorrectToMidi: { keys: PitchCorrectToMidiRequestKeys },
-  pitchCorrectToMidiTimevarying: { keys: PitchCorrectToMidiTimevaryingRequestKeys },
   pitchPyin: { keys: PitchPyinRequestKeys },
   pitchShift: { keys: PitchShiftRequestKeys },
   pitchTuning: { keys: PitchTuningRequestKeys },
@@ -2609,7 +2742,7 @@ export const REQUEST_SHAPES = {
     keys: SuggestMixSceneRequestKeys,
     hints: { options: MixAssistantOptionsKeys },
   },
-  synthesizeRir: { keys: RirSynthOptionsKeys },
+  synthesizeRir: { keys: SynthesizeRirRequestKeys },
   tempogram: { keys: TempogramRequestKeys },
   tempogramRatio: { keys: TempogramRatioRequestKeys },
   timeStretch: { keys: TimeStretchRequestKeys },

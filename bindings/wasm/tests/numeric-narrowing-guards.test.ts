@@ -108,7 +108,7 @@ describe('clip fields refuse a handle or an ordinal that is not whole', () => {
   }
 
   const render = (extra: Record<string, unknown>): number => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       engine.setClips([{ id: 1, channels: [source], startPpq: 0, ...extra }]);
       engine.play();
@@ -125,7 +125,7 @@ describe('clip fields refuse a handle or an ordinal that is not whole', () => {
 
   it('refuses a fractional page-provider handle instead of binding a real provider', () => {
     const withProvider = (pageProvider: number): number => {
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       try {
         const first = engine.createClipPageProvider(1, 128, 128);
         const second = engine.createClipPageProvider(1, 128, 128);
@@ -153,7 +153,7 @@ describe('clip fields refuse a handle or an ordinal that is not whole', () => {
     }
   });
 
-  it('refuses a fractional or non-finite warp-mode ordinal', () => {
+  it('refuses a warp-mode ordinal of any kind', () => {
     // The control: two legal ordinals render differently. A pitch-preserving
     // stretch keeps each 1024-sample frame's waveform, so the rate only shows over
     // several frames: the anchors read a 2048-sample source at twice the rate, and
@@ -163,8 +163,8 @@ describe('clip fields refuse a handle or an ordinal that is not whole', () => {
     for (let i = 0; i < long.length; i++) {
       long[i] = Math.sin(i * 0.3);
     }
-    const renderLong = (warpMode: 0 | 3): number => {
-      const engine = new RealtimeEngine(48000, 2048);
+    const renderLong = (warpMode: 'off' | 'timeStretch'): number => {
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 2048 });
       try {
         engine.setClips([
           {
@@ -190,18 +190,19 @@ describe('clip fields refuse a handle or an ordinal that is not whole', () => {
         engine.destroy();
       }
     };
-    expect(renderLong(0)).not.toBeCloseTo(renderLong(3), 2);
-    for (const value of [...SATURATING, ...NON_FINITE, 1.5]) {
-      expectRangeRefusal(() => render({ lengthSamples: 128, warpMode: value }));
+    expect(renderLong('off')).not.toBeCloseTo(renderLong('timeStretch'), 2);
+    // An ordinal is not a spelling of the closed set, however it is written.
+    for (const value of [0, 3, ...SATURATING, ...NON_FINITE, 1.5]) {
+      expect(() => render({ lengthSamples: 128, warpMode: value as never })).toThrow(TypeError);
     }
   });
 });
 
 describe('synth patch enum ordinals refuse a fractional or non-finite value', () => {
   const render = (patch: Record<string, unknown>): number => {
-    const engine = new RealtimeEngine(48000, 512);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 512 });
     try {
-      engine.setSynthInstrument(patch);
+      engine.setSynthInstrument(0, patch);
       engine.pushMidiNoteOn(0, 0, 0, 60, 100);
       engine.play();
       const out = engine.process([new Float32Array(512), new Float32Array(512)]);
@@ -271,9 +272,9 @@ describe('MIDI byte fields refuse a value that would wrap into the byte domain',
     // `(0x4 << 28) | …` is negative once bit 31 is set, and the whole 32-bit
     // range is legal for a word, so the sign is reinterpreted rather than
     // refused -- the one narrowing here that is not a range check.
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
-      engine.setBuiltinInstrument({ gain: 0.5 }, 0);
+      engine.setBuiltinInstrument(0, { gain: 0.5 });
       const noteOn = (0x2 << 28) | (0x9 << 20) | (60 << 8) | 100;
       expect(() =>
         engine.setMidiClips([
@@ -357,9 +358,9 @@ describe('realtime-engine options-bag readers refuse a silently coerced value', 
   ];
 
   const sound = (clip: Record<string, unknown>, boundAt = 0): number => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
-      engine.setBuiltinInstrument({ gain: 0.5 }, boundAt);
+      engine.setBuiltinInstrument(boundAt, { gain: 0.5 });
       engine.setMidiClips([
         { id: 1, trackId: 6, destinationId: 0, lengthSamples: 8192, events: heldNote, ...clip },
       ]);
@@ -399,7 +400,7 @@ describe('realtime-engine options-bag readers refuse a silently coerced value', 
 
   it('refuses a bounce length that is not a whole frame count', () => {
     const bounce = (totalFrames: number): number => {
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       try {
         engine.setClips([
           { id: 1, startPpq: 0, channels: [new Float32Array(256).fill(0.25)], lengthSamples: 256 },
@@ -448,7 +449,7 @@ describe('realtime-engine options-bag readers refuse a silently coerced value', 
   it("spectralEdit reads a region's sample bounds only at a whole, in-range position", () => {
     const samples = new Float32Array(4096).fill(0.1);
     const editWithStart = (startSample: number): Float32Array =>
-      spectralEdit(samples, 22050, [{ startSample, endSample: 4096, gainDb: -60 }]);
+      spectralEdit(samples, 22050, { ops: [{ startSample, endSample: 4096, gainDb: -60 }] });
     // The control: two legal starts both process without throwing.
     expect(editWithStart(0)).toHaveLength(samples.length);
     expect(editWithStart(2048)).toHaveLength(samples.length);
@@ -573,7 +574,7 @@ describe('the double reader refuses a non-finite number at the read', () => {
   const refusalFor = (fn: () => unknown): Error => expectRefusalOf(fn);
 
   const withEngine = <T>(fn: (engine: RealtimeEngine) => T): T => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       return fn(engine);
     } finally {
@@ -704,7 +705,7 @@ describe('uint32 ids keep their whole domain on every WASM id path', () => {
   const REFUSED = [-1, 2 ** 32, 1.5];
 
   const withEngine = <T>(fn: (engine: RealtimeEngine) => T): T => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       return fn(engine);
     } finally {
@@ -772,12 +773,12 @@ describe('uint32 ids keep their whole domain on every WASM id path', () => {
             { trackId: id, outputBusId: id, sends: [{ busId: id, levelDb: -6 }] },
           ]),
         ).not.toThrow();
-        expect(() => engine.setTrackLanes([id])).not.toThrow();
+        expect(() => engine.setTrackLanes([{ trackId: id }])).not.toThrow();
       });
     }
     for (const id of REFUSED) {
       withEngine((engine) => {
-        expectRangeRefusal(() => engine.setTrackLanes([id]));
+        expectRangeRefusal(() => engine.setTrackLanes([{ trackId: id }]));
         expectRangeRefusal(() => engine.setTrackLanes([{ trackId: id }]));
         expectRangeRefusal(() => engine.setTrackLanes([{ trackId: 1, outputBusId: id }]));
         expectRangeRefusal(() => engine.setTrackBuses([{ busId: id, gainDb: 0 }]));
