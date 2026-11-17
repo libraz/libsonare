@@ -142,7 +142,7 @@ _SCALAR_ARGS: dict[str, Any] = {
     "post_avg": 1,
     "delta": 0.1,
     "wait": 1,
-    "sample_offset": 0,
+    "start_sample": 0,
     "in_channels": 1,
     # The nested playback config document; {} takes every schema default, the
     # cheapest value that opens the same code path a real one would.
@@ -160,7 +160,7 @@ _CLASS_INSTANCES: dict[str, Callable[[], Any]] = {
     "Project": lambda: libsonare.Project(),
     "RealtimeVoiceChanger": lambda: libsonare.RealtimeVoiceChanger(22050, channels=2),
     "SampleBank": lambda: libsonare.SampleBank(),
-    "StreamAnalyzer": lambda: libsonare.StreamAnalyzer(),
+    "StreamAnalyzer": lambda: libsonare.StreamAnalyzer(libsonare.StreamConfig(sample_rate=22050)),
     "StreamingEqualizer": lambda: libsonare.StreamingEqualizer(),
     "StreamingMasteringChain": lambda: libsonare.StreamingMasteringChain(),
     "StreamingRetune": lambda: libsonare.StreamingRetune(),

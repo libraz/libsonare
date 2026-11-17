@@ -453,6 +453,8 @@ TempogramMode: TypeAlias = Literal["autocorrelation", "cosine"]
 
 PitchTargetMode: TypeAlias = Literal["midi", "scale"]
 
+WindowType: TypeAlias = Literal["hann", "hamming", "blackman", "rectangular"]
+
 KeyProfile: TypeAlias = Literal[
     "krumhanslSchmuckler",
     "temperley",
@@ -2758,7 +2760,7 @@ class CqtResult:
         frequencies: NDArray[np.float32],
     ) -> None: ...
 
-class QuantizeConfig:
+class StreamQuantizeConfig:
     mel_db_min: float
     mel_db_max: float
     onset_max: float
@@ -2774,15 +2776,16 @@ class QuantizeConfig:
     ) -> None: ...
 
 class StreamConfig:
+    """``fmax_hz`` is ``None`` for Nyquist; an explicit value must be positive."""
+
     sample_rate: int
     # Window in samples at 44100 Hz; rescaled below that rate, never shorter than hop_length.
     n_fft: int
     hop_length: int
     n_mels: int
-    fmin: float
-    fmax: float
+    fmin_hz: float
+    fmax_hz: float | None
     reference_hz: float
-    compute_magnitude: bool
     compute_mel: bool
     compute_chroma: bool
     compute_onset: bool
@@ -2793,18 +2796,16 @@ class StreamConfig:
     max_progression_entries: int
     key_update_interval_sec: float
     bpm_update_interval_sec: float
-    window: int
-    output_format: int  # Deprecated compatibility field; must be 0 (Float32).
+    window: WindowType
     def __init__(
         self,
-        sample_rate: int = 44100,
+        sample_rate: int,
         n_fft: int = 2048,
         hop_length: int = 512,
         n_mels: int = 128,
-        fmin: float = 0.0,
-        fmax: float = 0.0,
+        fmin_hz: float = 0.0,
+        fmax_hz: float | None = None,
         reference_hz: float = 440.0,
-        compute_magnitude: bool = False,
         compute_mel: bool = True,
         compute_chroma: bool = True,
         compute_onset: bool = True,
@@ -2815,105 +2816,95 @@ class StreamConfig:
         max_progression_entries: int = 4096,
         key_update_interval_sec: float = 5.0,
         bpm_update_interval_sec: float = 10.0,
-        window: int = 0,
-        output_format: int = 0,
+        window: WindowType = "hann",
     ) -> None: ...
 
 class StreamFrames:
+    """Matrices are band-major ``(bands, n_frames)``; a feature not computed is
+    ``None``. ``mel`` is linear power."""
+
     n_frames: int
-    n_mels: int
-    n_chroma: int
-    feature_flags: int
-    timestamps_sec: list[float]
-    mel: list[float]
-    chroma: list[float]
-    onset_strength: list[float]
-    rms_energy: list[float]
-    spectral_centroid: list[float]
-    spectral_flatness: list[float]
-    chord_root: list[int]
-    chord_quality: list[int]
-    chord_confidence: list[float]
+    timestamps_sec: NDArray[np.float32]
+    mel: NDArray[np.float32] | None
+    chroma: NDArray[np.float32] | None
+    onset_strength: NDArray[np.float32] | None
+    rms_energy: NDArray[np.float32]
+    spectral_centroid: NDArray[np.float32] | None
+    spectral_flatness: NDArray[np.float32] | None
+    chord_root: NDArray[np.int32] | None
+    chord_quality: NDArray[np.int32] | None
+    chord_confidence: NDArray[np.float32] | None
     def __init__(
         self,
         n_frames: int,
-        n_mels: int,
-        n_chroma: int,
-        feature_flags: int,
-        timestamps_sec: list[float],
-        mel: list[float],
-        chroma: list[float],
-        onset_strength: list[float],
-        rms_energy: list[float],
-        spectral_centroid: list[float],
-        spectral_flatness: list[float],
-        chord_root: list[int],
-        chord_quality: list[int],
-        chord_confidence: list[float],
+        timestamps_sec: NDArray[np.float32],
+        mel: NDArray[np.float32] | None,
+        chroma: NDArray[np.float32] | None,
+        onset_strength: NDArray[np.float32] | None,
+        rms_energy: NDArray[np.float32],
+        spectral_centroid: NDArray[np.float32] | None,
+        spectral_flatness: NDArray[np.float32] | None,
+        chord_root: NDArray[np.int32] | None,
+        chord_quality: NDArray[np.int32] | None,
+        chord_confidence: NDArray[np.float32] | None,
     ) -> None: ...
 
 class StreamFramesU8:
+    """Shaped as :class:`StreamFrames`; ``mel`` is dB quantized over
+    ``[mel_db_min, mel_db_max]``."""
+
     n_frames: int
-    n_mels: int
-    n_chroma: int
-    feature_flags: int
-    timestamps_sec: list[float]
-    mel: list[int]
-    chroma: list[int]
-    onset_strength: list[int]
-    rms_energy: list[int]
-    spectral_centroid: list[int]
-    spectral_flatness: list[int]
+    timestamps_sec: NDArray[np.float32]
+    mel: NDArray[np.uint8] | None
+    chroma: NDArray[np.uint8] | None
+    onset_strength: NDArray[np.uint8] | None
+    rms_energy: NDArray[np.uint8]
+    spectral_centroid: NDArray[np.uint8] | None
+    spectral_flatness: NDArray[np.uint8] | None
     def __init__(
         self,
         n_frames: int,
-        n_mels: int,
-        n_chroma: int,
-        feature_flags: int,
-        timestamps_sec: list[float],
-        mel: list[int],
-        chroma: list[int],
-        onset_strength: list[int],
-        rms_energy: list[int],
-        spectral_centroid: list[int],
-        spectral_flatness: list[int],
+        timestamps_sec: NDArray[np.float32],
+        mel: NDArray[np.uint8] | None,
+        chroma: NDArray[np.uint8] | None,
+        onset_strength: NDArray[np.uint8] | None,
+        rms_energy: NDArray[np.uint8],
+        spectral_centroid: NDArray[np.uint8] | None,
+        spectral_flatness: NDArray[np.uint8] | None,
     ) -> None: ...
 
 class StreamFramesI16:
+    """Shaped as :class:`StreamFrames`; ``mel`` is dB quantized over
+    ``[mel_db_min, mel_db_max]``."""
+
     n_frames: int
-    n_mels: int
-    n_chroma: int
-    feature_flags: int
-    timestamps_sec: list[float]
-    mel: list[int]
-    chroma: list[int]
-    onset_strength: list[int]
-    rms_energy: list[int]
-    spectral_centroid: list[int]
-    spectral_flatness: list[int]
+    timestamps_sec: NDArray[np.float32]
+    mel: NDArray[np.int16] | None
+    chroma: NDArray[np.int16] | None
+    onset_strength: NDArray[np.int16] | None
+    rms_energy: NDArray[np.int16]
+    spectral_centroid: NDArray[np.int16] | None
+    spectral_flatness: NDArray[np.int16] | None
     def __init__(
         self,
         n_frames: int,
-        n_mels: int,
-        n_chroma: int,
-        feature_flags: int,
-        timestamps_sec: list[float],
-        mel: list[int],
-        chroma: list[int],
-        onset_strength: list[int],
-        rms_energy: list[int],
-        spectral_centroid: list[int],
-        spectral_flatness: list[int],
+        timestamps_sec: NDArray[np.float32],
+        mel: NDArray[np.int16] | None,
+        chroma: NDArray[np.int16] | None,
+        onset_strength: NDArray[np.int16] | None,
+        rms_energy: NDArray[np.int16],
+        spectral_centroid: NDArray[np.int16] | None,
+        spectral_flatness: NDArray[np.int16] | None,
     ) -> None: ...
 
 class StreamChordChange:
-    root: int
-    quality: int
+    root: PitchClass
+    quality: str
     name: str
     start_sec: float
     confidence: float
     def __init__(
-        self, root: int, quality: int, name: str, start_sec: float, confidence: float
+        self, root: PitchClass, quality: str, name: str, start_sec: float, confidence: float
     ) -> None: ...
 
 class StreamBarChord:
@@ -2921,21 +2912,21 @@ class StreamBarChord:
     bars with no confident chord are not recorded and the oldest entries are
     dropped at the history cap, so group bars by pattern position with
     ``bar_index``. ``start_sec`` is on the same timeline as
-    ``StreamFrame.timestamp`` and consecutive bars are ``bar_duration_sec`` apart.
-    In ``voted_pattern``, ``bar_index`` is the pattern position and
+    ``StreamFrames.timestamps_sec`` and consecutive bars are ``bar_duration_sec``
+    apart. In ``voted_pattern``, ``bar_index`` is the pattern position and
     ``start_sec`` is unused."""
 
     bar_index: int
-    root: int
-    quality: int
+    root: PitchClass
+    quality: str
     name: str
     start_sec: float
     confidence: float
     def __init__(
         self,
         bar_index: int,
-        root: int,
-        quality: int,
+        root: PitchClass,
+        quality: str,
         name: str,
         start_sec: float,
         confidence: float,
@@ -2946,13 +2937,52 @@ class StreamPatternScore:
     score: float
     def __init__(self, name: str, score: float) -> None: ...
 
-class StreamStats:
-    """``bpm_candidate_count`` is the number of tempo candidates the most recent
-    BPM estimate chose from, 0 until one has run — the same quantity as
-    ``AnalysisResult``'s field of the same name. ``updated`` is true when the
+class StreamProgressiveEstimate:
+    """A field is ``None`` until the analyzer has an estimate for it.
+    ``bpm_candidate_count`` is the number of tempo candidates the most recent
+    BPM estimate chose from, 0 until one has run. ``updated`` is true when the
     key or BPM was re-estimated since the previous snapshot: one change sets it
     on exactly one snapshot however the caller chunks its input."""
 
+    bpm: float | None
+    bpm_confidence: float | None
+    bpm_candidate_count: int
+    key: Key | None
+    chord: StreamChordChange | None
+    chord_progression: list[StreamChordChange]
+    bar_chord_progression: list[StreamBarChord]
+    current_bar: int | None
+    bar_duration_sec: float | None
+    voted_pattern: list[StreamBarChord]
+    pattern_length: int
+    detected_pattern_name: str | None
+    detected_pattern_score: float | None
+    all_pattern_scores: list[StreamPatternScore]
+    accumulated_sec: float
+    used_frames: int
+    updated: bool
+    def __init__(
+        self,
+        bpm: float | None,
+        bpm_confidence: float | None,
+        bpm_candidate_count: int,
+        key: Key | None,
+        chord: StreamChordChange | None,
+        chord_progression: list[StreamChordChange],
+        bar_chord_progression: list[StreamBarChord],
+        current_bar: int | None,
+        bar_duration_sec: float | None,
+        voted_pattern: list[StreamBarChord],
+        pattern_length: int,
+        detected_pattern_name: str | None,
+        detected_pattern_score: float | None,
+        all_pattern_scores: list[StreamPatternScore],
+        accumulated_sec: float,
+        used_frames: int,
+        updated: bool,
+    ) -> None: ...
+
+class StreamStats:
     total_frames: int
     total_samples: int
     duration_sec: float
@@ -2961,31 +2991,7 @@ class StreamStats:
     dropped_chord_progression_entries: int
     dropped_bar_progression_entries: int
     non_finite_discard_blocks: int
-    bpm: float
-    bpm_confidence: float
-    bpm_candidate_count: int
-    key: int
-    key_minor: bool
-    key_confidence: float
-    key_name: str | None
-    key_short_name: str | None
-    chord_root: int
-    chord_quality: int
-    chord_name: str
-    chord_confidence: float
-    chord_start_sec: float
-    current_bar: int
-    bar_duration_sec: float
-    chord_progression: list[StreamChordChange]
-    bar_chord_progression: list[StreamBarChord]
-    voted_pattern: list[StreamBarChord]
-    pattern_length: int
-    detected_pattern_name: str
-    detected_pattern_score: float
-    all_pattern_scores: list[StreamPatternScore]
-    accumulated_sec: float
-    used_frames: int
-    updated: bool
+    estimate: StreamProgressiveEstimate
     def __init__(
         self,
         total_frames: int,
@@ -2996,29 +3002,5 @@ class StreamStats:
         dropped_chord_progression_entries: int,
         dropped_bar_progression_entries: int,
         non_finite_discard_blocks: int,
-        bpm: float,
-        bpm_confidence: float,
-        bpm_candidate_count: int,
-        key: int,
-        key_minor: bool,
-        key_confidence: float,
-        key_name: str | None,
-        key_short_name: str | None,
-        chord_root: int,
-        chord_quality: int,
-        chord_name: str,
-        chord_confidence: float,
-        chord_start_sec: float,
-        current_bar: int,
-        bar_duration_sec: float,
-        chord_progression: list[StreamChordChange],
-        bar_chord_progression: list[StreamBarChord],
-        voted_pattern: list[StreamBarChord],
-        pattern_length: int,
-        detected_pattern_name: str,
-        detected_pattern_score: float,
-        all_pattern_scores: list[StreamPatternScore],
-        accumulated_sec: float,
-        used_frames: int,
-        updated: bool,
+        estimate: StreamProgressiveEstimate,
     ) -> None: ...

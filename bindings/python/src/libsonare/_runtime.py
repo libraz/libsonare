@@ -49,6 +49,7 @@ from ._types_enums import _NORM_TYPES as _NORM_TYPES
 from ._types_enums import _PITCH_TARGET_MODES as _PITCH_TARGET_MODES
 from ._types_enums import _SECTION_TYPES as _SECTION_TYPES
 from ._types_enums import _TEMPOGRAM_MODES as _TEMPOGRAM_MODES
+from ._types_enums import _WINDOW_TYPES as _WINDOW_TYPES
 from .types import *  # noqa: F403
 
 # Pan-law aliases are normalized case-insensitively and with underscores folded

@@ -785,11 +785,11 @@ def test_note_segments_takes_exactly_one_voicing_input_by_keyword() -> None:
 
 
 def test_stream_names_carry_their_unit() -> None:
-    config = libsonare.StreamConfig(reference_hz=432.0)
-    assert config.reference_hz == 432.0
+    config = libsonare.StreamConfig(sample_rate=SR, reference_hz=432.0, fmin_hz=50.0)
+    assert (config.reference_hz, config.fmin_hz, config.fmax_hz) == (432.0, 50.0, None)
     analyzer = libsonare.StreamAnalyzer(config)
     try:
-        assert analyzer.current_time_sec() == 0.0
+        assert analyzer.current_time_sec == 0.0
         analyzer.set_reference_hz(440.0)
         analyzer.set_expected_duration(duration_sec=10.0)
         analyzer.process(_signal())
@@ -797,8 +797,9 @@ def test_stream_names_carry_their_unit() -> None:
         assert len(frames.timestamps_sec) == frames.n_frames > 0
         assert not hasattr(frames, "timestamps")
         stats = analyzer.stats()
-        for name in ("duration_sec", "chord_start_sec", "bar_duration_sec", "accumulated_sec"):
-            assert hasattr(stats, name), name
+        assert hasattr(stats, "duration_sec")
+        for name in ("bar_duration_sec", "accumulated_sec"):
+            assert hasattr(stats.estimate, name), name
     finally:
         analyzer.close()
 

@@ -10,9 +10,11 @@ import numpy as np
 
 from ._analysis_detection import _UNKNOWN_QUALITY_ORDINAL
 from ._errors import _not_supported, _require_open
-from ._narrowing import _narrow_double
+from ._narrowing import _narrow_double, _resolve_zero_default
 from ._runtime import (
-    QuantizeConfig,
+    _WINDOW_TYPES,
+    Key,
+    PitchClass,
     SonareStreamConfig,
     SonareStreamFrames,
     SonareStreamFramesI16,
@@ -26,6 +28,8 @@ from ._runtime import (
     StreamFramesI16,
     StreamFramesU8,
     StreamPatternScore,
+    StreamProgressiveEstimate,
+    StreamQuantizeConfig,
     StreamStats,
     _check,
     _from_c_float_array,
@@ -34,15 +38,15 @@ from ._runtime import (
     _to_c_float,
     _to_c_float_array,
     _to_c_size_t,
+    _token_ordinal,
 )
-from ._types_analysis import CHORD_QUALITIES, Key, _chord_symbol
-from ._types_enums import PitchClass
+from ._types_analysis import CHORD_QUALITIES, _chord_symbol
 
 
 def _quantize_config_to_c(
-    config: QuantizeConfig | None,
+    config: StreamQuantizeConfig | None,
 ) -> SonareStreamQuantizeConfig | None:
-    """Marshal a :class:`QuantizeConfig` to a C struct (``None`` stays ``None`` = defaults).
+    """Marshal a :class:`StreamQuantizeConfig` to a C struct (``None`` stays ``None`` = defaults).
 
     The caller keeps the returned struct alive and passes ``ctypes.byref`` of it
     (or ``None`` for the default ranges) to the native ``*_ex`` entry point.
@@ -66,8 +70,8 @@ class StreamAnalyzer:
 
     One serialized producer thread may call :meth:`process`,
     :meth:`process_with_offset`, or :meth:`finalize` concurrently with one
-    serialized consumer thread calling ``available_frames``, a ``read_frames*``
-    method, :meth:`stats`, ``frame_count``, or ``current_time_sec``. Native frame and
+    serialized consumer thread reading :attr:`available_frames`, a ``read_frames*``
+    method, :meth:`stats`, :attr:`frame_count`, or :attr:`current_time_sec`. Native frame and
     stats publication is an allocation-free release/acquire handoff. Do not call
     :meth:`reset`, setters, :meth:`close`, or transfer ownership until both roles
     are stopped. If the pending ring is full, the newly produced output frame is
@@ -77,46 +81,50 @@ class StreamAnalyzer:
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 
-    def __init__(self, config: StreamConfig | None = None) -> None:
+    def __init__(self, config: StreamConfig) -> None:
         # Set first so a failed create (e.g. rejected malformed config) leaves a
         # valid attribute for __del__/close() instead of raising AttributeError.
         self._handle: ctypes.c_void_p | None = None
+        if not isinstance(config, StreamConfig):
+            raise TypeError(
+                f"StreamAnalyzer: config must be a StreamConfig, got {type(config).__name__}"
+            )
         lib = _get_lib()
         if not hasattr(lib, "sonare_stream_analyzer_create"):
             raise _not_supported("libsonare was built without StreamAnalyzer support")
         raw = SonareStreamConfig()
         # Seed real-time defaults from the native layer, then override.
         _check(lib.sonare_stream_analyzer_config_default(ctypes.byref(raw)))
-        if config is not None:
-            # Integer fields are assigned bare: SonareStreamConfig is a CStruct, so
-            # each field narrows onto its own declared type and refuses a fraction
-            # an int() here would have truncated into a legal setting.
-            raw.sample_rate = config.sample_rate
-            raw.n_fft = config.n_fft
-            raw.hop_length = config.hop_length
-            raw.n_mels = config.n_mels
-            raw.fmin = _narrow_double(config.fmin, "config.fmin")
-            raw.fmax = _narrow_double(config.fmax, "config.fmax")
-            raw.reference_hz = _narrow_double(config.reference_hz, "config.reference_hz")
-            # The flags are the exception: that guard refuses a bool, so the 0/1 is
-            # spelled out here.
-            raw.compute_magnitude = int(config.compute_magnitude)
-            raw.compute_mel = int(config.compute_mel)
-            raw.compute_chroma = int(config.compute_chroma)
-            raw.compute_onset = int(config.compute_onset)
-            raw.compute_spectral = int(config.compute_spectral)
-            raw.emit_every_n_frames = config.emit_every_n_frames
-            raw.magnitude_downsample = config.magnitude_downsample
-            raw.max_pending_frames = config.max_pending_frames
-            raw.max_progression_entries = config.max_progression_entries
-            raw.key_update_interval_sec = _narrow_double(
-                config.key_update_interval_sec, "config.key_update_interval_sec"
-            )
-            raw.bpm_update_interval_sec = _narrow_double(
-                config.bpm_update_interval_sec, "config.bpm_update_interval_sec"
-            )
-            raw.window = config.window
-            raw.output_format = config.output_format
+        # Integer fields are assigned bare: SonareStreamConfig is a CStruct, so
+        # each field narrows onto its own declared type and refuses a fraction
+        # an int() here would have truncated into a legal setting.
+        raw.sample_rate = config.sample_rate
+        raw.n_fft = config.n_fft
+        raw.hop_length = config.hop_length
+        raw.n_mels = config.n_mels
+        raw.fmin = _narrow_double(config.fmin_hz, "config.fmin_hz")
+        # The C ABI reads 0 as Nyquist, so only an absent bound may reach it.
+        raw.fmax = _narrow_double(
+            _resolve_zero_default(config.fmax_hz, "config.fmax_hz"), "config.fmax_hz"
+        )
+        raw.reference_hz = _narrow_double(config.reference_hz, "config.reference_hz")
+        # The flags are the exception: that guard refuses a bool, so the 0/1 is
+        # spelled out here.
+        raw.compute_mel = int(config.compute_mel)
+        raw.compute_chroma = int(config.compute_chroma)
+        raw.compute_onset = int(config.compute_onset)
+        raw.compute_spectral = int(config.compute_spectral)
+        raw.emit_every_n_frames = config.emit_every_n_frames
+        raw.magnitude_downsample = config.magnitude_downsample
+        raw.max_pending_frames = config.max_pending_frames
+        raw.max_progression_entries = config.max_progression_entries
+        raw.key_update_interval_sec = _narrow_double(
+            config.key_update_interval_sec, "config.key_update_interval_sec"
+        )
+        raw.bpm_update_interval_sec = _narrow_double(
+            config.bpm_update_interval_sec, "config.bpm_update_interval_sec"
+        )
+        raw.window = _token_ordinal(config.window, _WINDOW_TYPES, "config.window")
         handle = ctypes.c_void_p()
         _check(lib.sonare_stream_analyzer_create(ctypes.byref(raw), ctypes.byref(handle)))
         self._handle = handle
@@ -125,15 +133,6 @@ class StreamAnalyzer:
         if self._handle is not None:
             _get_lib().sonare_stream_analyzer_destroy(self._handle)
             self._handle = None
-
-    # Cross-binding aliases: Node uses destroy(), WASM uses delete().
-    def destroy(self) -> None:
-        """Alias of :meth:`close` for cross-binding (Node ``destroy``) parity."""
-        self.close()
-
-    def delete(self) -> None:
-        """Alias of :meth:`close` for cross-binding (WASM ``delete``) parity."""
-        self.close()
 
     def __enter__(self) -> StreamAnalyzer:
         return self
@@ -161,7 +160,7 @@ class StreamAnalyzer:
         )
 
     def process_with_offset(
-        self, samples: Sequence[float] | list[float], sample_offset: int
+        self, samples: Sequence[float] | list[float], start_sample: int
     ) -> None:
         """Feed a chunk with a contiguous external sample offset.
 
@@ -169,7 +168,7 @@ class StreamAnalyzer:
         :meth:`finalize` is rejected. Call :meth:`reset` first to discard the
         buffered partial frame and anchor a new timeline segment.
         """
-        offset = _to_c_size_t(sample_offset, "sample_offset")
+        offset = _to_c_size_t(start_sample, "start_sample")
         c_array, length = _to_c_float_array(samples)
         _check(
             _get_lib().sonare_stream_analyzer_process_with_offset(
@@ -194,6 +193,7 @@ class StreamAnalyzer:
             raise _not_supported("libsonare was built without StreamAnalyzer.finalize support")
         _check(lib.sonare_stream_analyzer_finalize(self._require_handle()))
 
+    @property
     def available_frames(self) -> int:
         """Return the number of frames available to read."""
         out = ctypes.c_size_t()
@@ -219,7 +219,7 @@ class StreamAnalyzer:
             lib.sonare_free_stream_frames(ctypes.byref(raw))
 
     def read_frames_u8(
-        self, max_frames: int, quantize_config: QuantizeConfig | None = None
+        self, max_frames: int, quantize_config: StreamQuantizeConfig | None = None
     ) -> StreamFramesU8:
         """Read up to ``max_frames`` frames as 8-bit quantized arrays.
 
@@ -243,7 +243,7 @@ class StreamAnalyzer:
             lib.sonare_free_stream_frames_u8(ctypes.byref(raw))
 
     def read_frames_i16(
-        self, max_frames: int, quantize_config: QuantizeConfig | None = None
+        self, max_frames: int, quantize_config: StreamQuantizeConfig | None = None
     ) -> StreamFramesI16:
         """Read up to ``max_frames`` frames as 16-bit quantized arrays.
 
@@ -266,11 +266,11 @@ class StreamAnalyzer:
         finally:
             lib.sonare_free_stream_frames_i16(ctypes.byref(raw))
 
-    def reset(self, base_sample_offset: int = 0) -> None:
-        """Reset analyzer state for a new stream."""
+    def reset(self, start_sample: int = 0) -> None:
+        """Reset analyzer state for a new stream starting at ``start_sample``."""
         _check(
             _get_lib().sonare_stream_analyzer_reset(
-                self._require_handle(), _to_c_size_t(base_sample_offset, "base_sample_offset")
+                self._require_handle(), _to_c_size_t(start_sample, "start_sample")
             )
         )
 
@@ -285,6 +285,7 @@ class StreamAnalyzer:
             if hasattr(lib, "sonare_free_stream_stats"):
                 lib.sonare_free_stream_stats(ctypes.byref(raw))
 
+    @property
     def frame_count(self) -> int:
         """Return the total number of frames processed."""
         out = ctypes.c_int()
@@ -293,6 +294,7 @@ class StreamAnalyzer:
         )
         return int(out.value)
 
+    @property
     def current_time_sec(self) -> float:
         """Return the current stream time position in seconds."""
         out = ctypes.c_float()
@@ -303,6 +305,7 @@ class StreamAnalyzer:
         )
         return float(out.value)
 
+    @property
     def sample_rate(self) -> int:
         """Return the configured input sample rate in Hz."""
         out = ctypes.c_int()
@@ -350,57 +353,65 @@ class StreamAnalyzer:
         )
 
 
-def _ptr_to_list(ptr: object, count: int, ctype: Any, dtype: object) -> list[Any]:
-    """Bulk-copy a C pointer's ``count`` elements into a Python list.
+# Feature bits of the native frame buffers.
+_FEATURE_MEL = 1
+_FEATURE_CHROMA = 2
+_FEATURE_ONSET = 4
+_FEATURE_SPECTRAL = 8
 
-    Materializes a fixed-size view at the pointer's address and lets NumPy do
-    the copy in C (``frombuffer().copy()``), avoiding the per-element Python
-    marshalling that dominated this realtime drain path. The dataclass fields
-    are contractually ``list``, so the bulk ndarray is converted via
-    ``.tolist()``.
-    """
+
+def _copy(ptr: object, count: int, ctype: Any, dtype: Any) -> np.ndarray:
+    """Copy ``count`` elements at a C pointer into an independent ndarray."""
     if not ptr or count <= 0:
-        return []
+        return np.empty(0, dtype=dtype)
     raw_ptr = cast(Any, ptr)
     view = (ctype * count).from_address(ctypes.addressof(raw_ptr.contents))
-    values = np.frombuffer(memoryview(view), dtype=cast(Any, dtype), count=count)
-    return cast(list[Any], values.tolist())
+    return np.frombuffer(memoryview(view), dtype=dtype, count=count).copy()
 
 
-def _floats(ptr: object, count: int) -> list[float]:
-    if not ptr or count <= 0:
-        return []
-    return cast(list[float], _from_c_float_array(ptr, count).tolist())
+def _band_major(flat: np.ndarray, n_frames: int, n_bands: int) -> np.ndarray:
+    """The native buffers are frame-major; the public layout is ``(bands, n_frames)``."""
+    return np.ascontiguousarray(flat.reshape(n_frames, n_bands).T)
 
 
-def _ints(ptr: object, count: int) -> list[int]:
-    if not ptr or count <= 0:
-        return []
-    return cast(list[int], _from_c_int_array(ptr, count).tolist())
+def _frame_arrays(raw: Any, ctype: Any, dtype: Any) -> dict[str, np.ndarray | None]:
+    """The arrays every read path shares, ``None`` where the feature was not computed."""
+    n = int(raw.n_frames)
+    flags = int(raw.feature_flags)
+    n_mels = int(raw.n_mels)
+    n_chroma = int(raw.n_chroma)
+
+    def present(bit: int, ptr: object, count: int) -> np.ndarray | None:
+        return _copy(ptr, count, ctype, dtype) if flags & bit else None
+
+    mel = present(_FEATURE_MEL, raw.mel, n * n_mels)
+    chroma = present(_FEATURE_CHROMA, raw.chroma, n * n_chroma)
+    return {
+        "mel": None if mel is None else _band_major(mel, n, n_mels),
+        "chroma": None if chroma is None else _band_major(chroma, n, n_chroma),
+        "onset_strength": present(_FEATURE_ONSET, raw.onset_strength, n),
+        "rms_energy": _copy(raw.rms_energy, n, ctype, dtype),
+        "spectral_centroid": present(_FEATURE_SPECTRAL, raw.spectral_centroid, n),
+        "spectral_flatness": present(_FEATURE_SPECTRAL, raw.spectral_flatness, n),
+    }
 
 
-def _u8s(ptr: object, count: int) -> list[int]:
-    return cast(list[int], _ptr_to_list(ptr, count, ctypes.c_uint8, np.uint8))
-
-
-def _i16s(ptr: object, count: int) -> list[int]:
-    return cast(list[int], _ptr_to_list(ptr, count, ctypes.c_int16, np.int16))
-
-
-def _chord_name(root: int, quality: int) -> str:
-    """Spell a chord symbol through the table the batch analysis uses."""
-    if not 0 <= root < len(PitchClass):
-        return "N.C."
+def _chord_quality_token(quality: int) -> str:
     ordinal = quality if 0 <= quality < len(CHORD_QUALITIES) else _UNKNOWN_QUALITY_ORDINAL
-    return _chord_symbol(PitchClass(root), CHORD_QUALITIES[ordinal])
+    return CHORD_QUALITIES[ordinal]
 
 
-def _key_names(key: int, minor: bool) -> tuple[str | None, str | None]:
-    """Spell a key through ``Key``, or ``(None, None)`` when no key is estimated."""
-    if not 0 <= key < len(PitchClass):
-        return None, None
-    spelled = Key(root=PitchClass(key), mode="minor" if minor else "major", confidence=0.0)
-    return spelled.name, spelled.short_name
+def _chord_change(
+    root: int, quality: int, start_sec: float, confidence: float
+) -> StreamChordChange:
+    token = _chord_quality_token(quality)
+    return StreamChordChange(
+        root=PitchClass(root),
+        quality=token,
+        name=_chord_symbol(PitchClass(root), token),
+        start_sec=start_sec,
+        confidence=confidence,
+    )
 
 
 def _chord_changes(ptr: object, count: int) -> list[StreamChordChange]:
@@ -408,12 +419,11 @@ def _chord_changes(ptr: object, count: int) -> list[StreamChordChange]:
         return []
     raw_ptr = cast(Any, ptr)
     return [
-        StreamChordChange(
-            root=int(raw_ptr[i].root),
-            quality=int(raw_ptr[i].quality),
-            name=_chord_name(int(raw_ptr[i].root), int(raw_ptr[i].quality)),
-            start_sec=float(raw_ptr[i].start_sec),
-            confidence=float(raw_ptr[i].confidence),
+        _chord_change(
+            int(raw_ptr[i].root),
+            int(raw_ptr[i].quality),
+            float(raw_ptr[i].start_sec),
+            float(raw_ptr[i].confidence),
         )
         for i in range(count)
     ]
@@ -423,17 +433,21 @@ def _bar_chords(ptr: object, count: int) -> list[StreamBarChord]:
     if not ptr or count <= 0:
         return []
     raw_ptr = cast(Any, ptr)
-    return [
-        StreamBarChord(
-            bar_index=int(raw_ptr[i].bar_index),
-            root=int(raw_ptr[i].root),
-            quality=int(raw_ptr[i].quality),
-            name=_chord_name(int(raw_ptr[i].root), int(raw_ptr[i].quality)),
-            start_sec=float(raw_ptr[i].start_sec),
-            confidence=float(raw_ptr[i].confidence),
+    out = []
+    for i in range(count):
+        token = _chord_quality_token(int(raw_ptr[i].quality))
+        root = PitchClass(int(raw_ptr[i].root))
+        out.append(
+            StreamBarChord(
+                bar_index=int(raw_ptr[i].bar_index),
+                root=root,
+                quality=token,
+                name=_chord_symbol(root, token),
+                start_sec=float(raw_ptr[i].start_sec),
+                confidence=float(raw_ptr[i].confidence),
+            )
         )
-        for i in range(count)
-    ]
+    return out
 
 
 def _pattern_scores(ptr: object, count: int) -> list[StreamPatternScore]:
@@ -451,63 +465,81 @@ def _pattern_scores(ptr: object, count: int) -> list[StreamPatternScore]:
 
 def _stream_frames_from_c(raw: SonareStreamFrames) -> StreamFrames:
     n = int(raw.n_frames)
-    n_mels = int(raw.n_mels)
+    chords = bool(int(raw.feature_flags) & _FEATURE_CHROMA)
     return StreamFrames(
         n_frames=n,
-        n_mels=n_mels,
-        n_chroma=int(raw.n_chroma),
-        feature_flags=int(raw.feature_flags),
-        timestamps_sec=_floats(raw.timestamps_sec, n),
-        mel=_floats(raw.mel, n * n_mels),
-        chroma=_floats(raw.chroma, n * int(raw.n_chroma)),
-        onset_strength=_floats(raw.onset_strength, n),
-        rms_energy=_floats(raw.rms_energy, n),
-        spectral_centroid=_floats(raw.spectral_centroid, n),
-        spectral_flatness=_floats(raw.spectral_flatness, n),
-        chord_root=_ints(raw.chord_root, n),
-        chord_quality=_ints(raw.chord_quality, n),
-        chord_confidence=_floats(raw.chord_confidence, n),
+        timestamps_sec=_from_c_float_array(raw.timestamps_sec, n),
+        **_frame_arrays(raw, ctypes.c_float, np.float32),
+        chord_root=_from_c_int_array(raw.chord_root, n) if chords else None,
+        chord_quality=_from_c_int_array(raw.chord_quality, n) if chords else None,
+        chord_confidence=_from_c_float_array(raw.chord_confidence, n) if chords else None,
     )
 
 
 def _stream_frames_u8_from_c(raw: SonareStreamFramesU8) -> StreamFramesU8:
     n = int(raw.n_frames)
-    n_mels = int(raw.n_mels)
     return StreamFramesU8(
         n_frames=n,
-        n_mels=n_mels,
-        n_chroma=int(raw.n_chroma),
-        feature_flags=int(raw.feature_flags),
-        timestamps_sec=_floats(raw.timestamps_sec, n),
-        mel=_u8s(raw.mel, n * n_mels),
-        chroma=_u8s(raw.chroma, n * int(raw.n_chroma)),
-        onset_strength=_u8s(raw.onset_strength, n),
-        rms_energy=_u8s(raw.rms_energy, n),
-        spectral_centroid=_u8s(raw.spectral_centroid, n),
-        spectral_flatness=_u8s(raw.spectral_flatness, n),
+        timestamps_sec=_from_c_float_array(raw.timestamps_sec, n),
+        **_frame_arrays(raw, ctypes.c_uint8, np.uint8),
     )
 
 
 def _stream_frames_i16_from_c(raw: SonareStreamFramesI16) -> StreamFramesI16:
     n = int(raw.n_frames)
-    n_mels = int(raw.n_mels)
     return StreamFramesI16(
         n_frames=n,
-        n_mels=n_mels,
-        n_chroma=int(raw.n_chroma),
-        feature_flags=int(raw.feature_flags),
-        timestamps_sec=_floats(raw.timestamps_sec, n),
-        mel=_i16s(raw.mel, n * n_mels),
-        chroma=_i16s(raw.chroma, n * int(raw.n_chroma)),
-        onset_strength=_i16s(raw.onset_strength, n),
-        rms_energy=_i16s(raw.rms_energy, n),
-        spectral_centroid=_i16s(raw.spectral_centroid, n),
-        spectral_flatness=_i16s(raw.spectral_flatness, n),
+        timestamps_sec=_from_c_float_array(raw.timestamps_sec, n),
+        **_frame_arrays(raw, ctypes.c_int16, np.int16),
+    )
+
+
+def _estimate_from_c(raw: SonareStreamStats) -> StreamProgressiveEstimate:
+    has_bpm = float(raw.bpm) > 0
+    key_root = int(raw.key)
+    has_key = 0 <= key_root < len(PitchClass)
+    chord_root = int(raw.chord_root)
+    has_bar = int(raw.current_bar) >= 0
+    pattern = bytes(raw.detected_pattern_name).split(b"\0", 1)[0].decode("utf-8")
+    return StreamProgressiveEstimate(
+        bpm=float(raw.bpm) if has_bpm else None,
+        bpm_confidence=float(raw.bpm_confidence) if has_bpm else None,
+        bpm_candidate_count=int(raw.bpm_candidate_count),
+        key=Key(
+            root=PitchClass(key_root),
+            mode="minor" if raw.key_minor else "major",
+            confidence=float(raw.key_confidence),
+        )
+        if has_key
+        else None,
+        chord=_chord_change(
+            chord_root,
+            int(raw.chord_quality),
+            float(raw.chord_start_sec),
+            float(raw.chord_confidence),
+        )
+        if 0 <= chord_root < len(PitchClass)
+        else None,
+        chord_progression=_chord_changes(raw.chord_progression, int(raw.chord_progression_count)),
+        bar_chord_progression=_bar_chords(
+            raw.bar_chord_progression, int(raw.bar_chord_progression_count)
+        ),
+        current_bar=int(raw.current_bar) if has_bar else None,
+        bar_duration_sec=float(raw.bar_duration_sec) if has_bar else None,
+        voted_pattern=_bar_chords(raw.voted_pattern, int(raw.voted_pattern_count)),
+        pattern_length=int(raw.pattern_length),
+        detected_pattern_name=pattern or None,
+        detected_pattern_score=float(raw.detected_pattern_score) if pattern else None,
+        all_pattern_scores=_pattern_scores(
+            raw.all_pattern_scores, int(raw.all_pattern_scores_count)
+        ),
+        accumulated_sec=float(raw.accumulated_sec),
+        used_frames=int(raw.used_frames),
+        updated=bool(raw.updated),
     )
 
 
 def _stream_stats_from_c(raw: SonareStreamStats) -> StreamStats:
-    key_name, key_short_name = _key_names(int(raw.key), bool(raw.key_minor))
     return StreamStats(
         total_frames=int(raw.total_frames),
         total_samples=int(raw.total_samples),
@@ -517,33 +549,5 @@ def _stream_stats_from_c(raw: SonareStreamStats) -> StreamStats:
         dropped_chord_progression_entries=int(raw.dropped_chord_progression_entries),
         dropped_bar_progression_entries=int(raw.dropped_bar_progression_entries),
         non_finite_discard_blocks=int(raw.non_finite_discard_blocks),
-        bpm=float(raw.bpm),
-        bpm_confidence=float(raw.bpm_confidence),
-        bpm_candidate_count=int(raw.bpm_candidate_count),
-        key=int(raw.key),
-        key_minor=bool(raw.key_minor),
-        key_confidence=float(raw.key_confidence),
-        key_name=key_name,
-        key_short_name=key_short_name,
-        chord_root=int(raw.chord_root),
-        chord_quality=int(raw.chord_quality),
-        chord_name=_chord_name(int(raw.chord_root), int(raw.chord_quality)),
-        chord_confidence=float(raw.chord_confidence),
-        chord_start_sec=float(raw.chord_start_sec),
-        current_bar=int(raw.current_bar),
-        bar_duration_sec=float(raw.bar_duration_sec),
-        chord_progression=_chord_changes(raw.chord_progression, int(raw.chord_progression_count)),
-        bar_chord_progression=_bar_chords(
-            raw.bar_chord_progression, int(raw.bar_chord_progression_count)
-        ),
-        voted_pattern=_bar_chords(raw.voted_pattern, int(raw.voted_pattern_count)),
-        pattern_length=int(raw.pattern_length),
-        detected_pattern_name=bytes(raw.detected_pattern_name).split(b"\0", 1)[0].decode("utf-8"),
-        detected_pattern_score=float(raw.detected_pattern_score),
-        all_pattern_scores=_pattern_scores(
-            raw.all_pattern_scores, int(raw.all_pattern_scores_count)
-        ),
-        accumulated_sec=float(raw.accumulated_sec),
-        used_frames=int(raw.used_frames),
-        updated=bool(raw.updated),
+        estimate=_estimate_from_c(raw),
     )

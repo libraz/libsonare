@@ -10,10 +10,6 @@ import libsonare as ls
 from libsonare._runtime import SonareStreamConfig, _get_lib
 
 
-def _is_finite_list(xs):
-    return all(math.isfinite(float(x)) for x in xs)
-
-
 def _sine(n, freq, sr):
     return [0.5 * math.sin(2.0 * math.pi * freq * i / sr) for i in range(n)]
 
@@ -23,15 +19,14 @@ def test_stream_config_defaults_match_native_config():
     lib = _get_lib()
     assert lib.sonare_stream_analyzer_config_default(ctypes.byref(raw)) == 0
 
-    cfg = ls.StreamConfig()
-    assert cfg.sample_rate == raw.sample_rate
+    cfg = ls.StreamConfig(sample_rate=raw.sample_rate)
     assert cfg.n_fft == raw.n_fft
     assert cfg.hop_length == raw.hop_length
     assert cfg.n_mels == raw.n_mels
-    assert cfg.fmin == raw.fmin
-    assert cfg.fmax == raw.fmax
+    assert cfg.fmin_hz == raw.fmin
+    # An absent upper edge is the native 0, which the core reads as Nyquist.
+    assert cfg.fmax_hz is None and raw.fmax == 0.0
     assert cfg.reference_hz == raw.reference_hz
-    assert int(cfg.compute_magnitude) == raw.compute_magnitude
     assert int(cfg.compute_mel) == raw.compute_mel
     assert int(cfg.compute_chroma) == raw.compute_chroma
     assert int(cfg.compute_onset) == raw.compute_onset
@@ -42,8 +37,7 @@ def test_stream_config_defaults_match_native_config():
     assert cfg.max_progression_entries == raw.max_progression_entries
     assert cfg.key_update_interval_sec == raw.key_update_interval_sec
     assert cfg.bpm_update_interval_sec == raw.bpm_update_interval_sec
-    assert cfg.window == raw.window
-    assert cfg.output_format == raw.output_format
+    assert cfg.window == "hann" and raw.window == 0
 
 
 def test_mel_inverse_roundtrip():
@@ -208,8 +202,8 @@ def test_stream_analyzer_abi_and_stats():
         sa.process(audio[:half])
         sa.process(audio[half:])
 
-        assert sa.sample_rate() == sr
-        assert sa.frame_count() > 0
+        assert sa.sample_rate == sr
+        assert sa.frame_count > 0
 
         stats = sa.stats()
         # --- Critical ABI / struct-padding checks ---
@@ -228,54 +222,55 @@ def test_stream_analyzer_abi_and_stats():
             f"total_samples/sr {stats.total_samples / sr}"
         )
         assert stats.total_frames > 0
-        # Field-by-field sanity: every numeric field must be finite & in range.
-        assert math.isfinite(stats.bpm) and stats.bpm >= 0.0
-        assert 0.0 <= stats.bpm_confidence <= 1.0
-        assert stats.bpm_candidate_count >= 0
-        assert -1 <= stats.key <= 11
-        assert isinstance(stats.key_minor, bool)
-        assert 0.0 <= stats.key_confidence <= 1.0
-        assert -1 <= stats.chord_root <= 11
-        assert math.isfinite(stats.chord_confidence)
-        assert math.isfinite(stats.bar_duration_sec) and stats.bar_duration_sec >= 0.0
-        assert stats.used_frames >= 0
+        # Field-by-field sanity: every estimate present must be finite & in range.
+        estimate = stats.estimate
+        if estimate.bpm is not None:
+            assert math.isfinite(estimate.bpm) and estimate.bpm > 0.0
+            assert estimate.bpm_confidence is not None
+            assert 0.0 <= estimate.bpm_confidence <= 1.0
+        assert estimate.bpm_candidate_count >= 0
+        if estimate.key is not None:
+            assert estimate.key.mode in ("major", "minor")
+            assert 0.0 <= estimate.key.confidence <= 1.0
+        if estimate.chord is not None:
+            assert math.isfinite(estimate.chord.confidence)
+        if estimate.bar_duration_sec is not None:
+            assert math.isfinite(estimate.bar_duration_sec) and estimate.bar_duration_sec >= 0.0
+        assert estimate.used_frames >= 0
 
         # current_time should reflect consumed audio (<= fed, consistent with stats).
-        assert abs(sa.current_time_sec() - stats.total_samples / sr) < 0.1
+        assert abs(sa.current_time_sec - stats.total_samples / sr) < 0.1
 
         # Drain frames; verify SOA array lengths are internally consistent.
-        avail = sa.available_frames()
+        avail = sa.available_frames
         if avail > 0:
             frames = sa.read_frames(avail)
             assert frames.n_frames == avail
-            assert frames.n_mels == 128
-            assert len(frames.timestamps_sec) == avail
-            assert len(frames.mel) == avail * frames.n_mels
-            assert len(frames.chroma) == avail * 12
-            assert len(frames.onset_strength) == avail
-            assert len(frames.chord_root) == avail
-            assert _is_finite_list(frames.timestamps_sec)
-            assert _is_finite_list(frames.mel)
+            assert frames.timestamps_sec.shape == (avail,)
+            assert frames.mel is not None and frames.mel.shape == (128, avail)
+            assert frames.chroma is not None and frames.chroma.shape == (12, avail)
+            assert frames.onset_strength is not None and frames.onset_strength.shape == (avail,)
+            assert frames.chord_root is not None and frames.chord_root.shape == (avail,)
+            assert np.all(np.isfinite(frames.timestamps_sec))
+            assert np.all(np.isfinite(frames.mel))
 
 
 def test_stream_analyzer_quantized_python_api():
     sr = 22050
-    cfg = ls.StreamConfig(sample_rate=sr, n_fft=1024, hop_length=256, n_mels=32, window=1)
+    cfg = ls.StreamConfig(sample_rate=sr, n_fft=1024, hop_length=256, n_mels=32, window="hamming")
     with ls.StreamAnalyzer(cfg) as sa:
         sa.process(_sine(sr // 2, 440.0, sr))
         frames = sa.read_frames_u8(4)
         assert 0 < frames.n_frames <= 4
-        assert frames.n_mels == 32
-        assert len(frames.mel) == frames.n_frames * frames.n_mels
-        assert len(frames.chroma) == frames.n_frames * 12
-        assert all(0 <= value <= 255 for value in frames.mel)
+        assert frames.mel is not None and frames.mel.dtype == np.uint8
+        assert frames.mel.shape == (32, frames.n_frames)
+        assert frames.chroma is not None and frames.chroma.shape == (12, frames.n_frames)
 
         sa.process(_sine(sr // 2, 440.0, sr))
         frames16 = sa.read_frames_i16(4)
         assert 0 < frames16.n_frames <= 4
-        assert frames16.n_mels == 32
-        assert len(frames16.mel) == frames16.n_frames * frames16.n_mels
-        assert all(-32768 <= value <= 32767 for value in frames16.chroma)
+        assert frames16.mel is not None and frames16.mel.dtype == np.int16
+        assert frames16.mel.shape == (32, frames16.n_frames)
 
 
 def test_stream_analyzer_feature_shape_contract_all_combinations_and_read_types():
@@ -297,26 +292,29 @@ def test_stream_analyzer_feature_shape_contract_all_combinations_and_read_types(
                 analyzer.process(input_samples)
                 frames = getattr(analyzer, method_name)(1)
                 assert frames.n_frames == 1
-                assert frames.feature_flags == mask
-                assert frames.n_mels == (8 if mask & 1 else 0)
-                assert frames.n_chroma == (12 if mask & 2 else 0)
-                assert len(frames.mel) == (8 if mask & 1 else 0)
-                assert len(frames.chroma) == (12 if mask & 2 else 0)
-                assert len(frames.onset_strength) == (1 if mask & 4 else 0)
-                assert len(frames.rms_energy) == 1
-                assert len(frames.spectral_centroid) == (1 if mask & 8 else 0)
-                assert len(frames.spectral_flatness) == (1 if mask & 8 else 0)
+
+                def shape(array):
+                    return None if array is None else array.shape
+
+                assert shape(frames.mel) == ((8, 1) if mask & 1 else None)
+                assert shape(frames.chroma) == ((12, 1) if mask & 2 else None)
+                assert shape(frames.onset_strength) == ((1,) if mask & 4 else None)
+                assert shape(frames.rms_energy) == (1,)
+                assert shape(frames.spectral_centroid) == ((1,) if mask & 8 else None)
+                assert shape(frames.spectral_flatness) == ((1,) if mask & 8 else None)
+                if method_name == "read_frames":
+                    assert shape(frames.chord_root) == ((1,) if mask & 2 else None)
 
 
-@pytest.mark.parametrize("output_format", [1, 2])
-def test_stream_analyzer_rejects_legacy_output_format(output_format):
-    with pytest.raises(ls.SonareError):
-        ls.StreamAnalyzer(ls.StreamConfig(output_format=output_format))
+@pytest.mark.parametrize("field", ["output_format", "compute_magnitude", "fmin", "fmax"])
+def test_stream_config_has_no_dead_or_unitless_fields(field):
+    with pytest.raises(TypeError):
+        ls.StreamConfig(sample_rate=22050, **{field: 0})
 
 
 def test_stream_analyzer_quantize_config_override():
     sr = 22050
-    cfg = ls.StreamConfig(sample_rate=sr, n_fft=1024, hop_length=256, n_mels=32, window=1)
+    cfg = ls.StreamConfig(sample_rate=sr, n_fft=1024, hop_length=256, n_mels=32, window="hamming")
 
     # A tiny centroid_max saturates the (positive) spectral centroid to the u8
     # maximum; a huge centroid_max collapses it toward zero. Reading identical
@@ -324,14 +322,15 @@ def test_stream_analyzer_quantize_config_override():
     # native quantizer.
     with ls.StreamAnalyzer(cfg) as tight:
         tight.process(_sine(sr // 2, 440.0, sr))
-        narrow = tight.read_frames_u8(4, ls.QuantizeConfig(centroid_max=1.0))
+        narrow = tight.read_frames_u8(4, ls.StreamQuantizeConfig(centroid_max=1.0))
     with ls.StreamAnalyzer(cfg) as wide:
         wide.process(_sine(sr // 2, 440.0, sr))
-        broad = wide.read_frames_u8(4, ls.QuantizeConfig(centroid_max=1.0e9))
+        broad = wide.read_frames_u8(4, ls.StreamQuantizeConfig(centroid_max=1.0e9))
 
     assert narrow.n_frames == broad.n_frames
+    assert narrow.spectral_centroid is not None and broad.spectral_centroid is not None
     assert narrow.spectral_centroid[0] == 255  # saturated by the narrow range
-    assert narrow.spectral_centroid != broad.spectral_centroid
+    assert not np.array_equal(narrow.spectral_centroid, broad.spectral_centroid)
 
 
 def test_stream_analyzer_reset():
@@ -345,7 +344,7 @@ def test_stream_analyzer_reset():
         assert before.total_samples == before.total_frames * cfg.hop_length
         sa.reset()
         assert sa.stats().total_samples == 0
-        assert sa.frame_count() == 0
+        assert sa.frame_count == 0
     finally:
         sa.close()
 

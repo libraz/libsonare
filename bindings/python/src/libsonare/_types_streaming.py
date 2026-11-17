@@ -13,6 +13,9 @@ if TYPE_CHECKING:
     import numpy as np
     from numpy.typing import NDArray
 
+    from ._types_analysis import Key
+    from ._types_enums import PitchClass, WindowType
+
 
 @dataclass(frozen=True, slots=True, eq=False)
 class CqtResult:
@@ -29,7 +32,7 @@ class CqtResult:
 
 
 @dataclass(frozen=True, slots=True)
-class QuantizeConfig:
+class StreamQuantizeConfig:
     """Quantization ranges for the u8/i16 bandwidth-reduction read paths.
 
     Defaults mirror ``sonare_stream_quantize_config_default``. Widen any range
@@ -49,28 +52,26 @@ class QuantizeConfig:
 class StreamConfig:
     """Construction config for :class:`StreamAnalyzer`.
 
-    Defaults mirror the C ``sonare_stream_analyzer_config_default`` values
-    (real-time 44100 Hz / n_fft 2048).
+    Field defaults mirror the C ``sonare_stream_analyzer_config_default`` values.
 
     ``n_fft`` is the analysis window as a duration, in samples at 44100 Hz. Below
     that rate the window is rescaled to the analysis rate, never shorter than
     ``hop_length``; ``hop_length`` itself is in samples at the analysis rate.
     The emitted bin count is fixed by the FFT length the window is zero-padded
     to, not by ``n_fft // 2 + 1``.
+
+    ``fmax_hz`` is ``None`` for Nyquist; an explicit value must be positive.
+    ``reference_hz`` is the A4 reference and must be within 220..880, the same
+    range :meth:`StreamAnalyzer.set_reference_hz` accepts.
     """
 
-    sample_rate: int = 44100
+    sample_rate: int
     n_fft: int = 2048
     hop_length: int = 512
     n_mels: int = 128
-    fmin: float = 0.0
-    fmax: float = 0.0
-    # A4 tuning reference in Hz. Must be within 220..880, the same range
-    # StreamAnalyzer.set_reference_hz accepts live.
+    fmin_hz: float = 0.0
+    fmax_hz: float | None = None
     reference_hz: float = 440.0
-    # The streaming C ABI has no magnitude read path, so magnitude is off by
-    # default and an explicit True is rejected by the native layer.
-    compute_magnitude: bool = False
     compute_mel: bool = True
     compute_chroma: bool = True
     compute_onset: bool = True
@@ -78,86 +79,84 @@ class StreamConfig:
     emit_every_n_frames: int = 1
     magnitude_downsample: int = 1
     max_pending_frames: int = 4096  # Overflow drops the newly produced frame.
-    max_progression_entries: int = 4096
+    max_progression_entries: int = 4096  # Overflow drops the oldest entry.
     key_update_interval_sec: float = 5.0
     bpm_update_interval_sec: float = 10.0
-    window: int = 0
-    output_format: int = 0  # Deprecated: must be 0; choose an explicit read method.
+    window: WindowType = "hann"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class StreamFrames:
-    """Structure-of-arrays batch of analyzed frames from :class:`StreamAnalyzer`.
+    """A batch of analyzed frames from :class:`StreamAnalyzer`.
 
-    Matrix fields are flattened row-major ``[n_frames x stride]`` lists
-    (``mel`` stride is ``n_mels``, ``chroma`` stride is ``n_chroma``). A
-    disabled feature has a zero stride or empty scalar array; ``feature_flags``
-    uses MEL=1, CHROMA=2, ONSET=4, SPECTRAL=8.
+    Matrices are band-major ``(bands, n_frames)`` arrays, the layout of the batch
+    :func:`mel_spectrogram`. A feature that is not computed is ``None``; the chord
+    arrays follow ``compute_chroma``.
 
-    ``mel`` here is LINEAR mel power (not dB) — the raw per-frame mel energies.
-    The quantized read paths (:class:`StreamFramesU8` / :class:`StreamFramesI16`)
-    convert to dB before packing, so their ``mel`` is dB-scaled; this float
-    buffer is not.
+    ``mel`` is LINEAR mel power (not dB). The quantized read paths
+    (:class:`StreamFramesU8` / :class:`StreamFramesI16`) convert to dB before
+    packing.
+
+    ``chord_root`` is the pitch class of each frame's chord, or -1 where none was
+    detected; ``chord_quality`` is an ordinal into :data:`CHORD_QUALITIES`.
     """
 
     n_frames: int
-    n_mels: int
-    n_chroma: int
-    feature_flags: int
-    timestamps_sec: list[float]
-    mel: list[float]
-    chroma: list[float]
-    onset_strength: list[float]
-    rms_energy: list[float]
-    spectral_centroid: list[float]
-    spectral_flatness: list[float]
-    chord_root: list[int]
-    chord_quality: list[int]
-    chord_confidence: list[float]
+    timestamps_sec: NDArray[np.float32]
+    mel: NDArray[np.float32] | None
+    chroma: NDArray[np.float32] | None
+    onset_strength: NDArray[np.float32] | None
+    rms_energy: NDArray[np.float32]
+    spectral_centroid: NDArray[np.float32] | None
+    spectral_flatness: NDArray[np.float32] | None
+    chord_root: NDArray[np.int32] | None
+    chord_quality: NDArray[np.int32] | None
+    chord_confidence: NDArray[np.float32] | None
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class StreamFramesU8:
-    """Quantized (uint8) frame batch. ``mel`` is in dB, quantized over
-    ``[mel_db_min, mel_db_max]`` (unlike :class:`StreamFrames`, whose float
-    ``mel`` is linear power)."""
+    """Quantized (uint8) frame batch, shaped as :class:`StreamFrames`.
+
+    ``mel`` is in dB, quantized over ``[mel_db_min, mel_db_max]`` (unlike the
+    linear power of :class:`StreamFrames`). A feature not computed is ``None``.
+    """
 
     n_frames: int
-    n_mels: int
-    n_chroma: int
-    feature_flags: int
-    timestamps_sec: list[float]
-    mel: list[int]
-    chroma: list[int]
-    onset_strength: list[int]
-    rms_energy: list[int]
-    spectral_centroid: list[int]
-    spectral_flatness: list[int]
+    timestamps_sec: NDArray[np.float32]
+    mel: NDArray[np.uint8] | None
+    chroma: NDArray[np.uint8] | None
+    onset_strength: NDArray[np.uint8] | None
+    rms_energy: NDArray[np.uint8]
+    spectral_centroid: NDArray[np.uint8] | None
+    spectral_flatness: NDArray[np.uint8] | None
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class StreamFramesI16:
-    """Quantized (int16) frame batch. ``mel`` is in dB, quantized over
-    ``[mel_db_min, mel_db_max]`` (unlike :class:`StreamFrames`, whose float
-    ``mel`` is linear power)."""
+    """Quantized (int16) frame batch, shaped as :class:`StreamFrames`.
+
+    ``mel`` is in dB, quantized over ``[mel_db_min, mel_db_max]`` (unlike the
+    linear power of :class:`StreamFrames`). A feature not computed is ``None``.
+    """
 
     n_frames: int
-    n_mels: int
-    n_chroma: int
-    feature_flags: int
-    timestamps_sec: list[float]
-    mel: list[int]
-    chroma: list[int]
-    onset_strength: list[int]
-    rms_energy: list[int]
-    spectral_centroid: list[int]
-    spectral_flatness: list[int]
+    timestamps_sec: NDArray[np.float32]
+    mel: NDArray[np.int16] | None
+    chroma: NDArray[np.int16] | None
+    onset_strength: NDArray[np.int16] | None
+    rms_energy: NDArray[np.int16]
+    spectral_centroid: NDArray[np.int16] | None
+    spectral_flatness: NDArray[np.int16] | None
 
 
 @dataclass(frozen=True, slots=True)
 class StreamChordChange:
-    root: int
-    quality: int
+    """A chord change in the progression; ``name`` is spelled as the batch
+    analysis spells a chord, and ``quality`` is a :data:`CHORD_QUALITIES` token."""
+
+    root: PitchClass
+    quality: str
     name: str
     start_sec: float
     confidence: float
@@ -172,8 +171,8 @@ class StreamBarChord:
     at the history cap. Group bars by pattern position with ``bar_index``, never
     with the list index.
 
-    ``start_sec`` is on the same timeline as ``StreamFrame.timestamp``
-    (including a ``sample_offset`` anchor), and consecutive bars are
+    ``start_sec`` is on the same timeline as :attr:`StreamFrames.timestamps_sec`
+    (including a ``start_sample`` anchor), and consecutive bars are
     ``bar_duration_sec`` apart rather than snapped to the analysis frame grid.
 
     In ``voted_pattern`` the fields shift meaning: ``bar_index`` is the pattern
@@ -181,8 +180,8 @@ class StreamBarChord:
     """
 
     bar_index: int
-    root: int
-    quality: int
+    root: PitchClass
+    quality: str
     name: str
     start_sec: float
     confidence: float
@@ -195,8 +194,9 @@ class StreamPatternScore:
 
 
 @dataclass(frozen=True, slots=True)
-class StreamStats:
-    """Progressive estimate and counters snapshot from :class:`StreamAnalyzer`.
+class StreamProgressiveEstimate:
+    """Progressive BPM, key and chord estimate. A field is ``None`` until the
+    analyzer has an estimate for it.
 
     ``bpm_candidate_count`` is the number of tempo candidates the most recent
     BPM estimate chose from, 0 until one has run — the same quantity as the
@@ -205,11 +205,30 @@ class StreamStats:
     ``updated`` is true when the key or BPM was re-estimated since the previous
     snapshot. One change sets it on exactly one snapshot however the caller
     chunks its input, and a call that produced no frame does not repeat it.
-
-    ``key_name`` / ``key_short_name`` are ``None`` while no key is estimated.
-    ``chord_name`` and every chord's ``name`` are spelled as the batch analysis
-    spells a chord, with ``N.C.`` for no chord.
     """
+
+    bpm: float | None
+    bpm_confidence: float | None
+    bpm_candidate_count: int
+    key: Key | None
+    chord: StreamChordChange | None
+    chord_progression: list[StreamChordChange]
+    bar_chord_progression: list[StreamBarChord]
+    current_bar: int | None
+    bar_duration_sec: float | None
+    voted_pattern: list[StreamBarChord]
+    pattern_length: int
+    detected_pattern_name: str | None
+    detected_pattern_score: float | None
+    all_pattern_scores: list[StreamPatternScore]
+    accumulated_sec: float
+    used_frames: int
+    updated: bool
+
+
+@dataclass(frozen=True, slots=True)
+class StreamStats:
+    """Counters and the progressive estimate snapshot from :class:`StreamAnalyzer`."""
 
     total_frames: int
     total_samples: int
@@ -231,28 +250,4 @@ class StreamStats:
     describes a segment rather than the analyzer.
     """
 
-    bpm: float
-    bpm_confidence: float
-    bpm_candidate_count: int
-    key: int
-    key_minor: bool
-    key_confidence: float
-    key_name: str | None
-    key_short_name: str | None
-    chord_root: int
-    chord_quality: int
-    chord_name: str
-    chord_confidence: float
-    chord_start_sec: float
-    current_bar: int
-    bar_duration_sec: float
-    chord_progression: list[StreamChordChange]
-    bar_chord_progression: list[StreamBarChord]
-    voted_pattern: list[StreamBarChord]
-    pattern_length: int
-    detected_pattern_name: str
-    detected_pattern_score: float
-    all_pattern_scores: list[StreamPatternScore]
-    accumulated_sec: float
-    used_frames: int
-    updated: bool
+    estimate: StreamProgressiveEstimate

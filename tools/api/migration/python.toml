@@ -3576,21 +3576,21 @@ rule = "seconds-suffix"
 [[entry]]
 kind = "field"
 old = "StreamStats.chord_start_time"
-new = "StreamStats.chord_start_sec"
+new = "StreamChordChange.start_sec"
 domain = "analysis"
 rule = "seconds-suffix"
 
 [[entry]]
 kind = "field"
 old = "StreamStats.bar_duration"
-new = "StreamStats.bar_duration_sec"
+new = "StreamProgressiveEstimate.bar_duration_sec"
 domain = "analysis"
 rule = "seconds-suffix"
 
 [[entry]]
 kind = "field"
 old = "StreamStats.accumulated_seconds"
-new = "StreamStats.accumulated_sec"
+new = "StreamProgressiveEstimate.accumulated_sec"
 domain = "analysis"
 rule = "seconds-suffix"
 
@@ -5057,3 +5057,363 @@ changed = "default 0 -> None (1 / max_ratio); an explicit value below 1 is refus
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_optional_scalar_default_sentinel.py::test_a_ratio_below_one_is_refused"
+
+[[entry]]
+kind = "field"
+old = "StreamConfig.fmin"
+new = "StreamConfig.fmin_hz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "StreamConfig.fmax"
+new = "StreamConfig.fmax_hz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "StreamConfig.compute_magnitude"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamConfig.output_format"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamConfig.sample_rate"
+changed = "required (was default 44100)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_stream_analyzer_shape.py::test_the_sample_rate_is_required"
+
+[[entry]]
+kind = "field"
+old = "StreamConfig.window"
+changed = "a WindowType token 'hann' | 'hamming' | 'blackman' | 'rectangular' (was an ordinal)"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_stream_analyzer_shape.py::test_every_window_token_runs_and_the_window_reaches_the_core"
+
+[[entry]]
+kind = "type"
+old = "QuantizeConfig"
+new = "StreamQuantizeConfig"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "method"
+old = "StreamAnalyzer.destroy"
+removed = true
+domain = "analysis"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "StreamAnalyzer.delete"
+removed = true
+domain = "analysis"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "StreamAnalyzer.available_frames"
+changed = "a property (was a method)"
+domain = "analysis"
+rule = "getters"
+test = "bindings/python/tests/test_stream_analyzer_shape.py::test_state_reads_are_properties_and_close_is_the_only_teardown"
+
+[[entry]]
+kind = "method"
+old = "StreamAnalyzer.frame_count"
+changed = "a property (was a method)"
+domain = "analysis"
+rule = "getters"
+test = "bindings/python/tests/test_stream_analyzer_shape.py::test_state_reads_are_properties_and_close_is_the_only_teardown"
+
+[[entry]]
+kind = "method"
+old = "StreamAnalyzer.sample_rate"
+changed = "a property (was a method)"
+domain = "analysis"
+rule = "getters"
+test = "bindings/python/tests/test_stream_analyzer_shape.py::test_state_reads_are_properties_and_close_is_the_only_teardown"
+
+[[entry]]
+kind = "option"
+old = "StreamAnalyzer.reset(base_sample_offset)"
+new = "StreamAnalyzer.reset(start_sample)"
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "option"
+old = "StreamAnalyzer.process_with_offset(sample_offset)"
+new = "StreamAnalyzer.process_with_offset(start_sample)"
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "StreamAnalyzer.read_frames"
+changed = "returns band-major (bands, n_frames) ndarrays, None for a feature not computed"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_stream_analyzer_shape.py::test_frames_are_band_major_columns_per_frame"
+
+[[entry]]
+kind = "method"
+old = "StreamAnalyzer.read_frames_u8"
+changed = "returns band-major (bands, n_frames) ndarrays, None for a feature not computed"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_stream_analyzer_shape.py::test_a_feature_that_is_not_computed_is_none"
+
+[[entry]]
+kind = "method"
+old = "StreamAnalyzer.read_frames_i16"
+changed = "returns band-major (bands, n_frames) ndarrays, None for a feature not computed"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_stream_analyzer_shape.py::test_a_feature_that_is_not_computed_is_none"
+
+[[entry]]
+kind = "field"
+old = "StreamFrames.n_mels"
+removed = true
+domain = "analysis"
+rule = "array-results"
+
+[[entry]]
+kind = "field"
+old = "StreamFrames.n_chroma"
+removed = true
+domain = "analysis"
+rule = "array-results"
+
+[[entry]]
+kind = "field"
+old = "StreamFrames.feature_flags"
+removed = true
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesU8.n_mels"
+removed = true
+domain = "analysis"
+rule = "array-results"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesU8.n_chroma"
+removed = true
+domain = "analysis"
+rule = "array-results"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesU8.feature_flags"
+removed = true
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesI16.n_mels"
+removed = true
+domain = "analysis"
+rule = "array-results"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesI16.n_chroma"
+removed = true
+domain = "analysis"
+rule = "array-results"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesI16.feature_flags"
+removed = true
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "StreamChordChange.quality"
+changed = "a CHORD_QUALITIES token (was the ordinal)"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_stream_analyzer_shape.py::test_the_estimate_carries_a_key_and_a_named_chord"
+
+[[entry]]
+kind = "field"
+old = "StreamBarChord.quality"
+changed = "a CHORD_QUALITIES token (was the ordinal)"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_stream_analyzer_shape.py::test_the_estimate_carries_a_key_and_a_named_chord"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.bpm"
+new = "StreamProgressiveEstimate.bpm"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.bpm_confidence"
+new = "StreamProgressiveEstimate.bpm_confidence"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.bpm_candidate_count"
+new = "StreamProgressiveEstimate.bpm_candidate_count"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.key"
+new = "StreamProgressiveEstimate.key"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.chord_progression"
+new = "StreamProgressiveEstimate.chord_progression"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.bar_chord_progression"
+new = "StreamProgressiveEstimate.bar_chord_progression"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.current_bar"
+new = "StreamProgressiveEstimate.current_bar"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.voted_pattern"
+new = "StreamProgressiveEstimate.voted_pattern"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.pattern_length"
+new = "StreamProgressiveEstimate.pattern_length"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.detected_pattern_name"
+new = "StreamProgressiveEstimate.detected_pattern_name"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.detected_pattern_score"
+new = "StreamProgressiveEstimate.detected_pattern_score"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.all_pattern_scores"
+new = "StreamProgressiveEstimate.all_pattern_scores"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.used_frames"
+new = "StreamProgressiveEstimate.used_frames"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.updated"
+new = "StreamProgressiveEstimate.updated"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.key_minor"
+removed = true
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.key_confidence"
+removed = true
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.key_name"
+removed = true
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.key_short_name"
+removed = true
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.chord_root"
+removed = true
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.chord_quality"
+removed = true
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.chord_name"
+removed = true
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.chord_confidence"
+removed = true
+domain = "analysis"
+rule = "type-names"

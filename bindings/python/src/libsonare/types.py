@@ -430,6 +430,9 @@ from ._types_enums import (
 from ._types_enums import (
     TempogramMode as TempogramMode,
 )
+from ._types_enums import (
+    WindowType as WindowType,
+)
 from ._types_mastering import (
     LoudnessMatch as LoudnessMatch,
 )
@@ -605,9 +608,6 @@ from ._types_streaming import (
     CqtResult as CqtResult,
 )
 from ._types_streaming import (
-    QuantizeConfig as QuantizeConfig,
-)
-from ._types_streaming import (
     StreamBarChord as StreamBarChord,
 )
 from ._types_streaming import (
@@ -627,6 +627,12 @@ from ._types_streaming import (
 )
 from ._types_streaming import (
     StreamPatternScore as StreamPatternScore,
+)
+from ._types_streaming import (
+    StreamProgressiveEstimate as StreamProgressiveEstimate,
+)
+from ._types_streaming import (
+    StreamQuantizeConfig as StreamQuantizeConfig,
 )
 from ._types_streaming import (
     StreamStats as StreamStats,

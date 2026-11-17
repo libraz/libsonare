@@ -200,6 +200,9 @@ TempogramMode = Literal["autocorrelation", "cosine"]
 PitchTargetMode = Literal["midi", "scale"]
 """Pitch-correction target: a fixed MIDI note or the nearest note of a scale."""
 
+WindowType = Literal["hann", "hamming", "blackman", "rectangular"]
+"""Analysis window shape."""
+
 # Ordinal-ordered tokens: index == the C ordinal of each type.
 _KEY_MODES: tuple[KeyMode, ...] = get_args(KeyMode)
 _KEY_PROFILES: tuple[KeyProfile, ...] = get_args(KeyProfile)
@@ -208,5 +211,6 @@ _CHORD_CHROMA_METHODS: tuple[ChordChromaMethod, ...] = get_args(ChordChromaMetho
 _NORM_TYPES: tuple[NormType, ...] = get_args(NormType)
 _TEMPOGRAM_MODES: tuple[TempogramMode, ...] = get_args(TempogramMode)
 _PITCH_TARGET_MODES: tuple[PitchTargetMode, ...] = get_args(PitchTargetMode)
+_WINDOW_TYPES: tuple[WindowType, ...] = get_args(WindowType)
 # Passed to the core by name, so the order carries no ordinal.
 _GENRE_HINTS: tuple[GenreHint, ...] = get_args(GenreHint)

@@ -22,11 +22,11 @@ def test_stream_analyzer_rejects_malformed_config_geometry() -> None:
 
     for bad in (
         StreamConfig(sample_rate=0),
-        StreamConfig(n_fft=0),
-        StreamConfig(n_mels=0),
-        StreamConfig(n_fft=1024, hop_length=2048),
-        StreamConfig(fmin=8000.0, fmax=4000.0),
-        StreamConfig(max_progression_entries=0),
+        StreamConfig(sample_rate=22050, n_fft=0),
+        StreamConfig(sample_rate=22050, n_mels=0),
+        StreamConfig(sample_rate=22050, n_fft=1024, hop_length=2048),
+        StreamConfig(sample_rate=22050, fmin_hz=8000.0, fmax_hz=4000.0),
+        StreamConfig(sample_rate=22050, max_progression_entries=0),
     ):
         with pytest.raises(SonareError):
             StreamAnalyzer(bad)
@@ -638,21 +638,22 @@ def test_stream_analyzer_names_agree_with_numeric_fields() -> None:
             analyzer.process(samples[i : i + 4096])
         stats = analyzer.stats()
 
-    assert stats.chord_progression
-    for chord in [*stats.chord_progression, *stats.bar_chord_progression, *stats.voted_pattern]:
-        prefix = "N.C." if chord.root < 0 else pitches[chord.root]
-        assert chord.name.startswith(prefix)
-        if chord.quality == 0:
+    estimate = stats.estimate
+    assert estimate.chord_progression
+    chords = [*estimate.chord_progression, *estimate.bar_chord_progression, *estimate.voted_pattern]
+    if estimate.chord is not None:
+        chords.append(estimate.chord)
+    for chord in chords:
+        assert chord.name.startswith(pitches[chord.root])
+        if chord.quality == "major":
             assert chord.name == pitches[chord.root]
-        if chord.quality == 1:
+        if chord.quality == "minor":
             assert chord.name == pitches[chord.root] + "m"
-    prefix = "N.C." if stats.chord_root < 0 else pitches[stats.chord_root]
-    assert stats.chord_name.startswith(prefix)
 
-    assert stats.key >= 0
-    mode = "minor" if stats.key_minor else "major"
-    assert stats.key_name == f"{pitches[stats.key]} {mode}"
-    assert stats.key_short_name == pitches[stats.key] + ("m" if stats.key_minor else "")
+    key = estimate.key
+    assert key is not None
+    assert key.name == f"{pitches[key.root]} {key.mode}"
+    assert key.short_name == pitches[key.root] + ("m" if key.mode == "minor" else "")
 
 
 def test_stream_analyzer_key_name_matches_batch_spelling() -> None:
@@ -667,26 +668,19 @@ def test_stream_analyzer_key_name_matches_batch_spelling() -> None:
         stats = analyzer.stats()
 
     batch = detect_key(samples, sr)
-    assert stats.key_name == batch.name == "C major"
-    assert stats.key_short_name == batch.short_name == "C"
+    key = stats.estimate.key
+    assert key is not None
+    assert key.name == batch.name == "C major"
+    assert key.short_name == batch.short_name == "C"
 
 
-def test_stream_analyzer_names_before_any_estimate() -> None:
+def test_stream_estimates_are_absent_before_any_audio() -> None:
     from libsonare import StreamAnalyzer, StreamConfig
 
     with StreamAnalyzer(StreamConfig(sample_rate=22050)) as analyzer:
-        stats = analyzer.stats()
-    assert stats.key == -1
-    assert stats.key_name is None
-    assert stats.key_short_name is None
-    assert stats.chord_name == "N.C."
-
-
-def test_stream_chord_name_falls_back_for_unmapped_values() -> None:
-    from libsonare.streaming import _chord_name
-
-    assert _chord_name(-1, 0) == "N.C."
-    assert _chord_name(12, 0) == "N.C."
-    assert _chord_name(0, 0) == "C"
-    assert _chord_name(1, 1) == "C#m"
-    assert _chord_name(0, 999) == "N.C."
+        estimate = analyzer.stats().estimate
+    assert estimate.key is None
+    assert estimate.chord is None
+    assert estimate.bpm is None and estimate.bpm_confidence is None
+    assert estimate.current_bar is None and estimate.bar_duration_sec is None
+    assert estimate.detected_pattern_name is None and estimate.detected_pattern_score is None

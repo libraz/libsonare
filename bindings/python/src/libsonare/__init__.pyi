@@ -1201,9 +1201,6 @@ from .types import (
     ProjectTrack as ProjectTrack,
 )
 from .types import (
-    QuantizeConfig as QuantizeConfig,
-)
-from .types import (
     ReassignedSpectrogramResult as ReassignedSpectrogramResult,
 )
 from .types import (
@@ -1297,6 +1294,12 @@ from .types import (
     StreamPatternScore as StreamPatternScore,
 )
 from .types import (
+    StreamProgressiveEstimate as StreamProgressiveEstimate,
+)
+from .types import (
+    StreamQuantizeConfig as StreamQuantizeConfig,
+)
+from .types import (
     StreamStats as StreamStats,
 )
 from .types import SynthParamCondition as SynthParamCondition
@@ -1333,6 +1336,9 @@ from .types import (
 )
 from .types import (
     WaveformPeaksReport as WaveformPeaksReport,
+)
+from .types import (
+    WindowType as WindowType,
 )
 from .vocal_edit import (
     VocalAnalysis as VocalAnalysis,
