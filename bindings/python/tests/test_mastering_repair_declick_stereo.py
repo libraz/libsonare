@@ -91,7 +91,7 @@ class TestMasteringRepairDeclickStereo:
         """
         left, right = _fixture()
         stereo = libsonare.mastering_repair_declick_stereo(left, right, SR)
-        mono_left = libsonare.mastering_repair_declick(left, SR)
+        mono_left = libsonare.mastering_repair_declick(left, SR).samples
 
         assert stereo.left[_RIGHT_ONLY_CLICK_POSITION] != float(
             mono_left[_RIGHT_ONLY_CLICK_POSITION]

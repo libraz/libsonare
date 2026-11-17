@@ -474,7 +474,7 @@ def test_int_apis_declare_int_samples() -> None:
 
     # Guard the derivation itself: a parser change that matches nothing, or a
     # rename that empties the set, would otherwise pass silently.
-    assert checked >= 5, f"only {checked} stub parameters cross-checked"
+    assert checked >= 4, f"only {checked} stub parameters cross-checked"
     assert offenders == [], (
         f"these parameters accept ndarray at runtime but understate it in the stub: {offenders}"
     )

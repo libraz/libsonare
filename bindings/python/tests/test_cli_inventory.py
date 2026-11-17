@@ -379,7 +379,7 @@ def test_analyze_options_forward_existing_api_keywords(monkeypatch, capsys) -> N
             bpm_confidence=0.5,
             key=SimpleNamespace(
                 root=SimpleNamespace(value=0),
-                mode=SimpleNamespace(value=0),
+                mode="major",
                 confidence=0.5,
             ),
             time_signature=SimpleNamespace(numerator=4, denominator=4, confidence=0.5),

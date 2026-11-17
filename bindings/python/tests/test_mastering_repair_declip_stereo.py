@@ -112,7 +112,7 @@ class TestMasteringRepairDeclipStereo:
         """
         left, right = _fixture()
         stereo = libsonare.mastering_repair_declip_stereo(left, right, SR)
-        mono_left = libsonare.mastering_repair_declip(left, SR)
+        mono_left = libsonare.mastering_repair_declip(left, SR).samples
 
         stereo_slice = stereo.left[_LEFT_CLIP_END:_RIGHT_CLIP_END]
         mono_slice = mono_left[_LEFT_CLIP_END:_RIGHT_CLIP_END].tolist()
