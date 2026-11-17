@@ -8,13 +8,19 @@ modification time with the newest core source instead.
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
-SOURCE_SUFFIXES = (".cpp", ".cc", ".h", ".hpp", ".inc")
-SOURCE_TREES = ("src", "include")
-# WASM-only glue is never linked into the shared library.
-EXCLUDED_TREES = (Path("src") / "wasm",)
+# The source set is shared with the other test harnesses through one data file.
+_CORE_SOURCES = json.loads(
+    (Path(__file__).resolve().parents[3] / "tools" / "abi" / "core-sources.json").read_text(
+        encoding="utf-8"
+    )
+)
+SOURCE_SUFFIXES = tuple(_CORE_SOURCES["suffixes"])
+SOURCE_TREES = tuple(_CORE_SOURCES["trees"])
+EXCLUDED_TREES = tuple(Path(tree) for tree in _CORE_SOURCES["excluded_trees"])
 ALLOW_STALE_ENV = "SONARE_ALLOW_STALE_LIB"
 
 
