@@ -651,5 +651,5 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
         beat_observations=beat_observations,
         beat_local_bpm=beat_local_bpm,
         form=str(data.get("form", "")),
-        tuning_cents=float(data.get("tuning_cents", 0.0)),
+        tuning_cents=float(data["tuningCents"]),
     )

@@ -87,6 +87,7 @@ def test_parse_analysis_json_retains_tempo_and_meter_hypotheses() -> None:
 
     result = _parse_analysis_json(
         {
+            "tuningCents": 0.0,
             "bpm": 120.0,
             "bpmConfidence": 0.9,
             "bpmCandidates": [
@@ -182,6 +183,7 @@ def test_analysis_json_uses_canonical_display_names() -> None:
 
     result = _parse_analysis_json(
         {
+            "tuningCents": 0.0,
             "chords": [
                 {
                     "root": 0,
@@ -371,7 +373,9 @@ def test_parse_analysis_json_rejects_an_unmirrored_section_type() -> None:
     from libsonare.types import SectionType
 
     def parse(section: dict[str, object]) -> object:
-        return _parse_analysis_json({"key": {}, "beats": [], "sections": [section]})
+        return _parse_analysis_json(
+            {"key": {}, "beats": [], "sections": [section], "tuningCents": 0.0}
+        )
 
     with pytest.raises(SonareValueError, match="99"):
         parse({"type": 99, "start": 0.0, "end": 1.0})
@@ -394,7 +398,7 @@ def test_parse_analysis_json_rejects_an_unmirrored_chord_quality() -> None:
     from libsonare._analysis_detection import _parse_analysis_json
 
     def parse(chord: dict[str, object]) -> object:
-        return _parse_analysis_json({"key": {}, "beats": [], "chords": [chord]})
+        return _parse_analysis_json({"key": {}, "beats": [], "chords": [chord], "tuningCents": 0.0})
 
     with pytest.raises(SonareValueError, match="99"):
         parse({"root": 0, "quality": 99, "start": 0.0, "end": 1.0})
