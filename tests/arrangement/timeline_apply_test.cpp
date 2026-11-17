@@ -464,7 +464,7 @@ TEST_CASE("apply refuses a scene strip shared by two tracks when binding strips"
                         {bad.track_lanes[1].track_id, "shared"}};
   arr::ApplyOptions options;
   options.bind_strips = true;
-  require_refused_unchanged(bad, options, ErrorCode::NotImplemented);
+  require_refused_unchanged(bad, options, ErrorCode::NotSupported);
 }
 
 TEST_CASE("apply refuses a strip with an unacceptable EQ when binding strips",
@@ -886,6 +886,6 @@ TEST_CASE("bind_strips with strip bindings is refused without mixing",
   bad.mixer.bindings = {{bad.track_lanes.front().track_id, "strip"}};
   arr::ApplyOptions options;
   options.bind_strips = true;
-  require_refused_unchanged(bad, options, ErrorCode::NotImplemented);
+  require_refused_unchanged(bad, options, ErrorCode::NotSupported);
 }
 #endif  // SONARE_WITH_MIXING

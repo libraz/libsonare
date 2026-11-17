@@ -116,7 +116,7 @@ SonareError invoke(F&& action) {
     return code;
 #endif
   } catch (const sonare::SonareException& error) {
-    last_detail.reason = error.code() == sonare::ErrorCode::NotImplemented
+    last_detail.reason = error.code() == sonare::ErrorCode::NotSupported
                              ? SONARE_VOCAL_REASON_UNSUPPORTED
                              : SONARE_VOCAL_REASON_INVALID_INPUT;
     const SonareError code = sonare_c_detail::map_sonare_exception(error);
@@ -620,7 +620,7 @@ vocal::VocalSessionCreateOptions import_options(const SonareVocalCreateOptions* 
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #endif
 #define VOCAL_SUPPORTED_BODY(...) \
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented, "vocal editing unavailable")
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported, "vocal editing unavailable")
 #define VOCAL_ACTION(...) return invoke([] { VOCAL_SUPPORTED_BODY(__VA_ARGS__); })
 #endif
 #define VOCAL_OUTPUT_ACTION(out, ...)  \

@@ -88,6 +88,15 @@ OVERRIDES: dict[str, str] = {
     "streamanalyzer": "analysis",
     "scalename": "analysis",
     "hasfeature": "core",
+    # The audio handle's own construction, accessors and release are core on every
+    # surface; the C functions that analyse a handle keep their operation's domain.
+    "audiofrom*": "core",
+    "audiofilechannelcount": "core",
+    "audiofree": "core",
+    "audiodata": "core",
+    "audiolength": "core",
+    "audiosamplerate": "core",
+    "audiodurationsec": "core",
 }
 
 # Name patterns that outrank the declaring file: names those files misfile.

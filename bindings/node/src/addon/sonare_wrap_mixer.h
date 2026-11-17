@@ -5,6 +5,7 @@
 #include <sonare/sonare_c.h>
 
 #include <string>
+#include <vector>
 
 #include "sonare_wrap_utils.h"
 
@@ -112,7 +113,7 @@ class MixerWrap : public Napi::ObjectWrap<MixerWrap> {
   int sample_rate_ = 48000;
   int block_size_ = 0;
   /// Warning message captured at construction (newline-joined; empty if none).
-  std::string scene_warning_;
+  std::vector<std::string> scene_warnings_;
 };
 
 }  // namespace sonare_node

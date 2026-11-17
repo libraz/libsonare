@@ -186,7 +186,7 @@ ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEn
 #if !defined(SONARE_WITH_MIXING)
   if (options.bind_strips && !timeline.mixer.bindings.empty()) {
     return apply_refused(
-        ErrorCode::NotImplemented,
+        ErrorCode::NotSupported,
         "strip binding requested but SONARE_WITH_MIXING is disabled in this build");
   }
 #endif
@@ -219,7 +219,7 @@ ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEn
         }
         for (size_t j = i + 1; j < bindings.size(); ++j) {
           if (bindings[j].strip_id == bindings[i].strip_id) {
-            return apply_refused(ErrorCode::NotImplemented,
+            return apply_refused(ErrorCode::NotSupported,
                                  "scene strip \"" + bindings[i].strip_id +
                                      "\" is bound by several tracks; live playback is one strip "
                                      "per track");

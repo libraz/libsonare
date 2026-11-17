@@ -483,17 +483,18 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
                                     "mixer: scene JSON is required");
     return nullptr;
   }
-  // A non-fatal channel, separate from last_error: a scene can load fine while still
-  // carrying unknown keys or insert params no processor reads. Cleared on entry so a
-  // stale warning from an earlier load never leaks into a later, clean one.
-  sonare_c_detail::clear_last_warning();
+  // A scene can load fine while still carrying unknown keys or insert params no
+  // processor reads; those are Warning diagnostics. Cleared on entry so a stale
+  // entry from an earlier load never leaks into a later, clean one.
+  sonare_c_detail::clear_last_diagnostics();
   SONARE_C_TRY
-  std::vector<std::string> ignored_param_notes;
+  std::vector<std::string> unknown_scene_keys;
+  std::vector<std::string> insert_param_notes;
   sonare::mixing::api::Scene scene;
   // A malformed document is InvalidFormat, as on the engine's scene entry point;
   // without this arm it would reach the std::exception tail as Unknown.
   try {
-    scene = sonare::mixing::api::scene_from_json(json, &ignored_param_notes);
+    scene = sonare::mixing::api::scene_from_json(json, &unknown_scene_keys);
   } catch (const sonare::util::json::JsonError& e) {
     sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, e.what());
     return nullptr;
@@ -555,7 +556,7 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
           if (k > 0) note += ", ";
           note += unknown_keys[k];
         }
-        ignored_param_notes.push_back(std::move(note));
+        insert_param_notes.push_back(std::move(note));
       }
       const bool spo = sonare::mastering::api::channel_policy(insert.processor_name) ==
                        sonare::mastering::api::ChannelPolicy::StereoPairOnly;
@@ -631,7 +632,7 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
           if (k > 0) note += ", ";
           note += unknown_keys[k];
         }
-        ignored_param_notes.push_back(std::move(note));
+        insert_param_notes.push_back(std::move(note));
       }
       // Same channel policy the engine's bus chain passes, so a pair-only insert
       // on a surround bus touches the front pair alone in both.
@@ -660,18 +661,16 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
 
   apply_solo_mutes(mixer.get());
   build_and_compile(mixer.get());
-  for (std::string& note : undeclared_send_notes(mixer.get())) {
-    ignored_param_notes.push_back(std::move(note));
+  std::vector<std::string> send_notes = undeclared_send_notes(mixer.get());
+  // Scene loaded successfully; publish what it ignored, one Warning per note.
+  for (std::string& key : unknown_scene_keys) {
+    sonare_c_detail::add_last_warning("mixing.unknown_scene_key", std::move(key));
   }
-  // Scene loaded successfully; surface unknown scene keys and silently-ignored insert
-  // params as a non-fatal warning (one note each, '\n'-joined).
-  if (!ignored_param_notes.empty()) {
-    std::string warning;
-    for (size_t n = 0; n < ignored_param_notes.size(); ++n) {
-      if (n > 0) warning += '\n';
-      warning += ignored_param_notes[n];
-    }
-    sonare_c_detail::set_last_warning(warning.c_str());
+  for (std::string& note : insert_param_notes) {
+    sonare_c_detail::add_last_warning("mixing.ignored_insert_param", std::move(note));
+  }
+  for (std::string& note : send_notes) {
+    sonare_c_detail::add_last_warning("mixing.undeclared_send", std::move(note));
   }
   return mixer.release();
   SONARE_C_CATCH_RETURN(nullptr)

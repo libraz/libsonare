@@ -88,7 +88,9 @@ enum class ErrorCode : int {
   DecodeFailed,
   InvalidParameter,
   OutOfMemory,
-  NotImplemented,
+  /// @brief The request is not supported by this build or by the component
+  ///        (a compiled-out feature, an unsupported mode or result kind).
+  NotSupported,
   /// @brief The component is not in a state where the call is allowed
   ///        (e.g. @c process_block before @c prepare, configuration mismatch).
   InvalidState,
@@ -257,8 +259,8 @@ inline const char* error_message(ErrorCode code) {
       return "Invalid parameter";
     case ErrorCode::OutOfMemory:
       return "Out of memory";
-    case ErrorCode::NotImplemented:
-      return "Not implemented";
+    case ErrorCode::NotSupported:
+      return "Not supported";
     case ErrorCode::InvalidState:
       return "Invalid state";
     case ErrorCode::Cancelled:

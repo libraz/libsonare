@@ -132,5 +132,48 @@ test = "tests/api/surface_core_test.cpp::Version macros are reachable from sonar
 kind = "function"
 old = "sonare_audio_duration"
 new = "sonare_audio_duration_sec"
-domain = "analysis"
+domain = "core"
 rule = "seconds-suffix"
+
+[[entry]]
+kind = "function"
+old = "sonare_last_warning_message"
+new = "sonare_last_diagnostic"
+domain = "core"
+rule = "c-error-path"
+
+[[entry]]
+kind = "function"
+old = "sonare_last_diagnostic_code"
+new = "sonare_last_diagnostic"
+domain = "core"
+rule = "c-error-path"
+
+[[entry]]
+kind = "function"
+old = "sonare_last_diagnostic_message"
+new = "sonare_last_diagnostic"
+domain = "core"
+rule = "c-error-path"
+
+[[entry]]
+kind = "function"
+old = "sonare_last_diagnostic_severity"
+new = "sonare_last_diagnostic"
+domain = "core"
+rule = "c-error-path"
+
+[[entry]]
+kind = "field"
+old = "SonareRirSynthResult.has_error"
+removed = true
+domain = "effects"
+rule = "c-error-path"
+
+[[entry]]
+kind = "function"
+old = "sonare_synthesize_rir"
+changed = "an invalid room returns SONARE_ERROR_INVALID_PARAMETER with the diagnostic's text in sonare_last_error_message() instead of SONARE_OK with has_error set"
+domain = "effects"
+rule = "c-error-path"
+test = "tests/api/sonare_c_acoustic_test.cpp::refuses invalid RIR geometry with its diagnostic"

@@ -181,11 +181,11 @@ inline const char* stream_config_sizing_error(const StreamConfig& config) noexce
 ///          copy no read method there returns. Only that field is in scope:
 ///          @ref StreamConfig::magnitude_downsample is unused with magnitude
 ///          off, so refusing it would reject a default config round trip.
-/// @throws SonareException(NotImplemented) when the config asks for a result
+/// @throws SonareException(NotSupported) when the config asks for a result
 ///         the caller's read paths could never return.
 inline void validate_soa_stream_config(const StreamConfig& config) {
   if (config.compute_magnitude) {
-    throw SonareException(ErrorCode::NotImplemented,
+    throw SonareException(ErrorCode::NotSupported,
                           "computeMagnitude is not supported because magnitude frames are not "
                           "exposed by StreamAnalyzer read paths");
   }

@@ -55,7 +55,7 @@ _FEATURE_NAMES = {
     "playback",
 }
 # The two exits a gated-off command may answer with, one per gate shape:
-# ErrorCode::NotImplemented from a stub handler, and the parser's own unknown
+# ErrorCode::NotSupported from a stub handler, and the parser's own unknown
 # -command code when the registry never listed it.
 NOT_SUPPORTED_EXIT = 8
 UNKNOWN_COMMAND_EXIT = 2

@@ -166,7 +166,6 @@ class SonareRirSynthResult(CStruct):
         ("rir", ctypes.POINTER(ctypes.c_float)),
         ("length", ctypes.c_size_t),
         ("sample_rate", ctypes.c_int),
-        ("has_error", ctypes.c_int),
     ]
 
 

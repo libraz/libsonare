@@ -342,9 +342,7 @@ Audio assemble_rir(const RirPlan& plan, const Audio& late_audio, float scale,
         {Diagnostic::Severity::Warning, "acoustic.rir_length_clamped", clamp_message});
   }
   // Ordered after the clamp: a floored length is also a length the caller did
-  // not get, and surfaces that publish a single warning string (the C ABI's
-  // sonare_last_warning_message) should keep leading with the general one. The
-  // specific code travels in the full diagnostics list.
+  // not get, so a reader taking only the first warning sees the general one.
   if (plan.length_floored) {
     diagnostics.push_back(
         {Diagnostic::Severity::Warning, "acoustic.rir_length_floored",

@@ -483,10 +483,9 @@ const char* sonare_error_message(SonareError error);
 ///   - Functions that return a handle pointer record a code (see
 ///     @ref sonare_last_error_code) and a message on EVERY NULL return,
 ///     validation returns included, because the pointer cannot carry a code.
-///   - RIR synthesis is a deliberate SUCCESS-return diagnostic path: when
-///     @ref sonare_synthesize_rir sets SonareRirSynthResult::has_error, this
-///     returns its first Error as ``acoustic.code: explanation``, and
-///     @ref sonare_last_error_code stays SONARE_OK because the call succeeded.
+///   - A refusal reported by a core diagnostic (an invalid room in
+///     @ref sonare_synthesize_rir) records its first Error as
+///     ``acoustic.code: explanation``.
 /// @return Pointer to a NUL-terminated thread-local message string.
 const char* sonare_last_error_message(void);
 
@@ -501,68 +500,51 @@ const char* sonare_last_error_message(void);
 /// @return The recorded SonareError, or SONARE_OK.
 SonareError sonare_last_error_code(void);
 
-/// @brief Returns the most recent non-fatal warning recorded on the calling
-///        thread, or "" when none.
-/// @details A SEPARATE channel from sonare_last_error_message so a warning on a
-///   SUCCESS return never has to share storage with (or be mistaken for) an
-///   error. It is recorded by sonare_mixer_from_scene_json and
-///   sonare_project_set_mixer_scene_json when a scene loads
-///   successfully but carries a key the scene reader does not consume or a
-///   channel-strip insert was handed param keys it does not read (one line
-///   each, newline-joined), and by @ref sonare_synthesize_rir for its recoverable acoustic
-///   diagnostics (such as a clamped RIR tail). Use
-///   sonare_mastering_insert_param_names() to discover the keys a given insert
-///   accepts.
-///   - The pointer is owned by libsonare, never NULL, and valid until the next
-///     API call that records or clears a warning on the same thread.
-///   - @ref sonare_synthesize_rir publishes EVERY recoverable diagnostic it
-///     raised, each as ``acoustic.code: explanation`` and joined with "; " in
-///     the synthesizer's own order, so a request that trips two reports both.
-///     This flattening is lossy -- a message containing the separator cannot be
-///     split back out, and the severity is gone. Read the structured channel
-///     below instead of parsing this string; it is kept for callers written
-///     against it.
-///   - Cleared at the entry of sonare_mixer_from_scene_json and of
-///     sonare_synthesize_rir, so a stale warning from an earlier call never
-///     leaks into a later, clean one.
-/// @return Pointer to a NUL-terminated thread-local message string.
-const char* sonare_last_warning_message(void);
+/// @brief One entry of the structured diagnostic channel. Caller-allocated: fill
+///        it with @ref sonare_diagnostic_init before passing it to
+///        @ref sonare_last_diagnostic.
+/// @details @c code and @c message are borrowed: owned by libsonare, never NULL,
+///   and valid until the next API call that records or clears a diagnostic on
+///   the same thread.
+///
+///   The warning codes a call publishes are stable strings a caller may switch on:
+///   | code                           | published by                                   |
+///   |--------------------------------|------------------------------------------------|
+///   | `mixing.unknown_scene_key`     | sonare_mixer_from_scene_json                   |
+///   | `mixing.ignored_insert_param`  | sonare_mixer_from_scene_json                   |
+///   | `mixing.undeclared_send`       | sonare_mixer_from_scene_json                   |
+///   | `project.unknown_scene_key`    | sonare_project_set_mixer_scene_json            |
+///   | `acoustic.*`                   | sonare_synthesize_rir, sonare_room_morph,      |
+///   |                                | sonare_room_morph_stereo                       |
+typedef struct {
+  uint32_t struct_size;
+  const char* code;
+  const char* message;
+  SonareDiagnosticSeverity severity;
+} SonareDiagnostic;
+
+/// @brief Fills @p diagnostic with empty strings, SONARE_DIAGNOSTIC_INFO and its
+///        @c struct_size. A NULL @p diagnostic is ignored.
+void sonare_diagnostic_init(SonareDiagnostic* diagnostic);
 
 /// @brief Number of structured diagnostics the most recent call published on the
 ///        calling thread, or 0 when it published none.
-/// @details The structured form of the flattened sonare_last_warning_message
-///   string: the same entries, each keeping its own code, message and severity
-///   instead of being joined into one line. Published by the entry points that
-///   produce sonare::Diagnostic values -- @ref sonare_synthesize_rir and
-///   @ref sonare_room_morph -- and empty after any other call, including one
-///   that recorded a warning string built from something other than diagnostics
-///   (sonare_mixer_from_scene_json's ignored insert params).
-///   - Both channels are cleared together at the entry of every call that may
-///     record either, so a count read after a later clean call is 0 rather than
-///     stale.
+/// @details The only warning channel: a call that succeeds with a recoverable
+///   problem (an ignored scene key, a clamped RIR tail) publishes it here, never
+///   through sonare_last_error_message.
+///   - Cleared at the entry of every call that may publish, so a count read after
+///     a later clean call is 0 rather than stale.
 ///   - Reading does not consume: the list stays valid until the next API call
 ///     that records or clears a diagnostic on the same thread.
 size_t sonare_last_diagnostic_count(void);
 
-/// @brief Stable machine-readable id of diagnostic @p index, e.g.
-///        "acoustic.rir_length_clamped".
-/// @details Never NULL: an @p index at or past sonare_last_diagnostic_count()
-///   returns "", so a caller that reads past the end gets an empty entry rather
-///   than a fault. The pointer is owned by libsonare and valid until the next
-///   API call that records or clears a diagnostic on the same thread, the same
-///   lifetime as the count.
-const char* sonare_last_diagnostic_code(size_t index);
-
-/// @brief Human-readable detail of diagnostic @p index, "" when out of range.
-/// @details Never NULL, owned by libsonare, and valid until the next API call
-///   that records or clears a diagnostic on the same thread -- the lifetime
-///   @ref sonare_last_diagnostic_code documents.
-const char* sonare_last_diagnostic_message(size_t index);
-
-/// @brief Severity of diagnostic @p index. An out-of-range index reports
-///        SONARE_DIAGNOSTIC_INFO, which is also what an entry that carries no
-///        action reports -- test the index against the count, not the severity.
-SonareDiagnosticSeverity sonare_last_diagnostic_severity(size_t index);
+/// @brief Copies diagnostic @p index of the most recent call into @p out.
+/// @return SONARE_ERROR_INVALID_PARAMETER when @p out is NULL, its @c struct_size
+///   is below sizeof(SonareDiagnostic), or @p index is not below
+///   sonare_last_diagnostic_count(); @p out is left untouched then. Like the
+///   other sonare_last_* accessors it records no error message, so the message
+///   of the call being inspected survives the read.
+SonareError sonare_last_diagnostic(size_t index, SonareDiagnostic* out);
 
 // Version
 /// @brief Returns the library version string (e.g. "1.2.3").

@@ -27,7 +27,7 @@ void RealtimeEngineWasm::resetMasterLoudnessMeter(const val& render_frame_val) {
   }
 #else
   (void)render_frame;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "mixing support is not compiled in");
 #endif
 }

@@ -122,6 +122,27 @@ def _last_error(default_code: int, fallback_message: str) -> SonareError:
     return _coded_error(code if code != SONARE_OK else default_code, message)
 
 
+def _last_diagnostics() -> list[tuple[str, str, int]]:
+    """``(code, message, severity)`` of each diagnostic the last C call published.
+
+    Must run before any later C ABI call can replace the thread-local list.
+    """
+    lib = _get_lib()
+    out: list[tuple[str, str, int]] = []
+    for index in range(int(lib.sonare_last_diagnostic_count())):
+        entry = SonareDiagnostic()
+        lib.sonare_diagnostic_init(ctypes.byref(entry))
+        _check(lib.sonare_last_diagnostic(index, ctypes.byref(entry)))
+        out.append(
+            (
+                (entry.code or b"").decode("utf-8"),
+                (entry.message or b"").decode("utf-8"),
+                int(entry.severity),
+            )
+        )
+    return out
+
+
 def _joined_names(raw: bytes | None, what: str) -> list[str]:
     """Split the ``\n``-joined list a never-NULL C name getter returned.
 

@@ -16,7 +16,7 @@ extern "C" {
 ///   `sonare_realtime_voice_changer_process_planar_stereo` and
 ///   `sonare_realtime_voice_changer_latency_samples` are realtime-safe: they
 ///   neither allocate nor throw. They also do not access or clear the
-///   thread-local `sonare_last_error_message()` / `sonare_last_warning_message()`
+///   thread-local `sonare_last_error_message()` / `sonare_last_diagnostic()`
 ///   channels, because first-touch TLS setup is not realtime-safe: they report
 ///   a rejected argument through their return code only, and leave whatever a
 ///   previous call on the same thread recorded untouched. Validate arguments on

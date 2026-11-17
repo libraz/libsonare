@@ -115,7 +115,7 @@ void require_unsupported_flush(StreamingMasteringChain& chain, int num_channels,
     (void)chain.flush(channels.data(), num_channels, capacity);
   } catch (const SonareException& error) {
     refused = true;
-    CHECK(error.code() == ErrorCode::NotImplemented);
+    CHECK(error.code() == ErrorCode::NotSupported);
   }
   REQUIRE(refused);
 }

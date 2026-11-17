@@ -194,7 +194,7 @@ assistant::MixAssistantConfig assistantConfigFromParams(val params_obj) {
 // JS surface does not change shape with the build configuration; a caller gets
 // a runtime answer instead of a missing function.
 [[noreturn]] void throwUnavailable() {
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "this build does not include the mixing assistant");
 }
 

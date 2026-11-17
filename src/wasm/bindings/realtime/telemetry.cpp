@@ -112,7 +112,7 @@ val RealtimeEngineWasm::meterTargetInsertGainReduction(const val& target_id_val)
 #else
   // Same answer as the C ABI (NOT_SUPPORTED), even for an invalid target.
   (void)target_id;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "mixing support is not compiled in");
 #endif
   return out;

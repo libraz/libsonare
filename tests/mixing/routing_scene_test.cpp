@@ -2,6 +2,7 @@
 /// @brief Routed mixer scene topology tests.
 
 #include "routing_test_helpers.h"
+#include "support/c_diagnostics.h"
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 
@@ -1084,7 +1085,10 @@ TEST_CASE("Scene load surfaces silently-ignored insert params as a warning",
   })";
   SonareMixer* mixer = sonare_mixer_from_scene_json(with_unknown.c_str(), kSr, kBlock);
   REQUIRE(mixer != nullptr);
-  const std::string warning = sonare_last_warning_message();
+  const std::vector<std::string> notes =
+      sonare_test::diagnostic_messages("mixing.ignored_insert_param");
+  REQUIRE(notes.size() == 1);
+  const std::string& warning = notes.front();
   REQUIRE(warning.find("eq.parametric") != std::string::npos);
   REQUIRE(warning.find("vocal") != std::string::npos);
   REQUIRE(warning.find("highPassHz") != std::string::npos);
@@ -1105,7 +1109,7 @@ TEST_CASE("Scene load surfaces silently-ignored insert params as a warning",
   })";
   SonareMixer* clean = sonare_mixer_from_scene_json(all_known.c_str(), kSr, kBlock);
   REQUIRE(clean != nullptr);
-  REQUIRE(std::string(sonare_last_warning_message()).empty());
+  REQUIRE(sonare_last_diagnostic_count() == 0);
   sonare_mixer_destroy(clean);
 }
 
@@ -1128,14 +1132,16 @@ TEST_CASE("Scene load warns about a send to an undeclared bus and still routes i
   const std::string typo = scene_with_destination("aux1typo");
   SonareMixer* mixer = sonare_mixer_from_scene_json(typo.c_str(), kSr, kBlock);
   REQUIRE(mixer != nullptr);
-  CHECK(std::string(sonare_last_warning_message()) ==
-        "send 'a' targets undeclared bus 'aux1typo'; created as implicit aux");
+  CHECK(sonare_test::diagnostic_messages("mixing.undeclared_send") ==
+        std::vector<std::string>{
+            "send 'a' targets undeclared bus 'aux1typo'; created as implicit aux"});
+  CHECK(sonare_last_diagnostic_count() == 1);
   sonare_mixer_destroy(mixer);
 
   const std::string declared = scene_with_destination("aux1");
   mixer = sonare_mixer_from_scene_json(declared.c_str(), kSr, kBlock);
   REQUIRE(mixer != nullptr);
-  CHECK(std::string(sonare_last_warning_message()).empty());
+  CHECK(sonare_last_diagnostic_count() == 0);
   sonare_mixer_destroy(mixer);
 }
 
@@ -1155,7 +1161,10 @@ TEST_CASE("A bus insert reports its ignored params the way a strip insert does",
   })";
   SonareMixer* mixer = sonare_mixer_from_scene_json(with_unknown.c_str(), kSr, kBlock);
   REQUIRE(mixer != nullptr);
-  const std::string warning = sonare_last_warning_message();
+  const std::vector<std::string> notes =
+      sonare_test::diagnostic_messages("mixing.ignored_insert_param");
+  REQUIRE(notes.size() == 1);
+  const std::string& warning = notes.front();
   CHECK(warning.find("eq.parametric") != std::string::npos);
   CHECK(warning.find("master") != std::string::npos);
   CHECK(warning.find("highPassHz") != std::string::npos);
@@ -1315,7 +1324,9 @@ TEST_CASE("sonare_mixer_from_scene_json reports unknown scene keys on the warnin
   })";
   SonareMixer* mixer = sonare_mixer_from_scene_json(typo.c_str(), 48000, 512);
   REQUIRE(mixer != nullptr);
-  CHECK(std::string(sonare_last_warning_message()) == "unknown scene key 'strips[0].faderDB'");
+  CHECK(sonare_test::diagnostic_messages("mixing.unknown_scene_key") ==
+        std::vector<std::string>{"unknown scene key 'strips[0].faderDB'"});
+  CHECK(sonare_last_diagnostic_count() == 1);
   sonare_mixer_destroy(mixer);
 }
 

@@ -1883,6 +1883,36 @@
     ],
     "size": 48
   },
+  "SonareDiagnostic": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "pointer",
+        "name": "code",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "message",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "severity",
+        "offset": 24,
+        "size": 4
+      }
+    ],
+    "size": 32
+  },
   "SonareDynamicRangeResult": {
     "align": 8,
     "fields": [
@@ -8202,12 +8232,6 @@
         "kind": "signed",
         "name": "sample_rate",
         "offset": 16,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "has_error",
-        "offset": 20,
         "size": 4
       }
     ],

@@ -220,6 +220,20 @@ inline std::string cErrorMessage(SonareError err, const char* context) {
                                 cErrorMessage(err, context));
 }
 
+/// @brief The messages of the diagnostics the most recent C-ABI call published, in order.
+inline std::vector<std::string> lastDiagnosticMessages() {
+  std::vector<std::string> messages;
+  const size_t count = sonare_last_diagnostic_count();
+  for (size_t index = 0; index < count; ++index) {
+    SonareDiagnostic diagnostic;
+    sonare_diagnostic_init(&diagnostic);
+    if (sonare_last_diagnostic(index, &diagnostic) == SONARE_OK) {
+      messages.emplace_back(diagnostic.message);
+    }
+  }
+  return messages;
+}
+
 /// @brief Throws the failure recorded by a C-ABI call that returned NULL
 ///        (a handle, or a descriptor / JSON string): the thread-local code with
 ///        @p context and the recorded detail as the message.
@@ -234,9 +248,9 @@ inline std::string cErrorMessage(SonareError err, const char* context) {
                                 std::string(context) + text);
 }
 
-/// @brief Throws NotImplemented for an arrangement/MIDI entry point in a build without the engine.
+/// @brief Throws NotSupported for an arrangement/MIDI entry point in a build without the engine.
 [[noreturn]] inline void throwMidiEngineUnavailable() {
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "arrangement/MIDI engine is not available in this build");
 }
 

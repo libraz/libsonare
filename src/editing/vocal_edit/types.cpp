@@ -21,7 +21,7 @@ ErrorCode error_code_for(VocalReason reason) {
     case VocalReason::kInvalidState:
       return ErrorCode::InvalidState;
     case VocalReason::kUnsupported:
-      return ErrorCode::NotImplemented;
+      return ErrorCode::NotSupported;
     case VocalReason::kNone:
     case VocalReason::kInvalidInput:
       return ErrorCode::InvalidParameter;

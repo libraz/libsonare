@@ -10,11 +10,16 @@
 #include <utility>
 #include <vector>
 
+#include "support/c_diagnostics.h"
+
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_ACOUSTIC_SIM)
 #include "support/alloc_guard.h"
 #endif
 
 namespace {
+
+using sonare_test::has_diagnostic_code;
+using sonare_test::last_diagnostics;
 
 SonareRirSynthConfig valid_rir_config() {
   SonareRirSynthConfig cfg{};
@@ -59,7 +64,6 @@ TEST_CASE("sonare acoustic C API synthesizes and frees RIRs", "[c_api][acoustic]
   const SonareError err = sonare_synthesize_rir(&cfg, 48000, &result);
 
   REQUIRE(err == SONARE_OK);
-  REQUIRE(result.has_error == 0);
   REQUIRE(result.sample_rate == 48000);
   REQUIRE(result.length > 0);
   REQUIRE(result.rir != nullptr);
@@ -100,13 +104,14 @@ TEST_CASE("sonare acoustic C API rejects non-finite and out-of-range RIR inputs"
   REQUIRE(sonare_synthesize_rir(&cfg, 48000, &result) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
-TEST_CASE("sonare acoustic C API publishes RIR geometry diagnostics", "[c_api][acoustic]") {
+TEST_CASE("sonare acoustic C API refuses invalid RIR geometry with its diagnostic",
+          "[c_api][acoustic]") {
   SonareRirSynthConfig cfg = valid_rir_config();
   cfg.length_m = -1.0f;  // Finite ABI input; the acoustic validator diagnoses it.
   SonareRirSynthResult result{};
 
-  REQUIRE(sonare_synthesize_rir(&cfg, 48000, &result) == SONARE_OK);
-  REQUIRE(result.has_error == 1);
+  REQUIRE(sonare_synthesize_rir(&cfg, 48000, &result) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(result.rir == nullptr);
   REQUIRE(result.length == 0);
   const std::string detail = sonare_last_error_message();
@@ -122,44 +127,33 @@ TEST_CASE("sonare acoustic C API publishes recoverable RIR diagnostics", "[c_api
   SonareRirSynthResult result{};
 
   REQUIRE(sonare_synthesize_rir(&cfg, 48000, &result) == SONARE_OK);
-  REQUIRE(result.has_error == 0);
   REQUIRE(result.rir != nullptr);
   REQUIRE(std::string(sonare_last_error_message()).empty());
-  REQUIRE(std::string(sonare_last_warning_message()).find("acoustic.rir_length_clamped") !=
-          std::string::npos);
+  REQUIRE(has_diagnostic_code("acoustic.rir_length_clamped"));
 
   sonare_free_rir_synth_result(&result);
 }
 
-TEST_CASE("sonare acoustic C API publishes diagnostics unflattened", "[c_api][acoustic]") {
-  // A request that trips three at once, so the structured channel is measured
-  // where the joined string is at its least recoverable.
+TEST_CASE("sonare acoustic C API publishes every RIR diagnostic", "[c_api][acoustic]") {
+  // A request that trips several at once.
   SonareRirSynthConfig cfg = valid_rir_config();
   cfg.max_seconds = 0.005f;
   SonareRirSynthResult result{};
   REQUIRE(sonare_synthesize_rir(&cfg, 22050, &result) == SONARE_OK);
-  REQUIRE(result.has_error == 0);
 
-  REQUIRE(sonare_last_diagnostic_count() >= 2);
-  std::vector<std::string> codes;
-  for (size_t i = 0; i < sonare_last_diagnostic_count(); ++i) {
-    codes.emplace_back(sonare_last_diagnostic_code(i));
-    // Severity is the field the joined string cannot carry at all.
-    CHECK(sonare_last_diagnostic_severity(i) == SONARE_DIAGNOSTIC_WARNING);
-    CHECK(!std::string(sonare_last_diagnostic_message(i)).empty());
+  const std::vector<SonareDiagnostic> diagnostics = last_diagnostics();
+  REQUIRE(diagnostics.size() >= 2);
+  for (const SonareDiagnostic& diagnostic : diagnostics) {
+    CHECK(diagnostic.severity == SONARE_DIAGNOSTIC_WARNING);
+    CHECK(!std::string(diagnostic.message).empty());
   }
-  CHECK(std::find(codes.begin(), codes.end(), "acoustic.rir_length_clamped") != codes.end());
+  CHECK(has_diagnostic_code("acoustic.rir_length_clamped"));
 
-  // Each entry appears in the flattened string too, so the two channels describe
-  // one call rather than drifting apart.
-  const std::string joined = sonare_last_warning_message();
-  for (const std::string& code : codes) CHECK(joined.find(code) != std::string::npos);
-
-  // Past the end is an empty entry, not a fault, so a caller that miscounts gets
-  // nothing rather than memory it does not own.
-  const size_t past_end = sonare_last_diagnostic_count();
-  CHECK(std::string(sonare_last_diagnostic_code(past_end)).empty());
-  CHECK(std::string(sonare_last_diagnostic_message(past_end)).empty());
+  // Past the end is refused and the caller's struct is left as it was.
+  SonareDiagnostic past;
+  sonare_diagnostic_init(&past);
+  CHECK(sonare_last_diagnostic(diagnostics.size(), &past) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(past.code).empty());
 
   // A later clean call clears the list, so a count read after it is that call's
   // rather than a slot nothing resets.
@@ -187,8 +181,6 @@ TEST_CASE("sonare acoustic C API honors the late-tail model selector", "[c_api][
   SonareRirSynthResult eyring_rir{};
   REQUIRE(sonare_synthesize_rir(&sabine, 48000, &sabine_rir) == SONARE_OK);
   REQUIRE(sonare_synthesize_rir(&eyring, 48000, &eyring_rir) == SONARE_OK);
-  REQUIRE(sabine_rir.has_error == 0);
-  REQUIRE(eyring_rir.has_error == 0);
   REQUIRE(sabine_rir.length > 0);
   REQUIRE(eyring_rir.length > 0);
 
@@ -327,8 +319,7 @@ TEST_CASE("sonare acoustic C API publishes the morph's own RIR diagnostics", "[c
   REQUIRE(sonare_room_morph(input.data(), input.size(), 48000, &cfg, &out, &out_length) ==
           SONARE_OK);
   REQUIRE(out_length > 0);
-  REQUIRE(std::string(sonare_last_warning_message()).find("acoustic.ism_order_clamped") !=
-          std::string::npos);
+  REQUIRE(has_diagnostic_code("acoustic.ism_order_clamped"));
   sonare_free_floats(out);
 
   // An order the synthesizer does not clamp leaves the channel clear, so the
@@ -338,8 +329,7 @@ TEST_CASE("sonare acoustic C API publishes the morph's own RIR diagnostics", "[c
   out_length = 0;
   REQUIRE(sonare_room_morph(input.data(), input.size(), 48000, &cfg, &out, &out_length) ==
           SONARE_OK);
-  REQUIRE(std::string(sonare_last_warning_message()).find("acoustic.ism_order_clamped") ==
-          std::string::npos);
+  REQUIRE_FALSE(has_diagnostic_code("acoustic.ism_order_clamped"));
   sonare_free_floats(out);
 }
 
@@ -458,15 +448,16 @@ TEST_CASE("sonare acoustic C API morph honours the mixing-time / crossfade contr
   sonare_free_floats(wide_out);
 }
 
-TEST_CASE("sonare acoustic C API reports invalid geometry as empty RIR", "[c_api][acoustic]") {
+TEST_CASE("sonare acoustic C API refuses a source outside the room", "[c_api][acoustic]") {
   SonareRirSynthConfig cfg = valid_rir_config();
   cfg.source_x = 99.0f;
   SonareRirSynthResult result{};
 
   const SonareError err = sonare_synthesize_rir(&cfg, 48000, &result);
 
-  REQUIRE(err == SONARE_OK);
-  REQUIRE(result.has_error == 1);
+  REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::string(sonare_last_error_message()).find("acoustic.source_outside_room") !=
+          std::string::npos);
   REQUIRE(result.length == 0);
   REQUIRE(result.rir == nullptr);
   sonare_free_rir_synth_result(&result);
@@ -685,8 +676,6 @@ TEST_CASE("sonare acoustic C API uses per-band wall absorption", "[c_api][acoust
   SonareRirSynthResult scalar_rir{};
   REQUIRE(sonare_synthesize_rir(&banded, 48000, &banded_rir) == SONARE_OK);
   REQUIRE(sonare_synthesize_rir(&scalar, 48000, &scalar_rir) == SONARE_OK);
-  REQUIRE(banded_rir.has_error == 0);
-  REQUIRE(scalar_rir.has_error == 0);
   REQUIRE(banded_rir.length > 0);
   REQUIRE(scalar_rir.length > 0);
 
@@ -723,8 +712,6 @@ TEST_CASE("sonare acoustic C API uses per-band wall scattering", "[c_api][acoust
   SonareRirSynthResult rough_rir{};
   REQUIRE(sonare_synthesize_rir(&smooth, 48000, &smooth_rir) == SONARE_OK);
   REQUIRE(sonare_synthesize_rir(&rough, 48000, &rough_rir) == SONARE_OK);
-  REQUIRE(smooth_rir.has_error == 0);
-  REQUIRE(rough_rir.has_error == 0);
   REQUIRE(smooth_rir.length > 0);
   REQUIRE(rough_rir.length > 0);
 
@@ -752,8 +739,6 @@ TEST_CASE("sonare acoustic C API selects a material preset", "[c_api][acoustic]"
   SonareRirSynthResult concrete_rir{};
   REQUIRE(sonare_synthesize_rir(&curtain, 48000, &curtain_rir) == SONARE_OK);
   REQUIRE(sonare_synthesize_rir(&concrete, 48000, &concrete_rir) == SONARE_OK);
-  REQUIRE(curtain_rir.has_error == 0);
-  REQUIRE(concrete_rir.has_error == 0);
   REQUIRE(curtain_rir.length > 0);
   REQUIRE(concrete_rir.length > 0);
 
@@ -851,7 +836,6 @@ SonareRirSynthConfig air_hall_config() {
 SonareRirSynthResult synthesized(const SonareRirSynthConfig& cfg) {
   SonareRirSynthResult out{};
   REQUIRE(sonare_synthesize_rir(&cfg, 48000, &out) == SONARE_OK);
-  REQUIRE(out.has_error == 0);
   REQUIRE(out.length > 0);
   return out;
 }
@@ -941,13 +925,12 @@ TEST_CASE("sonare acoustic C API routes air absorption into the synthesized tail
 }
 
 TEST_CASE("sonare acoustic C API reports an implausible air climate", "[c_api][acoustic]") {
-  SECTION("RIR synthesis surfaces it as a diagnostic, not a call failure") {
+  SECTION("RIR synthesis refuses it with the diagnostic's text") {
     SonareRirSynthConfig cfg = air_hall_config();
     cfg.air_absorption = SONARE_AIR_ABSORPTION_ON;
     cfg.air_temperature_c = -500.0f;  // below absolute zero
     SonareRirSynthResult out{};
-    REQUIRE(sonare_synthesize_rir(&cfg, 48000, &out) == SONARE_OK);
-    REQUIRE(out.has_error == 1);
+    REQUIRE(sonare_synthesize_rir(&cfg, 48000, &out) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(out.length == 0);
     const char* message = sonare_last_error_message();
     REQUIRE(message != nullptr);
@@ -1147,7 +1130,6 @@ TEST_CASE("sonare acoustic C API applies wall scattering without per-band absorp
   auto synthesize = [](const SonareRirSynthConfig& cfg) {
     SonareRirSynthResult out{};
     REQUIRE(sonare_synthesize_rir(&cfg, 48000, &out) == SONARE_OK);
-    REQUIRE(out.has_error == 0);
     REQUIRE(out.length > 0);
     return out;
   };
@@ -1224,7 +1206,6 @@ TEST_CASE("sonare_room_geometry_from_estimate maps an estimate onto the synthesi
     geometry.max_seconds = 0.1f;
     SonareRirSynthResult rir{};
     REQUIRE(sonare_synthesize_rir(&geometry, 22050, &rir) == SONARE_OK);
-    CHECK(rir.has_error == 0);
     CHECK(rir.length > 0);
     sonare_free_rir_synth_result(&rir);
   }

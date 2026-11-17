@@ -54,13 +54,6 @@ void clear_last_error() noexcept {
   last_error_fallback_storage() = nullptr;
 }
 
-std::string& last_warning_storage() noexcept {
-  static thread_local std::string storage;
-  return storage;
-}
-
-void set_last_warning(const char* msg) { last_warning_storage().assign(msg != nullptr ? msg : ""); }
-
 std::vector<sonare::Diagnostic>& last_diagnostics_storage() noexcept {
   static thread_local std::vector<sonare::Diagnostic> storage;
   return storage;
@@ -70,9 +63,11 @@ void set_last_diagnostics(const std::vector<sonare::Diagnostic>& diagnostics) {
   last_diagnostics_storage() = diagnostics;
 }
 
-void clear_last_warning() noexcept {
-  last_warning_storage().clear();
-  last_diagnostics_storage().clear();
+void clear_last_diagnostics() noexcept { last_diagnostics_storage().clear(); }
+
+void add_last_warning(const char* code, std::string message) {
+  last_diagnostics_storage().push_back(
+      sonare::Diagnostic{sonare::Diagnostic::Severity::Warning, code, std::move(message)});
 }
 
 SonareError map_sonare_exception(const SonareException& e) {

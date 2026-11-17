@@ -170,7 +170,7 @@ void RealtimeEngineWasm::setGraph(val spec) {
   }
 #else
   (void)spec;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "graph support is not compiled in");
 #endif
 }

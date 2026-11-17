@@ -28,6 +28,7 @@ from ._runtime import (
     _float_array_result,
     _get_lib,
     _guard_buffer,
+    _last_diagnostics,
     _optional_float_array_result,
     _to_c_float_array,
     _to_c_int,
@@ -65,25 +66,16 @@ def _read_diagnostics() -> list[RirDiagnostic]:
     Must run before any later C ABI call can replace the thread-local list, the
     same contract the error and warning strings carry.
     """
-    lib = _get_lib()
-    if not hasattr(lib, "sonare_last_diagnostic_count"):
-        return []
-    out: list[RirDiagnostic] = []
-    for position in range(lib.sonare_last_diagnostic_count()):
-        index = _to_c_size_t(position, "index")
-        code = lib.sonare_last_diagnostic_code(index) or b""
-        message = lib.sonare_last_diagnostic_message(index) or b""
-        severity = lib.sonare_last_diagnostic_severity(index)
-        out.append(
-            RirDiagnostic(
-                code=code.decode("utf-8"),
-                message=message.decode("utf-8"),
-                severity=_DIAGNOSTIC_SEVERITIES[severity]
-                if 0 <= severity < len(_DIAGNOSTIC_SEVERITIES)
-                else "info",
-            )
+    return [
+        RirDiagnostic(
+            code=code,
+            message=message,
+            severity=_DIAGNOSTIC_SEVERITIES[severity]
+            if 0 <= severity < len(_DIAGNOSTIC_SEVERITIES)
+            else "info",
         )
-    return out
+        for code, message, severity in _last_diagnostics()
+    ]
 
 
 def _named_selector(value: str, argument: str, prefix: str) -> int:
@@ -277,9 +269,6 @@ def synthesize_rir(
     )
     _check(rc)
     try:
-        if out.has_error:
-            detail = lib.sonare_last_error_message()
-            raise SonareValueError(detail.decode("utf-8") if detail else "invalid room geometry")
         # Non-fatal diagnostics are recorded on success too -- a max_seconds clamp
         # that cut the tail, or a request degraded to early reflections only.
         # Read before any later C ABI call can overwrite the thread-local list.

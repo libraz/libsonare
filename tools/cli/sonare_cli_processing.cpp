@@ -98,7 +98,7 @@ int cmd_time_stretch(const CliArgs& args, const Audio& audio) {
 // Every command below up to the #else stays registered in the CLI's command
 // table regardless of BUILD_PITCH_EDITOR (see get_commands() in
 // tools/cli/sonare_cli.cpp), so a build without the pitch editor must still
-// answer the subcommand -- with a NotImplemented diagnostic mapped to the CLI's
+// answer the subcommand -- with a NotSupported diagnostic mapped to the CLI's
 // not-supported exit code -- instead of failing to link.
 #if defined(SONARE_WITH_PITCH_EDITOR)
 
@@ -597,42 +597,42 @@ int cmd_vocal_notes(const CliArgs& args, const Audio& audio) {
 #else  // !SONARE_WITH_PITCH_EDITOR
 
 int cmd_pitch_correct(const CliArgs&, const Audio&) {
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "pitch editor support is not compiled in");
 }
 
 int cmd_scale_quantize(const CliArgs&, const Audio&) {
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "pitch editor support is not compiled in");
 }
 
 int cmd_pitch_correct_timevarying(const CliArgs&, const Audio&) {
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "pitch editor support is not compiled in");
 }
 
 int cmd_note_move(const CliArgs&, const Audio&) {
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "pitch editor support is not compiled in");
 }
 
 int cmd_note_stretch(const CliArgs&, const Audio&) {
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "pitch editor support is not compiled in");
 }
 
 int cmd_polyphonic_notes(const CliArgs&, const Audio&) {
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "pitch editor support is not compiled in");
 }
 
 int cmd_polyphonic_render(const CliArgs&, const Audio&) {
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "pitch editor support is not compiled in");
 }
 
 int cmd_vocal_notes(const CliArgs&, const Audio&) {
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "pitch editor support is not compiled in");
 }
 
@@ -641,7 +641,7 @@ int cmd_vocal_notes(const CliArgs&, const Audio&) {
 // `tune-to-midi in.wav --reference-smf ref.mid -o out.wav` -- the take follows a
 // written melody instead of a single stated interval. Unlike the family above,
 // this one is absent from the command table when either gate is off rather than
-// answering with a NotImplemented diagnostic: the SMF reader lives in the
+// answering with a NotSupported diagnostic: the SMF reader lives in the
 // arrangement library, which an arrangement-off build does not link at all, so it
 // takes the registration shape the other arrangement commands take.
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
@@ -728,7 +728,7 @@ int cmd_tune_to_midi(const CliArgs& args, const Audio& audio) {
 // The four voice-changer commands below stay registered in the CLI's command
 // table regardless of BUILD_VOICE_CHANGER (see get_commands() in
 // tools/cli/sonare_cli.cpp), so a build without the voice changer must still
-// answer the subcommand -- with a NotImplemented diagnostic mapped to the
+// answer the subcommand -- with a NotSupported diagnostic mapped to the
 // CLI's not-supported exit code -- instead of failing to link.
 #if defined(SONARE_WITH_VOICE_CHANGER)
 
@@ -938,22 +938,22 @@ int cmd_voice_preset_validate(const CliArgs& args, const Audio&) {
 #else  // !SONARE_WITH_VOICE_CHANGER
 
 int cmd_voice_change(const CliArgs&, const Audio&) {
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "voice changer support is not compiled in");
 }
 
 int cmd_voice_presets(const CliArgs&, const Audio&) {
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "voice changer support is not compiled in");
 }
 
 int cmd_voice_preset(const CliArgs&, const Audio&) {
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "voice changer support is not compiled in");
 }
 
 int cmd_voice_preset_validate(const CliArgs&, const Audio&) {
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "voice changer support is not compiled in");
 }
 

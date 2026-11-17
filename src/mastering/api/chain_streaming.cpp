@@ -545,7 +545,7 @@ int StreamingMasteringChain::flush(float* const* channels, int num_channels, int
   rt::ProcessorBase::validate_channel_buffers(channels, num_channels);
   const int current_tail = tail_samples();
   if (current_tail == rt::TailBudget::kUnbounded) {
-    throw SonareException(ErrorCode::NotImplemented,
+    throw SonareException(ErrorCode::NotSupported,
                           "cannot automatically flush a chain with an unbounded tail");
   }
   if (!flush_started_) {

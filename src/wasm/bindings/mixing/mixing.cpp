@@ -78,30 +78,19 @@ MixerWasm* MixerWasm::fromSceneJson(std::string json, int sample_rate, int block
   if (mixer == nullptr) {
     throwLastCError("failed to build mixer from scene JSON: ");
   }
-  // Capture any non-fatal load warning (e.g. insert params no processor read)
-  // before any later C-ABI call can overwrite the thread-local message.
-  std::string warning = sonare_last_warning_message();
+  // Capture the load's warnings (e.g. insert params no processor read) before
+  // any later C-ABI call can overwrite the thread-local list.
+  std::vector<std::string> warnings = lastDiagnosticMessages();
   auto* wrapped = new MixerWasm(mixer, sample_rate, block_size);
-  wrapped->scene_warning_ = std::move(warning);
+  wrapped->scene_warnings_ = std::move(warnings);
   return wrapped;
 }
 
-// Non-fatal warnings captured when this mixer was built from scene JSON, one
-// entry per insert handed param keys it does not read; empty when all consumed.
+// Warnings captured when this mixer was built from scene JSON; empty when all consumed.
 val MixerWasm::sceneWarnings() const {
   val out = val::array();
-  if (scene_warning_.empty()) {
-    return out;
-  }
-  size_t start = 0;
-  while (start <= scene_warning_.size()) {
-    size_t end = scene_warning_.find('\n', start);
-    if (end == std::string::npos) {
-      out.call<void>("push", scene_warning_.substr(start));
-      break;
-    }
-    out.call<void>("push", scene_warning_.substr(start, end - start));
-    start = end + 1;
+  for (const std::string& warning : scene_warnings_) {
+    out.call<void>("push", warning);
   }
   return out;
 }

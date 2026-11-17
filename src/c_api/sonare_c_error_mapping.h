@@ -27,7 +27,7 @@ inline constexpr SonareError c_error_from_error_code(sonare::ErrorCode code) noe
       return SONARE_ERROR_INVALID_PARAMETER;
     case sonare::ErrorCode::OutOfMemory:
       return SONARE_ERROR_OUT_OF_MEMORY;
-    case sonare::ErrorCode::NotImplemented:
+    case sonare::ErrorCode::NotSupported:
       return SONARE_ERROR_NOT_SUPPORTED;
     case sonare::ErrorCode::InvalidState:
       return SONARE_ERROR_INVALID_STATE;
@@ -48,7 +48,7 @@ inline constexpr bool core_ordinals_match_c_abi() noexcept {
   for (const sonare::ErrorCode code :
        {sonare::ErrorCode::Ok, sonare::ErrorCode::FileNotFound, sonare::ErrorCode::InvalidFormat,
         sonare::ErrorCode::DecodeFailed, sonare::ErrorCode::InvalidParameter,
-        sonare::ErrorCode::OutOfMemory, sonare::ErrorCode::NotImplemented,
+        sonare::ErrorCode::OutOfMemory, sonare::ErrorCode::NotSupported,
         sonare::ErrorCode::InvalidState, sonare::ErrorCode::Cancelled,
         sonare::ErrorCode::EncodeFailed, sonare::ErrorCode::StaleResult}) {
     if (code == sonare::ErrorCode::Ok) continue;
@@ -73,7 +73,7 @@ inline sonare::ErrorCode error_code_from_c_error(SonareError err) {
     case SONARE_ERROR_OUT_OF_MEMORY:
       return sonare::ErrorCode::OutOfMemory;
     case SONARE_ERROR_NOT_SUPPORTED:
-      return sonare::ErrorCode::NotImplemented;
+      return sonare::ErrorCode::NotSupported;
     case SONARE_ERROR_INVALID_STATE:
       return sonare::ErrorCode::InvalidState;
     case SONARE_ERROR_CANCELLED:

@@ -96,37 +96,9 @@ sonare::acoustic::ShoeboxRoom make_room(float length, float width, float height,
   return make_uniform_room(sonare::RoomDimensions{length, width, height}, request);
 }
 
-// RIR synthesis reports geometry and synthesis limits as non-fatal core
-// diagnostics so a caller can inspect the result. Preserve their Error and
-// Warning content in the matching C-ABI channels as well: a C caller (and the
-// high-level CLIs) otherwise only sees `has_error` and has no truthful
-// explanation of a failed or clamped request.
-//
-// Every Warning is published, joined with "; ", not just the first. Node and
-// WASM return the whole diagnostics array, so publishing one warning here made
-// the C and Python surfaces structurally unable to report the same set: a
-// request that is both floored to fit the direct sound and clamped against its
-// length cap raises two, and the second was unreachable. The order is the
-// synthesizer's own, so the leading warning is unchanged.
+// Publishes the synthesizer's whole diagnostic list, in its own order, so a C
+// caller reads the same entries Node and WASM return as an array.
 void publish_rir_diagnostics(const std::vector<sonare::Diagnostic>& diagnostics) {
-  for (const sonare::Diagnostic& diagnostic : diagnostics) {
-    if (diagnostic.severity != sonare::Diagnostic::Severity::Error) continue;
-    const std::string detail = diagnostic.code + ": " + diagnostic.message;
-    // A success-return diagnostic: the call itself returns SONARE_OK.
-    sonare_c_detail::set_last_error(SONARE_OK, detail.c_str());
-    break;
-  }
-  std::string warnings;
-  for (const sonare::Diagnostic& diagnostic : diagnostics) {
-    if (diagnostic.severity != sonare::Diagnostic::Severity::Warning) continue;
-    if (!warnings.empty()) warnings += "; ";
-    warnings += diagnostic.code + ": " + diagnostic.message;
-  }
-  if (!warnings.empty()) sonare_c_detail::set_last_warning(warnings.c_str());
-  // The whole list, unflattened, so a binding can rebuild the array Node and
-  // WASM get from the core. The joined string above cannot be split back into
-  // it: a message holding the separator would split wrong, and the severity is
-  // not in the text at all.
   sonare_c_detail::set_last_diagnostics(diagnostics);
 }
 
@@ -199,14 +171,13 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
                                   SonareRirSynthResult* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
-  sonare_c_detail::clear_last_warning();
+  sonare_c_detail::clear_last_diagnostics();
   if (!config || !out) return SONARE_ERROR_INVALID_PARAMETER;
   // Define the result before any validation return, so a rejected call hands
   // back a defined struct rather than the caller's untouched stack slot.
   out->rir = nullptr;
   out->length = 0;
   out->sample_rate = sample_rate;
-  out->has_error = 0;
   if (sample_rate < sonare_c_detail::kMinSampleRate ||
       sample_rate > sonare_c_detail::kMaxSampleRate) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -263,16 +234,20 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   // "0 means the library default" rule as seed and crossfade_ms, so enabling
   // air absorption on an otherwise zeroed POD gives the documented climate
   // rather than a silent 0 degC / 0 % one. An implausible value is left for the
-  // core to diagnose (acoustic.invalid_air_absorption), which keeps the failure
-  // in the same has_error channel as the geometry checks.
+  // core to diagnose (acoustic.invalid_air_absorption), which refuses the call
+  // the same way the geometry checks do.
   rc.air.temperature_c =
       sonare::ZeroIsDefault(config->air_temperature_c).or_default(rc.air.temperature_c);
   rc.air.humidity_percent =
       sonare::ZeroIsDefault(config->air_humidity_percent).or_default(rc.air.humidity_percent);
 
   const RirSynthResult res = synthesize_rir(room, placement, sample_rate, rc);
-  out->has_error = has_error(res.diagnostics) ? 1 : 0;
   publish_rir_diagnostics(res.diagnostics);
+  if (has_error(res.diagnostics)) {
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                                    first_error_text(res.diagnostics).c_str());
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   if (!res.rir.empty()) {
     std::unique_ptr<float[]> rir(new float[res.rir.size()]);
     std::memcpy(rir.get(), res.rir.data(), res.rir.size() * sizeof(float));
@@ -446,7 +421,7 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
-  sonare_c_detail::clear_last_warning();
+  sonare_c_detail::clear_last_diagnostics();
   if (!config || !room_morph_config_is_valid(*config)) return SONARE_ERROR_INVALID_PARAMETER;
   return run_mono_offline(
       samples, length, sample_rate, out, out_length, [&](const Audio& audio) -> Audio {
@@ -471,7 +446,7 @@ SonareError sonare_room_morph_stereo(const float* left, const float* right, size
   // Defined before any validation return, so a rejected call hands back an empty result.
   *out = SonareRoomMorphStereoResult{};
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
-  sonare_c_detail::clear_last_warning();
+  sonare_c_detail::clear_last_diagnostics();
   if (!config || !room_morph_config_is_valid(*config)) return SONARE_ERROR_INVALID_PARAMETER;
   SonareError err = sonare_c_detail::validate_audio_params(left, length, sample_rate);
   if (err != SONARE_OK) return err;

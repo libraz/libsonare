@@ -224,7 +224,7 @@ double RealtimeEngineWasm::resolveInstrumentAutomationId(const val& destination_
 #else
   (void)destination_id_val;
   (void)param_name;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "arrangement support is not compiled in");
 #endif
 }

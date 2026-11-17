@@ -35,6 +35,7 @@ from ._runtime import (
     _check,
     _get_lib,
     _guard_buffer,
+    _last_diagnostics,
     _narrow_int,
     _require_instance,
     _to_c_float_array,
@@ -633,8 +634,7 @@ class _ProjectInspectionMixin:
                 _utf8_arg(scene_json, "scene_json"),
             )
         )
-        raw = lib.sonare_last_warning_message()
-        return raw.decode("utf-8").splitlines() if raw else []
+        return [message for _, message, _ in _last_diagnostics()]
 
     def set_tempo_segments(
         self,

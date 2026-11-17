@@ -23,7 +23,7 @@ extern "C" {
 /// AUDIO-thread functions (no allocation, no lock, no throw):
 /// - `sonare_engine_process`, `sonare_engine_process_with_monitor`. They do not
 ///   touch the thread-local `sonare_last_error_message()` /
-///   `sonare_last_warning_message()` channels, because first-touch TLS setup is
+///   `sonare_last_diagnostic()` channels, because first-touch TLS setup is
 ///   not realtime-safe — validate and read diagnostics on the control thread.
 ///
 /// CONTROL-thread, realtime-safe hand-off (lock-free, safe alongside

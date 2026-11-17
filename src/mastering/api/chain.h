@@ -422,7 +422,7 @@ class StreamingMasteringChain {
   /// throws when any enabled stage has an unbounded tail; to generate a chosen
   /// finite duration in that case, pass a bounded number of silent blocks to
   /// @ref process_block.
-  /// @throws SonareException (NotImplemented) when a stage reports an unbounded
+  /// @throws SonareException (NotSupported) when a stage reports an unbounded
   ///         tail and @p max_samples is nonzero.
   int flush(float* const* channels, int num_channels, int max_samples);
 

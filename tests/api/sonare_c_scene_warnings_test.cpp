@@ -9,6 +9,9 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <string>
+#include <vector>
+
+#include "support/c_diagnostics.h"
 
 namespace {
 
@@ -39,16 +42,15 @@ TEST_CASE("sonare_project_set_mixer_scene_json reports unknown scene keys as war
       R"({"version":1,"strips":[{"id":"lead","faderDB":-3.0,"x-note":1}],"$schema":"s",)"
       R"("buses":[{"id":"master","role":"master","roel":"aux"}]})";
   REQUIRE(sonare_project_set_mixer_scene_json(project.handle, typo) == SONARE_OK);
-  const std::string warning = sonare_last_warning_message();
-  CHECK(warning.find("unknown scene key 'strips[0].faderDB'") != std::string::npos);
-  CHECK(warning.find("unknown scene key 'buses[0].roel'") != std::string::npos);
-  CHECK(warning.find('\n') != std::string::npos);
-  CHECK(warning.find("x-note") == std::string::npos);
-  CHECK(warning.find("$schema") == std::string::npos);
+  // One warning per key, and only the unknown ones: extension keys are allowed.
+  CHECK(sonare_test::diagnostic_messages("project.unknown_scene_key") ==
+        std::vector<std::string>{"unknown scene key 'strips[0].faderDB'",
+                                 "unknown scene key 'buses[0].roel'"});
+  CHECK(sonare_test::last_diagnostics().size() == 2);
 
-  // A clean scene clears the previous call's warning.
+  // A clean scene clears the previous call's warnings.
   REQUIRE(sonare_project_set_mixer_scene_json(project.handle, kCleanScene) == SONARE_OK);
-  CHECK(std::string(sonare_last_warning_message()).empty());
+  CHECK(sonare_last_diagnostic_count() == 0);
 }
 
 TEST_CASE("sonare_project_deserialize reports unknown scene keys with the project path",

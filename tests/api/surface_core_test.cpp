@@ -84,3 +84,105 @@ TEST_CASE("Each ABI counter accessor returns its macro", "[surface][core]") {
   CHECK(sonare_vocal_edit_abi_version() == SONARE_VOCAL_EDIT_ABI_VERSION);
   CHECK(sonare_abi_version() == SONARE_ABI_VERSION);
 }
+
+namespace {
+
+std::vector<std::pair<std::string, std::string>> diagnostic_codes_and_messages() {
+  std::vector<std::pair<std::string, std::string>> out;
+  for (size_t i = 0; i < sonare_last_diagnostic_count(); ++i) {
+    SonareDiagnostic diagnostic;
+    sonare_diagnostic_init(&diagnostic);
+    REQUIRE(sonare_last_diagnostic(i, &diagnostic) == SONARE_OK);
+    REQUIRE(diagnostic.severity == SONARE_DIAGNOSTIC_WARNING);
+    out.emplace_back(diagnostic.code, diagnostic.message);
+  }
+  return out;
+}
+
+}  // namespace
+
+TEST_CASE("sonare_diagnostic_init sets the struct size and empty strings", "[surface][core]") {
+  SonareDiagnostic diagnostic;
+  sonare_diagnostic_init(&diagnostic);
+  CHECK(diagnostic.struct_size == sizeof(SonareDiagnostic));
+  CHECK(std::string(diagnostic.code).empty());
+  CHECK(std::string(diagnostic.message).empty());
+}
+
+#if defined(SONARE_WITH_MIXING)
+
+namespace {
+
+// One load that trips each mixing scene warning once.
+constexpr const char* kSceneWithEveryMixingWarning = R"({
+  "version": 1,
+  "buses": [{"id": "master", "role": "master"}],
+  "strips": [{"id": "a", "faderDB": -3,
+    "inserts": [{"slot": "post", "processor": "eq.parametric",
+                 "params": "{\"highPassHz\":80}"}],
+    "sends": [{"id": "s", "destinationBusId": "aux1typo", "sendDb": 0}]}],
+  "connections": [{"source": "a", "destination": "master"}]
+})";
+
+}  // namespace
+
+TEST_CASE("Mixer scene warnings carry their public codes in a fixed order", "[surface][core]") {
+  SonareMixer* mixer = sonare_mixer_from_scene_json(kSceneWithEveryMixingWarning, 48000, 512);
+  REQUIRE(mixer != nullptr);
+  const auto diagnostics = diagnostic_codes_and_messages();
+  sonare_mixer_destroy(mixer);
+  REQUIRE(diagnostics.size() == 3);
+  CHECK(diagnostics[0].first == "mixing.unknown_scene_key");
+  CHECK(diagnostics[0].second == "unknown scene key 'strips[0].faderDB'");
+  CHECK(diagnostics[1].first == "mixing.ignored_insert_param");
+  CHECK(diagnostics[2].first == "mixing.undeclared_send");
+  CHECK(diagnostics[2].second ==
+        "send 'a' targets undeclared bus 'aux1typo'; created as implicit aux");
+}
+
+TEST_CASE("sonare_last_diagnostic refuses a bad request and leaves the list intact",
+          "[surface][core]") {
+  SonareMixer* mixer = sonare_mixer_from_scene_json(kSceneWithEveryMixingWarning, 48000, 512);
+  REQUIRE(mixer != nullptr);
+  sonare_mixer_destroy(mixer);
+  REQUIRE(sonare_last_diagnostic_count() == 3);
+
+  SonareDiagnostic diagnostic;
+  sonare_diagnostic_init(&diagnostic);
+  const char* const untouched_code = diagnostic.code;
+
+  SECTION("NULL out") {
+    CHECK(sonare_last_diagnostic(0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+  SECTION("struct_size below the struct") {
+    diagnostic.struct_size = sizeof(SonareDiagnostic) - 1;
+    CHECK(sonare_last_diagnostic(0, &diagnostic) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(diagnostic.code == untouched_code);
+  }
+  SECTION("index past the count") {
+    CHECK(sonare_last_diagnostic(3, &diagnostic) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(diagnostic.code == untouched_code);
+  }
+  // A refused read neither clears the list nor records an error message.
+  CHECK(sonare_last_diagnostic_count() == 3);
+  CHECK(std::string(sonare_last_error_message()).empty());
+}
+
+#endif
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+
+TEST_CASE("Project scene warnings carry their public code", "[surface][core]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  const char* typo = R"({"version":1,"strips":[{"id":"lead","faderDB":-3.0}],)"
+                     R"("buses":[{"id":"master","role":"master"}]})";
+  REQUIRE(sonare_project_set_mixer_scene_json(project, typo) == SONARE_OK);
+  const auto diagnostics = diagnostic_codes_and_messages();
+  sonare_project_destroy(project);
+  REQUIRE(diagnostics.size() == 1);
+  CHECK(diagnostics[0].first == "project.unknown_scene_key");
+  CHECK(diagnostics[0].second == "unknown scene key 'strips[0].faderDB'");
+}
+
+#endif

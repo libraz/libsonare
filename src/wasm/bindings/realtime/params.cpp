@@ -233,7 +233,7 @@ void RealtimeEngineWasm::setSoloMute(const val& lane_index_val, bool solo, bool 
   (void)solo;
   (void)mute;
   (void)render_frame_val;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "mixing support is not compiled in");
 #endif
 }
@@ -260,7 +260,7 @@ void RealtimeEngineWasm::setTrackMonitorMode(const val& lane_index_val, const va
 #else
   (void)lane_index;
   (void)render_frame_val;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                 "mixing support is not compiled in");
 #endif
 }

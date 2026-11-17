@@ -167,18 +167,10 @@ val ProjectWasm::setMixerSceneJson(const std::string& scene_json) {
   if (err != SONARE_OK) {
     throwCError(err, "failed to set mixer scene JSON");
   }
-  // The warning is newline-joined, one entry per unknown scene key; empty when clean.
-  const std::string warning = sonare_last_warning_message();
+  // One entry per unknown scene key; empty when clean.
   val out = val::array();
-  size_t start = 0;
-  while (!warning.empty() && start <= warning.size()) {
-    const size_t end = warning.find('\n', start);
-    if (end == std::string::npos) {
-      out.call<void>("push", warning.substr(start));
-      break;
-    }
-    out.call<void>("push", warning.substr(start, end - start));
-    start = end + 1;
+  for (const std::string& warning : lastDiagnosticMessages()) {
+    out.call<void>("push", warning);
   }
   return out;
 }

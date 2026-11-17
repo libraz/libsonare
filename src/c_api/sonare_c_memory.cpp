@@ -246,34 +246,38 @@ const char* sonare_last_error_message(void) { return last_error_message(); }
 
 SonareError sonare_last_error_code(void) { return last_error_code_storage(); }
 
-const char* sonare_last_warning_message(void) { return last_warning_storage().c_str(); }
-
 size_t sonare_last_diagnostic_count(void) { return last_diagnostics_storage().size(); }
 
-const char* sonare_last_diagnostic_code(size_t index) {
-  const std::vector<sonare::Diagnostic>& diagnostics = last_diagnostics_storage();
-  if (index >= diagnostics.size()) return "";
-  return diagnostics[index].code.c_str();
+void sonare_diagnostic_init(SonareDiagnostic* diagnostic) {
+  if (diagnostic == nullptr) return;
+  *diagnostic = SonareDiagnostic{};
+  diagnostic->struct_size = sizeof(SonareDiagnostic);
+  diagnostic->code = "";
+  diagnostic->message = "";
+  diagnostic->severity = SONARE_DIAGNOSTIC_INFO;
 }
 
-const char* sonare_last_diagnostic_message(size_t index) {
+SonareError sonare_last_diagnostic(size_t index, SonareDiagnostic* out) {
   const std::vector<sonare::Diagnostic>& diagnostics = last_diagnostics_storage();
-  if (index >= diagnostics.size()) return "";
-  return diagnostics[index].message.c_str();
-}
-
-SonareDiagnosticSeverity sonare_last_diagnostic_severity(size_t index) {
-  const std::vector<sonare::Diagnostic>& diagnostics = last_diagnostics_storage();
-  if (index >= diagnostics.size()) return SONARE_DIAGNOSTIC_INFO;
-  switch (diagnostics[index].severity) {
-    case sonare::Diagnostic::Severity::Info:
-      return SONARE_DIAGNOSTIC_INFO;
-    case sonare::Diagnostic::Severity::Warning:
-      return SONARE_DIAGNOSTIC_WARNING;
-    case sonare::Diagnostic::Severity::Error:
-      return SONARE_DIAGNOSTIC_ERROR;
+  if (out == nullptr || out->struct_size < sizeof(SonareDiagnostic) ||
+      index >= diagnostics.size()) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
-  return SONARE_DIAGNOSTIC_INFO;
+  const sonare::Diagnostic& diagnostic = diagnostics[index];
+  out->code = diagnostic.code.c_str();
+  out->message = diagnostic.message.c_str();
+  switch (diagnostic.severity) {
+    case sonare::Diagnostic::Severity::Info:
+      out->severity = SONARE_DIAGNOSTIC_INFO;
+      break;
+    case sonare::Diagnostic::Severity::Warning:
+      out->severity = SONARE_DIAGNOSTIC_WARNING;
+      break;
+    case sonare::Diagnostic::Severity::Error:
+      out->severity = SONARE_DIAGNOSTIC_ERROR;
+      break;
+  }
+  return SONARE_OK;
 }
 
 const char* sonare_version(void) { return SONARE_VERSION_STRING; }

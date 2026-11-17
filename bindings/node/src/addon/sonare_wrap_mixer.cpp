@@ -94,9 +94,9 @@ MixerWrap::MixerWrap(const Napi::CallbackInfo& info) : Napi::ObjectWrap<MixerWra
     sonare_node::ThrowLastSonareError(env, "failed to build mixer from scene JSON: ");
     return;
   }
-  // Capture any non-fatal load warning (e.g. insert params no processor read)
-  // immediately, before any later C-ABI call can overwrite the thread-local.
-  scene_warning_ = sonare_last_warning_message();
+  // Capture the load's warnings (e.g. insert params no processor read)
+  // immediately, before any later C-ABI call can overwrite the thread-local list.
+  scene_warnings_ = sonare_node::LastDiagnosticMessages();
   SONARE_NODE_CATCH_VOID(env)
 }
 
@@ -298,22 +298,9 @@ Napi::Value MixerWrap::SceneWarnings(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
-  // Split the newline-joined message captured at construction into a string[]
-  // (one entry per affected insert); an empty message yields an empty array.
-  Napi::Array out = Napi::Array::New(env);
-  if (scene_warning_.empty()) {
-    return out;
-  }
-  uint32_t index = 0;
-  size_t start = 0;
-  while (start <= scene_warning_.size()) {
-    size_t end = scene_warning_.find('\n', start);
-    if (end == std::string::npos) {
-      out.Set(index++, Napi::String::New(env, scene_warning_.substr(start)));
-      break;
-    }
-    out.Set(index++, Napi::String::New(env, scene_warning_.substr(start, end - start)));
-    start = end + 1;
+  Napi::Array out = Napi::Array::New(env, scene_warnings_.size());
+  for (uint32_t index = 0; index < scene_warnings_.size(); ++index) {
+    out.Set(index, Napi::String::New(env, scene_warnings_[index]));
   }
   return out;
   SONARE_NODE_CATCH(env)

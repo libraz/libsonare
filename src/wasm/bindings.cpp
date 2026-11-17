@@ -62,7 +62,7 @@ constexpr bool capability_ffmpeg_enabled() {
 // True when the offline mixing assistant is compiled in. Reported separately
 // from `mixing` because BUILD_MIXING_ASSISTANT can be dropped on its own -- the
 // analysis-only bundle forces it off -- and its entry points stay registered
-// either way, throwing NotImplemented rather than disappearing, so a host
+// either way, throwing NotSupported rather than disappearing, so a host
 // cannot detect a stripped build by probing for a function.
 constexpr bool capability_mixing_assistant_enabled() {
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
@@ -272,7 +272,7 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
           code = 5;
           code_name = "OutOfMemory";
           break;
-        case sonare::ErrorCode::NotImplemented:
+        case sonare::ErrorCode::NotSupported:
           code = 6;
           code_name = "NotSupported";
           break;

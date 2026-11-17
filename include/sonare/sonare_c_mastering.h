@@ -487,8 +487,8 @@ const char* sonare_mastering_insert_names(void);
 ///        insert needs an unavailable build feature).
 /// @details For tools/UIs that want to validate a scene insert's params before
 ///   loading it: any supplied key NOT in this list is silently ignored by the
-///   processor (and would be reported via @ref sonare_last_warning_message on a
-///   scene load). Band/sub-band processors enumerate their indexed
+///   processor (and would be reported as a `mixing.ignored_insert_param`
+///   diagnostic on a scene load). Band/sub-band processors enumerate their indexed
 ///   `band{i}.<field>` keys. Unlike @ref sonare_mastering_insert_names (which
 ///   stays valid across later API calls on the calling thread), this pointer is
 ///   thread-local valid only until the next API call on the same thread; the

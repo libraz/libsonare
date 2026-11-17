@@ -25,7 +25,7 @@ int cli_exit_code_for_error(sonare::ErrorCode error, bool legacy_mode) noexcept 
       return 3;
     case sonare::ErrorCode::OutOfMemory:
       return 7;
-    case sonare::ErrorCode::NotImplemented:
+    case sonare::ErrorCode::NotSupported:
       return 8;
     case sonare::ErrorCode::InvalidState:
       return 9;

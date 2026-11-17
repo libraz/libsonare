@@ -34,7 +34,7 @@ sonare::midi::MidiInstrument* wasmBoundInstrument(const sonare::engine::Realtime
 }
 
 // Maps an engine instrument-control outcome onto the exceptions the C ABI's statuses become:
-// a RangeError for a destination nothing is bound to, NotImplemented (the C ABI's
+// a RangeError for a destination nothing is bound to, NotSupported (the C ABI's
 // NOT_SUPPORTED) for a bound instrument without the control.
 void wasmRequireControlOk(sonare::engine::RealtimeEngine::InstrumentControlStatus status,
                           const char* unsupported_message) {
@@ -47,7 +47,7 @@ void wasmRequireControlOk(sonare::engine::RealtimeEngine::InstrumentControlStatu
     case Status::kNotSupported:
       break;
   }
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented, unsupported_message);
+  throw sonare::SonareException(sonare::ErrorCode::NotSupported, unsupported_message);
 }
 
 // The destination's current profile, read through the engine rather than from the instrument.
@@ -375,7 +375,7 @@ val RealtimeEngineWasm::controllerNoteTracking(const val& destination_id_val, va
 // another note on that channel is still held. `articulation` is a canonical
 // name ("poly" / "mono-retrigger" / "mono-legato") or its ordinal. Mirrors
 // sonare_engine_set_articulation, including which refusals stay apart: an
-// instrument with no articulation of its own reports NotImplemented (the C ABI's
+// instrument with no articulation of its own reports NotSupported (the C ABI's
 // NOT_SUPPORTED) rather than succeeding quietly, because a discarded mode is
 // indistinguishable from one that took until two notes overlap.
 void RealtimeEngineWasm::setArticulation(const val& destination_id_val, const val& channel_val,
@@ -426,7 +426,7 @@ val RealtimeEngineWasm::articulation(const val& destination_id_val, const val& c
 
 // How many times a legato continuation was asked for and refused, so the note
 // started a voice of its own instead. An instrument with no articulation of its
-// own reports NotImplemented on the same terms as the two entries above rather
+// own reports NotSupported on the same terms as the two entries above rather
 // than answering 0: this counter exists because a refusal sounds like an
 // ordinary note, and a 0 from an instrument that was never asked reads as
 // "every slur took" -- the exact reading it is here to prevent. Saturated at
@@ -437,7 +437,7 @@ uint32_t RealtimeEngineWasm::legatoFallbackCount(const val& destination_id_val) 
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   uint64_t counted = 0;
   if (!wasmBoundInstrument(engine_, destination_id)->legato_fallback_count(&counted)) {
-    throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+    throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                   "the bound instrument has no articulation of its own");
   }
   return counted > UINT32_MAX ? UINT32_MAX : static_cast<uint32_t>(counted);
@@ -450,7 +450,7 @@ uint32_t RealtimeEngineWasm::legatoFallbackCount(const val& destination_id_val) 
 // Rebuilds one part's (or, for kPartRigAllParts, the destination default's) rig
 // on the destination's instrument. Mirrors sonare_engine_set_part_rig: shape
 // first, then the chain's processors, then the instrument, whose refusal is
-// NotImplemented (NOT_SUPPORTED) because a rig the instrument cannot hold would
+// NotSupported (NOT_SUPPORTED) because a rig the instrument cannot hold would
 // otherwise read as one that took.
 void RealtimeEngineWasm::setPartRig(const val& destination_id_val, const val& part_val, val mode,
                                     val inserts_json) {
@@ -488,13 +488,13 @@ void RealtimeEngineWasm::setPartRig(const val& destination_id_val, const val& pa
   }
 #else
   if (rig.mode == sonare::midi::PartRigMode::kChain) {
-    throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+    throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                   "insert chains are not available in this build");
   }
 #endif
   if (!wasmBoundInstrument(engine_, destination_id)
            ->set_part_rig(static_cast<uint8_t>(part), rig)) {
-    throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+    throw sonare::SonareException(sonare::ErrorCode::NotSupported,
                                   "the bound instrument has no part rigs");
   }
 #else

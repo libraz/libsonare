@@ -415,7 +415,7 @@ struct ApplyResult {
 ///
 /// The graph request has no Project authoring surface yet and is not acted on. With
 /// @c bind_strips off the mixer bindings are left to the caller; with it on, a strip bound to
-/// several tracks is refused (@c NotImplemented), because the live runtime is one strip per track
+/// several tracks is refused (@c NotSupported), because the live runtime is one strip per track
 /// and only the offline bounce realizes the sum-then-process grouping.
 ///
 /// The engine keeps pointers into @p timeline's marker names, so the timeline must outlive the

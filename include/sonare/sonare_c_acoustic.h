@@ -121,9 +121,8 @@ typedef struct {
    * 50 % relative humidity). A literal 0 degC is therefore not distinguishable
    * from unset - request 0.01 for a freezing room, which absorbs identically
    * (the coefficient varies smoothly with temperature). Out-of-range values are
-   * reported the way the surrounding geometry checks are: sonare_synthesize_rir
-   * sets has_error with acoustic.invalid_air_absorption, and sonare_room_morph
-   * returns SONARE_ERROR_INVALID_PARAMETER.
+   * refused the way the surrounding geometry checks are: SONARE_ERROR_INVALID_PARAMETER,
+   * with acoustic.invalid_air_absorption in sonare_last_error_message().
    *
    * These sit after the optional tail rather than with the other scalars: the
    * scalar prefix is a run of 4-byte members and three more would make it an
@@ -141,10 +140,6 @@ typedef struct {
   float* rir; /* length samples; NULL on error */
   size_t length;
   int sample_rate;
-  /* 1 when geometry validation failed (rir is empty). On this successful C
-   * call, sonare_last_error_message() contains the first Error diagnostic as
-   * "code: message" (for example acoustic.source_outside_room). */
-  int has_error;
 } SonareRirSynthResult;
 
 /// @brief Priors + analysis settings for blind room estimation.
@@ -297,8 +292,10 @@ static_assert(offsetof(SonareRoomMorphConfig, receiver_spacing_m) ==
 /// @param config      Geometry + placement + synthesis controls.
 /// @param sample_rate Output sample rate (Hz).
 /// @param out         Receives the synthesized RIR (caller frees).
-/// Invalid geometry is not an error: @c out->has_error is set to 1 and the RIR
-/// is left empty (length 0), mirroring the C++ diagnostics contract.
+/// @return SONARE_ERROR_INVALID_PARAMETER for an invalid room or placement, with the
+///   first Error diagnostic as "code: message" in sonare_last_error_message() (for
+///   example acoustic.source_outside_room); @p out is left empty. Recoverable
+///   problems (a clamped tail) are Warning entries of sonare_last_diagnostic.
 SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample_rate,
                                   SonareRirSynthResult* out);
 void sonare_free_rir_synth_result(SonareRirSynthResult* result);

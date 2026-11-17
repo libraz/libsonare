@@ -54,7 +54,7 @@ int project_exit_code(SonareError err) {
     case SONARE_ERROR_OUT_OF_MEMORY:
       return cli_exit_code_for_error(sonare::ErrorCode::OutOfMemory, false);
     case SONARE_ERROR_NOT_SUPPORTED:
-      return cli_exit_code_for_error(sonare::ErrorCode::NotImplemented, false);
+      return cli_exit_code_for_error(sonare::ErrorCode::NotSupported, false);
     case SONARE_ERROR_INVALID_STATE:
       return kExitInvalidState;
     case SONARE_ERROR_CANCELLED:

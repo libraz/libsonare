@@ -26,6 +26,7 @@ from ._runtime import (
     _float_array_result,
     _get_lib,
     _joined_names,
+    _last_diagnostics,
     _last_error,
     _meter_tap_value,
     _mix_meter_from_c,
@@ -149,10 +150,9 @@ class Mixer:
             raise _last_error(
                 int(ErrorCode.INVALID_PARAMETER), "failed to build mixer from scene JSON"
             )
-        # Capture any non-fatal load warning (e.g. insert params no processor
-        # read) immediately, before any later C-ABI call overwrites it.
-        raw = lib.sonare_last_warning_message()
-        warnings = raw.decode("utf-8").splitlines() if raw else []
+        # Capture the load's warnings (e.g. insert params no processor read)
+        # immediately, before any later C-ABI call overwrites them.
+        warnings = [message for _, message, _ in _last_diagnostics()]
         return cls(int(handle), sample_rate, block_size, warnings)
 
     def scene_warnings(self) -> list[str]:

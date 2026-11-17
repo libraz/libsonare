@@ -119,14 +119,14 @@ python = [
 #     calls the C `_ex` entry point; omitting it reproduces the base call. The
 #     companion sizing entry point project_preview_midi_fx_count is a real
 #     facade method on all three surfaces and is NOT allowlisted.
-#   error_message / last_error_message / last_error_code / last_warning_message /
-#     last_diagnostic_count / last_diagnostic_code / last_diagnostic_message /
-#     last_diagnostic_severity: C-ABI error/warning/diagnostic channel accessors
+#   error_message / last_error_message / last_error_code / last_diagnostic_count /
+#     last_diagnostic / diagnostic_init: C-ABI error and diagnostic channel accessors
 #     consumed internally by each facade (errors map to native exceptions; the
 #     scene-load warning surfaces as Mixer.sceneWarnings / scene_warnings; the
 #     diagnostic list becomes RirResult.diagnostics / RoomMorphResult.diagnostics),
-#     not standalone public facade functions. Node and WASM reach the same
-#     entries from the core's own std::vector<Diagnostic> and never call these.
+#     not standalone public facade functions. Node and WASM read the scene-load
+#     warnings through these and the RIR diagnostics from the core's own
+#     std::vector<Diagnostic>.
 # --- default seeders for C-only options structs ---
 #   A C struct cannot spell "field omitted", so the C ABI ships a seeder that
 #   fills one with the core config's values. No facade needs a free function for
@@ -219,11 +219,9 @@ node = [
   "error_message",
   "last_error_message",
   "last_error_code",
-  "last_warning_message",
   "last_diagnostic_count",
-  "last_diagnostic_code",
-  "last_diagnostic_message",
-  "last_diagnostic_severity",
+  "last_diagnostic",
+  "diagnostic_init",
   "boundary_options_default",
   "project_vocal_edit_apply_desc_init",
   "project_vocal_edit_apply_result_init",
@@ -370,11 +368,9 @@ wasm = [
   "error_message",
   "last_error_message",
   "last_error_code",
-  "last_warning_message",
   "last_diagnostic_count",
-  "last_diagnostic_code",
-  "last_diagnostic_message",
-  "last_diagnostic_severity",
+  "last_diagnostic",
+  "diagnostic_init",
   "boundary_options_default",
   "project_vocal_edit_apply_desc_init",
   "project_vocal_edit_apply_result_init",
@@ -500,11 +496,9 @@ python = [
   "error_message",
   "last_error_message",
   "last_error_code",
-  "last_warning_message",
   "last_diagnostic_count",
-  "last_diagnostic_code",
-  "last_diagnostic_message",
-  "last_diagnostic_severity",
+  "last_diagnostic",
+  "diagnostic_init",
   "boundary_options_default",
   "project_vocal_edit_apply_desc_init",
   "project_vocal_edit_apply_result_init",

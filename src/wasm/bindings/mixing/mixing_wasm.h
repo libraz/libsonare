@@ -298,7 +298,7 @@ class MixerWasm {
   int sample_rate_ = 48000;
   int block_size_ = 0;
   // Non-fatal warning captured at scene load (newline-joined; empty if none).
-  std::string scene_warning_;
+  std::vector<std::string> scene_warnings_;
   std::vector<std::vector<float>> left_scratch_;
   std::vector<std::vector<float>> right_scratch_;
   std::vector<const float*> left_ptrs_;

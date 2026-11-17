@@ -437,9 +437,10 @@ void sonare_project_free_audio_source_metadata(SonareProjectAudioSourceMetadata*
 
 /// @brief Replaces the project's mixer scene from scene JSON.
 /// @details Keys the scene reader does not consume (other than `$`- and `x-`-prefixed
-///   ones) do not fail the call; each is one line of @ref sonare_last_warning_message,
-///   e.g. `unknown scene key 'strips[2].faderDB'`. The warning is cleared on entry, so
-///   an empty message after a successful call means the scene was clean.
+///   ones) do not fail the call; each is one `project.unknown_scene_key` entry of
+///   @ref sonare_last_diagnostic, e.g. the message `unknown scene key 'strips[2].faderDB'`.
+///   The list is cleared on entry, so a count of 0 after a successful call means the
+///   scene was clean.
 SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const char* scene_json);
 
 /// @brief Reads the project sample rate (Hz).

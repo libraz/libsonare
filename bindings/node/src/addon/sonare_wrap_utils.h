@@ -6,6 +6,7 @@
 
 #include <exception>
 #include <new>
+#include <string>
 #include <vector>
 
 #include "mastering/api/named_processor.h"
@@ -181,6 +182,20 @@ bool IsInt32Array(const Napi::Value& value);
 /// the one the caller can act on, and it stays the reported one. This is a
 /// backstop, not a licence to call the C ABI with unread arguments — a caller
 /// must still bail out before the native call.
+/// @brief The messages of the diagnostics the most recent C-ABI call published, in order.
+inline std::vector<std::string> LastDiagnosticMessages() {
+  std::vector<std::string> messages;
+  const size_t count = sonare_last_diagnostic_count();
+  for (size_t index = 0; index < count; ++index) {
+    SonareDiagnostic diagnostic;
+    sonare_diagnostic_init(&diagnostic);
+    if (sonare_last_diagnostic(index, &diagnostic) == SONARE_OK) {
+      messages.emplace_back(diagnostic.message);
+    }
+  }
+  return messages;
+}
+
 inline void ThrowIfError(Napi::Env env, SonareError err) {
   if (env.IsExceptionPending()) return;
   if (err != SONARE_OK) {

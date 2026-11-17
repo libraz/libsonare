@@ -360,19 +360,11 @@ Napi::Value ProjectWrap::SetMixerSceneJson(const Napi::CallbackInfo& info) {
   if (!OptionalStringArg(env, info, 0, "sceneJson", "", &scene)) return env.Undefined();
   ThrowIfError(env, sonare_project_set_mixer_scene_json(project_, scene.c_str()));
   if (env.IsExceptionPending()) return env.Undefined();
-  // The warning is newline-joined, one entry per unknown scene key; empty when clean.
-  const std::string warning = sonare_last_warning_message();
-  Napi::Array out = Napi::Array::New(env);
-  uint32_t index = 0;
-  size_t start = 0;
-  while (!warning.empty() && start <= warning.size()) {
-    const size_t end = warning.find('\n', start);
-    if (end == std::string::npos) {
-      out.Set(index++, Napi::String::New(env, warning.substr(start)));
-      break;
-    }
-    out.Set(index++, Napi::String::New(env, warning.substr(start, end - start)));
-    start = end + 1;
+  // One entry per unknown scene key; empty when clean.
+  const std::vector<std::string> warnings = sonare_node::LastDiagnosticMessages();
+  Napi::Array out = Napi::Array::New(env, warnings.size());
+  for (uint32_t index = 0; index < warnings.size(); ++index) {
+    out.Set(index, Napi::String::New(env, warnings[index]));
   }
   return out;
   SONARE_NODE_CATCH(env)

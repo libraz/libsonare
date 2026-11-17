@@ -105,28 +105,17 @@ void set_last_error_static(SonareError code, const char* msg) noexcept;
 ///          an earlier call can never leak into an unrelated later call. See the
 ///          @ref sonare_last_error_message contract in sonare_c.h.
 void clear_last_error() noexcept;
-/// @brief Thread-local non-fatal diagnostic channel, separate from the error
-/// message. Surfaced by @ref sonare_last_warning_message on a SUCCESS return
-/// (e.g. a scene loaded fine but some insert params were silently ignored).
-std::string& last_warning_storage() noexcept;
-void set_last_warning(const char* msg);
-/// @brief Clears the thread-local warning message AND the structured diagnostic
-/// list below. Called at the entry of the C-ABI calls that may record either, so
-/// a stale warning never leaks forward.
-/// @details The two are cleared together rather than separately because every
-///          publisher of the structured list also writes the flattened string,
-///          so a per-channel clear would let a call that records only the string
-///          leave the previous call's structured entries readable beside it.
-void clear_last_warning() noexcept;
-/// @brief Thread-local structured form of the warning channel: the diagnostics a
-/// call published, each keeping its code, message and severity. Surfaced by
-/// @ref sonare_last_diagnostic_count and its accessors.
+/// @brief Clears the thread-local structured diagnostic list. Called at the entry
+/// of the C-ABI calls that may publish one, so a stale entry never leaks forward.
+void clear_last_diagnostics() noexcept;
+/// @brief Thread-local warning channel: the diagnostics a call published, each
+/// keeping its code, message and severity. Surfaced by
+/// @ref sonare_last_diagnostic_count and @ref sonare_last_diagnostic.
 std::vector<sonare::Diagnostic>& last_diagnostics_storage() noexcept;
-/// @brief Publishes @p diagnostics on the structured channel, replacing whatever
-/// the previous call left there. Callers also write the flattened warning string
-/// (and the first Error to the error channel) so the two channels describe the
-/// same call.
+/// @brief Publishes @p diagnostics, replacing whatever the previous call left.
 void set_last_diagnostics(const std::vector<sonare::Diagnostic>& diagnostics);
+/// @brief Appends one Warning diagnostic to the list the current call publishes.
+void add_last_warning(const char* code, std::string message);
 SonareError map_sonare_exception(const SonareException& e);
 /// @brief Whether the vocal-edit surface was compiled into this build.
 bool vocal_edit_compiled_in() noexcept;
