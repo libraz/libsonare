@@ -117,7 +117,7 @@ const std::vector<std::string>& analysis_result_schema_paths() {
       "melody.pitches[].frequency",
       "melody.pitches[].confidence",
       "form",
-      "tuning_cents",
+      "tuningCents",
   };
   return paths;
 }
@@ -302,7 +302,7 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
   }
 
   root["form"] = Value(result.form);
-  root["tuning_cents"] = Value(result.tuning * kCentsPerSemitone);
+  root["tuningCents"] = Value(result.tuning * kCentsPerSemitone);
 
   return sonare::util::json::dump(Value(std::move(root)));
 }

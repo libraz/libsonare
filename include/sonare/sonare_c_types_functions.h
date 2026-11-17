@@ -358,7 +358,7 @@ typedef struct {
   /* Non-zero measures the tuning from the audio instead of reading
      @c tuning_cents. sonare_music_analyze_options_default sets it to 1; a
      zeroed struct reads @c tuning_cents. The value used, given or measured, is
-     the result's "tuning_cents". */
+     the result's "tuningCents". */
   int tuning_auto;
 } SonareMusicAnalyzeOptions;
 

@@ -434,7 +434,7 @@ TEST_CASE("MusicAnalyzer by default re-centres a detuned recording and lands in 
   CHECK(result.tuning == measure_tuning(audio));
   CHECK(result.tuning == Catch::Approx(kDetuneSemitones).margin(0.05));
   CHECK(is_c_major(result.key));
-  CHECK(analysis_result_to_json(result).find("\"tuning_cents\":-4") != std::string::npos);
+  CHECK(analysis_result_to_json(result).find("\"tuningCents\":-4") != std::string::npos);
 }
 
 TEST_CASE("C ABI auto tuning, tuning converters and the key tuning entry",

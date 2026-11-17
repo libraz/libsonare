@@ -559,6 +559,14 @@ test = "tests/analysis/analysis_tuning_test.cpp::C ABI auto tuning, tuning conve
 
 [[entry]]
 kind = "function"
+old = "sonare_analyze_json"
+changed = "the document's \"tuning\" key (a fraction of a semitone) is \"tuningCents\", in cents"
+domain = "analysis"
+rule = "pitch-semitones"
+test = "tests/analysis/analysis_tuning_test.cpp::MusicAnalyzer by default re-centres a detuned recording"
+
+[[entry]]
+kind = "function"
 old = "sonare_reference_hz_to_tuning"
 changed = "out_tuning_cents is in cents (1.x: a fraction of a semitone)"
 domain = "analysis"
