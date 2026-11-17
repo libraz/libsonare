@@ -1,171 +1,193 @@
 # Changelog
 
-## Unreleased
+## v1.11.0 (2026-11-17)
+
+This release rebuilds the music-analysis front end: beat, downbeat and onset times mark the start of their evidence, chords and keys are read from a beat-pooled constant-Q chroma with HMM smoothing and measured tuning by default, and section analysis runs on a beat grid and reports which sections repeat the same material. The realtime voice changer gains a low-latency PSOLA engine (now the default), pitch correction, harmony, MIDI note input, a channel vocoder and character and echo stages. Monophonic transcription gains a `singing` model, the synthesizer a self-oscillating singing engine and further engine parameters, and room impulse responses apply air absorption and model the room's modes by default. Errors are classed by cause on every surface: a refused argument is `RangeError` / `SonareValueError`, and a refused document is `InvalidFormat`. Three ABI counters moved, so every binding and native consumer must be rebuilt together.
 
 ### Upgrade notes
 
-#### Realtime voice changer
+#### Rebuild
 
-- Voice changer C ABI 4: `SonareRealtimeVoiceChangerConfig` is `struct_version` 2 with the new fields appended, and `struct_version` 0 and 1 are refused. The aggregate ABI version is `0x06040208` (with the feature ABI 8 of the section analysis note below); a binding built against an older one reports `AbiMismatch` at load.
-- The flat camelCase config (Node and WASM) now requires every field; an omitted key is refused. Fractional values for `retuneGrainSize` and `reverbSeed` are refused.
-- Preset schema version 2. Version 1 documents still load; documents are written as version 2, which an older library refuses.
-
-#### Section analysis
-
-- Feature C ABI 8: `SonareSection` gains a trailing `int32_t group`, 24 bytes instead of 20. A library or binding on feature ABI 7 is refused with `AbiMismatch`; C callers and native consumers rebuild.
-- Breaking (C++): `SectionConfig::kernel_size` is removed; the novelty window is now twice `min_section_sec` on each side of a boundary. Delete the line that sets it.
-- Breaking (C++): the three `SectionAnalyzer` constructors that took boundaries from outside are removed. Call `SectionAnalyzer(audio, config)`, which tracks the beats itself, or `SectionAnalyzer(audio, SectionGrid, spec, config)` with the beats and downbeats and the STFT you already have; a `SectionGrid` that is not ascending, or whose downbeat index is out of range, is refused as `InvalidParameter`. `detect_boundaries` and `BoundaryDetector` are unchanged.
-
-#### Beat, downbeat and onset timing
-
-- Beat, downbeat and onset times mark the start of the evidence that produced them: they are 46.4 ms earlier than before on every public surface (all of which analyze at 22050 Hz; 16 kHz input moves 32 ms). Frame indices and the onset envelope are unchanged. Direct C++ `BeatAnalyzer` and `OnsetAnalyzer` calls at the input rate move by the envelope's centering shift at that rate (48.0 ms at 32 kHz, 46.4 ms at 44.1 kHz, 42.7 ms at 48 kHz).
-- Beat-synchronous chord windows start at the reported beat times, so a chord starts on its beat. Percussive event slices keep their placement.
-- The downbeat phase comes from low-frequency energy and harmonic change at each beat instead of onset strength, which marked the backbeat. Downbeat positions and `downbeatPhase` change on most music, and `detectDownbeats`, `analyze` and rhythm analysis report the same phase for the same beats; chord analysis no longer moves the downbeats. `estimateMeter`, which has no audio, keeps its own phase.
-- `lowFrequencyEnergy` in the beat observations is read at the new beat times. Result shapes do not change.
-
-#### Chord detection
-
-- Every chord label from `detect_chords`, `chord_functional_analysis` and `analyze` can change: chords are read from a constant-Q chroma averaged over each whole beat, then smoothed with an HMM.
-- `detect_chords` and `chord_functional_analysis` default to triads only, HMM smoothing and the constant-Q chroma on every surface: C++ `ChordConfig` (`use_triads_only`, `use_hmm`, `ChromaMethod::CQT`), Python `use_triads_only=True, use_hmm=True, chroma_method="cqt"`, Node and WASM `useTriadsOnly: true, useHmm: true, chromaMethod: 'cqt'`. Pass `use_triads_only=False` (`useTriadsOnly: false`) for seventh and extended chords, and `chroma_method="stft"` with `use_hmm=False` for the previous front end.
-- `analyze` defaults to no HPSS and HMM chord smoothing (`use_hpss` false, `use_chord_hmm` true), and reads its chords through the same front end as `detect_chords`, so the two report the same chords for the same input.
-- C `SonareChordDetectionOptions.chroma_method` accepts 2 for the constant-Q chroma; 0 (STFT) and 1 (NNLS) are unchanged and other values are refused. A zero-initialized options struct still selects STFT without HMM. The legacy `sonare_detect_chords`, which takes no options, follows the new defaults.
-- Command lines: `chords --triads-only`, `--nnls` and `--use-hmm` are replaced by `--with-seventh`, `--chroma-method cqt|stft|nnls` and `--no-hmm`, and `analyze --no-hpss` by `--hpss`. The old flags fail as unknown options.
-- With key context on (`use_key_context`, `use_chord_key_context`), the beat-synchronous decoder changes chord more readily than before.
-- Streaming chord analysis is unchanged and keeps the full vocabulary.
-
-#### Key detection and tuning
-
-- Every key from `detect_key`, `detect_key_candidates` and `analyze` can change, with its confidence and evidence score: the key is read from the constant-Q chroma the chord detector uses, without its bass blend, after an 80 Hz high-pass.
-- `detect_key`, `detect_key_candidates`, `detect_chords`, `chord_functional_analysis` and `analyze` measure the recording's tuning unless they are given one, on every surface. Pass `tuning=0` (Node and WASM `tuning: 0`) to read the audio at concert A440. The reported tuning is the value used. On 180 s of 22050 Hz audio a tuning value the process has not seen yet adds about 0.2 s to `detect_key` and 0.5 s to `detect_chords` and `analyze`, to rebuild the constant-Q kernels.
-- C++ `KeyConfig::tuning`, `ChordConfig::tuning` and `MusicAnalyzerConfig::tuning` are `std::optional<float>`, and `auto_tuning` is gone: leave `tuning` unset to measure it, set it to use a given value.
-- `detect_key` and `detect_key_candidates` default to `n_fft` 2048 and `high_pass_hz` 80 (`nFft`, `highPassHz` on Node and WASM). `n_fft` now only sets the window of the optional HPSS, which is margin 3 on that window; `loudness_weighted` weights the frames by the RMS of the input at the chroma hop.
-- The automatic search over HPSS and loudness-weighted chroma, and the harmonic high-pass retry, are removed. `use_hpss` and `loudness_weighted` stay as explicit options.
-- C ABI: struct layouts and versions are unchanged. `sonare_detect_key`, the `sonare_detect_key_with_options` family, `sonare_detect_key_candidates*`, the legacy `sonare_detect_chords` and `sonare_music_analyze_options_default()` measure the tuning. A zero-initialized `SonareChordDetectionOptions` or `SonareMusicAnalyzeOptions` still reads tuning 0.
-- `analyze` sections and downbeats can change on detuned recordings, because the sections read the measured tuning and the downbeats take observations from the tuned chords.
-- Auto-tune detects its key with measured tuning when it is given none, and pays that cost; the correction grid stays at A440.
-- Command lines: `key` defaults to `--n-fft 2048` and `--high-pass-hz 80`, and the Python command line no longer warns about an `--n-fft` below 4096. `key`, `chords` and `analyze` measure the tuning; there is no tuning flag.
-- Streaming key analysis is unchanged and keeps its fixed reference tuning.
+- The aggregate ABI is `0x06040208` (was `0x05030207`): `SONARE_FEATURE_ABI_VERSION` 8, `SONARE_PROJECT_ABI_VERSION` 2 (unchanged), `SONARE_VOICE_CHANGER_ABI_VERSION` 4 and `SONARE_ACOUSTIC_ABI_VERSION` 6. A binding loaded against a library on another aggregate reports `AbiMismatch`.
+- Feature ABI 8: `SonareSection` gains a trailing `int32_t group` and is 24 bytes instead of 20.
+- Voice changer ABI 4: `SonareRealtimeVoiceChangerConfig` is `struct_version` 2 with the new fields appended, and `struct_version` 0 and 1 are refused.
+- Acoustic ABI 6: `SonareRirSynthConfig` and `SonareRoomMorphConfig` replace `air_absorption_enabled` with the `air_absorption` selector (see below).
+- `SonareTranscribeConfig` is `struct_version` 4, adding `monophonic_model`; versions 1 to 3 are still read.
+- Voice-changer preset documents are written as schema version 2, which an older library refuses; version 1 documents still load.
+- In C++, `SectionConfig::kernel_size` is removed; the novelty window is twice `min_section_sec` on each side of a boundary.
+- In C++, the three `SectionAnalyzer` constructors that took boundaries from outside are removed; call `SectionAnalyzer(audio, config)` or `SectionAnalyzer(audio, SectionGrid, spec, config)`, which refuses a grid that is not ascending or whose downbeat index is out of range.
+- In C++, `KeyConfig::tuning`, `ChordConfig::tuning` and `MusicAnalyzerConfig::tuning` are `std::optional<float>` and `auto_tuning` is removed: leave `tuning` unset to measure it.
 
 #### Removed and renamed
 
-- The C `SonareRirSynthConfig` and `SonareRoomMorphConfig` field `air_absorption_enabled` is now `air_absorption`, a `SONARE_AIR_ABSORPTION_*` selector: `DEFAULT` (0) and `ON` (1) apply air absorption, `OFF` (2) leaves it out, and any other value is refused. A zero-initialized config therefore applies it. `SONARE_ACOUSTIC_ABI_VERSION` is 6.
-- The reed engine's `flowGain` engine parameter is now `zeta`, the dimensionless flow-to-pressure gain: the old value divided by the square root of `pressureScale` × `closingPressure`. It is clamped to [0, 0.9] where `flowGain` was clamped to [0, 1.5], since past 1 the valve has two states to choose between. The GM saxophone and bassoon voices carry the converted values.
+- The C field `air_absorption_enabled` is now `air_absorption`, a `SONARE_AIR_ABSORPTION_*` selector: `DEFAULT` (0) and `ON` (1) apply air absorption, `OFF` (2) leaves it out, and any other value is refused.
+- The reed engine parameter `flowGain` is now `zeta`, the dimensionless flow-to-pressure gain (the old value divided by the square root of `pressureScale` × `closingPressure`), clamped to [0, 0.9].
+- The `chords` command's `--triads-only`, `--nnls` and `--use-hmm` are replaced by `--with-seventh`, `--chroma-method cqt|stft|nnls` and `--no-hmm`, and `analyze --no-hpss` by `--hpss`, on both command lines; the old flags fail as unknown options.
+- Key detection's automatic search over HPSS and loudness-weighted chroma and its harmonic high-pass retry are removed; `use_hpss` and `loudness_weighted` remain as explicit options.
 
 #### Now refused
 
-- Every argument the library refuses (C `SONARE_ERROR_INVALID_PARAMETER`) is a `RangeError` on Node and WASM and a `SonareValueError` on Python, whichever layer refused it. Entry points that still raised a coded `InvalidParameter` `SonareError` follow, among them the one-shot named-processor calls refusing an unread key, `mixStereo` pan out of range, `Mixer.addStrip` `truePeakOversample` (now the same class as `configureMeter`), `masteringInsertTiming`, `hzToNote` and `noteToHz`. A Node or WASM `SonareError` handler no longer catches them; Python's `except SonareError` still does, and the message no longer carries a `[4]` prefix.
-- A loader refusing the content of a document it was handed reports `InvalidFormat` (C `SONARE_ERROR_INVALID_FORMAT`), a coded `SonareError` on every surface, as the project loader already did: mixer scene JSON (including its inserts and strips), HRTF set bytes, renderer config JSON, mastering chain JSON, EQ band JSON, realtime voice-changer config JSON, MIDI FX JSON, part rig JSON and repair-session stage and analysis JSON. A null pointer or a separate argument of the same call stays a refused argument.
-- A `StreamAnalyzer` asked for `computeMagnitude` reports `NotSupported` (C `SONARE_ERROR_NOT_SUPPORTED`) on every surface instead of `InvalidParameter`.
-- Reverb inserts refuse an out-of-range tail length instead of clamping it, and `capabilityCatalog()` publishes the range: `effects.reverb.convolution` `decaySec` [0, 12], `effects.reverb.fdn` `decaySec` [0, 15], `effects.reverb.velvet` `decaySec` and `reverbTimeS`, `effects.reverb.dattorro` `decaySec`. A negative `seed` on the room, room-morph and convolution reverbs is refused instead of read as 0.
-- Karplus-Strong `haloDampS` publishes 0–1.5 s, the halo's own ring time, instead of 0–10 s; a value at or above 1.5 s already left the halo undamped, so no sound changes.
-- Loading a mixer scene or a realtime voice-changer config refuses a present key of the wrong type, including `null`, naming the field, instead of loading the default (`faderDb: "loud"` on a scene strip, for example). An absent key keeps its default.
-
-### Behaviour changes
-
-#### Realtime voice changer
-
-- The default engine is now `psola`, so the same preset sounds different. Latency drops from 2263 to 717 samples at 48 kHz. `voiceEngine.engine = grain` (`voice_engine_engine="grain"` in Python) keeps the previous processing.
-- Six new presets: `hard-tune`, `robot-monotone`, `choir-harmony`, `vocoder-strings`, `megaphone` and `radio-voice`. The voice changer gains auto pitch and robot, scale harmony, MIDI note input (`noteOn` / `noteOff` / `allNotesOff`, Python `note_on` / `note_off` / `all_notes_off`), a channel vocoder with an internal or external carrier (`process*WithCarrier`, Python `process_*_with_carrier`), megaphone, radio, chorus and strobe character, and echo, tempo delay and dub echo.
-
-#### Section analysis
-
-- Section analysis is rebuilt on a beat grid. MFCC (c1 to c13) and chroma are averaged per beat; boundaries are checkerboard-novelty peaks, kept only where the harmony measurably changes and moved onto a nearby downbeat when the meter is trusted; sections are then compared as sequences along the diagonals of a smoothed self-similarity matrix instead of by their mean chroma. A verse and a chorus in the same key are no longer merged into one span, a chorus that the novelty split in two is rejoined, and sections that repeat the same material share a `group`.
-- Labels come from a fixed rule table over the groups: the most repeated loud group is the Chorus, the group covering the most time the Verse, a repeated group that always leads into the Chorus and is shorter than it the Pre-Chorus (`PreChorus` and `P` in `form` now occur), then Intro and Outro at the edges, Instrumental, Bridge between two Chorus occurrences, and Unknown for what no rule claims.
-- The number of sections, their boundaries, labels, `form` and `confidence` differ from earlier releases on real music. A labelled section's `confidence` is in [0.5, 1], and an Unknown section always has `confidence` 0; the demotion of a low-confidence label to Unknown is gone.
-- Instrumental tracks with repetition now get Chorus and Verse; a repeated section without vocals used to be kept from Chorus.
-- Material that never changes, or whose sections all fall into one group, is still one Unknown section with `confidence` 0. A section shorter than one beat column (0.5 s on the fallback grid used for fewer than 8 beats) is not separated.
-- `SectionConfig::boundary_threshold` defaults to 0.22 for section analysis; the public boundary detector's default stays 0.3.
-- `SectionAnalyzer::section_self_similarity()` returns the sequence-match score of every pair of sections (1 on the diagonal, 0 for a pair whose lengths differ more than fourfold) instead of the similarity of their mean chroma, and `boundary_times()` returns the boundaries found on the beat grid, before the minimum-length merge.
-- `analyze_sections` and the other entry points that take only audio run beat tracking themselves and can return different sections from `analyze()` on the same track.
-
-#### Room acoustics
-
-- Synthesized room impulse responses, the room reverb and the room morph apply ISO 9613-1 air absorption at the reference climate (20 °C, 50 % RH) by default, which shortens the high-band decay of large rooms. Pass `airAbsorptionEnabled: false` (Python `air_absorption_enabled=False`) for the geometry-only decay.
-- Below the room's Schroeder frequency the late tail is built from the shoebox's own standing waves instead of noise. The bass rings at the room's mode frequencies, decays at the room's RT60 there and changes with source and listener position; a listener on a mode's pressure node no longer hears that mode. On average over positions the bass carries the energy the noise tail did.
-- `estimateRoom` (`estimate_room`) removes the reference-climate air absorption from its per-band absorptions and anchors the volume on the 500 Hz and 1 kHz bands, so an estimate resynthesizes to the measured decay.
-
-#### Audio files
-
-- Writing 16- or 24-bit WAV (`save_wav`, the command lines, bounce output) applies deterministic TPDF dither, independent per channel, to a stream that is not already on the target grid, so a fading reverb tail ends in noise instead of truncation distortion and a cut to silence. A stream already at that word length (a decoded file, a mastering-dithered master) is written code for code, and exact zeros stay digital silence. The same input still writes the same bytes on every platform and on both command lines.
-
-#### Synthesizer
-
-- The built-in GM programs' relative loudness moves toward their references: 46 programs whose held level, measured against each one's own reference, stood more than 2 dB from the bank's median offset are brought to it by output gain alone, and the GS variations built on them move with them. Timbre is unchanged. A mix balanced against the previous levels needs these programs' faders re-set.
-- The brass section (GM program 61) no longer applies a mute colour, which raises its held level.
-- The brass section (GM program 61) takes the trombone's bell corner, a 600 Hz voice lowpass and a stronger breath noise, which raises its held level by a further 5.85 dB.
-- The muted trumpet (GM program 59) and the `muted-trumpet` preset are about 6.4 dB louder in held level: both give back part of the level the mute costs at each note's fundamental (`muteNorm` 0.45), with their output gains lowered by 0.9 dB, and their top notes no longer fall away as steeply.
-- Drum keys 27 to 30 of the built-in kit (High Q, Slap, Scratch Push, Scratch Pull) have voices of their own, fitted to a module's recordings, instead of the shared generic burst; Scratch Push and Scratch Pull choke each other. Their velocity response is the kit's generic one, since the recordings carry a single velocity.
-- Drum keys 0 to 16 of the built-in kit, the kick variants the GS map lists below the GM range, are voiced as kicks instead of the shared generic burst.
-- Five GM programs move toward their references in timbre: the steel-string acoustic guitar (GM program 25) takes a quicker attack and a longer, fuller body; the kalimba (108) a new attack, body, brightness and partial decay; tubular bells (14) a new decay for each partial and a longer release; the woodblock (115) a new strike noise and a slightly steeper velocity response; and the taiko (116) spans about twice as many decibels from its softest to its hardest notes, so soft taiko notes are quieter. A part balanced against the previous sound of these programs may need its level or velocities re-set.
-- A GS drum kit with voices of its own sounds only the keys its tone map's table lists: a key the table prints as no sound, or does not print, starts no voice, on the built-in synth and on the SoundFont player's synthesized drum fallback alike. Among keys that sounded before, this silences the CM-64/32L kit's keys 27 to 34, 52, 53, 55, 57 to 59 and 74 and Kick & Snare's keys 27 to 39 under the SC-88 map. A kit not yet voiced apart still falls back to Standard whole, its listing included.
-- Synth Bass 1 (GM program 38) is a pluck that dies away within about 1.8 s instead of a held tone, its filter sweep opens wider and closes within a quarter second, and its output gain is 2.9 dB lower, set against the module reference. A part balanced against its previous sound may need its level re-set.
-- Lead 8 (bass + lead, GM program 87) now falls from its attack to a held level that deepens 1 dB per semitone above D4, so its high notes die toward a softer plateau while the middle and low register hold; its noise floor is louder, its filter closes slightly lower, and its output gain is 2.8 dB lower so its held level at middle C sits where it did.
-- Lead 5 (charang, GM program 84) runs through a resonant state-variable filter at 1 kHz that follows the key note for note, in place of a driven diode ladder at 4.2 kHz, so its level is more even across the register; its attack is 8 ms and its output gain is re-set so its held level at middle C is unchanged.
-- Electric Piano 2 (GM program 5) decays faster the higher the note and slower below middle C, its body carrier's decay scaling 0.8 per octave instead of 0.4; its detuned and velocity-mix variations keep the previous rate.
-- Electric Piano 1 (GM program 4) decays faster the higher the note and slower below middle C, its body carrier's decay scaling 0.8 per octave instead of 0.4; its detuned and velocity-mix variations follow it, and its 60's variation keeps the previous rate.
-- The French horn (GM program 60) and the `french-horn` preset speak sooner and with less bore distortion: the lip attack shortens from 3.0 to 1.9 ms, the voice's attack from 59 to 20 ms, and the bore nonlinearity eases from 0.208 to 0.168, set against the reference.
-- The harmonica (GM program 22) speaks sooner and brighter: a 4 ms reed attack and a 36 ms voice attack in place of 12 and 59 ms, its lowpass opens from 5.5 to 10.5 kHz, and its breath pressure is set to 0.67, against the reference.
-- The flute (GM program 73) carries no vibrato of its own, since its reference holds a still pitch; the modulation wheel still adds vibrato.
-- The recorder (GM program 74) no longer wanders slowly in pitch; its reference carries no such motion.
-- The whistle (GM program 78) takes the vibrato its reference holds, 14 cents peak to peak at 4.84 Hz, in place of a 2.4-cent one at 5 Hz.
-- Two kicks of the built-in kit move toward their module references: Room Kick 1 (drum key 8) gains ten upper body partials between 16 and 63 times its pitch, and Dance Kick (drum key 16) sounds its first ten harmonics over a three-mode shell ringing 1.5 to 2 s, in place of one short mode.
-- Goblins (GM program 101) falls from its swell to its held level within about 0.1 s instead of 0.3 s and holds slightly lower, set against the module reference.
-- Seashore (GM program 122) swells in over about 3.2 s instead of 0.85 s, falls within about 0.9 s to a held level about 12 dB lower, and washes through a more resonant filter whose sweep reaches higher and dies away sooner, set against the module reference.
-- Gunshot (GM program 127) opens over 35 ms instead of 6 ms and dies over about 0.57 s instead of 0.41 s, its filter sweep reaches higher and closes more slowly, and its noise carries a stronger amplitude flutter, set against the module reference.
-- The ocarina (GM program 79) no longer wanders slowly in pitch; its reference carries no such motion.
-- The clavinet (GM program 7) no longer beats: its string's two polarizations are mistuned by 0.5 cent instead of 11, which removes the 3 to 7 Hz tremolo on its held partials.
-- Eighteen pieces of the built-in Standard kit move toward their module references in attack, ring and colour, each at its previous level: Electric Snare (drum key 40), High Floor Tom (43), Open Hi-Hat (46), Low-Mid Tom (47), Splash Cymbal (55), Cowbell (56), Crash Cymbal 2 (57), Low Bongo (61), Open Hi Conga (63), Low Conga (64), High Timbale (65), Low Agogo (68), Cabasa (69), Long Guiro (74), Low Wood Block (77), Open Cuica (79), Mute Triangle (80) and Open Triangle (81).
-- Side Stick (drum key 37), Acoustic Snare (38), Hand Clap (39), Ride Cymbal 1 (51) and Ride Cymbal 2 (59) of the built-in Standard kit move toward their module references in attack, ring and colour, each at its previous level, and Cowbell (56), Low Bongo (61) and Low Agogo (68) move further toward theirs.
+- Every argument the library refuses (C `SONARE_ERROR_INVALID_PARAMETER`) is a `RangeError` on Node and WASM and a `SonareValueError` on Python, whichever layer refused it, including the one-shot named-processor calls, `mixStereo` pan, `Mixer.addStrip` `truePeakOversample`, `masteringInsertTiming`, `hzToNote` and `noteToHz`; a Node or WASM `SonareError` handler no longer catches them, and the Python message drops its `[4]` prefix.
+- A loader refusing the content of a document reports `InvalidFormat` (C `SONARE_ERROR_INVALID_FORMAT`) on every surface: mixer scene, renderer config, mastering chain, EQ band, realtime voice-changer config, MIDI FX, part rig and repair-session JSON, and HRTF set bytes.
+- A `StreamAnalyzer` asked for `computeMagnitude` reports `NotSupported` instead of `InvalidParameter`.
+- Flushing a streaming mastering chain (`flushMono`, `flushStereo`, `flush_mono`, `sonare_streaming_mastering_chain_flush_mono`) while an enabled stage has an unbounded tail is refused with `NotSupported` and writes nothing; feed a bounded number of silent blocks instead.
+- Reverb inserts refuse an out-of-range tail length instead of clamping it (`effects.reverb.convolution` `decaySec` [0, 12], `effects.reverb.fdn` `decaySec` [0, 15], and `effects.reverb.velvet` `decaySec` and `reverbTimeS` and `effects.reverb.dattorro` `decaySec` at the ranges `capabilityCatalog()` publishes).
+- An insert `seed` is read as a 32-bit unsigned integer and a negative one is refused by name instead of read as 0; WASM also refuses a present seed that is not a uint32 instead of using the module default.
+- Surround pan azimuth, divergence and `lfe` out of range are refused instead of clamped on the C ABI, in scene JSON and on every binding.
+- Loading a mixer scene or a realtime voice-changer config refuses a present key of the wrong type, including `null`, naming the field; an absent key keeps its default.
+- The flat camelCase voice-changer config (Node and WASM) requires every field, and fractional `retuneGrainSize` and `reverbSeed` are refused.
+- Remix `intervals` of odd length are refused (`RangeError` on Node, `SonareValueError` on Python).
+- Node refuses a non-string detector or enum spelling with `TypeError` and an unknown one with a `RangeError` listing the accepted spellings, and a note, edit, event, target or op that is not a plain object with `TypeError`.
+- WASM refuses a positional boolean argument that is not a boolean with `TypeError` instead of coercing it, and `spectralEdit` ops and modes with a `TypeError` naming the failing index.
+- A non-number vocal-edit request or original-source field on a `Project` is a `TypeError` on Node and WASM, and an out-of-domain number a `RangeError`.
+- `tempogram` refuses an onset envelope shorter than its window.
+- Realtime sample-rate and block-size ceilings and out-of-range FFT, CQT, mel and NNLS configuration values are refused by field name before anything is allocated, with the same ranges on every surface.
+- Framing a signal into more than `INT_MAX` frames (`sonare_frame_signal`) and peak picking over more than `INT_MAX` samples (`sonare_peak_pick`) are refused as `InvalidParameter`, as are DCT dimension products that overflow and a `sonare_render_percussive_events` gain or output length that overflows.
+- The segmentation entries (`cross_similarity`, `recurrence_matrix`, `subsegment`, `agglomerative`) refuse a feature-matrix shape whose element count overflows or exceeds `INT_MAX`.
+- Writing a WAV file refuses a channel count or sample rate whose block align or byte rate does not fit the header.
+- Karplus-Strong `haloDampS` publishes 0 to 1.5 s instead of 0 to 10 s; no sound changes.
+- In C++, `TransientShaper` refuses a non-finite attack or sustain gain, `VocalRider` a non-finite target, noise floor or output gain, and `BinauralRenderer::prepare` a non-finite or out-of-range sample rate, block size or ITD.
 
 ### New
 
-#### Key detection
+#### Analysis
 
-- `detect_key_candidates` takes a `tuning` on every surface (a number, or `"auto"` to measure it), so the candidates of a call can be computed under the same tuning as its key. C adds `sonare_detect_key_candidates_with_tuning`, which reports the tuning used through an optional `out_tuning`.
+- Every section carries a `group`: sections sharing a value repeat the same material, numbered from 0 in order of first appearance (`SonareSection.group`, `sections[].group` in the analyze JSON, `Section.group` in C++, Python, Node and WASM, `AnalysisSection.group` on Node, and the `group` key in the `sections` and `analyze` output of both command lines).
+- `detect_key_candidates` takes a `tuning` on every surface (a number, or `"auto"` to measure it), and C adds `sonare_detect_key_candidates_with_tuning`, which reports the tuning used through an optional `out_tuning`.
+- `SonareChordDetectionOptions.chroma_method` accepts 2 for the constant-Q chroma, and Python and Node/WASM take `chroma_method="cqt"` / `chromaMethod: 'cqt'`.
+- In C++, `onset_center_shift_frames` returns the onset envelope's centering shift and `envelope_frame_time` the time of the evidence an envelope frame carries.
 
-#### Section analysis
+#### Editing and alignment
 
-- Every section carries a `group`: sections that share a value repeat the same material, numbered 0, 1, 2... in order of first appearance, and a section that repeats nothing has a group of its own. It is `SonareSection.group` in C, `sections[].group` in the analyze JSON, `Section.group` in C++ and Python, `AnalysisSection.group` and `Section.group` in Node, `Section.group` in WASM, and the `group` key of each section in the `sections` and `analyze` output of both command lines. `form` keeps its meaning, one label character per section.
+- The realtime voice changer gains a PSOLA engine (`voiceEngine.engine`, `psola` or `grain`), auto pitch correction and robot mode over a key and scale, up to three harmony voices, MIDI note input (`noteOn` / `noteOff` / `allNotesOff`, Python `note_on` / `note_off` / `all_notes_off`), a channel vocoder with an internal or external carrier (`process*WithCarrier`, Python `process_*_with_carrier`), megaphone, radio, chorus and strobe character, and echo, tempo delay and dub echo; the `voice.changer` insert exposes each as a parameter.
+- Six voice-changer presets: `hard-tune`, `robot-monotone`, `choir-harmony`, `vocoder-strings`, `megaphone` and `radio-voice`.
+- Monophonic transcription takes a model: `segments` (the default) or `singing`, which decodes notes jointly over pitch and holds vibrato and intonation drift within one note (`monophonic_model` in `SonareTranscribeConfig` and C++ `TranscribeConfig`, `monophonic_model="singing"` in Python, `monophonicModel: 'singing'` on Node and WASM, `--monophonic-model singing` on both command lines).
+- The `singing` model defaults `min_note_ms` to 45, reads `segmentation_threshold_cents` as the pitch movement held within one note, and is refused together with `polyphonic`.
+- In C++, `transcribe_monophonic_track` transcribes notes along a caller-supplied F0 track.
 
-#### Transcription
+#### MIDI and synthesizer
 
-- Monophonic transcription takes a model: `segments`, the default and unchanged, or `singing`, which decodes notes jointly over pitch and holds vibrato and intonation drift within one note. On solo singing it raises note F-measure from 0.566 to 0.677 against one Vocadito annotator and from 0.526 to 0.650 against the other, and from 0.665 to 0.739 on a held-out children's-song set; it can merge very short notes such as 32nds at fast tempos, so instrument lines stay on `segments`. It is `monophonic_model` in `SonareTranscribeConfig` (`struct_version` 4, 0 segments, 1 singing) and in C++ `TranscribeConfig`, `monophonic_model="singing"` in Python, `monophonicModel: 'singing'` in Node and WASM, and `--monophonic-model singing` on both command lines. Its default `min_note_ms` is 45, and it reads `segmentation_threshold_cents` as the pitch movement kept within one note. A polyphonic request naming `singing` is refused.
+- A `singing` engine mode (`SONARE_SYNTH_ENGINE_SINGING`, `'singing'`), reached through the `singing-voice` preset: a self-oscillating vocal-fold model through a vocal tract, with force as breath pressure, position and brightness moving the vowel, morph leaning the register, and an alveolar tap on a non-slurred note; its parameters are listed by `synthEngineParamInfo('singing')`.
+- The engine parameter unit vocabulary gains `midiNote`, declared by `sustainKeyBreak` and the harpsichord's `undampedFromNote` and listed in `MasteringInsertParamUnit`, its Python `Literal` and the capability catalog schema.
+- New `engineParams` keys, each leaving the sound unchanged at its default and listed by `synthEngineParamInfo()`:
+  - subtractive: `sustainKeySlopeDb` and `sustainKeyBreak`, lowering the held level per semitone above a key
+  - vocal: `sectionDetuneCents`, a slow independent pitch drift per section singer
+  - brass: `muteNorm`, giving back the level a seated mute costs at the fundamental
+  - reed: `bellCutoffHz`, a coupled bell reflection and radiation corner; `tongueStep`; and the breath onset overshoot (`onsetBreathOvershootDb`, `onsetBreathSettleMs`, `onsetBreathOvershootVelDb`)
+  - Karplus-Strong: `polDetuneCents` (default 11, the previous detune), `pluckMs`, `pluckVelExp`
+  - plucked string: `pluckMs`, `pluckVelExp`
+  - modal: `malletShape` (raised cosine or Gaussian), `tremoloPhaseDeg`, and per mode `modes<N>.keySlope`
+  - additive and percussion: `velocityExponent`
+- GS display SysEx (model `0x45`: display text, dot data, page and time) is recognised and accepted without changing the sound.
 
-#### Synthesizer
+### Behaviour changes
 
-- A `singing` engine mode (`SONARE_SYNTH_ENGINE_SINGING`), reached through the `singing-voice` preset: a self-oscillating vocal-fold model sounding through a vocal tract. All four excitation axes apply — force is breath pressure, position and brightness move the vowel's constriction, morph leans the vocal register — and a measured compensation table keeps the written pitch as the breath rises. A non-slurred note opens with an alveolar tap. The pitch holds within 20 cents from D#2 to D4 at the default breath; above that the voice is drawn toward its first formant.
-- Lower a subtractive voice's held level with pitch with the `sustainKeySlopeDb` engine parameter (dB per semitone above `sustainKeyBreak`, a MIDI note; slope 0 to 6, 0 adds none): the amplitude envelope's sustain scales down but never below 0.01, so a high held note keeps sounding.
-- The unit vocabulary gains `midiNote`, a MIDI note number, declared by the engine parameters that name a key position: the subtractive engine's `sustainKeyBreak` and the harpsichord's `undampedFromNote`, which were `none`. `MasteringInsertParamUnit` on Node and WASM, its Python `Literal` and the capability catalog schema list it.
-- Give each singer of the vocal engine's section a slow pitch offset of its own with the `sectionDetuneCents` engine parameter (peak cents, 0 to 20, 0 adds none), drifting over seconds independently of the singers' vibrato, so the section beats as its voices move against each other; it sounds the section on its own when `sectionSpreadCents` is 0.
-- Give back the level a seated brass mute costs at the note's fundamental with the `muteNorm` engine parameter (0 to 1, a share of that loss in decibels; 0, the default, renders as before, and it acts only while `mute` is above 0).
-- Set how far a Karplus-Strong string's second polarization is mistuned from the first with the `polDetuneCents` engine parameter (cents, -50 to 50, positive sharp; it acts only while `polarization` is above 0). The default, 11, is the detune the engine applied before.
+#### Analysis
+
+- Beat, downbeat and onset times are 46.4 ms earlier on every public surface (32 ms for 16 kHz input), marking the start of the evidence that produced them; frame indices and the onset envelope are unchanged, and direct C++ `BeatAnalyzer` and `OnsetAnalyzer` calls move by the centering shift at their input rate.
+- The downbeat phase is chosen from low-frequency energy and harmonic change at each beat instead of onset strength, so downbeats and `downbeatPhase` change on most music; `detectDownbeats`, `analyze` and rhythm analysis report the same phase, and chord analysis no longer moves the downbeats; `estimateMeter`, which has no audio, keeps its own phase.
+- Beat-synchronous chord windows start at the reported beat times, and `lowFrequencyEnergy` in the beat observations is read at those times.
+- Chords are read from a constant-Q chroma averaged over each beat and smoothed with an HMM, so every label from `detect_chords`, `chord_functional_analysis` and `analyze` can change.
+- `detect_chords` and `chord_functional_analysis` default to triads only, HMM smoothing and the constant-Q chroma on every surface (C++ `ChordConfig`, Python `use_triads_only=True, use_hmm=True, chroma_method="cqt"`, Node and WASM `useTriadsOnly: true, useHmm: true, chromaMethod: 'cqt'`); pass `use_triads_only=False` (`useTriadsOnly: false`) for seventh and extended chords, or `chroma_method="stft"` with `use_hmm=False` for the previous front end.
+- The legacy `sonare_detect_chords` follows the new defaults; a zero-initialized `SonareChordDetectionOptions` still selects STFT without HMM.
+- `analyze` defaults to no HPSS and HMM chord smoothing (`use_hpss` false, `use_chord_hmm` true) and reads chords through the same front end as `detect_chords`.
+- Chord segment confidence is the duration-weighted mean of its beats, and with key context on (`use_key_context`, `use_chord_key_context`) the beat-synchronous decoder changes chord more readily.
+- Keys are read from the constant-Q chord chroma after an 80 Hz high-pass, and chord-based key refinement weighs cadences and relative-tonic returns, so every key from `detect_key`, `detect_key_candidates` and `analyze` can change with its confidence.
+- `detect_key`, `detect_key_candidates`, `detect_chords`, `chord_functional_analysis` and `analyze` measure the recording's tuning unless given one, on every surface and in the C entry points that take none; pass `tuning=0` (`tuning: 0`) for concert A440. A zero-initialized `SonareChordDetectionOptions` or `SonareMusicAnalyzeOptions` still reads tuning 0, and the `key`, `chords` and `analyze` commands measure it with no flag.
+- Measured tuning can also move `analyze` sections and downbeats on detuned recordings.
+- `detect_key` and `detect_key_candidates` default to `n_fft` 2048 and `high_pass_hz` 80 (`nFft`, `highPassHz`; `key --n-fft 2048 --high-pass-hz 80` on the command lines); `n_fft` only sets the optional HPSS window, and the Python command line no longer warns about an `--n-fft` below 4096.
+- Auto-tune detects its key with measured tuning when given none; its correction grid stays at A440.
+- Section analysis runs on a beat grid: boundaries are novelty peaks kept where the harmony changes, sections are compared as sequences, and labels follow a fixed rule table over the groups, so the number of sections, boundaries, labels, `form` and `confidence` change on real music, and the Pre-Chorus label (`PreChorus`, `P` in `form`) now occurs.
+- A labelled section's `confidence` is in [0.5, 1] and an Unknown section's is 0, and instrumental tracks with repetition now get Chorus and Verse.
+- `SectionConfig::boundary_threshold` defaults to 0.22 for section analysis, and the native command line's `sections --threshold` defaults to 0.22; `detect_boundaries` keeps 0.3.
+- `SectionAnalyzer::section_self_similarity()` returns sequence-match scores, and `boundary_times()` the boundaries found on the beat grid.
+- `analyze_sections` and the other entry points that take only audio track the beats themselves and can return different sections from `analyze()` on the same track.
+- Streaming chord and key analysis are unchanged.
+
+#### Editing and alignment
+
+- The realtime voice changer defaults to the `psola` engine, so the same preset sounds different and latency drops from 2263 to 717 samples at 48 kHz; `voiceEngine.engine = grain` (`voice_engine_engine="grain"`) keeps the previous processing.
+- A voice-changer voice that drops out fades from its last target instead of cutting, and voice targets update on a 128-sample grid.
+- Auto-tune, pitch correction and monophonic transcription refine each voiced frame's pYIN F0 below the pitch-bin resolution, so their F0 tracks shift slightly; `pyin` output is unchanged.
+- Monophonic `segments` transcription repairs pitch estimates locked onto a fraction of the fundamental, joins adjacent notes of compatible pitch with no onset between them, and splits repeated attacks at brief level dips, so its notes can change.
+
+#### Mastering and repair
+
+- Synthesized room impulse responses, the room reverb and the room morph apply ISO 9613-1 air absorption at 20 °C and 50 % RH by default; pass `airAbsorptionEnabled: false` (`air_absorption_enabled=False`) for the geometry-only decay.
+- Below the room's Schroeder frequency the late tail is built from the room's own modes, so the bass changes with source and listener position.
+- `estimateRoom` (`estimate_room`) removes the reference-climate air absorption from its per-band absorptions and anchors the volume on the 500 Hz and 1 kHz bands.
+- Writing 16- or 24-bit WAV (`save_wav`, the command lines, bounce output) applies deterministic TPDF dither to a stream not already on the target grid; on-grid streams and exact zeros are written unchanged.
+- The dynamic EQ and the equalizer update on a 64-sample grid anchored to the stream position, so output no longer depends on how a stream is split into calls.
+- `tailSamples` reports an unbounded tail for tape with non-zero bias, a bitcrusher with active noise, hum or dither, and a waveshaper whose bias leaves a steady output.
+
+#### Realtime engine and project
+
+- Engine automation is evaluated at each span's timeline offset, so realtime output no longer depends on the host block size.
+
+#### MIDI and synthesizer
+
+- Only the acoustic piano is calibrated, so the other physical-model instruments may sound different from one patch release to the next.
+- The acoustic pianos no longer ring out at the strike on certain middle-register notes under a hard blow, repeated bass notes keep a steadier level, and the bass from about C#1 to D2 is slightly louder.
+- Built-in drum kit pieces and several GM programs and presets sound different, in level as well as timbre.
+- Drum keys 0 to 16 and 27 to 30 of the built-in kit sound voices of their own instead of one shared burst.
+- A GS drum kit with voices of its own sounds only the keys its tone map lists, on the built-in synth and the SoundFont player's drum fallback alike.
 
 ### Fixes
 
 #### Errors
 
-- Null-returning constructors and catalog getters report the code the library recorded (an allocation failure as `OutOfMemory`) instead of a fixed code on Node, WASM and Python, and catalogs that returned an empty list after a failure raise it.
+- Null-returning constructors and catalog getters report the code the library recorded (an allocation failure as `OutOfMemory`) on Node, WASM and Python, and catalogs that returned an empty list after a failure raise it.
 - WASM mixer and project calls report the library's code instead of `InvalidState`, so an out-of-range strip index is a `RangeError` as on Node.
 - WASM `tuningToReferenceHz`, `referenceHzToTuning` and `noteSegments` refusals carry a readable message instead of a native pointer.
+- A Python progress or cancel callback that raises stops the call and re-raises its exception instead of letting it cross into native code.
+- A Node vocal render `renderAsync` with an already-aborted signal rejects with an `AbortError`, and a WASM render cancelled midway rejects with a `Cancelled` `SonareError`.
+- The WASM voice-changer worklet reports a refused control message instead of dropping it.
 
-#### Playback renderer
+#### Mastering and repair
 
-- Node `PlaybackLoudnessMeter.pushInterleaved` passed the sample count where the library expects frames, reading past the end of a multichannel array; it now passes frames and refuses an array that is not a whole number of frames with a `RangeError`, as WASM and Python do.
+- An insert automation lane or setter whose value the processor refuses is reported not applied and leaves the processor unchanged, instead of gliding to the last accepted step.
+- `stereo.phaseAlign` and the binaural panner clear their delay history across a mono or zero-delay gap instead of replaying old audio.
+- A refused dynamic EQ block leaves its state unchanged, and a sidechain key wider than the prepared channel count no longer writes past its view.
+- Multiband saturation no longer allocates on gain, drive or mix edits.
+- The WAV writer pads an odd-length data chunk.
+
+#### Analysis
+
+- NNLS chroma accepts a negative `midi_min`, and analysis durations and frame counts no longer overflow on long inputs or large hops.
+- In C++, `hz_to_pitch_class` returns -1 for a non-finite frequency.
+- A `StreamAnalyzer` keeps publishing statistics when a reader releases a slot during a switch.
+
+#### Editing and alignment
+
+- Vocal edit analysis reads a note with fewer than two clear vibrato peaks from a fitted vibrato instead of the plain mean, so `centerMidi` (`center_midi`) and a `center` retune move by 1 to 3 cents on such notes.
+
+#### MIDI and synthesizer
+
+- Changing one part's rig, a GS insertion effect's send, EFX CONTROL source or depth, or a part's EFX assignment no longer resets the other parts' rigs and insertion units, and a parameter edit queued just before is no longer lost.
+- A GS ASSIGN GROUP write on the built-in drum kit chokes the pair the GS drum map gives that number (2 whistles, 3 guiros, 4 cuicas, 5 triangles).
+- MIDI 2.0 capture, clip validation, SMF2 export and MIDI FX read a UMP's group from the message itself.
+- Project MIDI export drops zero-length notes, as SMF import and export already did.
 
 #### Realtime engine and project
 
-- An insert automation lane or parameter setter whose value the processor refuses (a gate `rangeDb` above 0, a compressor `ratio` below 1) is reported not applied and leaves the processor unchanged on track, bus and master strips. It used to glide toward the value and stop at the last step the processor accepted, so `rangeDb` 12 rendered as about −2.3.
+- In C++, `RealtimeEngine`, `ClipPlayer` and `Graph` use the default 48 kHz rate for a non-finite sample rate as for a non-positive one.
+- In C++, `samples_to_ppq_duration` returns 0 for a non-finite tempo or sample rate, and `ppq_to_spp_beats` returns 0 for a NaN position and saturates an infinite one.
+- A project tempo map estimated from audio (`Project.autoTempo`, `auto_tempo`, `sonare_project_auto_tempo`) keeps every ramp ending on the next segment's tempo.
 
-#### Synthesizer
+#### Playback renderer
 
-- Changing one part's rig, a GS insertion effect's send, EFX CONTROL source or depth, or a part's EFX assignment no longer resets the other parts' rigs and the insertion units the change does not reach: their delay, reverb and amplifier tails keep ringing. Only the part chain or unit the edit reaches is rebuilt; a parameter edit queued just before such a change is no longer lost. The SF2 player's direct publication of an insertion-effect message still rebuilds every unit.
-- The acoustic pianos (GM programs 0 to 3 and their variations) no longer ring out at the strike on certain middle-register notes under a hard blow, G3, G#3 and F4 most of all: the string's longitudinal modes are driven by the pairs of partials that can reach each one instead of by all of them at once. From A0 to C3 the attack brightens slightly less between a soft and a hard blow. Bright Piano (GM program 1) and the wide variations of the Piano and Bright Piano have their brightening with a harder blow re-set so their attack sits where it did.
-- The acoustic pianos (GM programs 0 to 3 and their variations) repeat a bass note at a steadier level: the same key struck again at the same velocity changes level by about 0.4 dB across A0 to C3, where it changed by about 1.4 dB and up to 2.9. The strike noise now reaches the strings as one impulse of the noise's expected energy instead of a fresh random burst per strike; the knock heard directly keeps its random burst. The bass from about C#1 to D2 is 1 to 1.4 dB louder than its former average, up to 2.8 dB at one note, which is away from the reference grands there. Electric Grand (GM program 2) and its wide variation are 0.26 dB louder, so that its peak on a held C4 averages 0.97 of the grand's.
-- A GS ASSIGN GROUP write (`41 m3 rr`) on the built-in drum kit chokes the pair the GS drum map gives that number: group 2 is the whistles, 3 the guiros, 4 the cuicas and 5 the triangles, which were numbered 4, 5, 2 and 3. Files that write no ASSIGN GROUP sound the same.
+- Node `PlaybackLoudnessMeter.pushInterleaved` passes frames instead of samples, no longer reading past a multichannel array, and refuses an array that is not a whole number of frames.
 
-#### Vocal editing
+#### Command-line tools
 
-- Vocal edit analysis reads a note whose glides leave fewer than two clear vibrato peaks (a short note, or one the next glide cuts into) from a vibrato fitted to its held frames instead of their plain mean, which was off by the partial cycle at either end: 1–3 cents on a ±25-cent vibrato. `centerMidi` (`center_midi`) and a `center` retune move by that much on such notes.
+- Python `mix-strip` refuses an out-of-range trim, fader, pan or width with exit 3, as the native command line does.
+- Native `lufs` measures every channel.
+
+### Performance
+
+- Chord and key analysis keep four constant-Q kernels cached and build kernels row by row.
+- Streaming momentary and short-term loudness and LRA run in bounded memory.
+- Chroma, onset, spectral flux, dynamics, swing, RQA, reassignment and section analysis, cascaded biquads and vocal assembly do less work or copy less, with unchanged results.
 
 ## v1.10.0 (2026-10-26)
 
@@ -285,7 +307,7 @@ This release tightens argument validation on every surface: values that used to 
   - Karplus-Strong: `sympathetic`, `haloDampS`, `bodyAirHz`, `bodyAirT60S`, `bodyKnock`, `pickPositionPerOctave`, `excBrightnessPerOctave`
   - plucked string: `hfDecayS`, `midDecayS`, `inharmonicityB`, `pickNoise`, `pickPositionPerOctave`, `excBrightnessPerOctave`
   - harpsichord: `rippleLossShare`, `rippleRatio`, `polCoupling`, `polDetuneCents`, `polT60Ratio`
-  - modal: `malletMs`, `malletVelExp`, `malletShape`, `tremoloPhaseDeg`, `contact`, `contactMs`, and per mode `modes<N>.keySlope`
+  - modal: `malletMs`, `malletVelExp`, `contact`, `contactMs`
   - pipe organ: `pipeDetuneCents`, `loopPhaseServo`, `windRegulated`
   - vocal: `sectionSpreadCents`, `sectionRateHz`
 - `SynthParamInfo.unit` can be `'N'` (newtons), for the bowed string's `stringTensionN`.
