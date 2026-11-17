@@ -7,23 +7,7 @@ from loss import KIT_MIN_MEMBERS, kit_report
 from metrics import band_tilt_db
 from metrics_hit import ring_doublings
 from profile_gate import CensorTally
-
-
-def band_shape_error_db(model: list[float] | None, ref: list[float] | None) -> float | None:
-    """RMS distance between two normalised band profiles.
-
-    A magnitude and never a direction, which is the point: the tilt above says
-    which way a hit is wrong and this says how much of the error the tilt failed
-    to account for. A piece can match on tilt and still be a different
-    instrument, with a resonance in the wrong band and a hole beside it.
-    """
-    if not model or not ref:
-        return None
-    n = min(len(model), len(ref))
-    if not n:
-        return None
-    diff = np.asarray(model[:n], dtype=np.float64) - np.asarray(ref[:n], dtype=np.float64)
-    return float(np.sqrt(np.mean(diff**2)))
+from profile_measure import band_shape_error_db
 
 
 def mean_band_decay_delta(model: list, ref: list) -> float | None:

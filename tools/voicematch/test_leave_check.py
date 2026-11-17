@@ -78,6 +78,16 @@ def test_a_cache_s_attack_peaks_pass_to_their_own_bound_and_not_past_it(tmp_path
     assert "257 entries, the cap is 256" in capsys.readouterr().out
 
 
+def test_a_cache_s_fit_tnr_mask_passes_with_its_two_records_and_nothing_else(tmp_path, capsys):
+    cache = _cache(tmp_path)
+    mask = {"fm": [12.0, 5.1, 5.9], "am": [3.0, 4.3]}
+    _rewrite(cache, lambda b: b["oracle"]["rows"][0].update(fit_tnr_mask=mask))
+    assert leave_check.main(["--cache", str(cache)]) == 0
+    _rewrite(cache, lambda b: b["oracle"]["rows"][0]["fit_tnr_mask"].update(lines_hz=[440.0]))
+    assert leave_check.main(["--cache", str(cache)]) == 1
+    assert "lines_hz" in capsys.readouterr().out
+
+
 def test_a_file_that_is_not_a_gzip_cache_is_refused(tmp_path, capsys):
     other = tmp_path / "rows.json"
     other.write_text("{}")

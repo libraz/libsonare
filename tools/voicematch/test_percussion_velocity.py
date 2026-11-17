@@ -26,7 +26,7 @@ def _rows(peaks: dict[int, float | None], *, note: int = 60) -> list[dict]:
             {
                 "note": note,
                 "velocity": velocity,
-                "peak_dbfs": peak,
+                "mono_peak_dbfs": peak,
                 "held_rms_dbfs": -35.0,
                 "held_crest_db": 12.0,
                 "harmonics_db": [0.0, -6.0, -12.0] + [-24.0] * 9,

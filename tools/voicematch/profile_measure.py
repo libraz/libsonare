@@ -510,9 +510,14 @@ def attack_hf_share_db(mono: np.ndarray, sr: int, note: int, onset_s: float) -> 
     is its own band-over-total-power ratio, so a gain difference between two
     captures cancels; the six are collapsed to their median so one bad slice does not swing the row.
     """
-    bands = attack_bands(mono, sr, Note(note, 0, 0.0, 0.0), onset_s)
-    n_bands = len(ATTACK_BANDS_HZ)
-    vals = [v for v in bands[ATTACK_HF_BAND_INDEX::n_bands] if v is not None]
+    return attack_hf_share_of(attack_bands(mono, sr, Note(note, 0, 0.0, 0.0), onset_s))
+
+
+def attack_hf_share_of(bands: list[float | None] | None) -> float | None:
+    """`attack_bands`' slices as the gate reads them: the 4-8 kHz band's median over its slices."""
+    if not bands:
+        return None
+    vals = [v for v in bands[ATTACK_HF_BAND_INDEX :: len(ATTACK_BANDS_HZ)] if v is not None]
     return round(float(np.median(vals)), 2) if vals else None
 
 
@@ -574,6 +579,41 @@ def register_deltas(
         r_mid = float(np.median([ref[n][vel] for n in notes]))
         out.extend((n, vel, (model[n][vel] - m_mid) - (ref[n][vel] - r_mid)) for n in notes)
     return out
+
+
+def velocity_swing_deltas(
+    a: dict[int, dict[int, float]], b: dict[int, dict[int, float]]
+) -> list[float]:
+    """Per note, side a's softest-to-hardest change minus side b's, at the velocities both hold.
+
+    Signed, unlike `vel_range`'s span: a reading that falls with force on one side
+    and rises on the other is two opposite laws, not two equal ranges.
+    """
+    out: list[float] = []
+    for note, pa in sorted(a.items()):
+        pb = b.get(note, {})
+        both = sorted(set(pa) & set(pb))
+        if len(both) >= 2:
+            lo, hi = both[0], both[-1]
+            out.append((pa[hi] - pa[lo]) - (pb[hi] - pb[lo]))
+    return out
+
+
+def band_shape_error_db(model: list[float] | None, ref: list[float] | None) -> float | None:
+    """RMS distance between two normalised band profiles.
+
+    A magnitude and never a direction, which is the point: the tilt above says
+    which way a hit is wrong and this says how much of the error the tilt failed
+    to account for. A piece can match on tilt and still be a different
+    instrument, with a resonance in the wrong band and a hole beside it.
+    """
+    if not model or not ref:
+        return None
+    n = min(len(model), len(ref))
+    if not n:
+        return None
+    diff = np.asarray(model[:n], dtype=np.float64) - np.asarray(ref[:n], dtype=np.float64)
+    return float(np.sqrt(np.mean(diff**2)))
 
 
 def usable_decay_end(env_db: np.ndarray, start_i: int, range_db: float = DECAY_RANGE_DB) -> int:
@@ -791,9 +831,96 @@ def note_gate(
     on = int(onset_s * sr)
     off = on + int(gate_s * sr)
     held = mono[on:off]
-    if held.size < sr // 4:
+    if not held_readable(held, sr):
         return None
     return mono, held, onset_s, on, off
+
+
+def held_readable(held: np.ndarray, sr: int) -> bool:
+    """Whether an onset-anchored gate holds enough of a note to be read: a quarter second."""
+    return held.size >= sr // 4
+
+
+def peak_dbfs(signal: np.ndarray) -> float | None:
+    """The largest sample's level, which `vel_range` reads; None for an empty signal."""
+    return round(float(_db(float(np.max(np.abs(signal))))), 2) if len(signal) else None
+
+
+def held_peak_dbfs(held: np.ndarray, sr: int) -> float:
+    """The loudest point of the gate's 10 ms windowed RMS, which `register` reads."""
+    _, env = _rms_envelope(held, sr)
+    return round(float(np.max(_db(env))), 2)
+
+
+def fit_centroid_hz(seg: np.ndarray, sr: int, masked: list[float]) -> float:
+    """The fit window's power-weighted centroid with the masked lines removed: `centroid_pct`'s reading."""
+    freqs, mag = _spectrum(seg, sr)
+    p = mask_lines(freqs, mag, masked) ** 2
+    return round(float((freqs * p).sum() / max(p.sum(), 1e-20)), 1)
+
+
+def fit_tnr_db(seg: np.ndarray, sr: int, partials: dict, tnr_mask: dict) -> float | None:
+    """`tnr`'s reading: tone-to-noise of `seg` through `tnr_mask`; None where unresolved or not finite.
+
+    `seg` is the fit window, on its fundamental's clock where the warp kept it, and `partials`
+    the `read_partials` row read off it.
+    """
+    if "unresolved" in partials:
+        return None
+    freqs, mag = _spectrum(seg, sr)
+    stiffness = partials["inharmonicity_b"] if partials.get("inharmonicity_reliable") else 0.0
+    tnr = tone_to_noise_db(freqs, mag, partials["f0_hz"], stiffness, *tnr_mask_parts(tnr_mask))
+    return round(tnr, 2) if np.isfinite(tnr) else None
+
+
+def fit_window_readings(
+    held: np.ndarray,
+    sr: int,
+    note: int,
+    tnr_mask: dict | None,
+    *,
+    modal: bool = False,
+    stationary_lines_hz: list[float] | tuple[float, ...] = (),
+    body_lines_hz: list[float] | tuple[float, ...] = (),
+    read_end: int | None = None,
+) -> dict:
+    """`cents_vs_et`, `centroid_hz`, `tnr_db` and `body_below_f0_db`, as `measure_note` reads them.
+
+    The same `fit_window`, `read_partials`, `fit_centroid_hz` and `fit_tnr_db` calls on the fit
+    window, and `body_below_f0_db` on the gate up to `read_end`, at the fit's f0, without the rest
+    of the row. `read_end` is the sample a looped reference is read to (`read_to_join_s`); None
+    reads the whole gate. `tnr_mask` is the reference's fit-window mask, given when the note is
+    the model's; without it the note is read through its own, `measure_tnr_mask` over the fit
+    window. `tnr_mask` in the result is the mask read through, and `f0_hz` the fit's fundamental.
+    Empty where the gate is too short or holds no fundamental; `tnr_db` and
+    `body_below_f0_db` are absent where their readers give none.
+    """
+    if not held_readable(held, sr):
+        return {}
+    a, b = fit_window(held, sr, read_end)
+    seg = held[a:b]
+    partials, structure, masked = read_partials(
+        seg, sr, note, modal=modal, stationary_lines_hz=stationary_lines_hz
+    )
+    if not partials:
+        return {}
+    warped = structure is not None and structure.unwarped is not None
+    out = {
+        "f0_hz": partials["f0_hz"],
+        "cents_vs_et": partials["cents_vs_et"],
+        "centroid_hz": fit_centroid_hz(seg, sr, masked),
+    }
+    if tnr_mask is None:
+        tnr_mask = measure_tnr_mask(seg, sr, partials["f0_hz"])
+    out["tnr_mask"] = tnr_mask
+    tnr = fit_tnr_db(structure.unwarped if warped else seg, sr, partials, tnr_mask)
+    if tnr is not None:
+        out["tnr_db"] = tnr
+    body_src = held if read_end is None else held[:read_end]
+    body = body_below_f0_db(body_src, sr, float(partials.get("f0_hz") or 0.0), body_lines_hz)
+    if body is not None:
+        out["body_below_f0_db"] = body
+    return out
 
 
 def fit_window(held: np.ndarray, sr: int, read_end: int | None = None) -> tuple[int, int]:
@@ -944,7 +1071,7 @@ def measure_note(
     t_env, env = _rms_envelope(held, sr)
     env_db = np.asarray(_db(env))
     peak_i = int(np.argmax(env))
-    row["peak_dbfs"] = round(float(_db(np.abs(mono).max())), 2)
+    row["peak_dbfs"] = peak_dbfs(mono)
     row["rms_dbfs"] = round(float(_db(np.sqrt(np.mean(held.astype(np.float64) ** 2)))), 2)
     # The loudest the note's body gets: the maximum of the same 10 ms windowed
     # RMS every decay measurement here is read off. It is the one level in this
@@ -954,7 +1081,7 @@ def measure_note(
     # It is not hammer-free, and does not need to be: a transient reaches a
     # windowed RMS only in proportion to its share of the window's energy, so a
     # click that puts 14 dB on `peak_dbfs` puts under 3 on this.
-    row["held_peak_dbfs"] = round(float(env_db[peak_i]), 2)
+    row["held_peak_dbfs"] = held_peak_dbfs(held, sr)
     # Three indices, because `argmax` answers only the first of the three
     # questions on an envelope that does not decay: how loud the note got, when
     # it arrived, and where its fall begins.
@@ -1024,12 +1151,7 @@ def measure_note(
         )
         row["damper_capped"] = not bool(under.size)
 
-    freqs, mag = _spectrum(held[a:b], sr)
-    p = mask_lines(freqs, mag, masked) ** 2
-    row["centroid_hz"] = round(float((freqs * p).sum() / max(p.sum(), 1e-20)), 1)
-    if warped:
-        freqs, mag = _spectrum(read_seg, sr)
-    stiffness = row["inharmonicity_b"] if row.get("inharmonicity_reliable") else 0.0
+    row["centroid_hz"] = fit_centroid_hz(held[a:b], sr, masked)
     own_mask = measure_tnr_mask(held[a:b], sr, row["f0_hz"])
     # The note's own pitch motion, beside the mask it is read through, since the model's
     # mask is its reference's. Where the reference is measured, the coherence of the
@@ -1042,13 +1164,9 @@ def measure_note(
     if tnr_mask is None:
         tnr_mask = own_mask
     row["tnr_mask"] = tnr_mask
-    tnr = (
-        float("nan")
-        if "unresolved" in row
-        else tone_to_noise_db(freqs, mag, row["f0_hz"], stiffness, *tnr_mask_parts(tnr_mask))
-    )
-    if np.isfinite(tnr):
-        row["tnr_db"] = round(tnr, 2)
+    tnr = fit_tnr_db(read_seg, sr, row, tnr_mask)
+    if tnr is not None:
+        row["tnr_db"] = tnr
     width = channel_width(audio, on, off)
     if width is not None:
         row["stereo_width"] = width
@@ -1123,5 +1241,5 @@ def measure_hit(
     )
     row = hit.to_dict()
     strike = mono[int(preroll_s * sr) :]
-    row["peak_dbfs"] = round(float(_db(float(np.max(np.abs(strike))))), 2) if len(strike) else None
+    row["peak_dbfs"] = peak_dbfs(strike)
     return row

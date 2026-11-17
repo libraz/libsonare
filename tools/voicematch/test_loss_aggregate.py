@@ -22,12 +22,12 @@ def _pitched_rows(count=10):
             "note": 48 + i,
             "velocity": 80,
             "harmonics_db": [0.0, -6.0, -12.0] + [-20.0] * 9,
-            "f0_cents_err": 0.0,
+            "cents_vs_et": 0.0,
             "tnr_db": 30.0,
             "sustain_slope_db_s": -3.0,
             "release_ms": 80.0,
             "attack_ms": 5.0,
-            "held_rms_dbfs": -20.0,
+            "held_peak_dbfs": -20.0,
             "held_crest_db": 12.0,
         }
         for i in range(count)
@@ -37,7 +37,7 @@ def _pitched_rows(count=10):
 def test_one_bad_register_remains_visible_in_the_objective_and_report():
     oracle = _pitched_rows()
     model = copy.deepcopy(oracle)
-    model[-1]["f0_cents_err"] = 30.0
+    model[-1]["cents_vs_et"] = 30.0
     ordinary = score_terms(model, oracle)
     robust = robust_score_terms(model, oracle)
     assert ordinary["cents"] == pytest.approx(3.0)
@@ -51,8 +51,8 @@ def test_velocity_level_outlier_uses_the_whole_grid_gain_offset():
     oracle = _pitched_rows()
     model = copy.deepcopy(oracle)
     for row in model:
-        row["held_rms_dbfs"] += 7.0
-    model[-1]["held_rms_dbfs"] += 12.0
+        row["held_peak_dbfs"] += 7.0
+    model[-1]["held_peak_dbfs"] += 12.0
     robust = robust_score_terms(model, oracle)
     assert robust["level"] == pytest.approx(4.0)
     assert robust["level_mean"] == pytest.approx(1.2)
@@ -88,7 +88,7 @@ def test_a_uniform_grid_keeps_its_original_term_values():
     oracle = _pitched_rows(3)
     model = copy.deepcopy(oracle)
     for row in model:
-        row["f0_cents_err"] = 4.0
+        row["cents_vs_et"] = 4.0
     robust = robust_score_terms(model, oracle)
     ordinary = score_terms(model, oracle)
     for term in ("harm", "cents", "env", "level", "crest"):
@@ -98,14 +98,14 @@ def test_a_uniform_grid_keeps_its_original_term_values():
 def test_legacy_mean_mode_retains_the_original_objective():
     oracle = _pitched_rows()
     model = copy.deepcopy(oracle)
-    model[-1]["f0_cents_err"] = 30.0
+    model[-1]["cents_vs_et"] = 30.0
     assert robust_score_terms(model, oracle, tail_fraction=0.0) == score_terms(model, oracle)
 
 
 def test_a_large_single_note_error_cannot_be_reported_as_a_met_target():
     oracle = _pitched_rows(40)
     model = copy.deepcopy(oracle)
-    model[-1]["f0_cents_err"] = 10.0
+    model[-1]["cents_vs_et"] = 10.0
     terms = robust_score_terms(model, oracle)
     weights = LossWeights({"cents": 1.0})
     weights.calibrate(robust_score_terms(oracle, oracle))
@@ -128,7 +128,7 @@ def test_one_silent_row_cannot_make_the_whole_grid_unscorable():
         row["modal_hz"] = [110.0, 220.0, 330.0]
     model = copy.deepcopy(oracle)
     model[-1]["modal_hz"] = []
-    model[-1]["f0_cents_err"] = 30.0
+    model[-1]["cents_vs_et"] = 30.0
     ordinary = score_terms(model, oracle)
     assert ordinary is not None
     assert score_terms([model[-1]], [oracle[-1]]) is None
@@ -139,7 +139,7 @@ def test_one_silent_row_cannot_make_the_whole_grid_unscorable():
 
 
 def _velocity_rows(pitches=20):
-    from loss_dimensions import ATTACK_BANDS_HZ
+    from metrics_attack import ATTACK_BANDS_HZ
 
     rows = []
     for i in range(pitches):
@@ -148,7 +148,7 @@ def _velocity_rows(pitches=20):
             row.update(
                 note=48 + i,
                 velocity=velocity,
-                peak_dbfs=-20.0 + (velocity - 40) / 10.0,
+                mono_peak_dbfs=-20.0 + (velocity - 40) / 10.0,
                 attack_hf_db=[-30.0 + (velocity - 40) / 5.0] * len(ATTACK_BANDS_HZ) * 6,
             )
             rows.append(row)
@@ -165,7 +165,7 @@ def test_two_outlier_notes_in_twenty_move_a_presence_tail_term():
             row["held_crest_db"] += 6.0
             if row["velocity"] == 110:
                 row["attack_hf_db"] = [v + 8.0 for v in row["attack_hf_db"]]
-                row["peak_dbfs"] += 4.0
+                row["mono_peak_dbfs"] += 4.0
     tails = {t: PRESENCE_TAIL_FRACTION for t in ("crest", "hfdyn", "velspan")}
     mean = robust_score_terms(model, oracle, tail_fraction=0.0)
     tail = robust_score_terms(model, oracle, tail_fraction=0.0, term_tails=tails)

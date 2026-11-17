@@ -286,9 +286,7 @@ from _repo import REPO_ROOT
 # ruff: noqa: F401
 from autofit_report import (
     _select,
-    _went_blind,
     report_pinned,
-    short_of_blind,
     winner_or_defaults,
 )
 from autofit_resolve import (
@@ -302,6 +300,7 @@ from autofit_resolve import (
     open_corpus,
     oracle_cache_plan,
     primary_corpus,
+    reference_a4_offset_c,
     reference_band_edge,
     resolve_corpus,
     resolve_probe,
@@ -364,7 +363,13 @@ from knobs import (
     unscored_voices,
     write_unscored_voices,
 )
-from loop_record import committed_note_groups, mark_loop_rows
+from loop_record import (
+    committed_leads,
+    committed_note_groups,
+    committed_read_ends,
+    mark_floor_rows,
+    mark_loop_rows,
+)
 from loss import (
     HARM_REACH,
     KIT_MIN_MEMBERS,
@@ -380,10 +385,9 @@ from loss import (
     probe_rows,
     refused_weights,
     score_terms,
-    unmeasurable_terms,
 )
 from loss_aggregate import DEFAULT_TAIL_FRACTION, own_term_aggregates, robust_score_terms
-from loss_weights import PERCUSSION_GATE_PROXIES, cap_presence, presence_plan
+from loss_weights import PERCUSSION_GATE_PROXIES, cap_presence, presence_plan, skip_line
 from metrics import (
     MONO_MODES,
     channel_correlation,
@@ -608,14 +612,35 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
     mono = normalize_rms(raw)
     threads = resolve_metric_threads(args)
     reading = None if corpus is None else corpus_reading(corpus, HERE / "reference")
-    rows = probe_rows(mono, pattern, sr, raw=audio, threads=threads, reading=reading)
+    a4 = (
+        None
+        if corpus is None
+        else reference_a4_offset_c(corpus, HERE / "reference", program=args.program)
+    )
+    read_ends = (
+        None if corpus is None else committed_read_ends(corpus.capture_id, corpus.timbre) or None
+    )
+    leads = None if corpus is None else committed_leads(corpus.capture_id, corpus.timbre) or None
+    rows = probe_rows(
+        mono,
+        pattern,
+        sr,
+        raw=audio,
+        threads=threads,
+        reading=reading,
+        a4_offset_c=a4,
+        read_ends=read_ends,
+        leads=leads,
+    )
     edge = reference_band_edge(corpus, rows) if pattern.percussive else None
     if edge is not None:
         # Re-measured rather than patched. The band profile is normalised to the
         # loudest band inside the edge, and that is not a scaling that can be
         # applied to an already-floored profile without inventing the values the
         # floor took away.
-        rows = probe_rows(mono, pattern, sr, raw=audio, max_band_hz=edge, threads=threads)
+        rows = probe_rows(
+            mono, pattern, sr, raw=audio, max_band_hz=edge, threads=threads, leads=leads
+        )
         print(
             f"reference bandwidth: {edge / 1000.0:.1f} kHz — bands above it are "
             f"the capture chain rather than the kit, and are excluded from the "
@@ -624,6 +649,7 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
         )
     if corpus is not None and corpus.capture_id:
         mark_loop_rows(rows, corpus.capture_id, corpus.timbre)
+        mark_floor_rows(rows, corpus.capture_id, corpus.timbre)
     if plan is not None:
         rows = _write_oracle_cache(corpus, plan, pattern, rows, room, edge, corr)
     return rows, mono, room, edge
@@ -825,16 +851,16 @@ class Evaluator:
         self.best_level_offset_db: float | None = None
         self.head_level_offset_db: float | None = None
         self.head_level_unavailable: str | None = None
-        # How many notes the one-sided noise term still had something to say
-        # about, at the start and at the winner. `loss.py` charges `tnr` only
-        # where the model is noisier, so a candidate that walks the model past
-        # the reference collects the term's whole unit and reports zero.
+        # How many notes `tnr` compared, at the start and at the winner.
         self.start_tnr_notes: float | None = None
         self.best_tnr_notes: float | None = None
-        self.start_tnr_absent: float | None = None
-        self.best_tnr_absent: float | None = None
-        self.start_tnr_past_db: float | None = None
-        self.best_tnr_past_db: float | None = None
+        # How many reference readings of `tnr` and `body` the recording's floor took off the gate.
+        self.floor_dropped: dict[str, float] | None = None
+        # How many cells were charged at an absent cap (a reading the reference held and the
+        # model lost), at the start point and at the winner.
+        self.start_absent_charged: float | None = None
+        self.best_absent_charged: float | None = None
+        self.floor_not_computed: list[str] = []
         # A rebuild rewrites the shared tree, so its evaluations can only ever
         # run one at a time however many workers were asked for.
         self.workers = 1 if self.needs_rebuild else max(1, args.workers)
@@ -1225,8 +1251,9 @@ class Evaluator:
             return
         self._offset_reported = True
         if abs(offset) >= 1.0:
+            held = "held RMS" if getattr(self.args, "percussive", False) else "held peak"
             print(
-                f"level: the model's held RMS runs {offset:+.1f} dB against the reference "
+                f"level: the model's {held} runs {offset:+.1f} dB against the reference "
                 f"across the whole grid. The level term scores the spread around that "
                 f"offset, not the offset itself.",
                 file=sys.stderr,
@@ -1264,8 +1291,14 @@ class Evaluator:
             self.start_level_offset_db = terms.get("level_offset_db")
             self.start_sustain_excess_db_s = terms.get("sustain_excess_db_s")
             self.start_tnr_notes = terms.get("tnr_notes")
-            self.start_tnr_absent = terms.get("tnr_absent")
-            self.start_tnr_past_db = terms.get("tnr_past_db")
+            self.start_absent_charged = terms.get("absent_charged")
+            self.floor_dropped = {t: terms.get(f"{t}_floor_dropped", 0.0) for t in ("tnr", "body")}
+            # A term whose every reference reading the floor took off is not computed, not zero.
+            self.floor_not_computed = [
+                t
+                for t, held in (("tnr", terms.get("tnr_notes")), ("body", terms.get("body_hits")))
+                if self.floor_dropped[t] and not held
+            ]
             # What one unit of loss is worth in the units this run reports. The
             # fence rates are per dB on a loss the start scores 1.0, so on a raw
             # run — where the start scores its own weighted sum, two orders of
@@ -1320,8 +1353,7 @@ class Evaluator:
             # quieter scores exactly as if it had not.
             self.best_level_offset_db = None if terms is None else terms.get("level_offset_db")
             self.best_tnr_notes = None if terms is None else terms.get("tnr_notes")
-            self.best_tnr_absent = None if terms is None else terms.get("tnr_absent")
-            self.best_tnr_past_db = None if terms is None else terms.get("tnr_past_db")
+            self.best_absent_charged = None if terms is None else terms.get("absent_charged")
         if not fresh:
             return loss
         self.trajectory.append((self.best_loss, loss, self.stage))
@@ -1838,7 +1870,6 @@ class JointEvaluator:
         self.search_regressions: list[dict] = []
         self.write_back_refusal: str | None = None
         self.refused_by: list[str] = []
-        self.walked_back: dict | None = None
         self._announced = False
 
     # What a reader that wants one set of terms gets: the first capture's.
@@ -1986,8 +2017,7 @@ class JointEvaluator:
         """Make each capture's `best_*` readings those of `values`, the joint winner.
 
         A member tracks the best point of its OWN loss, and the guards that read
-        `best_*` (`winner_or_defaults`, the `tnr` walk-back) are about the point
-        the joint search chose.
+        `best_*` (`winner_or_defaults`) are about the point the joint search chose.
         """
         for member in self.members:
             terms = member.terms_for(values)
@@ -1997,51 +2027,9 @@ class JointEvaluator:
             get = (lambda name: None) if terms is None else terms.get
             member.best_level_offset_db = get("level_offset_db")
             member.best_tnr_notes = get("tnr_notes")
-            member.best_tnr_absent = get("tnr_absent")
-            member.best_tnr_past_db = get("tnr_past_db")
+            member.best_absent_charged = get("absent_charged")
         self.best_values = list(values)
         self.best_loss = self.loss_for(values)
-
-
-def joint_short_of_blind(best_values: list[float], joint: JointEvaluator) -> list[float]:
-    """`short_of_blind` over every capture: the point must stay clear of the guard on all of them."""
-    joint.walked_back = None
-
-    def blind(values: list[float]) -> tuple[str, str] | None:
-        for label, member in zip(joint.labels, joint.members):
-            terms = member.terms_for(values)
-            if terms is None:
-                continue
-            reading = _went_blind(member, terms.get("tnr_absent"), terms.get("tnr_past_db"))
-            if reading:
-                return label, reading
-        return None
-
-    found = blind(best_values)
-    if found is None or not joint.path:
-        return best_values
-    label, reading = found
-    for eval_no, loss, _stage, values in reversed(joint.path):
-        if loss >= 1.0:
-            break
-        if blind(values) is not None or any(m.terms_for(values) is None for m in joint.members):
-            continue
-        joint.walked_back = {
-            "reading": f"{reading} (capture {label})",
-            "from_eval": joint.path[-1][0],
-            "from_loss": joint.path[-1][1],
-            "to_eval": eval_no,
-            "to_loss": loss,
-        }
-        print(
-            f"\nthe winner {reading} on capture {label} — walking back to eval #{eval_no} "
-            f"(loss {loss:.4f}), the furthest point of the search that stayed on the "
-            f"reference's side on every capture",
-            file=sys.stderr,
-        )
-        joint.point_members_at(values)
-        return list(values)
-    return best_values
 
 
 def capture_label(corpus: Corpus) -> str:
@@ -2221,9 +2209,8 @@ def joint_winner(
 ) -> list[float]:
     """`winner_or_defaults` for a joint fit: the winner, unless a capture or the joint refuses it.
 
-    The per-capture guards (a term whose measurements vanished, the one-sided
-    `tnr` walk past the reference) run on each capture at the joint winner and any
-    one tripping keeps the defaults. The winner losing to the start point is a
+    The per-capture guard (a term whose measurements vanished) runs on each capture
+    at the joint winner and any one tripping keeps the defaults. The winner losing to the start point is a
     joint reading. The hold-out refuses on either reading: the joint worsening
     past `HOLDOUT_WORSE_MARGIN`, or any one capture's own hold-out doing so, so a
     gain on one capture cannot pay for a held-out loss on another.
@@ -2577,15 +2564,12 @@ def _fold_write_back_verdict(
             "start": getattr(first, "start_tnr_notes", None),
             "best": getattr(first, "best_tnr_notes", None),
         },
-        "tnr_absent": {
-            "start": getattr(first, "start_tnr_absent", None),
-            "best": getattr(first, "best_tnr_absent", None),
+        "absent_charged": {
+            "start": getattr(first, "start_absent_charged", None),
+            "best": getattr(first, "best_absent_charged", None),
         },
-        "tnr_past_db": {
-            "start": getattr(first, "start_tnr_past_db", None),
-            "best": getattr(first, "best_tnr_past_db", None),
-        },
-        "walked_back": getattr(evaluator, "walked_back", None),
+        "floor_dropped": getattr(first, "floor_dropped", None),
+        "not_computed": getattr(first, "floor_not_computed", []),
     }
     if members:
         record["write_back"]["refused_by"] = list(getattr(evaluator, "refused_by", []))
@@ -2595,11 +2579,12 @@ def _fold_write_back_verdict(
                 **({"layer": layers[label]} if layers and label in layers else {}),
                 "refused": member.write_back_refusal,
                 "tnr_notes": {"start": member.start_tnr_notes, "best": member.best_tnr_notes},
-                "tnr_absent": {"start": member.start_tnr_absent, "best": member.best_tnr_absent},
-                "tnr_past_db": {
-                    "start": member.start_tnr_past_db,
-                    "best": member.best_tnr_past_db,
+                "absent_charged": {
+                    "start": member.start_absent_charged,
+                    "best": member.best_absent_charged,
                 },
+                "floor_dropped": member.floor_dropped,
+                "not_computed": member.floor_not_computed,
                 "level_start_offset_db": member.start_level_offset_db,
                 "level_winner_offset_db": member.best_level_offset_db,
             }
@@ -2754,22 +2739,22 @@ def apply_prefit(args, namespaces: list = ()) -> dict | None:
     voice, why = gate_sources(args)
     if voice is None:
         print(f"pre-fit reading: skipped ({why})", file=sys.stderr)
-        return {"skipped": why}
+        return {"no_gate": why}
     import refit  # lazy: see _gate_voice
 
     readings = refit.gate_provenance_readings(voice)
     given = {
         t: getattr(args, f"w_{t}") for t in LOSS_TERMS if getattr(args, f"w_{t}", None) is not None
     }
-    prefit = refit.prefit_raise(voice, {"gate": {"readings": readings}}, cli_weights(args), given)
-    probe_cannot = dict(unmeasurable_terms(args))
+    prefit = refit.prefit_raise(
+        voice, {"gate": {"readings": readings}}, cli_weights(args), given, probe=args
+    )
     produced = set(measured_terms(getattr(args, "percussive", False)))
-    cannot = {}
-    for term in prefit["prefit_weights"]:
-        if term in probe_cannot:
-            cannot[term] = probe_cannot[term]
-        elif term not in produced:
-            cannot[term] = "this metric set does not produce it"
+    cannot = {
+        term: "this metric set does not produce it"
+        for term in prefit["prefit_weights"]
+        if term not in produced
+    }
     if cannot:
         prefit["not_measurable"] = cannot
         prefit["prefit_weights"] = {
@@ -2784,11 +2769,15 @@ def apply_prefit(args, namespaces: list = ()) -> dict | None:
     prefit["readings"] = len(readings)
     for line in refit.prefit_lines(voice["slug"], prefit):
         print(line, file=sys.stderr)
+    args.skips_reported = set(prefit["skipped"])
     return prefit
 
 
-def presence_lines(plan: dict) -> list[str]:
-    """The start-up lines of a presence plan: weighted terms, unscorable dimensions, user zeros."""
+def presence_lines(plan: dict, reported: set[str] = frozenset()) -> list[str]:
+    """The start-up lines of a presence plan: weighted terms, unscorable dimensions, user zeros.
+
+    A term the probe's shape refuses gets one line, unless `reported` already holds it.
+    """
     terms = plan["terms"]
     named = ", ".join(
         f"{t}<-{'/'.join(e['dimensions'])}"
@@ -2810,6 +2799,9 @@ def presence_lines(plan: dict) -> list[str]:
         lines.append(f"presence: unscorable: {', '.join(plan['unscorable'])}")
     for t, dims in plan["user_zero"].items():
         lines.append(f"presence: user zero: {t} ({', '.join(dims)})")
+    lines += [
+        f"presence: {skip_line(t, why)}" for t, why in plan["skipped"].items() if t not in reported
+    ]
     return lines
 
 
@@ -2857,8 +2849,10 @@ def apply_presence(args, namespaces: list) -> dict | None:
             setattr(ns, f"w_{t}", entry["weight"])
         ns.term_tails = dict(tails)
     args.presence = plan
-    for line in presence_lines(plan):
+    reported = getattr(args, "skips_reported", set())
+    for line in presence_lines(plan, reported):
         print(line, file=sys.stderr)
+    args.skips_reported = reported | set(plan["skipped"])
     return plan
 
 
@@ -2934,6 +2928,8 @@ def _fold_presence(out_path: str, args) -> None:
     profile["unscorable"] = list(plan["unscorable"])
     if plan["user_zero"]:
         profile["presence_user_zero"] = plan["user_zero"]
+    if plan["skipped"]:
+        profile["presence_skipped"] = plan["skipped"]
     if not plan["capped"]:
         profile["presence_capped"] = False
     path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
@@ -3608,11 +3604,7 @@ def run(args, argv: list[str] | None = None) -> int:
             restore(pristine, evaluator.written)
 
         if evaluator.best_values is not None:
-            best_values = (
-                joint_short_of_blind(evaluator.best_values, evaluator)
-                if joint
-                else short_of_blind(evaluator.best_values, evaluator)
-            )
+            best_values = evaluator.best_values
         # Before the report, because the hold-out decides which values the report
         # is about: it is scored on the winner and can then refuse it.
         start_values = [k.start_value for k in knobs]

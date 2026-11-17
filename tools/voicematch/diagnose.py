@@ -94,7 +94,8 @@ TERM_UNIT_NAMES = {
     "hf": "dB",
     "lf": "dB",
     "dyn": "dB per 64 velocity",
-    "hfdyn": "dB per 64 velocity",
+    "hfdyn": "dB of softest-to-hardest change",
+    "hfshare": "dB",
     "modedyn": "dB per 64 velocity",
     "onsetvel": "ms/2 + dB per velocity doubling",
     "velspan": "dB",
@@ -105,6 +106,7 @@ TERM_UNIT_NAMES = {
     "crest": "dB",
     "mss": "ratio",
     "band": "dB",
+    "bandrms": "dB",
     "bdecay": "octaves of decay rate",
     "modes": "dB + cents÷25",
     "mod": "composite",
@@ -125,8 +127,8 @@ TERM_UNIT_NAMES = {
 
 TERM_MEANS = {
     "harm": "the harmonic ladder — each partial's level against the fundamental",
-    "cents": "intonation",
-    "tnr": "how much noise sits between the partials",
+    "cents": "intonation: the fit window's fundamental against equal temperament",
+    "tnr": "how much noise sits between the partials, on either side of the reference",
     "env": "the gesture: attack, sustain slope and release",
     "init": "the excitation spectrum, extrapolated back to the onset",
     "slope": "how fast each harmonic decays over the first two seconds",
@@ -134,7 +136,8 @@ TERM_MEANS = {
     "hf": "the high-frequency content of the first 120 ms",
     "lf": "the low and mid bands of the first 50 ms — the attack's weight",
     "dyn": "the dynamics curve: how brightness tracks velocity, per pitch",
-    "hfdyn": "how the attack's 4-8 kHz share tracks velocity, per pitch",
+    "hfdyn": "how much the attack's 4-8 kHz share changes from softest to hardest, per pitch",
+    "hfshare": "the attack's 4-8 kHz share of the first 120 ms",
     "modedyn": "how the measured modes' upper share tracks velocity, per pitch",
     "onsetvel": "how the attack time and the onset overshoot track velocity, per pitch",
     "velspan": "the softest-to-hardest peak level range, per pitch",
@@ -147,6 +150,7 @@ TERM_MEANS = {
     "crest": "peak against RMS",
     "mss": "the whole timeline, at four spectral resolutions",
     "band": "the third-octave level profile",
+    "bandrms": "the third-octave level profile as one RMS error over every band",
     "bdecay": "how fast each octave band dies, as a ratio to the reference's rate",
     "tilt": "which way the spectrum leans — the level above 2 kHz against the "
     "level below 500 Hz, which `band` measures the magnitude of and "

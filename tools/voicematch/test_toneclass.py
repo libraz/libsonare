@@ -444,7 +444,7 @@ def test_a_band_the_window_cannot_resolve_withholds_rather_than_its_one_bin():
 
 
 def test_the_movement_term_asks_for_vibrato_the_noise_term_never_could():
-    """`tnr` charges the model only for being NOISIER, so a dead note is free there."""
+    """`tnr` can say a still note is cleaner, never which movement it lacks."""
     still = analyze_note(_vibrato(440.0, 0.0, 5.5), SR, Note(69, 100, 0.0, 3.0), 3.0).to_dict()
     moving = analyze_note(_vibrato(440.0, 40.0, 5.5), SR, Note(69, 100, 0.0, 3.0), 3.0).to_dict()
     charged, notes = _mod_terms([still], [moving])

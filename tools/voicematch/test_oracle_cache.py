@@ -137,6 +137,43 @@ def test_the_whitelist_refuses_a_long_array_and_anything_that_is_not_a_number(tm
     _write(path, desc, rows=[{"note": 60, "bands_db": [0.0] * oracle_cache.MAX_ARRAY}])
 
 
+@pytest.mark.parametrize("key", ["tnr_mask", "fit_tnr_mask"])
+def test_a_tnr_mask_holds_its_two_modulation_records_at_their_width_and_nothing_else(tmp_path, key):
+    desc = _descriptor(tmp_path)
+    path = tmp_path / "x.json.gz"
+    _write(path, desc, rows=[{"note": 60, key: {"fm": [12.0, 5.1, 5.9], "am": [3.0, 4.3]}}])
+    _write(path, desc, rows=[{"note": 60, key: {}}])
+    with pytest.raises(CacheError, match="unknown key 'lines_hz'"):
+        _write(path, desc, rows=[{"note": 60, key: {"lines_hz": [440.0]}}])
+    with pytest.raises(CacheError, match="expected 3 numbers"):
+        _write(path, desc, rows=[{"note": 60, key: {"fm": [12.0, 5.1]}}])
+    with pytest.raises(CacheError, match="expected 2 numbers"):
+        _write(path, desc, rows=[{"note": 60, key: {"am": [3.0, 4.3, 1.0]}}])
+    with pytest.raises(CacheError, match="expected 3 numbers"):
+        _write(path, desc, rows=[{"note": 60, key: {"fm": [12.0, None, 5.9]}}])
+    # Neither key takes a null: an absent mask is an absent key.
+    with pytest.raises(CacheError, match="expected an object"):
+        _write(path, desc, rows=[{"note": 60, key: None}])
+
+
+def test_a_row_whose_fit_window_read_nothing_writes_without_a_fit_mask(tmp_path):
+    """A note the gate reads no fit window of carries no fit-window readings, and no mask."""
+    from loss import probe_rows
+    from patterns import build_pattern
+
+    sr = 48000
+    pattern = build_pattern("sustain", 0, notes=[57])
+    (note,) = pattern.analysis_notes
+    silent = np.zeros(int((note.start + 0.2) * sr))
+    (row,) = probe_rows(silent, pattern, sr, raw=silent)
+    assert "fit_tnr_mask" not in row and row["cents_vs_et"] is None and row["fit_tnr_db"] is None
+    desc = _descriptor(tmp_path)
+    path = tmp_path / "x.json.gz"
+    _write(path, desc, rows=[oracle_cache.plain(row)])
+    with gzip.open(path) as handle:
+        assert "fit_tnr_mask" not in json.load(handle)["oracle"]["rows"][0]
+
+
 def test_attack_peaks_take_their_own_bound_and_every_other_key_the_cap(tmp_path):
     desc = _descriptor(tmp_path)
     path = tmp_path / "x.json.gz"
@@ -170,6 +207,15 @@ def test_the_row_whitelist_is_the_measurement_records_plus_what_the_probe_adds()
         "held_rms_dbfs",
         "held_crest_db",
         "loop_unweighted",
+        "a4_offset_c",
+        "cents_vs_et",
+        "fit_centroid_hz",
+        "fit_tnr_db",
+        "fit_tnr_mask",
+        "held_peak_dbfs",
+        "mono_peak_dbfs",
+        "read_to_join_s",
+        "floor_censored",
     }
     assert set(oracle_cache.ROW_KEYS) == recorded | added
     assert len(oracle_cache.ROW_KEYS) == len(set(oracle_cache.ROW_KEYS))
@@ -652,3 +698,16 @@ def test_a_write_only_run_writes_the_fit_and_hold_out_caches_and_renders_nothing
 def test_the_write_flag_without_a_cache_directory_is_refused():
     with pytest.raises(ValueError, match="--oracle-cache-write needs --oracle-cache"):
         autofit_resolve.oracle_cache_plan(_fit_args(oracle_cache_write=True), None)
+
+
+def test_a_cache_written_before_the_fit_window_mask_is_refused_as_stale(tmp_path):
+    """Rows without `fit_tnr_mask` were measured by code this host no longer has."""
+    path = tmp_path / "x.json.gz"
+    old_row = {"note": 60, "velocity": 100, "tnr_db": 20.0}
+    before = {**_body()["digests"], "code": "0" * 64}
+    _write(path, _descriptor(tmp_path), rows=[old_row], digests=before)
+    # The digest covers the modules that decide a row's shape, so any change to them stales it.
+    reached = set(objective.objective_modules(oracle_cache.HERE, oracle_cache.CODE_ROOTS))
+    assert {"loss", "profile_measure", "loop_record", "patterns", "metrics_hit"} <= reached
+    with pytest.raises(CacheError, match="stale: the code that measured it"):
+        oracle_cache.read(path, {"identity": _body()["identity"]})

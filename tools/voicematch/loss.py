@@ -36,12 +36,15 @@ from loss_dimensions import (
     BDECAY_OCTAVE_CAP,
     BODY_DELTA_CAP_DB,
     BRIGHT_ABSENT_CAP,
+    CENTS_ABSENT_CAP,
+    CREST_FIELDS,
     DYN_DELTA_CAP_DB,
     DYN_MIN_VELOCITY_SPREAD,
     DYN_VELOCITY_SPAN,
     HARM_REACH,
     HF_DELTA_CAP_DB,
     LEVEL_DELTA_CAP_DB,
+    LEVEL_FIELDS,
     LF_DELTA_CAP_DB,
     LOSS_TERMS,
     MOD_CENTS_CAP,
@@ -61,15 +64,20 @@ from loss_dimensions import (
     PERC_LF_MAX_HZ,
     PERCUSSION_TERMS,
     PITCHED_TERMS,
+    RISE_ABSENT_CAP_DB,
     STIFF_DELTA_CENTS_CAP,
+    STRIKE_ABSENT_CAP_DB,
     SUSTAIN_SLOPE_CAP_DB_S,
     TAIL_DELTA_CAP_DB_S,
+    TILT_ABSENT_CAP_DB,
     TNR_ABSENT_CAP_DB,
+    TONAL_ABSENT_CAP_DB,
     CellCount,
     _absent_or,
     _attack_delta_ms,
     _attack_hf_share,
     _brightness,
+    _delta_or_cap,
     _dyn_terms,
     _fell_silent,
     _finite_or_none,
@@ -84,6 +92,7 @@ from loss_dimensions import (
     _perc_lf_terms,
     _rows_comparable,
     _stiff_terms,
+    _swing_terms,
     _velcurve_terms,
     _velspan_terms,
     measured_terms,
@@ -130,14 +139,17 @@ from metrics import (
     attack_peaks,
     audibility_weights,
     band_tilt_db,
+    body_below_f0_db,
     estimate_inharmonicity_b,
     ladder_present,
     level_of,
     midi_to_hz,
     note_onset,
+    onset_shape,
     partial_hz,
     partial_offset,
     stretch_cents,
+    to_mono,
 )
 from metrics_hit import ring_doublings
 from metrics_skeleton import (
@@ -159,6 +171,14 @@ from metrics_texture import (
     WINDOW_FLATNESS_CLIP_DB,
 )
 from patterns import analysis_window_end
+from profile_measure import (
+    attack_hf_share_of,
+    band_shape_error_db,
+    fit_window_readings,
+    held_peak_dbfs,
+    held_readable,
+    peak_dbfs,
+)
 from toneclass import default_weights, tone_class
 
 # Longest analysis window per note. The probe patterns hold a note for two
@@ -417,21 +437,59 @@ def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = HARM_REACH) -> 
     return {"init_db": init_db, **slopes}
 
 
-# The spectral centroid carries no default weight on a pitched voice: breath and
-# bow noise move it note by note. It is scored per note as a centroid ratio over the
-# sustain window (not the gate's ruler), so `--w-bright` can see a string slipping
-# into a higher regime, which the audibility-weighted `harm` prices cheaply in the bass.
+#: The `fit_window_readings` keys a pitched row carries, under the fields the loss reads.
+FIT_WINDOW_FIELDS = {
+    "cents_vs_et": "cents_vs_et",
+    "centroid_hz": "fit_centroid_hz",
+    "tnr_db": "fit_tnr_db",
+    "tnr_mask": "fit_tnr_mask",
+    "body_below_f0_db": "body_below_f0_db",
+}
+#: The key an oracle mask carries its row's `fit_tnr_mask` under, for `probe_rows` to split off.
+FIT_TNR_MASK_KEY = "fit"
+#: The key it carries the seconds its row was read to (`read_to_join_s`) under, likewise.
+READ_END_KEY = "read_to_join_s"
+
+#: Per own term (`GATE_OWN_TERMS`), the gate's function its per-note reading comes from.
+OWN_TERM_READERS = {
+    "cents": fit_window_readings,
+    "tnr": fit_window_readings,
+    "bright": fit_window_readings,
+    "velspan": peak_dbfs,
+    "level": held_peak_dbfs,
+    "onset": onset_shape,
+    "hfshare": attack_hf_share_of,
+    "hfdyn": attack_hf_share_of,
+    "body": body_below_f0_db,
+}
+#: The same for `PERCUSSION_GATE_OWN_TERMS`: `measure_hit` reads a hit through `analyze_hit`.
+PERCUSSION_OWN_TERM_READERS = {
+    "velspan": peak_dbfs,
+    "crest": analyze_hit,
+    "bandrms": band_shape_error_db,
+    "bright": analyze_hit,
+    "tonal": analyze_hit,
+    "rise": analyze_hit,
+}
 
 
 def oracle_tnr_masks(oracle_rows: list[dict]) -> list[dict] | None:
     """The oracle rows' `tnr_mask`s, for `probe_rows` to read the model through.
 
     A mask carries the rest of how its row was read where the row says so (`modal`,
-    `stationary_lines_hz`; see `analyze_note`), so the model is read as its reference was.
+    `stationary_lines_hz`; see `analyze_note`), so the model is read as its reference was, the
+    row's fit-window mask under `FIT_TNR_MASK_KEY`, which `tnr` reads both sides through, and
+    the seconds a looped row was read to under `READ_END_KEY`.
     None for a percussive probe, whose rows carry no tone-to-noise ratio.
     """
     masks = [row.get("tnr_mask") for row in oracle_rows]
-    return None if any(m is None for m in masks) else masks
+    if any(m is None for m in masks):
+        return None
+    carried = {FIT_TNR_MASK_KEY: "fit_tnr_mask", READ_END_KEY: "read_to_join_s"}
+    return [
+        {**m, **{key: row[field] for key, field in carried.items() if row.get(field) is not None}}
+        for m, row in zip(masks, oracle_rows)
+    ]
 
 
 def corpus_reading(corpus, reference_dir) -> dict:
@@ -465,6 +523,9 @@ def probe_rows(
     threads: int = 1,
     tnr_masks: list[dict] | None = None,
     reading: dict | None = None,
+    a4_offset_c: float | None = None,
+    read_ends: dict[tuple[int, int], float] | None = None,
+    leads: dict[tuple[int, int], float] | None = None,
 ) -> list[dict]:
     """Measure every analysis note of `pattern` with the metric set it calls for.
 
@@ -499,33 +560,101 @@ def probe_rows(
     alongside its siblings wants 1, since the concurrency is being spent a
     level up.
 
-    `tnr_masks` is the oracle rows' `tnr_mask`, one per analysis note, given
+    `tnr_masks` is `oracle_tnr_masks` of the oracle rows, one per analysis note, given
     when the render is the model's so both sides read tone-to-noise through
     the oracle's mask. `reading` is the oracle's own (`corpus_reading`), carried into its rows' masks.
+    `a4_offset_c` is the oracle's `reference_a4_offset_c`, recorded on each of its rows for `cents`.
+    `read_ends` is the oracle's `committed_read_ends`, the seconds a looped reference row is read
+    to, recorded on its rows; the model reads to the same time through its mask. `leads` is the
+    oracle's `committed_leads`: the lead-in its recordings had, which the timeline drops and the
+    gate's onset search began inside.
+
+    Everything the gate's dimensions read is read as the gate reads it, off the mean downmix of
+    `raw` whatever the mono mode (`note_gate`), so a term and its dimension share one input.
     """
     notes = list(pattern.analysis_notes)
     masks = [None] * len(notes) if tnr_masks is None else list(tnr_masks)
     if len(masks) != len(notes):
         raise ValueError(f"{len(masks)} tone-to-noise masks for {len(notes)} analysis notes")
+    raw_mono = None if raw is None else to_mono(np.asarray(raw))
+    shape = mono if raw_mono is None else raw_mono
+
+    def lead_of(note) -> float:
+        return (leads or {}).get((note.note, note.velocity), 0.0)
+
+    def gate_peak(row: dict, note, end: float) -> None:
+        # The gate's `vel_range` reading: the largest sample of the note's slot, un-normalised.
+        if raw_mono is not None:
+            row["mono_peak_dbfs"] = peak_dbfs(raw_mono[int(note.start * sr) : int(end * sr)])
+
     if pattern.percussive:
 
         def measure(note, _mask) -> dict:
-            return analyze_hit(
-                mono, sr, note, analysis_window_end(pattern, note), max_band_hz=max_band_hz
+            end = analysis_window_end(pattern, note)
+            row = analyze_hit(
+                shape, sr, note, end, max_band_hz=max_band_hz, lead_s=lead_of(note)
             ).to_dict()
+            gate_peak(row, note, end)
+            return row
     else:
 
         def measure(note, mask) -> dict:
             end = analysis_window_end(pattern, note)
             # Found once and shared, so nothing that reads the attack can
             # disagree about where the note began.
-            onset = note_onset(mono, sr, note, end)
+            onset = note_onset(shape, sr, note, end, lead_of(note))
+            fit_mask = None if mask is None else mask.get(FIT_TNR_MASK_KEY)
+            until = (
+                (read_ends or {}).get((note.note, note.velocity))
+                if mask is None
+                else mask.get(READ_END_KEY)
+            )
+            if mask is not None:
+                mask = {k: v for k, v in mask.items() if k not in (FIT_TNR_MASK_KEY, READ_END_KEY)}
             row = analyze_note(
                 mono, sr, note, end, onset=onset, tnr_mask=mask, reading=reading
             ).to_dict()
+            # The gate's readings, on its onset-anchored gate and through the oracle's
+            # fit-window mask; the oracle reads through its own.
+            on = int(onset * sr)
+            off = min(on + int(note.dur * sr), int(end * sr))
+            given = row["tnr_mask"] if mask is None else mask
+            # A reference row with no fit-window mask had no fit-window read, so the gate has no
+            # cell here; the model's is absent too, never read through a mask of its own.
+            fit = (
+                {}
+                if mask is not None and fit_mask is None
+                else fit_window_readings(
+                    shape[on:off],
+                    sr,
+                    note.note,
+                    fit_mask,
+                    modal=bool(given.get("modal")),
+                    stationary_lines_hz=given.get("stationary_lines_hz", ()),
+                    body_lines_hz=given.get("body_lines_hz", ()),
+                    read_end=None if until is None else int(until * sr),
+                )
+            )
+            # Absent where the gate reads none, so `analyze_note`'s own reading never stands in.
+            row.update({field: fit.get(key) for key, field in FIT_WINDOW_FIELDS.items()})
+            if row["fit_tnr_mask"] is None:
+                del row["fit_tnr_mask"]
+            if until is not None:
+                row["read_to_join_s"] = until
+            # The gate's onset shape is read at the fit window's f0, over the gate's own length.
+            row.update(
+                onset_shape(shape[: int(end * sr)], sr, onset, note.dur, fit["f0_hz"])
+                if fit
+                else {"onset_overshoot_db": None, "onset_settle_ms": None}
+            )
+            gate_peak(row, note, end)
+            if a4_offset_c is not None:
+                row["a4_offset_c"] = a4_offset_c
+            if raw_mono is not None and held_readable(raw_mono[on:off], sr):
+                row["held_peak_dbfs"] = held_peak_dbfs(raw_mono[on:off], sr)
             row["skeleton"] = skeleton_note(mono, sr, note)
             row["onset_ms"] = round((onset - note.start) * 1000.0, 2)
-            row["attack_hf_db"] = attack_bands(mono, sr, note, onset)
+            row["attack_hf_db"] = attack_bands(shape, sr, note, onset)
             # The same window's other end. Kept as its own field rather than
             # appended to `attack_hf_db`, because the two are measured over
             # different spans — six 20 ms slices against one 50 ms window — and
@@ -707,10 +836,13 @@ def loss_terms(
     Per note, from the same fields report.json carries:
       - `harm`: L1 distance of h1-normalized harmonics_db over the first
         `n_harm` harmonics (the most directly actionable timbre signal);
-      - `cents`: absolute f0 cents difference from the oracle;
-      - `tnr`: noise-floor shortfall, counted only when the model is noisier
-        than the oracle (a model cleaner than the oracle is not penalised, since
-        the sampled oracle carries natural vibrato/breath noise);
+      - `cents`: |model - oracle| of the gate's `cents_vs_et`, the fit window's
+        fundamental against equal temperament;
+      - `tnr`: |model - oracle| of the gate's tone-to-noise ratio, read off the
+        fit window through the oracle's mask. Two-sided, as the gate's bound is;
+        the one-sided form's reason (a sampled oracle's breath noise is not the
+        model's to match) is superseded, since a model cleaner than the
+        reference is usually one missing the reference's own movement;
       - `env`: sustain-slope (dB/s), release (per 100 ms) and attack (per 10 ms)
         differences — the double-decay / ring-down signature a purely spectral
         match is blind to;
@@ -719,9 +851,10 @@ def loss_terms(
         decay (the time-averaged harmonic term conflates them). Per-bin deltas
         are capped (12 dB / 30 dB/s) so single-sample oracle quirks cannot
         dominate the objective.
-      - `bright`: a centroid ratio, |100 (model / oracle - 1)| per note, read off the
-        line-masked sustain window with |X| weighting below 12 kHz; the gate's
-        `centroid_pct` reads 0.12-1.62 s after onset, full band, with |X|^2.
+      - `bright`: the gate's `centroid_pct`, |100 (model / oracle - 1)| per note of
+        the fit window's line-masked |X|^2 centroid;
+      - `hfshare`: the gate's `attack_hf`, |model - oracle| dB per note of the
+        4-8 kHz share of the first 120 ms;
       - `arrival`: the gate's arrival time, |model - oracle| ms per note.
       - `body`: the gate's energy under the fundamental, |model - oracle| dB per note.
 
@@ -741,6 +874,13 @@ def loss_terms(
         # fixed everything.
         return {**{name: 0.0 for name in LOSS_TERMS}, "mss": mss, "comparable": 0.0}
     totals = {name: 0.0 for name in LOSS_TERMS}
+    # Cells charged at an absent cap: the reference held a reading and the model had none.
+    absent_n = [0]
+
+    def charge(delta: float | None, cap: float) -> float:
+        absent_n[0] += delta is None
+        return _delta_or_cap(delta, cap)
+
     # How many partials above the fundamental were present on both sides
     # anywhere in the probe. Zero is not a good score, it is no measurement: a
     # render that fell silent reports every harmonic at the -120 dB floor and
@@ -748,49 +888,49 @@ def loss_terms(
     # exactly, and the harmonic term comes out at 0.0 — the best value it has.
     # Left unguarded, silencing any gain is the cheapest way to win this term.
     compared = available = 0
-    # How many notes the one-sided noise term actually charged for. `tnr` counts
-    # only where the model is NOISIER, so its zero has two meanings that read
-    # identically in a fit log: every note matched, or the model is cleaner than
-    # the reference everywhere and the term has run out of anything to say.
-    # Those are opposite findings — on a sampled oracle a model measurably
-    # cleaner than the reference is usually one missing the reference's own
-    # movement — and on a normalised objective the second is worth a full unit
-    # of loss to whichever candidate reaches it first. Reported so a reader can
-    # tell those apart, and deliberately NOT in `TERM_COUNT_KEYS`: unlike
-    # `stiff_notes` and `dyn_groups`, this one moves with the candidate, so
-    # `_went_unmeasurable` would charge a model for getting clean rather than
-    # for going unmeasurable. Starting at 0 is not unusual — a physical model is
-    # cleaner than a sampled recording by default — and on those voices the term
-    # says nothing about any candidate. `loss_cells.py` counts which ones.
+    # How many notes `tnr` compared: the reference read a finite ratio and no loop took the note off it.
     tnr_notes = 0
-    # The two readings `tnr_notes` cannot separate from a match; the write-back guard reads their growth.
-    tnr_absent = 0
-    tnr_past: list[float] = []
+    # How many reference readings of `tnr` and `body` the recording's floor took off the gate.
+    tnr_floor_dropped = body_floor_dropped = 0
     # How many cells of each capped aggregate were a comparison rather than a
     # cap standing in for one. See `CellCount`: the raw value of a term whose
     # cells all hit the cap is its worst, not its best, so none of the empty-set
     # guards above can see it and a reader cannot tell it from a real distance.
     cells = {t: CellCount() for t in ("env", "init", "slope", "tail", "hf", "lf", "mod", "modes")}
-    bright_hits = arrival_hits = body_hits = 0
+    bright_hits = arrival_hits = body_hits = hfshare_notes = 0
     for m, o in zip(model_rows, oracle_rows_):
         # A reading the reference has and the model lacks costs the cap and still counts as a hit.
-        if o.get("centroid_hz"):
-            if m.get("centroid_hz"):
-                totals["bright"] += abs(100.0 * (m["centroid_hz"] / o["centroid_hz"] - 1.0))
-            else:
-                totals["bright"] += BRIGHT_ABSENT_CAP
-            bright_hits += 1
-        if o.get("arrival_ms") is not None:
-            if m.get("arrival_ms") is not None:
-                totals["arrival"] += abs(m["arrival_ms"] - o["arrival_ms"])
-            else:
-                totals["arrival"] += ARRIVAL_ABSENT_CAP
-            arrival_hits += 1
-        if o.get("body_below_f0_db") is not None:
-            totals["body"] += _absent_or(
-                m.get("body_below_f0_db"), o["body_below_f0_db"], BODY_DELTA_CAP_DB
+        if o.get("fit_centroid_hz"):
+            totals["bright"] += charge(
+                100.0 * (m["fit_centroid_hz"] / o["fit_centroid_hz"] - 1.0)
+                if m.get("fit_centroid_hz")
+                else None,
+                BRIGHT_ABSENT_CAP,
             )
-            body_hits += 1
+            bright_hits += 1
+        o_hf = attack_hf_share_of(o.get("attack_hf_db"))
+        if o_hf is not None:
+            m_hf = attack_hf_share_of(m.get("attack_hf_db"))
+            totals["hfshare"] += charge(None if m_hf is None else m_hf - o_hf, HF_DELTA_CAP_DB)
+            hfshare_notes += 1
+        if o.get("arrival_ms") is not None:
+            totals["arrival"] += charge(
+                None if m.get("arrival_ms") is None else m["arrival_ms"] - o["arrival_ms"],
+                ARRIVAL_ABSENT_CAP,
+            )
+            arrival_hits += 1
+        # Terms the loop or the recording's floor take off the gate on this reference row are skipped on it alone.
+        floor = o.get("floor_censored") or ()
+        off = [*(o.get("loop_unweighted") or ()), *floor]
+        if o.get("body_below_f0_db") is not None:
+            if "body" in floor:
+                body_floor_dropped += 1
+            if "body" not in off:
+                absent_n[0] += _finite_or_none(m.get("body_below_f0_db")) is None
+                totals["body"] += _absent_or(
+                    m.get("body_below_f0_db"), o["body_below_f0_db"], BODY_DELTA_CAP_DB
+                )
+                body_hits += 1
         pairs = list(zip(m["harmonics_db"][:n_harm], o["harmonics_db"][:n_harm]))
         available += max(0, len(pairs) - 1)
         # Which bins hold a partial rather than the note's own noise floor, read
@@ -833,20 +973,20 @@ def loss_terms(
                 continue
             totals["harm"] += float(weights[i]) * abs(mh - oh)
             compared += i > 0 and present_m[i] and present_o[i]
-        # Terms this reference row's loop makes read the loop are skipped on it alone.
-        off = o.get("loop_unweighted") or ()
-        if "cents" not in off:
-            totals["cents"] += abs(m["f0_cents_err"] - o["f0_cents_err"])
-        # A model NaN (dropped out where the oracle scored) is charged the cap rather than skipped; an oracle NaN is skipped.
-        m_tnr, o_tnr = m["tnr_db"], o["tnr_db"]
-        if "tnr" not in off and math.isfinite(o_tnr):
-            shortfall = TNR_ABSENT_CAP_DB if not math.isfinite(m_tnr) else max(0.0, o_tnr - m_tnr)
-            totals["tnr"] += shortfall
-            tnr_notes += shortfall > 0.0
-            if math.isfinite(m_tnr):
-                tnr_past.append(max(0.0, m_tnr - o_tnr))
-            else:
-                tnr_absent += 1
+        # A reading the reference has and the model lacks is charged the cap; one it lacks is skipped.
+        o_cents = _finite_or_none(o.get("cents_vs_et"))
+        if "cents" not in off and o_cents is not None:
+            m_cents = _finite_or_none(m.get("cents_vs_et"))
+            # The gate's `stretch`: model minus reference, the reference's own A4 offset removed.
+            stretch = None if m_cents is None else m_cents - o_cents + o.get("a4_offset_c", 0.0)
+            totals["cents"] += charge(stretch, CENTS_ABSENT_CAP)
+        o_tnr = _finite_or_none(o.get("fit_tnr_db"))
+        if "tnr" in floor and o_tnr is not None:
+            tnr_floor_dropped += 1
+        if "tnr" not in off and o_tnr is not None:
+            m_tnr = _finite_or_none(m.get("fit_tnr_db"))
+            totals["tnr"] += charge(None if m_tnr is None else m_tnr - o_tnr, TNR_ABSENT_CAP_DB)
+            tnr_notes += 1
         totals["env"] += _absent_or(
             m["sustain_slope_db_s"], o["sustain_slope_db_s"], SUSTAIN_SLOPE_CAP_DB_S, cells["env"]
         )
@@ -919,14 +1059,16 @@ def loss_terms(
     )
     out["modes"], modes_notes = _modes_terms(model_rows, oracle_rows_, cells["modes"])
     level_counts: dict[str, float] = {}
-    out["level"], out["crest"], offset = _level_terms(model_rows, oracle_rows_, counts=level_counts)
+    out["level"], out["crest"], offset = _level_terms(
+        model_rows, oracle_rows_, counts=level_counts, level_field=LEVEL_FIELDS[False]
+    )
     # Reported alongside the value because a probe with no velocity axis can
     # only score zero here, and zero is this term's best possible value.
     dyn_counts: dict[str, float] = {}
     out["dyn"], dyn_groups = _dyn_terms(model_rows, oracle_rows_, counts=dyn_counts)
     hfdyn_counts: dict[str, float] = {}
-    out["hfdyn"], hfdyn_groups = _dyn_terms(
-        model_rows, oracle_rows_, read=_attack_hf_share, cap_db=HF_DELTA_CAP_DB, counts=hfdyn_counts
+    out["hfdyn"], hfdyn_groups = _swing_terms(
+        model_rows, oracle_rows_, _attack_hf_share, HF_DELTA_CAP_DB, counts=hfdyn_counts
     )
     modedyn_counts: dict[str, float] = {}
     out["modedyn"], modedyn_groups = _dyn_terms(
@@ -956,8 +1098,8 @@ def loss_terms(
     out["onset_compared"] = float(onset_compared)
     out["stiff_notes"] = float(stiff_notes)
     out["tnr_notes"] = float(tnr_notes)
-    out["tnr_absent"] = float(tnr_absent)
-    out["tnr_past_db"] = float(np.median(tnr_past)) if tnr_past else 0.0
+    out["tnr_floor_dropped"] = float(tnr_floor_dropped)
+    out["body_floor_dropped"] = float(body_floor_dropped)
     out["mod_notes"] = float(mod_notes)
     out["modes_notes"] = float(modes_notes)
     # How many ladder bins above the fundamental held a partial on both sides.
@@ -968,11 +1110,24 @@ def loss_terms(
     out["bright_hits"] = float(bright_hits)
     out["arrival_hits"] = float(arrival_hits)
     out["body_hits"] = float(body_hits)
+    out["hfshare_notes"] = float(hfshare_notes)
     denominators = {"mod": mod_notes, "modes": modes_notes}
     for term, tally in cells.items():
         out.update(tally.out(term))
         out[f"{term}_uncapped"] = tally.uncapped(out[term], denominators.get(term, n))
     out.update(level_counts)
+    out["absent_charged"] = float(
+        absent_n[0]
+        + sum(out[f"{term}_absent"] for term in cells)
+        + sum(
+            c.get("absent", 0.0)
+            for c in (dyn_counts, hfdyn_counts, modedyn_counts, onsetvel_counts, velspan_counts)
+        )
+        + level_counts["level_expected"]
+        - level_counts["level_notes"]
+        + level_counts.get("crest_absent", 0.0)
+        + stiff_counts.get("stiff_absent", 0.0)
+    )
     out.update({f"dyn_{key}": value for key, value in dyn_counts.items()})
     out.update({f"hfdyn_{key}": value for key, value in hfdyn_counts.items()})
     out.update({f"modedyn_{key}": value for key, value in modedyn_counts.items()})
@@ -1019,6 +1174,8 @@ def percussion_terms(
     `env` carries the gestural difference — time to peak, time to fall 20 dB,
     and crest factor — each divided by roughly the amount that is audible, so
     the three are comparable before the term weights see them.
+    `bandrms` is the gate's `band_shape`: the RMS distance of the two band
+    profiles over every band, uncapped. `crest` reads the gate's `crest_db`.
 
     `mss` is carried through unchanged, as in `loss_terms`.
     """
@@ -1032,8 +1189,15 @@ def percussion_terms(
         # fixed everything.
         return {**{name: 0.0 for name in LOSS_TERMS}, "mss": mss, "comparable": 0.0}
     totals = {name: 0.0 for name in LOSS_TERMS}
+    # Cells charged at an absent cap: the reference held a reading and the model had none.
+    absent_n = [0]
+
+    def charge(delta: float | None, cap: float) -> float:
+        absent_n[0] += delta is None
+        return _delta_or_cap(delta, cap)
+
     band_bins = bdecay_bins = tilt_hits = bright_hits = tonal_hits = rise_hits = ring_hits = 0
-    strike_hits = 0
+    strike_hits = bandrms_hits = 0
     # See `CellCount` and the pitched reducer: how much of each capped aggregate
     # is a comparison rather than a cap standing in for one.
     cells = {
@@ -1050,26 +1214,36 @@ def percussion_terms(
     uncapped_deltas: dict[str, list[float]] = {"evolve": [], "diffuse": []}
     for m, o in zip(model_rows, oracle_rows_):
         tilt_m, tilt_o = band_tilt_db(m.get("bands_db")), band_tilt_db(o.get("bands_db"))
-        if tilt_m is not None and tilt_o is not None:
-            totals["tilt"] += abs(tilt_m - tilt_o)
+        if tilt_o is not None:
+            totals["tilt"] += charge(
+                None if tilt_m is None else tilt_m - tilt_o, TILT_ABSENT_CAP_DB
+            )
             tilt_hits += 1
         if o.get("centroid_hz"):
-            if m.get("centroid_hz"):
-                totals["bright"] += abs(100.0 * (m["centroid_hz"] / o["centroid_hz"] - 1.0))
-            else:
-                totals["bright"] += BRIGHT_ABSENT_CAP
+            totals["bright"] += charge(
+                100.0 * (m["centroid_hz"] / o["centroid_hz"] - 1.0)
+                if m.get("centroid_hz")
+                else None,
+                BRIGHT_ABSENT_CAP,
+            )
             bright_hits += 1
         flat_m, flat_o = m.get("flatness_db"), o.get("flatness_db")
-        if flat_m is not None and flat_o is not None:
-            totals["tonal"] += abs(flat_m - flat_o)
+        if flat_o is not None:
+            totals["tonal"] += charge(
+                None if flat_m is None else flat_m - flat_o, TONAL_ABSENT_CAP_DB
+            )
             tonal_hits += 1
         rise_m, rise_o = m.get("tilt_rise_db"), o.get("tilt_rise_db")
-        if rise_m is not None and rise_o is not None:
-            totals["rise"] += abs(rise_m - rise_o)
+        if rise_o is not None:
+            totals["rise"] += charge(
+                None if rise_m is None else rise_m - rise_o, RISE_ABSENT_CAP_DB
+            )
             rise_hits += 1
         strike_m, strike_o = m.get("tilt_strike_db"), o.get("tilt_strike_db")
-        if strike_m is not None and strike_o is not None:
-            totals["strike"] += abs(strike_m - strike_o)
+        if strike_o is not None:
+            totals["strike"] += charge(
+                None if strike_m is None else strike_m - strike_o, STRIKE_ABSENT_CAP_DB
+            )
             strike_hits += 1
         # A capped model decay is a lower bound, kept as `loss_kit` keeps it; a capped reference is still refused.
         ring = ring_doublings({**m, "decay_capped": False}, o)
@@ -1226,6 +1400,11 @@ def percussion_terms(
                     evolution_deltas.append(value)
                 else:
                     window_flatness_deltas.append(value)
+        # The gate's `band_shape`, every band; the reference's floored bands included.
+        if o.get("bands_db"):
+            shape = band_shape_error_db(m.get("bands_db"), o["bands_db"])
+            totals["bandrms"] += charge(shape, BAND_DELTA_CAP_DB)
+            bandrms_hits += 1
         for a, b in zip(m["bands_db"], o["bands_db"]):
             if b <= BAND_REFERENCE_FLOOR_DB:
                 # The reference has floored this band. See
@@ -1272,7 +1451,13 @@ def percussion_terms(
     out["diffuse"] = max(flatness_mean, flatness_upper) if window_flatness_deltas else 0.0
     out["mss"] = mss
     level_counts: dict[str, float] = {}
-    out["level"], out["crest"], offset = _level_terms(model_rows, oracle_rows_, counts=level_counts)
+    out["level"], out["crest"], offset = _level_terms(
+        model_rows,
+        oracle_rows_,
+        counts=level_counts,
+        level_field=LEVEL_FIELDS[True],
+        crest_field=CREST_FIELDS[True],
+    )
     # Reported alongside the value because a probe with no velocity axis can
     # only score zero here, and zero is this term's best possible value.
     dyn_counts: dict[str, float] = {}
@@ -1309,8 +1494,7 @@ def percussion_terms(
     # than it looks like. This one counts what the REFERENCE offered, so it does
     # not move with the candidate and `_went_unmeasurable` cannot fire on it —
     # it is kept in `TERM_COUNT_KEYS` anyway so that a skip reintroduced on the
-    # model side is caught rather than silently unguarded. `tnr_notes` is the
-    # opposite case and is out of that table on purpose; see its own comment.
+    # model side is caught rather than silently unguarded.
     out["band_bins"] = float(band_bins)
     out["bdecay_bins"] = float(bdecay_bins)
     out["density_bins"] = float(density_bins)
@@ -1329,6 +1513,7 @@ def percussion_terms(
     out["rise_hits"] = float(rise_hits)
     out["strike_hits"] = float(strike_hits)
     out["ring_hits"] = float(ring_hits)
+    out["bandrms_hits"] = float(bandrms_hits)
     for term, tally in cells.items():
         out.update(tally.out(term))
         if term in uncapped_deltas:
@@ -1338,6 +1523,15 @@ def percussion_terms(
             denominator = modes_notes if term == "modes" else n
             out[f"{term}_uncapped"] = tally.uncapped(out[term], denominator)
     out.update(level_counts)
+    out["absent_charged"] = float(
+        absent_n[0]
+        + sum(out[f"{term}_absent"] for term in cells)
+        + sum(c.get("absent", 0.0) for c in (dyn_counts, velspan_counts))
+        + level_counts["level_expected"]
+        - level_counts["level_notes"]
+        + level_counts.get("crest_absent", 0.0)
+        + kit_counts.get("kit_absent", 0.0)
+    )
     out.update({f"dyn_{key}": value for key, value in dyn_counts.items()})
     out.update({f"velspan_{key}": value for key, value in velspan_counts.items()})
     out.update(lf_counts)

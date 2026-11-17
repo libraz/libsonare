@@ -62,7 +62,7 @@ def _case(refused, moved, held, switch, newly, grew):
         "selected": {"values": values},
         "loss": {"selected": 0.9},
         "validation": validation,
-        "write_back": {"refused": "objective_went_blind" if refused else None},
+        "write_back": {"refused": "lost_to_start" if refused else None},
     }
     over = {"key": "decay", "stat": "p90", "value": 2.0, "limit": 1.0, "over": True, "excess": 1.0}
     pre = {"gate": {"readings": [dict(over)]}}
@@ -220,8 +220,20 @@ def test_a_search_without_a_weighed_term_is_judged_on_the_confirm_pair_alone():
     assert got["decision"] == "kept" and got["why"].startswith("confirm with mss on gained under")
     fit["confirm"]["local"]["best"]["loss"] = 0.9
     got = verdict(pre, fit, post)
-    assert got["decision"] == "adopt" and got["why"].startswith("confirm +0.1000 with mss on")
+    assert got["decision"] == "adopt" and got["why"].startswith(
+        "confirm +0.1000 in sample with mss on"
+    )
     assert got["scored_without"] == ["mss"]
+
+
+def test_a_gate_only_adoption_names_the_in_sample_gain_it_rests_on():
+    pre, fit, post = _case(False, True, "none", False, False, False)
+    gain = 2 * IN_SAMPLE_MARGIN
+    _own_notes(fit, 1.0, 1.0 - gain)
+    got = verdict(pre, fit, post, gate_only=True)
+    assert got["decision"] == "adopt" and got["held_out_gain"] is None
+    assert got["why"].startswith(f"confirm {gain:+.4f} in sample, gate excess ")
+    assert "gate only" not in got["why"]
 
 
 def test_an_adoption_with_no_held_out_condition_is_marked_in_sample():
@@ -288,6 +300,13 @@ def test_a_release_is_held_only_where_no_gate_reads_the_key_lift(tmp_path, monke
     assert refit.verdict(pre, good, post)["decision"] == "adopt"
 
 
+def test_a_stretch_trade_is_reweighed_through_its_own_term():
+    from refit import reweighed
+
+    report = {"fit_profile": {"weights": {"stiff": 1.0, "cents": 0.5}}}
+    assert reweighed(report, ["cap:stretch p90"]) == {"cents": 1.0}
+
+
 def test_a_kit_trade_is_reweighed_with_the_percussion_terms():
     from refit import reweighed
 
@@ -295,7 +314,7 @@ def test_a_kit_trade_is_reweighed_with_the_percussion_terms():
     weights = reweighed(
         report, ["drums_module_hit:level p90", "drums_module:band_shape median"], percussive=True
     )
-    assert weights == {"band": 2.0}
+    assert weights == {"bandrms": 1.0}
     assert reweighed(report, ["drums_module_hit:level p90"], percussive=True) is None
 
 
@@ -633,6 +652,10 @@ def _judged_dir(tmp_path, monkeypatch, *, fit_runs):
     monkeypatch.setattr(refit, "_tuning_lib", lambda build_dir: Path("lib"))
     monkeypatch.setattr(gate_audit, "compare", fake_compare)
     monkeypatch.setattr(refit, "_fit", no_fit)
+    # No reference audio here; a tail check that ran and found nothing.
+    monkeypatch.setattr(
+        refit, "tail_check", lambda voice, fit, lib: {"violated": False, "rows": []}
+    )
     monkeypatch.setattr(
         refit, "_catalogue", lambda voice, lib: SimpleNamespace(defaults={"cap.a": 3.0})
     )
@@ -809,9 +832,13 @@ def test_a_red_dimension_raises_the_term_that_measures_it():
     assert reweighed(report, ["c:body abs_median"]) == {"body": 1.0}
 
 
-def _prefit_dir(tmp_path, monkeypatch, red, *, weights, refuse_weighted=False):
-    """A voice whose pre reading is red on `red` (dimension -> over), with every fit recorded."""
+def _prefit_dir(tmp_path, monkeypatch, red, *, weights, refuse_weighted=False, contrasts=None):
+    """A voice whose pre reading is red on `red` (dimension -> over), with every fit recorded.
+
+    `contrasts` are the probe-shape flags the voice's fit probe carries; unset ones hold.
+    """
     import json
+    from types import SimpleNamespace
 
     import refit
 
@@ -846,7 +873,14 @@ def _prefit_dir(tmp_path, monkeypatch, red, *, weights, refuse_weighted=False):
     monkeypatch.setattr(refit, "_tuning_lib", lambda build_dir: Path("lib"))
     monkeypatch.setattr(gate_audit, "compare", fake_compare)
     monkeypatch.setattr(refit, "_fit", fake_fit)
+    # No reference audio here; a tail check that ran and found nothing.
+    monkeypatch.setattr(
+        refit, "tail_check", lambda voice, fit, lib: {"violated": False, "rows": []}
+    )
     monkeypatch.setattr(refit, "profile_weights", lambda voice: dict(weights))
+    monkeypatch.setattr(
+        refit, "probe_contrasts", lambda voice: SimpleNamespace(**(contrasts or {}))
+    )
     monkeypatch.setattr(refit, "struct_copies", dict)
     monkeypatch.setattr(refit, "explicit_fields", dict)
     monkeypatch.setattr(refit, "registry_history", lambda units: iter(()))  # pre ships
@@ -865,7 +899,7 @@ def test_prefit_raises_a_red_dimensions_zero_weight_own_term(tmp_path, monkeypat
 
     red = {"body": True, "centroid_pct": True, "stretch": True, "decay": True, "tnr": False}
     refit, voice, fits_run = _prefit_dir(
-        tmp_path, monkeypatch, red, weights={"harm": 1.0, "stiff": 2.0}
+        tmp_path, monkeypatch, red, weights={"harm": 1.0, "cents": 2.0}
     )
     result = refit.run_voice(voice, tmp_path, "build", 8)
     assert fits_run == [{"body": 1.0, "bright": 1.0}], "stretch has a weighted own term"
@@ -880,7 +914,7 @@ def test_prefit_raises_a_red_dimensions_zero_weight_own_term(tmp_path, monkeypat
 
 def test_prefit_leaves_a_clean_pre_alone(tmp_path, monkeypatch):
     refit, voice, fits_run = _prefit_dir(
-        tmp_path, monkeypatch, {"body": False, "stretch": True}, weights={"stiff": 1.0}
+        tmp_path, monkeypatch, {"body": False, "stretch": True}, weights={"cents": 1.0}
     )
     result = refit.run_voice(voice, tmp_path, "build", 8)
     assert fits_run == [None]
@@ -900,11 +934,79 @@ def test_prefit_weights_double_a_nonzero_term_by_the_reweighed_rule():
     from refit import prefit_raise
 
     pre = {"gate": {"readings": [{"key": "cap:attack_hf", "stat": "m", "over": True}]}}
-    assert prefit_raise({}, pre, {})["prefit_weights"] == {"hf": 1.0}
+    assert prefit_raise({}, pre, {})["prefit_weights"] == {"hfshare": 1.0}
+    # `hf` reads the attack's five bands and is a proxy, so weighing it raises the own term.
+    assert prefit_raise({}, pre, {"hf": 1.0})["prefit_weights"] == {"hfshare": 1.0}
+    # The same for `stiff`, which reads B: stretch's own term is `cents`.
+    pre = {"gate": {"readings": [{"key": "cap:stretch", "stat": "m", "over": True}]}}
+    assert prefit_raise({}, pre, {"stiff": 2.0})["prefit_weights"] == {"cents": 1.0}
     kit = {"drum_note": 36}
     pre = {"gate": {"readings": [{"key": "crest", "stat": "m", "over": True}]}}
     assert prefit_raise(kit, pre, {})["prefit_weights"] == {"crest": 1.0}
     assert prefit_raise(kit, pre, {"crest": 3.0})["prefit_weights"] == {}
+
+
+def _refusable_own_terms():
+    """(kit, dimension, term, flag) for every own term a probe's shape can refuse."""
+    from loss_weights import DROP_REASONS, GATE_OWN_TERMS, PERCUSSION_GATE_OWN_TERMS
+
+    return [
+        (kit, dim, term, DROP_REASONS[term][0])
+        for kit, own in ((False, GATE_OWN_TERMS), (True, PERCUSSION_GATE_OWN_TERMS))
+        for dim, terms in own.items()
+        for term in terms
+        if term in DROP_REASONS
+    ]
+
+
+@pytest.mark.parametrize("kit,dim,term,flag", _refusable_own_terms())
+def test_prefit_skips_an_own_term_the_probe_refuses_and_names_it_once(kit, dim, term, flag):
+    from types import SimpleNamespace
+
+    from loss_weights import DROP_REASONS
+    from refit import prefit_lines, prefit_raise
+
+    voice = {"drum_note": 36} if kit else {}
+    pre = {"gate": {"readings": [{"key": f"cap:{dim}", "stat": "m", "over": True}]}}
+    assert term in prefit_raise(voice, pre, {})["prefit_weights"]
+    got = prefit_raise(voice, pre, {}, probe=SimpleNamespace(**{flag: False}))
+    assert term not in got["prefit_weights"] and term not in got["raised_from_zero"]
+    assert got["skipped"] == {term: DROP_REASONS[term][1]}
+    lines = [ln for ln in prefit_lines("cap", got, 10.0) if term in ln]
+    assert lines == [f"cap: {term} not weighted: {DROP_REASONS[term][1]}"]
+
+
+def test_refit_reads_the_contrasts_off_the_probe_the_fit_will_run(tmp_path, monkeypatch, capsys):
+    refit, voice, fits_run = _prefit_dir(
+        tmp_path,
+        monkeypatch,
+        {"vel_range": True, "body": True},
+        weights={"harm": 1.0},
+        contrasts={"has_velocity_spread": False},
+    )
+    result = refit.run_voice(voice, tmp_path, "build", 8)
+    assert fits_run == [{"body": 1.0}]
+    assert list(result["prefit_skipped"]) == ["velspan"]
+    assert capsys.readouterr().out.count("velspan not weighted") == 1
+
+
+def test_probe_contrasts_read_the_capture_cells_the_fit_sounds(monkeypatch):
+    from types import SimpleNamespace
+
+    import refit
+
+    cells = {(36, 100): None, (38, 40): None, (38, 100): None, (60, 40): None, (60, 100): None}
+    monkeypatch.setattr(refit, "_corpus", lambda path, timbre: SimpleNamespace(renders=cells))
+    kit = refit.probe_contrasts({"drum_note": 36, "corpus": "c", "timbre": "t"})
+    assert (kit.has_velocity_spread, kit.has_level_contrasts) == (False, False)
+    snare = refit.probe_contrasts({"drum_note": 38, "corpus": "c", "timbre": "t"})
+    assert (snare.has_velocity_spread, snare.has_level_contrasts) == (True, True)
+    one = {"corpus": "c", "timbre": "t", "notes": [60], "velocities": [100]}
+    pitched = refit.probe_contrasts(one)
+    assert (pitched.has_velocity_spread, pitched.has_level_contrasts) == (False, False)
+    joint = {"joint": [{**one, "velocities": [40, 100]}, {**one, "notes": [36, 60]}]}
+    both = refit.probe_contrasts(joint)
+    assert (both.has_velocity_spread, both.has_level_contrasts) == (False, True)
 
 
 def _far_voice(tmp_path, monkeypatch, spread, k=10.0):
@@ -1724,13 +1826,90 @@ def test_a_fit_within_the_tail_bound_passes(monkeypatch, tmp_path):
     assert _tail_verdict(refit, {**fit, refit.TAIL_CHECK_KEY: record})["decision"] == "adopt"
 
 
-def test_a_tail_check_without_reference_audio_is_skipped_and_blocks_nothing(monkeypatch, tmp_path):
+def test_a_tail_check_without_reference_audio_is_an_error_not_a_skip(monkeypatch, tmp_path):
     refit, voice, fit, rendered = _tail_voice(
         monkeypatch, tmp_path, candidate_slope=-10.0, ref_exists=False
     )
     record = refit.tail_check(voice, fit, Path("lib"))
-    assert "no reference audio" in record["skipped"] and rendered == []
-    assert _tail_verdict(refit, {**fit, refit.TAIL_CHECK_KEY: record})["decision"] == "adopt"
+    assert "no reference audio" in record["error"] and "skipped" not in record and rendered == []
+    failed = refit.post_fit_error({**fit, refit.TAIL_CHECK_KEY: record})
+    assert failed.startswith("tail check failed: no reference audio")
+    assert refit.tail_check(voice, {**fit, "overrides": ""}, Path("lib")) == {
+        "skipped": "no value moved"
+    }
+
+
+def _judge_world(monkeypatch, tmp_path, fit: dict) -> tuple:
+    """A voice with pre and fit on disk, every measurement stubbed, and the calls recorded."""
+    import json
+
+    import refit
+
+    (tmp_path / "pre.json").write_text("{}")
+    (tmp_path / "fit.json").write_text(json.dumps(fit))
+    calls: list[str] = []
+    monkeypatch.setattr(refit, "_check_pin", lambda: None)
+    monkeypatch.setattr(refit, "_tuning_lib", lambda build_dir: Path("lib"))
+    monkeypatch.setattr(refit, "unmeasured", lambda voice: frozenset())
+    monkeypatch.setattr(refit, "gate_floors", lambda voice: None)
+    monkeypatch.setattr(
+        refit, "verdict", lambda *a, **k: calls.append("verdict") or {"decision": "kept"}
+    )
+
+    def audit(voice, out, *a, **k):
+        calls.append(out.name)
+        out.write_text("{}")
+
+    monkeypatch.setattr(gate_audit, "compare_voice", audit)
+    return refit, calls
+
+
+def test_an_anchor_that_errors_leaves_the_voice_unjudged(monkeypatch, tmp_path):
+    refit, calls = _judge_world(monkeypatch, tmp_path, {"level_unscored": True})
+    monkeypatch.setattr(
+        refit,
+        "anchor_gain",
+        lambda voice, d, b, report, lib, k: {
+            **report,
+            refit.GAIN_ANCHOR_KEY: {"knob": "p.gain", "error": "no level reading"},
+        },
+    )
+    got = refit._judge_voice({"slug": "v"}, tmp_path, "build", 8)
+    assert got == {
+        "slug": "v",
+        "decision": "stopped",
+        "why": "gain anchor failed: no level reading",
+    }
+    assert calls == [], "neither the post audit nor a verdict runs on a failed anchor"
+
+
+def test_an_anchor_that_does_not_apply_is_judged_around(monkeypatch, tmp_path):
+    refit, calls = _judge_world(monkeypatch, tmp_path, {"level_unscored": True, "tail_check": {}})
+    monkeypatch.setattr(
+        refit,
+        "anchor_gain",
+        lambda voice, d, b, report, lib, k: {
+            **report,
+            refit.GAIN_ANCHOR_KEY: {"knob": "p.gain", "skipped": "no gain field"},
+        },
+    )
+    assert refit._judge_voice({"slug": "v"}, tmp_path, "build", 8)["decision"] == "kept"
+    assert calls == ["post.json", "verdict"]
+
+
+def test_a_tail_check_that_errors_leaves_the_voice_unjudged_and_runs_again(monkeypatch, tmp_path):
+    refit, calls = _judge_world(monkeypatch, tmp_path, {"tail_check": {"error": "render failed"}})
+    runs = []
+
+    def tail(voice, fit, lib):
+        runs.append(1)
+        return {"error": "no reference audio for c n60v100"}
+
+    monkeypatch.setattr(refit, "tail_check", tail)
+    got = refit._judge_voice({"slug": "v"}, tmp_path, "build", 8)
+    assert got["decision"] == "stopped" and runs == [1], "the recorded error is not a result"
+    assert got["why"] == "tail check failed: no reference audio for c n60v100"
+    assert "verdict" not in calls
 
 
 # A dimension the gate bounds and the objective could not weigh is judged after the fit.

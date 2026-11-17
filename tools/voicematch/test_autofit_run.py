@@ -22,7 +22,6 @@ import json
 from dataclasses import replace
 
 import autofit
-import autofit_report
 import build_lib
 import eval_cache
 import render_rows
@@ -213,86 +212,6 @@ def test_a_validation_fallback_pairs_selected_values_with_selected_loss():
     assert selected == [0.25]
     assert evaluator.selected_values == [0.25]
     assert evaluator.selected_loss == pytest.approx(1.0)
-
-
-def test_a_winner_that_left_the_reference_behind_writes_nothing():
-    """`tnr` charges only where the model is noisier, so leaving is free.
-
-    The shamisen's buzz is its sawari and it is the only between-partial energy
-    the model has. A fit took it from 0.5 to 0.146 and the gate then read the
-    voice 29.97 dB cleaner than its reference against a 1.81 bound, while the
-    term reported 0.00 at every candidate. How many notes it charged cannot tell
-    that from a match, so the guard reads how far past the reference the model
-    went, and how many notes it fell silent on.
-    """
-    knobs = [_reach_knob("a", 0.0, 1.0, 0.25)]
-
-    def ev(past, absent, notes_start=7.0, notes_best=0.0):
-        return argparse.Namespace(
-            normalize=True,
-            best_loss=0.5071,
-            start_tnr_notes=notes_start,
-            best_tnr_notes=notes_best,
-            start_tnr_past_db=past[0],
-            best_tnr_past_db=past[1],
-            start_tnr_absent=absent[0],
-            best_tnr_absent=absent[1],
-        )
-
-    # Walked 28 dB past the reference: refused.
-    assert winner_or_defaults(knobs, [0.9], ev((2.0, 30.0), (0.0, 0.0))) == [0.25]
-    # Fell silent on notes it used to sound on: refused, even with no overshoot.
-    assert winner_or_defaults(knobs, [0.9], ev((2.0, 2.0), (0.0, 3.0))) == [0.25]
-    # Every shortfall closed without going past: a match, and it is written.
-    assert winner_or_defaults(knobs, [0.9], ev((2.0, 2.5), (1.0, 1.0))) == [0.9]
-    # Only the fit's own growth past the gate's `tnr` floor is a finding.
-    assert winner_or_defaults(knobs, [0.9], ev((12.0, 12.9), (0.0, 0.0), 0.0, 0.0)) == [0.9]
-    # A --raw-loss run leaves the anchors unset; the guard has nothing to read.
-    assert winner_or_defaults(knobs, [0.9], ev((None, None), (None, None), None, None)) == [0.9]
-
-
-def test_a_winner_past_the_reference_walks_back_along_its_path():
-    """The guard keeps what the search gained before it started walking past.
-
-    Three best-so-far points: the start, one still on the reference's side, and
-    the winner 3.5 dB cleaner than it. The second is selected, becomes the search
-    winner so the hold-out scores it, and the unconstrained winner is recorded.
-    """
-    terms = {
-        (1.0,): {"tnr_absent": 0.0, "tnr_past_db": 0.0},
-        (0.6,): {"tnr_absent": 0.0, "tnr_past_db": 0.8},
-        (0.2,): {"tnr_absent": 0.0, "tnr_past_db": 3.5},
-    }
-    ev = argparse.Namespace(
-        start_tnr_absent=0.0,
-        start_tnr_past_db=0.0,
-        best_tnr_absent=0.0,
-        best_tnr_past_db=3.5,
-        best_values=[0.2],
-        best_loss=0.70,
-        path=[(1, 1.0, "", [1.0]), (40, 0.80, "", [0.6]), (300, 0.70, "", [0.2])],
-        terms_for=lambda v: terms.get(tuple(v)),
-    )
-    assert autofit_report.short_of_blind([0.2], ev) == [0.6]
-    assert ev.best_values == [0.6] and ev.best_loss == 0.80 and ev.best_tnr_past_db == 0.8
-    assert ev.walked_back["from_eval"] == 300 and ev.walked_back["to_eval"] == 40
-    knobs = [_reach_knob("a", 0.0, 1.0, 1.0)]
-    ev.normalize = True
-    assert winner_or_defaults(knobs, [0.6], ev) == [0.6]
-    assert ev.write_back_refusal is None
-
-    # Nothing on the path short of the start stayed on the reference's side: refused as before.
-    ev.path = [(1, 1.0, "", [1.0]), (300, 0.70, "", [0.2])]
-    ev.best_tnr_past_db, ev.best_values, ev.best_loss = 3.5, [0.2], 0.70
-    assert autofit_report.short_of_blind([0.2], ev) == [0.2]
-    assert ev.walked_back is None
-    assert winner_or_defaults(knobs, [0.2], ev) == [1.0]
-    assert ev.write_back_refusal == "objective_went_blind"
-
-    # A winner the guard admits is left alone.
-    ev.best_tnr_past_db = 0.5
-    assert autofit_report.short_of_blind([0.2], ev) == [0.2]
-    assert ev.walked_back is None
 
 
 def test_a_screen_that_moves_something_still_narrows_to_it():
@@ -774,36 +693,48 @@ def test_fold_tree_provenance_is_a_noop_without_an_out_path(tmp_path):
 def test_a_refusal_names_itself_in_the_out_artifact(tmp_path):
     """Unchanged values have two readings and only the record can tell them apart.
 
-    A search that found nothing worth writing and an objective that went blind
-    leave the same tree. The second is a missing measurement axis rather than a
-    fit result, and it is the one worth counting later.
+    A search that found nothing worth writing and a winner refused for losing to
+    its own start leave the same tree; the record names the refusal.
     """
     knobs = [_reach_knob("a", 0.0, 1.0, 0.25)]
-    blind = argparse.Namespace(
-        normalize=True,
-        best_loss=0.5071,
-        start_tnr_notes=7.0,
-        best_tnr_notes=0.0,
-        start_tnr_absent=0.0,
-        best_tnr_absent=0.0,
-        start_tnr_past_db=2.0,
-        best_tnr_past_db=30.0,
+    lost = argparse.Namespace(
+        normalize=True, best_loss=1.1536, start_tnr_notes=7.0, best_tnr_notes=6.0
     )
-    assert winner_or_defaults(knobs, [0.9], blind) == [0.25]
-    assert blind.write_back_refusal == "objective_went_blind"
+    assert winner_or_defaults(knobs, [0.9], lost) == [0.25]
+    assert lost.write_back_refusal == "lost_to_start"
 
     out = tmp_path / "result.json"
-    out.write_text(json.dumps({"loss": {"best": 0.5071}}))
-    autofit._fold_write_back_verdict(str(out), blind)
+    out.write_text(json.dumps({"loss": {"best": 1.1536}}))
+    autofit._fold_write_back_verdict(str(out), lost)
     record = json.loads(out.read_text())
-    assert record["loss"] == {"best": 0.5071}  # what was already there survives
+    assert record["loss"] == {"best": 1.1536}  # what was already there survives
     assert record["write_back"] == {
-        "refused": "objective_went_blind",
-        "tnr_notes": {"start": 7.0, "best": 0.0},
-        "tnr_absent": {"start": 0.0, "best": 0.0},
-        "tnr_past_db": {"start": 2.0, "best": 30.0},
-        "walked_back": None,
+        "refused": "lost_to_start",
+        "tnr_notes": {"start": 7.0, "best": 6.0},
+        "absent_charged": {"start": None, "best": None},
+        "floor_dropped": None,
+        "not_computed": [],
     }
+
+
+def test_the_write_back_record_names_the_readings_the_floor_took_and_the_terms_it_emptied(tmp_path):
+    state = argparse.Namespace(
+        normalize=True,
+        best_loss=1.0,
+        start_tnr_notes=0.0,
+        best_tnr_notes=0.0,
+        floor_dropped={"tnr": 3.0, "body": 0.0},
+        floor_not_computed=["tnr"],
+        start_absent_charged=4.0,
+        best_absent_charged=1.0,
+    )
+    out = tmp_path / "result.json"
+    out.write_text("{}")
+    autofit._fold_write_back_verdict(str(out), state)
+    record = json.loads(out.read_text())["write_back"]
+    assert record["floor_dropped"] == {"tnr": 3.0, "body": 0.0}
+    assert record["not_computed"] == ["tnr"]
+    assert record["absent_charged"] == {"start": 4.0, "best": 1.0}
 
 
 def test_each_refusal_is_distinguishable_and_a_write_names_none():
@@ -838,17 +769,12 @@ def test_fold_write_back_verdict_keeps_nonfinite_measurements_as_json_null(tmp_p
         write_back_refusal=None,
         start_tnr_notes=float("inf"),
         best_tnr_notes=float("nan"),
-        start_tnr_absent=None,
-        best_tnr_absent=None,
-        start_tnr_past_db=None,
-        best_tnr_past_db=float("-inf"),
     )
     autofit._fold_write_back_verdict(str(out), evaluator)
     text = out.read_text()
     assert "Infinity" not in text and "NaN" not in text
     record = json.loads(text)
     assert record["write_back"]["tnr_notes"] == {"start": None, "best": None}
-    assert record["write_back"]["tnr_past_db"] == {"start": None, "best": None}
 
 
 def test_allow_dirty_src_run_records_provenance_in_out(tmp_path, monkeypatch):
@@ -1156,7 +1082,7 @@ def test_an_already_weighted_dimension_prints_why_nothing_was_raised(tmp_path, m
     err = capsys.readouterr().err
     assert prefit["prefit_weights"] == {} and autofit.cli_weights(args) == weights
     assert f"v: attack_hf_swing already weighted ({weights['hfdyn']:g}): red" in err
-    assert f"v: stretch already weighted ({weights['stiff']:g}): far 11 floors" in err
+    assert f"v: stretch already weighted ({weights['cents']:g}): far 11 floors" in err
 
 
 def test_the_users_zero_weight_wins_over_a_bare_autofits_pre_fit_raise(
@@ -1175,6 +1101,35 @@ def test_a_gate_with_no_stored_measurement_raises_nothing(tmp_path, monkeypatch,
     prefit = autofit.apply_prefit(args)
     assert prefit["readings"] == 0 and prefit["prefit_weights"] == {}
     assert capsys.readouterr().err == ""
+
+
+def _refusable_pitched_own_terms():
+    """(dimension, term, flag) for every pitched own term a probe's shape can refuse."""
+    from loss_weights import DROP_REASONS, GATE_OWN_TERMS
+
+    return [
+        (dim, term, DROP_REASONS[term][0])
+        for dim, terms in GATE_OWN_TERMS.items()
+        for term in terms
+        if term in DROP_REASONS
+    ]
+
+
+@pytest.mark.parametrize("dim,term,flag", _refusable_pitched_own_terms())
+def test_a_term_the_probe_refuses_is_skipped_by_prefit_and_presence_and_named_once(
+    tmp_path, monkeypatch, capsys, dim, term, flag
+):
+    from loss_weights import DROP_REASONS
+
+    args = _prefit_world(tmp_path, monkeypatch, {dim: _bound("p90", 1.0, 2.0)})
+    setattr(args, flag, False)
+    prefit = autofit.apply_prefit(args)
+    plan = autofit.apply_presence(args, [args])
+    assert term not in prefit["prefit_weights"] and term not in plan["terms"]
+    assert getattr(args, f"w_{term}", None) is None and term not in autofit.cli_weights(args)
+    assert prefit["skipped"] == plan["skipped"] == {term: DROP_REASONS[term][1]}
+    err = capsys.readouterr().err
+    assert err.count(f"{term} not weighted: {DROP_REASONS[term][1]}") == 1
 
 
 def _presence_bounds():
@@ -1224,29 +1179,37 @@ def test_an_already_weighted_own_term_takes_the_p90_tail_without_a_presence_weig
 ):
     from loss_aggregate import PRESENCE_TAIL_FRACTION
 
-    args = _prefit_world(tmp_path, monkeypatch, {"crest": {"median": 1.0, "p90": 2.0}})
-    weight = autofit.cli_weights(args)["crest"]
+    args = _prefit_world(tmp_path, monkeypatch, {"tnr": {"median": 1.0, "p90": 2.0}})
+    weight = autofit.cli_weights(args)["tnr"]
     plan = autofit.apply_presence(args, [args])
-    assert plan["terms"] == {} and autofit.cli_weights(args)["crest"] == weight
-    crest = plan["weighted"]["crest"]
-    assert crest["weight"] == weight and crest["aggregate"] == "tail"
-    assert crest["tail_fraction"] == PRESENCE_TAIL_FRACTION and crest["covers"] == ["median", "p90"]
-    assert args.term_tails == {"crest": PRESENCE_TAIL_FRACTION}
-    assert "tails: weighted own term(s) tailed for a gated p90 (crest<-crest tail 0.1)" in (
+    assert plan["terms"] == {} and autofit.cli_weights(args)["tnr"] == weight
+    tnr = plan["weighted"]["tnr"]
+    assert tnr["weight"] == weight and tnr["aggregate"] == "tail"
+    assert tnr["tail_fraction"] == PRESENCE_TAIL_FRACTION and tnr["covers"] == ["median", "p90"]
+    assert args.term_tails == {"tnr": PRESENCE_TAIL_FRACTION}
+    assert "tails: weighted own term(s) tailed for a gated p90 (tnr<-tnr tail 0.1)" in (
         capsys.readouterr().err
     )
     # Without a p90 bound the weighted term keeps the run's reduction.
-    plain = _prefit_world(tmp_path, monkeypatch, {"crest": {"median": 1.0}})
+    plain = _prefit_world(tmp_path, monkeypatch, {"tnr": {"median": 1.0}})
     autofit.apply_presence(plain, [plain])
-    assert plain.term_tails == {} and plain.presence["weighted"]["crest"]["covers"] == ["median"]
+    assert plain.term_tails == {} and plain.presence["weighted"]["tnr"]["covers"] == ["median"]
+
+
+def test_a_pitched_crest_has_no_own_term(tmp_path, monkeypatch):
+    """Peak over held RMS is not the gate's crest reading, so weighing it is not owning it."""
+    args = _prefit_world(tmp_path, monkeypatch, {"crest": {"median": 1.0, "p90": 2.0}})
+    assert autofit.cli_weights(args)["crest"] > 0.0
+    plan = autofit.apply_presence(args, [args])
+    assert plan["terms"] == plan["weighted"] == {} and plan["unscorable"] == ["crest"]
 
 
 def test_recorded_tails_are_used_as_given_and_a_mismatch_is_refused(tmp_path, monkeypatch):
-    args = _prefit_world(tmp_path, monkeypatch, {"crest": {"p90": 2.0}})
-    args.term_tails_given = "crest=0.05"
+    args = _prefit_world(tmp_path, monkeypatch, {"tnr": {"p90": 2.0}})
+    args.term_tails_given = "tnr=0.05"
     autofit.apply_presence(args, [args])
-    assert args.term_tails == {"crest": 0.05}
-    wrong = _prefit_world(tmp_path, monkeypatch, {"crest": {"p90": 2.0}})
+    assert args.term_tails == {"tnr": 0.05}
+    wrong = _prefit_world(tmp_path, monkeypatch, {"tnr": {"p90": 2.0}})
     wrong.term_tails_given = "body=0.1"
     with pytest.raises(ValueError, match="--term-tails names"):
         autofit.apply_presence(wrong, [wrong])

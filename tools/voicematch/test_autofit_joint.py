@@ -28,7 +28,6 @@ from autofit import (
     Evaluator,
     JointEvaluator,
     capture_weight,
-    joint_short_of_blind,
     joint_winner,
     validate_joint,
 )
@@ -273,16 +272,17 @@ def test_the_partition_is_checked_per_capture_and_names_the_offender(tmp_path):
 # Guards: any capture tripping trips the fit
 # --------------------------------------------------------------------------- #
 def _blind_on_second(v):
-    return _terms(harm=_units("harm", 4.0 - 2.0 * v[0]), tnr=1.0, tnr_absent=3.0 * (v[0] > 0.7))
+    notes = 0.0 if v[0] > 0.7 else 3.0
+    return _terms(harm=_units("harm", 4.0 - 2.0 * v[0]), stiff=1.0, stiff_notes=notes)
 
 
 def _steady(v):
-    return _terms(harm=_units("harm", 4.0 - 2.0 * v[0]), tnr=1.0, tnr_absent=0.0)
+    return _terms(harm=_units("harm", 4.0 - 2.0 * v[0]), stiff=1.0, stiff_notes=3.0)
 
 
 def _two(tmp_path, monkeypatch, second):
-    a = _member(tmp_path, monkeypatch, _steady, harm=1.0)
-    b = _member(tmp_path, monkeypatch, second, harm=1.0)
+    a = _member(tmp_path, monkeypatch, _steady, harm=1.0, stiff=0.1)
+    b = _member(tmp_path, monkeypatch, second, harm=1.0, stiff=0.1)
     joint = _joint(a, b, labels=["a:t0", "b:t0"])
     for value in ([0.5], [0.6], [0.9]):
         joint(value)
@@ -293,7 +293,7 @@ def test_a_guard_tripped_by_the_second_capture_keeps_the_defaults(tmp_path, monk
     joint = _two(tmp_path, monkeypatch, _blind_on_second)
     assert joint.best_values == [0.9]
     assert joint_winner([KNOB], [0.9], joint, None) == START
-    assert joint.write_back_refusal == "objective_went_blind"
+    assert joint.write_back_refusal == "measurement_dropout"
     assert joint.refused_by == ["b:t0"]
     assert joint.members[0].write_back_refusal is None
 
@@ -303,15 +303,6 @@ def test_the_same_winner_is_kept_when_no_capture_trips(tmp_path, monkeypatch):
     assert joint_winner([KNOB], [0.9], joint, None) == [0.9]
     assert joint.write_back_refusal is None
     assert joint.members[1].selected_values == [0.9]
-
-
-def test_the_walk_back_stops_at_the_last_point_clear_on_every_capture(tmp_path, monkeypatch):
-    joint = _two(tmp_path, monkeypatch, _blind_on_second)
-    assert joint_short_of_blind([0.9], joint) == [0.6]
-    assert joint.walked_back["to_loss"] < 1.0
-    assert joint.best_values == [0.6]
-    # The members follow, so the guards read the point the fit now means to write.
-    assert joint.members[1].best_values == [0.6]
 
 
 def test_losing_to_the_start_is_a_joint_reading_not_a_capture_one(tmp_path, monkeypatch):

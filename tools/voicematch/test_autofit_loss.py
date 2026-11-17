@@ -12,6 +12,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from loss_dimensions import ARRIVAL_ABSENT_CAP, BRIGHT_ABSENT_CAP
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -309,12 +310,12 @@ def test_a_pattern_with_no_analysis_notes_is_scorable_on_the_whole_timeline():
     assert terms["harm"] == 0.0
 
 
-def test_a_model_cleaner_than_its_oracle_is_not_penalised():
+def test_a_model_cleaner_than_its_oracle_is_charged_as_a_noisier_one():
     def row(tnr):
         return {
             "harmonics_db": [0.0],
             "f0_cents_err": 0.0,
-            "tnr_db": tnr,
+            "fit_tnr_db": tnr,
             "sustain_slope_db_s": 0.0,
             "release_ms": 0.0,
             "attack_ms": 0.0,
@@ -322,7 +323,7 @@ def test_a_model_cleaner_than_its_oracle_is_not_penalised():
 
     cleaner = loss_terms([row(40.0)], [row(20.0)], n_harm=1)
     noisier = loss_terms([row(10.0)], [row(20.0)], n_harm=1)
-    assert cleaner["tnr"] == 0.0
+    assert cleaner["tnr"] == pytest.approx(20.0)
     assert noisier["tnr"] == pytest.approx(10.0)
 
 
@@ -335,12 +336,13 @@ def test_a_pitched_voice_scores_the_gates_centroid_ratio():
             "sustain_slope_db_s": 0.0,
             "release_ms": 0.0,
             "attack_ms": 0.0,
-            **({"centroid_hz": centroid_hz} if centroid_hz else {}),
+            **({"fit_centroid_hz": centroid_hz} if centroid_hz else {}),
         }
 
-    # A string sounding its octave doubles the centroid; the gate reads +100 %.
+    # A string sounding its octave doubles the centroid; the gate reads +100 %, which the term
+    # holds to the cost of an absent reading.
     octave = loss_terms([row(1600.0), row(800.0)], [row(800.0), row(800.0)], n_harm=1)
-    assert octave["bright"] == pytest.approx(50.0)
+    assert octave["bright"] == pytest.approx(BRIGHT_ABSENT_CAP / 2)
     assert octave["bright_hits"] == 2.0
     # A reference with no centroid is unmeasured, not a match.
     absent = loss_terms([row(1600.0)], [row(None)], n_harm=1)
@@ -361,11 +363,11 @@ def test_a_pitched_voice_scores_the_gates_arrival_time():
         }
 
     late = loss_terms([row(750.0), row(110.0)], [row(110.0), row(110.0)], n_harm=1)
-    assert late["arrival"] == pytest.approx(320.0)
+    assert late["arrival"] == pytest.approx(ARRIVAL_ABSENT_CAP / 2)  # 640 ms late, held to the cap
     assert late["arrival_hits"] == 2.0
     # A reference arriving at its first window is a reading of zero, not an absence.
     prompt = loss_terms([row(40.0)], [row(0.0)], n_harm=1)
-    assert prompt["arrival"] == pytest.approx(40.0)
+    assert prompt["arrival"] == pytest.approx(ARRIVAL_ABSENT_CAP)
     absent = loss_terms([row(750.0)], [row(None)], n_harm=1)
     assert absent["arrival"] == 0.0
     assert absent["arrival_hits"] == 0.0
@@ -592,19 +594,17 @@ def test_an_oracle_that_shows_no_ceiling_of_its_own_still_takes_the_measured_one
     assert reference_band_edge(corpus, wide) == 5000.0
 
 
-def test_a_narrower_oracle_is_not_widened_by_the_committed_profile(
+def test_a_fit_takes_the_gates_ceiling_even_where_its_own_oracle_is_narrower(
     tmp_path,
     monkeypatch,
     capsys,
 ):
-    """The lower of the two wins in both directions. A corpus re-captured since
-    the profile was measured can be the narrower one, and a ceiling that rises
-    because a file on disk is older than the audio is this guard running
-    backwards."""
+    """The gate scores a kit's bands up to the profile's ceiling and no lower, so the fit's
+    `bandrms` reads the same bands whichever way the two measurements disagree."""
     corpus = load_corpus(_write_corpus(tmp_path / "c"))
     _committed_profile(tmp_path, monkeypatch, corpus.capture_id, 5000.0)
-    assert reference_band_edge(corpus, _rows_discriminating_to(19)) == 4000.0
-    assert "held to" not in capsys.readouterr().err
+    assert reference_band_edge(corpus, _rows_discriminating_to(19)) == 5000.0
+    assert "held to 5.0 kHz" in capsys.readouterr().err
 
 
 def test_a_capture_with_no_measured_profile_keeps_its_own_ceiling(tmp_path, monkeypatch):
@@ -622,13 +622,12 @@ def test_a_run_with_no_corpus_reads_no_profile(tmp_path, monkeypatch):
     assert reference_band_edge(None, _rows_discriminating_to(22)) == 8000.0
 
 
-def test_a_profile_that_recorded_no_ceiling_does_not_invent_one(tmp_path, monkeypatch):
-    """`band_edge_hz` is null for every capture that carries its whole range,
-    and null has to stay distinguishable from zero — which would cut every
-    band."""
+def test_a_profile_that_recorded_no_ceiling_is_read_over_the_whole_range(tmp_path, monkeypatch):
+    """`band_edge_hz` is null for every capture that carries its whole range, and the gate
+    then reads every band; null stays distinguishable from zero, which would cut every band."""
     corpus = load_corpus(_write_corpus(tmp_path / "c"))
     _committed_profile(tmp_path, monkeypatch, corpus.capture_id, None)
-    assert reference_band_edge(corpus, _rows_discriminating_to(22)) == 8000.0
+    assert reference_band_edge(corpus, _rows_discriminating_to(22)) is None
 
 
 def _slope_row(note: int, velocity: int, slope: float) -> dict:

@@ -15,7 +15,7 @@ import numpy as np
 import profile_measure
 from metrics_motion import motion_deltas, recording_motion
 from metrics_signal import ENVELOPE_HOP_MS
-from profile_measure import double_decay_gap, register_deltas
+from profile_measure import double_decay_gap, register_deltas, velocity_swing_deltas
 from profile_summary import a4_ruler, format_ruler, partial_balance_db, partial_tilt_db_s
 
 DELTA_LABELS = {
@@ -92,24 +92,6 @@ def vel_range_deltas(
             continue
         span = ([pm[v] for v in shared], [pr[v] for v in shared])
         out.append((max(span[0]) - min(span[0])) - (max(span[1]) - min(span[1])))
-    return out
-
-
-def velocity_swing_deltas(
-    a: dict[int, dict[int, float]], b: dict[int, dict[int, float]]
-) -> list[float]:
-    """Per note, side a's softest-to-hardest change minus side b's, at the velocities both hold.
-
-    Signed, unlike `vel_range`'s span: a reading that falls with force on one side
-    and rises on the other is two opposite laws, not two equal ranges.
-    """
-    out: list[float] = []
-    for note, pa in sorted(a.items()):
-        pb = b.get(note, {})
-        both = sorted(set(pa) & set(pb))
-        if len(both) >= 2:
-            lo, hi = both[0], both[-1]
-            out.append((pa[hi] - pa[lo]) - (pb[hi] - pb[lo]))
     return out
 
 

@@ -12,6 +12,7 @@ import statistics
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from profile import scored_profile
 
 import bank
 import oracle_cache
@@ -26,9 +27,10 @@ from corpus import (
     corpus_pattern,
     describe,
     load_corpus,
+    tracked_definition,
 )
 from knobs import load_spec_weights
-from loop_record import committed_loop_cells
+from loop_record import committed_loop_cells, committed_term_cells
 from loss import (
     DYN_MIN_VELOCITY_SPREAD,
     KIT_MIN_MEMBERS,
@@ -39,9 +41,11 @@ from loss import (
     band_min_note_samples_for,
     cli_weights,
 )
+from loss_weights import contrast_flags
 from metrics import measure_band_edge
 from metrics_skeleton import sample_count
 from patterns import build_pattern, pattern_length
+from profile_summary import profile_program, stretch_ruler
 from render_oracle import check_oracle_rig
 from toneclass import PERCUSSION_WEIGHTS, default_weights
 from writeback import adoption_refusal
@@ -266,15 +270,35 @@ def capture_namespace(args, spec: CaptureSpec, *, primary: bool) -> argparse.Nam
     return ns
 
 
-def _committed_band_edge(corpus: Corpus | None) -> float | None:
-    """What the capture's measured profile settled its ceiling at, if it has one."""
+def _committed_capture(corpus: Corpus | None) -> dict | None:
+    """The `capture` record of the capture's committed profile, or None where it has none."""
     if corpus is None or not corpus.capture_id:
         return None
     path = HERE / "reference" / f"{corpus.capture_id}.json"
     if not path.exists():
         return None
-    profile = json.loads(path.read_text())
-    return (profile.get("capture") or {}).get("band_edge_hz")
+    return json.loads(path.read_text()).get("capture") or {}
+
+
+def reference_a4_offset_c(
+    corpus, reference_dir, *, program: int | None = None, capture_dir: Path | None = None
+) -> float | None:
+    """The committed profile's A4 offset the gate removes from `stretch` (`stretch_ruler`).
+
+    Read as `profile.compare` reads it: the profile's rows restricted to the capture definition's
+    grid (`scored_profile`), under the program the model answers with (`profile_program`; `program`
+    is the fit's, which wins over the profile's recorded one). None where the capture has no
+    profile or its class reads no stretch.
+    """
+    path = Path(reference_dir) / f"{corpus.capture_id}.json"
+    if not corpus.capture_id or not path.exists():
+        return None
+    cfg = dict(tracked_definition(corpus.capture_id, capture_dir) or {})
+    if program is not None:
+        cfg["program"], cfg["_program_override"] = program, True
+    profile = scored_profile(path, cfg)
+    ruler = stretch_ruler(profile, corpus.timbre, profile_program(profile, cfg))
+    return None if ruler is None else ruler["offset_c"]
 
 
 def window_line(corpus: Corpus, pattern) -> str:
@@ -304,6 +328,21 @@ def has_onset_reference(corpus: Corpus | None, pattern) -> bool:
     )
 
 
+def has_reference_cells(corpus: Corpus | None, pattern, term: str) -> bool:
+    """Whether any cell of this probe is one the gate reads `term` on in the committed profile.
+
+    The loop and the recording's floor take `tnr` and `body` off some rows; a probe whose every
+    cell is one of them has no reading to compare, which is no score rather than a zero one.
+    True where there is no committed profile to ask.
+    """
+    if corpus is None or not corpus.capture_id:
+        return True
+    read = committed_term_cells(corpus.capture_id, corpus.timbre, term)
+    if read is None:
+        return True
+    return any((n.note, n.velocity) in read for n in pattern.analysis_notes)
+
+
 def reference_loop_note(corpus: Corpus | None, pattern) -> str | None:
     """How many of this probe's reference rows loop and which terms they lose, or None.
 
@@ -328,28 +367,22 @@ def reference_loop_note(corpus: Corpus | None, pattern) -> str | None:
 def reference_band_edge(corpus: Corpus | None, rows: list[dict]) -> float | None:
     """The highest 1/3-octave band this fit may be scored over, in Hz.
 
-    A fit run scores one oracle, so the only ceiling it can measure for itself is
-    `measure_band_edge` — whether that reference still tells its instruments
-    apart up there. The gate scores the same voice against `shared_band_edge`,
-    which also asks whether the capture's references AGREE about where the
-    instruments are, and needs two recordings to ask it. The drum capture answers
-    8 kHz to the first question and 5 kHz to the second, so a fit left on its own
-    measurement optimises three bands the gate does not read, and closes the
-    voice's filter to match a roll-off nothing holds it to.
+    The gate reads a kit's bands up to the ceiling its committed profile recorded
+    (`capture.band_edge_hz`, which `shared_band_edge` set across every reference of the
+    capture), and the whole range where the profile recorded none. A fit reads the same
+    range, so a capture with a profile takes that ceiling whatever its own oracle would
+    measure: the drum capture answers 8 kHz to `measure_band_edge` alone and 5 kHz to the
+    gate, and a fit left on its own measurement optimises three bands the gate does not read.
 
-    So the committed profile's ceiling is taken as well, and the lower wins. Not
-    the profile's alone: a corpus re-captured since it was measured can be the
-    narrower of the two, and a ceiling that rises because a file on disk is older
-    than the audio is the failure this is here to prevent, arriving the other way
-    round.
+    Only a capture with no committed profile has nothing to follow, and keeps the one
+    ceiling a single oracle can measure for itself.
     """
+    capture = _committed_capture(corpus)
     own = measure_band_edge(rows)
-    committed = _committed_band_edge(corpus)
-    known = [e for e in (own, committed) if e is not None]
-    if not known:
-        return None
-    edge = min(known)
-    if committed is not None and edge == committed and edge != own:
+    if capture is None:
+        return own
+    edge = capture.get("band_edge_hz")
+    if edge is not None and edge != own:
         print(
             f"oracle bandwidth: "
             f"{'no measurable ceiling' if own is None else f'{own / 1000.0:.1f} kHz'} "
@@ -514,11 +547,11 @@ def resolve_probe(args) -> None:
     velocities: dict[int, set[int]] = {}
     for n in pattern.analysis_notes:
         velocities.setdefault(n.note, set()).add(n.velocity)
-    args.has_velocity_spread = any(
-        len(v) >= 2 and max(v) - min(v) >= DYN_MIN_VELOCITY_SPREAD for v in velocities.values()
-    )
-    args.has_level_contrasts = len({(n.note, n.velocity) for n in pattern.analysis_notes}) >= 2
+    for flag, value in contrast_flags((n.note, n.velocity) for n in pattern.analysis_notes).items():
+        setattr(args, flag, value)
     args.has_onset_reference = has_onset_reference(corpus, pattern)
+    args.has_tnr_reference = has_reference_cells(corpus, pattern, "tnr")
+    args.has_body_reference = has_reference_cells(corpus, pattern, "body")
     args.loop_note = reference_loop_note(corpus, pattern)
     # Whether any note is held long enough for the aftersound band to have
     # frames in it. Same treatment for the fourth time, and this one is the
@@ -587,6 +620,13 @@ def resolve_probe(args) -> None:
             "onset-eligible in the committed reference, so there is nothing to compare. "
             "Drop --w-onset."
         )
+    for term in ("tnr", "body"):
+        if getattr(args, f"w_{term}", None) and not getattr(args, f"has_{term}_reference"):
+            raise ValueError(
+                f"--w-{term} compares the gate's {term} reading, and no cell of this probe "
+                f"carries one in the committed reference: each is at the recording's floor or "
+                f"reads the loop, so there is nothing to compare. Drop --w-{term}."
+            )
     # The same again on the time axis, and the reason it is worth a refusal: an
     # unreachable `tail` is 0.0, which is also its best score, so a run
     # weighting it would report a perfect aftersound on every candidate.
@@ -629,6 +669,8 @@ _PROBE_FLAGS = (
     "has_velocity_spread",
     "has_level_contrasts",
     "has_onset_reference",
+    "has_tnr_reference",
+    "has_body_reference",
     "has_tail_window",
     "has_kit_groups",
 )

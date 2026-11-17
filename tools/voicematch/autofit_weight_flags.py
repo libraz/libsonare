@@ -11,11 +11,17 @@ _WEIGHT_FLAGS_1: tuple[tuple[str, str], ...] = (
     ),
     (
         "--w-cents",
-        "weight on the intonation (cents) term",
+        (
+            "weight on the intonation (cents) term: the fit window's fundamental "
+            "against equal temperament, the gate's `stretch` reading"
+        ),
     ),
     (
         "--w-tnr",
-        "weight on the noise-floor (TNR shortfall) term",
+        (
+            "weight on the tone-to-noise term, the gate's `tnr` reading, charged on "
+            "either side of the reference"
+        ),
     ),
     (
         "--w-env",
@@ -32,6 +38,13 @@ _WEIGHT_FLAGS_1: tuple[tuple[str, str], ...] = (
         (
             "drum fits: weight on the 1/3-octave level-profile term, the "
             "percussion analogue of the harmonic ladder"
+        ),
+    ),
+    (
+        "--w-bandrms",
+        (
+            "drum fits: weight on the gate's `band_shape`, the RMS distance of the "
+            "two 1/3-octave profiles over every band, uncapped"
         ),
     ),
     (
@@ -162,6 +175,13 @@ _WEIGHT_FLAGS_1: tuple[tuple[str, str], ...] = (
         ),
     ),
     (
+        "--w-hfshare",
+        (
+            "weight on the gate's `attack_hf` reading: the 4-8 kHz share of the "
+            "first 120 ms, one median per note"
+        ),
+    ),
+    (
         "--w-lf",
         (
             "weight on the attack's low- and mid-band balance, 20 Hz to "
@@ -196,8 +216,9 @@ _WEIGHT_FLAGS_1: tuple[tuple[str, str], ...] = (
     (
         "--w-hfdyn",
         (
-            "weight on the ATTACK DYNAMICS CURVE: how the 4-8 kHz share of "
-            "the first 120 ms tracks velocity, fitted per pitch. `--w-dyn` reads "
+            "weight on the ATTACK DYNAMICS CURVE: how much the 4-8 kHz share of "
+            "the first 120 ms changes from the softest to the hardest velocity, per "
+            "pitch, the gate's `attack_hf_swing`. `--w-dyn` reads "
             "the held ladder and cannot see a hammer whose attack brightens with "
             "force while the ring does not. Needs a probe with a velocity axis"
         ),
@@ -231,7 +252,7 @@ _WEIGHT_FLAGS_1: tuple[tuple[str, str], ...] = (
         "--w-velspan",
         (
             "weight on the VELOCITY SPAN: the softest-to-hardest range of the peak "
-            "level per pitch, the quantity the gate's `vel_range` reads. Needs a probe "
+            "level per pitch, the gate's `vel_range` reading. Needs a probe "
             "with a velocity axis"
         ),
     ),
@@ -249,7 +270,8 @@ _WEIGHT_FLAGS_1: tuple[tuple[str, str], ...] = (
         (
             "weight on the level BALANCE across the probe grid: how loud each "
             "note is relative to the others, with the grid's own median "
-            "offset removed so an output-gain difference is not fitted. "
+            "offset removed so an output-gain difference is not fitted. A pitched "
+            "note reads its held peak, the gate's `register` reading. "
             "Needs a probe with more than one note to mean anything"
         ),
     ),
@@ -259,7 +281,8 @@ _WEIGHT_FLAGS_2: tuple[tuple[str, str], ...] = (
     (
         "--w-crest",
         (
-            "weight on peak-minus-held-RMS per note. Gain-invariant, and the "
+            "weight on peak-minus-held-RMS per note, the gate's `crest` on a drum. "
+            "Gain-invariant, and the "
             "one term that sees a note whose envelope never falls after its "
             "attack — every other term here is normalised past it"
         ),
@@ -291,9 +314,8 @@ _WEIGHT_FLAGS_2: tuple[tuple[str, str], ...] = (
             "beat of an ensemble or a unison pair, and how wide the "
             "fundamental is. A sampled reference is a recording of a player "
             "and carries all of it; a physical model renders a still note "
-            "unless told otherwise, and every other term here reads that "
-            "stillness as cleanliness - --w-tnr charges the model only for "
-            "being NOISIER, so nothing could ever ask for vibrato"
+            "unless told otherwise, and no other term here asks for the "
+            "movement itself"
         ),
     ),
 )

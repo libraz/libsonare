@@ -35,7 +35,6 @@ from types import SimpleNamespace
 
 import numpy as np
 from loss import (
-    DYN_MIN_VELOCITY_SPREAD,
     LOSS_TERMS,
     SKELETON_MAX_S,
     band_min_note_samples_for,
@@ -45,6 +44,7 @@ from loss import (
     probe_rows,
     score_terms,
 )
+from loss_weights import contrast_flags
 from metrics import normalize_rms, to_mono
 from metrics_skeleton import sample_count
 from patterns import (
@@ -126,9 +126,6 @@ def resolved_weights(
     default the probe cannot fit. Asking the class alone would mark `tail`
     weighted on the very probes the gate exists to take it off.
     """
-    velocities: dict[int, set[int]] = {}
-    for note in pattern.analysis_notes:
-        velocities.setdefault(note.note, set()).add(note.velocity)
     tail_min_samples_by_note = [
         band_min_note_samples_for("tail_db_s", note, sample_rate, percussive=pattern.percussive)
         for note in pattern.analysis_notes
@@ -139,10 +136,7 @@ def resolved_weights(
         drum_note=rows[0]["note"] if pattern.percussive else None,
         has_analysis_notes=bool(pattern.analysis_notes),
         has_kit_groups=False,
-        has_velocity_spread=any(
-            len(v) >= 2 and max(v) - min(v) >= DYN_MIN_VELOCITY_SPREAD for v in velocities.values()
-        ),
-        has_level_contrasts=len({(n.note, n.velocity) for n in pattern.analysis_notes}) >= 2,
+        **contrast_flags((n.note, n.velocity) for n in pattern.analysis_notes),
         has_tail_window=any(
             min(sample_count(note.dur, sample_rate), sample_count(SKELETON_MAX_S, sample_rate))
             >= required

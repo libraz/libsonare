@@ -115,8 +115,10 @@ def _kit_relation(
     field: str,
     in_db: bool,
     guard: str | None,
-) -> tuple[list[float], list[float]] | None:
+) -> tuple[list[float] | None, list[float]] | None:
     """(model contrasts, oracle contrasts) for one relation of one group.
+
+    The model's contrasts are None where it has no reading for a member the reference holds.
 
     Both sides are read over exactly the same members: a contrast taken over two
     different sets is not a comparison of anything. Each side is then centred on
@@ -126,20 +128,24 @@ def _kit_relation(
     None when the members do not support the relation, or when the REFERENCE
     does not itself hold it — see KIT_MIN_SPREAD.
     """
-    pairs = []
+    held = []
     for i in indices:
         if guard is not None and oracle_rows_[i].get(guard):
             continue
-        m = _kit_value(model_rows[i], field, in_db)
         o = _kit_value(oracle_rows_[i], field, in_db)
-        if m is not None and o is not None:
-            pairs.append((m, o))
-    if len(pairs) < KIT_MIN_MEMBERS:
+        if o is not None:
+            held.append((i, o))
+    if len(held) < KIT_MIN_MEMBERS:
         return None
-    oracle_c = sorted(v - float(np.median([b for _, b in pairs])) for _, v in pairs)
+    oracle_c = sorted(v - float(np.median([b for _, b in held])) for _, v in held)
     if oracle_c[-1] - oracle_c[0] < KIT_MIN_SPREAD:
         return None
-    model_c = sorted(v - float(np.median([a for a, _ in pairs])) for v, _ in pairs)
+    model_v = [_kit_value(model_rows[i], field, in_db) for i, _ in held]
+    if any(v is None for v in model_v):
+        # A member the reference holds and the model does not: the model has gone blind, so the
+        # relation is charged whole (model contrasts None) rather than read over the survivors.
+        return None, oracle_c
+    model_c = sorted(v - float(np.median(model_v)) for v in model_v)
     return model_c, oracle_c
 
 
@@ -192,14 +198,20 @@ def _kit_terms(
     """
     total = 0.0
     scored = 0
-    capped = 0
+    capped = absent = 0
     for _family, _name, _v, model_c, oracle_c in _kit_scored(model_rows, oracle_rows_, groups):
-        deltas = [abs(a - b) for a, b in zip(model_c, oracle_c)]
+        deltas = (
+            [KIT_DOUBLING_CAP] * len(oracle_c)
+            if model_c is None
+            else [abs(a - b) for a, b in zip(model_c, oracle_c)]
+        )
         total += sum(min(delta, KIT_DOUBLING_CAP) for delta in deltas)
         capped += sum(delta >= KIT_DOUBLING_CAP for delta in deltas)
         scored += len(oracle_c)
+        absent += len(oracle_c) if model_c is None else 0
     if counts is not None:
         counts["kit_capped"] = float(capped)
+        counts["kit_absent"] = float(absent)
     return (total / scored, scored) if scored else (0.0, 0)
 
 
@@ -224,9 +236,12 @@ def kit_report(
             (family, name), {"spread": [], "model_spread": [], "charge": [], "members": []}
         )
         acc["spread"].append(oracle_c[-1] - oracle_c[0])
-        acc["model_spread"].append(model_c[-1] - model_c[0])
+        # A relation the model went blind on has no spread of its own and is charged the cap.
+        acc["model_spread"].append(0.0 if model_c is None else model_c[-1] - model_c[0])
         acc["charge"].append(
-            sum(min(abs(a - b), KIT_DOUBLING_CAP) for a, b in zip(model_c, oracle_c))
+            KIT_DOUBLING_CAP
+            if model_c is None
+            else sum(min(abs(a - b), KIT_DOUBLING_CAP) for a, b in zip(model_c, oracle_c))
             / len(oracle_c)
         )
         acc["members"].append(float(len(oracle_c)))

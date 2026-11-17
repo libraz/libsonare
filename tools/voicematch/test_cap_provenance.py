@@ -52,7 +52,7 @@ def test_pitched_score_terms_cap_becomes_unknown_in_quality_and_diagnosis():
         _pitched_row(note=72, velocity=80),
     ]
     model = [
-        _pitched_row(note=60, velocity=80, held_rms_dbfs=None, held_crest_db=None),
+        _pitched_row(note=60, velocity=80, held_peak_dbfs=None, held_crest_db=None),
         _pitched_row(note=72, velocity=80),
     ]
     baseline = score_terms(oracle, oracle)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from loss_dimensions import HARM_REACH, LOSS_TERMS, measured_terms
+from loss_dimensions import DYN_MIN_VELOCITY_SPREAD, HARM_REACH, LOSS_TERMS, measured_terms
 from toneclass import default_weights
 
 # One perceptual unit, in each term's own raw units: 1 dB of harmonic-profile
@@ -52,13 +52,15 @@ TERM_UNITS = {
     # rule above: it AVERAGES its bands rather than summing them, so that its
     # harmonic and percussion branches can share one name — see `loss.py`.
     "hf": 1.0 * 30,
+    # The gate's `attack_hf`: one median over the 4-8 kHz band's slices, a dB per note.
+    "hfshare": 1.0,
     "lf": 1.0,
     "stiff": 1.0,
     "level": 0.5,
     "crest": 0.5,
     "dyn": 0.5,
-    # A decibel per 64 velocity steps: the attack band is read over 120 ms of
-    # hammer transient, so its per-note wobble is wider than the held ladder's.
+    # A decibel of softest-to-hardest change: the attack band is read over 120 ms
+    # of hammer transient, so its per-note wobble is wider than the held ladder's.
     "hfdyn": 1.0,
     # The same per-64-velocity dB as `dyn`, read off the measured modes' upper share.
     "modedyn": 0.5,
@@ -74,6 +76,8 @@ TERM_UNITS = {
     # octave decay rates at a tenth of a doubling each.
     "mss": 0.01,
     "band": 1.0 * 25,
+    # The gate's `band_shape`: one RMS over the bands, a dB per hit.
+    "bandrms": 1.0,
     "bdecay": 0.1 * 8,
     # Seven octave bands, one mode and one dB per band. These two drum terms
     # are deliberately scaled independently from the 25-band profile: their
@@ -172,6 +176,9 @@ def cli_weights(args) -> dict[str, float]:
         weights.pop("level", None)
     if not getattr(args, "has_onset_reference", True):
         weights.pop("onset", None)
+    for term in ("tnr", "body"):
+        if not getattr(args, f"has_{term}_reference", True):
+            weights.pop(term, None)
     group = set(measured_terms(percussive))
     for term in LOSS_TERMS:
         given = getattr(args, f"w_{term}", None)
@@ -216,36 +223,44 @@ DROP_REASONS = {
     "velspan": ("has_velocity_spread", "the probe has no usable per-note velocity span"),
     "velcurve": ("has_velocity_spread", "the probe has no usable per-note velocity span"),
     "onset": ("has_onset_reference", "no reference cell is onset-eligible"),
+    "tnr": (
+        "has_tnr_reference",
+        "every reference cell is at the recording's floor or reads the loop",
+    ),
+    "body": (
+        "has_body_reference",
+        "every reference cell is at the recording's floor or reads the loop",
+    ),
     "tail": ("has_tail_window", "no note is held long enough to reach the 2-6 s band"),
 }
 
 
-#: The terms whose loss reads a gated dimension's OWN quantity. Any other mapping is a
-#: proxy: `slope` and `tail` read per-harmonic skeleton slopes, `env` a sum of sustain
-#: slope, release and attack, `harm` the ladder, `modedyn` modal brightness -- none the
-#: gate's broadband reading. A dimension absent here has no own term.
+#: The terms whose loss reads a gated dimension's OWN quantity, each through the function the
+#: gate reads it with (`loss.OWN_TERM_READERS`). Any other mapping is a proxy: `stiff` reads B,
+#: `hf` the attack's five bands, `crest` peak over held RMS, `slope` and `tail` per-harmonic
+#: skeleton slopes, `env` a sum of sustain slope, release and attack, `harm` the ladder,
+#: `modedyn` modal brightness. A dimension absent here has no own term.
 GATE_OWN_TERMS = {
-    "stretch": ("stiff",),
+    "stretch": ("cents",),
     "tnr": ("tnr",),
     "vel_range": ("velspan",),
     "onset": ("onset",),
     "onset_settle": ("onset",),
     "register": ("level",),
-    "attack_hf": ("hf",),
+    "attack_hf": ("hfshare",),
     "attack_hf_swing": ("hfdyn",),
-    "crest": ("crest",),
     "centroid_pct": ("bright",),
     "body": ("body",),
 }
-#: Own-measure terms of the percussion set: a term whose change moved the note's own gate row,
-#: past the row's floor, the same way on at least 80 % of at least 10 notes over finished kit fits.
+#: The same for the percussion set (`loss.PERCUSSION_OWN_TERM_READERS`); `band` is a proxy for
+#: `band_shape`, capping each band and skipping the reference's floored ones.
 PERCUSSION_GATE_OWN_TERMS = {
     "vel_range": ("velspan",),
     "crest": ("crest",),
-    "band_shape": ("band",),  # n=17, agree 88 %
-    "centroid_pct": ("bright",),  # n=21, agree 100 %
-    "tonality": ("tonal",),  # n=20, agree 100 %
-    "tilt_rise": ("rise",),  # n=17, agree 100 %
+    "band_shape": ("bandrms",),
+    "centroid_pct": ("bright",),
+    "tonality": ("tonal",),
+    "tilt_rise": ("rise",),
 }
 #: Percussion dimensions measured and found to have only a proxy: the mapped term did not move
 #: the row the same way (bdecay 57 %, band -> band_tilt 47 %, env 11 %), or too few rows passed
@@ -257,6 +272,24 @@ PRESENCE_WEIGHT = 0.25
 #: The most one presence term, and all of them together, may carry of the start's weighted loss.
 PRESENCE_TERM_SHARE = 0.10
 PRESENCE_TOTAL_SHARE = 0.30
+
+
+def contrast_flags(cells) -> dict[str, bool]:
+    """`has_velocity_spread` and `has_level_contrasts` of a probe sounding (note, velocity) `cells`."""
+    velocities: dict[int, set[int]] = {}
+    for note, velocity in cells:
+        velocities.setdefault(note, set()).add(velocity)
+    return {
+        "has_velocity_spread": any(
+            len(v) >= 2 and max(v) - min(v) >= DYN_MIN_VELOCITY_SPREAD for v in velocities.values()
+        ),
+        "has_level_contrasts": sum(len(v) for v in velocities.values()) >= 2,
+    }
+
+
+def skip_line(term: str, why: str) -> str:
+    """The one line a term skipped for this probe's shape is reported with."""
+    return f"{term} not weighted: {why}"
 
 
 def unmeasurable_terms(args) -> list[tuple[str, str]]:
@@ -314,14 +347,18 @@ def presence_plan(args, gated: dict[str, frozenset[str]], weights: dict[str, flo
     where `weights`, the resolved profile, gives it none; the term records the statistics of
     its dimensions. An own term the profile already weighs is listed in `weighted` the same
     way. An explicit weight of 0 in `args` wins and is listed in `user_zero`. A dimension with
-    no own term, or whose own terms this probe cannot measure, is `unscorable`.
+    no own term, or whose own terms this probe cannot measure, is `unscorable`; an own term the
+    probe's shape refuses (`DROP_REASONS`) is in `skipped` with why.
     """
     own = PERCUSSION_GATE_OWN_TERMS if getattr(args, "percussive", False) else GATE_OWN_TERMS
+    refused = dict(unmeasurable_terms(args))
     terms: dict[str, dict] = {}
     weighted: dict[str, dict] = {}
     user_zero: dict[str, list[str]] = {}
     unscorable: list[str] = []
+    skipped: dict[str, str] = {}
     for dim in sorted(gated):
+        skipped.update({t: refused[t] for t in own.get(dim, ()) if t in refused})
         measurable = [t for t in own.get(dim, ()) if _probe_measures(args, t)]
         if not measurable:
             unscorable.append(dim)
@@ -345,6 +382,7 @@ def presence_plan(args, gated: dict[str, frozenset[str]], weights: dict[str, flo
         "weighted": weighted,
         "unscorable": unscorable,
         "user_zero": user_zero,
+        "skipped": skipped,
         "capped": False,
     }
 
@@ -422,12 +460,14 @@ TERM_COUNT_KEYS = {
     "stiff": "stiff_notes",
     "dyn": "dyn_groups",
     "hfdyn": "hfdyn_groups",
+    "hfshare": "hfshare_notes",
     "modedyn": "modedyn_groups",
     "onsetvel": "onsetvel_groups",
     "velspan": "velspan_groups",
     "velcurve": "velcurve_cells",
     "onset": "onset_compared",
     "band": "band_bins",
+    "bandrms": "bandrms_hits",
     "bdecay": "bdecay_bins",
     "density": "density_bins",
     "prompt": "prompt_bins",

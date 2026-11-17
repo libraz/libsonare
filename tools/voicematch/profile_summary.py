@@ -7,6 +7,7 @@ from itertools import pairwise
 
 import numpy as np
 from metrics import ladder_present
+from toneclass import canonical_dimensions
 
 # Past this much delay between a note-on and the strike, the host scheduled the
 # note rather than the instrument being slow to speak. Well above any real
@@ -523,6 +524,11 @@ def a4_ruler(rows: list[dict], timbre: str) -> dict | None:
     if slope is not None:
         ruler["slope_c_per_oct"] = round(slope * 12.0, 3)
     return ruler
+
+
+def stretch_ruler(profile: dict, timbre: str, program: int) -> dict | None:
+    """The `a4_ruler` a timbre's stretch is read against; None for a class that reads no stretch."""
+    return a4_ruler(profile["rows"], timbre) if "stretch" in canonical_dimensions(program) else None
 
 
 def format_ruler(ruler: dict) -> str:

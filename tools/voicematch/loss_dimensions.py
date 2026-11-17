@@ -15,8 +15,8 @@ from metrics import (
     midi_to_hz,
     stretch_cents,
 )
-from metrics_attack import ATTACK_BANDS_HZ
 from metrics_signal import DB_FLOOR
+from profile_measure import attack_hf_share_of, velocity_swing_deltas
 
 #: How far up the ladder `harm` compares. `analyze_note` measures exactly
 #: `N_HARMONICS` bins, so this is the whole of what the measurement offers
@@ -26,9 +26,9 @@ from metrics_signal import DB_FLOOR
 HARM_REACH = N_HARMONICS
 
 # The terms the loss is built from, in report order. `harm`/`cents`/`tnr`/`init`/
-# `slope`/`tail`/`hf`/`lf` come from the harmonic metric set and `band`/`bdecay`
-# from the percussion one; `env`, `mss`, `level` and `crest` are computed for
-# both. `velspan` measures the gate's endpoint range; `velcurve` compares the
+# `slope`/`tail`/`hf`/`hfshare`/`lf` come from the harmonic metric set and
+# `band`/`bandrms`/`bdecay` from the percussion one; `env`, `mss`, `level` and
+# `crest` are computed for both. `velspan` measures the gate's endpoint range; `velcurve` compares the
 # per-velocity peak levels after removing each note's common offset. A run uses
 # one metric set or the other — which one the probe pattern decides — and the
 # unused terms stay at zero weight.
@@ -49,6 +49,7 @@ LOSS_TERMS = (
     "crest",
     "dyn",
     "hfdyn",
+    "hfshare",
     "modedyn",
     "onsetvel",
     "velspan",
@@ -56,6 +57,7 @@ LOSS_TERMS = (
     "onset",
     "mss",
     "band",
+    "bandrms",
     "bdecay",
     "tilt",
     "bright",
@@ -97,11 +99,26 @@ BODY_DELTA_CAP_DB = 24.0
 # borrow the body term's cap, the only per-note cap among their siblings.
 BRIGHT_ABSENT_CAP = BODY_DELTA_CAP_DB
 ARRIVAL_ABSENT_CAP = BODY_DELTA_CAP_DB
+# A kit's `tonal` (flatness) and `rise` (tilt rise) are per-hit dB readings with no cap of their
+# own, so they borrow the same per-note cap as `bright`, for the same reason.
+TONAL_ABSENT_CAP_DB = BODY_DELTA_CAP_DB
+RISE_ABSENT_CAP_DB = BODY_DELTA_CAP_DB
+# The band profile's lean (`tilt`) and the strike's lean (`strike`) are per-hit dB readings of the same kind.
+TILT_ABSENT_CAP_DB = BODY_DELTA_CAP_DB
+STRIKE_ABSENT_CAP_DB = BODY_DELTA_CAP_DB
 # What a note charges `tnr` when the model's own window fell silent (NaN) while
 # the reference's did not: the same cap the other absent-model terms use,
 # rather than skipping a note a fit could make disappear for free.
 TNR_ABSENT_CAP_DB = 24.0
 PEAK_DB_FLOOR = 20.0 * math.log10(DB_FLOOR)
+
+#: The row field `level` scores, by metric set: the gate's `register` reading on a pitched
+#: probe, the held RMS on a drum, whose gate has no register.
+LEVEL_FIELDS = {False: "held_peak_dbfs", True: "held_rms_dbfs"}
+#: The row field `crest` scores: the gate's own on a drum, peak over held RMS on a pitched voice.
+CREST_FIELDS = {False: "held_crest_db", True: "crest_db"}
+#: The row field `velspan` reads: the gate's `vel_range` peak, on the un-normalised downmix.
+VELSPAN_FIELD = "mono_peak_dbfs"
 
 # Which terms a metric set actually produces. Both reducers fill every entry of
 # LOSS_TERMS so the dict has one shape, which means a term belonging to the
@@ -134,6 +151,7 @@ PITCHED_TERMS = (
     "lf",
     "stiff",
     "hfdyn",
+    "hfshare",
     "modedyn",
     "onsetvel",
     "onset",
@@ -193,6 +211,7 @@ PITCHED_TERMS = (
 #: mean over finite reference cells, with explicit cap/absence counts.
 PERCUSSION_TERMS = (
     "band",
+    "bandrms",
     "bdecay",
     "tilt",
     "tonal",
@@ -230,6 +249,8 @@ def _level_terms(
     oracle_rows_: list[dict],
     *,
     counts: dict[str, float] | None = None,
+    level_field: str = "held_rms_dbfs",
+    crest_field: str = "held_crest_db",
 ) -> tuple[float, float, float]:
     """The two level terms, plus the whole-grid offset they are measured against.
 
@@ -252,16 +273,18 @@ def _level_terms(
     measured from a normalised render should score: nothing, rather than a
     match. When ``counts`` is supplied it receives ``level_notes`` (finite
     model/reference pairs) and ``level_expected`` (finite oracle cells) without
-    changing this function's three-value return API.
+    changing this function's three-value return API. `level_field` and
+    `crest_field` name the readings scored (`LEVEL_FIELDS`, `CREST_FIELDS`).
     """
     offsets: list[float] = []
     level_pairs: list[tuple[float | None, float]] = []
     level_conditions: set[tuple] = set()
     crests: list[float] = []
     crest_capped = 0
+    crest_absent = 0
     # An oracle note the model lacks stays in the denominator as a capped residual (`_absent_or`).
     for index, (m, o) in enumerate(zip(model_rows, oracle_rows_)):
-        mo, oo = _finite_or_none(m.get("held_rms_dbfs")), _finite_or_none(o.get("held_rms_dbfs"))
+        mo, oo = _finite_or_none(m.get(level_field)), _finite_or_none(o.get(level_field))
         if oo is not None:
             level_pairs.append((mo, oo))
             condition = (
@@ -270,9 +293,10 @@ def _level_terms(
             level_conditions.add(condition)
             if mo is not None:
                 offsets.append(mo - oo)
-        mc, oc = _finite_or_none(m.get("held_crest_db")), _finite_or_none(o.get("held_crest_db"))
+        mc, oc = _finite_or_none(m.get(crest_field)), _finite_or_none(o.get(crest_field))
         if oc is not None:
             delta = LEVEL_DELTA_CAP_DB if mc is None else abs(mc - oc)
+            crest_absent += int(mc is None)
             crest_capped += int(delta >= LEVEL_DELTA_CAP_DB)
             crests.append(min(delta, LEVEL_DELTA_CAP_DB))
     expected = len(level_pairs)
@@ -297,6 +321,7 @@ def _level_terms(
             )
         )
         counts["crest_capped"] = float(crest_capped)
+        counts["crest_absent"] = float(crest_absent)
         counts["level_notes"] = float(measured)
         counts["level_expected"] = float(expected)
         counts["level_contrasts"] = float(len(level_conditions))
@@ -371,17 +396,13 @@ def _modal_brightness(row: dict) -> float | None:
 
 
 def _attack_hf_share(row: dict) -> float | None:
-    """The 4-8 kHz share of the first 120 ms: the first attack band's median over its slices.
+    """The 4-8 kHz share of the first 120 ms, read off the row's attack bands as the gate reads it.
 
     The hammer's velocity law lives here and not in `_brightness`, which reads
     the held ladder: three concert grands swing this share ~28 dB from v24 to
     v120 while their held h2-h7 moves under 1 dB.
     """
-    bands = row.get("attack_hf_db")
-    if not bands:
-        return None
-    vals = [v for v in bands[:: len(ATTACK_BANDS_HZ)] if v is not None]
-    return float(np.median(vals)) if vals else None
+    return attack_hf_share_of(row.get("attack_hf_db"))
 
 
 def _readable_slope(model_rows, oracle_rows_, idx: list[int], read, *, oracle: bool) -> bool:
@@ -427,29 +448,70 @@ def _dyn_terms(
     capped = 0
     absent = 0
     for idx in groups.values():
-        pairs = []
-        for i in idx:
-            m, o = read(model_rows[i]), read(oracle_rows_[i])
-            if m is not None and o is not None:
-                pairs.append((float(model_rows[i]["velocity"]), m, o))
-        vel = [p[0] for p in pairs]
-        if len(pairs) < 2 or max(vel) - min(vel) < DYN_MIN_VELOCITY_SPREAD:
-            # No shared curve. A reference that reads a slope where the model
-            # reads none is the model failing to sound, charged the cap.
-            if _readable_slope(model_rows, oracle_rows_, idx, read, oracle=True) and not (
-                _readable_slope(model_rows, oracle_rows_, idx, read, oracle=False)
-            ):
-                total += cap_db
-                capped += 1
-                absent += 1
-                used += 1
+        # A reference cell the model has no reading for is the model gone blind: the whole
+        # relation of this pitch is charged the cap, not recomputed over the survivors.
+        if not _readable_slope(model_rows, oracle_rows_, idx, read, oracle=True):
             continue
+        ref_cells = [i for i in idx if read(oracle_rows_[i]) is not None]
+        if any(read(model_rows[i]) is None for i in ref_cells):
+            total += cap_db
+            capped += 1
+            absent += 1
+            used += 1
+            continue
+        pairs = [
+            (float(model_rows[i]["velocity"]), read(model_rows[i]), read(oracle_rows_[i]))
+            for i in ref_cells
+        ]
+        vel = [p[0] for p in pairs]
         v = np.asarray(vel, dtype=np.float64)
         sm = float(np.polyfit(v, [p[1] for p in pairs], 1)[0]) * DYN_VELOCITY_SPAN
         so = float(np.polyfit(v, [p[2] for p in pairs], 1)[0]) * DYN_VELOCITY_SPAN
         delta = abs(sm - so)
         total += min(delta, cap_db)
         capped += int(delta >= cap_db)
+        used += 1
+    if counts is not None:
+        counts["capped"] = float(capped)
+        counts["absent"] = float(absent)
+    return (total / used if used else 0.0), used
+
+
+def _swing_terms(
+    model_rows: list[dict],
+    oracle_rows_: list[dict],
+    read,
+    cap_db: float,
+    *,
+    counts: dict[str, float] | None = None,
+) -> tuple[float, int]:
+    """How far each pitch's softest-to-hardest change in `read` sits from the reference's.
+
+    The gate's `velocity_swing_deltas` per pitch: the change between the lowest and highest
+    velocity both sides read, not a fitted slope, which a law that rises and then falls gives
+    the opposite sign. A pitch counts where the reference reads two velocities at least
+    `DYN_MIN_VELOCITY_SPREAD` apart; a model reading no change there is charged the cap.
+    """
+    groups: dict[int, list[int]] = {}
+    for i, r in enumerate(model_rows):
+        if r.get("note") is not None and r.get("velocity") is not None:
+            groups.setdefault(r["note"], []).append(i)
+    total = 0.0
+    used = capped = absent = 0
+    for note, idx in groups.items():
+        ref = {
+            model_rows[i]["velocity"]: v for i in idx if (v := read(oracle_rows_[i])) is not None
+        }
+        if len(ref) < 2 or max(ref) - min(ref) < DYN_MIN_VELOCITY_SPREAD:
+            continue
+        mod = {model_rows[i]["velocity"]: v for i in idx if (v := read(model_rows[i])) is not None}
+        # A reference velocity the model reads nothing at is the model gone blind: the whole
+        # swing is charged the cap, not taken over the velocities that survive.
+        swing = None if set(ref) - set(mod) else velocity_swing_deltas({note: mod}, {note: ref})
+        delta = abs(swing[0]) if swing else cap_db
+        absent += int(not swing)
+        capped += int(delta >= cap_db)
+        total += min(delta, cap_db)
         used += 1
     if counts is not None:
         counts["capped"] = float(capped)
@@ -492,23 +554,18 @@ def _onsetvel_terms(
         cost = 0.0
         scored = False
         for field, unit, cap in ONSETVEL_FIELDS:
-            vel = [float(model_rows[i]["velocity"]) for i in idx]
-            so = slope(
-                [
-                    (v, oracle_rows_[i][field])
-                    for v, i in zip(vel, idx)
-                    if _finite_or_none(oracle_rows_[i].get(field)) is not None
-                ]
-            )
+            held = [i for i in idx if _finite_or_none(oracle_rows_[i].get(field)) is not None]
+            so = slope([(float(model_rows[i]["velocity"]), oracle_rows_[i][field]) for i in held])
             if so is None:
                 continue
             scored = True
-            sm = slope(
-                [
-                    (v, model_rows[i][field])
-                    for v, i in zip(vel, idx)
-                    if _finite_or_none(model_rows[i].get(field)) is not None
-                ]
+            # A reference cell the model lacks is the model gone blind: the relation is charged
+            # the cap whole, not refitted over the cells that survive.
+            blind = any(_finite_or_none(model_rows[i].get(field)) is None for i in held)
+            sm = (
+                None
+                if blind
+                else slope([(float(model_rows[i]["velocity"]), model_rows[i][field]) for i in held])
             )
             if sm is None:
                 absent += 1
@@ -571,11 +628,12 @@ def _onset_terms(
 def _velspan_terms(
     model_rows: list[dict], oracle_rows_: list[dict], *, counts: dict[str, float] | None = None
 ) -> tuple[float, int]:
-    """How far each pitch's softest-to-hardest `peak_dbfs` span sits from the reference's.
+    """How far each pitch's softest-to-hardest peak span sits from the reference's.
 
-    The quantity the gate's `vel_range` reads. A pitch is scored where the
-    reference holds a span (two finite velocities, spread of at least
-    `DYN_MIN_VELOCITY_SPREAD`); a model span missing there is charged the cap.
+    The gate's `vel_range` reading, `VELSPAN_FIELD`, both spans over the velocities the two
+    sides share. A pitch is scored where the reference holds a span (two finite velocities,
+    spread of at least `DYN_MIN_VELOCITY_SPREAD`); a model span missing there is charged the
+    cap, and two sides that share fewer than two velocities read nothing, as the gate does.
     Returns the mean over those pitches and how many they were.
     """
     groups: dict[int, list[int]] = {}
@@ -583,32 +641,34 @@ def _velspan_terms(
         if r.get("note") is not None and r.get("velocity"):
             groups.setdefault(r["note"], []).append(i)
 
-    def span(rows: list[dict], idx: list[int]) -> float | None:
-        cells = [
-            (float(rows[i]["velocity"]), peak)
+    def peaks(rows: list[dict], idx: list[int]) -> dict[float, float] | None:
+        cells = {
+            float(rows[i]["velocity"]): peak
             for i in idx
-            if (peak := _finite_or_none(rows[i].get("peak_dbfs"))) is not None
-        ]
-        if len(cells) < 2:
+            if (peak := _finite_or_none(rows[i].get(VELSPAN_FIELD))) is not None
+        }
+        if len(cells) < 2 or max(cells) - min(cells) < DYN_MIN_VELOCITY_SPREAD:
             return None
-        vel = [v for v, _ in cells]
-        if max(vel) - min(vel) < DYN_MIN_VELOCITY_SPREAD:
-            return None
-        peaks = [p for _, p in cells]
-        return max(peaks) - min(peaks)
+        return cells
 
     total = 0.0
     used = absent = capped = 0
     for idx in groups.values():
-        ref = span(oracle_rows_, idx)
+        ref = peaks(oracle_rows_, idx)
         if ref is None:
             continue
-        mod = span(model_rows, idx)
-        if mod is None:
+        mod = peaks(model_rows, idx)
+        if mod is None or set(ref) - set(mod):
+            # A reference velocity the model reads nothing at: the model gone blind.
             delta = LEVEL_DELTA_CAP_DB
             absent += 1
         else:
-            delta = abs(mod - ref)
+            # The gate's `vel_range`: both spans over the velocities the two sides share.
+            shared = sorted(set(ref) & set(mod))
+            delta = abs(
+                (max(mod[v] for v in shared) - min(mod[v] for v in shared))
+                - (max(ref[v] for v in shared) - min(ref[v] for v in shared))
+            )
         capped += int(delta >= LEVEL_DELTA_CAP_DB)
         total += min(delta, LEVEL_DELTA_CAP_DB)
         used += 1
@@ -800,9 +860,18 @@ def _modes_terms(
         pairs = _pair_modes(m_hz, o_hz)
         cost = 0.0
         for i, j, cents in pairs:
-            cost += min(cents, MODE_CENTS_CAP) / MODE_CENTS_PER_DB
-            db = abs(m_db[i] - o_db[j]) if i < len(m_db) and j < len(o_db) else 0.0
-            cost += min(db, MODE_DB_CAP)
+            # A mode whose level the model lacks costs the level cap; a matched pair never costs
+            # more than the same mode left unmatched.
+            if j >= len(o_db):
+                db = 0.0  # the reference holds no level here: nothing to compare
+            elif i >= len(m_db):
+                db = MODE_DB_CAP
+            else:
+                db = abs(m_db[i] - o_db[j])
+            cost += min(
+                min(cents, MODE_CENTS_CAP) / MODE_CENTS_PER_DB + min(db, MODE_DB_CAP),
+                MODE_UNMATCHED_DB,
+            )
             if tally is not None:
                 capped = cents >= MODE_CENTS_CAP or db >= MODE_DB_CAP
                 tally.clipped += capped
@@ -816,7 +885,8 @@ def _modes_terms(
         cost += MODE_UNMATCHED_DB * unmatched
         if tally is not None:
             tally.absent += unmatched
-        total += cost / len(o_hz)
+        # Never more than the same modes cost a model that has none.
+        total += min(cost, MODE_UNMATCHED_DB * len(o_hz)) / len(o_hz)
         used += 1
     return (total / used if used else 0.0), used
 
@@ -856,7 +926,7 @@ def _mod_terms(
     breath movement and — on anything with more than one string or more than one
     voice — a beat. A physical model renders a mathematically still note unless
     it is told otherwise, and every other term here reads that stillness as
-    cleanliness: `tnr` charges the model only for being NOISIER, the ladder is a
+    cleanliness: `tnr` can say only that the note is cleaner, the ladder is a
     time average, and the multi-scale term ignores phase. So the harness could
     see the difference in every render and had no way to say it.
 
@@ -931,12 +1001,16 @@ def _mod_terms(
             ("fm_fast_cents", MOD_FM_FAST_CENTS_PER_UNIT, MOD_FM_FAST_CAP_CENTS),
         ):
             mv, ov = _finite_or_none(m.get(field)), _finite_or_none(o.get(field))
-            if mv is None or ov is None:
-                # A model too dead to read is charged by the depth parts above.
+            if ov is None:
                 continue
             scored = True
+            if mv is None:
+                parts.append(cap / scale)
+                if tally is not None:
+                    tally.absent += 1
+                continue
             delta = abs(mv - ov)
-            parts.append(min(delta, cap) / scale)
+            parts.append(_delta_or_cap(delta, cap) / scale)
             if tally is not None:
                 tally.clipped += delta >= cap
                 tally.compared += delta < cap
@@ -951,6 +1025,8 @@ def _mod_terms(
 # past anything a string does; past that the note is telling us the fit failed
 # rather than that the model is wrong.
 STIFF_DELTA_CENTS_CAP = 50.0
+# What a note charges `cents` where the reference's fit window found a fundamental and the model's did not.
+CENTS_ABSENT_CAP = STIFF_DELTA_CENTS_CAP
 
 
 def _stiff_terms(
@@ -976,6 +1052,7 @@ def _stiff_terms(
     total = 0.0
     used = 0
     capped = 0
+    absent = 0
     for m, o in zip(model_rows, oracle_rows_):
         mb, ob = m.get("inharmonicity_b"), o.get("inharmonicity_b")
         if ob is None or o.get("inharmonicity_partials", 0) < MIN_PARTIALS_FOR_B:
@@ -983,6 +1060,7 @@ def _stiff_terms(
         if mb is None or m.get("inharmonicity_partials", 0) < MIN_PARTIALS_FOR_B:
             # The reference fitted a series and the model's did not: charged the cap.
             delta = STIFF_DELTA_CENTS_CAP
+            absent += 1
         else:
             delta = abs(stretch_cents(mb) - stretch_cents(ob))
         capped += int(delta >= STIFF_DELTA_CENTS_CAP)
@@ -990,6 +1068,7 @@ def _stiff_terms(
         used += 1
     if counts is not None:
         counts["stiff_capped"] = float(capped)
+        counts["stiff_absent"] = float(absent)
     return (total / used if used else 0.0), used
 
 
@@ -1109,6 +1188,15 @@ def _absent_or(
         else:
             tally.compared += 1
     return min(delta, cap)
+
+
+def _delta_or_cap(delta: float | None, cap: float) -> float:
+    """A measured delta held to `cap`, and `cap` where the model has no reading.
+
+    The ceiling on a present reading is the price of an absent one, so a candidate that loses
+    the reading never pays less than one that keeps it, however far off.
+    """
+    return cap if delta is None else min(abs(delta), cap)
 
 
 def _fell_silent(model_rows: list[dict], oracle_rows_: list[dict]) -> bool:

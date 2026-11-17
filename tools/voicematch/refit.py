@@ -93,7 +93,13 @@ from knobs import (
     unjudged_reach,
 )
 from loop_record import committed_note_groups
-from loss_weights import GATE_OWN_TERMS, PERCUSSION_GATE_OWN_TERMS
+from loss_weights import (
+    GATE_OWN_TERMS,
+    PERCUSSION_GATE_OWN_TERMS,
+    contrast_flags,
+    skip_line,
+    unmeasurable_terms,
+)
 from metrics_floor import BODY_FLOOR_MARGIN_DB, FLOOR_GUARD_S, MIN_FLOOR_S
 from metrics_signal import _db, _rms_envelope, to_mono
 from objective import objective_digest
@@ -1106,9 +1112,11 @@ def verdict(
     elif post_sum > pre_sum + 1e-9:
         out["decision"], out["why"] = "kept", f"gate excess grew {pre_sum:.3f} -> {post_sum:.3f}"
     else:
-        basis = "gate only" if held is None else f"held-out {held:+.4f}"
+        # An adopt with no held-out result rests on the confirm gain in sample, and says so.
+        sample = " in sample" if held is None else ""
+        basis = f"confirm {gain:+.4f} in sample" if held is None else f"held-out {held:+.4f}"
         if without:
-            basis = f"confirm {gain:+.4f} with {', '.join(without)} on"
+            basis = f"confirm {gain:+.4f}{sample} with {', '.join(without)} on"
         out["decision"], out["why"] = (
             "adopt",
             (f"{basis}, gate excess {pre_sum:.3f} -> {post_sum:.3f}"),
@@ -1283,6 +1291,7 @@ def prefit_raise(
     pre: dict,
     weights: dict[str, float],
     given: dict[str, float] | None = None,
+    probe=None,
 ) -> dict:
     """The terms the first fit weighs up because their gate dimension is already over its bound.
 
@@ -1294,10 +1303,13 @@ def prefit_raise(
     explicit 0 wins, and the term is listed in `user_zero`. `raised_far` is the raised terms
     whose dimension was far; `far` holds each far dimension's floors. `already_weighted`
     holds each red or far dimension whose own term is weighted and so is left as it is: its
-    heaviest own weight, whether it is red, and its far reading if it is far.
+    heaviest own weight, whether it is red, and its far reading if it is far. An own term
+    `probe`'s shape refuses (`unmeasurable_terms`) is never raised and is in `skipped` with why.
     """
     given = WEIGHTS if given is None else given
     own = PERCUSSION_GATE_OWN_TERMS if "drum_note" in voice else GATE_OWN_TERMS
+    refused = {} if probe is None else dict(unmeasurable_terms(probe))
+    skipped: dict[str, str] = {}
     readings = pre["gate"]["readings"]
     red = sorted({r["key"].rpartition(":")[2] for r in readings if r.get("over")})
     far = far_dimensions(voice, readings, far_floors())
@@ -1320,7 +1332,12 @@ def prefit_raise(
         else:
             held = {t for t in terms if given.get(t) == 0.0}
             user_zero.update(held)
-            take = {t: _doubled(weights.get(t, 0.0)) for t in terms if t not in held}
+            skipped.update({t: refused[t] for t in terms if t in refused and t not in held})
+            take = {
+                t: _doubled(weights.get(t, 0.0))
+                for t in terms
+                if t not in held and t not in refused
+            }
             raised.update(take)
             if dim in far:
                 raised_far.update(take)
@@ -1332,6 +1349,7 @@ def prefit_raise(
         "no_own_term": no_own,
         "user_zero": sorted(user_zero),
         "already_weighted": already,
+        "skipped": skipped,
     }
 
 
@@ -1363,6 +1381,7 @@ def prefit_lines(slug: str, prefit: dict, threshold: float | None = None) -> lis
         if dim not in weighted:
             lines.append(far_line(slug, dim, far, threshold))
     lines += already_weighted_lines(slug, weighted)
+    lines += [f"{slug}: {skip_line(t, why)}" for t, why in prefit.get("skipped", {}).items()]
     if prefit["raised_from_zero"]:
         lines.append(f"{slug}: [raised from zero weight: {', '.join(prefit['raised_from_zero'])}]")
     return lines
@@ -1389,9 +1408,27 @@ def profile_weights(voice: dict) -> dict[str, float]:
     return weights
 
 
+def probe_contrasts(voice: dict) -> SimpleNamespace:
+    """The contrast flags (`contrast_flags`) the voice's fit probe carries, on every capture it fits."""
+    flags = []
+    for part in fit_parts(voice) or [voice]:
+        cells = _corpus(part["corpus"], part["timbre"]).renders
+        if "drum_note" in voice:
+            cells = [(n, v) for n, v in cells if n == voice["drum_note"]]
+        else:
+            cells = [(n, v) for n, v in cells if n in part["notes"] and v in part["velocities"]]
+        flags.append(contrast_flags(cells))
+    return SimpleNamespace(**{k: all(f[k] for f in flags) for k in flags[0]})
+
+
 def _first_fit(voice: dict, d: Path, build_dir: str, per_knob: int) -> None:
     """Fit once, with the terms the pre reading shows red at zero weight raised."""
-    prefit = prefit_raise(voice, json.loads((d / "pre.json").read_text()), profile_weights(voice))
+    prefit = prefit_raise(
+        voice,
+        json.loads((d / "pre.json").read_text()),
+        profile_weights(voice),
+        probe=probe_contrasts(voice),
+    )
     for line in prefit_lines(voice["slug"], prefit):
         print(line)
     weights = prefit["prefit_weights"]
@@ -1525,7 +1562,7 @@ def anchor_gain(
         reference = level(base)
         gain, left, offset = solve_gain(diff_at, current, lo, hi)
     except RuntimeError as exc:
-        return _write_anchor(d, report, {"knob": key, "skipped": str(exc)})
+        return _write_anchor(d, report, {"knob": key, "error": str(exc)})
     record = {
         "knob": key,
         "before": current,
@@ -1554,7 +1591,7 @@ def anchor_gain(
             anchored_argv, lib, d / "anchor_after.json", start_overrides(_at(knobs, moved)), report
         )
     except RuntimeError as exc:
-        return _write_anchor(d, report, {**record, "skipped": str(exc)})
+        return _write_anchor(d, report, {**record, "error": str(exc)})
     before = scored["selected"]["quality"]["absolute_weighted_mean_units"]
     after = rescored["selected"]["quality"]["absolute_weighted_mean_units"]
     if abs(after - before) / before > IN_SAMPLE_MARGIN:
@@ -1589,6 +1626,28 @@ def _at(knobs: list[dict], values: list[float]) -> dict:
     """
     moved = [(k, v) for k, v in zip(knobs, values, strict=True) if v != k["start"]]
     return {"knobs": [k for k, _ in moved], "selected": {"values": [v for _, v in moved]}}
+
+
+#: The post-fit checks whose failure leaves a voice unjudged, by record key and name.
+POST_FIT_CHECKS = ((GAIN_ANCHOR_KEY, "gain anchor"), (TAIL_CHECK_KEY, "tail check"))
+
+
+def post_fit_error(fit: dict) -> str | None:
+    """`<check> failed: <reason>` for the first post-fit check that failed with an error.
+
+    A check that does not apply records `skipped` and is judged around; one that failed has
+    no result, so the verdict is refused rather than read without it.
+    """
+    for key, name in POST_FIT_CHECKS:
+        error = (fit.get(key) or {}).get("error")
+        if error:
+            return f"{name} failed: {error}"
+    return None
+
+
+def _ran(fit: dict, key: str) -> bool:
+    """Whether a post-fit check has a result on `fit`; a failed one is run again."""
+    return key in fit and "error" not in fit[key]
 
 
 def _write_anchor(d: Path, report: dict, record: dict) -> dict:
@@ -1823,7 +1882,8 @@ def tail_check(voice: dict, fit: dict, lib: Path) -> dict:
     Past each capture's scored window the candidate's decay may be no slower than the slower
     of the shipped model's there and the reference's last slope projected forward. The check
     is post-fit rather than a hold in the search because the ring knobs act inside the window
-    too. A measurement that cannot be made is recorded as `skipped` and blocks nothing.
+    too. A fit that moved nothing is `skipped`; a measurement that fails is recorded as
+    `error`, which `post_fit_error` turns into an unjudged voice.
     """
     if not fit.get("overrides"):
         return {"skipped": "no value moved"}
@@ -1853,7 +1913,7 @@ def tail_check(voice: dict, fit: dict, lib: Path) -> dict:
     except HarnessMoved:
         raise
     except (RuntimeError, OSError, ValueError, KeyError) as exc:
-        return {"skipped": str(exc)}
+        return {"error": str(exc)}
     return {
         "window_source": "corpus slot",
         "cap_s": TAIL_RENDER_CAP_S,
@@ -1950,8 +2010,10 @@ def _judge_voice(voice: dict, d: Path, build_dir: str, per_knob: int) -> dict:
         _first_fit(voice, d, build_dir, per_knob)
     fit_report = json.loads(fit.read_text())
     if not post.exists():
-        if fit_report.get("level_unscored") and GAIN_ANCHOR_KEY not in fit_report:
+        if fit_report.get("level_unscored") and not _ran(fit_report, GAIN_ANCHOR_KEY):
             fit_report = anchor_gain(voice, d, build_dir, fit_report, lib, per_knob)
+            if failed := post_fit_error(fit_report):
+                return {"slug": voice["slug"], "decision": "stopped", "why": failed}
             if "loss_after" in fit_report.get(GAIN_ANCHOR_KEY, {}):
                 # Per-capture parts kept to resume an audit were measured before the rewrite.
                 for part in d.glob(f"{post.stem}.*.json"):
@@ -1964,9 +2026,11 @@ def _judge_voice(voice: dict, d: Path, build_dir: str, per_knob: int) -> dict:
             reach_copies(fit_report.get("overrides") or "", voice),
             base_overrides=reach_copies(BASE_OVERRIDES, voice),
         )
-    if TAIL_CHECK_KEY not in fit_report:
+    if not _ran(fit_report, TAIL_CHECK_KEY):
         fit_report[TAIL_CHECK_KEY] = tail_check(voice, fit_report, lib)
         fit.write_text(json.dumps(fit_report, indent=2) + "\n")
+    if failed := post_fit_error(fit_report):
+        return {"slug": voice["slug"], "decision": "stopped", "why": failed}
     result = {
         "slug": voice["slug"],
         **verdict(
@@ -1988,10 +2052,12 @@ def _judge_voice(voice: dict, d: Path, build_dir: str, per_knob: int) -> dict:
             "prefit_weights",
             "no_own_term",
             "user_zero",
+            "skipped",
             "refused",
         ):
             if got.get(key):
-                result["red_without_own_term" if key == "no_own_term" else key] = got[key]
+                renamed = {"no_own_term": "red_without_own_term", "skipped": "prefit_skipped"}
+                result[renamed.get(key, key)] = got[key]
     if SPEC:
         result["spec"] = {"path": SPEC, "knobs": SPEC_KNOBS}
     if WEIGHTS:
@@ -2241,7 +2307,7 @@ def along_the_path(voice: dict, d: Path, lib: Path, report: dict, tag: str) -> d
 #: A tuple names the terms that read one dimension in different tone classes; the
 #: ones the fit's class weighs are raised.
 GATE_TERMS = {
-    "stretch": "stiff",
+    "stretch": "cents",
     "decay": "slope",
     "partial_tilt": "slope",
     "damper": "env",
@@ -2256,7 +2322,7 @@ GATE_TERMS = {
     "aftersound": "tail",
     "doubling": "tail",
     "body": "body",
-    "attack_hf": "hf",
+    "attack_hf": "hfshare",
     "attack_hf_swing": ("hfdyn", "modedyn"),
     "crest": "crest",
 }
@@ -2265,7 +2331,7 @@ GATE_TERMS = {
 PERCUSSION_GATE_TERMS = {
     "vel_range": "velspan",
     "band_tilt": "band",
-    "band_shape": "band",
+    "band_shape": "bandrms",
     "band_decay": "bdecay",
     "ring": "ring",
     "tonality": "tonal",

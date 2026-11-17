@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+from metrics_floor import body_floor_state, tnr_floor_state
 
 # Best-frame residual at lag >= 100 ms. Rows known not to loop reach -33.6 dB at closest
 # (bass_fingered; piano -29.7, electric_guitar_di -31.5, jittered synthetic -29); loops: -36.
@@ -671,6 +672,7 @@ LOOP_TERM_DIMENSION = {
     "slope": "decay",
     "tail": "aftersound",
     "mod": "decay",
+    "body": "body",
 }
 
 
@@ -680,17 +682,85 @@ def unweighted_terms(rec: dict | None) -> list[str]:
     return [t for t, dim in LOOP_TERM_DIMENSION.items() if dim in excluded]
 
 
-def committed_loop_cells(capture_id: str | None, timbre: str | None = None) -> dict[tuple, list]:
-    """(note, velocity) -> unweighted terms, from the committed reference profile; empty without."""
+def _committed_rows(capture_id: str | None, timbre: str | None) -> list[dict]:
+    """The committed reference profile's rows for `timbre` (all where None); empty without one."""
     if not capture_id:
-        return {}
+        return []
     path = Path(__file__).resolve().parent / "reference" / f"{capture_id}.json"
     if not path.exists():
-        return {}
-    return {
-        (r["note"], r["velocity"]): unweighted_terms(r.get("loop"))
+        return []
+    return [
+        r
         for r in json.loads(path.read_text()).get("rows") or []
         if timbre is None or r.get("timbre") == timbre
+    ]
+
+
+def committed_loop_cells(capture_id: str | None, timbre: str | None = None) -> dict[tuple, list]:
+    """(note, velocity) -> unweighted terms, from the committed reference profile; empty without."""
+    return {
+        (r["note"], r["velocity"]): unweighted_terms(r.get("loop"))
+        for r in _committed_rows(capture_id, timbre)
+    }
+
+
+def committed_read_ends(capture_id: str | None, timbre: str | None = None) -> dict[tuple, float]:
+    """(note, velocity) -> seconds a looped reference row was read to (`read_to_join_s`)."""
+    out = {}
+    for r in _committed_rows(capture_id, timbre):
+        until = (r.get("loop") or {}).get("read_to_join_s")
+        if until is not None:
+            out[(r["note"], r["velocity"])] = until
+    return out
+
+
+def committed_leads(capture_id: str | None, timbre: str | None = None) -> dict[tuple, float]:
+    """(note, velocity) -> seconds of lead-in before the sound in a committed reference recording."""
+    return {
+        (r["note"], r["velocity"]): max(float(r["onset_ms"]), 0.0) / 1000.0
+        for r in _committed_rows(capture_id, timbre)
+        if r.get("onset_ms") is not None
+    }
+
+
+def floor_censored_terms(row: dict) -> list[str]:
+    """The terms the recording's floor takes off a reference row, through the gate's own predicates."""
+    return [
+        term
+        for term, state in (("tnr", tnr_floor_state), ("body", body_floor_state))
+        if state(row) is not None
+    ]
+
+
+def committed_floor_cells(capture_id: str | None, timbre: str | None = None) -> dict[tuple, list]:
+    """(note, velocity) -> terms the recording's floor censors, from the committed profile."""
+    return {
+        (r["note"], r["velocity"]): floor_censored_terms(r)
+        for r in _committed_rows(capture_id, timbre)
+    }
+
+
+#: The reference row field each term the loop or the floor can take off reads.
+TERM_FIELDS = {"tnr": "tnr_db", "body": "body_below_f0_db"}
+
+
+def committed_term_cells(
+    capture_id: str | None, timbre: str | None, term: str
+) -> set[tuple] | None:
+    """(note, velocity) cells whose reference row reads `term` for the gate; None without a profile.
+
+    A cell is out where the row holds no reading, its loop takes the term off it
+    (`unweighted_terms`) or the recording's floor does (`floor_censored_terms`).
+    """
+    rows = _committed_rows(capture_id, timbre)
+    if not rows:
+        return None
+    return {
+        (r["note"], r["velocity"])
+        for r in rows
+        if r.get(TERM_FIELDS[term]) is not None
+        and term not in unweighted_terms(r.get("loop"))
+        and term not in floor_censored_terms(r)
     }
 
 
@@ -706,5 +776,21 @@ def mark_loop_rows(rows: list[dict], capture_id: str | None, timbre: str | None 
         terms = cells.get((r.get("note"), r.get("velocity")))
         if terms:
             r["loop_unweighted"] = terms
+            marked += 1
+    return marked
+
+
+def mark_floor_rows(rows: list[dict], capture_id: str | None, timbre: str | None = None) -> int:
+    """Set `floor_censored` on the oracle rows whose reference row sits at the recording's floor.
+
+    The gate leaves `tnr` and `body` out of those rows (`tnr_floor_state`, `body_floor_state`),
+    so the loss does the same; the count is the rows marked.
+    """
+    cells = committed_floor_cells(capture_id, timbre)
+    marked = 0
+    for r in rows:
+        terms = cells.get((r.get("note"), r.get("velocity")))
+        if terms:
+            r["floor_censored"] = terms
             marked += 1
     return marked

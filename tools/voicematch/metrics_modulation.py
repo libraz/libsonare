@@ -17,11 +17,9 @@ from smf import Note
 #   "A model reading 'cleaner, flatter' than the oracle often means 'add
 #    vibrato/breath movement', not 'the oracle is worse'."
 #
-# — while the objective had no term that could ever say it. `tnr` is the closest
-# and it is one-sided by construction: it charges the model for being NOISIER
-# than the reference and is silent when the model is dead. So the one reading
-# that reliably indicates a missing vibrato was the one reading the loss could
-# not act on.
+# — while the objective had no term that could ever say it. `tnr` is the closest,
+# and it can say only that a still model is cleaner than the reference, never
+# which movement it lacks.
 #
 # What is measured is the fundamental's instantaneous frequency and level over
 # the held part of the note, separated into three bands because they are three

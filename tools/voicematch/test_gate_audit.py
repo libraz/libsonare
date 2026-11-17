@@ -128,8 +128,16 @@ def test_a_percussion_mapping_measured_as_a_proxy_reads_proxy():
         classified=set(own) | PERCUSSION_GATE_PROXIES,
     )
     assert got["band_tilt"] == (gate_audit.PROXY, ("band",))
-    assert got["band_shape"] == (gate_audit.WEIGHTED, ("band",))
+    # `band` caps each band and skips the floored ones; `bandrms` is the gate's own reading.
+    assert "band_shape" not in got
     assert got["ring"] == (gate_audit.PROXY, ("ring",))
+    weighed = gate_audit.weighting(
+        {"band": 1.0, "bandrms": 0.25},
+        refit.PERCUSSION_GATE_TERMS,
+        own,
+        classified=set(own) | PERCUSSION_GATE_PROXIES,
+    )
+    assert weighed["band_shape"] == (gate_audit.WEIGHTED, ("bandrms",))
 
 
 def _args(tmp_path, **kw):

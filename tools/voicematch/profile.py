@@ -211,6 +211,7 @@ from profile_summary import (
     print_summary,
     profile_bank,
     profile_program,
+    stretch_ruler,
     summarize,
     summarize_percussion,
     velocity_law_reading,
@@ -1581,9 +1582,7 @@ def compare(
     bank = profile_bank(profile, cfg)
     pairs = sorted({k for k in ref if not notes_filter or k[0] in notes_filter})
     # An unpitched class reads no stretch, so it has no ruler to remove from one.
-    ruler = (
-        a4_ruler(profile["rows"], timbre) if "stretch" in canonical_dimensions(program) else None
-    )
+    ruler = stretch_ruler(profile, timbre, program)
     a4_off = ruler["offset_c"] if ruler else 0.0
     print(f"model vs {timbre}: {len(pairs)} notes, model on GM program {program}")
     if ruler:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 
 from loss import score_terms
-from loss_dimensions import LEVEL_DELTA_CAP_DB, LOSS_TERMS, _velcurve_groups
+from loss_dimensions import LEVEL_DELTA_CAP_DB, LEVEL_FIELDS, LOSS_TERMS, _velcurve_groups
 from loss_weights import TERM_COUNT_KEYS
 
 DEFAULT_TAIL_FRACTION = 0.25
@@ -38,11 +38,11 @@ def _finite(value):
     return value if math.isfinite(value) else None
 
 
-def _row_level(model, oracle, offset):
-    reference = _finite(oracle.get("held_rms_dbfs"))
+def _row_level(model, oracle, offset, field):
+    reference = _finite(oracle.get(field))
     if reference is None:
         return None
-    observed = _finite(model.get("held_rms_dbfs"))
+    observed = _finite(model.get(field))
     if observed is None:
         return LEVEL_DELTA_CAP_DB
     return min(abs(observed - reference - offset), LEVEL_DELTA_CAP_DB)
@@ -127,6 +127,7 @@ def robust_score_terms(
     # A row unscorable alone stays charged in the grid result and only leaves the tail statistics.
     rows = [score_terms([m], [o], **kwargs) for m, o in zip(model_rows, oracle_rows)]
     offset = aggregate.get("level_offset_db", 0.0)
+    level_field = LEVEL_FIELDS[bool(kwargs.get("percussive", False))]
     for name in LOSS_TERMS:
         fraction = term_tails.get(name, tail_fraction)
         if name in GRID_TERMS or not fraction:
@@ -135,7 +136,7 @@ def robust_score_terms(
         uncapped = []
         for index, (model, oracle, terms) in enumerate(zip(model_rows, oracle_rows, rows)):
             if name == "level":
-                value = _row_level(model, oracle, offset)
+                value = _row_level(model, oracle, offset, level_field)
             elif terms is None:
                 continue
             else:

@@ -10,6 +10,12 @@ import sys
 from pathlib import Path
 
 import pytest
+from loss_dimensions import (
+    BRIGHT_ABSENT_CAP,
+    RISE_ABSENT_CAP_DB,
+    STRIKE_ABSENT_CAP_DB,
+    TONAL_ABSENT_CAP_DB,
+)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -208,7 +214,10 @@ def test_the_lean_of_the_spectrum_is_scored_where_the_band_profile_cannot_see_it
     # And the centroid is the gate's own ratio, absent when the reference has none.
     assert percussion_terms([{**bright, "centroid_hz": 4000.0}], [{**ref, "centroid_hz": 2000.0}])[
         "bright"
-    ] == pytest.approx(100.0)
+    ] == pytest.approx(BRIGHT_ABSENT_CAP)  # +100 %, held to what an absent reading costs
+    assert percussion_terms([{**bright, "centroid_hz": 2200.0}], [{**ref, "centroid_hz": 2000.0}])[
+        "bright"
+    ] == pytest.approx(10.0)
     assert percussion_terms([bright], [ref])["bright_hits"] == 0.0
 
 
@@ -226,8 +235,10 @@ def test_the_flatness_the_gate_bounds_is_scored_where_the_band_profile_cannot_se
     assert terms["band"] == 0.0
     assert terms["tonal"] == pytest.approx(7.0)
     assert terms["tonal_hits"] == 1.0
-    # Absent on either side, it is not charged and not counted.
-    assert percussion_terms([_hit(bands, [-20.0])], [ref])["tonal_hits"] == 0.0
+    # A model that lost the reading is charged the cap and counted; a reference without it is neither.
+    blind = percussion_terms([_hit(bands, [-20.0])], [ref])
+    assert blind["tonal_hits"] == 1.0 and blind["tonal"] == pytest.approx(TONAL_ABSENT_CAP_DB)
+    assert percussion_terms([ref], [_hit(bands, [-20.0])])["tonal_hits"] == 0.0
 
 
 def test_the_order_the_colour_arrives_in_is_scored_where_integrated_terms_cannot_see_it():
@@ -239,7 +250,10 @@ def test_the_order_the_colour_arrives_in_is_scored_where_integrated_terms_cannot
     assert terms["band"] == 0.0 and terms["tilt"] == 0.0
     assert terms["rise"] == pytest.approx(18.0)
     assert terms["rise_hits"] == 1.0
-    assert percussion_terms([_hit(bands, [-20.0])], [ref])["rise_hits"] == 0.0
+    # A model that lost the reading is charged the cap and counted; a reference without it is neither.
+    blind = percussion_terms([_hit(bands, [-20.0])], [ref])
+    assert blind["rise_hits"] == 1.0 and blind["rise"] == pytest.approx(RISE_ABSENT_CAP_DB)
+    assert percussion_terms([ref], [_hit(bands, [-20.0])])["rise_hits"] == 0.0
 
 
 def test_a_strike_too_dark_is_scored_where_the_rise_and_the_whole_hit_tilt_agree():
@@ -251,7 +265,10 @@ def test_a_strike_too_dark_is_scored_where_the_rise_and_the_whole_hit_tilt_agree
     assert terms["band"] == 0.0 and terms["tilt"] == 0.0 and terms["rise"] == 0.0
     assert terms["strike"] == pytest.approx(7.0)
     assert terms["strike_hits"] == 1.0
-    assert percussion_terms([_hit(bands, [-20.0])], [ref])["strike_hits"] == 0.0
+    # A model that lost the reading is charged the cap and counted; a reference without it is neither.
+    blind = percussion_terms([_hit(bands, [-20.0])], [ref])
+    assert blind["strike_hits"] == 1.0 and blind["strike"] == pytest.approx(STRIKE_ABSENT_CAP_DB)
+    assert percussion_terms([ref], [_hit(bands, [-20.0])])["strike_hits"] == 0.0
 
 
 def test_a_ring_half_as_long_costs_a_doubling_and_a_capped_reference_costs_nothing():

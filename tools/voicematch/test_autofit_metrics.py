@@ -255,12 +255,11 @@ def test_stiffness_is_read_from_the_signal_and_never_from_the_note_number():
 
 
 def test_the_noise_term_does_not_file_stretched_partials_as_noise():
-    """`tnr` is scored one-directionally, so a mistracked mask is not neutral.
+    """A mistracked mask is not neutral.
 
-    Only a model noisier than its oracle is charged. A mask on integer
-    multiples buckets a stiff string's upper partials as noise, so whichever
-    side is stiffer reads as the noisy one and the fit is sent to correct a
-    property of the ruler.
+    A mask on integer multiples buckets a stiff string's upper partials as
+    noise, so whichever side is stiffer reads as the noisy one and the fit is
+    sent to correct a property of the ruler.
     """
     sr = 48000
     rng = np.random.default_rng(0)
@@ -412,27 +411,50 @@ def test_the_attack_dynamics_term_sees_a_hammer_law_the_held_ladder_cannot():
     reference and one against it. Rows carry no ladder, so `dyn` has nothing to
     read and only `hfdyn` can tell them apart.
     """
-    from loss_dimensions import _attack_hf_share, _dyn_terms
-    from metrics_attack import ATTACK_BANDS_HZ
+    from loss_dimensions import _attack_hf_share, _dyn_terms, _swing_terms
 
-    def rows(law):
-        out = []
-        for v in (24, 56, 88, 120):
-            share = law(v)
-            bands = [share if i % len(ATTACK_BANDS_HZ) == 0 else -60.0 for i in range(30)]
-            out.append({"note": 60, "velocity": v, "attack_hf_db": bands})
-        return out
-
-    ref = rows(lambda v: -60.0 + 28.0 * (v - 24) / 96.0)
-    right = rows(lambda v: -57.0 + 28.0 * (v - 24) / 96.0)
-    wrong = rows(lambda v: -54.0 - 28.0 * (v - 24) / 96.0 + 28.0 * (v >= 88))
+    ref = _attack_rows(lambda v: -60.0 + 28.0 * (v - 24) / 96.0)
+    right = _attack_rows(lambda v: -57.0 + 28.0 * (v - 24) / 96.0)
+    wrong = _attack_rows(lambda v: -54.0 - 28.0 * (v - 24) / 96.0 + 28.0 * (v >= 88))
     for cand in (right, wrong):
         assert _dyn_terms(cand, ref) == (0.0, 0)
-    hf_right, groups = _dyn_terms(right, ref, read=_attack_hf_share, cap_db=24.0)
-    hf_wrong, _ = _dyn_terms(wrong, ref, read=_attack_hf_share, cap_db=24.0)
+    hf_right, groups = _swing_terms(right, ref, _attack_hf_share, 24.0)
+    hf_wrong, _ = _swing_terms(wrong, ref, _attack_hf_share, 24.0)
     assert groups == 1
     assert hf_right == pytest.approx(0.0, abs=1e-9)
     assert hf_wrong > 5.0
+
+
+def _attack_rows(law, velocities=(24, 56, 88, 120)):
+    """One pitch's rows whose 4-8 kHz attack share follows `law(velocity)`."""
+    from metrics_attack import ATTACK_BANDS_HZ
+
+    out = []
+    for v in velocities:
+        share = law(v)
+        bands = [share if i % len(ATTACK_BANDS_HZ) == 0 else -60.0 for i in range(30)]
+        out.append({"note": 60, "velocity": v, "attack_hf_db": bands})
+    return out
+
+
+def test_the_attack_dynamics_term_takes_the_gates_endpoint_change_not_a_slope():
+    """A law that rises and then falls has a rising slope and a falling end.
+
+    The gate's `attack_hf_swing` is the softest-to-hardest change, so a model whose
+    share climbs to v88 and drops back below its start reads as falling with force.
+    """
+    from loss_dimensions import _attack_hf_share, _swing_terms
+    from profile_measure import velocity_swing_deltas
+
+    ref = _attack_rows(lambda v: -40.0 + 10.0 * (v - 24) / 96.0)
+    peaked = _attack_rows(lambda v: {24: -40.0, 56: -38.0, 88: -10.0, 120: -42.0}[v])
+    cells = [{r["velocity"]: _attack_hf_share(r) for r in rows} for rows in (peaked, ref)]
+    (gate,) = velocity_swing_deltas({60: cells[0]}, {60: cells[1]})
+    assert gate == pytest.approx(-12.0)
+    slope = np.polyfit(list(cells[0]), list(cells[0].values()), 1)[0]
+    assert slope > 0.0, "the fitted slope says the share rises"
+    swing, groups = _swing_terms(peaked, ref, _attack_hf_share, 24.0)
+    assert groups == 1 and swing == pytest.approx(abs(gate))
 
 
 def test_a_probe_with_no_velocity_axis_measures_no_attack_dynamics():
@@ -913,72 +935,41 @@ def test_a_model_probe_is_read_through_the_oracle_masks():
     assert oracle_tnr_masks([{"tnr_db": 20.0}]) is None
 
 
-def test_a_zero_noise_term_says_whether_it_measured_anything():
-    """`tnr` is one-sided, so its zero has two opposite meanings.
-
-    Charged only where the model is noisier, it reads 0.00 both when every note
-    matched and when the model is cleaner than the reference everywhere — and on
-    a normalised objective the second is worth a full unit of loss to whichever
-    candidate reaches it first. The count is what tells a reader which happened.
-    """
-    sr = 48000
+def _tnr_row(sr: int) -> dict:
+    """A measured note carrying a gate tone-to-noise reading."""
     y, _ = _string(sr, 0.0)
-    note = Note(33, 96, 0.0, 2.0)
-    row = analyze_note(y, sr, note, 3.0).to_dict()
+    row = analyze_note(y, sr, Note(33, 96, 0.0, 2.0), 3.0).to_dict()
+    return {**row, "fit_tnr_db": 30.0}
+
+
+def test_the_noise_term_charges_a_model_on_either_side_of_the_reference():
+    """`tnr` is two-sided, as the gate's bound is: a cleaner model is charged as a noisier one.
+
+    A model measurably cleaner than a sampled reference is usually one missing the
+    reference's own movement; a fit that took a shamisen's sawari away read 30 dB
+    cleaner than its reference at the gate while a one-sided term read 0.00.
+    """
+    row = _tnr_row(48000)
     same = loss_terms([row], [row], n_harm=10)
-    assert same["tnr"] == 0.0 and same["tnr_notes"] == 0.0
-
-    noisy = dict(row)
-    noisy["tnr_db"] = row["tnr_db"] - 6.0
-    charged = loss_terms([noisy], [row], n_harm=10)
-    assert charged["tnr"] == pytest.approx(6.0, abs=0.01)
-    assert charged["tnr_notes"] == 1.0
-
-    cleaner = dict(row)
-    cleaner["tnr_db"] = row["tnr_db"] + 6.0
-    free = loss_terms([cleaner], [row], n_harm=10)
-    assert free["tnr"] == 0.0, "a cleaner model is deliberately not penalised"
-    assert free["tnr_notes"] == 0.0, "and the zero must not read as a match"
+    assert same["tnr"] == 0.0 and same["tnr_notes"] == 1.0
+    noisy = {**row, "fit_tnr_db": 24.0}
+    assert loss_terms([noisy], [row], n_harm=10)["tnr"] == pytest.approx(6.0)
+    cleaner = {**row, "fit_tnr_db": 50.0}
+    charged = loss_terms([cleaner], [row], n_harm=10)
+    assert charged["tnr"] == pytest.approx(20.0) and charged["tnr_notes"] == 1.0
 
 
 def test_a_model_that_fell_silent_does_not_collect_the_tnr_term():
-    """A NaN model tnr_db must cost the absent cap, not read as clean.
-
-    A model whose own analysis window decayed into silence reads an implausibly
-    high tnr_db (a decaying sinusoid's residual still outweighs an uninjected
-    noise floor), which `max(0, oracle - model)` would score as cleaner than the reference.
-    """
-    sr = 48000
-    y, _ = _string(sr, 0.0)
-    note = Note(33, 96, 0.0, 2.0)
-    row = analyze_note(y, sr, note, 3.0).to_dict()
-
-    silent = dict(row)
-    silent["tnr_db"] = float("nan")
+    """A model with no reading where the reference has one costs the absent cap."""
+    row = _tnr_row(48000)
+    silent = {k: v for k, v in row.items() if k != "fit_tnr_db"}
     charged = loss_terms([silent], [row], n_harm=10)
     assert charged["tnr"] == pytest.approx(TNR_ABSENT_CAP_DB)
     assert charged["tnr_notes"] == 1.0
-
-    # An oracle NaN is the reference offering nothing here — skipped, not charged.
-    oracle_silent = dict(row)
-    oracle_silent["tnr_db"] = float("nan")
-    unmeasurable = loss_terms([row], [oracle_silent], n_harm=10)
+    # An oracle with no reading is the reference offering nothing here — skipped, not charged.
+    unmeasurable = loss_terms([row], [silent], n_harm=10)
     assert unmeasurable["tnr"] == 0.0
     assert unmeasurable["tnr_notes"] == 0.0
-    assert charged["tnr_absent"] == 1.0 and unmeasurable["tnr_absent"] == 0.0
-
-
-def test_the_tnr_term_reports_how_far_past_the_reference_it_let_the_model_go():
-    """Past the reference the term charges nothing; the distance is still reported."""
-    sr = 48000
-    y, _ = _string(sr, 0.0)
-    row = analyze_note(y, sr, Note(33, 96, 0.0, 2.0), 3.0).to_dict()
-    cleaner = dict(row)
-    cleaner["tnr_db"] = row["tnr_db"] + 20.0
-    past = loss_terms([cleaner], [row], n_harm=10)
-    assert past["tnr"] == 0.0 and past["tnr_notes"] == 0.0
-    assert past["tnr_past_db"] == pytest.approx(20.0)
-    assert loss_terms([row], [row], n_harm=10)["tnr_past_db"] == 0.0
 
 
 # --------------------------------------------------------------------------- #
@@ -1131,8 +1122,10 @@ def test_the_onset_velocity_term_reads_the_slope_against_log_velocity():
 
 
 def _peak_rows(peaks: dict[int, float | None], note: int = 60, **extra) -> list[dict]:
+    from loss_dimensions import VELSPAN_FIELD
+
     return [
-        {"note": note, "velocity": v, "peak_dbfs": p, "held_rms_dbfs": -30.0, **extra}
+        {"note": note, "velocity": v, VELSPAN_FIELD: p, "held_rms_dbfs": -30.0, **extra}
         for v, p in peaks.items()
     ]
 
@@ -1146,7 +1139,7 @@ def test_the_velocity_span_term_reads_the_peak_level_range_the_gate_reads():
     narrow, _ = _velspan_terms(_peak_rows({32: -30.0, 64: -27.0, 127: -24.0}), ref)
     assert narrow == pytest.approx(6.0)
     # A span wider by more than the cap is charged the cap.
-    wide, _ = _velspan_terms(_peak_rows({32: -60.0, 127: 0.0}), ref)
+    wide, _ = _velspan_terms(_peak_rows({32: -60.0, 64: None, 127: 0.0}), ref)
     assert wide == pytest.approx(LEVEL_DELTA_CAP_DB)
     one = _peak_rows({100: -20.0})
     assert _velspan_terms(one, one) == (0.0, 0)
@@ -1162,13 +1155,14 @@ def test_the_velocity_span_term_charges_a_missing_model_cell_the_cap():
     assert counts["absent"] == 1.0
 
 
-def test_the_velocity_span_term_reads_peak_dbfs_and_not_the_held_level():
+def test_the_velocity_span_term_reads_the_gates_peak_and_not_another_level():
     from loss_dimensions import _velspan_terms
 
     ref = _peak_rows({32: -30.0, 127: -18.0})
     model = _peak_rows({32: -30.0, 127: -18.0})
     for i, r in enumerate(model):
         r["held_rms_dbfs"] = -50.0 + 20.0 * i
+        r["peak_dbfs"] = -40.0 + 30.0 * i
     assert _velspan_terms(model, ref) == (0.0, 1)
 
 

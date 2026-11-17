@@ -90,6 +90,13 @@ class EnumList:
 
 
 @dataclass(frozen=True)
+class Vec:
+    """A list of exactly `n` numbers (no None, no nesting)."""
+
+    n: int
+
+
+@dataclass(frozen=True)
 class Maybe:
     """Either None or the wrapped spec."""
 
@@ -99,6 +106,7 @@ class Maybe:
 #: Every key of an oracle row: the note and hit measurement records, plus what
 #: `probe_rows` and `level_of` add. A test compares this against the records.
 ROW_KEYS = [
+    "a4_offset_c",
     "arrival_ms",
     "attack_ms",
     "attack_fine_ms",
@@ -111,6 +119,7 @@ ROW_KEYS = [
     "beat_db",
     "beat_rate_hz",
     "body_below_f0_db",
+    "cents_vs_et",
     "centroid_hz",
     "crest_db",
     "decay_capped",
@@ -121,13 +130,18 @@ ROW_KEYS = [
     "f0_cents_err",
     "f0_hz",
     "f0_width_cents",
+    "fit_centroid_hz",
+    "fit_tnr_db",
+    "fit_tnr_mask",
     "flatness_db",
+    "floor_censored",
     "fm_fast_cents",
     "fm_fast_rate_hz",
     "fm_slow_cents",
     "fm_slow_rate_hz",
     "harmonics_db",
     "held_crest_db",
+    "held_peak_dbfs",
     "held_rms_dbfs",
     "inharmonicity_b",
     "inharmonicity_partials",
@@ -139,6 +153,7 @@ ROW_KEYS = [
     "modal_density_valid",
     "modal_hz",
     "modal_ratio",
+    "mono_peak_dbfs",
     "note",
     "odd_even_db",
     "onset_ms",
@@ -150,6 +165,7 @@ ROW_KEYS = [
     "pitch_drop_ratio",
     "prompt_late_db",
     "prompt_late_valid",
+    "read_to_join_s",
     "release_capped",
     "release_ms",
     "skeleton",
@@ -173,7 +189,10 @@ ROW_KEYS = [
 ]
 
 #: The terms a loop record can take weight off a row (`loop_record.LOOP_TERM_DIMENSION`).
-LOOP_TERMS = ("cents", "tnr", "slope", "tail", "mod")
+LOOP_TERMS = ("cents", "tnr", "slope", "tail", "mod", "body")
+
+#: The terms the recording's floor takes off a reference row (`loop_record.floor_censored_terms`).
+FLOOR_TERMS = ("tnr", "body")
 
 ROOM_KEYS = ("rt60_s", "hf_ratio", "tail_db", "predelay_ms", "tail_window_s", "note_window_s")
 
@@ -182,24 +201,29 @@ _ID_OR_EMPTY = re.compile(r"^[A-Za-z0-9_.\-]{0,64}$")
 _CSV = re.compile(r"^[0-9, ]{0,512}$")
 _HEX = re.compile(r"^[0-9a-f]{16,64}$")
 
+#: `measure_tnr_mask`'s record: pitch motion (cents, rate, rate_hi) and tremolo (dB, rate).
+_MOTION = {"fm": Vec(3), "am": Vec(2)}
+
 _ROW = Obj(
     {
         **dict.fromkeys(ROW_KEYS, "datum"),
         "tnr_mask": Obj(
             {
-                "fm": "datum",
-                "am": "datum",
+                **_MOTION,
                 "modal": "bool",
                 "stationary_lines_hz": "datum",
                 "body_lines_hz": "datum",
             },
             required=False,
         ),
+        # The same record read over the fit window: its modulation keys only.
+        "fit_tnr_mask": Obj(_MOTION, required=False),
         "skeleton": Obj(
             {k: "datum" for k in ("init_db", "early_db_s", "late_db_s", "tail_db_s")},
             required=False,
         ),
         "loop_unweighted": EnumList(LOOP_TERMS),
+        "floor_censored": EnumList(FLOOR_TERMS),
     },
     required=False,
 )
@@ -331,6 +355,11 @@ def check(value, spec=SCHEMA, path: str = "cache") -> None:
     elif isinstance(spec, EnumList):
         if not isinstance(value, list) or any(x not in spec.values for x in value):
             raise CacheError(f"{path}: {value!r} is not a list of {', '.join(spec.values)}")
+    elif isinstance(spec, Vec):
+        if not (
+            isinstance(value, list) and len(value) == spec.n and all(_is_number(x) for x in value)
+        ):
+            raise CacheError(f"{path}: expected {spec.n} numbers, got {value!r:.60}")
     elif isinstance(spec, Maybe):
         if value is not None:
             check(value, spec.spec, path)

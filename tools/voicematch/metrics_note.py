@@ -629,7 +629,9 @@ def level_of(raw: np.ndarray, sr: int, note: Note, window_end: float) -> dict:
     }
 
 
-def note_onset(mono: np.ndarray, sr: int, note: Note, window_end: float) -> float:
+def note_onset(
+    mono: np.ndarray, sr: int, note: Note, window_end: float, lead_s: float = 0.0
+) -> float:
     """Where a pitched note actually starts sounding, in seconds.
 
     The same search the percussion set has always run, applied to the pitched
@@ -645,7 +647,7 @@ def note_onset(mono: np.ndarray, sr: int, note: Note, window_end: float) -> floa
     offset separates two things the scheduled anchor conflated; anchoring on
     the score alone measured neither of them cleanly.
     """
-    return _hit_onset(mono, sr, note.start, window_end)
+    return _hit_onset(mono, sr, note.start, window_end, lead_s)
 
 
 def compare_note(model: NoteMetrics, oracle: NoteMetrics) -> dict:

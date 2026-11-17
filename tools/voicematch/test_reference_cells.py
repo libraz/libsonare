@@ -30,12 +30,12 @@ def _skeleton(values, *, tail=True):
 def _pitched_row(**over):
     row = {
         "harmonics_db": [0.0, -6.0, -12.0] + [-20.0] * 9,
-        "f0_cents_err": 0.0,
-        "tnr_db": 30.0,
+        "cents_vs_et": 0.0,
+        "fit_tnr_db": 30.0,
         "sustain_slope_db_s": -3.0,
         "release_ms": 80.0,
         "attack_ms": 5.0,
-        "held_rms_dbfs": -20.0,
+        "held_peak_dbfs": -20.0,
         "held_crest_db": 12.0,
         "attack_hf_db": [1.0, 2.0, 3.0],
         "attack_lf_db": [1.0, 2.0, 3.0],
@@ -115,8 +115,8 @@ def test_reference_without_new_arrays_remains_unknown():
 
 
 def test_level_is_gain_offset_invariant_and_reports_shared_coverage():
-    oracle = [_pitched_row(held_rms_dbfs=-30.0), _pitched_row(held_rms_dbfs=-32.0)]
-    model = [_pitched_row(held_rms_dbfs=-21.0), _pitched_row(held_rms_dbfs=-23.0)]
+    oracle = [_pitched_row(held_peak_dbfs=-30.0), _pitched_row(held_peak_dbfs=-32.0)]
+    model = [_pitched_row(held_peak_dbfs=-21.0), _pitched_row(held_peak_dbfs=-23.0)]
     terms = loss_terms(model, oracle)
     assert terms["level"] == pytest.approx(0.0)
     assert terms["level_offset_db"] == pytest.approx(9.0)
@@ -125,9 +125,9 @@ def test_level_is_gain_offset_invariant_and_reports_shared_coverage():
 
 
 def test_missing_level_is_capped_and_partial_level_keeps_reference_denominator():
-    oracle = [_pitched_row(held_rms_dbfs=-30.0), _pitched_row(held_rms_dbfs=-32.0)]
+    oracle = [_pitched_row(held_peak_dbfs=-30.0), _pitched_row(held_peak_dbfs=-32.0)]
     all_missing = loss_terms(
-        [_pitched_row(held_rms_dbfs=None, held_crest_db=None)] * 2,
+        [_pitched_row(held_peak_dbfs=None, held_crest_db=None)] * 2,
         oracle,
     )
     assert all_missing["level"] == pytest.approx(LEVEL_DELTA_CAP_DB)
@@ -135,7 +135,7 @@ def test_missing_level_is_capped_and_partial_level_keeps_reference_denominator()
     assert all_missing["level_expected"] == 2.0
 
     partial = loss_terms(
-        [_pitched_row(held_rms_dbfs=-21.0), _pitched_row(held_rms_dbfs=None)],
+        [_pitched_row(held_peak_dbfs=-21.0), _pitched_row(held_peak_dbfs=None)],
         oracle,
     )
     assert partial["level"] == pytest.approx(LEVEL_DELTA_CAP_DB / 2.0)

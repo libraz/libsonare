@@ -10,6 +10,7 @@ import math
 
 import pytest
 from loss import loss_terms, percussion_terms
+from loss_dimensions import BRIGHT_ABSENT_CAP
 from metrics_bands import THIRD_OCTAVE_CENTERS
 
 NOTES = (60, 72)
@@ -30,7 +31,7 @@ def _row(p: dict, note: int, vel: int) -> dict:
     lv = math.log2(vel / 64)
     return {
         "note": note, "velocity": vel, "f0_hz": 440.0, "harmonics_db": ladder,
-        "f0_cents_err": p["cents"], "tnr_db": p["tnr"], "sustain_slope_db_s": p["sus"],
+        "cents_vs_et": p["cents"], "fit_tnr_db": p["tnr"], "sustain_slope_db_s": p["sus"],
         "release_ms": p["rel"], "attack_ms": p["att"],
         "attack_fine_ms": p["attf"] + p["attv"] * lv,
         "skeleton": {
@@ -39,10 +40,11 @@ def _row(p: dict, note: int, vel: int) -> dict:
             "tail_db_s": [p["tail"]] * 12,
         },
         "attack_hf_db": [p["hf"] + 0.2 * (vel - 64)] * 30, "attack_lf_db": [p["lf"]] * 4,
-        "held_rms_dbfs": p["held"] + p["held_v"] * (vel - 64),
+        "held_peak_dbfs": p["held"] + p["held_v"] * (vel - 64),
         "held_crest_db": p["crest"], "peak_dbfs": -30.0 + p["peak_v"] * (vel - 64),
+        "mono_peak_dbfs": -30.0 + p["peak_v"] * (vel - 64),
         "onset_overshoot_db": p["ov"] + p["ovv"] * lv, "onset_settle_ms": p["settle"],
-        "centroid_hz": p["cent"], "arrival_ms": p["arr"], "body_below_f0_db": p["body"],
+        "fit_centroid_hz": p["cent"], "arrival_ms": p["arr"], "body_below_f0_db": p["body"],
         "inharmonicity_b": p["b"], "inharmonicity_partials": p["nb"],
         "vib_cents": p["vib"], "trem_db": p["trem"], "beat_db": p["beat"],
         "f0_width_cents": p["width"], "vib_rate_hz": p["vibr"], "trem_rate_hz": p["tremr"],
@@ -94,6 +96,15 @@ def test_fm_cap_still_binds_both_ways():
     assert _terms(model={"fms": 0.0}, oracle={"fms": 500.0})["mod"] == pytest.approx(12.0)
 
 
+# --- tnr: a cleaner model is charged as a noisier one ---
+
+
+def test_tnr_charges_a_cleaner_model_as_a_noisier_one():
+    assert _terms(model={"tnr": 24.0})["tnr"] == pytest.approx(6.0)
+    assert _terms(model={"tnr": 36.0})["tnr"] == pytest.approx(6.0)
+    assert _terms()["tnr"] == 0.0
+
+
 # --- env release: a reference that never fell 40 dB has no release to compare ---
 
 
@@ -117,7 +128,7 @@ def test_a_capped_reference_release_is_skipped_and_an_uncapped_one_is_charged():
 
 @pytest.mark.parametrize("term", ["bright", "arrival", "body"])
 def test_absent_model_note_reading_is_charged_the_cap(term):
-    field = {"bright": "centroid_hz", "arrival": "arrival_ms", "body": "body_below_f0_db"}[term]
+    field = {"bright": "fit_centroid_hz", "arrival": "arrival_ms", "body": "body_below_f0_db"}[term]
     t = _terms(mutate=lambda mr, orr: _set(mr, **{field: None}))
     assert t[term] == pytest.approx(24.0)
     assert t[f"{term}_hits"] == len(NOTES) * len(VELS)
@@ -125,7 +136,7 @@ def test_absent_model_note_reading_is_charged_the_cap(term):
 
 @pytest.mark.parametrize("term", ["bright", "arrival", "body"])
 def test_absent_oracle_note_reading_stays_skipped(term):
-    field = {"bright": "centroid_hz", "arrival": "arrival_ms", "body": "body_below_f0_db"}[term]
+    field = {"bright": "fit_centroid_hz", "arrival": "arrival_ms", "body": "body_below_f0_db"}[term]
     t = _terms(mutate=lambda mr, orr: _set(orr, **{field: None}))
     assert t[term] == 0.0
     assert t[f"{term}_hits"] == 0.0
@@ -133,7 +144,9 @@ def test_absent_oracle_note_reading_stays_skipped(term):
 
 def test_measured_note_readings_are_unchanged():
     t = _terms(model={"cent": 3000.0, "arr": 20.0, "body": -50.0})
-    assert t["bright"] == pytest.approx(100.0)
+    assert t["bright"] == pytest.approx(
+        BRIGHT_ABSENT_CAP
+    )  # +100 %, held to an absent reading's cost
     assert t["arrival"] == pytest.approx(10.0)
     assert t["body"] == pytest.approx(10.0)
 

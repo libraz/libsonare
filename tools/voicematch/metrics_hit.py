@@ -471,13 +471,18 @@ def ring_doublings(model: dict, ref: dict) -> float | None:
     return float(np.log2(m / r))
 
 
-def _hit_onset(mono: np.ndarray, sr: int, start: float, limit: float) -> float:
+def _hit_onset(mono: np.ndarray, sr: int, start: float, limit: float, lead_s: float = 0.0) -> float:
     """Where the strike actually begins, in seconds, at or after `start`.
 
     The shared onset, under the name the percussion path reads it by; the
     behaviour and the constants are `sound_onset_s`'s.
+
+    `lead_s` is the lead-in a reference recording had before its sound, which a probe timeline
+    drops: the gate's search began that much earlier, so it ends that much earlier in sound time.
     """
-    return sound_onset_s(mono, sr, start, limit)
+    return sound_onset_s(
+        mono, sr, start, limit - lead_s, search_s=max(ONSET_SEARCH_S - lead_s, 0.0)
+    )
 
 
 def analyze_hit(
@@ -488,6 +493,7 @@ def analyze_hit(
     *,
     max_band_hz: float | None = None,
     stereo: np.ndarray | None = None,
+    lead_s: float = 0.0,
 ) -> HitMetrics:
     """Compute the percussion metric set for one hit.
 
@@ -522,7 +528,7 @@ def analyze_hit(
     padding, and a correlation taken across that reports the silence as a source
     in the middle.
     """
-    onset = _hit_onset(mono, sr, note.start, window_end)
+    onset = _hit_onset(mono, sr, note.start, window_end, lead_s)
     on = int(onset * sr)
     ceiling = HIT_LONG_MAX_SEC if note.note in LONG_DECAY_DRUM_NOTES else HIT_MAX_SEC
     end = int(min(window_end, onset + ceiling) * sr)

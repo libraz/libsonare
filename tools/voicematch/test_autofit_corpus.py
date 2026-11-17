@@ -108,7 +108,7 @@ class _FakeMetrics:
     """Stands in for a measurement so a window test costs no spectra."""
 
     def to_dict(self) -> dict:
-        return {}
+        return {"tnr_mask": {}}
 
 
 def _window_ends(pattern, monkeypatch) -> list[tuple[float, float]]:
@@ -122,6 +122,7 @@ def _window_ends(pattern, monkeypatch) -> list[tuple[float, float]]:
     monkeypatch.setattr(loss_module, "analyze_note", spy)
     monkeypatch.setattr(loss_module, "analyze_hit", spy)
     monkeypatch.setattr(loss_module, "skeleton_note", lambda *a, **k: {})
+    monkeypatch.setattr(loss_module, "fit_window_readings", lambda *a, **k: {})
     probe_rows(np.zeros(int(pattern_length(pattern) * 48000), dtype=np.float32), pattern, 48000)
     return seen
 

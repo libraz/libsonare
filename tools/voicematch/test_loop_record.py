@@ -455,7 +455,7 @@ def _loss_row(note: int, cents: float, tnr: float, **extra) -> dict:
     from test_loss_sidedness import BASE, _row
 
     row = _row(BASE, note, 64)
-    row.update(f0_cents_err=cents, tnr_db=tnr, **extra)
+    row.update(cents_vs_et=cents, fit_tnr_db=tnr, **extra)
     return row
 
 

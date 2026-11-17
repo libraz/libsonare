@@ -469,6 +469,13 @@ def analysis_window_end(pattern: Pattern, note: Note) -> float:
 
     `analyze_note` and `analyze_hit` both cap the window they are handed, so a
     gap longer than the sound costs nothing.
+
+    A corpus probe lays each reference slot end to end, and the gate reads a slot whole, so its
+    window runs to the next slot rather than to this note's own gate plus the last slot's tail.
     """
+    if pattern.name == "corpus":
+        return min(
+            [pattern_length(pattern)] + [n.start for n in pattern.notes if n.start > note.start]
+        )
     end = min(note.start + note.dur + pattern.tail, pattern_length(pattern))
     return min([end] + [n.start for n in pattern.notes if n.start > note.start])
