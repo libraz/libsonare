@@ -1,0 +1,13 @@
+{
+"bpm_mode": {"domain": "analysis", "surfaces": ["node", "wasm"]},
+"bpm_options": {"domain": "analysis", "surfaces": ["c"]},
+"bpm_options_init": {"domain": "analysis", "surfaces": ["c"]},
+"bpm_request": {"domain": "analysis", "surfaces": ["node", "wasm"]},
+"bpm_result": {"domain": "analysis", "surfaces": ["python"]},
+"detect_bpm": {"domain": "analysis", "surfaces": ["node", "python", "wasm"]},
+"free_string": {"domain": "analysis", "surfaces": ["c"]},
+"session": {"domain": "engine", "surfaces": ["c", "node", "python", "wasm"]},
+"session_create": {"domain": "analysis", "surfaces": ["c"]},
+"session_destroy": {"domain": "analysis", "surfaces": ["c"]},
+"stft": {"domain": "analysis", "surfaces": ["python"]}
+}

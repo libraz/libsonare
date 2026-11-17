@@ -1337,10 +1337,12 @@ def extract_cli(root: Path) -> tuple[list[dict], dict[str, int], dict]:
 
 
 def assign_domains(records: list[dict]) -> tuple[collections.Counter, list[str]]:
-    """Set domain and domain_path on every record; members inherit their owner's."""
-    paths: collections.Counter = collections.Counter()
+    """Set domain and domain_path on every record: classify per surface, then inherit.
+
+    The cross-surface name vote is not applied here; the checker applies the frozen
+    assignment in domains.json.
+    """
     errors: list[str] = []
-    owners: dict[tuple[str, str], str] = {}
     for r in records:
         if r["owner"]:
             continue
@@ -1352,23 +1354,8 @@ def assign_domains(records: list[dict]) -> tuple[collections.Counter, list[str]]
             )
             d, p = "core", "default"
         r["domain"], r["domain_path"] = d, p
-        owners[(r["surface"], r["name"])] = d
-        paths[p] += 1
-    for r in records:
-        if not r["owner"]:
-            continue
-        owner = r["owner"]
-        d = None
-        while d is None:
-            d = owners.get((r["surface"], owner))
-            if d is None and "." in owner:
-                owner = owner.rsplit(".", 1)[0]
-            elif d is None:
-                owner = owner.split("(")[0]
-                d = owners.get((r["surface"], owner), "core")
-        r["domain"], r["domain_path"] = d, "inherited"
-        paths["inherited"] += 1
-    return paths, errors
+    domains.inherit(records)
+    return collections.Counter(r["domain_path"] for r in records), errors
 
 
 # ---------------------------------------------------------------------- build

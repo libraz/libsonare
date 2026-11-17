@@ -1,16 +1,21 @@
 """Domain rule for the public-interface inventory.
 
 Every public record belongs to exactly one of six domains. Resolution order:
-an override by name, the CLI command table, the declaring file's basename, a
-short list of key patterns when the basename names no domain, the symbol key for
-files whose declarations span domains, and finally ``core``.
-Members (methods, fields, options, values, flags) inherit their owner's domain;
-the inventory applies that, this module classifies owners only.
+an override by name, the CLI command table, a few name patterns that outrank
+the file, the declaring file's basename, a short list of key patterns when the
+basename names no domain, the symbol key (AREAS) for files whose declarations
+span domains (then that file's basename), and finally ``core``. A vote over those per-surface domains gives each name one
+domain (most surfaces, ties C > wasm > node > python, an override pins it); the
+result is frozen in domains.json, which the checker applies by name.
+Members (methods, fields, options, values, flags) inherit their owner's domain,
+except the direct members of a MEMBER_KEYED override class, which classify by
+their own name; the inventory applies inheritance.
 """
 
 from __future__ import annotations
 
 import fnmatch
+import json
 import re
 from pathlib import PurePosixPath
 
@@ -74,21 +79,52 @@ OVERRIDES: dict[str, str] = {
     "lasterrorcode": "core",
     "lasterrormessage": "core",
     "errorcodename": "core",
+    "init": "core",
+    "isinitialized": "core",
+    "masteringrepair*": "effects",
+    "sonaremasteringrepair*": "effects",
     "version": "core",
     "mixer": "engine",
     "streamanalyzer": "analysis",
+    "scalename": "analysis",
+    "hasfeature": "core",
 }
 
-# Key patterns tried when the declaring file's basename names no domain.
+# Name patterns that outrank the declaring file: names those files misfile.
+NAME_PATTERNS: tuple[tuple[str, str], ...] = (
+    (r"^synth(_|$)", "engine"),
+    (r"^(meter_estimate|estimate_meter|meter_options)(_|$)", "analysis"),
+    (r"(^|_)rir(_|$)", "effects"),
+    (
+        r"^(analyze|analysis)_dynamics(_|$)|^(free_)?dynamics(_analysis)?_result$|^dynamics$",
+        "analysis",
+    ),
+    (r"^scale_|streaming_retune", "effects"),
+)
+
+# Key patterns tried before AREAS whenever the declaring file's basename names no domain.
 KEY_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"^engine_mixer_", "engine"),
     (r"worklet_scope", "engine"),
+    (r"^mastering_", "mastering"),
+    (r"pitch_correct", "effects"),
+    (r"^note_(move|stretch)(_|$)", "effects"),
+    (r"^(harmonic|percussive)(_|$)", "effects"),
+    (r"^normalize(_|$)", "mastering"),
+    (r"^(detect_clipping|dynamic_range|peak_db|true_peak_db|rms_db)(_|$)", "mastering"),
+    (r"^(crest_factor_db|dc_offset|silence_ratio)(_|$)", "mastering"),
+    (r"^(zero_crossing_rate|rms_energy)(_|$)", "analysis"),
 )
+
+# Override classes whose members are operations of other domains: each member is
+# classified by its own name (key patterns, then AREAS), falling back to core.
+MEMBER_KEYED: frozenset[str] = frozenset({"audio"})
 
 # Files whose declarations span domains: classify by symbol key instead.
 AGGREGATE_FILES: frozenset[str] = frozenset(
     {
         "bindings/python/src/libsonare/__init__.pyi",
+        "bindings/python/src/libsonare/_types_analysis.py",
         "bindings/python/src/libsonare/__init__.py",
         "bindings/python/src/libsonare/types.pyi",
         "bindings/python/src/libsonare/analyzer.pyi",
@@ -97,6 +133,7 @@ AGGREGATE_FILES: frozenset[str] = frozenset(
         "bindings/python/src/libsonare/_types_enums.py",
         "bindings/python/src/libsonare/_ffi_types_core.py",
         "bindings/wasm/src/index.ts",
+        "bindings/wasm/src/public_types_spectral.ts",
         "bindings/wasm/src/analysis.ts",
         "bindings/wasm/src/public_types.ts",
         "bindings/wasm/src/public_types_music.ts",
@@ -104,6 +141,8 @@ AGGREGATE_FILES: frozenset[str] = frozenset(
         "bindings/wasm/src/worklet/messages.ts",
         "bindings/wasm/src/validation.ts",
         "bindings/node/src/index.ts",
+        "bindings/node/src/types_analysis.ts",
+        "bindings/node/src/types_notes.ts",
         "bindings/node/src/types.ts",
         "include/sonare/sonare_c.h",
         "include/sonare/sonare_c_types_functions.h",
@@ -242,10 +281,15 @@ CLI_COMMANDS: dict[str, str] = {
 PATHS = (
     "override",
     "cli-table",
+    "name-pattern",
     "declaring-file",
     "key-pattern",
     "aggregate-key",
     "default",
+    "member-key",
+    "member-default",
+    "unified",
+    "ledger",
     "inherited",
 )
 
@@ -269,7 +313,7 @@ def compact(name: str) -> str:
 
 def symbol_key(name: str) -> str:
     """The snake_case key the AREAS patterns run against for aggregate files."""
-    if name.startswith("sonare_"):
+    if name.startswith(("sonare_", "SONARE_")):
         name = name[len("sonare_") :]
     elif name.startswith("Sonare") and len(name) > 6 and name[6].isupper():
         name = name[6:]
@@ -282,6 +326,21 @@ def area_of(text: str) -> str | None:
         if re.search(pattern, low):
             return domain
     return None
+
+
+def _first_match(patterns: tuple[tuple[str, str], ...], key: str) -> str | None:
+    for pattern, domain in patterns:
+        if re.search(pattern, key):
+            return domain
+    return None
+
+
+def name_pattern(key: str) -> str | None:
+    return _first_match(NAME_PATTERNS, key)
+
+
+def key_pattern(key: str) -> str | None:
+    return _first_match(KEY_PATTERNS, key)
 
 
 def override_for(name: str, overrides: dict[str, str] | None = None) -> str | None:
@@ -316,17 +375,152 @@ def classify(
         if name not in table:
             raise UnknownCommandError(name)
         return table[name], "cli-table"
+    key = symbol_key(name)
+    domain = name_pattern(key)
+    if domain:
+        return domain, "name-pattern"
     agg = AGGREGATE_FILES if aggregates is None else aggregates
     if file and file not in agg:
         domain = area_of(PurePosixPath(file).name.replace("-", "_"))
         if domain:
             return domain, "declaring-file"
-        key = symbol_key(name)
-        for pattern, domain in KEY_PATTERNS:
-            if re.search(pattern, key):
-                return domain, "key-pattern"
+    domain = key_pattern(key)
+    if domain:
+        return domain, "key-pattern"
     if file in agg or not file:
-        domain = area_of(symbol_key(name))
+        domain = area_of(key)
         if domain:
             return domain, "aggregate-key"
+        # An aggregate whose basename names a domain keeps it for keys no pattern claims.
+        domain = area_of(PurePosixPath(file).name.replace("-", "_")) if file else None
+        if domain:
+            return domain, "declaring-file"
     return "core", "default"
+
+
+def member_keyed(owner: str) -> bool:
+    """True when members of this top-level owner classify by their own name."""
+    return compact(owner) in MEMBER_KEYED
+
+
+def classify_member(member: str) -> tuple[str, str]:
+    """Return (domain, path) for a member of a MEMBER_KEYED owner."""
+    key = symbol_key(member)
+    domain = name_pattern(key) or key_pattern(key) or area_of(key)
+    return (domain, "member-key") if domain else ("core", "member-default")
+
+
+# Top-level kinds the name vote covers, and its tie-break order (highest first).
+UNIFY_KINDS = ("function", "class", "type", "export")
+UNIFY_PRIORITY = ("c", "wasm", "node", "python")
+
+
+def top_level(name: str) -> str:
+    """The top-level name a ledger spelling refers to: Type.field, fn(param), Type='token'."""
+    return re.split(r"[.(=]", name, maxsplit=1)[0]
+
+
+def _voters(records: list[dict]) -> dict[str, dict[str, list[dict]]]:
+    groups: dict[str, dict[str, list[dict]]] = {}
+    for r in records:
+        if r["owner"] or r["kind"] not in UNIFY_KINDS or r["surface"] not in UNIFY_PRIORITY:
+            continue
+        groups.setdefault(symbol_key(r["name"]), {}).setdefault(r["surface"], []).append(r)
+    return groups
+
+
+def vote(records: list[dict]) -> dict[str, dict]:
+    """Resolve each top-level name (as a symbol key) to one domain from per-surface domains.
+
+    An override on any surface pins the name; otherwise the domain held by the most surfaces
+    wins, ties broken by UNIFY_PRIORITY. A surface holding the name in two domains votes with
+    its first record (by file, line, kind). Returns {key: {domain, surfaces, tie}}.
+    """
+    rank = {s: i for i, s in enumerate(UNIFY_PRIORITY)}
+    out = {}
+    for key, per in _voters(records).items():
+        firsts = {
+            s: min(per[s], key=lambda r: (r["file"], r["line"], r["kind"]))
+            for s in UNIFY_PRIORITY
+            if s in per
+        }
+        pinned = [
+            r for s in UNIFY_PRIORITY for r in per.get(s, []) if r.get("domain_path") == "override"
+        ]
+        tie = False
+        if pinned:
+            winner = pinned[0]["domain"]
+        else:
+            tally: dict[str, list[int]] = {}
+            for s, r in firsts.items():
+                t = tally.setdefault(r["domain"], [0, len(rank)])
+                t[0] += 1
+                t[1] = min(t[1], rank[s])
+            winner = min(tally, key=lambda d: (-tally[d][0], tally[d][1]))
+            tie = sum(1 for t in tally.values() if t[0] == tally[winner][0]) > 1
+        out[key] = {
+            "domain": winner,
+            "surfaces": {s: r["domain"] for s, r in firsts.items()},
+            "tie": tie,
+        }
+    return out
+
+
+def regenerate(records: list[dict]) -> str:
+    """The generated domains.json text: one line per name, its domain and the surfaces seen."""
+    lines = [
+        json.dumps(k)
+        + ": "
+        + json.dumps({"domain": v["domain"], "surfaces": sorted(v["surfaces"])})
+        for k, v in sorted(vote(records).items())
+    ]
+    return "{\n" + ",\n".join(lines) + "\n}\n"
+
+
+def assign(records: list[dict], frozen: dict[str, dict], renames: dict[str, str]) -> list[str]:
+    """Give top-level records the frozen domain of their name, else the ledger's; return the rest.
+
+    ``renames`` maps a new name's key to the domain of its old entry. A name in neither keeps
+    its per-surface classification; the sorted keys of those names are returned.
+    """
+    unassigned = set()
+    for key, per in _voters(records).items():
+        if key in frozen:
+            domain, path = frozen[key]["domain"], "unified"
+        elif key in renames:
+            domain, path = renames[key], "ledger"
+        else:
+            unassigned.add(key)
+            continue
+        for recs in per.values():
+            for r in recs:
+                if r["domain"] != domain:
+                    r["domain"], r["domain_path"] = domain, path
+    return sorted(unassigned)
+
+
+def inherit(records: list[dict]) -> None:
+    """Set member domains from their owner, or by name for a MEMBER_KEYED owner's direct members."""
+    owners = {(r["surface"], r["name"]): r["domain"] for r in records if not r["owner"]}
+    for r in records:
+        if (
+            r["owner"]
+            and "." not in r["owner"]
+            and "(" not in r["name"]
+            and member_keyed(r["owner"])
+        ):
+            r["domain"], r["domain_path"] = classify_member(r["member"])
+            owners[(r["surface"], r["name"])] = r["domain"]
+    for r in records:
+        if not r["owner"] or r.get("domain_path", "").startswith("member-"):
+            continue
+        owner = r["owner"]
+        d = None
+        while d is None:
+            d = owners.get((r["surface"], owner))
+            if d is None and "." in owner:
+                owner = owner.rsplit(".", 1)[0]
+            elif d is None:
+                owner = owner.split("(")[0]
+                d = owners.get((r["surface"], owner), "core")
+        r["domain"], r["domain_path"] = d, "inherited"

@@ -7,8 +7,12 @@ Three parts, all over the per-surface inventory (tools/api/inventory.py):
 - convention checks: one check per convention slug (``slug`` or ``slug:aspect``),
   each reporting how many candidates it examined and which of them violate it.
 
-A check that examined zero candidates fails, because an extractor that stopped
-feeding it reads exactly like a clean tree. Violations may be excused by
+Each name takes its domain from the generated tools/api/domains.json
+(``--regenerate-domains`` rewrites it from the tree); a ledger's new name takes its
+old name's, and a ledger domain disagreeing with the file is a validation problem.
+
+A check that examined zero candidates fails in an unfiltered run, because an
+extractor that stopped feeding it reads exactly like a clean tree. Violations may be excused by
 tools/api/surface_allowlist.toml (four categories) or, for the Python surface of a
 librosa-named function, by tools/api/librosa_mirrors.toml. ``--audit-allowlist``
 fails on any allowlist entry that excused nothing in a full run.
@@ -115,6 +119,7 @@ DEFAULT_LEDGER_DIR = HERE / "migration"
 DEFAULT_RULES = HERE / "migration" / "rules.toml"
 DEFAULT_MIRRORS = HERE / "librosa_mirrors.toml"
 DEFAULT_ALLOWLIST = HERE / "surface_allowlist.toml"
+DEFAULT_DOMAINS = HERE / "domains.json"
 
 
 # ------------------------------------------------------------------ inputs
@@ -313,6 +318,58 @@ def validate_ledger(entries: list[LedgerEntry], slugs: set[str], root: Path) -> 
             le.valid = False
             problems.extend(f"{le.label}: {b}" for b in bad)
     return problems
+
+
+def load_domains(path: Path, problems: list[str]) -> dict[str, dict]:
+    """Read the frozen name -> domain assignment; an unreadable file is a validation problem."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        problems.append(f"{path.name}: missing; run with --regenerate-domains")
+        return {}
+    except json.JSONDecodeError as exc:
+        problems.append(f"{path.name}: {exc}")
+        return {}
+    out = {}
+    for key, v in sorted(data.items()) if isinstance(data, dict) else []:
+        ok = (
+            isinstance(v, dict)
+            and set(v) == {"domain", "surfaces"}
+            and v["domain"] in domains.DOMAINS
+            and isinstance(v["surfaces"], list)
+        )
+        if ok:
+            out[key] = v
+        else:
+            problems.append(f"{path.name}: {key}: needs domain (one of the six) and surfaces")
+    if not isinstance(data, dict):
+        problems.append(f"{path.name}: top level must be an object")
+    return out
+
+
+def _ledger_key(name: str) -> str:
+    return domains.symbol_key(domains.top_level(name))
+
+
+def ledger_domains(entries: list[LedgerEntry], frozen: dict[str, dict]):
+    """Return (renames, problems): new-name keys mapped to their old entry's domain, and
+    the entries whose domain disagrees with the frozen assignment."""
+    renames, problems = {}, []
+    for le in entries:
+        e = le.data
+        if not le.valid or e["kind"] in ("command", "flag"):
+            continue
+        old_key = _ledger_key(e["old"])
+        new_key = _ledger_key(e["new"]) if "new" in e else None
+        expected = frozen.get(old_key) or (frozen.get(new_key) if new_key else None)
+        if expected and e["domain"] != expected["domain"]:
+            problems.append(
+                f"{le.label}: domain {e['domain']!r} disagrees with domains.json;"
+                f" expected {expected['domain']!r}"
+            )
+        if new_key and e["kind"] in domains.UNIFY_KINDS:
+            renames[new_key] = expected["domain"] if expected else e["domain"]
+    return renames, problems
 
 
 def ledger_surfaces(le: LedgerEntry) -> list[str]:
@@ -1206,6 +1263,27 @@ def build_lookup(records):
     return lookup
 
 
+def domain_splits(records, want_domains=frozenset()):
+    """Top-level names (snake_case, surface prefix stripped) that land in more than one domain.
+
+    Informational: returns sorted (name, [(surface, domain), ...]); a surface holding the name
+    in two domains lists them joined by '/'.
+    """
+    by: dict = collections.defaultdict(lambda: collections.defaultdict(set))
+    for r in records:
+        if r["owner"] or r["kind"] not in domains.UNIFY_KINDS or r["surface"] not in LANG:
+            continue
+        by[domains.symbol_key(r["name"])][r["surface"]].add(r["domain"])
+    out = []
+    for name in sorted(by):
+        per = by[name]
+        found = set().union(*per.values())
+        if len(found) < 2 or (want_domains and not found & set(want_domains)):
+            continue
+        out.append((name, [(s, "/".join(sorted(per[s]))) for s in LANG if s in per]))
+    return out
+
+
 def line_of(v) -> str:
     return f"{v['surface']} {v['kind']} {v['name']}: {v['message']}"
 
@@ -1228,9 +1306,31 @@ def run(args) -> tuple[int, list[str], dict]:
             raise SystemExit(f"unknown domain {d!r}")
     matches = _split(args.match)
     check_ids = _split(args.check)
-    for c in check_ids:
+    skip_ids = _split(args.skip_check)
+    # A domain, match, check or skip filter selects a slice in which zero candidates is legitimate.
+    narrowed = bool(want_domains or matches or check_ids or skip_ids)
+    for c in check_ids + skip_ids:
         if c not in CHECK_IDS:
             raise SystemExit(f"unknown check {c!r}")
+
+    if args.regenerate_domains:
+        args.domains_file.write_text(domains.regenerate(records), encoding="utf-8")
+    votes = domains.vote(records)
+    ties = {k: v for k, v in votes.items() if v["tie"]}
+
+    problems: list[str] = list(inv.get("errors", []))
+    rules = load_rules(args.rules_file, problems)
+    slugs = {r.get("slug") for r in rules}
+    mirrors = load_mirrors(args.mirrors_file, problems)
+    allow = load_allowlist(args.allowlist_file, problems, CHECK_IDS)
+    entries = load_ledgers(args.ledger_dir, problems)
+    problems += validate_ledger(entries, slugs, root)
+    frozen = load_domains(args.domains_file, problems)
+    renames, ledger_problems = ledger_domains(entries, frozen)
+    problems += ledger_problems
+    unassigned = domains.assign(records, frozen, renames)
+    domains.inherit(records)
+    paths = collections.Counter(r["domain_path"] for r in records)
 
     if args.inventory:
         for r in records:
@@ -1252,7 +1352,11 @@ def run(args) -> tuple[int, list[str], dict]:
     report: dict = {
         "files": inv.get("files", {}),
         "counts": inv.get("counts", {}),
-        "domain_paths": inv.get("domain_paths", {}),
+        "domain_paths": {p: paths.get(p, 0) for p in domains.PATHS},
+        "domain_unassigned": unassigned,
+        "domain_ties": {
+            k: {"domain": v["domain"], **v["surfaces"]} for k, v in sorted(ties.items())
+        },
     }
     out.append("Inventory:")
     for s in SURFACES:
@@ -1263,16 +1367,13 @@ def run(args) -> tuple[int, list[str], dict]:
             failed = True
     out.append(
         "Domain classification paths: "
-        + ", ".join(f"{k}={v}" for k, v in inv.get("domain_paths", {}).items())
+        + ", ".join(f"{k}={v}" for k, v in report["domain_paths"].items())
     )
-
-    problems: list[str] = list(inv.get("errors", []))
-    rules = load_rules(args.rules_file, problems)
-    slugs = {r.get("slug") for r in rules}
-    mirrors = load_mirrors(args.mirrors_file, problems)
-    allow = load_allowlist(args.allowlist_file, problems, CHECK_IDS)
-    entries = load_ledgers(args.ledger_dir, problems)
-    problems += validate_ledger(entries, slugs, root)
+    if args.regenerate_domains:
+        out.append(f"Regenerated {args.domains_file.name}: {len(votes)} names")
+    out.append(f"domain vote: {len(votes)} names, {len(ties)} by tie-break")
+    out.append(f"unassigned: {len(unassigned)}")
+    out += [f"  {k}" for k in unassigned]
 
     out.append(f"Validation problems: {len(problems)}")
     out += [f"  {p}" for p in problems]
@@ -1307,6 +1408,10 @@ def run(args) -> tuple[int, list[str], dict]:
     out.append("Checks:")
     for chk in CHECKS:
         if check_ids and chk.id not in check_ids:
+            continue
+        if chk.id in skip_ids:
+            out.append(f"  check {chk.id}: skipped")
+            out.append(f"    not compared: {chk.id} (excluded by --skip-check)")
             continue
         if not set(chk.surfaces) & set(selected):
             continue
@@ -1348,7 +1453,9 @@ def run(args) -> tuple[int, list[str], dict]:
         viol.sort(key=line_of)
         suffix = f", excused {excused}" if excused else ""
         out.append(f"  check {chk.id}: checked {n}, violations {len(viol)}{suffix}")
-        if n == 0:
+        if n == 0 and narrowed:
+            out.append(f"    not compared: {chk.id} (no candidates under this filter)")
+        elif n == 0:
             out.append(
                 f"    FAIL {chk.id}: no candidates on the selected surfaces; its extractor found nothing"
             )
@@ -1362,9 +1469,10 @@ def run(args) -> tuple[int, list[str], dict]:
         )
 
     if args.audit_allowlist:
-        if args.surface or args.domain or args.match or args.check:
+        if args.surface or args.domain or args.match or args.check or args.skip_check:
             out.append(
-                "--audit-allowlist needs a full run; drop --surface / --domain / --match / --check"
+                "--audit-allowlist needs a full run;"
+                " drop --surface / --domain / --match / --check / --skip-check"
             )
             return 2, out, report
         stale = [a for a in allow if a.used == 0]
@@ -1373,6 +1481,11 @@ def run(args) -> tuple[int, list[str], dict]:
         )
         out += [f"  allow {a.index}: {a.check} {a.surface} {a.name}" for a in stale]
         failed |= bool(stale)
+
+    splits = domain_splits(ctx.records, want_domains)
+    out.append(f"domain splits: {len(splits)}")
+    out += [f"  {name}: " + ", ".join(f"{s}={d}" for s, d in per) for name, per in splits]
+    report["domain_splits"] = {name: dict(per) for name, per in splits}
 
     cols = [s for s in SURFACES if s in selected]
     out.append("Failures by domain x surface:")
@@ -1407,6 +1520,13 @@ def parse_args(argv):
     ap.add_argument("--domain", help="comma list of domains")
     ap.add_argument("--match", help="comma list of substrings (ledger old names, violation names)")
     ap.add_argument("--check", help="comma list of check ids")
+    ap.add_argument("--skip-check", help="comma list of check ids to leave out of this run")
+    ap.add_argument(
+        "--regenerate-domains",
+        action="store_true",
+        help="rewrite the frozen name -> domain file from the inventory before checking",
+    )
+    ap.add_argument("--domains-file", type=Path, default=DEFAULT_DOMAINS)
     ap.add_argument("--audit-allowlist", action="store_true")
     ap.add_argument("--inventory", action="store_true", help="print the inventory as TSV and exit")
     ap.add_argument("--json", action="store_true")
