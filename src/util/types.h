@@ -101,7 +101,7 @@ enum class ErrorCode : int {
   ///        the two are merged.
   EncodeFailed,
   /// @brief An operation was attempted on a result its source has since invalidated.
-  StaleResult,
+  StaleResult = 11,
 };
 
 /// @brief Pitch class (0-11, C=0).

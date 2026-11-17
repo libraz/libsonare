@@ -42,6 +42,22 @@ inline constexpr SonareError c_error_from_error_code(sonare::ErrorCode code) noe
   return SONARE_ERROR_UNKNOWN;
 }
 
+/// Every core enumerator carries its C-ABI number, so a binding that reads the
+/// core ordinal publishes the same code as one that goes through this mapping.
+inline constexpr bool core_ordinals_match_c_abi() noexcept {
+  for (const sonare::ErrorCode code :
+       {sonare::ErrorCode::Ok, sonare::ErrorCode::FileNotFound, sonare::ErrorCode::InvalidFormat,
+        sonare::ErrorCode::DecodeFailed, sonare::ErrorCode::InvalidParameter,
+        sonare::ErrorCode::OutOfMemory, sonare::ErrorCode::NotImplemented,
+        sonare::ErrorCode::InvalidState, sonare::ErrorCode::Cancelled,
+        sonare::ErrorCode::EncodeFailed, sonare::ErrorCode::StaleResult}) {
+    if (code == sonare::ErrorCode::Ok) continue;
+    if (static_cast<int>(code) != static_cast<int>(c_error_from_error_code(code))) return false;
+  }
+  return true;
+}
+static_assert(core_ordinals_match_c_abi(), "a core ErrorCode ordinal differs from its C-ABI code");
+
 /// Inverse of c_error_from_error_code(): lets facades that call the C ABI raise
 /// the same core ErrorCode without maintaining a second switch table.
 inline sonare::ErrorCode error_code_from_c_error(SonareError err) {
