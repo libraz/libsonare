@@ -13,6 +13,8 @@ from pathlib import Path
 
 import pytest
 
+from libsonare._ffi import in_tree_library
+
 ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -35,12 +37,10 @@ def _run_cli(*args: str, legacy: bool = False) -> subprocess.CompletedProcess[st
         environment["SONARE_LEGACY_EXIT"] = "1"
     source = ROOT / "bindings" / "python" / "src"
     environment["PYTHONPATH"] = str(source) + os.pathsep + environment.get("PYTHONPATH", "")
-    if "SONARE_LIB_PATH" not in environment:
-        for name in ("libsonare.dylib", "libsonare.so"):
-            candidate = ROOT / "build-python-shared" / "lib" / name
-            if candidate.exists():
-                environment["SONARE_LIB_PATH"] = str(candidate)
-                break
+    if not environment.get("SONARE_LIB_PATH"):
+        in_tree = in_tree_library(ROOT)
+        if in_tree is not None:
+            environment["SONARE_LIB_PATH"] = in_tree
     return subprocess.run(
         [sys.executable, "-m", "libsonare.cli", *args],
         cwd=ROOT,

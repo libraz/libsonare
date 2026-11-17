@@ -55,7 +55,8 @@ def _find_library(pkg_dir: Path | None = None) -> str:
     """Find the libsonare shared library.
 
     Search order:
-        1. SONARE_LIB_PATH environment variable
+        1. SONARE_LIB_PATH environment variable -- used or refused, never
+           replaced by another library; an empty value counts as unset
         2. In-tree builds: ``build-python-shared/lib``, then ``build/lib`` --
            checked before the package-adjacent copy so a source checkout picks
            up a freshly built library instead of a stale copy an older build
@@ -64,7 +65,9 @@ def _find_library(pkg_dir: Path | None = None) -> str:
         4. System library path
     """
     env_path = os.environ.get("SONARE_LIB_PATH")
-    if env_path and Path(env_path).exists():
+    if env_path:
+        if not Path(env_path).exists():
+            raise OSError(f"SONARE_LIB_PATH={env_path!r} does not exist")
         return env_path
 
     if pkg_dir is None:

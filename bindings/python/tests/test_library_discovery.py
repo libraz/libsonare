@@ -62,3 +62,20 @@ def test_in_tree_lookup_matches_the_loader(pkg_dir: Path) -> None:
     _place(_root(pkg_dir) / "build" / "lib" / LIB_NAME)
     _place(_root(pkg_dir) / "build-python-shared" / "lib" / LIB_NAME)
     assert _ffi.in_tree_library(_root(pkg_dir)) == _ffi._find_library(pkg_dir)
+
+
+def test_a_named_library_that_does_not_exist_is_refused(
+    pkg_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _place(_root(pkg_dir) / "build-python-shared" / "lib" / LIB_NAME)
+    missing = tmp_path / "typo" / LIB_NAME
+    monkeypatch.setenv("SONARE_LIB_PATH", str(missing))
+    with pytest.raises(OSError, match="does not exist") as raised:
+        _ffi._find_library(pkg_dir)
+    assert str(missing) in str(raised.value)
+
+
+def test_an_empty_variable_counts_as_unset(pkg_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    shared = _place(_root(pkg_dir) / "build-python-shared" / "lib" / LIB_NAME)
+    monkeypatch.setenv("SONARE_LIB_PATH", "")
+    assert _ffi._find_library(pkg_dir) == str(shared)

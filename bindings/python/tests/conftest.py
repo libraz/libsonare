@@ -25,7 +25,7 @@ def _find_dev_lib_path() -> str | None:
     wheel job test something other than the artifact it just built.
     """
     env_path = os.environ.get("SONARE_LIB_PATH")
-    if env_path and Path(env_path).exists():
+    if env_path:
         return env_path
 
     from libsonare._ffi import in_tree_library
@@ -35,13 +35,17 @@ def _find_dev_lib_path() -> str | None:
 
 _dev_lib_path = _find_dev_lib_path()
 if _dev_lib_path is not None:
-    os.environ.setdefault("SONARE_LIB_PATH", _dev_lib_path)
+    os.environ["SONARE_LIB_PATH"] = _dev_lib_path
 
 
 def pytest_sessionstart(session: pytest.Session) -> None:
     """Refuse to run against an in-tree library older than the core sources."""
     if _dev_lib_path is None:
         return
+    # A named library that is missing would make every C-layer module skip,
+    # which reads as a green run.
+    if not Path(_dev_lib_path).exists():
+        pytest.exit(f"SONARE_LIB_PATH={_dev_lib_path!r} does not exist", returncode=3)
     from ._lib_freshness import stale_library_message
 
     message = stale_library_message(_dev_lib_path, Path(__file__).parent.parent.parent.parent)
