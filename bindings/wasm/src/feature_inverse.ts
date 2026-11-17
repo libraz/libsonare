@@ -115,7 +115,8 @@ export interface GriffinLimRequest extends GuardedOptions {
  *
  * @returns {@link Matrix2D} whose rows are `nFft / 2 + 1` bins and cols are frames.
  */
-export function melToStft(...args: [request: MelToStftRequest]): Matrix2D {
+export function melToStft(request: MelToStftRequest): Matrix2D;
+export function melToStft(...args: unknown[]): Matrix2D {
   const r = requestOnly<MelToStftRequest>('melToStft', args);
   const sampleRate = r.sampleRate ?? 22050;
   assertSampleRate('melToStft', sampleRate);
@@ -147,7 +148,8 @@ export function melToStft(...args: [request: MelToStftRequest]): Matrix2D {
  *
  * @returns Reconstructed audio samples (mono, float32)
  */
-export function melToAudio(...args: [request: MelToAudioRequest]): Float32Array {
+export function melToAudio(request: MelToAudioRequest): Float32Array;
+export function melToAudio(...args: unknown[]): Float32Array {
   const r = requestOnly<MelToAudioRequest>('melToAudio', args);
   const sampleRate = r.sampleRate ?? 22050;
   assertSampleRate('melToAudio', sampleRate);
@@ -173,7 +175,8 @@ export function melToAudio(...args: [request: MelToAudioRequest]): Float32Array 
 }
 
 /** Reconstruct audio from an STFT magnitude matrix via Griffin-Lim. */
-export function griffinLim(...args: [request: GriffinLimRequest]): Float32Array {
+export function griffinLim(request: GriffinLimRequest): Float32Array;
+export function griffinLim(...args: unknown[]): Float32Array {
   const r = requestOnly<GriffinLimRequest>('griffinLim', args);
   const sampleRate = r.sampleRate ?? 22050;
   assertSampleRate('griffinLim', sampleRate);
@@ -199,7 +202,8 @@ export function griffinLim(...args: [request: GriffinLimRequest]): Float32Array 
  *
  * @returns {@link Matrix2D} whose rows are mel bands and cols are frames.
  */
-export function mfccToMel(...args: [request: MfccToMelRequest]): Matrix2D {
+export function mfccToMel(request: MfccToMelRequest): Matrix2D;
+export function mfccToMel(...args: unknown[]): Matrix2D {
   const r = requestOnly<MfccToMelRequest>('mfccToMel', args);
   const coefficients = assertMatrix2D(
     'mfccToMel',
@@ -225,7 +229,8 @@ export function mfccToMel(...args: [request: MfccToMelRequest]): Matrix2D {
  *
  * @returns Reconstructed audio samples (mono, float32)
  */
-export function mfccToAudio(...args: [request: MfccToAudioRequest]): Float32Array {
+export function mfccToAudio(request: MfccToAudioRequest): Float32Array;
+export function mfccToAudio(...args: unknown[]): Float32Array {
   const r = requestOnly<MfccToAudioRequest>('mfccToAudio', args);
   const sampleRate = r.sampleRate ?? 22050;
   assertSampleRate('mfccToAudio', sampleRate);

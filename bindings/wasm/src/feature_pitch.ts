@@ -187,7 +187,8 @@ export interface NoteSegmentsRequest {
  * `f0Hz` and `voicedProb` must have the same non-zero length. Zero-Hz frames
  * and values below `voicedThreshold` (default `0.5`) are treated as unvoiced.
  */
-export function noteSegments(...args: [request: NoteSegmentsRequest]): NoteSegment[] {
+export function noteSegments(request: NoteSegmentsRequest): NoteSegment[];
+export function noteSegments(...args: unknown[]): NoteSegment[] {
   const r = requestOnly<NoteSegmentsRequest>('noteSegments', args);
   const native = requireModule().noteSegments(r.f0Hz, r.voicedProb, r.frameRate, {
     segmentationThresholdCents: r.segmentationThresholdCents,
@@ -237,7 +238,8 @@ export interface EstimateTuningRequest extends ValidateOptions {
  *
  * @returns The offset in cents of a semitone, in `[-50, 50)` at 12 bins per octave.
  */
-export function pitchTuning(...args: [request: PitchTuningRequest]): number {
+export function pitchTuning(request: PitchTuningRequest): number;
+export function pitchTuning(...args: unknown[]): number {
   const r = requestOnly<PitchTuningRequest>('pitchTuning', args);
   const binsPerOctave = r.binsPerOctave ?? 12;
   const bins = requireModule().pitchTuning(r.frequencies, r.resolution ?? 0.01, binsPerOctave);

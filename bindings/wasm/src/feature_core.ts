@@ -343,7 +343,8 @@ export interface PlpRequest {
  *
  * @returns The samples, `durationSec * sampleRate` long.
  */
-export function tone(...args: [request?: ToneRequest]): Float32Array {
+export function tone(request?: ToneRequest): Float32Array;
+export function tone(...args: unknown[]): Float32Array {
   const r = requestOnly<ToneRequest>('tone', args.length === 0 ? [{}] : args);
   const frequencyHz = r.frequencyHz ?? 440;
   const durationSec = r.durationSec ?? 1;
@@ -358,7 +359,8 @@ export function tone(...args: [request?: ToneRequest]): Float32Array {
 }
 
 /** Frequency sweep; exponential unless `linear` is set. */
-export function chirp(...args: [request?: ChirpRequest]): Float32Array {
+export function chirp(request?: ChirpRequest): Float32Array;
+export function chirp(...args: unknown[]): Float32Array {
   const r = requestOnly<ChirpRequest>('chirp', args.length === 0 ? [{}] : args);
   const fminHz = r.fminHz ?? 440;
   const fmaxHz = r.fmaxHz ?? 880;
@@ -378,7 +380,8 @@ export function chirp(...args: [request?: ChirpRequest]): Float32Array {
  *
  * @throws RangeError for an explicit `length` of 0.
  */
-export function clicks(...args: [request: ClicksRequest]): Float32Array {
+export function clicks(request: ClicksRequest): Float32Array;
+export function clicks(...args: unknown[]): Float32Array {
   const r = requestOnly<ClicksRequest>('clicks', args);
   if (r.length !== undefined && r.length !== null) {
     assertPositiveInteger('clicks', r.length, 'length');
@@ -556,26 +559,30 @@ export function samplesToFrames(samples: number, hopLength = 512, nFft?: number)
 // ============================================================================
 
 /** Power values to dB. */
-export function powerToDb(...args: [request: PowerToDbRequest]): Float32Array {
+export function powerToDb(request: PowerToDbRequest): Float32Array;
+export function powerToDb(...args: unknown[]): Float32Array {
   const r = requestOnly<PowerToDbRequest>('powerToDb', args);
   return requireModule().powerToDb(r.values, r.ref ?? 1.0, r.amin ?? 1e-10, r.topDb ?? 80.0);
 }
 
 /** Amplitude values to dB. */
-export function amplitudeToDb(...args: [request: AmplitudeToDbRequest]): Float32Array {
+export function amplitudeToDb(request: AmplitudeToDbRequest): Float32Array;
+export function amplitudeToDb(...args: unknown[]): Float32Array {
   const r = requestOnly<AmplitudeToDbRequest>('amplitudeToDb', args);
   return requireModule().amplitudeToDb(r.values, r.ref ?? 1.0, r.amin ?? 1e-5, r.topDb ?? 80.0);
 }
 
 /** dB values to power. */
-export function dbToPower(...args: [request: DbToPowerRequest]): Float32Array {
+export function dbToPower(request: DbToPowerRequest): Float32Array;
+export function dbToPower(...args: unknown[]): Float32Array {
   const r = requestOnly<DbToPowerRequest>('dbToPower', args);
   assertNumber('dbToPower', r.ref ?? 1.0, 'ref');
   return requireModule().dbToPower(r.values, r.ref ?? 1.0);
 }
 
 /** dB values to amplitude. */
-export function dbToAmplitude(...args: [request: DbToAmplitudeRequest]): Float32Array {
+export function dbToAmplitude(request: DbToAmplitudeRequest): Float32Array;
+export function dbToAmplitude(...args: unknown[]): Float32Array {
   const r = requestOnly<DbToAmplitudeRequest>('dbToAmplitude', args);
   assertNumber('dbToAmplitude', r.ref ?? 1.0, 'ref');
   return requireModule().dbToAmplitude(r.values, r.ref ?? 1.0);
@@ -661,7 +668,8 @@ function assertCommonSignals(fnName: string, signals: unknown): void {
  *   where they touch. A single signal returns exactly what `splitSilence`
  *   does for it.
  */
-export function splitSilenceCommon(...args: [request: SplitSilenceCommonRequest]): Int32Array {
+export function splitSilenceCommon(request: SplitSilenceCommonRequest): Int32Array;
+export function splitSilenceCommon(...args: unknown[]): Int32Array {
   const r = requestOnly<SplitSilenceCommonRequest>('splitSilenceCommon', args);
   assertCommonSignals('splitSilenceCommon', r.signals);
   return requireModule().splitSilenceCommon(
@@ -685,7 +693,10 @@ export function splitSilenceCommon(...args: [request: SplitSilenceCommonRequest]
  * @returns The union intervals and the report measured on the same RMS pass
  */
 export function splitSilenceCommonWithReport(
-  ...args: [request: SplitSilenceCommonWithReportRequest]
+  request: SplitSilenceCommonWithReportRequest,
+): SplitSilenceCommonWithReportResult;
+export function splitSilenceCommonWithReport(
+  ...args: unknown[]
 ): SplitSilenceCommonWithReportResult {
   const r = requestOnly<SplitSilenceCommonWithReportRequest>('splitSilenceCommonWithReport', args);
   assertCommonSignals('splitSilenceCommonWithReport', r.signals);
@@ -729,19 +740,22 @@ export function frameSignal(...args: unknown[]): Matrix2D {
 }
 
 /** Center `values` in a vector of `targetSize`. */
-export function padCenter(...args: [request: PadCenterRequest]): Float32Array {
+export function padCenter(request: PadCenterRequest): Float32Array;
+export function padCenter(...args: unknown[]): Float32Array {
   const r = requestOnly<PadCenterRequest>('padCenter', args);
   return requireModule().padCenter(r.values, r.targetSize, r.padValue ?? 0.0);
 }
 
 /** Pad or truncate `values` to `targetSize`. */
-export function fixLength(...args: [request: FixLengthRequest]): Float32Array {
+export function fixLength(request: FixLengthRequest): Float32Array;
+export function fixLength(...args: unknown[]): Float32Array {
   const r = requestOnly<FixLengthRequest>('fixLength', args);
   return requireModule().fixLength(r.values, r.targetSize, r.padValue ?? 0.0);
 }
 
 /** Bound a frame-index vector to `[xMin, xMax]`, padding the ends when `pad` is set. */
-export function fixFrames(...args: [request: FixFramesRequest]): Int32Array {
+export function fixFrames(request: FixFramesRequest): Int32Array;
+export function fixFrames(...args: unknown[]): Int32Array {
   const r = requestOnly<FixFramesRequest>('fixFrames', args);
   return requireModule().fixFrames(
     toInt32Array('fixFrames', r.frames, 'frames'),
@@ -752,14 +766,16 @@ export function fixFrames(...args: [request: FixFramesRequest]): Int32Array {
 }
 
 /** Roll each onset event back to the preceding energy minimum. */
-export function onsetBacktrack(...args: [request: OnsetBacktrackRequest]): Int32Array {
+export function onsetBacktrack(request: OnsetBacktrackRequest): Int32Array;
+export function onsetBacktrack(...args: unknown[]): Int32Array {
   const r = requestOnly<OnsetBacktrackRequest>('onsetBacktrack', args);
   const events = toInt32Array('onsetBacktrack', r.events, 'events');
   return requireModule().onsetBacktrack(events, r.energy);
 }
 
 /** Pick peaks from an onset-strength-like vector (librosa.util.peak_pick). */
-export function peakPick(...args: [request: PeakPickRequest]): Int32Array {
+export function peakPick(request: PeakPickRequest): Int32Array;
+export function peakPick(...args: unknown[]): Int32Array {
   const r = requestOnly<PeakPickRequest>('peakPick', args);
   return requireModule().peakPick(
     r.values,
@@ -779,7 +795,8 @@ const NORM_TOKENS = ['max', 'l1', 'l2', 'power'] as const;
  *
  * @throws TypeError for a non-string `norm`, RangeError for an unknown token.
  */
-export function vectorNormalize(...args: [request: VectorNormalizeRequest]): Float32Array {
+export function vectorNormalize(request: VectorNormalizeRequest): Float32Array;
+export function vectorNormalize(...args: unknown[]): Float32Array {
   const r = requestOnly<VectorNormalizeRequest>('vectorNormalize', args);
   const norm = requireToken('vectorNormalize', r.norm, 'norm', NORM_TOKENS, 'max');
   return requireModule().vectorNormalize(r.values, NORM_TOKENS.indexOf(norm), r.threshold ?? 0.0);
@@ -800,7 +817,8 @@ const PCEN_OPTION_KEYS = [
  *
  * @returns {@link Matrix2D} of the input's shape: rows are bins, cols are frames.
  */
-export function pcen(...args: [request: PcenRequest]): Matrix2D {
+export function pcen(request: PcenRequest): Matrix2D;
+export function pcen(...args: unknown[]): Matrix2D {
   const r = requestOnly<PcenRequest>('pcen', args);
   const values = assertMatrix2D('pcen', r.values, 'values');
   const options: Record<string, number> = {};
@@ -818,7 +836,8 @@ export function pcen(...args: [request: PcenRequest]): Matrix2D {
  *
  * @returns {@link Matrix2D} whose rows are the 6 tonnetz dimensions and cols are frames.
  */
-export function tonnetz(...args: [request: TonnetzRequest]): Matrix2D {
+export function tonnetz(request: TonnetzRequest): Matrix2D;
+export function tonnetz(...args: unknown[]): Matrix2D {
   const r = requestOnly<TonnetzRequest>('tonnetz', args);
   const chromagram = assertMatrix2D('tonnetz', r.chromagram, 'chromagram');
   const out = requireModule().tonnetz(chromagram.data, chromagram.rows, chromagram.cols);
@@ -833,7 +852,8 @@ const TEMPOGRAM_MODES = ['autocorrelation', 'cosine'] as const;
  * @returns {@link Matrix2D} whose rows are the `winLength` lags and cols are frames.
  * @throws TypeError for a non-string `mode`, RangeError for one other than `'autocorrelation'` or `'cosine'`.
  */
-export function tempogram(...args: [request: TempogramRequest]): Matrix2D {
+export function tempogram(request: TempogramRequest): Matrix2D;
+export function tempogram(...args: unknown[]): Matrix2D {
   const r = requestOnly<TempogramRequest>('tempogram', args);
   const mode = requireToken('tempogram', r.mode, 'mode', TEMPOGRAM_MODES, 'autocorrelation');
   const native = requireModule().tempogram(
@@ -853,7 +873,8 @@ export function tempogram(...args: [request: TempogramRequest]): Matrix2D {
  *
  * @returns {@link Matrix2D} whose rows are the `nBins` tempo bins and cols are frames.
  */
-export function cyclicTempogram(...args: [request: CyclicTempogramRequest]): Matrix2D {
+export function cyclicTempogram(request: CyclicTempogramRequest): Matrix2D;
+export function cyclicTempogram(...args: unknown[]): Matrix2D {
   const r = requestOnly<CyclicTempogramRequest>('cyclicTempogram', args);
   const native = requireModule().cyclicTempogram(
     r.onsetEnvelope,
@@ -867,7 +888,8 @@ export function cyclicTempogram(...args: [request: CyclicTempogramRequest]): Mat
 }
 
 /** Predominant local pulse curve; the default range is 60-200 BPM. */
-export function plp(...args: [request: PlpRequest]): Float32Array {
+export function plp(request: PlpRequest): Float32Array;
+export function plp(...args: unknown[]): Float32Array {
   const r = requestOnly<PlpRequest>('plp', args);
   return requireModule().plp(
     r.onsetEnvelope,

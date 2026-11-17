@@ -475,7 +475,8 @@ export function mfcc(...args: unknown[]): MfccResult {
  *
  * @returns {@link Matrix2D} of the input's shape: rows are features, cols are frames.
  */
-export function melDelta(...args: [request: MelDeltaRequest]): Matrix2D {
+export function melDelta(request: MelDeltaRequest): Matrix2D;
+export function melDelta(...args: unknown[]): Matrix2D {
   const r = requestOnly<MelDeltaRequest>('melDelta', args);
   const features = assertMatrix2D('melDelta', r.features, 'features', r.validate !== false);
   const width = r.width ?? 9;

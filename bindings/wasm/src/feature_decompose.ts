@@ -524,9 +524,8 @@ export function hpssWithResidual(
  *
  * @returns {@link Matrix2D} whose rows are `y` frames and cols are `x` frames.
  */
-export function segmentCrossSimilarity(
-  ...args: [request: SegmentCrossSimilarityRequest]
-): Matrix2D {
+export function segmentCrossSimilarity(request: SegmentCrossSimilarityRequest): Matrix2D;
+export function segmentCrossSimilarity(...args: unknown[]): Matrix2D {
   const r = requestOnly<SegmentCrossSimilarityRequest>('segmentCrossSimilarity', args);
   const x = assertMatrix2D('segmentCrossSimilarity', r.x, 'x');
   const y = assertMatrix2D('segmentCrossSimilarity', r.y, 'y');
@@ -553,9 +552,8 @@ export function segmentCrossSimilarity(
  *
  * @returns Square {@link Matrix2D}: rows = cols = frames.
  */
-export function segmentRecurrenceMatrix(
-  ...args: [request: SegmentRecurrenceMatrixRequest]
-): Matrix2D {
+export function segmentRecurrenceMatrix(request: SegmentRecurrenceMatrixRequest): Matrix2D;
+export function segmentRecurrenceMatrix(...args: unknown[]): Matrix2D {
   const r = requestOnly<SegmentRecurrenceMatrixRequest>('segmentRecurrenceMatrix', args);
   const data = assertMatrix2D('segmentRecurrenceMatrix', r.data, 'data');
   assertNonNegativeInteger('segmentRecurrenceMatrix', r.k ?? 0, 'k');
@@ -578,9 +576,8 @@ export function segmentRecurrenceMatrix(
  *
  * @returns {@link Matrix2D} whose rows are lags and cols are frames.
  */
-export function segmentRecurrenceToLag(
-  ...args: [request: SegmentRecurrenceToLagRequest]
-): Matrix2D {
+export function segmentRecurrenceToLag(request: SegmentRecurrenceToLagRequest): Matrix2D;
+export function segmentRecurrenceToLag(...args: unknown[]): Matrix2D {
   const r = requestOnly<SegmentRecurrenceToLagRequest>('segmentRecurrenceToLag', args);
   const recurrence = assertMatrix2D('segmentRecurrenceToLag', r.recurrence, 'recurrence');
   assertSquare('segmentRecurrenceToLag', recurrence, 'recurrence');
@@ -597,9 +594,8 @@ export function segmentRecurrenceToLag(
  *
  * @returns Square {@link Matrix2D}: rows = cols = frames.
  */
-export function segmentLagToRecurrence(
-  ...args: [request: SegmentLagToRecurrenceRequest]
-): Matrix2D {
+export function segmentLagToRecurrence(request: SegmentLagToRecurrenceRequest): Matrix2D;
+export function segmentLagToRecurrence(...args: unknown[]): Matrix2D {
   const r = requestOnly<SegmentLagToRecurrenceRequest>('segmentLagToRecurrence', args);
   const lag = assertMatrix2D('segmentLagToRecurrence', r.lag, 'lag');
   const native = requireModule().segmentLagToRecurrence(lag.data, lag.cols, lag.rows);
@@ -607,7 +603,8 @@ export function segmentLagToRecurrence(
 }
 
 /** Refine frame boundaries by clustering within each parent segment. */
-export function segmentSubsegment(...args: [request: SegmentSubsegmentRequest]): Int32Array {
+export function segmentSubsegment(request: SegmentSubsegmentRequest): Int32Array;
+export function segmentSubsegment(...args: unknown[]): Int32Array {
   const r = requestOnly<SegmentSubsegmentRequest>('segmentSubsegment', args);
   const data = assertMatrix2D('segmentSubsegment', r.data, 'data');
   assertPositiveInteger('segmentSubsegment', r.nSegments ?? 4, 'nSegments');
@@ -621,7 +618,8 @@ export function segmentSubsegment(...args: [request: SegmentSubsegmentRequest]):
 }
 
 /** Cluster feature columns and return one label per column. */
-export function segmentAgglomerative(...args: [request: SegmentAgglomerativeRequest]): Int32Array {
+export function segmentAgglomerative(request: SegmentAgglomerativeRequest): Int32Array;
+export function segmentAgglomerative(...args: unknown[]): Int32Array {
   const r = requestOnly<SegmentAgglomerativeRequest>('segmentAgglomerative', args);
   const data = assertMatrix2D('segmentAgglomerative', r.data, 'data');
   assertPositiveInteger('segmentAgglomerative', r.k, 'k');
@@ -639,7 +637,8 @@ export function segmentAgglomerative(...args: [request: SegmentAgglomerativeRequ
  *
  * @returns Square {@link Matrix2D}: rows = cols = frames.
  */
-export function segmentPathEnhance(...args: [request: SegmentPathEnhanceRequest]): Matrix2D {
+export function segmentPathEnhance(request: SegmentPathEnhanceRequest): Matrix2D;
+export function segmentPathEnhance(...args: unknown[]): Matrix2D {
   const r = requestOnly<SegmentPathEnhanceRequest>('segmentPathEnhance', args);
   const recurrence = assertMatrix2D('segmentPathEnhance', r.recurrence, 'recurrence');
   assertSquare('segmentPathEnhance', recurrence, 'recurrence');
