@@ -31,14 +31,35 @@ EXPECTED_ABI_VERSION = 0x06040208
 # --- Library discovery ---
 
 
-def _find_library() -> str:
+# In-tree build directories, most authoritative first. ``build-python-shared``
+# is the macOS shared-library build refreshed at every C-ABI change; ``build``
+# may be compiled elsewhere and hold an older local library.
+_IN_TREE_BUILD_DIRS = ("build-python-shared", "build")
+
+
+def _shared_library_name() -> str:
+    return "libsonare.dylib" if platform.system() == "Darwin" else "libsonare.so"
+
+
+def in_tree_library(project_root: Path) -> str | None:
+    """Return the first in-tree shared library under ``project_root``, or None."""
+    lib_name = _shared_library_name()
+    for build_dir in _IN_TREE_BUILD_DIRS:
+        candidate = project_root / build_dir / "lib" / lib_name
+        if candidate.exists():
+            return str(candidate)
+    return None
+
+
+def _find_library(pkg_dir: Path | None = None) -> str:
     """Find the libsonare shared library.
 
     Search order:
         1. SONARE_LIB_PATH environment variable
-        2. Build directory (development) -- checked before the package-adjacent
-           copy so an editable/source checkout always picks up a freshly built
-           library instead of a stale copy an older build may have left behind
+        2. In-tree builds: ``build-python-shared/lib``, then ``build/lib`` --
+           checked before the package-adjacent copy so a source checkout picks
+           up a freshly built library instead of a stale copy an older build
+           may have left behind
         3. Package-adjacent (wheel distribution)
         4. System library path
     """
@@ -46,14 +67,12 @@ def _find_library() -> str:
     if env_path and Path(env_path).exists():
         return env_path
 
-    pkg_dir = Path(__file__).parent
-    # In editable/source checkouts, prefer the freshly built shared library over
-    # any package-adjacent copy that may have been left by an older build.
+    if pkg_dir is None:
+        pkg_dir = Path(__file__).parent
     project_root = pkg_dir.parent.parent.parent.parent
-    lib_name = "libsonare.dylib" if platform.system() == "Darwin" else "libsonare.so"
-    build_path = project_root / "build" / "lib" / lib_name
-    if build_path.exists():
-        return str(build_path)
+    in_tree = in_tree_library(project_root)
+    if in_tree is not None:
+        return in_tree
 
     for name in ("libsonare.dylib", "libsonare.so", "sonare.dll"):
         candidate = pkg_dir / name

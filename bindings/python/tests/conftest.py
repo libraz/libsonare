@@ -11,7 +11,6 @@ a failure.
 """
 
 import os
-import sys
 from pathlib import Path
 
 import pytest
@@ -29,14 +28,9 @@ def _find_dev_lib_path() -> str | None:
     if env_path and Path(env_path).exists():
         return env_path
 
-    project_root = Path(__file__).parent.parent.parent.parent
-    lib_name = "libsonare.dylib" if sys.platform == "darwin" else "libsonare.so"
-    for build_dir in ("build", "build-mastering-api", "build-mastering"):
-        build_path = project_root / build_dir / "lib" / lib_name
-        if build_path.exists():
-            return str(build_path)
+    from libsonare._ffi import in_tree_library
 
-    return None
+    return in_tree_library(Path(__file__).parent.parent.parent.parent)
 
 
 _dev_lib_path = _find_dev_lib_path()
