@@ -792,15 +792,8 @@ def analyze_rhythm(
     sample rate, and lands closer to the known tempo than either. Analysis runs
     at ``sample_rate``. ``n_fft`` is the analysis window length in samples at
     22050 Hz, rescaled to the input sample rate; ``hop_length`` is in samples
-    of the input buffer.
-
-    Note:
-        ``bpm_min`` defaults to 60.0 here (higher than :func:`analyze_bpm`'s
-        30.0). The narrower search range biases the single tempo estimate
-        toward the musically common 60-200 BPM band and avoids half-tempo
-        lock; :func:`analyze_bpm` uses the lower 30.0 floor so its candidate
-        list can include slow/half-tempo options. This difference is
-        intentional.
+    of the input buffer. The tempo search spans 60-200 BPM by default, as on
+    every other tempo entry point.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
