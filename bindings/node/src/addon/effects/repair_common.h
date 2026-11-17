@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "core/audio.h"
 #include "sonare_wrap_utils.h"
 
 namespace sonare_node::repair_detail {
@@ -71,6 +72,17 @@ inline Napi::Object EmitStereoResult(Napi::Env env, const Result& result) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("left", left);
   out.Set("right", right);
+  return out;
+}
+
+/// @brief Pack a mono repair result into the common `{ samples, report }` shape.
+inline Napi::Object EmitMonoResult(Napi::Env env, const sonare::Audio& audio,
+                                   const Napi::Object& report) {
+  auto samples = Napi::Float32Array::New(env, audio.size());
+  if (!audio.empty()) std::memcpy(samples.Data(), audio.data(), audio.size() * sizeof(float));
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("samples", samples);
+  out.Set("report", report);
   return out;
 }
 

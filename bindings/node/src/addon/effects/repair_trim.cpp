@@ -32,14 +32,16 @@ sonare::mastering::repair::TrimSilenceMode parse_trim_silence_mode(
 constexpr SonareTrimSilenceConfig kTrimSilenceConfigDefaults{
     0.001f, 0, SONARE_TRIM_SILENCE_MODE_PEAK, -60.0f, 400.0f};
 
-Napi::Object EmitTrimRange(Napi::Env env, const SonareTrimRange& range) {
+template <typename T>
+Napi::Object EmitTrimRange(Napi::Env env, const T& range) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("first", Napi::Number::New(env, static_cast<double>(range.first)));
   out.Set("lastExclusive", Napi::Number::New(env, static_cast<double>(range.last_exclusive)));
   return out;
 }
 
-Napi::Object EmitTrimReport(Napi::Env env, const SonareTrimReport& report) {
+template <typename T>
+Napi::Object EmitTrimReport(Napi::Env env, const T& report) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("range", EmitTrimRange(env, report.range));
   out.Set("removedHeadSamples",
@@ -107,9 +109,9 @@ Napi::Value SonareWrap::MasteringRepairTrimSilence(const Napi::CallbackInfo& inf
     config.window_ms = FloatProperty(options, "windowMs", config.window_ms);
   }
   sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
-  sonare::Audio result = sonare::mastering::repair::trim_silence(audio, config);
-  std::vector<float> out(result.data(), result.data() + result.size());
-  return VecToFloat32(env, out);
+  sonare::mastering::repair::TrimReport report;
+  sonare::Audio result = sonare::mastering::repair::trim_silence(audio, config, &report);
+  return EmitMonoResult(env, result, EmitTrimReport(env, report));
   SONARE_NODE_CATCH(env)
 }
 

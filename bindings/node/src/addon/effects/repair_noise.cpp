@@ -71,7 +71,8 @@ constexpr SonareDehumConfig kDehumConfigDefaults{
 
 /// @brief Marshal the pair-level noise analysis into the JS shape the denoise
 ///        stereo report carries.
-Napi::Object EmitNoiseDetection(Napi::Env env, const SonareNoiseDetection& detection) {
+template <typename T>
+Napi::Object EmitNoiseDetection(Napi::Env env, const T& detection) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("floorDbfs", Napi::Number::New(env, detection.floor_dbfs));
   Napi::Array band_floor_dbfs = Napi::Array::New(env, SONARE_REPAIR_NOISE_BAND_COUNT);
@@ -83,7 +84,8 @@ Napi::Object EmitNoiseDetection(Napi::Env env, const SonareNoiseDetection& detec
   return out;
 }
 
-Napi::Object EmitDenoiseReport(Napi::Env env, const SonareDenoiseReport& report) {
+template <typename T>
+Napi::Object EmitDenoiseReport(Napi::Env env, const T& report) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("detected", EmitNoiseDetection(env, report.detected));
   out.Set("meanReductionDb", Napi::Number::New(env, report.mean_reduction_db));
@@ -119,7 +121,8 @@ SonareDenoiseClassicalConfig read_denoise_config(const Napi::Object& options,
 
 /// @brief Marshal one channel's hum detection into the JS shape shared by the
 ///        dehum stereo report.
-Napi::Object EmitHumDetection(Napi::Env env, const SonareHumDetection& detection) {
+template <typename T>
+Napi::Object EmitHumDetection(Napi::Env env, const T& detection) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("fundamentalHz", Napi::Number::New(env, detection.fundamental_hz));
   out.Set("fundamentalProminence", Napi::Number::New(env, detection.fundamental_prominence));
@@ -132,7 +135,8 @@ Napi::Object EmitHumDetection(Napi::Env env, const SonareHumDetection& detection
   return out;
 }
 
-Napi::Object EmitDehumReport(Napi::Env env, const SonareDehumReport& report) {
+template <typename T>
+Napi::Object EmitDehumReport(Napi::Env env, const T& report) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("detected", EmitHumDetection(env, report.detected));
   out.Set("notchedHarmonics", Napi::Number::New(env, report.notched_harmonics));
@@ -195,9 +199,9 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassical(const Napi::CallbackInfo
     return env.Undefined();
   }
   sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
-  sonare::Audio result = sonare::mastering::repair::denoise_classical(audio, config);
-  std::vector<float> out(result.data(), result.data() + result.size());
-  return VecToFloat32(env, out);
+  sonare::mastering::repair::DenoiseReport report;
+  sonare::Audio result = sonare::mastering::repair::denoise_classical(audio, config, &report);
+  return EmitMonoResult(env, result, EmitDenoiseReport(env, report));
   SONARE_NODE_CATCH(env)
 }
 
@@ -345,9 +349,9 @@ Napi::Value SonareWrap::MasteringRepairDehum(const Napi::CallbackInfo& info) {
         parse_dehum_mode(options, static_cast<int>(config.mode)));
   }
   sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
-  sonare::Audio result = sonare::mastering::repair::dehum(audio, config);
-  std::vector<float> out(result.data(), result.data() + result.size());
-  return VecToFloat32(env, out);
+  sonare::mastering::repair::DehumReport report;
+  sonare::Audio result = sonare::mastering::repair::dehum(audio, config, &report);
+  return EmitMonoResult(env, result, EmitDehumReport(env, report));
   SONARE_NODE_CATCH(env)
 }
 

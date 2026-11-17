@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "analysis/acoustic_analyzer.h"
@@ -416,6 +417,41 @@ SonareError run_stereo(const float* left, const float* right, size_t length, int
   return run_stereo(true, left, right, length, sample_rate, out, process);
 }
 
+/// Shared body of the mono repair entry points, which differ only in their
+/// result type and the core call. @p process returns the repaired audio and its
+/// C report; nothing reaches @p out until both exist.
+template <typename CResult, typename Fn>
+SonareError run_mono(bool params_ok, const float* samples, size_t length, int sample_rate,
+                     CResult* out, Fn process) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = CResult{};
+  if (!params_ok) return SONARE_ERROR_INVALID_PARAMETER;
+
+  const SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+
+  SONARE_C_TRY
+  auto produced = process(Audio::from_buffer(samples, length, sample_rate));
+  float* data = nullptr;
+  size_t data_length = 0;
+  const SonareError copied = copy_audio_result(produced.first, &data, &data_length);
+  if (copied != SONARE_OK) return copied;
+  out->samples = data;
+  out->length = data_length;
+  out->report = produced.second;
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+/// Release a mono repair result's samples and empty it, so a second release is a no-op.
+template <typename CResult>
+void free_mono_samples(CResult* result) {
+  if (result == nullptr) return;
+  delete[] result->samples;
+  result->samples = nullptr;
+  result->length = 0;
+}
+
 /// Copy a stereo core result's channels into @p out and record the length.
 template <typename StereoResult, typename CResult>
 void fill_stereo_channels(const StereoResult& result, CResult* out) {
@@ -426,14 +462,14 @@ void fill_stereo_channels(const StereoResult& result, CResult* out) {
 }  // namespace
 
 SonareError sonare_mastering_repair_declick(const float* samples, size_t length, int sample_rate,
-                                            const SonareDeclickConfig* config, float** out,
-                                            size_t* out_length) {
+                                            const SonareDeclickConfig* config,
+                                            SonareDeclickResult* out) {
   SONARE_C_API_ENTRY;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    Audio result = sonare::mastering::repair::declick(audio, to_cpp_declick_config(config));
-    return copy_audio_result(result, out, out_length);
+  return run_mono(true, samples, length, sample_rate, out, [&](const Audio& audio) {
+    sonare::mastering::repair::DeclickReport report;
+    Audio result =
+        sonare::mastering::repair::declick(audio, to_cpp_declick_config(config), &report);
+    return std::make_pair(std::move(result), to_c_declick_report(report));
   });
 }
 
@@ -467,16 +503,15 @@ SonareError sonare_mastering_repair_detect_clicks(const float* samples, size_t l
 SonareError sonare_mastering_repair_denoise_classical(const float* samples, size_t length,
                                                       int sample_rate,
                                                       const SonareDenoiseClassicalConfig* config,
-                                                      float** out, size_t* out_length) {
+                                                      SonareDenoiseResult* out) {
   SONARE_C_API_ENTRY;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!denoise_config_valid(config)) return SONARE_ERROR_INVALID_PARAMETER;
-
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    Audio result =
-        sonare::mastering::repair::denoise_classical(audio, to_cpp_denoise_config(config));
-    return copy_audio_result(result, out, out_length);
-  });
+  return run_mono(denoise_config_valid(config), samples, length, sample_rate, out,
+                  [&](const Audio& audio) {
+                    sonare::mastering::repair::DenoiseReport report;
+                    Audio result = sonare::mastering::repair::denoise_classical(
+                        audio, to_cpp_denoise_config(config), &report);
+                    return std::make_pair(std::move(result), to_c_denoise_report(report));
+                  });
 }
 
 SonareError sonare_mastering_repair_denoise_classical_stereo(
@@ -545,14 +580,13 @@ SonareError sonare_mastering_repair_noise_band_bins(int n_fft, int sample_rate, 
 }
 
 SonareError sonare_mastering_repair_declip(const float* samples, size_t length, int sample_rate,
-                                           const SonareDeclipConfig* config, float** out,
-                                           size_t* out_length) {
+                                           const SonareDeclipConfig* config,
+                                           SonareDeclipResult* out) {
   SONARE_C_API_ENTRY;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    Audio result = sonare::mastering::repair::declip(audio, to_cpp_declip_config(config));
-    return copy_audio_result(result, out, out_length);
+  return run_mono(true, samples, length, sample_rate, out, [&](const Audio& audio) {
+    sonare::mastering::repair::DeclipReport report;
+    Audio result = sonare::mastering::repair::declip(audio, to_cpp_declip_config(config), &report);
+    return std::make_pair(std::move(result), to_c_declip_report(report));
   });
 }
 
@@ -584,14 +618,14 @@ SonareError sonare_mastering_repair_detect_clipping(const float* samples, size_t
 }
 
 SonareError sonare_mastering_repair_decrackle(const float* samples, size_t length, int sample_rate,
-                                              const SonareDecrackleConfig* config, float** out,
-                                              size_t* out_length) {
+                                              const SonareDecrackleConfig* config,
+                                              SonareDecrackleResult* out) {
   SONARE_C_API_ENTRY;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    Audio result = sonare::mastering::repair::decrackle(audio, to_cpp_decrackle_config(config));
-    return copy_audio_result(result, out, out_length);
+  return run_mono(true, samples, length, sample_rate, out, [&](const Audio& audio) {
+    sonare::mastering::repair::DecrackleReport report;
+    Audio result =
+        sonare::mastering::repair::decrackle(audio, to_cpp_decrackle_config(config), &report);
+    return std::make_pair(std::move(result), to_c_decrackle_report(report));
   });
 }
 
@@ -623,14 +657,12 @@ SonareError sonare_mastering_repair_detect_crackle(const float* samples, size_t 
 }
 
 SonareError sonare_mastering_repair_dehum(const float* samples, size_t length, int sample_rate,
-                                          const SonareDehumConfig* config, float** out,
-                                          size_t* out_length) {
+                                          const SonareDehumConfig* config, SonareDehumResult* out) {
   SONARE_C_API_ENTRY;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    Audio result = sonare::mastering::repair::dehum(audio, to_cpp_dehum_config(config));
-    return copy_audio_result(result, out, out_length);
+  return run_mono(true, samples, length, sample_rate, out, [&](const Audio& audio) {
+    sonare::mastering::repair::DehumReport report;
+    Audio result = sonare::mastering::repair::dehum(audio, to_cpp_dehum_config(config), &report);
+    return std::make_pair(std::move(result), to_c_dehum_report(report));
   });
 }
 
@@ -662,16 +694,15 @@ SonareError sonare_mastering_repair_detect_hum(const float* samples, size_t leng
 SonareError sonare_mastering_repair_dereverb_classical(const float* samples, size_t length,
                                                        int sample_rate,
                                                        const SonareDereverbClassicalConfig* config,
-                                                       float** out, size_t* out_length) {
+                                                       SonareDereverbResult* out) {
   SONARE_C_API_ENTRY;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!dereverb_config_valid(config)) return SONARE_ERROR_INVALID_PARAMETER;
-
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    Audio result =
-        sonare::mastering::repair::dereverb_classical(audio, to_cpp_dereverb_config(config));
-    return copy_audio_result(result, out, out_length);
-  });
+  return run_mono(dereverb_config_valid(config), samples, length, sample_rate, out,
+                  [&](const Audio& audio) {
+                    sonare::mastering::repair::DereverbReport report;
+                    Audio result = sonare::mastering::repair::dereverb_classical(
+                        audio, to_cpp_dereverb_config(config), &report);
+                    return std::make_pair(std::move(result), to_c_dereverb_report(report));
+                  });
 }
 
 SonareError sonare_mastering_repair_dereverb_classical_stereo(
@@ -722,15 +753,14 @@ SonareError sonare_mastering_repair_detect_reverb(const float* samples, size_t l
 
 SonareError sonare_mastering_repair_trim_silence(const float* samples, size_t length,
                                                  int sample_rate,
-                                                 const SonareTrimSilenceConfig* config, float** out,
-                                                 size_t* out_length) {
+                                                 const SonareTrimSilenceConfig* config,
+                                                 SonareTrimSilenceResult* out) {
   SONARE_C_API_ENTRY;
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+  return run_mono(true, samples, length, sample_rate, out, [&](const Audio& audio) {
+    sonare::mastering::repair::TrimReport report;
     Audio result =
-        sonare::mastering::repair::trim_silence(audio, to_cpp_trim_silence_config(config));
-    return copy_audio_result(result, out, out_length);
+        sonare::mastering::repair::trim_silence(audio, to_cpp_trim_silence_config(config), &report);
+    return std::make_pair(std::move(result), to_c_trim_report(report));
   });
 }
 
@@ -861,29 +891,43 @@ SonareError sonare_mastering_repair_apply(const float* const* channels, size_t c
   SONARE_C_CATCH
 }
 
+void sonare_free_declick_result(SonareDeclickResult* result) { free_mono_samples(result); }
+
 void sonare_free_declick_stereo_result(SonareDeclickStereoResult* result) {
   sonare_c_mastering_detail::free_stereo_channels(result);
 }
+
+void sonare_free_denoise_result(SonareDenoiseResult* result) { free_mono_samples(result); }
 
 void sonare_free_denoise_stereo_result(SonareDenoiseStereoResult* result) {
   sonare_c_mastering_detail::free_stereo_channels(result);
 }
 
+void sonare_free_declip_result(SonareDeclipResult* result) { free_mono_samples(result); }
+
 void sonare_free_declip_stereo_result(SonareDeclipStereoResult* result) {
   sonare_c_mastering_detail::free_stereo_channels(result);
 }
+
+void sonare_free_decrackle_result(SonareDecrackleResult* result) { free_mono_samples(result); }
 
 void sonare_free_decrackle_stereo_result(SonareDecrackleStereoResult* result) {
   sonare_c_mastering_detail::free_stereo_channels(result);
 }
 
+void sonare_free_dehum_result(SonareDehumResult* result) { free_mono_samples(result); }
+
 void sonare_free_dehum_stereo_result(SonareDehumStereoResult* result) {
   sonare_c_mastering_detail::free_stereo_channels(result);
 }
 
+void sonare_free_dereverb_result(SonareDereverbResult* result) { free_mono_samples(result); }
+
 void sonare_free_dereverb_stereo_result(SonareDereverbStereoResult* result) {
   sonare_c_mastering_detail::free_stereo_channels(result);
 }
+
+void sonare_free_trim_silence_result(SonareTrimSilenceResult* result) { free_mono_samples(result); }
 
 void sonare_free_trim_silence_stereo_result(SonareTrimSilenceStereoResult* result) {
   sonare_c_mastering_detail::free_stereo_channels(result);

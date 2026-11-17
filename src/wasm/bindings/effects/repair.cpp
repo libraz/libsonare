@@ -87,6 +87,15 @@ val stereoResultToVal(const Audio& left, const Audio& right) {
   return out;
 }
 
+// Mono result object `{ samples, report }`. A trimmed result can be empty, which is safe for the
+// same reason as above.
+val monoResultToVal(const Audio& audio, const val& report) {
+  val out = val::object();
+  out.set("samples", vectorToFloat32Array(audio.data(), audio.size()));
+  out.set("report", report);
+  return out;
+}
+
 mastering::repair::DeclickConfig readMasteringRepairDeclick(const val& options, const char* entry) {
   mastering::repair::DeclickConfig cfg;
   if (options.isUndefined() || options.isNull()) return cfg;
@@ -116,14 +125,6 @@ mastering::repair::DeclipConfig readMasteringRepairDeclip(const val& options) {
 
 }  // namespace
 
-val js_mastering_repair_declick(val samples, const val& sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  const mastering::repair::DeclickConfig cfg =
-      readMasteringRepairDeclick(options, "masteringRepairDeclick");
-  Audio result = mastering::repair::declick(audio, cfg);
-  return vectorToFloat32Array(result.data(), result.size());
-}
-
 namespace {
 
 val declickDetectionToVal(const mastering::repair::ClickDetection& detected) {
@@ -146,6 +147,15 @@ val declickReportToVal(const mastering::repair::DeclickReport& report) {
 }
 
 }  // namespace
+
+val js_mastering_repair_declick(val samples, const val& sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  const mastering::repair::DeclickConfig cfg =
+      readMasteringRepairDeclick(options, "masteringRepairDeclick");
+  mastering::repair::DeclickReport report;
+  Audio result = mastering::repair::declick(audio, cfg, &report);
+  return monoResultToVal(result, declickReportToVal(report));
+}
 
 // Declicks a stereo pair, selecting the repaired runs from the union of both
 // channels' own detection: a common-mode click repaired on one side only would
@@ -287,14 +297,6 @@ mastering::repair::DereverbClassicalConfig validatedDereverbConfig(const val& op
 
 }  // namespace
 
-val js_mastering_repair_denoise_classical(val samples, const val& sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  const mastering::repair::DenoiseClassicalConfig cfg =
-      validatedDenoiseConfig(options, "masteringRepairDenoiseClassical");
-  Audio result = mastering::repair::denoise_classical(audio, cfg);
-  return vectorToFloat32Array(result.data(), result.size());
-}
-
 namespace {
 
 val noiseDetectionToVal(const mastering::repair::NoiseDetection& detected) {
@@ -317,6 +319,15 @@ val denoiseReportToVal(const mastering::repair::DenoiseReport& report) {
 }
 
 }  // namespace
+
+val js_mastering_repair_denoise_classical(val samples, const val& sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  const mastering::repair::DenoiseClassicalConfig cfg =
+      validatedDenoiseConfig(options, "masteringRepairDenoiseClassical");
+  mastering::repair::DenoiseReport report;
+  Audio result = mastering::repair::denoise_classical(audio, cfg, &report);
+  return monoResultToVal(result, denoiseReportToVal(report));
+}
 
 // Denoises a stereo pair with one channel-linked gain mask. One `report` and
 // not a per-channel pair: the mask is built from the channel-summed power and
@@ -419,13 +430,6 @@ val js_mastering_repair_apply(val channels, const val& sample_rate_val,
   return out;
 }
 
-val js_mastering_repair_declip(val samples, const val& sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  const mastering::repair::DeclipConfig cfg = readMasteringRepairDeclip(options);
-  Audio result = mastering::repair::declip(audio, cfg);
-  return vectorToFloat32Array(result.data(), result.size());
-}
-
 namespace {
 
 val declipDetectionToVal(const mastering::repair::ClipDetection& detected) {
@@ -452,6 +456,14 @@ val declipReportToVal(const mastering::repair::DeclipReport& report) {
 }
 
 }  // namespace
+
+val js_mastering_repair_declip(val samples, const val& sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  const mastering::repair::DeclipConfig cfg = readMasteringRepairDeclip(options);
+  mastering::repair::DeclipReport report;
+  Audio result = mastering::repair::declip(audio, cfg, &report);
+  return monoResultToVal(result, declipReportToVal(report));
+}
 
 // Declips a stereo pair, reconstructing the union of both channels' own
 // clipped runs: a channel with at least one clipped sample in a union run
@@ -537,13 +549,6 @@ mastering::repair::TrimSilenceConfig readTrimSilenceConfig(
 
 }  // namespace
 
-val js_mastering_repair_decrackle(val samples, const val& sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  const mastering::repair::DecrackleConfig cfg = readMasteringRepairDecrackle(options);
-  Audio result = mastering::repair::decrackle(audio, cfg);
-  return vectorToFloat32Array(result.data(), result.size());
-}
-
 namespace {
 
 val crackleDetectionToVal(const mastering::repair::CrackleDetection& detected) {
@@ -566,6 +571,14 @@ val decrackleReportToVal(const mastering::repair::DecrackleReport& report) {
 
 }  // namespace
 
+val js_mastering_repair_decrackle(val samples, const val& sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  const mastering::repair::DecrackleConfig cfg = readMasteringRepairDecrackle(options);
+  mastering::repair::DecrackleReport report;
+  Audio result = mastering::repair::decrackle(audio, cfg, &report);
+  return monoResultToVal(result, decrackleReportToVal(report));
+}
+
 // Decrackles a stereo pair, each channel on its own. Crackle is surface
 // damage with no common event between the two channels, unlike declick's and
 // declip's shared run selection, so there is nothing to link -- this
@@ -584,13 +597,6 @@ val js_mastering_repair_decrackle_stereo(val left_samples, val right_samples,
   out.set("leftReport", decrackleReportToVal(result.left_report));
   out.set("rightReport", decrackleReportToVal(result.right_report));
   return out;
-}
-
-val js_mastering_repair_dehum(val samples, const val& sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  const mastering::repair::DehumConfig cfg = readMasteringRepairDehum(options);
-  Audio result = mastering::repair::dehum(audio, cfg);
-  return vectorToFloat32Array(result.data(), result.size());
 }
 
 namespace {
@@ -617,6 +623,14 @@ val dehumReportToVal(const mastering::repair::DehumReport& report) {
 
 }  // namespace
 
+val js_mastering_repair_dehum(val samples, const val& sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  const mastering::repair::DehumConfig cfg = readMasteringRepairDehum(options);
+  mastering::repair::DehumReport report;
+  Audio result = mastering::repair::dehum(audio, cfg, &report);
+  return monoResultToVal(result, dehumReportToVal(report));
+}
+
 // Dehums a stereo pair. With `adaptive` set the two channels track one shared
 // fundamental -- mains hum is one physical source, and tracking the channels
 // apart would put the notches at two frequencies differing by whatever each
@@ -640,14 +654,6 @@ val js_mastering_repair_dehum_stereo(val left_samples, val right_samples,
   return out;
 }
 
-val js_mastering_repair_dereverb_classical(val samples, const val& sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  const mastering::repair::DereverbClassicalConfig cfg =
-      validatedDereverbConfig(options, "masteringRepairDereverbClassical");
-  Audio result = mastering::repair::dereverb_classical(audio, cfg);
-  return vectorToFloat32Array(result.data(), result.size());
-}
-
 namespace {
 
 val reverbDetectionToVal(const mastering::repair::ReverbDetection& detected) {
@@ -667,6 +673,15 @@ val dereverbReportToVal(const mastering::repair::DereverbReport& report) {
 }
 
 }  // namespace
+
+val js_mastering_repair_dereverb_classical(val samples, const val& sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  const mastering::repair::DereverbClassicalConfig cfg =
+      validatedDereverbConfig(options, "masteringRepairDereverbClassical");
+  mastering::repair::DereverbReport report;
+  Audio result = mastering::repair::dereverb_classical(audio, cfg, &report);
+  return monoResultToVal(result, dereverbReportToVal(report));
+}
 
 // Dereverberates a stereo pair with one channel-linked mask. One `report` and
 // not a per-channel pair: the mask comes from the channel-summed power and the
@@ -757,14 +772,6 @@ val js_mastering_repair_dereverb_config_for_room(val estimate, val options) {
   return out;
 }
 
-val js_mastering_repair_trim_silence(val samples, const val& sample_rate, val options) {
-  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  const mastering::repair::TrimSilenceConfig cfg = readTrimSilenceConfig(
-      options, mastering::repair::TrimSilenceConfig{}, "masteringRepairTrimSilence");
-  Audio result = mastering::repair::trim_silence(audio, cfg);
-  return vectorToFloat32Array(result.data(), result.size());
-}
-
 namespace {
 
 val trimRangeToVal(const mastering::repair::TrimRange& range) {
@@ -783,6 +790,15 @@ val trimReportToVal(const mastering::repair::TrimReport& report) {
 }
 
 }  // namespace
+
+val js_mastering_repair_trim_silence(val samples, const val& sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  const mastering::repair::TrimSilenceConfig cfg = readTrimSilenceConfig(
+      options, mastering::repair::TrimSilenceConfig{}, "masteringRepairTrimSilence");
+  mastering::repair::TrimReport report;
+  Audio result = mastering::repair::trim_silence(audio, cfg, &report);
+  return monoResultToVal(result, trimReportToVal(report));
+}
 
 // Unlike every other repair stereo entry this SHORTENS its input, and a pair in
 // which neither channel carries signal comes back as two empty arrays and a

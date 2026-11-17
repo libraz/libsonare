@@ -1303,13 +1303,6 @@ typedef struct {
   int gain_smoothing;               // 0/1 (default 1)
 } SonareDenoiseClassicalConfig;
 
-/// @brief Offline LPC-based declicker.
-/// @details Output buffer is heap-allocated; release with @ref sonare_free_floats.
-/// @param config Pass NULL to use library defaults.
-SonareError sonare_mastering_repair_declick(const float* samples, size_t length, int sample_rate,
-                                            const SonareDeclickConfig* config, float** out,
-                                            size_t* out_length);
-
 /// @brief Flat POD mirror of @c mastering::repair::ClickDetection. Counts runs,
 ///        not samples.
 typedef struct {
@@ -1376,16 +1369,25 @@ SonareError sonare_mastering_repair_declick_stereo(const float* left, const floa
 /// @details NULL and an already-released result are no-ops.
 void sonare_free_declick_stereo_result(SonareDeclickStereoResult* result);
 
-/// @brief Offline STFT-domain classical denoiser
-///        (LogMMSE / MMSE-STSA / SpectralSubtraction).
-/// @details Output buffer is heap-allocated; release with @ref sonare_free_floats. An
-///   input shorter than @c config->n_fft is padded for analysis and the output
-///   trimmed back to @p length.
+/// @brief A repaired mono buffer and the report of the pass that produced it.
+/// @details @c samples is heap-allocated; release it with
+///   @ref sonare_free_declick_result.
+typedef struct {
+  float* samples;
+  size_t length;
+  SonareDeclickReport report;
+} SonareDeclickResult;
+
+/// @brief Offline LPC-based declicker.
+/// @details @c out->samples is heap-allocated; release it with @ref sonare_free_declick_result.
 /// @param config Pass NULL to use library defaults.
-SonareError sonare_mastering_repair_denoise_classical(const float* samples, size_t length,
-                                                      int sample_rate,
-                                                      const SonareDenoiseClassicalConfig* config,
-                                                      float** out, size_t* out_length);
+SonareError sonare_mastering_repair_declick(const float* samples, size_t length, int sample_rate,
+                                            const SonareDeclickConfig* config,
+                                            SonareDeclickResult* out);
+
+/// @brief Release the samples of a @ref SonareDeclickResult and empty it.
+/// @details NULL and an already-released result are no-ops.
+void sonare_free_declick_result(SonareDeclickResult* result);
 
 // Bands a denoise noise floor is reported in, and the length of
 // SonareNoiseDetection::band_floor_dbfs. A geometric grid from 20 Hz to Nyquist,
@@ -1487,6 +1489,30 @@ SonareError sonare_mastering_repair_denoise_classical_stereo(
 /// @details NULL and an already-released result are no-ops.
 void sonare_free_denoise_stereo_result(SonareDenoiseStereoResult* result);
 
+/// @brief A repaired mono buffer and the report of the pass that produced it.
+/// @details @c samples is heap-allocated; release it with
+///   @ref sonare_free_denoise_result.
+typedef struct {
+  float* samples;
+  size_t length;
+  SonareDenoiseReport report;
+} SonareDenoiseResult;
+
+/// @brief Offline STFT-domain classical denoiser
+///        (LogMMSE / MMSE-STSA / SpectralSubtraction).
+/// @details @c out->samples is heap-allocated; release it with @ref sonare_free_denoise_result. An
+///   input shorter than @c config->n_fft is padded for analysis and the output
+///   trimmed back to @p length.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_denoise_classical(const float* samples, size_t length,
+                                                      int sample_rate,
+                                                      const SonareDenoiseClassicalConfig* config,
+                                                      SonareDenoiseResult* out);
+
+/// @brief Release the samples of a @ref SonareDenoiseResult and empty it.
+/// @details NULL and an already-released result are no-ops.
+void sonare_free_denoise_result(SonareDenoiseResult* result);
+
 /// @brief Denoises any number of channels with one channel-linked gain mask.
 /// @details The N-channel form of
 ///   @ref sonare_mastering_repair_denoise_classical_stereo, carrying the same
@@ -1525,22 +1551,6 @@ typedef struct {
   int iterations;        // LPC reconstruction iterations (default 2)
   float lpc_blend;       // LPC vs interpolation blend (default 0.65)
 } SonareDeclipConfig;
-
-/// @brief Offline LPC-based declipper.
-/// @details Output buffer is heap-allocated; release with @ref sonare_free_floats.
-///
-/// Only clipped runs of at most 512 consecutive samples are reconstructed with the LPC
-/// solver. The cap is a fixed sample count: it is not derived from @c lpc_order, from
-/// @c sample_rate, or from any other field, so its duration depends on the rate
-/// (~10.7 ms at 48 kHz). A longer run is filled with cubic / linear interpolation
-/// instead, which keeps the solver's dense matrices bounded by the cap rather than by
-/// the input. Exceeding the cap silently changes the reconstruction method rather than
-/// failing: the call still returns @c SONARE_OK, and @c lpc_order, @c iterations and
-/// @c lpc_blend have no effect on the interpolated run.
-/// @param config Pass NULL to use library defaults.
-SonareError sonare_mastering_repair_declip(const float* samples, size_t length, int sample_rate,
-                                           const SonareDeclipConfig* config, float** out,
-                                           size_t* out_length);
 
 /// @brief Flat POD mirror of @c mastering::repair::ClipDetection.
 typedef struct {
@@ -1624,6 +1634,35 @@ SonareError sonare_mastering_repair_declip_stereo(const float* left, const float
 /// @details NULL and an already-released result are no-ops.
 void sonare_free_declip_stereo_result(SonareDeclipStereoResult* result);
 
+/// @brief A repaired mono buffer and the report of the pass that produced it.
+/// @details @c samples is heap-allocated; release it with
+///   @ref sonare_free_declip_result.
+typedef struct {
+  float* samples;
+  size_t length;
+  SonareDeclipReport report;
+} SonareDeclipResult;
+
+/// @brief Offline LPC-based declipper.
+/// @details @c out->samples is heap-allocated; release it with @ref sonare_free_declip_result.
+///
+/// Only clipped runs of at most 512 consecutive samples are reconstructed with the LPC
+/// solver. The cap is a fixed sample count: it is not derived from @c lpc_order, from
+/// @c sample_rate, or from any other field, so its duration depends on the rate
+/// (~10.7 ms at 48 kHz). A longer run is filled with cubic / linear interpolation
+/// instead, which keeps the solver's dense matrices bounded by the cap rather than by
+/// the input. Exceeding the cap silently changes the reconstruction method rather than
+/// failing: the call still returns @c SONARE_OK, and @c lpc_order, @c iterations and
+/// @c lpc_blend have no effect on the interpolated run.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_declip(const float* samples, size_t length, int sample_rate,
+                                           const SonareDeclipConfig* config,
+                                           SonareDeclipResult* out);
+
+/// @brief Release the samples of a @ref SonareDeclipResult and empty it.
+/// @details NULL and an already-released result are no-ops.
+void sonare_free_declip_result(SonareDeclipResult* result);
+
 // Algorithm modes for sonare_mastering_repair_decrackle.
 #define SONARE_DECRACKLE_MODE_MEDIAN 0
 #define SONARE_DECRACKLE_MODE_WAVELET_SHRINKAGE 1
@@ -1634,13 +1673,6 @@ typedef struct {
   int mode;         // SONARE_DECRACKLE_MODE_*
   int levels;       // wavelet decomposition levels (default 4)
 } SonareDecrackleConfig;
-
-/// @brief Offline crackle suppressor (median or wavelet-shrinkage).
-/// @details Output buffer is heap-allocated; release with @ref sonare_free_floats.
-/// @param config Pass NULL to use library defaults.
-SonareError sonare_mastering_repair_decrackle(const float* samples, size_t length, int sample_rate,
-                                              const SonareDecrackleConfig* config, float** out,
-                                              size_t* out_length);
 
 /// @brief Flat POD mirror of @c mastering::repair::CrackleDetection.
 /// @details Measured by the median criterion whatever mode is configured:
@@ -1710,6 +1742,26 @@ SonareError sonare_mastering_repair_decrackle_stereo(const float* left, const fl
 /// @details NULL and an already-released result are no-ops.
 void sonare_free_decrackle_stereo_result(SonareDecrackleStereoResult* result);
 
+/// @brief A repaired mono buffer and the report of the pass that produced it.
+/// @details @c samples is heap-allocated; release it with
+///   @ref sonare_free_decrackle_result.
+typedef struct {
+  float* samples;
+  size_t length;
+  SonareDecrackleReport report;
+} SonareDecrackleResult;
+
+/// @brief Offline crackle suppressor (median or wavelet-shrinkage).
+/// @details @c out->samples is heap-allocated; release it with @ref sonare_free_decrackle_result.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_decrackle(const float* samples, size_t length, int sample_rate,
+                                              const SonareDecrackleConfig* config,
+                                              SonareDecrackleResult* out);
+
+/// @brief Release the samples of a @ref SonareDecrackleResult and empty it.
+/// @details NULL and an already-released result are no-ops.
+void sonare_free_decrackle_result(SonareDecrackleResult* result);
+
 #define SONARE_DEHUM_MODE_SUBTRACT 0  // Subtracts the tracked harmonic series
 #define SONARE_DEHUM_MODE_NOTCH 1     // Cascaded RBJ notches, hum or programme
 
@@ -1727,13 +1779,6 @@ typedef struct {
   int mode;               // SONARE_DEHUM_MODE_* (default SUBTRACT, so a
                           // zero-initialized config selects it)
 } SonareDehumConfig;
-
-/// @brief Offline mains-hum remover (cascaded notch filters with optional PLL tracking).
-/// @details Output buffer is heap-allocated; release with @ref sonare_free_floats.
-/// @param config Pass NULL to use library defaults.
-SonareError sonare_mastering_repair_dehum(const float* samples, size_t length, int sample_rate,
-                                          const SonareDehumConfig* config, float** out,
-                                          size_t* out_length);
 
 // Longest harmonic series a dehum pass tracks, and the length of
 // SonareHumDetection::harmonic_dbfs. 16 harmonics reach 800 Hz from a 50 Hz
@@ -1820,6 +1865,25 @@ SonareError sonare_mastering_repair_dehum_stereo(const float* left, const float*
 /// @details NULL and an already-released result are no-ops.
 void sonare_free_dehum_stereo_result(SonareDehumStereoResult* result);
 
+/// @brief A repaired mono buffer and the report of the pass that produced it.
+/// @details @c samples is heap-allocated; release it with
+///   @ref sonare_free_dehum_result.
+typedef struct {
+  float* samples;
+  size_t length;
+  SonareDehumReport report;
+} SonareDehumResult;
+
+/// @brief Offline mains-hum remover (cascaded notch filters with optional PLL tracking).
+/// @details @c out->samples is heap-allocated; release it with @ref sonare_free_dehum_result.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_dehum(const float* samples, size_t length, int sample_rate,
+                                          const SonareDehumConfig* config, SonareDehumResult* out);
+
+/// @brief Release the samples of a @ref SonareDehumResult and empty it.
+/// @details NULL and an already-released result are no-ops.
+void sonare_free_dehum_result(SonareDehumResult* result);
+
 /// @brief Flat POD mirror of @c mastering::repair::DereverbClassicalConfig.
 typedef struct {
   float threshold;         // late-reverb detection threshold (default 0, no gate)
@@ -1835,14 +1899,6 @@ typedef struct {
   int wpe_taps;            // WPE filter taps (default 3)
   float wpe_strength;      // WPE blend weight (default 0.7)
 } SonareDereverbClassicalConfig;
-
-/// @brief Offline classical dereverberator (spectral subtraction + optional WPE pre-stage).
-/// @details Output buffer is heap-allocated; release with @ref sonare_free_floats.
-/// @param config Pass NULL to use library defaults.
-SonareError sonare_mastering_repair_dereverb_classical(const float* samples, size_t length,
-                                                       int sample_rate,
-                                                       const SonareDereverbClassicalConfig* config,
-                                                       float** out, size_t* out_length);
 
 /// @brief Flat POD mirror of @c mastering::repair::ReverbDetection.
 /// @details NOT an ISO 3382 reverberation time: no Schroeder integration, no
@@ -1916,6 +1972,27 @@ SonareError sonare_mastering_repair_dereverb_classical_stereo(
 /// @brief Release both channels of a @ref SonareDereverbStereoResult and empty it.
 /// @details NULL and an already-released result are no-ops.
 void sonare_free_dereverb_stereo_result(SonareDereverbStereoResult* result);
+
+/// @brief A repaired mono buffer and the report of the pass that produced it.
+/// @details @c samples is heap-allocated; release it with
+///   @ref sonare_free_dereverb_result.
+typedef struct {
+  float* samples;
+  size_t length;
+  SonareDereverbReport report;
+} SonareDereverbResult;
+
+/// @brief Offline classical dereverberator (spectral subtraction + optional WPE pre-stage).
+/// @details @c out->samples is heap-allocated; release it with @ref sonare_free_dereverb_result.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_dereverb_classical(const float* samples, size_t length,
+                                                       int sample_rate,
+                                                       const SonareDereverbClassicalConfig* config,
+                                                       SonareDereverbResult* out);
+
+/// @brief Release the samples of a @ref SonareDereverbResult and empty it.
+/// @details NULL and an already-released result are no-ops.
+void sonare_free_dereverb_result(SonareDereverbResult* result);
 
 /// @brief Dereverberates any number of channels with one channel-linked mask.
 /// @details The N-channel form of
@@ -1999,14 +2076,6 @@ typedef struct {
   float gate_lufs;         // LUFS gate threshold (default -60 for LufsGated mode)
   float window_ms;         // analysis window in milliseconds (default 400)
 } SonareTrimSilenceConfig;
-
-/// @brief Offline silence trimmer (peak threshold or LUFS-gated).
-/// @details Output buffer is heap-allocated; release with @ref sonare_free_floats.
-/// @param config Pass NULL to use library defaults.
-SonareError sonare_mastering_repair_trim_silence(const float* samples, size_t length,
-                                                 int sample_rate,
-                                                 const SonareTrimSilenceConfig* config, float** out,
-                                                 size_t* out_length);
 
 /// @brief One half-open sample range, in input-buffer coordinates.
 typedef struct {
@@ -2108,6 +2177,30 @@ SonareError sonare_mastering_repair_trim_silence_stereo(const float* left, const
 /// @brief Release both channels of a @ref SonareTrimSilenceStereoResult and empty it.
 /// @details NULL and an already-released result are no-ops.
 void sonare_free_trim_silence_stereo_result(SonareTrimSilenceStereoResult* result);
+
+/// @brief A trimmed mono buffer and the report of the pass that produced it.
+/// @details @c samples is heap-allocated; release it with
+///   @ref sonare_free_trim_silence_result.
+///   @c length is the OUTPUT length. A pass that kept nothing leaves @c samples
+///   NULL and @c length 0; the releaser accepts that result.
+typedef struct {
+  float* samples;
+  size_t length;
+  SonareTrimReport report;
+} SonareTrimSilenceResult;
+
+/// @brief Offline silence trimmer (peak threshold or LUFS-gated).
+/// @details @c out->samples is heap-allocated; release it with @ref
+/// sonare_free_trim_silence_result.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_trim_silence(const float* samples, size_t length,
+                                                 int sample_rate,
+                                                 const SonareTrimSilenceConfig* config,
+                                                 SonareTrimSilenceResult* out);
+
+/// @brief Release the samples of a @ref SonareTrimSilenceResult and empty it.
+/// @details NULL and an already-released result are no-ops.
+void sonare_free_trim_silence_result(SonareTrimSilenceResult* result);
 
 // ============================================================================
 // Mastering: one repair analysis and one repair application, any channel count

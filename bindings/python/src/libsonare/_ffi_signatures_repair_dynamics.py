@@ -18,8 +18,7 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_size_t,
             ctypes.c_int,
             ctypes.POINTER(SonareDeclickConfig),
-            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-            ctypes.POINTER(ctypes.c_size_t),
+            ctypes.POINTER(SonareDeclickResult),
         ]
 
     if hasattr(lib, "sonare_mastering_repair_declick_stereo"):
@@ -73,8 +72,7 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_size_t,
             ctypes.c_int,
             ctypes.POINTER(SonareDenoiseClassicalConfig),
-            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-            ctypes.POINTER(ctypes.c_size_t),
+            ctypes.POINTER(SonareDenoiseResult),
         ]
 
     if hasattr(lib, "sonare_mastering_repair_denoise_classical_stereo"):
@@ -219,12 +217,16 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_int),
         ]
 
-    for _name, _repair_cfg in (
-        ("sonare_mastering_repair_declip", SonareDeclipConfig),
-        ("sonare_mastering_repair_decrackle", SonareDecrackleConfig),
-        ("sonare_mastering_repair_dehum", SonareDehumConfig),
-        ("sonare_mastering_repair_dereverb_classical", SonareDereverbClassicalConfig),
-        ("sonare_mastering_repair_trim_silence", SonareTrimSilenceConfig),
+    for _name, _repair_cfg, _repair_result in (
+        ("sonare_mastering_repair_declip", SonareDeclipConfig, SonareDeclipResult),
+        ("sonare_mastering_repair_decrackle", SonareDecrackleConfig, SonareDecrackleResult),
+        ("sonare_mastering_repair_dehum", SonareDehumConfig, SonareDehumResult),
+        (
+            "sonare_mastering_repair_dereverb_classical",
+            SonareDereverbClassicalConfig,
+            SonareDereverbResult,
+        ),
+        ("sonare_mastering_repair_trim_silence", SonareTrimSilenceConfig, SonareTrimSilenceResult),
     ):
         if hasattr(lib, _name):
             _fn = getattr(lib, _name)
@@ -234,8 +236,7 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.c_size_t,
                 ctypes.c_int,
                 ctypes.POINTER(_repair_cfg),
-                ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-                ctypes.POINTER(ctypes.c_size_t),
+                ctypes.POINTER(_repair_result),
             ]
 
     # Config-shaping companion to the dereverb processor: it takes a room
@@ -268,6 +269,23 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.POINTER(ctypes.c_size_t),
                 ctypes.POINTER(ctypes.c_int),
             ]
+
+    # Each mono repair result is released by its own function, which frees the
+    # samples and empties the struct.
+    for _name, _result in (
+        ("declick", SonareDeclickResult),
+        ("declip", SonareDeclipResult),
+        ("decrackle", SonareDecrackleResult),
+        ("dehum", SonareDehumResult),
+        ("denoise", SonareDenoiseResult),
+        ("dereverb", SonareDereverbResult),
+        ("trim_silence", SonareTrimSilenceResult),
+    ):
+        _free = getattr(lib, f"sonare_free_{_name}_result", None)
+        if _free is None:
+            continue
+        _free.restype = None
+        _free.argtypes = [ctypes.POINTER(_result)]
 
     # Each stereo repair result is released by its own function, which frees
     # both channels and empties the struct.

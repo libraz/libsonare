@@ -41,7 +41,8 @@ constexpr SonareDecrackleConfig kDecrackleConfigDefaults{0.4f, SONARE_DECRACKLE_
 
 /// @brief Marshal one channel's click detection into the JS shape shared by
 ///        the mono and stereo declick reports.
-Napi::Object EmitClickDetection(Napi::Env env, const SonareClickDetection& detection) {
+template <typename T>
+Napi::Object EmitClickDetection(Napi::Env env, const T& detection) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("count", Napi::Number::New(env, static_cast<double>(detection.count)));
   out.Set("rejected", Napi::Number::New(env, static_cast<double>(detection.rejected)));
@@ -51,7 +52,8 @@ Napi::Object EmitClickDetection(Napi::Env env, const SonareClickDetection& detec
   return out;
 }
 
-Napi::Object EmitDeclickReport(Napi::Env env, const SonareDeclickReport& report) {
+template <typename T>
+Napi::Object EmitDeclickReport(Napi::Env env, const T& report) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("detected", EmitClickDetection(env, report.detected));
   out.Set("repairedRuns", Napi::Number::New(env, static_cast<double>(report.repaired_runs)));
@@ -84,7 +86,8 @@ SonareDeclickConfig read_declick_config_c(Napi::Env env, const Napi::Object& opt
 
 /// @brief Marshal one channel's clip detection into the JS shape shared by the
 ///        declip stereo report.
-Napi::Object EmitClipDetection(Napi::Env env, const SonareClipDetection& detection) {
+template <typename T>
+Napi::Object EmitClipDetection(Napi::Env env, const T& detection) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("sampleCount", Napi::Number::New(env, static_cast<double>(detection.sample_count)));
   out.Set("sampleFraction", Napi::Number::New(env, detection.sample_fraction));
@@ -100,7 +103,8 @@ Napi::Object EmitClipDetection(Napi::Env env, const SonareClipDetection& detecti
   return out;
 }
 
-Napi::Object EmitDeclipReport(Napi::Env env, const SonareDeclipReport& report) {
+template <typename T>
+Napi::Object EmitDeclipReport(Napi::Env env, const T& report) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("detected", EmitClipDetection(env, report.detected));
   out.Set("lpcReconstructedRuns",
@@ -126,7 +130,8 @@ SonareDeclipConfig read_declip_config_c(const Napi::Object& options, SonareDecli
 
 /// @brief Marshal one channel's crackle detection into the JS shape shared by
 ///        the decrackle stereo report.
-Napi::Object EmitCrackleDetection(Napi::Env env, const SonareCrackleDetection& detection) {
+template <typename T>
+Napi::Object EmitCrackleDetection(Napi::Env env, const T& detection) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("sampleCount", Napi::Number::New(env, static_cast<double>(detection.sample_count)));
   out.Set("sampleFraction", Napi::Number::New(env, detection.sample_fraction));
@@ -134,7 +139,8 @@ Napi::Object EmitCrackleDetection(Napi::Env env, const SonareCrackleDetection& d
   return out;
 }
 
-Napi::Object EmitDecrackleReport(Napi::Env env, const SonareDecrackleReport& report) {
+template <typename T>
+Napi::Object EmitDecrackleReport(Napi::Env env, const T& report) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("detected", EmitCrackleDetection(env, report.detected));
   out.Set("replacedSamples", Napi::Number::New(env, static_cast<double>(report.replaced_samples)));
@@ -187,9 +193,9 @@ Napi::Value SonareWrap::MasteringRepairDeclick(const Napi::CallbackInfo& info) {
     config.residual_ratio = FloatProperty(options, "residualRatio", config.residual_ratio);
   }
   sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
-  sonare::Audio result = sonare::mastering::repair::declick(audio, config);
-  std::vector<float> out(result.data(), result.data() + result.size());
-  return VecToFloat32(env, out);
+  sonare::mastering::repair::DeclickReport report;
+  sonare::Audio result = sonare::mastering::repair::declick(audio, config, &report);
+  return EmitMonoResult(env, result, EmitDeclickReport(env, report));
   SONARE_NODE_CATCH(env)
 }
 
@@ -273,9 +279,9 @@ Napi::Value SonareWrap::MasteringRepairDeclip(const Napi::CallbackInfo& info) {
     config.lpc_blend = FloatProperty(options, "lpcBlend", config.lpc_blend);
   }
   sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
-  sonare::Audio result = sonare::mastering::repair::declip(audio, config);
-  std::vector<float> out(result.data(), result.data() + result.size());
-  return VecToFloat32(env, out);
+  sonare::mastering::repair::DeclipReport report;
+  sonare::Audio result = sonare::mastering::repair::declip(audio, config, &report);
+  return EmitMonoResult(env, result, EmitDeclipReport(env, report));
   SONARE_NODE_CATCH(env)
 }
 
@@ -358,9 +364,9 @@ Napi::Value SonareWrap::MasteringRepairDecrackle(const Napi::CallbackInfo& info)
     config.levels = IntProperty(options, "levels", config.levels);
   }
   sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
-  sonare::Audio result = sonare::mastering::repair::decrackle(audio, config);
-  std::vector<float> out(result.data(), result.data() + result.size());
-  return VecToFloat32(env, out);
+  sonare::mastering::repair::DecrackleReport report;
+  sonare::Audio result = sonare::mastering::repair::decrackle(audio, config, &report);
+  return EmitMonoResult(env, result, EmitDecrackleReport(env, report));
   SONARE_NODE_CATCH(env)
 }
 

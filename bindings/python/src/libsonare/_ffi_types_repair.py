@@ -42,6 +42,16 @@ class SonareDeclickReport(CStruct):
     ]
 
 
+class SonareDeclickResult(CStruct):
+    """Maps to SonareDeclickResult in sonare_c.h."""
+
+    _fields_ = [
+        ("samples", ctypes.POINTER(ctypes.c_float)),
+        ("length", ctypes.c_size_t),
+        ("report", SonareDeclickReport),
+    ]
+
+
 class SonareDeclickStereoResult(CStruct):
     """Maps to SonareDeclickStereoResult in sonare_c.h."""
 
@@ -165,6 +175,16 @@ class SonareDenoiseReport(CStruct):
     ]
 
 
+class SonareDenoiseResult(CStruct):
+    """Maps to SonareDenoiseResult in sonare_c.h."""
+
+    _fields_ = [
+        ("samples", ctypes.POINTER(ctypes.c_float)),
+        ("length", ctypes.c_size_t),
+        ("report", SonareDenoiseReport),
+    ]
+
+
 class SonareDenoiseStereoResult(CStruct):
     """Maps to SonareDenoiseStereoResult in sonare_c.h.
 
@@ -218,6 +238,16 @@ class SonareDeclipReport(CStruct):
     ]
 
 
+class SonareDeclipResult(CStruct):
+    """Maps to SonareDeclipResult in sonare_c.h."""
+
+    _fields_ = [
+        ("samples", ctypes.POINTER(ctypes.c_float)),
+        ("length", ctypes.c_size_t),
+        ("report", SonareDeclipReport),
+    ]
+
+
 class SonareDeclipStereoResult(CStruct):
     """Maps to SonareDeclipStereoResult in sonare_c.h."""
 
@@ -264,6 +294,16 @@ class SonareDecrackleReport(CStruct):
         ("detail_coefficients", ctypes.c_size_t),
         ("shrunk_coefficients", ctypes.c_size_t),
         ("noise_sigma", ctypes.c_float),
+    ]
+
+
+class SonareDecrackleResult(CStruct):
+    """Maps to SonareDecrackleResult in sonare_c.h."""
+
+    _fields_ = [
+        ("samples", ctypes.POINTER(ctypes.c_float)),
+        ("length", ctypes.c_size_t),
+        ("report", SonareDecrackleReport),
     ]
 
 
@@ -327,6 +367,16 @@ class SonareDehumReport(CStruct):
     ]
 
 
+class SonareDehumResult(CStruct):
+    """Maps to SonareDehumResult in sonare_c.h."""
+
+    _fields_ = [
+        ("samples", ctypes.POINTER(ctypes.c_float)),
+        ("length", ctypes.c_size_t),
+        ("report", SonareDehumReport),
+    ]
+
+
 class SonareDehumStereoResult(CStruct):
     """Maps to SonareDehumStereoResult in sonare_c.h."""
 
@@ -375,6 +425,16 @@ class SonareDereverbReport(CStruct):
         ("mean_reduction_db", ctypes.c_float),
         ("suppressed_fraction", ctypes.c_float),
         ("wpe_predictor_norm", ctypes.c_float),
+    ]
+
+
+class SonareDereverbResult(CStruct):
+    """Maps to SonareDereverbResult in sonare_c.h."""
+
+    _fields_ = [
+        ("samples", ctypes.POINTER(ctypes.c_float)),
+        ("length", ctypes.c_size_t),
+        ("report", SonareDereverbReport),
     ]
 
 
@@ -430,6 +490,20 @@ class SonareTrimReport(CStruct):
         ("range", SonareTrimRange),
         ("removed_head_samples", ctypes.c_size_t),
         ("removed_tail_samples", ctypes.c_size_t),
+    ]
+
+
+class SonareTrimSilenceResult(CStruct):
+    """Maps to SonareTrimSilenceResult in sonare_c.h.
+
+    ``length`` is an OUTPUT length; a pass that kept nothing leaves ``samples``
+    NULL and ``length`` 0.
+    """
+
+    _fields_ = [
+        ("samples", ctypes.POINTER(ctypes.c_float)),
+        ("length", ctypes.c_size_t),
+        ("report", SonareTrimReport),
     ]
 
 

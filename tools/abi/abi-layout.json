@@ -1199,6 +1199,30 @@
     ],
     "size": 64
   },
+  "SonareDeclickResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "pointer",
+        "name": "samples",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "length",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "report",
+        "offset": 16,
+        "size": 64
+      }
+    ],
+    "size": 80
+  },
   "SonareDeclickStereoResult": {
     "align": 8,
     "fields": [
@@ -1300,6 +1324,30 @@
       }
     ],
     "size": 96
+  },
+  "SonareDeclipResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "pointer",
+        "name": "samples",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "length",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "report",
+        "offset": 16,
+        "size": 96
+      }
+    ],
+    "size": 112
   },
   "SonareDeclipStereoResult": {
     "align": 8,
@@ -1451,6 +1499,30 @@
     ],
     "size": 48
   },
+  "SonareDecrackleResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "pointer",
+        "name": "samples",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "length",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "report",
+        "offset": 16,
+        "size": 48
+      }
+    ],
+    "size": 64
+  },
   "SonareDecrackleStereoResult": {
     "align": 8,
     "fields": [
@@ -1576,6 +1648,30 @@
       }
     ],
     "size": 88
+  },
+  "SonareDehumResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "pointer",
+        "name": "samples",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "length",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "report",
+        "offset": 16,
+        "size": 88
+      }
+    ],
+    "size": 104
   },
   "SonareDehumStereoResult": {
     "align": 8,
@@ -1715,6 +1811,30 @@
     ],
     "size": 144
   },
+  "SonareDenoiseResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "pointer",
+        "name": "samples",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "length",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "report",
+        "offset": 16,
+        "size": 144
+      }
+    ],
+    "size": 160
+  },
   "SonareDenoiseStereoResult": {
     "align": 8,
     "fields": [
@@ -1852,6 +1972,30 @@
       }
     ],
     "size": 20
+  },
+  "SonareDereverbResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "pointer",
+        "name": "samples",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "length",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "report",
+        "offset": 16,
+        "size": 20
+      }
+    ],
+    "size": 40
   },
   "SonareDereverbStereoResult": {
     "align": 8,
@@ -10906,6 +11050,30 @@
       }
     ],
     "size": 32
+  },
+  "SonareTrimSilenceResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "pointer",
+        "name": "samples",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "length",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "report",
+        "offset": 16,
+        "size": 32
+      }
+    ],
+    "size": 48
   },
   "SonareTrimSilenceStereoResult": {
     "align": 8,

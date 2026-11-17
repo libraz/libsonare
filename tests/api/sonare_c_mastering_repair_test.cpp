@@ -14,16 +14,15 @@ TEST_CASE("sonare_mastering_repair_declick", "[c_api][mastering]") {
   }
 
   SECTION("returns same-length cleaned buffer with NULL config (defaults)") {
-    float* out = nullptr;
-    size_t out_length = 0;
-    REQUIRE(sonare_mastering_repair_declick(samples.data(), samples.size(), sr, nullptr, &out,
-                                            &out_length) == SONARE_OK);
-    REQUIRE(out != nullptr);
-    REQUIRE(out_length == samples.size());
+    SonareDeclickResult result{};
+    REQUIRE(sonare_mastering_repair_declick(samples.data(), samples.size(), sr, nullptr, &result) ==
+            SONARE_OK);
+    REQUIRE(result.samples != nullptr);
+    REQUIRE(result.length == samples.size());
     // Output should be finite and not silent (the wrapper preserves the signal).
-    REQUIRE(std::isfinite(max_abs(out, out_length)));
-    REQUIRE(max_abs(out, out_length) > 0.1f);
-    sonare_free_floats(out);
+    REQUIRE(std::isfinite(max_abs(result.samples, result.length)));
+    REQUIRE(max_abs(result.samples, result.length) > 0.1f);
+    sonare_free_declick_result(&result);
   }
 
   SECTION("accepts explicit config") {
@@ -34,23 +33,23 @@ TEST_CASE("sonare_mastering_repair_declick", "[c_api][mastering]") {
     config.lpc_order = 20;
     config.residual_ratio = 8.0f;
 
-    float* out = nullptr;
-    size_t out_length = 0;
-    REQUIRE(sonare_mastering_repair_declick(samples.data(), samples.size(), sr, &config, &out,
-                                            &out_length) == SONARE_OK);
-    REQUIRE(out_length == samples.size());
-    sonare_free_floats(out);
+    SonareDeclickResult result{};
+    REQUIRE(sonare_mastering_repair_declick(samples.data(), samples.size(), sr, &config, &result) ==
+            SONARE_OK);
+    REQUIRE(result.length == samples.size());
+    sonare_free_declick_result(&result);
   }
 
-  SECTION("rejects null out / bad inputs") {
-    REQUIRE(sonare_mastering_repair_declick(samples.data(), samples.size(), sr, nullptr, nullptr,
-                                            nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-    float* out = non_null_sentinel_float_ptr();
-    size_t out_length = 123;
-    REQUIRE(sonare_mastering_repair_declick(nullptr, 0, sr, nullptr, &out, &out_length) ==
+  SECTION("rejects null result / bad inputs") {
+    REQUIRE(sonare_mastering_repair_declick(samples.data(), samples.size(), sr, nullptr, nullptr) ==
             SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(out == nullptr);
-    REQUIRE(out_length == 0);
+    SonareDeclickResult result{};
+    result.samples = non_null_sentinel_float_ptr();
+    result.length = 123;
+    REQUIRE(sonare_mastering_repair_declick(nullptr, 0, sr, nullptr, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result.samples == nullptr);
+    REQUIRE(result.length == 0);
   }
 
   SECTION("invalid config returns invalid parameter and clears output") {
@@ -60,12 +59,13 @@ TEST_CASE("sonare_mastering_repair_declick", "[c_api][mastering]") {
     config.max_click_samples = 8;
     config.lpc_order = 20;
     config.residual_ratio = 8.0f;
-    float* out = non_null_sentinel_float_ptr();
-    size_t out_length = 123;
-    REQUIRE(sonare_mastering_repair_declick(samples.data(), samples.size(), sr, &config, &out,
-                                            &out_length) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(out == nullptr);
-    REQUIRE(out_length == 0);
+    SonareDeclickResult result{};
+    result.samples = non_null_sentinel_float_ptr();
+    result.length = 123;
+    REQUIRE(sonare_mastering_repair_declick(samples.data(), samples.size(), sr, &config, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result.samples == nullptr);
+    REQUIRE(result.length == 0);
   }
 }
 
@@ -124,19 +124,18 @@ TEST_CASE("sonare_mastering_repair_declick_stereo", "[c_api][mastering]") {
     SonareDeclickStereoResult stereo{};
     REQUIRE(sonare_mastering_repair_declick_stereo(left.data(), right.data(), left.size(), sr,
                                                    nullptr, &stereo) == SONARE_OK);
-    float* mono = nullptr;
-    size_t mono_length = 0;
-    REQUIRE(sonare_mastering_repair_declick(left.data(), left.size(), sr, nullptr, &mono,
-                                            &mono_length) == SONARE_OK);
-    REQUIRE(mono_length == stereo.length);
+    SonareDeclickResult mono{};
+    REQUIRE(sonare_mastering_repair_declick(left.data(), left.size(), sr, nullptr, &mono) ==
+            SONARE_OK);
+    REQUIRE(mono.length == stereo.length);
 
     // The mono pass never sees the right channel's click, so it leaves the left
     // channel untouched there while the stereo pass repairs it. Without this the
     // stereo entry could be the mono one run twice.
-    CHECK(stereo.left[kRightClick] != mono[kRightClick]);
-    CHECK(stereo.left[kLeftClick] == Catch::Approx(mono[kLeftClick]).margin(1e-6));
+    CHECK(stereo.left[kRightClick] != mono.samples[kRightClick]);
+    CHECK(stereo.left[kLeftClick] == Catch::Approx(mono.samples[kLeftClick]).margin(1e-6));
 
-    sonare_free_floats(mono);
+    sonare_free_declick_result(&mono);
     sonare_free_declick_stereo_result(&stereo);
   }
 
@@ -186,13 +185,12 @@ TEST_CASE("sonare_mastering_repair_denoise_classical", "[c_api][mastering]") {
   }
 
   SECTION("LogMMSE default config reduces noise floor") {
-    float* out = nullptr;
-    size_t out_length = 0;
-    REQUIRE(sonare_mastering_repair_denoise_classical(noisy.data(), noisy.size(), sr, nullptr, &out,
-                                                      &out_length) == SONARE_OK);
-    REQUIRE(out != nullptr);
-    REQUIRE(out_length == noisy.size());
-    sonare_free_floats(out);
+    SonareDenoiseResult result{};
+    REQUIRE(sonare_mastering_repair_denoise_classical(noisy.data(), noisy.size(), sr, nullptr,
+                                                      &result) == SONARE_OK);
+    REQUIRE(result.samples != nullptr);
+    REQUIRE(result.length == noisy.size());
+    sonare_free_denoise_result(&result);
   }
 
   SECTION("Berouti SpectralSubtraction config runs") {
@@ -209,12 +207,11 @@ TEST_CASE("sonare_mastering_repair_denoise_classical", "[c_api][mastering]") {
     config.speech_presence_gain = 0;
     config.gain_smoothing = 1;
 
-    float* out = nullptr;
-    size_t out_length = 0;
-    REQUIRE(sonare_mastering_repair_denoise_classical(noisy.data(), noisy.size(), sr, &config, &out,
-                                                      &out_length) == SONARE_OK);
-    REQUIRE(out_length == noisy.size());
-    sonare_free_floats(out);
+    SonareDenoiseResult result{};
+    REQUIRE(sonare_mastering_repair_denoise_classical(noisy.data(), noisy.size(), sr, &config,
+                                                      &result) == SONARE_OK);
+    REQUIRE(result.length == noisy.size());
+    sonare_free_denoise_result(&result);
   }
 
   SECTION("rejects non-power-of-two n_fft and bad hop") {
@@ -223,23 +220,21 @@ TEST_CASE("sonare_mastering_repair_denoise_classical", "[c_api][mastering]") {
     config.noise_estimator = SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE;
     config.n_fft = 1500;  // not a power of two
     config.hop_length = 256;
-    float* out = nullptr;
-    size_t out_length = 0;
-    REQUIRE(sonare_mastering_repair_denoise_classical(noisy.data(), noisy.size(), sr, &config, &out,
-                                                      &out_length) ==
-            SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(out == nullptr);
-    REQUIRE(out_length == 0);
+    SonareDenoiseResult result{};
+    REQUIRE(sonare_mastering_repair_denoise_classical(noisy.data(), noisy.size(), sr, &config,
+                                                      &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result.samples == nullptr);
+    REQUIRE(result.length == 0);
 
     config.n_fft = 1024;
     config.hop_length = 0;
-    out = non_null_sentinel_float_ptr();
-    out_length = 123;
-    REQUIRE(sonare_mastering_repair_denoise_classical(noisy.data(), noisy.size(), sr, &config, &out,
-                                                      &out_length) ==
-            SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(out == nullptr);
-    REQUIRE(out_length == 0);
+    result = {};
+    result.samples = non_null_sentinel_float_ptr();
+    result.length = 123;
+    REQUIRE(sonare_mastering_repair_denoise_classical(noisy.data(), noisy.size(), sr, &config,
+                                                      &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result.samples == nullptr);
+    REQUIRE(result.length == 0);
   }
 
   SECTION("rejects unknown mode and noise estimator enums") {
@@ -255,23 +250,23 @@ TEST_CASE("sonare_mastering_repair_denoise_classical", "[c_api][mastering]") {
     config.noise_estimation_quantile = 0.1f;
     config.speech_presence_gain = 1;
     config.gain_smoothing = 1;
-    float* out = non_null_sentinel_float_ptr();
-    size_t out_length = 123;
-    REQUIRE(sonare_mastering_repair_denoise_classical(noisy.data(), noisy.size(), sr, &config, &out,
-                                                      &out_length) ==
-            SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(out == nullptr);
-    REQUIRE(out_length == 0);
+    SonareDenoiseResult result{};
+    result.samples = non_null_sentinel_float_ptr();
+    result.length = 123;
+    REQUIRE(sonare_mastering_repair_denoise_classical(noisy.data(), noisy.size(), sr, &config,
+                                                      &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result.samples == nullptr);
+    REQUIRE(result.length == 0);
 
     config.mode = SONARE_DENOISE_MODE_LOG_MMSE;
     config.noise_estimator = 999;
-    out = non_null_sentinel_float_ptr();
-    out_length = 123;
-    REQUIRE(sonare_mastering_repair_denoise_classical(noisy.data(), noisy.size(), sr, &config, &out,
-                                                      &out_length) ==
-            SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(out == nullptr);
-    REQUIRE(out_length == 0);
+    result = {};
+    result.samples = non_null_sentinel_float_ptr();
+    result.length = 123;
+    REQUIRE(sonare_mastering_repair_denoise_classical(noisy.data(), noisy.size(), sr, &config,
+                                                      &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result.samples == nullptr);
+    REQUIRE(result.length == 0);
   }
 }
 
@@ -464,17 +459,16 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_linked", "[c_api][mastering
     REQUIRE(sonare_mastering_repair_denoise_classical_linked(in, 1, length, sr, nullptr, outs,
                                                              &report) == SONARE_OK);
 
-    float* mono = nullptr;
-    size_t mono_length = 0;
-    REQUIRE(sonare_mastering_repair_denoise_classical(noisy.data(), length, sr, nullptr, &mono,
-                                                      &mono_length) == SONARE_OK);
-    REQUIRE(mono_length == length);
+    SonareDenoiseResult mono{};
+    REQUIRE(sonare_mastering_repair_denoise_classical(noisy.data(), length, sr, nullptr, &mono) ==
+            SONARE_OK);
+    REQUIRE(mono.length == length);
     for (size_t i = 0; i < length; ++i) {
-      REQUIRE(plane[i] == mono[i]);
+      REQUIRE(plane[i] == mono.samples[i]);
     }
     // Pinned so the equality above cannot be satisfied by two silent buffers.
     REQUIRE(max_abs(plane.data(), length) > 0.01f);
-    sonare_free_floats(mono);
+    sonare_free_denoise_result(&mono);
   }
 
   SECTION("two channels reproduce the stereo entry, plane for plane") {
@@ -708,20 +702,19 @@ TEST_CASE("sonare_mastering_repair_declip_stereo", "[c_api][mastering]") {
     SonareDeclipStereoResult stereo{};
     REQUIRE(sonare_mastering_repair_declip_stereo(left.data(), right.data(), left.size(), sr,
                                                   nullptr, &stereo) == SONARE_OK);
-    float* mono = nullptr;
-    size_t mono_length = 0;
-    REQUIRE(sonare_mastering_repair_declip(left.data(), left.size(), sr, nullptr, &mono,
-                                           &mono_length) == SONARE_OK);
-    REQUIRE(mono_length == stereo.length);
+    SonareDeclipResult mono{};
+    REQUIRE(sonare_mastering_repair_declip(left.data(), left.size(), sr, nullptr, &mono) ==
+            SONARE_OK);
+    REQUIRE(mono.length == stereo.length);
 
     // The mono pass never sees the right channel's run, so it stops at 2010.
     bool differs = false;
     for (size_t i = kSharedEnd; i < kRightWideEnd; ++i) {
-      if (stereo.left[i] != mono[i]) differs = true;
+      if (stereo.left[i] != mono.samples[i]) differs = true;
     }
     CHECK(differs);
 
-    sonare_free_floats(mono);
+    sonare_free_declip_result(&mono);
     sonare_free_declip_stereo_result(&stereo);
   }
 
@@ -754,14 +747,13 @@ TEST_CASE("sonare_mastering_repair_declip", "[.][slow][c_api][mastering]") {
   }
 
   SECTION("default config restores a length-matching buffer") {
-    float* out = nullptr;
-    size_t out_length = 0;
-    REQUIRE(sonare_mastering_repair_declip(samples.data(), samples.size(), sr, nullptr, &out,
-                                           &out_length) == SONARE_OK);
-    REQUIRE(out != nullptr);
-    REQUIRE(out_length == samples.size());
-    REQUIRE(std::isfinite(max_abs(out, out_length)));
-    sonare_free_floats(out);
+    SonareDeclipResult result{};
+    REQUIRE(sonare_mastering_repair_declip(samples.data(), samples.size(), sr, nullptr, &result) ==
+            SONARE_OK);
+    REQUIRE(result.samples != nullptr);
+    REQUIRE(result.length == samples.size());
+    REQUIRE(std::isfinite(max_abs(result.samples, result.length)));
+    sonare_free_declip_result(&result);
   }
 
   SECTION("explicit config") {
@@ -770,11 +762,10 @@ TEST_CASE("sonare_mastering_repair_declip", "[.][slow][c_api][mastering]") {
     config.lpc_order = 24;
     config.iterations = 1;
     config.lpc_blend = 0.5f;
-    float* out = nullptr;
-    size_t out_length = 0;
-    REQUIRE(sonare_mastering_repair_declip(samples.data(), samples.size(), sr, &config, &out,
-                                           &out_length) == SONARE_OK);
-    sonare_free_floats(out);
+    SonareDeclipResult result{};
+    REQUIRE(sonare_mastering_repair_declip(samples.data(), samples.size(), sr, &config, &result) ==
+            SONARE_OK);
+    sonare_free_declip_result(&result);
   }
 
   SECTION("invalid config returns invalid parameter and clears output") {
@@ -783,12 +774,13 @@ TEST_CASE("sonare_mastering_repair_declip", "[.][slow][c_api][mastering]") {
     config.lpc_order = 24;
     config.iterations = 1;
     config.lpc_blend = 0.5f;
-    float* out = non_null_sentinel_float_ptr();
-    size_t out_length = 123;
-    REQUIRE(sonare_mastering_repair_declip(samples.data(), samples.size(), sr, &config, &out,
-                                           &out_length) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(out == nullptr);
-    REQUIRE(out_length == 0);
+    SonareDeclipResult result{};
+    result.samples = non_null_sentinel_float_ptr();
+    result.length = 123;
+    REQUIRE(sonare_mastering_repair_declip(samples.data(), samples.size(), sr, &config, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result.samples == nullptr);
+    REQUIRE(result.length == 0);
   }
 }
 
@@ -802,12 +794,11 @@ TEST_CASE("sonare_mastering_repair_decrackle", "[c_api][mastering]") {
   }
 
   SECTION("median mode (default)") {
-    float* out = nullptr;
-    size_t out_length = 0;
-    REQUIRE(sonare_mastering_repair_decrackle(samples.data(), samples.size(), sr, nullptr, &out,
-                                              &out_length) == SONARE_OK);
-    REQUIRE(out_length == samples.size());
-    sonare_free_floats(out);
+    SonareDecrackleResult result{};
+    REQUIRE(sonare_mastering_repair_decrackle(samples.data(), samples.size(), sr, nullptr,
+                                              &result) == SONARE_OK);
+    REQUIRE(result.length == samples.size());
+    sonare_free_decrackle_result(&result);
   }
 
   SECTION("wavelet shrinkage mode") {
@@ -815,12 +806,11 @@ TEST_CASE("sonare_mastering_repair_decrackle", "[c_api][mastering]") {
     config.threshold = 0.4f;
     config.mode = SONARE_DECRACKLE_MODE_WAVELET_SHRINKAGE;
     config.levels = 4;
-    float* out = nullptr;
-    size_t out_length = 0;
-    REQUIRE(sonare_mastering_repair_decrackle(samples.data(), samples.size(), sr, &config, &out,
-                                              &out_length) == SONARE_OK);
-    REQUIRE(out_length == samples.size());
-    sonare_free_floats(out);
+    SonareDecrackleResult result{};
+    REQUIRE(sonare_mastering_repair_decrackle(samples.data(), samples.size(), sr, &config,
+                                              &result) == SONARE_OK);
+    REQUIRE(result.length == samples.size());
+    sonare_free_decrackle_result(&result);
   }
 
   SECTION("invalid config returns invalid parameter and clears output") {
@@ -828,12 +818,13 @@ TEST_CASE("sonare_mastering_repair_decrackle", "[c_api][mastering]") {
     config.threshold = 0.0f;
     config.mode = SONARE_DECRACKLE_MODE_MEDIAN;
     config.levels = 4;
-    float* out = non_null_sentinel_float_ptr();
-    size_t out_length = 123;
-    REQUIRE(sonare_mastering_repair_decrackle(samples.data(), samples.size(), sr, &config, &out,
-                                              &out_length) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(out == nullptr);
-    REQUIRE(out_length == 0);
+    SonareDecrackleResult result{};
+    result.samples = non_null_sentinel_float_ptr();
+    result.length = 123;
+    REQUIRE(sonare_mastering_repair_decrackle(samples.data(), samples.size(), sr, &config,
+                                              &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result.samples == nullptr);
+    REQUIRE(result.length == 0);
   }
 
   SECTION("rejects unknown mode enum") {
@@ -841,12 +832,13 @@ TEST_CASE("sonare_mastering_repair_decrackle", "[c_api][mastering]") {
     config.threshold = 0.4f;
     config.mode = 999;
     config.levels = 4;
-    float* out = non_null_sentinel_float_ptr();
-    size_t out_length = 123;
-    REQUIRE(sonare_mastering_repair_decrackle(samples.data(), samples.size(), sr, &config, &out,
-                                              &out_length) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(out == nullptr);
-    REQUIRE(out_length == 0);
+    SonareDecrackleResult result{};
+    result.samples = non_null_sentinel_float_ptr();
+    result.length = 123;
+    REQUIRE(sonare_mastering_repair_decrackle(samples.data(), samples.size(), sr, &config,
+                                              &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result.samples == nullptr);
+    REQUIRE(result.length == 0);
   }
 }
 
@@ -906,25 +898,21 @@ TEST_CASE("sonare_mastering_repair_decrackle_stereo", "[c_api][mastering]") {
     // declicker and the declipper the stereo pass owes the mono pass bit
     // equality. An implementation that grew any cross-channel decision breaks
     // this without needing a fixture built to catch that decision.
-    float* mono = nullptr;
-    size_t mono_length = 0;
-    REQUIRE(sonare_mastering_repair_decrackle(left.data(), left.size(), sr, nullptr, &mono,
-                                              &mono_length) == SONARE_OK);
-    REQUIRE(mono_length == stereo.length);
-    for (size_t i = 0; i < mono_length; ++i) {
-      REQUIRE(stereo.left[i] == mono[i]);
+    SonareDecrackleResult mono{};
+    REQUIRE(sonare_mastering_repair_decrackle(left.data(), left.size(), sr, nullptr, &mono) ==
+            SONARE_OK);
+    REQUIRE(mono.length == stereo.length);
+    for (size_t i = 0; i < mono.length; ++i) {
+      REQUIRE(stereo.left[i] == mono.samples[i]);
     }
-    sonare_free_floats(mono);
-
-    mono = nullptr;
-    mono_length = 0;
-    REQUIRE(sonare_mastering_repair_decrackle(right.data(), right.size(), sr, nullptr, &mono,
-                                              &mono_length) == SONARE_OK);
-    REQUIRE(mono_length == stereo.length);
-    for (size_t i = 0; i < mono_length; ++i) {
-      REQUIRE(stereo.right[i] == mono[i]);
+    sonare_free_decrackle_result(&mono);
+    REQUIRE(sonare_mastering_repair_decrackle(right.data(), right.size(), sr, nullptr, &mono) ==
+            SONARE_OK);
+    REQUIRE(mono.length == stereo.length);
+    for (size_t i = 0; i < mono.length; ++i) {
+      REQUIRE(stereo.right[i] == mono.samples[i]);
     }
-    sonare_free_floats(mono);
+    sonare_free_decrackle_result(&mono);
 
     sonare_free_decrackle_stereo_result(&stereo);
   }
@@ -1035,12 +1023,11 @@ TEST_CASE("sonare_mastering_repair_dehum", "[c_api][mastering]") {
   for (size_t i = 0; i < signal.size(); ++i) samples[i] = 0.5f * signal[i] + 0.2f * hum[i];
 
   SECTION("static notch (default)") {
-    float* out = nullptr;
-    size_t out_length = 0;
-    REQUIRE(sonare_mastering_repair_dehum(samples.data(), samples.size(), sr, nullptr, &out,
-                                          &out_length) == SONARE_OK);
-    REQUIRE(out_length == samples.size());
-    sonare_free_floats(out);
+    SonareDehumResult result{};
+    REQUIRE(sonare_mastering_repair_dehum(samples.data(), samples.size(), sr, nullptr, &result) ==
+            SONARE_OK);
+    REQUIRE(result.length == samples.size());
+    sonare_free_dehum_result(&result);
   }
 
   SECTION("adaptive tracking with explicit config") {
@@ -1053,12 +1040,11 @@ TEST_CASE("sonare_mastering_repair_dehum", "[c_api][mastering]") {
     config.adaptation = 0.25f;
     config.frame_size = 2048;
     config.pll_bandwidth = 0.01f;
-    float* out = nullptr;
-    size_t out_length = 0;
-    REQUIRE(sonare_mastering_repair_dehum(samples.data(), samples.size(), sr, &config, &out,
-                                          &out_length) == SONARE_OK);
-    REQUIRE(out_length == samples.size());
-    sonare_free_floats(out);
+    SonareDehumResult result{};
+    REQUIRE(sonare_mastering_repair_dehum(samples.data(), samples.size(), sr, &config, &result) ==
+            SONARE_OK);
+    REQUIRE(result.length == samples.size());
+    sonare_free_dehum_result(&result);
   }
 
   SECTION("invalid config returns invalid parameter and clears output") {
@@ -1067,12 +1053,13 @@ TEST_CASE("sonare_mastering_repair_dehum", "[c_api][mastering]") {
     config.harmonics = 4;
     config.q = 20.0f;
     config.frame_size = 2048;
-    float* out = non_null_sentinel_float_ptr();
-    size_t out_length = 123;
-    REQUIRE(sonare_mastering_repair_dehum(samples.data(), samples.size(), sr, &config, &out,
-                                          &out_length) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(out == nullptr);
-    REQUIRE(out_length == 0);
+    SonareDehumResult result{};
+    result.samples = non_null_sentinel_float_ptr();
+    result.length = 123;
+    REQUIRE(sonare_mastering_repair_dehum(samples.data(), samples.size(), sr, &config, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result.samples == nullptr);
+    REQUIRE(result.length == 0);
   }
 }
 
@@ -1116,15 +1103,14 @@ TEST_CASE("sonare_mastering_repair_dehum_stereo", "[c_api][mastering]") {
     // Nothing is shared here, so each channel owes the mono pass bit equality.
     // An implementation that grew a cross-channel decision on this path breaks
     // this without needing a fixture built to catch that decision.
-    float* mono = nullptr;
-    size_t mono_length = 0;
-    REQUIRE(sonare_mastering_repair_dehum(left.data(), left.size(), sr, &fixed, &mono,
-                                          &mono_length) == SONARE_OK);
-    REQUIRE(mono_length == out.length);
-    for (size_t i = 0; i < mono_length; ++i) {
-      REQUIRE(out.left[i] == mono[i]);
+    SonareDehumResult mono{};
+    REQUIRE(sonare_mastering_repair_dehum(left.data(), left.size(), sr, &fixed, &mono) ==
+            SONARE_OK);
+    REQUIRE(mono.length == out.length);
+    for (size_t i = 0; i < mono.length; ++i) {
+      REQUIRE(out.left[i] == mono.samples[i]);
     }
-    sonare_free_floats(mono);
+    sonare_free_dehum_result(&mono);
 
     sonare_free_dehum_stereo_result(&out);
   }
@@ -1154,17 +1140,16 @@ TEST_CASE("sonare_mastering_repair_dehum_stereo", "[c_api][mastering]") {
 
     // And the shared tracker must actually be reached: the mono pass tracks the
     // left channel alone, so it lands somewhere the pair's mean does not.
-    float* mono = nullptr;
-    size_t mono_length = 0;
-    REQUIRE(sonare_mastering_repair_dehum(left.data(), left.size(), sr, &tracked, &mono,
-                                          &mono_length) == SONARE_OK);
-    REQUIRE(mono_length == out.length);
+    SonareDehumResult mono{};
+    REQUIRE(sonare_mastering_repair_dehum(left.data(), left.size(), sr, &tracked, &mono) ==
+            SONARE_OK);
+    REQUIRE(mono.length == out.length);
     bool differs_from_mono = false;
-    for (size_t i = 0; i < mono_length; ++i) {
-      if (out.left[i] != mono[i]) differs_from_mono = true;
+    for (size_t i = 0; i < mono.length; ++i) {
+      if (out.left[i] != mono.samples[i]) differs_from_mono = true;
     }
     REQUIRE(differs_from_mono);
-    sonare_free_floats(mono);
+    sonare_free_dehum_result(&mono);
 
     sonare_free_dehum_stereo_result(&out);
   }
@@ -1234,12 +1219,11 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical", "[c_api][mastering]") {
   for (auto& s : samples) s *= 0.5f;
 
   SECTION("default config") {
-    float* out = nullptr;
-    size_t out_length = 0;
+    SonareDereverbResult result{};
     REQUIRE(sonare_mastering_repair_dereverb_classical(samples.data(), samples.size(), sr, nullptr,
-                                                       &out, &out_length) == SONARE_OK);
-    REQUIRE(out_length == samples.size());
-    sonare_free_floats(out);
+                                                       &result) == SONARE_OK);
+    REQUIRE(result.length == samples.size());
+    sonare_free_dereverb_result(&result);
   }
 
   SECTION("WPE-enabled config") {
@@ -1256,12 +1240,11 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical", "[c_api][mastering]") {
     config.wpe_iterations = 2;
     config.wpe_taps = 3;
     config.wpe_strength = 0.7f;
-    float* out = nullptr;
-    size_t out_length = 0;
+    SonareDereverbResult result{};
     REQUIRE(sonare_mastering_repair_dereverb_classical(samples.data(), samples.size(), sr, &config,
-                                                       &out, &out_length) == SONARE_OK);
-    REQUIRE(out_length == samples.size());
-    sonare_free_floats(out);
+                                                       &result) == SONARE_OK);
+    REQUIRE(result.length == samples.size());
+    sonare_free_dereverb_result(&result);
   }
 
   SECTION("rejects bad n_fft / hop_length") {
@@ -1274,23 +1257,21 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical", "[c_api][mastering]") {
     config.late_delay_ms = 50.0f;
     config.over_subtraction = 1.0f;
     config.spectral_floor = 0.08f;
-    float* out = nullptr;
-    size_t out_length = 0;
+    SonareDereverbResult result{};
     REQUIRE(sonare_mastering_repair_dereverb_classical(samples.data(), samples.size(), sr, &config,
-                                                       &out, &out_length) ==
-            SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(out == nullptr);
-    REQUIRE(out_length == 0);
+                                                       &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result.samples == nullptr);
+    REQUIRE(result.length == 0);
 
     config.n_fft = 1024;
     config.hop_length = 2048;  // larger than n_fft
-    out = non_null_sentinel_float_ptr();
-    out_length = 123;
+    result = {};
+    result.samples = non_null_sentinel_float_ptr();
+    result.length = 123;
     REQUIRE(sonare_mastering_repair_dereverb_classical(samples.data(), samples.size(), sr, &config,
-                                                       &out, &out_length) ==
-            SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(out == nullptr);
-    REQUIRE(out_length == 0);
+                                                       &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result.samples == nullptr);
+    REQUIRE(result.length == 0);
   }
 }
 
@@ -1517,16 +1498,15 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
     REQUIRE(sonare_mastering_repair_dereverb_classical_linked(in, 1, length, sr, &base, outs,
                                                               &report) == SONARE_OK);
 
-    float* mono = nullptr;
-    size_t mono_length = 0;
-    REQUIRE(sonare_mastering_repair_dereverb_classical(reverberant.data(), length, sr, &base, &mono,
-                                                       &mono_length) == SONARE_OK);
-    REQUIRE(mono_length == length);
+    SonareDereverbResult mono{};
+    REQUIRE(sonare_mastering_repair_dereverb_classical(reverberant.data(), length, sr, &base,
+                                                       &mono) == SONARE_OK);
+    REQUIRE(mono.length == length);
     for (size_t i = 0; i < length; ++i) {
-      REQUIRE(plane[i] == mono[i]);
+      REQUIRE(plane[i] == mono.samples[i]);
     }
     REQUIRE(max_abs(plane.data(), length) > 0.01f);
-    sonare_free_floats(mono);
+    sonare_free_dereverb_result(&mono);
   }
 
   SECTION("two channels reproduce the stereo entry, plane for plane") {
@@ -1699,11 +1679,9 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
     SonareDereverbClassicalConfig bad = base;
     bad.hop_length = bad.n_fft * 2;
     // The core would refuse too, but with a message; the pre-check records none.
-    float* mono_out = nullptr;
-    size_t mono_length = 0;
-    REQUIRE(sonare_mastering_repair_dereverb_classical(reverberant.data(), length, sr, &bad,
-                                                       &mono_out, &mono_length) ==
-            SONARE_ERROR_INVALID_PARAMETER);
+    SonareDereverbResult mono_out{};
+    REQUIRE(sonare_mastering_repair_dereverb_classical(
+                reverberant.data(), length, sr, &bad, &mono_out) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(std::string(sonare_last_error_message()).empty());
 
     SonareDereverbStereoResult stereo{};
@@ -1772,14 +1750,13 @@ TEST_CASE("sonare_mastering_repair_trim_silence", "[c_api][mastering]") {
   samples.insert(samples.end(), silent_pad, 0.0f);
 
   SECTION("peak mode (default) shortens the buffer") {
-    float* out = nullptr;
-    size_t out_length = 0;
-    REQUIRE(sonare_mastering_repair_trim_silence(samples.data(), samples.size(), sr, nullptr, &out,
-                                                 &out_length) == SONARE_OK);
-    REQUIRE(out != nullptr);
-    REQUIRE(out_length < samples.size());
-    REQUIRE(out_length > 0);
-    sonare_free_floats(out);
+    SonareTrimSilenceResult result{};
+    REQUIRE(sonare_mastering_repair_trim_silence(samples.data(), samples.size(), sr, nullptr,
+                                                 &result) == SONARE_OK);
+    REQUIRE(result.samples != nullptr);
+    REQUIRE(result.length < samples.size());
+    REQUIRE(result.length > 0);
+    sonare_free_trim_silence_result(&result);
   }
 
   SECTION("LUFS-gated mode with padding") {
@@ -1789,13 +1766,12 @@ TEST_CASE("sonare_mastering_repair_trim_silence", "[c_api][mastering]") {
     config.mode = SONARE_TRIM_SILENCE_MODE_LUFS_GATED;
     config.gate_lufs = -40.0f;
     config.window_ms = 400.0f;
-    float* out = nullptr;
-    size_t out_length = 0;
-    REQUIRE(sonare_mastering_repair_trim_silence(samples.data(), samples.size(), sr, &config, &out,
-                                                 &out_length) == SONARE_OK);
-    REQUIRE(out != nullptr);
-    REQUIRE(out_length > 0);
-    sonare_free_floats(out);
+    SonareTrimSilenceResult result{};
+    REQUIRE(sonare_mastering_repair_trim_silence(samples.data(), samples.size(), sr, &config,
+                                                 &result) == SONARE_OK);
+    REQUIRE(result.samples != nullptr);
+    REQUIRE(result.length > 0);
+    sonare_free_trim_silence_result(&result);
   }
 
   SECTION("invalid config returns invalid parameter and clears output") {
@@ -1803,12 +1779,13 @@ TEST_CASE("sonare_mastering_repair_trim_silence", "[c_api][mastering]") {
     config.threshold = -1.0f;
     config.mode = SONARE_TRIM_SILENCE_MODE_PEAK;
     config.window_ms = 400.0f;
-    float* out = non_null_sentinel_float_ptr();
-    size_t out_length = 123;
-    REQUIRE(sonare_mastering_repair_trim_silence(samples.data(), samples.size(), sr, &config, &out,
-                                                 &out_length) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(out == nullptr);
-    REQUIRE(out_length == 0);
+    SonareTrimSilenceResult result{};
+    result.samples = non_null_sentinel_float_ptr();
+    result.length = 123;
+    REQUIRE(sonare_mastering_repair_trim_silence(samples.data(), samples.size(), sr, &config,
+                                                 &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result.samples == nullptr);
+    REQUIRE(result.length == 0);
   }
 
   SECTION("rejects unknown mode enum") {
@@ -1818,12 +1795,224 @@ TEST_CASE("sonare_mastering_repair_trim_silence", "[c_api][mastering]") {
     config.mode = 999;
     config.gate_lufs = -60.0f;
     config.window_ms = 400.0f;
-    float* out = non_null_sentinel_float_ptr();
-    size_t out_length = 123;
-    REQUIRE(sonare_mastering_repair_trim_silence(samples.data(), samples.size(), sr, &config, &out,
-                                                 &out_length) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(out == nullptr);
-    REQUIRE(out_length == 0);
+    SonareTrimSilenceResult result{};
+    result.samples = non_null_sentinel_float_ptr();
+    result.length = 123;
+    REQUIRE(sonare_mastering_repair_trim_silence(samples.data(), samples.size(), sr, &config,
+                                                 &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result.samples == nullptr);
+    REQUIRE(result.length == 0);
+  }
+}
+
+namespace {
+
+// Pre-fills a result with garbage, checks a refused call empties it, then checks
+// the releaser empties a real result and tolerates a second call and NULL.
+template <typename R, typename Call, typename Release, typename ReportCleared>
+void check_refusal_and_release(int sample_rate, Call call, Release release,
+                               ReportCleared report_cleared) {
+  R refused;
+  std::memset(&refused, 0xAB, sizeof(refused));
+  refused.samples = non_null_sentinel_float_ptr();
+  refused.length = 123;
+  CHECK(call(0, &refused) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(refused.samples == nullptr);
+  CHECK(refused.length == 0);
+  CHECK(report_cleared(refused));
+
+  R result{};
+  REQUIRE(call(sample_rate, &result) == SONARE_OK);
+  REQUIRE(result.samples != nullptr);
+  release(&result);
+  CHECK(result.samples == nullptr);
+  CHECK(result.length == 0);
+  release(&result);
+  release(nullptr);
+}
+
+}  // namespace
+
+TEST_CASE("mono repair returns its report beside the audio", "[c_api][mastering]") {
+  SECTION("declick") {
+    const int sr = 48000;
+    auto samples = generate_sine(440.0f, sr, 0.5f);
+    for (auto& s : samples) s *= 0.3f;
+    for (size_t i = 0; i < 5; ++i) samples[2000 + i * 1500] = 1.0f;
+
+    SonareDeclickResult result{};
+    REQUIRE(sonare_mastering_repair_declick(samples.data(), samples.size(), sr, nullptr, &result) ==
+            SONARE_OK);
+    CHECK(result.length == samples.size());
+    CHECK(result.report.repaired_runs > 0);
+    CHECK(result.report.repaired_samples > 0);
+    CHECK(result.report.linked_runs == 0);
+    sonare_free_declick_result(&result);
+  }
+
+  SECTION("declip") {
+    const int sr = 48000;
+    auto samples = generate_sine(440.0f, sr, 0.1f);
+    for (auto& s : samples) s = std::max(-1.0f, std::min(1.0f, s * 2.0f));
+
+    SonareDeclipResult result{};
+    REQUIRE(sonare_mastering_repair_declip(samples.data(), samples.size(), sr, nullptr, &result) ==
+            SONARE_OK);
+    CHECK(result.length == samples.size());
+    CHECK(result.report.repaired_samples > 0);
+    CHECK(result.report.linked_runs == 0);
+    sonare_free_declip_result(&result);
+  }
+
+  SECTION("decrackle") {
+    const int sr = 48000;
+    auto samples = generate_sine(440.0f, sr, 0.5f);
+    for (auto& s : samples) s *= 0.4f;
+    for (size_t i = 500; i < samples.size(); i += 1700) {
+      samples[i] = (i % 2 == 0) ? 0.95f : -0.95f;
+    }
+
+    SonareDecrackleResult result{};
+    REQUIRE(sonare_mastering_repair_decrackle(samples.data(), samples.size(), sr, nullptr,
+                                              &result) == SONARE_OK);
+    CHECK(result.length == samples.size());
+    CHECK(result.report.replaced_samples > 0);
+    CHECK(result.report.replaced_samples >= result.report.detected.sample_count);
+    sonare_free_decrackle_result(&result);
+  }
+
+  SECTION("dehum") {
+    const int sr = 48000;
+    auto signal = generate_sine(440.0f, sr, 1.0f);
+    auto hum = generate_sine(50.0f, sr, 1.0f);
+    std::vector<float> samples(signal.size());
+    for (size_t i = 0; i < signal.size(); ++i) samples[i] = 0.5f * signal[i] + 0.2f * hum[i];
+
+    SonareDehumResult result{};
+    REQUIRE(sonare_mastering_repair_dehum(samples.data(), samples.size(), sr, nullptr, &result) ==
+            SONARE_OK);
+    CHECK(result.length == samples.size());
+    CHECK(result.report.detected.fundamental_hz == Catch::Approx(50.0f).margin(1.0f));
+    CHECK(result.report.notched_harmonics > 0);
+    sonare_free_dehum_result(&result);
+  }
+
+  SECTION("denoise") {
+    const int sr = 22050;
+    auto signal = generate_sine(440.0f, sr, 1.0f);
+    std::vector<float> noisy(signal.size());
+    uint32_t state = 1u;
+    for (size_t i = 0; i < signal.size(); ++i) {
+      state = state * 1664525u + 1013904223u;
+      const float u = static_cast<float>(state >> 8) / static_cast<float>(1u << 24);
+      noisy[i] = 0.5f * signal[i] + (u - 0.5f) * 0.4f;
+    }
+
+    SonareDenoiseResult result{};
+    REQUIRE(sonare_mastering_repair_denoise_classical(noisy.data(), noisy.size(), sr, nullptr,
+                                                      &result) == SONARE_OK);
+    CHECK(result.length == noisy.size());
+    CHECK(result.report.mean_reduction_db > 0.0f);
+    CHECK(result.report.max_reduction_db >= result.report.mean_reduction_db);
+    sonare_free_denoise_result(&result);
+  }
+
+  SECTION("dereverb") {
+    const int sr = 48000;
+    auto samples = generate_sine(440.0f, sr, 1.0f);
+    for (auto& s : samples) s *= 0.5f;
+
+    SonareDereverbResult result{};
+    REQUIRE(sonare_mastering_repair_dereverb_classical(samples.data(), samples.size(), sr, nullptr,
+                                                       &result) == SONARE_OK);
+    CHECK(result.length == samples.size());
+    CHECK(std::isfinite(result.report.detected.late_decay_ratio_db));
+    CHECK(std::isfinite(result.report.detected.late_predictability));
+    CHECK(result.report.mean_reduction_db >= 0.0f);
+    sonare_free_dereverb_result(&result);
+  }
+
+  SECTION("trim_silence") {
+    const int sr = 48000;
+    const size_t silent_pad = 2400;
+    std::vector<float> samples(silent_pad, 0.0f);
+    auto sig = generate_sine(440.0f, sr, 0.2f);
+    for (auto& s : sig) s *= 0.5f;
+    samples.insert(samples.end(), sig.begin(), sig.end());
+    samples.insert(samples.end(), silent_pad, 0.0f);
+
+    SonareTrimRange expected{};
+    REQUIRE(sonare_mastering_repair_detect_trim_range(samples.data(), samples.size(), sr, nullptr,
+                                                      &expected) == SONARE_OK);
+    SonareTrimSilenceResult result{};
+    REQUIRE(sonare_mastering_repair_trim_silence(samples.data(), samples.size(), sr, nullptr,
+                                                 &result) == SONARE_OK);
+    CHECK(result.report.range.first == expected.first);
+    CHECK(result.report.range.last_exclusive == expected.last_exclusive);
+    CHECK(result.length == expected.last_exclusive - expected.first);
+    CHECK(result.report.removed_head_samples + result.report.removed_tail_samples + result.length ==
+          samples.size());
+    CHECK(result.report.removed_head_samples > 0);
+    sonare_free_trim_silence_result(&result);
+  }
+
+  SECTION("a refused call empties the result and the releaser is idempotent") {
+    const int sr = 48000;
+    auto samples = generate_sine(440.0f, sr, 0.25f);
+    for (auto& s : samples) s *= 0.3f;
+    for (size_t i = 0; i < 3; ++i) samples[2000 + i * 1500] = 1.0f;
+    const float* data = samples.data();
+    const size_t n = samples.size();
+
+    check_refusal_and_release<SonareDeclickResult>(
+        sr,
+        [&](int rate, SonareDeclickResult* out) {
+          return sonare_mastering_repair_declick(data, n, rate, nullptr, out);
+        },
+        [](SonareDeclickResult* r) { sonare_free_declick_result(r); },
+        [](const SonareDeclickResult& r) { return r.report.repaired_runs == 0; });
+    check_refusal_and_release<SonareDeclipResult>(
+        sr,
+        [&](int rate, SonareDeclipResult* out) {
+          return sonare_mastering_repair_declip(data, n, rate, nullptr, out);
+        },
+        [](SonareDeclipResult* r) { sonare_free_declip_result(r); },
+        [](const SonareDeclipResult& r) { return r.report.repaired_samples == 0; });
+    check_refusal_and_release<SonareDecrackleResult>(
+        sr,
+        [&](int rate, SonareDecrackleResult* out) {
+          return sonare_mastering_repair_decrackle(data, n, rate, nullptr, out);
+        },
+        [](SonareDecrackleResult* r) { sonare_free_decrackle_result(r); },
+        [](const SonareDecrackleResult& r) { return r.report.replaced_samples == 0; });
+    check_refusal_and_release<SonareDehumResult>(
+        sr,
+        [&](int rate, SonareDehumResult* out) {
+          return sonare_mastering_repair_dehum(data, n, rate, nullptr, out);
+        },
+        [](SonareDehumResult* r) { sonare_free_dehum_result(r); },
+        [](const SonareDehumResult& r) { return r.report.notched_harmonics == 0; });
+    check_refusal_and_release<SonareDenoiseResult>(
+        sr,
+        [&](int rate, SonareDenoiseResult* out) {
+          return sonare_mastering_repair_denoise_classical(data, n, rate, nullptr, out);
+        },
+        [](SonareDenoiseResult* r) { sonare_free_denoise_result(r); },
+        [](const SonareDenoiseResult& r) { return r.report.mean_reduction_db == 0.0f; });
+    check_refusal_and_release<SonareDereverbResult>(
+        sr,
+        [&](int rate, SonareDereverbResult* out) {
+          return sonare_mastering_repair_dereverb_classical(data, n, rate, nullptr, out);
+        },
+        [](SonareDereverbResult* r) { sonare_free_dereverb_result(r); },
+        [](const SonareDereverbResult& r) { return r.report.mean_reduction_db == 0.0f; });
+    check_refusal_and_release<SonareTrimSilenceResult>(
+        sr,
+        [&](int rate, SonareTrimSilenceResult* out) {
+          return sonare_mastering_repair_trim_silence(data, n, rate, nullptr, out);
+        },
+        [](SonareTrimSilenceResult* r) { sonare_free_trim_silence_result(r); },
+        [](const SonareTrimSilenceResult& r) { return r.report.removed_head_samples == 0; });
   }
 }
 

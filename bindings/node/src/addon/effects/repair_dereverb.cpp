@@ -43,14 +43,16 @@ constexpr SonareDereverbClassicalConfig kDereverbConfigDefaults{0.0f, 1.0f,  102
 
 /// @brief Marshal the pair-level reverb analysis into the JS shape the dereverb
 ///        stereo report carries.
-Napi::Object EmitReverbDetection(Napi::Env env, const SonareReverbDetection& detection) {
+template <typename T>
+Napi::Object EmitReverbDetection(Napi::Env env, const T& detection) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("lateDecayRatioDb", Napi::Number::New(env, detection.late_decay_ratio_db));
   out.Set("latePredictability", Napi::Number::New(env, detection.late_predictability));
   return out;
 }
 
-Napi::Object EmitDereverbReport(Napi::Env env, const SonareDereverbReport& report) {
+template <typename T>
+Napi::Object EmitDereverbReport(Napi::Env env, const T& report) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("detected", EmitReverbDetection(env, report.detected));
   out.Set("meanReductionDb", Napi::Number::New(env, report.mean_reduction_db));
@@ -103,9 +105,9 @@ Napi::Value SonareWrap::MasteringRepairDereverbClassical(const Napi::CallbackInf
     return env.Undefined();
   }
   sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
-  sonare::Audio result = sonare::mastering::repair::dereverb_classical(audio, config);
-  std::vector<float> out(result.data(), result.data() + result.size());
-  return VecToFloat32(env, out);
+  sonare::mastering::repair::DereverbReport report;
+  sonare::Audio result = sonare::mastering::repair::dereverb_classical(audio, config, &report);
+  return EmitMonoResult(env, result, EmitDereverbReport(env, report));
   SONARE_NODE_CATCH(env)
 }
 

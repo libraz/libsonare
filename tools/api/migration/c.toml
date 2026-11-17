@@ -718,3 +718,59 @@ old = "SONARE_AIR_ABSORPTION_DEFAULT"
 removed = true
 domain = "effects"
 rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_repair_declick"
+changed = "writes a SonareDeclickResult (samples, length and the pass's report) instead of float** out / size_t* out_length; release it with sonare_free_declick_result"
+domain = "effects"
+rule = "typed-results"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::mono repair returns its report beside the audio"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_repair_denoise_classical"
+changed = "writes a SonareDenoiseResult (samples, length and the pass's report) instead of float** out / size_t* out_length; release it with sonare_free_denoise_result"
+domain = "effects"
+rule = "typed-results"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::mono repair returns its report beside the audio"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_repair_declip"
+changed = "writes a SonareDeclipResult (samples, length and the pass's report) instead of float** out / size_t* out_length; release it with sonare_free_declip_result"
+domain = "effects"
+rule = "typed-results"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::mono repair returns its report beside the audio"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_repair_decrackle"
+changed = "writes a SonareDecrackleResult (samples, length and the pass's report) instead of float** out / size_t* out_length; release it with sonare_free_decrackle_result"
+domain = "effects"
+rule = "typed-results"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::mono repair returns its report beside the audio"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_repair_dehum"
+changed = "writes a SonareDehumResult (samples, length and the pass's report) instead of float** out / size_t* out_length; release it with sonare_free_dehum_result"
+domain = "effects"
+rule = "typed-results"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::mono repair returns its report beside the audio"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_repair_dereverb_classical"
+changed = "writes a SonareDereverbResult (samples, length and the pass's report) instead of float** out / size_t* out_length; release it with sonare_free_dereverb_result"
+domain = "effects"
+rule = "typed-results"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::mono repair returns its report beside the audio"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_repair_trim_silence"
+changed = "writes a SonareTrimSilenceResult (samples, length and the pass's report) instead of float** out / size_t* out_length; release it with sonare_free_trim_silence_result"
+domain = "effects"
+rule = "typed-results"
+test = "tests/api/sonare_c_mastering_repair_test.cpp::mono repair returns its report beside the audio"
