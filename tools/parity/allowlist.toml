@@ -213,6 +213,9 @@ node = [
   "project_auto_tempo_with_options",
   "project_snap_to_grid_ex",
   "project_bake_midi_fx_ex",
+  # C-only probe so a C caller need not parse the capabilities JSON; the
+  # bindings read capabilities().features[key].
+  "has_feature",
   "error_message",
   "last_error_message",
   "last_error_code",
@@ -361,6 +364,9 @@ wasm = [
   "project_auto_tempo_with_options",
   "project_snap_to_grid_ex",
   "project_bake_midi_fx_ex",
+  # C-only probe so a C caller need not parse the capabilities JSON; the
+  # bindings read capabilities().features[key].
+  "has_feature",
   "error_message",
   "last_error_message",
   "last_error_code",
@@ -488,6 +494,9 @@ python = [
   "project_auto_tempo_with_options",
   "project_snap_to_grid_ex",
   "project_bake_midi_fx_ex",
+  # C-only probe so a C caller need not parse the capabilities JSON; the
+  # bindings read capabilities().features[key].
+  "has_feature",
   "error_message",
   "last_error_message",
   "last_error_code",
