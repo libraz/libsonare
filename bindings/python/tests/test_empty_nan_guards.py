@@ -620,10 +620,8 @@ class TestBufferRankGuards:
         assert mel_to_stft(mel.reshape(-1), 16, 4).n_frames == 4
 
     def test_audio_from_buffer_rejects_a_stereo_read(self):
-        # The guard names the parameter the caller actually passed. Before it was
-        # applied the rank rejection came from `_to_c_float_array`'s default and
-        # read "samples", which is not what this entry point calls its buffer.
-        with pytest.raises(SonareValueError, match=r"from_buffer: data must be a 1-D buffer"):
+        # The guard prefixes the rank refusal with the entry point's name.
+        with pytest.raises(SonareValueError, match=r"from_buffer: samples must be a 1-D buffer"):
             libsonare.Audio.from_buffer(_stereo_2d(), sample_rate=SR)
 
     def test_realtime_voice_changer_rejects_a_stereo_read(self):

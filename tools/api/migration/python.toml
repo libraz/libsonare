@@ -609,6 +609,13 @@ test = "bindings/python/tests/test_binding_consistency.py::test_audio_from_buffe
 
 [[entry]]
 kind = "option"
+old = "Audio.from_buffer(data)"
+new = "Audio.from_buffer(samples)"
+domain = "core"
+rule = "individual"
+
+[[entry]]
+kind = "option"
 old = "detect_bpm(sample_rate)"
 changed = "sample_rate is required (1.x defaulted to 22050)"
 domain = "analysis"

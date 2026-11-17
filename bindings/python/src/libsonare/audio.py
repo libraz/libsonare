@@ -431,30 +431,30 @@ class Audio:
         return channels
 
     @classmethod
-    @_guard_buffer("data")
+    @_guard_buffer("samples")
     def from_buffer(
         cls,
-        data: Sequence[float] | list[float],
+        samples: Sequence[float] | list[float],
         sample_rate: int,
     ) -> Audio:
         """Create audio from a float sample buffer.
 
         Args:
-            data: Mono audio samples. Accepts ``list[float]``, ``tuple[float, ...]``,
+            samples: Mono audio samples. Accepts ``list[float]``, ``tuple[float, ...]``,
                 ``array.array``, or a numpy 1D array of dtype ``float32`` (or
                 anything castable to ``float``). Multi-channel input must be
                 folded first with :func:`downmix` (``downmix(channels, 0)[0]``).
                 Values are nominally in ``[-1.0, 1.0]``.
-            sample_rate: Sample rate of ``data`` in Hz.
+            sample_rate: Sample rate of ``samples`` in Hz.
 
         Raises:
-            SonareValueError: If ``data`` is empty or holds a NaN or Inf sample.
+            SonareValueError: If ``samples`` is empty or holds a NaN or Inf sample.
         """
         lib = _get_lib()
         # Use the shared numpy fast path (zero-copy for contiguous float32
         # ndarrays, one bulk C-level copy otherwise) instead of the slow
         # per-element `(c_float * N)(*data)` marshalling.
-        c_array, length = _to_c_float_array(data)
+        c_array, length = _to_c_float_array(samples)
         handle = ctypes.c_void_p()
         rc = lib.sonare_audio_from_buffer(
             c_array,
