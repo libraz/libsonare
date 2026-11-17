@@ -25,6 +25,8 @@ pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared libr
 _REQUIRED_ARGS: dict[str, tuple[tuple[Any, ...], dict[str, Any]]] = {
     "resample": ((22050,), {}),
     "mastering_process": (("limiter",), {}),
+    "pitch_shift": ((2.0,), {}),
+    "time_stretch": ((1.5,), {}),
 }
 
 # close() is the teardown entry point itself and must stay callable (and a
