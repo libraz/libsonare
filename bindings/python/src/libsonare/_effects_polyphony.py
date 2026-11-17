@@ -617,14 +617,10 @@ class PolyphonicAnalysis:
                 "set_note_edit: edit.time_offset_samples",
                 "set_note_edit: edit.time_offset_sec",
             ),
-            pitch_semitones=_narrow_double(
-                edit.pitch_shift_semitones, "edit.pitch_shift_semitones"
-            ),
+            pitch_semitones=_narrow_double(edit.pitch_semitones, "edit.pitch_semitones"),
             gain_db=_narrow_double(edit.gain_db, "edit.gain_db"),
             time_stretch_ratio=_narrow_double(edit.time_stretch_ratio, "edit.time_stretch_ratio"),
-            formant_semitones=_narrow_double(
-                edit.formant_shift_semitones, "edit.formant_shift_semitones"
-            ),
+            formant_semitones=_narrow_double(edit.formant_semitones, "edit.formant_semitones"),
             vibrato_depth_change=_narrow_double(
                 edit.vibrato_depth_change, "edit.vibrato_depth_change"
             ),
@@ -775,11 +771,11 @@ class PolyphonicAnalysis:
             amplitude=self.note_amplitude(index),
             edit=NoteEdit(
                 time_offset_samples=int(row.edit.time_offset_samples),
-                pitch_shift_semitones=float(row.edit.pitch_semitones),
+                pitch_semitones=float(row.edit.pitch_semitones),
                 gain_db=float(row.edit.gain_db),
                 time_stretch_ratio=float(row.edit.time_stretch_ratio),
                 muted=bool(row.edit.muted),
-                formant_shift_semitones=float(row.edit.formant_semitones),
+                formant_semitones=float(row.edit.formant_semitones),
                 vibrato_depth_change=float(row.edit.vibrato_depth_change),
                 drift_change=float(row.edit.drift_change),
                 amplitude_envelope=self._envelope_points(

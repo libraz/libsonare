@@ -82,28 +82,28 @@ def _rms(samples: NDArray[np.float32]) -> float:
 
 
 def _fm_tone(
-    centre_hz: float, depth_cents: float, rate_hz: float, n_samples: int
+    center_hz: float, depth_cents: float, rate_hz: float, n_samples: int
 ) -> NDArray[np.float32]:
-    """A sine whose pitch swings ``depth_cents`` either side of ``centre_hz``."""
+    """A sine whose pitch swings ``depth_cents`` either side of ``center_hz``."""
     t = np.arange(n_samples) / SR
-    hz = centre_hz * 2.0 ** (depth_cents * np.sin(2 * np.pi * rate_hz * t) / CENTS_PER_OCTAVE)
+    hz = center_hz * 2.0 ** (depth_cents * np.sin(2 * np.pi * rate_hz * t) / CENTS_PER_OCTAVE)
     phase = np.concatenate([[0.0], np.cumsum(2 * np.pi * hz / SR)[:-1]])
     return (0.4 * np.sin(phase)).astype(np.float32)
 
 
 def _injected_f0(
-    centre_hz: float, n_frames: int, components: Sequence[tuple[float, float]]
+    center_hz: float, n_frames: int, components: Sequence[tuple[float, float]]
 ) -> NDArray[np.float32]:
-    """An F0 curve whose cents above ``centre_hz`` are exactly the components' sum."""
+    """An F0 curve whose cents above ``center_hz`` are exactly the components' sum."""
     t = np.arange(n_frames) / FRAME_RATE
     cents = np.zeros(n_frames, dtype=np.float64)
     for hz, depth_cents in components:
         cents += depth_cents * np.sin(2 * np.pi * hz * t)
-    return (centre_hz * 2.0 ** (cents / CENTS_PER_OCTAVE)).astype(np.float32)
+    return (center_hz * 2.0 ** (cents / CENTS_PER_OCTAVE)).astype(np.float32)
 
 
-def _cents_above(f0_hz: NDArray[np.float32], centre_hz: float) -> NDArray[np.float64]:
-    return CENTS_PER_OCTAVE * np.log2(np.asarray(f0_hz, dtype=np.float64) / centre_hz)
+def _cents_above(f0_hz: NDArray[np.float32], center_hz: float) -> NDArray[np.float64]:
+    return CENTS_PER_OCTAVE * np.log2(np.asarray(f0_hz, dtype=np.float64) / center_hz)
 
 
 # A vibrato fast enough to sit above the default 3 Hz split and slow enough to
@@ -454,7 +454,7 @@ def test_a_default_edit_is_still_the_identity_once_it_carries_the_new_fields() -
     audio, f0_hz, _, notes = _vibrato_notes()
     for note in notes:
         assert note.edit == libsonare.NoteEdit()
-        assert note.edit.formant_shift_semitones == 0.0
+        assert note.edit.formant_semitones == 0.0
         assert note.edit.vibrato_depth_change == 0.0
         assert note.edit.drift_change == 0.0
         assert note.edit.amplitude_envelope.size == 0
@@ -473,7 +473,7 @@ def test_a_default_edit_is_still_the_identity_once_it_carries_the_new_fields() -
         edited = libsonare.render_notes(audio, SR, notes, f0_hz=f0_hz, frame_rate=FRAME_RATE)
         _assert_edited(edited, audio)
 
-    moves_the_output("formant_shift_semitones", 2.0)
+    moves_the_output("formant_semitones", 2.0)
     moves_the_output("vibrato_depth_change", -1.0)
     moves_the_output("drift_change", 1.0)
     moves_the_output("amplitude_envelope", np.array([0.25, 1.0], dtype=np.float32))
@@ -606,18 +606,18 @@ def test_the_vibrato_cutoff_decides_which_curve_a_curve_edit_acts_on() -> None:
 
 
 def test_decompose_note_pitch_splits_a_curve_into_two_parts_that_add_back_up() -> None:
-    centre_hz = 196.0
+    center_hz = 196.0
     n_frames = 400
-    f0_hz = _injected_f0(centre_hz, n_frames, [(0.5, 60.0), (5.5, 40.0)])
+    f0_hz = _injected_f0(center_hz, n_frames, [(0.5, 60.0), (5.5, 40.0)])
 
-    curve = libsonare.decompose_note_pitch(f0_hz, FRAME_RATE, centre_hz)
-    assert curve.centre_hz == pytest.approx(centre_hz)
+    curve = libsonare.decompose_note_pitch(f0_hz, FRAME_RATE, center_hz)
+    assert curve.center_hz == pytest.approx(center_hz)
     assert curve.drift_cents.shape == (n_frames,)
     assert curve.vibrato_cents.shape == (n_frames,)
     assert curve.drift_cents.dtype == np.float32
 
     total = curve.drift_cents.astype(np.float64) + curve.vibrato_cents.astype(np.float64)
-    assert float(np.max(np.abs(total - _cents_above(f0_hz, centre_hz)))) < 1e-3
+    assert float(np.max(np.abs(total - _cents_above(f0_hz, center_hz)))) < 1e-3
 
     # Two zero curves satisfy the sum as well, so both have to carry something.
     # 0.5 Hz and 5.5 Hz sit either side of the 3 Hz cut, so each does.
@@ -626,12 +626,12 @@ def test_decompose_note_pitch_splits_a_curve_into_two_parts_that_add_back_up() -
 
 
 def test_the_decompose_note_pitch_cutoff_takes_its_default_at_none() -> None:
-    centre_hz = 220.0
-    f0_hz = _injected_f0(centre_hz, 400, [(0.5, 60.0), (5.5, 40.0)])
+    center_hz = 220.0
+    f0_hz = _injected_f0(center_hz, 400, [(0.5, 60.0), (5.5, 40.0)])
 
     def both_curves(cutoff_hz: float | None) -> NDArray[np.float32]:
         curve = libsonare.decompose_note_pitch(
-            f0_hz, FRAME_RATE, centre_hz, vibrato_cutoff_hz=cutoff_hz
+            f0_hz, FRAME_RATE, center_hz, vibrato_cutoff_hz=cutoff_hz
         )
         return np.concatenate([curve.drift_cents, curve.vibrato_cents])
 
@@ -646,22 +646,22 @@ def test_the_decompose_note_pitch_cutoff_takes_its_default_at_none() -> None:
 
 
 def test_decompose_note_pitch_reports_a_note_with_no_usable_pitch_as_empty() -> None:
-    centre_hz = 220.0
+    center_hz = 220.0
     n_frames = 200
-    f0_hz = _injected_f0(centre_hz, n_frames, [(5.0, 30.0)])
+    f0_hz = _injected_f0(center_hz, n_frames, [(5.0, 30.0)])
 
     # A measurement that came up empty is not a bad argument, so it is reported
     # rather than raised: no usable frame, and no centre to measure against.
-    for curve_in, median_hz in ((np.zeros(n_frames, dtype=np.float32), centre_hz), (f0_hz, 0.0)):
+    for curve_in, median_hz in ((np.zeros(n_frames, dtype=np.float32), center_hz), (f0_hz, 0.0)):
         curve = libsonare.decompose_note_pitch(curve_in, FRAME_RATE, median_hz)
-        assert curve.centre_hz == 0.0
+        assert curve.center_hz == 0.0
         assert curve.drift_cents.size == 0
         assert curve.vibrato_cents.size == 0
 
     # The same curve with a centre is not an empty measurement, so neither of the
     # two above passes by emptying every call.
-    usable = libsonare.decompose_note_pitch(f0_hz, FRAME_RATE, centre_hz)
-    assert usable.centre_hz == pytest.approx(centre_hz)
+    usable = libsonare.decompose_note_pitch(f0_hz, FRAME_RATE, center_hz)
+    assert usable.center_hz == pytest.approx(center_hz)
     assert usable.drift_cents.size == n_frames
 
 
@@ -696,7 +696,7 @@ def test_decompose_note_pitch_uses_voiced_mask_and_preserves_f0_validity() -> No
         invalid, FRAME_RATE, 220.0, voiced=np.ones(n_frames)
     )
     invalid_inferred = libsonare.decompose_note_pitch(invalid, FRAME_RATE, 220.0)
-    assert invalid_masked.centre_hz == pytest.approx(invalid_inferred.centre_hz, abs=1e-6)
+    assert invalid_masked.center_hz == pytest.approx(invalid_inferred.center_hz, abs=1e-6)
     np.testing.assert_allclose(
         invalid_masked.drift_cents, invalid_inferred.drift_cents, rtol=0.0, atol=1e-6
     )
@@ -719,7 +719,7 @@ def test_decompose_note_pitch_uses_voiced_mask_and_preserves_f0_validity() -> No
     all_unvoiced = libsonare.decompose_note_pitch(
         f0_hz, FRAME_RATE, 220.0, voiced=np.zeros(n_frames, dtype=bool)
     )
-    assert all_unvoiced.centre_hz == pytest.approx(0.0, abs=1e-6)
+    assert all_unvoiced.center_hz == pytest.approx(0.0, abs=1e-6)
     assert all_unvoiced.drift_cents.size == 0
     assert all_unvoiced.vibrato_cents.size == 0
 
@@ -790,19 +790,19 @@ def test_note_curve_voiced_masks_validate_presence_length_and_numeric_values(
 
 
 def test_decompose_note_pitch_rejects_invalid_arguments() -> None:
-    centre_hz = 220.0
+    center_hz = 220.0
     n_frames = 200
-    f0_hz = _injected_f0(centre_hz, n_frames, [(5.0, 30.0)])
+    f0_hz = _injected_f0(center_hz, n_frames, [(5.0, 30.0)])
 
     with pytest.raises(SonareValueError, match="decompose_note_pitch"):
-        libsonare.decompose_note_pitch(np.zeros(0, dtype=np.float32), FRAME_RATE, centre_hz)
+        libsonare.decompose_note_pitch(np.zeros(0, dtype=np.float32), FRAME_RATE, center_hz)
 
     # An all-NaN contour is a note with no usable pitch, which the header says
     # comes back as a zero centre and two empty curves rather than as an error.
     unmeasured = libsonare.decompose_note_pitch(
-        np.full(n_frames, np.nan, dtype=np.float32), FRAME_RATE, centre_hz
+        np.full(n_frames, np.nan, dtype=np.float32), FRAME_RATE, center_hz
     )
-    assert unmeasured.centre_hz == 0.0
+    assert unmeasured.center_hz == 0.0
     assert len(unmeasured.drift_cents) == 0
     assert len(unmeasured.vibrato_cents) == 0
 
@@ -811,13 +811,13 @@ def test_decompose_note_pitch_rejects_invalid_arguments() -> None:
     # around the frames that do carry one.
     negative = f0_hz.copy()
     negative[7] = -1.0
-    assert libsonare.decompose_note_pitch(negative, FRAME_RATE, centre_hz).centre_hz > 0.0
+    assert libsonare.decompose_note_pitch(negative, FRAME_RATE, center_hz).center_hz > 0.0
 
     # The frame rate and the centre below are still refused, so the acceptances
     # above are the contour's values being read and not a dropped check.
     for frame_rate in (0.0, -100.0, np.nan, np.inf):
         with pytest.raises(SonareError):
-            libsonare.decompose_note_pitch(f0_hz, frame_rate, centre_hz)
+            libsonare.decompose_note_pitch(f0_hz, frame_rate, center_hz)
 
     # 0 is the no-pitch spelling, so only a value that cannot be a centre at all
     # is rejected.
@@ -829,11 +829,11 @@ def test_decompose_note_pitch_rejects_invalid_arguments() -> None:
     for cutoff_hz in (-1.0, np.nan, np.inf, -np.inf):
         with pytest.raises(SonareError):
             libsonare.decompose_note_pitch(
-                f0_hz, FRAME_RATE, centre_hz, vibrato_cutoff_hz=cutoff_hz
+                f0_hz, FRAME_RATE, center_hz, vibrato_cutoff_hz=cutoff_hz
             )
 
     # Positive control: the same call with nothing poisoned succeeds.
-    assert libsonare.decompose_note_pitch(f0_hz, FRAME_RATE, centre_hz).drift_cents.size == n_frames
+    assert libsonare.decompose_note_pitch(f0_hz, FRAME_RATE, center_hz).drift_cents.size == n_frames
 
 
 # --- split_note -------------------------------------------------------------
@@ -1039,7 +1039,7 @@ def test_merge_notes_spans_the_gap_it_joins_over_and_keeps_every_slice_aligned()
 def test_merge_notes_takes_the_first_notes_edit() -> None:
     audio, f0_hz, voiced, notes = _gapped_notes()
     notes[0].edit.gain_db = -3.0
-    notes[0].edit.pitch_shift_semitones = 2.0
+    notes[0].edit.pitch_semitones = 2.0
     notes[0].edit.amplitude_envelope = np.array([0.25, 1.0], dtype=np.float32)
     notes[1].edit.gain_db = 9.0
     notes[1].edit.muted = True
@@ -1047,7 +1047,7 @@ def test_merge_notes_takes_the_first_notes_edit() -> None:
     merged = libsonare.merge_notes(audio, SR, f0_hz, FRAME_RATE, notes, 0, 1, voiced=voiced)
     assert len(merged) == 2
     assert merged[0].edit.gain_db == -3.0
-    assert merged[0].edit.pitch_shift_semitones == 2.0
+    assert merged[0].edit.pitch_semitones == 2.0
     assert merged[0].edit.amplitude_envelope.size > 0
     # The second note's edit does not survive: the rule is the first note's edit,
     # not a merge of the two.
@@ -1137,3 +1137,17 @@ def test_the_documented_pitch_pyin_to_extract_notes_pipeline_runs() -> None:
     notes[0].edit.gain_db = -6.0
     quieter = libsonare.render_notes(samples, sr, notes)
     assert len(quieter) == len(samples)
+
+
+def test_note_edit_names_its_semitone_quantities_like_the_other_surfaces() -> None:
+    edit = libsonare.NoteEdit(pitch_semitones=2.0, formant_semitones=-2.0)
+    assert (edit.pitch_semitones, edit.formant_semitones) == (2.0, -2.0)
+    for old in ("pitch_shift_semitones", "formant_shift_semitones"):
+        with pytest.raises(TypeError):
+            libsonare.NoteEdit(**{old: 1.0})  # type: ignore[arg-type]
+
+
+def test_the_pitch_decomposition_spells_center() -> None:
+    curve = libsonare.decompose_note_pitch(np.full(64, 220.0, np.float32), FRAME_RATE, 220.0)
+    assert curve.center_hz == pytest.approx(220.0)
+    assert not hasattr(curve, "centre_hz")

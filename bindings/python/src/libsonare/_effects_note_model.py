@@ -66,7 +66,7 @@ class NoteEdit:
             reads as; set this or ``time_offset_sec``, not both.
         time_offset_sec: ``time_offset_samples`` in seconds, rounded to the
             nearest sample at the call's sample rate; ``None`` when unset.
-        pitch_shift_semitones: Transposes the note; pitch only, duration is
+        pitch_semitones: Transposes the note; pitch only, duration is
             unchanged.
         gain_db: Level change applied over the note's span.
         time_stretch_ratio: Duration ratio: ``>1`` lengthens the note, ``<1``
@@ -74,11 +74,11 @@ class NoteEdit:
             :func:`time_stretch`'s ``speed_ratio``, which is a speed.
         muted: ``True`` silences the note's span; the other fields then do not
             apply.
-        formant_shift_semitones: Moves the spectral envelope, on top of whatever
-            ``pitch_shift_semitones`` already did to it. 0 runs no warp at all,
+        formant_semitones: Moves the spectral envelope, on top of whatever
+            ``pitch_semitones`` already did to it. 0 runs no warp at all,
             so a pitch-only edit is not charged for an LPC analysis-resynthesis
             round it did not ask for; a pitch shift drags the formants with it,
-            so holding them still is ``-pitch_shift_semitones`` and the chipmunk
+            so holding them still is ``-pitch_semitones`` and the chipmunk
             is the default. Saturates near -10.3 and +8.7 semitones rather than
             being rejected.
         vibrato_depth_change: Scales the vibrato measured over the note, stated
@@ -100,11 +100,11 @@ class NoteEdit:
     """
 
     time_offset_samples: int = 0
-    pitch_shift_semitones: float = 0.0
+    pitch_semitones: float = 0.0
     gain_db: float = 0.0
     time_stretch_ratio: float = 1.0
     muted: bool = False
-    formant_shift_semitones: float = 0.0
+    formant_semitones: float = 0.0
     vibrato_depth_change: float = 0.0
     drift_change: float = 0.0
     # Out of the generated comparison, which an ndarray field makes raise on an
@@ -127,11 +127,11 @@ class NoteEdit:
     def _scalars(self) -> tuple[object, ...]:
         return (
             self.time_offset_samples,
-            self.pitch_shift_semitones,
+            self.pitch_semitones,
             self.gain_db,
             self.time_stretch_ratio,
             self.muted,
-            self.formant_shift_semitones,
+            self.formant_semitones,
             self.vibrato_depth_change,
             self.drift_change,
             self.time_offset_sec,
@@ -203,7 +203,7 @@ class PitchDecomposition:
     """One note's pitch curve split into a centre, a slow drift and a vibrato.
 
     ``drift_cents[i] + vibrato_cents[i]`` is the note's own pitch at frame ``i``,
-    in cents above ``centre_hz``, to within float rounding, so the three parts
+    in cents above ``center_hz``, to within float rounding, so the three parts
     reconstruct the curve. The drift filter is zero phase, so neither curve is
     shifted in time against the audio.
 
@@ -213,16 +213,16 @@ class PitchDecomposition:
     ``f0_hz``, which is exact.
 
     Attributes:
-        centre_hz: The note's steady pitch in Hz. 0 when the note carries no
+        center_hz: The note's steady pitch in Hz. 0 when the note carries no
             usable pitch, and then both curves are empty.
-        drift_cents: ``float32`` slow deviation from ``centre_hz``, in cents.
+        drift_cents: ``float32`` slow deviation from ``center_hz``, in cents.
             Not part of ``==``, which an ndarray field would make raise on an
             ambiguous truth value.
         vibrato_cents: ``float32`` fast deviation, over the same frames. Out of
             ``==`` for the same reason.
     """
 
-    centre_hz: float = 0.0
+    center_hz: float = 0.0
     drift_cents: np.ndarray = dataclasses.field(
         default_factory=lambda: np.empty(0, dtype=np.float32), compare=False
     )
@@ -498,11 +498,11 @@ def _note_from_c(row: SonareNoteObject, amplitude: np.ndarray, envelopes: np.nda
         amplitude=amplitude[start:stop].copy(),
         edit=NoteEdit(
             time_offset_samples=int(row.edit.time_offset_samples),
-            pitch_shift_semitones=float(row.edit.pitch_semitones),
+            pitch_semitones=float(row.edit.pitch_semitones),
             gain_db=float(row.edit.gain_db),
             time_stretch_ratio=float(row.edit.time_stretch_ratio),
             muted=bool(row.edit.muted),
-            formant_shift_semitones=float(row.edit.formant_semitones),
+            formant_semitones=float(row.edit.formant_semitones),
             vibrato_depth_change=float(row.edit.vibrato_depth_change),
             drift_change=float(row.edit.drift_change),
             amplitude_envelope=envelopes[envelope_start:envelope_stop].copy(),
@@ -579,15 +579,13 @@ def _notes_to_c(
             ),
             envelope_offset=envelope_offset,
             envelope_count=int(curve.size),
-            pitch_semitones=_narrow_double(
-                note.edit.pitch_shift_semitones, "note.edit.pitch_shift_semitones"
-            ),
+            pitch_semitones=_narrow_double(note.edit.pitch_semitones, "note.edit.pitch_semitones"),
             gain_db=_narrow_double(note.edit.gain_db, "note.edit.gain_db"),
             time_stretch_ratio=_narrow_double(
                 note.edit.time_stretch_ratio, "note.edit.time_stretch_ratio"
             ),
             formant_semitones=_narrow_double(
-                note.edit.formant_shift_semitones, "note.edit.formant_shift_semitones"
+                note.edit.formant_semitones, "note.edit.formant_semitones"
             ),
             vibrato_depth_change=_narrow_double(
                 note.edit.vibrato_depth_change, "note.edit.vibrato_depth_change"

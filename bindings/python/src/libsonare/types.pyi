@@ -455,6 +455,8 @@ PitchTargetMode: TypeAlias = Literal["midi", "scale"]
 
 WindowType: TypeAlias = Literal["hann", "hamming", "blackman", "rectangular"]
 
+SpectralEditMode: TypeAlias = Literal["gain", "attenuate", "mute", "heal"]
+
 KeyProfile: TypeAlias = Literal[
     "krumhanslSchmuckler",
     "temperley",

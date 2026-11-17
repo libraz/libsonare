@@ -8,11 +8,15 @@ that band's energy, and validation rejects bad parameters.
 
 from __future__ import annotations
 
+from typing import get_args
+
 import numpy as np
 import pytest
 from numpy.typing import NDArray
 
 import libsonare
+from libsonare import SonareValueError
+from libsonare.types import SpectralEditMode, WindowType
 
 from ._helpers import LIB_AVAILABLE, raises_coded, sine
 
@@ -106,5 +110,39 @@ def test_invalid_parameters_raise() -> None:
     with raises_coded():
         libsonare.spectral_edit(x, SR, [], n_fft=2048, hop_length=2048)  # hop > n_fft/2
     with raises_coded():
-        op = libsonare.SpectralRegionOp(0, len(x), 0.0, 0.0, mode="nonsense")
+        op = libsonare.SpectralRegionOp(0, len(x), 0.0, 0.0, mode="nonsense")  # type: ignore[arg-type]
         libsonare.spectral_edit(x, SR, [op])
+
+
+def test_the_result_is_a_float32_array() -> None:
+    out = libsonare.spectral_edit(sine(440.0, 0.25, amp=0.4), SR, [])
+    assert isinstance(out, np.ndarray) and out.dtype == np.float32
+
+
+def test_every_window_token_reaches_the_core() -> None:
+    x = sine(440.0, 0.25, amp=0.4)
+    op = libsonare.SpectralRegionOp(low_hz=300.0, high_hz=600.0, gain_db=-24.0)
+    outs = {w: libsonare.spectral_edit(x, SR, [op], window=w) for w in get_args(WindowType)}
+    assert not np.allclose(outs["hann"], outs["rectangular"])
+
+
+@pytest.mark.parametrize("mode", get_args(SpectralEditMode))
+def test_every_mode_token_runs(mode: str) -> None:
+    x = sine(440.0, 0.25, amp=0.4)
+    op = libsonare.SpectralRegionOp(low_hz=300.0, high_hz=600.0, gain_db=-12.0, mode=mode)  # type: ignore[arg-type]
+    assert np.all(np.isfinite(libsonare.spectral_edit(x, SR, [op])))
+
+
+@pytest.mark.parametrize(
+    ("value", "error"), [("Hann", SonareValueError), ("rect", SonareValueError), (0, TypeError)]
+)
+def test_a_window_outside_the_tokens_is_refused(value: object, error: type) -> None:
+    with pytest.raises(error):
+        libsonare.spectral_edit(sine(440.0, 0.1), SR, [], window=value)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(("value", "error"), [("Mute", SonareValueError), (2, TypeError)])
+def test_a_mode_outside_the_tokens_is_refused(value: object, error: type) -> None:
+    op = libsonare.SpectralRegionOp(low_hz=300.0, high_hz=600.0, mode=value)  # type: ignore[arg-type]
+    with pytest.raises(error, match="mode"):
+        libsonare.spectral_edit(sine(440.0, 0.1), SR, [op])

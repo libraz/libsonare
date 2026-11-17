@@ -5,12 +5,12 @@ from __future__ import annotations
 import ctypes
 import dataclasses
 from collections.abc import Sequence
+from typing import TYPE_CHECKING
+
+import numpy as np
+from numpy.typing import NDArray
 
 from ._ffi import (
-    SONARE_SPECTRAL_EDIT_MODE_ATTENUATE,
-    SONARE_SPECTRAL_EDIT_MODE_GAIN,
-    SONARE_SPECTRAL_EDIT_MODE_HEAL,
-    SONARE_SPECTRAL_EDIT_MODE_MUTE,
     SonareSpectralEditConfig,
     SonareSpectralRegionOp,
 )
@@ -18,67 +18,30 @@ from ._narrowing import _narrow_double
 from ._runtime import (
     SonareValueError,
     _check,
-    _float_array_result,
+    _from_c_float_array,
     _get_lib,
     _guard_buffer,
     _out_float_array,
     _require_power_of_two,
-    _resolve_enum,
     _resolve_sample_bound,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
+    _token_ordinal,
     _validate_c_int_field,
 )
+from ._types_enums import _SPECTRAL_EDIT_MODES, _WINDOW_TYPES
 
-_SPECTRAL_EDIT_MODE_NAMES: dict[str, int] = {
-    "gain": SONARE_SPECTRAL_EDIT_MODE_GAIN,
-    "attenuate": SONARE_SPECTRAL_EDIT_MODE_ATTENUATE,
-    "mute": SONARE_SPECTRAL_EDIT_MODE_MUTE,
-    "heal": SONARE_SPECTRAL_EDIT_MODE_HEAL,
-}
+if TYPE_CHECKING:
+    from ._types_enums import SpectralEditMode, WindowType
 
-
-_SPECTRAL_EDIT_WINDOW_NAMES: dict[str, int] = {
-    "hann": 0,
-    "hamming": 1,
-    "blackman": 2,
-    "rectangular": 3,
-    "rect": 3,
-}
-
-
-def _coerce_spectral_edit_mode(value: int | str) -> int:
-    return _resolve_enum(
-        value,
-        _SPECTRAL_EDIT_MODE_NAMES,
-        "spectral edit mode",
-        underscore=True,
-        strip=True,
-        validate_int=True,
-        reject_bool=True,
-    )
-
-
-def _coerce_spectral_edit_window(value: int | str) -> int:
-    return _resolve_enum(
-        value,
-        _SPECTRAL_EDIT_WINDOW_NAMES,
-        "spectral edit window",
-        underscore=True,
-        strip=True,
-        validate_int=True,
-        reject_bool=True,
-    )
 
 
 @dataclasses.dataclass
 class SpectralRegionOp:
     """One time x frequency rectangle edit op for :func:`spectral_edit`.
 
-    Mirrors :class:`SonareSpectralRegionOp`. ``mode`` is one of ``"gain"``,
-    ``"attenuate"``, ``"mute"`` or ``"heal"`` (or the matching integer enum
-    value from ``SONARE_SPECTRAL_EDIT_MODE_*``).
+    ``mode`` is one of ``"gain"``, ``"attenuate"``, ``"mute"`` or ``"heal"``.
 
     Each time bound is given in samples (``start_sample`` / ``end_sample``) or in
     seconds (``start_sec`` / ``end_sec``, rounded to the nearest sample at the
@@ -93,22 +56,22 @@ class SpectralRegionOp:
     low_hz: float = 0.0
     high_hz: float = 0.0
     gain_db: float = 0.0
-    mode: str | int = "gain"
+    mode: SpectralEditMode = "gain"
     start_sec: float | None = None
     end_sec: float | None = None
 
 
 @_guard_buffer("samples")
 def spectral_edit(
-    samples: Sequence[float] | list[float],
+    samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
     ops: Sequence[SpectralRegionOp],
     *,
     n_fft: int = 2048,
     hop_length: int = 512,
-    window: str | int = "hann",
+    window: WindowType = "hann",
     heal_radius_frames: int = 2,
-) -> list[float]:
+) -> NDArray[np.float32]:
     """Region-based spectral editing (STFT -> per-op bin/frame masking -> iSTFT).
 
     Stateless mono transform; the output has the same length and sample rate as
@@ -124,13 +87,12 @@ def spectral_edit(
         hop_length: STFT hop; must satisfy ``0 < hop_length <= n_fft / 2``
             (default 512).
         window: Analysis window, one of ``"hann"``, ``"hamming"``,
-            ``"blackman"``, ``"rectangular"`` (or the matching integer enum;
-            default ``"hann"``).
+            ``"blackman"``, ``"rectangular"`` (default ``"hann"``).
         heal_radius_frames: Neighbour frames each side used by ``"heal"`` mode
             (default 2).
 
     Returns:
-        List of edited samples.
+        ``float32`` edited samples.
 
     Note:
         The shape rules -- ``n_fft`` a power of two, ``hop_length`` within
@@ -163,14 +125,14 @@ def spectral_edit(
         raise SonareValueError("hop_length must satisfy 0 < hop_length <= n_fft / 2")
     if heal_radius_frames < 0:
         raise SonareValueError("heal_radius_frames must be non-negative")
-    window_value = _coerce_spectral_edit_window(window)
+    window_value = _token_ordinal(window, _WINDOW_TYPES, "window")
 
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     config = SonareSpectralEditConfig(
         n_fft=n_fft,
         hop_length=hop_length,
-        window=int(window_value),
+        window=window_value,
         heal_radius_frames=heal_radius_frames,
     )
 
@@ -201,7 +163,7 @@ def spectral_edit(
                 low_hz=_narrow_double(op.low_hz, "op.low_hz"),
                 high_hz=_narrow_double(op.high_hz, "op.high_hz"),
                 gain_db=_narrow_double(op.gain_db, "op.gain_db"),
-                mode=_coerce_spectral_edit_mode(op.mode),
+                mode=_token_ordinal(op.mode, _SPECTRAL_EDIT_MODES, f"ops[{i}].mode"),
             )
 
     with _out_float_array(lib) as (out, out_length):
@@ -217,4 +179,4 @@ def spectral_edit(
                 ctypes.byref(out_length),
             )
         )
-        return _float_array_result(out, out_length.value)
+        return _from_c_float_array(out, out_length.value)

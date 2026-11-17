@@ -357,7 +357,7 @@ def test_a_pitch_shift_reaches_the_render(chord: NDArray[np.float32]) -> None:
     with libsonare.PolyphonicAnalysis(chord, SR) as handle:
         assert handle.note_count() == EXPECTED_NOTES
         before = handle.render()
-        handle.set_note_edit(0, libsonare.NoteEdit(pitch_shift_semitones=1.0))
+        handle.set_note_edit(0, libsonare.NoteEdit(pitch_semitones=1.0))
         after = handle.render()
 
     assert len(after) == len(before)
@@ -390,10 +390,10 @@ def test_a_gain_edit_is_readable_back_on_the_note(chord: NDArray[np.float32]) ->
     """``notes()`` reports the pending edit, so a host can show what it set."""
     with libsonare.PolyphonicAnalysis(chord, SR) as handle:
         assert handle.note_count() == EXPECTED_NOTES
-        handle.set_note_edit(0, libsonare.NoteEdit(gain_db=-6.0, pitch_shift_semitones=2.0))
+        handle.set_note_edit(0, libsonare.NoteEdit(gain_db=-6.0, pitch_semitones=2.0))
         edit = handle.notes()[0].edit
         assert edit.gain_db == pytest.approx(-6.0)
-        assert edit.pitch_shift_semitones == pytest.approx(2.0)
+        assert edit.pitch_semitones == pytest.approx(2.0)
         assert edit.time_stretch_ratio == pytest.approx(1.0)
 
 

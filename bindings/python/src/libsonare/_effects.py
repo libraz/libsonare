@@ -53,18 +53,6 @@ from ._effects_repair_trim import (
 )
 from ._effects_separation import *  # noqa: F403
 from ._effects_spectral import *  # noqa: F403
-from ._effects_spectral import (
-    _SPECTRAL_EDIT_MODE_NAMES as _SPECTRAL_EDIT_MODE_NAMES,
-)
-from ._effects_spectral import (
-    _SPECTRAL_EDIT_WINDOW_NAMES as _SPECTRAL_EDIT_WINDOW_NAMES,
-)
-from ._effects_spectral import (
-    _coerce_spectral_edit_mode as _coerce_spectral_edit_mode,
-)
-from ._effects_spectral import (
-    _coerce_spectral_edit_window as _coerce_spectral_edit_window,
-)
 from ._effects_timepitch import *  # noqa: F403
 from ._effects_voice import *  # noqa: F403
 from ._effects_voice import _VC_PRESET_NAME_TO_ORDINAL as _VC_PRESET_NAME_TO_ORDINAL

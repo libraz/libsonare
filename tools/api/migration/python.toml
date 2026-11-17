@@ -5417,3 +5417,48 @@ old = "StreamStats.chord_confidence"
 removed = true
 domain = "analysis"
 rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "NoteEdit.pitch_shift_semitones"
+new = "NoteEdit.pitch_semitones"
+domain = "effects"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "field"
+old = "NoteEdit.formant_shift_semitones"
+new = "NoteEdit.formant_semitones"
+domain = "effects"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "field"
+old = "PitchDecomposition.centre_hz"
+new = "PitchDecomposition.center_hz"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "option"
+old = "spectral_edit(window)"
+changed = "a WindowType token (\"hann\", \"hamming\", \"blackman\", \"rectangular\"); an int raises TypeError and the \"rect\" alias raises SonareValueError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_spectral_edit.py::test_a_window_outside_the_tokens_is_refused"
+
+[[entry]]
+kind = "field"
+old = "SpectralRegionOp.mode"
+changed = "a SpectralEditMode token (\"gain\", \"attenuate\", \"mute\", \"heal\"); an int raises TypeError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_spectral_edit.py::test_a_mode_outside_the_tokens_is_refused"
+
+[[entry]]
+kind = "function"
+old = "spectral_edit"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_spectral_edit.py::test_the_result_is_a_float32_array"

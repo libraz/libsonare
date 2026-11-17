@@ -59,7 +59,7 @@ def _answer(
     edited, assigned = libsonare.assign_note_targets(notes, SR, targets, **options)  # type: ignore[arg-type]
     answer = (
         assigned,
-        tuple(round(note.edit.pitch_shift_semitones, 4) for note in edited),
+        tuple(round(note.edit.pitch_semitones, 4) for note in edited),
         tuple(note.edit.muted for note in edited),
     )
     return answer, edited
@@ -131,9 +131,7 @@ def test_the_melody_a_file_carries_is_what_gets_assigned() -> None:
 
     assert assigned == 2
     # C4 and G4 against a 440 Hz take: 60 - 69 and 67 - 69.
-    assert [note.edit.pitch_shift_semitones for note in edited] == pytest.approx(
-        [-9.0, -2.0], abs=1e-4
-    )
+    assert [note.edit.pitch_semitones for note in edited] == pytest.approx([-9.0, -2.0], abs=1e-4)
 
 
 # ---------------------------------------------------------------------------
@@ -161,11 +159,11 @@ def test_the_callers_notes_are_not_rewritten() -> None:
         notes, SR, targets, unmatched_policy="mute", max_correction_semitones=1.0
     )
 
-    assert notes[0].edit.pitch_shift_semitones == 0.0
+    assert notes[0].edit.pitch_semitones == 0.0
     assert notes[0].edit.muted is False
     assert edited[0] is not notes[0]
     assert edited[0].edit is not notes[0].edit
-    assert edited[0].edit.pitch_shift_semitones == pytest.approx(-1.0, abs=1e-4)
+    assert edited[0].edit.pitch_semitones == pytest.approx(-1.0, abs=1e-4)
 
 
 @pytest.mark.parametrize("curve", ["amplitude", "envelope"])
@@ -201,7 +199,7 @@ def test_everything_the_assignment_does_not_write_survives_it() -> None:
             time_offset_samples=128,
             gain_db=-3.0,
             time_stretch_ratio=1.5,
-            formant_shift_semitones=2.0,
+            formant_semitones=2.0,
             vibrato_depth_change=-1.0,
             drift_change=0.5,
             amplitude_envelope=envelope,
@@ -212,14 +210,14 @@ def test_everything_the_assignment_does_not_write_survives_it() -> None:
 
     assert assigned == 1
     result = edited[0]
-    assert result.edit.pitch_shift_semitones == pytest.approx(-9.0, abs=1e-4)
+    assert result.edit.pitch_semitones == pytest.approx(-9.0, abs=1e-4)
     assert (result.onset_sample, result.offset_sample) == (0, HALF_SECOND)
     assert (result.frame_start, result.frame_end) == (3, 24)
     assert (result.median_cents, result.f0_stability) == (1200.0, 0.75)
     assert result.edit.time_offset_samples == 128
     assert result.edit.gain_db == -3.0
     assert result.edit.time_stretch_ratio == 1.5
-    assert result.edit.formant_shift_semitones == 2.0
+    assert result.edit.formant_semitones == 2.0
     assert result.edit.vibrato_depth_change == -1.0
     assert result.edit.drift_change == 0.5
     assert np.array_equal(result.edit.amplitude_envelope, envelope)

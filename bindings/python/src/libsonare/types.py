@@ -428,6 +428,9 @@ from ._types_enums import (
     SidechainSourceKind as SidechainSourceKind,
 )
 from ._types_enums import (
+    SpectralEditMode as SpectralEditMode,
+)
+from ._types_enums import (
     TempogramMode as TempogramMode,
 )
 from ._types_enums import (

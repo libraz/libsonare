@@ -1252,6 +1252,9 @@ from .types import (
     SidechainSourceKind as SidechainSourceKind,
 )
 from .types import (
+    SpectralEditMode as SpectralEditMode,
+)
+from .types import (
     SpectrumReport as SpectrumReport,
 )
 from .types import (

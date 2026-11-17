@@ -95,6 +95,7 @@ from .types import (
     RoomMorphStereoResult,
     Section,
     SendTiming,
+    SpectralEditMode,
     SpectrumReport,
     StftResult,
     StreamingLoudnessGain,
@@ -105,6 +106,7 @@ from .types import (
     TrimSilenceStereoResult,
     VectorscopeReport,
     WaveformPeaksReport,
+    WindowType,
 )
 
 FloatSamples: TypeAlias = Sequence[float] | list[float] | np.ndarray[Any, Any]
@@ -749,11 +751,11 @@ def voice_change(
 
 class NoteEdit:
     time_offset_samples: int
-    pitch_shift_semitones: float
+    pitch_semitones: float
     gain_db: float
     time_stretch_ratio: float
     muted: bool
-    formant_shift_semitones: float
+    formant_semitones: float
     vibrato_depth_change: float
     drift_change: float
     amplitude_envelope: np.ndarray[Any, Any]
@@ -761,11 +763,11 @@ class NoteEdit:
     def __init__(
         self,
         time_offset_samples: int = 0,
-        pitch_shift_semitones: float = 0.0,
+        pitch_semitones: float = 0.0,
         gain_db: float = 0.0,
         time_stretch_ratio: float = 1.0,
         muted: bool = False,
-        formant_shift_semitones: float = 0.0,
+        formant_semitones: float = 0.0,
         vibrato_depth_change: float = 0.0,
         drift_change: float = 0.0,
         amplitude_envelope: np.ndarray[Any, Any] = ...,
@@ -920,12 +922,12 @@ def render_percussive_events(
 ) -> np.ndarray[Any, Any]: ...
 
 class PitchDecomposition:
-    centre_hz: float
+    center_hz: float
     drift_cents: np.ndarray[Any, Any]
     vibrato_cents: np.ndarray[Any, Any]
     def __init__(
         self,
-        centre_hz: float = 0.0,
+        center_hz: float = 0.0,
         drift_cents: np.ndarray[Any, Any] = ...,
         vibrato_cents: np.ndarray[Any, Any] = ...,
     ) -> None: ...
@@ -1003,7 +1005,7 @@ class SpectralRegionOp:
     low_hz: float
     high_hz: float
     gain_db: float
-    mode: str | int
+    mode: SpectralEditMode
     start_sec: float | None
     end_sec: float | None
     def __init__(
@@ -1013,7 +1015,7 @@ class SpectralRegionOp:
         low_hz: float = 0.0,
         high_hz: float = 0.0,
         gain_db: float = 0.0,
-        mode: str | int = "gain",
+        mode: SpectralEditMode = "gain",
         start_sec: float | None = None,
         end_sec: float | None = None,
     ) -> None: ...
@@ -1025,9 +1027,9 @@ def spectral_edit(
     *,
     n_fft: int = 2048,
     hop_length: int = 512,
-    window: str | int = "hann",
+    window: WindowType = "hann",
     heal_radius_frames: int = 2,
-) -> list[float]: ...
+) -> npt.NDArray[np.float32]: ...
 
 VoiceEngineName: TypeAlias = Literal["grain", "psola"]
 PitchCorrectionModeName: TypeAlias = Literal["off", "auto", "robot"]

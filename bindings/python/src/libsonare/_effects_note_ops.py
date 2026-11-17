@@ -457,7 +457,7 @@ def decompose_note_pitch(
 
     Returns:
         :class:`PitchDecomposition`. A note with no usable pitch is reported as
-        a zero ``centre_hz`` and two empty curves rather than as an error.
+        a zero ``center_hz`` and two empty curves rather than as an error.
 
     Raises:
         SonareValueError: If ``f0_hz`` is empty or if ``voiced`` has a different
@@ -495,7 +495,7 @@ def decompose_note_pitch(
     _check(rc)
     try:
         return PitchDecomposition(
-            centre_hz=float(out.centre_hz),
+            center_hz=float(out.centre_hz),
             drift_cents=_from_c_float_array(out.drift_cents, out.count),
             vibrato_cents=_from_c_float_array(out.vibrato_cents, out.count),
         )
@@ -756,7 +756,7 @@ def _note_targets_to_c(fn_name: str, targets: Sequence[NoteTarget]) -> tuple[obj
 def _note_with_assigned_edit(note: NoteObject, row: SonareNoteObject) -> NoteObject:
     """Copy one note out of the edited C row, leaving the caller's own untouched.
 
-    The C call rewrites ``pitch_shift_semitones`` and ``muted`` in place and
+    The C call rewrites ``pitch_semitones`` and ``muted`` in place and
     reads nothing else back, so those two are taken from the row and everything
     else -- the span, the metrics, the other edits, both curves -- is copied from
     the note that went in. The two curves are independent arrays in the returned
@@ -767,7 +767,7 @@ def _note_with_assigned_edit(note: NoteObject, row: SonareNoteObject) -> NoteObj
         amplitude=np.asarray(note.amplitude).copy(),
         edit=dataclasses.replace(
             note.edit,
-            pitch_shift_semitones=float(row.edit.pitch_semitones),
+            pitch_semitones=float(row.edit.pitch_semitones),
             muted=bool(row.edit.muted),
             amplitude_envelope=np.asarray(note.edit.amplitude_envelope).copy(),
         ),
@@ -853,7 +853,7 @@ def assign_note_targets(
     min_overlap_ratio: float | None = None,
     max_correction_semitones: float | None = None,
 ) -> tuple[list[NoteObject], int]:
-    """Write each note's ``pitch_shift_semitones`` from the target it overlaps.
+    """Write each note's ``pitch_semitones`` from the target it overlaps.
 
     This is what makes a take follow a written melody rather than a single stated
     interval: hand it the notes :func:`extract_notes` found and a reference --

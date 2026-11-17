@@ -264,6 +264,12 @@ _POLYPHONIC_EDIT_FLOAT_FIELDS = frozenset(_POLYPHONIC_EDIT_FIELDS) - {
     "time_offset_samples",
     "muted",
 }
+# The command line keeps the native CLI's field tokens; these two name a
+# differently spelled NoteEdit attribute.
+_POLYPHONIC_EDIT_ATTRIBUTES = {
+    "pitch_shift_semitones": "pitch_semitones",
+    "formant_shift_semitones": "formant_semitones",
+}
 
 
 def _edit_value_consumed_whole(value: str) -> bool:
@@ -345,7 +351,11 @@ def _apply_polyphonic_note_edit(edits: list[NoteEdit], assignment: str) -> int:
     elif field == "muted":
         edit.muted = _parse_polyphonic_edit_bool(field, value)
     elif field in _POLYPHONIC_EDIT_FLOAT_FIELDS:
-        setattr(edit, field, _parse_polyphonic_edit_float(value))
+        setattr(
+            edit,
+            _POLYPHONIC_EDIT_ATTRIBUTES.get(field, field),
+            _parse_polyphonic_edit_float(value),
+        )
     else:
         # The accepted set is named at the refusal because the help carries no
         # per-field text, so this is the only place a caller can read it.
