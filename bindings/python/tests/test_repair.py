@@ -32,7 +32,7 @@ class TestMasteringRepairDeclick:
         # Inject a few clicks.
         for i in range(5):
             samples[1000 + i * 1200] = 1.0
-        out = libsonare.mastering_repair_declick(samples, SR)
+        out = libsonare.mastering_repair_declick(samples, SR).samples
         assert isinstance(out, np.ndarray)
         assert out.dtype == np.float32
         assert out.shape == samples.shape
@@ -48,7 +48,7 @@ class TestMasteringRepairDeclick:
             max_click_samples=8,
             lpc_order=16,
             residual_ratio=6.0,
-        )
+        ).samples
         assert out.shape == samples.shape
 
     def test_rejects_non_positive_max_click_samples(self) -> None:
@@ -60,7 +60,7 @@ class TestMasteringRepairDeclick:
 class TestMasteringRepairDenoiseClassical:
     def test_logmmse_default(self) -> None:
         noisy = _with_noise(sine(440.0, 0.5, amp=0.5), 0.4)
-        out = libsonare.mastering_repair_denoise_classical(noisy, SR)
+        out = libsonare.mastering_repair_denoise_classical(noisy, SR).samples
         assert isinstance(out, np.ndarray)
         assert out.dtype == np.float32
         assert out.shape == noisy.shape
@@ -77,7 +77,7 @@ class TestMasteringRepairDenoiseClassical:
             over_subtraction=2.0,
             spectral_floor=0.05,
             speech_presence_gain=False,
-        )
+        ).samples
         assert out.shape == noisy.shape
 
     def test_mmse_stsa_with_int_enum(self) -> None:
@@ -88,7 +88,7 @@ class TestMasteringRepairDenoiseClassical:
             mode=libsonare._ffi.SONARE_DENOISE_MODE_MMSE_STSA,
             n_fft=512,
             hop_length=128,
-        )
+        ).samples
         assert out.shape == noisy.shape
 
     def test_rejects_non_power_of_two_n_fft(self) -> None:

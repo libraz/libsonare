@@ -17,6 +17,7 @@ from ._effects_repair_common import (
 from ._ffi import (
     SonareDereverbClassicalConfig,
     SonareDereverbReport,
+    SonareDereverbResult,
     SonareDereverbStereoResult,
     SonareReverbDetection,
     SonareRoomEstimate,
@@ -42,6 +43,7 @@ from .types import (
     DereverbClassicalConfig,
     DereverbLinkedResult,
     DereverbReport,
+    DereverbResult,
     DereverbStereoResult,
     ReverbDetection,
     RoomEstimate,
@@ -65,7 +67,7 @@ def mastering_repair_dereverb_classical(
     wpe_iterations: int = 2,
     wpe_taps: int = 3,
     wpe_strength: float = 0.7,
-) -> np.ndarray:
+) -> DereverbResult:
     """Offline classical dereverberator (spectral subtraction + optional WPE)."""
     # The core requires a power of two here (dereverb_classical.cpp), narrower
     # than the shared even-size rule; check it eagerly so the message names it.
@@ -97,9 +99,17 @@ def mastering_repair_dereverb_classical(
         ),
         wpe_strength=_narrow_double(wpe_strength, "wpe_strength"),
     )
-    return _run_repair(
-        _get_lib().sonare_mastering_repair_dereverb_classical, samples, sample_rate, config
+    lib = _get_lib()
+    audio, report = _run_repair(
+        lib.sonare_mastering_repair_dereverb_classical,
+        lib.sonare_free_dereverb_result,
+        SonareDereverbResult,
+        _extract_dereverb_report,
+        samples,
+        sample_rate,
+        config,
     )
+    return DereverbResult(samples=audio, report=report)
 
 
 def _extract_reverb_detection(raw: Any) -> ReverbDetection:
@@ -515,7 +525,7 @@ def mastering_repair_dereverb_config_for_room(
 
         estimate = libsonare.estimate_room(samples, sr)
         config = libsonare.mastering_repair_dereverb_config_for_room(estimate)
-        clean = libsonare.mastering_repair_dereverb_classical(samples, sr, **config)
+        clean = libsonare.mastering_repair_dereverb_classical(samples, sr, **config).samples
 
     What the room decides is *where* the tail is. Exactly two keys come back
     changed from what was passed in:

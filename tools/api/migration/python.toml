@@ -4578,3 +4578,59 @@ changed = "None means the ISO reference 50 %; an explicit 0 is 0 % rather than t
 domain = "effects"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_acoustic.py::test_an_absent_room_keyword_is_the_documented_default_and_zero_is_literal"
+
+[[entry]]
+kind = "function"
+old = "mastering_repair_declick"
+changed = "returns a frozen DeclickResult (samples, report) instead of a bare ndarray; read .samples for the audio"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/python/tests/test_repair_mono_result.py::test_a_mono_repair_returns_float32_samples_beside_its_report"
+
+[[entry]]
+kind = "function"
+old = "mastering_repair_declip"
+changed = "returns a frozen DeclipResult (samples, report) instead of a bare ndarray; read .samples for the audio"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/python/tests/test_repair_mono_result.py::test_a_mono_repair_returns_float32_samples_beside_its_report"
+
+[[entry]]
+kind = "function"
+old = "mastering_repair_decrackle"
+changed = "returns a frozen DecrackleResult (samples, report) instead of a bare ndarray; read .samples for the audio"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/python/tests/test_repair_mono_result.py::test_a_mono_repair_returns_float32_samples_beside_its_report"
+
+[[entry]]
+kind = "function"
+old = "mastering_repair_dehum"
+changed = "returns a frozen DehumResult (samples, report) instead of a bare ndarray; read .samples for the audio"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/python/tests/test_repair_mono_result.py::test_a_mono_repair_returns_float32_samples_beside_its_report"
+
+[[entry]]
+kind = "function"
+old = "mastering_repair_denoise_classical"
+changed = "returns a frozen DenoiseResult (samples, report) instead of a bare ndarray; read .samples for the audio"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/python/tests/test_repair_mono_result.py::test_a_mono_repair_returns_float32_samples_beside_its_report"
+
+[[entry]]
+kind = "function"
+old = "mastering_repair_dereverb_classical"
+changed = "returns a frozen DereverbResult (samples, report) instead of a bare ndarray; read .samples for the audio"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/python/tests/test_repair_mono_result.py::test_a_mono_repair_returns_float32_samples_beside_its_report"
+
+[[entry]]
+kind = "function"
+old = "mastering_repair_trim_silence"
+changed = "returns a frozen TrimSilenceResult (samples, report) instead of a bare ndarray; read .samples for the audio"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/python/tests/test_repair_mono_result.py::test_a_mono_repair_returns_float32_samples_beside_its_report"

@@ -26,14 +26,20 @@ from .types import (
     ClippingReport,
     CqtResult,
     CrackleDetection,
+    DeclickResult,
     DeclickStereoResult,
+    DeclipResult,
     DeclipStereoResult,
+    DecrackleResult,
     DecrackleStereoResult,
+    DehumResult,
     DehumStereoResult,
     DenoiseLinkedResult,
+    DenoiseResult,
     DenoiseStereoResult,
     DereverbClassicalConfig,
     DereverbLinkedResult,
+    DereverbResult,
     DereverbStereoResult,
     DynamicRangeReport,
     DynamicsResult,
@@ -90,6 +96,7 @@ from .types import (
     StreamingLoudnessGain,
     TimbreResult,
     TrimRange,
+    TrimSilenceResult,
     TrimSilenceStereoResult,
     VectorscopeReport,
     WaveformPeaksReport,
@@ -2150,7 +2157,7 @@ def mastering_repair_declick(
     max_click_samples: int = 8,
     lpc_order: int = 20,
     residual_ratio: float = 8.0,
-) -> np.ndarray[Any, Any]: ...
+) -> DeclickResult: ...
 def mastering_repair_declick_stereo(
     left: FloatSamples,
     right: FloatSamples,
@@ -2177,7 +2184,7 @@ def mastering_repair_denoise_classical(
     noise_estimation_quantile: float = 0.1,
     speech_presence_gain: bool = True,
     gain_smoothing: bool = True,
-) -> np.ndarray[Any, Any]: ...
+) -> DenoiseResult: ...
 def mastering_repair_denoise_classical_stereo(
     left: FloatSamples,
     right: FloatSamples,
@@ -2233,7 +2240,7 @@ def mastering_repair_declip(
     lpc_order: int = 36,
     iterations: int = 2,
     lpc_blend: float = 0.65,
-) -> np.ndarray[Any, Any]: ...
+) -> DeclipResult: ...
 def mastering_repair_declip_stereo(
     left: FloatSamples,
     right: FloatSamples,
@@ -2251,7 +2258,7 @@ def mastering_repair_decrackle(
     threshold: float = 0.4,
     mode: int | str = "median",
     levels: int = 4,
-) -> np.ndarray[Any, Any]: ...
+) -> DecrackleResult: ...
 def mastering_repair_decrackle_stereo(
     left: FloatSamples,
     right: FloatSamples,
@@ -2274,7 +2281,7 @@ def mastering_repair_dehum(
     frame_size: int = 2048,
     pll_bandwidth: float = 0.01,
     mode: int | str = "subtract",
-) -> np.ndarray[Any, Any]: ...
+) -> DehumResult: ...
 def mastering_repair_dehum_stereo(
     left: FloatSamples,
     right: FloatSamples,
@@ -2306,7 +2313,7 @@ def mastering_repair_dereverb_classical(
     wpe_iterations: int = 2,
     wpe_taps: int = 3,
     wpe_strength: float = 0.7,
-) -> np.ndarray[Any, Any]: ...
+) -> DereverbResult: ...
 def mastering_repair_dereverb_classical_stereo(
     left: FloatSamples,
     right: FloatSamples,
@@ -2469,7 +2476,7 @@ def mastering_repair_trim_silence(
     mode: int | str = "peak",
     gate_lufs: float = -60.0,
     window_ms: float = 400.0,
-) -> np.ndarray[Any, Any]: ...
+) -> TrimSilenceResult: ...
 def mastering_repair_trim_silence_stereo(
     left: FloatSamples,
     right: FloatSamples,

@@ -52,6 +52,14 @@ class DeclickReport:
     lpc_model_used: bool
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class DeclickResult:
+    """A declicked mono buffer and what the pass did to it."""
+
+    samples: NDArray[np.float32]
+    report: DeclickReport
+
+
 @dataclass(frozen=True, slots=True)
 class DeclickStereoResult:
     """A declicked stereo pair and what each channel's pass did.
@@ -128,6 +136,14 @@ class DeclipReport:
     linked_runs: int
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class DeclipResult:
+    """A declipped mono buffer and what the pass did to it."""
+
+    samples: NDArray[np.float32]
+    report: DeclipReport
+
+
 @dataclass(frozen=True, slots=True)
 class DeclipStereoResult:
     """A declipped stereo pair and what each channel's pass did.
@@ -180,6 +196,14 @@ class DecrackleReport:
     noise_sigma: float
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class DecrackleResult:
+    """A decrackled mono buffer and what the pass did to it."""
+
+    samples: NDArray[np.float32]
+    report: DecrackleReport
+
+
 @dataclass(frozen=True, slots=True)
 class DecrackleStereoResult:
     """A decrackled stereo pair and what each channel's pass did.
@@ -229,6 +253,14 @@ class DehumReport:
     notched_harmonics: int
     applied_fundamental_hz: float
     fundamental_drift_hz: float
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class DehumResult:
+    """A dehummed mono buffer and what the pass did to it."""
+
+    samples: NDArray[np.float32]
+    report: DehumReport
 
 
 @dataclass(frozen=True, slots=True)
@@ -283,6 +315,14 @@ class DenoiseReport:
     mean_reduction_db: float
     max_reduction_db: float
     floor_limited_fraction: float
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class DenoiseResult:
+    """A denoised mono buffer and what the pass did to it."""
+
+    samples: NDArray[np.float32]
+    report: DenoiseReport
 
 
 @dataclass(frozen=True, slots=True)
@@ -357,6 +397,14 @@ class DereverbReport:
     mean_reduction_db: float
     suppressed_fraction: float
     wpe_predictor_norm: float
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class DereverbResult:
+    """A dereverberated mono buffer and what the pass did to it."""
+
+    samples: NDArray[np.float32]
+    report: DereverbReport
 
 
 @dataclass(frozen=True, slots=True)

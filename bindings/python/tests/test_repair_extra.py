@@ -21,7 +21,7 @@ class TestMasteringRepairDeclip:
     def test_default(self) -> None:
         samples = sine(440.0, 0.3, amp=1.0)
         samples = np.clip(samples * 2.0, -0.9, 0.9).astype(np.float32)
-        out = libsonare.mastering_repair_declip(samples, SR)
+        out = libsonare.mastering_repair_declip(samples, SR).samples
         assert out.shape == samples.shape
         assert out.dtype == np.float32
 
@@ -29,7 +29,7 @@ class TestMasteringRepairDeclip:
         samples = sine(440.0, 0.2, amp=0.3)
         out = libsonare.mastering_repair_declip(
             samples, SR, clip_threshold=0.85, lpc_order=24, iterations=1, lpc_blend=0.5
-        )
+        ).samples
         assert out.shape == samples.shape
 
 
@@ -42,14 +42,14 @@ class TestMasteringRepairDecrackle:
 
     def test_median_default(self) -> None:
         samples = self._sample()
-        out = libsonare.mastering_repair_decrackle(samples, SR)
+        out = libsonare.mastering_repair_decrackle(samples, SR).samples
         assert out.shape == samples.shape
 
     def test_wavelet_shrinkage(self) -> None:
         samples = self._sample()
         out = libsonare.mastering_repair_decrackle(
             samples, SR, mode="waveletShrinkage", threshold=0.4, levels=4
-        )
+        ).samples
         assert out.shape == samples.shape
 
     def test_unknown_mode_raises(self) -> None:
@@ -71,7 +71,7 @@ class TestMasteringRepairDehum:
 
     def test_static_notch_default(self) -> None:
         samples = self._sample()
-        out = libsonare.mastering_repair_dehum(samples, SR)
+        out = libsonare.mastering_repair_dehum(samples, SR).samples
         assert out.shape == samples.shape
 
     def test_adaptive_tracking(self) -> None:
@@ -87,14 +87,14 @@ class TestMasteringRepairDehum:
             adaptation=0.25,
             frame_size=2048,
             pll_bandwidth=0.01,
-        )
+        ).samples
         assert out.shape == samples.shape
 
 
 class TestMasteringRepairDereverbClassical:
     def test_default(self) -> None:
         samples = sine(440.0, 0.5, amp=0.5)
-        out = libsonare.mastering_repair_dereverb_classical(samples, SR)
+        out = libsonare.mastering_repair_dereverb_classical(samples, SR).samples
         assert out.shape == samples.shape
 
     def test_wpe_enabled(self) -> None:
@@ -108,7 +108,7 @@ class TestMasteringRepairDereverbClassical:
             wpe_strength=0.7,
             n_fft=1024,
             hop_length=256,
-        )
+        ).samples
         assert out.shape == samples.shape
 
     def test_rejects_non_power_of_two_n_fft(self) -> None:
@@ -226,7 +226,7 @@ class TestMasteringRepairDereverbConfigForRoom:
     def test_the_result_runs_the_dereverberator(self) -> None:
         samples = sine(440.0, 0.3, amp=0.5)
         config = libsonare.mastering_repair_dereverb_config_for_room(self._estimate(2500.0))
-        out = libsonare.mastering_repair_dereverb_classical(samples, SR, **config)
+        out = libsonare.mastering_repair_dereverb_classical(samples, SR, **config).samples
         assert out.shape == samples.shape
         assert np.isfinite(out).all()
 
@@ -239,7 +239,7 @@ class TestMasteringRepairTrimSilence:
 
     def test_peak_mode_shortens_buffer(self) -> None:
         samples = self._sample()
-        out = libsonare.mastering_repair_trim_silence(samples, SR)
+        out = libsonare.mastering_repair_trim_silence(samples, SR).samples
         assert 0 < out.shape[0] < samples.shape[0]
 
     def test_lufs_gated_with_padding(self) -> None:
@@ -251,7 +251,7 @@ class TestMasteringRepairTrimSilence:
             gate_lufs=-40.0,
             window_ms=400.0,
             padding_samples=600,
-        )
+        ).samples
         assert out.shape[0] > 0
 
     def test_unknown_mode_raises(self) -> None:

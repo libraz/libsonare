@@ -891,13 +891,19 @@ from .types import (
 )
 from .types import CrackleDetection as CrackleDetection
 from .types import DeclickReport as DeclickReport
+from .types import DeclickResult as DeclickResult
 from .types import DeclickStereoResult as DeclickStereoResult
 from .types import DeclipReport as DeclipReport
+from .types import DeclipResult as DeclipResult
 from .types import DeclipStereoResult as DeclipStereoResult
 from .types import DecrackleReport as DecrackleReport
+from .types import DecrackleResult as DecrackleResult
 from .types import DecrackleStereoResult as DecrackleStereoResult
 from .types import (
     DehumReport as DehumReport,
+)
+from .types import (
+    DehumResult as DehumResult,
 )
 from .types import (
     DehumStereoResult as DehumStereoResult,
@@ -909,6 +915,9 @@ from .types import (
     DenoiseReport as DenoiseReport,
 )
 from .types import (
+    DenoiseResult as DenoiseResult,
+)
+from .types import (
     DenoiseStereoResult as DenoiseStereoResult,
 )
 from .types import DereverbClassicalConfig as DereverbClassicalConfig
@@ -917,6 +926,9 @@ from .types import (
 )
 from .types import (
     DereverbReport as DereverbReport,
+)
+from .types import (
+    DereverbResult as DereverbResult,
 )
 from .types import (
     DereverbStereoResult as DereverbStereoResult,
@@ -1297,6 +1309,9 @@ from .types import (
 )
 from .types import (
     TrimReport as TrimReport,
+)
+from .types import (
+    TrimSilenceResult as TrimSilenceResult,
 )
 from .types import (
     TrimSilenceStereoResult as TrimSilenceStereoResult,

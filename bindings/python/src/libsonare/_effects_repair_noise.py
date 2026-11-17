@@ -26,9 +26,11 @@ from ._ffi import (
     SONARE_DENOISE_NOISE_ESTIMATOR_SPP,
     SONARE_REPAIR_NOISE_BAND_COUNT,
     SonareDehumConfig,
+    SonareDehumResult,
     SonareDehumStereoResult,
     SonareDenoiseClassicalConfig,
     SonareDenoiseReport,
+    SonareDenoiseResult,
     SonareDenoiseStereoResult,
     SonareHumDetection,
     SonareNoiseDetection,
@@ -41,11 +43,9 @@ from ._runtime import (
     _as_float32_buffer,
     _check,
     _float_array_result,
-    _from_c_float_array,
     _get_lib,
     _guard_buffer,
     _narrow_int,
-    _out_float_array,
     _planar_channel_arrays,
     _require_power_of_two,
     _resolve_enum,
@@ -56,9 +56,11 @@ from ._runtime import (
 )
 from .types import (
     DehumReport,
+    DehumResult,
     DehumStereoResult,
     DenoiseLinkedResult,
     DenoiseReport,
+    DenoiseResult,
     DenoiseStereoResult,
     HumDetection,
     NoiseDetection,
@@ -123,7 +125,7 @@ def mastering_repair_denoise_classical(
     noise_estimation_quantile: float = 0.1,
     speech_presence_gain: bool = True,
     gain_smoothing: bool = True,
-) -> np.ndarray:
+) -> DenoiseResult:
     """Offline STFT-domain classical denoiser.
 
     Args:
@@ -144,7 +146,8 @@ def mastering_repair_denoise_classical(
         gain_smoothing: Smooth gains across time (default True).
 
     Returns:
-        ``numpy.ndarray`` of ``float32`` with the same length as the input.
+        :class:`~libsonare.types.DenoiseResult`: the denoised ``float32``
+        samples, the same length as the input, and the pass's report.
 
     Raises:
         SonareValueError: If ``mode`` / ``noise_estimator`` cannot be resolved.
@@ -164,8 +167,6 @@ def mastering_repair_denoise_classical(
 
     lib = _get_lib()
     in_buf = _as_float32_buffer(samples)
-    length = int(in_buf.shape[0])
-    c_array = in_buf.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
     config = SonareDenoiseClassicalConfig(  # noqa: F405
         mode=_coerce_denoise_mode(mode),
         noise_estimator=_coerce_denoise_estimator(noise_estimator),
@@ -181,17 +182,16 @@ def mastering_repair_denoise_classical(
         speech_presence_gain=1 if speech_presence_gain else 0,
         gain_smoothing=1 if gain_smoothing else 0,
     )
-    with _out_float_array(lib) as (out, out_length):
-        rc = lib.sonare_mastering_repair_denoise_classical(
-            c_array,
-            _to_c_size_t(length, "length"),
-            _to_c_int(sample_rate, "sample_rate"),
-            ctypes.byref(config),
-            ctypes.byref(out),
-            ctypes.byref(out_length),
-        )
-        _check(rc)
-        return _from_c_float_array(out, out_length.value)
+    audio, report = _run_repair(
+        lib.sonare_mastering_repair_denoise_classical,
+        lib.sonare_free_denoise_result,
+        SonareDenoiseResult,
+        _extract_denoise_report,
+        in_buf,
+        sample_rate,
+        config,
+    )
+    return DenoiseResult(samples=audio, report=report)
 
 
 def _extract_noise_detection(raw: Any) -> NoiseDetection:
@@ -653,7 +653,7 @@ def mastering_repair_dehum(
     frame_size: int = 2048,
     pll_bandwidth: float = 0.01,
     mode: int | str = "subtract",
-) -> np.ndarray:
+) -> DehumResult:
     """Offline mains-hum remover.
 
     Args:
@@ -676,7 +676,17 @@ def mastering_repair_dehum(
         pll_bandwidth=_narrow_double(pll_bandwidth, "pll_bandwidth"),
         mode=_coerce_dehum_mode(mode),
     )
-    return _run_repair(_get_lib().sonare_mastering_repair_dehum, samples, sample_rate, config)
+    lib = _get_lib()
+    audio, report = _run_repair(
+        lib.sonare_mastering_repair_dehum,
+        lib.sonare_free_dehum_result,
+        SonareDehumResult,
+        _extract_dehum_report,
+        samples,
+        sample_rate,
+        config,
+    )
+    return DehumResult(samples=audio, report=report)
 
 
 def _extract_hum_detection(raw: Any) -> HumDetection:
@@ -715,7 +725,7 @@ def mastering_repair_detect_hum(
         if detected.fundamental_prominence > 2.0:
             samples = libsonare.mastering_repair_dehum(
                 samples, 44100, fundamental_hz=detected.fundamental_hz
-            )
+            ).samples
 
     ``fundamental_prominence`` is the winning candidate's projected energy over
     the median candidate, a linear ratio (not dB); 1.0 means no peak: none

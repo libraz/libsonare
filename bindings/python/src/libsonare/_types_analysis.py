@@ -830,6 +830,17 @@ class TrimReport:
     removed_tail_samples: int
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class TrimSilenceResult:
+    """A trimmed mono buffer and the range it was cut to.
+
+    A pass that kept nothing returns an empty ``samples`` -- a success, not a
+    refusal; ``report`` says where the cut fell."""
+
+    samples: NDArray[np.float32]
+    report: TrimReport
+
+
 @dataclass(frozen=True, slots=True)
 class TrimSilenceStereoResult:
     """A trimmed stereo pair, the range both channels were cut to, and the two

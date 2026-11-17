@@ -348,12 +348,12 @@ def test_the_n_fft_verdict_matches_the_core_for_both_families() -> None:
     assert (
         repair_noise.mastering_repair_denoise_classical(
             samples, 22050, n_fft=1024, hop_length=256
-        ).shape
+        ).samples.shape
         == samples.shape
     )
     assert (
         repair_dereverb.mastering_repair_dereverb_classical(
             samples, 22050, n_fft=1024, hop_length=256
-        ).shape
+        ).samples.shape
         == samples.shape
     )

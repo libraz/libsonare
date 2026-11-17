@@ -398,7 +398,7 @@ class TestDetectTrimRange:
 
         assert isinstance(kept, libsonare.TrimRange)
         assert (kept.first, kept.last_exclusive) == BURST_SPAN
-        assert len(libsonare.mastering_repair_trim_silence(burst, SR)) == (
+        assert len(libsonare.mastering_repair_trim_silence(burst, SR).samples) == (
             kept.last_exclusive - kept.first
         )
 

@@ -17,6 +17,7 @@ from ._ffi import (
     SONARE_TRIM_SILENCE_MODE_PEAK,
     SonareTrimRange,
     SonareTrimSilenceConfig,
+    SonareTrimSilenceResult,
     SonareTrimSilenceStereoResult,
 )
 from ._narrowing import _narrow_double
@@ -36,6 +37,7 @@ from ._runtime import (
 from .types import (
     TrimRange,
     TrimReport,
+    TrimSilenceResult,
     TrimSilenceStereoResult,
 )
 
@@ -87,7 +89,7 @@ def mastering_repair_trim_silence(
     mode: int | str = "peak",
     gate_lufs: float = -60.0,
     window_ms: float = 400.0,
-) -> np.ndarray:
+) -> TrimSilenceResult:
     """Offline silence trimmer (peak threshold or LUFS-gated).
 
     The margin kept around the signal is ``padding_samples`` or ``padding_sec``,
@@ -101,9 +103,17 @@ def mastering_repair_trim_silence(
         gate_lufs=_narrow_double(gate_lufs, "gate_lufs"),
         window_ms=_narrow_double(window_ms, "window_ms"),
     )
-    return _run_repair(
-        _get_lib().sonare_mastering_repair_trim_silence, samples, sample_rate, config
+    lib = _get_lib()
+    audio, report = _run_repair(
+        lib.sonare_mastering_repair_trim_silence,
+        lib.sonare_free_trim_silence_result,
+        SonareTrimSilenceResult,
+        _extract_trim_report,
+        samples,
+        sample_rate,
+        config,
     )
+    return TrimSilenceResult(samples=audio, report=report)
 
 
 def _extract_trim_range(raw: Any) -> TrimRange:

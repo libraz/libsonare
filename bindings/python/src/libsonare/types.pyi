@@ -1388,6 +1388,11 @@ class DeclickReport:
         lpc_model_used: bool,
     ) -> None: ...
 
+class DeclickResult:
+    samples: np.ndarray[Any, Any]
+    report: DeclickReport
+    def __init__(self, samples: np.ndarray[Any, Any], report: DeclickReport) -> None: ...
+
 class DeclickStereoResult:
     left: list[float]
     right: list[float]
@@ -1417,6 +1422,11 @@ class DeclipReport:
         repaired_samples: int,
         linked_runs: int,
     ) -> None: ...
+
+class DeclipResult:
+    samples: np.ndarray[Any, Any]
+    report: DeclipReport
+    def __init__(self, samples: np.ndarray[Any, Any], report: DeclipReport) -> None: ...
 
 class DeclipStereoResult:
     left: list[float]
@@ -1453,6 +1463,11 @@ class DecrackleReport:
         shrunk_coefficients: int,
         noise_sigma: float,
     ) -> None: ...
+
+class DecrackleResult:
+    samples: np.ndarray[Any, Any]
+    report: DecrackleReport
+    def __init__(self, samples: np.ndarray[Any, Any], report: DecrackleReport) -> None: ...
 
 class DecrackleStereoResult:
     left: list[float]
@@ -1496,6 +1511,11 @@ class DehumReport:
         fundamental_drift_hz: float,
     ) -> None: ...
 
+class DehumResult:
+    samples: np.ndarray[Any, Any]
+    report: DehumReport
+    def __init__(self, samples: np.ndarray[Any, Any], report: DehumReport) -> None: ...
+
 class DehumStereoResult:
     left: list[float]
     right: list[float]
@@ -1532,6 +1552,11 @@ class DenoiseReport:
         max_reduction_db: float,
         floor_limited_fraction: float,
     ) -> None: ...
+
+class DenoiseResult:
+    samples: np.ndarray[Any, Any]
+    report: DenoiseReport
+    def __init__(self, samples: np.ndarray[Any, Any], report: DenoiseReport) -> None: ...
 
 class DenoiseStereoResult:
     left: list[float]
@@ -1611,6 +1636,11 @@ class DereverbReport:
         wpe_predictor_norm: float,
     ) -> None: ...
 
+class DereverbResult:
+    samples: np.ndarray[Any, Any]
+    report: DereverbReport
+    def __init__(self, samples: np.ndarray[Any, Any], report: DereverbReport) -> None: ...
+
 class DereverbStereoResult:
     left: list[float]
     right: list[float]
@@ -1652,6 +1682,11 @@ class TrimReport:
         removed_head_samples: int,
         removed_tail_samples: int,
     ) -> None: ...
+
+class TrimSilenceResult:
+    samples: np.ndarray[Any, Any]
+    report: TrimReport
+    def __init__(self, samples: np.ndarray[Any, Any], report: TrimReport) -> None: ...
 
 class TrimSilenceStereoResult:
     left: list[float]

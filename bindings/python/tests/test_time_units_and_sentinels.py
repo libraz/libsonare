@@ -185,9 +185,11 @@ class TestTrimPadding:
     )
 
     def test_padding_sec_equals_padding_samples(self) -> None:
-        by_samples = libsonare.mastering_repair_trim_silence(self.samples, SR, padding_samples=2205)
-        by_seconds = libsonare.mastering_repair_trim_silence(self.samples, SR, padding_sec=0.1)
-        assert np.array_equal(np.asarray(by_samples), np.asarray(by_seconds))
+        trim = libsonare.mastering_repair_trim_silence
+        by_samples = trim(self.samples, SR, padding_samples=2205)
+        by_seconds = trim(self.samples, SR, padding_sec=0.1)
+        assert np.array_equal(by_samples.samples, by_seconds.samples)
+        assert by_samples.report == by_seconds.report
         detect = libsonare.mastering_repair_detect_trim_range
         assert detect(self.samples, SR, padding_samples=2205) == detect(
             self.samples, SR, padding_sec=0.1

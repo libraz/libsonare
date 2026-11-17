@@ -176,7 +176,7 @@ class DereverbClassicalConfig(TypedDict):
     type is splatted straight into it::
 
         config = mastering_repair_dereverb_config_for_room(estimate)
-        clean = mastering_repair_dereverb_classical(samples, sr, **config)
+        clean = mastering_repair_dereverb_classical(samples, sr, **config).samples
 
     Every key is required: this type describes a config that is ready to run,
     never a partial override set.

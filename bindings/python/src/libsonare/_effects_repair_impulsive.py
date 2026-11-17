@@ -19,10 +19,13 @@ from ._ffi import (
     SonareClipDetection,
     SonareCrackleDetection,
     SonareDeclickConfig,
+    SonareDeclickResult,
     SonareDeclickStereoResult,
     SonareDeclipConfig,
+    SonareDeclipResult,
     SonareDeclipStereoResult,
     SonareDecrackleConfig,
+    SonareDecrackleResult,
     SonareDecrackleStereoResult,
 )
 from ._narrowing import _narrow_double
@@ -33,11 +36,9 @@ from ._runtime import (
     _as_float32_buffer,
     _check,
     _float_array_result,
-    _from_c_float_array,
     _get_lib,
     _guard_buffer,
     _narrow_int,
-    _out_float_array,
     _resolve_enum,
     _to_c_float_array,
     _to_c_int,
@@ -48,10 +49,13 @@ from .types import (
     ClipDetection,
     CrackleDetection,
     DeclickReport,
+    DeclickResult,
     DeclickStereoResult,
     DeclipReport,
+    DeclipResult,
     DeclipStereoResult,
     DecrackleReport,
+    DecrackleResult,
     DecrackleStereoResult,
 )
 
@@ -84,7 +88,7 @@ def mastering_repair_declick(
     max_click_samples: int = 8,
     lpc_order: int = 20,
     residual_ratio: float = 8.0,
-) -> np.ndarray:
+) -> DeclickResult:
     """Offline LPC-based declicker.
 
     Args:
@@ -97,7 +101,8 @@ def mastering_repair_declick(
         residual_ratio: Residual / signal threshold (default 8.0).
 
     Returns:
-        ``numpy.ndarray`` of ``float32`` with the same length as the input.
+        :class:`~libsonare.types.DeclickResult`: the repaired ``float32``
+        samples, the same length as the input, and the pass's report.
     """
     # Narrowed ahead of the sign check: int() takes 8.7 as 8, a run length nobody asked for.
     max_click_value = _narrow_int(
@@ -110,8 +115,6 @@ def mastering_repair_declick(
         raise SonareValueError("max_click_samples must be positive")
     lib = _get_lib()
     in_buf = _as_float32_buffer(samples)
-    length = int(in_buf.shape[0])
-    c_array = in_buf.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
     config = SonareDeclickConfig(  # noqa: F405
         threshold=_narrow_double(threshold, "threshold"),
         neighbor_ratio=_narrow_double(neighbor_ratio, "neighbor_ratio"),
@@ -119,17 +122,16 @@ def mastering_repair_declick(
         lpc_order=lpc_order_value,
         residual_ratio=_narrow_double(residual_ratio, "residual_ratio"),
     )
-    with _out_float_array(lib) as (out, out_length):
-        rc = lib.sonare_mastering_repair_declick(
-            c_array,
-            _to_c_size_t(length, "length"),
-            _to_c_int(sample_rate, "sample_rate"),
-            ctypes.byref(config),
-            ctypes.byref(out),
-            ctypes.byref(out_length),
-        )
-        _check(rc)
-        return _from_c_float_array(out, out_length.value)
+    audio, report = _run_repair(
+        lib.sonare_mastering_repair_declick,
+        lib.sonare_free_declick_result,
+        SonareDeclickResult,
+        _extract_declick_report,
+        in_buf,
+        sample_rate,
+        config,
+    )
+    return DeclickResult(samples=audio, report=report)
 
 
 def _extract_click_detection(raw: Any) -> ClickDetection:
@@ -162,7 +164,7 @@ def mastering_repair_detect_clicks(
 
         detected = libsonare.mastering_repair_detect_clicks(samples, 44100)
         if detected.per_second > 1.0:
-            samples = libsonare.mastering_repair_declick(samples, 44100)
+            samples = libsonare.mastering_repair_declick(samples, 44100).samples
 
     ``count`` counts RUNS meeting the repair criteria, not samples, and
     ``rejected`` counts runs the criteria excluded as outliers -- a large
@@ -316,7 +318,7 @@ def mastering_repair_declip(
     lpc_order: int = 36,
     iterations: int = 2,
     lpc_blend: float = 0.65,
-) -> np.ndarray:
+) -> DeclipResult:
     """Offline LPC-based declipper.
 
     Only clipped runs of at most 512 consecutive samples are reconstructed with the
@@ -339,7 +341,17 @@ def mastering_repair_declip(
         ),
         lpc_blend=_narrow_double(lpc_blend, "lpc_blend"),
     )
-    return _run_repair(_get_lib().sonare_mastering_repair_declip, samples, sample_rate, config)
+    lib = _get_lib()
+    audio, report = _run_repair(
+        lib.sonare_mastering_repair_declip,
+        lib.sonare_free_declip_result,
+        SonareDeclipResult,
+        _extract_declip_report,
+        samples,
+        sample_rate,
+        config,
+    )
+    return DeclipResult(samples=audio, report=report)
 
 
 def _extract_clip_detection(raw: Any) -> ClipDetection:
@@ -375,7 +387,7 @@ def mastering_repair_detect_clipping(
 
         detected = libsonare.mastering_repair_detect_clipping(samples, 44100)
         if detected.sample_fraction > 0.0:
-            samples = libsonare.mastering_repair_declip(samples, 44100)
+            samples = libsonare.mastering_repair_declip(samples, 44100).samples
 
     ``longest_run_samples`` past 512 is the one field that predicts the repair's
     method rather than its extent: a longer run takes the interpolation fallback
@@ -532,7 +544,7 @@ def mastering_repair_decrackle(
     threshold: float = 0.4,
     mode: int | str = "median",
     levels: int = 4,
-) -> np.ndarray:
+) -> DecrackleResult:
     """Offline crackle suppressor (median or wavelet-shrinkage)."""
     config = SonareDecrackleConfig(  # noqa: F405
         threshold=_narrow_double(threshold, "threshold"),
@@ -540,7 +552,17 @@ def mastering_repair_decrackle(
         # Narrowed rather than coerced: int() takes 4.7 as 4, a depth nobody asked for.
         levels=_narrow_int(levels, "mastering_repair_decrackle: levels", _C_INT_MIN, _C_INT_MAX),
     )
-    return _run_repair(_get_lib().sonare_mastering_repair_decrackle, samples, sample_rate, config)
+    lib = _get_lib()
+    audio, report = _run_repair(
+        lib.sonare_mastering_repair_decrackle,
+        lib.sonare_free_decrackle_result,
+        SonareDecrackleResult,
+        _extract_decrackle_report,
+        samples,
+        sample_rate,
+        config,
+    )
+    return DecrackleResult(samples=audio, report=report)
 
 
 def _extract_crackle_detection(raw: Any) -> CrackleDetection:
@@ -568,7 +590,7 @@ def mastering_repair_detect_crackle(
 
         detected = libsonare.mastering_repair_detect_crackle(samples, 44100)
         if detected.per_second > 5.0:
-            samples = libsonare.mastering_repair_decrackle(samples, 44100)
+            samples = libsonare.mastering_repair_decrackle(samples, 44100).samples
 
     ``mode`` and ``levels`` are accepted so one set of arguments configures both
     this call and :func:`mastering_repair_decrackle`; neither reaches the result.

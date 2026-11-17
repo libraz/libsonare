@@ -348,7 +348,9 @@ def test_declip_cli_repairs_a_stereo_pair_as_a_pair(tmp_path) -> None:
     # the other channel was in the call.
     with Audio.from_file_channel(str(source), 1) as channel:
         alone = list(
-            mastering_repair_declip(channel.data, sample_rate=sample_rate, clip_threshold=detect_at)
+            mastering_repair_declip(
+                channel.data, sample_rate=sample_rate, clip_threshold=detect_at
+            ).samples
         )
     with wave.open(str(output), "rb") as wav:
         frames = wav.readframes(wav.getnframes())

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import ctypes
-from collections.abc import Sequence
-from typing import Any
+from collections.abc import Callable, Sequence
+from typing import Any, TypeVar
 
 import numpy as np
 
@@ -12,10 +12,8 @@ from ._runtime import (
     SonareValueError,
     _as_float32_buffer,
     _check,
-    _from_c_float_array,
-    _get_lib,
     _not_planar_channels,
-    _out_float_array,
+    _optional_from_c_float_array,
     _to_c_int,
     _to_c_size_t,
     _validate_samples,
@@ -51,27 +49,40 @@ def _run_detection(
     return out
 
 
+_Report = TypeVar("_Report")
+
+
 def _run_repair(
     lib_fn: Any,
+    free_fn: Any,
+    result_type: Any,
+    extract_report: Callable[[Any], _Report],
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
     config: Any,
-) -> np.ndarray:
-    lib = _get_lib()
+) -> tuple[np.ndarray, _Report]:
+    """Run one mono repair entry and return its audio with the report it filled.
+
+    The audio is copied out and the report converted before ``free_fn`` releases
+    the C result. A pass that kept nothing (a trim of silence) hands back a NULL
+    buffer, which reads as an empty array.
+    """
     in_buf = _as_float32_buffer(samples)
     length = int(in_buf.shape[0])
     c_array = in_buf.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
-    with _out_float_array(lib) as (out, out_length):
-        rc = lib_fn(
-            c_array,
-            _to_c_size_t(length, "length"),
-            _to_c_int(sample_rate, "sample_rate"),
-            ctypes.byref(config),
-            ctypes.byref(out),
-            ctypes.byref(out_length),
-        )
-        _check(rc)
-        return _from_c_float_array(out, out_length.value)
+    out = result_type()
+    rc = lib_fn(
+        c_array,
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        ctypes.byref(config),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return _optional_from_c_float_array(out.samples, out.length), extract_report(out.report)
+    finally:
+        free_fn(ctypes.byref(out))
 
 
 def _linked_channel_planes(

@@ -82,7 +82,7 @@ def _as_plane(values: list[float]) -> NDArray[np.float32]:
 class TestDenoiseLinkedAgreesWithTheNarrowerEntries:
     def test_one_channel_reproduces_the_mono_entry(self, signal: NDArray[np.float32]) -> None:
         linked = libsonare.mastering_repair_denoise_classical_linked([signal], SR)
-        mono = libsonare.mastering_repair_denoise_classical(signal, SR)
+        mono = libsonare.mastering_repair_denoise_classical(signal, SR).samples
 
         assert len(linked.channels) == 1
         assert linked.channels[0].dtype == np.float32
@@ -105,7 +105,7 @@ class TestDenoiseLinkedAgreesWithTheNarrowerEntries:
 class TestDereverbLinkedAgreesWithTheNarrowerEntries:
     def test_one_channel_reproduces_the_mono_entry(self, signal: NDArray[np.float32]) -> None:
         linked = libsonare.mastering_repair_dereverb_classical_linked([signal], SR)
-        mono = libsonare.mastering_repair_dereverb_classical(signal, SR)
+        mono = libsonare.mastering_repair_dereverb_classical(signal, SR).samples
 
         assert len(linked.channels) == 1
         assert linked.channels[0].dtype == np.float32

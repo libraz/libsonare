@@ -167,6 +167,9 @@ from ._types_analysis import (
     TrimReport as TrimReport,
 )
 from ._types_analysis import (
+    TrimSilenceResult as TrimSilenceResult,
+)
+from ._types_analysis import (
     TrimSilenceStereoResult as TrimSilenceStereoResult,
 )
 from ._types_analysis import (
@@ -512,10 +515,16 @@ from ._types_repair import (
     DeclickReport as DeclickReport,
 )
 from ._types_repair import (
+    DeclickResult as DeclickResult,
+)
+from ._types_repair import (
     DeclickStereoResult as DeclickStereoResult,
 )
 from ._types_repair import (
     DeclipReport as DeclipReport,
+)
+from ._types_repair import (
+    DeclipResult as DeclipResult,
 )
 from ._types_repair import (
     DeclipStereoResult as DeclipStereoResult,
@@ -524,10 +533,16 @@ from ._types_repair import (
     DecrackleReport as DecrackleReport,
 )
 from ._types_repair import (
+    DecrackleResult as DecrackleResult,
+)
+from ._types_repair import (
     DecrackleStereoResult as DecrackleStereoResult,
 )
 from ._types_repair import (
     DehumReport as DehumReport,
+)
+from ._types_repair import (
+    DehumResult as DehumResult,
 )
 from ._types_repair import (
     DehumStereoResult as DehumStereoResult,
@@ -539,6 +554,9 @@ from ._types_repair import (
     DenoiseReport as DenoiseReport,
 )
 from ._types_repair import (
+    DenoiseResult as DenoiseResult,
+)
+from ._types_repair import (
     DenoiseStereoResult as DenoiseStereoResult,
 )
 from ._types_repair import (
@@ -546,6 +564,9 @@ from ._types_repair import (
 )
 from ._types_repair import (
     DereverbReport as DereverbReport,
+)
+from ._types_repair import (
+    DereverbResult as DereverbResult,
 )
 from ._types_repair import (
     DereverbStereoResult as DereverbStereoResult,

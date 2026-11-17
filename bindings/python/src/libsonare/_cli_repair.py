@@ -52,7 +52,8 @@ def cmd_declip(args: argparse.Namespace) -> int:
         stereo = mastering_repair_declip_stereo(planes[0], planes[1], sample_rate=sr, **knobs)
         rendered = [_audio_array(stereo.left), _audio_array(stereo.right)]
     else:
-        rendered = [_audio_array(mastering_repair_declip(planes[0], sample_rate=sr, **knobs))]
+        mono = mastering_repair_declip(planes[0], sample_rate=sr, **knobs)
+        rendered = [_audio_array(mono.samples)]
     repaired = rendered[0]
 
     if args.output:
