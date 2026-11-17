@@ -760,10 +760,3 @@ export function waveformPeakPyramid(
   });
   return addon.waveformPeakPyramid(request.samples, request.channels, levels);
 }
-
-/**
- * Snap a MIDI value to the nearest pitch class enabled by `modeMask`.
- *
- * `modeMask` is a 12-bit mask. For natural C major use `0b101010110101`.
- * `referenceMidi` defaults to A4 (69) when passed as 0.
- */

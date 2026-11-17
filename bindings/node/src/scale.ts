@@ -1,4 +1,5 @@
 import { KEY_MODES } from './internal/key_modes.js';
+import { scaleReferenceMidiArg } from './internal/scale_reference.js';
 import { addon } from './native.js';
 import type { KeyMode, PitchClass } from './types_analysis.js';
 import { assertClosedToken, assertFiniteScalar } from './validation.js';
@@ -25,17 +26,18 @@ export function scaleMaskForMode(root: PitchClass, mode: KeyMode): number {
  * Snap a MIDI value to the nearest pitch class enabled by `modeMask`.
  *
  * `modeMask` is a 12-bit mask. For natural C major use `0b101010110101`.
- * `scaleReferenceMidi` defaults to A4 (69) when passed as 0.
+ * `scaleReferenceMidi` anchors the grid; omit it for A4 (69). An explicit 0 is
+ * refused (`RangeError`) until the native layer reads it as MIDI note 0.
  */
 export function scaleQuantizeMidi(
   root: number,
   modeMask: number,
   midi: number,
-  scaleReferenceMidi = 0,
+  scaleReferenceMidi?: number,
 ): number {
   assertFiniteScalar('scaleQuantizeMidi', midi, 'midi');
-  assertFiniteScalar('scaleQuantizeMidi', scaleReferenceMidi, 'scaleReferenceMidi');
-  return addon.scaleQuantizeMidi(root, modeMask, midi, scaleReferenceMidi);
+  const reference = scaleReferenceMidiArg('scaleQuantizeMidi', scaleReferenceMidi);
+  return addon.scaleQuantizeMidi(root, modeMask, midi, reference);
 }
 
 /** The signed correction in semitones that moves `midi` onto the scale; `scaleReferenceMidi` as in {@link scaleQuantizeMidi}. */
@@ -43,11 +45,11 @@ export function scaleCorrectionSemitones(
   root: number,
   modeMask: number,
   midi: number,
-  scaleReferenceMidi = 0,
+  scaleReferenceMidi?: number,
 ): number {
   assertFiniteScalar('scaleCorrectionSemitones', midi, 'midi');
-  assertFiniteScalar('scaleCorrectionSemitones', scaleReferenceMidi, 'scaleReferenceMidi');
-  return addon.scaleCorrectionSemitones(root, modeMask, midi, scaleReferenceMidi);
+  const reference = scaleReferenceMidiArg('scaleCorrectionSemitones', scaleReferenceMidi);
+  return addon.scaleCorrectionSemitones(root, modeMask, midi, reference);
 }
 
 export function scalePitchClassEnabled(

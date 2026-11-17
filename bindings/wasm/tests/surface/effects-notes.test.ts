@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import * as sonare from '../../dist/index.js';
 import {
@@ -353,13 +354,40 @@ describe('effects notes surface', () => {
     const major = scaleMaskForMode(0, 'major');
     expect(major).toBe(0b101010110101);
     expect(scaleQuantizeMidi(0, major, 61, 69)).toBe(60);
-    expect(scaleQuantizeMidi(0, major, 61)).toBe(scaleQuantizeMidi(0, major, 61, 0));
+    expect(scaleQuantizeMidi(0, major, 61)).toBe(scaleQuantizeMidi(0, major, 61, 69));
     expect(Number.isFinite(scaleCorrectionSemitones(0, major, 61, 69))).toBe(true);
     expect(thrown(() => scaleQuantizeMidi(0, major, Number.NaN, 69))).toBeInstanceOf(RangeError);
     expect(thrown(() => scaleQuantizeMidi(0, major, 61, Number.NaN))).toBeInstanceOf(RangeError);
     expect(thrown(() => scaleCorrectionSemitones(0, major, 61, Number.NaN))).toBeInstanceOf(
       RangeError,
     );
+  });
+
+  it('scale helpers: an absent scaleReferenceMidi is A4 and an explicit 0 is refused', () => {
+    const major = scaleMaskForMode(0, 'major');
+    for (const fn of [scaleQuantizeMidi, scaleCorrectionSemitones]) {
+      const absent = fn(0, major, 60.4);
+      expect(fn(0, major, 60.4, 69)).toBe(absent);
+      expect(fn(0, major, 60.4, 69.5)).not.toBe(absent);
+      expect(thrown(() => fn(0, major, 60.4, 0))).toBeInstanceOf(RangeError);
+      expect(thrown(() => fn(0, major, 60.4, 0))).toHaveProperty(
+        'message',
+        `${fn.name}: scaleReferenceMidi 0 is temporarily unsupported (omit it for the A4 default)`,
+      );
+      expect(thrown(() => loose(fn)(0, major, 60.4, '69'))).toBeInstanceOf(TypeError);
+    }
+  });
+
+  it('the scale helpers refuse a 0 reference only while their native entry reads 0 as A4', () => {
+    // Fails once native reads 0 as MIDI note 0: then drop the refusal in internal/scale_reference.ts.
+    const source = readFileSync(
+      new URL(
+        '../../../../src/wasm/bindings/effects/offline_dynamics_editing.cpp',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+    expect(source).toContain('ZeroIsDefault(scale_reference_midi)');
   });
 
   it('autoTune names its key and scale reference in the options', () => {

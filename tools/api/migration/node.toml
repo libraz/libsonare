@@ -9633,18 +9633,18 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::refuses the removed p
 [[entry]]
 kind = "option"
 old = "scaleCorrectionSemitones(referenceMidi)"
-changed = "scaleCorrectionSemitones(scaleReferenceMidi)"
+changed = "scaleCorrectionSemitones(scaleReferenceMidi?): absent is A4 and an explicit 0 is refused until the native entry reads it as MIDI note 0"
 domain = "effects"
-rule = "individual"
-test = "bindings/node/tests/surface/effects-notes.test.ts::scale helpers keep their positional scalar form"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/effects-notes.test.ts::scale helpers: an absent scaleReferenceMidi is A4 and an explicit 0 is refused"
 
 [[entry]]
 kind = "option"
 old = "scaleQuantizeMidi(referenceMidi)"
-changed = "scaleQuantizeMidi(scaleReferenceMidi)"
+changed = "scaleQuantizeMidi(scaleReferenceMidi?): absent is A4 and an explicit 0 is refused until the native entry reads it as MIDI note 0"
 domain = "effects"
-rule = "individual"
-test = "bindings/node/tests/surface/effects-notes.test.ts::scale helpers keep their positional scalar form"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/effects-notes.test.ts::scale helpers: an absent scaleReferenceMidi is A4 and an explicit 0 is refused"
 
 [[entry]]
 kind = "type"
