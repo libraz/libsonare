@@ -1717,6 +1717,28 @@ export const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    name: 'SonareWrap.noteSegments',
+    missingRequired: [],
+    // The frame rate and the F0 track are positional; a wrong-typed one must be
+    // refused by name rather than read as 0 Hz or an empty track.
+    rejectsArgument: [
+      {
+        argument: 'frameRate',
+        call: () => addon.noteSegments(samples(8), samples(8), null, 'x'),
+        message: /frameRate/,
+      },
+      {
+        argument: 'omitted frameRate',
+        call: () => addon.noteSegments(samples(8), samples(8), null),
+        message: /frameRate/,
+      },
+      {
+        argument: 'f0Hz',
+        call: () => addon.noteSegments('x', samples(8), null, 100),
+      },
+    ],
+  },
+  {
     name: 'RealtimeVoiceChanger.noteOn',
     missingRequired: [],
     // The note is read before the velocity; a wrong-typed velocity must not fall back to
