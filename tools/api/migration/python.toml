@@ -4482,3 +4482,99 @@ changed = "importable from libsonare"
 domain = "core"
 rule = "no-internal-types"
 test = "bindings/python/tests/test_surface_analysis.py::test_boundary_and_beat_types_are_importable"
+
+[[entry]]
+kind = "option"
+old = "synthesize_rir(seed)"
+changed = "None means 1; 0 is a seed rather than the library default"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_an_absent_room_keyword_is_the_documented_default_and_zero_is_literal"
+
+[[entry]]
+kind = "option"
+old = "synthesize_rir(crossfade_ms)"
+changed = "None means 5 ms; an explicit 0 is a 0 ms crossfade rather than the library default"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_an_absent_room_keyword_is_the_documented_default_and_zero_is_literal"
+
+[[entry]]
+kind = "option"
+old = "synthesize_rir(air_temperature_c)"
+changed = "None means the ISO reference 20 degC; an explicit 0 is 0 degC rather than the reference"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_an_absent_room_keyword_is_the_documented_default_and_zero_is_literal"
+
+[[entry]]
+kind = "option"
+old = "synthesize_rir(air_humidity_percent)"
+changed = "None means the ISO reference 50 %; an explicit 0 is 0 % rather than the reference"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_an_absent_room_keyword_is_the_documented_default_and_zero_is_literal"
+
+[[entry]]
+kind = "option"
+old = "room_morph(seed)"
+changed = "None means 1; 0 is a seed rather than the library default"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_an_absent_room_keyword_is_the_documented_default_and_zero_is_literal"
+
+[[entry]]
+kind = "option"
+old = "room_morph(crossfade_ms)"
+changed = "None means 5 ms; an explicit 0 is a 0 ms crossfade rather than the library default"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_an_absent_room_keyword_is_the_documented_default_and_zero_is_literal"
+
+[[entry]]
+kind = "option"
+old = "room_morph(air_temperature_c)"
+changed = "None means the ISO reference 20 degC; an explicit 0 is 0 degC rather than the reference"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_an_absent_room_keyword_is_the_documented_default_and_zero_is_literal"
+
+[[entry]]
+kind = "option"
+old = "room_morph(air_humidity_percent)"
+changed = "None means the ISO reference 50 %; an explicit 0 is 0 % rather than the reference"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_an_absent_room_keyword_is_the_documented_default_and_zero_is_literal"
+
+[[entry]]
+kind = "option"
+old = "room_morph_stereo(seed)"
+changed = "None means 1; 0 is a seed rather than the library default"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_an_absent_room_keyword_is_the_documented_default_and_zero_is_literal"
+
+[[entry]]
+kind = "option"
+old = "room_morph_stereo(crossfade_ms)"
+changed = "None means 5 ms; an explicit 0 is a 0 ms crossfade rather than the library default"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_an_absent_room_keyword_is_the_documented_default_and_zero_is_literal"
+
+[[entry]]
+kind = "option"
+old = "room_morph_stereo(air_temperature_c)"
+changed = "None means the ISO reference 20 degC; an explicit 0 is 0 degC rather than the reference"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_an_absent_room_keyword_is_the_documented_default_and_zero_is_literal"
+
+[[entry]]
+kind = "option"
+old = "room_morph_stereo(air_humidity_percent)"
+changed = "None means the ISO reference 50 %; an explicit 0 is 0 % rather than the reference"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_acoustic.py::test_an_absent_room_keyword_is_the_documented_default_and_zero_is_literal"

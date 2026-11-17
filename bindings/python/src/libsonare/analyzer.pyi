@@ -409,13 +409,13 @@ def synthesize_rir(
     sample_rate: int,
     ism_order: int = 3,
     prefer_eyring: bool = True,
-    seed: int = 1,
-    max_seconds: float = 0.0,
-    mixing_time_ms: float = 0.0,
-    crossfade_ms: float = 0.0,
+    seed: int | None = None,  # None = 1; 0 is a seed
+    max_seconds: float = 0.0,  # 0 = natural length
+    mixing_time_ms: float = 0.0,  # 0 = automatic
+    crossfade_ms: float | None = None,  # None = 5 ms
     air_absorption_enabled: bool = True,
-    air_temperature_c: float = 0.0,
-    air_humidity_percent: float = 0.0,
+    air_temperature_c: float | None = None,  # None = 20 degC
+    air_humidity_percent: float | None = None,  # None = 50 %
 ) -> RirResult: ...
 def estimate_room(
     samples: FloatSamples,
@@ -453,13 +453,13 @@ def room_morph(
     wet: float = 0.5,
     ism_order: int = 3,
     prefer_eyring: bool = True,
-    seed: int = 1,
-    max_seconds: float = 0.0,
-    mixing_time_ms: float = 0.0,
-    crossfade_ms: float = 0.0,
+    seed: int | None = None,  # None = 1; 0 is a seed
+    max_seconds: float = 0.0,  # 0 = natural length
+    mixing_time_ms: float = 0.0,  # 0 = automatic
+    crossfade_ms: float | None = None,  # None = 5 ms
     air_absorption_enabled: bool = True,
-    air_temperature_c: float = 0.0,
-    air_humidity_percent: float = 0.0,
+    air_temperature_c: float | None = None,  # None = 20 degC
+    air_humidity_percent: float | None = None,  # None = 50 %
 ) -> RoomMorphResult: ...
 def room_morph_stereo(
     left: FloatSamples,
@@ -469,7 +469,7 @@ def room_morph_stereo(
     width_m: float,
     height_m: float,
     *,
-    receiver_spacing_m: float | None = None,
+    receiver_spacing_m: float | None = None,  # None = 0.5 m
     source: tuple[float, float, float] = ...,
     listener: tuple[float, float, float] = ...,
     absorption: float = 0.2,
@@ -480,13 +480,13 @@ def room_morph_stereo(
     wet: float = 0.5,
     ism_order: int = 3,
     prefer_eyring: bool = True,
-    seed: int = 1,
-    max_seconds: float = 0.0,
-    mixing_time_ms: float = 0.0,
-    crossfade_ms: float = 0.0,
+    seed: int | None = None,  # None = 1; 0 is a seed
+    max_seconds: float = 0.0,  # 0 = natural length
+    mixing_time_ms: float = 0.0,  # 0 = automatic
+    crossfade_ms: float | None = None,  # None = 5 ms
     air_absorption_enabled: bool = True,
-    air_temperature_c: float = 0.0,
-    air_humidity_percent: float = 0.0,
+    air_temperature_c: float | None = None,  # None = 20 degC
+    air_humidity_percent: float | None = None,  # None = 50 %
 ) -> RoomMorphStereoResult: ...
 def analyze_rhythm(
     samples: FloatSamples,

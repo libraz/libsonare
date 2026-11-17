@@ -14,6 +14,7 @@ from __future__ import annotations
 import ctypes
 import math
 from collections.abc import Sequence
+from typing import TypeVar
 
 from ._errors import SonareValueError, _not_supported
 from ._narrowing import _narrow_double
@@ -45,13 +46,11 @@ from .types import (
     RoomMorphStereoResult,
 )
 
-# SONARE_REVERB_MODEL_* selectors (sonare_c_acoustic.h). DEFAULT (0) resolves to
-# the library default (Eyring); only SABINE selects Sabine explicitly.
-_REVERB_MODEL_DEFAULT = 0
+# SONARE_REVERB_MODEL_* selectors (sonare_c_acoustic.h); 0 is refused.
 _REVERB_MODEL_SABINE = 1
 _REVERB_MODEL_EYRING = 2
 
-# SonareRirSynthConfig / SonareRoomMorphConfig.air_absorption selector (0 = library default).
+# SonareRirSynthConfig / SonareRoomMorphConfig.air_absorption selector; 0 is refused.
 _AIR_ABSORPTION_ON = 1
 _AIR_ABSORPTION_OFF = 2
 
@@ -150,6 +149,46 @@ def _checked_seed(seed: int) -> int:
     return seed
 
 
+_RoomConfig = TypeVar("_RoomConfig", SonareRirSynthConfig, SonareRoomMorphConfig)
+
+
+def _fill_room_config(
+    config: _RoomConfig,
+    *,
+    source: tuple[float, float, float],
+    listener: tuple[float, float, float],
+    band_ptr: object,
+    band_count: int,
+    scatter_ptr: object,
+    scatter_count: int,
+    material_preset: MaterialPresetName,
+    prefer_eyring: bool,
+    air_absorption_enabled: bool,
+    seed: int | None,
+    **fields: float | None,
+) -> _RoomConfig:
+    """Overwrite an ``_init``-filled config with every field the caller gave.
+
+    A ``None`` keyword leaves the ``_init`` value; every other value is written
+    literally, so a 0 seed, a 0 ms crossfade and a 0 degC climate are honoured.
+    """
+    config.source_x, config.source_y, config.source_z = source
+    config.listener_x, config.listener_y, config.listener_z = listener
+    config.absorption_bands = band_ptr
+    config.absorption_band_count = band_count
+    config.scattering_bands = scatter_ptr
+    config.scattering_band_count = scatter_count
+    config.material_preset = _material_preset(material_preset)
+    config.late_model = _late_model(prefer_eyring)
+    config.air_absorption = _AIR_ABSORPTION_ON if air_absorption_enabled else _AIR_ABSORPTION_OFF
+    if seed is not None:
+        config.seed = _checked_seed(seed)
+    for name, value in fields.items():
+        if value is not None:
+            setattr(config, name, value)
+    return config
+
+
 def synthesize_rir(
     length_m: float = 7.0,
     width_m: float = 5.0,
@@ -164,13 +203,13 @@ def synthesize_rir(
     sample_rate: int,
     ism_order: int = 3,
     prefer_eyring: bool = True,
-    seed: int = 1,
+    seed: int | None = None,
     max_seconds: float = 0.0,
     mixing_time_ms: float = 0.0,
-    crossfade_ms: float = 0.0,
+    crossfade_ms: float | None = None,
     air_absorption_enabled: bool = True,
-    air_temperature_c: float = 0.0,
-    air_humidity_percent: float = 0.0,
+    air_temperature_c: float | None = None,
+    air_humidity_percent: float | None = None,
 ) -> RirResult:
     """Synthesize a room impulse response from shoebox geometry.
 
@@ -200,21 +239,20 @@ def synthesize_rir(
         ism_order: Image-source reflection order.
         prefer_eyring: Use the Eyring statistical late-tail model (default);
             False selects Sabine.
-        seed: Deterministic late-tail seed, in [0, 4294967295]; 0 keeps the
-            library default, as it does on every other surface.
+        seed: Deterministic late-tail seed, in [0, 4294967295]; None = 1.
+            Every value, 0 included, is a seed.
         max_seconds: Hard RIR length cap (0 = natural length).
         mixing_time_ms: Early/late crossover in ms (0 = auto, ~sqrt(V) ms).
-        crossfade_ms: Equal-power crossfade width around the mixing time in ms
-            (0 = library default).
+        crossfade_ms: Equal-power crossfade width around the mixing time in ms;
+            None = 5 ms, and 0 is a hard switch.
         air_absorption_enabled: Add the ISO 9613-1 atmospheric-absorption term
             to the late tail's per-band RT60. On by default; it mainly shortens
             the high bands of a large room. ``False`` gives the geometry-only
             RT60.
-        air_temperature_c: Air temperature in degrees Celsius (0 = the ISO
-            reference climate's 20 degC). A literal 0 degC is not
-            distinguishable from unset here; use 0.01 for a freezing room.
-        air_humidity_percent: Relative humidity in percent (0 = the ISO
-            reference climate's 50 %). Both climate values are read only while
+        air_temperature_c: Air temperature in degrees Celsius; None = the ISO
+            reference climate's 20 degC, and 0 is 0 degC.
+        air_humidity_percent: Relative humidity in percent; None = the ISO
+            reference climate's 50 %, and 0 is 0 %. Both climate values are read only while
             ``air_absorption_enabled`` is set, and an implausible pair raises
             ``SonareError`` (``acoustic.invalid_air_absorption``).
 
@@ -235,31 +273,30 @@ def synthesize_rir(
     scatter_ptr, scatter_count, _scatter_owner = _band_array_args(
         band_scattering, arg_name="band_scattering"
     )
-    config = SonareRirSynthConfig(
+    config = SonareRirSynthConfig()
+    lib.sonare_rir_synth_config_init(ctypes.byref(config))
+    _fill_room_config(
+        config,
+        source=source,
+        listener=listener,
+        band_ptr=bands_ptr,
+        band_count=bands_count,
+        scatter_ptr=scatter_ptr,
+        scatter_count=scatter_count,
+        material_preset=material_preset,
+        prefer_eyring=prefer_eyring,
+        air_absorption_enabled=air_absorption_enabled,
+        seed=seed,
         length_m=length_m,
         width_m=width_m,
         height_m=height_m,
-        source_x=source[0],
-        source_y=source[1],
-        source_z=source[2],
-        listener_x=listener[0],
-        listener_y=listener[1],
-        listener_z=listener[2],
         absorption=absorption,
         max_seconds=max_seconds,
         mixing_time_ms=mixing_time_ms,
         crossfade_ms=crossfade_ms,
         ism_order=ism_order,
-        late_model=_late_model(prefer_eyring),
-        seed=_checked_seed(seed),
-        air_absorption=_AIR_ABSORPTION_ON if air_absorption_enabled else _AIR_ABSORPTION_OFF,
         air_temperature_c=air_temperature_c,
         air_humidity_percent=air_humidity_percent,
-        absorption_bands=bands_ptr,
-        absorption_band_count=bands_count,
-        scattering_bands=scatter_ptr,
-        scattering_band_count=scatter_count,
-        material_preset=_material_preset(material_preset),
     )
     out = SonareRirSynthResult()
     rc = lib.sonare_synthesize_rir(
@@ -403,6 +440,7 @@ def room_geometry_from_estimate(
         band_count=bands_count,
     )
     config = SonareRirSynthConfig()
+    lib.sonare_rir_synth_config_init(ctypes.byref(config))
     _check(lib.sonare_room_geometry_from_estimate(ctypes.byref(c_estimate), ctypes.byref(config)))
     geometry: RoomGeometry = {
         "length_m": _narrow_double(config.length_m, "config.length_m"),
@@ -447,14 +485,14 @@ def _room_morph_config(
     wet: float,
     ism_order: int,
     prefer_eyring: bool,
-    seed: int,
+    seed: int | None,
     max_seconds: float,
     mixing_time_ms: float,
-    crossfade_ms: float,
+    crossfade_ms: float | None,
     air_absorption_enabled: bool,
-    air_temperature_c: float,
-    air_humidity_percent: float,
-    receiver_spacing_m: float = 0.0,
+    air_temperature_c: float | None,
+    air_humidity_percent: float | None,
+    receiver_spacing_m: float | None = None,
 ) -> tuple[SonareRoomMorphConfig, tuple[object, object]]:
     """Builds the morph config shared by the mono and stereo entry points.
 
@@ -467,16 +505,23 @@ def _room_morph_config(
     scatter_ptr, scatter_count, scatter_owner = _band_array_args(
         band_scattering, arg_name="band_scattering"
     )
-    config = SonareRoomMorphConfig(
+    config = SonareRoomMorphConfig()
+    _get_lib().sonare_room_morph_config_init(ctypes.byref(config))
+    _fill_room_config(
+        config,
+        source=source,
+        listener=listener,
+        band_ptr=bands_ptr,
+        band_count=bands_count,
+        scatter_ptr=scatter_ptr,
+        scatter_count=scatter_count,
+        material_preset=material_preset,
+        prefer_eyring=prefer_eyring,
+        air_absorption_enabled=air_absorption_enabled,
+        seed=seed,
         length_m=length_m,
         width_m=width_m,
         height_m=height_m,
-        source_x=source[0],
-        source_y=source[1],
-        source_z=source[2],
-        listener_x=listener[0],
-        listener_y=listener[1],
-        listener_z=listener[2],
         absorption=absorption,
         source_tail_suppression=source_tail_suppression,
         wet=wet,
@@ -484,16 +529,8 @@ def _room_morph_config(
         mixing_time_ms=mixing_time_ms,
         crossfade_ms=crossfade_ms,
         ism_order=ism_order,
-        late_model=_late_model(prefer_eyring),
-        seed=_checked_seed(seed),
-        air_absorption=_AIR_ABSORPTION_ON if air_absorption_enabled else _AIR_ABSORPTION_OFF,
         air_temperature_c=air_temperature_c,
         air_humidity_percent=air_humidity_percent,
-        absorption_bands=bands_ptr,
-        absorption_band_count=bands_count,
-        scattering_bands=scatter_ptr,
-        scattering_band_count=scatter_count,
-        material_preset=_material_preset(material_preset),
         receiver_spacing_m=receiver_spacing_m,
     )
     return config, (bands_owner, scatter_owner)
@@ -517,13 +554,13 @@ def room_morph(
     wet: float = 0.5,
     ism_order: int = 3,
     prefer_eyring: bool = True,
-    seed: int = 1,
+    seed: int | None = None,
     max_seconds: float = 0.0,
     mixing_time_ms: float = 0.0,
-    crossfade_ms: float = 0.0,
+    crossfade_ms: float | None = None,
     air_absorption_enabled: bool = True,
-    air_temperature_c: float = 0.0,
-    air_humidity_percent: float = 0.0,
+    air_temperature_c: float | None = None,
+    air_humidity_percent: float | None = None,
 ) -> RoomMorphResult:
     """Morph a recording's reverberation toward a target room (creative FX).
 
@@ -545,15 +582,16 @@ def room_morph(
         prefer_eyring: Use the Eyring statistical late-tail model for the target
             room (default); False selects Sabine.
         mixing_time_ms: Early/late crossover in ms (0 = auto, ~sqrt(V) ms).
-        crossfade_ms: Equal-power crossfade width around the mixing time in ms
-            (0 = library default).
+        crossfade_ms: Equal-power crossfade width around the mixing time in ms;
+            None = 5 ms, and 0 is a hard switch.
         air_absorption_enabled: Add the ISO 9613-1 atmospheric-absorption term
             to the target room's late tail (on by default; ``False`` gives the
             geometry-only RT60).
-        air_temperature_c: Air temperature in degrees Celsius (0 = the ISO
-            reference 20 degC); see :func:`synthesize_rir`.
-        air_humidity_percent: Relative humidity in percent (0 = the ISO
-            reference 50 %). An implausible climate raises here rather than
+        seed: Deterministic late-tail seed; None = 1, and 0 is a seed.
+        air_temperature_c: Air temperature in degrees Celsius; None = the ISO
+            reference 20 degC, and 0 is 0 degC; see :func:`synthesize_rir`.
+        air_humidity_percent: Relative humidity in percent; None = the ISO
+            reference 50 %, and 0 is 0 %. An implausible climate raises here rather than
             reporting a diagnostic, because the morph validates its config.
     """
     lib = _get_lib()
@@ -627,13 +665,13 @@ def room_morph_stereo(
     wet: float = 0.5,
     ism_order: int = 3,
     prefer_eyring: bool = True,
-    seed: int = 1,
+    seed: int | None = None,
     max_seconds: float = 0.0,
     mixing_time_ms: float = 0.0,
-    crossfade_ms: float = 0.0,
+    crossfade_ms: float | None = None,
     air_absorption_enabled: bool = True,
-    air_temperature_c: float = 0.0,
-    air_humidity_percent: float = 0.0,
+    air_temperature_c: float | None = None,
+    air_humidity_percent: float | None = None,
 ) -> RoomMorphStereoResult:
     """Morph a stereo recording toward a target room heard by two receivers.
 
@@ -656,9 +694,8 @@ def room_morph_stereo(
     lib = _get_lib()
     if not hasattr(lib, "sonare_room_morph_stereo"):
         raise _not_supported("libsonare was built without acoustic-simulation support")
-    if receiver_spacing_m is None:
-        spacing = 0.0
-    else:
+    spacing: float | None = None
+    if receiver_spacing_m is not None:
         spacing = _narrow_double(receiver_spacing_m, "receiver_spacing_m")
         if not math.isfinite(spacing) or not 0.0 < spacing <= 4.0:
             raise SonareValueError(

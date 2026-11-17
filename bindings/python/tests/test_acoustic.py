@@ -313,10 +313,13 @@ def test_synthesize_rir_routes_air_absorption_through_the_c_abi() -> None:
     # 9600 (200 ms) is past the ~100 ms crossover for this room.
     assert sum(v * v for v in iso.rir[9600:]) < sum(v * v for v in off.rir[9600:])
 
-    # A zeroed climate resolves to the ISO reference, matching the seed and
-    # crossfade_ms convention the rest of this config already follows.
+    # An absent climate is the ISO reference; an explicit 0 degC / 0 % is a climate.
     implicit = libsonare.synthesize_rir(**hall, air_absorption_enabled=True)
     assert implicit.rir == iso.rir
+    freezing = libsonare.synthesize_rir(**hall, air_absorption_enabled=True, air_temperature_c=0.0)
+    arid = libsonare.synthesize_rir(**hall, air_absorption_enabled=True, air_humidity_percent=0.0)
+    assert freezing.rir != iso.rir
+    assert arid.rir != iso.rir
 
     # Air absorption is on by default; False is the geometry-only RIR.
     assert libsonare.synthesize_rir(**hall).rir == iso.rir
@@ -497,9 +500,40 @@ def test_a_seed_the_c_field_cannot_express_is_rejected_rather_than_folded() -> N
         with pytest.raises(libsonare.SonareValueError, match="seed"):
             libsonare.room_morph([0.0] * 2205, seed=invalid, **room)
 
-    # The whole uint32 range stays reachable, and 0 keeps the library default.
+    # The whole uint32 range stays reachable, and 0 is a seed of its own.
     assert len(libsonare.synthesize_rir(seed=0xFFFF_FFFF, **room).rir) > 0
-    assert libsonare.synthesize_rir(seed=0, **room).rir == libsonare.synthesize_rir(**room).rir
+    assert libsonare.synthesize_rir(seed=0, **room).rir != libsonare.synthesize_rir(**room).rir
+
+
+@acoustic
+@pytest.mark.parametrize(
+    ("keyword", "default", "literal"),
+    [
+        ("seed", 1, 0),
+        ("crossfade_ms", 5.0, 0.0),
+        ("air_temperature_c", 20.0, 0.0),
+        ("air_humidity_percent", 50.0, 0.0),
+    ],
+)
+def test_an_absent_room_keyword_is_the_documented_default_and_zero_is_literal(
+    keyword: str, default: float, literal: float
+) -> None:
+    room = dict(sample_rate=22050, length_m=7.0, width_m=5.0, height_m=3.0, max_seconds=0.2)
+    absent = libsonare.synthesize_rir(**room).rir
+    assert libsonare.synthesize_rir(**room, **{keyword: default}).rir == absent
+    assert libsonare.synthesize_rir(**room, **{keyword: literal}).rir != absent
+
+    samples = [0.0] * 2205
+    samples[0] = 1.0
+    morph_absent = libsonare.room_morph(samples, **room).audio
+    assert libsonare.room_morph(samples, **room, **{keyword: default}).audio == morph_absent
+    assert libsonare.room_morph(samples, **room, **{keyword: literal}).audio != morph_absent
+
+    stereo_absent = libsonare.room_morph_stereo(samples, samples, **room).left
+    stereo_default = libsonare.room_morph_stereo(samples, samples, **room, **{keyword: default})
+    stereo_literal = libsonare.room_morph_stereo(samples, samples, **room, **{keyword: literal})
+    assert stereo_default.left == stereo_absent
+    assert stereo_literal.left != stereo_absent
 
 
 @acoustic
