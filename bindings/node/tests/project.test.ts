@@ -275,7 +275,7 @@ function accelerando(sampleRate = 22050, startBpm = 100, endBpm = 160, seconds =
 describe('Project native binding', () => {
   it('reports the expected project ABI version', () => {
     expect(projectAbiVersion()).toBe(EXPECTED_PROJECT_ABI_VERSION);
-    expect(projectAbiVersion()).toBeGreaterThan(0);
+    expect(projectAbiVersion() ?? 0).toBeGreaterThan(0);
   });
 
   it('imports external planar stems through the project C ABI', () => {

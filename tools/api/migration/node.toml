@@ -90,7 +90,7 @@ test = "bindings/node/tests/surface/core-errors.test.ts::derives codeName from c
 kind = "function"
 old = "vocalEditApiVersion"
 new = "vocalEditAbiVersion"
-domain = "core"
+domain = "project"
 rule = "abi-probes"
 
 [[entry]]
@@ -118,7 +118,7 @@ rule = "abi-probes"
 kind = "value"
 old = "EXPECTED_ENGINE_ABI_VERSION"
 removed = true
-domain = "engine"
+domain = "core"
 rule = "abi-probes"
 
 [[entry]]
@@ -208,3 +208,75 @@ old = "Audio.getDuration"
 new = "Audio.durationSec"
 domain = "core"
 rule = "seconds-suffix"
+
+[[entry]]
+kind = "method"
+old = "Mixer.delete"
+removed = true
+domain = "engine"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "Project.delete"
+removed = true
+domain = "project"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "SampleBank.delete"
+removed = true
+domain = "engine"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "ProjectTimeline.dispose"
+new = "ProjectTimeline.destroy"
+domain = "project"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "VocalEditSession.dispose"
+removed = true
+domain = "project"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "VocalEditDraft.dispose"
+removed = true
+domain = "project"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "VocalRenderSnapshot.dispose"
+removed = true
+domain = "project"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "VocalRenderJob.dispose"
+removed = true
+domain = "project"
+rule = "teardown"
+
+[[entry]]
+kind = "function"
+old = "vocalEditAbiVersion"
+changed = "returns undefined instead of 0 when the feature is compiled out"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/core-teardown.test.ts::declare number | undefined"
+
+[[entry]]
+kind = "function"
+old = "projectAbiVersion"
+changed = "returns undefined instead of 0 when the feature is compiled out"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/core-teardown.test.ts::declare number | undefined"

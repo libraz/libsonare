@@ -642,11 +642,6 @@ export class Mixer {
     this.native.destroy();
   }
 
-  /** Alias for {@link destroy}, provided for cross-binding (WASM) compatibility. */
-  delete(): void {
-    this.destroy();
-  }
-
   /**
 
    * Releases the native mixer; lets `using` free it automatically (needs TypeScript 5.2+

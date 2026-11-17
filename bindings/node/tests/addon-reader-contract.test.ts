@@ -352,7 +352,7 @@ describe('vocal analysis supplied without an algorithm id is labelled host', () 
     try {
       expect(session.analysis().algorithmId).toBe('host');
     } finally {
-      session.dispose();
+      session.destroy();
     }
   });
 });

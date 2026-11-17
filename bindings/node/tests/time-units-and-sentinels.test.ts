@@ -407,8 +407,8 @@ describe('vocal render range', () => {
         /startSample.*startSec/,
       );
     } finally {
-      snapshot.dispose();
-      edit.dispose();
+      snapshot.destroy();
+      edit.destroy();
     }
   });
 });

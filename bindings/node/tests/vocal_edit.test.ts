@@ -79,7 +79,7 @@ describe('Node vocal edit facade', () => {
   it('reports the linked vocal-edit surface and its ABI version', () => {
     expect(capabilities().features.vocalEdit).toBe(true);
     expect(Number.isInteger(vocalEditAbiVersion())).toBe(true);
-    expect(vocalEditAbiVersion()).toBeGreaterThan(0);
+    expect(vocalEditAbiVersion() ?? 0).toBeGreaterThan(0);
   });
 
   it('copies source and supplied analysis before returning the session', () => {
@@ -95,7 +95,7 @@ describe('Node vocal edit facade', () => {
       expect(source[0]).not.toBe(original);
       expect(session.analysis().sourceLengthSamples).toBe(SAMPLE_COUNT);
     } finally {
-      session.dispose();
+      session.destroy();
     }
   });
 
@@ -114,7 +114,7 @@ describe('Node vocal edit facade', () => {
         expect(session.notes().notes[0].amplitude[0]).not.toBe(0);
       }
     } finally {
-      session.dispose();
+      session.destroy();
     }
   });
 
@@ -158,7 +158,7 @@ describe('Node vocal edit facade', () => {
         referenceHz: 442,
       });
     } finally {
-      session.dispose();
+      session.destroy();
     }
   });
 
@@ -195,7 +195,7 @@ describe('Node vocal edit facade', () => {
       expect(result?.edit.amplitudeEnvelope).toEqual(envelope);
       expect(result?.edit.amplitudeEnvelope.concat([1])).toEqual([...envelope, 1]);
     } finally {
-      session.dispose();
+      session.destroy();
     }
   });
 
@@ -208,8 +208,8 @@ describe('Node vocal edit facade', () => {
       expect(snapshot.outputLengthSamples()).toBe(SAMPLE_COUNT);
       expect(snapshot.render({}).samples.length).toBe(SAMPLE_COUNT);
     } finally {
-      snapshot.dispose();
-      session.dispose();
+      snapshot.destroy();
+      session.destroy();
     }
   });
 
@@ -231,7 +231,7 @@ describe('Node vocal edit facade', () => {
       expect(evaluation.hasTarget.some((value) => value === 1)).toBe(true);
       draft.cancel();
     } finally {
-      session.dispose();
+      session.destroy();
     }
   });
 
@@ -271,7 +271,7 @@ describe('Node vocal edit facade', () => {
       expect(draft.notes().transitions).toHaveLength(1);
       draft.cancel();
     } finally {
-      session.dispose();
+      session.destroy();
     }
   });
 
@@ -298,14 +298,14 @@ describe('Node vocal edit facade', () => {
       expect(session.token().revision).toBe('0');
       draft.cancel();
     } finally {
-      session.dispose();
+      session.destroy();
     }
   });
 
   it('renders an exact requested range and retains the snapshot after session disposal', async () => {
     const session = create();
     const snapshot = session.captureRenderSnapshot();
-    session.dispose();
+    session.destroy();
     try {
       const range = { startSample: 64, endSample: 320 };
       const sync = snapshot.render({ range, requestId: '184467440737095516' });
@@ -315,7 +315,7 @@ describe('Node vocal edit facade', () => {
       expect(asyncResult.token.profileId).toBe(1);
       expect(asyncResult.token.requestId).toBe('184467440737095516');
     } finally {
-      snapshot.dispose();
+      snapshot.destroy();
     }
   });
 
@@ -332,8 +332,8 @@ describe('Node vocal edit facade', () => {
         field: 'render',
       });
     } finally {
-      snapshot.dispose();
-      session.dispose();
+      snapshot.destroy();
+      session.destroy();
     }
   });
 
@@ -347,8 +347,8 @@ describe('Node vocal edit facade', () => {
       }).not.toThrow();
       await expect(promise).rejects.toBeInstanceOf(RangeError);
     } finally {
-      snapshot.dispose();
-      session.dispose();
+      snapshot.destroy();
+      session.destroy();
     }
     let lifecycle: Promise<unknown> | undefined;
     expect(() => {
@@ -370,8 +370,8 @@ describe('Node vocal edit facade', () => {
       );
       await expect(snapshot.renderAsync({ signal })).rejects.toMatchObject({ name: 'AbortError' });
     } finally {
-      snapshot.dispose();
-      session.dispose();
+      snapshot.destroy();
+      session.destroy();
     }
   });
 
@@ -396,8 +396,8 @@ describe('Node vocal edit facade', () => {
         snapshot.renderAsync({ range: { startSample: 0, endSample: 256 } }),
       ).resolves.toMatchObject({ samples: expect.any(Float32Array) });
     } finally {
-      snapshot.dispose();
-      session.dispose();
+      snapshot.destroy();
+      session.destroy();
     }
   });
 
@@ -415,8 +415,8 @@ describe('Node vocal edit facade', () => {
       expect(result.samples).toBeInstanceOf(Float32Array);
       expect(result.samples.length).toBe(256);
     } finally {
-      snapshot.dispose();
-      session.dispose();
+      snapshot.destroy();
+      session.destroy();
     }
   });
 
@@ -437,7 +437,7 @@ describe('Node vocal edit facade', () => {
     const source = sine();
     const original = create();
     const state = original.exportState();
-    original.dispose();
+    original.destroy();
     expect(() =>
       restoreVocalEditSession({
         samples: source,
@@ -457,10 +457,10 @@ describe('Node vocal edit facade', () => {
       const range = { startSample: 0, endSample: 256 };
       const first = snapshot.beginRenderJob({ range });
       expect(() => snapshot.beginRenderJob({ range })).toThrow();
-      first.dispose();
+      first.destroy();
     } finally {
-      snapshot.dispose();
-      restored.dispose();
+      snapshot.destroy();
+      restored.destroy();
     }
   });
 
@@ -481,7 +481,7 @@ describe('Node vocal edit facade', () => {
     const session = create();
     const note = session.notes().notes[0];
     const draft = session.beginEdit();
-    session.dispose();
+    session.destroy();
     expect(() => draft.notes()).toThrow(/disposed/);
     expect(() =>
       draft.apply({
@@ -490,7 +490,7 @@ describe('Node vocal edit facade', () => {
       }),
     ).toThrow(/disposed/);
     draft.cancel();
-    draft.dispose();
+    draft.destroy();
   });
 
   it('requires expectedGeneration on draft apply', () => {
@@ -505,7 +505,7 @@ describe('Node vocal edit facade', () => {
       ).toThrow(TypeError);
       draft.cancel();
     } finally {
-      session.dispose();
+      session.destroy();
     }
   });
 
@@ -530,7 +530,7 @@ describe('Node vocal edit facade', () => {
         expect(error?.message).toMatch(pattern);
         draft.cancel();
       } finally {
-        session.dispose();
+        session.destroy();
       }
     };
 

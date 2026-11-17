@@ -380,7 +380,7 @@ export interface ProjectCompileResult {
 export interface ProjectCompileTimelineResult extends ProjectCompileResult {
   /**
    * The compiled playback snapshot, or `null` when compilation produced none
-   * (see `diagnostics`). Owned by the caller: dispose it when done.
+   * (see `diagnostics`). Owned by the caller: destroy it when done.
    */
   timeline: ProjectTimeline | null;
 }

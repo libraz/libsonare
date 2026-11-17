@@ -105,11 +105,12 @@ export {
 } from './types.js';
 
 /**
- * ABI version of the flat project layout in the loaded native binding, or `0`
- * when the native library was built without the arrangement subsystem.
+ * ABI version of the flat project layout in the loaded native binding. `undefined` when the
+ * build has no project subsystem; check `capabilities().features` for presence.
  */
-export function projectAbiVersion(): number {
-  return addon.projectAbiVersion();
+export function projectAbiVersion(): number | undefined {
+  const version = (addon.projectAbiVersion as (() => number) | undefined)?.() ?? 0;
+  return version > 0 ? version : undefined;
 }
 
 /**
@@ -186,7 +187,7 @@ function interleaveLoopRecording(desc: ProjectLoopRecordingDesc): ProjectLoopRec
  * Immutable compiled playback snapshot of a {@link Project}, produced by
  * {@link Project.compileTimeline} and installed with
  * {@link RealtimeEngine.applyProjectTimeline}. The native handle is not
- * garbage-collected, so release it with {@link dispose} (or `using`).
+ * garbage-collected, so release it with {@link destroy} (or `using`).
  */
 export class ProjectTimeline {
   private native: InstanceType<typeof addon.ProjectTimeline>;
@@ -202,7 +203,7 @@ export class ProjectTimeline {
    * applied to keeps its own reference, so this is safe right after
    * {@link RealtimeEngine.applyProjectTimeline}.
    */
-  dispose(): void {
+  destroy(): void {
     if (this.disposed) {
       return;
     }
@@ -218,7 +219,7 @@ export class ProjectTimeline {
 
    */
   [Symbol.dispose](): void {
-    this.dispose();
+    this.destroy();
   }
 }
 
@@ -1831,11 +1832,6 @@ export class Project {
     }
     this.disposed = true;
     this.native.destroy();
-  }
-
-  /** Alias for {@link destroy}, provided for cross-binding (WASM) compatibility. */
-  delete(): void {
-    this.destroy();
   }
 
   /**

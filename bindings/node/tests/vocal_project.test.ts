@@ -113,7 +113,7 @@ describe('Vocal uint64 and digest input rules', () => {
         /decimal uint64 string/,
       );
     } finally {
-      session.dispose();
+      session.destroy();
     }
   });
 
@@ -489,10 +489,10 @@ describe('Node Project vocal edit helpers', () => {
       }
     } finally {
       draft?.cancel();
-      snapshot?.dispose();
+      snapshot?.destroy();
       restored?.destroy();
       project?.destroy();
-      session.dispose();
+      session.destroy();
     }
   });
 });

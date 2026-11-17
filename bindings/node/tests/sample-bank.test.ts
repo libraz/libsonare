@@ -211,7 +211,7 @@ describe('SampleBank', () => {
     bank.addSample(sampleSine(64));
     bank.destroy();
     expect(() => bank.destroy()).not.toThrow();
-    expect(() => bank.delete()).not.toThrow();
+    expect(() => bank.destroy()).not.toThrow();
     expect(() => bank.sampleCount()).toThrow(/destroyed/);
     expect(() => bank.addSample(sampleSine(64))).toThrow(/destroyed/);
   });

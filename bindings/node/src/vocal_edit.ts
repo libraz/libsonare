@@ -82,8 +82,7 @@ interface NativeJob {
 }
 
 interface NativeVocalAddon {
-  vocalEditAvailable(): boolean;
-  vocalEditApiVersion(): number;
+  vocalEditApiVersion?(): number;
   createVocalEditSession(request: VocalCreateRequest): NativeSession;
   restoreVocalEditSession(request: VocalRestoreRequest): NativeSession;
 }
@@ -207,7 +206,7 @@ export class VocalEditSession implements Disposable {
     return cloneStateBytes(this.native.exportState());
   }
 
-  dispose(): void {
+  destroy(): void {
     if (this.disposed) {
       return;
     }
@@ -216,12 +215,8 @@ export class VocalEditSession implements Disposable {
     disposedSessions.add(this);
   }
 
-  destroy(): void {
-    this.dispose();
-  }
-
   [Symbol.dispose](): void {
-    this.dispose();
+    this.destroy();
   }
 
   private requireAlive(): void {
@@ -294,7 +289,7 @@ export class VocalEditDraft implements Disposable {
     return wrapVocalRenderSnapshot(this.native.captureRenderSnapshot(), this.sampleRate);
   }
 
-  dispose(): void {
+  destroy(): void {
     if (this.disposed) {
       return;
     }
@@ -302,12 +297,8 @@ export class VocalEditDraft implements Disposable {
     this.disposed = true;
   }
 
-  destroy(): void {
-    this.dispose();
-  }
-
   [Symbol.dispose](): void {
-    this.dispose();
+    this.destroy();
   }
 
   private requireAlive(): void {
@@ -360,7 +351,7 @@ export class VocalRenderSnapshot implements Disposable {
     );
   }
 
-  dispose(): void {
+  destroy(): void {
     if (this.disposed) {
       return;
     }
@@ -368,12 +359,8 @@ export class VocalRenderSnapshot implements Disposable {
     this.disposed = true;
   }
 
-  destroy(): void {
-    this.dispose();
-  }
-
   [Symbol.dispose](): void {
-    this.dispose();
+    this.destroy();
   }
 
   private requireAlive(): void {
@@ -421,7 +408,7 @@ export class VocalRenderJob implements Disposable {
   finalize(): VocalRenderResult {
     this.requireAlive();
     const result = cloneRenderResult(this.native.finalize());
-    this.dispose();
+    this.destroy();
     return result;
   }
 
@@ -431,7 +418,7 @@ export class VocalRenderJob implements Disposable {
     }
   }
 
-  dispose(): void {
+  destroy(): void {
     if (this.disposed) {
       return;
     }
@@ -439,12 +426,8 @@ export class VocalRenderJob implements Disposable {
     this.disposed = true;
   }
 
-  destroy(): void {
-    this.dispose();
-  }
-
   [Symbol.dispose](): void {
-    this.dispose();
+    this.destroy();
   }
 
   private requireAlive(): void {
@@ -595,11 +578,12 @@ function resolveVocalOperationTimes(
 }
 
 /**
- * ABI version of the vocal-edit layout in the loaded addon. Whether vocal
- * editing is built in at all is `capabilities().features.vocalEdit`.
+ * ABI version of the vocal-edit layout in the loaded addon. `undefined` when the build has no
+ * vocal editing; check `capabilities().features` for presence.
  */
-export function vocalEditAbiVersion(): number {
-  return vocalAddon.vocalEditApiVersion();
+export function vocalEditAbiVersion(): number | undefined {
+  const version = vocalAddon.vocalEditApiVersion?.() ?? 0;
+  return version > 0 ? version : undefined;
 }
 
 export function createVocalEditSession(request: VocalCreateRequest): VocalEditSession {

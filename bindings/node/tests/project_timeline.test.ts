@@ -116,7 +116,7 @@ function applyProject(engine: RealtimeEngine, project: Project): void {
   expect(hasTimeline).toBe(true);
   expect(timeline).toBeInstanceOf(ProjectTimeline);
   engine.applyProjectTimeline(timeline as ProjectTimeline);
-  (timeline as ProjectTimeline).dispose();
+  (timeline as ProjectTimeline).destroy();
 }
 
 describe('project timeline', () => {
@@ -145,8 +145,8 @@ describe('project timeline', () => {
     const engine = preparedEngine();
     const { timeline } = project.compileTimeline();
     expect(timeline).not.toBeNull();
-    timeline?.dispose();
-    timeline?.dispose();
+    timeline?.destroy();
+    timeline?.destroy();
     expect(() => engine.applyProjectTimeline(timeline as ProjectTimeline)).toThrow(
       expect.objectContaining({ code: ErrorCode.InvalidState }),
     );
@@ -167,7 +167,7 @@ describe('project timeline', () => {
     processBlock(engine);
     engine.applyProjectTimeline(timeline as ProjectTimeline);
     expect(engine.clipCount()).toBeGreaterThan(0);
-    timeline?.dispose();
+    timeline?.destroy();
     engine.destroy();
     project.destroy();
   });
