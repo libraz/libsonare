@@ -67,7 +67,7 @@ class StreamAnalyzer:
     One serialized producer thread may call :meth:`process`,
     :meth:`process_with_offset`, or :meth:`finalize` concurrently with one
     serialized consumer thread calling ``available_frames``, a ``read_frames*``
-    method, :meth:`stats`, ``frame_count``, or ``current_time``. Native frame and
+    method, :meth:`stats`, ``frame_count``, or ``current_time_sec``. Native frame and
     stats publication is an allocation-free release/acquire handoff. Do not call
     :meth:`reset`, setters, :meth:`close`, or transfer ownership until both roles
     are stopped. If the pending ring is full, the newly produced output frame is
@@ -97,7 +97,7 @@ class StreamAnalyzer:
             raw.n_mels = config.n_mels
             raw.fmin = _narrow_double(config.fmin, "config.fmin")
             raw.fmax = _narrow_double(config.fmax, "config.fmax")
-            raw.tuning_ref_hz = _narrow_double(config.tuning_ref_hz, "config.tuning_ref_hz")
+            raw.reference_hz = _narrow_double(config.reference_hz, "config.reference_hz")
             # The flags are the exception: that guard refuses a bool, so the 0/1 is
             # spelled out here.
             raw.compute_magnitude = int(config.compute_magnitude)
@@ -293,11 +293,11 @@ class StreamAnalyzer:
         )
         return int(out.value)
 
-    def current_time(self) -> float:
+    def current_time_sec(self) -> float:
         """Return the current stream time position in seconds."""
         out = ctypes.c_float()
         _check(
-            _get_lib().sonare_stream_analyzer_current_time(
+            _get_lib().sonare_stream_analyzer_current_time_sec(
                 self._require_handle(), ctypes.byref(out)
             )
         )
@@ -311,11 +311,11 @@ class StreamAnalyzer:
         )
         return int(out.value)
 
-    def set_expected_duration(self, duration_seconds: float) -> None:
+    def set_expected_duration(self, duration_sec: float) -> None:
         """Set the expected total duration (s) for pattern-lock timing."""
         _check(
             _get_lib().sonare_stream_analyzer_set_expected_duration(
-                self._require_handle(), _to_c_float(duration_seconds, "duration_seconds")
+                self._require_handle(), _to_c_float(duration_sec, "duration_sec")
             )
         )
 
@@ -336,16 +336,16 @@ class StreamAnalyzer:
             )
         )
 
-    def set_tuning_ref_hz(self, ref_hz: float) -> None:
+    def set_reference_hz(self, reference_hz: float) -> None:
         """Set the A4 tuning reference (Hz) and rebuild the chroma filterbank.
 
-        ``ref_hz`` must be within 220..880, the same range
-        :attr:`StreamConfig.tuning_ref_hz` accepts at create time. A value
+        ``reference_hz`` must be within 220..880, the same range
+        :attr:`StreamConfig.reference_hz` accepts at create time. A value
         outside it raises instead of being clamped into range.
         """
         _check(
-            _get_lib().sonare_stream_analyzer_set_tuning_ref_hz(
-                self._require_handle(), _to_c_float(ref_hz, "ref_hz")
+            _get_lib().sonare_stream_analyzer_set_reference_hz(
+                self._require_handle(), _to_c_float(reference_hz, "reference_hz")
             )
         )
 
@@ -414,7 +414,7 @@ def _chord_changes(ptr: object, count: int) -> list[StreamChordChange]:
             root=int(raw_ptr[i].root),
             quality=int(raw_ptr[i].quality),
             name=_chord_name(int(raw_ptr[i].root), int(raw_ptr[i].quality)),
-            start_time=float(raw_ptr[i].start_time),
+            start_sec=float(raw_ptr[i].start_sec),
             confidence=float(raw_ptr[i].confidence),
         )
         for i in range(count)
@@ -431,7 +431,7 @@ def _bar_chords(ptr: object, count: int) -> list[StreamBarChord]:
             root=int(raw_ptr[i].root),
             quality=int(raw_ptr[i].quality),
             name=_chord_name(int(raw_ptr[i].root), int(raw_ptr[i].quality)),
-            start_time=float(raw_ptr[i].start_time),
+            start_sec=float(raw_ptr[i].start_sec),
             confidence=float(raw_ptr[i].confidence),
         )
         for i in range(count)
@@ -459,7 +459,7 @@ def _stream_frames_from_c(raw: SonareStreamFrames) -> StreamFrames:
         n_mels=n_mels,
         n_chroma=int(raw.n_chroma),
         feature_flags=int(raw.feature_flags),
-        timestamps=_floats(raw.timestamps, n),
+        timestamps_sec=_floats(raw.timestamps_sec, n),
         mel=_floats(raw.mel, n * n_mels),
         chroma=_floats(raw.chroma, n * int(raw.n_chroma)),
         onset_strength=_floats(raw.onset_strength, n),
@@ -480,7 +480,7 @@ def _stream_frames_u8_from_c(raw: SonareStreamFramesU8) -> StreamFramesU8:
         n_mels=n_mels,
         n_chroma=int(raw.n_chroma),
         feature_flags=int(raw.feature_flags),
-        timestamps=_floats(raw.timestamps, n),
+        timestamps_sec=_floats(raw.timestamps_sec, n),
         mel=_u8s(raw.mel, n * n_mels),
         chroma=_u8s(raw.chroma, n * int(raw.n_chroma)),
         onset_strength=_u8s(raw.onset_strength, n),
@@ -498,7 +498,7 @@ def _stream_frames_i16_from_c(raw: SonareStreamFramesI16) -> StreamFramesI16:
         n_mels=n_mels,
         n_chroma=int(raw.n_chroma),
         feature_flags=int(raw.feature_flags),
-        timestamps=_floats(raw.timestamps, n),
+        timestamps_sec=_floats(raw.timestamps_sec, n),
         mel=_i16s(raw.mel, n * n_mels),
         chroma=_i16s(raw.chroma, n * int(raw.n_chroma)),
         onset_strength=_i16s(raw.onset_strength, n),
@@ -513,7 +513,7 @@ def _stream_stats_from_c(raw: SonareStreamStats) -> StreamStats:
     return StreamStats(
         total_frames=int(raw.total_frames),
         total_samples=int(raw.total_samples),
-        duration_seconds=float(raw.duration_seconds),
+        duration_sec=float(raw.duration_sec),
         pending_frames=int(raw.pending_frames),
         dropped_output_frames=int(raw.dropped_output_frames),
         dropped_chord_progression_entries=int(raw.dropped_chord_progression_entries),
@@ -531,9 +531,9 @@ def _stream_stats_from_c(raw: SonareStreamStats) -> StreamStats:
         chord_quality=int(raw.chord_quality),
         chord_name=_chord_name(int(raw.chord_root), int(raw.chord_quality)),
         chord_confidence=float(raw.chord_confidence),
-        chord_start_time=float(raw.chord_start_time),
+        chord_start_sec=float(raw.chord_start_sec),
         current_bar=int(raw.current_bar),
-        bar_duration=float(raw.bar_duration),
+        bar_duration_sec=float(raw.bar_duration_sec),
         chord_progression=_chord_changes(raw.chord_progression, int(raw.chord_progression_count)),
         bar_chord_progression=_bar_chords(
             raw.bar_chord_progression, int(raw.bar_chord_progression_count)
@@ -545,7 +545,7 @@ def _stream_stats_from_c(raw: SonareStreamStats) -> StreamStats:
         all_pattern_scores=_pattern_scores(
             raw.all_pattern_scores, int(raw.all_pattern_scores_count)
         ),
-        accumulated_seconds=float(raw.accumulated_seconds),
+        accumulated_sec=float(raw.accumulated_sec),
         used_frames=int(raw.used_frames),
         updated=bool(raw.updated),
     )

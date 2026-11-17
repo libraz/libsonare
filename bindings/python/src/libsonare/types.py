@@ -146,9 +146,6 @@ from ._types_analysis import (
     RhythmResult as RhythmResult,
 )
 from ._types_analysis import (
-    SegmentMatrix as SegmentMatrix,
-)
-from ._types_analysis import (
     SpectrumReport as SpectrumReport,
 )
 from ._types_analysis import (
@@ -575,13 +572,7 @@ from ._types_streaming import (
     CqtResult as CqtResult,
 )
 from ._types_streaming import (
-    MelPowerResult as MelPowerResult,
-)
-from ._types_streaming import (
     QuantizeConfig as QuantizeConfig,
-)
-from ._types_streaming import (
-    StftMagnitudeResult as StftMagnitudeResult,
 )
 from ._types_streaming import (
     StreamBarChord as StreamBarChord,

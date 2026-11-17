@@ -150,14 +150,14 @@ def test_int_apis_accept_read_only_ndarray() -> None:
         arr.setflags(write=False)
         return arr
 
-    assert libsonare.fix_frames(read_only([1, 3, 5])) == [0, 1, 3, 5]
+    np.testing.assert_array_equal(libsonare.fix_frames(read_only([1, 3, 5])), [0, 1, 3, 5])
 
     energy = np.abs(_sine(512)).astype(np.float32)
     backtracked = libsonare.onset_backtrack(read_only([100, 300]), energy)
     assert len(backtracked) == 2
 
-    data = np.linspace(0.0, 1.0, 4 * 16, dtype=np.float32)
-    refined = libsonare.segment_subsegment(data, 4, 16, read_only([0, 8]), n_segments=2)
+    data = np.linspace(0.0, 1.0, 4 * 16, dtype=np.float32).reshape(4, 16)
+    refined = libsonare.segment_subsegment(data, read_only([0, 8]), n_segments=2)
     assert len(refined) >= 2
 
     samples = _sine(2048)

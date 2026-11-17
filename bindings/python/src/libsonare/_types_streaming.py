@@ -7,42 +7,25 @@ between languages see the same names. They intentionally violate PEP8 N802.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import numpy as np
+    from numpy.typing import NDArray
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class CqtResult:
-    """Constant-Q / Variable-Q transform magnitude result."""
+    """Constant-Q / Variable-Q transform magnitude result.
 
-    n_bins: int
-    n_frames: int
+    ``magnitude`` is a float32 array of shape ``(n_bins, n_frames)`` and
+    ``frequencies`` holds the ``n_bins`` center frequencies in Hz.
+    """
+
     hop_length: int
     sample_rate: int
-    magnitude: list[float]
-    frequencies: list[float]
-
-
-@dataclass(frozen=True, slots=True)
-class StftMagnitudeResult:
-    """STFT magnitude matrix reconstructed from a Mel spectrogram.
-
-    ``magnitude`` is a row-major ``[n_bins x n_frames]`` matrix (not squared).
-    """
-
-    n_bins: int
-    n_frames: int
-    magnitude: list[float]
-
-
-@dataclass(frozen=True, slots=True)
-class MelPowerResult:
-    """Mel power matrix reconstructed from MFCC coefficients.
-
-    ``power`` is a row-major ``[n_mels x n_frames]`` matrix.
-    """
-
-    n_mels: int
-    n_frames: int
-    power: list[float]
+    magnitude: NDArray[np.float32]
+    frequencies: NDArray[np.float32]
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,8 +66,8 @@ class StreamConfig:
     fmin: float = 0.0
     fmax: float = 0.0
     # A4 tuning reference in Hz. Must be within 220..880, the same range
-    # StreamAnalyzer.set_tuning_ref_hz accepts live.
-    tuning_ref_hz: float = 440.0
+    # StreamAnalyzer.set_reference_hz accepts live.
+    reference_hz: float = 440.0
     # The streaming C ABI has no magnitude read path, so magnitude is off by
     # default and an explicit True is rejected by the native layer.
     compute_magnitude: bool = False
@@ -121,7 +104,7 @@ class StreamFrames:
     n_mels: int
     n_chroma: int
     feature_flags: int
-    timestamps: list[float]
+    timestamps_sec: list[float]
     mel: list[float]
     chroma: list[float]
     onset_strength: list[float]
@@ -143,7 +126,7 @@ class StreamFramesU8:
     n_mels: int
     n_chroma: int
     feature_flags: int
-    timestamps: list[float]
+    timestamps_sec: list[float]
     mel: list[int]
     chroma: list[int]
     onset_strength: list[int]
@@ -162,7 +145,7 @@ class StreamFramesI16:
     n_mels: int
     n_chroma: int
     feature_flags: int
-    timestamps: list[float]
+    timestamps_sec: list[float]
     mel: list[int]
     chroma: list[int]
     onset_strength: list[int]
@@ -176,7 +159,7 @@ class StreamChordChange:
     root: int
     quality: int
     name: str
-    start_time: float
+    start_sec: float
     confidence: float
 
 
@@ -189,19 +172,19 @@ class StreamBarChord:
     at the history cap. Group bars by pattern position with ``bar_index``, never
     with the list index.
 
-    ``start_time`` is on the same timeline as ``StreamFrame.timestamp``
+    ``start_sec`` is on the same timeline as ``StreamFrame.timestamp``
     (including a ``sample_offset`` anchor), and consecutive bars are
-    ``bar_duration`` apart rather than snapped to the analysis frame grid.
+    ``bar_duration_sec`` apart rather than snapped to the analysis frame grid.
 
     In ``voted_pattern`` the fields shift meaning: ``bar_index`` is the pattern
-    position and ``start_time`` is unused.
+    position and ``start_sec`` is unused.
     """
 
     bar_index: int
     root: int
     quality: int
     name: str
-    start_time: float
+    start_sec: float
     confidence: float
 
 
@@ -230,7 +213,7 @@ class StreamStats:
 
     total_frames: int
     total_samples: int
-    duration_seconds: float
+    duration_sec: float
     pending_frames: int
     dropped_output_frames: int
     dropped_chord_progression_entries: int
@@ -260,9 +243,9 @@ class StreamStats:
     chord_quality: int
     chord_name: str
     chord_confidence: float
-    chord_start_time: float
+    chord_start_sec: float
     current_bar: int
-    bar_duration: float
+    bar_duration_sec: float
     chord_progression: list[StreamChordChange]
     bar_chord_progression: list[StreamBarChord]
     voted_pattern: list[StreamBarChord]
@@ -270,6 +253,6 @@ class StreamStats:
     detected_pattern_name: str
     detected_pattern_score: float
     all_pattern_scores: list[StreamPatternScore]
-    accumulated_seconds: float
+    accumulated_sec: float
     used_frames: int
     updated: bool

@@ -1,10 +1,11 @@
-"""``tuning="auto"`` on analysis and transcription, the tuning converters, and the
+"""``tuning_cents="auto"`` on analysis and transcription, the tuning converters, and the
 Mel / MFCC results that carry their forward parameters."""
 
 from __future__ import annotations
 
 import math
 
+import numpy as np
 import pytest
 
 import libsonare
@@ -17,6 +18,7 @@ pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared libr
 _SR = 22050
 # A4 = 446 Hz, as a semitone fraction.
 _DETUNE = 12.0 * math.log2(446.0 / 440.0)
+_DETUNE_CENTS = 100.0 * _DETUNE
 
 
 def _detuned_pop_loop(detune: float) -> list[float]:
@@ -44,28 +46,33 @@ def loop() -> list[float]:
 
 @pytest.fixture(scope="module")
 def measured(loop: list[float]) -> float:
-    return libsonare.estimate_tuning(loop, _SR)
+    # estimate_tuning reports fractions of a bin; the analysis options speak cents.
+    return 100.0 * libsonare.estimate_tuning(loop, _SR)
 
 
 def test_auto_tuning_is_measured_on_every_entry_point(loop: list[float], measured: float) -> None:
-    assert measured == pytest.approx(_DETUNE, abs=0.03)
-    chords = libsonare.detect_chords(loop, _SR, tuning="auto")
-    assert chords.tuning == pytest.approx(measured, abs=1e-6)
-    key = libsonare.detect_key(loop, _SR, tuning="auto")
-    assert key.tuning == pytest.approx(measured, abs=1e-6)
+    assert measured == pytest.approx(_DETUNE_CENTS, abs=3.0)
+    chords = libsonare.detect_chords(loop, _SR, tuning_cents="auto")
+    assert chords.tuning_cents == pytest.approx(measured, abs=1e-4)
+    key = libsonare.detect_key(loop, _SR, tuning_cents="auto")
+    assert key.tuning_cents == pytest.approx(measured, abs=1e-4)
     assert isinstance(key, libsonare.KeyDetection)
-    assert libsonare.analyze(loop, _SR, tuning="auto").tuning == pytest.approx(measured, abs=1e-6)
+    assert libsonare.analyze(loop, _SR, tuning_cents="auto").tuning_cents == pytest.approx(
+        measured, abs=1e-4
+    )
     with libsonare.Audio.from_buffer(loop, _SR) as audio:
-        assert audio.detect_key(tuning="auto").tuning == key.tuning
+        assert audio.detect_key(tuning_cents="auto").tuning_cents == key.tuning_cents
 
 
 def test_default_tuning_is_measured_on_every_entry_point(loop: list[float]) -> None:
-    assert libsonare.detect_chords(loop, _SR).tuning == pytest.approx(_DETUNE, abs=0.05)
+    assert libsonare.detect_chords(loop, _SR).tuning_cents == pytest.approx(_DETUNE_CENTS, abs=5.0)
     key = libsonare.detect_key(loop, _SR)
-    assert key.tuning == pytest.approx(_DETUNE, abs=0.05)
+    assert key.tuning_cents == pytest.approx(_DETUNE_CENTS, abs=5.0)
     assert (key.root, key.mode) == (libsonare.PitchClass.C, libsonare.Mode.MAJOR)
-    assert libsonare.analyze(loop, _SR).tuning == pytest.approx(_DETUNE, abs=0.05)
-    assert libsonare.analyze_with_progress(loop, _SR).tuning == pytest.approx(_DETUNE, abs=0.05)
+    assert libsonare.analyze(loop, _SR).tuning_cents == pytest.approx(_DETUNE_CENTS, abs=5.0)
+    assert libsonare.analyze_with_progress(loop, _SR).tuning_cents == pytest.approx(
+        _DETUNE_CENTS, abs=5.0
+    )
     names = {c.name for c in libsonare.detect_chords(loop, _SR).chords}
     assert {"C", "G", "Am", "F"} <= names
     functional = libsonare.chord_functional_analysis(
@@ -75,55 +82,61 @@ def test_default_tuning_is_measured_on_every_entry_point(loop: list[float]) -> N
 
 
 def test_given_tuning_is_reported_as_given(loop: list[float]) -> None:
-    assert libsonare.detect_chords(loop, _SR, tuning=0.1).tuning == pytest.approx(0.1, abs=1e-6)
-    assert libsonare.detect_chords(loop, _SR, tuning=0).tuning == 0.0
-    assert libsonare.detect_key(loop, _SR, tuning=0.2).tuning == pytest.approx(0.2, abs=1e-6)
-    assert libsonare.detect_key(loop, _SR, tuning=0).tuning == 0.0
-    assert libsonare.analyze(loop, _SR, tuning=-0.3).tuning == pytest.approx(-0.3, abs=1e-6)
-    assert libsonare.analyze(loop, _SR, tuning=0).tuning == 0.0
+    assert libsonare.detect_chords(loop, _SR, tuning_cents=10.0).tuning_cents == pytest.approx(
+        10.0, abs=1e-4
+    )
+    assert libsonare.detect_chords(loop, _SR, tuning_cents=0).tuning_cents == 0.0
+    assert libsonare.detect_key(loop, _SR, tuning_cents=20.0).tuning_cents == pytest.approx(
+        20.0, abs=1e-4
+    )
+    assert libsonare.detect_key(loop, _SR, tuning_cents=0).tuning_cents == 0.0
+    assert libsonare.analyze(loop, _SR, tuning_cents=-30.0).tuning_cents == pytest.approx(
+        -30.0, abs=1e-4
+    )
+    assert libsonare.analyze(loop, _SR, tuning_cents=0).tuning_cents == 0.0
 
 
 def test_key_candidates_accept_a_number_and_auto(loop: list[float], measured: float) -> None:
     c_major = (libsonare.PitchClass.C, libsonare.Mode.MAJOR)
     for tuning in ("auto", measured, 0):
-        ranked = libsonare.detect_key_candidates(loop, _SR, tuning=tuning)
+        ranked = libsonare.detect_key_candidates(loop, _SR, tuning_cents=tuning)
         assert ranked
         assert (ranked[0].key.root, ranked[0].key.mode) == c_major
-    auto = libsonare.detect_key_candidates(loop, _SR, tuning="auto")
-    explicit = libsonare.detect_key_candidates(loop, _SR, tuning=measured)
+    auto = libsonare.detect_key_candidates(loop, _SR, tuning_cents="auto")
+    explicit = libsonare.detect_key_candidates(loop, _SR, tuning_cents=measured)
     assert [c.correlation for c in auto] == pytest.approx(
         [c.correlation for c in explicit], abs=1e-4
     )
-    with pytest.raises(SonareValueError, match="tuning must be a number or 'auto'"):
-        libsonare.detect_key_candidates(loop, _SR, tuning="other")
+    with pytest.raises(SonareValueError, match="tuning_cents must be a number or 'auto'"):
+        libsonare.detect_key_candidates(loop, _SR, tuning_cents="other")
     with pytest.raises(SonareError):
-        libsonare.detect_key_candidates(loop, _SR, tuning=0.7)
+        libsonare.detect_key_candidates(loop, _SR, tuning_cents=70.0)
 
 
 def test_auto_equals_the_measured_value_applied_explicitly(
     loop: list[float], measured: float
 ) -> None:
-    auto = libsonare.detect_key(loop, _SR, tuning="auto")
-    explicit = libsonare.detect_key(loop, _SR, tuning=measured)
+    auto = libsonare.detect_key(loop, _SR, tuning_cents="auto")
+    explicit = libsonare.detect_key(loop, _SR, tuning_cents=measured)
     assert (auto.root, auto.mode) == (explicit.root, explicit.mode)
-    assert auto.tuning == pytest.approx(explicit.tuning, abs=1e-6)
+    assert auto.tuning_cents == pytest.approx(explicit.tuning_cents, abs=1e-4)
 
 
 def test_a_tuning_that_is_neither_a_number_nor_auto_is_refused(loop: list[float]) -> None:
-    with pytest.raises(SonareValueError, match="tuning must be a number or 'auto'"):
-        libsonare.detect_key(loop, _SR, tuning="other")
+    with pytest.raises(SonareValueError, match="tuning_cents must be a number or 'auto'"):
+        libsonare.detect_key(loop, _SR, tuning_cents="other")
     with pytest.raises(SonareError):
-        libsonare.detect_key(loop, _SR, tuning=0.7)
+        libsonare.detect_key(loop, _SR, tuning_cents=70.0)
 
 
 def test_converters_round_trip_and_name_the_reference_pitch() -> None:
     assert libsonare.tuning_to_reference_hz(0.0) == pytest.approx(440.0, abs=1e-3)
-    assert libsonare.tuning_to_reference_hz(_DETUNE) == pytest.approx(446.0, abs=0.02)
-    assert libsonare.reference_hz_to_tuning(446.0) == pytest.approx(_DETUNE, abs=1e-3)
+    assert libsonare.tuning_to_reference_hz(_DETUNE_CENTS) == pytest.approx(446.0, abs=0.02)
+    assert libsonare.reference_hz_to_tuning(446.0) == pytest.approx(_DETUNE_CENTS, abs=0.1)
     assert libsonare.tuning_to_reference_hz(0.0, 432.0) == pytest.approx(432.0, abs=1e-3)
-    for tuning in (-0.5, -0.2, 0.2349, 0.49, 7.0):
+    for tuning in (-50.0, -20.0, 23.49, 49.0, 700.0):
         hz = libsonare.tuning_to_reference_hz(tuning, 432.0)
-        assert libsonare.reference_hz_to_tuning(hz, 432.0) == pytest.approx(tuning, abs=1e-3)
+        assert libsonare.reference_hz_to_tuning(hz, 432.0) == pytest.approx(tuning, abs=0.1)
 
 
 def test_converters_refuse_values_outside_their_domain() -> None:
@@ -153,11 +166,11 @@ def test_transcribe_reference_auto_reports_the_tuning_used() -> None:
         _tones(2.0 ** (0.3 / 12.0)), _SR, tempo_bpm=120.0, reference_hz="auto"
     )
     assert result.note_count > 0
-    assert result.tuning == pytest.approx(0.3, abs=0.1)
+    assert result.tuning_cents == pytest.approx(30.0, abs=10.0)
 
     given = libsonare.transcribe(_tones(1.0), _SR, tempo_bpm=120.0, reference_hz=432.0)
-    assert given.tuning == pytest.approx(libsonare.reference_hz_to_tuning(432.0), abs=1e-4)
-    assert libsonare.transcribe(_tones(1.0), _SR, tempo_bpm=120.0).tuning == 0.0
+    assert given.tuning_cents == pytest.approx(libsonare.reference_hz_to_tuning(432.0), abs=0.01)
+    assert libsonare.transcribe(_tones(1.0), _SR, tempo_bpm=120.0).tuning_cents == 0.0
 
     with pytest.raises(SonareValueError, match="reference_hz must be a number or 'auto'"):
         libsonare.transcribe(_tones(1.0), _SR, reference_hz="other")
@@ -175,53 +188,37 @@ _MEL_SAMPLES = [0.5 * math.sin(2.0 * math.pi * 440.0 * i / _SR) for i in range(_
 
 def test_mel_result_carries_the_forward_parameters() -> None:
     mel = libsonare.mel_spectrogram(_MEL_SAMPLES, _SR, 1024, 256, 40, 100.0, 0.0, True)
-    assert (mel.n_mels, mel.sample_rate, mel.hop_length, mel.n_fft) == (40, _SR, 256, 1024)
+    assert (mel.power.shape[0], mel.sample_rate, mel.hop_length, mel.n_fft) == (40, _SR, 256, 1024)
     assert mel.fmin == 100.0
     assert mel.fmax == _SR / 2
     assert mel.htk is True
-    assert mel.is_db is False
+    assert not hasattr(mel, "is_db")
 
 
 def test_mfcc_result_carries_the_mel_parameters_and_the_lifter() -> None:
     result = libsonare.mfcc(_MEL_SAMPLES, _SR, 1024, 256, 40, 13, 0.0, 8000.0, False, 22.0)
-    assert (result.n_mfcc, result.n_mels, result.sample_rate) == (13, 40, _SR)
+    assert (result.coefficients.shape[0], result.n_mels, result.sample_rate) == (13, 40, _SR)
     assert (result.hop_length, result.n_fft) == (256, 1024)
     assert result.fmax == 8000.0
     assert result.htk is False
-    assert result.is_db is False
+    assert not hasattr(result, "is_db")
     assert result.lifter == 22.0
 
 
-def test_result_helpers_equal_the_explicit_inverse() -> None:
-    mel = libsonare.mel_spectrogram(_MEL_SAMPLES, _SR, 1024, 256, 40, 100.0, 4000.0, True)
-    assert libsonare.mel_result_to_stft(mel) == libsonare.mel_to_stft(
-        mel.power, 40, mel.n_frames, _SR, 1024, 100.0, 4000.0, True
-    )
-    stft = libsonare.mel_result_to_stft(mel)
-    assert isinstance(stft, libsonare.StftMagnitudeResult)
-    assert stft.n_bins == 1024 // 2 + 1
-    assert libsonare.mel_result_to_audio(mel, n_iter=2) == libsonare.mel_to_audio(
-        mel.power, 40, mel.n_frames, _SR, 1024, 256, 100.0, 4000.0, 2, True
-    )
-
+def test_the_lifter_is_part_of_the_mfcc_inverse() -> None:
     result = libsonare.mfcc(_MEL_SAMPLES, _SR, 1024, 256, 40, 13, 0.0, 8000.0, False, 22.0)
-    from_result = libsonare.mfcc_result_to_mel(result)
-    assert from_result == libsonare.mfcc_to_mel(result.coefficients, 13, result.n_frames, 40, 22.0)
-    assert isinstance(from_result, libsonare.MelPowerResult)
-    assert from_result.n_mels == 40
-    # The lifter is part of the answer: an inverse that dropped it would differ.
-    assert from_result != libsonare.mfcc_to_mel(result.coefficients, 13, result.n_frames, 40, 0.0)
-    assert libsonare.mfcc_result_to_audio(result, n_iter=2) == libsonare.mfcc_to_audio(
-        result.coefficients, 13, result.n_frames, 40, _SR, 1024, 256, 0.0, 8000.0, 2, False, 22.0
-    )
+    n_frames = result.coefficients.shape[1]
+    lifted = libsonare.mfcc_to_mel(result.coefficients, result.n_mels, result.lifter)
+    assert lifted.shape == (40, n_frames)
+    # An inverse that dropped the lifter would equal this one.
+    unlifted = libsonare.mfcc_to_mel(result.coefficients, result.n_mels, 0.0)
+    assert not np.allclose(lifted, unlifted)
 
 
-def test_a_mel_result_in_db_is_refused_naming_the_conversion() -> None:
-    import dataclasses
-
-    mel = libsonare.mel_spectrogram(_MEL_SAMPLES, _SR, 1024, 256, 40)
-    in_db = dataclasses.replace(mel, power=mel.db, is_db=True)
-    with pytest.raises(SonareValueError, match="db_to_power"):
-        libsonare.mel_result_to_stft(in_db)
-    with pytest.raises(SonareValueError, match="db_to_power"):
-        libsonare.mel_result_to_audio(in_db)
+def test_a_mel_result_inverts_with_the_parameters_it_carries() -> None:
+    mel = libsonare.mel_spectrogram(_MEL_SAMPLES, _SR, 1024, 256, 40, 100.0, 4000.0, True)
+    stft = libsonare.mel_to_stft(mel.power, _SR, mel.n_fft, mel.fmin, mel.fmax, mel.htk)
+    assert stft.shape == (1024 // 2 + 1, mel.power.shape[1])
+    # The Mel range is part of the answer: the default range inverts differently.
+    default_range = libsonare.mel_to_stft(mel.power, _SR, mel.n_fft, 0.0, None, mel.htk)
+    assert not np.allclose(stft, default_range)

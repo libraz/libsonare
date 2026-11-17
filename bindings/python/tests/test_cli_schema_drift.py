@@ -8,6 +8,8 @@ import math
 import statistics
 from types import SimpleNamespace
 
+import numpy as np
+
 from ._helpers import patch_mono_decode
 
 
@@ -73,8 +75,8 @@ def test_pitch_json_reports_voicing_and_serializes_nonfinite_as_null(monkeypatch
         libsonare,
         "pitch_pyin",
         lambda samples, sample_rate: SimpleNamespace(
-            n_frames=0,
-            voiced_flag=[],
+            f0=np.zeros(0, dtype=np.float32),
+            voiced_flag=np.zeros(0, dtype=np.bool_),
             median_f0=math.nan,
             mean_f0=math.inf,
         ),

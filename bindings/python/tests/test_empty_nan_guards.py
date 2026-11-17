@@ -269,10 +269,9 @@ class TestPitchCAbiValidation:
     @pytest.mark.parametrize("pitch", [pitch_yin, pitch_pyin], ids=["yin", "pyin"])
     def test_normal_audio_returns_pitch_result(self, pitch):
         result = pitch(_sine(SR), sample_rate=SR)
-        assert result.n_frames > 0
-        assert len(result.f0) == result.n_frames
-        assert len(result.voiced_prob) == result.n_frames
-        assert len(result.voiced_flag) == result.n_frames
+        assert len(result.f0) > 0
+        assert result.voiced_prob.shape == result.f0.shape
+        assert result.voiced_flag.shape == result.f0.shape
 
 
 # Wrappers whose validated buffer is not called ``samples``; the guard names the
@@ -607,17 +606,15 @@ class TestBufferRankGuards:
             metering_rms_db(np.array(0.5, dtype=np.float32), sample_rate=22050)
         assert "ndim=0" in str(exc_info.value)
 
-    def test_a_flattened_matrix_argument_rejects_the_unflattened_form(self):
-        # The matrix entry points document a flattened row-major buffer and
-        # check its length against their own shape arguments. A transposed 2-D
-        # array passes that length check while flattening in the wrong order,
-        # so the rank has to be refused rather than repaired here too.
+    def test_a_matrix_argument_rejects_the_flattened_form(self):
+        # A matrix entry point takes one 2-D array; a flattened buffer carries no
+        # row count to read, so the rank is refused rather than guessed at.
         from libsonare import mel_to_stft
 
         mel = np.linspace(0.0, 1.0, 16 * 4, dtype=np.float32).reshape(16, 4)
-        with pytest.raises(SonareValueError, match=r"mel_to_stft: mel must be a 1-D buffer"):
-            mel_to_stft(mel, 16, 4)
-        assert mel_to_stft(mel.reshape(-1), 16, 4).n_frames == 4
+        with pytest.raises(SonareValueError, match=r"mel_to_stft: mel must be a 2-D array"):
+            mel_to_stft(mel.reshape(-1))
+        assert mel_to_stft(mel).shape[1] == 4
 
     def test_audio_from_buffer_rejects_a_stereo_read(self):
         # The guard prefixes the rank refusal with the entry point's name.

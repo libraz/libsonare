@@ -281,8 +281,8 @@ class TranscribeResult:
         note_count: Number of notes.
         tempo_bpm: The tempo the PPQ coordinates were built on -- the requested
             value when one was given, and the detected one otherwise.
-        tuning: The tuning the note numbers were measured against, in fractions
-            of a semitone from concert A440: the measured value under
+        tuning_cents: The tuning the note numbers were measured against, in
+            cents from concert A440: the measured value under
             ``reference_hz="auto"``, otherwise the one ``reference_hz`` amounts
             to (:func:`reference_hz_to_tuning`).
     """
@@ -290,7 +290,7 @@ class TranscribeResult:
     events: list[tuple[float, int, int]] = dataclasses.field(default_factory=list)
     note_count: int = 0
     tempo_bpm: float = 0.0
-    tuning: float = 0.0
+    tuning_cents: float = 0.0
 
 
 def _transcribe_int(fn_name: str, value: object, arg_name: str, low: int, high: int) -> int:
@@ -325,12 +325,10 @@ def _transcribe_ratio(fn_name: str, value: float, arg_name: str) -> float:
 
 
 def _transcribe_reattack(fn_name: str, value: float) -> float:
-    """Narrow ``reattack_ratio``: 0 is "no split" (C: negative), otherwise above 1."""
+    """Narrow a given ``reattack_ratio``: above 1, since ``None`` is "no split"."""
     number = _validate_scalar(fn_name, value, "reattack_ratio")
-    if number == 0.0:
-        return -1.0
     if number <= 1.0:
-        raise SonareValueError(f"{fn_name}: reattack_ratio must be 0 or above 1")
+        raise SonareValueError(f"{fn_name}: reattack_ratio must be above 1 (use None for no split)")
     return number
 
 
@@ -350,8 +348,8 @@ def _transcribe_config(
     *,
     polyphonic: bool,
     reference_hz: float | str | None,
-    fmin: float | None,
-    fmax: float | None,
+    f0_min_hz: float | None,
+    f0_max_hz: float | None,
     min_note_ms: float | None,
     segmentation_threshold_cents: float | None,
     velocity_floor_db: float | None,
@@ -370,7 +368,7 @@ def _transcribe_config(
     ``None`` is this binding's spelling of "keep the library default" and the C
     ABI's is 0, so a value the caller passed is always a request: an explicit
     ``velocity_floor_db=0.0`` or ``fixed_velocity=0`` is a mistake rather than
-    the default, and is refused here. Whether ``fmin`` and ``fmax`` bracket each
+    the default, and is refused here. Whether ``f0_min_hz`` and ``f0_max_hz`` bracket each
     other is left to the core, which is the side that has both resolved
     defaults; passing both wrong way round is named here.
     """
@@ -384,8 +382,8 @@ def _transcribe_config(
         reference_hz = None
     for arg_name, value in (
         ("reference_hz", reference_hz),
-        ("fmin", fmin),
-        ("fmax", fmax),
+        ("f0_min_hz", f0_min_hz),
+        ("f0_max_hz", f0_max_hz),
         ("min_note_ms", min_note_ms),
         ("segmentation_threshold_cents", segmentation_threshold_cents),
     ):
@@ -394,8 +392,8 @@ def _transcribe_config(
             arg_name,
             0.0 if value is None else _transcribe_positive(fn_name, value, arg_name),
         )
-    if fmin is not None and fmax is not None and config.fmax <= config.fmin:
-        raise SonareValueError(f"{fn_name}: fmax must be above fmin")
+    if f0_min_hz is not None and f0_max_hz is not None and config.f0_max_hz <= config.f0_min_hz:
+        raise SonareValueError(f"{fn_name}: f0_max_hz must be above f0_min_hz")
 
     if velocity_floor_db is None:
         config.velocity_floor_db = 0.0
@@ -467,7 +465,7 @@ def _transcribe_result_from_c(out: SonareTranscribeResult) -> TranscribeResult:
         events=events,
         note_count=int(out.note_count),
         tempo_bpm=float(out.tempo_bpm),
-        tuning=float(out.tuning),
+        tuning_cents=float(out.tuning_cents),
     )
 
 
@@ -500,11 +498,11 @@ def _note_from_c(row: SonareNoteObject, amplitude: np.ndarray, envelopes: np.nda
         amplitude=amplitude[start:stop].copy(),
         edit=NoteEdit(
             time_offset_samples=int(row.edit.time_offset_samples),
-            pitch_shift_semitones=float(row.edit.pitch_shift_semitones),
+            pitch_shift_semitones=float(row.edit.pitch_semitones),
             gain_db=float(row.edit.gain_db),
             time_stretch_ratio=float(row.edit.time_stretch_ratio),
             muted=bool(row.edit.muted),
-            formant_shift_semitones=float(row.edit.formant_shift_semitones),
+            formant_shift_semitones=float(row.edit.formant_semitones),
             vibrato_depth_change=float(row.edit.vibrato_depth_change),
             drift_change=float(row.edit.drift_change),
             amplitude_envelope=envelopes[envelope_start:envelope_stop].copy(),
@@ -581,14 +579,14 @@ def _notes_to_c(
             ),
             envelope_offset=envelope_offset,
             envelope_count=int(curve.size),
-            pitch_shift_semitones=_narrow_double(
+            pitch_semitones=_narrow_double(
                 note.edit.pitch_shift_semitones, "note.edit.pitch_shift_semitones"
             ),
             gain_db=_narrow_double(note.edit.gain_db, "note.edit.gain_db"),
             time_stretch_ratio=_narrow_double(
                 note.edit.time_stretch_ratio, "note.edit.time_stretch_ratio"
             ),
-            formant_shift_semitones=_narrow_double(
+            formant_semitones=_narrow_double(
                 note.edit.formant_shift_semitones, "note.edit.formant_shift_semitones"
             ),
             vibrato_depth_change=_narrow_double(

@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Sequence
+from typing import Any, cast
+
+import numpy as np
 
 from ._ffi import (
     SonareNoteSegmenterConfig,
@@ -11,13 +14,16 @@ from ._ffi import (
     SonarePitchResult,
 )
 from ._runtime import (
+    SonareValueError,
     _check,
-    _float_array_result,
+    _from_c_float_array,
+    _from_c_float_matrix,
     _get_lib,
     _guard_buffer,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
+    _to_c_int_array,
     _to_c_size_t,
     _validate_samples,
 )
@@ -89,11 +95,11 @@ def estimate_tuning(
         wraps to ``-0.5``.
 
     Note:
-        A librosa mirror: the offset is the semitone fraction the analysis
-        options take only at 12 bins per octave (otherwise multiply by
-        ``12 / bins_per_octave``). :func:`analyze` and :func:`detect_chords`
-        measure the semitone fraction themselves with ``tuning="auto"``, and
-        :func:`tuning_to_reference_hz` converts it to Hz.
+        A librosa mirror: the offset is in fractions of a bin, not cents
+        (at 12 bins per octave multiply by 100 for cents). :func:`analyze` and
+        :func:`detect_chords` measure the tuning in cents themselves with
+        ``tuning_cents="auto"``, and :func:`tuning_to_reference_hz` converts
+        cents to Hz.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
@@ -112,51 +118,55 @@ def estimate_tuning(
     return float(out.value)
 
 
-def tuning_to_reference_hz(tuning: float, a4: float = 440.0) -> float:
-    """Reference frequency of an A4 raised by ``tuning`` fractions of a semitone.
+def tuning_to_reference_hz(tuning_cents: float, a4_hz: float = 440.0) -> float:
+    """Reference frequency of an A4 raised by ``tuning_cents`` cents.
 
-    The converter from the analysis unit (``tuning``, in ``[-0.5, 0.5)`` for the
-    analysis options) to the Hz a pitch reference is stated in, such as
-    ``reference_hz`` and the streaming ``tuning_ref_hz``: ``a4 * 2 ** (tuning / 12)``.
+    The converter from the analysis unit (``tuning_cents``, in ``[-50, 50)`` for
+    the analysis options) to the Hz a pitch reference is stated in, such as
+    ``reference_hz``: ``a4_hz * 2 ** (tuning_cents / 1200)``.
 
     Args:
-        tuning: Finite fraction of a semitone.
-        a4: Finite positive concert pitch the tuning is measured from (default 440).
+        tuning_cents: Finite offset in cents.
+        a4_hz: Finite positive concert pitch the tuning is measured from (default 440).
 
     Returns:
         The reference frequency in Hz.
 
     Raises:
-        SonareValueError: For a non-finite ``tuning`` or a non-positive ``a4``.
+        SonareValueError: For a non-finite ``tuning_cents`` or a non-positive ``a4_hz``.
     """
     out = ctypes.c_float(0.0)
     _check(
         _get_lib().sonare_tuning_to_reference_hz(
-            _to_c_float(tuning, "tuning"), _to_c_float(a4, "a4"), ctypes.byref(out)
+            _to_c_float(tuning_cents, "tuning_cents"),
+            _to_c_float(a4_hz, "a4_hz"),
+            ctypes.byref(out),
         )
     )
     return float(out.value)
 
 
-def reference_hz_to_tuning(hz: float, a4: float = 440.0) -> float:
-    """Tuning, in fractions of a semitone, of a recording whose A4 sits at ``hz``.
+def reference_hz_to_tuning(reference_hz: float, a4_hz: float = 440.0) -> float:
+    """Tuning, in cents, of a recording whose A4 sits at ``reference_hz``.
 
-    Inverse of :func:`tuning_to_reference_hz`: ``12 * log2(hz / a4)``.
+    Inverse of :func:`tuning_to_reference_hz`: ``1200 * log2(reference_hz / a4_hz)``.
 
     Args:
-        hz: Finite positive reference frequency.
-        a4: Finite positive concert pitch (default 440).
+        reference_hz: Finite positive reference frequency.
+        a4_hz: Finite positive concert pitch (default 440).
 
     Returns:
-        The tuning in fractions of a semitone.
+        The tuning in cents.
 
     Raises:
-        SonareValueError: For a non-positive ``hz`` or ``a4``.
+        SonareValueError: For a non-positive ``reference_hz`` or ``a4_hz``.
     """
     out = ctypes.c_float(0.0)
     _check(
         _get_lib().sonare_reference_hz_to_tuning(
-            _to_c_float(hz, "hz"), _to_c_float(a4, "a4"), ctypes.byref(out)
+            _to_c_float(reference_hz, "reference_hz"),
+            _to_c_float(a4_hz, "a4_hz"),
+            ctypes.byref(out),
         )
     )
     return float(out.value)
@@ -172,7 +182,10 @@ def piptrack(
     fmax: float = 4000.0,
     threshold: float = 0.1,
 ) -> PiptrackResult:
-    """Return per-bin spectral pitch candidates and their peak magnitudes."""
+    """Return per-bin spectral pitch candidates and their peak magnitudes.
+
+    Each field is a float32 array of shape ``(n_bins, n_frames)``.
+    """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     n_bins = ctypes.c_int()
@@ -195,18 +208,27 @@ def piptrack(
     )
     _check(rc)
     try:
-        total = n_bins.value * n_frames.value
         return PiptrackResult(
-            n_bins.value,
-            n_frames.value,
-            _float_array_result(pitches, total),
-            _float_array_result(magnitudes, total),
+            pitches=_from_c_float_matrix(pitches, n_bins.value, n_frames.value),
+            magnitudes=_from_c_float_matrix(magnitudes, n_bins.value, n_frames.value),
         )
     finally:
         if pitches:
             lib.sonare_free_floats(pitches)
         if magnitudes:
             lib.sonare_free_floats(magnitudes)
+
+
+def _pitch_result(out: SonarePitchResult) -> PitchResult:
+    n = out.n_frames
+    flags = np.array([out.voiced_flag[i] for i in range(n)], dtype=np.bool_)
+    return PitchResult(
+        f0=_from_c_float_array(out.f0, n),
+        voiced_prob=_from_c_float_array(out.voiced_prob, n),
+        voiced_flag=flags,
+        median_f0=float(out.median_f0),
+        mean_f0=float(out.mean_f0),
+    )
 
 
 def pitch_yin(
@@ -254,15 +276,7 @@ def pitch_yin(
     )
     _check(rc)
     try:
-        n = out.n_frames
-        return PitchResult(
-            n_frames=n,
-            f0=_float_array_result(out.f0, n),
-            voiced_prob=_float_array_result(out.voiced_prob, n),
-            voiced_flag=[bool(out.voiced_flag[i]) for i in range(n)],
-            median_f0=float(out.median_f0),
-            mean_f0=float(out.mean_f0),
-        )
+        return _pitch_result(out)
     finally:
         lib.sonare_free_pitch_result(ctypes.byref(out))
 
@@ -311,15 +325,7 @@ def pitch_pyin(
     )
     _check(rc)
     try:
-        n = out.n_frames
-        return PitchResult(
-            n_frames=n,
-            f0=_float_array_result(out.f0, n),
-            voiced_prob=_float_array_result(out.voiced_prob, n),
-            voiced_flag=[bool(out.voiced_flag[i]) for i in range(n)],
-            median_f0=float(out.median_f0),
-            mean_f0=float(out.mean_f0),
-        )
+        return _pitch_result(out)
     finally:
         lib.sonare_free_pitch_result(ctypes.byref(out))
 
@@ -327,9 +333,10 @@ def pitch_pyin(
 @_guard_buffer(shape_only=("f0_hz",))
 def note_segments(
     f0_hz: Sequence[float] | list[float],
-    voiced_prob: Sequence[float] | list[float],
     frame_rate: float,
     *,
+    voiced_prob: Sequence[float] | list[float] | None = None,
+    voiced_flags: Sequence[int] | Sequence[bool] | list[int] | None = None,
     segmentation_threshold_cents: float | None = None,
     min_note_ms: float | None = None,
     reference_hz: float | None = None,
@@ -337,18 +344,37 @@ def note_segments(
 ) -> list[NoteSegment]:
     """Segment a monophonic F0 track into stable note regions.
 
-    Zero-Hz F0 frames and voicing values below ``voiced_threshold`` (default
-    0.5) delimit note regions. The F0 and voicing arrays must have equal
-    non-zero length.
+    Zero-Hz F0 frames and unvoiced frames delimit note regions. Exactly one
+    voicing input is given, by keyword: ``voiced_prob`` (a per-frame
+    probability, thresholded at ``voiced_threshold``, default 0.5) or
+    ``voiced_flags`` (a per-frame 0/1 or boolean array, as
+    :func:`pitch_pyin` reports ``voiced_flag``). The F0 and voicing arrays must
+    have equal non-zero length.
 
-    Pass :func:`pitch_pyin`'s ``voiced_flag`` as 0.0/1.0 for ``voiced_prob``.
-    Do **not** pass its ``voiced_prob``: that value is the frame's voiced
-    observation mass and rises with F0 for a fixed ``frame_length``, so a fixed
-    threshold silently returns no segments at all for low-register material.
+    Do **not** pass :func:`pitch_pyin`'s ``voiced_prob``: that value is the
+    frame's voiced observation mass and rises with F0 for a fixed
+    ``frame_length``, so a fixed threshold silently returns no segments at all
+    for low-register material. Pass its ``voiced_flag`` as ``voiced_flags``.
+
+    Raises:
+        SonareValueError: If both or neither of ``voiced_prob`` and
+            ``voiced_flags`` is given, or the lengths differ.
     """
+    if (voiced_prob is None) == (voiced_flags is None):
+        raise SonareValueError("note_segments: give exactly one of voiced_prob or voiced_flags")
     lib = _get_lib()
     f0_array, f0_count = _to_c_float_array(f0_hz)
-    probability_array, probability_count = _to_c_float_array(voiced_prob, arg_name="voiced_prob")
+    probability_array = None
+    flags_array = None
+    if voiced_prob is not None:
+        probability_array, voiced_count = _to_c_float_array(voiced_prob, arg_name="voiced_prob")
+    else:
+        flags_array, voiced_count = _to_c_int_array(cast(Any, voiced_flags), "voiced_flags")
+    if voiced_count != f0_count:
+        raise SonareValueError(
+            f"note_segments: f0_hz and the voicing array must have equal length, "
+            f"got {f0_count} and {voiced_count}"
+        )
     config = SonareNoteSegmenterConfig(
         2,
         0.0 if segmentation_threshold_cents is None else segmentation_threshold_cents,
@@ -359,9 +385,9 @@ def note_segments(
     out = SonareNoteSegmentsResult()
     rc = lib.sonare_note_segments(
         f0_array,
-        _to_c_size_t(f0_count, "f0_count"),
         probability_array,
-        _to_c_size_t(probability_count, "probability_count"),
+        flags_array,
+        _to_c_size_t(f0_count, "n_frames"),
         _to_c_float(frame_rate, "frame_rate"),
         ctypes.byref(config),
         ctypes.byref(out),
@@ -372,8 +398,8 @@ def note_segments(
             NoteSegment(
                 frame_start=int(out.segments[i].frame_start),
                 frame_end=int(out.segments[i].frame_end),
-                start_seconds=float(out.segments[i].start_seconds),
-                end_seconds=float(out.segments[i].end_seconds),
+                start_sec=float(out.segments[i].start_sec),
+                end_sec=float(out.segments[i].end_sec),
                 median_cents=float(out.segments[i].median_cents),
             )
             for i in range(out.count)

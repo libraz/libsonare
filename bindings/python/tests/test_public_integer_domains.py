@@ -92,6 +92,7 @@ PROBES: dict[str, tuple[tuple[object, ...], tuple[object, ...]]] = {
         (7, None, 48000, "probe", "probe_sec"),
     ),
     "_resolve_optional_non_negative": ((math.inf, "probe"), (7, "probe")),
+    "_resolve_zero_default": ((-1, "probe"), (7, "probe")),
     "_resolve_render_frame": ((1.5,), (7,)),
     # The array refusals, where the fraction is in an element rather than in the
     # argument.
@@ -132,6 +133,14 @@ SKIPS: dict[str, str] = {
         "no integer becomes a C integer here"
     ),
     "_to_c_float_array_owned": "as _to_c_float_array, over a fresh writable copy",
+    "_to_c_float_matrix": (
+        "coerces a 2-D float32 matrix; every finite element is in domain, and no "
+        "integer becomes a C integer here"
+    ),
+    "_validate_matrix": (
+        "refuses a rank other than 2 and runs the sample-buffer checks on the "
+        "flattened matrix; no integer domain is involved"
+    ),
     "_require_instance": (
         "an isinstance check on a dataclass argument; no integer domain is involved"
     ),

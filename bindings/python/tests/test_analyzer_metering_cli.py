@@ -6,6 +6,8 @@ import argparse
 import json
 from types import SimpleNamespace
 
+import numpy as np
+
 # ruff: noqa: F403,F405
 from ._analyzer_helpers import *
 from ._helpers import patch_mono_decode
@@ -28,11 +30,9 @@ def test_fourier_tempogram() -> None:
     samples = _generate_sine(440, 22050, 2.0)
     env = onset_strength(samples, sr=22050)
     win_length = 384
-    n_frames, data = fourier_tempogram(env, sr=22050, win_length=win_length)
-    assert n_frames == len(env)
-    n_bins = win_length // 2 + 1
-    assert len(data) == n_bins * n_frames
-    assert _all_finite(data)
+    data = fourier_tempogram(env, sr=22050, win_length=win_length)
+    assert data.shape == (win_length // 2 + 1, len(env))
+    assert np.isfinite(data).all()
 
 
 def test_tempogram_ratio() -> None:
@@ -42,13 +42,13 @@ def test_tempogram_ratio() -> None:
     samples = _generate_sine(440, 22050, 2.0)
     env = onset_strength(samples, sr=22050)
     win_length = 384
-    _, tg = tempogram(env, sr=22050)
+    tg = tempogram(env, sr=22050, win_length=win_length)
 
-    default_ratio = tempogram_ratio(tg, win_length=win_length, sr=22050)
+    default_ratio = tempogram_ratio(tg, sr=22050)
     assert len(default_ratio) == 5  # {0.5, 1, 2, 3, 4}
     assert _all_finite(default_ratio)
 
-    explicit = tempogram_ratio(tg, win_length=win_length, sr=22050, factors=[1.0, 2.0, 3.0])
+    explicit = tempogram_ratio(tg, sr=22050, factors=[1.0, 2.0, 3.0])
     assert len(explicit) == 3
     assert _all_finite(explicit)
 
@@ -59,17 +59,17 @@ def test_nnls_chroma() -> None:
 
     # 0.5 s keeps the NNLS solve (the dominant cost) fast without losing coverage.
     samples = _generate_sine(440, 22050, 0.5)
-    n_frames, data = nnls_chroma(
+    data = nnls_chroma(
         samples,
         sample_rate=22050,
         enable_stft_blend=False,
         stft_blend_weight=0.0,
         stft_blend_n_fft=2048,
     )
-    assert n_frames > 0
-    assert len(data) == 12 * n_frames
-    assert _all_finite(data)
-    assert all(v >= 0.0 for v in data)  # NNLS output is non-negative
+    assert data.shape[0] == 12
+    assert data.shape[1] > 0
+    assert np.isfinite(data).all()
+    assert (data >= 0.0).all()  # NNLS output is non-negative
 
 
 def test_lufs() -> None:
@@ -123,10 +123,10 @@ def test_audio_nnls_chroma() -> None:
 
     # Wrapper-only check — the algorithm itself is covered by test_nnls_chroma.
     audio = Audio.from_buffer(_generate_sine(440, 22050, 0.5), sample_rate=22050)
-    n_frames, data = audio.nnls_chroma()
-    assert n_frames > 0
-    assert len(data) == 12 * n_frames
-    assert _all_finite(data)
+    data = audio.nnls_chroma()
+    assert data.shape[0] == 12
+    assert data.shape[1] > 0
+    assert np.isfinite(data).all()
 
 
 def test_audio_lufs() -> None:
@@ -744,10 +744,9 @@ def test_cqt_and_vqt_return_cqt_result() -> None:
         vqt(samples, sr=22050, n_bins=24, bins_per_octave=12, gamma=10.0),
     ):
         assert isinstance(result, CqtResult)
-        assert result.n_bins == 24
-        assert result.n_frames > 0
-        assert len(result.magnitude) == result.n_bins * result.n_frames
-        assert len(result.frequencies) == result.n_bins
+        assert result.magnitude.shape[0] == 24
+        assert result.magnitude.shape[1] > 0
+        assert result.frequencies.shape == (24,)
 
 
 def test_pseudo_and_hybrid_cqt_return_cqt_result() -> None:
@@ -759,17 +758,16 @@ def test_pseudo_and_hybrid_cqt_return_cqt_result() -> None:
         hybrid_cqt(samples, sr=22050, n_bins=24, bins_per_octave=12),
     ):
         assert isinstance(result, CqtResult)
-        assert result.n_bins == 24
-        assert result.n_frames > 0
-        assert len(result.magnitude) == result.n_bins * result.n_frames
-        assert len(result.frequencies) == result.n_bins
+        assert result.magnitude.shape[0] == 24
+        assert result.magnitude.shape[1] > 0
+        assert result.frequencies.shape == (24,)
 
 
 def test_onset_strength_multi_returns_band_matrix() -> None:
     from libsonare import onset_strength_multi
 
     samples = _generate_sine(440, 22050, 1.0)
-    n_frames, data = onset_strength_multi(samples, sample_rate=22050, n_bands=4)
-    assert n_frames > 0
-    assert len(data) == 4 * n_frames
-    assert all(math.isfinite(value) for value in data)
+    data = onset_strength_multi(samples, sample_rate=22050, n_bands=4)
+    assert data.shape[0] == 4
+    assert data.shape[1] > 0
+    assert np.isfinite(data).all()

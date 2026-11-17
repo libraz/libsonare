@@ -2073,3 +2073,1498 @@ changed = "absent is None (librosa's default); an explicit 0 raises SonareValueE
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_surface_analysis.py::test_mirror_absent_is_none_not_zero"
+
+[[entry]]
+kind = "function"
+old = "detect_beats"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "detect_downbeats"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "detect_onsets"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "spectral_centroid"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "spectral_bandwidth"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "spectral_flux"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "spectral_rolloff"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "spectral_flatness"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "zero_crossing_rate"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "rms_energy"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "tone"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "chirp"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "clicks"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "power_to_db"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "amplitude_to_db"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "db_to_power"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "db_to_amplitude"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "preemphasis"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "deemphasis"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "pad_center"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "fix_length"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "vector_normalize"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "plp"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "onset_strength"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "momentary_lufs"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "short_term_lufs"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "resample"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
+
+[[entry]]
+kind = "function"
+old = "fix_frames"
+changed = "returns an int32 ndarray instead of list[int]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_index_results_are_int32_arrays"
+
+[[entry]]
+kind = "function"
+old = "peak_pick"
+changed = "returns an int32 ndarray instead of list[int]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_index_results_are_int32_arrays"
+
+[[entry]]
+kind = "function"
+old = "segment_subsegment"
+changed = "takes one 2-D (features, frames) array and returns an int32 ndarray instead of list[int]"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_index_results_are_int32_arrays"
+
+[[entry]]
+kind = "function"
+old = "segment_agglomerative"
+changed = "takes one 2-D (features, frames) array and returns an int32 ndarray instead of list[int]"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_index_results_are_int32_arrays"
+
+[[entry]]
+kind = "function"
+old = "stft_db"
+changed = "returns one float32 (rows, n_frames) ndarray instead of a tuple of the frame count and a flat list"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_results_are_two_dimensional"
+
+[[entry]]
+kind = "function"
+old = "tempogram"
+changed = "returns one float32 (rows, n_frames) ndarray instead of a tuple of the frame count and a flat list"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_results_are_two_dimensional"
+
+[[entry]]
+kind = "function"
+old = "cyclic_tempogram"
+changed = "returns one float32 (rows, n_frames) ndarray instead of a tuple of the frame count and a flat list"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_results_are_two_dimensional"
+
+[[entry]]
+kind = "function"
+old = "fourier_tempogram"
+changed = "returns one float32 (rows, n_frames) ndarray instead of a tuple of the frame count and a flat list"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_results_are_two_dimensional"
+
+[[entry]]
+kind = "function"
+old = "onset_strength_multi"
+changed = "returns one float32 (rows, n_frames) ndarray instead of a tuple of the frame count and a flat list"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_results_are_two_dimensional"
+
+[[entry]]
+kind = "function"
+old = "nnls_chroma"
+changed = "returns one float32 (rows, n_frames) ndarray instead of a tuple of the frame count and a flat list"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_results_are_two_dimensional"
+
+[[entry]]
+kind = "function"
+old = "frame_signal"
+changed = "returns a float32 (frame_length, n_frames) ndarray whose column j is frame j, instead of a tuple of n_frames and a flat list"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_frame_signal_columns_are_the_frames"
+
+[[entry]]
+kind = "function"
+old = "mel_delta"
+changed = "takes one 2-D (n_features, n_frames) array and returns a float32 ndarray of the same shape"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
+
+[[entry]]
+kind = "function"
+old = "pcen"
+changed = "takes one 2-D (n_bins, n_frames) array and returns a float32 ndarray of the same shape"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
+
+[[entry]]
+kind = "function"
+old = "tonnetz"
+changed = "takes one 2-D (n_chroma, n_frames) array and returns a float32 (6, n_frames) ndarray"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
+
+[[entry]]
+kind = "function"
+old = "segment_cross_similarity"
+changed = "takes two 2-D (features, frames) arrays and returns a float32 ndarray instead of SegmentMatrix"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
+
+[[entry]]
+kind = "function"
+old = "segment_recurrence_matrix"
+changed = "takes one 2-D (features, frames) array and returns a float32 (frames, frames) ndarray instead of SegmentMatrix"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
+
+[[entry]]
+kind = "function"
+old = "segment_recurrence_to_lag"
+changed = "takes a square 2-D recurrence array and returns a float32 ndarray instead of SegmentMatrix"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
+
+[[entry]]
+kind = "function"
+old = "segment_lag_to_recurrence"
+changed = "takes one 2-D (n_lags, n_rows) array and returns a float32 ndarray instead of SegmentMatrix"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
+
+[[entry]]
+kind = "function"
+old = "segment_path_enhance"
+changed = "takes a square 2-D recurrence array and returns a float32 ndarray instead of SegmentMatrix"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
+
+[[entry]]
+kind = "function"
+old = "tempogram_ratio"
+changed = "takes the 2-D (win_length, n_frames) tempogram and returns a float32 ndarray of one value per factor"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
+
+[[entry]]
+kind = "function"
+old = "mel_to_stft"
+changed = "takes one 2-D (n_mels, n_frames) array and returns a float32 (n_fft // 2 + 1, n_frames) ndarray instead of StftMagnitudeResult"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
+
+[[entry]]
+kind = "function"
+old = "mel_to_audio"
+changed = "takes one 2-D (n_mels, n_frames) array and returns a float32 ndarray"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_inverse_transforms_return_audio_arrays"
+
+[[entry]]
+kind = "function"
+old = "mfcc_to_mel"
+changed = "takes one 2-D (n_mfcc, n_frames) array and returns a float32 (n_mels, n_frames) ndarray instead of MelPowerResult"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
+
+[[entry]]
+kind = "function"
+old = "mfcc_to_audio"
+changed = "takes one 2-D (n_mfcc, n_frames) array and returns a float32 ndarray"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_inverse_transforms_return_audio_arrays"
+
+[[entry]]
+kind = "function"
+old = "griffin_lim"
+changed = "takes one 2-D (n_bins, n_frames) array and returns a float32 ndarray"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_inverse_transforms_return_audio_arrays"
+
+[[entry]]
+kind = "function"
+old = "cqt_to_audio"
+changed = "takes one 2-D (n_bins, n_frames) array and returns a float32 ndarray"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_inverse_transforms_return_audio_arrays"
+
+[[entry]]
+kind = "function"
+old = "vqt_to_audio"
+changed = "takes one 2-D (n_bins, n_frames) array and returns a float32 ndarray"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_inverse_transforms_return_audio_arrays"
+
+[[entry]]
+kind = "option"
+old = "mel_delta(n_features)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "mel_delta(n_frames)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "pcen(n_bins)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "pcen(n_frames)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "tonnetz(n_chroma)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "tonnetz(n_frames)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "segment_cross_similarity(x_rows)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "segment_cross_similarity(x_cols)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "segment_cross_similarity(y_rows)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "segment_cross_similarity(y_cols)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "segment_recurrence_matrix(rows)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "segment_recurrence_matrix(cols)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "segment_recurrence_to_lag(n)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "segment_lag_to_recurrence(n_rows)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "segment_lag_to_recurrence(n_lags)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "segment_subsegment(rows)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "segment_subsegment(cols)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "segment_agglomerative(rows)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "segment_agglomerative(cols)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "segment_path_enhance(n)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "tempogram_ratio(win_length)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "mel_to_stft(n_mels)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "mel_to_stft(n_frames)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "mel_to_audio(n_mels)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "mel_to_audio(n_frames)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "griffin_lim(n_bins)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "griffin_lim(n_frames)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "mfcc_to_mel(n_mfcc)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "mfcc_to_mel(n_frames)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "mfcc_to_audio(n_mfcc)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "mfcc_to_audio(n_frames)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "cqt_to_audio(n_bins)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "cqt_to_audio(n_frames)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "vqt_to_audio(n_bins)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "vqt_to_audio(n_frames)"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "option"
+old = "tempogram_ratio(tempogram_data)"
+new = "tempogram_ratio(tempogram)"
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "function"
+old = "trim_silence"
+changed = "returns TrimResult(audio, start_sample, end_sample) instead of a tuple"
+domain = "analysis"
+rule = "typed-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_silence_results_are_arrays_and_typed_results"
+
+[[entry]]
+kind = "function"
+old = "split_silence"
+changed = "returns an int64 (n_intervals, 2) ndarray of [start, end) samples instead of a list of tuples"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_silence_results_are_arrays_and_typed_results"
+
+[[entry]]
+kind = "function"
+old = "split_silence_common"
+changed = "returns an int64 (n_intervals, 2) ndarray of [start, end) samples instead of a list of tuples"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_silence_results_are_arrays_and_typed_results"
+
+[[entry]]
+kind = "function"
+old = "split_silence_common_with_report"
+changed = "returns SplitSilenceCommonWithReportResult(intervals, report) instead of a tuple"
+domain = "analysis"
+rule = "typed-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_silence_results_are_arrays_and_typed_results"
+
+[[entry]]
+kind = "field"
+old = "StftResult.n_bins"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "StftResult.n_frames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "StftResult.magnitude"
+changed = "float32 (n_bins, n_frames) ndarray instead of a flat list"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold_two_dimensional_arrays"
+
+[[entry]]
+kind = "field"
+old = "StftResult.power"
+changed = "float32 (n_bins, n_frames) ndarray instead of a flat list"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold_two_dimensional_arrays"
+
+[[entry]]
+kind = "field"
+old = "CqtResult.n_bins"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "CqtResult.n_frames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "CqtResult.magnitude"
+changed = "float32 (n_bins, n_frames) ndarray instead of a flat list"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold_two_dimensional_arrays"
+
+[[entry]]
+kind = "field"
+old = "CqtResult.frequencies"
+changed = "float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold_two_dimensional_arrays"
+
+[[entry]]
+kind = "field"
+old = "MelSpectrogramResult.n_mels"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "MelSpectrogramResult.n_frames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "MelSpectrogramResult.is_db"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "MelSpectrogramResult.power"
+changed = "float32 (n_mels, n_frames) ndarray instead of a flat list"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold_two_dimensional_arrays"
+
+[[entry]]
+kind = "field"
+old = "MelSpectrogramResult.db"
+changed = "float32 (n_mels, n_frames) ndarray instead of a flat list"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold_two_dimensional_arrays"
+
+[[entry]]
+kind = "field"
+old = "MfccResult.n_mfcc"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "MfccResult.n_frames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "MfccResult.is_db"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "MfccResult.coefficients"
+changed = "float32 (n_mfcc, n_frames) ndarray instead of a flat list"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold_two_dimensional_arrays"
+
+[[entry]]
+kind = "field"
+old = "ChromaResult.n_chroma"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "ChromaResult.n_frames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "ChromaResult.features"
+changed = "float32 (n_chroma, n_frames) ndarray instead of a flat list"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold_two_dimensional_arrays"
+
+[[entry]]
+kind = "field"
+old = "ChromaResult.mean_energy"
+changed = "float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold_two_dimensional_arrays"
+
+[[entry]]
+kind = "field"
+old = "PitchResult.n_frames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "PitchResult.f0"
+changed = "float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold_two_dimensional_arrays"
+
+[[entry]]
+kind = "field"
+old = "PitchResult.voiced_prob"
+changed = "float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold_two_dimensional_arrays"
+
+[[entry]]
+kind = "field"
+old = "PitchResult.voiced_flag"
+changed = "bool ndarray instead of list[bool]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold_two_dimensional_arrays"
+
+[[entry]]
+kind = "field"
+old = "PiptrackResult.n_bins"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "PiptrackResult.n_frames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "PiptrackResult.pitches"
+changed = "float32 (n_bins, n_frames) ndarray instead of a flat list"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold_two_dimensional_arrays"
+
+[[entry]]
+kind = "field"
+old = "PiptrackResult.magnitudes"
+changed = "float32 (n_bins, n_frames) ndarray instead of a flat list"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold_two_dimensional_arrays"
+
+[[entry]]
+kind = "field"
+old = "ReassignedSpectrogramResult.n_bins"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "ReassignedSpectrogramResult.n_frames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "ReassignedSpectrogramResult.magnitude"
+changed = "float32 (n_bins, n_frames) ndarray instead of a flat list"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold_two_dimensional_arrays"
+
+[[entry]]
+kind = "field"
+old = "ReassignedSpectrogramResult.times"
+changed = "float32 (n_bins, n_frames) ndarray instead of a flat list"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold_two_dimensional_arrays"
+
+[[entry]]
+kind = "field"
+old = "ReassignedSpectrogramResult.frequencies"
+changed = "float32 (n_bins, n_frames) ndarray instead of a flat list"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold_two_dimensional_arrays"
+
+[[entry]]
+kind = "class"
+old = "SegmentMatrix"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "class"
+old = "StftMagnitudeResult"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "class"
+old = "MelPowerResult"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "function"
+old = "mel_result_to_stft"
+removed = true
+domain = "analysis"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "mel_result_to_audio"
+removed = true
+domain = "analysis"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "mfcc_result_to_mel"
+removed = true
+domain = "analysis"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "mfcc_result_to_audio"
+removed = true
+domain = "analysis"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "class"
+old = "PiptrackResult"
+changed = "importable from libsonare"
+domain = "analysis"
+rule = "no-internal-types"
+test = "bindings/python/tests/test_surface_analysis.py::test_result_types_are_importable"
+
+[[entry]]
+kind = "class"
+old = "ReassignedSpectrogramResult"
+changed = "importable from libsonare"
+domain = "analysis"
+rule = "no-internal-types"
+test = "bindings/python/tests/test_surface_analysis.py::test_result_types_are_importable"
+
+[[entry]]
+kind = "method"
+old = "Audio.detect_beats"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_audio_methods_return_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.detect_downbeats"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_audio_methods_return_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.detect_onsets"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_audio_methods_return_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.onset_strength"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_audio_methods_return_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.momentary_lufs"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_audio_methods_return_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.short_term_lufs"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_audio_methods_return_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.spectral_centroid"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_audio_methods_return_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.spectral_bandwidth"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_audio_methods_return_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.spectral_rolloff"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_audio_methods_return_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.spectral_flatness"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_audio_methods_return_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.zero_crossing_rate"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_audio_methods_return_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.rms_energy"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_audio_methods_return_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.resample"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "core"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_audio_methods_return_arrays"
+
+[[entry]]
+kind = "method"
+old = "Audio.stft_db"
+changed = "returns one float32 (rows, n_frames) ndarray instead of a tuple of dimensions and a flat list"
+domain = "core"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_results_are_two_dimensional"
+
+[[entry]]
+kind = "method"
+old = "Audio.nnls_chroma"
+changed = "returns one float32 (rows, n_frames) ndarray instead of a tuple of dimensions and a flat list"
+domain = "core"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_results_are_two_dimensional"
+
+[[entry]]
+kind = "option"
+old = "detect_key(tuning)"
+new = "detect_key(tuning_cents)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "detect_key_candidates(tuning)"
+new = "detect_key_candidates(tuning_cents)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "detect_chords(tuning)"
+new = "detect_chords(tuning_cents)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "chord_functional_analysis(tuning)"
+new = "chord_functional_analysis(tuning_cents)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "analyze(tuning)"
+new = "analyze(tuning_cents)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "analyze_with_progress(tuning)"
+new = "analyze_with_progress(tuning_cents)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "Audio.detect_key(tuning)"
+new = "Audio.detect_key(tuning_cents)"
+domain = "core"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "Audio.detect_key_candidates(tuning)"
+new = "Audio.detect_key_candidates(tuning_cents)"
+domain = "core"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "Audio.detect_chords(tuning)"
+new = "Audio.detect_chords(tuning_cents)"
+domain = "core"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "tuning_to_reference_hz(tuning)"
+new = "tuning_to_reference_hz(tuning_cents)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "tuning_to_reference_hz(a4)"
+new = "tuning_to_reference_hz(a4_hz)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "reference_hz_to_tuning(hz)"
+new = "reference_hz_to_tuning(reference_hz)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "reference_hz_to_tuning(a4)"
+new = "reference_hz_to_tuning(a4_hz)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "function"
+old = "tuning_to_reference_hz"
+changed = "takes cents in [-50, 50) like every analysis tuning (1.x: fractions of a semitone)"
+domain = "analysis"
+rule = "unit-in-name"
+test = "bindings/python/tests/test_surface_analysis.py::test_tuning_cents_round_trips_through_the_converters"
+
+[[entry]]
+kind = "function"
+old = "reference_hz_to_tuning"
+changed = "returns cents (1.x: fractions of a semitone)"
+domain = "analysis"
+rule = "unit-in-name"
+test = "bindings/python/tests/test_surface_analysis.py::test_tuning_cents_round_trips_through_the_converters"
+
+[[entry]]
+kind = "field"
+old = "KeyDetection.tuning"
+new = "KeyDetection.tuning_cents"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "AnalysisResult.tuning"
+new = "AnalysisResult.tuning_cents"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "ChordAnalysisResult.tuning"
+new = "ChordAnalysisResult.tuning_cents"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "TranscribeResult.tuning"
+new = "TranscribeResult.tuning_cents"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "time_to_frames(time)"
+new = "time_to_frames(time_sec)"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "NoteSegment.start_seconds"
+new = "NoteSegment.start_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "NoteSegment.end_seconds"
+new = "NoteSegment.end_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "function"
+old = "note_segments"
+changed = "voicing is voiced_prob= or voiced_flags= by keyword, exactly one; frame_rate follows f0_hz"
+domain = "analysis"
+rule = "individual"
+test = "bindings/python/tests/test_surface_analysis.py::test_note_segments_takes_exactly_one_voicing_input_by_keyword"
+
+[[entry]]
+kind = "option"
+old = "transcribe(fmin)"
+new = "transcribe(f0_min_hz)"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "option"
+old = "transcribe(fmax)"
+new = "transcribe(f0_max_hz)"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "option"
+old = "Project.transcribe_to_clip(fmin)"
+new = "Project.transcribe_to_clip(f0_min_hz)"
+domain = "project"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "option"
+old = "Project.transcribe_to_clip(fmax)"
+new = "Project.transcribe_to_clip(f0_max_hz)"
+domain = "project"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "option"
+old = "transcribe(reattack_ratio)"
+changed = "None means no split; an explicit 0, a negative value or a value up to 1 raises SonareValueError"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_surface_analysis.py::test_reattack_ratio_none_is_no_split_and_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "Project.transcribe_to_clip(reattack_ratio)"
+changed = "None means no split; an explicit 0, a negative value or a value up to 1 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_surface_analysis.py::test_reattack_ratio_none_is_no_split_and_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "PolyphonicAnalysis.analyze(reattack_ratio)"
+changed = "None means no split; an explicit 0, a negative value or a value up to 1 raises SonareValueError"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_surface_analysis.py::test_reattack_ratio_none_is_no_split_and_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "detect_bpm(bpm_min)"
+changed = "keyword-only tempo search bound, default 60-200 BPM (1.x searched 30-300); an inverted range raises SonareValueError"
+domain = "analysis"
+rule = "tempo-range"
+test = "bindings/python/tests/test_surface_analysis.py::test_tempo_search_range_is_keyword_only_and_validated"
+
+[[entry]]
+kind = "option"
+old = "detect_bpm(bpm_max)"
+changed = "keyword-only tempo search bound, default 60-200 BPM (1.x searched 30-300); an inverted range raises SonareValueError"
+domain = "analysis"
+rule = "tempo-range"
+test = "bindings/python/tests/test_surface_analysis.py::test_tempo_search_range_is_keyword_only_and_validated"
+
+[[entry]]
+kind = "option"
+old = "detect_beats(bpm_min)"
+changed = "keyword-only tempo search bound, default 60-200 BPM (1.x searched 30-300); an inverted range raises SonareValueError"
+domain = "analysis"
+rule = "tempo-range"
+test = "bindings/python/tests/test_surface_analysis.py::test_tempo_search_range_is_keyword_only_and_validated"
+
+[[entry]]
+kind = "option"
+old = "detect_beats(bpm_max)"
+changed = "keyword-only tempo search bound, default 60-200 BPM (1.x searched 30-300); an inverted range raises SonareValueError"
+domain = "analysis"
+rule = "tempo-range"
+test = "bindings/python/tests/test_surface_analysis.py::test_tempo_search_range_is_keyword_only_and_validated"
+
+[[entry]]
+kind = "field"
+old = "StreamConfig.tuning_ref_hz"
+new = "StreamConfig.reference_hz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "method"
+old = "StreamAnalyzer.set_tuning_ref_hz"
+new = "StreamAnalyzer.set_reference_hz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "method"
+old = "StreamAnalyzer.current_time"
+new = "StreamAnalyzer.current_time_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "option"
+old = "StreamAnalyzer.set_expected_duration(duration_seconds)"
+new = "StreamAnalyzer.set_expected_duration(duration_sec)"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "StreamFrames.timestamps"
+new = "StreamFrames.timestamps_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesU8.timestamps"
+new = "StreamFramesU8.timestamps_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesI16.timestamps"
+new = "StreamFramesI16.timestamps_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "StreamChordChange.start_time"
+new = "StreamChordChange.start_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "StreamBarChord.start_time"
+new = "StreamBarChord.start_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.duration_seconds"
+new = "StreamStats.duration_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.chord_start_time"
+new = "StreamStats.chord_start_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.bar_duration"
+new = "StreamStats.bar_duration_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "StreamStats.accumulated_seconds"
+new = "StreamStats.accumulated_sec"
+domain = "analysis"
+rule = "seconds-suffix"

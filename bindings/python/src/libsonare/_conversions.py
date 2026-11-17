@@ -6,9 +6,10 @@ import ctypes
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 
 from ._ffi import SonareSilenceCommonReport
 from ._narrowing import _narrow_double
@@ -18,14 +19,15 @@ from ._runtime import (
     ErrorCode,
     SonareError,
     SonareValueError,
-    _call_float_transform,
+    _call_float_array_transform,
     _call_string,
     _check,
-    _float_array_result,
     _from_c_float_array,
+    _from_c_float_columns,
+    _from_c_float_matrix,
+    _from_c_int_array,
     _get_lib,
     _guard_buffer,
-    _int_array_result,
     _narrow_int,
     _out_float_array,
     _out_int_array,
@@ -33,10 +35,12 @@ from ._runtime import (
     _resolve_zero_default,
     _to_c_float,
     _to_c_float_array,
+    _to_c_float_matrix,
     _to_c_int,
     _to_c_int_array,
     _to_c_size_t,
     _utf8_arg,
+    _validate_matrix,
     _validate_samples,
 )
 
@@ -114,12 +118,14 @@ def frames_to_time(frames: int, sr: int = 22050, hop_length: int = 512) -> float
     )
 
 
-def time_to_frames(time: float, sr: int = 22050, hop_length: int = 512) -> int:
+def time_to_frames(time_sec: float, sr: int = 22050, hop_length: int = 512) -> int:
     """Convert time in seconds to frame count."""
     lib = _get_lib()
     return int(
         lib.sonare_time_to_frames(
-            _to_c_float(time, "time"), _to_c_int(sr, "sr"), _to_c_int(hop_length, "hop_length")
+            _to_c_float(time_sec, "time_sec"),
+            _to_c_int(sr, "sr"),
+            _to_c_int(hop_length, "hop_length"),
         )
     )
 
@@ -159,9 +165,9 @@ def power_to_db(
     ref: float = 1.0,
     amin: float = 1e-10,
     top_db: float = 80.0,
-) -> list[float]:
-    """Convert power values to dB."""
-    return _call_float_transform(
+) -> np.ndarray:
+    """Convert power values to dB; returns a float32 array shaped like ``values``."""
+    return _call_float_array_transform(
         "sonare_power_to_db",
         values,
         _to_c_float(ref, "ref"),
@@ -176,9 +182,9 @@ def amplitude_to_db(
     ref: float = 1.0,
     amin: float = 1e-5,
     top_db: float = 80.0,
-) -> list[float]:
-    """Convert amplitude values to dB."""
-    return _call_float_transform(
+) -> np.ndarray:
+    """Convert amplitude values to dB; returns a float32 array shaped like ``values``."""
+    return _call_float_array_transform(
         "sonare_amplitude_to_db",
         values,
         _to_c_float(ref, "ref"),
@@ -188,16 +194,16 @@ def amplitude_to_db(
     )
 
 
-def db_to_power(values: Sequence[float] | list[float], ref: float = 1.0) -> list[float]:
-    """Convert dB values back to power."""
-    return _call_float_transform(
+def db_to_power(values: Sequence[float] | list[float], ref: float = 1.0) -> np.ndarray:
+    """Convert dB values back to power; returns a float32 array shaped like ``values``."""
+    return _call_float_array_transform(
         "sonare_db_to_power", values, _to_c_float(ref, "ref"), arg_name="values"
     )
 
 
-def db_to_amplitude(values: Sequence[float] | list[float], ref: float = 1.0) -> list[float]:
-    """Convert dB values back to amplitude."""
-    return _call_float_transform(
+def db_to_amplitude(values: Sequence[float] | list[float], ref: float = 1.0) -> np.ndarray:
+    """Convert dB values back to amplitude; returns a float32 array shaped like ``values``."""
+    return _call_float_array_transform(
         "sonare_db_to_amplitude", values, _to_c_float(ref, "ref"), arg_name="values"
     )
 
@@ -206,9 +212,9 @@ def preemphasis(
     samples: Sequence[float] | list[float],
     coef: float = 0.97,
     zi: float | None = None,
-) -> list[float]:
-    """Apply librosa-compatible pre-emphasis."""
-    return _call_float_transform(
+) -> np.ndarray:
+    """Apply librosa-compatible pre-emphasis; returns a float32 array."""
+    return _call_float_array_transform(
         "sonare_preemphasis",
         samples,
         _to_c_float(coef, "coef"),
@@ -221,9 +227,9 @@ def deemphasis(
     samples: Sequence[float] | list[float],
     coef: float = 0.97,
     zi: float | None = None,
-) -> list[float]:
-    """Apply inverse pre-emphasis."""
-    return _call_float_transform(
+) -> np.ndarray:
+    """Apply inverse pre-emphasis; returns a float32 array."""
+    return _call_float_array_transform(
         "sonare_deemphasis",
         samples,
         _to_c_float(coef, "coef"),
@@ -238,8 +244,8 @@ def trim_silence(
     top_db: float = 60.0,
     frame_length: int = 2048,
     hop_length: int = 512,
-) -> tuple[list[float], int, int]:
-    """Trim leading/trailing silence and return (audio, start_sample, end_sample)."""
+) -> TrimResult:
+    """Trim leading/trailing silence and return a :class:`TrimResult`."""
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     start = ctypes.c_int()
@@ -257,7 +263,11 @@ def trim_silence(
             ctypes.byref(end),
         )
         _check(rc)
-        return (_float_array_result(out, out_length.value), int(start.value), int(end.value))
+        return TrimResult(
+            audio=_from_c_float_array(out, out_length.value),
+            start_sample=int(start.value),
+            end_sample=int(end.value),
+        )
 
 
 @_guard_buffer("samples")
@@ -266,8 +276,11 @@ def split_silence(
     top_db: float = 60.0,
     frame_length: int = 2048,
     hop_length: int = 512,
-) -> list[tuple[int, int]]:
-    """Return non-silent intervals as (start_sample, end_sample)."""
+) -> np.ndarray:
+    """Return non-silent intervals as an int64 array of shape ``(n_intervals, 2)``.
+
+    Each row is ``[start_sample, end_sample)``.
+    """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     with _out_int_array(lib) as (out, out_count):
@@ -281,8 +294,25 @@ def split_silence(
             ctypes.byref(out_count),
         )
         _check(rc)
-        flat = _int_array_result(out, out_count.value)
-        return [(flat[i], flat[i + 1]) for i in range(0, len(flat), 2)]
+        return _intervals_result(out, out_count.value)
+
+
+def _intervals_result(out: object, count: int) -> np.ndarray:
+    """Copy a flat ``[start, end, ...]`` C int array into an int64 ``(n, 2)`` array."""
+    return _from_c_int_array(out, count).astype(np.int64).reshape(-1, 2)
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class TrimResult:
+    """Audio kept by :func:`trim_silence` and the span it came from.
+
+    ``audio`` is a float32 array; ``start_sample`` and ``end_sample`` bound it
+    in the input as ``[start_sample, end_sample)``.
+    """
+
+    audio: npt.NDArray[np.float32]
+    start_sample: int
+    end_sample: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -345,8 +375,11 @@ def split_silence_common(
     top_db: float = 60.0,
     frame_length: int = 2048,
     hop_length: int = 512,
-) -> list[tuple[int, int]]:
+) -> np.ndarray:
     """Return the intervals where any of several takes of one part is sounding.
+
+    The result is an int64 array of shape ``(n_intervals, 2)`` of
+    ``[start_sample, end_sample)`` rows.
 
     What several takes have in common is the silence, not the sound: the
     result is the union of what :func:`split_silence` reports for each
@@ -369,8 +402,19 @@ def split_silence_common(
             ctypes.byref(out_count),
         )
         _check(rc)
-        flat = _int_array_result(out, out_count.value)
-        return [(flat[i], flat[i + 1]) for i in range(0, len(flat), 2)]
+        return _intervals_result(out, out_count.value)
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class SplitSilenceCommonWithReportResult:
+    """Intervals from :func:`split_silence_common_with_report` and why they came out so.
+
+    ``intervals`` is an int64 array of shape ``(n_intervals, 2)`` of
+    ``[start_sample, end_sample)`` rows.
+    """
+
+    intervals: npt.NDArray[np.int64]
+    report: SilenceCommonReport
 
 
 def split_silence_common_with_report(
@@ -378,7 +422,7 @@ def split_silence_common_with_report(
     top_db: float = 60.0,
     frame_length: int = 2048,
     hop_length: int = 512,
-) -> tuple[list[tuple[int, int]], SilenceCommonReport]:
+) -> SplitSilenceCommonWithReportResult:
     """Return what :func:`split_silence_common` returns, plus why.
 
     Identical intervals and identical refusals; the difference is the
@@ -406,10 +450,10 @@ def split_silence_common_with_report(
             ctypes.byref(report),
         )
         _check(rc)
-        flat = _int_array_result(out, out_count.value)
-    return (
-        [(flat[i], flat[i + 1]) for i in range(0, len(flat), 2)],
-        SilenceCommonReport(
+        intervals = _intervals_result(out, out_count.value)
+    return SplitSilenceCommonWithReportResult(
+        intervals=intervals,
+        report=SilenceCommonReport(
             silence_ceiling_db=float(report.silence_ceiling_db),
             max_signal_intervals=int(report.max_signal_intervals),
             min_signal_intervals=int(report.min_signal_intervals),
@@ -421,8 +465,12 @@ def frame_signal(
     samples: Sequence[float] | list[float],
     frame_length: int,
     hop_length: int,
-) -> tuple[int, list[float]]:
-    """Slice a signal into frames. Returns (n_frames, row-major frames)."""
+) -> np.ndarray:
+    """Slice a signal into frames.
+
+    Returns a float32 array of shape ``(frame_length, n_frames)``: column ``j`` is
+    ``samples[j * hop_length : j * hop_length + frame_length]``.
+    """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     n_frames = ctypes.c_int()
@@ -437,18 +485,22 @@ def frame_signal(
             ctypes.byref(n_frames),
         )
         _check(rc)
-        return (int(n_frames.value), _float_array_result(out, out_length.value))
+        frames = int(n_frames.value)
+        flat = _from_c_float_array(out, out_length.value)
+        # The C buffer holds one frame after another, so its rows are frames.
+        frame_size = flat.size // frames if frames else int(frame_length)
+        return np.ascontiguousarray(flat.reshape(frames, frame_size).T)
 
 
 def pad_center(
     values: Sequence[float] | list[float],
     target_size: int,
     pad_value: float = 0.0,
-) -> list[float]:
-    """Pad an array by centering it within target size."""
+) -> np.ndarray:
+    """Pad an array by centering it within target size; returns a float32 array."""
     if not isinstance(target_size, int) or target_size < 0:
         raise SonareValueError("target_size must be a non-negative integer")
-    return _call_float_transform(
+    return _call_float_array_transform(
         "sonare_pad_center",
         values,
         _to_c_size_t(target_size, "target_size"),
@@ -461,11 +513,11 @@ def fix_length(
     values: Sequence[float] | list[float],
     target_size: int,
     pad_value: float = 0.0,
-) -> list[float]:
-    """Crop or pad an array to exact length."""
+) -> np.ndarray:
+    """Crop or pad an array to exact length; returns a float32 array."""
     if not isinstance(target_size, int) or target_size < 0:
         raise SonareValueError("target_size must be a non-negative integer")
-    return _call_float_transform(
+    return _call_float_array_transform(
         "sonare_fix_length",
         values,
         _to_c_size_t(target_size, "target_size"),
@@ -480,8 +532,8 @@ def fix_frames(
     x_min: int = 0,
     x_max: int | None = None,
     pad: bool = True,
-) -> list[int]:
-    """Adjust frame indices to fit within bounds.
+) -> np.ndarray:
+    """Adjust frame indices to fit within bounds; returns an int32 array.
 
     ``x_max`` is the inclusive upper bound; ``None`` (the default) means none, and a
     negative value is refused.
@@ -499,7 +551,7 @@ def fix_frames(
             ctypes.byref(out_length),
         )
         _check(rc)
-        return _int_array_result(out, out_length.value)
+        return _from_c_int_array(out, out_length.value)
 
 
 def peak_pick(
@@ -510,8 +562,10 @@ def peak_pick(
     post_avg: int,
     delta: float,
     wait: int,
-) -> list[int]:
+) -> np.ndarray:
     """Pick peaks using librosa.util.peak_pick-compatible parameters.
+
+    Returns an int32 array of peak indices.
 
     ``delta`` is a threshold above the local mean, in the units of ``values``
     itself. The envelope is not normalized -- :func:`onset_strength` returns
@@ -537,16 +591,16 @@ def peak_pick(
             ctypes.byref(out_length),
         )
         _check(rc)
-        return _int_array_result(out, out_length.value)
+        return _from_c_int_array(out, out_length.value)
 
 
 def vector_normalize(
     values: Sequence[float] | list[float],
     norm_type: int = 0,
     threshold: float = 0.0,
-) -> list[float]:
-    """Normalize a vector. norm_type: 0=inf, 1=L1, 2=L2, 3=power."""
-    return _call_float_transform(
+) -> np.ndarray:
+    """Normalize a vector (float32 array). norm_type: 0=inf, 1=L1, 2=L2, 3=power."""
+    return _call_float_array_transform(
         "sonare_vector_normalize",
         values,
         _to_c_int(norm_type, "norm_type"),
@@ -556,9 +610,7 @@ def vector_normalize(
 
 
 def pcen(
-    values: Sequence[float] | list[float],
-    n_bins: int,
-    n_frames: int,
+    values: npt.ArrayLike,
     sr: int = 22050,
     hop_length: int = 512,
     time_constant: float = 0.4,
@@ -566,12 +618,14 @@ def pcen(
     bias: float = 2.0,
     power: float = 0.5,
     eps: float = 1e-6,
-) -> list[float]:
-    """Apply per-channel energy normalization to a row-major spectrogram."""
+) -> np.ndarray:
+    """Apply per-channel energy normalization to a spectrogram.
+
+    ``values`` is a 2-D array of shape ``(n_bins, n_frames)``; the result is a
+    float32 array of the same shape.
+    """
     lib = _get_lib()
-    c_array, length = _to_c_float_array(values, arg_name="values")
-    if length != n_bins * n_frames:
-        raise SonareValueError("values length must equal n_bins * n_frames")
+    c_array, n_bins, n_frames = _to_c_float_matrix("pcen", values, arg_name="values")
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_pcen(
             c_array,
@@ -588,16 +642,17 @@ def pcen(
             ctypes.byref(out_length),
         )
         _check(rc)
-        return _float_array_result(out, out_length.value)
+        return _from_c_float_matrix(out, n_bins, n_frames)
 
 
-@_guard_buffer("chromagram")
-def tonnetz(chromagram: Sequence[float] | list[float], n_chroma: int, n_frames: int) -> list[float]:
-    """Compute Tonnetz from row-major chromagram data."""
+def tonnetz(chromagram: npt.ArrayLike) -> np.ndarray:
+    """Compute Tonnetz from a chromagram.
+
+    ``chromagram`` is a 2-D array of shape ``(n_chroma, n_frames)``; the result is
+    a float32 array of shape ``(6, n_frames)``.
+    """
     lib = _get_lib()
-    c_array, length = _to_c_float_array(chromagram)
-    if length != n_chroma * n_frames:
-        raise SonareValueError("chromagram length must equal n_chroma * n_frames")
+    c_array, n_chroma, n_frames = _to_c_float_matrix("tonnetz", chromagram, arg_name="chromagram")
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_tonnetz(
             c_array,
@@ -607,7 +662,7 @@ def tonnetz(chromagram: Sequence[float] | list[float], n_chroma: int, n_frames: 
             ctypes.byref(out_length),
         )
         _check(rc)
-        return _float_array_result(out, out_length.value)
+        return _from_c_float_columns(out, out_length.value, n_frames)
 
 
 def tempogram(
@@ -618,8 +673,8 @@ def tempogram(
     center: bool = True,
     norm: bool = True,
     mode: str = "autocorrelation",
-) -> tuple[int, list[float]]:
-    """Compute tempogram. Returns (n_frames, row-major matrix)."""
+) -> np.ndarray:
+    """Compute a tempogram as a float32 array of shape ``(win_length, n_frames)``."""
     mode_id = {"autocorrelation": 0, "auto": 0, "ac": 0, "cosine": 1}.get(mode)
     if mode_id is None:
         raise SonareValueError("mode must be 'autocorrelation' or 'cosine'")
@@ -641,7 +696,7 @@ def tempogram(
             ctypes.byref(n_frames),
         )
         _check(rc)
-        return (int(n_frames.value), _float_array_result(out, out_length.value))
+        return _from_c_float_columns(out, out_length.value, int(n_frames.value))
 
 
 def cyclic_tempogram(
@@ -651,8 +706,8 @@ def cyclic_tempogram(
     win_length: int = 384,
     bpm_min: float = 60.0,
     n_bins: int = 60,
-) -> tuple[int, list[float]]:
-    """Compute cyclic tempogram. Returns (n_frames, row-major matrix)."""
+) -> np.ndarray:
+    """Compute a cyclic tempogram as a float32 array of shape ``(n_bins, n_frames)``."""
     lib = _get_lib()
     c_array, length = _to_c_float_array(onset_envelope, arg_name="onset_envelope")
     n_frames = ctypes.c_int()
@@ -670,7 +725,7 @@ def cyclic_tempogram(
             ctypes.byref(n_frames),
         )
         _check(rc)
-        return (int(n_frames.value), _float_array_result(out, out_length.value))
+        return _from_c_float_columns(out, out_length.value, int(n_frames.value))
 
 
 def plp(
@@ -680,9 +735,9 @@ def plp(
     tempo_min: float = 30.0,
     tempo_max: float = 300.0,
     win_length: int = 384,
-) -> list[float]:
-    """Compute predominant local pulse from an onset envelope."""
-    return _call_float_transform(
+) -> np.ndarray:
+    """Compute predominant local pulse from an onset envelope (float32, one value per frame)."""
+    return _call_float_array_transform(
         "sonare_plp",
         onset_envelope,
         _to_c_int(sr, "sr"),
@@ -701,12 +756,13 @@ def onset_strength(
     n_fft: int = 2048,
     hop_length: int = 512,
     n_mels: int = 128,
-) -> list[float]:
+) -> np.ndarray:
     """Compute the onset strength envelope (librosa.onset.onset_strength).
 
-    Returns one value per frame (half-wave rectified Mel-spectrogram flux).
+    Returns a float32 array with one value per frame (half-wave rectified
+    Mel-spectrogram flux).
     """
-    return _call_float_transform(
+    return _call_float_array_transform(
         "sonare_onset_strength",
         samples,
         _to_c_int(sr, "sr"),
@@ -724,8 +780,8 @@ def onset_strength_multi(
     hop_length: int = 512,
     n_mels: int = 128,
     n_bands: int = 3,
-) -> tuple[int, list[float]]:
-    """Compute multi-band onset strength. Returns (n_frames, [n_bands x n_frames])."""
+) -> np.ndarray:
+    """Compute multi-band onset strength as a float32 array of shape ``(n_bands, n_frames)``."""
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     n_frames = ctypes.c_int()
@@ -743,7 +799,7 @@ def onset_strength_multi(
             ctypes.byref(n_frames),
         )
         _check(rc)
-        return (int(n_frames.value), _float_array_result(out, out_length.value))
+        return _from_c_float_columns(out, out_length.value, int(n_frames.value))
 
 
 def fourier_tempogram(
@@ -753,11 +809,10 @@ def fourier_tempogram(
     win_length: int = 384,
     center: bool = True,
     norm: bool = True,
-) -> tuple[int, list[float]]:
-    """Compute the Fourier (FFT-based) tempogram. Returns (n_frames, matrix).
+) -> np.ndarray:
+    """Compute the Fourier (FFT-based) tempogram magnitude.
 
-    The matrix is row-major [n_bins x n_frames] where
-    n_bins = len(matrix) // n_frames.
+    Returns a float32 array of shape ``(n_bins, n_frames)``.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(onset_envelope, arg_name="onset_envelope")
@@ -776,22 +831,23 @@ def fourier_tempogram(
             ctypes.byref(n_frames),
         )
         _check(rc)
-        return (int(n_frames.value), _float_array_result(out, out_length.value))
+        return _from_c_float_columns(out, out_length.value, int(n_frames.value))
 
 
-@_guard_buffer("tempogram_data")
 def tempogram_ratio(
-    tempogram_data: Sequence[float] | list[float],
-    win_length: int = 384,
+    tempogram: npt.ArrayLike,
     sr: int = 22050,
     hop_length: int = 512,
     factors: Sequence[float] | list[float] | None = None,
-) -> list[float]:
+) -> np.ndarray:
     """Aggregate tempogram magnitudes at integer ratios of a reference tempo.
 
-    When ``factors`` is None the library default factors are used.
-    Returns one value per factor.
+    ``tempogram`` is a 2-D array of shape ``(win_length, n_frames)``. When
+    ``factors`` is None the library default factors are used. Returns a float32
+    array with one value per factor.
     """
+    matrix = _validate_matrix("tempogram_ratio", tempogram, arg_name="tempogram")
+    win_length = int(matrix.shape[0])
     if factors is None:
         factors_ptr: ctypes.Array[ctypes.c_float] | None = None
         n_factors = 0
@@ -807,14 +863,15 @@ def tempogram_ratio(
                     f"tempogram_ratio: factors[{index}] must be a finite positive number"
                 )
         factors_ptr, n_factors = _to_c_float_array(factor_values, arg_name="factors")
-    return _call_float_transform(
+    return _call_float_array_transform(
         "sonare_tempogram_ratio",
-        tempogram_data,
+        matrix.reshape(-1),
         _to_c_int(win_length, "win_length"),
         _to_c_int(sr, "sr"),
         _to_c_int(hop_length, "hop_length"),
         factors_ptr,
         _to_c_size_t(n_factors, "n_factors"),
+        arg_name="tempogram",
     )
 
 
@@ -827,10 +884,10 @@ def nnls_chroma(
     stft_blend_weight: float = 0.55,
     stft_blend_n_fft: int = 4096,
     hop_length: int = 512,
-) -> tuple[int, list[float]]:
+) -> np.ndarray:
     """Compute NNLS chroma.
 
-    Returns ``(n_frames, row-major 12 x n_frames matrix)``.  ``hop_length``
+    Returns a float32 array of shape ``(12, n_frames)``.  ``hop_length``
     controls the CQT hop used by the NNLS analysis and defaults to the legacy
     512-sample hop.
     """
@@ -902,13 +959,13 @@ def nnls_chroma(
                 ctypes.byref(n_frames),
             )
         _check(rc)
-        return (int(n_frames.value), _float_array_result(out, out_length.value))
+        return _from_c_float_columns(out, out_length.value, int(n_frames.value))
 
 
 def _resample_float32(
     samples: Sequence[float] | np.ndarray, src_sr: int, target_sr: int
 ) -> np.ndarray:
-    """Resample to a float32 ndarray; :func:`resample` is the list-returning public form."""
+    """Resample to a float32 ndarray."""
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     with _out_float_array(lib) as (out, out_length):
@@ -929,7 +986,7 @@ def resample(
     samples: Sequence[float] | list[float],
     source_sample_rate: int,
     target_sample_rate: int,
-) -> list[float]:
+) -> np.ndarray:
     """Resample audio to a different sample rate.
 
     Args:
@@ -938,8 +995,6 @@ def resample(
         target_sample_rate: Target sample rate in Hz.
 
     Returns:
-        List of resampled audio samples.
+        A float32 array of resampled audio samples.
     """
-    return cast(
-        list[float], _resample_float32(samples, source_sample_rate, target_sample_rate).tolist()
-    )
+    return _resample_float32(samples, source_sample_rate, target_sample_rate)

@@ -15,6 +15,7 @@ import inspect
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from ._helpers import LIB_AVAILABLE
@@ -560,14 +561,14 @@ def test_public_analysis_and_catalog_helpers_return_usable_values() -> None:
     candidates = detect_key_candidates(samples, sample_rate, n_fft=1024, hop_length=256)
     assert candidates
     assert all(math.isfinite(candidate.correlation) for candidate in candidates)
-    assert isinstance(detect_downbeats(samples, sample_rate), list)
+    assert isinstance(detect_downbeats(samples, sample_rate), np.ndarray)
 
     chromagram = chroma(samples, sample_rate, n_fft=1024, hop_length=256)
-    assert chromagram.n_chroma == 12
-    assert len(chromagram.features) == chromagram.n_chroma * chromagram.n_frames
-    frames, tempogram = cyclic_tempogram([abs(sample) for sample in samples], sample_rate, 256, 128)
-    assert frames > 0
-    assert len(tempogram) == frames * 60
+    assert chromagram.features.shape[0] == 12
+    assert chromagram.features.shape[1] > 0
+    tempogram = cyclic_tempogram([abs(sample) for sample in samples], sample_rate, 256, 128)
+    assert tempogram.shape[1] > 0
+    assert tempogram.shape[0] == 60
 
     w, h = decompose_with_init([1.0, 2.0, 3.0, 4.0], 2, 2, 1, n_iter=2, init="nndsvd")
     assert w.shape == (2, 1)

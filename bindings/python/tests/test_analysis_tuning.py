@@ -48,16 +48,18 @@ def test_estimate_tuning_reads_flat_as_negative(detuned: list[float]) -> None:
 
 
 def test_detect_chords_tuning_recovers_plain_triads(detuned: list[float]) -> None:
-    estimate = libsonare.estimate_tuning(detuned, _SR)
+    estimate = 100.0 * libsonare.estimate_tuning(detuned, _SR)
     # The STFT front end with the full vocabulary is the one a detuned triad misleads.
     front = {"chroma_method": "stft", "use_triads_only": False}
-    off_result = libsonare.detect_chords(detuned, _SR, tuning=0.0, **front)
+    off_result = libsonare.detect_chords(detuned, _SR, tuning_cents=0.0, **front)
     off = {c.name for c in off_result.chords}
-    on = {c.name for c in libsonare.detect_chords(detuned, _SR, tuning=estimate, **front).chords}
+    on = {
+        c.name for c in libsonare.detect_chords(detuned, _SR, tuning_cents=estimate, **front).chords
+    }
     default_result = libsonare.detect_chords(detuned, _SR, **front)
     default = {c.name for c in default_result.chords}
-    assert off_result.tuning == 0.0
-    assert default_result.tuning == pytest.approx(-0.45, abs=0.05)
+    assert off_result.tuning_cents == 0.0
+    assert default_result.tuning_cents == pytest.approx(-45.0, abs=5.0)
     for triad in ("C", "G", "Am", "F"):
         assert triad in on
         assert triad not in off
@@ -67,38 +69,38 @@ def test_detect_chords_tuning_recovers_plain_triads(detuned: list[float]) -> Non
 def test_defaults_measure_the_tuning_and_read_the_key(detuned: list[float]) -> None:
     key = libsonare.detect_key(detuned, _SR)
     assert (key.root, key.mode) == (libsonare.PitchClass.C, libsonare.Mode.MAJOR)
-    assert key.tuning == pytest.approx(-0.45, abs=0.05)
+    assert key.tuning_cents == pytest.approx(-45.0, abs=5.0)
 
     chords = libsonare.detect_chords(detuned, _SR)
-    assert chords.tuning == pytest.approx(-0.45, abs=0.05)
+    assert chords.tuning_cents == pytest.approx(-45.0, abs=5.0)
     assert {"C", "G", "Am", "F"} <= {c.name for c in chords.chords}
 
     with libsonare.Audio.from_buffer(detuned, _SR) as audio:
-        assert audio.detect_key().tuning == key.tuning
-        assert audio.detect_chords().tuning == chords.tuning
+        assert audio.detect_key().tuning_cents == key.tuning_cents
+        assert audio.detect_chords().tuning_cents == chords.tuning_cents
 
 
 def test_explicit_zero_tuning_is_honoured(detuned: list[float]) -> None:
-    assert libsonare.detect_key(detuned, _SR, tuning=0).tuning == 0.0
-    assert libsonare.detect_chords(detuned, _SR, tuning=0).tuning == 0.0
+    assert libsonare.detect_key(detuned, _SR, tuning_cents=0).tuning_cents == 0.0
+    assert libsonare.detect_chords(detuned, _SR, tuning_cents=0).tuning_cents == 0.0
     labels = libsonare.chord_functional_analysis(
         detuned,
         key_root=libsonare.PitchClass.C,
         key_mode=libsonare.Mode.MAJOR,
         sample_rate=_SR,
-        tuning=0,
+        tuning_cents=0,
     )
     assert labels
 
 
 def test_key_candidates_take_a_tuning(detuned: list[float]) -> None:
-    estimate = libsonare.estimate_tuning(detuned, _SR)
+    estimate = 100.0 * libsonare.estimate_tuning(detuned, _SR)
     c_major = (libsonare.PitchClass.C, libsonare.Mode.MAJOR)
 
     default = libsonare.detect_key_candidates(detuned, _SR)
-    auto = libsonare.detect_key_candidates(detuned, _SR, tuning="auto")
-    given = libsonare.detect_key_candidates(detuned, _SR, tuning=estimate)
-    zero = libsonare.detect_key_candidates(detuned, _SR, tuning=0)
+    auto = libsonare.detect_key_candidates(detuned, _SR, tuning_cents="auto")
+    given = libsonare.detect_key_candidates(detuned, _SR, tuning_cents=estimate)
+    zero = libsonare.detect_key_candidates(detuned, _SR, tuning_cents=0)
     for ranked in (default, auto, given, zero):
         assert ranked
     for ranked in (default, auto, given):
@@ -108,30 +110,30 @@ def test_key_candidates_take_a_tuning(detuned: list[float]) -> None:
     assert [c.correlation for c in zero] != [c.correlation for c in given]
 
     with libsonare.Audio.from_buffer(detuned, _SR) as audio:
-        assert audio.detect_key_candidates(tuning=estimate)[0].key == given[0].key
-        assert audio.detect_key_candidates(tuning=0)[0].correlation == zero[0].correlation
+        assert audio.detect_key_candidates(tuning_cents=estimate)[0].key == given[0].key
+        assert audio.detect_key_candidates(tuning_cents=0)[0].correlation == zero[0].correlation
 
 
 @pytest.mark.slow
 def test_analyze_tuning_recentres_key_and_numerals(detuned: list[float]) -> None:
-    estimate = libsonare.estimate_tuning(detuned, _SR)
-    off = libsonare.analyze(detuned, _SR, tuning=0)
-    on = libsonare.analyze(detuned, _SR, tuning=estimate)
+    estimate = 100.0 * libsonare.estimate_tuning(detuned, _SR)
+    off = libsonare.analyze(detuned, _SR, tuning_cents=0)
+    on = libsonare.analyze(detuned, _SR, tuning_cents=estimate)
     default = libsonare.analyze(detuned, _SR)
     # The constant-Q key chroma folds +-0.5 semitone into each pitch class, so the key alone
     # cannot show the shift; the tuning each call reports does.
-    assert off.tuning == 0.0
-    assert on.tuning == pytest.approx(estimate, abs=1e-6)
-    assert default.tuning == pytest.approx(-0.45, abs=0.05)
+    assert off.tuning_cents == 0.0
+    assert on.tuning_cents == pytest.approx(estimate, abs=1e-4)
+    assert default.tuning_cents == pytest.approx(-45.0, abs=5.0)
     assert (default.key.root, default.key.mode) == (libsonare.PitchClass.C, libsonare.Mode.MAJOR)
     assert (on.key.root, on.key.mode) == (libsonare.PitchClass.C, libsonare.Mode.MAJOR)
     numerals = {c.roman_numeral for c in on.chords if c.quality != "unknown"}
     assert {"I", "V", "vi", "IV"} <= numerals
 
     labels = libsonare.chord_functional_analysis(
-        detuned, key_root=on.key.root, key_mode=on.key.mode, sample_rate=_SR, tuning=estimate
+        detuned, key_root=on.key.root, key_mode=on.key.mode, sample_rate=_SR, tuning_cents=estimate
     )
-    detected = libsonare.detect_chords(detuned, _SR, tuning=estimate).chords
+    detected = libsonare.detect_chords(detuned, _SR, tuning_cents=estimate).chords
     assert [c.name for c in labels] == [c.name for c in detected]
     label_by_name = {c.name: c.roman for c in labels}
     compared = 0
@@ -144,12 +146,12 @@ def test_analyze_tuning_recentres_key_and_numerals(detuned: list[float]) -> None
 
 def test_tuning_out_of_range_is_invalid(detuned: list[float]) -> None:
     for call in (
-        lambda: libsonare.analyze(detuned[:_SR], _SR, tuning=0.5),
-        lambda: libsonare.analyze_with_progress(detuned[:_SR], _SR, tuning=-0.6),
-        lambda: libsonare.detect_chords(detuned[:_SR], _SR, tuning=0.5),
-        lambda: libsonare.detect_key_candidates(detuned[:_SR], _SR, tuning=0.5),
+        lambda: libsonare.analyze(detuned[:_SR], _SR, tuning_cents=50.0),
+        lambda: libsonare.analyze_with_progress(detuned[:_SR], _SR, tuning_cents=-60.0),
+        lambda: libsonare.detect_chords(detuned[:_SR], _SR, tuning_cents=50.0),
+        lambda: libsonare.detect_key_candidates(detuned[:_SR], _SR, tuning_cents=50.0),
         lambda: libsonare.chord_functional_analysis(
-            detuned[:_SR], key_root=libsonare.PitchClass.C, tuning=0.5, sample_rate=22050
+            detuned[:_SR], key_root=libsonare.PitchClass.C, tuning_cents=50.0, sample_rate=22050
         ),
     ):
         with pytest.raises(SonareValueError) as info:
@@ -169,7 +171,7 @@ def test_analyze_with_progress_takes_the_analyze_keywords() -> None:
 def test_analyze_with_progress_matches_analyze_under_options(detuned: list[float]) -> None:
     samples = detuned[: 4 * _SR]
     stages: list[str] = []
-    options = {"compute_tempo_curve": True, "tuning": -0.45}
+    options = {"compute_tempo_curve": True, "tuning_cents": -45.0}
     with_progress = libsonare.analyze_with_progress(
         samples, _SR, lambda _p, stage: stages.append(stage), **options
     )
@@ -187,5 +189,7 @@ def test_analyze_with_progress_matches_analyze_under_options(detuned: list[float
 
 def test_analyze_with_progress_cancel_still_honoured(detuned: list[float]) -> None:
     with pytest.raises(SonareError) as info:
-        libsonare.analyze_with_progress(detuned[: 2 * _SR], _SR, cancel=lambda: True, tuning=0.1)
+        libsonare.analyze_with_progress(
+            detuned[: 2 * _SR], _SR, cancel=lambda: True, tuning_cents=10.0
+        )
     assert info.value.code == ErrorCode.CANCELLED

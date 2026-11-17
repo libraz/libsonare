@@ -113,8 +113,8 @@ class _ProjectMidiMixin:
         *,
         polyphonic: bool = False,
         reference_hz: float | str | None = None,
-        fmin: float | None = None,
-        fmax: float | None = None,
+        f0_min_hz: float | None = None,
+        f0_max_hz: float | None = None,
         min_note_ms: float | None = None,
         segmentation_threshold_cents: float | None = None,
         velocity_floor_db: float | None = None,
@@ -151,14 +151,14 @@ class _ProjectMidiMixin:
                 sample of the longest note while it is measured.
             reference_hz: Tuning reference in Hz; ``"auto"`` measures it from the
                 audio; ``None`` keeps the default (440 Hz).
-            fmin: Low end of the F0 tracker's range; ``None`` uses 65 Hz for the
+            f0_min_hz: Low end of the F0 tracker's range; ``None`` uses 65 Hz for the
                 monophonic path or 55 Hz for the polyphonic path. Both paths use
                 this bound. The polyphonic path applies it to the salience
                 estimator's F0 axis; its cent-spectrum bounds remain independent.
-            fmax: High end of the F0 tracker's range; ``None`` uses 2093 Hz for
+            f0_max_hz: High end of the F0 tracker's range; ``None`` uses 2093 Hz for
                 the monophonic path or 1760 Hz for the polyphonic path. Both
                 paths use this bound, with the same polyphonic salience-axis
-                behavior as ``fmin``.
+                behavior as ``f0_min_hz``.
             min_note_ms: Shortest span kept as a note; ``None`` keeps 30 ms
                 (monophonic segments), 45 ms (singing) or 60 ms (polyphonic),
                 whatever the tempo. Not
@@ -196,7 +196,7 @@ class _ProjectMidiMixin:
                 real 0.
             reattack_ratio: Polyphonic only. Splits a ridge where its salience
                 climbs past this multiple of the level just before; above 1.
-                ``None`` keeps 2.0 and 0 means no split.
+                ``None`` means no split.
 
         Returns:
             The number of notes written; the clip holds twice that many events.
@@ -204,8 +204,9 @@ class _ProjectMidiMixin:
         Raises:
             SonareValueError: If ``samples`` is empty or holds a NaN or Inf
                 sample, if a config argument is outside its domain, or if both
-                ``fmin`` and ``fmax`` are given and ``fmin`` is not below ``fmax``.
-            SonareValueError: When only one of ``fmin``/``fmax``
+                ``f0_min_hz`` and ``f0_max_hz`` are given and ``f0_min_hz`` is
+                not below ``f0_max_hz``.
+            SonareValueError: When only one of ``f0_min_hz``/``f0_max_hz``
                 is given and it does not lie on the right side of the selected
                 source's default for the other bound; also if the clip id is
                 unknown.
@@ -223,8 +224,8 @@ class _ProjectMidiMixin:
             "transcribe_to_clip",
             polyphonic=polyphonic,
             reference_hz=reference_hz,
-            fmin=fmin,
-            fmax=fmax,
+            f0_min_hz=f0_min_hz,
+            f0_max_hz=f0_max_hz,
             min_note_ms=min_note_ms,
             segmentation_threshold_cents=segmentation_threshold_cents,
             velocity_floor_db=velocity_floor_db,

@@ -35,16 +35,7 @@ def _has_analyze_json_progress() -> bool:
     try:
         from libsonare._runtime import _get_lib
 
-        return hasattr(_get_lib(), "sonare_analyze_json_with_progress")
-    except Exception:
-        return False
-
-
-def _has_analyze_json_progress_ex() -> bool:
-    try:
-        from libsonare._runtime import _get_lib
-
-        return hasattr(_get_lib(), "sonare_analyze_json_with_progress_ex")
+        return hasattr(_get_lib(), "sonare_analyze_json_ex_with_progress")
     except Exception:
         return False
 
@@ -64,11 +55,7 @@ requires_json = pytest.mark.skipif(
 )
 requires_json_progress = pytest.mark.skipif(
     not _has_analyze_json_progress(),
-    reason="libsonare built without sonare_analyze_json_with_progress",
-)
-requires_json_progress_ex = pytest.mark.skipif(
-    not _has_analyze_json_progress_ex(),
-    reason="libsonare built without sonare_analyze_json_with_progress_ex",
+    reason="libsonare built without sonare_analyze_json_ex_with_progress",
 )
 requires_melody_ex = pytest.mark.skipif(
     not _has_analyze_melody_ex(),
@@ -313,7 +300,7 @@ def test_analyze_with_progress_invokes_callback(progress_result) -> None:
         assert isinstance(stage, str)
 
 
-@requires_json_progress_ex
+@requires_json_progress
 def test_analyze_with_progress_false_result_does_not_cancel() -> None:
     """A progress callback's boolean return value is ignored."""
     calls: list[float] = []
@@ -330,7 +317,7 @@ def test_analyze_with_progress_false_result_does_not_cancel() -> None:
     assert isinstance(result, libsonare.AnalysisResult)
 
 
-@requires_json_progress_ex
+@requires_json_progress
 def test_analyze_with_progress_cancel_callable_cancels_without_a_result() -> None:
     """The keyword-only cancel callable maps to the native cancellation callback."""
     result = None

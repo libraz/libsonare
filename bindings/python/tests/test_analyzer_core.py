@@ -331,6 +331,7 @@ def test_compat_numeric_and_signal_utilities() -> None:
     assert libsonare.samples_to_frames(2048, hop_length=512) == 4
 
     power_db = libsonare.power_to_db([1.0, 0.01], ref=1.0, amin=1e-10, top_db=80.0)
+    assert isinstance(power_db, np.ndarray) and power_db.shape == (2,)
     assert power_db[0] == pytest.approx(0.0, abs=1e-5)
     assert power_db[1] == pytest.approx(-20.0, abs=1e-4)
     assert libsonare.db_to_power(power_db, ref=1.0)[1] == pytest.approx(0.01, rel=1e-5)
@@ -340,24 +341,30 @@ def test_compat_numeric_and_signal_utilities() -> None:
     assert libsonare.db_to_amplitude(amp_db, ref=1.0)[1] == pytest.approx(0.5, rel=1e-5)
 
     emphasized = libsonare.preemphasis([1.0, 1.0, 1.0], coef=0.5, zi=0.0)
-    assert emphasized == pytest.approx([1.0, 0.5, 0.5])
+    np.testing.assert_allclose(emphasized, [1.0, 0.5, 0.5], rtol=1e-6)
     assert libsonare.deemphasis(emphasized, coef=0.5, zi=0.0)[2] == pytest.approx(1.0, abs=1e-5)
 
     framed = libsonare.frame_signal([1.0, 2.0, 3.0, 4.0], frame_length=2, hop_length=1)
-    assert framed[0] == 3
-    assert framed[1] == pytest.approx([1.0, 2.0, 2.0, 3.0, 3.0, 4.0])
-    assert libsonare.fix_length([1.0, 2.0], target_size=4, pad_value=-1.0) == pytest.approx(
-        [1.0, 2.0, -1.0, -1.0]
+    # One column per frame: [1, 2], [2, 3], [3, 4].
+    np.testing.assert_allclose(framed, [[1.0, 2.0, 3.0], [2.0, 3.0, 4.0]])
+    np.testing.assert_allclose(
+        libsonare.fix_length([1.0, 2.0], target_size=4, pad_value=-1.0), [1.0, 2.0, -1.0, -1.0]
     )
     with pytest.raises(ValueError):
         libsonare.pad_center([1.0, 2.0], target_size=-1)
     with pytest.raises(ValueError):
         libsonare.fix_length([1.0, 2.0], target_size=-1)
-    assert libsonare.fix_frames([2, 4], x_min=0, x_max=5, pad=True) == [0, 2, 4, 5]
+    np.testing.assert_array_equal(
+        libsonare.fix_frames([2, 4], x_min=0, x_max=5, pad=True), [0, 2, 4, 5]
+    )
     # Matches librosa.util.peak_pick exactly (index 0 is a peak under its
     # first-frame rule: x[0] >= max/mean of the leading window).
-    assert libsonare.peak_pick([0.0, 1.0, 0.0, 2.0, 0.0], 1, 1, 1, 1, 0.0, 0) == [0, 1, 3]
-    assert libsonare.vector_normalize([3.0, 4.0], norm_type=2) == pytest.approx([0.6, 0.8])
+    np.testing.assert_array_equal(
+        libsonare.peak_pick([0.0, 1.0, 0.0, 2.0, 0.0], 1, 1, 1, 1, 0.0, 0), [0, 1, 3]
+    )
+    np.testing.assert_allclose(
+        libsonare.vector_normalize([3.0, 4.0], norm_type=2), [0.6, 0.8], rtol=1e-6
+    )
 
 
 def test_compat_silence_and_rhythm_utilities() -> None:
@@ -366,28 +373,27 @@ def test_compat_silence_and_rhythm_utilities() -> None:
 
     samples = [0.0, 0.0, 1.0, 1.0, 0.0, 0.0]
     trimmed = libsonare.trim_silence(samples, top_db=20.0, frame_length=2, hop_length=1)
-    assert len(trimmed[0]) > 0
-    assert trimmed[2] > trimmed[1]
+    assert len(trimmed.audio) > 0
+    assert trimmed.end_sample > trimmed.start_sample
     intervals = libsonare.split_silence(samples, top_db=20.0, frame_length=2, hop_length=1)
-    assert isinstance(intervals, list)
+    assert isinstance(intervals, np.ndarray)
+    assert intervals.ndim == 2 and intervals.shape[1] == 2
 
-    pcen_values = libsonare.pcen([1.0, 2.0, 3.0, 4.0], n_bins=2, n_frames=2)
-    assert len(pcen_values) == 4
+    pcen_values = libsonare.pcen([[1.0, 2.0], [3.0, 4.0]])
+    assert pcen_values.shape == (2, 2)
 
-    chroma = [0.0] * 24
-    chroma[0] = 1.0
-    chroma[12] = 1.0
-    tonnetz_values = libsonare.tonnetz(chroma, n_chroma=12, n_frames=2)
-    assert len(tonnetz_values) == 12
+    chroma = np.zeros((12, 2), dtype=np.float32)
+    chroma[0, 0] = 1.0
+    chroma[6, 0] = 1.0
+    tonnetz_values = libsonare.tonnetz(chroma)
+    assert tonnetz_values.shape == (6, 2)
 
     onset = [0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0]
     temp = libsonare.tempogram(onset, sr=22050, hop_length=512, win_length=4)
-    assert temp[0] == len(onset)
-    assert len(temp[1]) == 4 * len(onset)
+    assert temp.shape == (4, len(onset))
     cosine = libsonare.tempogram(onset, sr=22050, hop_length=512, win_length=4, mode="cosine")
-    assert cosine[0] == len(onset)
-    assert len(cosine[1]) == 4 * len(onset)
-    assert all(-1.000001 <= value <= 1.000001 for value in cosine[1])
+    assert cosine.shape == (4, len(onset))
+    assert np.all((cosine >= -1.000001) & (cosine <= 1.000001))
     assert len(libsonare.plp(onset, sr=22050, hop_length=512, win_length=4)) == len(onset)
 
 
@@ -417,18 +423,18 @@ def test_audio_detect_key() -> None:
 
 
 def test_audio_detect_beats() -> None:
-    """Audio.detect_beats returns a list."""
+    """Audio.detect_beats returns an array."""
     from libsonare import Audio
 
     audio = Audio.from_buffer([0.0] * 22050, sample_rate=22050)
     beats = audio.detect_beats()
-    assert isinstance(beats, list)
+    assert isinstance(beats, np.ndarray)
 
 
 def test_audio_detect_onsets() -> None:
-    """Audio.detect_onsets returns a list."""
+    """Audio.detect_onsets returns an array."""
     from libsonare import Audio
 
     audio = Audio.from_buffer([0.0] * 22050, sample_rate=22050)
     onsets = audio.detect_onsets()
-    assert isinstance(onsets, list)
+    assert isinstance(onsets, np.ndarray)

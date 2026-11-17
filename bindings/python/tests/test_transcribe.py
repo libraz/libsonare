@@ -101,7 +101,7 @@ def test_polyphonic_default_range_retains_low_notes(frequency: float, midi_note:
     audio = _tone(frequency, duration=1.0)
     omitted = libsonare.transcribe(audio, SR, polyphonic=True, tempo_bpm=120.0)
     explicit = libsonare.transcribe(
-        audio, SR, polyphonic=True, tempo_bpm=120.0, fmin=55.0, fmax=1760.0
+        audio, SR, polyphonic=True, tempo_bpm=120.0, f0_min_hz=55.0, f0_max_hz=1760.0
     )
     assert any(_note_number(data0) == midi_note for _, data0, _ in explicit.events)
     assert omitted.events == explicit.events
@@ -109,9 +109,9 @@ def test_polyphonic_default_range_retains_low_notes(frequency: float, midi_note:
 
 def test_partial_range_uses_the_selected_tracker_default() -> None:
     audio = _tone(440.0)
-    libsonare.transcribe(audio, SR, tempo_bpm=120.0, fmin=1800.0)
-    with pytest.raises(libsonare.SonareValueError, match="fmax") as failure:
-        libsonare.transcribe(audio, SR, polyphonic=True, tempo_bpm=120.0, fmin=1800.0)
+    libsonare.transcribe(audio, SR, tempo_bpm=120.0, f0_min_hz=1800.0)
+    with pytest.raises(libsonare.SonareValueError, match="f0_max_hz") as failure:
+        libsonare.transcribe(audio, SR, polyphonic=True, tempo_bpm=120.0, f0_min_hz=1800.0)
     assert failure.value.code == 4  # InvalidParameter from the core range resolver.
 
 
@@ -230,8 +230,12 @@ def _rejections(entry: str) -> list[tuple[str, dict[str, object], str]]:
         ("fixed_velocity_zero", {"fixed_velocity": 0}, f"{entry}: fixed_velocity must be"),
         ("velocity_floor_db", {"velocity_floor_db": 0.0}, f"{entry}: velocity_floor_db must be"),
         ("velocity_floor_positive", {"velocity_floor_db": 6.0}, f"{entry}: velocity_floor_db"),
-        ("fmin", {"fmin": 0.0}, f"{entry}: fmin must be positive"),
-        ("fmin_above_fmax", {"fmin": 900.0, "fmax": 200.0}, f"{entry}: fmax must be above fmin"),
+        ("f0_min_hz", {"f0_min_hz": 0.0}, f"{entry}: f0_min_hz must be positive"),
+        (
+            "f0_min_above_f0_max",
+            {"f0_min_hz": 900.0, "f0_max_hz": 200.0},
+            f"{entry}: f0_max_hz must be above f0_min_hz",
+        ),
         ("reference_hz", {"reference_hz": float("nan")}, f"{entry}: reference_hz must be"),
         ("min_note_ms", {"min_note_ms": -1.0}, f"{entry}: min_note_ms must be positive"),
         (
@@ -281,12 +285,17 @@ def _rejections(entry: str) -> list[tuple[str, dict[str, object], str]]:
         (
             "reattack_within_one",
             {"reattack_ratio": 1.0},
-            f"{entry}: reattack_ratio must be 0 or above 1",
+            f"{entry}: reattack_ratio must be above 1",
+        ),
+        (
+            "reattack_zero",
+            {"reattack_ratio": 0.0},
+            f"{entry}: reattack_ratio must be above 1",
         ),
         (
             "reattack_negative",
             {"reattack_ratio": -2.0},
-            f"{entry}: reattack_ratio must be 0 or above 1",
+            f"{entry}: reattack_ratio must be above 1",
         ),
         (
             "reattack_nan",
@@ -575,10 +584,9 @@ def test_min_ridge_peak_ratio_changes_the_note_length(decaying_tone: np.ndarray)
 
 
 def test_reattack_ratio_splits_a_restruck_tone(restruck_tone: np.ndarray) -> None:
-    default = _poly(restruck_tone)
-    assert _note_ons(default.events) == 2
-    # 0 is "no split", not the default 2.0; so is a ratio nothing climbs past.
-    assert _note_ons(_poly(restruck_tone, reattack_ratio=0.0).events) == 1
+    # None is "no split"; so is a ratio nothing climbs past.
+    assert _note_ons(_poly(restruck_tone).events) == 1
+    assert _note_ons(_poly(restruck_tone, reattack_ratio=None).events) == 1
     assert _note_ons(_poly(restruck_tone, reattack_ratio=100.0).events) == 1
     assert _note_ons(_poly(restruck_tone, reattack_ratio=2.0).events) == 2
 

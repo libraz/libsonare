@@ -234,8 +234,8 @@ class TestEngine:
 
 class TestSentinelsAreAbsence:
     def test_fix_frames_x_max(self) -> None:
-        assert libsonare.fix_frames([0, 5, 20]) == [0, 5, 20]
-        assert libsonare.fix_frames([0, 5, 20], x_max=10) == [0, 5, 10]
+        np.testing.assert_array_equal(libsonare.fix_frames([0, 5, 20]), [0, 5, 20])
+        np.testing.assert_array_equal(libsonare.fix_frames([0, 5, 20], x_max=10), [0, 5, 10])
         with pytest.raises(SonareValueError, match="x_max"):
             libsonare.fix_frames([0, 5, 20], x_max=-1)
 

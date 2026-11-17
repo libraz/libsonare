@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, NamedTuple, TypeAlias
 
 import numpy as np
+import numpy.typing as npt
 
 from .types import (
     AcousticModeName,
@@ -57,7 +58,6 @@ from .types import (
     MasteringStereoResult,
     MaterialPresetName,
     MelodyResult,
-    MelPowerResult,
     MelSpectrogramResult,
     MeterEstimate,
     MeterTap,
@@ -83,10 +83,8 @@ from .types import (
     RoomMorphResult,
     RoomMorphStereoResult,
     SectionResult,
-    SegmentMatrix,
     SendTiming,
     SpectrumReport,
-    StftMagnitudeResult,
     StftResult,
     StreamingLoudnessGain,
     TimbreResult,
@@ -275,7 +273,13 @@ PairAnalysis: TypeAlias = Literal[
 ]
 StereoAnalysis: TypeAlias = Literal["stereo.monoCompatCheck", "stereo.monoCompatCheckLogBands"]
 
-def detect_bpm(samples: FloatSamples, sample_rate: int) -> float: ...
+def detect_bpm(
+    samples: FloatSamples,
+    sample_rate: int,
+    *,
+    bpm_min: float | None = None,
+    bpm_max: float | None = None,
+) -> float: ...
 def detect_key(
     samples: FloatSamples,
     sample_rate: int,
@@ -287,7 +291,7 @@ def detect_key(
     modes: Sequence[Mode | str] | str | None = None,
     profile: KeyProfile | str | None = None,
     genre_hint: str | None = None,
-    tuning: float | str = "auto",
+    tuning_cents: float | str = "auto",
 ) -> KeyDetection: ...
 def detect_key_candidates(
     samples: FloatSamples,
@@ -300,10 +304,16 @@ def detect_key_candidates(
     modes: Sequence[Mode | str] | str | None = None,
     profile: KeyProfile | str | None = None,
     genre_hint: str | None = None,
-    tuning: float | str = "auto",
+    tuning_cents: float | str = "auto",
 ) -> list[KeyCandidate]: ...
-def detect_beats(samples: FloatSamples, sample_rate: int) -> list[float]: ...
-def detect_downbeats(samples: FloatSamples, sample_rate: int) -> list[float]: ...
+def detect_beats(
+    samples: FloatSamples,
+    sample_rate: int,
+    *,
+    bpm_min: float | None = None,
+    bpm_max: float | None = None,
+) -> np.ndarray[Any, Any]: ...
+def detect_downbeats(samples: FloatSamples, sample_rate: int) -> np.ndarray[Any, Any]: ...
 def detect_onsets(
     samples: FloatSamples,
     sample_rate: int,
@@ -319,7 +329,7 @@ def detect_onsets(
     wait: int = 1,
     backtrack: bool = False,
     backtrack_range: int = 10,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def analyze(
     samples: FloatSamples,
     sample_rate: int,
@@ -343,7 +353,7 @@ def analyze(
     compute_tempo_curve: bool = False,
     meter_candidate_numerators: Sequence[int] | None = None,
     meter_denominator: int = 4,
-    tuning: float | str = "auto",
+    tuning_cents: float | str = "auto",
 ) -> AnalysisResult: ...
 def analyze_with_progress(
     samples: FloatSamples,
@@ -370,7 +380,7 @@ def analyze_with_progress(
     compute_tempo_curve: bool = False,
     meter_candidate_numerators: Sequence[int] | None = None,
     meter_denominator: int = 4,
-    tuning: float | str = "auto",
+    tuning_cents: float | str = "auto",
 ) -> AnalysisResult: ...
 def estimate_meter(
     beat_times: Sequence[float],
@@ -551,7 +561,7 @@ def detect_chords(
     key_mode: Mode = Mode.MAJOR,
     detect_inversions: bool = False,
     chroma_method: str = "cqt",
-    tuning: float | str = "auto",
+    tuning_cents: float | str = "auto",
 ) -> ChordAnalysisResult: ...
 def chord_functional_analysis(
     samples: FloatSamples,
@@ -570,7 +580,7 @@ def chord_functional_analysis(
     use_key_context: bool = False,
     detect_inversions: bool = False,
     chroma_method: str = "cqt",
-    tuning: float | str = "auto",
+    tuning_cents: float | str = "auto",
 ) -> list[FunctionalChord]: ...
 def chord_functions(
     chords: ChordAnalysisResult | Sequence[Chord],
@@ -842,13 +852,13 @@ class TranscribeResult:
     events: list[tuple[float, int, int]]
     note_count: int
     tempo_bpm: float
-    tuning: float
+    tuning_cents: float
     def __init__(
         self,
         events: list[tuple[float, int, int]] = ...,
         note_count: int = 0,
         tempo_bpm: float = 0.0,
-        tuning: float = 0.0,
+        tuning_cents: float = 0.0,
     ) -> None: ...
 
 def transcribe(
@@ -858,8 +868,8 @@ def transcribe(
     tempo_bpm: float | None = None,
     polyphonic: bool = False,
     reference_hz: float | str | None = None,
-    fmin: float | None = None,
-    fmax: float | None = None,
+    f0_min_hz: float | None = None,
+    f0_max_hz: float | None = None,
     min_note_ms: float | None = None,
     segmentation_threshold_cents: float | None = None,
     velocity_floor_db: float | None = None,
@@ -1670,7 +1680,7 @@ def stft(
 ) -> StftResult: ...
 def stft_db(
     samples: FloatSamples, sample_rate: int, n_fft: int = 2048, hop_length: int = 512
-) -> tuple[int, int, list[float]]: ...
+) -> np.ndarray[Any, Any]: ...
 def mel_spectrogram(
     samples: FloatSamples,
     sample_rate: int,
@@ -1681,9 +1691,7 @@ def mel_spectrogram(
     fmax: float = 0.0,
     htk: bool = False,
 ) -> MelSpectrogramResult: ...
-def mel_delta(
-    features: FloatSamples, n_features: int, n_frames: int, width: int = 9
-) -> list[float]: ...
+def mel_delta(features: npt.ArrayLike, width: int = 9) -> np.ndarray[Any, Any]: ...
 def mfcc(
     samples: FloatSamples,
     sr: int = 22050,
@@ -1718,42 +1726,42 @@ def bass_chroma(
 ) -> ChromaResult: ...
 def spectral_centroid(
     samples: FloatSamples, sr: int = 22050, n_fft: int = 2048, hop_length: int = 512
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def tone(
     frequency: float = 440.0,
     sr: int = 22050,
     duration: float = 1.0,
     phi: float = 0.0,
     amplitude: float = 1.0,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def chirp(
     fmin: float = 440.0,
     fmax: float = 880.0,
     sr: int = 22050,
     duration: float = 1.0,
     linear: bool = False,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def clicks(
     times: FloatSamples,
     sr: int = 22050,
     length: int | None = None,
     click_freq: float = 1000.0,
     click_duration: float = 0.1,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def spectral_bandwidth(
     samples: FloatSamples,
     sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     p: float = 2.0,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def spectral_flux(
     samples: FloatSamples,
     sample_rate: int,
     n_fft: int = 2048,
     hop_length: int = 512,
     lag: int = 1,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def onset_backtrack(events: IntSamples, energy: FloatSamples) -> np.ndarray[Any, Any]: ...
 def spectral_rolloff(
     samples: FloatSamples,
@@ -1761,16 +1769,16 @@ def spectral_rolloff(
     n_fft: int = 2048,
     hop_length: int = 512,
     roll_percent: float = 0.85,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def spectral_flatness(
     samples: FloatSamples, sr: int = 22050, n_fft: int = 2048, hop_length: int = 512
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def zero_crossing_rate(
     samples: FloatSamples, sr: int = 22050, frame_length: int = 2048, hop_length: int = 512
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def rms_energy(
     samples: FloatSamples, sample_rate: int, frame_length: int = 2048, hop_length: int = 512
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def pitch_yin(
     samples: FloatSamples,
     sample_rate: int,
@@ -1809,57 +1817,47 @@ def reassigned_spectrogram(
     fill_nan: bool = False,
 ) -> ReassignedSpectrogramResult: ...
 def segment_cross_similarity(
-    x: FloatSamples,
-    x_rows: int,
-    x_cols: int,
-    y: FloatSamples,
-    y_rows: int,
-    y_cols: int,
+    x: npt.ArrayLike,
+    y: npt.ArrayLike,
     k: int = 0,
     metric: str = "cosine",
     mode: str = "connectivity",
-) -> SegmentMatrix: ...
+) -> np.ndarray[Any, Any]: ...
 def segment_recurrence_matrix(
-    data: FloatSamples,
-    rows: int,
-    cols: int,
+    data: npt.ArrayLike,
     k: int = 0,
     width: int = 1,
     sym: bool = False,
     metric: str = "euclidean",
     mode: str = "connectivity",
-) -> SegmentMatrix: ...
+) -> np.ndarray[Any, Any]: ...
 def segment_recurrence_to_lag(
-    recurrence: FloatSamples, n: int, pad: bool = True
-) -> SegmentMatrix: ...
-def segment_lag_to_recurrence(lag: FloatSamples, n_rows: int, n_lags: int) -> SegmentMatrix: ...
+    recurrence: npt.ArrayLike, pad: bool = True
+) -> np.ndarray[Any, Any]: ...
+def segment_lag_to_recurrence(lag: npt.ArrayLike) -> np.ndarray[Any, Any]: ...
 def segment_subsegment(
-    data: FloatSamples,
-    rows: int,
-    cols: int,
+    data: npt.ArrayLike,
     boundaries: IntSamples,
     n_segments: int = 4,
-) -> list[int]: ...
+) -> np.ndarray[Any, Any]: ...
 def segment_agglomerative(
-    data: FloatSamples,
-    rows: int,
-    cols: int,
+    data: npt.ArrayLike,
     k: int,
     linkage: str = "average",
-) -> list[int]: ...
+) -> np.ndarray[Any, Any]: ...
 def segment_path_enhance(
-    recurrence: FloatSamples,
-    n: int,
+    recurrence: npt.ArrayLike,
     win: int,
     max_ratio: int = 2,
     min_ratio: int = 0,
     n_filters: int = 7,
-) -> SegmentMatrix: ...
+) -> np.ndarray[Any, Any]: ...
 def note_segments(
     f0_hz: FloatSamples,
-    voiced_prob: FloatSamples,
     frame_rate: float,
     *,
+    voiced_prob: FloatSamples | None = None,
+    voiced_flags: npt.ArrayLike | None = None,
     segmentation_threshold_cents: float | None = None,
     min_note_ms: float | None = None,
     reference_hz: float | None = None,
@@ -1901,8 +1899,8 @@ def estimate_tuning(
     resolution: float = 0.01,
     bins_per_octave: int = 12,
 ) -> float: ...
-def tuning_to_reference_hz(tuning: float, a4: float = 440.0) -> float: ...
-def reference_hz_to_tuning(hz: float, a4: float = 440.0) -> float: ...
+def tuning_to_reference_hz(tuning_cents: float, a4_hz: float = 440.0) -> float: ...
+def reference_hz_to_tuning(reference_hz: float, a4_hz: float = 440.0) -> float: ...
 def lufs_interleaved(
     samples: FloatSamples,
     channels: int,
@@ -2017,35 +2015,35 @@ def note_to_hz(note: str) -> float:
     """Raises ``SonareValueError`` when ``note`` does not parse or its octave is out of range."""
 
 def frames_to_time(frames: int, sr: int = 22050, hop_length: int = 512) -> float: ...
-def time_to_frames(time: float, sr: int = 22050, hop_length: int = 512) -> int: ...
+def time_to_frames(time_sec: float, sr: int = 22050, hop_length: int = 512) -> int: ...
 def frames_to_samples(frames: int, hop_length: int = 512, n_fft: int | None = None) -> int: ...
 def samples_to_frames(samples: int, hop_length: int = 512, n_fft: int | None = None) -> int: ...
 def power_to_db(
     values: FloatSamples, ref: float = 1.0, amin: float = 1e-10, top_db: float = 80.0
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def amplitude_to_db(
     values: FloatSamples, ref: float = 1.0, amin: float = 1e-5, top_db: float = 80.0
-) -> list[float]: ...
-def db_to_power(values: FloatSamples, ref: float = 1.0) -> list[float]: ...
-def db_to_amplitude(values: FloatSamples, ref: float = 1.0) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
+def db_to_power(values: FloatSamples, ref: float = 1.0) -> np.ndarray[Any, Any]: ...
+def db_to_amplitude(values: FloatSamples, ref: float = 1.0) -> np.ndarray[Any, Any]: ...
 def preemphasis(
     samples: FloatSamples, coef: float = 0.97, zi: float | None = None
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def deemphasis(
     samples: FloatSamples, coef: float = 0.97, zi: float | None = None
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def trim_silence(
     samples: FloatSamples, top_db: float = 60.0, frame_length: int = 2048, hop_length: int = 512
-) -> tuple[list[float], int, int]: ...
+) -> TrimResult: ...
 def split_silence(
     samples: FloatSamples, top_db: float = 60.0, frame_length: int = 2048, hop_length: int = 512
-) -> list[tuple[int, int]]: ...
+) -> np.ndarray[Any, Any]: ...
 def split_silence_common(
     signals: Sequence[Sequence[float]],
     top_db: float = 60.0,
     frame_length: int = 2048,
     hop_length: int = 512,
-) -> list[tuple[int, int]]: ...
+) -> np.ndarray[Any, Any]: ...
 
 @dataclass(frozen=True, slots=True)
 class SilenceCommonReport:
@@ -2053,20 +2051,35 @@ class SilenceCommonReport:
     max_signal_intervals: int
     min_signal_intervals: int
 
+@dataclass(frozen=True, slots=True, eq=False)
+class TrimResult:
+    audio: np.ndarray[Any, Any]
+    start_sample: int
+    end_sample: int
+
+@dataclass(frozen=True, slots=True, eq=False)
+class SplitSilenceCommonWithReportResult:
+    intervals: np.ndarray[Any, Any]
+    report: SilenceCommonReport
+
 def split_silence_common_with_report(
     signals: Sequence[Sequence[float]],
     top_db: float = 60.0,
     frame_length: int = 2048,
     hop_length: int = 512,
-) -> tuple[list[tuple[int, int]], SilenceCommonReport]: ...
+) -> SplitSilenceCommonWithReportResult: ...
 def frame_signal(
     samples: FloatSamples, frame_length: int, hop_length: int
-) -> tuple[int, list[float]]: ...
-def pad_center(values: FloatSamples, target_size: int, pad_value: float = 0.0) -> list[float]: ...
-def fix_length(values: FloatSamples, target_size: int, pad_value: float = 0.0) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
+def pad_center(
+    values: FloatSamples, target_size: int, pad_value: float = 0.0
+) -> np.ndarray[Any, Any]: ...
+def fix_length(
+    values: FloatSamples, target_size: int, pad_value: float = 0.0
+) -> np.ndarray[Any, Any]: ...
 def fix_frames(
     frames: IntSamples, x_min: int = 0, x_max: int | None = None, pad: bool = True
-) -> list[int]: ...
+) -> np.ndarray[Any, Any]: ...
 def peak_pick(
     values: FloatSamples,
     pre_max: int,
@@ -2075,14 +2088,12 @@ def peak_pick(
     post_avg: int,
     delta: float,
     wait: int,
-) -> list[int]: ...
+) -> np.ndarray[Any, Any]: ...
 def vector_normalize(
     values: FloatSamples, norm_type: int = 0, threshold: float = 0.0
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def pcen(
-    values: FloatSamples,
-    n_bins: int,
-    n_frames: int,
+    values: npt.ArrayLike,
     sr: int = 22050,
     hop_length: int = 512,
     time_constant: float = 0.4,
@@ -2090,8 +2101,8 @@ def pcen(
     bias: float = 2.0,
     power: float = 0.5,
     eps: float = 1e-6,
-) -> list[float]: ...
-def tonnetz(chromagram: FloatSamples, n_chroma: int, n_frames: int) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
+def tonnetz(chromagram: npt.ArrayLike) -> np.ndarray[Any, Any]: ...
 def tempogram(
     onset_envelope: FloatSamples,
     sr: int = 22050,
@@ -2100,7 +2111,7 @@ def tempogram(
     center: bool = True,
     norm: bool = True,
     mode: TempogramMode = "autocorrelation",
-) -> tuple[int, list[float]]: ...
+) -> np.ndarray[Any, Any]: ...
 def cyclic_tempogram(
     onset_envelope: FloatSamples,
     sample_rate: int,
@@ -2108,7 +2119,7 @@ def cyclic_tempogram(
     win_length: int = 384,
     bpm_min: float = 60.0,
     n_bins: int = 60,
-) -> tuple[int, list[float]]: ...
+) -> np.ndarray[Any, Any]: ...
 def plp(
     onset_envelope: FloatSamples,
     sr: int = 22050,
@@ -2116,14 +2127,14 @@ def plp(
     tempo_min: float = 30.0,
     tempo_max: float = 300.0,
     win_length: int = 384,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def onset_strength(
     samples: FloatSamples,
     sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     n_mels: int = 128,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def fourier_tempogram(
     onset_envelope: FloatSamples,
     sr: int = 22050,
@@ -2131,14 +2142,13 @@ def fourier_tempogram(
     win_length: int = 384,
     center: bool = True,
     norm: bool = True,
-) -> tuple[int, list[float]]: ...
+) -> np.ndarray[Any, Any]: ...
 def tempogram_ratio(
-    tempogram_data: FloatSamples,
-    win_length: int = 384,
+    tempogram: npt.ArrayLike,
     sr: int = 22050,
     hop_length: int = 512,
     factors: FloatSamples | None = None,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def nnls_chroma(
     samples: FloatSamples,
     sample_rate: int,
@@ -2147,7 +2157,7 @@ def nnls_chroma(
     stft_blend_weight: float = 0.55,
     stft_blend_n_fft: int = 4096,
     hop_length: int = 512,
-) -> tuple[int, list[float]]: ...
+) -> np.ndarray[Any, Any]: ...
 def onset_strength_multi(
     samples: FloatSamples,
     sample_rate: int,
@@ -2155,7 +2165,7 @@ def onset_strength_multi(
     hop_length: int = 512,
     n_mels: int = 128,
     n_bands: int = 3,
-) -> tuple[int, list[float]]: ...
+) -> np.ndarray[Any, Any]: ...
 def mastering_repair_declick(
     samples: FloatSamples,
     sample_rate: int,
@@ -2500,10 +2510,10 @@ def mastering_repair_trim_silence_stereo(
 def lufs(samples: FloatSamples, sample_rate: int, *, validate: bool = True) -> LufsResult: ...
 def momentary_lufs(
     samples: FloatSamples, sample_rate: int, *, validate: bool = True
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def short_term_lufs(
     samples: FloatSamples, sample_rate: int, *, validate: bool = True
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def metering_stereo_correlation(
     left: FloatSamples, right: FloatSamples, sample_rate: int, *, validate: bool = True
 ) -> float: ...
@@ -2639,40 +2649,32 @@ def scale_correction_semitones(
 def scale_mask_for_mode(root: int, mode: Mode | str | int) -> int: ...
 def scale_pitch_class_enabled(root: int, mode_mask: int, pitch_class: int) -> bool: ...
 def mel_to_stft(
-    mel: FloatSamples,
-    n_mels: int,
-    n_frames: int,
+    mel: npt.ArrayLike,
     sr: int = 22050,
     n_fft: int = 2048,
     fmin: float = 0.0,
     fmax: float | None = None,
     htk: bool = False,
-) -> StftMagnitudeResult: ...
+) -> np.ndarray[Any, Any]: ...
 def cqt_to_audio(
-    magnitude: FloatSamples,
-    n_bins: int,
-    n_frames: int,
+    magnitude: npt.ArrayLike,
     sample_rate: int,
     hop_length: int = 512,
     fmin: float = 32.70319566257483,
     bins_per_octave: int = 12,
     n_iter: int = 32,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def vqt_to_audio(
-    magnitude: FloatSamples,
-    n_bins: int,
-    n_frames: int,
+    magnitude: npt.ArrayLike,
     sample_rate: int,
     hop_length: int = 512,
     fmin: float = 32.70319566257483,
     bins_per_octave: int = 12,
     gamma: float | None = None,
     n_iter: int = 32,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def mel_to_audio(
-    mel: FloatSamples,
-    n_mels: int,
-    n_frames: int,
+    mel: npt.ArrayLike,
     sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
@@ -2680,28 +2682,22 @@ def mel_to_audio(
     fmax: float | None = None,
     n_iter: int = 32,
     htk: bool = False,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def griffin_lim(
-    magnitude: FloatSamples,
-    n_bins: int,
-    n_frames: int,
+    magnitude: npt.ArrayLike,
     sample_rate: int,
     n_fft: int = 2048,
     hop_length: int = 512,
     n_iter: int = 32,
     momentum: float = 0.99,
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def mfcc_to_mel(
-    mfcc_coeffs: FloatSamples,
-    n_mfcc: int,
-    n_frames: int,
+    mfcc_coeffs: npt.ArrayLike,
     n_mels: int = 128,
     lifter: float = 0.0,
-) -> MelPowerResult: ...
+) -> np.ndarray[Any, Any]: ...
 def mfcc_to_audio(
-    mfcc_coeffs: FloatSamples,
-    n_mfcc: int,
-    n_frames: int,
+    mfcc_coeffs: npt.ArrayLike,
     n_mels: int = 128,
     sr: int = 22050,
     n_fft: int = 2048,
@@ -2711,11 +2707,7 @@ def mfcc_to_audio(
     n_iter: int = 32,
     htk: bool = False,
     lifter: float = 0.0,
-) -> list[float]: ...
-def mel_result_to_stft(result: MelSpectrogramResult) -> StftMagnitudeResult: ...
-def mel_result_to_audio(result: MelSpectrogramResult, n_iter: int = 32) -> list[float]: ...
-def mfcc_result_to_mel(result: MfccResult) -> MelPowerResult: ...
-def mfcc_result_to_audio(result: MfccResult, n_iter: int = 32) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...
 def mastering_dynamics_compressor(
     samples: FloatSamples,
     sample_rate: int,
@@ -2765,4 +2757,4 @@ def mastering_dynamics_transient_shaper(
 ) -> tuple[np.ndarray[Any, Any], int]: ...
 def resample(
     samples: FloatSamples, source_sample_rate: int, target_sample_rate: int
-) -> list[float]: ...
+) -> np.ndarray[Any, Any]: ...

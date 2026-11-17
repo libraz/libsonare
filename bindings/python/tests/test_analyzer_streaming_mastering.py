@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
+
 # ruff: noqa: F403,F405
 from ._analyzer_helpers import *
 from ._helpers import raises_coded
@@ -402,17 +404,16 @@ def test_stft_result_types() -> None:
 
     tone = _generate_sine(440, 22050, 1.0)
     result = stft(tone, sr=22050)
-    assert isinstance(result.n_bins, int)
-    assert isinstance(result.n_frames, int)
     assert isinstance(result.n_fft, int)
     assert isinstance(result.hop_length, int)
     assert isinstance(result.sample_rate, int)
-    assert isinstance(result.magnitude, list)
-    assert isinstance(result.power, list)
+    assert isinstance(result.magnitude, np.ndarray)
+    assert isinstance(result.power, np.ndarray)
     assert result.n_fft == 2048
     assert result.hop_length == 512
-    assert len(result.magnitude) == result.n_bins * result.n_frames
-    assert len(result.power) == result.n_bins * result.n_frames
+    assert result.magnitude.shape[0] == 2048 // 2 + 1
+    assert result.magnitude.shape[1] > 0
+    assert result.power.shape == result.magnitude.shape
 
 
 def test_mastering_chain_invokes_progress_callback() -> None:

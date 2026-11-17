@@ -24,7 +24,7 @@ from ._ffi import (
 from ._runtime import (
     _SIZE_T_MAX,
     SonareValueError,
-    _call_float_transform,
+    _call_float_array_transform,
     _check,
     _float_array_result,
     _from_c_float_array,
@@ -94,10 +94,10 @@ def momentary_lufs(
     sample_rate: int,
     *,
     validate: bool = True,
-) -> list[float]:
-    """Compute the per-block momentary LUFS time series."""
+) -> np.ndarray:
+    """Compute the per-block momentary LUFS time series as a float32 array."""
     sample_buf = _validate_samples("momentary_lufs", samples, validate=validate)
-    return _call_float_transform(
+    return _call_float_array_transform(
         "sonare_momentary_lufs",
         sample_buf,
         _to_c_int(sample_rate, "sample_rate"),
@@ -109,10 +109,10 @@ def short_term_lufs(
     sample_rate: int,
     *,
     validate: bool = True,
-) -> list[float]:
-    """Compute the per-block short-term LUFS time series."""
+) -> np.ndarray:
+    """Compute the per-block short-term LUFS time series as a float32 array."""
     sample_buf = _validate_samples("short_term_lufs", samples, validate=validate)
-    return _call_float_transform(
+    return _call_float_array_transform(
         "sonare_short_term_lufs",
         sample_buf,
         _to_c_int(sample_rate, "sample_rate"),

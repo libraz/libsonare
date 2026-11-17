@@ -576,11 +576,11 @@ class Audio:
         modes: Sequence[Mode | str] | str | None = None,
         profile: KeyProfile | str | None = None,
         genre_hint: str | None = None,
-        tuning: float | str = "auto",
+        tuning_cents: float | str = "auto",
     ) -> KeyDetection:
         """Detect musical key and the tuning its chroma was built with.
 
-        ``tuning`` defaults to ``"auto"`` (measured from the audio); pass 0 for A440.
+        ``tuning_cents`` defaults to ``"auto"`` (measured from the audio); pass 0 for A440.
         """
         from .analyzer import detect_key
 
@@ -595,7 +595,7 @@ class Audio:
             modes=modes,
             profile=profile,
             genre_hint=genre_hint,
-            tuning=tuning,
+            tuning_cents=tuning_cents,
         )
 
     def detect_key_candidates(
@@ -608,9 +608,9 @@ class Audio:
         modes: Sequence[Mode | str] | str | None = None,
         profile: KeyProfile | str | None = None,
         genre_hint: str | None = None,
-        tuning: float | str = "auto",
+        tuning_cents: float | str = "auto",
     ) -> list[KeyCandidate]:
-        """Return ranked musical key candidates; ``tuning`` is as for :meth:`detect_key`."""
+        """Return ranked musical key candidates; ``tuning_cents`` is as for :meth:`detect_key`."""
         return _detect_key_candidates(
             self.data,
             self.sample_rate,
@@ -622,17 +622,17 @@ class Audio:
             modes=modes,
             profile=profile,
             genre_hint=genre_hint,
-            tuning=tuning,
+            tuning_cents=tuning_cents,
         )
 
-    def detect_beats(self) -> list[float]:
+    def detect_beats(self) -> np.ndarray:
         """Detect beat times in seconds.
 
         Each ``detect_*`` call runs its own analysis; nothing is cached, so
         four calls run the pipeline four times.
 
         Returns:
-            Beat times in seconds. For the beat-level accent evidence
+            A float32 array of beat times in seconds. For the beat-level accent evidence
             (``beat_observations.onset_strength``), the time signature,
             confidence values, or the bar-start positions, use
             :func:`libsonare.analyze` instead — one call returns all of them.
@@ -646,16 +646,16 @@ class Audio:
                 handle, ctypes.byref(out_times), ctypes.byref(out_count)
             )
             _check(rc)
-            return _float_array_result(out_times, out_count.value)
+            return _from_c_float_array(out_times, out_count.value)
 
-    def detect_downbeats(self) -> list[float]:
+    def detect_downbeats(self) -> np.ndarray:
         """Detect downbeat times in seconds.
 
         Each ``detect_*`` call runs its own analysis; nothing is cached, so
         four calls run the pipeline four times.
 
         Returns:
-            Downbeat times in seconds. For the beat-level accent evidence
+            A float32 array of downbeat times in seconds. For the beat-level accent evidence
             (``beat_observations.onset_strength``), the time signature,
             confidence values, or the bar starts as indices into the beat
             list, use :func:`libsonare.analyze` instead — one call returns all
@@ -670,10 +670,10 @@ class Audio:
                 handle, ctypes.byref(out_times), ctypes.byref(out_count)
             )
             _check(rc)
-            return _float_array_result(out_times, out_count.value)
+            return _from_c_float_array(out_times, out_count.value)
 
-    def detect_onsets(self) -> list[float]:
-        """Detect onset times in seconds.
+    def detect_onsets(self) -> np.ndarray:
+        """Detect onset times in seconds as a float32 array.
 
         Raises:
             RuntimeError: If the audio has been closed.
@@ -686,7 +686,7 @@ class Audio:
         )
         _check(rc)
         try:
-            return _float_array_result(out_times, out_count.value)
+            return _from_c_float_array(out_times, out_count.value)
         finally:
             if out_times and out_count.value > 0:
                 self._lib.sonare_free_floats(out_times)
@@ -695,7 +695,7 @@ class Audio:
         """Run full music analysis, forwarding to the module-level :func:`libsonare.analyze`.
 
         Accepts the same keyword options (``bpm_min``, ``use_hpss``,
-        ``meter_candidate_numerators``, ``tuning``, ...) and returns the same
+        ``meter_candidate_numerators``, ``tuning_cents``, ...) and returns the same
         fully populated :class:`~libsonare.AnalysisResult` -- chords, sections,
         timbre, dynamics, rhythm, melody and form included, not just bpm, key,
         time signature and beat times. This handle contributes only its
@@ -824,7 +824,7 @@ class Audio:
         key_mode: Mode = Mode.MAJOR,
         detect_inversions: bool = False,
         chroma_method: str = "cqt",
-        tuning: float | str = "auto",
+        tuning_cents: float | str = "auto",
     ) -> ChordAnalysisResult:
         """Detect chord segments."""
         return _detect_chords(
@@ -844,7 +844,7 @@ class Audio:
             key_mode,
             detect_inversions,
             chroma_method,
-            tuning,
+            tuning_cents,
         )
 
     # --- Effects ---
@@ -1019,8 +1019,8 @@ class Audio:
         self,
         n_fft: int = 2048,
         hop_length: int = 512,
-    ) -> tuple[int, int, list[float]]:
-        """Compute the STFT in decibels."""
+    ) -> np.ndarray:
+        """Compute the STFT in decibels as a float32 array of shape ``(n_bins, n_frames)``."""
         return _stft_db(self.data, self.sample_rate, n_fft, hop_length)
 
     # --- Features - Mel ---
@@ -1050,8 +1050,8 @@ class Audio:
         """Compute chroma features."""
         return _chroma(self.data, self.sample_rate, n_fft, hop_length)
 
-    def nnls_chroma(self) -> tuple[int, list[float]]:
-        """Compute NNLS chroma. Returns (n_frames, row-major 12 x n_frames matrix)."""
+    def nnls_chroma(self) -> np.ndarray:
+        """Compute NNLS chroma as a float32 array of shape ``(12, n_frames)``."""
         return _nnls_chroma(self.data, self.sample_rate)
 
     # --- Features - Onset ---
@@ -1061,8 +1061,8 @@ class Audio:
         n_fft: int = 2048,
         hop_length: int = 512,
         n_mels: int = 128,
-    ) -> list[float]:
-        """Compute the onset strength envelope (one value per frame)."""
+    ) -> np.ndarray:
+        """Compute the onset strength envelope (float32, one value per frame)."""
         return _onset_strength(self.data, self.sample_rate, n_fft, hop_length, n_mels)
 
     # --- Loudness (LUFS) ---
@@ -1071,12 +1071,12 @@ class Audio:
         """Compute integrated/momentary/short-term LUFS and loudness range."""
         return _lufs(self.data, self.sample_rate)
 
-    def momentary_lufs(self) -> list[float]:
-        """Compute the per-block momentary LUFS time series."""
+    def momentary_lufs(self) -> np.ndarray:
+        """Compute the per-block momentary LUFS time series as a float32 array."""
         return _momentary_lufs(self.data, self.sample_rate)
 
-    def short_term_lufs(self) -> list[float]:
-        """Compute the per-block short-term LUFS time series."""
+    def short_term_lufs(self) -> np.ndarray:
+        """Compute the per-block short-term LUFS time series as a float32 array."""
         return _short_term_lufs(self.data, self.sample_rate)
 
     # --- Features - Spectral ---
@@ -1085,8 +1085,8 @@ class Audio:
         self,
         n_fft: int = 2048,
         hop_length: int = 512,
-    ) -> list[float]:
-        """Compute the spectral centroid per frame."""
+    ) -> np.ndarray:
+        """Compute the spectral centroid per frame as a float32 array."""
         return _spectral_centroid(self.data, self.sample_rate, n_fft, hop_length)
 
     def spectral_bandwidth(
@@ -1094,8 +1094,8 @@ class Audio:
         n_fft: int = 2048,
         hop_length: int = 512,
         p: float = 2.0,
-    ) -> list[float]:
-        """Compute the spectral bandwidth per frame."""
+    ) -> np.ndarray:
+        """Compute the spectral bandwidth per frame as a float32 array."""
         return _spectral_bandwidth(self.data, self.sample_rate, n_fft, hop_length, p)
 
     def spectral_rolloff(
@@ -1103,32 +1103,32 @@ class Audio:
         n_fft: int = 2048,
         hop_length: int = 512,
         roll_percent: float = 0.85,
-    ) -> list[float]:
-        """Compute the spectral rolloff per frame."""
+    ) -> np.ndarray:
+        """Compute the spectral rolloff per frame as a float32 array."""
         return _spectral_rolloff(self.data, self.sample_rate, n_fft, hop_length, roll_percent)
 
     def spectral_flatness(
         self,
         n_fft: int = 2048,
         hop_length: int = 512,
-    ) -> list[float]:
-        """Compute the spectral flatness per frame."""
+    ) -> np.ndarray:
+        """Compute the spectral flatness per frame as a float32 array."""
         return _spectral_flatness(self.data, self.sample_rate, n_fft, hop_length)
 
     def zero_crossing_rate(
         self,
         frame_length: int = 2048,
         hop_length: int = 512,
-    ) -> list[float]:
-        """Compute the zero-crossing rate per frame."""
+    ) -> np.ndarray:
+        """Compute the zero-crossing rate per frame as a float32 array."""
         return _zero_crossing_rate(self.data, self.sample_rate, frame_length, hop_length)
 
     def rms_energy(
         self,
         frame_length: int = 2048,
         hop_length: int = 512,
-    ) -> list[float]:
-        """Compute the RMS energy per frame."""
+    ) -> np.ndarray:
+        """Compute the RMS energy per frame as a float32 array."""
         return _rms_energy(self.data, self.sample_rate, frame_length, hop_length)
 
     # --- Features - Pitch ---
@@ -1163,8 +1163,8 @@ class Audio:
 
     # --- Core - Resample ---
 
-    def resample(self, target_sample_rate: int) -> list[float]:
-        """Resample audio to a different sample rate."""
+    def resample(self, target_sample_rate: int) -> np.ndarray:
+        """Resample audio to a different sample rate; returns a float32 array."""
         return _resample(self.data, self.sample_rate, target_sample_rate)
 
     # --- Metering (handle form) ---

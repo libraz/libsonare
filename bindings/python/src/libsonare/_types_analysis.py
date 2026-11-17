@@ -266,11 +266,11 @@ class KeyDetection(Key):
     """A detected key and the tuning its chroma was built with.
 
     Attributes:
-        tuning: Tuning used, in fractions of a semitone: the given value, or the
-            measured one under ``tuning="auto"``.
+        tuning_cents: Tuning used, in cents: the given value, or the
+            measured one under ``tuning_cents="auto"``.
     """
 
-    tuning: float = 0.0
+    tuning_cents: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -334,9 +334,9 @@ class AnalysisResult:
     # is not how to get the global tempo.
     beat_local_bpm: list[float] = dataclasses.field(default_factory=list)
     form: str = ""
-    # Tuning the chromagrams were built with, in fractions of a semitone: the
-    # given value, or the measured one under ``tuning="auto"``.
-    tuning: float = 0.0
+    # Tuning the chromagrams were built with, in cents: the
+    # given value, or the measured one under ``tuning_cents="auto"``.
+    tuning_cents: float = 0.0
 
     @property
     def bpmConfidence(self) -> float:  # noqa: N802
@@ -862,33 +862,35 @@ class ChordAnalysisResult:
 
     Attributes:
         chords: The detected chord timeline.
-        tuning: Tuning the chroma was built with, in fractions of a semitone:
-            the given value, or the measured one under ``tuning="auto"``.
+        tuning_cents: Tuning the chroma was built with, in cents:
+            the given value, or the measured one under ``tuning_cents="auto"``.
     """
 
     chords: list[Chord]
-    tuning: float = 0.0
+    tuning_cents: float = 0.0
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class StftResult:
-    """Short-time Fourier transform result."""
+    """Short-time Fourier transform result.
 
-    n_bins: int
-    n_frames: int
+    ``magnitude`` and ``power`` are float32 arrays of shape ``(n_bins, n_frames)``.
+    """
+
     n_fft: int
     hop_length: int
     sample_rate: int
-    magnitude: list[float]
-    power: list[float]
+    magnitude: NDArray[np.float32]
+    power: NDArray[np.float32]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class MelSpectrogramResult:
     """Mel spectrogram result.
 
-    Carries the parameters of the forward transform, so the result alone is
-    enough to invert it (:func:`mel_result_to_stft`, :func:`mel_result_to_audio`).
+    Carries the parameters of the forward transform. ``power`` and ``db`` are
+    float32 arrays of shape ``(n_mels, n_frames)``; ``power`` is linear power and
+    ``db`` is its dB form.
 
     Attributes:
         n_fft: FFT size of the source STFT.
@@ -896,44 +898,33 @@ class MelSpectrogramResult:
         fmax: Upper Mel band edge in Hz as applied: the Nyquist when the
             request left it at 0.
         htk: ``True`` for the HTK Mel formula, ``False`` for Slaney.
-        is_db: ``True`` when ``power`` holds dB values. A forward transform
-            always reports ``False``: ``power`` is linear power and ``db`` is
-            its dB form.
     """
 
-    n_mels: int
-    n_frames: int
     sample_rate: int
     hop_length: int
-    power: list[float]
-    db: list[float]
+    power: NDArray[np.float32]
+    db: NDArray[np.float32]
     n_fft: int
     fmin: float
     fmax: float
     htk: bool
-    is_db: bool
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class MfccResult:
     """MFCC (Mel-frequency cepstral coefficients) result.
 
-    Carries the Mel parameters the coefficients were derived with and the lifter,
-    so the result alone is enough to invert it (:func:`mfcc_result_to_mel`,
-    :func:`mfcc_result_to_audio`).
+    Carries the Mel parameters the coefficients were derived with and the lifter.
+    ``coefficients`` is a float32 array of shape ``(n_mfcc, n_frames)``.
 
     Attributes:
         n_mels: Mel bands the coefficients were taken from.
         fmax: Upper Mel band edge in Hz as applied: the Nyquist when the request
             left it at 0.
-        is_db: Always ``False``: the coefficients are a cepstrum, not a dB
-            spectrogram.
         lifter: Cepstral lifter applied to the coefficients; 0 means none.
     """
 
-    n_mfcc: int
-    n_frames: int
-    coefficients: list[float]
+    coefficients: NDArray[np.float32]
     sample_rate: int
     hop_length: int
     n_fft: int
@@ -941,23 +932,24 @@ class MfccResult:
     fmin: float
     fmax: float
     htk: bool
-    is_db: bool
     lifter: float
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class ChromaResult:
-    """Chroma feature result."""
+    """Chroma feature result.
 
-    n_chroma: int
-    n_frames: int
+    ``features`` is a float32 array of shape ``(n_chroma, n_frames)`` and
+    ``mean_energy`` holds the mean energy of each of the ``n_chroma`` classes.
+    """
+
     sample_rate: int
     hop_length: int
-    features: list[float]
-    mean_energy: list[float]
+    features: NDArray[np.float32]
+    mean_energy: NDArray[np.float32]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class PitchResult:
     """Pitch detection result.
 
@@ -974,42 +966,34 @@ class PitchResult:
     :func:`note_segments`) therefore drops entire low registers.
     """
 
-    n_frames: int
-    f0: list[float]
-    voiced_prob: list[float]
-    voiced_flag: list[bool]
+    f0: NDArray[np.float32]
+    voiced_prob: NDArray[np.float32]
+    voiced_flag: NDArray[np.bool_]
     median_f0: float
     mean_f0: float
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class PiptrackResult:
-    """Per-bin pitch candidates and peak magnitudes from spectral piptrack."""
+    """Per-bin pitch candidates and peak magnitudes from spectral piptrack.
 
-    n_bins: int
-    n_frames: int
-    pitches: list[float]
-    magnitudes: list[float]
+    Both are float32 arrays of shape ``(n_bins, n_frames)``.
+    """
+
+    pitches: NDArray[np.float32]
+    magnitudes: NDArray[np.float32]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class ReassignedSpectrogramResult:
-    """Magnitude and reassigned coordinates for a row-major STFT matrix."""
+    """Magnitude and reassigned coordinates of an STFT.
 
-    n_bins: int
-    n_frames: int
-    magnitude: list[float]
-    times: list[float]
-    frequencies: list[float]
+    All three are float32 arrays of shape ``(n_bins, n_frames)``.
+    """
 
-
-@dataclass(frozen=True, slots=True)
-class SegmentMatrix:
-    """A row-major matrix returned by a ``librosa.segment``-compatible API."""
-
-    rows: int
-    cols: int
-    values: list[float]
+    magnitude: NDArray[np.float32]
+    times: NDArray[np.float32]
+    frequencies: NDArray[np.float32]
 
 
 @dataclass(frozen=True, slots=True)
@@ -1018,8 +1002,8 @@ class NoteSegment:
 
     frame_start: int
     frame_end: int
-    start_seconds: float
-    end_seconds: float
+    start_sec: float
+    end_sec: float
     median_cents: float
 
 

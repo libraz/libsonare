@@ -3,6 +3,7 @@
 import ctypes
 import math
 
+import numpy as np
 import pytest
 
 import libsonare as ls
@@ -29,7 +30,7 @@ def test_stream_config_defaults_match_native_config():
     assert cfg.n_mels == raw.n_mels
     assert cfg.fmin == raw.fmin
     assert cfg.fmax == raw.fmax
-    assert cfg.tuning_ref_hz == raw.tuning_ref_hz
+    assert cfg.reference_hz == raw.reference_hz
     assert int(cfg.compute_magnitude) == raw.compute_magnitude
     assert int(cfg.compute_mel) == raw.compute_mel
     assert int(cfg.compute_chroma) == raw.compute_chroma
@@ -53,22 +54,20 @@ def test_mel_inverse_roundtrip():
     audio = _sine(sr // 4, 440.0, sr)  # 0.25 s — Griffin-Lim cost scales with frames
 
     mel = ls.mel_spectrogram(audio, sample_rate=sr, n_fft=n_fft, hop_length=hop, n_mels=n_mels)
-    n_frames = mel.n_frames
+    assert mel.power.shape[0] == n_mels
+    n_frames = mel.power.shape[1]
     assert n_frames > 0
-    assert len(mel.power) == n_mels * n_frames
 
-    stft = ls.mel_to_stft(mel.power, n_mels, n_frames, sr=sr, n_fft=n_fft)
-    assert isinstance(stft, ls.StftMagnitudeResult)
-    assert stft.n_bins == n_fft // 2 + 1
-    assert stft.n_frames == n_frames
-    assert len(stft.magnitude) == stft.n_bins * stft.n_frames
-    assert _is_finite_list(stft.magnitude)
-    assert max(stft.magnitude) > 0.0  # reconstructed magnitude is non-trivial
+    stft = ls.mel_to_stft(mel.power, sr=sr, n_fft=n_fft)
+    assert isinstance(stft, np.ndarray)
+    assert stft.shape == (n_fft // 2 + 1, n_frames)
+    assert np.isfinite(stft).all()
+    assert stft.max() > 0.0  # reconstructed magnitude is non-trivial
 
-    out = ls.mel_to_audio(mel.power, n_mels, n_frames, sr=sr, n_fft=n_fft, hop_length=hop)
+    out = ls.mel_to_audio(mel.power, sr=sr, n_fft=n_fft, hop_length=hop)
     assert len(out) >= (n_frames - 1) * hop
-    assert _is_finite_list(out)
-    assert max(abs(x) for x in out) > 0.0
+    assert np.isfinite(out).all()
+    assert np.abs(out).max() > 0.0
 
 
 def test_mel_inverse_honours_htk():
@@ -81,26 +80,24 @@ def test_mel_inverse_honours_htk():
     mel = ls.mel_spectrogram(
         audio, sample_rate=sr, n_fft=n_fft, hop_length=hop, n_mels=n_mels, htk=True
     )
-    slaney = ls.mel_to_stft(mel.power, n_mels, mel.n_frames, sr=sr, n_fft=n_fft, htk=False)
-    htk = ls.mel_to_stft(mel.power, n_mels, mel.n_frames, sr=sr, n_fft=n_fft, htk=True)
+    n_frames = mel.power.shape[1]
+    slaney = ls.mel_to_stft(mel.power, sr=sr, n_fft=n_fft, htk=False)
+    htk = ls.mel_to_stft(mel.power, sr=sr, n_fft=n_fft, htk=True)
 
-    assert htk.n_bins == n_fft // 2 + 1
-    assert htk.n_frames == mel.n_frames
-    assert _is_finite_list(htk.magnitude)
-    assert sum((a - b) ** 2 for a, b in zip(slaney.magnitude, htk.magnitude, strict=True)) > 1e-6
+    assert htk.shape == (n_fft // 2 + 1, n_frames)
+    assert np.isfinite(htk).all()
+    assert np.sum((slaney - htk) ** 2) > 1e-6
 
     out = ls.mel_to_audio(
         mel.power,
-        n_mels,
-        mel.n_frames,
         sr=sr,
         n_fft=n_fft,
         hop_length=hop,
         n_iter=2,
         htk=True,
     )
-    assert len(out) >= (mel.n_frames - 1) * hop
-    assert _is_finite_list(out)
+    assert len(out) >= (n_frames - 1) * hop
+    assert np.isfinite(out).all()
 
 
 def test_mfcc_inverse_roundtrip():
@@ -111,45 +108,42 @@ def test_mfcc_inverse_roundtrip():
     audio = _sine(sr // 4, 220.0, sr)  # 0.25 s — see mel roundtrip above
 
     mf = ls.mfcc(audio, sr=sr, n_fft=n_fft, hop_length=hop, n_mfcc=20)
-    n_frames = mf.n_frames
+    assert mf.coefficients.shape[0] == 20
+    n_frames = mf.coefficients.shape[1]
     assert n_frames > 0
-    assert len(mf.coefficients) == 20 * n_frames
 
-    mel = ls.mfcc_to_mel(mf.coefficients, 20, n_frames, n_mels=n_mels)
-    assert isinstance(mel, ls.MelPowerResult)
-    assert mel.n_mels == n_mels
-    assert mel.n_frames == n_frames
-    assert len(mel.power) == n_mels * n_frames
-    assert _is_finite_list(mel.power)
+    mel = ls.mfcc_to_mel(mf.coefficients, n_mels=n_mels)
+    assert isinstance(mel, np.ndarray)
+    assert mel.shape == (n_mels, n_frames)
+    assert np.isfinite(mel).all()
 
-    lifted_mel = ls.mfcc_to_mel(mf.coefficients, 20, n_frames, n_mels=n_mels, lifter=22.0)
-    assert _is_finite_list(lifted_mel.power)
-    assert any(abs(a - b) > 1.0e-5 for a, b in zip(lifted_mel.power, mel.power, strict=True))
+    lifted_mel = ls.mfcc_to_mel(mf.coefficients, n_mels=n_mels, lifter=22.0)
+    assert np.isfinite(lifted_mel).all()
+    assert np.any(np.abs(lifted_mel - mel) > 1.0e-5)
 
-    out = ls.mfcc_to_audio(
-        mf.coefficients, 20, n_frames, sr=sr, n_fft=n_fft, hop_length=hop, n_mels=n_mels
-    )
+    out = ls.mfcc_to_audio(mf.coefficients, sr=sr, n_fft=n_fft, hop_length=hop, n_mels=n_mels)
     assert len(out) >= (n_frames - 1) * hop
-    assert _is_finite_list(out)
+    assert np.isfinite(out).all()
 
 
-def test_inverse_transforms_reject_dim_length_mismatch():
-    # Regression: the inverse/decompose wrappers forwarded a flat matrix plus
-    # declared dims to the C ABI without a length check, so a mismatched length
-    # caused a C-side heap over-read. They must now raise ValueError up front.
-    n_mels, n_frames = 8, 4  # expects 32 elements
-    short = [0.1] * (n_mels * n_frames - 1)
-    with pytest.raises(ValueError):
-        ls.mel_to_stft(short, n_mels, n_frames)
-    with pytest.raises(ValueError):
-        ls.mel_to_audio(short, n_mels, n_frames)
+def test_inverse_transforms_refuse_a_flat_buffer_and_dim_length_mismatch():
+    # A matrix entry point takes one 2-D array, so a dimension count can no longer
+    # disagree with the buffer; a flat buffer is refused by name instead. The
+    # decompose wrappers still take a flat matrix plus declared dims and must
+    # raise ValueError up front rather than over-read on the C side.
+    n_mels, n_frames = 8, 4
+    flat = np.full(n_mels * n_frames, 0.1, dtype=np.float32)
+    with pytest.raises(ls.SonareValueError, match="mel must be a 2-D array"):
+        ls.mel_to_stft(flat)
+    with pytest.raises(ls.SonareValueError, match="mel must be a 2-D array"):
+        ls.mel_to_audio(flat)
 
-    n_mfcc = 5  # expects 20 elements
-    short_mfcc = [0.1] * (n_mfcc * n_frames - 1)
-    with pytest.raises(ValueError):
-        ls.mfcc_to_mel(short_mfcc, n_mfcc, n_frames)
-    with pytest.raises(ValueError):
-        ls.mfcc_to_audio(short_mfcc, n_mfcc, n_frames)
+    n_mfcc = 5
+    flat_mfcc = np.full(n_mfcc * n_frames, 0.1, dtype=np.float32)
+    with pytest.raises(ls.SonareValueError, match="mfcc_coeffs must be a 2-D array"):
+        ls.mfcc_to_mel(flat_mfcc)
+    with pytest.raises(ls.SonareValueError, match="mfcc_coeffs must be a 2-D array"):
+        ls.mfcc_to_audio(flat_mfcc)
 
     n_features = 6  # expects 24 elements
     short_spec = [0.1] * (n_features * n_frames - 1)
@@ -161,23 +155,21 @@ def test_inverse_transforms_reject_dim_length_mismatch():
 
 def test_inverse_transforms_reject_non_finite_cells():
     n_mels, n_frames = 8, 4
-    mel = [0.1] * (n_mels * n_frames)
-    mel[3] = math.nan
+    mel = np.full((n_mels, n_frames), 0.1, dtype=np.float32)
+    mel[0, 3] = math.nan
     with pytest.raises(ls.SonareError):
-        ls.mel_to_stft(mel, n_mels, n_frames)
+        ls.mel_to_stft(mel)
     with pytest.raises(ls.SonareError):
-        ls.mel_to_audio(mel, n_mels, n_frames, n_fft=256, hop_length=64, n_iter=2)
+        ls.mel_to_audio(mel, n_fft=256, hop_length=64, n_iter=2)
 
     n_mfcc = 5
-    mfcc = [0.1] * (n_mfcc * n_frames)
-    mfcc[7] = math.inf
+    mfcc = np.full((n_mfcc, n_frames), 0.1, dtype=np.float32)
+    mfcc[1, 3] = math.inf
     with pytest.raises(ls.SonareError):
-        ls.mfcc_to_mel(mfcc, n_mfcc, n_frames, n_mels=n_mels)
+        ls.mfcc_to_mel(mfcc, n_mels=n_mels)
     with pytest.raises(ls.SonareError):
         ls.mfcc_to_audio(
             mfcc,
-            n_mfcc,
-            n_frames,
             n_mels=n_mels,
             n_fft=256,
             hop_length=64,
@@ -189,21 +181,19 @@ def test_cqt_vqt_inverse_reconstruction_and_shape_validation():
     sr = 8000
     source = _sine(2048, 261.6256, sr)
     cq = ls.cqt(source, sr=sr, hop_length=128, fmin=130.8128, n_bins=12)
-    reconstructed = ls.cqt_to_audio(cq.magnitude, cq.n_bins, cq.n_frames, sr, 128, 130.8128, 12, 2)
+    reconstructed = ls.cqt_to_audio(cq.magnitude, sr, 128, 130.8128, 12, 2)
     assert len(reconstructed) == len(source)
-    assert _is_finite_list(reconstructed)
-    assert max(map(abs, reconstructed)) > 1e-5
+    assert np.isfinite(reconstructed).all()
+    assert np.abs(reconstructed).max() > 1e-5
 
     vq = ls.vqt(source, sr=sr, hop_length=128, fmin=130.8128, n_bins=12)
-    vqt_reconstructed = ls.vqt_to_audio(
-        vq.magnitude, vq.n_bins, vq.n_frames, sr, 128, 130.8128, 12, 0, 2
-    )
+    vqt_reconstructed = ls.vqt_to_audio(vq.magnitude, sr, 128, 130.8128, 12, 0, 2)
     assert len(vqt_reconstructed) == len(source)
-    assert _is_finite_list(vqt_reconstructed)
+    assert np.isfinite(vqt_reconstructed).all()
+    with pytest.raises(ls.SonareValueError, match="magnitude must be a 2-D array"):
+        ls.cqt_to_audio(cq.magnitude.reshape(-1), sample_rate=22050)
     with pytest.raises(ls.SonareError):
-        ls.cqt_to_audio(cq.magnitude[:-1], cq.n_bins, cq.n_frames, sample_rate=22050)
-    with pytest.raises(ls.SonareError):
-        ls.vqt_to_audio(vq.magnitude, vq.n_bins, vq.n_frames, n_iter=257, sample_rate=22050)
+        ls.vqt_to_audio(vq.magnitude, n_iter=257, sample_rate=22050)
 
 
 def test_stream_analyzer_abi_and_stats():
@@ -233,8 +223,8 @@ def test_stream_analyzer_abi_and_stats():
         # ABI cross-check: the size_t field and the float field that straddle the
         # padding boundary must be mutually consistent. Misaligned padding would
         # make these disagree.
-        assert abs(stats.duration_seconds - stats.total_samples / sr) < 1e-3, (
-            f"ABI mismatch: duration_seconds {stats.duration_seconds} != "
+        assert abs(stats.duration_sec - stats.total_samples / sr) < 1e-3, (
+            f"ABI mismatch: duration_sec {stats.duration_sec} != "
             f"total_samples/sr {stats.total_samples / sr}"
         )
         assert stats.total_frames > 0
@@ -247,11 +237,11 @@ def test_stream_analyzer_abi_and_stats():
         assert 0.0 <= stats.key_confidence <= 1.0
         assert -1 <= stats.chord_root <= 11
         assert math.isfinite(stats.chord_confidence)
-        assert math.isfinite(stats.bar_duration) and stats.bar_duration >= 0.0
+        assert math.isfinite(stats.bar_duration_sec) and stats.bar_duration_sec >= 0.0
         assert stats.used_frames >= 0
 
         # current_time should reflect consumed audio (<= fed, consistent with stats).
-        assert abs(sa.current_time() - stats.total_samples / sr) < 0.1
+        assert abs(sa.current_time_sec() - stats.total_samples / sr) < 0.1
 
         # Drain frames; verify SOA array lengths are internally consistent.
         avail = sa.available_frames()
@@ -259,12 +249,12 @@ def test_stream_analyzer_abi_and_stats():
             frames = sa.read_frames(avail)
             assert frames.n_frames == avail
             assert frames.n_mels == 128
-            assert len(frames.timestamps) == avail
+            assert len(frames.timestamps_sec) == avail
             assert len(frames.mel) == avail * frames.n_mels
             assert len(frames.chroma) == avail * 12
             assert len(frames.onset_strength) == avail
             assert len(frames.chord_root) == avail
-            assert _is_finite_list(frames.timestamps)
+            assert _is_finite_list(frames.timestamps_sec)
             assert _is_finite_list(frames.mel)
 
 
@@ -365,11 +355,11 @@ def test_stream_analyzer_external_offsets_preserve_buffered_timestamps_and_rejec
     audio = [0.0] * 4096
     with ls.StreamAnalyzer(cfg) as reference:
         reference.process(audio)
-        expected = reference.read_frames(64).timestamps
+        expected = reference.read_frames(64).timestamps_sec
     with ls.StreamAnalyzer(cfg) as analyzer:
         for offset in range(0, len(audio), 128):
             analyzer.process_with_offset(audio[offset : offset + 128], offset)
-        assert analyzer.read_frames(64).timestamps == pytest.approx(expected, abs=1e-7)
+        assert analyzer.read_frames(64).timestamps_sec == pytest.approx(expected, abs=1e-7)
         analyzer.reset()
         analyzer.process_with_offset(audio[:128], 1000)
         with pytest.raises(ls.SonareError):

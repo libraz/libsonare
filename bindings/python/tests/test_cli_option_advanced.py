@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 
@@ -83,11 +84,9 @@ def test_nnls_chroma_forwards_hop_length(
     monkeypatch.setattr(_cli_advanced, "_load_audio", lambda _path: ([0.0], 22050))
     calls: dict[str, object] = {}
 
-    def nnls_spy(
-        samples: list[float], sample_rate: int, **kwargs: object
-    ) -> tuple[int, list[float]]:
+    def nnls_spy(samples: list[float], sample_rate: int, **kwargs: object) -> np.ndarray:
         calls["args"] = (samples, sample_rate, kwargs)
-        return 1, [0.0] * 12
+        return np.zeros((12, 1), dtype=np.float32)
 
     monkeypatch.setattr(_conversions, "nnls_chroma", nnls_spy)
 
@@ -106,13 +105,13 @@ def test_tempogram_forwards_mel_and_window_options(
     monkeypatch.setattr(_cli_advanced, "_load_audio", lambda _path: ([0.0, 0.5], 22050))
     calls: dict[str, object] = {}
 
-    def onset_spy(samples: list[float], **kwargs: object) -> list[float]:
+    def onset_spy(samples: list[float], **kwargs: object) -> np.ndarray:
         calls["onset"] = (samples, kwargs)
-        return [0.1, 0.2, 0.3]
+        return np.array([0.1, 0.2, 0.3])
 
-    def tempogram_spy(envelope: list[float], **kwargs: object) -> tuple[int, list[float]]:
-        calls["tempogram"] = (envelope, kwargs)
-        return 3, [0.0] * (3 * 96)
+    def tempogram_spy(envelope: np.ndarray, **kwargs: object) -> np.ndarray:
+        calls["tempogram"] = (envelope.tolist(), kwargs)
+        return np.zeros((96, 3), dtype=np.float32)
 
     monkeypatch.setattr(_conversions, "onset_strength", onset_spy)
     monkeypatch.setattr(_conversions, "tempogram", tempogram_spy)
@@ -143,13 +142,13 @@ def test_plp_forwards_mel_tempo_and_window_options(
     monkeypatch.setattr(_cli_advanced, "_load_audio", lambda _path: ([0.0, 0.5], 22050))
     calls: dict[str, object] = {}
 
-    def onset_spy(samples: list[float], **kwargs: object) -> list[float]:
+    def onset_spy(samples: list[float], **kwargs: object) -> np.ndarray:
         calls["onset"] = (samples, kwargs)
-        return [0.1, 0.2]
+        return np.array([0.1, 0.2])
 
-    def plp_spy(envelope: list[float], **kwargs: object) -> list[float]:
-        calls["plp"] = (envelope, kwargs)
-        return [0.0, 1.0]
+    def plp_spy(envelope: np.ndarray, **kwargs: object) -> np.ndarray:
+        calls["plp"] = (envelope.tolist(), kwargs)
+        return np.array([0.0, 1.0])
 
     monkeypatch.setattr(_conversions, "onset_strength", onset_spy)
     monkeypatch.setattr(_conversions, "plp", plp_spy)

@@ -5,15 +5,18 @@ from __future__ import annotations
 import ctypes
 from collections.abc import Sequence
 
+import numpy as np
+import numpy.typing as npt
+
 from ._errors import _not_supported
 from ._ffi import (
     SonareCqtResult,
     SonareInverseResult,
 )
 from ._runtime import (
-    SonareValueError,
     _check,
-    _float_array_result,
+    _from_c_float_array,
+    _from_c_float_matrix,
     _get_lib,
     _guard_buffer,
     _out_float_array,
@@ -21,16 +24,11 @@ from ._runtime import (
     _resolve_zero_default,
     _to_c_float,
     _to_c_float_array,
+    _to_c_float_matrix,
     _to_c_int,
     _to_c_size_t,
 )
-from .types import (
-    CqtResult,
-    MelPowerResult,
-    MelSpectrogramResult,
-    MfccResult,
-    StftMagnitudeResult,
-)
+from .types import CqtResult
 
 # ============================================================================
 # Features - Constant-Q / Variable-Q transforms
@@ -38,14 +36,11 @@ from .types import (
 
 
 def _cqt_result_from_c(out: SonareCqtResult) -> CqtResult:
-    total = out.n_bins * out.n_frames
     return CqtResult(
-        n_bins=int(out.n_bins),
-        n_frames=int(out.n_frames),
         hop_length=int(out.hop_length),
         sample_rate=int(out.sample_rate),
-        magnitude=_float_array_result(out.magnitude, total),
-        frequencies=_float_array_result(out.frequencies, out.n_bins),
+        magnitude=_from_c_float_matrix(out.magnitude, out.n_bins, out.n_frames),
+        frequencies=_from_c_float_array(out.frequencies, out.n_bins),
     )
 
 
@@ -69,7 +64,8 @@ def cqt(
         bins_per_octave: Bins per octave (default 12).
 
     Returns:
-        A :class:`CqtResult` with the magnitude matrix and bin frequencies.
+        A :class:`CqtResult` with the magnitude of shape ``(n_bins, n_frames)`` and
+        the bin frequencies.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_cqt"):
@@ -150,20 +146,21 @@ def hybrid_cqt(
     return _cqt_variant("sonare_hybrid_cqt", samples, sr, hop_length, fmin, n_bins, bins_per_octave)
 
 
-@_guard_buffer("magnitude")
 def cqt_to_audio(
-    magnitude: Sequence[float] | list[float],
-    n_bins: int,
-    n_frames: int,
+    magnitude: npt.ArrayLike,
     sample_rate: int,
     hop_length: int = 512,
     fmin: float = 32.70319566257483,
     bins_per_octave: int = 12,
     n_iter: int = 32,
-) -> list[float]:
-    """Reconstruct mono audio from row-major CQT magnitude via Griffin-Lim."""
+) -> np.ndarray:
+    """Reconstruct mono audio from a CQT magnitude via Griffin-Lim.
+
+    ``magnitude`` is a 2-D array of shape ``(n_bins, n_frames)``. Returns a float32 array.
+    """
     lib = _get_lib()
-    c_array, length = _to_c_float_array(magnitude)
+    c_array, n_bins, n_frames = _to_c_float_matrix("cqt_to_audio", magnitude, arg_name="magnitude")
+    length = n_bins * n_frames
     out = ctypes.POINTER(ctypes.c_float)()
     out_length = ctypes.c_size_t()
     rc = lib.sonare_cqt_to_audio_checked(
@@ -181,7 +178,7 @@ def cqt_to_audio(
     )
     _check(rc)
     try:
-        return _float_array_result(out, out_length.value)
+        return _from_c_float_array(out, out_length.value)
     finally:
         if out:
             lib.sonare_free_floats(out)
@@ -192,23 +189,18 @@ def cqt_to_audio(
 # ============================================================================
 
 
-@_guard_buffer("mel")
 def mel_to_stft(
-    mel: Sequence[float] | list[float],
-    n_mels: int,
-    n_frames: int,
+    mel: npt.ArrayLike,
     sr: int = 22050,
     n_fft: int = 2048,
     fmin: float = 0.0,
     fmax: float | None = None,
     htk: bool = False,
-) -> StftMagnitudeResult:
+) -> np.ndarray:
     """Approximate inverse of a Mel filterbank (Mel power -> STFT magnitude).
 
     Args:
-        mel: Mel power spectrogram, flattened row-major ``[n_mels x n_frames]``.
-        n_mels: Number of Mel bands.
-        n_frames: Number of time frames.
+        mel: Mel power spectrogram, a 2-D array of shape ``(n_mels, n_frames)``.
         sr: Sample rate that produced ``mel`` in Hz (default 22050).
         n_fft: FFT size of the source STFT; sets output bins to ``n_fft/2 + 1``
             (default 2048).
@@ -217,14 +209,13 @@ def mel_to_stft(
         htk: Use the HTK Mel formula instead of Slaney (default False).
 
     Returns:
-        An :class:`StftMagnitudeResult` with the reconstructed STFT magnitude matrix (not squared).
+        A float32 array of shape ``(n_fft // 2 + 1, n_frames)`` holding the
+        reconstructed STFT magnitude (not squared).
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mel_to_stft"):
         raise _not_supported("libsonare was built without inverse-reconstruction support")
-    c_array, length = _to_c_float_array(mel)
-    if length != n_mels * n_frames:
-        raise SonareValueError("mel length must equal n_mels * n_frames")
+    c_array, n_mels, n_frames = _to_c_float_matrix("mel_to_stft", mel, arg_name="mel")
     out = SonareInverseResult()
     if htk:
         if not hasattr(lib, "sonare_mel_to_stft_ex"):
@@ -253,12 +244,7 @@ def mel_to_stft(
         )
     _check(rc)
     try:
-        total = out.rows * out.n_frames
-        return StftMagnitudeResult(
-            n_bins=int(out.rows),
-            n_frames=int(out.n_frames),
-            magnitude=_float_array_result(out.data, total),
-        )
+        return _from_c_float_matrix(out.data, int(out.rows), int(out.n_frames))
     finally:
         lib.sonare_free_inverse_result(ctypes.byref(out))
 
@@ -271,7 +257,7 @@ def _inverse_audio(
     args: tuple[object, ...],
     n_iter: int,
     htk: bool,
-) -> list[float]:
+) -> np.ndarray:
     """Call a Griffin-Lim inverse wrapper with shared HTK/output handling."""
     function_name = extended_name if htk else base_name
     if not hasattr(lib, function_name):
@@ -289,14 +275,11 @@ def _inverse_audio(
                 ctypes.byref(out_length),
             )
         )
-        return _float_array_result(out, out_length.value)
+        return _from_c_float_array(out, out_length.value)
 
 
-@_guard_buffer("mel")
 def mel_to_audio(
-    mel: Sequence[float] | list[float],
-    n_mels: int,
-    n_frames: int,
+    mel: npt.ArrayLike,
     sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
@@ -304,13 +287,11 @@ def mel_to_audio(
     fmax: float | None = None,
     n_iter: int = 32,
     htk: bool = False,
-) -> list[float]:
+) -> np.ndarray:
     """Reconstruct audio from a Mel spectrogram via Griffin-Lim.
 
     Args:
-        mel: Mel power spectrogram, flattened row-major ``[n_mels x n_frames]``.
-        n_mels: Number of Mel bands.
-        n_frames: Number of time frames.
+        mel: Mel power spectrogram, a 2-D array of shape ``(n_mels, n_frames)``.
         sr: Sample rate of the original audio in Hz (default 22050).
         n_fft: FFT size used for reconstruction (default 2048).
         hop_length: Hop length used for reconstruction (default 512).
@@ -320,14 +301,12 @@ def mel_to_audio(
         htk: Use the HTK Mel formula instead of Slaney (default False).
 
     Returns:
-        The reconstructed audio samples.
+        The reconstructed audio samples as a float32 array.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mel_to_audio"):
         raise _not_supported("libsonare was built without inverse-reconstruction support")
-    c_array, length = _to_c_float_array(mel)
-    if length != n_mels * n_frames:
-        raise SonareValueError("mel length must equal n_mels * n_frames")
+    c_array, n_mels, n_frames = _to_c_float_matrix("mel_to_audio", mel, arg_name="mel")
     return _inverse_audio(
         lib,
         "sonare_mel_to_audio",
@@ -347,20 +326,21 @@ def mel_to_audio(
     )
 
 
-@_guard_buffer("magnitude")
 def griffin_lim(
-    magnitude: Sequence[float] | list[float],
-    n_bins: int,
-    n_frames: int,
+    magnitude: npt.ArrayLike,
     sample_rate: int,
     n_fft: int = 2048,
     hop_length: int = 512,
     n_iter: int = 32,
     momentum: float = 0.99,
-) -> list[float]:
-    """Reconstruct audio from a row-major STFT magnitude matrix."""
+) -> np.ndarray:
+    """Reconstruct audio from an STFT magnitude of shape ``(n_bins, n_frames)``.
+
+    Returns a float32 array.
+    """
     lib = _get_lib()
-    data, length = _to_c_float_array(magnitude)
+    data, n_bins, n_frames = _to_c_float_matrix("griffin_lim", magnitude, arg_name="magnitude")
+    length = n_bins * n_frames
     with _out_float_array(lib) as (out, out_length):
         _check(
             lib.sonare_griffin_lim(
@@ -377,34 +357,30 @@ def griffin_lim(
                 ctypes.byref(out_length),
             )
         )
-        return _float_array_result(out, out_length.value)
+        return _from_c_float_array(out, out_length.value)
 
 
-@_guard_buffer("mfcc_coeffs")
 def mfcc_to_mel(
-    mfcc_coeffs: Sequence[float] | list[float],
-    n_mfcc: int,
-    n_frames: int,
+    mfcc_coeffs: npt.ArrayLike,
     n_mels: int = 128,
     lifter: float = 0.0,
-) -> MelPowerResult:
+) -> np.ndarray:
     """Invert MFCC coefficients back to a Mel power spectrogram.
 
     Args:
-        mfcc_coeffs: MFCC matrix, flattened row-major ``[n_mfcc x n_frames]``.
-        n_mfcc: Number of MFCCs.
-        n_frames: Number of time frames.
+        mfcc_coeffs: MFCC matrix, a 2-D array of shape ``(n_mfcc, n_frames)``.
         n_mels: Number of Mel bins to reconstruct (default 128).
+        lifter: Cepstral lifter the coefficients were computed with (default 0.0).
 
     Returns:
-        An :class:`MelPowerResult` with the reconstructed Mel power matrix.
+        A float32 array of shape ``(n_mels, n_frames)`` with the reconstructed Mel power.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mfcc_to_mel"):
         raise _not_supported("libsonare was built without inverse-reconstruction support")
-    c_array, length = _to_c_float_array(mfcc_coeffs)
-    if length != n_mfcc * n_frames:
-        raise SonareValueError("mfcc_coeffs length must equal n_mfcc * n_frames")
+    c_array, n_mfcc, n_frames = _to_c_float_matrix(
+        "mfcc_to_mel", mfcc_coeffs, arg_name="mfcc_coeffs"
+    )
     out = SonareInverseResult()
     if hasattr(lib, "sonare_mfcc_to_mel_ex"):
         rc = lib.sonare_mfcc_to_mel_ex(
@@ -427,21 +403,13 @@ def mfcc_to_mel(
         )
     _check(rc)
     try:
-        total = out.rows * out.n_frames
-        return MelPowerResult(
-            n_mels=int(out.rows),
-            n_frames=int(out.n_frames),
-            power=_float_array_result(out.data, total),
-        )
+        return _from_c_float_matrix(out.data, int(out.rows), int(out.n_frames))
     finally:
         lib.sonare_free_inverse_result(ctypes.byref(out))
 
 
-@_guard_buffer("mfcc_coeffs")
 def mfcc_to_audio(
-    mfcc_coeffs: Sequence[float] | list[float],
-    n_mfcc: int,
-    n_frames: int,
+    mfcc_coeffs: npt.ArrayLike,
     n_mels: int = 128,
     sr: int = 22050,
     n_fft: int = 2048,
@@ -451,13 +419,11 @@ def mfcc_to_audio(
     n_iter: int = 32,
     htk: bool = False,
     lifter: float = 0.0,
-) -> list[float]:
+) -> np.ndarray:
     """Reconstruct audio directly from MFCC via Mel inversion + Griffin-Lim.
 
     Args:
-        mfcc_coeffs: MFCC matrix, flattened row-major ``[n_mfcc x n_frames]``.
-        n_mfcc: Number of MFCCs.
-        n_frames: Number of time frames.
+        mfcc_coeffs: MFCC matrix, a 2-D array of shape ``(n_mfcc, n_frames)``.
         n_mels: Number of Mel bins (must match the MFCC source config).
         sr: Sample rate of the original audio in Hz (default 22050).
         n_fft: FFT size used for reconstruction (default 2048).
@@ -468,14 +434,14 @@ def mfcc_to_audio(
         htk: Use the HTK Mel formula instead of Slaney (default False).
 
     Returns:
-        The reconstructed audio samples.
+        The reconstructed audio samples as a float32 array.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mfcc_to_audio"):
         raise _not_supported("libsonare was built without inverse-reconstruction support")
-    c_array, length = _to_c_float_array(mfcc_coeffs)
-    if length != n_mfcc * n_frames:
-        raise SonareValueError("mfcc_coeffs length must equal n_mfcc * n_frames")
+    c_array, n_mfcc, n_frames = _to_c_float_matrix(
+        "mfcc_to_audio", mfcc_coeffs, arg_name="mfcc_coeffs"
+    )
     if lifter == 0.0:
         return _inverse_audio(
             lib,
@@ -517,118 +483,9 @@ def mfcc_to_audio(
     )
     _check(rc)
     try:
-        return _float_array_result(out, out_length.value)
+        return _from_c_float_array(out, out_length.value)
     finally:
         lib.sonare_free_floats(out)
-
-
-def _require_linear_mel(fn_name: str, result: MelSpectrogramResult) -> None:
-    """Refuse a Mel result whose matrix is in dB, naming the conversion."""
-    if result.is_db:
-        raise SonareValueError(
-            f"{fn_name}: result is in dB; convert it to power with db_to_power before inverting it"
-        )
-
-
-def mel_result_to_stft(result: MelSpectrogramResult) -> StftMagnitudeResult:
-    """Approximate inverse of a Mel result (Mel power -> STFT magnitude).
-
-    Reads the matrix and every forward parameter from ``result``, so the call
-    equals :func:`mel_to_stft` with the values the forward transform used.
-
-    Args:
-        result: A :func:`mel_spectrogram` result.
-
-    Returns:
-        An :class:`StftMagnitudeResult` with the reconstructed STFT magnitude matrix (not squared).
-
-    Raises:
-        SonareValueError: If ``result`` is in dB (``result.is_db``).
-    """
-    _require_linear_mel("mel_result_to_stft", result)
-    return mel_to_stft(
-        result.power,
-        result.n_mels,
-        result.n_frames,
-        result.sample_rate,
-        result.n_fft,
-        result.fmin,
-        result.fmax,
-        result.htk,
-    )
-
-
-def mel_result_to_audio(result: MelSpectrogramResult, n_iter: int = 32) -> list[float]:
-    """Reconstruct audio from a Mel result via Griffin-Lim.
-
-    Reads the matrix and every forward parameter from ``result``, so the call
-    equals :func:`mel_to_audio` with the values the forward transform used.
-
-    Args:
-        result: A :func:`mel_spectrogram` result.
-        n_iter: Griffin-Lim iterations (default 32).
-
-    Returns:
-        The reconstructed audio samples.
-
-    Raises:
-        SonareValueError: If ``result`` is in dB (``result.is_db``).
-    """
-    _require_linear_mel("mel_result_to_audio", result)
-    return mel_to_audio(
-        result.power,
-        result.n_mels,
-        result.n_frames,
-        result.sample_rate,
-        result.n_fft,
-        result.hop_length,
-        result.fmin,
-        result.fmax,
-        n_iter,
-        result.htk,
-    )
-
-
-def mfcc_result_to_mel(result: MfccResult) -> MelPowerResult:
-    """Invert an MFCC result back to a Mel power spectrogram, undoing its lifter.
-
-    Args:
-        result: An :func:`mfcc` result.
-
-    Returns:
-        An :class:`MelPowerResult` with the reconstructed Mel power matrix.
-    """
-    return mfcc_to_mel(
-        result.coefficients, result.n_mfcc, result.n_frames, result.n_mels, result.lifter
-    )
-
-
-def mfcc_result_to_audio(result: MfccResult, n_iter: int = 32) -> list[float]:
-    """Reconstruct audio from an MFCC result via Mel inversion and Griffin-Lim.
-
-    Reads the coefficients, the Mel parameters and the lifter from ``result``.
-
-    Args:
-        result: An :func:`mfcc` result.
-        n_iter: Griffin-Lim iterations (default 32).
-
-    Returns:
-        The reconstructed audio samples.
-    """
-    return mfcc_to_audio(
-        result.coefficients,
-        result.n_mfcc,
-        result.n_frames,
-        result.n_mels,
-        result.sample_rate,
-        result.n_fft,
-        result.hop_length,
-        result.fmin,
-        result.fmax,
-        n_iter,
-        result.htk,
-        result.lifter,
-    )
 
 
 @_guard_buffer("samples")
@@ -655,7 +512,8 @@ def vqt(
             non-finite value is refused.
 
     Returns:
-        A :class:`CqtResult` with the magnitude matrix and bin frequencies.
+        A :class:`CqtResult` with the magnitude of shape ``(n_bins, n_frames)`` and
+        the bin frequencies.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_vqt"):
@@ -680,21 +538,22 @@ def vqt(
         lib.sonare_free_cqt_result(ctypes.byref(out))
 
 
-@_guard_buffer("magnitude")
 def vqt_to_audio(
-    magnitude: Sequence[float] | list[float],
-    n_bins: int,
-    n_frames: int,
+    magnitude: npt.ArrayLike,
     sample_rate: int,
     hop_length: int = 512,
     fmin: float = 32.70319566257483,
     bins_per_octave: int = 12,
     gamma: float | None = None,
     n_iter: int = 32,
-) -> list[float]:
-    """Reconstruct mono audio from row-major VQT magnitude via Griffin-Lim."""
+) -> np.ndarray:
+    """Reconstruct mono audio from a VQT magnitude via Griffin-Lim.
+
+    ``magnitude`` is a 2-D array of shape ``(n_bins, n_frames)``. Returns a float32 array.
+    """
     lib = _get_lib()
-    c_array, length = _to_c_float_array(magnitude)
+    c_array, n_bins, n_frames = _to_c_float_matrix("vqt_to_audio", magnitude, arg_name="magnitude")
+    length = n_bins * n_frames
     out = ctypes.POINTER(ctypes.c_float)()
     out_length = ctypes.c_size_t()
     rc = lib.sonare_vqt_to_audio_checked(
@@ -713,7 +572,7 @@ def vqt_to_audio(
     )
     _check(rc)
     try:
-        return _float_array_result(out, out_length.value)
+        return _from_c_float_array(out, out_length.value)
     finally:
         if out:
             lib.sonare_free_floats(out)

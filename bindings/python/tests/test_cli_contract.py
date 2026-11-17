@@ -13,6 +13,7 @@ import wave
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 
@@ -988,7 +989,7 @@ def test_spectral_json_has_closed_unrounded_feature_stats(monkeypatch, capsys) -
                 "zcr": "zero_crossing_rate",
                 "rms": "rms_energy",
             }[name],
-            lambda *args, _values=feature_values, **kwargs: _values,
+            lambda *args, _values=feature_values, **kwargs: np.asarray(_values),
         )
     monkeypatch.setattr(_cli_analysis, "_load_audio", lambda path: ([0.0], 22050))
 

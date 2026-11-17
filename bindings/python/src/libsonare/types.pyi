@@ -556,9 +556,9 @@ class Key:
     def shortName(self) -> str: ...
 
 class KeyDetection(Key):
-    tuning: float
+    tuning_cents: float
     def __init__(
-        self, root: PitchClass, mode: Mode, confidence: float, tuning: float = ...
+        self, root: PitchClass, mode: Mode, confidence: float, tuning_cents: float = ...
     ) -> None: ...
 
 class AutoTuneResult:
@@ -743,7 +743,7 @@ class AnalysisResult:
     beat_observations: AnalysisBeatObservations | None
     beat_local_bpm: list[float]
     form: str
-    tuning: float
+    tuning_cents: float
     def __init__(
         self,
         bpm: float,
@@ -765,7 +765,7 @@ class AnalysisResult:
         beat_observations: AnalysisBeatObservations | None = None,
         beat_local_bpm: list[float] = ...,
         form: str = "",
-        tuning: float = 0.0,
+        tuning_cents: float = 0.0,
     ) -> None: ...
     @property
     def bpmConfidence(self) -> float: ...
@@ -1218,18 +1218,6 @@ class DynamicRangeReport:
         window_rms_db: list[float],
     ) -> None: ...
 
-class StftMagnitudeResult:
-    n_bins: int
-    n_frames: int
-    magnitude: list[float]
-    def __init__(self, n_bins: int, n_frames: int, magnitude: list[float]) -> None: ...
-
-class MelPowerResult:
-    n_mels: int
-    n_frames: int
-    power: list[float]
-    def __init__(self, n_mels: int, n_frames: int, power: list[float]) -> None: ...
-
 class VectorscopeReport:
     mid: NDArray[np.float32]
     side: NDArray[np.float32]
@@ -1367,8 +1355,8 @@ class Chord:
 
 class ChordAnalysisResult:
     chords: list[Chord]
-    tuning: float
-    def __init__(self, chords: list[Chord], tuning: float = ...) -> None: ...
+    tuning_cents: float
+    def __init__(self, chords: list[Chord], tuning_cents: float = ...) -> None: ...
 
 ChordFunctionName: TypeAlias = Literal["tonic", "subdominant", "dominant", "chromatic", "none"]
 
@@ -1390,55 +1378,43 @@ class FunctionalChord(Chord):
     ) -> None: ...
 
 class StftResult:
-    n_bins: int
-    n_frames: int
     n_fft: int
     hop_length: int
     sample_rate: int
-    magnitude: list[float]
-    power: list[float]
+    magnitude: NDArray[np.float32]
+    power: NDArray[np.float32]
     def __init__(
         self,
-        n_bins: int,
-        n_frames: int,
         n_fft: int,
         hop_length: int,
         sample_rate: int,
-        magnitude: list[float],
-        power: list[float],
+        magnitude: NDArray[np.float32],
+        power: NDArray[np.float32],
     ) -> None: ...
 
 class MelSpectrogramResult:
-    n_mels: int
-    n_frames: int
     sample_rate: int
     hop_length: int
-    power: list[float]
-    db: list[float]
+    power: NDArray[np.float32]
+    db: NDArray[np.float32]
     n_fft: int
     fmin: float
     fmax: float
     htk: bool
-    is_db: bool
     def __init__(
         self,
-        n_mels: int,
-        n_frames: int,
         sample_rate: int,
         hop_length: int,
-        power: list[float],
-        db: list[float],
+        power: NDArray[np.float32],
+        db: NDArray[np.float32],
         n_fft: int,
         fmin: float,
         fmax: float,
         htk: bool,
-        is_db: bool,
     ) -> None: ...
 
 class MfccResult:
-    n_mfcc: int
-    n_frames: int
-    coefficients: list[float]
+    coefficients: NDArray[np.float32]
     sample_rate: int
     hop_length: int
     n_fft: int
@@ -1446,13 +1422,10 @@ class MfccResult:
     fmin: float
     fmax: float
     htk: bool
-    is_db: bool
     lifter: float
     def __init__(
         self,
-        n_mfcc: int,
-        n_frames: int,
-        coefficients: list[float],
+        coefficients: NDArray[np.float32],
         sample_rate: int,
         hop_length: int,
         n_fft: int,
@@ -1460,86 +1433,65 @@ class MfccResult:
         fmin: float,
         fmax: float,
         htk: bool,
-        is_db: bool,
         lifter: float,
     ) -> None: ...
 
 class ChromaResult:
-    n_chroma: int
-    n_frames: int
     sample_rate: int
     hop_length: int
-    features: list[float]
-    mean_energy: list[float]
+    features: NDArray[np.float32]
+    mean_energy: NDArray[np.float32]
     def __init__(
         self,
-        n_chroma: int,
-        n_frames: int,
         sample_rate: int,
         hop_length: int,
-        features: list[float],
-        mean_energy: list[float],
+        features: NDArray[np.float32],
+        mean_energy: NDArray[np.float32],
     ) -> None: ...
 
 class PitchResult:
-    n_frames: int
-    f0: list[float]
-    voiced_prob: list[float]
-    voiced_flag: list[bool]
+    f0: NDArray[np.float32]
+    voiced_prob: NDArray[np.float32]
+    voiced_flag: NDArray[np.bool_]
     median_f0: float
     mean_f0: float
     def __init__(
         self,
-        n_frames: int,
-        f0: list[float],
-        voiced_prob: list[float],
-        voiced_flag: list[bool],
+        f0: NDArray[np.float32],
+        voiced_prob: NDArray[np.float32],
+        voiced_flag: NDArray[np.bool_],
         median_f0: float,
         mean_f0: float,
     ) -> None: ...
 
 class PiptrackResult:
-    n_bins: int
-    n_frames: int
-    pitches: list[float]
-    magnitudes: list[float]
-    def __init__(
-        self, n_bins: int, n_frames: int, pitches: list[float], magnitudes: list[float]
-    ) -> None: ...
+    pitches: NDArray[np.float32]
+    magnitudes: NDArray[np.float32]
+    def __init__(self, pitches: NDArray[np.float32], magnitudes: NDArray[np.float32]) -> None: ...
 
 class ReassignedSpectrogramResult:
-    n_bins: int
-    n_frames: int
-    magnitude: list[float]
-    times: list[float]
-    frequencies: list[float]
+    magnitude: NDArray[np.float32]
+    times: NDArray[np.float32]
+    frequencies: NDArray[np.float32]
     def __init__(
         self,
-        n_bins: int,
-        n_frames: int,
-        magnitude: list[float],
-        times: list[float],
-        frequencies: list[float],
+        magnitude: NDArray[np.float32],
+        times: NDArray[np.float32],
+        frequencies: NDArray[np.float32],
     ) -> None: ...
-
-class SegmentMatrix:
-    rows: int
-    cols: int
-    values: list[float]
-    def __init__(self, rows: int, cols: int, values: list[float]) -> None: ...
 
 class NoteSegment:
     frame_start: int
     frame_end: int
-    start_seconds: float
-    end_seconds: float
+    start_sec: float
+    end_sec: float
     median_cents: float
     def __init__(
         self,
         frame_start: int,
         frame_end: int,
-        start_seconds: float,
-        end_seconds: float,
+        start_sec: float,
+        end_sec: float,
         median_cents: float,
     ) -> None: ...
 
@@ -2895,20 +2847,16 @@ class MelodyResult:
     ) -> None: ...
 
 class CqtResult:
-    n_bins: int
-    n_frames: int
     hop_length: int
     sample_rate: int
-    magnitude: list[float]
-    frequencies: list[float]
+    magnitude: NDArray[np.float32]
+    frequencies: NDArray[np.float32]
     def __init__(
         self,
-        n_bins: int,
-        n_frames: int,
         hop_length: int,
         sample_rate: int,
-        magnitude: list[float],
-        frequencies: list[float],
+        magnitude: NDArray[np.float32],
+        frequencies: NDArray[np.float32],
     ) -> None: ...
 
 class QuantizeConfig:
@@ -2934,7 +2882,7 @@ class StreamConfig:
     n_mels: int
     fmin: float
     fmax: float
-    tuning_ref_hz: float
+    reference_hz: float
     compute_magnitude: bool
     compute_mel: bool
     compute_chroma: bool
@@ -2956,7 +2904,7 @@ class StreamConfig:
         n_mels: int = 128,
         fmin: float = 0.0,
         fmax: float = 0.0,
-        tuning_ref_hz: float = 440.0,
+        reference_hz: float = 440.0,
         compute_magnitude: bool = False,
         compute_mel: bool = True,
         compute_chroma: bool = True,
@@ -2977,7 +2925,7 @@ class StreamFrames:
     n_mels: int
     n_chroma: int
     feature_flags: int
-    timestamps: list[float]
+    timestamps_sec: list[float]
     mel: list[float]
     chroma: list[float]
     onset_strength: list[float]
@@ -2993,7 +2941,7 @@ class StreamFrames:
         n_mels: int,
         n_chroma: int,
         feature_flags: int,
-        timestamps: list[float],
+        timestamps_sec: list[float],
         mel: list[float],
         chroma: list[float],
         onset_strength: list[float],
@@ -3010,7 +2958,7 @@ class StreamFramesU8:
     n_mels: int
     n_chroma: int
     feature_flags: int
-    timestamps: list[float]
+    timestamps_sec: list[float]
     mel: list[int]
     chroma: list[int]
     onset_strength: list[int]
@@ -3023,7 +2971,7 @@ class StreamFramesU8:
         n_mels: int,
         n_chroma: int,
         feature_flags: int,
-        timestamps: list[float],
+        timestamps_sec: list[float],
         mel: list[int],
         chroma: list[int],
         onset_strength: list[int],
@@ -3037,7 +2985,7 @@ class StreamFramesI16:
     n_mels: int
     n_chroma: int
     feature_flags: int
-    timestamps: list[float]
+    timestamps_sec: list[float]
     mel: list[int]
     chroma: list[int]
     onset_strength: list[int]
@@ -3050,7 +2998,7 @@ class StreamFramesI16:
         n_mels: int,
         n_chroma: int,
         feature_flags: int,
-        timestamps: list[float],
+        timestamps_sec: list[float],
         mel: list[int],
         chroma: list[int],
         onset_strength: list[int],
@@ -3063,26 +3011,26 @@ class StreamChordChange:
     root: int
     quality: int
     name: str
-    start_time: float
+    start_sec: float
     confidence: float
     def __init__(
-        self, root: int, quality: int, name: str, start_time: float, confidence: float
+        self, root: int, quality: int, name: str, start_sec: float, confidence: float
     ) -> None: ...
 
 class StreamBarChord:
     """``bar_index`` is the bar number, not this entry's position in the list:
     bars with no confident chord are not recorded and the oldest entries are
     dropped at the history cap, so group bars by pattern position with
-    ``bar_index``. ``start_time`` is on the same timeline as
-    ``StreamFrame.timestamp`` and consecutive bars are ``bar_duration`` apart.
+    ``bar_index``. ``start_sec`` is on the same timeline as
+    ``StreamFrame.timestamp`` and consecutive bars are ``bar_duration_sec`` apart.
     In ``voted_pattern``, ``bar_index`` is the pattern position and
-    ``start_time`` is unused."""
+    ``start_sec`` is unused."""
 
     bar_index: int
     root: int
     quality: int
     name: str
-    start_time: float
+    start_sec: float
     confidence: float
     def __init__(
         self,
@@ -3090,7 +3038,7 @@ class StreamBarChord:
         root: int,
         quality: int,
         name: str,
-        start_time: float,
+        start_sec: float,
         confidence: float,
     ) -> None: ...
 
@@ -3108,7 +3056,7 @@ class StreamStats:
 
     total_frames: int
     total_samples: int
-    duration_seconds: float
+    duration_sec: float
     pending_frames: int
     dropped_output_frames: int
     dropped_chord_progression_entries: int
@@ -3126,9 +3074,9 @@ class StreamStats:
     chord_quality: int
     chord_name: str
     chord_confidence: float
-    chord_start_time: float
+    chord_start_sec: float
     current_bar: int
-    bar_duration: float
+    bar_duration_sec: float
     chord_progression: list[StreamChordChange]
     bar_chord_progression: list[StreamBarChord]
     voted_pattern: list[StreamBarChord]
@@ -3136,14 +3084,14 @@ class StreamStats:
     detected_pattern_name: str
     detected_pattern_score: float
     all_pattern_scores: list[StreamPatternScore]
-    accumulated_seconds: float
+    accumulated_sec: float
     used_frames: int
     updated: bool
     def __init__(
         self,
         total_frames: int,
         total_samples: int,
-        duration_seconds: float,
+        duration_sec: float,
         pending_frames: int,
         dropped_output_frames: int,
         dropped_chord_progression_entries: int,
@@ -3161,9 +3109,9 @@ class StreamStats:
         chord_quality: int,
         chord_name: str,
         chord_confidence: float,
-        chord_start_time: float,
+        chord_start_sec: float,
         current_bar: int,
-        bar_duration: float,
+        bar_duration_sec: float,
         chord_progression: list[StreamChordChange],
         bar_chord_progression: list[StreamBarChord],
         voted_pattern: list[StreamBarChord],
@@ -3171,7 +3119,7 @@ class StreamStats:
         detected_pattern_name: str,
         detected_pattern_score: float,
         all_pattern_scores: list[StreamPatternScore],
-        accumulated_seconds: float,
+        accumulated_sec: float,
         used_frames: int,
         updated: bool,
     ) -> None: ...

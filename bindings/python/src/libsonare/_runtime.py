@@ -602,6 +602,58 @@ def _to_c_float_array(
     return c_array, length
 
 
+def _not_two_dimensional(array: np.ndarray, fn_name: str, arg_name: str) -> SonareValueError:
+    """Build the rejection for a matrix argument of the wrong rank, naming its shape."""
+    prefix = f"{fn_name}: " if fn_name else ""
+    return SonareValueError(
+        f"{prefix}{arg_name} must be a 2-D array (rows, cols), not ndim={array.ndim} "
+        f"shape={tuple(array.shape)}"
+    )
+
+
+def _validate_matrix(fn_name: str, values: object, *, arg_name: str) -> np.ndarray:
+    """Coerce ``values`` to a C-contiguous ``float32`` array of shape ``(rows, cols)``.
+
+    The rank is decided first and named, then the elements get the same
+    emptiness, range and non-finite refusals as a sample buffer, so a matrix is
+    never accepted on terms a vector would not be.
+    """
+    try:
+        raw = values if isinstance(values, np.ndarray) else np.asarray(values)
+    except (TypeError, ValueError) as exc:
+        raise _not_a_buffer(values, fn_name, arg_name) from exc
+    if raw.ndim == 0:
+        raise _not_a_buffer(values, fn_name, arg_name)
+    if raw.ndim != 2:
+        raise _not_two_dimensional(raw, fn_name, arg_name)
+    if raw.dtype.kind not in "biuf":
+        raise _not_a_buffer(values, fn_name, arg_name)
+    flat = _validate_samples(fn_name, np.ascontiguousarray(raw).reshape(-1), arg_name=arg_name)
+    return flat.reshape(raw.shape)
+
+
+def _to_c_float_matrix(
+    fn_name: str, values: object, *, arg_name: str
+) -> tuple[ctypes.Array[ctypes.c_float], int, int]:
+    """Marshal a 2-D matrix as a row-major C buffer plus its ``(rows, cols)``."""
+    matrix = _validate_matrix(fn_name, values, arg_name=arg_name)
+    c_array, _ = _to_c_float_array(matrix.reshape(-1), fn_name=fn_name, arg_name=arg_name)
+    return c_array, int(matrix.shape[0]), int(matrix.shape[1])
+
+
+def _from_c_float_matrix(array: object, rows: int, cols: int) -> np.ndarray:
+    """Copy a row-major C ``float*`` of ``rows * cols`` values into a ``(rows, cols)`` ndarray."""
+    return _from_c_float_array(array, rows * cols).reshape(rows, cols)
+
+
+def _from_c_float_columns(array: object, count: int, cols: int) -> np.ndarray:
+    """Copy ``count`` row-major C floats into a ``(count // cols, cols)`` ndarray.
+
+    For results whose row count is not known to the caller; only the frame count is.
+    """
+    return _from_c_float_array(array, count).reshape(count // cols if cols > 0 else 0, cols)
+
+
 def _to_c_float_array_owned(
     samples: Sequence[float] | list[float] | np.ndarray,
     *,
@@ -793,16 +845,16 @@ def _to_c_double(value: object, name: str) -> ctypes.c_double:
     return ctypes.c_double(_narrow_double(value, name))
 
 
-def _tuning_arg(fn_name: str, tuning: float | str) -> tuple[float, int]:
-    """Split a ``tuning`` argument into the C pair ``(tuning, tuning_auto)``.
+def _tuning_arg(fn_name: str, tuning_cents: float | str) -> tuple[float, int]:
+    """Split a ``tuning_cents`` argument into the C pair ``(tuning_cents, tuning_auto)``.
 
-    A number is a semitone fraction; ``"auto"`` asks the analysis to measure it.
+    A number is cents in ``[-50, 50)``; ``"auto"`` asks the analysis to measure it.
     """
-    if isinstance(tuning, str):
-        if tuning != "auto":
-            raise SonareValueError(f"{fn_name}: tuning must be a number or 'auto'")
+    if isinstance(tuning_cents, str):
+        if tuning_cents != "auto":
+            raise SonareValueError(f"{fn_name}: tuning_cents must be a number or 'auto'")
         return 0.0, 1
-    return tuning, 0
+    return tuning_cents, 0
 
 
 _PAN_MODE_NAMES = {
@@ -1316,6 +1368,18 @@ def _call_float_transform(
     *args: object,
     arg_name: str = "samples",
 ) -> list[float]:
+    return cast(
+        list[float], _call_float_array_transform(fn_name, values, *args, arg_name=arg_name).tolist()
+    )
+
+
+def _call_float_array_transform(
+    fn_name: str,
+    values: Sequence[float] | list[float] | np.ndarray,
+    *args: object,
+    arg_name: str = "samples",
+) -> np.ndarray:
+    """Run a buffer-in, buffer-out C transform and return a ``float32`` ndarray."""
     lib = _get_lib()
     # `fn_name` is the C symbol, not the facade, so only the argument name goes on.
     c_array, length = _to_c_float_array(values, arg_name=arg_name)
@@ -1328,7 +1392,7 @@ def _call_float_transform(
             ctypes.byref(out_length),
         )
         _check(rc)
-        return _float_array_result(out, out_length.value)
+        return _from_c_float_array(out, out_length.value)
 
 
 __all__ = [name for name in globals() if not name.startswith("__")]

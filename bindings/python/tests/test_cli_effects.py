@@ -380,7 +380,7 @@ def test_split_silence_cli_single_take_matches_the_facade(tmp_path) -> None:
             audio.data, top_db=60.0, frame_length=2048, hop_length=512
         )
     assert json.loads(result.stdout) == [
-        {"start_sample": start, "end_sample": end} for start, end in expected
+        {"start_sample": start, "end_sample": end} for start, end in expected.tolist()
     ]
 
 

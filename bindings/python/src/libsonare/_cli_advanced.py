@@ -191,7 +191,7 @@ def cmd_onset_envelope(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     env = onset_strength(
         samples, sr=sr, n_fft=args.n_fft, hop_length=args.hop_length, n_mels=args.n_mels
-    )
+    ).tolist()
 
     if args.json:
         print(
@@ -222,14 +222,11 @@ def cmd_nnls_chroma(args: argparse.Namespace) -> int:
     nnls_options = {}
     if hasattr(args, "hop_length"):
         nnls_options["hop_length"] = args.hop_length
-    n_frames, data = nnls_chroma(samples, sample_rate=sr, **nnls_options)
+    chroma_rows = nnls_chroma(samples, sample_rate=sr, **nnls_options)
     n_chroma = 12
-    # data is row-major [12 x n_frames]; mean energy per bin.
-    mean_energy = []
-    for bin_index in range(n_chroma):
-        start = bin_index * n_frames
-        row = data[start : start + n_frames]
-        mean_energy.append(sum(row) / len(row) if row else 0.0)
+    n_frames = chroma_rows.shape[1]
+    # One row per pitch class; mean energy per bin.
+    mean_energy = [sum(row) / len(row) if row else 0.0 for row in chroma_rows.tolist()]
 
     if args.json:
         print(
@@ -262,12 +259,10 @@ def cmd_tempogram(args: argparse.Namespace) -> int:
     tempogram_options = {}
     if hasattr(args, "win_length"):
         tempogram_options["win_length"] = args.win_length
-    n_frames, data = tempogram(env, sr=sr, hop_length=args.hop_length, **tempogram_options)
-    win_length = (
-        args.win_length
-        if hasattr(args, "win_length")
-        else (len(data) // n_frames if n_frames else 0)
-    )
+    matrix = tempogram(env, sr=sr, hop_length=args.hop_length, **tempogram_options)
+    n_frames = matrix.shape[1]
+    data = matrix.ravel().tolist()
+    win_length = args.win_length if hasattr(args, "win_length") else matrix.shape[0]
 
     if args.json:
         print(
@@ -301,7 +296,7 @@ def cmd_plp(args: argparse.Namespace) -> int:
         for name in ("tempo_min", "tempo_max", "win_length")
         if hasattr(args, name)
     }
-    pulse = plp(env, sr=sr, hop_length=args.hop_length, **plp_options)
+    pulse = plp(env, sr=sr, hop_length=args.hop_length, **plp_options).tolist()
 
     if args.json:
         print(

@@ -53,6 +53,7 @@ _BUFFER_TYPES = frozenset(
         "list[int]",
         "np.ndarray",
         "ndarray",
+        "npt.ArrayLike",
     }
 )
 
@@ -86,7 +87,6 @@ _EMPTY_INPUT_IS_DEFINED = frozenset(
         "deemphasis",
         "frame_signal",
         "onset_backtrack",
-        "pcen",
         "peak_pick",
         "plp",
         "power_to_db",
@@ -493,7 +493,7 @@ def _no_pitch_call(name: str, contour: np.ndarray) -> Any:
     """
     if name == "note_segments":
         probability = np.full(len(contour), 0.9, dtype=np.float32)
-        return libsonare.note_segments(contour, probability, 100.0)
+        return libsonare.note_segments(contour, 100.0, voiced_prob=probability)
     return libsonare.decompose_note_pitch(contour, 100.0, 220.0)
 
 

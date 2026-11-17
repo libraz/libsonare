@@ -77,15 +77,14 @@ def _value_field(value: float | None, name: str) -> float:
 
 
 def _reattack_field(value: float | None) -> float:
-    """``None`` and 0 are off (C 0); anything else must be finite and above 1."""
+    """``None`` is off (C 0); a given value must be finite and above 1."""
     if value is None:
         return 0.0
     number = _narrow_double(value, "reattack_ratio")
-    if number == 0.0:
-        return 0.0
     if not math.isfinite(number) or number <= 1.0:
         raise SonareValueError(
-            f"PolyphonicAnalysis: reattack_ratio must be 0 or finite and above 1, got {value!r}"
+            "PolyphonicAnalysis: reattack_ratio must be finite and above 1 "
+            f"(use None for no split), got {value!r}"
         )
     return number
 
@@ -267,8 +266,8 @@ class PolyphonicAnalysis:
                 A4 = 440).
             reattack_ratio: Splits a ridge where its salience climbs past this
                 multiple of the level just before (the same pitch struck again
-                while it sounds). ``None`` (the editing default) and 0 are
-                off; any other value must be finite and above 1.
+                while it sounds). ``None`` (the editing default) is
+                off; a given value must be finite and above 1.
 
         Raises:
             SonareValueError: If ``samples`` is empty, non-finite, or not a
@@ -618,12 +617,12 @@ class PolyphonicAnalysis:
                 "set_note_edit: edit.time_offset_samples",
                 "set_note_edit: edit.time_offset_sec",
             ),
-            pitch_shift_semitones=_narrow_double(
+            pitch_semitones=_narrow_double(
                 edit.pitch_shift_semitones, "edit.pitch_shift_semitones"
             ),
             gain_db=_narrow_double(edit.gain_db, "edit.gain_db"),
             time_stretch_ratio=_narrow_double(edit.time_stretch_ratio, "edit.time_stretch_ratio"),
-            formant_shift_semitones=_narrow_double(
+            formant_semitones=_narrow_double(
                 edit.formant_shift_semitones, "edit.formant_shift_semitones"
             ),
             vibrato_depth_change=_narrow_double(
@@ -776,11 +775,11 @@ class PolyphonicAnalysis:
             amplitude=self.note_amplitude(index),
             edit=NoteEdit(
                 time_offset_samples=int(row.edit.time_offset_samples),
-                pitch_shift_semitones=float(row.edit.pitch_shift_semitones),
+                pitch_shift_semitones=float(row.edit.pitch_semitones),
                 gain_db=float(row.edit.gain_db),
                 time_stretch_ratio=float(row.edit.time_stretch_ratio),
                 muted=bool(row.edit.muted),
-                formant_shift_semitones=float(row.edit.formant_shift_semitones),
+                formant_shift_semitones=float(row.edit.formant_semitones),
                 vibrato_depth_change=float(row.edit.vibrato_depth_change),
                 drift_change=float(row.edit.drift_change),
                 amplitude_envelope=self._envelope_points(

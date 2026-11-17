@@ -329,12 +329,12 @@ def cmd_trim_silence(args: argparse.Namespace) -> int:
     n_fft = getattr(args, "n_fft", 2048)
     hop_length = getattr(args, "hop_length", 512)
     if top_db is not None:
-        result, _, _ = trim_silence(
+        result = trim_silence(
             samples,
             top_db=top_db,
             frame_length=n_fft,
             hop_length=hop_length,
-        )
+        ).audio.tolist()
         extra = {"top_db": top_db, "n_fft": n_fft, "hop_length": hop_length}
         label = f"Trim silence (top {top_db:.1f} dB)"
     else:
@@ -401,12 +401,14 @@ def cmd_split_silence(args: argparse.Namespace) -> int:
     takes, sr = _split_silence_takes(args)
     # Always asked for, only sometimes printed: one call site rather than two
     # that could come to refuse differently.
-    intervals, report = split_silence_common_with_report(
+    split = split_silence_common_with_report(
         takes,
         top_db=top_db,
         frame_length=n_fft,
         hop_length=hop_length,
     )
+    intervals = split.intervals.tolist()
+    report = split.report
 
     write_takes = getattr(args, "write_takes", None)
     if write_takes:

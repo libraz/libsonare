@@ -44,7 +44,9 @@ SIGNAL_B = _tone_in_window(0.5, 0.7)
 
 def test_single_signal_matches_split_silence() -> None:
     expected = split_silence(SIGNAL_A, TOP_DB, FRAME_LENGTH, HOP_LENGTH)
-    assert split_silence_common([SIGNAL_A], TOP_DB, FRAME_LENGTH, HOP_LENGTH) == expected
+    np.testing.assert_array_equal(
+        split_silence_common([SIGNAL_A], TOP_DB, FRAME_LENGTH, HOP_LENGTH), expected
+    )
 
 
 def test_union_keeps_each_signals_own_sounding_interval() -> None:
@@ -52,13 +54,15 @@ def test_union_keeps_each_signals_own_sounding_interval() -> None:
     interval_a = split_silence(SIGNAL_A, TOP_DB, FRAME_LENGTH, HOP_LENGTH)
     interval_b = split_silence(SIGNAL_B, TOP_DB, FRAME_LENGTH, HOP_LENGTH)
     combined = split_silence_common([SIGNAL_A, SIGNAL_B], TOP_DB, FRAME_LENGTH, HOP_LENGTH)
-    assert combined == sorted(interval_a + interval_b)
+    merged = np.vstack([interval_a, interval_b])
+    np.testing.assert_array_equal(combined, merged[np.argsort(merged[:, 0], kind="stable")])
+    assert combined.dtype == np.int64 and combined.shape[1] == 2
 
 
 def test_order_does_not_affect_the_result() -> None:
     ab = split_silence_common([SIGNAL_A, SIGNAL_B], TOP_DB, FRAME_LENGTH, HOP_LENGTH)
     ba = split_silence_common([SIGNAL_B, SIGNAL_A], TOP_DB, FRAME_LENGTH, HOP_LENGTH)
-    assert ab == ba
+    np.testing.assert_array_equal(ab, ba)
 
 
 def test_signal_ending_before_it_would_sound_contributes_nothing() -> None:
@@ -66,12 +70,15 @@ def test_signal_ending_before_it_would_sound_contributes_nothing() -> None:
     assert not np.any(truncated_b)
     only_a = split_silence(SIGNAL_A, TOP_DB, FRAME_LENGTH, HOP_LENGTH)
     combined = split_silence_common([SIGNAL_A, truncated_b], TOP_DB, FRAME_LENGTH, HOP_LENGTH)
-    assert combined == only_a
+    np.testing.assert_array_equal(combined, only_a)
 
 
 def test_all_silent_signals_return_no_intervals() -> None:
     silence = np.zeros(int(SR * DURATION), dtype=np.float32)
-    assert split_silence_common([silence, silence], TOP_DB, FRAME_LENGTH, HOP_LENGTH) == []
+    assert split_silence_common([silence, silence], TOP_DB, FRAME_LENGTH, HOP_LENGTH).shape == (
+        0,
+        2,
+    )
 
 
 def test_empty_signal_among_others_is_rejected_by_name() -> None:
@@ -87,7 +94,8 @@ def test_no_signals_is_rejected_by_name() -> None:
 def test_report_reads_a_part_that_never_stops_as_unfixable_by_threshold() -> None:
     """A ceiling near 0 says no threshold opens a gap, whatever top_db is passed."""
     tone = sine(440.0, DURATION, sr=SR)
-    intervals, report = split_silence_common_with_report([tone], TOP_DB, FRAME_LENGTH, HOP_LENGTH)
+    result = split_silence_common_with_report([tone], TOP_DB, FRAME_LENGTH, HOP_LENGTH)
+    intervals, report = result.intervals, result.report
     assert len(intervals) == 1
     assert report.max_signal_intervals == 1
     assert report.min_signal_intervals == 1
@@ -100,9 +108,8 @@ def test_report_reads_takes_that_never_go_quiet_together_against_top_db() -> Non
     """The ceiling at or above top_db, with one interval, is the alignment case."""
     early = _tone_in_window(0.0, 0.5)
     late = _tone_in_window(0.5, 1.0)
-    intervals, report = split_silence_common_with_report(
-        [early, late], TOP_DB, FRAME_LENGTH, HOP_LENGTH
-    )
+    result = split_silence_common_with_report([early, late], TOP_DB, FRAME_LENGTH, HOP_LENGTH)
+    intervals, report = result.intervals, result.report
     assert len(intervals) == 1
     # The silence is there at this very setting, so a single interval means the
     # takes do not share it. The interval counts do NOT say so -- a take that
@@ -118,9 +125,8 @@ def test_report_ceiling_under_top_db_names_a_threshold_that_splits() -> None:
     take[int(SR * 0.4) : int(SR * 0.6)] *= np.float32(10.0 ** (-40.0 / 20.0))
     other = take.copy()
 
-    loose_intervals, loose = split_silence_common_with_report(
-        [take, other], TOP_DB, FRAME_LENGTH, HOP_LENGTH
-    )
+    loose_result = split_silence_common_with_report([take, other], TOP_DB, FRAME_LENGTH, HOP_LENGTH)
+    loose_intervals, loose = loose_result.intervals, loose_result.report
     assert len(loose_intervals) == 1
     assert loose.max_signal_intervals == 1
     # Below the threshold in use, which is what separates this case from the
@@ -128,19 +134,20 @@ def test_report_ceiling_under_top_db_names_a_threshold_that_splits() -> None:
     assert loose.silence_ceiling_db < TOP_DB
     assert loose.silence_ceiling_db > 30.0
 
-    tight_intervals, tight = split_silence_common_with_report(
+    tight_result = split_silence_common_with_report(
         [take, other], loose.silence_ceiling_db - 5.0, FRAME_LENGTH, HOP_LENGTH
     )
+    tight_intervals, tight = tight_result.intervals, tight_result.report
     assert len(tight_intervals) == 2
     assert tight.min_signal_intervals == 2
 
 
 def test_report_variant_returns_the_same_intervals_as_the_plain_one() -> None:
     plain = split_silence_common([SIGNAL_A, SIGNAL_B], TOP_DB, FRAME_LENGTH, HOP_LENGTH)
-    intervals, _ = split_silence_common_with_report(
+    with_report = split_silence_common_with_report(
         [SIGNAL_A, SIGNAL_B], TOP_DB, FRAME_LENGTH, HOP_LENGTH
     )
-    assert intervals == plain
+    np.testing.assert_array_equal(with_report.intervals, plain)
 
 
 def test_report_variant_rejects_the_same_inputs_by_the_same_name() -> None:

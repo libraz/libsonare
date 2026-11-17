@@ -99,7 +99,7 @@ def _music_analyze_options(
     compute_tempo_curve: bool,
     meter_candidate_numerators: Sequence[int] | None,
     meter_denominator: int,
-    tuning: float | str,
+    tuning_cents: float | str,
 ) -> SonareMusicAnalyzeOptions:
     """Build the options struct shared by :func:`analyze` and :func:`analyze_with_progress`."""
     numerators = (
@@ -116,7 +116,7 @@ def _music_analyze_options(
             "analyze: meter_candidate_numerators must hold at most "
             f"{SONARE_MAX_METER_CANDIDATE_NUMERATORS} entries"
         )
-    tuning_value, tuning_auto = _tuning_arg("analyze", tuning)
+    tuning_value, tuning_auto = _tuning_arg("analyze", tuning_cents)
     return SonareMusicAnalyzeOptions(
         struct_version=SONARE_MUSIC_ANALYZE_OPTIONS_VERSION,
         n_fft=n_fft,
@@ -126,7 +126,7 @@ def _music_analyze_options(
         start_bpm=start_bpm,
         use_triads_only=int(use_triads_only),
         use_hpss=int(use_hpss),
-        chroma_highpass_hz=chroma_highpass_hz,
+        chroma_high_pass_hz=chroma_highpass_hz,
         use_bass_weighted=int(use_bass_weighted),
         chroma_hop_multiplier=chroma_hop_multiplier,
         use_chord_hmm=int(use_chord_hmm),
@@ -152,7 +152,7 @@ def _music_analyze_options(
         ),
         meter_candidate_numerator_count=len(numerators),
         meter_denominator=meter_denominator,
-        tuning=tuning_value,
+        tuning_cents=tuning_value,
         tuning_auto=tuning_auto,
     )
 
@@ -181,7 +181,7 @@ def analyze(
     compute_tempo_curve: bool = False,
     meter_candidate_numerators: Sequence[int] | None = None,
     meter_denominator: int = 4,
-    tuning: float | str = "auto",
+    tuning_cents: float | str = "auto",
 ) -> AnalysisResult:
     """Run full audio analysis on samples.
 
@@ -209,10 +209,10 @@ def analyze(
         meter_denominator: Beat unit reported for the detected meter; a power
             of two in ``[1, 32]``. The estimator still reports 8 on its own
             when it resolves a compound meter.
-        tuning: Tuning offset of the recording in fractions of a semitone; must
-            be in ``[-0.5, 0.5)``. ``"auto"`` (default) measures it from the audio, and
+        tuning_cents: Tuning offset of the recording in cents; must
+            be in ``[-50, 50)``. ``"auto"`` (default) measures it from the audio, and
             :func:`reference_hz_to_tuning` converts a reference pitch to this unit.
-            The value used, given or measured, is ``AnalysisResult.tuning``.
+            The value used, given or measured, is ``AnalysisResult.tuning_cents``.
             Every chroma the analysis builds (key, chords, sections) is shifted
             by it. 0 is concert A440.
 
@@ -274,7 +274,7 @@ def analyze(
         compute_tempo_curve=compute_tempo_curve,
         meter_candidate_numerators=meter_candidate_numerators,
         meter_denominator=meter_denominator,
-        tuning=tuning,
+        tuning_cents=tuning_cents,
     )
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
@@ -395,7 +395,7 @@ def analyze_with_progress(
     compute_tempo_curve: bool = False,
     meter_candidate_numerators: Sequence[int] | None = None,
     meter_denominator: int = 4,
-    tuning: float | str = "auto",
+    tuning_cents: float | str = "auto",
 ) -> AnalysisResult:
     """Run full audio analysis with optional progress callbacks.
 
@@ -423,7 +423,7 @@ def analyze_with_progress(
         use_chord_hmm, use_chord_key_context, chord_hmm_beam_width,
         detect_chord_inversions, adaptive_tempo, tempo_update_interval_beats,
         compute_tempo_curve, meter_candidate_numerators, meter_denominator,
-        tuning: As for :func:`analyze`.
+        tuning_cents: As for :func:`analyze`.
 
     Returns:
         Same rich :class:`libsonare.AnalysisResult` as :func:`analyze`.
@@ -451,7 +451,7 @@ def analyze_with_progress(
         compute_tempo_curve=compute_tempo_curve,
         meter_candidate_numerators=meter_candidate_numerators,
         meter_denominator=meter_denominator,
-        tuning=tuning,
+        tuning_cents=tuning_cents,
     )
     lib = _get_lib()
     if not hasattr(lib, "sonare_analyze_json_ex_with_progress"):
@@ -926,7 +926,7 @@ def analyze_dynamics(
             crest_factor=float(out.crest_factor),
             loudness_range_db=float(out.loudness_range_db),
             is_compressed=bool(out.is_compressed),
-            loudness_times=_float_array_result(out.loudness_times, out.loudness_count),
+            loudness_times=_float_array_result(out.loudness_times_sec, out.loudness_count),
             loudness_rms_db=_float_array_result(out.loudness_rms_db, out.loudness_count),
         )
     finally:

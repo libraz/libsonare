@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+import numpy as np
+
 from ._analyzer_helpers import *
 
 
@@ -289,20 +291,21 @@ def test_stft() -> None:
 
     tone = _generate_sine(440, 22050, 1.0)
     result = stft(tone, sr=22050)
-    assert result.n_bins == 1025
-    assert result.n_frames > 0
-    assert len(result.magnitude) == result.n_bins * result.n_frames
+    n_bins, n_frames = result.magnitude.shape
+    assert n_bins == 1025
+    assert n_frames > 0
+    assert result.power.shape == (n_bins, n_frames)
 
 
 def test_stft_db() -> None:
-    """stft_db returns dB-scaled spectrogram."""
-    from libsonare import stft_db
+    """stft_db returns a dB-scaled spectrogram of shape (n_bins, n_frames)."""
+    from libsonare import stft, stft_db
 
     tone = _generate_sine(440, 22050, 1.0)
-    n_bins, n_frames, db = stft_db(tone, sample_rate=22050)
-    assert n_bins == 1025
-    assert n_frames > 0
-    assert len(db) == n_bins * n_frames
+    db = stft_db(tone, sample_rate=22050)
+    assert db.shape == stft(tone, sr=22050).magnitude.shape
+    assert db.shape[0] == 1025
+    assert db.shape[1] > 0
 
 
 def test_mel_spectrogram() -> None:
@@ -311,15 +314,20 @@ def test_mel_spectrogram() -> None:
 
     tone = _generate_sine(440, 22050, 1.0)
     result = mel_spectrogram(tone, sample_rate=22050)
-    assert result.n_mels == 128
+    assert result.power.shape[0] == 128
+    assert result.db.shape == result.power.shape
 
 
 def test_mel_delta_returns_linear_slope() -> None:
     """mel_delta preserves the unit slope of a linear feature row."""
+    import numpy as np
+
     from libsonare import mel_delta
 
-    result = mel_delta([float(i) for i in range(10)], n_features=2, n_frames=5, width=5)
-    assert result == pytest.approx([1.0] * 10)
+    features = np.arange(10, dtype=np.float32).reshape(2, 5)
+    result = mel_delta(features, width=5)
+    assert result.shape == (2, 5)
+    np.testing.assert_allclose(result, np.ones((2, 5)), rtol=1e-6)
 
 
 def test_piptrack_returns_equally_shaped_matrices() -> None:
@@ -327,9 +335,9 @@ def test_piptrack_returns_equally_shaped_matrices() -> None:
     from libsonare import piptrack
 
     result = piptrack(_generate_sine(440.0, 22050, 1.0), sr=22050, n_fft=1024, hop_length=256)
-    assert result.n_bins == 513
-    assert len(result.pitches) == result.n_bins * result.n_frames
-    assert len(result.magnitudes) == len(result.pitches)
+    assert result.pitches.shape[0] == 513
+    assert result.pitches.shape[1] > 0
+    assert result.magnitudes.shape == result.pitches.shape
 
 
 def test_reassigned_spectrogram_returns_equally_shaped_coordinate_matrices() -> None:
@@ -339,16 +347,16 @@ def test_reassigned_spectrogram_returns_equally_shaped_coordinate_matrices() -> 
     result = reassigned_spectrogram(
         _generate_sine(440.0, 22050, 1.0), sr=22050, n_fft=1024, hop_length=256
     )
-    assert result.n_bins == 513
-    assert result.n_frames > 0
-    assert len(result.magnitude) == result.n_bins * result.n_frames
-    assert len(result.times) == len(result.magnitude)
-    assert len(result.frequencies) == len(result.magnitude)
-    assert result.n_frames > 0
+    assert result.magnitude.shape[0] == 513
+    assert result.magnitude.shape[1] > 0
+    assert result.times.shape == result.magnitude.shape
+    assert result.frequencies.shape == result.magnitude.shape
 
 
 def test_librosa_segment_operations_are_public() -> None:
     """All seven librosa.segment-compatible functions cross the Python C ABI."""
+    import numpy as np
+
     from libsonare import (
         segment_agglomerative,
         segment_cross_similarity,
@@ -359,26 +367,32 @@ def test_librosa_segment_operations_are_public() -> None:
         segment_subsegment,
     )
 
-    data = [1.0, 0.0, 1.0, 0.0, 1.0, 1.0]
-    cross = segment_cross_similarity(data, 2, 3, data, 2, 3)
-    assert (cross.rows, cross.cols, len(cross.values)) == (3, 3, 9)
-    recurrence = segment_recurrence_matrix(data, 2, 3)
-    assert (recurrence.rows, recurrence.cols, len(recurrence.values)) == (3, 3, 9)
-    lag = segment_recurrence_to_lag(recurrence.values, 3)
-    assert (lag.rows, lag.cols, len(lag.values)) == (6, 3, 18)
-    assert len(segment_lag_to_recurrence(lag.values, 3, 6).values) == 9
+    data = np.array([[1.0, 0.0, 1.0], [0.0, 1.0, 1.0]], dtype=np.float32)
+    cross = segment_cross_similarity(data, data)
+    assert cross.shape == (3, 3)
+    recurrence = segment_recurrence_matrix(data)
+    assert recurrence.shape == (3, 3)
+    lag = segment_recurrence_to_lag(recurrence)
+    assert lag.shape == (6, 3)
+    assert segment_lag_to_recurrence(lag).shape == (3, 3)
     # librosa 0.11.0 segment_recurrence_to_lag on rec[r][c] = 4r + c (pad defaults to True).
-    padded = segment_recurrence_to_lag([float(i) for i in range(16)], 4)
-    assert (padded.rows, padded.cols) == (8, 4)
+    padded = segment_recurrence_to_lag(np.arange(16, dtype=np.float32).reshape(4, 4))
     # fmt: off
-    assert list(padded.values) == [
-        0, 5, 10, 15, 4, 9, 14, 0, 8, 13, 0, 0, 12, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 2, 7, 0, 1, 6, 11,
-    ]
+    expected = np.array([
+        [0, 5, 10, 15],
+        [4, 9, 14, 0],
+        [8, 13, 0, 0],
+        [12, 0, 0, 0],
+        [0, 0, 0, 0],
+        [0, 0, 0, 3],
+        [0, 0, 2, 7],
+        [0, 1, 6, 11],
+    ], dtype=np.float32)
     # fmt: on
-    assert segment_subsegment(data, 2, 3, [0, 3])[0] == 0
-    assert len(segment_agglomerative(data, 2, 3, 2)) == 3
-    assert len(segment_path_enhance(recurrence.values, 3, 1).values) == 9
+    np.testing.assert_array_equal(padded, expected)
+    assert segment_subsegment(data, [0, 3])[0] == 0
+    assert segment_agglomerative(data, 2).shape == (3,)
+    assert segment_path_enhance(recurrence, 1).shape == (3, 3)
 
 
 def test_mel_spectrogram_explicit_range() -> None:
@@ -390,11 +404,11 @@ def test_mel_spectrogram_explicit_range() -> None:
     ranged = mel_spectrogram(tone, sample_rate=22050, n_mels=40, fmin=500.0, fmax=4000.0)
     htk = mel_spectrogram(tone, sample_rate=22050, n_mels=40, htk=True)
 
-    assert base.n_mels == ranged.n_mels == 40
-    assert len(base.power) == len(ranged.power) == len(htk.power)
+    assert base.power.shape[0] == ranged.power.shape[0] == 40
+    assert base.power.shape == ranged.power.shape == htk.power.shape
     # An explicit Mel range / HTK formula yields a measurably different filterbank.
-    assert sum((a - b) ** 2 for a, b in zip(base.power, ranged.power, strict=True)) > 1e-6
-    assert sum((a - b) ** 2 for a, b in zip(base.power, htk.power, strict=True)) > 1e-6
+    assert np.sum((base.power - ranged.power) ** 2) > 1e-6
+    assert np.sum((base.power - htk.power) ** 2) > 1e-6
 
 
 def test_mel_range_is_applied_or_refused_never_defaulted() -> None:
@@ -417,8 +431,8 @@ def test_mel_range_is_applied_or_refused_never_defaulted() -> None:
     nyquist = mel_spectrogram(tone, sample_rate=22050, n_mels=40, fmax=11025.0)
     ranged = mel_spectrogram(tone, sample_rate=22050, n_mels=40, fmin=500.0, fmax=4000.0)
 
-    assert defaulted.power == pytest.approx(nyquist.power, abs=1e-6)
-    assert sum((a - b) ** 2 for a, b in zip(defaulted.power, ranged.power, strict=True)) > 1e-6
+    np.testing.assert_allclose(defaulted.power, nyquist.power, atol=1e-6)
+    assert np.sum((defaulted.power - ranged.power) ** 2) > 1e-6
 
     for bad in (-1.0, -11025.0, math.nan, math.inf, -math.inf):
         with pytest.raises(SonareError):
@@ -433,9 +447,8 @@ def test_mfcc() -> None:
 
     tone = _generate_sine(440, 22050, 1.0)
     result = mfcc(tone, sr=22050, n_mels=64, n_mfcc=13)
-    assert result.n_mfcc == 13
-    assert result.n_frames > 0
-    assert len(result.coefficients) == result.n_mfcc * result.n_frames
+    assert result.coefficients.shape[0] == 13
+    assert result.coefficients.shape[1] > 0
 
 
 def test_mfcc_explicit_range() -> None:
@@ -445,11 +458,8 @@ def test_mfcc_explicit_range() -> None:
     tone = _generate_sine(440, 22050, 1.0)
     base = mfcc(tone, sr=22050, n_mels=64, n_mfcc=13)
     ranged = mfcc(tone, sr=22050, n_mels=64, n_mfcc=13, fmin=500.0, fmax=4000.0)
-    assert len(base.coefficients) == len(ranged.coefficients)
-    assert (
-        sum((a - b) ** 2 for a, b in zip(base.coefficients, ranged.coefficients, strict=True))
-        > 1e-6
-    )
+    assert base.coefficients.shape == ranged.coefficients.shape
+    assert np.sum((base.coefficients - ranged.coefficients) ** 2) > 1e-6
 
 
 def test_chroma() -> None:
@@ -458,9 +468,9 @@ def test_chroma() -> None:
 
     tone = _generate_sine(440, 22050, 1.0)
     result = chroma(tone, sample_rate=22050)
-    assert result.n_chroma == 12
-    assert result.n_frames > 0
-    assert len(result.mean_energy) == 12
+    assert result.features.shape[0] == 12
+    assert result.features.shape[1] > 0
+    assert result.mean_energy.shape == (12,)
 
 
 @pytest.mark.slow  # bass_chroma's low-frequency CQT (~10 s); run via `make test-python-slow`
@@ -472,10 +482,9 @@ def test_chroma_cens_and_bass_chroma() -> None:
         chroma_cens(tone, sr=22050),
         bass_chroma(tone, sample_rate=22050),
     ):
-        assert result.n_chroma == 12
-        assert result.n_frames > 0
-        assert len(result.features) == result.n_chroma * result.n_frames
-        assert len(result.mean_energy) == 12
+        assert result.features.shape[0] == 12
+        assert result.features.shape[1] > 0
+        assert result.mean_energy.shape == (12,)
 
 
 def test_spectral_centroid() -> None:
@@ -494,7 +503,7 @@ def test_spectral_bandwidth() -> None:
     tone = _generate_sine(440, 22050, 1.0)
     result = spectral_bandwidth(tone, sr=22050)
     assert len(result) > 0
-    assert spectral_bandwidth(tone, sr=22050, p=1.0) != result
+    assert not np.array_equal(spectral_bandwidth(tone, sr=22050, p=1.0), result)
 
 
 def test_spectral_flux() -> None:
@@ -504,7 +513,7 @@ def test_spectral_flux() -> None:
     tone = _generate_sine(440, 22050, 1.0)
     result = spectral_flux(tone, sample_rate=22050)
     assert len(result) > 0
-    assert spectral_flux(tone, sample_rate=22050, lag=2) != result
+    assert not np.array_equal(spectral_flux(tone, sample_rate=22050, lag=2), result)
 
 
 def test_onset_backtrack() -> None:
@@ -523,8 +532,6 @@ def test_griffin_lim() -> None:
     spec = stft(samples, sr=22050, n_fft=1024, hop_length=256)
     result = griffin_lim(
         spec.magnitude,
-        spec.n_bins,
-        spec.n_frames,
         n_fft=1024,
         hop_length=256,
         n_iter=1,
@@ -558,7 +565,7 @@ def test_zero_crossing_rate() -> None:
     tone = _generate_sine(440, 22050, 1.0)
     result = zero_crossing_rate(tone, sr=22050)
     assert len(result) > 0
-    assert all(0 <= v <= 1 for v in result)
+    assert np.all((result >= 0) & (result <= 1))
 
 
 def test_zero_crossing_rate_uses_edge_padding() -> None:
@@ -567,7 +574,7 @@ def test_zero_crossing_rate_uses_edge_padding() -> None:
 
     result = zero_crossing_rate([-1.0] * 8, sr=22050, frame_length=8, hop_length=4)
     assert len(result) > 0
-    assert all(v == 0.0 for v in result)
+    assert np.all(result == 0.0)
 
 
 def test_rms_energy() -> None:
@@ -577,7 +584,7 @@ def test_rms_energy() -> None:
     tone = _generate_sine(440, 22050, 1.0)
     result = rms_energy(tone, sample_rate=22050)
     assert len(result) > 0
-    assert all(v >= 0 for v in result)
+    assert np.all(result >= 0)
 
 
 def test_spectral_scalars_repeated_calls_are_stable() -> None:
@@ -611,7 +618,7 @@ def test_spectral_scalars_repeated_calls_are_stable() -> None:
         assert len(first) > 0
         for _ in range(64):
             again = helper(tone, 22050)
-            assert again == first
+            np.testing.assert_array_equal(again, first)
 
 
 def test_pitch_yin() -> None:
@@ -620,7 +627,7 @@ def test_pitch_yin() -> None:
 
     tone = _generate_sine(440, 22050, 1.0)
     result = pitch_yin(tone, sample_rate=22050)
-    assert result.n_frames > 0
+    assert len(result.f0) > 0
     assert 400 < result.median_f0 < 480
 
 
@@ -630,7 +637,7 @@ def test_pitch_pyin() -> None:
 
     tone = _generate_sine(440, 22050, 1.0)
     result = pitch_pyin(tone, sample_rate=22050)
-    assert result.n_frames > 0
+    assert len(result.f0) > 0
     assert 400 < result.median_f0 < 480
 
 

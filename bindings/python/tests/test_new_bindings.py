@@ -315,12 +315,12 @@ def test_pitch_yin_returns_librosa_style_estimates_for_unvoiced_frames() -> None
     silence = np.zeros(SR, dtype=np.float32)
 
     nan_res = libsonare.pitch_yin(silence, SR, fill_na=False)
-    assert nan_res.n_frames > 0
+    assert len(nan_res.f0) > 0
     assert all(math.isfinite(v) for v in nan_res.f0)
     assert not any(nan_res.voiced_flag)
 
     filled = libsonare.pitch_yin(silence, SR, fill_na=True)
-    assert filled.n_frames > 0
+    assert len(filled.f0) > 0
     assert all(math.isfinite(v) for v in filled.f0)
 
 
@@ -337,12 +337,12 @@ def test_pitch_pyin_fill_na_controls_unvoiced_value() -> None:
 def test_note_segments_preserves_vibrato_and_separates_unvoiced_intervals() -> None:
     segments = libsonare.note_segments(
         [440.0, 445.0, 435.0, 444.0, 436.0, 0.0, 0.0, 660.0, 666.0, 654.0, 665.0, 655.0, 0.0],
-        [1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0],
         100.0,
+        voiced_prob=[1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0],
     )
     assert [(segment.frame_start, segment.frame_end) for segment in segments] == [(0, 5), (7, 12)]
     assert [
-        value for segment in segments for value in (segment.start_seconds, segment.end_seconds)
+        value for segment in segments for value in (segment.start_sec, segment.end_sec)
     ] == pytest.approx([0.0, 0.05, 0.07, 0.12])
 
 

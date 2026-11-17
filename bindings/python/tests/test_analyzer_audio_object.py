@@ -28,7 +28,7 @@ def test_audio_stft() -> None:
 
     audio = Audio.from_buffer(_generate_sine(440, 22050, 1.0), sample_rate=22050)
     result = audio.stft()
-    assert result.n_bins == 1025
+    assert result.magnitude.shape[0] == 1025
 
 
 def test_audio_hpss() -> None:
@@ -115,20 +115,19 @@ def test_detect_beats_returns_sorted() -> None:
 
     tone = _generate_sine(440, 22050, 4.0)
     beats = detect_beats(tone, sample_rate=22050)
-    assert isinstance(beats, list)
-    for i in range(1, len(beats)):
-        assert beats[i] > beats[i - 1]
+    assert isinstance(beats, np.ndarray)
+    assert beats.dtype == np.float32
+    assert np.all(np.diff(beats) > 0)
 
 
 def test_detect_onsets_function() -> None:
-    """detect_onsets returns a list of onset times."""
+    """detect_onsets returns an array of onset times."""
     from libsonare import detect_onsets
 
     tone = _generate_sine(440, 22050, 2.0)
     onsets = detect_onsets(tone, sample_rate=22050)
-    assert isinstance(onsets, list)
-    for t in onsets:
-        assert t >= 0.0
+    assert isinstance(onsets, np.ndarray)
+    assert np.all(onsets >= 0.0)
 
 
 def test_detect_onsets_refusal_names_the_keyword() -> None:
@@ -268,8 +267,8 @@ def test_audio_mel_spectrogram() -> None:
 
     audio = Audio.from_buffer(_generate_sine(440, 22050, 1.0), sample_rate=22050)
     result = audio.mel_spectrogram()
-    assert result.n_mels == 128
-    assert result.n_frames > 0
+    assert result.power.shape[0] == 128
+    assert result.power.shape[1] > 0
 
 
 def test_audio_mfcc() -> None:
@@ -278,8 +277,8 @@ def test_audio_mfcc() -> None:
 
     audio = Audio.from_buffer(_generate_sine(440, 22050, 1.0), sample_rate=22050)
     result = audio.mfcc(n_mfcc=13)
-    assert result.n_mfcc == 13
-    assert result.n_frames > 0
+    assert result.coefficients.shape[0] == 13
+    assert result.coefficients.shape[1] > 0
 
 
 def test_audio_chroma() -> None:
@@ -288,7 +287,7 @@ def test_audio_chroma() -> None:
 
     audio = Audio.from_buffer(_generate_sine(440, 22050, 1.0), sample_rate=22050)
     result = audio.chroma()
-    assert result.n_chroma == 12
+    assert result.features.shape[0] == 12
 
 
 def test_audio_spectral_features() -> None:
@@ -342,10 +341,9 @@ def test_audio_stft_db() -> None:
     from libsonare import Audio
 
     audio = Audio.from_buffer(_generate_sine(440, 22050, 1.0), sample_rate=22050)
-    n_bins, n_frames, db = audio.stft_db()
-    assert n_bins == 1025
-    assert n_frames > 0
-    assert len(db) == n_bins * n_frames
+    db = audio.stft_db()
+    assert db.shape[0] == 1025
+    assert db.shape[1] > 0
 
 
 def test_audio_pitch_pyin() -> None:
@@ -379,7 +377,7 @@ def test_different_sample_rates() -> None:
     assert bpm > 0
 
     mel = mel_spectrogram(tone_44k, sample_rate=44100)
-    assert mel.n_mels == 128
+    assert mel.power.shape[0] == 128
 
 
 def test_short_audio() -> None:
@@ -388,10 +386,10 @@ def test_short_audio() -> None:
 
     short = _generate_sine(440, 22050, 0.1)  # 100ms
     result = stft(short, sr=22050)
-    assert result.n_frames >= 0
+    assert result.magnitude.shape[1] >= 0
 
     mel = mel_spectrogram(short, sample_rate=22050)
-    assert mel.n_frames >= 0
+    assert mel.power.shape[1] >= 0
 
 
 def test_two_tone_chroma() -> None:
@@ -408,10 +406,10 @@ def test_two_tone_chroma() -> None:
         for i in range(n)
     ]
     result = chroma(samples, sample_rate=sr)
-    assert result.n_chroma == 12
-    assert len(result.mean_energy) == 12
+    assert result.features.shape[0] == 12
+    assert result.mean_energy.shape == (12,)
     # C is index 0, E is index 4 — these should be among the highest
-    max_energy = max(result.mean_energy)
+    max_energy = result.mean_energy.max()
     assert max_energy > 0
 
 

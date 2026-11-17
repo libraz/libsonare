@@ -767,7 +767,7 @@ def _note_with_assigned_edit(note: NoteObject, row: SonareNoteObject) -> NoteObj
         amplitude=np.asarray(note.amplitude).copy(),
         edit=dataclasses.replace(
             note.edit,
-            pitch_shift_semitones=float(row.edit.pitch_shift_semitones),
+            pitch_shift_semitones=float(row.edit.pitch_semitones),
             muted=bool(row.edit.muted),
             amplitude_envelope=np.asarray(note.edit.amplitude_envelope).copy(),
         ),
@@ -969,8 +969,8 @@ def transcribe(
     tempo_bpm: float | None = None,
     polyphonic: bool = False,
     reference_hz: float | str | None = None,
-    fmin: float | None = None,
-    fmax: float | None = None,
+    f0_min_hz: float | None = None,
+    f0_max_hz: float | None = None,
     min_note_ms: float | None = None,
     segmentation_threshold_cents: float | None = None,
     velocity_floor_db: float | None = None,
@@ -1005,7 +1005,7 @@ def transcribe(
     measured tuning through :func:`tuning_to_reference_hz`). A take recorded
     away from A440 lands a full semitone out at roughly 26 Hz of error, so pass
     ``reference_hz="auto"`` to measure it from the audio before any pitch is
-    tracked; ``tuning`` on the result reports what was used either way.
+    tracked; ``tuning_cents`` on the result reports what was used either way.
 
     Finding no notes is not an error: silence, and material the chain cannot
     resolve, come back with an empty ``events`` list, and ``tempo_bpm`` still
@@ -1030,14 +1030,14 @@ def transcribe(
         reference_hz: Tuning reference the MIDI note numbers are measured
             against, in Hz; ``"auto"`` measures it from the audio; ``None``
             keeps the default (A4 = 440 Hz).
-        fmin: Low end of the F0 tracker's range, in Hz. ``None`` uses 65 for
+        f0_min_hz: Low end of the F0 tracker's range, in Hz. ``None`` uses 65 for
             the monophonic path or 55 for the polyphonic path. Both paths use
             this bound; the polyphonic path applies it to the salience
             estimator's F0 axis, whose cent-spectrum bounds remain independent.
-        fmax: High end of the F0 tracker's range. ``None`` uses 2093 for the
+        f0_max_hz: High end of the F0 tracker's range. ``None`` uses 2093 for the
             monophonic path or 1760 for the polyphonic path. Both paths use
             this bound, with the same polyphonic salience-axis behavior as
-            ``fmin``.
+            ``f0_min_hz``.
         min_note_ms: Shortest span kept as a note; ``None`` keeps the default
             (30 ms monophonic segments, 45 ms singing, 60 ms
             polyphonic, whatever the tempo). Not given
@@ -1077,8 +1077,8 @@ def transcribe(
             means a real 0.
         reattack_ratio: Polyphonic only. A ridge is split where its salience
             climbs past this multiple of the level just before (the same pitch
-            struck again while it sounds); must be above 1. ``None`` keeps the
-            default (2.0) and 0 means no split.
+            struck again while it sounds); must be above 1. ``None`` means no
+            split.
 
     Returns:
         A :class:`TranscribeResult`.
@@ -1089,7 +1089,7 @@ def transcribe(
             this function -- if ``min_note_division`` is given together with
             ``min_note_ms``, if any polyphonic-only field is given with
             ``polyphonic=False`` (the message names the field), or if only one
-            of ``fmin``/``fmax`` is given and it does not lie on the right side
+            of ``f0_min_hz``/``f0_max_hz`` is given and it does not lie on the right side
             of the selected path's default for the other bound, or if
             ``monophonic_model`` is an unknown name or is not ``None`` with
             ``polyphonic=True``.
@@ -1109,7 +1109,7 @@ def transcribe(
         semitone out:
 
         >>> result = libsonare.transcribe(samples, sr, reference_hz="auto")
-        >>> result.tuning  # semitone fraction of the recording from A440
+        >>> result.tuning_cents  # cents of the recording from A440
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_transcribe"):
@@ -1121,8 +1121,8 @@ def transcribe(
         "transcribe",
         polyphonic=polyphonic,
         reference_hz=reference_hz,
-        fmin=fmin,
-        fmax=fmax,
+        f0_min_hz=f0_min_hz,
+        f0_max_hz=f0_max_hz,
         min_note_ms=min_note_ms,
         segmentation_threshold_cents=segmentation_threshold_cents,
         velocity_floor_db=velocity_floor_db,

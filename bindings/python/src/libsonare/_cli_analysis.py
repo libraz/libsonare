@@ -170,7 +170,7 @@ def cmd_beats(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     beats = detect_beats(samples, sample_rate=sr)
     if args.json:
-        print(_strict_json_dumps(list(beats)))
+        print(_strict_json_dumps(beats.tolist()))
     else:
         print(f"  Beat times ({len(beats)} beats):")
         for i, b in enumerate(beats[:20]):
@@ -186,7 +186,7 @@ def cmd_downbeats(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     downbeats = detect_downbeats(samples, sample_rate=sr)
     if args.json:
-        print(_strict_json_dumps(list(downbeats)))
+        print(_strict_json_dumps(downbeats.tolist()))
     else:
         print(f"  Downbeat times ({len(downbeats)} downbeats):")
         for i, d in enumerate(downbeats[:20]):
@@ -202,7 +202,7 @@ def cmd_onsets(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     onsets = detect_onsets(samples, sample_rate=sr)
     if args.json:
-        print(_strict_json_dumps(list(onsets)))
+        print(_strict_json_dumps(onsets.tolist()))
     else:
         print(f"  Onset times ({len(onsets)} onsets):")
         for i, o in enumerate(onsets[:20]):
@@ -437,30 +437,30 @@ def cmd_mel(args: argparse.Namespace) -> int:
         fmax=args.fmax,
         htk=args.htk,
     )
+    n_mels, n_frames = result.power.shape
+    power = result.power.ravel().tolist()
     if args.json:
         print(
             _strict_json_dumps(
                 {
-                    "n_mels": result.n_mels,
-                    "n_frames": result.n_frames,
-                    "duration": result.n_frames * result.hop_length / result.sample_rate
+                    "n_mels": n_mels,
+                    "n_frames": n_frames,
+                    "duration": n_frames * result.hop_length / result.sample_rate
                     if result.sample_rate > 0
                     else 0.0,
                     "sample_rate": result.sample_rate,
                     "hop_length": result.hop_length,
                     "stats": {
-                        "min": round(min(result.power), 6) if result.power else 0.0,
-                        "max": round(max(result.power), 6) if result.power else 0.0,
-                        "mean": round(sum(result.power) / len(result.power), 6)
-                        if result.power
-                        else 0.0,
+                        "min": round(min(power), 6) if power else 0.0,
+                        "max": round(max(power), 6) if power else 0.0,
+                        "mean": round(sum(power) / len(power), 6) if power else 0.0,
                     },
                 }
             )
         )
     else:
         print("  Mel Spectrogram:")
-        print(f"    Shape: {result.n_mels} mels x {result.n_frames} frames")
+        print(f"    Shape: {n_mels} mels x {n_frames} frames")
     return 0
 
 
@@ -469,24 +469,26 @@ def cmd_chroma(args: argparse.Namespace) -> int:
 
     samples, sr = _load_audio(args.file)
     result = chroma(samples, sample_rate=sr, n_fft=args.n_fft, hop_length=args.hop_length)
+    n_chroma, n_frames = result.features.shape
+    mean_energy = result.mean_energy.tolist()
     if args.json:
         print(
             _strict_json_dumps(
                 {
-                    "n_chroma": result.n_chroma,
-                    "n_frames": result.n_frames,
-                    "duration": result.n_frames * result.hop_length / result.sample_rate
+                    "n_chroma": n_chroma,
+                    "n_frames": n_frames,
+                    "duration": n_frames * result.hop_length / result.sample_rate
                     if result.sample_rate > 0
                     else 0.0,
-                    "mean_energy": [round(e, 6) for e in result.mean_energy],
+                    "mean_energy": [round(e, 6) for e in mean_energy],
                 }
             )
         )
     else:
-        print(f"  Chromagram: {result.n_chroma} bins x {result.n_frames} frames")
+        print(f"  Chromagram: {n_chroma} bins x {n_frames} frames")
         print("  Mean energy per pitch class:")
-        max_energy = max(result.mean_energy) if result.mean_energy else 0
-        for i, e in enumerate(result.mean_energy):
+        max_energy = max(mean_energy) if mean_energy else 0
+        for i, e in enumerate(mean_energy):
             bar = "#" * int(e * 50 / max_energy) if max_energy > 0 else ""
             print(f"    {PITCH_NAMES[i]:2s} {e:.4f} {bar}")
     return 0
@@ -516,12 +518,12 @@ def cmd_spectral(args: argparse.Namespace) -> int:
             "max": float(max(vals)),
         }
 
-    centroid = spectral_centroid(samples, sr, nf, hl)
-    bandwidth = spectral_bandwidth(samples, sr, nf, hl)
-    rolloff = spectral_rolloff(samples, sr, nf, hl)
-    flatness = spectral_flatness(samples, sr, nf, hl)
-    zcr = zero_crossing_rate(samples, sr, nf, hl)
-    rms = rms_energy(samples, sr, nf, hl)
+    centroid = spectral_centroid(samples, sr, nf, hl).tolist()
+    bandwidth = spectral_bandwidth(samples, sr, nf, hl).tolist()
+    rolloff = spectral_rolloff(samples, sr, nf, hl).tolist()
+    flatness = spectral_flatness(samples, sr, nf, hl).tolist()
+    zcr = zero_crossing_rate(samples, sr, nf, hl).tolist()
+    rms = rms_energy(samples, sr, nf, hl).tolist()
     features = {
         "centroid": _stats(centroid),
         "bandwidth": _stats(bandwidth),
@@ -588,11 +590,12 @@ def cmd_pitch(args: argparse.Namespace) -> int:
             result = pitch_pyin(samples, sample_rate=sr)
 
     if args.json:
-        voiced_count = sum(1 for flag in result.voiced_flag if flag)
-        voiced_ratio = voiced_count / result.n_frames if result.n_frames else math.nan
+        n_frames = len(result.f0)
+        voiced_count = int(result.voiced_flag.sum())
+        voiced_ratio = voiced_count / n_frames if n_frames else math.nan
         payload: dict[str, object] = {
             "algorithm": algo,
-            "n_frames": result.n_frames,
+            "n_frames": n_frames,
             "voiced_count": voiced_count,
             "voiced_ratio": voiced_ratio,
             "median_f0": result.median_f0,
@@ -601,14 +604,14 @@ def cmd_pitch(args: argparse.Namespace) -> int:
         # The contour is opt-in: one value per frame. An unvoiced frame's
         # non-finite f0 serializes as null.
         if getattr(args, "frames", False):
-            payload["times"] = [index * hop_length / sr for index in range(result.n_frames)]
-            payload["f0"] = list(result.f0)
-            payload["voiced_flag"] = [bool(flag) for flag in result.voiced_flag]
-            payload["voiced_prob"] = list(result.voiced_prob)
+            payload["times"] = [index * hop_length / sr for index in range(n_frames)]
+            payload["f0"] = result.f0.tolist()
+            payload["voiced_flag"] = result.voiced_flag.tolist()
+            payload["voiced_prob"] = result.voiced_prob.tolist()
         print(_strict_json_dumps(payload))
     else:
         print(f"  Pitch Tracking ({algo}):")
-        print(f"    Frames:    {result.n_frames}")
+        print(f"    Frames:    {len(result.f0)}")
         print(f"    Median F0: {result.median_f0:.1f} Hz")
         print(f"    Mean F0:   {result.mean_f0:.1f} Hz")
     return 0

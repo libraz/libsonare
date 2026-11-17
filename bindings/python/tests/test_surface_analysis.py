@@ -170,6 +170,7 @@ PRIMARY_ARGS = {
     "strips",
     "tracks",
     "onset_envelope",
+    "magnitude",
     "notes",
     "name",
     "params",
@@ -177,9 +178,6 @@ PRIMARY_ARGS = {
     "analysis_name",
     "n_fft",
 }
-# Flat-matrix inverses whose dimension arguments still precede sample_rate.
-MATRIX_INPUTS = {"cqt_to_audio", "vqt_to_audio", "griffin_lim"}
-
 # librosa mirrors (tools/api/librosa_mirrors.toml) that take a rate: sr=22050, never sample_rate.
 RATE_MIRRORS = (
     "chirp",
@@ -240,8 +238,7 @@ def test_operation_requires_sample_rate(name: str) -> None:
         return
     assert param.kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
     before = list(params)[: list(params).index("sample_rate")]
-    if name not in MATRIX_INPUTS:
-        assert set(before) <= PRIMARY_ARGS, before
+    assert set(before) <= PRIMARY_ARGS, before
 
 
 def test_omitted_sample_rate_is_a_type_error() -> None:
@@ -337,3 +334,452 @@ def test_remix_aligns_to_zero_crossings_by_default() -> None:
     aligned = np.asarray(libsonare.remix(y, intervals, sr=SR, align_zeros=True))
     np.testing.assert_array_equal(default, aligned)
     assert inspect.signature(libsonare.remix).parameters["align_zeros"].default is True
+
+
+# --- arrays and matrices -----------------------------------------------------------------
+
+
+def _signal() -> np.ndarray:
+    return _tone(1.0)
+
+
+def _chain() -> dict[str, np.ndarray]:
+    y = _signal()
+    return {
+        "y": y,
+        "env": libsonare.onset_strength(y, sr=SR),
+        "mel": libsonare.mel_spectrogram(y, SR).power,
+        "mfcc": libsonare.mfcc(y, sr=SR).coefficients,
+        "chroma": libsonare.chroma(y, SR).features,
+    }
+
+
+ONE_DIMENSIONAL_RESULTS = {
+    "detect_beats": lambda y: libsonare.detect_beats(y, SR),
+    "detect_downbeats": lambda y: libsonare.detect_downbeats(y, SR),
+    "detect_onsets": lambda y: libsonare.detect_onsets(y, SR),
+    "spectral_centroid": lambda y: libsonare.spectral_centroid(y, SR),
+    "spectral_bandwidth": lambda y: libsonare.spectral_bandwidth(y, SR),
+    "spectral_flux": lambda y: libsonare.spectral_flux(y, SR),
+    "spectral_rolloff": lambda y: libsonare.spectral_rolloff(y, SR),
+    "spectral_flatness": lambda y: libsonare.spectral_flatness(y, SR),
+    "zero_crossing_rate": lambda y: libsonare.zero_crossing_rate(y, SR),
+    "rms_energy": lambda y: libsonare.rms_energy(y, SR),
+    "tone": lambda y: libsonare.tone(sr=SR, duration=0.1),
+    "chirp": lambda y: libsonare.chirp(sr=SR, duration=0.1),
+    "clicks": lambda y: libsonare.clicks([0.0, 0.1], sr=SR),
+    "power_to_db": lambda y: libsonare.power_to_db(y**2 + 1e-3),
+    "amplitude_to_db": lambda y: libsonare.amplitude_to_db(np.abs(y) + 1e-3),
+    "db_to_power": lambda y: libsonare.db_to_power(y),
+    "db_to_amplitude": lambda y: libsonare.db_to_amplitude(y),
+    "preemphasis": lambda y: libsonare.preemphasis(y),
+    "deemphasis": lambda y: libsonare.deemphasis(y),
+    "pad_center": lambda y: libsonare.pad_center(y, y.size + 10),
+    "fix_length": lambda y: libsonare.fix_length(y, y.size - 10),
+    "vector_normalize": lambda y: libsonare.vector_normalize(y),
+    "plp": lambda y: libsonare.plp(libsonare.onset_strength(y, sr=SR), sr=SR),
+    "onset_strength": lambda y: libsonare.onset_strength(y, sr=SR),
+    "momentary_lufs": lambda y: libsonare.momentary_lufs(y, SR),
+    "short_term_lufs": lambda y: libsonare.short_term_lufs(y, SR),
+    "resample": lambda y: libsonare.resample(y, SR, 2 * SR),
+}
+
+
+@pytest.mark.parametrize("name", sorted(ONE_DIMENSIONAL_RESULTS))
+def test_one_dimensional_results_are_float32_arrays(name: str) -> None:
+    out = ONE_DIMENSIONAL_RESULTS[name](_signal())
+    assert isinstance(out, np.ndarray)
+    assert out.dtype == np.float32
+    assert out.ndim == 1
+
+
+def test_per_frame_features_have_one_value_per_frame() -> None:
+    y = _signal()
+    n_frames = libsonare.stft(y, SR).magnitude.shape[1]
+    for name in ("spectral_centroid", "spectral_bandwidth", "spectral_rolloff", "onset_strength"):
+        assert ONE_DIMENSIONAL_RESULTS[name](y).shape == (n_frames,), name
+
+
+def test_db_conversions_keep_values_and_shape() -> None:
+    power = np.asarray([1.0, 0.1, 0.01], dtype=np.float32)
+    db = libsonare.power_to_db(power, top_db=80.0)
+    assert db.shape == power.shape
+    np.testing.assert_allclose(db, [0.0, -10.0, -20.0], atol=1e-4)
+    np.testing.assert_allclose(libsonare.db_to_power(db), power, rtol=1e-4)
+
+
+def test_index_results_are_int32_arrays() -> None:
+    c = _chain()
+    peaks = libsonare.peak_pick(c["env"], 3, 3, 3, 5, 0.05, 5)
+    fixed = libsonare.fix_frames([5, 20, 500], 0, 100)
+    labels = libsonare.segment_agglomerative(c["chroma"], 3)
+    refined = libsonare.segment_subsegment(c["chroma"], [0, 10, 20], n_segments=2)
+    for out in (peaks, fixed, labels, refined):
+        assert isinstance(out, np.ndarray)
+        assert out.dtype == np.int32
+        assert out.ndim == 1
+    np.testing.assert_array_equal(fixed, [0, 5, 20, 100])
+    assert labels.shape == (c["chroma"].shape[1],)
+
+
+def test_matrix_results_are_two_dimensional() -> None:
+    c = _chain()
+    y, env = c["y"], c["env"]
+    n_bins, n_frames = libsonare.stft(y, SR).magnitude.shape
+    assert n_bins == 2048 // 2 + 1
+    db = libsonare.stft_db(y, SR)
+    assert db.dtype == np.float32 and db.shape == (n_bins, n_frames)
+    assert libsonare.Audio.from_buffer(y, SR).stft_db().shape == (n_bins, n_frames)
+    assert libsonare.tempogram(env, sr=SR, win_length=64).shape == (64, env.size)
+    assert libsonare.cyclic_tempogram(env, SR, n_bins=30).shape == (30, env.size)
+    assert libsonare.fourier_tempogram(env, sr=SR, win_length=64).shape == (33, env.size)
+    assert libsonare.onset_strength_multi(y, SR, n_bands=3).shape == (3, env.size)
+    assert libsonare.nnls_chroma(y, SR).shape[0] == 12
+    assert libsonare.Audio.from_buffer(y, SR).nnls_chroma().shape[0] == 12
+    assert libsonare.tonnetz(c["chroma"]).shape == (6, c["chroma"].shape[1])
+
+
+def test_result_classes_hold_two_dimensional_arrays() -> None:
+    y = _signal()
+    stft = libsonare.stft(y, SR)
+    n_bins, n_frames = stft.magnitude.shape
+    assert stft.power.shape == (n_bins, n_frames)
+    assert stft.magnitude.dtype == np.float32
+    mel = libsonare.mel_spectrogram(y, SR, n_mels=40)
+    assert mel.power.shape == mel.db.shape == (40, n_frames)
+    mfcc = libsonare.mfcc(y, sr=SR, n_mfcc=13)
+    assert mfcc.coefficients.shape == (13, n_frames)
+    for fn in (libsonare.chroma, libsonare.bass_chroma):
+        chroma = fn(y, SR)
+        assert chroma.features.shape == (12, n_frames)
+        assert chroma.mean_energy.shape == (12,)
+    for fn in (libsonare.chroma_cens, libsonare.chroma_cqt):
+        assert fn(y, sr=SR).features.shape[0] == 12
+    for fn in (libsonare.cqt, libsonare.pseudo_cqt, libsonare.hybrid_cqt, libsonare.vqt):
+        cqt = fn(y, sr=SR, n_bins=48)
+        assert cqt.magnitude.shape[0] == 48
+        assert cqt.frequencies.shape == (48,)
+    for fn in (libsonare.pitch_yin, libsonare.pitch_pyin):
+        pitch = fn(y, SR)
+        assert pitch.f0.shape == pitch.voiced_prob.shape == pitch.voiced_flag.shape
+        assert pitch.voiced_flag.dtype == np.bool_
+    track = libsonare.piptrack(y, sr=SR)
+    assert track.pitches.shape == track.magnitudes.shape == (n_bins, n_frames)
+    reassigned = libsonare.reassigned_spectrogram(y, sr=SR)
+    assert reassigned.magnitude.shape == reassigned.times.shape == (n_bins, n_frames)
+    assert reassigned.frequencies.shape == (n_bins, n_frames)
+
+
+@pytest.mark.parametrize(
+    ("cls", "removed"),
+    [
+        ("StftResult", ("n_bins", "n_frames")),
+        ("CqtResult", ("n_bins", "n_frames")),
+        ("MelSpectrogramResult", ("n_mels", "n_frames", "is_db")),
+        ("MfccResult", ("n_mfcc", "n_frames", "is_db")),
+        ("ChromaResult", ("n_chroma", "n_frames")),
+        ("PitchResult", ("n_frames",)),
+        ("PiptrackResult", ("n_bins", "n_frames")),
+        ("ReassignedSpectrogramResult", ("n_bins", "n_frames")),
+    ],
+)
+def test_matrix_results_drop_their_dimension_fields(cls: str, removed: tuple[str, ...]) -> None:
+    fields = {f.name for f in __import__("dataclasses").fields(getattr(libsonare, cls))}
+    assert not fields & set(removed)
+
+
+def test_matrix_results_are_frozen_and_compare_by_identity() -> None:
+    result = libsonare.stft(_signal(), SR)
+    with pytest.raises(AttributeError):
+        result.n_fft = 1  # type: ignore[misc]
+    assert result != libsonare.stft(_signal(), SR)
+    assert result == result  # noqa: PLR0124
+
+
+def test_frame_signal_columns_are_the_frames() -> None:
+    y = _signal()
+    frame_length, hop = 1024, 256
+    frames = libsonare.frame_signal(y, frame_length, hop)
+    assert frames.dtype == np.float32
+    assert frames.shape == (frame_length, 1 + (y.size - frame_length) // hop)
+    assert frames.flags["C_CONTIGUOUS"]
+    for j in (0, 1, frames.shape[1] - 1):
+        np.testing.assert_array_equal(frames[:, j], y[j * hop : j * hop + frame_length])
+
+
+def test_silence_results_are_arrays_and_typed_results() -> None:
+    gap = np.zeros(SR // 2, dtype=np.float32)
+    y = np.concatenate([gap, _signal(), gap, _signal(), gap])
+    trimmed = libsonare.trim_silence(y)
+    assert isinstance(trimmed, libsonare.TrimResult)
+    assert trimmed.audio.dtype == np.float32
+    assert trimmed.audio.size == trimmed.end_sample - trimmed.start_sample
+    assert trimmed.start_sample > 0 and trimmed.end_sample < y.size
+    intervals = libsonare.split_silence(y)
+    assert intervals.dtype == np.int64 and intervals.shape == (2, 2)
+    assert np.all(intervals[:, 0] < intervals[:, 1])
+    common = libsonare.split_silence_common([y, y])
+    assert common.dtype == np.int64 and common.shape[1] == 2
+    with_report = libsonare.split_silence_common_with_report([y, y])
+    assert isinstance(with_report, libsonare.SplitSilenceCommonWithReportResult)
+    np.testing.assert_array_equal(with_report.intervals, common)
+    assert isinstance(with_report.report, libsonare.SilenceCommonReport)
+
+
+def test_matrix_inputs_take_one_two_dimensional_array() -> None:
+    c = _chain()
+    mel, mfcc, chroma = c["mel"], c["mfcc"], c["chroma"]
+    delta = libsonare.mel_delta(mel)
+    assert delta.dtype == np.float32 and delta.shape == mel.shape
+    assert libsonare.pcen(mel, sr=SR).shape == mel.shape
+    assert libsonare.tonnetz(chroma).shape == (6, chroma.shape[1])
+    recurrence = libsonare.segment_recurrence_matrix(chroma)
+    n = chroma.shape[1]
+    assert recurrence.shape == (n, n)
+    assert libsonare.segment_path_enhance(recurrence, 3).shape == (n, n)
+    lag = libsonare.segment_recurrence_to_lag(recurrence)
+    assert lag.shape == (2 * n, n)
+    assert libsonare.segment_lag_to_recurrence(lag).shape == (n, n)
+    assert libsonare.segment_cross_similarity(chroma, chroma).ndim == 2
+    stft = libsonare.mel_to_stft(mel, sr=SR)
+    assert stft.dtype == np.float32 and stft.shape == (2048 // 2 + 1, mel.shape[1])
+    assert libsonare.mfcc_to_mel(mfcc, n_mels=64).shape == (64, mfcc.shape[1])
+    ratio = libsonare.tempogram_ratio(libsonare.tempogram(c["env"], sr=SR, win_length=64), sr=SR)
+    assert ratio.dtype == np.float32 and ratio.ndim == 1
+
+
+def test_matrix_inputs_accept_nested_lists() -> None:
+    mel = _chain()["mel"]
+    np.testing.assert_allclose(
+        libsonare.mel_delta(mel.tolist()), libsonare.mel_delta(mel), rtol=1e-6, atol=1e-7
+    )
+
+
+def test_inverse_transforms_return_audio_arrays() -> None:
+    c = _chain()
+    y = c["y"]
+    magnitude = libsonare.stft(y, SR).magnitude
+    cqt = libsonare.cqt(y, sr=SR).magnitude
+    for audio in (
+        libsonare.mel_to_audio(c["mel"], sr=SR, n_iter=2),
+        libsonare.mfcc_to_audio(c["mfcc"], sr=SR, n_iter=2),
+        libsonare.griffin_lim(magnitude, SR, n_iter=2),
+        libsonare.cqt_to_audio(cqt, SR, n_iter=2),
+        libsonare.vqt_to_audio(cqt, SR, n_iter=2),
+    ):
+        assert audio.dtype == np.float32 and audio.ndim == 1 and audio.size > 0
+
+
+MATRIX_INPUT_CALLS = {
+    "mel_delta": (lambda m: libsonare.mel_delta(m), "features"),
+    "pcen": (lambda m: libsonare.pcen(m), "values"),
+    "tonnetz": (lambda m: libsonare.tonnetz(m), "chromagram"),
+    "segment_recurrence_matrix": (lambda m: libsonare.segment_recurrence_matrix(m), "data"),
+    "segment_agglomerative": (lambda m: libsonare.segment_agglomerative(m, 2), "data"),
+    "segment_subsegment": (lambda m: libsonare.segment_subsegment(m, [0, 2]), "data"),
+    "segment_cross_similarity": (lambda m: libsonare.segment_cross_similarity(m, m), "x"),
+    "segment_recurrence_to_lag": (lambda m: libsonare.segment_recurrence_to_lag(m), "recurrence"),
+    "segment_lag_to_recurrence": (lambda m: libsonare.segment_lag_to_recurrence(m), "lag"),
+    "segment_path_enhance": (lambda m: libsonare.segment_path_enhance(m, 3), "recurrence"),
+    "tempogram_ratio": (lambda m: libsonare.tempogram_ratio(m), "tempogram"),
+    "mel_to_stft": (lambda m: libsonare.mel_to_stft(m), "mel"),
+    "mel_to_audio": (lambda m: libsonare.mel_to_audio(m, n_iter=1), "mel"),
+    "mfcc_to_mel": (lambda m: libsonare.mfcc_to_mel(m), "mfcc_coeffs"),
+    "mfcc_to_audio": (lambda m: libsonare.mfcc_to_audio(m, n_iter=1), "mfcc_coeffs"),
+    "griffin_lim": (lambda m: libsonare.griffin_lim(m, SR, n_iter=1), "magnitude"),
+    "cqt_to_audio": (lambda m: libsonare.cqt_to_audio(m, SR, n_iter=1), "magnitude"),
+    "vqt_to_audio": (lambda m: libsonare.vqt_to_audio(m, SR, n_iter=1), "magnitude"),
+}
+
+
+@pytest.mark.parametrize("name", sorted(MATRIX_INPUT_CALLS))
+@pytest.mark.parametrize("shape", [(8,), (2, 4, 3)], ids=["1-D", "3-D"])
+def test_matrix_inputs_refuse_a_wrong_rank_by_name(name: str, shape: tuple[int, ...]) -> None:
+    call, parameter = MATRIX_INPUT_CALLS[name]
+    with pytest.raises(SonareValueError, match=rf"{name}: {parameter} must be a 2-D array"):
+        call(np.ones(shape, dtype=np.float32))
+
+
+@pytest.mark.parametrize("name", ["mel_delta", "pcen", "griffin_lim"])
+def test_matrix_inputs_refuse_non_finite_values(name: str) -> None:
+    call, parameter = MATRIX_INPUT_CALLS[name]
+    bad = np.ones((4, 6), dtype=np.float32)
+    bad[1, 2] = np.nan
+    with pytest.raises(SonareValueError, match=parameter):
+        call(bad)
+
+
+def test_segment_inputs_that_must_be_square_are_refused() -> None:
+    with pytest.raises(SonareValueError, match="recurrence must be square"):
+        libsonare.segment_path_enhance(np.ones((4, 5), dtype=np.float32), 3)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "SegmentMatrix",
+        "StftMagnitudeResult",
+        "MelPowerResult",
+        "mel_result_to_stft",
+        "mel_result_to_audio",
+        "mfcc_result_to_mel",
+        "mfcc_result_to_audio",
+    ],
+)
+def test_removed_result_types_and_helpers_are_absent(name: str) -> None:
+    assert not hasattr(libsonare, name)
+    assert name not in libsonare.__all__
+    assert not hasattr(libsonare.types, name)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "TrimResult",
+        "SplitSilenceCommonWithReportResult",
+        "PiptrackResult",
+        "ReassignedSpectrogramResult",
+    ],
+)
+def test_result_types_are_importable(name: str) -> None:
+    assert getattr(libsonare, name) is not None
+    assert name in libsonare.__all__
+
+
+def test_audio_methods_return_arrays() -> None:
+    audio = libsonare.Audio.from_buffer(_signal(), SR)
+    for method in (
+        "detect_beats",
+        "detect_downbeats",
+        "detect_onsets",
+        "onset_strength",
+        "momentary_lufs",
+        "short_term_lufs",
+        "spectral_centroid",
+        "spectral_bandwidth",
+        "spectral_rolloff",
+        "spectral_flatness",
+        "zero_crossing_rate",
+        "rms_energy",
+    ):
+        out = getattr(audio, method)()
+        assert isinstance(out, np.ndarray) and out.dtype == np.float32, method
+    assert audio.resample(2 * SR).dtype == np.float32
+    assert audio.mel_spectrogram().power.ndim == 2
+    assert audio.pitch_yin().f0.ndim == 1
+
+
+# ---------------------------------------------------------------------------
+# Units in names: cents, seconds, hertz and the tempo range
+# ---------------------------------------------------------------------------
+
+
+def test_tuning_cents_round_trips_through_the_converters() -> None:
+    hz = libsonare.tuning_to_reference_hz(10.0)
+    assert hz == pytest.approx(440.0 * 2.0 ** (10.0 / 1200.0), rel=1e-5)
+    assert libsonare.reference_hz_to_tuning(hz) == pytest.approx(10.0, abs=1e-2)
+    assert libsonare.tuning_to_reference_hz(tuning_cents=0.0, a4_hz=432.0) == pytest.approx(432.0)
+    assert libsonare.reference_hz_to_tuning(reference_hz=432.0, a4_hz=432.0) == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize(
+    "name", ["detect_key", "detect_key_candidates", "detect_chords", "analyze"]
+)
+def test_tuning_is_named_tuning_cents(name: str) -> None:
+    parameters = inspect.signature(getattr(libsonare, name)).parameters
+    assert "tuning_cents" in parameters
+    assert "tuning" not in parameters
+
+
+def test_given_tuning_cents_is_reported_on_the_results() -> None:
+    samples = _signal()
+    assert libsonare.detect_key(samples, SR, tuning_cents=12.5).tuning_cents == pytest.approx(12.5)
+    assert libsonare.detect_chords(samples, SR, tuning_cents=-7.0).tuning_cents == pytest.approx(
+        -7.0
+    )
+    with pytest.raises(SonareValueError):
+        libsonare.detect_key(samples, SR, tuning_cents=50.0)
+
+
+def test_time_to_frames_takes_seconds() -> None:
+    assert libsonare.time_to_frames(time_sec=1.0, sr=22050, hop_length=512) == 43
+
+
+def test_note_segment_and_transcribe_names_carry_their_unit() -> None:
+    fields = {f.name for f in libsonare.NoteSegment.__dataclass_fields__.values()}
+    assert {"start_sec", "end_sec"} <= fields
+    assert not {"start_seconds", "end_seconds"} & fields
+    parameters = inspect.signature(libsonare.transcribe).parameters
+    assert {"f0_min_hz", "f0_max_hz"} <= set(parameters)
+    assert not {"fmin", "fmax"} & set(parameters)
+
+
+@pytest.mark.parametrize("name", ["detect_bpm", "detect_beats"])
+def test_tempo_search_range_is_keyword_only_and_validated(name: str) -> None:
+    samples = _signal()
+    function = getattr(libsonare, name)
+    parameters = inspect.signature(function).parameters
+    for bound in ("bpm_min", "bpm_max"):
+        assert parameters[bound].kind is inspect.Parameter.KEYWORD_ONLY
+        assert parameters[bound].default is None
+    function(samples, SR)
+    function(samples, SR, bpm_min=80.0, bpm_max=180.0)
+    with pytest.raises(SonareValueError):
+        function(samples, SR, bpm_min=180.0, bpm_max=80.0)
+    with pytest.raises(SonareValueError):
+        function(samples, SR, bpm_min=-1.0)
+
+
+def test_reattack_ratio_none_is_no_split_and_zero_is_refused() -> None:
+    samples = _signal()
+    libsonare.transcribe(samples, SR, polyphonic=True, tempo_bpm=120.0, reattack_ratio=None)
+    libsonare.transcribe(samples, SR, polyphonic=True, tempo_bpm=120.0, reattack_ratio=2.0)
+    for value in (0.0, -1.0, 1.0):
+        with pytest.raises(SonareValueError, match="reattack_ratio"):
+            libsonare.transcribe(
+                samples, SR, polyphonic=True, tempo_bpm=120.0, reattack_ratio=value
+            )
+        with pytest.raises(SonareValueError, match="reattack_ratio"):
+            libsonare.PolyphonicAnalysis.analyze(samples, SR, reattack_ratio=value)
+
+
+def test_note_segments_takes_exactly_one_voicing_input_by_keyword() -> None:
+    f0 = [440.0, 441.0, 439.0, 440.0, 0.0, 0.0, 660.0, 661.0, 659.0, 660.0]
+    probability = [1.0] * 4 + [0.0] * 2 + [1.0] * 4
+    flags = [1, 1, 1, 1, 0, 0, 1, 1, 1, 1]
+    spans = [(0, 4), (6, 10)]
+    by_probability = libsonare.note_segments(f0, 100.0, voiced_prob=probability)
+    by_flags = libsonare.note_segments(f0, 100.0, voiced_flags=flags)
+    by_bools = libsonare.note_segments(f0, 100.0, voiced_flags=np.array(flags, dtype=bool))
+    for found in (by_probability, by_flags, by_bools):
+        assert [(s.frame_start, s.frame_end) for s in found] == spans
+    assert [s.start_sec for s in by_flags] == pytest.approx([0.0, 0.06])
+    assert [s.end_sec for s in by_flags] == pytest.approx([0.04, 0.10])
+
+    with pytest.raises(SonareValueError, match="exactly one"):
+        libsonare.note_segments(f0, 100.0)
+    with pytest.raises(SonareValueError, match="exactly one"):
+        libsonare.note_segments(f0, 100.0, voiced_prob=probability, voiced_flags=flags)
+    with pytest.raises(SonareValueError, match="equal length"):
+        libsonare.note_segments(f0, 100.0, voiced_flags=flags[:-1])
+    with pytest.raises(TypeError):
+        libsonare.note_segments(f0, probability, 100.0)  # type: ignore[misc]
+
+
+def test_stream_names_carry_their_unit() -> None:
+    config = libsonare.StreamConfig(reference_hz=432.0)
+    assert config.reference_hz == 432.0
+    analyzer = libsonare.StreamAnalyzer(config)
+    try:
+        assert analyzer.current_time_sec() == 0.0
+        analyzer.set_reference_hz(440.0)
+        analyzer.set_expected_duration(duration_sec=10.0)
+        analyzer.process(_signal())
+        frames = analyzer.read_frames(8)
+        assert len(frames.timestamps_sec) == frames.n_frames > 0
+        assert not hasattr(frames, "timestamps")
+        stats = analyzer.stats()
+        for name in ("duration_sec", "chord_start_sec", "bar_duration_sec", "accumulated_sec"):
+            assert hasattr(stats, name), name
+    finally:
+        analyzer.close()

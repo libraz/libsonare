@@ -39,7 +39,7 @@ def _mel(tone: np.ndarray, n_mels: int):
 
 def test_a_wrapped_count_is_refused_rather_than_read_as_a_smaller_one(tone) -> None:
     """The signed-int argument reader, driven where the wrap lands in domain."""
-    assert _mel(tone, 8).n_mels != _mel(tone, 16).n_mels  # positive control
+    assert _mel(tone, 8).power.shape[0] != _mel(tone, 16).power.shape[0]  # positive control
     for value in (2**32 + 8, 2**32 + 16, 2**32, 2**31, -(2**31) - 1):
         with pytest.raises(SonareValueError, match="n_mels"):
             _mel(tone, value)
@@ -673,9 +673,9 @@ def test_every_integer_array_argument_names_itself_when_it_refuses() -> None:
     with pytest.raises(SonareValueError, match=re.escape("intervals[1]")):
         ls.remix_aligned_intervals(signal, intervals=[0, 1000.7], sample_rate=22050)
     rows, cols = 4, 32
-    matrix = np.tile(np.arange(cols, dtype=np.float32), rows)
+    matrix = np.tile(np.arange(cols, dtype=np.float32), (rows, 1))
     with pytest.raises(SonareValueError, match=re.escape("boundaries[1]")):
-        ls.segment_subsegment(matrix, rows, cols, [0, 16.5], n_segments=2)
+        ls.segment_subsegment(matrix, [0, 16.5], n_segments=2)
 
 
 @pytest.mark.parametrize("value", ["1", True, None, b"1", object()])

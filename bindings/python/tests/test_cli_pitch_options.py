@@ -7,6 +7,7 @@ from collections.abc import Callable
 from types import SimpleNamespace
 from typing import Any, cast
 
+import numpy as np
 import pytest
 
 
@@ -22,8 +23,8 @@ def _pitch_args(*extra: str) -> argparse.Namespace:
 
 def _pitch_result() -> SimpleNamespace:
     return SimpleNamespace(
-        n_frames=1,
-        voiced_flag=[True],
+        f0=np.array([440.0]),
+        voiced_flag=np.array([True]),
         median_f0=440.0,
         mean_f0=440.0,
     )
@@ -217,10 +218,9 @@ def test_pitch_frames_flag_defaults_off_and_adds_the_contour_to_json(
 
     monkeypatch.setattr(_cli_analysis, "_load_audio", lambda path: ([0.0], 22050))
     result = SimpleNamespace(
-        n_frames=2,
-        f0=[440.0, float("nan")],
-        voiced_flag=[True, False],
-        voiced_prob=[0.9, 0.0],
+        f0=np.array([440.0, float("nan")]),
+        voiced_flag=np.array([True, False]),
+        voiced_prob=np.array([0.9, 0.0]),
         median_f0=440.0,
         mean_f0=440.0,
     )

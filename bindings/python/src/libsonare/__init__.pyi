@@ -76,6 +76,9 @@ from .analyzer import (
     SpectralRegionOp as SpectralRegionOp,
 )
 from .analyzer import (
+    SplitSilenceCommonWithReportResult as SplitSilenceCommonWithReportResult,
+)
+from .analyzer import (
     StreamingEqualizer as StreamingEqualizer,
 )
 from .analyzer import (
@@ -86,6 +89,9 @@ from .analyzer import (
 )
 from .analyzer import (
     TranscribeResult as TranscribeResult,
+)
+from .analyzer import (
+    TrimResult as TrimResult,
 )
 from .analyzer import (
     abi_version as abi_version,
@@ -466,8 +472,6 @@ from .analyzer import (
     mastering_streaming_preview_stereo as mastering_streaming_preview_stereo,
 )
 from .analyzer import mel_delta as mel_delta
-from .analyzer import mel_result_to_audio as mel_result_to_audio
-from .analyzer import mel_result_to_stft as mel_result_to_stft
 from .analyzer import (
     mel_spectrogram as mel_spectrogram,
 )
@@ -513,8 +517,6 @@ from .analyzer import (
 from .analyzer import (
     mfcc as mfcc,
 )
-from .analyzer import mfcc_result_to_audio as mfcc_result_to_audio
-from .analyzer import mfcc_result_to_mel as mfcc_result_to_mel
 from .analyzer import mfcc_to_audio as mfcc_to_audio
 from .analyzer import mfcc_to_mel as mfcc_to_mel
 from .analyzer import (
@@ -1117,7 +1119,6 @@ from .types import (
 from .types import (
     MelodyResult as MelodyResult,
 )
-from .types import MelPowerResult as MelPowerResult
 from .types import (
     MelSpectrogramResult as MelSpectrogramResult,
 )
@@ -1162,6 +1163,9 @@ from .types import (
     PhaseScopeReport as PhaseScopeReport,
 )
 from .types import (
+    PiptrackResult as PiptrackResult,
+)
+from .types import (
     PitchClass as PitchClass,
 )
 from .types import (
@@ -1181,6 +1185,9 @@ from .types import (
 )
 from .types import (
     QuantizeConfig as QuantizeConfig,
+)
+from .types import (
+    ReassignedSpectrogramResult as ReassignedSpectrogramResult,
 )
 from .types import (
     RepairApplyResult as RepairApplyResult,
@@ -1248,7 +1255,6 @@ from .types import (
 from .types import (
     StereoMonoCompatCheckResult as StereoMonoCompatCheckResult,
 )
-from .types import StftMagnitudeResult as StftMagnitudeResult
 from .types import (
     StftResult as StftResult,
 )

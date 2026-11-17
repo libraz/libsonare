@@ -6,6 +6,8 @@ import ctypes
 from collections.abc import Sequence
 from typing import Any, Literal, cast
 
+import numpy as np
+
 from ._ffi_types_core import (
     SonareKey,
     SonareKeyCandidate,
@@ -15,7 +17,7 @@ from ._narrowing import _narrow_double
 from ._runtime import (
     SonareValueError,
     _check,
-    _float_array_result,
+    _from_c_float_array,
     _get_lib,
     _guard_buffer,
     _mode_values,
@@ -50,11 +52,18 @@ from .types import (
     TimeSignature,
 )
 
+# The tempo search range shared by detect_bpm, detect_beats and analyze.
+_DEFAULT_BPM_MIN = 60.0
+_DEFAULT_BPM_MAX = 200.0
+
 
 @_guard_buffer("samples")
 def detect_bpm(
     samples: Sequence[float] | list[float],
     sample_rate: int,
+    *,
+    bpm_min: float | None = None,
+    bpm_max: float | None = None,
 ) -> float:
     """Detect the BPM (tempo) of audio samples.
 
@@ -67,11 +76,14 @@ def detect_bpm(
             ``list[float]``, ``tuple[float, ...]``, ``array.array``, or a numpy
             1D array of dtype ``float32``.
         sample_rate: Sample rate in Hz.
+        bpm_min: Lower bound of the tempo search in BPM (default 60).
+        bpm_max: Upper bound of the tempo search in BPM (default 200).
 
     Returns:
         Detected BPM as a ``float``. For confidence, use :func:`analyze`.
 
     Raises:
+        SonareValueError: If the range is non-finite, non-positive or inverted.
         RuntimeError: If detection fails.
     """
     lib = _get_lib()
@@ -81,6 +93,8 @@ def detect_bpm(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
+        _to_c_float(_DEFAULT_BPM_MIN if bpm_min is None else bpm_min, "bpm_min"),
+        _to_c_float(_DEFAULT_BPM_MAX if bpm_max is None else bpm_max, "bpm_max"),
         ctypes.byref(out_bpm),
     )
     _check(rc)
@@ -99,12 +113,12 @@ def detect_key(
     modes: Sequence[Mode | str] | str | None = None,
     profile: KeyProfile | str | None = None,
     genre_hint: str | None = None,
-    tuning: float | str = "auto",
+    tuning_cents: float | str = "auto",
 ) -> KeyDetection:
     """Detect the musical key of audio samples.
 
     The chroma is shifted by the tuning measured from the audio unless
-    ``tuning`` says otherwise; pass 0 to read it at concert A440.
+    ``tuning_cents`` says otherwise; pass 0 to read it at concert A440.
 
     Args:
         samples: Mono audio samples (1D float). See :func:`detect_bpm` for
@@ -120,16 +134,16 @@ def detect_key(
             ``"auto"`` hint.
         genre_hint: Optional genre hint (``"auto"``, ``"edm"``, ``"pop"``,
             ``"classical"``, or ``"jazz"``).
-        tuning: Tuning offset of the recording in fractions of a semitone, in
-            ``[-0.5, 0.5)``; 0 is concert A440. ``"auto"`` (default) measures it
+        tuning_cents: Tuning offset of the recording in cents, in
+            ``[-50, 50)``; 0 is concert A440. ``"auto"`` (default) measures it
             from the audio, and :func:`reference_hz_to_tuning` converts a reference pitch
             to this unit.
 
     Returns:
         :class:`libsonare.KeyDetection`, a :class:`Key` with ``root``
         (:class:`PitchClass`), ``mode`` (:class:`Mode`), and ``confidence``
-        (``float`` in ``[0, 1]``), plus ``tuning``: the tuning used, given or
-        measured, in fractions of a semitone.
+        (``float`` in ``[0, 1]``), plus ``tuning_cents``: the tuning used, given or
+        measured, in cents.
 
     Raises:
         RuntimeError: If detection fails.
@@ -140,7 +154,7 @@ def detect_key(
     mode_array, mode_count = _to_c_int_array(mode_values, "modes") if mode_values else (None, 0)
     out_key = SonareKey()
     out_tuning = ctypes.c_float()
-    tuning_value, tuning_auto = _tuning_arg("detect_key", tuning)
+    tuning_value, tuning_auto = _tuning_arg("detect_key", tuning_cents)
     rc = lib.sonare_detect_key_with_tuning(
         c_array,
         _to_c_size_t(length, "length"),
@@ -154,7 +168,7 @@ def detect_key(
         _to_c_size_t(mode_count, "mode_count"),
         ctypes.c_int32(_profile_value(profile)),
         _utf8_arg(genre_hint, "genre_hint") if genre_hint else None,
-        _to_c_float(tuning_value, "tuning"),
+        _to_c_float(tuning_value, "tuning_cents"),
         _to_c_int(tuning_auto, "tuning_auto"),
         ctypes.byref(out_key),
         ctypes.byref(out_tuning),
@@ -164,7 +178,7 @@ def detect_key(
         root=PitchClass(out_key.root),
         mode=Mode(out_key.mode),
         confidence=float(out_key.confidence),
-        tuning=float(out_tuning.value),
+        tuning_cents=float(out_tuning.value),
     )
 
 
@@ -180,12 +194,12 @@ def detect_key_candidates(
     modes: Sequence[Mode | str] | str | None = None,
     profile: KeyProfile | str | None = None,
     genre_hint: str | None = None,
-    tuning: float | str = "auto",
+    tuning_cents: float | str = "auto",
 ) -> list[KeyCandidate]:
     """Return ranked musical key candidates for ambiguous material.
 
-    ``tuning`` is as for :func:`detect_key`: a semitone fraction in
-    ``[-0.5, 0.5)`` (0 is concert A440) or ``"auto"`` to measure it.
+    ``tuning_cents`` is as for :func:`detect_key`: a tuning offset in cents in
+    ``[-50, 50)`` (0 is concert A440) or ``"auto"`` to measure it.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
@@ -193,7 +207,7 @@ def detect_key_candidates(
     mode_array, mode_count = _to_c_int_array(mode_values, "modes") if mode_values else (None, 0)
     out_candidates = ctypes.POINTER(SonareKeyCandidate)()
     out_count = ctypes.c_size_t()
-    tuning_value, tuning_auto = _tuning_arg("detect_key_candidates", tuning)
+    tuning_value, tuning_auto = _tuning_arg("detect_key_candidates", tuning_cents)
     rc = lib.sonare_detect_key_candidates_with_tuning(
         c_array,
         _to_c_size_t(length, "length"),
@@ -207,7 +221,7 @@ def detect_key_candidates(
         _to_c_size_t(mode_count, "mode_count"),
         ctypes.c_int32(_profile_value(profile)),
         _utf8_arg(genre_hint, "genre_hint") if genre_hint else None,
-        _to_c_float(tuning_value, "tuning"),
+        _to_c_float(tuning_value, "tuning_cents"),
         _to_c_int(tuning_auto, "tuning_auto"),
         ctypes.byref(out_candidates),
         ctypes.byref(out_count),
@@ -235,15 +249,20 @@ def detect_key_candidates(
 def detect_beats(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-) -> list[float]:
+    *,
+    bpm_min: float | None = None,
+    bpm_max: float | None = None,
+) -> np.ndarray:
     """Detect beat positions in audio samples.
 
     Args:
         samples: Audio samples as a list/sequence of floats.
         sample_rate: Sample rate in Hz.
+        bpm_min: Lower bound of the tempo search in BPM (default 60).
+        bpm_max: Upper bound of the tempo search in BPM (default 200).
 
     Returns:
-        List of beat times in seconds.
+        A float32 array of beat times in seconds.
 
     Raises:
         RuntimeError: If detection fails.
@@ -255,20 +274,22 @@ def detect_beats(
             c_array,
             _to_c_size_t(length, "length"),
             _to_c_int(sample_rate, "sample_rate"),
+            _to_c_float(_DEFAULT_BPM_MIN if bpm_min is None else bpm_min, "bpm_min"),
+            _to_c_float(_DEFAULT_BPM_MAX if bpm_max is None else bpm_max, "bpm_max"),
             ctypes.byref(out_times),
             ctypes.byref(out_count),
         )
         _check(rc)
         count = out_count.value
-        return _float_array_result(out_times, count)
+        return _from_c_float_array(out_times, count)
 
 
 @_guard_buffer("samples")
 def detect_downbeats(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-) -> list[float]:
-    """Detect downbeat positions in audio samples."""
+) -> np.ndarray:
+    """Detect downbeat positions in audio samples as a float32 array of seconds."""
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     with _out_float_array(lib) as (out_times, out_count):
@@ -281,7 +302,7 @@ def detect_downbeats(
         )
         _check(rc)
         count = out_count.value
-        return _float_array_result(out_times, count)
+        return _from_c_float_array(out_times, count)
 
 
 @_guard_buffer("samples")
@@ -300,7 +321,7 @@ def detect_onsets(
     wait: int = 1,
     backtrack: bool = False,
     backtrack_range: int = 10,
-) -> list[float]:
+) -> np.ndarray:
     """Detect onset positions in audio samples.
 
     Args:
@@ -308,7 +329,7 @@ def detect_onsets(
         sample_rate: Sample rate in Hz.
 
     Returns:
-        List of onset times in seconds.
+        A float32 array of onset times in seconds.
 
     Raises:
         RuntimeError: If detection fails.
@@ -341,7 +362,7 @@ def detect_onsets(
         )
         _check(rc)
         count = out_count.value
-        return _float_array_result(out_times, count)
+        return _from_c_float_array(out_times, count)
 
 
 # camelCase → snake_case quality name table (mirrors detect_chords).
@@ -630,5 +651,5 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
         beat_observations=beat_observations,
         beat_local_bpm=beat_local_bpm,
         form=str(data.get("form", "")),
-        tuning=float(data.get("tuning", 0.0)),
+        tuning_cents=float(data.get("tuning_cents", 0.0)),
     )

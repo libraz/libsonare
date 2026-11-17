@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from types import ModuleType, SimpleNamespace
 
+import numpy as np
 import pytest
 
 import libsonare
@@ -202,7 +203,10 @@ def test_normalize_mode_and_trim_controls_forward_to_the_matching_facade(
     monkeypatch.setattr(
         libsonare,
         "trim_silence",
-        lambda _samples, **kwargs: trim_calls.append(("top", kwargs)) or ([0.4], 0, 1),
+        lambda _samples, **kwargs: (
+            trim_calls.append(("top", kwargs))
+            or SimpleNamespace(audio=np.asarray([0.4]), start_sample=0, end_sample=1)
+        ),
     )
     assert (
         effects.cmd_trim_silence(_args(threshold_db=None, top_db=24.0, n_fft=1024, hop_length=256))

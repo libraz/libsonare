@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from typing import Literal, assert_type
+from typing import Any, Literal, assert_type
 
 import libsonare
+import numpy as np
 
 samples = [0.0, 0.1, -0.1, 0.0]
 ir_samples = [1.0, 0.5, 0.25, 0.125, 0.0]
 
 bpm: float = libsonare.detect_bpm(samples, sample_rate=22050)
-downbeats: list[float] = libsonare.detect_downbeats(samples, sample_rate=22050)
+downbeats: np.ndarray[Any, Any] = libsonare.detect_downbeats(samples, sample_rate=22050)
 key: libsonare.Key = libsonare.detect_key(
     samples,
     22050,
@@ -43,7 +44,7 @@ chords: libsonare.ChordAnalysisResult = libsonare.detect_chords(
     detect_inversions=True,
     chroma_method="nnls",
 )
-cyclic_frames, cyclic_data = libsonare.cyclic_tempogram(samples, 22050)
+cyclic_data = libsonare.cyclic_tempogram(samples, 22050)
 mastered: libsonare.MasteringChainResult = libsonare.master_audio(samples, 48000, preset="aiMusic")
 catalog = libsonare.mastering_processor_catalog()
 param_info = libsonare.mastering_insert_param_info("saturation.softClipper")
@@ -56,7 +57,7 @@ project.set_assist_sidecar({"moduleId": "python-smoke-descriptor"})
 assist_sidecars: list[libsonare.AssistSidecar] = project.assist_sidecars()
 
 assert_type(bpm, float)
-assert_type(downbeats, list[float])
+assert_type(downbeats, np.ndarray[Any, Any])
 assert_type(key.shortName, str)
 assert_type(key_candidates[0].correlation, float)
 assert_type(analysis.beatTimes, list[float])
@@ -70,8 +71,7 @@ assert_type(morphed.audio, list[float])
 assert_type(morphed.diagnostics, list[libsonare.RirDiagnostic])
 assert_type(rir.diagnostics, list[libsonare.RirDiagnostic])
 assert_type(chords.chords, list[libsonare.Chord])
-assert_type(cyclic_frames, int)
-assert_type(cyclic_data, list[float])
+assert_type(cyclic_data, np.ndarray[Any, Any])
 assert_type(mastered.stages, list[str])
 assert_type(catalog, list[libsonare.MasteringProcessorCatalogEntry])
 assert_type(catalog[0].kind, libsonare.MasteringProcessorKind)

@@ -661,8 +661,8 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
             sr,
             polyphonic=args.polyphonic,
             reference_hz=args.reference_hz,
-            fmin=args.fmin,
-            fmax=args.fmax,
+            f0_min_hz=args.fmin,
+            f0_max_hz=args.fmax,
             min_note_ms=args.min_note_ms,
             segmentation_threshold_cents=args.segmentation_threshold_cents,
             velocity_floor_db=args.velocity_floor_db,
@@ -990,7 +990,7 @@ def register_project_parsers(
         type=_finite_float,
         default=None,
         help="Polyphonic only: split a ridge where its salience climbs past this "
-        "multiple of the level before, above 1; 0 disables the split (default: 2.0)",
+        "multiple of the level before, above 1 (default: no split)",
     )
     transcribe_p.add_argument(
         "--segmentation-threshold-cents",

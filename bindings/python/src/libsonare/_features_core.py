@@ -6,6 +6,7 @@ import ctypes
 from collections.abc import Sequence
 
 import numpy as np
+import numpy.typing as npt
 
 from ._ffi import (
     SonareChromaResult,
@@ -16,10 +17,10 @@ from ._ffi import (
 )
 from ._runtime import (
     SonareValueError,
-    _call_float_transform,
+    _call_float_array_transform,
     _check,
-    _float_array_result,
     _from_c_float_array,
+    _from_c_float_matrix,
     _from_c_int_array,
     _get_lib,
     _guard_buffer,
@@ -28,6 +29,7 @@ from ._runtime import (
     _resolve_zero_default,
     _to_c_float,
     _to_c_float_array,
+    _to_c_float_matrix,
     _to_c_int,
     _to_c_int_array,
     _to_c_size_t,
@@ -48,8 +50,8 @@ def tone(
     duration: float = 1.0,
     phi: float = 0.0,
     amplitude: float = 1.0,
-) -> list[float]:
-    """Generate a sine tone."""
+) -> np.ndarray:
+    """Generate a sine tone as a float32 array."""
     lib = _get_lib()
     with _out_float_array(lib) as (out, out_length):
         _check(
@@ -63,7 +65,7 @@ def tone(
                 ctypes.byref(out_length),
             )
         )
-        return _float_array_result(out, out_length.value)
+        return _from_c_float_array(out, out_length.value)
 
 
 def chirp(
@@ -72,8 +74,8 @@ def chirp(
     sr: int = 22050,
     duration: float = 1.0,
     linear: bool = False,
-) -> list[float]:
-    """Generate a linear or exponential chirp."""
+) -> np.ndarray:
+    """Generate a linear or exponential chirp as a float32 array."""
     lib = _get_lib()
     with _out_float_array(lib) as (out, out_length):
         _check(
@@ -87,7 +89,7 @@ def chirp(
                 ctypes.byref(out_length),
             )
         )
-        return _float_array_result(out, out_length.value)
+        return _from_c_float_array(out, out_length.value)
 
 
 def clicks(
@@ -96,8 +98,8 @@ def clicks(
     length: int | None = None,
     click_freq: float = 1000.0,
     click_duration: float = 0.1,
-) -> list[float]:
-    """Generate decaying sine clicks at times in seconds.
+) -> np.ndarray:
+    """Generate decaying sine clicks at times in seconds as a float32 array.
 
     ``length`` is the output length in samples; ``None`` ends after the last click.
     """
@@ -116,7 +118,7 @@ def clicks(
                 ctypes.byref(out_length),
             )
         )
-        return _float_array_result(out, out_length.value)
+        return _from_c_float_array(out, out_length.value)
 
 
 def stft(
@@ -134,7 +136,8 @@ def stft(
         hop_length: Hop length in samples (default 512).
 
     Returns:
-        StftResult with magnitude and power spectrograms.
+        StftResult with magnitude and power spectrograms, each of shape
+        ``(n_fft // 2 + 1, n_frames)``.
     """
     lib = _get_lib()
     sample_buf = _validate_samples("stft", samples)
@@ -150,15 +153,12 @@ def stft(
     )
     _check(rc)
     try:
-        total = out.n_bins * out.n_frames
         return StftResult(
-            n_bins=out.n_bins,
-            n_frames=out.n_frames,
             n_fft=out.n_fft,
             hop_length=out.hop_length,
             sample_rate=out.sample_rate,
-            magnitude=_float_array_result(out.magnitude, total),
-            power=_float_array_result(out.power, total),
+            magnitude=_from_c_float_matrix(out.magnitude, out.n_bins, out.n_frames),
+            power=_from_c_float_matrix(out.power, out.n_bins, out.n_frames),
         )
     finally:
         lib.sonare_free_stft_result(ctypes.byref(out))
@@ -170,7 +170,7 @@ def stft_db(
     sample_rate: int,
     n_fft: int = 2048,
     hop_length: int = 512,
-) -> tuple[int, int, list[float]]:
+) -> np.ndarray:
     """Compute the STFT in decibels.
 
     Args:
@@ -180,7 +180,7 @@ def stft_db(
         hop_length: Hop length in samples (default 512).
 
     Returns:
-        Tuple of (n_bins, n_frames, db_values).
+        A float32 array of shape ``(n_fft // 2 + 1, n_frames)``.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
@@ -199,9 +199,7 @@ def stft_db(
     )
     _check(rc)
     try:
-        total = out_n_bins.value * out_n_frames.value
-        result = _float_array_result(out_db, total)
-        return (out_n_bins.value, out_n_frames.value, result)
+        return _from_c_float_matrix(out_db, out_n_bins.value, out_n_frames.value)
     finally:
         total = out_n_bins.value * out_n_frames.value
         if out_db and total > 0:
@@ -238,7 +236,8 @@ def mel_spectrogram(
         htk: Use the HTK Mel formula instead of Slaney (default False).
 
     Returns:
-        MelSpectrogramResult with power and dB spectrograms.
+        MelSpectrogramResult with power and dB spectrograms, each of shape
+        ``(n_mels, n_frames)``.
     """
     lib = _get_lib()
     sample_buf = _validate_samples("mel_spectrogram", samples)
@@ -258,19 +257,15 @@ def mel_spectrogram(
     )
     _check(rc)
     try:
-        total = out.n_mels * out.n_frames
         return MelSpectrogramResult(
-            n_mels=out.n_mels,
-            n_frames=out.n_frames,
             sample_rate=out.sample_rate,
             hop_length=out.hop_length,
-            power=_float_array_result(out.power, total),
-            db=_float_array_result(out.db, total),
+            power=_from_c_float_matrix(out.power, out.n_mels, out.n_frames),
+            db=_from_c_float_matrix(out.db, out.n_mels, out.n_frames),
             n_fft=out.n_fft,
             fmin=float(out.fmin),
             fmax=float(out.fmax),
             htk=bool(out.htk),
-            is_db=bool(out.is_db),
         )
     finally:
         lib.sonare_free_mel_result(ctypes.byref(out))
@@ -303,7 +298,7 @@ def mfcc(
         lifter: Cepstral liftering coefficient (default 0.0 = no liftering).
 
     Returns:
-        MfccResult with coefficient matrix.
+        MfccResult whose coefficients have shape ``(n_mfcc, n_frames)``.
     """
     lib = _get_lib()
     sample_buf = _validate_samples("mfcc", samples)
@@ -325,11 +320,8 @@ def mfcc(
     )
     _check(rc)
     try:
-        total = out.n_mfcc * out.n_frames
         return MfccResult(
-            n_mfcc=out.n_mfcc,
-            n_frames=out.n_frames,
-            coefficients=_float_array_result(out.coefficients, total),
+            coefficients=_from_c_float_matrix(out.coefficients, out.n_mfcc, out.n_frames),
             sample_rate=out.sample_rate,
             hop_length=out.hop_length,
             n_fft=out.n_fft,
@@ -337,27 +329,22 @@ def mfcc(
             fmin=float(out.fmin),
             fmax=float(out.fmax),
             htk=bool(out.htk),
-            is_db=bool(out.is_db),
             lifter=float(out.lifter),
         )
     finally:
         lib.sonare_free_mfcc_result(ctypes.byref(out))
 
 
-@_guard_buffer("features")
-def mel_delta(
-    features: Sequence[float] | list[float],
-    n_features: int,
-    n_frames: int,
-    width: int = 9,
-) -> list[float]:
-    """Compute first-order regression deltas of a row-major feature matrix."""
-    if n_features <= 0 or n_frames <= 0 or len(features) != n_features * n_frames:
-        raise SonareValueError("mel_delta: feature matrix length must equal n_features * n_frames")
+def mel_delta(features: npt.ArrayLike, width: int = 9) -> np.ndarray:
+    """Compute first-order regression deltas of a feature matrix.
+
+    ``features`` is a 2-D array of shape ``(n_features, n_frames)``; the result is
+    a float32 array of the same shape.
+    """
     if width < 3 or width % 2 == 0:
         raise SonareValueError("mel_delta: width must be an odd integer of at least 3")
     lib = _get_lib()
-    c_array, _ = _to_c_float_array(features)
+    c_array, n_features, n_frames = _to_c_float_matrix("mel_delta", features, arg_name="features")
     out = ctypes.POINTER(ctypes.c_float)()
     rc = lib.sonare_mel_delta(
         c_array,
@@ -368,7 +355,7 @@ def mel_delta(
     )
     _check(rc)
     try:
-        return _float_array_result(out, n_features * n_frames)
+        return _from_c_float_matrix(out, n_features, n_frames)
     finally:
         if out:
             lib.sonare_free_floats(out)
@@ -402,7 +389,8 @@ def chroma(
         hop_length: Hop length in samples (default 512).
 
     Returns:
-        ChromaResult with chroma features and mean energy.
+        ChromaResult with chroma features of shape ``(n_chroma, n_frames)`` and
+        the mean energy of each class.
     """
     lib = _get_lib()
     sample_buf = _validate_samples("chroma", samples)
@@ -418,14 +406,11 @@ def chroma(
     )
     _check(rc)
     try:
-        total = out.n_chroma * out.n_frames
         return ChromaResult(
-            n_chroma=out.n_chroma,
-            n_frames=out.n_frames,
             sample_rate=out.sample_rate,
             hop_length=out.hop_length,
-            features=_float_array_result(out.features, total),
-            mean_energy=_float_array_result(out.mean_energy, out.n_chroma),
+            features=_from_c_float_matrix(out.features, out.n_chroma, out.n_frames),
+            mean_energy=_from_c_float_array(out.mean_energy, out.n_chroma),
         )
     finally:
         lib.sonare_free_chroma_result(ctypes.byref(out))
@@ -460,14 +445,11 @@ def _chroma_variant(
     rc = getattr(lib, fn_name)(*args)
     _check(rc)
     try:
-        total = out.n_chroma * out.n_frames
         return ChromaResult(
-            n_chroma=out.n_chroma,
-            n_frames=out.n_frames,
             sample_rate=out.sample_rate,
             hop_length=out.hop_length,
-            features=_float_array_result(out.features, total),
-            mean_energy=_float_array_result(out.mean_energy, out.n_chroma),
+            features=_from_c_float_matrix(out.features, out.n_chroma, out.n_frames),
+            mean_energy=_from_c_float_array(out.mean_energy, out.n_chroma),
         )
     finally:
         lib.sonare_free_chroma_result(ctypes.byref(out))
@@ -493,7 +475,8 @@ def chroma_cens(
             them has no fold, so 18 is refused against the default 12 classes.
 
     Returns:
-        ChromaResult with chroma features and mean energy.
+        ChromaResult with chroma features of shape ``(n_chroma, n_frames)`` and
+        the mean energy of each class.
     """
     return _chroma_variant(
         "sonare_chroma_cens_ex",
@@ -526,7 +509,8 @@ def chroma_cqt(
             them has no fold, so 18 is refused against the default 12 classes.
 
     Returns:
-        ChromaResult with chroma features and mean energy.
+        ChromaResult with chroma features of shape ``(n_chroma, n_frames)`` and
+        the mean energy of each class.
     """
     return _chroma_variant(
         "sonare_chroma_cqt_ex",
@@ -557,7 +541,8 @@ def bass_chroma(
             that does not divide 36 -- 5 among them -- is refused.
 
     Returns:
-        ChromaResult with chroma features and mean energy.
+        ChromaResult with chroma features of shape ``(n_chroma, n_frames)`` and
+        the mean energy of each class.
     """
     return _chroma_variant(
         "sonare_bass_chroma",
@@ -580,7 +565,7 @@ def spectral_centroid(
     sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
-) -> list[float]:
+) -> np.ndarray:
     """Compute the spectral centroid per frame.
 
     Args:
@@ -590,9 +575,9 @@ def spectral_centroid(
         hop_length: Hop length in samples (default 512).
 
     Returns:
-        List of spectral centroid values per frame.
+        A float32 array of spectral centroid values, one per frame.
     """
-    return _call_float_transform(
+    return _call_float_array_transform(
         "sonare_spectral_centroid",
         samples,
         _to_c_int(sr, "sr"),
@@ -608,7 +593,7 @@ def spectral_bandwidth(
     n_fft: int = 2048,
     hop_length: int = 512,
     p: float = 2.0,
-) -> list[float]:
+) -> np.ndarray:
     """Compute the spectral bandwidth per frame.
 
     Args:
@@ -619,9 +604,9 @@ def spectral_bandwidth(
         p: Positive Minkowski exponent (default 2.0).
 
     Returns:
-        List of spectral bandwidth values per frame.
+        A float32 array of spectral bandwidth values, one per frame.
     """
-    return _call_float_transform(
+    return _call_float_array_transform(
         "sonare_spectral_bandwidth_ex",
         samples,
         _to_c_int(sr, "sr"),
@@ -638,9 +623,9 @@ def spectral_flux(
     n_fft: int = 2048,
     hop_length: int = 512,
     lag: int = 1,
-) -> list[float]:
-    """Compute the unsigned L1 spectral-flux envelope."""
-    return _call_float_transform(
+) -> np.ndarray:
+    """Compute the unsigned L1 spectral-flux envelope as a float32 array."""
+    return _call_float_array_transform(
         "sonare_spectral_flux",
         samples,
         _to_c_int(sample_rate, "sample_rate"),
@@ -678,7 +663,7 @@ def spectral_rolloff(
     n_fft: int = 2048,
     hop_length: int = 512,
     roll_percent: float = 0.85,
-) -> list[float]:
+) -> np.ndarray:
     """Compute the spectral rolloff per frame.
 
     Args:
@@ -689,9 +674,9 @@ def spectral_rolloff(
         roll_percent: Rolloff percentage (default 0.85).
 
     Returns:
-        List of spectral rolloff values per frame.
+        A float32 array of spectral rolloff values, one per frame.
     """
-    return _call_float_transform(
+    return _call_float_array_transform(
         "sonare_spectral_rolloff",
         samples,
         _to_c_int(sr, "sr"),
@@ -707,7 +692,7 @@ def spectral_flatness(
     sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
-) -> list[float]:
+) -> np.ndarray:
     """Compute the spectral flatness per frame.
 
     Args:
@@ -717,9 +702,9 @@ def spectral_flatness(
         hop_length: Hop length in samples (default 512).
 
     Returns:
-        List of spectral flatness values per frame.
+        A float32 array of spectral flatness values, one per frame.
     """
-    return _call_float_transform(
+    return _call_float_array_transform(
         "sonare_spectral_flatness",
         samples,
         _to_c_int(sr, "sr"),
@@ -734,7 +719,7 @@ def zero_crossing_rate(
     sr: int = 22050,
     frame_length: int = 2048,
     hop_length: int = 512,
-) -> list[float]:
+) -> np.ndarray:
     """Compute the zero-crossing rate per frame.
 
     Args:
@@ -744,9 +729,9 @@ def zero_crossing_rate(
         hop_length: Hop length in samples (default 512).
 
     Returns:
-        List of zero-crossing rate values per frame.
+        A float32 array of zero-crossing rate values, one per frame.
     """
-    return _call_float_transform(
+    return _call_float_array_transform(
         "sonare_zero_crossing_rate",
         samples,
         _to_c_int(sr, "sr"),
@@ -761,7 +746,7 @@ def rms_energy(
     sample_rate: int,
     frame_length: int = 2048,
     hop_length: int = 512,
-) -> list[float]:
+) -> np.ndarray:
     """Compute the RMS energy per frame.
 
     Args:
@@ -771,9 +756,9 @@ def rms_energy(
         hop_length: Hop length in samples (default 512).
 
     Returns:
-        List of RMS energy values per frame.
+        A float32 array of RMS energy values, one per frame.
     """
-    return _call_float_transform(
+    return _call_float_array_transform(
         "sonare_rms_energy",
         samples,
         _to_c_int(sample_rate, "sample_rate"),
@@ -937,7 +922,10 @@ def reassigned_spectrogram(
     ref_power: float = 1e-6,
     fill_nan: bool = False,
 ) -> ReassignedSpectrogramResult:
-    """Return magnitude, reassigned times, and reassigned frequencies per STFT bin."""
+    """Return magnitude, reassigned times and reassigned frequencies per STFT bin.
+
+    Each field is a float32 array of shape ``(n_bins, n_frames)``.
+    """
     if ref_power < 0.0 or not np.isfinite(ref_power):
         raise SonareValueError("reassigned_spectrogram: ref_power must be finite and non-negative")
     lib = _get_lib()
@@ -955,13 +943,10 @@ def reassigned_spectrogram(
     )
     _check(rc)
     try:
-        total = out.n_bins * out.n_frames
         return ReassignedSpectrogramResult(
-            out.n_bins,
-            out.n_frames,
-            _float_array_result(out.magnitude, total),
-            _float_array_result(out.times, total),
-            _float_array_result(out.frequencies, total),
+            magnitude=_from_c_float_matrix(out.magnitude, out.n_bins, out.n_frames),
+            times=_from_c_float_matrix(out.times, out.n_bins, out.n_frames),
+            frequencies=_from_c_float_matrix(out.frequencies, out.n_bins, out.n_frames),
         )
     finally:
         lib.sonare_free_reassigned_spectrogram_result(ctypes.byref(out))

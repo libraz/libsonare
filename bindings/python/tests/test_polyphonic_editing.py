@@ -552,12 +552,12 @@ def test_reattack_ratio_splits_a_restruck_tone() -> None:
         assert len(whole.notes()) == 1
     with libsonare.PolyphonicAnalysis.analyze(tone, SR, reattack_ratio=None) as whole:
         assert len(whole.notes()) == 1
-    # A written 0 is off too, as on the transcribe facade and the other surfaces.
-    with libsonare.PolyphonicAnalysis.analyze(tone, SR, reattack_ratio=0.0) as whole:
-        assert len(whole.notes()) == 1
+    # A written 0 is refused, as on the transcribe facade and the other surfaces.
+    with pytest.raises(SonareValueError, match="reattack_ratio"):
+        libsonare.PolyphonicAnalysis.analyze(tone, SR, reattack_ratio=0.0)
 
 
-@pytest.mark.parametrize("value", [1.0, 0.5, -2.0, float("nan"), float("inf")], ids=str)
+@pytest.mark.parametrize("value", [1.0, 0.5, 0.0, -2.0, float("nan"), float("inf")], ids=str)
 def test_reattack_ratio_out_of_domain_is_refused(chord: NDArray[np.float32], value: float) -> None:
     with pytest.raises(SonareValueError, match="reattack_ratio"):
         libsonare.PolyphonicAnalysis.analyze(chord, SR, reattack_ratio=value)

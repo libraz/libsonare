@@ -7,6 +7,7 @@ import json
 from types import SimpleNamespace
 from typing import Any, cast
 
+import numpy as np
 import pytest
 
 
@@ -301,7 +302,7 @@ def test_mel_forwards_htk_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_mel(samples: Any, **kwargs: object) -> SimpleNamespace:
         calls.append(kwargs)
         return SimpleNamespace(
-            n_mels=128, n_frames=1, sample_rate=22050, hop_length=512, power=[0.0]
+            sample_rate=22050, hop_length=512, power=np.zeros((128, 1), dtype=np.float32)
         )
 
     monkeypatch.setattr(libsonare, "mel_spectrogram", fake_mel)
@@ -350,7 +351,12 @@ def test_pitch_forwards_threshold_hop_and_frequency_bounds(
     def fake_pitch(name: str):
         def run(samples: Any, **kwargs: object) -> SimpleNamespace:
             calls.append((name, kwargs))
-            return SimpleNamespace(n_frames=1, voiced_flag=[True], median_f0=440.0, mean_f0=440.0)
+            return SimpleNamespace(
+                f0=np.array([440.0]),
+                voiced_flag=np.array([True]),
+                median_f0=440.0,
+                mean_f0=440.0,
+            )
 
         return run
 

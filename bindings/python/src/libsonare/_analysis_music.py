@@ -116,16 +116,16 @@ def detect_chords(
     key_mode: Mode = Mode.MAJOR,
     detect_inversions: bool = False,
     chroma_method: str = "cqt",
-    tuning: float | str = "auto",
+    tuning_cents: float | str = "auto",
 ) -> ChordAnalysisResult:
     """Detect a continuous chord/N.C. timeline.
 
     ``threshold`` is a final-template correlation cutoff in ``[0, 1]``;
     rejected intervals use quality ``"unknown"`` and ``Chord.name == "N.C."``.
-    ``tuning`` is the recording's tuning offset in fractions of a semitone; it
-    must be in ``[-0.5, 0.5)`` and 0 is concert A440. ``"auto"`` (default)
+    ``tuning_cents`` is the recording's tuning offset in cents; it
+    must be in ``[-50, 50)`` and 0 is concert A440. ``"auto"`` (default)
     measures it from the audio, and :func:`reference_hz_to_tuning` converts a reference pitch to
-    this unit. The value used, given or measured, is the result's ``tuning``.
+    this unit. The value used, given or measured, is the result's ``tuning_cents``.
     ``n_fft`` is the STFT chroma window in samples at 22050 Hz,
     rescaled to the input rate so its duration is the same at every rate.
     ``chroma_method`` is ``"cqt"`` (default), ``"stft"`` or ``"nnls"``; the
@@ -139,7 +139,7 @@ def detect_chords(
     out = SonareChordAnalysisResult()
     # The key ordinals go in unconverted: the struct's own narrowing refuses a
     # fraction, which int() truncated into a neighbouring pitch class or mode.
-    tuning_value, tuning_auto = _tuning_arg("detect_chords", tuning)
+    tuning_value, tuning_auto = _tuning_arg("detect_chords", tuning_cents)
     options = SonareChordDetectionOptions(
         SONARE_CHORD_DETECTION_OPTIONS_VERSION,
         min_duration,
@@ -168,7 +168,7 @@ def detect_chords(
     )
     _check(rc)
     try:
-        return ChordAnalysisResult(chords=_chords_from_c(out), tuning=float(out.tuning))
+        return ChordAnalysisResult(chords=_chords_from_c(out), tuning_cents=float(out.tuning_cents))
     finally:
         lib.sonare_free_chord_analysis_result(ctypes.byref(out))
 
@@ -191,13 +191,13 @@ def chord_functional_analysis(
     use_key_context: bool = False,
     detect_inversions: bool = False,
     chroma_method: str = "cqt",
-    tuning: float | str = "auto",
+    tuning_cents: float | str = "auto",
 ) -> list[FunctionalChord]:
     """Detect chords and label them relative to a key.
 
     Detects chords with the same algorithm as :func:`detect_chords`, then
     returns the timed entries as :func:`chord_functions` does: every
-    :class:`Chord` field plus ``roman`` and ``function``. ``tuning`` is as for
+    :class:`Chord` field plus ``roman`` and ``function``. ``tuning_cents`` is as for
     :func:`detect_chords`.
     """
     chroma_method_value = {"stft": 0, "nnls": 1, "cqt": 2}.get(chroma_method.lower())
@@ -210,7 +210,7 @@ def chord_functional_analysis(
     functions = SonareStringArray()
     # The key ordinals go in unconverted: the struct's own narrowing refuses a
     # fraction, which int() truncated into a neighbouring pitch class or mode.
-    tuning_value, tuning_auto = _tuning_arg("chord_functional_analysis", tuning)
+    tuning_value, tuning_auto = _tuning_arg("chord_functional_analysis", tuning_cents)
     options = SonareChordDetectionOptions(
         SONARE_CHORD_DETECTION_OPTIONS_VERSION,
         min_duration,
