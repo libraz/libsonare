@@ -5033,3 +5033,27 @@ changed = "default 300 -> 200, the shared tempo range"
 domain = "core"
 rule = "tempo-range"
 test = "bindings/python/tests/test_tempo_range_defaults.py::test_the_default_range_is_60_to_200"
+
+[[entry]]
+kind = "option"
+old = "segment_recurrence_matrix(k)"
+changed = "default 0 -> None (derived from the frame count); an explicit value below 1 is refused"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_optional_scalar_default_sentinel.py::test_a_count_below_one_is_refused"
+
+[[entry]]
+kind = "option"
+old = "segment_cross_similarity(k)"
+changed = "default 0 -> None (derived from the frame count); an explicit value below 1 is refused"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_optional_scalar_default_sentinel.py::test_a_count_below_one_is_refused"
+
+[[entry]]
+kind = "option"
+old = "segment_path_enhance(min_ratio)"
+changed = "default 0 -> None (1 / max_ratio); an explicit value below 1 is refused"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_optional_scalar_default_sentinel.py::test_a_ratio_below_one_is_refused"

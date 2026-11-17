@@ -1795,13 +1795,13 @@ def reassigned_spectrogram(
 def segment_cross_similarity(
     x: npt.ArrayLike,
     y: npt.ArrayLike,
-    k: int = 0,
+    k: int | None = None,
     metric: Literal["cosine", "euclidean"] = "cosine",
     mode: Literal["connectivity", "affinity"] = "connectivity",
 ) -> np.ndarray[Any, Any]: ...
 def segment_recurrence_matrix(
     data: npt.ArrayLike,
-    k: int = 0,
+    k: int | None = None,
     width: int = 1,
     sym: bool = False,
     metric: Literal["cosine", "euclidean"] = "euclidean",
@@ -1825,7 +1825,7 @@ def segment_path_enhance(
     recurrence: npt.ArrayLike,
     win: int,
     max_ratio: int = 2,
-    min_ratio: int = 0,
+    min_ratio: int | None = None,
     n_filters: int = 7,
 ) -> np.ndarray[Any, Any]: ...
 def note_segments(

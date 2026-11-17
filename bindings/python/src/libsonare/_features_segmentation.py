@@ -10,6 +10,7 @@ import numpy as np
 import numpy.typing as npt
 
 from ._ffi import SonareSegmentIndices, SonareSegmentMatrix
+from ._narrowing import _resolve_zero_default
 from ._runtime import (
     SonareValueError,
     _check,
@@ -59,14 +60,15 @@ def _segment_indices_result(lib: ctypes.CDLL, out: SonareSegmentIndices) -> np.n
 def segment_cross_similarity(
     x: npt.ArrayLike,
     y: npt.ArrayLike,
-    k: int = 0,
+    k: int | None = None,
     metric: _SegmentMetric = "cosine",
     mode: _SegmentMode = "connectivity",
 ) -> np.ndarray:
     """Return column-wise cross-similarity (``librosa.segment.cross_similarity``).
 
     ``x`` and ``y`` are 2-D feature arrays of shape ``(features, frames)``. The
-    result is a float32 array of shape ``(frames_y, frames_x)``.
+    result is a float32 array of shape ``(frames_y, frames_x)``. ``k`` is the
+    neighbour count; ``None`` derives it from the frame count as librosa does.
     """
     x_array, x_rows, x_cols = _to_c_float_matrix("segment_cross_similarity", x, arg_name="x")
     y_array, y_rows, y_cols = _to_c_float_matrix("segment_cross_similarity", y, arg_name="y")
@@ -78,7 +80,7 @@ def segment_cross_similarity(
         y_array,
         _to_c_int(y_rows, "y_rows"),
         _to_c_int(y_cols, "y_cols"),
-        _to_c_int(k, "k"),
+        _to_c_int(_resolve_zero_default(k, "k"), "k"),
         _utf8_arg(_token_arg(metric, _SEGMENT_METRICS, "metric"), "metric"),
         _utf8_arg(_token_arg(mode, _SEGMENT_MODES, "mode"), "mode"),
         ctypes.byref(out),
@@ -89,7 +91,7 @@ def segment_cross_similarity(
 
 def segment_recurrence_matrix(
     data: npt.ArrayLike,
-    k: int = 0,
+    k: int | None = None,
     width: int = 1,
     sym: bool = False,
     metric: _SegmentMetric = "euclidean",
@@ -98,7 +100,8 @@ def segment_recurrence_matrix(
     """Return a self-similarity recurrence matrix (``librosa.segment.recurrence_matrix``).
 
     ``data`` is a 2-D feature array of shape ``(features, frames)``. The result is
-    a float32 array of shape ``(frames, frames)``.
+    a float32 array of shape ``(frames, frames)``. ``k`` is the neighbour count;
+    ``None`` derives it from the frame count as librosa does.
     """
     c_data, rows, cols = _to_c_float_matrix("segment_recurrence_matrix", data, arg_name="data")
     lib = _get_lib()
@@ -107,7 +110,7 @@ def segment_recurrence_matrix(
         c_data,
         _to_c_int(rows, "rows"),
         _to_c_int(cols, "cols"),
-        _to_c_int(k, "k"),
+        _to_c_int(_resolve_zero_default(k, "k"), "k"),
         _to_c_int(width, "width"),
         1 if sym else 0,
         _utf8_arg(_token_arg(metric, _SEGMENT_METRICS, "metric"), "metric"),
@@ -213,10 +216,13 @@ def segment_path_enhance(
     recurrence: npt.ArrayLike,
     win: int,
     max_ratio: int = 2,
-    min_ratio: int = 0,
+    min_ratio: int | None = None,
     n_filters: int = 7,
 ) -> np.ndarray:
-    """Enhance diagonal paths in a square recurrence matrix of shape ``(n, n)``."""
+    """Enhance diagonal paths in a square recurrence matrix of shape ``(n, n)``.
+
+    ``min_ratio`` is the slowest tempo ratio; ``None`` is ``1 / max_ratio``.
+    """
     c_recurrence, n = _square_input("segment_path_enhance", recurrence, arg_name="recurrence")
     lib = _get_lib()
     out = SonareSegmentMatrix()
@@ -226,7 +232,7 @@ def segment_path_enhance(
             _to_c_int(n, "n"),
             _to_c_int(win, "win"),
             _to_c_int(max_ratio, "max_ratio"),
-            _to_c_int(min_ratio, "min_ratio"),
+            _to_c_int(_resolve_zero_default(min_ratio, "min_ratio"), "min_ratio"),
             _to_c_int(n_filters, "n_filters"),
             ctypes.byref(out),
         )

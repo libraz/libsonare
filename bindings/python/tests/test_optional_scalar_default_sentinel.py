@@ -22,6 +22,7 @@ from collections.abc import Callable
 import numpy as np
 import pytest
 
+import libsonare
 from libsonare import SonareError, SonareValueError
 from libsonare._features_core import mel_spectrogram
 from libsonare._features_metering import scale_correction_semitones, scale_quantize_midi
@@ -163,3 +164,51 @@ class TestScaleQuantizerReference:
         # integer one is the same grid as the default whatever its value.
         detuned = scale_quantize_midi(0, C_MAJOR_MASK, 60.4, scale_reference_midi=69.5)
         assert detuned != scale_quantize_midi(0, C_MAJOR_MASK, 60.4)
+
+
+def _features() -> np.ndarray:
+    return np.random.default_rng(3).standard_normal((6, 40)).astype(np.float32)
+
+
+SEGMENT_NEIGHBOURS = {
+    "segment_recurrence_matrix": lambda **kw: libsonare.segment_recurrence_matrix(
+        _features(), **kw
+    ),
+    "segment_cross_similarity": lambda **kw: libsonare.segment_cross_similarity(
+        _features(), _features()[:, ::-1].copy(), **kw
+    ),
+}
+
+
+class TestSegmentNeighbourCount:
+    """The recurrence ``k``: None derives it from the frame count; 0 is not a count."""
+
+    @pytest.mark.parametrize("name", sorted(SEGMENT_NEIGHBOURS))
+    def test_an_absent_k_is_the_derived_count(self, name: str) -> None:
+        call = SEGMENT_NEIGHBOURS[name]
+        assert np.array_equal(call(), call(k=None))
+        assert not np.array_equal(call(), call(k=2))
+
+    @pytest.mark.parametrize("name", sorted(SEGMENT_NEIGHBOURS))
+    @pytest.mark.parametrize("value", [0, -1])
+    def test_a_count_below_one_is_refused(self, name: str, value: int) -> None:
+        with pytest.raises(SonareValueError, match="k must be positive"):
+            SEGMENT_NEIGHBOURS[name](k=value)
+
+
+class TestPathEnhanceMinRatio:
+    """``min_ratio``: None is ``1 / max_ratio``; 0 is not a ratio."""
+
+    @staticmethod
+    def _enhance(**kw: object) -> np.ndarray:
+        rec = libsonare.segment_recurrence_matrix(_features(), mode="affinity")
+        return libsonare.segment_path_enhance(rec, 5, **kw)
+
+    def test_an_absent_min_ratio_is_the_reciprocal_of_max_ratio(self) -> None:
+        assert np.array_equal(self._enhance(), self._enhance(min_ratio=None))
+        assert not np.array_equal(self._enhance(), self._enhance(min_ratio=1))
+
+    @pytest.mark.parametrize("value", [0, -1])
+    def test_a_ratio_below_one_is_refused(self, value: int) -> None:
+        with pytest.raises(SonareValueError, match="min_ratio must be positive"):
+            self._enhance(min_ratio=value)
