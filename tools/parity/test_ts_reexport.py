@@ -297,6 +297,14 @@ def test_an_object_return_type_is_not_a_body() -> None:
     assert [[p.name for p in s.params] for s in sigs] == [["x"]], sigs
 
 
+def test_a_type_parameter_list_does_not_hide_the_function() -> None:
+    sigs = _one_module(
+        "export function fn<T extends Array<Record<string, number>>>(items: T, hopLength?: number): T {\n"
+        "  return items;\n}\n"
+    )
+    assert [[p.name for p in s.params] for s in sigs] == [["items", "hop_length"]], sigs
+
+
 def test_real_repo_surface_is_substantial() -> None:
     """On the real repo, node/wasm must each cover a large share of the C API.
 

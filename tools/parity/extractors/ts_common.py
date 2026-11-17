@@ -58,10 +58,16 @@ from ._tokens import split_top_level_commas
 # naming signal is preserved rather than silently dropped.
 _STRUCTURAL_NAMES = {"options", "validate", "on_progress"}
 
+# An optional type-parameter list between a name and its `(`, nested up to three deep.
+_TYPE_PARAMS = r"(?:\s*<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>)?"
 # export function foo(  ... up to the closing paren before the return type
-_FUNC_HEAD = re.compile(r"export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(")
+_FUNC_HEAD = re.compile(
+    r"export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)" + _TYPE_PARAMS + r"\s*\("
+)
 # class method head: indented `name(` that is not a keyword/control statement.
-_METHOD_HEAD = re.compile(r"^[ \t]{2,4}(?:static\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(", re.MULTILINE)
+_METHOD_HEAD = re.compile(
+    r"^[ \t]{2,4}(?:static\s+)?([A-Za-z_][A-Za-z0-9_]*)" + _TYPE_PARAMS + r"\s*\(", re.MULTILINE
+)
 # A public property getter has no argument list to normalize, but represents a
 # callable C-ABI accessor just like a zero-argument class method.
 _GETTER_HEAD = re.compile(r"^[ \t]{2,4}get\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)", re.MULTILINE)
