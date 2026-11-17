@@ -117,8 +117,8 @@ PROBES: dict[str, tuple[tuple[object, ...], tuple[object, ...]]] = {
     "_send_timing_value": ((1.5,), ("post-fader",)),
     "_sidechain_source_kind_value": ((1.5,), ("track",)),
     "_warp_mode_value": ((1.5,), ("off",)),
-    "_profile_value": (("not-a-key-profile",), ("krumhansl",)),
-    "_mode_values": (("not-a-mode",), ("major-minor",)),
+    "_profile_value": (("not-a-key-profile",), ("krumhanslSchmuckler",)),
+    "_mode_values": (("not-a-mode",), ("majorMinor",)),
     "_mode_value": (("not-a-mode",), ("dorian",)),
 }
 

@@ -47,8 +47,8 @@ from .types import (
     ClippingRegion,
     ClippingReport,
     DynamicRangeReport,
+    KeyMode,
     LufsResult,
-    Mode,
     PhaseScopeReport,
     SpectrumReport,
     VectorscopeReport,
@@ -1063,16 +1063,16 @@ def _scale_scalar(
     return float(out.value)
 
 
-def scale_mask_for_mode(root: int, mode: Mode | str | int) -> int:
+def scale_mask_for_mode(root: int, mode: KeyMode) -> int:
     """Return the 12-bit scale mask of a mode.
 
     Bit ``i`` is set when the semitone ``i`` above ``root`` belongs to the scale,
     the layout :func:`scale_quantize_midi` and :func:`pitch_correct_timevarying`
     read. The mask is relative to the root, so it is the same for every ``root``,
-    which is still validated. ``mode`` is a :class:`Mode`, its ordinal, or a
-    church-mode name as :func:`detect_key` reports it (``"major"``, ``"minor"``,
-    ``"dorian"``, ``"phrygian"``, ``"lydian"``, ``"mixolydian"``,
-    ``"locrian"``); minor is the natural minor.
+    which is still validated. ``mode`` is a :data:`KeyMode` token, as
+    :func:`detect_key` reports it (``"major"``, ``"minor"``, ``"dorian"``,
+    ``"phrygian"``, ``"lydian"``, ``"mixolydian"``, ``"locrian"``); minor is the
+    natural minor.
 
     Example:
         >>> scale_mask_for_mode(0, "major") == 0b101010110101

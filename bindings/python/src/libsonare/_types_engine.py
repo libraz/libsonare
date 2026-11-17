@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Any
 
 import numpy as np
 
@@ -590,7 +589,7 @@ class Section:
     ``energy_level`` is the median frame RMS in the section over the loudest
     section's, in [0, 1]. ``group`` numbers the section's material: sections
     sharing a value repeat the same material, numbered 0, 1, ... by first
-    appearance. ``SectionType.UNKNOWN`` means no labelling rule matched and
+    appearance. ``"unknown"`` means no labelling rule matched and
     comes with ``confidence`` 0.
     """
 
@@ -603,15 +602,15 @@ class Section:
     name: str = ""
 
 
-_SECTION_NAMES: dict[Any, str] = {
-    SectionType.INTRO: "Intro",
-    SectionType.VERSE: "Verse",
-    SectionType.PRE_CHORUS: "Pre-Chorus",
-    SectionType.CHORUS: "Chorus",
-    SectionType.BRIDGE: "Bridge",
-    SectionType.INSTRUMENTAL: "Instrumental",
-    SectionType.OUTRO: "Outro",
-    SectionType.UNKNOWN: "Unknown",
+_SECTION_NAMES: dict[SectionType, str] = {
+    "intro": "Intro",
+    "verse": "Verse",
+    "preChorus": "Pre-Chorus",
+    "chorus": "Chorus",
+    "bridge": "Bridge",
+    "instrumental": "Instrumental",
+    "outro": "Outro",
+    "unknown": "Unknown",
 }
 
 

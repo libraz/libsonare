@@ -14,11 +14,11 @@ key: libsonare.Key = libsonare.detect_key(
     samples,
     22050,
     chroma_high_pass_hz=80.0,
-    profile=libsonare.KeyProfile.FARALDO_EDMA,
+    profile="faraldoEdma",
     genre_hint="edm",
 )
 key_candidates: list[libsonare.KeyCandidate] = libsonare.detect_key_candidates(
-    samples, 22050, chroma_high_pass_hz=80.0, modes=[libsonare.Mode.MAJOR, "dorian"], profile="edma"
+    samples, 22050, chroma_high_pass_hz=80.0, modes=["major", "dorian"], profile="faraldoEdma"
 )
 analysis: libsonare.AnalysisResult = libsonare.analyze(samples, 22050)
 acoustic: libsonare.AcousticResult = libsonare.analyze_impulse_response(ir_samples, 48000)
@@ -40,7 +40,7 @@ chords: libsonare.ChordAnalysisResult = libsonare.detect_chords(
     hmm_beam_width=8,
     use_key_context=True,
     key_root=libsonare.PitchClass.C,
-    key_mode=libsonare.Mode.MAJOR,
+    key_mode="major",
     detect_inversions=True,
     chroma_method="nnls",
 )

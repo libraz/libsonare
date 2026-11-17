@@ -293,13 +293,12 @@ def test_detect_bpm_with_silence() -> None:
 def test_detect_key_with_silence() -> None:
     """detect_key returns the documented C-major fallback on silence."""
     from libsonare import PitchClass, detect_key
-    from libsonare.types import Mode
 
     silence = [0.0] * 22050
     key = detect_key(silence, sample_rate=22050)
     # Silence has no tonal content, so detect_key falls back to C major.
     assert key.root == PitchClass.C
-    assert key.mode == Mode.MAJOR
+    assert key.mode == "major"
     assert isinstance(key.confidence, float)
     # Confidence on silence stays low (empirically ~0.25).
     assert key.confidence < 0.5
@@ -308,7 +307,6 @@ def test_detect_key_with_silence() -> None:
 def test_analyze_with_silence() -> None:
     """analyze returns the documented fallbacks on silent audio."""
     from libsonare import PitchClass, analyze
-    from libsonare.types import Mode
 
     silence = [0.0] * 22050
     result = analyze(silence, sample_rate=22050)
@@ -316,7 +314,7 @@ def test_analyze_with_silence() -> None:
     assert isinstance(result.bpm_confidence, float)
     # Silence has no tonal content: detect_key falls back to C major.
     assert result.key.root == PitchClass.C
-    assert result.key.mode == Mode.MAJOR
+    assert result.key.mode == "major"
     # Time signature falls back to 4/4 when no rhythmic content is present.
     assert result.time_signature.numerator == 4
     assert result.time_signature.denominator == 4
@@ -409,13 +407,12 @@ def test_audio_detect_bpm() -> None:
 def test_audio_detect_key() -> None:
     """Audio.detect_key returns the documented C-major fallback on silence."""
     from libsonare import Audio, PitchClass
-    from libsonare.types import Mode
 
     audio = Audio.from_buffer([0.0] * 22050, sample_rate=22050)
     key = audio.detect_key()
     # Silence has no tonal content, so detect_key falls back to C major.
     assert key.root == PitchClass.C
-    assert key.mode == Mode.MAJOR
+    assert key.mode == "major"
     # Name accessors must agree with the resolved root/mode.
     assert key.name == "C major"
     assert key.short_name == "C"

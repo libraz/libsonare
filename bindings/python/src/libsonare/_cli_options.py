@@ -15,13 +15,14 @@ import dataclasses
 import math
 import sys
 from collections.abc import Iterable
-from typing import Any, NoReturn
+from typing import Any, NoReturn, cast
 
 from ._cli_common import EXIT_USAGE, _legacy_exit_codes
 from ._cli_inventory import _cli_domain, _cli_scalar_type, _inventory_subparsers
 from ._errors import SonareValueError
 from ._narrowing import _FLOAT32_MAX
 from ._runtime import _C_INT_MAX, _C_INT_MIN, _narrow_int
+from ._types_enums import KeyMode
 
 
 class _ContractArgumentParser(argparse.ArgumentParser):
@@ -254,7 +255,7 @@ def _mode_mask(value: str) -> int:
     from ._features_metering import scale_mask_for_mode
 
     try:
-        return scale_mask_for_mode(0, value)
+        return scale_mask_for_mode(0, cast(KeyMode, value))
     except SonareValueError as exc:
         raise argparse.ArgumentTypeError(
             f"{value!r} is neither an integer mask nor a mode name "

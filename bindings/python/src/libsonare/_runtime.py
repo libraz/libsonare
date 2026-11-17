@@ -41,6 +41,9 @@ from ._narrowing import _resolve_sample_bound as _resolve_sample_bound
 from ._narrowing import _resolve_time_offset as _resolve_time_offset
 from ._narrowing import _resolve_zero_default as _resolve_zero_default
 from ._narrowing import _utf8_arg as _utf8_arg
+from ._types_enums import _KEY_MODES as _KEY_MODES
+from ._types_enums import _KEY_PROFILES as _KEY_PROFILES
+from ._types_enums import _SECTION_TYPES as _SECTION_TYPES
 from .types import *  # noqa: F403
 
 # Pan-law aliases are normalized case-insensitively and with underscores folded
@@ -1253,81 +1256,71 @@ def _mix_meter_from_c(snapshot: SonareMixMeterSnapshot) -> MixMeterSnapshot:
     )
 
 
-def _mode_values(modes: Sequence[Mode | str] | str | None) -> list[int]:
+def _token_ordinal(value: object, tokens: tuple[str, ...], what: str) -> int:
+    """Resolve a string token to its ordinal (its index in ``tokens``).
+
+    Only the exact canonical spelling is accepted. A non-string, including an
+    ``int`` or ``bool``, raises ``TypeError``; an unknown string raises
+    :class:`SonareValueError` listing the accepted tokens.
+    """
+    if not isinstance(value, str):
+        raise TypeError(f"invalid {what}: expected a string token, got {type(value).__name__}")
+    try:
+        return tokens.index(value)
+    except ValueError:
+        raise SonareValueError(
+            f"invalid {what}: {value!r} (expected one of {list(tokens)})"
+        ) from None
+
+
+# Candidate-mode groups a ``modes`` string may name instead of a single mode.
+_MODE_GROUPS: dict[str, tuple[KeyMode, ...]] = {
+    "majorMinor": ("major", "minor"),
+    "all": _KEY_MODES,
+    "modal": _KEY_MODES,
+}
+
+
+def _mode_values(modes: Sequence[KeyMode] | str | None) -> list[int]:
     if modes is None:
         return []
     if isinstance(modes, str):
-        key = modes.lower()
-        if key in ("major-minor", "majmin", "diatonic"):
-            return [int(Mode.MAJOR), int(Mode.MINOR)]
-        if key in ("all", "modal"):
-            return [
-                int(Mode.MAJOR),
-                int(Mode.MINOR),
-                int(Mode.DORIAN),
-                int(Mode.PHRYGIAN),
-                int(Mode.LYDIAN),
-                int(Mode.MIXOLYDIAN),
-                int(Mode.LOCRIAN),
-            ]
-        modes = [modes]
-    out: list[int] = []
-    for mode in modes:
-        if isinstance(mode, str):
-            out.append(_resolve_enum(mode, _MODE_NAMES, "mode", verb="invalid"))
-        else:
-            out.append(int(Mode(mode)))
-    return out
+        if modes in _MODE_GROUPS:
+            return [_mode_value(mode) for mode in _MODE_GROUPS[modes]]
+        return [_mode_value(cast(KeyMode, modes))]
+    return [_mode_value(mode) for mode in modes]
 
 
-def _mode_value(mode: Mode | str | int) -> int:
-    """Resolve one mode given as a :class:`Mode`, its name, or its ordinal."""
-    if isinstance(mode, str):
-        return _resolve_enum(mode, _MODE_NAMES, "mode", verb="invalid")
-    return int(Mode(mode))
-
-
-_MODE_NAMES = {
-    "major": int(Mode.MAJOR),
-    "maj": int(Mode.MAJOR),
-    "minor": int(Mode.MINOR),
-    "min": int(Mode.MINOR),
-    "m": int(Mode.MINOR),
-    "dorian": int(Mode.DORIAN),
-    "phrygian": int(Mode.PHRYGIAN),
-    "lydian": int(Mode.LYDIAN),
-    "mixolydian": int(Mode.MIXOLYDIAN),
-    "locrian": int(Mode.LOCRIAN),
-}
-
-_KEY_PROFILE_NAMES = {
-    "ks": int(KeyProfile.KRUMHANSL_SCHMUCKLER),
-    "krumhansl": int(KeyProfile.KRUMHANSL_SCHMUCKLER),
-    "krumhansl-schmuckler": int(KeyProfile.KRUMHANSL_SCHMUCKLER),
-    "temperley": int(KeyProfile.TEMPERLEY),
-    "shaath": int(KeyProfile.SHAATH),
-    "keyfinder": int(KeyProfile.SHAATH),
-    "faraldo-edmt": int(KeyProfile.FARALDO_EDMT),
-    "edmt": int(KeyProfile.FARALDO_EDMT),
-    "faraldo-edma": int(KeyProfile.FARALDO_EDMA),
-    "edma": int(KeyProfile.FARALDO_EDMA),
-    "faraldo-edmm": int(KeyProfile.FARALDO_EDMM),
-    "edmm": int(KeyProfile.FARALDO_EDMM),
-    "bellman-budge": int(KeyProfile.BELLMAN_BUDGE),
-    "bellman": int(KeyProfile.BELLMAN_BUDGE),
-}
+def _mode_value(mode: KeyMode) -> int:
+    """Resolve one mode token to its C ordinal."""
+    return _token_ordinal(mode, _KEY_MODES, "mode")
 
 
 # SONARE_KEY_PROFILE_AUTO: no profile pinned, so the genre hint or the chroma chooses one.
 _KEY_PROFILE_AUTO = -1
 
 
-def _profile_value(profile: KeyProfile | str | None) -> int:
+def _profile_value(profile: KeyProfile | None) -> int:
     if profile is None:
         return _KEY_PROFILE_AUTO
-    if not isinstance(profile, str):
-        return int(KeyProfile(profile))
-    return _resolve_enum(profile, _KEY_PROFILE_NAMES, "key profile", verb="invalid")
+    return _token_ordinal(profile, _KEY_PROFILES, "key profile")
+
+
+def _ordinal_token(ordinal: int, tokens: tuple[str, ...], what: str) -> str:
+    """Convert a C ordinal to its token; an ordinal outside the table is refused."""
+    if not 0 <= ordinal < len(tokens):
+        raise SonareValueError(f"unknown {what} ordinal: {ordinal}")
+    return tokens[ordinal]
+
+
+def _key_mode_token(ordinal: int) -> KeyMode:
+    """Convert a C key-mode ordinal to its token."""
+    return cast(KeyMode, _ordinal_token(ordinal, _KEY_MODES, "key mode"))
+
+
+def _section_type_token(ordinal: int) -> SectionType:
+    """Convert a C section-type ordinal to its token."""
+    return cast(SectionType, _ordinal_token(ordinal, _SECTION_TYPES, "analysis section type"))
 
 
 def _float_array_result(out: object, count: int) -> list[float]:

@@ -258,21 +258,17 @@ def test_the_reserved_sample_loop_ordinal_renders_as_no_loop() -> None:
     assert np.array_equal(reserved, unlooped)
 
 
-def test_a_key_enum_ordinal_is_bounded_by_its_enum_rather_than_by_a_name_table() -> None:
-    """The key-detection resolvers reach the C ABI through IntEnum, not a spelling table.
-
-    They take the integer route before any name lookup, so the table's coverage
-    is not what stops an out-of-range ordinal there -- the constructor is.
-    """
-    # Positive control: both routes carry a legal value through.
-    assert _mode_values([1]) == [1] and _profile_value(0) == 0  # type: ignore[list-item]
+def test_a_key_ordinal_is_never_accepted_in_place_of_its_token() -> None:
+    """The key-detection resolvers take the token spelling only, never an ordinal."""
+    # Positive control: both routes carry a legal token through.
+    assert _mode_values(["minor"]) == [1] and _profile_value("krumhanslSchmuckler") == 0
     # Omitted is SONARE_KEY_PROFILE_AUTO; the same -1 given as an ordinal is refused.
     assert _profile_value(None) == -1
-    with pytest.raises(ValueError, match="Mode"):
-        _mode_values([99])  # type: ignore[list-item]
-    with pytest.raises(ValueError, match="KeyProfile"):
-        _profile_value(99)  # type: ignore[arg-type]
-    with pytest.raises(ValueError, match="KeyProfile"):
+    with pytest.raises(TypeError, match="mode"):
+        _mode_values([1])  # type: ignore[list-item]
+    with pytest.raises(TypeError, match="key profile"):
+        _profile_value(0)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="key profile"):
         _profile_value(-1)  # type: ignore[arg-type]
 
 

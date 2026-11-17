@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+from typing import get_args
+
 import numpy as np
+
+from libsonare.types import KeyMode
 
 from ._analyzer_helpers import *
 from ._helpers import raises_coded
@@ -84,7 +88,6 @@ def test_detect_bpm_click_track() -> None:
 def test_detect_key_a_major() -> None:
     """detect_key identifies A major from an A-major triad (A + C# + E)."""
     from libsonare import PitchClass, detect_key
-    from libsonare.types import Mode
 
     sr = 22050
     duration = 2.0
@@ -103,7 +106,7 @@ def test_detect_key_a_major() -> None:
     ]
     key = detect_key(triad, sample_rate=sr)
     assert key.root == PitchClass.A
-    assert key.mode == Mode.MAJOR
+    assert key.mode == "major"
     # An unambiguous triad should yield high confidence (empirically ~0.98).
     assert key.confidence > 0.8
     assert key.confidence <= 1.0
@@ -416,13 +419,12 @@ def test_two_tone_chroma() -> None:
 def test_analysis_result_types(analyze_sine_result) -> None:
     """AnalysisResult fields have correct types."""
     from libsonare import PitchClass
-    from libsonare.types import Mode
 
     result = analyze_sine_result
     assert isinstance(result.bpm, float)
     assert isinstance(result.bpm_confidence, float)
     assert isinstance(result.key.root, PitchClass)
-    assert isinstance(result.key.mode, Mode)
+    assert result.key.mode in get_args(KeyMode)
     assert isinstance(result.key.confidence, float)
     assert isinstance(result.time_signature.numerator, int)
     assert isinstance(result.time_signature.denominator, int)

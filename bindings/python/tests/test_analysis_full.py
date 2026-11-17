@@ -11,6 +11,7 @@ These cover the full analysis result surface:
 from __future__ import annotations
 
 import math
+from typing import get_args
 
 import pytest
 
@@ -145,7 +146,7 @@ def test_analyze_returns_extended_fields(analyze_result) -> None:
         TimbreFrame,
         TimeSignature,
     )
-    from libsonare.types import Mode, PitchClass
+    from libsonare.types import KeyMode, PitchClass
 
     result = analyze_result
 
@@ -156,7 +157,7 @@ def test_analyze_returns_extended_fields(analyze_result) -> None:
     assert isinstance(result.bpm_confidence, float)
     assert isinstance(result.key, Key)
     assert isinstance(result.key.root, PitchClass)
-    assert isinstance(result.key.mode, Mode)
+    assert result.key.mode in get_args(KeyMode)
     assert isinstance(result.time_signature, TimeSignature)
     assert isinstance(result.beats, list)
     assert all(isinstance(b, libsonare.Beat) for b in result.beats)
@@ -246,7 +247,7 @@ def test_analyze_sub_result_types(analyze_result) -> None:
         assert isinstance(chord.quality, str)
     for section in result.sections:
         assert isinstance(section, Section)
-        assert isinstance(section.type, SectionType)
+        assert section.type in get_args(SectionType)
 
 
 def test_analyze_melody_default_runs() -> None:
@@ -360,12 +361,11 @@ def test_analyze_progress_matches_analyze_shape(analyze_result, progress_result)
 def test_parse_analysis_json_rejects_an_unmirrored_section_type() -> None:
     """A section ordinal outside SectionType names a drifted enum mirror.
 
-    Substituting UNKNOWN for it would present the drift as an analysis result,
+    Substituting "unknown" for it would present the drift as an analysis result,
     so the decoder raises and names the ordinal instead.
     """
     from libsonare import SonareValueError
     from libsonare._analysis_detection import _parse_analysis_json
-    from libsonare.types import SectionType
 
     def parse(section: dict[str, object]) -> object:
         return _parse_analysis_json(
@@ -378,8 +378,8 @@ def test_parse_analysis_json_rejects_an_unmirrored_section_type() -> None:
     with pytest.raises(SonareValueError, match="missing its type"):
         parse({"start": 0.0, "end": 1.0})
 
-    result = parse({"type": int(SectionType.CHORUS), "start": 0.0, "end": 1.0, "group": 0})
-    assert result.sections[0].type is SectionType.CHORUS  # type: ignore[attr-defined]
+    result = parse({"type": 3, "start": 0.0, "end": 1.0, "group": 0})
+    assert result.sections[0].type == "chorus"  # type: ignore[attr-defined]
 
 
 def test_parse_analysis_json_rejects_an_unmirrored_chord_quality() -> None:

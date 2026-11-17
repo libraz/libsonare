@@ -1,12 +1,15 @@
-"""Integer enumerations on the public libsonare type surface.
+"""Enumerations on the public libsonare type surface.
 
-They subclass :class:`enum.IntEnum` because the values cross the C ABI as
-plain integers, so either the member or its number is accepted.
+Most subclass :class:`enum.IntEnum` because the values cross the C ABI as
+plain integers, so either the member or its number is accepted. Key mode, key
+profile and section type are string tokens (:class:`typing.Literal`) whose
+position in the matching ``_*`` tuple is the C ordinal.
 """
 
 from __future__ import annotations
 
 from enum import IntEnum
+from typing import Literal, get_args
 
 
 class PitchClass(IntEnum):
@@ -41,30 +44,6 @@ class PitchClass(IntEnum):
             11: "B",
         }
         return _names[self.value]
-
-
-class Mode(IntEnum):
-    """Musical mode."""
-
-    MAJOR = 0
-    MINOR = 1
-    DORIAN = 2
-    PHRYGIAN = 3
-    LYDIAN = 4
-    MIXOLYDIAN = 5
-    LOCRIAN = 6
-
-    def __str__(self) -> str:
-        names = {
-            Mode.MAJOR: "major",
-            Mode.MINOR: "minor",
-            Mode.DORIAN: "dorian",
-            Mode.PHRYGIAN: "phrygian",
-            Mode.LYDIAN: "lydian",
-            Mode.MIXOLYDIAN: "mixolydian",
-            Mode.LOCRIAN: "locrian",
-        }
-        return names[self]
 
 
 class AutomationCurve(IntEnum):
@@ -146,23 +125,6 @@ class SidechainSourceKind(IntEnum):
     BUS = 1
 
 
-class SectionType(IntEnum):
-    """Song-structure section type (mirrors sonare::SectionType ordinals).
-
-    ``UNKNOWN`` means no labelling rule matched the section and comes with
-    ``confidence`` 0.
-    """
-
-    INTRO = 0
-    VERSE = 1
-    PRE_CHORUS = 2
-    CHORUS = 3
-    BRIDGE = 4
-    INSTRUMENTAL = 5
-    OUTRO = 6
-    UNKNOWN = 7
-
-
 class EngineTelemetryType(IntEnum):
     """Realtime engine telemetry record type."""
 
@@ -197,13 +159,33 @@ class EngineTelemetryError(IntEnum):
     PARAMETER_BASE_OVERFLOW = 21
 
 
-class KeyProfile(IntEnum):
-    """Key-profile family used by profile-correlation key detection."""
+KeyMode = Literal["major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian"]
+"""Musical mode of a detected or requested key."""
 
-    KRUMHANSL_SCHMUCKLER = 0
-    TEMPERLEY = 1
-    SHAATH = 2
-    FARALDO_EDMT = 3
-    FARALDO_EDMA = 4
-    FARALDO_EDMM = 5
-    BELLMAN_BUDGE = 6
+KeyProfile = Literal[
+    "krumhanslSchmuckler",
+    "temperley",
+    "shaath",
+    "faraldoEdmt",
+    "faraldoEdma",
+    "faraldoEdmm",
+    "bellmanBudge",
+]
+"""Key-profile family used by profile-correlation key detection."""
+
+SectionType = Literal[
+    "intro",
+    "verse",
+    "preChorus",
+    "chorus",
+    "bridge",
+    "instrumental",
+    "outro",
+    "unknown",
+]
+"""Song-structure section type; ``"unknown"`` means no labelling rule matched."""
+
+# Ordinal-ordered tokens: index == the C ordinal of each type.
+_KEY_MODES: tuple[KeyMode, ...] = get_args(KeyMode)
+_KEY_PROFILES: tuple[KeyProfile, ...] = get_args(KeyProfile)
+_SECTION_TYPES: tuple[SectionType, ...] = get_args(SectionType)

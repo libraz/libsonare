@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from types import SimpleNamespace
+from typing import get_args
 
 import numpy as np
 
@@ -716,7 +717,7 @@ def test_analyze_sections_returns_a_section_list() -> None:
     assert isinstance(result, list)
     for section in result:
         assert isinstance(section, Section)
-        assert isinstance(section.type, SectionType)
+        assert section.type in get_args(SectionType)
         assert section.end >= section.start
         assert isinstance(section.name, str)
 

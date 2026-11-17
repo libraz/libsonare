@@ -51,6 +51,7 @@ from .types import (
     Key,
     KeyCandidate,
     KeyDetection,
+    KeyMode,
     KeyProfile,
     LoudnessMatch,
     LufsResult,
@@ -71,7 +72,6 @@ from .types import (
     MfccResult,
     MixMeterSnapshot,
     MixResult,
-    Mode,
     NoiseDetection,
     NormalizeStereoResult,
     NoteSegment,
@@ -296,8 +296,8 @@ def detect_key(
     use_hpss: bool = False,
     loudness_weighted: bool = False,
     chroma_high_pass_hz: float = 80.0,
-    modes: Sequence[Mode | str] | str | None = None,
-    profile: KeyProfile | str | None = None,
+    modes: Sequence[KeyMode] | str | None = None,
+    profile: KeyProfile | None = None,
     genre_hint: str | None = None,
     tuning_cents: float | str = "auto",
 ) -> KeyDetection: ...
@@ -309,8 +309,8 @@ def detect_key_candidates(
     use_hpss: bool = False,
     loudness_weighted: bool = False,
     chroma_high_pass_hz: float = 80.0,
-    modes: Sequence[Mode | str] | str | None = None,
-    profile: KeyProfile | str | None = None,
+    modes: Sequence[KeyMode] | str | None = None,
+    profile: KeyProfile | None = None,
     genre_hint: str | None = None,
     tuning_cents: float | str = "auto",
 ) -> list[KeyCandidate]: ...
@@ -540,7 +540,7 @@ def detect_chords(
     hmm_beam_width: int = 24,
     use_key_context: bool = False,
     key_root: PitchClass = PitchClass.C,
-    key_mode: Mode = Mode.MAJOR,
+    key_mode: KeyMode = "major",
     detect_inversions: bool = False,
     chroma_method: str = "cqt",
     tuning_cents: float | str = "auto",
@@ -549,7 +549,7 @@ def chord_functional_analysis(
     samples: FloatSamples,
     sample_rate: int,
     key_root: PitchClass,
-    key_mode: Mode = Mode.MAJOR,
+    key_mode: KeyMode = "major",
     min_duration: float = 0.3,
     smoothing_window: float = 2.0,
     threshold: float = 0.5,
@@ -566,7 +566,7 @@ def chord_functional_analysis(
 ) -> list[FunctionalChord]: ...
 def chord_functions(
     chords: ChordAnalysisResult | Sequence[Chord],
-    key: Key | Mapping[str, object] | tuple[PitchClass, Mode],
+    key: Key | Mapping[str, object] | tuple[PitchClass, KeyMode],
 ) -> list[FunctionalChord]: ...
 def analyze_sections(
     samples: FloatSamples,
@@ -704,7 +704,7 @@ def pitch_correct_timevarying(
     mode: str = "midi",
     target_midi: float = 69.0,
     scale_root: int = 0,
-    scale_mode_mask: int | str | Mode | None = None,
+    scale_mode_mask: int | KeyMode | None = None,
     reference_midi: float | None = None,
     retune_amount: float | None = None,
     max_correction_semitones: float | None = None,
@@ -716,7 +716,7 @@ def pitch_correct_timevarying(
 def auto_tune(
     samples: FloatSamples,
     sample_rate: int,
-    key: str | Key | Mapping[str, object] | tuple[PitchClass, Mode] = "detect",
+    key: str | Key | Mapping[str, object] | tuple[PitchClass, KeyMode] = "detect",
     *,
     strength: float | None = None,
     retune_speed_ms: float | None = None,
@@ -2628,7 +2628,7 @@ def scale_quantize_midi(
 def scale_correction_semitones(
     root: int, mode_mask: int, midi: float, reference_midi: float = 0.0
 ) -> float: ...
-def scale_mask_for_mode(root: int, mode: Mode | str | int) -> int: ...
+def scale_mask_for_mode(root: int, mode: KeyMode) -> int: ...
 def scale_pitch_class_enabled(root: int, mode_mask: int, pitch_class: int) -> bool: ...
 def mel_to_stft(
     mel: npt.ArrayLike,

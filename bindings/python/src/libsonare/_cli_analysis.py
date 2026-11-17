@@ -9,7 +9,6 @@ import statistics
 import numpy as np
 
 from ._cli_common import (
-    MODE_NAMES,
     PITCH_NAMES,
     _color_enabled,
     _format_time,
@@ -18,6 +17,7 @@ from ._cli_common import (
     _parse_mode,
     _parse_modes,
     _parse_pitch_class,
+    _section_type_label,
     _strict_json_dumps,
 )
 from ._cli_common import (
@@ -36,6 +36,7 @@ from ._cli_options import (
     _positive_pitch_frequency,
 )
 from ._errors import _unknown_error
+from ._runtime import _mode_value
 
 
 def cmd_version(args: argparse.Namespace) -> int:
@@ -119,7 +120,7 @@ def cmd_key(args: argparse.Namespace) -> int:
         "genre_hint": args.genre_hint or None,
     }
     key = detect_key(samples, **key_options)
-    name = f"{PITCH_NAMES[key.root.value]} {MODE_NAMES[key.mode.value]}"
+    name = f"{PITCH_NAMES[key.root.value]} {key.mode}"
     # The ``true`` shorthand is resolved to a count by the parser, the one place
     # that sees the literal; a negative count clamps to none, as on the native
     # CLI.
@@ -130,7 +131,7 @@ def cmd_key(args: argparse.Namespace) -> int:
     if args.json:
         payload: dict[str, object] = {
             "root": key.root.value,
-            "mode": key.mode.value,
+            "mode": _mode_value(key.mode),
             "confidence": key.confidence,
             "name": name,
         }
@@ -138,10 +139,9 @@ def cmd_key(args: argparse.Namespace) -> int:
             payload["candidates"] = [
                 {
                     "root": candidate.key.root.value,
-                    "mode": candidate.key.mode.value,
+                    "mode": _mode_value(candidate.key.mode),
                     "confidence": candidate.key.confidence,
-                    "name": f"{PITCH_NAMES[candidate.key.root.value]} "
-                    f"{MODE_NAMES[candidate.key.mode.value]}",
+                    "name": f"{PITCH_NAMES[candidate.key.root.value]} {candidate.key.mode}",
                     "correlation": candidate.correlation,
                 }
                 for candidate in candidates
@@ -152,10 +152,7 @@ def cmd_key(args: argparse.Namespace) -> int:
         if candidates:
             print("  Key candidates:")
             for index, candidate in enumerate(candidates, start=1):
-                candidate_name = (
-                    f"{PITCH_NAMES[candidate.key.root.value]} "
-                    f"{MODE_NAMES[candidate.key.mode.value]}"
-                )
+                candidate_name = f"{PITCH_NAMES[candidate.key.root.value]} {candidate.key.mode}"
                 print(
                     f"    {index:2d}. {candidate_name} "
                     f"(corr: {candidate.correlation:.3f}, "
@@ -292,7 +289,7 @@ def cmd_sections(args: argparse.Namespace) -> int:
                             # The spelling `analyze` serializes, so a consumer
                             # matching on `type == "chorus"` need not know which
                             # command produced the document.
-                            "type": section.type.name.casefold().replace("_", "-"),
+                            "type": _section_type_label(section.type),
                             "start": section.start,
                             "end": section.end,
                             "energy": section.energy_level,
@@ -308,7 +305,7 @@ def cmd_sections(args: argparse.Namespace) -> int:
         print(f"  Sections ({len(sections)}):")
         for index, section in enumerate(sections, start=1):
             print(
-                f"    {index:2d}. {section.type.name.casefold().replace('_', '-'):<12s} "
+                f"    {index:2d}. {_section_type_label(section.type):<12s} "
                 f"({section.start:.2f}s - {section.end:.2f}s, "
                 f"energy: {section.energy_level:.2f}, "
                 f"confidence: {section.confidence:.0%})"
@@ -332,7 +329,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         meter_candidate_numerators=candidates or None,
         meter_denominator=args.meter_denominator,
     )
-    key_name = f"{PITCH_NAMES[r.key.root.value]} {MODE_NAMES[r.key.mode.value]}"
+    key_name = f"{PITCH_NAMES[r.key.root.value]} {r.key.mode}"
 
     if args.json:
         beats = [{"time": beat.time_sec, "strength": beat.strength} for beat in r.beats]
@@ -351,7 +348,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         ]
         sections = [
             {
-                "type": section.type.name.casefold().replace("_", "-"),
+                "type": _section_type_label(section.type),
                 "start": section.start,
                 "end": section.end,
                 "group": section.group,
@@ -368,7 +365,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
                     "bpm_confidence": r.bpm_confidence,
                     "key": {
                         "root": r.key.root.value,
-                        "mode": r.key.mode.value,
+                        "mode": _mode_value(r.key.mode),
                         "confidence": r.key.confidence,
                         "name": key_name,
                     },

@@ -18,12 +18,13 @@ from ._runtime import (
     _check,
     _get_lib,
     _guard_buffer,
+    _mode_value,
     _to_c_float_array,
     _to_c_int,
     _to_c_int32,
     _to_c_size_t,
 )
-from .types import Chord, Mode
+from .types import Chord, KeyMode
 
 
 @dataclass(frozen=True)
@@ -189,8 +190,6 @@ def align_take_to_reference(
 
 # The annotation's own extension cap; an analysis chord carries at most 3.
 _CHORD_EXTENSION_CAPACITY = 32
-# Analysis modes are 0..6 (Mode.MAJOR..Mode.LOCRIAN).
-_ANALYSIS_MODE_COUNT = 7
 
 
 def _pitch_class_arg(value: object, name: str) -> int:
@@ -261,21 +260,18 @@ def chord_symbol_from_analysis(chord: Chord) -> dict[str, object]:
     }
 
 
-def key_mode_from_analysis(mode: Mode | int) -> int:
-    """Convert an analysis key :class:`Mode` into the ``mode`` of a key annotation.
+def key_mode_from_analysis(mode: KeyMode) -> int:
+    """Convert an analysis key :data:`KeyMode` token into the ``mode`` of a key annotation.
 
     The annotation numbering reserves 0 for an unknown mode, so every analysis
     mode lands one ordinal higher. The result is the fourth element of a
     :meth:`Project.annotate_keys` tuple.
 
     Raises:
-        TypeError: If ``mode`` is not a :class:`Mode` or an integer.
-        SonareValueError: If ``mode`` is not in 0..6.
+        TypeError: If ``mode`` is not a string.
+        SonareValueError: If ``mode`` is not a :data:`KeyMode` token.
     """
-    if isinstance(mode, bool) or not isinstance(mode, int):
-        raise TypeError(f"mode must be a Mode, got {type(mode).__name__}")
-    if not 0 <= int(mode) < _ANALYSIS_MODE_COUNT:
-        raise SonareValueError(f"mode {mode!r} is not an analysis mode (0..6)")
+    ordinal = _mode_value(mode)
     lib = _get_lib()
     if not hasattr(lib, "sonare_key_mode_from_analysis"):
         raise _not_supported(
@@ -283,5 +279,5 @@ def key_mode_from_analysis(mode: Mode | int) -> int:
             "rebuild or upgrade the shared library before calling key_mode_from_analysis"
         )
     out_mode = ctypes.c_uint32()
-    _check(lib.sonare_key_mode_from_analysis(_to_c_int32(mode, "mode"), ctypes.byref(out_mode)))
+    _check(lib.sonare_key_mode_from_analysis(_to_c_int32(ordinal, "mode"), ctypes.byref(out_mode)))
     return int(out_mode.value)

@@ -1025,6 +1025,9 @@ from .types import (
     KeyDetection as KeyDetection,
 )
 from .types import (
+    KeyMode as KeyMode,
+)
+from .types import (
     KeyProfile as KeyProfile,
 )
 from .types import (
@@ -1150,9 +1153,6 @@ from .types import (
 )
 from .types import (
     MixResult as MixResult,
-)
-from .types import (
-    Mode as Mode,
 )
 from .types import (
     NoiseDetection as NoiseDetection,

@@ -8,7 +8,7 @@ import math
 import os
 import sys
 from collections.abc import Sequence
-from typing import Any, cast
+from typing import Any, cast, get_args
 
 import numpy as np
 
@@ -151,7 +151,7 @@ from ._ffi import (
     resolved_library_path,
 )
 from ._runtime import SonareError
-from .types import KeyProfile, Mode, PitchClass
+from .types import KeyMode, KeyProfile, PitchClass, SectionType
 
 PITCH_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 MODE_NAMES = ["major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian"]
@@ -851,39 +851,32 @@ def _parse_pitch_class(value: str) -> PitchClass:
     return names[key]
 
 
-def _parse_mode(value: str) -> Mode:
+_CLI_MODE_ALIASES: dict[str, KeyMode] = {
+    "maj": "major",
+    "min": "minor",
+    "m": "minor",
+}
+
+
+def _section_type_label(section_type: SectionType) -> str:
+    """Spell a section type as the CLI prints it (``"pre-chorus"``)."""
+    return "pre-chorus" if section_type == "preChorus" else section_type
+
+
+def _parse_mode(value: str) -> KeyMode:
     key = value.lower()
-    if key in ("major", "maj"):
-        return Mode.MAJOR
-    if key in ("minor", "min", "m"):
-        return Mode.MINOR
-    if key == "dorian":
-        return Mode.DORIAN
-    if key == "phrygian":
-        return Mode.PHRYGIAN
-    if key == "lydian":
-        return Mode.LYDIAN
-    if key == "mixolydian":
-        return Mode.MIXOLYDIAN
-    if key == "locrian":
-        return Mode.LOCRIAN
-    raise ValueError(f"invalid mode: {value}")
+    key = _CLI_MODE_ALIASES.get(key, key)
+    if key not in get_args(KeyMode):
+        raise ValueError(f"invalid mode: {value}")
+    return cast(KeyMode, key)
 
 
-def _parse_modes(value: str) -> list[Mode]:
+def _parse_modes(value: str) -> list[KeyMode]:
     key = value.lower()
     if key in ("major-minor", "majmin", "diatonic"):
-        return [Mode.MAJOR, Mode.MINOR]
+        return ["major", "minor"]
     if key in ("all", "modal"):
-        return [
-            Mode.MAJOR,
-            Mode.MINOR,
-            Mode.DORIAN,
-            Mode.PHRYGIAN,
-            Mode.LYDIAN,
-            Mode.MIXOLYDIAN,
-            Mode.LOCRIAN,
-        ]
+        return list(get_args(KeyMode))
     return [_parse_mode(item.strip()) for item in value.split(",") if item.strip()]
 
 
@@ -906,22 +899,22 @@ def _parse_meter_candidates(value: str) -> list[int]:
 
 
 def _parse_key_profile(value: str) -> KeyProfile:
-    names = {
-        "ks": KeyProfile.KRUMHANSL_SCHMUCKLER,
-        "krumhansl": KeyProfile.KRUMHANSL_SCHMUCKLER,
-        "krumhansl-schmuckler": KeyProfile.KRUMHANSL_SCHMUCKLER,
-        "temperley": KeyProfile.TEMPERLEY,
-        "shaath": KeyProfile.SHAATH,
-        "keyfinder": KeyProfile.SHAATH,
-        "faraldo-edmt": KeyProfile.FARALDO_EDMT,
-        "edmt": KeyProfile.FARALDO_EDMT,
-        "faraldo-edma": KeyProfile.FARALDO_EDMA,
-        "edma": KeyProfile.FARALDO_EDMA,
-        "faraldo-edmm": KeyProfile.FARALDO_EDMM,
-        "edmm": KeyProfile.FARALDO_EDMM,
-        "bellman-budge": KeyProfile.BELLMAN_BUDGE,
-        "bellman": KeyProfile.BELLMAN_BUDGE,
-        "budge": KeyProfile.BELLMAN_BUDGE,
+    names: dict[str, KeyProfile] = {
+        "ks": "krumhanslSchmuckler",
+        "krumhansl": "krumhanslSchmuckler",
+        "krumhansl-schmuckler": "krumhanslSchmuckler",
+        "temperley": "temperley",
+        "shaath": "shaath",
+        "keyfinder": "shaath",
+        "faraldo-edmt": "faraldoEdmt",
+        "edmt": "faraldoEdmt",
+        "faraldo-edma": "faraldoEdma",
+        "edma": "faraldoEdma",
+        "faraldo-edmm": "faraldoEdmm",
+        "edmm": "faraldoEdmm",
+        "bellman-budge": "bellmanBudge",
+        "bellman": "bellmanBudge",
+        "budge": "bellmanBudge",
     }
     key = value.lower()
     if key not in names:

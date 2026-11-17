@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
-from ._types_enums import Mode, PitchClass
+from ._types_enums import KeyMode, PitchClass
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -46,7 +46,7 @@ class Key:
     """
 
     root: PitchClass
-    mode: Mode
+    mode: KeyMode
     confidence: float
 
     @property
@@ -55,9 +55,9 @@ class Key:
 
     @property
     def short_name(self) -> str:
-        if self.mode == Mode.MAJOR:
+        if self.mode == "major":
             return f"{self.root}"
-        if self.mode == Mode.MINOR:
+        if self.mode == "minor":
             return f"{self.root}m"
         return f"{self.root} {self.mode}"
 

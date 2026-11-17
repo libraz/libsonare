@@ -20,9 +20,11 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
+    _key_mode_token,
     _mode_values,
     _out_float_array,
     _profile_value,
+    _section_type_token,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -46,9 +48,9 @@ from .types import (
     Key,
     KeyCandidate,
     KeyDetection,
+    KeyMode,
     KeyProfile,
     MelodyPoint,
-    Mode,
     PitchClass,
     Section,
     SectionType,
@@ -114,8 +116,8 @@ def detect_key(
     use_hpss: bool = False,
     loudness_weighted: bool = False,
     chroma_high_pass_hz: float = 80.0,
-    modes: Sequence[Mode | str] | str | None = None,
-    profile: KeyProfile | str | None = None,
+    modes: Sequence[KeyMode] | str | None = None,
+    profile: KeyProfile | None = None,
     genre_hint: str | None = None,
     tuning_cents: float | str = "auto",
 ) -> KeyDetection:
@@ -145,7 +147,7 @@ def detect_key(
 
     Returns:
         :class:`libsonare.KeyDetection`, a :class:`Key` with ``root``
-        (:class:`PitchClass`), ``mode`` (:class:`Mode`), and ``confidence``
+        (:class:`PitchClass`), ``mode`` (a :data:`KeyMode` token), and ``confidence``
         (``float`` in ``[0, 1]``), plus ``tuning_cents``: the tuning used, given or
         measured, in cents.
 
@@ -180,7 +182,7 @@ def detect_key(
     _check(rc)
     return KeyDetection(
         root=PitchClass(out_key.root),
-        mode=Mode(out_key.mode),
+        mode=_key_mode_token(out_key.mode),
         confidence=float(out_key.confidence),
         tuning_cents=float(out_tuning.value),
     )
@@ -195,8 +197,8 @@ def detect_key_candidates(
     use_hpss: bool = False,
     loudness_weighted: bool = False,
     chroma_high_pass_hz: float = 80.0,
-    modes: Sequence[Mode | str] | str | None = None,
-    profile: KeyProfile | str | None = None,
+    modes: Sequence[KeyMode] | str | None = None,
+    profile: KeyProfile | None = None,
     genre_hint: str | None = None,
     tuning_cents: float | str = "auto",
 ) -> list[KeyCandidate]:
@@ -237,7 +239,7 @@ def detect_key_candidates(
             KeyCandidate(
                 key=Key(
                     root=PitchClass(out_candidates[i].key.root),
-                    mode=Mode(out_candidates[i].key.mode),
+                    mode=_key_mode_token(out_candidates[i].key.mode),
                     confidence=float(out_candidates[i].key.confidence),
                 ),
                 correlation=float(out_candidates[i].correlation),
@@ -381,7 +383,7 @@ def _bpm_relation(raw: Any) -> str:
 
 
 def _section_type_from_ordinal(raw: Any) -> SectionType:
-    """Convert a raw ``sections[].type`` ordinal into a :class:`SectionType`.
+    """Convert a raw ``sections[].type`` ordinal into a :data:`SectionType` token.
 
     The analyzer always writes this field, and its ordinals are a mirror of
     ``sonare::SectionType``. Both facts are load-bearing, so neither a missing
@@ -393,11 +395,7 @@ def _section_type_from_ordinal(raw: Any) -> SectionType:
     """
     if raw is None:
         raise SonareValueError("analysis result section is missing its type field")
-    ordinal = int(raw)
-    try:
-        return SectionType(ordinal)
-    except ValueError as exc:
-        raise SonareValueError(f"unknown analysis section type ordinal: {ordinal}") from exc
+    return _section_type_token(int(raw))
 
 
 def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
@@ -410,7 +408,7 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
     key_d = data.get("key", {})
     key = Key(
         root=PitchClass(int(key_d.get("root", 0))),
-        mode=Mode(int(key_d.get("mode", 0))),
+        mode=_key_mode_token(int(key_d.get("mode", 0))),
         confidence=float(key_d.get("confidence", 0.0)),
     )
 

@@ -65,15 +65,19 @@ def test_scale_mask_for_mode_returns_each_mode_for_every_root() -> None:
     for name, mask in MASKS.items():
         for root in (0, 5, 11):
             assert libsonare.scale_mask_for_mode(root, name) == mask
-    assert libsonare.scale_mask_for_mode(0, libsonare.Mode.DORIAN) == MASKS["dorian"]
-    assert libsonare.scale_mask_for_mode(0, 6) == MASKS["locrian"]
+    assert libsonare.scale_mask_for_mode(0, "dorian") == MASKS["dorian"]
+    assert libsonare.scale_mask_for_mode(0, "locrian") == MASKS["locrian"]
 
 
 def test_scale_mask_for_mode_refuses_bad_arguments() -> None:
     with pytest.raises(libsonare.SonareValueError):
         libsonare.scale_mask_for_mode(0, "whole-tone")
-    with pytest.raises(ValueError):
-        libsonare.scale_mask_for_mode(0, 7)
+    with pytest.raises(libsonare.SonareValueError, match="mode"):
+        libsonare.scale_mask_for_mode(0, "Major")  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        libsonare.scale_mask_for_mode(0, 6)  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        libsonare.scale_mask_for_mode(0, 7)  # type: ignore[arg-type]
     with pytest.raises(Exception):  # noqa: B017 - out-of-range root is the core's refusal
         libsonare.scale_mask_for_mode(12, "major")
     with pytest.raises(Exception):  # noqa: B017
@@ -100,9 +104,9 @@ def test_scale_mode_mask_name_equals_numeric_mask() -> None:
 
 def test_auto_tune_lands_a_detuned_melody_on_the_key_scale() -> None:
     audio = _detuned_melody(DETUNE_CENTS)
-    result = libsonare.auto_tune(audio, SR, key=(libsonare.PitchClass.C, libsonare.Mode.MAJOR))
+    result = libsonare.auto_tune(audio, SR, key=(libsonare.PitchClass.C, "major"))
     assert len(result.samples) == len(audio)
-    assert result.key == libsonare.Key(libsonare.PitchClass.C, libsonare.Mode.MAJOR, 1.0)
+    assert result.key == libsonare.Key(libsonare.PitchClass.C, "major", 1.0)
     tuned = np.asarray(result.samples, dtype=np.float32)
     before = max(abs(_median_midi(audio, n) - m) for n, m in enumerate(MELODY))
     after = max(abs(_median_midi(tuned, n) - m) for n, m in enumerate(MELODY))
@@ -125,9 +129,9 @@ def test_auto_tune_detect_equals_passing_the_detected_key() -> None:
 def test_auto_tune_takes_the_key_in_several_shapes() -> None:
     audio = _detuned_melody(DETUNE_CENTS)
     pair = libsonare.auto_tune(audio, SR, key=(2, "dorian"))
-    mapping = libsonare.auto_tune(audio, SR, key={"root": 2, "mode": libsonare.Mode.DORIAN})
+    mapping = libsonare.auto_tune(audio, SR, key={"root": 2, "mode": "dorian"})
     assert pair.samples == mapping.samples
-    assert pair.key.mode == libsonare.Mode.DORIAN
+    assert pair.key.mode == "dorian"
 
 
 def test_auto_tune_strength_zero_leaves_the_audio_unchanged() -> None:

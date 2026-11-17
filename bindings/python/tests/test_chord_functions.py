@@ -8,14 +8,14 @@ import math
 import pytest
 
 import libsonare
-from libsonare import Chord, Key, Mode, PitchClass
+from libsonare import Chord, Key, PitchClass
 
 from ._helpers import LIB_AVAILABLE
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not found")
 
 SR = 22050
-C_MAJOR = Key(PitchClass.C, Mode.MAJOR, 1.0)
+C_MAJOR = Key(PitchClass.C, "major", 1.0)
 
 
 def _triad(notes: tuple[float, float, float], seconds: float) -> list[float]:
@@ -71,10 +71,10 @@ def test_key_may_be_a_mapping_or_a_pair() -> None:
     chords = [Chord(PitchClass.G, "dominant7", 0.0, 1.0, 0.9)]
     expected = libsonare.chord_functions(chords, key=C_MAJOR)
     assert expected[0].roman_numeral == "V7"
-    assert libsonare.chord_functions(chords, key={"root": PitchClass.C, "mode": Mode.MAJOR}) == (
+    assert libsonare.chord_functions(chords, key={"root": PitchClass.C, "mode": "major"}) == (
         expected
     )
-    assert libsonare.chord_functions(chords, key=(PitchClass.C, Mode.MAJOR)) == expected
+    assert libsonare.chord_functions(chords, key=(PitchClass.C, "major")) == expected
 
 
 def test_minor_key_unknown_and_chromatic_chords() -> None:
@@ -85,7 +85,7 @@ def test_minor_key_unknown_and_chromatic_chords() -> None:
         Chord(PitchClass.C, "unknown", 3.0, 4.0, 0.0),
         Chord(PitchClass.AS, "major", 4.0, 5.0, 0.9),
     ]
-    result = libsonare.chord_functions(chords, key=Key(PitchClass.A, Mode.MINOR, 1.0))
+    result = libsonare.chord_functions(chords, key=Key(PitchClass.A, "minor", 1.0))
     assert [e.function for e in result] == [
         "tonic",
         "subdominant",

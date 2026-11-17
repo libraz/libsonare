@@ -36,7 +36,7 @@ from ._runtime import (
     _to_c_size_t,
 )
 from ._types_analysis import CHORD_QUALITIES, Key, _chord_symbol
-from ._types_enums import Mode, PitchClass
+from ._types_enums import PitchClass
 
 
 def _quantize_config_to_c(
@@ -399,7 +399,7 @@ def _key_names(key: int, minor: bool) -> tuple[str | None, str | None]:
     """Spell a key through ``Key``, or ``(None, None)`` when no key is estimated."""
     if not 0 <= key < len(PitchClass):
         return None, None
-    spelled = Key(root=PitchClass(key), mode=Mode.MINOR if minor else Mode.MAJOR, confidence=0.0)
+    spelled = Key(root=PitchClass(key), mode="minor" if minor else "major", confidence=0.0)
     return spelled.name, spelled.short_name
 
 

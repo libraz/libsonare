@@ -68,7 +68,7 @@ def test_detect_chords_tuning_recovers_plain_triads(detuned: list[float]) -> Non
 
 def test_defaults_measure_the_tuning_and_read_the_key(detuned: list[float]) -> None:
     key = libsonare.detect_key(detuned, _SR)
-    assert (key.root, key.mode) == (libsonare.PitchClass.C, libsonare.Mode.MAJOR)
+    assert (key.root, key.mode) == (libsonare.PitchClass.C, "major")
     assert key.tuning_cents == pytest.approx(-45.0, abs=5.0)
 
     chords = libsonare.detect_chords(detuned, _SR)
@@ -86,7 +86,7 @@ def test_explicit_zero_tuning_is_honoured(detuned: list[float]) -> None:
     labels = libsonare.chord_functional_analysis(
         detuned,
         key_root=libsonare.PitchClass.C,
-        key_mode=libsonare.Mode.MAJOR,
+        key_mode="major",
         sample_rate=_SR,
         tuning_cents=0,
     )
@@ -95,7 +95,7 @@ def test_explicit_zero_tuning_is_honoured(detuned: list[float]) -> None:
 
 def test_key_candidates_take_a_tuning(detuned: list[float]) -> None:
     estimate = 100.0 * libsonare.estimate_tuning(detuned, _SR)
-    c_major = (libsonare.PitchClass.C, libsonare.Mode.MAJOR)
+    c_major = (libsonare.PitchClass.C, "major")
 
     default = libsonare.detect_key_candidates(detuned, _SR)
     auto = libsonare.detect_key_candidates(detuned, _SR, tuning_cents="auto")
@@ -125,8 +125,8 @@ def test_analyze_tuning_recentres_key_and_numerals(detuned: list[float]) -> None
     assert off.tuning_cents == 0.0
     assert on.tuning_cents == pytest.approx(estimate, abs=1e-4)
     assert default.tuning_cents == pytest.approx(-45.0, abs=5.0)
-    assert (default.key.root, default.key.mode) == (libsonare.PitchClass.C, libsonare.Mode.MAJOR)
-    assert (on.key.root, on.key.mode) == (libsonare.PitchClass.C, libsonare.Mode.MAJOR)
+    assert (default.key.root, default.key.mode) == (libsonare.PitchClass.C, "major")
+    assert (on.key.root, on.key.mode) == (libsonare.PitchClass.C, "major")
     numerals = {c.roman_numeral for c in on.chords if c.quality != "unknown"}
     assert {"I", "V", "vi", "IV"} <= numerals
 

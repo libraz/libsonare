@@ -5,7 +5,7 @@ from __future__ import annotations
 import ctypes
 import json
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, cast
 
 from ._errors import _unknown_error
 from ._ffi import (
@@ -26,7 +26,9 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
+    _mode_value,
     _require_export,
+    _section_type_token,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -46,12 +48,11 @@ from .types import (
     ChordAnalysisResult,
     FunctionalChord,
     Key,
+    KeyMode,
     MelodyPoint,
     MelodyResult,
-    Mode,
     PitchClass,
     Section,
-    SectionType,
 )
 
 _CHORD_QUALITY_ORDINALS = {name: ordinal for ordinal, name in enumerate(CHORD_QUALITIES)}
@@ -94,7 +95,7 @@ def detect_chords(
     hmm_beam_width: int = 24,
     use_key_context: bool = False,
     key_root: PitchClass = PitchClass.C,
-    key_mode: Mode = Mode.MAJOR,
+    key_mode: KeyMode = "major",
     detect_inversions: bool = False,
     chroma_method: str = "cqt",
     tuning_cents: float | str = "auto",
@@ -134,7 +135,7 @@ def detect_chords(
         hmm_beam_width,
         1 if use_key_context else 0,
         key_root,
-        key_mode,
+        _mode_value(key_mode),
         1 if detect_inversions else 0,
         chroma_method_value,
         tuning_value,
@@ -159,7 +160,7 @@ def chord_functional_analysis(
     samples: Sequence[float] | list[float],
     sample_rate: int,
     key_root: PitchClass,
-    key_mode: Mode = Mode.MAJOR,
+    key_mode: KeyMode = "major",
     min_duration: float = 0.3,
     smoothing_window: float = 2.0,
     threshold: float = 0.5,
@@ -205,7 +206,7 @@ def chord_functional_analysis(
         hmm_beam_width,
         1 if use_key_context else 0,
         key_root,
-        key_mode,
+        _mode_value(key_mode),
         1 if detect_inversions else 0,
         chroma_method_value,
         tuning_value,
@@ -217,7 +218,7 @@ def chord_functional_analysis(
         _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(options),
         _to_c_int32(key_root, "key_root"),
-        _to_c_int32(key_mode, "key_mode"),
+        _mode_value(key_mode),
         ctypes.byref(detected),
         ctypes.byref(roman),
         ctypes.byref(functions),
@@ -259,7 +260,7 @@ def _key_pair(key: object) -> tuple[object, object]:
 
 def chord_functions(
     chords: ChordAnalysisResult | Sequence[Chord],
-    key: Key | Mapping[str, object] | tuple[PitchClass, Mode],
+    key: Key | Mapping[str, object] | tuple[PitchClass, KeyMode],
 ) -> list[FunctionalChord]:
     """Label chords that are already known with their harmonic function in a key.
 
@@ -278,7 +279,7 @@ def chord_functions(
     entries = list(chords.chords if isinstance(chords, ChordAnalysisResult) else chords)
     root, mode = _key_pair(key)
     key_root = _to_c_int32(root, "key.root")
-    key_mode = _to_c_int32(mode, "key.mode")
+    key_mode = _mode_value(cast(KeyMode, mode))
     lib = _get_lib()
     array = (SonareChord * len(entries))()
     for i, chord in enumerate(entries):
@@ -363,13 +364,13 @@ def analyze_sections(
     try:
         return [
             Section(
-                type=SectionType(int(out.sections[i].type)),
+                type=_section_type_token(int(out.sections[i].type)),
                 start=float(out.sections[i].start),
                 end=float(out.sections[i].end),
                 energy_level=float(out.sections[i].energy_level),
                 confidence=float(out.sections[i].confidence),
                 group=int(out.sections[i].group),
-                name=_SECTION_NAMES[SectionType(int(out.sections[i].type))],
+                name=_SECTION_NAMES[_section_type_token(int(out.sections[i].type))],
             )
             for i in range(out.section_count)
         ]

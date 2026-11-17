@@ -12,14 +12,13 @@ from ._helpers import same_value
 def test_audio_analyze() -> None:
     """Audio.analyze returns a full AnalysisResult with documented silence fallbacks."""
     from libsonare import Audio, PitchClass
-    from libsonare.types import Mode
 
     audio = Audio.from_buffer([0.0] * 22050, sample_rate=22050)
     result = audio.analyze()
     assert isinstance(result.bpm, float)
     # Silence has no tonal content, so detect_key falls back to C major.
     assert result.key.root == PitchClass.C
-    assert result.key.mode == Mode.MAJOR
+    assert result.key.mode == "major"
     assert result.key.name == "C major"
     assert isinstance(result.beats, list)
 
@@ -127,7 +126,6 @@ def test_analysis_primitives() -> None:
 def test_chord_functional_analysis() -> None:
     """Functional analysis returns the timed chords labelled like chord_functions."""
     from libsonare import (
-        Mode,
         PitchClass,
         chord_functional_analysis,
         chord_functions,
@@ -149,7 +147,7 @@ def test_chord_functional_analysis() -> None:
     romans = chord_functional_analysis(
         tone,
         key_root=PitchClass.C,
-        key_mode=Mode.MAJOR,
+        key_mode="major",
         sample_rate=sr,
         use_beat_sync=False,
     )
@@ -157,7 +155,7 @@ def test_chord_functional_analysis() -> None:
     assert len(romans) == len(chords.chords)
     assert all(label.roman_numeral and label.function for label in romans)
     # Detection followed by chord_functions gives the same entries.
-    assert romans == chord_functions(chords, (PitchClass.C, Mode.MAJOR))
+    assert romans == chord_functions(chords, (PitchClass.C, "major"))
 
     with pytest.raises(ValueError):
         chord_functional_analysis(

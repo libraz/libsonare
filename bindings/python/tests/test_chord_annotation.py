@@ -8,12 +8,14 @@ accepted by ``annotate_chords`` and survives serialization.
 
 from __future__ import annotations
 
+from typing import get_args
+
 import pytest
 
 from libsonare import (
     CHORD_QUALITIES,
     Chord,
-    Mode,
+    KeyMode,
     PitchClass,
     Project,
     SonareValueError,
@@ -80,10 +82,10 @@ def test_every_quality_is_accepted_by_annotate_chords_and_survives_serialization
     assert Project.from_json(serialized).to_json() == serialized
 
 
-@pytest.mark.parametrize("mode", list(Mode))
-def test_key_modes_are_offset_by_one_and_accepted_by_annotate_keys(mode: Mode) -> None:
+@pytest.mark.parametrize("mode", get_args(KeyMode))
+def test_key_modes_are_offset_by_one_and_accepted_by_annotate_keys(mode: KeyMode) -> None:
     converted = key_mode_from_analysis(mode)
-    assert converted == int(mode) + 1
+    assert converted == get_args(KeyMode).index(mode) + 1
     project = Project()
     project.annotate_keys([(0.0, 480.0, 0, converted)])
     serialized = project.to_json()
@@ -109,12 +111,13 @@ def test_an_unrecognised_value_is_refused_naming_the_field(bad: Chord, field: st
         chord_symbol_from_analysis(bad)
 
 
-@pytest.mark.parametrize("mode", [7, -1])
-def test_an_out_of_range_mode_is_refused_naming_the_field(mode: int) -> None:
+@pytest.mark.parametrize("mode", ["Major", "maj", "whole-tone"])
+def test_an_unknown_mode_is_refused_naming_the_field(mode: str) -> None:
     with pytest.raises(SonareValueError, match="mode"):
-        key_mode_from_analysis(mode)
+        key_mode_from_analysis(mode)  # type: ignore[arg-type]
 
 
-def test_a_non_integer_mode_is_a_type_error() -> None:
+@pytest.mark.parametrize("mode", [0, 1, True])
+def test_a_non_string_mode_is_a_type_error(mode: object) -> None:
     with pytest.raises(TypeError):
-        key_mode_from_analysis("major")  # type: ignore[arg-type]
+        key_mode_from_analysis(mode)  # type: ignore[arg-type]

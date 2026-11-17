@@ -980,7 +980,7 @@ def test_chord_names_and_roman_numerals_are_fields() -> None:
     chord = libsonare.Chord(libsonare.PitchClass.C, "major", 0.0, 1.0, 1.0, name="C")
     assert chord.name == "C"
     assert not hasattr(chord, "roman_numeral")
-    functional = libsonare.chord_functions([chord], (libsonare.PitchClass.C, libsonare.Mode.MAJOR))
+    functional = libsonare.chord_functions([chord], (libsonare.PitchClass.C, "major"))
     assert functional[0].roman_numeral == "I"
     assert functional[0].name == "C"
     assert not hasattr(functional[0], "roman")

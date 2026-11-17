@@ -439,23 +439,30 @@ class PitchClass(IntEnum):
     AS = 10
     B = 11
 
-class Mode(IntEnum):
-    MAJOR = 0
-    MINOR = 1
-    DORIAN = 2
-    PHRYGIAN = 3
-    LYDIAN = 4
-    MIXOLYDIAN = 5
-    LOCRIAN = 6
+KeyMode: TypeAlias = Literal[
+    "major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian"
+]
 
-class KeyProfile(IntEnum):
-    KRUMHANSL_SCHMUCKLER = 0
-    TEMPERLEY = 1
-    SHAATH = 2
-    FARALDO_EDMT = 3
-    FARALDO_EDMA = 4
-    FARALDO_EDMM = 5
-    BELLMAN_BUDGE = 6
+KeyProfile: TypeAlias = Literal[
+    "krumhanslSchmuckler",
+    "temperley",
+    "shaath",
+    "faraldoEdmt",
+    "faraldoEdma",
+    "faraldoEdmm",
+    "bellmanBudge",
+]
+
+SectionType: TypeAlias = Literal[
+    "intro",
+    "verse",
+    "preChorus",
+    "chorus",
+    "bridge",
+    "instrumental",
+    "outro",
+    "unknown",
+]
 
 class AutomationCurve(IntEnum):
     LINEAR = 0
@@ -488,19 +495,6 @@ class SendTiming(IntEnum):
 class SidechainSourceKind(IntEnum):
     TRACK = 0
     BUS = 1
-
-class SectionType(IntEnum):
-    """``UNKNOWN`` marks a section no labelling rule matched; it carries
-    ``confidence`` 0."""
-
-    INTRO = 0
-    VERSE = 1
-    PRE_CHORUS = 2
-    CHORUS = 3
-    BRIDGE = 4
-    INSTRUMENTAL = 5
-    OUTRO = 6
-    UNKNOWN = 7
 
 class EngineTelemetryType(IntEnum):
     PROCESS_BLOCK = 0
@@ -545,9 +539,9 @@ class Key:
     """
 
     root: PitchClass
-    mode: Mode
+    mode: KeyMode
     confidence: float
-    def __init__(self, root: PitchClass, mode: Mode, confidence: float) -> None: ...
+    def __init__(self, root: PitchClass, mode: KeyMode, confidence: float) -> None: ...
     @property
     def name(self) -> str: ...
     @property
@@ -556,7 +550,7 @@ class Key:
 class KeyDetection(Key):
     tuning_cents: float
     def __init__(
-        self, root: PitchClass, mode: Mode, confidence: float, tuning_cents: float = ...
+        self, root: PitchClass, mode: KeyMode, confidence: float, tuning_cents: float = ...
     ) -> None: ...
 
 class AutoTuneResult:

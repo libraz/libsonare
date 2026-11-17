@@ -43,7 +43,7 @@ def _key_args(**overrides: object) -> argparse.Namespace:
 def _key_result() -> SimpleNamespace:
     return SimpleNamespace(
         root=SimpleNamespace(value=0),
-        mode=SimpleNamespace(value=0),
+        mode="major",
         confidence=0.8,
     )
 
@@ -226,7 +226,7 @@ def test_chords_forwards_smoothing_window_and_beat_sync_flag(
             "hmm_beam_width": 24,
             "use_key_context": False,
             "key_root": 0,
-            "key_mode": 0,
+            "key_mode": "major",
             "detect_inversions": False,
             "chroma_method": "cqt",
         }

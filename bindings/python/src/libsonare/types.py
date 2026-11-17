@@ -392,13 +392,13 @@ from ._types_enums import (
     EngineTelemetryType as EngineTelemetryType,
 )
 from ._types_enums import (
+    KeyMode as KeyMode,
+)
+from ._types_enums import (
     KeyProfile as KeyProfile,
 )
 from ._types_enums import (
     MeterTap as MeterTap,
-)
-from ._types_enums import (
-    Mode as Mode,
 )
 from ._types_enums import (
     PanLaw as PanLaw,

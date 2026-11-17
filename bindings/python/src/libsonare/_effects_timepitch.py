@@ -26,6 +26,7 @@ from ._runtime import (
     _float_array_result,
     _get_lib,
     _guard_buffer,
+    _key_mode_token,
     _mode_value,
     _narrow_int,
     _out_float_array,
@@ -39,7 +40,7 @@ from ._runtime import (
     _validate_samples,
 )
 from ._types_analysis import AutoTuneResult, Key
-from ._types_enums import Mode, PitchClass
+from ._types_enums import KeyMode, PitchClass
 
 
 def time_stretch(
@@ -260,7 +261,7 @@ def pitch_correct_timevarying(
     mode: str = "midi",
     target_midi: float = 69.0,
     scale_root: int = 0,
-    scale_mode_mask: int | str | Mode | None = None,
+    scale_mode_mask: int | KeyMode | None = None,
     reference_midi: float | None = None,
     retune_amount: float | None = None,
     max_correction_semitones: float | None = None,
@@ -286,7 +287,7 @@ def pitch_correct_timevarying(
         mode: ``"midi"`` retunes toward ``target_midi``; ``"scale"`` snaps to the key.
         target_midi: Fixed target note when ``mode == "midi"`` (in ``[0, 127]``).
         scale_root: Scale root pitch class (0=C .. 11=B) when ``mode == "scale"``.
-        scale_mode_mask: 12-bit degree mask, or a :class:`Mode` / mode name
+        scale_mode_mask: 12-bit degree mask, or a mode token
             (``"major"``, ``"dorian"``, ...) resolved by :func:`scale_mask_for_mode`;
             ``None`` keeps the library default (C major).
         reference_midi: Reference MIDI anchoring the scale grid; ``None`` keeps the default.
@@ -319,7 +320,7 @@ def pitch_correct_timevarying(
     config.scale_root = _narrow_int(
         scale_root, "pitch_correct_timevarying: scale_root", _C_INT_MIN, _C_INT_MAX
     )
-    if isinstance(scale_mode_mask, str | Mode):
+    if isinstance(scale_mode_mask, str):
         config.scale_mode_mask = scale_mask_for_mode(0, scale_mode_mask)
     elif scale_mode_mask is not None:
         config.scale_mode_mask = _narrow_int(
@@ -395,7 +396,7 @@ def _auto_tune_key(key: object) -> SonareKey | None:
 def auto_tune(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-    key: str | Key | Mapping[str, object] | tuple[PitchClass, Mode] = "detect",
+    key: str | Key | Mapping[str, object] | tuple[PitchClass, KeyMode] = "detect",
     *,
     strength: float | None = None,
     retune_speed_ms: float | None = None,
@@ -417,7 +418,7 @@ def auto_tune(
         key: ``"detect"`` finds the key with :func:`detect_key`'s defaults; or name
             it with a :class:`Key` (e.g. :func:`detect_key`'s result), a
             ``{"root": ..., "mode": ...}`` mapping or a ``(root, mode)`` pair, the
-            mode as a :class:`Mode`, its ordinal or its name.
+            mode a :data:`KeyMode` token.
         strength: Correction strength in ``[0, 1]``; ``None`` keeps the default (1.0).
         retune_speed_ms: Retune IIR time constant (ms); ``None`` keeps the default.
         vibrato_threshold_cents: Vibrato-preserve threshold; ``None`` keeps the default.
@@ -466,5 +467,5 @@ def auto_tune(
         )
         return AutoTuneResult(
             samples=_float_array_result(out, out_length.value),
-            key=Key(PitchClass(used.root), Mode(used.mode), float(used.confidence)),
+            key=Key(PitchClass(used.root), _key_mode_token(used.mode), float(used.confidence)),
         )

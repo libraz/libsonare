@@ -44,6 +44,7 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
+    _key_mode_token,
     _narrow_int,
     _optional_from_c_float_array,
     _to_c_float,
@@ -62,7 +63,6 @@ from .types import (
     DynamicsResult,
     Key,
     MeterEstimate,
-    Mode,
     PitchClass,
     RhythmResult,
     TimbreFrame,
@@ -341,7 +341,7 @@ def analyze(
             bpm_confidence=float(out.bpm_confidence),
             key=Key(
                 root=PitchClass(out.key.root),
-                mode=Mode(out.key.mode),
+                mode=_key_mode_token(out.key.mode),
                 confidence=float(out.key.confidence),
             ),
             time_signature=TimeSignature(

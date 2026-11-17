@@ -4634,3 +4634,67 @@ changed = "returns a frozen TrimSilenceResult (samples, report) instead of a bar
 domain = "effects"
 rule = "typed-results"
 test = "bindings/python/tests/test_repair_mono_result.py::test_a_mono_repair_returns_float32_samples_beside_its_report"
+
+[[entry]]
+kind = "class"
+old = "Mode"
+changed = "replaced by KeyMode, a Literal of the lowercase mode tokens (\"major\" ... \"locrian\"); an int is refused with TypeError"
+domain = "core"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_key_tokens.py::test_a_non_string_mode_is_a_type_error"
+
+[[entry]]
+kind = "class"
+old = "KeyProfile"
+changed = "a Literal of lowerCamel tokens (\"krumhanslSchmuckler\", \"faraldoEdmt\", ...) instead of an IntEnum; ordinals raise TypeError and legacy aliases such as \"ks\" raise SonareValueError"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_key_tokens.py::test_an_unknown_or_legacy_profile_names_the_accepted_tokens"
+
+[[entry]]
+kind = "class"
+old = "SectionType"
+changed = "a Literal of lowerCamel tokens (\"intro\", \"preChorus\", ...) instead of an IntEnum"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_key_tokens.py::test_section_types_are_tokens"
+
+[[entry]]
+kind = "field"
+old = "Key.mode"
+changed = "a KeyMode token string instead of a Mode IntEnum"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_key_tokens.py::test_a_detected_key_mode_is_a_token"
+
+[[entry]]
+kind = "field"
+old = "Section.type"
+changed = "a SectionType token string instead of an IntEnum"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_key_tokens.py::test_section_types_are_tokens"
+
+[[entry]]
+kind = "option"
+old = "detect_key(profile)"
+changed = "takes a KeyProfile token only; ordinals and legacy aliases are refused"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_key_tokens.py::test_detect_key_refuses_an_ordinal_and_a_legacy_name"
+
+[[entry]]
+kind = "option"
+old = "detect_key(modes)"
+changed = "a list of KeyMode tokens or the group \"majorMinor\" / \"all\" / \"modal\"; \"major-minor\", \"majmin\", \"diatonic\" and ordinals are refused"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_key_tokens.py::test_a_mode_list_resolves_each_entry_and_names_a_group"
+
+[[entry]]
+kind = "function"
+old = "scale_mask_for_mode"
+changed = "mode is a KeyMode token only; an int raises TypeError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_key_tokens.py::test_scale_mask_for_c_major_is_the_numeric_mask"

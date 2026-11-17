@@ -12,9 +12,12 @@ import sys
 import wave
 from pathlib import Path
 from types import SimpleNamespace
+from typing import get_args
 
 import numpy as np
 import pytest
+
+from libsonare.types import KeyMode
 
 
 def _write_tone_wav(
@@ -133,9 +136,8 @@ TOP_LEVEL_ROUTES = (
 def test_key_profile_aliases_match_native_cli() -> None:
     """Every documented native key-profile alias is accepted by Python too."""
     from libsonare._cli_common import _parse_key_profile
-    from libsonare.types import KeyProfile
 
-    assert _parse_key_profile("budge") is KeyProfile.BELLMAN_BUDGE
+    assert _parse_key_profile("budge") == "bellmanBudge"
 
 
 PROJECT_ROUTES = (
@@ -775,7 +777,7 @@ def test_key_default_matches_library_detect_key(tmp_path) -> None:
     samples, sr = cli._load_audio(str(source))
     key = detect_key(samples, sample_rate=sr)
     assert payload["root"] == key.root.value
-    assert payload["mode"] == key.mode.value
+    assert payload["mode"] == get_args(KeyMode).index(key.mode)
 
 
 @pytest.mark.parametrize("needs_audio", [False, True])
@@ -870,7 +872,7 @@ def _minimal_analysis_result(*, sections: list[object] | None = None) -> SimpleN
         bpm_confidence=0.5,
         key=SimpleNamespace(
             root=SimpleNamespace(value=0),
-            mode=SimpleNamespace(value=0),
+            mode="major",
             confidence=0.5,
         ),
         time_signature=SimpleNamespace(numerator=4, denominator=4, confidence=0.5),
@@ -949,9 +951,9 @@ def test_analysis_commands_reject_ignored_output_option(tmp_path, command, optio
 def test_analyze_json_section_type_is_lowercase_kebab(monkeypatch, capsys) -> None:
     """Section types use the Python semantic enum spelling in JSON."""
     import libsonare
-    from libsonare import SectionType, _cli_analysis, cli
+    from libsonare import _cli_analysis, cli
 
-    section = SimpleNamespace(type=SectionType.PRE_CHORUS, start=0.0, end=1.0, group=2)
+    section = SimpleNamespace(type="preChorus", start=0.0, end=1.0, group=2)
     monkeypatch.setattr(
         libsonare, "analyze", lambda samples, **kwargs: _minimal_analysis_result(sections=[section])
     )
