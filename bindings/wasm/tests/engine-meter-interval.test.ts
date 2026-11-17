@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RealtimeEngine } from '../src/index';
-import type { SonareRealtimeEngineNodeOptions } from '../src/internal/worklet_messages';
+import type { SonareRealtimeEngineNodeOptions } from '../src/public_types_worklet';
 import { SonareEngine } from '../src/worklet/engine';
 import { SonareRealtimeEngineNode } from '../src/worklet/engine-node';
 

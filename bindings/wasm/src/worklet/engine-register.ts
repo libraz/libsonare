@@ -1,9 +1,7 @@
 import { ErrorCode, SonareError } from '../errors.js';
 import { failurePayload } from '../internal/failure_payload.js';
-import type {
-  SonareRealtimeEngineWorkletProcessorOptions,
-  WorkletPort,
-} from '../internal/worklet_messages.js';
+import type { WorkletPort } from '../internal/worklet_messages.js';
+import type { SonareRealtimeEngineWorkletProcessorOptions } from '../public_types_worklet.js';
 import type { WorkletInput, WorkletOutput } from './audio_types.js';
 import { initializeEmbindInWorklet } from './embind-init.js';
 import { SonareRealtimeEngineWorkletProcessor } from './engine-processor.js';

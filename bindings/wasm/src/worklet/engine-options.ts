@@ -1,5 +1,5 @@
 import type { RealtimeEngine } from '../index.js';
-import type { SonareRealtimeEngineNodeOptions } from '../internal/worklet_messages.js';
+import type { SonareRealtimeEngineNodeOptions } from '../public_types_worklet.js';
 
 /** Options of {@link SonareEngine.create}, on top of the node options. */
 export interface SonareEngineOptions extends SonareRealtimeEngineNodeOptions {

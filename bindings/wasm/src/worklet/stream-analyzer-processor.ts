@@ -1,9 +1,7 @@
 import { ErrorCode, SonareError } from '../errors.js';
 import type { SonareStreamAnalyzerChunkMessage } from '../internal/stream_analyzer_messages.js';
-import type {
-  SonareStreamAnalyzerWorkletProcessorOptions,
-  WorkletPort,
-} from '../internal/worklet_messages.js';
+import type { WorkletPort } from '../internal/worklet_messages.js';
+import type { SonareStreamAnalyzerWorkletProcessorOptions } from '../public_types_worklet.js';
 import type { WorkletInput, WorkletOutput } from './audio_types.js';
 import {
   assertKnownProcessorOptions,

@@ -12,6 +12,12 @@ export { attachOpfsClipStream } from './clip_page_streamer.js';
 // module singleton. Re-export the lifecycle so that realm can initialize its
 // own wasm instance, independent of the main-thread `index` module.
 export { init, isInitialized } from './index.js';
+export { opfsClipPageWorkerSource } from './opfs_clip_pages.js';
+// Host-side mastering preview inside the worklet realm. Kept here rather than
+// left main-thread-only so a live preview does not have to round-trip audio to
+// the main thread; see the class doc for the prepare/loudness/latency contract.
+export type { StreamingMasteringChainConfig } from './public_types.js';
+export type { CaptureOptions } from './public_types_engine.js';
 export type {
   SonarePlaybackNodeOptions,
   SonarePlaybackWorkletDiagnostics,
@@ -23,13 +29,7 @@ export type {
   SonareStreamAnalyzerNodeOptions,
   SonareStreamAnalyzerWorkletProcessorOptions,
   SonareWorkletProcessorOptions,
-} from './internal/worklet_messages.js';
-export { opfsClipPageWorkerSource } from './opfs_clip_pages.js';
-// Host-side mastering preview inside the worklet realm. Kept here rather than
-// left main-thread-only so a live preview does not have to round-trip audio to
-// the main thread; see the class doc for the prepare/loudness/latency contract.
-export type { StreamingMasteringChainConfig } from './public_types.js';
-export type { CaptureOptions } from './public_types_engine.js';
+} from './public_types_worklet.js';
 export { StreamingMasteringChain } from './streaming_processors.js';
 export { SonareEngine } from './worklet/engine.js';
 export type { SonareRenderOfflineRequest } from './worklet/engine-export.js';

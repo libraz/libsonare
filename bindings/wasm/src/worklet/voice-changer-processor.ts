@@ -2,10 +2,8 @@ import { ErrorCode, SonareError } from '../errors.js';
 import { RealtimeVoiceChanger } from '../index.js';
 import { failurePayload } from '../internal/failure_payload.js';
 import type { SonareRealtimeVoiceChangerErrorMessage } from '../internal/voice_changer_messages.js';
-import type {
-  SonareRealtimeVoiceChangerWorkletProcessorOptions,
-  WorkletPort,
-} from '../internal/worklet_messages.js';
+import type { WorkletPort } from '../internal/worklet_messages.js';
+import type { SonareRealtimeVoiceChangerWorkletProcessorOptions } from '../public_types_worklet.js';
 import type {
   RealtimeVoiceChangerMonoBuffer,
   RealtimeVoiceChangerPlanarBuffer,

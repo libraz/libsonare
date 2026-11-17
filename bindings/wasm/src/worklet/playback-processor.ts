@@ -4,11 +4,13 @@ import type {
   SonarePlaybackDiagnosticsReplyMessage,
   SonarePlaybackErrorMessage,
   SonarePlaybackMessage,
-  SonarePlaybackNodeOptions,
-  SonarePlaybackWorkletProcessorOptions,
   WorkletPort,
 } from '../internal/worklet_messages.js';
 import type { PlaybackRendererConfig } from '../public_types_playback.js';
+import type {
+  SonarePlaybackNodeOptions,
+  SonarePlaybackWorkletProcessorOptions,
+} from '../public_types_worklet.js';
 import type { WasmPlaybackRenderer } from '../sonare.js';
 import {
   copyPlanesToOutput,

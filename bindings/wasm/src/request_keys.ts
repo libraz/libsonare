@@ -137,16 +137,6 @@ import type {
 } from './feature_spectrogram.js';
 import type { PartRigRequest } from './instrument_types.js';
 import type {
-  SonarePlaybackNodeOptions,
-  SonarePlaybackWorkletProcessorOptions,
-  SonareRealtimeEngineNodeOptions,
-  SonareRealtimeEngineWorkletProcessorOptions,
-  SonareRealtimeVoiceChangerWorkletProcessorOptions,
-  SonareStreamAnalyzerNodeOptions,
-  SonareStreamAnalyzerWorkletProcessorOptions,
-  SonareWorkletProcessorOptions,
-} from './internal/worklet_messages.js';
-import type {
   MasterAudioRequest,
   MasterAudioStereoRequest,
   MasteringChainRequest,
@@ -283,6 +273,16 @@ import type {
   VocalSessionLimits,
 } from './public_types_vocal_edit.js';
 import type { ProjectVocalEditApplyRequest } from './public_types_vocal_project.js';
+import type {
+  SonarePlaybackNodeOptions,
+  SonarePlaybackWorkletProcessorOptions,
+  SonareRealtimeEngineNodeOptions,
+  SonareRealtimeEngineWorkletProcessorOptions,
+  SonareRealtimeVoiceChangerWorkletProcessorOptions,
+  SonareStreamAnalyzerNodeOptions,
+  SonareStreamAnalyzerWorkletProcessorOptions,
+  SonareWorkletProcessorOptions,
+} from './public_types_worklet.js';
 import type {
   AnalyzeBpmRequest,
   AnalyzeDynamicsRequest,

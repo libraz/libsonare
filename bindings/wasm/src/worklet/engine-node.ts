@@ -9,12 +9,14 @@ import type {
   SonareEngineSyncErrorMessage,
   SonareEngineSyncMessage,
   SonareEngineTransportResponseMessage,
-  SonareRealtimeEngineNodeCapabilities,
-  SonareRealtimeEngineNodeOptions,
-  SonareRealtimeEngineWorkletProcessorOptions,
 } from '../internal/worklet_messages.js';
 import { OwnerEpoch } from '../owner_epoch.js';
 import type { EngineTelemetry, ExternalMidiEvent } from '../public_types_engine.js';
+import type {
+  SonareRealtimeEngineNodeCapabilities,
+  SonareRealtimeEngineNodeOptions,
+  SonareRealtimeEngineWorkletProcessorOptions,
+} from '../public_types_worklet.js';
 import { engineCapabilities } from '../realtime_engine.js';
 import { resolveRenderFrame } from '../validation.js';
 import { externalMidiEventFromWire, telemetryFromRecord } from './engine-records.js';

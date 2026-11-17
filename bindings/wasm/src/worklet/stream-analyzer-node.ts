@@ -5,7 +5,7 @@ import type { SonareStreamAnalyzerChunkMessage } from '../internal/stream_analyz
 import type {
   SonareStreamAnalyzerNodeOptions,
   SonareStreamAnalyzerWorkletProcessorOptions,
-} from '../internal/worklet_messages.js';
+} from '../public_types_worklet.js';
 import {
   assertKnownProcessorOptions,
   isStreamAnalyzerChunkMessage,

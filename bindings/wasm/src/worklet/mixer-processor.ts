@@ -4,10 +4,10 @@ import { Mixer } from '../index.js';
 import { failurePayload } from '../internal/failure_payload.js';
 import type {
   SonareWorkletMessage,
-  SonareWorkletProcessorOptions,
   WorkletPort,
   WorkletTransport,
 } from '../internal/worklet_messages.js';
+import type { SonareWorkletProcessorOptions } from '../public_types_worklet.js';
 import { leadingSamples, type WorkletInput, type WorkletOutput } from './audio_types.js';
 import { initializeEmbindInWorklet, isEmbindReady } from './embind-init.js';
 import {

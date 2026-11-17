@@ -39,10 +39,7 @@ import type {
 } from '../index.js';
 import { RealtimeEngine } from '../index.js';
 import { releasedHandleError } from '../internal/handle_guard.js';
-import type {
-  SonareEngineSyncMessage,
-  SonareRealtimeEngineNodeCapabilities,
-} from '../internal/worklet_messages.js';
+import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
 import {
   createOpfsClipPageProvider,
   type OpfsClipPageProviderBinding,
@@ -56,6 +53,7 @@ import type {
   MidiFxConfig,
   SidechainSource,
 } from '../public_types_engine.js';
+import type { SonareRealtimeEngineNodeCapabilities } from '../public_types_worklet.js';
 import type { ClipPageProvider } from '../realtime_engine.js';
 import { resolveRenderFrame } from '../validation.js';
 import type { EngineAutomationContext } from './engine-automation.js';

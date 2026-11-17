@@ -13,9 +13,9 @@ import {
   type SonareEngineSyncMessage,
   type SonareEngineTransportRequestMessage,
   type SonareEngineTransportResponseMessage,
-  type SonareRealtimeEngineWorkletProcessorOptions,
   type WorkletTransport,
 } from '../internal/worklet_messages.js';
+import type { SonareRealtimeEngineWorkletProcessorOptions } from '../public_types_worklet.js';
 import { engineNativeHandle } from '../realtime_engine.js';
 import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types.js';
 import { buildCaptureConfig } from './engine-offline.js';
