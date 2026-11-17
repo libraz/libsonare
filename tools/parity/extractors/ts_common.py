@@ -130,6 +130,55 @@ def _balanced_arglist(text: str, open_paren_idx: int) -> tuple[str, int] | None:
     return None
 
 
+def _is_declaration(text: str, after: int) -> bool:
+    """True when the head whose argument list ends at ``after`` is an overload declaration.
+
+    A declaration ends at ``;``; an implementation opens its body with a ``{``
+    that does not start an object return type.
+    """
+    depth = 0
+    prev = ""
+    for i in range(after, len(text)):
+        ch = text[i]
+        if depth == 0 and ch == ";":
+            return True
+        if depth == 0 and ch == "{" and prev not in (":", "|", "&", ",", "<", "(", ">"):
+            return False
+        if ch in "([{<":
+            depth += 1
+        elif ch in ")]}>" and not (ch == ">" and text[i - 1] == "="):
+            depth -= 1
+        if not ch.isspace():
+            prev = ch
+    return False
+
+
+def _expand_rest_tuple(decl: str) -> list[str] | None:
+    """``...args: [request: R, extra?: T]`` -> its labeled elements, else None."""
+    d = decl.strip()
+    if not d.startswith("..."):
+        return None
+    _, _, type_str = d.partition(":")
+    type_str = type_str.strip()
+    if not (type_str.startswith("[") and type_str.endswith("]")):
+        return None
+    elems = split_top_level_commas(type_str[1:-1])
+    if not elems or not all(":" in e for e in elems):
+        return None
+    return elems
+
+
+def _params(inner: str, enum_types: dict[str, tuple[str, ...]]) -> list[Param]:
+    decls = split_top_level_commas(inner)
+    if len(decls) == 1 and (elems := _expand_rest_tuple(decls[0])) is not None:
+        decls = elems
+    return [_parse_ts_param(p, enum_types) for p in decls]
+
+
+def _all_bag(params: list[Param]) -> bool:
+    return bool(params) and all(p.name in ("request", "options") for p in params)
+
+
 def _parse_ts_param(decl: str, enum_types: dict[str, tuple[str, ...]]) -> Param:
     """Parse ``nFft = 2048`` / ``options: DeclickOptions = {}`` / ``samples: Float32Array``."""
     decl = decl.strip().rstrip(",")
@@ -195,7 +244,10 @@ def _parse_text(
     parse_methods: bool,
 ) -> None:
     seen_here: set[str] = set()
-    # Top-level export functions.
+    # Top-level export functions. An overloaded function's public signature is
+    # its declarations; the implementation head is dropped, and a positional
+    # declaration is listed before a request-only one so it is the one compared.
+    heads: dict[str, list[tuple[bool, FunctionSig]]] = {}
     for m in _FUNC_HEAD.finditer(text):
         name = m.group(1)
         open_idx = m.end() - 1
@@ -204,25 +256,31 @@ def _parse_text(
             ex.unparsed += 1
             ex.unparsed_notes.append(f"{file}:{_line_of(text, open_idx)}: {name} (unbalanced args)")
             continue
-        inner, _ = bal
+        inner, after = bal
         try:
-            params = [_parse_ts_param(p, enum_types) for p in split_top_level_commas(inner)]
+            params = _params(inner, enum_types)
         except Exception:  # noqa: BLE001
             ex.unparsed += 1
             ex.unparsed_notes.append(f"{file}:{_line_of(text, open_idx)}: {name} (param parse)")
             continue
-        key = canonical_key(name, surface)
         seen_here.add(name)
-        ex.functions.append(
-            FunctionSig(
-                key=key,
-                surface=surface,
-                raw_name=name,
-                params=params,
-                file=file,
-                line=_line_of(text, m.start()),
+        heads.setdefault(name, []).append(
+            (
+                _is_declaration(text, after),
+                FunctionSig(
+                    key=canonical_key(name, surface),
+                    surface=surface,
+                    raw_name=name,
+                    params=params,
+                    file=file,
+                    line=_line_of(text, m.start()),
+                ),
             )
         )
+    for group in heads.values():
+        sigs = [sig for decl, sig in group if decl] or [sig for _, sig in group]
+        sigs.sort(key=lambda sig: _all_bag(sig.params))
+        ex.functions.extend(sigs)
 
     if not parse_methods:
         return
@@ -268,7 +326,7 @@ def _parse_text(
             if brace < 0 or (semi >= 0 and semi < brace):
                 continue
             try:
-                params = [_parse_ts_param(p, enum_types) for p in split_top_level_commas(inner)]
+                params = _params(inner, enum_types)
             except Exception:  # noqa: BLE001, S112 -- an unparsable signature is skipped
                 continue
             key = canonical_key(name, surface)

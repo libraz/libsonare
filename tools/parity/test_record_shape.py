@@ -503,7 +503,7 @@ def test_real_repo_extracts_records_on_every_surface() -> None:
 
 
 def test_chord_duration_is_declared_on_both_js_facades() -> None:
-    """``duration`` is a facade-side derivation and must not drift back apart.
+    """``duration_sec`` is a facade-side derivation and must not drift back apart.
 
     ``SonareChord`` carries only ``start`` and ``end``; every facade also exposes
     the span, defined identically as ``end - start`` — Python as a property, Node
@@ -526,7 +526,7 @@ def test_chord_duration_is_declared_on_both_js_facades() -> None:
         chord = next((r for r in ex.records if r.key == "chord"), None)
         assert chord is not None, surface
         fields = set(chord.core_field_names())
-        assert "duration" in fields, (surface, sorted(fields))
+        assert "duration_sec" in fields, (surface, sorted(fields))
 
 
 def _run_all() -> int:

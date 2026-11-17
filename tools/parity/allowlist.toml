@@ -43,7 +43,6 @@ wasm = [
   "is_sonare_error",        # TS type guard for the SonareError shape; no C symbol
   "is_initialized",         # WASM init-state probe
   "engine_capabilities",    # WASM build capability descriptor
-  "stream_analyzer_config_defaults", # WASM facade default snapshot, not a C API symbol
   "synth_enum_tables",      # facade-visible snapshot built from C enum names
   "synth_patch_round_trip_for_test", # WASM-only regression hook for embind patch shape
   "bind_web_midi",                   # Browser Web MIDI listener glue; routes to existing realtime-engine MIDI input APIs
@@ -207,7 +206,6 @@ node = [
   "detect_key_candidates_with_extended_options",
   "detect_key_candidates_with_tuning",
   "tempogram_with_mode",
-  "onset_strength",
   "project_auto_tempo_ex",
   "project_analyze_tempo_with_options",
   "project_auto_tempo_with_options",
@@ -356,7 +354,6 @@ wasm = [
   "detect_key_candidates_with_extended_options",
   "detect_key_candidates_with_tuning",
   "tempogram_with_mode",
-  "onset_strength",
   "project_auto_tempo_ex",
   "project_analyze_tempo_with_options",
   "project_auto_tempo_with_options",
@@ -422,7 +419,6 @@ wasm = [
   "analyze_melody_ex",
   # --- Internal default-struct seeders (see node note above) ---
   "engine_bounce_options_default",
-  "stream_analyzer_config_default",
   "stream_quantize_config_default",
   "pitch_correction_config_default",
   "note_target_assign_config_default",
@@ -1065,14 +1061,6 @@ fields = [
   "chord.name",
   "chord.root_name",
   "chord.bass_name",
-
-  # --- category 1: a span reported as its two endpoints plus their difference ---
-  # The C struct carries `start` and `end`; every facade also exposes the span
-  # itself, because a caller asking "how long is this chord" should not have to
-  # subtract. Python derives it as a property, Node computes it in the addon,
-  # WASM computes it in the result converter, and all three define it as
-  # `end - start`, so the three agree on both the name and the value.
-  "chord.duration",
 
   # --- category 1: a shared buffer + per-record offset -> one array per record ---
   # C returns every note's RMS curve concatenated into one `amplitude` array on

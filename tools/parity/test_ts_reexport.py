@@ -263,6 +263,40 @@ def test_js_extension_resolves_to_ts() -> None:
         assert {p.name for p in values} == names, values
 
 
+def _one_module(src: str):
+    d = tempfile.TemporaryDirectory()
+    root = Path(d.name)
+    _write(root, "bindings/x/src/index.ts", "export * from './m';\n")
+    _write(root, "bindings/x/src/m.ts", src)
+    ex = extract_ts(root, "node", "bindings/x/src/index.ts", "bindings/x/src/generated")
+    d.cleanup()
+    return [f for f in ex.functions if f.raw_name == "fn"]
+
+
+def test_overload_declarations_replace_the_implementation_head() -> None:
+    """The positional declaration is compared; the ``...args`` implementation is not."""
+    sigs = _one_module(
+        "export function fn(request: { x: number }): number;\n"
+        "export function fn(x: number, hopLength?: number): { y: number };\n"
+        "export function fn(...args: unknown[]): { y: number } {\n  return { y: 0 };\n}\n"
+    )
+    assert [p.name for p in sigs[0].params] == ["x", "hop_length"], sigs
+    assert all(p.name != "args" for s in sigs for p in s.params), sigs
+
+
+def test_a_labeled_rest_tuple_is_its_elements() -> None:
+    """``...args: [request: R]`` is a request-only facade, not an opaque rest."""
+    sigs = _one_module(
+        "export function fn(...args: [request: { x: number }]): number {\n  return 0;\n}\n"
+    )
+    assert [[p.name for p in s.params] for s in sigs] == [["request"]], sigs
+
+
+def test_an_object_return_type_is_not_a_body() -> None:
+    sigs = _one_module("export function fn(x: number): { y: number } {\n  return { y: x };\n}\n")
+    assert [[p.name for p in s.params] for s in sigs] == [["x"]], sigs
+
+
 def test_real_repo_surface_is_substantial() -> None:
     """On the real repo, node/wasm must each cover a large share of the C API.
 
