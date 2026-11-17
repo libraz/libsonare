@@ -22,11 +22,20 @@ import { ALLOW_STALE_ENV, readArtifacts, verifyAll } from './dist-source-manifes
 
 let readDigests = {};
 
+// A finished stack: vite's source-map hook cannot map this module's frames and crashes the printer.
+function refusal(message) {
+  const error = new Error(message);
+  error.stack = `Error: ${message}`;
+  return error;
+}
+
 export async function setup() {
   const allowStale = process.env[ALLOW_STALE_ENV] === '1';
   const { problems, provenance, artifacts } = await verifyAll({ allowStale });
   if (problems.length > 0) {
-    throw new Error(`\n${problems.join('\n\n')}\n`);
+    throw refusal(
+      `\n${problems.join('\n\n')}\n\nSet ${ALLOW_STALE_ENV}=1 to accept stale emscripten modules; the bundle is never relaxed.\n`,
+    );
   }
   readDigests = artifacts;
   const readAt = new Date().toISOString();
@@ -41,7 +50,7 @@ export async function teardown() {
   const current = await readArtifacts(names);
   const moved = names.filter((name) => current[name] !== readDigests[name]);
   if (moved.length > 0) {
-    throw new Error(
+    throw refusal(
       `\ndist/${moved.join(', dist/')} changed while the suite was running, so these results do not attribute to one build.\nRe-run the suite.\n`,
     );
   }
