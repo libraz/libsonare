@@ -9,14 +9,13 @@
 # ---------------------------------------------------------------------------
 [surface_only]
 # Symbols that exist on multiple bindings but are deliberately binding-only.
-# The `mastering` / `mix_stereo` / `onset_envelope` entries are ERGONOMIC
+# The `mastering` / `mix_stereo` entries are ERGONOMIC
 # facade free-function names with no C function of the same name. Renaming the
 # public facade API to mirror C is out of scope, so these are intentional, not
 # drift. (The named mastering processors and analyses are credited through
 # compare.py's _ALIAS_COVERAGE instead.)
 #   mastering                <- high-level convenience wrapper (C mastering_process)
 #   mix_stereo               <- stereo mix convenience
-#   onset_envelope           <- facade name for C onset_strength
 # The facade validation helpers (`assert_samples`, `assert_u7`, `midi1_event`
 # and the rest of that family) are NOT listed here. They live in modules the
 # index re-exports a TYPE from and no value, so they are importable by their
@@ -28,7 +27,6 @@ any = [
   "init",                  # WASM async module init
   "mastering",
   "mix_stereo",
-  "onset_envelope",
 ]
 
 node = [
@@ -100,8 +98,6 @@ python = [
 #    anchored to the base mel_spectrogram / mfcc facade which now exposes the
 #    fmin/fmax/htk arguments and routes to the _ex C entry point — so they are
 #    not allowlisted here.)
-#   onset_strength: exposed by the facades under the ergonomic name
-#     `onset_envelope`.
 #   project_auto_tempo_ex / project_snap_to_grid_ex: folded into each Project
 #     facade's base auto-tempo / snap-to-grid method. The extended candidate,
 #     meter-apply, and division arguments are public optional parameters and the
@@ -480,7 +476,6 @@ python = [
   "detect_key_candidates_with_extended_options",
   "detect_key_candidates_with_tuning",
   "tempogram_with_mode",
-  "onset_strength",
   "project_auto_tempo_ex",
   "project_analyze_tempo_with_options",
   "project_auto_tempo_with_options",
@@ -615,15 +610,6 @@ python = [
 # (the handle becomes a numeric `strip_index`) and add a `tap` metering-tap
 # selector, the same extended-facade shape already accepted for strip_meter
 # (python) below. Same op, handle->index + tap-selector — not order drift.
-# strip_non_finite_discard_count (wasm): the same handle->index convention on the
-# same handle, with no extra selector — C takes a `strip` handle, WASM a numeric
-# `strip_index`. Node carries no entry: its facade takes the StripRef the C
-# parameter names, so nothing diverges there.
-# lufs_interleaved / lufs_series_interleaved (python): C is (samples, frames,
-# channels, sample_rate). The facade exposes (samples, channels, sample_rate) and
-# DERIVES frames = len(samples) / channels internally — passing both an
-# interleaved buffer and a redundant frame count would let them disagree. The
-# frames-derived shape is the documented cross-binding convention; not order drift.
 # chord_functional_analysis (python): C is (options-bag, key_root, key_mode); the
 # facade puts (key_root, key_mode) first and INLINES the
 # SonareChordDetectionOptions fields after them — the same ergonomic
@@ -654,7 +640,7 @@ python = [
 # disagree. Remapped to C order internally; ergonomic convenience, not order drift.
 # midi_route_events (python): C is (events, count, config). The facade exposes
 # (events, config) and DERIVES `count` from the events array length — same
-# array-length derivation as lufs_interleaved. Node and WASM carry no entry: their
+# array-length derivation as spectral_edit's ops. Node and WASM carry no entry: their
 # trailing options bag is structural, so what reaches the comparison is a strict
 # prefix of the C order and there is nothing left to excuse. (The facade method is
 # `midiRouteEvents` / `route_midi_events`, mapped to this C key.)
@@ -695,7 +681,7 @@ python = [
 # DERIVES both the count and the per-signal `lengths` array from it — a Python
 # caller holding a list of takes has no second place to state their lengths, and
 # passing one alongside would let the two disagree. Same array-length derivation
-# as lufs_interleaved, on a ragged input. Node and WASM carry no entry: their
+# as midi_route_events, on a ragged input. Node and WASM carry no entry: their
 # request object declares no order, so nothing reaches the comparison.
 #
 # note_targets_from_smf (python): C is (bytes, len). The facade spells the buffer
@@ -723,7 +709,6 @@ wasm = [
   "scale_quantize_midi",
   "scale_correction_semitones",
   "strip_meter",
-  "strip_non_finite_discard_count",
   "midi_cc_learn",
   "downmix",
   "chord_symbol_from_analysis", # the facade folds root/quality/bass into one analysis chord object and sizes the extensions array itself
@@ -749,8 +734,6 @@ python = [
   "tempogram",
   "scale_quantize_midi",
   "scale_correction_semitones",
-  "lufs_interleaved",
-  "lufs_series_interleaved",
   "chord_functional_analysis",
   "analyze_melody",
   "voice_change",
@@ -781,6 +764,8 @@ python = [
   "mastering_repair_apply", # Python serializes the `stages` mappings into stages_json and folds the cancel callback pair into `cancel`
   "master_audio", # ergonomic rename: the keyword is `preset`, the field name the JS request objects use; the C parameter is preset_name
   "master_audio_stereo", # ergonomic rename: `preset` as in master_audio and the JS request objects; the C parameter is preset_name
+  "tone", # librosa mirror: librosa.tone names the phase `phi`; the C parameter is phase
+  "clicks", # librosa mirror: librosa.clicks names the frequency `click_freq`; the C parameter is frequency
 ]
 
 # ---------------------------------------------------------------------------

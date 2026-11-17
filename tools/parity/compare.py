@@ -431,15 +431,6 @@ _ALIAS_COVERAGE = {
     # prepare() accepts maxChannels and routes to this C entry point when it is
     # available, retaining a fallback for older native libraries in Python.
     "engine_prepare_with_channels": ("prepare",),
-    # Python's segmentation facade uses concise names; the C ABI namespaces
-    # these helpers with `segment_`.
-    "segment_agglomerative": ("agglomerative",),
-    "segment_cross_similarity": ("cross_similarity",),
-    "segment_lag_to_recurrence": ("lag_to_recurrence",),
-    "segment_path_enhance": ("path_enhance",),
-    "segment_recurrence_matrix": ("recurrence_matrix",),
-    "segment_recurrence_to_lag": ("recurrence_to_lag",),
-    "segment_subsegment": ("subsegment",),
     # SoundFont ops: the C symbols spell "soundfont" as one word while the
     # Node/WASM camelCase methods (`loadSoundFont`) fold to `load_sound_font`.
     # An idiomatic spelling difference shared by both JS facades (Python matches
@@ -1061,15 +1052,14 @@ _INPUT_NOISE_NAMES = _BUFFER_COMPANION_NAMES | _SAMPLE_RATE_NAMES
 
 
 def _input_names(sig: FunctionSig, roles: set[str]) -> list[str]:
-    """Leading audio-input buffer param names of a signature.
+    """Audio-input buffer param names of a signature, wherever they sit.
 
-    The buffer-companion length and sample-rate alias are dropped so only the
-    actual buffer parameter names (``samples`` / ``left`` / ``right`` / ...) are
-    compared for naming consistency.
+    Collected the same way as on the C side, so a second buffer behind its
+    first one's extents (``x, x_rows, x_cols, y``) is compared too. The
+    buffer-companion length and sample-rate alias are dropped so only the
+    buffer parameter names (``samples`` / ``left`` / ``right`` / ...) remain.
     """
-    names = [p.name for p in sig.params]
-    n = _leading_input_group(names, roles)
-    return [nm for nm in names[:n] if nm not in _INPUT_NOISE_NAMES]
+    return [p.name for p in sig.params if p.name in roles and p.name not in _INPUT_NOISE_NAMES]
 
 
 def _input_naming(c_index, indexed, allow, rep: Report, selected, roles: set[str]) -> None:
