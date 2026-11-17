@@ -1,6 +1,7 @@
 // Type-only, so the erased import adds no runtime edge: to the coercion module
 // below, and to the bank module, which names these types back.
 import type { ProjectTimeline } from './project.js';
+import type { MidiFxConfig } from './types_engine.js';
 import type { AutomationCurve } from './types_mixing.js';
 
 /**
@@ -367,15 +368,15 @@ export interface ProjectMidiEvent {
   data1?: number;
 }
 
-/** Options for {@link Project.midiRouteEvents}. `null`/omitted filter fields mean any/no remap. */
+/** Options for {@link midiRouteEvents}. Omitted filter fields mean any group/channel and no remap. */
 export interface ProjectMidiRouteConfig {
-  filterGroup?: number | null;
-  filterChannel?: number | null;
-  remapChannel?: number | null;
+  filterGroup?: number;
+  filterChannel?: number;
+  remapChannel?: number;
   thru?: boolean;
 }
 
-/** Result of {@link Project.midiRouteEvents}. */
+/** Result of {@link midiRouteEvents}. */
 export interface ProjectMidiRouteResult {
   events: ProjectMidiEvent[];
   overflowed: boolean;
@@ -384,7 +385,7 @@ export interface ProjectMidiRouteResult {
 
 export type ProjectMidiCcBindingKind = 0 | 1 | 2 | 3;
 
-/** Options for {@link Project.midiCcLearn}. All fields are optional. */
+/** Options for {@link midiCcLearn}. All fields are optional. */
 export interface MidiCcLearnOptions {
   /** Lower end of the mapped parameter range. Default `0`. */
   minValue?: number;
@@ -860,8 +861,8 @@ export interface ProjectAssistSidecar {
 export interface ProjectMidiFxBakeRequest {
   /** Target MIDI clip id. */
   clipId: number;
-  /** MIDI-FX chain configuration as JSON. */
-  configJson: string;
+  /** MIDI-FX chain configuration. */
+  config: MidiFxConfig;
   /** Return per-event provenance in the result. Default false. */
   withSourceIndex?: boolean;
 }
@@ -883,8 +884,8 @@ export interface ProjectMidiFxBakeResult {
 export interface ProjectMidiFxPreviewRequest {
   /** Target MIDI clip id. */
   clipId: number;
-  /** MIDI-FX chain configuration as JSON. */
-  configJson: string;
+  /** MIDI-FX chain configuration. */
+  config: MidiFxConfig;
 }
 
 /**

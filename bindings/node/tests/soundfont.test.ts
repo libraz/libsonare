@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { Project, RealtimeEngine } from '../src/index.js';
+import { midiNoteOff, midiNoteOn, midiProgram, Project, RealtimeEngine } from '../src/index.js';
 
 // Canonical minimal GS test SoundFont (presets: "Piano 1" at (0,0),
 // "Piano 2" at (0,1), "Standard Kit" at (128,0); program 2 uncovered).
@@ -18,8 +18,8 @@ function buildMidiOnlyProject(): Project {
   const { trackId, clipId } = project.addMidiClip(0, 4);
   project.setTrackMidiDestination(trackId, 0);
   project.setMidiEvents(clipId, [
-    Project.midiNoteOn(0, 0, 0, 60, 100),
-    Project.midiNoteOff(2, 0, 0, 60, 0),
+    midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+    midiNoteOff({ ppq: 2, group: 0, channel: 0, note: 60, velocity: 0 }),
   ]);
   return project;
 }
@@ -79,9 +79,9 @@ describe('Project SoundFont (SF2) binding', () => {
       const { clipId, trackId } = project.addMidiClip(0, 2);
       project.setTrackMidiDestination(trackId, 0);
       project.setMidiEvents(clipId, [
-        Project.midiProgram(0, 0, 0, program),
-        Project.midiNoteOn(0.05, 0, 0, 52, 110),
-        Project.midiNoteOff(1, 0, 0, 52, 0),
+        midiProgram({ ppq: 0, group: 0, channel: 0, program }),
+        midiNoteOn({ ppq: 0.05, group: 0, channel: 0, note: 52, velocity: 110 }),
+        midiNoteOff({ ppq: 1, group: 0, channel: 0, note: 52, velocity: 0 }),
       ]);
       const out = project.bounceWithSf2Instruments(
         { destinationId: 0, instrument: { gain: 1, clearBankRig } },

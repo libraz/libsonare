@@ -729,3 +729,36 @@ export interface EngineTimeSignatureSegment {
   /** Beat unit (e.g. `4` for quarter note). */
   denominator: number;
 }
+
+/**
+ * Typed MIDI-FX chain configuration. Every field is optional; a stage runs only
+ * when one of its fields is given, and stages apply in the order listed here.
+ */
+export interface MidiFxConfig {
+  /** Transpose every note by this many semitones (integer). Giving it enables the transpose stage. */
+  transposeSemitones?: number;
+  /** Velocity multiplier. Default `1`. Any velocity field enables the velocity-curve stage. */
+  velocityScale?: number;
+  /** Velocity offset added after scaling. Default `0`. */
+  velocityOffset?: number;
+  /** Velocity gamma, `> 0`. Default `1`. */
+  velocityGamma?: number;
+  /** Quantize grid in quarter notes, `> 0`. Giving it enables the quantize stage. */
+  quantizePpq?: number;
+  /** Quantize strength, `0`..`1`. Default `1`. */
+  quantizeStrength?: number;
+  /** Semitone intervals stacked on each note, 1 to 8 integers. Giving it enables the chord stage. */
+  chordIntervals?: number[];
+  /** Semitone intervals of the arpeggio steps, 1 to 16 integers. Giving it enables the arpeggiator and requires `arpeggiatorStepPpq`. */
+  arpeggiatorIntervals?: number[];
+  /** Length of one arpeggio step in quarter notes, `> 0`. */
+  arpeggiatorStepPpq?: number;
+  /** Sounding length of one arpeggio step in quarter notes, `> 0`, capped at the step. Default: the step length. */
+  arpeggiatorGatePpq?: number;
+  /** Timing jitter in quarter notes, `>= 0`. Default `0`. Any humanize field enables the humanize stage. */
+  humanizePpq?: number;
+  /** Velocity jitter, integer `0`..`127`. Default `0`. */
+  humanizeVelocity?: number;
+  /** Humanize random seed, integer `>= 0`. Default `0`. */
+  seed?: number;
+}

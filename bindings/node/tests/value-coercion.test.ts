@@ -92,7 +92,7 @@ describe('enum ordinal coercion', () => {
     // the type documents it as an alias and the Python marshaller reads it too.
     expect(
       projectAutomationPointValue(
-        { ppq: 1, value: 0.5, curveToNext: 's-curve' },
+        { ppq: 1, value: 0.5, curveToNext: 'sCurve' },
         'addAutomationLane',
       ),
     ).toEqual({
@@ -103,7 +103,7 @@ describe('enum ordinal coercion', () => {
     });
     expect(
       projectAutomationPointValue(
-        { ppq: 1, value: 0.5, curve: 'hold', curveToNext: 's-curve' },
+        { ppq: 1, value: 0.5, curve: 'hold', curveToNext: 'sCurve' },
         'addAutomationLane',
       ),
     ).toEqual({ ppq: 1, value: 0.5, curve: 2, curveToNext: 2 });

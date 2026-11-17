@@ -37,6 +37,8 @@ import {
   estimateMeter,
   extractNotes,
   extractPercussiveEvents,
+  midiNoteOn,
+  midiRouteEvents,
   Mixer,
   masteringDynamicsCompressor,
   masteringDynamicsGate,
@@ -529,7 +531,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   {
     jsName: 'midiRouteEvents',
     invoke: (o) =>
-      Project.midiRouteEvents([{ ppq: 0, data0: (0x2 << 28) | (0x9 << 20) | (60 << 8) | 100 }], o),
+      midiRouteEvents([{ ppq: 0, data0: (0x2 << 28) | (0x9 << 20) | (60 << 8) | 100 }], o),
   },
   {
     jsName: 'analyzeTempo',
@@ -1071,7 +1073,11 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
       withProject((p) => {
         const { clipId } = p.addMidiClip(0, 4);
         p.setMidiEvents(clipId, [
-          { ...o, ppq: 0, data0: Project.midiNoteOn(0, 0, 0, 60, 100).data0 },
+          {
+            ...o,
+            ppq: 0,
+            data0: midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }).data0,
+          },
         ]);
         return p.clips().length;
       }),

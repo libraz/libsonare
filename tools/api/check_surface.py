@@ -78,6 +78,7 @@ RULE_SLUGS = (
     "onset-strength",
     "tempo-range",
     "one-positional-form",
+    "midi-module-functions",
     "options-struct",
     "c-create",
     "c-free",

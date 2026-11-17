@@ -81,7 +81,7 @@ describe('Mixer runtime methods', () => {
     expect(() => mixer.setSoloed(0, false)).not.toThrow();
     expect(() => mixer.setSoloSafe('guest', true)).not.toThrow();
     expect(() => mixer.setPolarityInvert('host', { left: true, right: false })).not.toThrow();
-    expect(() => mixer.setPanLaw('host', 'const6dB')).not.toThrow();
+    expect(() => mixer.setPanLaw('host', 'const6Db')).not.toThrow();
     expect(() => mixer.setChannelDelaySamples('host', 2)).not.toThrow();
     expect(() => mixer.setVcaOffsetDb('host', -3)).not.toThrow();
     expect(() => mixer.setDualPan('host', -0.5, 0.5)).not.toThrow();
@@ -385,10 +385,10 @@ describe('Mixer argument validation', () => {
   });
 
   it('maps string unions to native ints end-to-end', () => {
-    expect(() => mixer.setPanLaw('host', 'const3dB')).not.toThrow();
-    expect(() => mixer.setPanLaw('host', 'const4.5dB')).not.toThrow();
-    expect(() => mixer.setPanLaw('host', 'const6dB')).not.toThrow();
-    expect(() => mixer.setPanLaw('host', 'linear0dB')).not.toThrow();
+    expect(() => mixer.setPanLaw('host', 'const3Db')).not.toThrow();
+    expect(() => mixer.setPanLaw('host', 'const4.5Db')).not.toThrow();
+    expect(() => mixer.setPanLaw('host', 'const6Db')).not.toThrow();
+    expect(() => mixer.setPanLaw('host', 'linear0Db')).not.toThrow();
     expect(() => mixer.stripMeter('host', 'preFader')).not.toThrow();
     expect(() => mixer.stripMeter('host', 'postFader')).not.toThrow();
     const sendIndex = mixer.addSend('host', {

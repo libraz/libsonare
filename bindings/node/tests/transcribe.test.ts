@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TranscribeRequest, TranscribeResult } from '../src/index.js';
-import { Project, transcribe } from '../src/index.js';
+import { midiNoteOff, midiNoteOn, Project, transcribe } from '../src/index.js';
 
 const SR = 22050;
 
@@ -455,8 +455,8 @@ describe('Project.transcribeToClip', () => {
   it('replaces the clip contents rather than appending to them', () => {
     withProject((project, clipId) => {
       project.setMidiEvents(clipId, [
-        Project.midiNoteOn(0, 0, 0, 40, 100),
-        Project.midiNoteOff(1, 0, 0, 40, 0),
+        midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 40, velocity: 100 }),
+        midiNoteOff({ ppq: 1, group: 0, channel: 0, note: 40, velocity: 0 }),
       ]);
       expect(storedEvents(project, clipId)).toHaveLength(2);
 

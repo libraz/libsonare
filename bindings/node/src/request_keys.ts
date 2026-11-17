@@ -1373,8 +1373,8 @@ const SCHEDULE_PAN_AUTOMATION_REQUEST_KEYS = keySet('samplePos', 'pan', 'curve')
 const SCHEDULE_WIDTH_AUTOMATION_REQUEST_KEYS = keySet('samplePos', 'width', 'curve');
 const SCHEDULE_SEND_AUTOMATION_REQUEST_KEYS = keySet('samplePos', 'sendDb', 'curve');
 const IMPORT_EXTERNAL_SEPARATED_STEM_REQUEST_KEYS = keySet('sampleRate', 'stems');
-const BAKE_MIDI_FX_REQUEST_KEYS = keySet('clipId', 'configJson', 'withSourceIndex');
-const PREVIEW_MIDI_FX_REQUEST_KEYS = keySet('clipId', 'configJson');
+const BAKE_MIDI_FX_REQUEST_KEYS = keySet('clipId', 'config', 'withSourceIndex');
+const PREVIEW_MIDI_FX_REQUEST_KEYS = keySet('clipId', 'config');
 const TRANSCRIBE_TO_CLIP_REQUEST_KEYS = keySet(
   'clipId',
   'samples',
@@ -1530,6 +1530,40 @@ export const REQUEST_KEYS = {
   importExternalSeparatedStem: IMPORT_EXTERNAL_SEPARATED_STEM_REQUEST_KEYS,
   bakeMidiFx: BAKE_MIDI_FX_REQUEST_KEYS,
   previewMidiFx: PREVIEW_MIDI_FX_REQUEST_KEYS,
+  midiNoteOn: keySet('ppq', 'group', 'channel', 'note', 'velocity'),
+  midiNoteOff: keySet('ppq', 'group', 'channel', 'note', 'velocity'),
+  midiCc: keySet('ppq', 'group', 'channel', 'controller', 'value'),
+  midiPolyPressure: keySet('ppq', 'group', 'channel', 'note', 'pressure'),
+  midiProgram: keySet('ppq', 'group', 'channel', 'program'),
+  midiChannelPressure: keySet('ppq', 'group', 'channel', 'pressure'),
+  midiPitchBend: keySet('ppq', 'group', 'channel', 'bend'),
+  midi2NoteOn: keySet(
+    'ppq',
+    'group',
+    'channel',
+    'note',
+    'velocity16',
+    'attributeType',
+    'attributeData',
+  ),
+  midi2NoteOff: keySet('ppq', 'group', 'channel', 'note', 'velocity16'),
+  midi2Cc: keySet('ppq', 'group', 'channel', 'controller', 'value32'),
+  midi2PolyPressure: keySet('ppq', 'group', 'channel', 'note', 'pressure32'),
+  midi2ChannelPressure: keySet('ppq', 'group', 'channel', 'pressure32'),
+  midi2PitchBend: keySet('ppq', 'group', 'channel', 'bend32'),
+  midi2Program: keySet('ppq', 'group', 'channel', 'program', 'bank'),
+  midi2RegisteredController: keySet('ppq', 'group', 'channel', 'bank', 'index', 'value32'),
+  midi2AssignableController: keySet('ppq', 'group', 'channel', 'bank', 'index', 'value32'),
+  midi2RelativeRegisteredController: keySet('ppq', 'group', 'channel', 'bank', 'index', 'delta32'),
+  midi2RelativeAssignableController: keySet('ppq', 'group', 'channel', 'bank', 'index', 'delta32'),
+  midi2RegisteredPerNoteController: keySet('ppq', 'group', 'channel', 'note', 'index', 'value32'),
+  midi2AssignablePerNoteController: keySet('ppq', 'group', 'channel', 'note', 'index', 'value32'),
+  midi2PerNotePitchBend: keySet('ppq', 'group', 'channel', 'note', 'bend32'),
+  midi2PerNoteManagement: keySet('ppq', 'group', 'channel', 'note', 'detach', 'reset'),
+  midiBankProgram: keySet('ppq', 'group', 'channel', 'program', 'bank'),
+  midiParamToCc: keySet('bindings', 'paramId', 'unitValue', 'group', 'ppq'),
+  gm2InstrumentName: keySet('bankLsb', 'program'),
+  gm2DrumName: keySet('bankLsb', 'note'),
   transcribeToClip: TRANSCRIBE_TO_CLIP_REQUEST_KEYS,
   applyProjectVocalEdit: APPLY_PROJECT_VOCAL_EDIT_REQUEST_KEYS,
   vocalApply: VOCAL_APPLY_REQUEST_KEYS,
@@ -1963,6 +1997,8 @@ export const REQUEST_KEYS = {
 
 export const NESTED_REQUEST_KEYS = {
   setProgramOnChannel: { bank: keySet('msb', 'lsb') },
+  midi2Program: { bank: keySet('msb', 'lsb') },
+  midiBankProgram: { bank: keySet('msb', 'lsb') },
   configureCapture: { inputMonitor: CAPTURE_INPUT_MONITOR_KEYS, punch: CAPTURE_PUNCH_KEYS },
   renderPlayback: { config: PLAYBACK_RENDERER_CONFIG_KEYS },
   restoreVocalEditSession: { limits: VOCAL_SESSION_LIMITS_KEYS },

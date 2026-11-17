@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { MixSceneStrip } from '../src/index.js';
-import { ErrorCode, Project, ProjectTimeline, RealtimeEngine } from '../src/index.js';
+import {
+  ErrorCode,
+  midiNoteOff,
+  midiNoteOn,
+  Project,
+  ProjectTimeline,
+  RealtimeEngine,
+} from '../src/index.js';
 
 /** First strip / bus of a scene document: the object the engine strip setters take. */
 const sceneStrip = (json: string): MixSceneStrip => JSON.parse(json).strips[0];
@@ -49,10 +56,10 @@ function buildProject(): { project: Project; audioClip: number; audioTrack: numb
   });
   const { trackId, clipId } = project.addMidiClip(0, 2);
   project.setMidiEvents(clipId, [
-    Project.midiNoteOn(0.25, 0, 0, 60, 0x60),
-    Project.midiNoteOff(1, 0, 0, 60, 0),
-    Project.midiNoteOn(1, 0, 0, 64, 0x60),
-    Project.midiNoteOff(1.75, 0, 0, 64, 0),
+    midiNoteOn({ ppq: 0.25, group: 0, channel: 0, note: 60, velocity: 0x60 }),
+    midiNoteOff({ ppq: 1, group: 0, channel: 0, note: 60, velocity: 0 }),
+    midiNoteOn({ ppq: 1, group: 0, channel: 0, note: 64, velocity: 0x60 }),
+    midiNoteOff({ ppq: 1.75, group: 0, channel: 0, note: 64, velocity: 0 }),
   ]);
   project.setTrackMidiDestination(trackId, DESTINATION);
   return { project, audioClip, audioTrack };

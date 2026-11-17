@@ -115,10 +115,12 @@ describe('RealtimeEngine', () => {
   it('exposes live non-destructive MIDI FX inserts', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 16 });
     try {
-      expect(() => engine.setMidiFx(0, '{"transpose_semitones":12}')).not.toThrow();
+      expect(() => engine.setMidiFx(0, { transposeSemitones: 12 })).not.toThrow();
       expect(() => engine.clearMidiFx(0)).not.toThrow();
-      expect(() => engine.setMidiFx(0, '{bad json')).toThrow();
-      expect(() => engine.setMidiFx(0, '{"quantize_ppq":0}')).toThrow();
+      // A JSON string is no longer a config, and a refused stage still reaches the core's check.
+      expect(() => engine.setMidiFx(0, '{"transpose_semitones":12}' as never)).toThrow(TypeError);
+      expect(() => engine.setMidiFx(0, { transposeSemitones: '12' as never })).toThrow(TypeError);
+      expect(() => engine.setMidiFx(0, { quantizePpq: 0 })).toThrow();
     } finally {
       engine.destroy();
     }

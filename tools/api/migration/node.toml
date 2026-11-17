@@ -11945,8 +11945,319 @@ test = "bindings/node/tests/project-edit-extra.test.ts::refuses a curve ordinal 
 
 [[entry]]
 kind = "method"
-old = "Project.midiCcToBreakpoint"
-changed = "the breakpoint's curveToNext is an AutomationCurve token instead of an ordinal"
+old = "Project.midiNoteOn"
+removed = true
 domain = "project"
-rule = "string-closed-sets"
-test = "bindings/node/tests/project.test.ts::exposes native CcMap learn"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiNoteOff"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiCc"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiPolyPressure"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiProgram"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2NoteOn"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2NoteOff"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2Cc"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2PolyPressure"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2ChannelPressure"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2PitchBend"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2Program"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2RegisteredController"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2AssignableController"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2RelativeRegisteredController"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2RelativeAssignableController"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2RegisteredPerNoteController"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2AssignablePerNoteController"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2PerNotePitchBend"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2PerNoteManagement"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiBankProgram"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiParamToCc"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiChannelPressure"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiPitchBend"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gmInstrumentName"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gmProgramForName"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gmFamilyName"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gmFamilyFirstProgram"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gm2InstrumentName"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gmDrumName"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gmDrumNoteForName"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gm2DrumSetName"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gm2DrumName"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiCcName"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiCcIndexForName"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.perNoteControllerName"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiRouteEvents"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiCcLearn"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiCcToBreakpoint"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "field"
+old = "ProjectMidiRouteConfig.filterGroup"
+changed = "typed number only; null is no longer in the type, and a null at runtime still reads as absent"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/project.test.ts::reads a null route-config field as absent"
+
+[[entry]]
+kind = "field"
+old = "ProjectMidiRouteConfig.filterChannel"
+changed = "typed number only; null is no longer in the type, and a null at runtime still reads as absent"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/project.test.ts::reads a null route-config field as absent"
+
+[[entry]]
+kind = "field"
+old = "ProjectMidiRouteConfig.remapChannel"
+changed = "typed number only; null is no longer in the type, and a null at runtime still reads as absent"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/project.test.ts::reads a null route-config field as absent"
+
+[[entry]]
+kind = "field"
+old = "ProjectMidiFxBakeRequest.configJson"
+new = "ProjectMidiFxBakeRequest.config"
+domain = "project"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "ProjectMidiFxPreviewRequest.configJson"
+new = "ProjectMidiFxPreviewRequest.config"
+domain = "project"
+rule = "typed-results"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setMidiFx"
+changed = "takes a MidiFxConfig object instead of a JSON string; a non-object config, an unknown key or a wrong-typed field is a TypeError"
+domain = "engine"
+rule = "typed-results"
+test = "bindings/node/tests/basic_engine_mixer.test.ts::exposes live non-destructive MIDI FX inserts"

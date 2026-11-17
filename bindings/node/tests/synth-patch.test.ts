@@ -4,10 +4,14 @@ import {
   BUILTIN_SYNTH_WAVEFORMS,
   CONTROLLER_AXES,
   CONTROLLER_INPUTS,
+  midiNoteOff,
+  midiNoteOn,
+  midiProgram,
   MPE_DIMENSIONS,
   NOTE_TRACKINGS,
   PART_RIG_MODES,
   Project,
+  type ProjectBounceOptions,
   RealtimeEngine,
   SAMPLE_KEY_TRACKS,
   SAMPLE_LOOP_MODES,
@@ -34,26 +38,26 @@ function synthPatchRoundTripForTest(patch: SynthPatch): SynthPatch {
 }
 
 function buildMidiOnlyProject(note = 60): Project {
-  const project = Project.create();
+  const project = new Project();
   project.setSampleRate(48000);
   const { trackId, clipId } = project.addMidiClip(0, 4);
   project.setTrackMidiDestination(trackId, 0);
   project.setMidiEvents(clipId, [
-    Project.midiNoteOn(0, 0, 0, note, 100),
-    Project.midiNoteOff(2, 0, 0, note, 0),
+    midiNoteOn({ ppq: 0, group: 0, channel: 0, note, velocity: 100 }),
+    midiNoteOff({ ppq: 2, group: 0, channel: 0, note, velocity: 0 }),
   ]);
   return project;
 }
 
 function buildGmProgramProject(program = 4): Project {
-  const project = Project.create();
+  const project = new Project();
   project.setSampleRate(48000);
   const { trackId, clipId } = project.addMidiClip(0, 1);
   project.setTrackMidiDestination(trackId, 0);
   project.setMidiEvents(clipId, [
-    Project.midiProgram(0, 0, 0, program),
-    Project.midiNoteOn(0, 0, 0, 60, 100),
-    Project.midiNoteOff(0.5, 0, 0, 60, 0),
+    midiProgram({ ppq: 0, group: 0, channel: 0, program }),
+    midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+    midiNoteOff({ ppq: 0.5, group: 0, channel: 0, note: 60, velocity: 0 }),
   ]);
   return project;
 }
@@ -61,21 +65,22 @@ function buildGmProgramProject(program = 4): Project {
 // One note played twice, the second long after the first has ended and at an
 // offset that is no whole number of its periods.
 function buildRepeatedNoteProject(): Project {
-  const project = Project.create();
+  const project = new Project();
   project.setSampleRate(48000);
   const { trackId, clipId } = project.addMidiClip(0, 16);
   project.setTrackMidiDestination(trackId, 0);
   project.setMidiEvents(clipId, [
-    Project.midiNoteOn(0, 0, 0, 48, 100),
-    Project.midiNoteOff(1, 0, 0, 48, 0),
-    Project.midiNoteOn(9.37, 0, 0, 48, 100),
-    Project.midiNoteOff(10.37, 0, 0, 48, 0),
+    midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 48, velocity: 100 }),
+    midiNoteOff({ ppq: 1, group: 0, channel: 0, note: 48, velocity: 0 }),
+    midiNoteOn({ ppq: 9.37, group: 0, channel: 0, note: 48, velocity: 100 }),
+    midiNoteOff({ ppq: 10.37, group: 0, channel: 0, note: 48, velocity: 0 }),
   ]);
   return project;
 }
 
 // Largest difference between the two plays, each aligned on its own onset.
-function repeatedNoteDiff(audio: Float32Array): number {
+function repeatedNoteDiff(planes: Float32Array[]): number {
+  const [audio] = planes;
   const onset = (from: number) => {
     for (let i = from; i < audio.length; i++) {
       if (Math.abs(audio[i]) > 1e-4) {
@@ -85,17 +90,32 @@ function repeatedNoteDiff(audio: Float32Array): number {
     return -1;
   };
   const first = onset(0);
-  const second = onset(first + 2 * 48000 * 2);
+  const second = onset(first + 2 * 48000);
   expect(first).toBeGreaterThanOrEqual(0);
   expect(second).toBeGreaterThan(first);
   let diff = 0;
-  for (let i = 0; i < 48000; i++) {
-    diff = Math.max(diff, Math.abs(audio[first + i] - audio[second + i]));
+  for (const plane of planes) {
+    for (let i = 0; i < 24000; i++) {
+      diff = Math.max(diff, Math.abs(plane[first + i] - plane[second + i]));
+    }
   }
   return diff;
 }
 
-function peak(audio: Float32Array): number {
+/** Bounces one patch (or preset name) bound to destination 0 and returns the audio planes. */
+function bounceSynth(
+  project: Project,
+  patch: SynthPatch | string,
+  options: ProjectBounceOptions,
+): Float32Array[] {
+  const instrument = typeof patch === 'string' ? { preset: patch } : patch;
+  return project.bounceWithSynthInstruments({ instrument }, options).channels;
+}
+
+function peak(audio: Float32Array | Float32Array[]): number {
+  if (Array.isArray(audio)) {
+    return Math.max(0, ...audio.map(peak));
+  }
   let p = 0;
   for (let i = 0; i < audio.length; i++) {
     const a = Math.abs(audio[i]);
@@ -272,12 +292,12 @@ describe('Project.bounceWithSynthInstrument', () => {
     const project = buildMidiOnlyProject();
     try {
       for (const preset of ['va:saw-lead', 'e-piano', 'harp']) {
-        const audio = project.bounceWithSynthInstrument(preset, { totalFrames: 24000 });
-        expect(audio.length).toBe(48000);
+        const audio = bounceSynth(project, preset, { totalFrames: 24000 });
+        expect(audio.map((plane) => plane.length)).toEqual([24000, 24000]);
         expect(peak(audio)).toBeGreaterThan(0);
       }
-      const first = project.bounceWithSynthInstrument('saw-lead', { totalFrames: 24000 });
-      const second = project.bounceWithSynthInstrument('saw-lead', { totalFrames: 24000 });
+      const first = bounceSynth(project, 'saw-lead', { totalFrames: 24000 });
+      const second = bounceSynth(project, 'saw-lead', { totalFrames: 24000 });
       expect(first).toEqual(second);
     } finally {
       project.destroy();
@@ -291,30 +311,30 @@ describe('Project.bounceWithSynthInstrument', () => {
       // either off is a real edit. Before the patch carried presence bits a
       // zero was indistinguishable from an omitted key and the render was
       // unchanged, which made "no spread" impossible to ask for.
-      const reference = project.bounceWithSynthInstrument('warm-pad', { totalFrames: 24000 });
+      const reference = bounceSynth(project, 'warm-pad', { totalFrames: 24000 });
       expect(peak(reference)).toBeGreaterThan(0);
 
-      const noSpread = project.bounceWithSynthInstrument(
+      const noSpread = bounceSynth(
+        project,
         { preset: 'warm-pad', stereoSpread: 0 },
         { totalFrames: 24000 },
       );
       expect(noSpread).not.toEqual(reference);
 
-      const noDrive = project.bounceWithSynthInstrument(
+      const noDrive = bounceSynth(
+        project,
         { preset: 'warm-pad', busDrive: 0 },
         { totalFrames: 24000 },
       );
       expect(noDrive).not.toEqual(reference);
 
       // Omitting the key still keeps the base value.
-      const untouched = project.bounceWithSynthInstrument(
-        { preset: 'warm-pad' },
-        { totalFrames: 24000 },
-      );
+      const untouched = bounceSynth(project, { preset: 'warm-pad' }, { totalFrames: 24000 });
       expect(untouched).toEqual(reference);
 
       // An empty routing array clears the base matrix; omitting it keeps it.
-      const wobble = project.bounceWithSynthInstrument(
+      const wobble = bounceSynth(
+        project,
         {
           preset: 'warm-pad',
           lfoRateHz: 6,
@@ -322,7 +342,8 @@ describe('Project.bounceWithSynthInstrument', () => {
         },
         { totalFrames: 24000 },
       );
-      const cleared = project.bounceWithSynthInstrument(
+      const cleared = bounceSynth(
+        project,
         { preset: 'warm-pad', lfoRateHz: 6, modRoutings: [] },
         { totalFrames: 24000 },
       );
@@ -358,7 +379,7 @@ describe('Project.bounceWithSynthInstrument', () => {
         filterDecayMs: 200,
         filterSustain: 0.3,
       };
-      const reference = project.bounceWithSynthInstrument(base, frames);
+      const reference = bounceSynth(project, base, frames);
       expect(peak(reference)).toBeGreaterThan(0);
       for (const edit of [
         { driftRateHz: 7 },
@@ -370,15 +391,13 @@ describe('Project.bounceWithSynthInstrument', () => {
         // The lowest rate the field accepts, which the base does not use.
         { driftRateHz: 0.01 },
       ]) {
-        const edited = project.bounceWithSynthInstrument({ ...base, ...edit }, frames);
+        const edited = bounceSynth(project, { ...base, ...edit }, frames);
         expect(edited, JSON.stringify(edit)).not.toEqual(reference);
       }
-      expect(project.bounceWithSynthInstrument({ ...base, oneShot: undefined }, frames)).toEqual(
-        reference,
+      expect(bounceSynth(project, { ...base, oneShot: undefined }, frames)).toEqual(reference);
+      expect(() => bounceSynth(project, { ...base, oneShot: 1 as never }, frames)).toThrow(
+        TypeError,
       );
-      expect(() =>
-        project.bounceWithSynthInstrument({ ...base, oneShot: 1 as never }, frames),
-      ).toThrow(TypeError);
     } finally {
       project.destroy();
     }
@@ -387,16 +406,14 @@ describe('Project.bounceWithSynthInstrument', () => {
   it('takes gain: 0 as silence, not the base level', () => {
     const project = buildMidiOnlyProject();
     try {
-      const reference = project.bounceWithSynthInstrument('warm-pad', { totalFrames: 24000 });
+      const reference = bounceSynth(project, 'warm-pad', { totalFrames: 24000 });
       expect(peak(reference)).toBeGreaterThan(0);
 
-      const silent = project.bounceWithSynthInstrument(
-        { preset: 'warm-pad', gain: 0 },
-        { totalFrames: 24000 },
-      );
+      const silent = bounceSynth(project, { preset: 'warm-pad', gain: 0 }, { totalFrames: 24000 });
       expect(peak(silent)).toBe(0);
 
-      const quiet = project.bounceWithSynthInstrument(
+      const quiet = bounceSynth(
+        project,
         { preset: 'warm-pad', gain: 0.01 },
         { totalFrames: 24000 },
       );
@@ -411,7 +428,7 @@ describe('Project.bounceWithSynthInstrument', () => {
     try {
       const rejection = (patch: SynthPatch): { code?: number; name?: string; message: string } => {
         try {
-          project.bounceWithSynthInstrument(patch, { totalFrames: 128 });
+          bounceSynth(project, patch, { totalFrames: 128 });
         } catch (error) {
           return error as { code?: number; name?: string; message: string };
         }
@@ -432,7 +449,7 @@ describe('Project.bounceWithSynthInstrument', () => {
       }
       // The published ends are accepted.
       expect(() =>
-        project.bounceWithSynthInstrument({ cutoffHz: cutoff?.max }, { totalFrames: 128 }),
+        bounceSynth(project, { cutoffHz: cutoff?.max }, { totalFrames: 128 }),
       ).not.toThrow();
     } finally {
       project.destroy();
@@ -443,19 +460,22 @@ describe('Project.bounceWithSynthInstrument', () => {
     const project = buildMidiOnlyProject();
     try {
       expect(() =>
-        project.bounceWithSynthInstrument(
+        bounceSynth(
+          project,
           { modRoutings: [{ source: 'none', destination: 'pitch-cents', depth: 80 }] },
           { totalFrames: 128 },
         ),
       ).toThrow();
       expect(() =>
-        project.bounceWithSynthInstrument(
+        bounceSynth(
+          project,
           { modRoutings: [{ source: 'lfo1', destination: 'none', depth: 80 }] },
           { totalFrames: 128 },
         ),
       ).toThrow();
       // Not vacuous: a real routing on both ends still passes.
-      const audio = project.bounceWithSynthInstrument(
+      const audio = bounceSynth(
+        project,
         { modRoutings: [{ source: 'lfo1', destination: 'pitch-cents', depth: 80 }] },
         { totalFrames: 24000 },
       );
@@ -468,14 +488,12 @@ describe('Project.bounceWithSynthInstrument', () => {
   it('applies field overrides and the mod matrix', () => {
     const project = buildMidiOnlyProject();
     try {
-      const plain = project.bounceWithSynthInstrument({}, { totalFrames: 24000 });
+      const plain = bounceSynth(project, {}, { totalFrames: 24000 });
       expect(peak(plain)).toBeGreaterThan(0);
-      const dark = project.bounceWithSynthInstrument(
-        { cutoffHz: 300, resonanceQ: 4 },
-        { totalFrames: 24000 },
-      );
+      const dark = bounceSynth(project, { cutoffHz: 300, resonanceQ: 4 }, { totalFrames: 24000 });
       expect(dark).not.toEqual(plain);
-      const wobble = project.bounceWithSynthInstrument(
+      const wobble = bounceSynth(
+        project,
         {
           lfoRateHz: 6,
           modRoutings: [{ source: 'lfo1', destination: 'pitch-cents', depth: 80 }],
@@ -483,13 +501,25 @@ describe('Project.bounceWithSynthInstrument', () => {
         { totalFrames: 24000 },
       );
       expect(wobble).not.toEqual(plain);
-      expect(() =>
-        project.bounceWithSynthInstrument('no-such-preset', { totalFrames: 128 }),
-      ).toThrow();
+      expect(() => bounceSynth(project, 'no-such-preset', { totalFrames: 128 })).toThrow();
       expect(() =>
         // @ts-expect-error deliberately unknown waveform name; the patch resolver must reject it.
-        project.bounceWithSynthInstrument({ waveform: 'sawtooth-ish' }, { totalFrames: 128 }),
+        bounceSynth(project, { waveform: 'sawtooth-ish' }, { totalFrames: 128 }),
       ).toThrow();
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('refuses a bare preset name in place of a binding', () => {
+    const project = buildMidiOnlyProject();
+    try {
+      expect(() =>
+        project.bounceWithSynthInstruments('saw-lead' as never, { totalFrames: 128 }),
+      ).toThrow(TypeError);
+      expect(() =>
+        project.bounceWithSynthInstruments({ preset: 'saw-lead' } as never, { totalFrames: 128 }),
+      ).toThrow(TypeError);
     } finally {
       project.destroy();
     }
@@ -499,14 +529,8 @@ describe('Project.bounceWithSynthInstrument', () => {
     const project = buildRepeatedNoteProject();
     try {
       const options = { totalFrames: 48000 * 6 };
-      const note = project.bounceWithSynthInstrument(
-        { preset: 'saw-lead', retrigger: 'note' },
-        options,
-      );
-      const free = project.bounceWithSynthInstrument(
-        { preset: 'saw-lead', retrigger: 'free' },
-        options,
-      );
+      const note = bounceSynth(project, { preset: 'saw-lead', retrigger: 'note' }, options);
+      const free = bounceSynth(project, { preset: 'saw-lead', retrigger: 'free' }, options);
       expect(peak(note)).toBeGreaterThan(0.01);
       expect(repeatedNoteDiff(note)).toBe(0);
       expect(repeatedNoteDiff(free)).toBeGreaterThan(1e-3);
@@ -519,7 +543,7 @@ describe('Project.bounceWithSynthInstrument', () => {
     // Note 38 = acoustic snare in the GM drum map.
     const project = buildMidiOnlyProject(38);
     try {
-      const audio = project.bounceWithSynthInstrument('drum-kit', { totalFrames: 24000 });
+      const audio = bounceSynth(project, 'drum-kit', { totalFrames: 24000 });
       expect(peak(audio)).toBeGreaterThan(0);
     } finally {
       project.destroy();
@@ -530,20 +554,15 @@ describe('Project.bounceWithSynthInstrument', () => {
     const fixedProject = buildGmProgramProject();
     const changedProject = buildGmProgramProject(40);
     try {
-      const options = { totalFrames: 12000, numChannels: 1, sampleRate: 48000 };
-      const fixed = fixedProject.bounceWithSynthInstrument({ preset: 'sine' }, options);
-      const explicitFalse = fixedProject.bounceWithSynthInstrument(
+      const options = { totalFrames: 12000, numChannels: 1 };
+      const fixed = bounceSynth(fixedProject, { preset: 'sine' }, options);
+      const explicitFalse = bounceSynth(
+        fixedProject,
         { preset: 'sine', useGmPrograms: false },
         options,
       );
-      const gm = fixedProject.bounceWithSynthInstrument(
-        { preset: 'sine', useGmPrograms: true },
-        options,
-      );
-      const otherGm = changedProject.bounceWithSynthInstrument(
-        { preset: 'sine', useGmPrograms: true },
-        options,
-      );
+      const gm = bounceSynth(fixedProject, { preset: 'sine', useGmPrograms: true }, options);
+      const otherGm = bounceSynth(changedProject, { preset: 'sine', useGmPrograms: true }, options);
 
       expect(explicitFalse).toEqual(fixed);
       expect(gm).not.toEqual(fixed);
@@ -558,16 +577,14 @@ describe('Project.bounceWithSynthInstrument', () => {
     const project = buildMidiOnlyProject();
     try {
       expect(() =>
-        project.bounceWithSynthInstrument(
-          { preset: 'sine', useGmPrograms: 1 } as unknown as SynthPatch,
-          { totalFrames: 128 },
-        ),
+        bounceSynth(project, { preset: 'sine', useGmPrograms: 1 } as unknown as SynthPatch, {
+          totalFrames: 128,
+        }),
       ).toThrow();
       expect(() =>
-        project.bounceWithSynthInstrument(
-          { preset: 'sine', useGmPrograms: 'true' } as unknown as SynthPatch,
-          { totalFrames: 128 },
-        ),
+        bounceSynth(project, { preset: 'sine', useGmPrograms: 'true' } as unknown as SynthPatch, {
+          totalFrames: 128,
+        }),
       ).toThrow();
     } finally {
       project.destroy();
@@ -698,10 +715,10 @@ describe('RealtimeEngine.setSynthInstrument', () => {
 });
 
 describe('SynthPatch.engineParams', () => {
-  const bounce = (patch: SynthPatch | string): Float32Array => {
+  const bounce = (patch: SynthPatch | string): Float32Array[] => {
     const project = buildMidiOnlyProject();
     try {
-      return project.bounceWithSynthInstrument(patch, { totalFrames: 24000 });
+      return bounceSynth(project, patch, { totalFrames: 24000 });
     } finally {
       project.destroy();
     }
@@ -771,12 +788,18 @@ describe('SynthPatch.engineParams', () => {
     try {
       const audio = project.bounceWithSynthInstruments(
         [
-          { destinationId: 0, engineMode: 'bowed-string', engineParams: { bowForce: 0.9 } },
-          { destinationId: 1, engineMode: 'bowed-string', engineParams: { bowForce: 0.2 } },
+          {
+            destinationId: 0,
+            instrument: { engineMode: 'bowed-string', engineParams: { bowForce: 0.9 } },
+          },
+          {
+            destinationId: 1,
+            instrument: { engineMode: 'bowed-string', engineParams: { bowForce: 0.2 } },
+          },
         ],
         { totalFrames: 24000 },
       );
-      expect(peak(audio)).toBeGreaterThan(0);
+      expect(peak(audio.channels)).toBeGreaterThan(0);
     } finally {
       project.destroy();
     }

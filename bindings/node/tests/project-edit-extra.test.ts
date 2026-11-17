@@ -547,8 +547,8 @@ describe('Project edit ops (new bindings)', () => {
   it('resolves a curve token and its curveToNext alias to one serialized ordinal', () => {
     // A `curveToNext`-only point must not fall back to Linear at the boundary.
     const spellings: ProjectAutomationPoint[] = [
-      { ppq: 0, value: 1, curve: 's-curve' },
-      { ppq: 0, value: 1, curveToNext: 's-curve' },
+      { ppq: 0, value: 1, curve: 'sCurve' },
+      { ppq: 0, value: 1, curveToNext: 'sCurve' },
     ];
     const serialized = spellings.map((point) => {
       const project = new Project();

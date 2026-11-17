@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { Project, type ProjectBounceOptions } from '../src/index.js';
+import { midiNoteOff, midiNoteOn, Project, type ProjectBounceOptions } from '../src/index.js';
 
 const OPTIONS: ProjectBounceOptions = { totalFrames: 4096, numChannels: 2 };
 
@@ -17,8 +17,8 @@ function midiProject(): Project {
   const { trackId, clipId } = project.addMidiClip(0, 4);
   project.setTrackMidiDestination(trackId, 0);
   project.setMidiEvents(clipId, [
-    Project.midiNoteOn(0, 0, 0, 60, 100),
-    Project.midiNoteOff(2, 0, 0, 60, 0),
+    midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+    midiNoteOff({ ppq: 2, group: 0, channel: 0, note: 60, velocity: 0 }),
   ]);
   return project;
 }

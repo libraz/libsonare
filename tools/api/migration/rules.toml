@@ -459,6 +459,22 @@ timeStretch({ samples, sampleRate: 44100, rate: 1.25, nFft: 2048, hopLength: 512
 '''
 
 [[rule]]
+slug = "midi-module-functions"
+title = "MIDI message packers and GM lookups are module functions"
+summary = "The `Project.midi*`, `Project.midi2*`, `Project.gm*` and `Project.perNoteControllerName` statics are module functions of the same name. Message packers take one request object, with `bank?: { msb, lsb }` in place of a bank-valid flag; lookups return the value and throw `RangeError` for an unknown name or out-of-range number instead of returning `null` or `-1`."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const on = Project.midiNoteOn(0, 0, 0, 60, 100);
+const program = Project.gmProgramForName('Violin'); // -1 when unknown
+'''
+after = '''
+import { gmProgramForName, midiNoteOn } from '@libraz/libsonare';
+const on = midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 });
+const program = gmProgramForName('Violin'); // RangeError when unknown
+'''
+
+[[rule]]
 slug = "options-struct"
 title = "C extends an operation through an Options struct"
 summary = "Each C operation has one entry point with an optional `Sonare<Op>Options` struct whose first field is `struct_size`, initialised by `sonare_<op>_options_init`; `NULL` selects the defaults. The `_ex`, `_ex2`, `_v2`, `_checked`, `_with_options` and `_with_progress` variants are removed."

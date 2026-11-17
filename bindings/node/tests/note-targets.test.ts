@@ -19,6 +19,8 @@ import type { NoteObject, NoteTarget, NoteTargetUnmatchedPolicy } from '../src/i
 import {
   assignNoteTargets,
   extractNotes,
+  midiNoteOff,
+  midiNoteOn,
   noteTargetsFromSmf,
   Project,
   renderNotes,
@@ -110,10 +112,10 @@ function twoQuarterNotesSmf(): Buffer {
     project.setTempoSegments([{ startPpq: 0, bpm: 120 }]);
     const { clipId } = project.addMidiClip(0, 3);
     project.setMidiEvents(clipId, [
-      Project.midiNoteOn(0, 0, 0, 60, 100),
-      Project.midiNoteOff(1, 0, 0, 60, 0),
-      Project.midiNoteOn(1, 0, 0, 67, 100),
-      Project.midiNoteOff(2, 0, 0, 67, 0),
+      midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+      midiNoteOff({ ppq: 1, group: 0, channel: 0, note: 60, velocity: 0 }),
+      midiNoteOn({ ppq: 1, group: 0, channel: 0, note: 67, velocity: 100 }),
+      midiNoteOff({ ppq: 2, group: 0, channel: 0, note: 67, velocity: 0 }),
     ]);
     return Buffer.from(project.exportSmf());
   } finally {

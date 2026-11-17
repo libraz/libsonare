@@ -15,6 +15,7 @@ export * from './effects_polyphony.js';
 export * from './errors.js';
 export * from './features.js';
 export * from './metering.js';
+export * from './midi_messages.js';
 export * from './mixer.js';
 export * from './mixing_assistant.js';
 export * from './playback.js';
@@ -159,6 +160,8 @@ export type {
   FileClipPageProviderOptions,
   FunctionalChord,
   GenreHint,
+  Gm2DrumNameRequest,
+  Gm2InstrumentNameRequest,
   GoniometerPoint,
   GrooveType,
   HpssResult,
@@ -226,7 +229,32 @@ export type {
   MeterEstimate,
   MeterTap,
   MfccResult,
+  Midi2AssignableControllerRequest,
+  Midi2AssignablePerNoteControllerRequest,
+  Midi2CcRequest,
+  Midi2ChannelPressureRequest,
+  Midi2NoteOffRequest,
+  Midi2NoteOnRequest,
+  Midi2PerNoteManagementRequest,
+  Midi2PerNotePitchBendRequest,
+  Midi2PitchBendRequest,
+  Midi2PolyPressureRequest,
+  Midi2ProgramRequest,
+  Midi2RegisteredControllerRequest,
+  Midi2RegisteredPerNoteControllerRequest,
+  Midi2RelativeAssignableControllerRequest,
+  Midi2RelativeRegisteredControllerRequest,
+  MidiBankProgramRequest,
   MidiCcLearnOptions,
+  MidiCcRequest,
+  MidiChannelPressureRequest,
+  MidiFxConfig,
+  MidiNoteOffRequest,
+  MidiNoteOnRequest,
+  MidiParamToCcRequest,
+  MidiPitchBendRequest,
+  MidiPolyPressureRequest,
+  MidiProgramRequest,
   MidiRelease,
   MixAlignmentPair,
   MixAssistantMixProfile,

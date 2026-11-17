@@ -1,6 +1,37 @@
 import { describe, expect, it } from 'vitest';
 import type { BuiltinSynthConfig } from '../src/index.js';
-import { ErrorCode, Project, projectAbiVersion } from '../src/index.js';
+import {
+  ErrorCode,
+  gm2DrumName,
+  gm2DrumSetName,
+  gm2InstrumentName,
+  gmDrumName,
+  gmDrumNoteForName,
+  gmFamilyFirstProgram,
+  gmFamilyName,
+  gmInstrumentName,
+  gmProgramForName,
+  midi2Cc,
+  midi2PerNoteManagement,
+  midi2Program,
+  midiBankProgram,
+  midiCc,
+  midiCcIndexForName,
+  midiCcLearn,
+  midiCcName,
+  midiCcToBreakpoint,
+  midiChannelPressure,
+  midiNoteOff,
+  midiNoteOn,
+  midiParamToCc,
+  midiPitchBend,
+  midiPolyPressure,
+  midiProgram,
+  midiRouteEvents,
+  perNoteControllerName,
+  Project,
+  projectAbiVersion,
+} from '../src/index.js';
 import { EXPECTED_PROJECT_ABI_VERSION } from '../src/types_project.js';
 
 /** A byte view for subsequence search and ASCII reads on an exported file. */
@@ -43,8 +74,8 @@ function buildProject(): Project {
 
   const { clipId } = project.addMidiClip(0, 4);
   project.setMidiEvents(clipId, [
-    Project.midiNoteOn(0, 0, 0, 60, 100),
-    Project.midiNoteOff(2, 0, 0, 60, 0),
+    midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+    midiNoteOff({ ppq: 2, group: 0, channel: 0, note: 60, velocity: 0 }),
   ]);
 
   return project;
@@ -686,7 +717,9 @@ describe('Project native binding', () => {
   it('rejects MIDI loop export that exceeds the expansion budget', () => {
     const project = new Project();
     const { clipId } = project.addMidiClip(0, 4);
-    project.setMidiEvents(clipId, [Project.midiNoteOn(0, 0, 0, 60, 100)]);
+    project.setMidiEvents(clipId, [
+      midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+    ]);
     project.setClipLoop(clipId, { loopMode: 'loop', loopLengthPpq: 1e-9 });
     expect(() => project.exportSmf()).toThrow();
     expect(() => project.exportClipFile()).toThrow();
@@ -718,21 +751,21 @@ describe('Project native binding', () => {
   it('reports MIDI-FX provenance and matches the bare bake', () => {
     const seed = (project: Project, clip: number) => {
       project.setMidiEvents(clip, [
-        Project.midiNoteOn(0, 0, 0, 60, 100),
-        Project.midiNoteOff(1, 0, 0, 60, 0),
-        Project.midiNoteOn(2, 0, 0, 64, 100),
-        Project.midiNoteOff(3, 0, 0, 64, 0),
+        midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+        midiNoteOff({ ppq: 1, group: 0, channel: 0, note: 60, velocity: 0 }),
+        midiNoteOn({ ppq: 2, group: 0, channel: 0, note: 64, velocity: 100 }),
+        midiNoteOff({ ppq: 3, group: 0, channel: 0, note: 64, velocity: 0 }),
       ]);
     };
-    const config = '{"chord_intervals":[0,4,7]}';
+    const config = { chordIntervals: [0, 4, 7] };
 
     const request = buildProject();
     const { clipId: requestClip } = request.addMidiClip(0, 4);
     seed(request, requestClip);
-    expect(request.previewMidiFxCount({ clipId: requestClip, configJson: config })).toBe(12);
+    expect(request.previewMidiFxCount({ clipId: requestClip, config })).toBe(12);
     const result = request.bakeMidiFx({
       clipId: requestClip,
-      configJson: config,
+      config,
       withSourceIndex: true,
     });
     expect(result.sourceIndex).toBeInstanceOf(Int32Array);
@@ -749,7 +782,7 @@ describe('Project native binding', () => {
     const bare = buildProject();
     const { clipId: bareClip } = bare.addMidiClip(0, 4);
     seed(bare, bareClip);
-    expect(bare.bakeMidiFx({ clipId: bareClip, configJson: config })).toEqual({});
+    expect(bare.bakeMidiFx({ clipId: bareClip, config })).toEqual({});
     expect(bare.exportSmf()).toEqual(request.exportSmf());
 
     // The positional form is gone.
@@ -758,12 +791,16 @@ describe('Project native binding', () => {
     ).toThrow(TypeError);
 
     // Errors travel the same path with and without the flag.
-    expect(() => bare.bakeMidiFx({ clipId: bareClip, configJson: '{bad json' })).toThrow();
+    expect(() => bare.bakeMidiFx({ clipId: bareClip, config: { chordIntervals: [] } })).toThrow();
     expect(() =>
-      request.bakeMidiFx({ clipId: requestClip, configJson: '{bad json', withSourceIndex: true }),
+      request.bakeMidiFx({
+        clipId: requestClip,
+        config: { chordIntervals: [] },
+        withSourceIndex: true,
+      }),
     ).toThrow();
     expect(() =>
-      request.previewMidiFxCount({ clipId: requestClip, configJson: '{bad json' }),
+      request.previewMidiFxCount({ clipId: requestClip, config: { chordIntervals: [] } }),
     ).toThrow();
 
     request.destroy();
@@ -774,15 +811,15 @@ describe('Project native binding', () => {
     const project = buildProject();
     const { clipId } = project.addMidiClip(0, 2);
     project.setMidiEvents(clipId, [
-      Project.midiNoteOn(0.1, 0, 0, 60, 100),
-      Project.midiPolyPressure(0.2, 0, 0, 60, 70),
-      Project.midiChannelPressure(0.3, 0, 0, 80),
-      Project.midiPitchBend(0.4, 0, 0, 8192),
-      Project.midiNoteOff(1.1, 0, 0, 60, 0),
+      midiNoteOn({ ppq: 0.1, group: 0, channel: 0, note: 60, velocity: 100 }),
+      midiPolyPressure({ ppq: 0.2, group: 0, channel: 0, note: 60, pressure: 70 }),
+      midiChannelPressure({ ppq: 0.3, group: 0, channel: 0, pressure: 80 }),
+      midiPitchBend({ ppq: 0.4, group: 0, channel: 0, bend: 8192 }),
+      midiNoteOff({ ppq: 1.1, group: 0, channel: 0, note: 60, velocity: 0 }),
     ]);
     project.bakeMidiFx({
       clipId,
-      configJson: '{"transpose_semitones":12,"quantize_ppq":0.25,"quantize_strength":1.0}',
+      config: { transposeSemitones: 12, quantizePpq: 0.25, quantizeStrength: 1 },
     });
     project.setProgram(clipId, 42);
     project.setProgramOnChannel(clipId, {
@@ -821,10 +858,10 @@ describe('Project native binding', () => {
     const project = new Project();
     const { clipId } = project.addMidiClip(0, 8);
     const events = Array.from({ length: 600 }, (_, i) =>
-      Project.midiCc(i / 80, 0, 0, i % 128, (i * 3) % 128),
+      midiCc({ ppq: i / 80, group: 0, channel: 0, controller: i % 128, value: (i * 3) % 128 }),
     );
     project.setMidiEvents(clipId, events);
-    project.bakeMidiFx({ clipId, configJson: '{}' });
+    project.bakeMidiFx({ clipId, config: {} });
 
     const payload = JSON.parse(project.toJson()) as {
       midi_content: Record<string, Array<{ ppq: number; data0: number; data1: number }>>;
@@ -833,7 +870,7 @@ describe('Project native binding', () => {
 
     const round = new Project();
     const roundClip = round.importSmf(project.exportSmf());
-    round.bakeMidiFx({ clipId: roundClip, configJson: '{}' });
+    round.bakeMidiFx({ clipId: roundClip, config: {} });
     const roundPayload = JSON.parse(round.toJson()) as {
       midi_content: Record<string, Array<{ ppq: number; data0: number; data1: number }>>;
     };
@@ -881,8 +918,8 @@ describe('Project native binding', () => {
     const { trackId, clipId } = project.addMidiClip(0, 4);
     project.setTrackMidiDestination(trackId, 0);
     project.setMidiEvents(clipId, [
-      Project.midiNoteOn(0, 0, 0, 60, 100),
-      Project.midiNoteOff(2, 0, 0, 60, 0),
+      midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+      midiNoteOff({ ppq: 2, group: 0, channel: 0, note: 60, velocity: 0 }),
     ]);
     return project;
   }
@@ -1234,8 +1271,8 @@ describe('Project validateMidiNotes', () => {
     project.setSampleRate(48000);
     const { clipId } = project.addMidiClip(0, 4);
     project.setMidiEvents(clipId, [
-      Project.midiNoteOn(0, 0, 0, 60, 100),
-      Project.midiNoteOff(2, 0, 0, 60, 0),
+      midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+      midiNoteOff({ ppq: 2, group: 0, channel: 0, note: 60, velocity: 0 }),
     ]);
 
     const result = project.validateMidiNotes(clipId);
@@ -1249,7 +1286,9 @@ describe('Project validateMidiNotes', () => {
     const project = new Project();
     project.setSampleRate(48000);
     const { clipId } = project.addMidiClip(0, 4);
-    project.setMidiEvents(clipId, [Project.midiNoteOn(0, 0, 0, 60, 100)]);
+    project.setMidiEvents(clipId, [
+      midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+    ]);
 
     const result = project.validateMidiNotes(clipId);
     expect(result.ok).toBe(false);
@@ -1263,8 +1302,8 @@ describe('Project validateMidiNotes', () => {
     project.setSampleRate(48000);
     const { clipId } = project.addMidiClip(0, 4);
     project.setMidiEvents(clipId, [
-      Project.midiNoteOn(0, 0, 0, 60, 100),
-      Project.midiNoteOff(1, 1, 0, 60, 0),
+      midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+      midiNoteOff({ ppq: 1, group: 1, channel: 0, note: 60, velocity: 0 }),
     ]);
 
     const result = project.validateMidiNotes(clipId);
@@ -1278,8 +1317,8 @@ describe('Project validateMidiNotes', () => {
     const project = new Project();
     const { clipId } = project.addMidiClip(0, 1);
     project.setMidiEvents(clipId, [
-      Project.midiNoteOn(0, 0, 0, 60, 100),
-      Project.midiNoteOff(1, 0, 0, 60, 0),
+      midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+      midiNoteOff({ ppq: 1, group: 0, channel: 0, note: 60, velocity: 0 }),
     ]);
 
     const result = project.validateMidiNotes(clipId);
@@ -1291,51 +1330,71 @@ describe('Project validateMidiNotes', () => {
 });
 
 // Golden vectors for the hand-written UMP MIDI-1.0 channel-voice packing
-// (Project.midiNoteOn/Off/Cc/... build data0 in TS rather than via the native
+// (midiNoteOn/Off/Cc/... build data0 in TS rather than via the native
 // packer). These exact words are what sonare::midi::make_midi1_* — and thus the
 // C-ABI sonare_midi_* packers Python delegates to — produce, so pinning them
 // here (with the identical vectors mirrored in the WASM suite) makes any silent
 // drift between the two hand-written JS copies a CI failure.
 describe('UMP MIDI-1.0 packing matches the canonical word layout', () => {
   it('packs channel-voice messages into the spec word', () => {
-    expect(Project.midiNoteOn(0, 0, 0, 60, 100).data0 >>> 0).toBe(0x20903c64);
-    expect(Project.midiNoteOff(2, 0, 0, 60, 0).data0 >>> 0).toBe(0x20803c00);
-    expect(Project.midiCc(0, 0, 0, 7, 127).data0 >>> 0).toBe(0x20b0077f);
-    expect(Project.midiPolyPressure(0, 0, 0, 60, 64).data0 >>> 0).toBe(0x20a03c40);
-    expect(Project.midiProgram(0, 0, 0, 5).data0 >>> 0).toBe(0x20c00500);
-    expect(Project.midiChannelPressure(0, 0, 0, 90).data0 >>> 0).toBe(0x20d05a00);
+    expect(midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }).data0 >>> 0).toBe(
+      0x20903c64,
+    );
+    expect(midiNoteOff({ ppq: 2, group: 0, channel: 0, note: 60, velocity: 0 }).data0 >>> 0).toBe(
+      0x20803c00,
+    );
+    expect(midiCc({ ppq: 0, group: 0, channel: 0, controller: 7, value: 127 }).data0 >>> 0).toBe(
+      0x20b0077f,
+    );
+    expect(
+      midiPolyPressure({ ppq: 0, group: 0, channel: 0, note: 60, pressure: 64 }).data0 >>> 0,
+    ).toBe(0x20a03c40);
+    expect(midiProgram({ ppq: 0, group: 0, channel: 0, program: 5 }).data0 >>> 0).toBe(0x20c00500);
+    expect(midiChannelPressure({ ppq: 0, group: 0, channel: 0, pressure: 90 }).data0 >>> 0).toBe(
+      0x20d05a00,
+    );
     // Group and channel nibbles land in their own fields.
-    expect(Project.midiNoteOn(0, 0xa, 0x3, 60, 100).data0 >>> 0).toBe(0x2a933c64);
+    expect(
+      midiNoteOn({ ppq: 0, group: 0xa, channel: 0x3, note: 60, velocity: 100 }).data0 >>> 0,
+    ).toBe(0x2a933c64);
   });
 
   it('exposes ProgramMap names and bank/program lowering', () => {
-    expect(Project.gmInstrumentName(0)).toBe('Acoustic Grand Piano');
-    expect(Project.gmInstrumentName(40)).toBe('Violin');
-    expect(Project.gmInstrumentName(128)).toBeNull();
-    expect(Project.gmProgramForName('Violin')).toBe(40);
-    expect(Project.gmProgramForName('No Such Instrument')).toBe(-1);
-    expect(Project.gmFamilyName(4)).toBe('Bass');
-    expect(Project.gmFamilyFirstProgram(4)).toBe(32);
-    expect(Project.gm2InstrumentName(1, 24)).toBe('Ukulele');
-    expect(Project.gmDrumName(38)).toBe('Acoustic Snare');
-    expect(Project.gmDrumNoteForName('Open Triangle')).toBe(81);
-    expect(Project.gm2DrumSetName(40)).toBe('Brush');
-    expect(Project.gm2DrumName(40, 40)).toBe('Brush Swirl');
-    expect(Project.midiCcName(74)).toBe('Brightness');
-    expect(Project.midiCcIndexForName('Pan (MSB)')).toBe(10);
-    expect(Project.perNoteControllerName(11)).toBe('Expression');
+    expect(gmInstrumentName(0)).toBe('Acoustic Grand Piano');
+    expect(gmInstrumentName(40)).toBe('Violin');
+    expect(() => gmInstrumentName(128)).toThrow(RangeError);
+    expect(gmProgramForName('Violin')).toBe(40);
+    expect(() => gmProgramForName('No Such Instrument')).toThrow(
+      new RangeError("gmProgramForName: unknown instrument name 'No Such Instrument'"),
+    );
+    expect(gmFamilyName(4)).toBe('Bass');
+    expect(gmFamilyFirstProgram(4)).toBe(32);
+    expect(gm2InstrumentName({ bankLsb: 1, program: 24 })).toBe('Ukulele');
+    expect(gmDrumName(38)).toBe('Acoustic Snare');
+    expect(gmDrumNoteForName('Open Triangle')).toBe(81);
+    expect(gm2DrumSetName(40)).toBe('Brush');
+    expect(gm2DrumName({ bankLsb: 40, note: 40 })).toBe('Brush Swirl');
+    expect(midiCcName(74)).toBe('Brightness');
+    expect(midiCcIndexForName('Pan (MSB)')).toBe(10);
+    expect(perNoteControllerName(11)).toBe('Expression');
 
-    const events = Project.midiBankProgram(0, 0, 3, 0x79, 1, 24);
+    const events = midiBankProgram({
+      ppq: 0,
+      group: 0,
+      channel: 3,
+      program: 24,
+      bank: { msb: 0x79, lsb: 1 },
+    });
     expect(events.map((event) => event.data0 >>> 0)).toEqual([0x20b30079, 0x20b32001, 0x20c31800]);
     expect(events.every((event) => event.ppq === 0 && event.data1 === 0)).toBe(true);
   });
 
   it('routes MIDI events through the native MidiRouter', () => {
-    const routed = Project.midiRouteEvents(
+    const routed = midiRouteEvents(
       [
-        Project.midiNoteOn(0, 0, 3, 60, 100),
-        Project.midiNoteOff(0.5, 0, 3, 60, 0),
-        Project.midiNoteOn(1, 0, 2, 61, 100),
+        midiNoteOn({ ppq: 0, group: 0, channel: 3, note: 60, velocity: 100 }),
+        midiNoteOff({ ppq: 0.5, group: 0, channel: 3, note: 60, velocity: 0 }),
+        midiNoteOn({ ppq: 1, group: 0, channel: 2, note: 61, velocity: 100 }),
       ],
       { filterChannel: 3, remapChannel: 7 },
     );
@@ -1346,16 +1405,22 @@ describe('UMP MIDI-1.0 packing matches the canonical word layout', () => {
     expect(routed.events.map((event) => (event.data0 >>> 16) & 0xf)).toEqual([7, 7]);
     expect((routed.events[1].data0 >>> 20) & 0xf).toBe(0x8);
 
-    const muted = Project.midiRouteEvents([Project.midiNoteOn(0, 0, 0, 60, 100)], {
-      thru: false,
-    });
+    const muted = midiRouteEvents(
+      [midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 })],
+      {
+        thru: false,
+      },
+    );
     expect(muted.events).toHaveLength(0);
     expect(muted.overflowed).toBe(false);
   });
 
   it('exposes native CcMap learn and CC/automation conversion helpers', () => {
-    const learned14 = Project.midiCcLearn(
-      [Project.midiCc(0, 0, 2, 1, 64), Project.midiCc(0.1, 0, 2, 33, 12)],
+    const learned14 = midiCcLearn(
+      [
+        midiCc({ ppq: 0, group: 0, channel: 2, controller: 1, value: 64 }),
+        midiCc({ ppq: 0.1, group: 0, channel: 2, controller: 33, value: 12 }),
+      ],
       77,
       { minValue: -1, maxValue: 1 },
     );
@@ -1369,11 +1434,11 @@ describe('UMP MIDI-1.0 packing matches the canonical word layout', () => {
       maxValue: 1,
     });
 
-    const learnedRpn = Project.midiCcLearn(
+    const learnedRpn = midiCcLearn(
       [
-        Project.midiCc(0, 0, 3, 101, 0),
-        Project.midiCc(0.1, 0, 3, 100, 1),
-        Project.midiCc(0.2, 0, 3, 6, 64),
+        midiCc({ ppq: 0, group: 0, channel: 3, controller: 101, value: 0 }),
+        midiCc({ ppq: 0.1, group: 0, channel: 3, controller: 100, value: 1 }),
+        midiCc({ ppq: 0.2, group: 0, channel: 3, controller: 6, value: 64 }),
       ],
       78,
     );
@@ -1387,10 +1452,19 @@ describe('UMP MIDI-1.0 packing matches the canonical word layout', () => {
       minValue: -60,
       maxValue: 0,
     };
-    const point = Project.midiCcToBreakpoint([binding], Project.midiCc(2, 0, 4, 74, 127));
+    const point = midiCcToBreakpoint(
+      [binding],
+      midiCc({ ppq: 2, group: 0, channel: 4, controller: 74, value: 127 }),
+    );
     expect(point).toEqual({ ppq: 2, value: 0, curveToNext: 'linear' });
 
-    const event = Project.midiParamToCc([binding], 88, -60, 0, 3);
+    const event = midiParamToCc({
+      bindings: [binding],
+      paramId: 88,
+      unitValue: -60,
+      group: 0,
+      ppq: 3,
+    });
     expect(event?.ppq).toBe(3);
     expect(((event?.data0 ?? 0) >>> 16) & 0xf).toBe(4);
     expect(((event?.data0 ?? 0) >>> 8) & 0x7f).toBe(74);
@@ -1442,5 +1516,111 @@ describe('UMP MIDI-1.0 packing matches the canonical word layout', () => {
     } finally {
       project.destroy();
     }
+  });
+});
+
+describe('MIDI message module functions', () => {
+  it('refuses an unknown name and an out-of-range number in every GM and CC lookup', () => {
+    const byNumber: Array<[string, () => unknown]> = [
+      ['gmInstrumentName', () => gmInstrumentName(128)],
+      ['gmFamilyName', () => gmFamilyName(16)],
+      ['gmFamilyFirstProgram', () => gmFamilyFirstProgram(16)],
+      ['gmDrumName', () => gmDrumName(200)],
+      ['gm2DrumSetName', () => gm2DrumSetName(127)],
+      ['gm2InstrumentName', () => gm2InstrumentName({ bankLsb: 0, program: 128 })],
+      ['gm2DrumName', () => gm2DrumName({ bankLsb: 0, note: 128 })],
+      ['midiCcName', () => midiCcName(128)],
+      ['perNoteControllerName', () => perNoteControllerName(1000)],
+    ];
+    for (const [name, call] of byNumber) {
+      expect(call, name).toThrow(RangeError);
+      expect(call, name).toThrow(name);
+    }
+    const byName: Array<[string, () => unknown]> = [
+      ['gmProgramForName', () => gmProgramForName('no such instrument')],
+      ['gmDrumNoteForName', () => gmDrumNoteForName('no such drum')],
+      ['midiCcIndexForName', () => midiCcIndexForName('no such controller')],
+    ];
+    for (const [name, call] of byName) {
+      expect(call, name).toThrow(RangeError);
+      expect(call, name).toThrow(name);
+    }
+    expect(() => gmInstrumentName('0' as unknown as number)).toThrow(TypeError);
+    expect(() => gmProgramForName(40 as unknown as string)).toThrow(TypeError);
+  });
+
+  it('refuses an unknown request key in every MIDI message packer', () => {
+    const base = { ppq: 0, group: 0, channel: 0 };
+    const packers: Array<[string, (request: never) => unknown, object]> = [
+      ['midiNoteOn', midiNoteOn, { ...base, note: 60, velocity: 100 }],
+      ['midiCc', midiCc, { ...base, controller: 7, value: 1 }],
+      ['midiProgram', midiProgram, { ...base, program: 1 }],
+      ['midiPitchBend', midiPitchBend, { ...base, bend: 8192 }],
+      ['midi2Cc', midi2Cc, { ...base, controller: 7, value32: 1 }],
+      ['midi2Program', midi2Program, { ...base, program: 1 }],
+      ['midi2PerNoteManagement', midi2PerNoteManagement, { ...base, note: 60 }],
+      ['midiBankProgram', midiBankProgram, { ...base, program: 1, bank: { msb: 0, lsb: 0 } }],
+    ];
+    for (const [name, packer, request] of packers) {
+      expect(() => packer(request as never), name).not.toThrow();
+      expect(() => packer({ ...request, bogus: 1 } as never), name).toThrow(
+        new TypeError(`${name}: unknown request key 'bogus'`),
+      );
+    }
+    expect(() =>
+      midi2Program({ ...base, program: 1, bank: { msb: 0, lsb: 0, extra: 1 } } as never),
+    ).toThrow(TypeError);
+    expect(() => midiNoteOn({ ...base, note: '60', velocity: 1 } as never)).toThrow(TypeError);
+  });
+
+  it('packs a MIDI 2.0 program with an optional bank and per-note flags as optional fields', () => {
+    expect(midi2Program({ ppq: 0, group: 0, channel: 0, program: 5 }).data1).toBe(0x05000000);
+    const banked = midi2Program({
+      ppq: 0,
+      group: 0,
+      channel: 0,
+      program: 5,
+      bank: { msb: 1, lsb: 2 },
+    });
+    expect(banked.data0 >>> 0).toBe(0x40c00001);
+    expect(banked.data1).toBe(0x05000102);
+    const flags = midi2PerNoteManagement({
+      ppq: 0,
+      group: 0,
+      channel: 0,
+      note: 60,
+      detach: true,
+      reset: true,
+    });
+    expect(flags.data0 >>> 0).toBe(0x40f03c03);
+  });
+
+  it('reads a null route-config field as absent', () => {
+    const events = [midiNoteOn({ ppq: 0, group: 0, channel: 3, note: 60, velocity: 100 })];
+    const nulls = { filterGroup: null, filterChannel: null, remapChannel: null };
+    expect(midiRouteEvents(events, nulls as never)).toEqual(midiRouteEvents(events, {}));
+  });
+
+  it('serializes a typed MIDI-FX config and refuses a wrong-typed field', () => {
+    const project = new Project();
+    const { clipId } = project.addMidiClip(0, 4);
+    project.setMidiEvents(clipId, [
+      midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+      midiNoteOff({ ppq: 1, group: 0, channel: 0, note: 60, velocity: 0 }),
+    ]);
+    expect(project.previewMidiFxCount({ clipId, config: { chordIntervals: [0, 4, 7] } })).toBe(6);
+    expect(
+      project.previewMidiFxCount({ clipId, config: { velocityScale: undefined, seed: 3 } }),
+    ).toBe(2);
+    const bad = (config: unknown) =>
+      project.previewMidiFxCount({ clipId, config: config as never });
+    expect(() => bad('{}')).toThrow(TypeError);
+    expect(() => bad(null)).toThrow(TypeError);
+    expect(() => bad({ transposeSemitones: '12' })).toThrow(/transposeSemitones/);
+    expect(() => bad({ chordIntervals: [0, 'x'] })).toThrow(/chordIntervals\[1\]/);
+    expect(() => bad({ velocityScale: Number.NaN })).toThrow(RangeError);
+    expect(() => bad({ transpose_semitones: 1 })).toThrow(TypeError);
+    expect(() => project.previewMidiFxCount({ clipId, config: { chordIntervals: [] } })).toThrow();
+    project.destroy();
   });
 });

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { Project, ProjectTimeline, RealtimeEngine } from '../../dist/index.js';
+import {
+  midiNoteOff,
+  midiNoteOn,
+  Project,
+  ProjectTimeline,
+  RealtimeEngine,
+} from '../../dist/index.js';
 
 const SR = 48000;
 
@@ -55,8 +61,8 @@ function addMidiNote(project: Project): number {
   const { trackId, clipId } = project.addMidiClip(0, 4);
   project.setTrackMidiDestination(trackId, 0);
   project.setMidiEvents(clipId, [
-    Project.midiNoteOn(0, 0, 0, 60, 100),
-    Project.midiNoteOff(2, 0, 0, 60, 0),
+    midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+    midiNoteOff({ ppq: 2, group: 0, channel: 0, note: 60, velocity: 0 }),
   ]);
   return clipId;
 }
@@ -415,20 +421,20 @@ describe('compile and bounce', () => {
     withProject((project) => {
       const { clipId } = project.addMidiClip(0, 4);
       project.setMidiEvents(clipId, [
-        Project.midiNoteOn(0, 0, 0, 60, 100),
-        Project.midiNoteOff(1, 0, 0, 60, 0),
+        midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+        midiNoteOff({ ppq: 1, group: 0, channel: 0, note: 60, velocity: 0 }),
       ]);
-      const config = '{"chord_intervals":[0,4,7]}';
-      expect(project.bakeMidiFx({ clipId, configJson: config })).toEqual({});
+      const config = { chordIntervals: [0, 4, 7] };
+      expect(project.bakeMidiFx({ clipId, config })).toEqual({});
       expect(() => loose(project).bakeMidiFx(clipId, config)).toThrow(TypeError);
       const clipId2 = project.addMidiClip(0, 4).clipId;
       project.setMidiEvents(clipId2, [
-        Project.midiNoteOn(0, 0, 0, 60, 100),
-        Project.midiNoteOff(1, 0, 0, 60, 0),
+        midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+        midiNoteOff({ ppq: 1, group: 0, channel: 0, note: 60, velocity: 0 }),
       ]);
       const baked = project.bakeMidiFx({
         clipId: clipId2,
-        configJson: config,
+        config,
         withSourceIndex: true,
       });
       expect(baked.sourceIndex).toBeInstanceOf(Int32Array);

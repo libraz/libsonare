@@ -4,6 +4,7 @@ import {
   FileClipPageProvider,
 } from './clip_page_provider.js';
 import { ErrorCode, SonareError } from './errors.js';
+import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { deinterleave } from './internal/planar.js';
 import { timelineHandle } from './internal/project_handles.js';
 import { addon } from './native.js';
@@ -42,6 +43,7 @@ import type {
   EqBandInput,
   ExternalMidiEvent,
   FileClipPageProviderOptions,
+  MidiFxConfig,
   MixSceneBus,
   MixSceneStrip,
   MpeDimension,
@@ -2316,9 +2318,15 @@ export class RealtimeEngine {
     return this.native.legatoFallbackCount(destinationId);
   }
 
-  /** Install/replace a live non-destructive MIDI-FX insert for one destination. */
-  setMidiFx(destinationId: number, configJson: string): void {
-    this.native.setMidiFx(destinationId, configJson);
+  /**
+   * Install/replace a live non-destructive MIDI-FX insert for one destination.
+   *
+   * @param destinationId - Destination to insert on
+   * @param config - Typed MIDI-FX chain configuration
+   * @throws TypeError when `config` is not an object or a field has the wrong type
+   */
+  setMidiFx(destinationId: number, config: MidiFxConfig): void {
+    this.native.setMidiFx(destinationId, midiFxConfigJson(config, 'setMidiFx'));
   }
 
   clearMidiFx(destinationId = 0): void {

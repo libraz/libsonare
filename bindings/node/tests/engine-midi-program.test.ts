@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Project, RealtimeEngine } from '../src/index.js';
+import { midi2Program, RealtimeEngine } from '../src/index.js';
 
 const DEST = 7;
 const BLOCK = 128;
@@ -14,7 +14,13 @@ function programWords(
   bankMsb: number,
   bankLsb: number,
 ): [number, number] {
-  const e = Project.midi2Program(0, group, channel, program, bankValid, bankMsb, bankLsb);
+  const e = midi2Program({
+    ppq: 0,
+    group,
+    channel,
+    program,
+    ...(bankValid ? { bank: { msb: bankMsb, lsb: bankLsb } } : {}),
+  });
   return [e.data0, e.data1 ?? 0];
 }
 
@@ -83,16 +89,16 @@ describe('RealtimeEngine live program change', () => {
     } finally {
       engine.destroy();
     }
-    expect(() => Project.midi2Program(0, 0, 0, 5, false, 8, 0)).toThrow(
-      'Project.midi2Program: bank MSB and LSB must be 0 when bank-valid is false',
-    );
-    expect(() => Project.midi2Program(0, 0, 0, 5, false, 0, 1)).toThrow(RangeError);
-    expect(() => Project.midi2Program(0, 0, 0, 5, true, 128, 0)).toThrow(
-      new RangeError('Project.midi2Program: bank_msb must be in [0, 127]'),
-    );
-    expect(() => Project.midi2Program(0, 0, 0, 5, true, 0, 1.5)).toThrow(TypeError);
-    expect(() => Project.midi2Program(0, 0, 0, 5, true, 8, 1)).not.toThrow();
-    expect(() => Project.midi2Program(0, 0, 0, 5)).not.toThrow();
+    expect(() =>
+      midi2Program({ ppq: 0, group: 0, channel: 0, program: 5, bank: { msb: 128, lsb: 0 } }),
+    ).toThrow(new RangeError('midi2Program: bank.msb must be in [0, 127]'));
+    expect(() =>
+      midi2Program({ ppq: 0, group: 0, channel: 0, program: 5, bank: { msb: 0, lsb: 1.5 } }),
+    ).toThrow(TypeError);
+    expect(() =>
+      midi2Program({ ppq: 0, group: 0, channel: 0, program: 5, bank: { msb: 8, lsb: 1 } }),
+    ).not.toThrow();
+    expect(() => midi2Program({ ppq: 0, group: 0, channel: 0, program: 5 })).not.toThrow();
   });
 
   it('refuses out-of-range and mistyped arguments like the sibling pushes', () => {

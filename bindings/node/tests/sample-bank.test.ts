@@ -10,6 +10,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   ErrorCode,
+  midiNoteOff,
+  midiNoteOn,
   Project,
   RealtimeEngine,
   SampleBank,
@@ -27,18 +29,21 @@ function sampleSine(frames = 24000, freq = 440): Float32Array {
 
 /** A MIDI-only project sounding @p note for the whole render. */
 function buildNoteProject(note: number): Project {
-  const project = Project.create();
+  const project = new Project();
   project.setSampleRate(SR);
   const { trackId, clipId } = project.addMidiClip(0, 4);
   project.setTrackMidiDestination(trackId, 0);
   project.setMidiEvents(clipId, [
-    Project.midiNoteOn(0, 0, 0, note, 100),
-    Project.midiNoteOff(2, 0, 0, note, 0),
+    midiNoteOn({ ppq: 0, group: 0, channel: 0, note, velocity: 100 }),
+    midiNoteOff({ ppq: 2, group: 0, channel: 0, note, velocity: 0 }),
   ]);
   return project;
 }
 
-function peak(audio: Float32Array): number {
+function peak(audio: Float32Array | Float32Array[]): number {
+  if (Array.isArray(audio)) {
+    return Math.max(0, ...audio.map(peak));
+  }
   let highest = 0;
   for (const value of audio) {
     const magnitude = Math.abs(value);
@@ -59,13 +64,13 @@ function withBank<T>(body: (bank: SampleBank) => T): T {
 }
 
 /** Renders @p note through a sample patch reading @p bank's keymap set 0. */
-function renderNote(bank: SampleBank | undefined, note: number): Float32Array {
+function renderNote(bank: SampleBank | undefined, note: number): Float32Array[] {
   const project = buildNoteProject(note);
   try {
-    return project.bounceWithSynthInstrument(
-      { engineMode: 'sample', sampleBank: bank },
+    return project.bounceWithSynthInstruments(
+      { instrument: { engineMode: 'sample', sampleBank: bank } },
       { totalFrames: TOTAL_FRAMES },
-    );
+    ).channels;
   } finally {
     project.destroy();
   }
@@ -179,7 +184,7 @@ describe('SampleBank', () => {
       bank.addZone({ sampleIndex: 0 });
       const audio = renderNote(bank, 69);
       expect(peak(audio)).toBeGreaterThan(0);
-      expect(audio.every((v) => Number.isFinite(v))).toBe(true);
+      expect(audio.every((plane) => plane.every((v) => Number.isFinite(v)))).toBe(true);
     });
   });
 
@@ -234,7 +239,7 @@ describe('bouncing a project through a sample patch', () => {
       bank.addZone({ sampleIndex: 0 });
 
       const audio = renderNote(bank, 60);
-      expect(audio.length).toBe(TOTAL_FRAMES * 2);
+      expect(audio.map((plane) => plane.length)).toEqual([TOTAL_FRAMES, TOTAL_FRAMES]);
       expect(peak(audio)).toBeGreaterThan(0);
     });
   });
@@ -295,9 +300,9 @@ describe('bouncing a project through a sample patch', () => {
     const project = buildNoteProject(60);
     try {
       expect(() =>
-        project.bounceWithSynthInstrument(
+        project.bounceWithSynthInstruments(
           // @ts-expect-error the bank is deliberately the wrong type.
-          { engineMode: 'sample', sampleBank: { addSample: () => 0 } },
+          { instrument: { engineMode: 'sample', sampleBank: { addSample: () => 0 } } },
           { totalFrames: 128 },
         ),
       ).toThrow(TypeError);
@@ -346,36 +351,43 @@ describe('bouncing a project through a sample patch', () => {
       bank.addZone({ sampleIndex: 0 });
       const project = buildNoteProject(60);
       try {
-        const plain = project.bounceWithSynthInstrument(
-          { engineMode: 'sample', sampleBank: bank },
+        const plain = project.bounceWithSynthInstruments(
+          { instrument: { engineMode: 'sample', sampleBank: bank } },
           { totalFrames: TOTAL_FRAMES },
-        );
-        const quiet = project.bounceWithSynthInstrument(
-          { engineMode: 'sample', sampleBank: bank, sampleLevel: 0.1 },
+        ).channels;
+        const quiet = project.bounceWithSynthInstruments(
+          { instrument: { engineMode: 'sample', sampleBank: bank, sampleLevel: 0.1 } },
           { totalFrames: TOTAL_FRAMES },
-        );
+        ).channels;
         expect(peak(plain)).toBeGreaterThan(0);
         expect(peak(quiet)).toBeLessThan(peak(plain));
 
         // A keymap set the bank does not have is silent, not an error.
-        const missingSet = project.bounceWithSynthInstrument(
-          { engineMode: 'sample', sampleBank: bank, sampleSet: 5 },
+        const missingSet = project.bounceWithSynthInstruments(
+          { instrument: { engineMode: 'sample', sampleBank: bank, sampleSet: 5 } },
           { totalFrames: TOTAL_FRAMES },
-        );
+        ).channels;
         expect(peak(missingSet)).toBe(0);
 
         // The three enum spellings resolve; a bad one is rejected by name.
         for (const sampleLoop of ['default', 'none', 'continuous', 'key-down'] as const) {
-          const audio = project.bounceWithSynthInstrument(
-            { engineMode: 'sample', sampleBank: bank, sampleLoop, sampleKeyTrack: 'off' },
+          const audio = project.bounceWithSynthInstruments(
+            {
+              instrument: {
+                engineMode: 'sample',
+                sampleBank: bank,
+                sampleLoop,
+                sampleKeyTrack: 'off',
+              },
+            },
             { totalFrames: TOTAL_FRAMES },
-          );
+          ).channels;
           expect(peak(audio)).toBeGreaterThan(0);
         }
         expect(() =>
-          project.bounceWithSynthInstrument(
+          project.bounceWithSynthInstruments(
             // @ts-expect-error deliberately unknown loop mode name.
-            { engineMode: 'sample', sampleBank: bank, sampleLoop: 'ping-pong' },
+            { instrument: { engineMode: 'sample', sampleBank: bank, sampleLoop: 'ping-pong' } },
             { totalFrames: 128 },
           ),
         ).toThrow(/sample loop mode/);

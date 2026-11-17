@@ -464,7 +464,7 @@ describe('RealtimeEngine native binding', () => {
       ),
     );
 
-    expect(() => engine.setStripPanLaw(10, 'linear0dB')).not.toThrow();
+    expect(() => engine.setStripPanLaw(10, 'linear0Db')).not.toThrow();
     expect(() => engine.setStripPanMode(10, 'balance')).not.toThrow();
     expect(() => engine.setStripChannelDelaySamples(10, 0)).not.toThrow();
     expect(() => engine.setStripDualPan(10, -1, -1)).not.toThrow();
@@ -636,7 +636,7 @@ describe('RealtimeEngine native binding', () => {
     engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
     engine.setTrackLanes([{ trackId: 10, outputBusId: 1 }]);
 
-    expect(() => engine.setBusPanLaw(1, 'linear0dB')).not.toThrow();
+    expect(() => engine.setBusPanLaw(1, 'linear0Db')).not.toThrow();
     expect(() => engine.setBusPanMode(1, 'balance')).not.toThrow();
     expect(() => engine.setBusDualPan(1, -1, -1)).not.toThrow();
 
@@ -700,7 +700,7 @@ describe('RealtimeEngine native binding', () => {
     expectArgumentRefusal(() => engine.setBusPan(0, -1));
     expectArgumentRefusal(() => engine.setBusPan(99, -1));
     expectArgumentRefusal(() => engine.setBusPan(1, Number.NaN));
-    expectArgumentRefusal(() => engine.setBusPanLaw(99, 'const6dB'));
+    expectArgumentRefusal(() => engine.setBusPanLaw(99, 'const6Db'));
     expectArgumentRefusal(() => engine.setBusPanMode(99, 'stereoPan'));
     expectArgumentRefusal(() => engine.setBusDualPan(99, -1, 1));
     expectArgumentRefusal(() => engine.setBusDualPan(1, Number.POSITIVE_INFINITY, 1));
@@ -713,7 +713,7 @@ describe('RealtimeEngine native binding', () => {
     engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: '5.1' }]); // 5.1
 
     expectArgumentRefusal(() => engine.setBusPan(1, -1));
-    expectArgumentRefusal(() => engine.setBusPanLaw(1, 'const6dB'));
+    expectArgumentRefusal(() => engine.setBusPanLaw(1, 'const6Db'));
     expectArgumentRefusal(() => engine.setBusPanMode(1, 'stereoPan'));
     expectArgumentRefusal(() => engine.setBusDualPan(1, -1, 1));
 

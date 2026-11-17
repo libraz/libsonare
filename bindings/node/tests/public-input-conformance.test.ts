@@ -3,6 +3,14 @@ import { describe, expect, it } from 'vitest';
 import {
   analyze,
   lufsInterleaved,
+  midiBankProgram,
+  midiCc,
+  midiCcLearn,
+  midiCcToBreakpoint,
+  midiNoteOff,
+  midiNoteOn,
+  midiParamToCc,
+  midiRouteEvents,
   Mixer,
   masterAudio,
   masterAudioAsync,
@@ -168,11 +176,11 @@ describe('shared public-input conformance corpus', () => {
     });
 
     it(`keeps Project.midiCcToBreakpoint byte fields conformant: ${testCase.id}`, () => {
-      const event = Project.midiCc(0, 0, 0, 7, 64);
+      const event = midiCc({ ppq: 0, group: 0, channel: 0, controller: 7, value: 64 });
       if (testCase.accepted) {
-        expect(() => Project.midiCcToBreakpoint([binding() as never], event)).not.toThrow();
+        expect(() => midiCcToBreakpoint([binding() as never], event)).not.toThrow();
       } else {
-        expect(() => Project.midiCcToBreakpoint([binding() as never], event)).toThrow(RangeError);
+        expect(() => midiCcToBreakpoint([binding() as never], event)).toThrow(RangeError);
       }
     });
   }
@@ -193,18 +201,28 @@ describe('shared public-input conformance corpus', () => {
   });
 
   it('rejects an out-of-byte-range positional MIDI argument', () => {
-    const learnEvents = [0, 64, 127].map((value) => Project.midiCc(0, 0, 0, 7, value));
+    const learnEvents = [0, 64, 127].map((value) =>
+      midiCc({ ppq: 0, group: 0, channel: 0, controller: 7, value }),
+    );
 
     // The same hazard reached through positional arguments rather than an
     // object key: each of these is a uint8_t C-ABI parameter.
-    expect(() => Project.midiParamToCc([], 1, 0, 256)).toThrow(RangeError);
-    expect(() => Project.midiParamToCc([], 1, 0, -1)).toThrow(RangeError);
-    expect(() => Project.midiBankProgram(0, 256, 0, 0, 0, 24)).toThrow(RangeError);
-    expect(() => Project.midiBankProgram(0, 0, 271, 0, 0, 24)).toThrow(RangeError);
-    expect(() => Project.midiCcLearn(learnEvents, 3, { minMovement: 256 })).toThrow(RangeError);
+    expect(() => midiParamToCc({ bindings: [], paramId: 1, unitValue: 0, group: 256 })).toThrow(
+      RangeError,
+    );
+    expect(() => midiParamToCc({ bindings: [], paramId: 1, unitValue: 0, group: -1 })).toThrow(
+      RangeError,
+    );
+    expect(() =>
+      midiBankProgram({ ppq: 0, group: 256, channel: 0, program: 24, bank: { msb: 0, lsb: 0 } }),
+    ).toThrow(RangeError);
+    expect(() =>
+      midiBankProgram({ ppq: 0, group: 0, channel: 271, program: 24, bank: { msb: 0, lsb: 0 } }),
+    ).toThrow(RangeError);
+    expect(() => midiCcLearn(learnEvents, 3, { minMovement: 256 })).toThrow(RangeError);
     // 128..255 fit the byte but not the 7-bit CC units the core compares in.
-    expect(() => Project.midiCcLearn(learnEvents, 3, { minMovement: 128 })).toThrow(RangeError);
-    expect(() => Project.midiCcLearn(learnEvents, 3, { minMovement: 255 })).toThrow(RangeError);
+    expect(() => midiCcLearn(learnEvents, 3, { minMovement: 128 })).toThrow(RangeError);
+    expect(() => midiCcLearn(learnEvents, 3, { minMovement: 255 })).toThrow(RangeError);
 
     const project = new Project();
     try {
@@ -224,9 +242,12 @@ describe('shared public-input conformance corpus', () => {
     }
 
     // In-range values on the pure helpers still succeed.
-    expect(Project.midiBankProgram(0, 0, 3, 0x79, 1, 24).length).toBeGreaterThan(0);
-    expect(Project.midiCcLearn(learnEvents, 3, { minMovement: 4 })).not.toBeNull();
-    expect(() => Project.midiCcLearn(learnEvents, 3, { minMovement: 127 })).not.toThrow();
+    expect(
+      midiBankProgram({ ppq: 0, group: 0, channel: 3, program: 24, bank: { msb: 0x79, lsb: 1 } })
+        .length,
+    ).toBeGreaterThan(0);
+    expect(midiCcLearn(learnEvents, 3, { minMovement: 4 })).not.toBeNull();
+    expect(() => midiCcLearn(learnEvents, 3, { minMovement: 127 })).not.toThrow();
   });
 });
 
@@ -332,8 +353,8 @@ describe('explicit undefined reads as an omitted option', () => {
 
   it('keeps the Project.midiRouteEvents thru default with an explicit undefined', () => {
     const events = [noteOn(60)];
-    const omitted = Project.midiRouteEvents(events, {});
-    const explicit = Project.midiRouteEvents(events, { thru: undefined });
+    const omitted = midiRouteEvents(events, {});
+    const explicit = midiRouteEvents(events, { thru: undefined });
     expect(omitted.events.length).toBe(1);
     expect(explicit).toEqual(omitted);
   });
@@ -341,35 +362,35 @@ describe('explicit undefined reads as an omitted option', () => {
   it('keeps every Project.midiRouteEvents config field undefined-safe', () => {
     const events = [noteOn(60)];
     expect(
-      Project.midiRouteEvents(events, {
+      midiRouteEvents(events, {
         filterGroup: undefined,
         filterChannel: undefined,
         remapChannel: undefined,
         thru: undefined,
       }),
-    ).toEqual(Project.midiRouteEvents(events, {}));
+    ).toEqual(midiRouteEvents(events, {}));
   });
 
   it('routes events whose optional data1 is explicitly undefined', () => {
     const events = [noteOn(60), noteOn(64)];
     expect(
-      Project.midiRouteEvents(
+      midiRouteEvents(
         events.map((event) => ({ ...event, data1: undefined })),
         {},
       ),
-    ).toEqual(Project.midiRouteEvents(events, {}));
+    ).toEqual(midiRouteEvents(events, {}));
   });
 
   it('learns a CC binding with every option explicitly undefined', () => {
     const cc = (value: number) => ({ ppq: 0, data0: (0x2 << 28) | (0xb << 20) | (7 << 8) | value });
     const events = [cc(0), cc(64), cc(127)];
     expect(
-      Project.midiCcLearn(events, 3, {
+      midiCcLearn(events, 3, {
         minValue: undefined,
         maxValue: undefined,
         minMovement: undefined,
       }),
-    ).toEqual(Project.midiCcLearn(events, 3, {}));
+    ).toEqual(midiCcLearn(events, 3, {}));
   });
 
   it('applies pcen defaults for explicitly undefined options', () => {
@@ -787,8 +808,8 @@ describe('a wrapping ordinal cannot reach a NativeSynth patch enum', () => {
     const { trackId, clipId } = project.addMidiClip(0, 4);
     project.setTrackMidiDestination(trackId, 0);
     project.setMidiEvents(clipId, [
-      Project.midiNoteOn(0, 0, 0, 60, 100),
-      Project.midiNoteOff(2, 0, 0, 60, 0),
+      midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+      midiNoteOff({ ppq: 2, group: 0, channel: 0, note: 60, velocity: 0 }),
     ]);
     return project;
   };
