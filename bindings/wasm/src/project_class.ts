@@ -14,6 +14,7 @@ import type {
 } from './instrument_types.js';
 import { assertHandleLive, releasedHandleError } from './internal/handle_guard.js';
 import { packMidi2Program } from './internal/midi_program_pack.js';
+import { nativeTranscribeOptions } from './internal/transcribe_request.js';
 import { midi2Byte, midi2Event, midi2I32, midi2U16, midi2U32 } from './internal/ump_events.js';
 import {
   assertProjectMidiEvents,
@@ -85,7 +86,6 @@ import type {
   ProjectVocalOriginalSource,
   ProjectVocalRehydrateItem,
 } from './public_types_vocal_project.js';
-import { nativeTranscribeOptions } from './transcribe.js';
 import {
   assertBoundedInteger,
   assertSampleRate,

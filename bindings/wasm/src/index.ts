@@ -19,6 +19,7 @@
  */
 
 import './lifetime.js';
+import { podConfigFromNative } from './internal/pod_config.js';
 import {
   assertAbiCompatible,
   assertSameInitOptions,
@@ -32,7 +33,6 @@ import type {
   SonareModuleHandle,
   VoicePresetId,
 } from './public_types.js';
-import { podConfigFromNative } from './realtime_voice_changer.js';
 import type {
   SonareModule,
   WasmDecomposeResult,
