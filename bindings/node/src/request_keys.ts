@@ -1254,14 +1254,81 @@ const PLAYBACK_RENDERER_CONFIG_KEYS = keySet(
 );
 
 const SET_PART_RIG_REQUEST_KEYS = keySet('destinationId', 'part', 'mode', 'inserts');
-const SET_CAPTURE_PUNCH_REQUEST_KEYS = keySet(
+const RENDER_OFFLINE_REQUEST_KEYS = keySet('channels', 'blockSize', 'finalize', 'validate');
+const ENGINE_CONFIG_REQUEST_KEYS = keySet(
+  'sampleRate',
+  'maxBlockSize',
+  'commandCapacity',
+  'telemetryCapacity',
+  'maxNumChannels',
+);
+const ENGINE_TRACK_LANE_REQUEST_KEYS = keySet(
+  'trackId',
+  'sends',
+  'outputBusId',
+  'sourceChannelLayout',
+);
+const ENGINE_BUS_REQUEST_KEYS = keySet('busId', 'gainDb', 'channelLayout', 'outputBusId', 'sends');
+const SIDECHAIN_SOURCE_REQUEST_KEYS = keySet('kind', 'id');
+const INSERT_BYPASS_REQUEST_KEYS = keySet('bypassed', 'resetOnBypass');
+const INSERT_PARAM_REQUEST_KEYS = keySet('name', 'value');
+const SET_GRAPH_REQUEST_KEYS = keySet(
+  'nodes',
+  'connections',
+  'inputNode',
+  'outputNode',
+  'numChannels',
+  'parameterBindings',
+);
+const BOUNCE_OFFLINE_REQUEST_KEYS = keySet(
+  'totalFrames',
+  'blockSize',
+  'numChannels',
+  'targetSampleRate',
+  'sourceSampleRate',
+  'normalizeLufs',
+  'targetLufs',
+  'dither',
+  'ditherBits',
+  'ditherSeed',
+);
+const CONFIGURE_CAPTURE_REQUEST_KEYS = keySet(
+  'capacityFrames',
+  'numChannels',
+  'source',
+  'recordOffsetSamples',
+  'inputMonitor',
+  'punch',
+);
+const CAPTURE_INPUT_MONITOR_KEYS = keySet('enabled', 'gain');
+const CAPTURE_PUNCH_KEYS = keySet(
+  'startPpq',
   'startSample',
   'startSec',
+  'endPpq',
   'endSample',
   'endSec',
-  'enabled',
 );
-const RENDER_OFFLINE_REQUEST_KEYS = keySet('channels', 'blockSize', 'finalize');
+const ARM_CAPTURE_REQUEST_KEYS = keySet('armed');
+const SET_LOOP_REQUEST_KEYS = keySet('startPpq', 'endPpq', 'enabled');
+const SET_METRONOME_REQUEST_KEYS = keySet(
+  'enabled',
+  'beatGain',
+  'accentGain',
+  'clickSamples',
+  'clickSec',
+);
+const SET_TRACK_SOLO_MUTE_REQUEST_KEYS = keySet('solo', 'mute');
+const MIDI_BANK_REQUEST_KEYS = keySet('msb', 'lsb');
+const MIXER_CONFIG_REQUEST_KEYS = keySet('scene', 'sampleRate', 'blockSize');
+const MIXER_JSON_OPTIONS_REQUEST_KEYS = keySet('sampleRate', 'blockSize');
+const SET_POLARITY_INVERT_REQUEST_KEYS = keySet('left', 'right');
+const MIXER_ADD_SEND_REQUEST_KEYS = keySet('id', 'destinationBusId', 'sendDb', 'timing');
+const SCHEDULE_INSERT_AUTOMATION_REQUEST_KEYS = keySet('paramId', 'samplePos', 'value', 'curve');
+const SCHEDULE_FADER_AUTOMATION_REQUEST_KEYS = keySet('samplePos', 'faderDb', 'curve');
+const SCHEDULE_PAN_AUTOMATION_REQUEST_KEYS = keySet('samplePos', 'pan', 'curve');
+const SCHEDULE_WIDTH_AUTOMATION_REQUEST_KEYS = keySet('samplePos', 'width', 'curve');
+const SCHEDULE_SEND_AUTOMATION_REQUEST_KEYS = keySet('samplePos', 'sendDb', 'curve');
 const IMPORT_EXTERNAL_SEPARATED_STEM_REQUEST_KEYS = keySet('sampleRate', 'stems');
 const BAKE_MIDI_FX_REQUEST_KEYS = keySet('clipId', 'configJson', 'withSourceIndex');
 const PREVIEW_MIDI_FX_REQUEST_KEYS = keySet('clipId', 'configJson');
@@ -1321,8 +1388,41 @@ const MASTERING_REPAIR_DEREVERB_CONFIG_FOR_ROOM_REQUEST_KEYS = keySet(
 
 export const REQUEST_KEYS = {
   setPartRig: SET_PART_RIG_REQUEST_KEYS,
-  setCapturePunch: SET_CAPTURE_PUNCH_REQUEST_KEYS,
   renderOffline: RENDER_OFFLINE_REQUEST_KEYS,
+  RealtimeEngine: ENGINE_CONFIG_REQUEST_KEYS,
+  prepare: ENGINE_CONFIG_REQUEST_KEYS,
+  setTrackLanes: ENGINE_TRACK_LANE_REQUEST_KEYS,
+  setTrackBuses: ENGINE_BUS_REQUEST_KEYS,
+  setBusSidechain: SIDECHAIN_SOURCE_REQUEST_KEYS,
+  setStripSidechain: SIDECHAIN_SOURCE_REQUEST_KEYS,
+  canSetBusSidechain: SIDECHAIN_SOURCE_REQUEST_KEYS,
+  canSetStripSidechain: SIDECHAIN_SOURCE_REQUEST_KEYS,
+  setStripInsertBypassed: INSERT_BYPASS_REQUEST_KEYS,
+  setBusInsertBypassed: INSERT_BYPASS_REQUEST_KEYS,
+  setStripInsertParam: INSERT_PARAM_REQUEST_KEYS,
+  setBusInsertParam: INSERT_PARAM_REQUEST_KEYS,
+  applyStripInsertParamNow: INSERT_PARAM_REQUEST_KEYS,
+  applyBusInsertParamNow: INSERT_PARAM_REQUEST_KEYS,
+  restoreStripInsertParam: INSERT_PARAM_REQUEST_KEYS,
+  restoreBusInsertParam: INSERT_PARAM_REQUEST_KEYS,
+  setGraph: SET_GRAPH_REQUEST_KEYS,
+  bounceOffline: BOUNCE_OFFLINE_REQUEST_KEYS,
+  configureCapture: CONFIGURE_CAPTURE_REQUEST_KEYS,
+  armCapture: ARM_CAPTURE_REQUEST_KEYS,
+  setLoop: SET_LOOP_REQUEST_KEYS,
+  setMetronome: SET_METRONOME_REQUEST_KEYS,
+  setTrackSoloMute: SET_TRACK_SOLO_MUTE_REQUEST_KEYS,
+  pushMidiProgram: MIDI_BANK_REQUEST_KEYS,
+  pushMidiInputProgram: MIDI_BANK_REQUEST_KEYS,
+  Mixer: MIXER_CONFIG_REQUEST_KEYS,
+  'Mixer.fromJson': MIXER_JSON_OPTIONS_REQUEST_KEYS,
+  setPolarityInvert: SET_POLARITY_INVERT_REQUEST_KEYS,
+  addSend: MIXER_ADD_SEND_REQUEST_KEYS,
+  scheduleInsertAutomation: SCHEDULE_INSERT_AUTOMATION_REQUEST_KEYS,
+  scheduleFaderAutomation: SCHEDULE_FADER_AUTOMATION_REQUEST_KEYS,
+  schedulePanAutomation: SCHEDULE_PAN_AUTOMATION_REQUEST_KEYS,
+  scheduleWidthAutomation: SCHEDULE_WIDTH_AUTOMATION_REQUEST_KEYS,
+  scheduleSendAutomation: SCHEDULE_SEND_AUTOMATION_REQUEST_KEYS,
   importExternalSeparatedStem: IMPORT_EXTERNAL_SEPARATED_STEM_REQUEST_KEYS,
   bakeMidiFx: BAKE_MIDI_FX_REQUEST_KEYS,
   previewMidiFx: PREVIEW_MIDI_FX_REQUEST_KEYS,
@@ -1758,6 +1858,7 @@ export const REQUEST_KEYS = {
 } as const;
 
 export const NESTED_REQUEST_KEYS = {
+  configureCapture: { inputMonitor: CAPTURE_INPUT_MONITOR_KEYS, punch: CAPTURE_PUNCH_KEYS },
   renderPlayback: { config: PLAYBACK_RENDERER_CONFIG_KEYS },
   restoreVocalEditSession: { limits: VOCAL_SESSION_LIMITS_KEYS },
   createVocalEditSession: { limits: VOCAL_SESSION_LIMITS_KEYS },

@@ -11,7 +11,10 @@ const SAMPLE_RATE = 48000;
 const DIRECT_PRESET = 'commentaryDucking';
 
 function buildMixer(): Mixer {
-  return Mixer.fromSceneJson(mixingScenePresetJson(DIRECT_PRESET), SAMPLE_RATE, BLOCK_SIZE);
+  return Mixer.fromJson(mixingScenePresetJson(DIRECT_PRESET), {
+    sampleRate: SAMPLE_RATE,
+    blockSize: BLOCK_SIZE,
+  });
 }
 
 function serialTailScene(): string {
@@ -67,17 +70,17 @@ describe('Mixer runtime methods', () => {
   });
 
   it('resolves strip ids and reports null for unknown ids', () => {
-    expect(mixer.stripCount()).toBe(3);
+    expect(mixer.stripCount).toBe(3);
     expect(mixer.stripById('host')).toBe(0);
     expect(typeof mixer.stripById('guest')).toBe('number');
-    expect(mixer.stripById('does-not-exist')).toBeNull();
+    expect(() => mixer.stripById('does-not-exist')).toThrow(RangeError);
   });
 
   it('smoke-calls each setter without throwing', () => {
     expect(() => mixer.setSoloed('host', true)).not.toThrow();
     expect(() => mixer.setSoloed(0, false)).not.toThrow();
     expect(() => mixer.setSoloSafe('guest', true)).not.toThrow();
-    expect(() => mixer.setPolarityInvert('host', true, false)).not.toThrow();
+    expect(() => mixer.setPolarityInvert('host', { left: true, right: false })).not.toThrow();
     expect(() => mixer.setPanLaw('host', 'const6dB')).not.toThrow();
     expect(() => mixer.setChannelDelaySamples('host', 2)).not.toThrow();
     expect(() => mixer.setVcaOffsetDb('host', -3)).not.toThrow();
@@ -85,10 +88,10 @@ describe('Mixer runtime methods', () => {
   });
 
   it('forwards asymmetric polarity and dual-pan values in scene JSON', () => {
-    mixer.setPolarityInvert('host', true, false);
+    mixer.setPolarityInvert('host', { left: true, right: false });
     mixer.setDualPan('host', 0.75, -0.25);
 
-    const scene = JSON.parse(mixer.toSceneJson());
+    const scene = JSON.parse(mixer.toJson());
     const host = scene.strips.find((strip: { id: string }) => strip.id === 'host');
     expect(host.polarityInvertLeft).toBe(true);
     expect(host.polarityInvertRight).toBe(false);
@@ -100,7 +103,7 @@ describe('Mixer runtime methods', () => {
     expect(() =>
       mixer.setSurroundPan('host', { azimuth: -45, divergence: 0.25, lfe: 0.5 }),
     ).not.toThrow();
-    const scene = JSON.parse(mixer.toSceneJson());
+    const scene = JSON.parse(mixer.toJson());
     const host = scene.strips.find((strip: { id: string }) => strip.id === 'host');
     expect(host.surroundPan.azimuth).toBeCloseTo(-45, 5);
     expect(host.surroundPan.divergence).toBeCloseTo(0.25, 5);
@@ -115,12 +118,17 @@ describe('Mixer runtime methods', () => {
   });
 
   it('returns a numeric index from addSend and accepts setSendDb', () => {
-    const sendIndex = mixer.addSend('host', 'host-extra', 'master', -6, 'postFader');
+    const sendIndex = mixer.addSend('host', {
+      id: 'host-extra',
+      destinationBusId: 'master',
+      sendDb: -6,
+      timing: 'postFader',
+    });
     expect(typeof sendIndex).toBe('number');
     expect(sendIndex).toBe(0);
     expect(() => mixer.setSendDb('host', sendIndex, -12)).not.toThrow();
 
-    const scene = JSON.parse(mixer.toSceneJson());
+    const scene = JSON.parse(mixer.toJson());
     const host = scene.strips.find((strip: { id: string }) => strip.id === 'host');
     expect(host.sends).toHaveLength(1);
     expect(host.sends[0].id).toBe('host-extra');
@@ -128,21 +136,26 @@ describe('Mixer runtime methods', () => {
   });
 
   it('removeSend drops a previously added send', () => {
-    const sendIndex = mixer.addSend('host', 'host-extra', 'master', -6, 'postFader');
+    const sendIndex = mixer.addSend('host', {
+      id: 'host-extra',
+      destinationBusId: 'master',
+      sendDb: -6,
+      timing: 'postFader',
+    });
     expect(sendIndex).toBe(0);
 
-    const before = JSON.parse(mixer.toSceneJson());
+    const before = JSON.parse(mixer.toJson());
     const hostBefore = before.strips.find((strip: { id: string }) => strip.id === 'host');
     expect(hostBefore.sends).toHaveLength(1);
 
     expect(() => mixer.removeSend('host', sendIndex)).not.toThrow();
 
-    const after = JSON.parse(mixer.toSceneJson());
+    const after = JSON.parse(mixer.toJson());
     const hostAfter = after.strips.find((strip: { id: string }) => strip.id === 'host');
     expect(hostAfter.sends ?? []).toHaveLength(0);
   });
 
-  it('returns numeric meter snapshots from stripMeter and meterTap', () => {
+  it('returns numeric meter snapshots from stripMeter', () => {
     const { left, right } = constantStrips([0.5, 0.25, 0.1]);
     mixer.processStereo(left, right);
 
@@ -161,8 +174,8 @@ describe('Mixer runtime methods', () => {
     expect(typeof meter.likelyMonoCompatible).toBe('boolean');
     expect(meter.peakDbL).toBeGreaterThan(-120);
 
-    const preFader = mixer.meterTap('host', 'preFader');
-    const postFader = mixer.meterTap('host', 'postFader');
+    const preFader = mixer.stripMeter('host', 'preFader');
+    const postFader = mixer.stripMeter('host', 'postFader');
     expect(Number.isFinite(preFader.peakDbL)).toBe(true);
     expect(Number.isFinite(postFader.peakDbL)).toBe(true);
     const master = mixer.busMeter('master');
@@ -174,7 +187,7 @@ describe('Mixer runtime methods', () => {
     const { left, right } = constantStrips([0.5, 0.25, 0.1]);
     mixer.processStereo(left, right);
 
-    // No tap -> post-fader (same as the dedicated meterTap('postFader')).
+    // No tap -> post-fader (same as the explicit 'postFader' tap).
     const post = mixer.stripMeter('host');
     const postTap = mixer.stripMeter('host', 'postFader');
     const preTap = mixer.stripMeter('host', 'preFader');
@@ -195,27 +208,31 @@ describe('Mixer runtime methods', () => {
     expect(() => mixer.setDualPan('host', -1.5, 0)).toThrow(RangeError);
     expect(() => mixer.setWidth('host', 3)).toThrow(RangeError);
     expect(() => mixer.setWidth('host', -0.1)).toThrow(RangeError);
-    expect(() => mixer.schedulePanAutomation('host', 0, 1.5)).toThrow(RangeError);
-    expect(() => mixer.scheduleWidthAutomation('host', 0, 2.5)).toThrow(RangeError);
+    expect(() => mixer.schedulePanAutomation('host', { samplePos: 0, pan: 1.5 })).toThrow(
+      RangeError,
+    );
+    expect(() => mixer.scheduleWidthAutomation('host', { samplePos: 0, width: 2.5 })).toThrow(
+      RangeError,
+    );
   });
 
   it('setPan without panMode keeps the strip current pan mode', () => {
     // Put the strip into stereoPan mode explicitly first.
     mixer.setPan('host', 0.0, 'stereoPan');
-    const beforeScene = JSON.parse(mixer.toSceneJson());
+    const beforeScene = JSON.parse(mixer.toJson());
     const beforeHost = beforeScene.strips.find((s: { id: string }) => s.id === 'host');
     expect(beforeHost.panMode).toBe(1); // 1 = stereoPan
 
     // A plain pan nudge (no panMode) must NOT reset the mode back to Balance.
     mixer.setPan('host', 0.3);
-    const afterScene = JSON.parse(mixer.toSceneJson());
+    const afterScene = JSON.parse(mixer.toJson());
     const afterHost = afterScene.strips.find((s: { id: string }) => s.id === 'host');
     expect(afterHost.panMode).toBe(1); // still stereoPan
     expect(afterHost.pan).toBeCloseTo(0.3, 5);
 
     // Passing an explicit mode still switches it.
     mixer.setPan('host', 0.3, 'balance');
-    const finalScene = JSON.parse(mixer.toSceneJson());
+    const finalScene = JSON.parse(mixer.toJson());
     const finalHost = finalScene.strips.find((s: { id: string }) => s.id === 'host');
     expect(finalHost.panMode).toBe(0); // 0 = balance
   });
@@ -259,13 +276,28 @@ describe('Mixer runtime methods', () => {
   });
 
   it('accepts scheduled automation events with string-union curves', () => {
-    expect(() => mixer.scheduleFaderAutomation('host', 0, -6, 'linear')).not.toThrow();
-    expect(() => mixer.schedulePanAutomation('host', 0, 0.5, 'exponential')).not.toThrow();
-    expect(() => mixer.scheduleWidthAutomation('host', 0, 1.2, 'linear')).not.toThrow();
-
-    const sendIndex = mixer.addSend('host', 'host-aux', 'master', -6, 'preFader');
     expect(() =>
-      mixer.scheduleSendAutomation('host', sendIndex, 0, -3, 'exponential'),
+      mixer.scheduleFaderAutomation('host', { samplePos: 0, faderDb: -6, curve: 'linear' }),
+    ).not.toThrow();
+    expect(() =>
+      mixer.schedulePanAutomation('host', { samplePos: 0, pan: 0.5, curve: 'exponential' }),
+    ).not.toThrow();
+    expect(() =>
+      mixer.scheduleWidthAutomation('host', { samplePos: 0, width: 1.2, curve: 'linear' }),
+    ).not.toThrow();
+
+    const sendIndex = mixer.addSend('host', {
+      id: 'host-aux',
+      destinationBusId: 'master',
+      sendDb: -6,
+      timing: 'preFader',
+    });
+    expect(() =>
+      mixer.scheduleSendAutomation('host', sendIndex, {
+        samplePos: 0,
+        sendDb: -3,
+        curve: 'exponential',
+      }),
     ).not.toThrow();
   });
 });
@@ -322,11 +354,15 @@ describe('Mixer argument validation', () => {
     // @ts-expect-error invalid pan law string is rejected at runtime
     expect(() => mixer.setPanLaw('host', 'bogusLaw')).toThrow(/pan law/i);
     // @ts-expect-error invalid meter tap string is rejected at runtime
-    expect(() => mixer.meterTap('host', 'bogusTap')).toThrow(/meter tap/i);
-    // @ts-expect-error invalid automation curve string is rejected at runtime
-    expect(() => mixer.scheduleFaderAutomation('host', 0, -6, 'bogusCurve')).toThrow(
-      /automation curve/i,
-    );
+    expect(() => mixer.stripMeter('host', 'bogusTap')).toThrow(/meter tap/i);
+    expect(() =>
+      mixer.scheduleFaderAutomation('host', {
+        samplePos: 0,
+        faderDb: -6,
+        // @ts-expect-error invalid automation curve string is rejected at runtime
+        curve: 'bogusCurve',
+      }),
+    ).toThrow(/automation curve/i);
   });
 
   it('throws on out-of-range strip indices', () => {
@@ -341,7 +377,9 @@ describe('Mixer argument validation', () => {
   it('rejects non-finite live values and accepts later finite values', () => {
     expect(() => mixer.setFaderDb('host', Number.NaN)).toThrow();
     expect(() => mixer.setPan('host', Number.POSITIVE_INFINITY)).toThrow();
-    expect(() => mixer.scheduleFaderAutomation('host', 0, Number.NaN, 'linear')).toThrow();
+    expect(() =>
+      mixer.scheduleFaderAutomation('host', { samplePos: 0, faderDb: Number.NaN, curve: 'linear' }),
+    ).toThrow();
     expect(() => mixer.setFaderDb('host', -3)).not.toThrow();
     expect(() => mixer.setPan('host', 0.25)).not.toThrow();
   });
@@ -351,18 +389,27 @@ describe('Mixer argument validation', () => {
     expect(() => mixer.setPanLaw('host', 'const4.5dB')).not.toThrow();
     expect(() => mixer.setPanLaw('host', 'const6dB')).not.toThrow();
     expect(() => mixer.setPanLaw('host', 'linear0dB')).not.toThrow();
-    expect(() => mixer.meterTap('host', 'preFader')).not.toThrow();
-    expect(() => mixer.meterTap('host', 'postFader')).not.toThrow();
-    const sendIndex = mixer.addSend('host', 'host-send', 'master', 0, 'postFader');
+    expect(() => mixer.stripMeter('host', 'preFader')).not.toThrow();
+    expect(() => mixer.stripMeter('host', 'postFader')).not.toThrow();
+    const sendIndex = mixer.addSend('host', {
+      id: 'host-send',
+      destinationBusId: 'master',
+      sendDb: 0,
+      timing: 'postFader',
+    });
     expect(() =>
-      mixer.scheduleSendAutomation('host', sendIndex, 0, -3, 'exponential'),
+      mixer.scheduleSendAutomation('host', sendIndex, {
+        samplePos: 0,
+        sendDb: -3,
+        curve: 'exponential',
+      }),
     ).not.toThrow();
   });
 
   it('adds strips imperatively', () => {
-    const before = mixer.stripCount();
+    const before = mixer.stripCount;
     mixer.addStrip('late-arrival');
-    expect(mixer.stripCount()).toBe(before + 1);
+    expect(mixer.stripCount).toBe(before + 1);
     expect(mixer.stripById('late-arrival')).toBe(before);
     expect(() => mixer.compile()).not.toThrow();
     // The C call answers a failure with a NULL strip rather than an error code,
@@ -376,25 +423,25 @@ describe('Mixer argument validation', () => {
     expect(() => mixer.addStrip('wrong-type', { lufs: 'yes' as unknown as boolean })).toThrow(
       /lufs/,
     );
-    expect(mixer.stripCount()).toBe(before + 1);
+    expect(mixer.stripCount).toBe(before + 1);
   });
 
   it('refuses a metering argument that is not a plain object', () => {
-    const before = mixer.stripCount();
+    const before = mixer.stripCount;
     // A wrong-typed BAG would otherwise read as an empty one and put the caller
     // on the full default metering, the field readers' failure mode one level up.
     // @ts-expect-error a non-object metering bag is rejected at runtime
     expect(() => mixer.addStrip('number-bag', 5)).toThrow(/metering must be a plain object/);
     // @ts-expect-error an array is not a plain object, though `typeof []` is 'object'
     expect(() => mixer.addStrip('array-bag', [])).toThrow(/metering must be a plain object/);
-    expect(mixer.stripCount()).toBe(before);
+    expect(mixer.stripCount).toBe(before);
 
     // Absent and explicit undefined are the omitted default, which the scene
     // document spells by carrying no metering object at all.
     mixer.addStrip('omitted');
     mixer.addStrip('explicit-undefined', undefined);
-    expect(mixer.stripCount()).toBe(before + 2);
-    const strips = JSON.parse(mixer.toSceneJson()).strips as Array<{
+    expect(mixer.stripCount).toBe(before + 2);
+    const strips = JSON.parse(mixer.toJson()).strips as Array<{
       id: string;
       metering?: Record<string, unknown>;
     }>;
@@ -407,7 +454,7 @@ describe('Mixer argument validation', () => {
     // The document omits the object at the full default, so a strip added with
     // no metering argument carries none and only the opted-out one shows.
     mixer.addStrip('plain');
-    const strips = JSON.parse(mixer.toSceneJson()).strips as Array<{
+    const strips = JSON.parse(mixer.toJson()).strips as Array<{
       id: string;
       metering?: Record<string, unknown>;
     }>;
@@ -421,26 +468,26 @@ describe('Mixer argument validation', () => {
   });
 
   it('manages buses imperatively', () => {
-    const before = mixer.busCount();
+    const before = mixer.busCount;
     expect(before).toBeGreaterThanOrEqual(0);
     mixer.addBus('extra-aux', 'aux');
-    expect(mixer.busCount()).toBe(before + 1);
+    expect(mixer.busCount).toBe(before + 1);
     mixer.removeBus('extra-aux');
-    expect(mixer.busCount()).toBe(before);
+    expect(mixer.busCount).toBe(before);
   });
 
   it('manages VCA groups imperatively', () => {
-    const before = mixer.vcaGroupCount();
+    const before = mixer.vcaGroupCount;
     mixer.addVcaGroup('test-vca-group', -2, ['host', 'guest']);
-    expect(mixer.vcaGroupCount()).toBe(before + 1);
+    expect(mixer.vcaGroupCount).toBe(before + 1);
     mixer.setVcaGroupGainDb('test-vca-group', -7);
     mixer.setVcaGroupMembers('test-vca-group', ['guest']);
-    const scene = JSON.parse(mixer.toSceneJson());
+    const scene = JSON.parse(mixer.toJson());
     const group = scene.vcaGroups.find((entry: { id: string }) => entry.id === 'test-vca-group');
     expect(group.gainDb).toBe(-7);
     expect(group.members).toEqual(['guest']);
     mixer.removeVcaGroup('test-vca-group');
-    expect(mixer.vcaGroupCount()).toBe(before);
+    expect(mixer.vcaGroupCount).toBe(before);
     // members default to an empty group.
     expect(() => mixer.addVcaGroup('test-vca-empty', 0)).not.toThrow();
     mixer.removeVcaGroup('test-vca-empty');
@@ -448,15 +495,18 @@ describe('Mixer argument validation', () => {
 
   it('reports a numeric tail length', () => {
     mixer.compile();
-    const tail = mixer.tailSamples();
+    const tail = mixer.tailSamples;
     expect(typeof tail).toBe('number');
     expect(tail).toBeGreaterThanOrEqual(0);
   });
 
   it('reports the longest serial send tail', () => {
-    const routed = Mixer.fromSceneJson(serialTailScene(), SAMPLE_RATE, BLOCK_SIZE);
+    const routed = Mixer.fromJson(serialTailScene(), {
+      sampleRate: SAMPLE_RATE,
+      blockSize: BLOCK_SIZE,
+    });
     try {
-      expect(routed.tailSamples()).toBeGreaterThan(1440);
+      expect(routed.tailSamples).toBeGreaterThan(1440);
     } finally {
       routed.destroy();
     }
@@ -464,7 +514,7 @@ describe('Mixer argument validation', () => {
 
   it('reports a numeric latency', () => {
     mixer.compile();
-    const latency = mixer.latencySamples();
+    const latency = mixer.latencySamples;
     expect(typeof latency).toBe('number');
     expect(latency).toBeGreaterThanOrEqual(0);
   });
@@ -494,10 +544,13 @@ describe('Mixer argument validation', () => {
 describe('Mixer.setOutputBus', () => {
   const tone = (): Float32Array[] => [new Float32Array(BLOCK_SIZE).fill(0.5)];
   const connections = (m: Mixer): unknown =>
-    (JSON.parse(m.toSceneJson()) as { connections?: unknown }).connections;
+    (JSON.parse(m.toJson()) as { connections?: unknown }).connections;
 
   function emptyMixer(): Mixer {
-    return Mixer.fromSceneJson(JSON.stringify({ version: 1 }), SAMPLE_RATE, BLOCK_SIZE);
+    return Mixer.fromJson(JSON.stringify({ version: 1 }), {
+      sampleRate: SAMPLE_RATE,
+      blockSize: BLOCK_SIZE,
+    });
   }
 
   function refusal(call: () => void): Error {
@@ -538,7 +591,7 @@ describe('Mixer.setOutputBus', () => {
     mixer.addBus('sub', 'submix');
     mixer.addBus('sub2', 'submix');
     mixer.setOutputBus('sub', 'sub2');
-    const before = mixer.toSceneJson();
+    const before = mixer.toJson();
     expect(refusal(() => mixer.setOutputBus('ghost', 'sub')).message).toMatch(/ghost/);
     expect(refusal(() => mixer.setOutputBus('a', 'nowhere')).message).toMatch(/nowhere/);
     expect(refusal(() => mixer.setOutputBus('a', 'a')).message).toMatch(/a/);
@@ -546,7 +599,7 @@ describe('Mixer.setOutputBus', () => {
     const cycle = refusal(() => mixer.setOutputBus('sub2', 'sub')).message;
     expect(cycle).toMatch(/sub2/);
     expect(cycle).toMatch(/sub/);
-    expect(mixer.toSceneJson()).toBe(before);
+    expect(mixer.toJson()).toBe(before);
     mixer.destroy();
   });
 

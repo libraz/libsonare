@@ -29,7 +29,7 @@ function settled(engine: RealtimeEngine, blocks = 30): number {
 
 describe('track lane automation ids (Node)', () => {
   it('keeps a fader id on its track across a reorder and retires it with the track', () => {
-    const engine = new RealtimeEngine(48000, kBlock);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: kBlock });
     try {
       // Only track 20 sounds, so the output reads track 20's fader alone.
       engine.setClips([
@@ -41,27 +41,27 @@ describe('track lane automation ids (Node)', () => {
           lengthSamples: kFrames,
         },
       ]);
-      engine.setTrackLanes([10, 20]);
-      const fader10 = engine.resolveTrackLaneAutomationId(10, 'faderDb');
-      const pan10 = engine.resolveTrackLaneAutomationId(10, 'pan');
+      engine.setTrackLanes([{ trackId: 10 }, { trackId: 20 }]);
+      const fader10 = engine.resolveStripAutomationId(10, 'faderDb');
+      const pan10 = engine.resolveStripAutomationId(10, 'pan');
       expect(fader10).toBeGreaterThan(0);
       expect(pan10).not.toBe(fader10);
-      expect(() => engine.resolveTrackLaneAutomationId(30, 'faderDb')).toThrow(RangeError);
-      expect(() => engine.resolveTrackLaneAutomationId(10, 'width' as 'pan')).toThrow(RangeError);
+      expect(() => engine.resolveStripAutomationId(30, 'faderDb')).toThrow(RangeError);
+      expect(() => engine.resolveStripAutomationId(10, 'width' as 'pan')).toThrow(RangeError);
 
-      engine.setTrackLanes([20, 10]);
-      expect(engine.resolveTrackLaneAutomationId(10, 'faderDb')).toBe(fader10);
+      engine.setTrackLanes([{ trackId: 20 }, { trackId: 10 }]);
+      expect(engine.resolveStripAutomationId(10, 'faderDb')).toBe(fader10);
       engine.setParameter(fader10, -60);
       engine.play();
       expect(settled(engine)).toBeCloseTo(1, 3);
 
-      engine.setTrackLanes([20]);
+      engine.setTrackLanes([{ trackId: 20 }]);
       expect(alive(engine, fader10)).toBe(false);
       engine.setParameter(fader10, -60);
       expect(settled(engine)).toBeCloseTo(1, 3);
-      engine.setTrackLanes([20, 10]);
+      engine.setTrackLanes([{ trackId: 20 }, { trackId: 10 }]);
       expect(alive(engine, fader10)).toBe(false);
-      expect(engine.resolveTrackLaneAutomationId(10, 'faderDb')).not.toBe(fader10);
+      expect(engine.resolveStripAutomationId(10, 'faderDb')).not.toBe(fader10);
     } finally {
       engine.destroy();
     }

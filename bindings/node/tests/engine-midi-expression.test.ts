@@ -34,11 +34,11 @@ const bendRatio = (bend14: number): number =>
 
 /** A held note on the built-in sine synth, rendered under one gesture. */
 function renderHeldNote(gesture: (engine: RealtimeEngine) => void): Float32Array {
-  const engine = new RealtimeEngine(SR, BLOCK);
+  const engine = new RealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
   try {
     // A flat envelope, so the measured span is one steady tone and an RMS
     // ratio reads as the pressure gain rather than as a decay.
-    engine.setBuiltinInstrument({ waveform: 'sine', attackMs: 1, sustain: 1, releaseMs: 1 }, 0);
+    engine.setBuiltinInstrument(0, { waveform: 'sine', attackMs: 1, sustain: 1, releaseMs: 1 });
     engine.play();
     gesture(engine);
     const out: number[] = [];
@@ -189,8 +189,8 @@ describe('a live pressure reaches the rendered audio', () => {
 
 describe('a bend outside its domain is refused, never truncated into it', () => {
   const preparedEngine = (): RealtimeEngine => {
-    const engine = new RealtimeEngine(SR, BLOCK);
-    engine.setBuiltinInstrument({ waveform: 'sine' }, 0);
+    const engine = new RealtimeEngine({ sampleRate: SR, maxBlockSize: BLOCK });
+    engine.setBuiltinInstrument(0, { waveform: 'sine' });
     engine.setMidiInputSource(0);
     return engine;
   };

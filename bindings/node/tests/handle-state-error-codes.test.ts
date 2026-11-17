@@ -127,7 +127,7 @@ describe('a released handle passed as an argument reports InvalidState', () => {
 
   it('a disposed ProjectTimeline applied to an engine', () => {
     const project = Project.create();
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       const track = project.addTrack({ kind: 'midi' });
       project.addClip({ trackId: track, isMidi: true, startPpq: 0, lengthPpq: 4 });
@@ -143,7 +143,7 @@ describe('a released handle passed as an argument reports InvalidState', () => {
   });
 
   it('a non-timeline stays a TypeError', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       expect(capture(() => engine.applyProjectTimeline({} as never))).toBeInstanceOf(TypeError);
     } finally {
@@ -156,10 +156,10 @@ describe('a released handle passed as an argument reports InvalidState', () => {
     bank.addSample(new Float32Array(64).fill(0.1));
     bank.addZone({ sampleIndex: 0 });
     bank.destroy();
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       const error = capture(() =>
-        engine.setSynthInstrument({ engineMode: 'sample', sampleBank: bank }, 7),
+        engine.setSynthInstrument(7, { engineMode: 'sample', sampleBank: bank }),
       );
       expect(codeOf(error)).toBe(ErrorCode.InvalidState);
     } finally {

@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import type { MixSceneStrip } from '../src/index.js';
 import { ErrorCode, RealtimeEngine, SonareError } from '../src/index.js';
 import { expectRefusal } from './_helpers.js';
+
+/** First strip / bus of a scene document: the object the engine strip setters take. */
+const sceneStrip = (json: string): MixSceneStrip => JSON.parse(json).strips[0];
 
 const UNKNOWN_ID = 987654;
 
 /** Runs `body` against a fresh engine with one track lane and one bus, then destroys it. */
 function withEngine(body: (engine: RealtimeEngine) => void): void {
-  const engine = new RealtimeEngine(48000, 256);
+  const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
   try {
     engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
     engine.setTrackLanes([{ trackId: 10 }]);
@@ -21,17 +25,20 @@ describe('RealtimeEngine value refusals are RangeError, not SonareError', () => 
     [
       'setSynthInstrument with an unknown engineParams key',
       (e) =>
-        e.setSynthInstrument({ engineMode: 'bowed-string', engineParams: { noSuchField: 1 } }, 0),
+        e.setSynthInstrument(0, { engineMode: 'bowed-string', engineParams: { noSuchField: 1 } }),
     ],
     ['setTrackSends on an unknown track', (e) => e.setTrackSends(UNKNOWN_ID, [])],
     ['setTrackOutputBus on an unknown bus', (e) => e.setTrackOutputBus(10, UNKNOWN_ID)],
-    ['setBusStripPan on an unknown bus', (e) => e.setBusStripPan(UNKNOWN_ID, 0)],
-    ['setBusStripPan with a non-finite value', (e) => e.setBusStripPan(1, Number.NaN)],
+    ['setBusStripPan on an unknown bus', (e) => e.setBusPan(UNKNOWN_ID, 0)],
+    ['setBusStripPan with a non-finite value', (e) => e.setBusPan(1, Number.NaN)],
     [
       'setTrackStripInsertBypassed past the insert count',
       (e) => {
-        e.setTrackStripJson(10, '{"version":1,"strips":[{"id":"s"}],"buses":[],"connections":[]}');
-        e.setTrackStripInsertBypassed(10, 7, true);
+        e.setStrip(
+          10,
+          sceneStrip('{"version":1,"strips":[{"id":"s"}],"buses":[],"connections":[]}'),
+        );
+        e.setStripInsertBypassed(10, 7, { bypassed: true });
       },
     ],
     ['sampleAtPpq with a non-finite position', (e) => e.sampleAtPpq(Number.NaN)],
@@ -63,13 +70,13 @@ describe('RealtimeEngine value refusals are RangeError, not SonareError', () => 
 describe('RealtimeEngine state refusals stay coded SonareError', () => {
   it('master strip setters before any master strip is configured are InvalidState', () => {
     withEngine((engine) => {
-      expect(() => engine.setMasterStripInsertBypassed(0, true)).toThrow(
+      expect(() => engine.setStripInsertBypassed('master', 0, { bypassed: true })).toThrow(
         expect.objectContaining({ code: ErrorCode.InvalidState }),
       );
-      expect(() => engine.setMasterStripEqBand(0, { type: 'peak', enabled: true })).toThrow(
+      expect(() => engine.setStripEqBand('master', 0, { type: 'peak', enabled: true })).toThrow(
         expect.objectContaining({ code: ErrorCode.InvalidState }),
       );
-      expect(() => engine.resolveMasterInsertAutomationId(0, 'thresholdDb')).toThrow(
+      expect(() => engine.resolveStripInsertAutomationId('master', 0, 'thresholdDb')).toThrow(
         expect.objectContaining({ code: ErrorCode.InvalidState }),
       );
     });
@@ -78,29 +85,33 @@ describe('RealtimeEngine state refusals stay coded SonareError', () => {
   it('an unknown strip key is a document content defect, coded InvalidFormat', () => {
     withEngine((engine) => {
       expect(() =>
-        engine.setTrackStripJson(
+        engine.setStrip(
           10,
-          '{"version":1,"strips":[{"id":"s","faderDB":-3}],"buses":[],"connections":[]}',
+          sceneStrip(
+            '{"version":1,"strips":[{"id":"s","faderDB":-3}],"buses":[],"connections":[]}',
+          ),
         ),
       ).toThrow(expect.objectContaining({ code: ErrorCode.InvalidFormat }));
     });
   });
 
-  it('a malformed strip JSON document keeps its InvalidFormat code', () => {
+  it('a strip that is not an object is a TypeError, not a coded error', () => {
     withEngine((engine) => {
-      expect(() => engine.setTrackStripJson(10, '{bad json')).toThrow(
-        expect.objectContaining({ code: ErrorCode.InvalidFormat }),
-      );
+      expect(() => engine.setStrip(10, '{"strips":[]}' as never)).toThrow(TypeError);
+      expect(() => engine.setBusStrip(1, null as never)).toThrow(TypeError);
+      // Digit-only strings are not track ids: only a number or 'master' addresses a strip.
+      expect(() => engine.setStrip('10', {} as never)).toThrow(RangeError);
+      expect(() => engine.setStripPan('master', 0)).toThrow(RangeError);
     });
   });
 
   it('a destroyed engine refuses with InvalidState', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     engine.destroy();
-    expect(() => engine.tailSamples()).toThrow(
+    expect(() => engine.tailSamples).toThrow(
       expect.objectContaining({ code: ErrorCode.InvalidState }),
     );
-    expect(() => engine.setBusStripPan(1, 0)).toThrow(
+    expect(() => engine.setBusPan(1, 0)).toThrow(
       expect.objectContaining({ code: ErrorCode.InvalidState }),
     );
   });
@@ -118,9 +129,9 @@ describe('RealtimeEngine strip controls refuse an omitted required argument', ()
 
   it('refuses a missing bypassed flag and leaves the insert state alone', () => {
     withEngine((engine) => {
-      engine.setTrackStripJson(
+      engine.setStrip(
         10,
-        '{"version":1,"strips":[{"id":"s"}],"buses":[],"connections":[]}',
+        sceneStrip('{"version":1,"strips":[{"id":"s"}],"buses":[],"connections":[]}'),
       );
       const native = (engine as unknown as { native: Record<string, (...a: unknown[]) => void> })
         .native;

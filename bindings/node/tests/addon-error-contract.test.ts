@@ -25,7 +25,7 @@ describe('addon error contract', () => {
   it('reports a scene that fails to load with the library code', () => {
     let caught: unknown;
     try {
-      Mixer.fromSceneJson('{ not json');
+      Mixer.fromJson('{ not json', { sampleRate: 48000 });
     } catch (error) {
       caught = error;
     }

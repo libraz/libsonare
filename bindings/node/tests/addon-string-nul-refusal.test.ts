@@ -53,7 +53,28 @@ function expectNulRefusal(call: () => unknown, field: string): void {
 }
 
 function withEngine<T>(body: (engine: RealtimeEngine) => T): T {
-  const engine = new RealtimeEngine(48000, 256);
+  const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
+  try {
+    return body(engine);
+  } finally {
+    engine.destroy();
+  }
+}
+
+/**
+ * The facade serialises a band or bus object itself, so a NUL can no longer
+ * reach the native JSON-string readers through it; these two cases drive the
+ * addon handle directly to keep exercising the readers.
+ */
+interface NativeJsonEngine {
+  setTrackBuses(buses: Array<{ busId: number }>): void;
+  setBusStripJson(busId: number, json: string): void;
+  setBusStripEqBandJson(busId: number, bandIndex: number, json: string): void;
+  destroy(): void;
+}
+
+function withNativeEngine<T>(body: (engine: NativeJsonEngine) => T): T {
+  const engine = new addon.RealtimeEngine(48000, 256) as NativeJsonEngine;
   try {
     return body(engine);
   } finally {
@@ -92,7 +113,7 @@ describe('embedded NUL refusal, by reader', () => {
   });
 
   it('OptionalStringArg names the argument', () => {
-    withEngine((engine) => {
+    withNativeEngine((engine) => {
       engine.setTrackBuses([{ busId: 1 }]);
       engine.setBusStripJson(1, SCENE_JSON);
       expect(() => engine.setBusStripEqBandJson(1, 0, BAND_JSON)).not.toThrow();
@@ -126,9 +147,9 @@ describe('embedded NUL refusal, by reader', () => {
 
   it('StringProperty names the key', () => {
     withEngine((engine) => {
-      expect(() => engine.setMarkers([{ id: 1, ppq: 0, name: 'a', kind: 0 }])).not.toThrow();
+      expect(() => engine.setMarkers([{ id: 1, ppq: 0, name: 'a', kind: 'marker' }])).not.toThrow();
       expectNulRefusal(
-        () => engine.setMarkers([{ id: 1, ppq: 0, name: `a${NUL}b`, kind: 0 }]),
+        () => engine.setMarkers([{ id: 1, ppq: 0, name: `a${NUL}b`, kind: 'marker' }]),
         'name',
       );
     });
@@ -136,10 +157,10 @@ describe('embedded NUL refusal, by reader', () => {
 
   it('ReadBuiltinWaveform names the field', () => {
     withEngine((engine) => {
-      expect(() => engine.setBuiltinInstrument({ waveform: 'sine' }, 0)).not.toThrow();
+      expect(() => engine.setBuiltinInstrument(0, { waveform: 'sine' })).not.toThrow();
       expectNulRefusal(
         // @ts-expect-error deliberately invalid waveform name for runtime refusal.
-        () => engine.setBuiltinInstrument({ waveform: `sine${NUL}x` }, 0),
+        () => engine.setBuiltinInstrument(0, { waveform: `sine${NUL}x` }),
         'waveform',
       );
     });
@@ -148,7 +169,7 @@ describe('embedded NUL refusal, by reader', () => {
 
 describe('embedded NUL refusal, by handoff kind', () => {
   it('a name lookup (mixer bus id)', () => {
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('drumBusSubgroup'));
+    const mixer = Mixer.fromJson(mixingScenePresetJson('drumBusSubgroup'), { sampleRate: 48000 });
     try {
       expect(() => mixer.busMeter('master')).not.toThrow();
       expect(() => mixer.busMeter('masterx')).toThrow();
@@ -166,7 +187,7 @@ describe('embedded NUL refusal, by handoff kind', () => {
   });
 
   it('a JSON key (EQ band)', () => {
-    withEngine((engine) => {
+    withNativeEngine((engine) => {
       engine.setTrackBuses([{ busId: 1 }]);
       engine.setBusStripJson(1, SCENE_JSON);
       expect(() => engine.setBusStripEqBandJson(1, 0, BAND_JSON)).not.toThrow();
@@ -187,7 +208,7 @@ describe('embedded NUL refusal, by handoff kind', () => {
   it('a fixed-buffer copy (marker name)', () => {
     withEngine((engine) => {
       expectNulRefusal(
-        () => engine.setMarkers([{ id: 1, ppq: 0, name: `verse${NUL}x`, kind: 0 }]),
+        () => engine.setMarkers([{ id: 1, ppq: 0, name: `verse${NUL}x`, kind: 'marker' }]),
         'name',
       );
     });

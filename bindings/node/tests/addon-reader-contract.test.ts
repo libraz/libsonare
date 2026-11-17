@@ -282,7 +282,7 @@ describe('the mixer entry points refuse a sample rate outside [8000, 384000]', (
   const scene = JSON.stringify({ tracks: [] });
   const tone = new Float32Array(64);
 
-  it('Mixer constructor (Mixer.fromSceneJson)', () => {
+  it('Mixer constructor (Mixer.fromJson)', () => {
     for (const bad of [7999, 384001, 1_000_000]) {
       expect(() => new addon.Mixer(scene, bad, 512)).toThrow(
         'Mixer: sampleRate out of supported range [8000, 384000]',

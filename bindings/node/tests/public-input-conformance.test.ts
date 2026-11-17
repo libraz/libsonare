@@ -63,8 +63,7 @@ const markerValue = (marker: CorpusMarker) => ({
   name: marker.name,
 });
 
-const snapshot = (engine: RealtimeEngine): string =>
-  JSON.stringify(Array.from({ length: engine.markerCount() }, (_, i) => engine.markerByIndex(i)));
+const snapshot = (engine: RealtimeEngine): string => JSON.stringify(engine.markers());
 
 const mixOptionValue = (value: MixOptionCase['value']): number | string => {
   if (value === 'nan') {
@@ -98,16 +97,16 @@ const mixOptions = (testCase: MixOptionCase): MixOptions => {
 describe('shared public-input conformance corpus', () => {
   for (const testCase of corpus.marker_transaction.cases) {
     it(`keeps marker transactions conformant: ${testCase.id}`, () => {
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       try {
         engine.setMarkers(corpus.marker_transaction.initial.map(markerValue));
         const before = snapshot(engine);
         const candidate = testCase.markers.map(markerValue);
         if (testCase.accepted) {
           engine.setMarkers(candidate);
-          expect(engine.markerCount()).toBe(candidate.length);
+          expect(engine.markers().length).toBe(candidate.length);
           for (let i = 0; i < candidate.length; i++) {
-            expect(engine.markerByIndex(i)).toMatchObject(candidate[i]);
+            expect(engine.markers()[i]).toMatchObject(candidate[i]);
           }
         } else {
           expect(() => engine.setMarkers(candidate)).toThrow();
@@ -153,15 +152,15 @@ describe('shared public-input conformance corpus', () => {
   for (const testCase of corpus.midi_cc_binding.cases) {
     const binding = () => ({ ccNumber: 7, paramId: 1, [testCase.field]: testCase.value });
 
-    it(`keeps RealtimeEngine.bindMidiCcBinding byte fields conformant: ${testCase.id}`, () => {
-      const engine = new RealtimeEngine(48000, 128);
+    it(`keeps RealtimeEngine.bindMidiCc byte fields conformant: ${testCase.id}`, () => {
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       try {
         if (testCase.accepted) {
-          engine.bindMidiCcBinding(binding() as never);
-          expect(engine.midiCcBindingCount()).toBe(1);
+          engine.bindMidiCc(binding() as never);
+          expect(engine.midiCcBindingCount).toBe(1);
         } else {
-          expect(() => engine.bindMidiCcBinding(binding() as never)).toThrow(RangeError);
-          expect(engine.midiCcBindingCount()).toBe(0);
+          expect(() => engine.bindMidiCc(binding() as never)).toThrow(RangeError);
+          expect(engine.midiCcBindingCount).toBe(0);
         }
       } finally {
         engine.destroy();
@@ -182,12 +181,12 @@ describe('shared public-input conformance corpus', () => {
   // RangeError). A present, wrong-TYPE byte field used to report a bare, unnamed
   // "A number was expected" instead of naming which field was wrong.
   it('names the field for a wrong-typed MidiByteProperty value instead of an anonymous type error', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
-      expect(() =>
-        engine.bindMidiCcBinding({ ccNumber: 7, paramId: 1, channel: '3' } as never),
-      ).toThrow(/^channel must be a number$/);
-      expect(engine.midiCcBindingCount()).toBe(0);
+      expect(() => engine.bindMidiCc({ ccNumber: 7, paramId: 1, channel: '3' } as never)).toThrow(
+        /^channel must be a number$/,
+      );
+      expect(engine.midiCcBindingCount).toBe(0);
     } finally {
       engine.destroy();
     }
@@ -413,7 +412,7 @@ describe('explicit undefined reads as an omitted option', () => {
   });
 
   it('schedules MIDI clips whose optional fields are explicitly undefined', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       expect(() =>
         engine.setMidiClips([
@@ -435,25 +434,21 @@ describe('explicit undefined reads as an omitted option', () => {
   });
 
   it('binds a builtin instrument whose config fields are explicitly undefined', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
-      // The facade takes (config, destinationId); passing them in the addon's
-      // (destinationId, config) order made `config` the number 1, so the
-      // explicitly-undefined bag never reached the reader and this test
-      // established nothing about undefined-safety.
+      // The facade takes (destinationId, config); a swapped order would make
+      // `config` a number and the explicitly-undefined bag would never reach
+      // the reader.
       expect(() =>
-        engine.setBuiltinInstrument(
-          {
-            waveform: undefined,
-            gain: undefined,
-            attackMs: undefined,
-            decayMs: undefined,
-            sustain: undefined,
-            releaseMs: undefined,
-            polyphony: undefined,
-          },
-          1,
-        ),
+        engine.setBuiltinInstrument(1, {
+          waveform: undefined,
+          gain: undefined,
+          attackMs: undefined,
+          decayMs: undefined,
+          sustain: undefined,
+          releaseMs: undefined,
+          polyphony: undefined,
+        }),
       ).not.toThrow();
     } finally {
       engine.destroy();
@@ -461,7 +456,7 @@ describe('explicit undefined reads as an omitted option', () => {
   });
 
   it('keeps engine struct readers undefined-safe across the RealtimeEngine surface', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       expect(() =>
         engine.setTempoSegments([{ startPpq: 0, bpm: 120, endBpm: undefined }]),
@@ -472,14 +467,14 @@ describe('explicit undefined reads as an omitted option', () => {
           beatGain: undefined,
           accentGain: undefined,
           clickSamples: undefined,
-          clickSeconds: undefined,
+          clickSec: undefined,
         }),
       ).not.toThrow();
       expect(() =>
         engine.setMarkers([{ id: 1, ppq: 0, name: undefined, kind: undefined }]),
       ).not.toThrow();
       expect(() =>
-        engine.bindMidiCcBinding({
+        engine.bindMidiCc({
           ccNumber: 7,
           paramId: 1,
           channel: undefined,
@@ -492,7 +487,7 @@ describe('explicit undefined reads as an omitted option', () => {
         }),
       ).not.toThrow();
       expect(() =>
-        engine.setSf2Instrument({
+        engine.setSf2Instrument(0, {
           gain: undefined,
           polyphony: undefined,
           preferModelForModeledFamilies: undefined,
@@ -916,7 +911,10 @@ describe('an out-of-domain scalar is a RangeError across the addon readers', () 
   });
 
   it('the mixer refuses a block past its configured size with RangeError', () => {
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('commentaryDucking'), 48000, 8);
+    const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+      sampleRate: 48000,
+      blockSize: 8,
+    });
     try {
       const over = Array.from({ length: 3 }, () => new Float32Array(16));
       expect(() => mixer.processStereo(over, over)).toThrow(RangeError);
@@ -929,7 +927,10 @@ describe('an out-of-domain scalar is a RangeError across the addon readers', () 
   });
 
   it('the mixer keeps TypeError for a non-Float32Array strip', () => {
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('commentaryDucking'), 48000, 8);
+    const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+      sampleRate: 48000,
+      blockSize: 8,
+    });
     try {
       const bad = Array.from({ length: 3 }, () => [0, 0, 0, 0] as never);
       expect(() => mixer.processStereo(bad, bad)).toThrow(TypeError);

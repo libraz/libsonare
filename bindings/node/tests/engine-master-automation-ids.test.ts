@@ -11,17 +11,19 @@ import { EXPECTED_ENGINE_ABI_VERSION } from '../src/realtime_engine.js';
 
 describe('master automation ids (Node)', () => {
   it('resolves the three master controls to engine parameters and refuses other names', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     try {
       const ids = (['faderDb', 'pan', 'width'] as const).map((name) =>
-        engine.resolveMasterAutomationId(name),
+        engine.resolveStripAutomationId('master', name),
       );
       expect(new Set(ids).size).toBe(3);
       ids.forEach((id, index) => {
         expect(engine.parameterInfo(id).name).toBe(['faderDb', 'pan', 'width'][index]);
         expect(() => engine.setParameterSmoothed(id, index === 0 ? -6 : 0.5)).not.toThrow();
       });
-      expect(() => engine.resolveMasterAutomationId('gain' as 'faderDb')).toThrow(RangeError);
+      expect(() => engine.resolveStripAutomationId('master', 'gain' as 'faderDb')).toThrow(
+        RangeError,
+      );
     } finally {
       engine.destroy();
     }

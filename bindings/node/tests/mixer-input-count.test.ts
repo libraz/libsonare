@@ -12,8 +12,11 @@ function inputs(count: number): Float32Array[] {
 }
 
 describe('Mixer input count (Node)', () => {
-  const mixer = Mixer.fromSceneJson(mixingScenePresetJson('commentaryDucking'), 48000, BLOCK);
-  const strips = mixer.stripCount();
+  const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+    sampleRate: 48000,
+    blockSize: BLOCK,
+  });
+  const strips = mixer.stripCount;
 
   it('takes fewer and equal, and refuses more inputs than strips, naming both counts', () => {
     expect(strips).toBeGreaterThan(1);

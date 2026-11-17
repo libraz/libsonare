@@ -29,7 +29,7 @@ function sceneWithBusEq(gainDb: number): string {
 
 describe('RealtimeEngine', () => {
   it('processWithMonitor returns output and monitor buses', () => {
-    const engine = new RealtimeEngine(48000, 16);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 16 });
     try {
       const result = engine.processWithMonitor([
         new Float32Array(16).fill(0.25),
@@ -48,7 +48,7 @@ describe('RealtimeEngine', () => {
 
   it('schedules a PFL monitor tap for a mono lane without changing main output', () => {
     const blockSize = 16;
-    const engine = new RealtimeEngine(48000, blockSize);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: blockSize });
     try {
       engine.setClips([
         {
@@ -59,9 +59,9 @@ describe('RealtimeEngine', () => {
           lengthSamples: blockSize * 2,
         },
       ]);
-      engine.setTrackLanes([10]);
+      engine.setTrackLanes([{ trackId: 10 }]);
       engine.play();
-      engine.setTrackMonitorMode(0, 'pfl', blockSize / 2);
+      engine.setTrackMonitorMode(10, 'pfl', blockSize / 2);
 
       const result = engine.processWithMonitor([new Float32Array(blockSize)]);
       expect(result.output).toHaveLength(1);
@@ -80,23 +80,22 @@ describe('RealtimeEngine', () => {
     }
   });
 
-  it('reports an unknown monitor lane through asynchronous telemetry', () => {
-    const engine = new RealtimeEngine(48000, 16);
+  it('refuses an unknown monitor lane synchronously', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 16 });
     try {
-      expect(() => engine.setTrackMonitorMode(99, 'pfl')).not.toThrow();
-      engine.process([new Float32Array(16)]);
-      expect(engine.drainTelemetry().some((record) => record.error === 7)).toBe(true);
+      engine.setTrackLanes([{ trackId: 10 }]);
+      expect(() => engine.setTrackMonitorMode(99, 'pfl')).toThrow(RangeError);
     } finally {
       engine.destroy();
     }
   });
 
   it('exposes live MIDI CC bindings', () => {
-    const engine = new RealtimeEngine(48000, 16);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 16 });
     try {
-      expect(engine.midiCcBindingCount()).toBe(0);
-      engine.bindMidiCc(0, 74, 7, { minValue: -60, maxValue: 0 });
-      engine.bindMidiCcBinding({
+      expect(engine.midiCcBindingCount).toBe(0);
+      engine.bindMidiCc({ ccNumber: 74, channel: 0, paramId: 7, minValue: -60, maxValue: 0 });
+      engine.bindMidiCc({
         ccNumber: 1,
         ccLsbNumber: 33,
         channel: 0,
@@ -105,16 +104,16 @@ describe('RealtimeEngine', () => {
         minValue: 0,
         maxValue: 1,
       });
-      expect(engine.midiCcBindingCount()).toBe(2);
+      expect(engine.midiCcBindingCount).toBe(2);
       engine.clearMidiCcBindings();
-      expect(engine.midiCcBindingCount()).toBe(0);
+      expect(engine.midiCcBindingCount).toBe(0);
     } finally {
       engine.destroy();
     }
   });
 
   it('exposes live non-destructive MIDI FX inserts', () => {
-    const engine = new RealtimeEngine(48000, 16);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 16 });
     try {
       expect(() => engine.setMidiFx(0, '{"transpose_semitones":12}')).not.toThrow();
       expect(() => engine.clearMidiFx(0)).not.toThrow();
@@ -126,14 +125,14 @@ describe('RealtimeEngine', () => {
   });
 
   it('exposes an owned live MIDI input source', () => {
-    const engine = new RealtimeEngine(48000, 16);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 16 });
     try {
       engine.setMidiInputSource(0);
-      expect(engine.midiInputPendingCount()).toBe(0);
+      expect(engine.midiInputPendingCount).toBe(0);
       engine.pushMidiInputNoteOn(0, 0, 60, 100, 3);
-      expect(engine.midiInputPendingCount()).toBe(1);
+      expect(engine.midiInputPendingCount).toBe(1);
       engine.process([new Float32Array(16), new Float32Array(16)]);
-      expect(engine.midiInputPendingCount()).toBe(0);
+      expect(engine.midiInputPendingCount).toBe(0);
       engine.clearMidiInputSource();
       expect(() => engine.pushMidiInputNoteOff(0, 0, 60, 0, 0)).toThrow(
         expect.objectContaining({ code: ErrorCode.InvalidState }),
@@ -146,19 +145,31 @@ describe('RealtimeEngine', () => {
 
 describe('Mixer (scene-based routing)', () => {
   it('routes a preset scene and schedules insert automation', () => {
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 512);
+    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      sampleRate: 48000,
+      blockSize: 512,
+    });
     try {
       mixer.compile();
-      expect(mixer.stripCount()).toBeGreaterThan(0);
+      expect(mixer.stripCount).toBeGreaterThan(0);
 
       // Strip 0 (vocal) carries pre-fader inserts; schedule a no-throw event.
-      expect(() => mixer.scheduleInsertAutomation(0, 0, 0, 0, 0.0)).not.toThrow();
       expect(() =>
-        mixer.scheduleInsertAutomation(0, 0, 0, 48000, 1.0, 'exponential'),
+        mixer.scheduleInsertAutomation(0, 0, { paramId: 0, samplePos: 0, value: 0.0 }),
+      ).not.toThrow();
+      expect(() =>
+        mixer.scheduleInsertAutomation(0, 0, {
+          paramId: 0,
+          samplePos: 48000,
+          value: 1.0,
+          curve: 'exponential',
+        }),
       ).not.toThrow();
 
       // Out-of-range strip index must throw.
-      expect(() => mixer.scheduleInsertAutomation(999, 0, 0, 0, 0.0)).toThrow();
+      expect(() =>
+        mixer.scheduleInsertAutomation(999, 0, { paramId: 0, samplePos: 0, value: 0.0 }),
+      ).toThrow();
 
       const block = 512;
       const vocalL = new Float32Array(block);
@@ -171,7 +182,7 @@ describe('Mixer (scene-based routing)', () => {
       expect(out.left.length).toBe(block);
       expect(out.sampleRate).toBe(48000);
 
-      const scene = mixer.toSceneJson();
+      const scene = mixer.toJson();
       expect(scene).toContain('vocal-verb');
     } finally {
       mixer.destroy();
@@ -179,7 +190,10 @@ describe('Mixer (scene-based routing)', () => {
   });
 
   it('reports a non-zero discard count once a strip processes a near-FLT_MAX input', () => {
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 512);
+    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      sampleRate: 48000,
+      blockSize: 512,
+    });
     try {
       mixer.compile();
 
@@ -209,7 +223,7 @@ describe('Mixer (scene-based routing)', () => {
   });
 
   it('reports a rising bus discard count once a bus insert overflows', () => {
-    const mixer = Mixer.fromSceneJson(sceneWithBusEq(200.0), 48000, 64);
+    const mixer = Mixer.fromJson(sceneWithBusEq(200.0), { sampleRate: 48000, blockSize: 64 });
     try {
       const block = new Float32Array(64);
       for (let i = 0; i < block.length; i += 1) {
@@ -229,7 +243,10 @@ describe('Mixer (scene-based routing)', () => {
   });
 
   it('rejects an uncompiled or unknown bus', () => {
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 512);
+    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      sampleRate: 48000,
+      blockSize: 512,
+    });
     try {
       mixer.compile();
       // Baseline: a freshly compiled bus has discarded nothing.

@@ -138,8 +138,8 @@ describe('part rig on a project', () => {
 
 describe('part rig on the realtime engine', () => {
   it('throws NotSupported on a builtin instrument', () => {
-    const engine = new RealtimeEngine(48000, 128);
-    engine.setBuiltinInstrument({}, 3);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    engine.setBuiltinInstrument(3, {});
     expect(codeNameOf(() => engine.setPartRig({ destinationId: 3, part: 0, mode: 'none' }))).toBe(
       'NotSupported',
     );
@@ -147,16 +147,16 @@ describe('part rig on the realtime engine', () => {
   });
 
   it('accepts a rig on a NativeSynth', () => {
-    const engine = new RealtimeEngine(48000, 128);
-    engine.setSynthInstrument({}, 3);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    engine.setSynthInstrument(3, {});
     engine.setPartRig({ destinationId: 3, part: 0, mode: 'chain', inserts: chain });
-    engine.setPartRig({ destinationId: 3, part: PART_RIG_ALL_PARTS, mode: 'bank' });
+    engine.setPartRig({ destinationId: 3, mode: 'bank' } as never);
     engine.destroy();
   });
 
   it('accepts omitted insert params on a NativeSynth', () => {
-    const engine = new RealtimeEngine(48000, 128);
-    engine.setSynthInstrument({}, 3);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    engine.setSynthInstrument(3, {});
     expect(() =>
       engine.setPartRig({
         destinationId: 3,
@@ -228,13 +228,36 @@ describe('part rig request and positional forms', () => {
     );
   });
 
-  it('answers the engine the same through either form', () => {
-    const engine = new RealtimeEngine(48000, 128);
-    engine.setBuiltinInstrument({}, 3);
-    expect(codeNameOf(() => engine.setPartRig(3, 0, 'none'))).toBe('NotSupported');
-    engine.setSynthInstrument({}, 3);
-    expect(() => engine.setPartRig(3, 0, 'chain', chain)).not.toThrow();
-    expect(() => engine.setPartRig(3, 0, 'none', chain)).toThrow();
+  it('takes only a request object on the engine', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    engine.setBuiltinInstrument(3, {});
+    expect(codeNameOf(() => engine.setPartRig({ destinationId: 3, part: 0, mode: 'none' }))).toBe(
+      'NotSupported',
+    );
+    engine.setSynthInstrument(3, {});
+    expect(() =>
+      engine.setPartRig({ destinationId: 3, part: 0, mode: 'chain', inserts: chain }),
+    ).not.toThrow();
+    expect(() =>
+      engine.setPartRig({ destinationId: 3, part: 0, mode: 'none', inserts: chain }),
+    ).toThrow();
+    // A number is not a mode, a stray key is refused by name, and params are an object.
+    expect(() => engine.setPartRig({ destinationId: 3, part: 0, mode: 1 as never })).toThrow(
+      TypeError,
+    );
+    expect(() =>
+      engine.setPartRig({ destinationId: 3, part: 0, mode: 'bank', extra: 1 } as never),
+    ).toThrow(/unknown request key 'extra'/);
+    expect(() =>
+      engine.setPartRig({
+        destinationId: 3,
+        part: 0,
+        mode: 'chain',
+        inserts: [{ processor: 'saturation.overdrive', params: '{}' as never }],
+      }),
+    ).toThrow(TypeError);
+    // @ts-expect-error the positional form is gone.
+    expect(() => engine.setPartRig(3, 0, 'none')).toThrow(TypeError);
     engine.destroy();
   });
 });

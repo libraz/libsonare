@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import type { MixSceneStrip } from '../src/index.js';
 import { RealtimeEngine } from '../src/index.js';
+
+/** First strip / bus of a scene document: the object the engine strip setters take. */
+const sceneStrip = (json: string): MixSceneStrip => JSON.parse(json).strips[0];
 
 const stripJson =
   '{"version":1,"strips":[{"id":"track-10","inserts":[' +
@@ -10,9 +14,9 @@ const stripJson =
 describe('engine meter input peaks and constructed insert values', () => {
   it('publishes input peaks and resets the integrated master loudness', () => {
     const block = 1024;
-    const engine = new RealtimeEngine(48000, block);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: block });
     try {
-      engine.setInputMonitor(true);
+      engine.configureCapture({ capacityFrames: block, inputMonitor: { enabled: true } });
       engine.play();
       const tone = new Float32Array(block);
       for (let i = 0; i < block; i += 1) {
@@ -39,7 +43,7 @@ describe('engine meter input peaks and constructed insert values', () => {
   });
 
   it('publishes input peaks on the wide meter surface', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     const frames = 256;
     try {
       engine.setClips([
@@ -51,12 +55,14 @@ describe('engine meter input peaks and constructed insert values', () => {
           lengthSamples: frames,
         },
       ]);
-      engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 2 }]);
+      engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: '5.1' }]);
       engine.setTrackLanes([{ trackId: 10, outputBusId: 1 }]);
-      engine.setTrackStripJson(
+      engine.setStrip(
         10,
-        '{"version":1,"buses":[{"id":"master","role":"master"}],"strips":[' +
-          '{"id":"s","surroundPan":{"azimuth":-110}}]}',
+        sceneStrip(
+          '{"version":1,"buses":[{"id":"master","role":"master"}],"strips":[' +
+            '{"id":"s","surroundPan":{"azimuth":-110}}]}',
+        ),
       );
       engine.play();
       engine.process([
@@ -79,11 +85,11 @@ describe('engine meter input peaks and constructed insert values', () => {
   });
 
   it('exposes constructed insert values with invalid-id errors', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
-      engine.setTrackLanes([10]);
-      engine.setTrackStripJson(10, stripJson);
-      const paramId = engine.resolveTrackInsertAutomationId(10, 0, 'band0.gainDb');
+      engine.setTrackLanes([{ trackId: 10 }]);
+      engine.setStrip(10, sceneStrip(stripJson));
+      const paramId = engine.resolveStripInsertAutomationId(10, 0, 'band0.gainDb');
       expect(paramId).toBeGreaterThan(0);
 
       expect(engine.insertParameterConstructedValue(paramId)).toBeCloseTo(-3, 5);
@@ -122,7 +128,7 @@ describe('per-insert gain reduction query', () => {
 
   it('reports each insert in order and agrees with the meter record', () => {
     const block = 512;
-    const engine = new RealtimeEngine(48000, block);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: block });
     try {
       engine.setClips([
         {
@@ -133,8 +139,8 @@ describe('per-insert gain reduction query', () => {
           lengthSamples: block * 64,
         },
       ]);
-      engine.setTrackLanes([10]);
-      engine.setTrackStripJson(10, sceneJson);
+      engine.setTrackLanes([{ trackId: 10 }]);
+      engine.setStrip(10, sceneStrip(sceneJson));
       engine.play();
       for (let i = 0; i < 32; i += 1) {
         engine.process([new Float32Array(block), new Float32Array(block)]);

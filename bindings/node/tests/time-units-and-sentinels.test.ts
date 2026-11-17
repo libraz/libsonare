@@ -15,6 +15,7 @@ import {
   spectralEdit,
   vqt,
 } from '../src/index.js';
+import type { CapturePunch } from '../src/types.js';
 
 const SR = 22050;
 
@@ -274,19 +275,28 @@ describe('trim padding in seconds', () => {
 
 describe('engine punch-in window', () => {
   it('seconds equal samples at the engine rate, and bounds are required and non-negative', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    const configure = (punch?: CapturePunch) =>
+      engine.configureCapture({ capacityFrames: 128, ...(punch ? { punch } : {}) });
     try {
-      engine.setCapturePunch({ startSec: 1, endSample: 48128 });
+      configure({ startSec: 1, endSample: 48128 });
       expect(engine.captureStatus().punchEnabled).toBe(true);
-      engine.setCapturePunch({ startSample: 48000, endSample: 48128, enabled: false });
+      configure();
       expect(engine.captureStatus().punchEnabled).toBe(false);
-      engine.setCapturePunch(48000, 48128);
+      configure({ startSample: 48000, endSample: 48128 });
       expect(engine.captureStatus().punchEnabled).toBe(true);
-      expect(() => engine.setCapturePunch({ startSample: 1, startSec: 1, endSample: 2 })).toThrow(
-        /startSample.*startSec/,
+      // ppq resolves through the tempo map.
+      engine.setTempo(120);
+      configure({ startPpq: 2, endPpq: 4 });
+      expect(engine.captureStatus().punchEnabled).toBe(true);
+      expect(() => configure({ startSample: 1, startSec: 1, endSample: 2 })).toThrow(
+        /startSample, startSec/,
       );
-      expect(() => engine.setCapturePunch({ startSample: -1, endSample: 2 })).toThrow(RangeError);
-      expect(() => engine.setCapturePunch({ startSample: 1 })).toThrow(RangeError);
+      expect(() => configure({ startSample: -1, endSample: 2 })).toThrow(RangeError);
+      expect(() => configure({ startSample: 1 })).toThrow(RangeError);
+      expect(() => configure({ startSample: 1, endSample: 2, enabled: false } as never)).toThrow(
+        /unknown option 'enabled' in 'punch'/,
+      );
     } finally {
       engine.destroy();
     }
@@ -295,7 +305,7 @@ describe('engine punch-in window', () => {
 
 describe('absent is omission and -1 is refused', () => {
   it('engine renderFrame: omitted is immediate, negative is refused', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       expect(() => engine.play()).not.toThrow();
       expect(() => engine.play(0)).not.toThrow();

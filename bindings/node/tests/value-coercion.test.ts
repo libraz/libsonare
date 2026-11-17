@@ -2,12 +2,10 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import type { EngineAutomationPointCurve, EngineTrackMonitorMode } from '../src/types_engine.js';
 import type { PanLawInput } from '../src/types_mixing.js';
 import type { ProjectAutomationCurve } from '../src/types_project.js';
 import {
   AUTOMATION_CURVE_VALUES,
-  engineAutomationCurveValue,
   meterTapValue,
   PROJECT_AUTOMATION_CURVE_VALUES,
   panLawValue,
@@ -15,9 +13,7 @@ import {
   projectAutomationPointValue,
   projectLoopModeValue,
   resolveEnumOrdinal,
-  sendTimingValue,
   trackKindValue,
-  trackMonitorModeValue,
   warpModeValue,
 } from '../src/value_coercion.js';
 
@@ -65,37 +61,6 @@ describe('enum ordinal coercion', () => {
     expect(() => projectLoopModeValue(8 as any)).toThrow(RangeError);
     // biome-ignore lint/suspicious/noExplicitAny: exercise direct JavaScript callers.
     expect(() => meterTapValue(2 as any)).toThrow(RangeError);
-    // biome-ignore lint/suspicious/noExplicitAny: exercise direct JavaScript callers.
-    expect(() => sendTimingValue(2 as any)).toThrow(RangeError);
-  });
-
-  it('accepts only exact track monitor mode spellings and ordinals', () => {
-    const accepted: Array<[EngineTrackMonitorMode, number]> = [
-      ['off', 0],
-      ['pfl', 1],
-      ['afl', 2],
-      [0, 0],
-      [1, 1],
-      [2, 2],
-    ];
-    for (const [mode, ordinal] of accepted) {
-      expect(trackMonitorModeValue(mode)).toBe(ordinal);
-    }
-
-    const rejected: unknown[] = [
-      true,
-      false,
-      0.5,
-      Number.NaN,
-      -1,
-      3,
-      Number.POSITIVE_INFINITY,
-      'PFL',
-      'mix',
-    ];
-    for (const mode of rejected) {
-      expect(() => trackMonitorModeValue(mode as EngineTrackMonitorMode)).toThrow(RangeError);
-    }
   });
 
   it('resolves every shared pan-law spelling and conservative normalization', () => {
@@ -126,7 +91,6 @@ describe('enum ordinal coercion', () => {
       ),
     );
     for (const { value, ordinal } of curveCorpus.accepted) {
-      expect(engineAutomationCurveValue(value as EngineAutomationPointCurve)).toBe(ordinal);
       expect(projectAutomationCurveValue(value as ProjectAutomationCurve)).toBe(ordinal);
     }
     for (const value of curveCorpus.numeric) {

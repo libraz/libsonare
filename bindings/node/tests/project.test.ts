@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BuiltinSynthConfig } from '../src/index.js';
-import { ErrorCode, MarkerKind, Project, projectAbiVersion } from '../src/index.js';
+import { ErrorCode, Project, projectAbiVersion } from '../src/index.js';
 import { EXPECTED_PROJECT_ABI_VERSION } from '../src/types_project.js';
 
 /** Build a small deterministic project: a track + an audio clip + a MIDI clip + tempo. */
@@ -271,6 +271,9 @@ function accelerando(sampleRate = 22050, startBpm = 100, endBpm = 160, seconds =
   }
   return audio;
 }
+
+/** Project markers still carry the kind as an ordinal (`marker, text, lyric, cuePoint, keySignature`). */
+const MarkerKind = { Marker: 0, KeySignature: 4 } as const;
 
 describe('Project native binding', () => {
   it('reports the expected project ABI version', () => {

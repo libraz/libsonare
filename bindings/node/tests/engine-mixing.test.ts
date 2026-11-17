@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { EngineAutomationPoint, MasteringProcessorCatalogEntry } from '../src/index.js';
+import type {
+  EngineAutomationPoint,
+  MasteringProcessorCatalogEntry,
+  MixSceneBus,
+  MixSceneStrip,
+} from '../src/index.js';
 import {
   ErrorCode,
   isSonareError,
@@ -9,6 +14,22 @@ import {
   RealtimeEngine,
 } from '../src/index.js';
 import { rms } from './_engine_signals.js';
+
+/** First strip / bus of a scene document: the object the engine strip setters take. */
+const sceneStrip = (json: string): MixSceneStrip => JSON.parse(json).strips[0];
+// The facade takes documents as objects, so malformed JSON can only reach the
+// addon's parser through the native handle.
+const nativeOf = (engine: RealtimeEngine) =>
+  (
+    engine as unknown as {
+      native: {
+        setBusStripJson(busId: number, json: string): void;
+        setTrackStripJson(trackId: number, json: string): void;
+        setMasterStripJson(json: string): void;
+      };
+    }
+  ).native;
+const sceneBus = (json: string): MixSceneBus => JSON.parse(json).buses[0];
 
 describe('RealtimeEngine native binding', () => {
   /** Asserts that `call` is refused as an argument error (RangeError, not SonareError). */
@@ -24,7 +45,7 @@ describe('RealtimeEngine native binding', () => {
   };
 
   it('routes track clips through lanes and lane commands', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     const frames = 256 * 10;
     engine.setClips([
       {
@@ -42,7 +63,7 @@ describe('RealtimeEngine native binding', () => {
         lengthSamples: frames,
       },
     ]);
-    engine.setTrackLanes([10, { trackId: 20 }]);
+    engine.setTrackLanes([{ trackId: 10 }, { trackId: 20 }]);
     let duplicateLaneError: unknown;
     try {
       engine.setTrackLanes([{ trackId: 10 }, { trackId: 10 }]);
@@ -51,21 +72,21 @@ describe('RealtimeEngine native binding', () => {
     }
     expect(duplicateLaneError).toBeInstanceOf(RangeError);
     expect(isSonareError(duplicateLaneError)).toBe(false);
-    engine.setTrackLanes([10, { trackId: 20 }]);
+    engine.setTrackLanes([{ trackId: 10 }, { trackId: 20 }]);
 
     engine.play();
     let processed = engine.process([new Float32Array(256), new Float32Array(256)]);
     expect(processed[0].at(-1)).toBeCloseTo(2, 4);
     expect(processed[1].at(-1)).toBeCloseTo(2, 4);
 
-    engine.setSoloMute(0, true, false);
+    engine.setTrackSoloMute(10, { solo: true, mute: false });
     for (let block = 0; block < 4; block += 1) {
       processed = engine.process([new Float32Array(256), new Float32Array(256)]);
     }
     expect(processed[0].at(-1)).toBeGreaterThan(0.75);
     expect(processed[0].at(-1)).toBeLessThan(1.25);
 
-    engine.setParameterSmoothed(engine.resolveTrackLaneAutomationId(10, 'faderDb'), -12);
+    engine.setParameterSmoothed(engine.resolveStripAutomationId(10, 'faderDb'), -12);
     for (let block = 0; block < 6; block += 1) {
       processed = engine.process([new Float32Array(256), new Float32Array(256)]);
     }
@@ -75,7 +96,7 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('routes track sends through buses', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     const frames = 256 * 40;
     engine.setClips([
       {
@@ -101,11 +122,15 @@ describe('RealtimeEngine native binding', () => {
 
     // A surround bus/source layout flows through to the native struct fields
     // (the native side validates the enum range).
-    expect(() => engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 2 }])).not.toThrow();
+    expect(() =>
+      engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: '5.1' }]),
+    ).not.toThrow();
     // Only a stereo (or omitted) lane layout is accepted; the others are refused.
-    expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 1 }])).not.toThrow();
+    expect(() =>
+      engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 'stereo' }]),
+    ).not.toThrow();
     expect(() => engine.setTrackLanes([{ trackId: 10 }])).not.toThrow();
-    for (const layout of [0, 2, 3] as const) {
+    for (const layout of ['mono', '5.1', '7.1'] as const) {
       expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: layout }])).toThrow(
         /must be stereo/,
       );
@@ -116,17 +141,18 @@ describe('RealtimeEngine native binding', () => {
     expect(() => engine.setTrackLanes(lanes.slice(0, MAX_TRACK_LANES))).not.toThrow();
     expect(() => engine.setTrackLanes(lanes)).toThrow(/at most 32 track lanes/);
     expect(() => engine.setTrackLanes([{ trackId: 10 }])).not.toThrow();
-    // 257/-255 narrow to 1 (Stereo, valid) if the addon range-checks the
-    // uint8_t C-ABI field's value AFTER narrowing to it instead of before --
-    // the wrap this guards against on both the lane and the bus reader.
-    // @ts-expect-error deliberately out-of-range layout ordinal; the addon must reject it.
+    // A layout is a name: an ordinal never reaches the narrowing in the addon.
+    // @ts-expect-error deliberately a number where a layout name belongs.
     expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 257 }])).toThrow(
-      /\[0, 255\]/,
+      TypeError,
     );
-    // @ts-expect-error deliberately out-of-range layout ordinal; the addon must reject it.
+    // @ts-expect-error deliberately a number where a layout name belongs.
     expect(() => engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 257 }])).toThrow(
-      /\[0, 255\]/,
+      TypeError,
     );
+    expect(() =>
+      engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 'quad' as never }]),
+    ).toThrow(RangeError);
 
     engine.setTrackLanes([{ trackId: 10, sends: [{ busId: 1, levelDb: 0, enabled: true }] }]);
     for (const lane of [
@@ -177,7 +203,7 @@ describe('RealtimeEngine native binding', () => {
 
     let badJsonError: unknown;
     try {
-      engine.setBusStripJson(1, '{bad json');
+      nativeOf(engine).setBusStripJson(1, '{bad json');
     } catch (error) {
       badJsonError = error;
     }
@@ -186,15 +212,15 @@ describe('RealtimeEngine native binding', () => {
       throw new Error('expected SonareError');
     }
     expect(badJsonError.code).toBe(ErrorCode.InvalidFormat);
-    engine.setBusStripJson(
+    engine.setBusStrip(
       1,
-      '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
+      sceneBus('{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}'),
     );
     engine.destroy();
   });
 
   it('drains per-plane meter telemetry for a surround group bus', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     const frames = 256;
     engine.setClips([
       {
@@ -206,11 +232,13 @@ describe('RealtimeEngine native binding', () => {
       },
     ]);
     // 5.1 group bus; the lane routes into it and is panned hard to Ls.
-    engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 2 }]);
+    engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: '5.1' }]);
     engine.setTrackLanes([{ trackId: 10, outputBusId: 1 }]);
-    engine.setTrackStripJson(
+    engine.setStrip(
       10,
-      '{"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"s","surroundPan":{"azimuth":-110}}]}',
+      sceneStrip(
+        '{"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"s","surroundPan":{"azimuth":-110}}]}',
+      ),
     );
     engine.play();
     engine.process([
@@ -235,15 +263,15 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('refuses an out-of-range surround pan on a track strip', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     try {
       engine.setTrackLanes([{ trackId: 10 }]);
-      engine.setTrackStripJson(
+      engine.setStrip(
         10,
-        '{"version":1,"strips":[{"id":"s"}],"buses":[],"connections":[]}',
+        sceneStrip('{"version":1,"strips":[{"id":"s"}],"buses":[],"connections":[]}'),
       );
-      expectArgumentRefusal(() => engine.setTrackStripSurroundPan(10, { azimuth: 200 }));
-      expectArgumentRefusal(() => engine.setTrackStripSurroundPan(10, { lfe: 2 }));
+      expectArgumentRefusal(() => engine.setStripSurroundPan(10, { azimuth: 200 }));
+      expectArgumentRefusal(() => engine.setStripSurroundPan(10, { lfe: 2 }));
     } finally {
       engine.destroy();
     }
@@ -252,7 +280,7 @@ describe('RealtimeEngine native binding', () => {
   it('moves a lane across surround planes live with setTrackStripSurroundPan', () => {
     const frames = 256;
     const blocks = 16;
-    const engine = new RealtimeEngine(48000, frames);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: frames });
     engine.setClips([
       {
         id: 1,
@@ -262,11 +290,11 @@ describe('RealtimeEngine native binding', () => {
         lengthSamples: frames * blocks,
       },
     ]);
-    engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 2 }]);
+    engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: '5.1' }]);
     engine.setTrackLanes([{ trackId: 10, outputBusId: 1 }]);
-    engine.setTrackStripJson(
+    engine.setStrip(
       10,
-      '{"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"s"}]}',
+      sceneStrip('{"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"s"}]}'),
     );
     const run = (): Float32Array[] =>
       engine.process(Array.from({ length: 6 }, () => new Float32Array(frames)));
@@ -283,7 +311,7 @@ describe('RealtimeEngine native binding', () => {
     const C = 2;
 
     engine.play();
-    engine.setTrackStripSurroundPan(10, { azimuth: -110 });
+    engine.setStripSurroundPan(10, { azimuth: -110 });
     let left = tailPower(run());
     // 5 ms glide: after 5 blocks (~27 ms) the move has settled.
     for (let b = 0; b < 5; b++) {
@@ -302,7 +330,7 @@ describe('RealtimeEngine native binding', () => {
     const steadyPower = framePower(settled, frames - 1);
     expect(steadyPower).toBeGreaterThan(0.01);
 
-    engine.setTrackStripSurroundPan(10, { azimuth: 110 });
+    engine.setStripSurroundPan(10, { azimuth: 110 });
     let minRatio = Number.POSITIVE_INFINITY;
     let maxRatio = 0;
     let crossfadeFrames = 0;
@@ -332,13 +360,13 @@ describe('RealtimeEngine native binding', () => {
     // A power-preserving pan keeps the summed plane power through the move.
     expect(Math.abs(rightTotal - leftTotal)).toBeLessThan(0.05 * leftTotal);
 
-    expect(() => engine.setTrackStripSurroundPan(10, { azimuth: Number.NaN })).toThrow();
-    expect(() => engine.setTrackStripSurroundPan(999, { azimuth: 0 })).toThrow();
+    expect(() => engine.setStripSurroundPan(10, { azimuth: Number.NaN })).toThrow();
+    expect(() => engine.setStripSurroundPan(999, { azimuth: 0 })).toThrow();
     engine.destroy();
   });
 
   it('applies track strip JSON to a lane', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     const frames = 256 * 4;
     engine.setClips([
       {
@@ -356,13 +384,13 @@ describe('RealtimeEngine native binding', () => {
         lengthSamples: frames,
       },
     ]);
-    engine.setTrackLanes([10, 20]);
+    engine.setTrackLanes([{ trackId: 10 }, { trackId: 20 }]);
     const sceneJson =
       '{"version":1,"strips":[{"id":"track-10","faderDb":-12,"panLaw":3}],"buses":[],"connections":[]}';
-    engine.setTrackStripJson(10, sceneJson);
+    engine.setStrip(10, sceneStrip(sceneJson));
     let badJsonError: unknown;
     try {
-      engine.setTrackStripJson(10, '{bad json');
+      nativeOf(engine).setTrackStripJson(10, '{bad json');
     } catch (error) {
       badJsonError = error;
     }
@@ -373,9 +401,11 @@ describe('RealtimeEngine native binding', () => {
     expect(badJsonError.code).toBe(ErrorCode.InvalidFormat);
     let badProcessorError: unknown;
     try {
-      engine.setTrackStripJson(
+      engine.setStrip(
         10,
-        '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"missing.processor","params":"{}"}]}],"buses":[],"connections":[]}',
+        sceneStrip(
+          '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"missing.processor","params":"{}"}]}],"buses":[],"connections":[]}',
+        ),
       );
     } catch (error) {
       badProcessorError = error;
@@ -384,9 +414,11 @@ describe('RealtimeEngine native binding', () => {
     expect(isSonareError(badProcessorError)).toBe(false);
     let badParamError: unknown;
     try {
-      engine.setTrackStripJson(
+      engine.setStrip(
         10,
-        '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.gainDb\\":\\"loud\\"}"}]}],"buses":[],"connections":[]}',
+        sceneStrip(
+          '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.gainDb\\":\\"loud\\"}"}]}],"buses":[],"connections":[]}',
+        ),
       );
     } catch (error) {
       badParamError = error;
@@ -395,7 +427,7 @@ describe('RealtimeEngine native binding', () => {
     expect(isSonareError(badParamError)).toBe(false);
     let badBypassError: unknown;
     try {
-      engine.setMasterStripInsertBypassed(0, true);
+      engine.setStripInsertBypassed('master', 0, { bypassed: true });
     } catch (error) {
       badBypassError = error;
     }
@@ -413,7 +445,7 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('applies realtime track strip pan setters', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     const frames = 256 * 4;
     engine.setClips([
       {
@@ -424,20 +456,22 @@ describe('RealtimeEngine native binding', () => {
         lengthSamples: frames,
       },
     ]);
-    engine.setTrackLanes([10]);
-    engine.setTrackStripJson(
+    engine.setTrackLanes([{ trackId: 10 }]);
+    engine.setStrip(
       10,
-      '{"version":1,"strips":[{"id":"track-10","panLaw":3}],"buses":[],"connections":[]}',
+      sceneStrip(
+        '{"version":1,"strips":[{"id":"track-10","panLaw":3}],"buses":[],"connections":[]}',
+      ),
     );
 
-    expect(() => engine.setTrackStripPanLaw(10, 'linear0dB')).not.toThrow();
-    expect(() => engine.setTrackStripPanMode(10, 'balance')).not.toThrow();
-    expect(() => engine.setTrackStripChannelDelaySamples(10, 0)).not.toThrow();
-    expect(() => engine.setTrackStripDualPan(10, -1, -1)).not.toThrow();
+    expect(() => engine.setStripPanLaw(10, 'linear0dB')).not.toThrow();
+    expect(() => engine.setStripPanMode(10, 'balance')).not.toThrow();
+    expect(() => engine.setStripChannelDelaySamples(10, 0)).not.toThrow();
+    expect(() => engine.setStripDualPan(10, -1, -1)).not.toThrow();
 
     // Hard-left pan: the left output channel must dominate the right.
-    engine.setTrackStripPanMode(10, 'balance');
-    engine.setTrackStripPan(10, -1);
+    engine.setStripPanMode(10, 'balance');
+    engine.setStripPan(10, -1);
     engine.settleParameters();
     engine.play();
     let panned: Float32Array[] = [new Float32Array(256), new Float32Array(256)];
@@ -452,7 +486,7 @@ describe('RealtimeEngine native binding', () => {
 
   it('routes a stereo clip through realtime dual-pan directions', () => {
     const renderDualPan = (leftPan: number, rightPan: number): [number, number] => {
-      const engine = new RealtimeEngine(48000, 256);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
       const frames = 256 * 4;
       try {
         engine.setClips([
@@ -464,13 +498,15 @@ describe('RealtimeEngine native binding', () => {
             lengthSamples: frames,
           },
         ]);
-        engine.setTrackLanes([10]);
-        engine.setTrackStripJson(
+        engine.setTrackLanes([{ trackId: 10 }]);
+        engine.setStrip(
           10,
-          '{"version":1,"strips":[{"id":"track-10","panLaw":3}],"buses":[],"connections":[]}',
+          sceneStrip(
+            '{"version":1,"strips":[{"id":"track-10","panLaw":3}],"buses":[],"connections":[]}',
+          ),
         );
-        engine.setTrackStripPanMode(10, 'dualPan');
-        engine.setTrackStripDualPan(10, leftPan, rightPan);
+        engine.setStripPanMode(10, 'dualPan');
+        engine.setStripDualPan(10, leftPan, rightPan);
         engine.settleParameters();
         engine.play();
 
@@ -494,7 +530,7 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('toggles track strip insert bypass', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     const frames = 256 * 16;
     const source = new Float32Array(frames);
     for (let i = 0; i < frames; i += 1) {
@@ -509,14 +545,16 @@ describe('RealtimeEngine native binding', () => {
         lengthSamples: frames,
       },
     ]);
-    engine.setTrackLanes([10]);
-    engine.setTrackStripJson(
+    engine.setTrackLanes([{ trackId: 10 }]);
+    engine.setStrip(
       10,
-      '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":12,\\"band0.enabled\\":1}"}]}],"buses":[],"connections":[]}',
+      sceneStrip(
+        '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":12,\\"band0.enabled\\":1}"}]}],"buses":[],"connections":[]}',
+      ),
     );
     let badIndexError: unknown;
     try {
-      engine.setTrackStripInsertBypassed(10, 7, true);
+      engine.setStripInsertBypassed(10, 7, { bypassed: true });
     } catch (error) {
       badIndexError = error;
     }
@@ -528,7 +566,7 @@ describe('RealtimeEngine native binding', () => {
     for (let block = 0; block < 6; block += 1) {
       [eqOut] = engine.process([new Float32Array(256)]);
     }
-    engine.setTrackStripInsertBypassed(10, 0, true, true);
+    engine.setStripInsertBypassed(10, 0, { bypassed: true, resetOnBypass: true });
     engine.seekSample(0);
     const [bypassedOut] = engine.process([new Float32Array(256)]);
     expect(rms(eqOut)).toBeGreaterThan(rms(bypassedOut) * 1.5);
@@ -536,7 +574,7 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('updates track strip EQ band', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     const frames = 256 * 16;
     const source = new Float32Array(frames);
     for (let i = 0; i < frames; i += 1) {
@@ -551,14 +589,14 @@ describe('RealtimeEngine native binding', () => {
         lengthSamples: frames,
       },
     ]);
-    engine.setTrackLanes([10]);
-    engine.setTrackStripJson(
+    engine.setTrackLanes([{ trackId: 10 }]);
+    engine.setStrip(
       10,
-      '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
+      sceneStrip('{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}'),
     );
     let badIndexError: unknown;
     try {
-      engine.setTrackStripEqBand(10, 99, { type: 'peak', enabled: true });
+      engine.setStripEqBand(10, 99, { type: 'peak', enabled: true });
     } catch (error) {
       badIndexError = error;
     }
@@ -567,7 +605,7 @@ describe('RealtimeEngine native binding', () => {
 
     engine.play();
     const [flatOut] = engine.process([new Float32Array(256)]);
-    engine.setTrackStripEqBand(10, 0, {
+    engine.setStripEqBand(10, 0, {
       type: 'peak',
       frequencyHz: 1000,
       gainDb: 12,
@@ -584,7 +622,7 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('applies realtime bus strip pan setters', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     const frames = 256 * 4;
     engine.setClips([
       {
@@ -598,13 +636,13 @@ describe('RealtimeEngine native binding', () => {
     engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
     engine.setTrackLanes([{ trackId: 10, outputBusId: 1 }]);
 
-    expect(() => engine.setBusStripPanLaw(1, 'linear0dB')).not.toThrow();
-    expect(() => engine.setBusStripPanMode(1, 'balance')).not.toThrow();
-    expect(() => engine.setBusStripDualPan(1, -1, -1)).not.toThrow();
+    expect(() => engine.setBusPanLaw(1, 'linear0dB')).not.toThrow();
+    expect(() => engine.setBusPanMode(1, 'balance')).not.toThrow();
+    expect(() => engine.setBusDualPan(1, -1, -1)).not.toThrow();
 
     // Hard-left pan on the bus: the left output channel must dominate the right.
-    engine.setBusStripPanMode(1, 'balance');
-    engine.setBusStripPan(1, -1);
+    engine.setBusPanMode(1, 'balance');
+    engine.setBusPan(1, -1);
     engine.settleParameters();
     engine.play();
     let panned: Float32Array[] = [new Float32Array(256), new Float32Array(256)];
@@ -618,7 +656,7 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('updates bus strip EQ band', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     const frames = 256 * 16;
     const source = new Float32Array(frames);
     for (let i = 0; i < frames; i += 1) {
@@ -635,11 +673,11 @@ describe('RealtimeEngine native binding', () => {
     ]);
     engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
     engine.setTrackLanes([{ trackId: 10, outputBusId: 1 }]);
-    expectArgumentRefusal(() => engine.setBusStripEqBand(1, 99, { type: 'peak', enabled: true }));
+    expectArgumentRefusal(() => engine.setBusEqBand(1, 99, { type: 'peak', enabled: true }));
 
     engine.play();
     const [flatOut] = engine.process([new Float32Array(256)]);
-    engine.setBusStripEqBand(1, 0, {
+    engine.setBusEqBand(1, 0, {
       type: 'peak',
       frequencyHz: 1000,
       gainDb: 12,
@@ -656,31 +694,31 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('rejects bus strip pan setters for bus id 0, an unknown bus, and non-finite values', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
 
-    expectArgumentRefusal(() => engine.setBusStripPan(0, -1));
-    expectArgumentRefusal(() => engine.setBusStripPan(99, -1));
-    expectArgumentRefusal(() => engine.setBusStripPan(1, Number.NaN));
-    expectArgumentRefusal(() => engine.setBusStripPanLaw(99, 'const6dB'));
-    expectArgumentRefusal(() => engine.setBusStripPanMode(99, 'stereoPan'));
-    expectArgumentRefusal(() => engine.setBusStripDualPan(99, -1, 1));
-    expectArgumentRefusal(() => engine.setBusStripDualPan(1, Number.POSITIVE_INFINITY, 1));
+    expectArgumentRefusal(() => engine.setBusPan(0, -1));
+    expectArgumentRefusal(() => engine.setBusPan(99, -1));
+    expectArgumentRefusal(() => engine.setBusPan(1, Number.NaN));
+    expectArgumentRefusal(() => engine.setBusPanLaw(99, 'const6dB'));
+    expectArgumentRefusal(() => engine.setBusPanMode(99, 'stereoPan'));
+    expectArgumentRefusal(() => engine.setBusDualPan(99, -1, 1));
+    expectArgumentRefusal(() => engine.setBusDualPan(1, Number.POSITIVE_INFINITY, 1));
 
     engine.destroy();
   });
 
   it('refuses bus strip pan setters on a surround bus, but still allows EQ', () => {
-    const engine = new RealtimeEngine(48000, 256);
-    engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 2 }]); // 5.1
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
+    engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: '5.1' }]); // 5.1
 
-    expectArgumentRefusal(() => engine.setBusStripPan(1, -1));
-    expectArgumentRefusal(() => engine.setBusStripPanLaw(1, 'const6dB'));
-    expectArgumentRefusal(() => engine.setBusStripPanMode(1, 'stereoPan'));
-    expectArgumentRefusal(() => engine.setBusStripDualPan(1, -1, 1));
+    expectArgumentRefusal(() => engine.setBusPan(1, -1));
+    expectArgumentRefusal(() => engine.setBusPanLaw(1, 'const6dB'));
+    expectArgumentRefusal(() => engine.setBusPanMode(1, 'stereoPan'));
+    expectArgumentRefusal(() => engine.setBusDualPan(1, -1, 1));
 
     expect(() =>
-      engine.setBusStripEqBand(1, 0, {
+      engine.setBusEqBand(1, 0, {
         type: 'peak',
         frequencyHz: 1000,
         gainDb: 6,
@@ -693,7 +731,7 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('applies master strip JSON after lane mix', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     const frames = 256 * 16;
     engine.setClips([
       {
@@ -711,10 +749,10 @@ describe('RealtimeEngine native binding', () => {
     ]);
     const sceneJson =
       '{"version":1,"strips":[{"id":"master","faderDb":-12,"panLaw":3}],"buses":[],"connections":[]}';
-    engine.setMasterStripJson(sceneJson);
+    engine.setStrip('master', sceneStrip(sceneJson));
     let badJsonError: unknown;
     try {
-      engine.setMasterStripJson('{bad json');
+      nativeOf(engine).setMasterStripJson('{bad json');
     } catch (error) {
       badJsonError = error;
     }
@@ -725,8 +763,11 @@ describe('RealtimeEngine native binding', () => {
     expect(badJsonError.code).toBe(ErrorCode.InvalidFormat);
     let badParamError: unknown;
     try {
-      engine.setMasterStripJson(
-        '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.gainDb\\":\\"loud\\"}"}]}],"buses":[],"connections":[]}',
+      engine.setStrip(
+        'master',
+        sceneStrip(
+          '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.gainDb\\":\\"loud\\"}"}]}],"buses":[],"connections":[]}',
+        ),
       );
     } catch (error) {
       badParamError = error;
@@ -750,9 +791,9 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('refuses a reserved mixer id that names no strip and keeps the master and per-strip ids', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     engine.setTrackLanes([{ trackId: 5 }, { trackId: 7 }]);
-    const point: EngineAutomationPoint[] = [{ ppq: 0, value: -6, curveToNext: 0 }];
+    const point: EngineAutomationPoint[] = [{ ppq: 0, value: -6, curveToNext: 'linear' }];
     // The retired positional encoding, for the lane that now holds track 7.
     for (const positional of [0x4d580101, 0x4d580001, 0x4d58fe00]) {
       for (const call of [
@@ -770,7 +811,7 @@ describe('RealtimeEngine native binding', () => {
         expect(isSonareError(error)).toBe(false);
       }
     }
-    const laneFader = engine.resolveTrackLaneAutomationId(7, 'faderDb');
+    const laneFader = engine.resolveStripAutomationId(7, 'faderDb');
     expect(() => engine.setParameterSmoothed(laneFader, -6)).not.toThrow();
     expect(() => engine.setAutomationLane(laneFader, point)).not.toThrow();
     expect(() => engine.setParameterSmoothed(0x4d58ff01, -6)).not.toThrow();
@@ -779,7 +820,7 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('updates master strip EQ band', () => {
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     const frames = 256 * 16;
     const source = new Float32Array(frames);
     for (let i = 0; i < frames; i += 1) {
@@ -793,12 +834,13 @@ describe('RealtimeEngine native binding', () => {
         lengthSamples: frames,
       },
     ]);
-    engine.setMasterStripJson(
-      '{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}',
+    engine.setStrip(
+      'master',
+      sceneStrip('{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}'),
     );
     let badIndexError: unknown;
     try {
-      engine.setMasterStripEqBand(99, { type: 'peak', enabled: true });
+      engine.setStripEqBand('master', 99, { type: 'peak', enabled: true });
     } catch (error) {
       badIndexError = error;
     }
@@ -807,7 +849,7 @@ describe('RealtimeEngine native binding', () => {
 
     engine.play();
     const [flatOut] = engine.process([new Float32Array(256)]);
-    engine.setMasterStripEqBand(0, {
+    engine.setStripEqBand('master', 0, {
       type: 'peak',
       frequencyHz: 1000,
       gainDb: 12,
@@ -952,7 +994,7 @@ describe('RealtimeEngine native binding', () => {
     expect(typeof dryWet?.id).toBe('number');
     expect(masteringInsertParamInfo('nope.nope')).toEqual([]);
 
-    const engine = new RealtimeEngine(48000, 256);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
     const frames = 256 * 16;
     const source = new Float32Array(frames);
     for (let i = 0; i < frames; i++) {
@@ -961,31 +1003,33 @@ describe('RealtimeEngine native binding', () => {
     engine.setClips([
       { id: 1, trackId: 10, channels: [source], startPpq: 0, lengthSamples: frames },
     ]);
-    engine.setTrackLanes([10]);
-    engine.setTrackStripJson(
+    engine.setTrackLanes([{ trackId: 10 }]);
+    engine.setStrip(
       10,
-      JSON.stringify({
-        version: 1,
-        strips: [
-          {
-            id: 'track-10',
-            inserts: [
-              {
-                slot: 'pre',
-                processor: 'effects.reverb.fdn',
-                params: '{"dryWet":0.0,"decaySec":2.0}',
-              },
-            ],
-          },
-        ],
-        buses: [],
-        connections: [],
-      }),
+      sceneStrip(
+        JSON.stringify({
+          version: 1,
+          strips: [
+            {
+              id: 'track-10',
+              inserts: [
+                {
+                  slot: 'pre',
+                  processor: 'effects.reverb.fdn',
+                  params: '{"dryWet":0.0,"decaySec":2.0}',
+                },
+              ],
+            },
+          ],
+          buses: [],
+          connections: [],
+        }),
+      ),
     );
 
     // Bad arguments are rejected.
-    expect(() => engine.setTrackStripInsertParamByName(0, 0, 'dryWet', 1)).toThrow();
-    expect(() => engine.setTrackStripInsertParamByName(10, 0, 'bogusParam', 1)).toThrow();
+    expect(() => engine.setStripInsertParam(0, 0, { name: 'dryWet', value: 1 })).toThrow();
+    expect(() => engine.setStripInsertParam(10, 0, { name: 'bogusParam', value: 1 })).toThrow();
 
     engine.play();
     let dry: Float32Array<ArrayBufferLike> = new Float32Array(256);
@@ -994,7 +1038,7 @@ describe('RealtimeEngine native binding', () => {
     }
     const dryRms = rms(dry);
 
-    engine.setTrackStripInsertParamByName(10, 0, 'dryWet', 1.0);
+    engine.setStripInsertParam(10, 0, { name: 'dryWet', value: 1.0 });
     let wet: Float32Array<ArrayBufferLike> = new Float32Array(256);
     for (let b = 0; b < 8; b++) {
       wet = engine.process([new Float32Array(256)])[0];
@@ -1007,32 +1051,39 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('resolves and sets bus insert automation by name', () => {
-    const engine = new RealtimeEngine(48000, 256, 64, 64);
-    engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 1 }]);
-    engine.setBusStripJson(
+    const engine = new RealtimeEngine({
+      sampleRate: 48000,
+      maxBlockSize: 256,
+      commandCapacity: 64,
+      telemetryCapacity: 64,
+    });
+    engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 'stereo' }]);
+    engine.setBusStrip(
       1,
-      JSON.stringify({
-        version: 1,
-        strips: [],
-        buses: [
-          {
-            id: '1',
-            inserts: [
-              {
-                slot: 'pre',
-                processor: 'eq.parametric',
-                params: JSON.stringify({
-                  'band0.type': 1,
-                  'band0.frequencyHz': 1000,
-                  'band0.gainDb': 0,
-                  'band0.enabled': 1,
-                }),
-              },
-            ],
-          },
-        ],
-        connections: [],
-      }),
+      sceneBus(
+        JSON.stringify({
+          version: 1,
+          strips: [],
+          buses: [
+            {
+              id: '1',
+              inserts: [
+                {
+                  slot: 'pre',
+                  processor: 'eq.parametric',
+                  params: JSON.stringify({
+                    'band0.type': 1,
+                    'band0.frequencyHz': 1000,
+                    'band0.gainDb': 0,
+                    'band0.enabled': 1,
+                  }),
+                },
+              ],
+            },
+          ],
+          connections: [],
+        }),
+      ),
     );
 
     // Resolve the bus insert parameter to its reserved automation id (top 3 bits 111).
@@ -1045,7 +1096,7 @@ describe('RealtimeEngine native binding', () => {
     engine.setParameter(automationId, 3);
 
     // And the by-name manual set reaches the same target.
-    engine.setBusStripInsertParamByName(1, 0, 'band0.gainDb', -3);
+    engine.setBusInsertParam(1, 0, { name: 'band0.gainDb', value: -3 });
 
     // Unknown bus / insert / name resolve to -1.
     expect(() => engine.resolveBusInsertAutomationId(9, 0, 'band0.gainDb')).toThrow(RangeError);
@@ -1053,7 +1104,7 @@ describe('RealtimeEngine native binding', () => {
 
     let badBusError: unknown;
     try {
-      engine.setBusStripInsertParamByName(9, 0, 'band0.gainDb', 1);
+      engine.setBusInsertParam(9, 0, { name: 'band0.gainDb', value: 1 });
     } catch (error) {
       badBusError = error;
     }
@@ -1063,91 +1114,113 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('applies, restores and clears retained insert parameters on track, master and bus strips', () => {
-    const engine = new RealtimeEngine(48000, 256, 64, 64);
-    engine.setTrackLanes([10]);
-    engine.setTrackStripJson(
+    const engine = new RealtimeEngine({
+      sampleRate: 48000,
+      maxBlockSize: 256,
+      commandCapacity: 64,
+      telemetryCapacity: 64,
+    });
+    engine.setTrackLanes([{ trackId: 10 }]);
+    engine.setStrip(
       10,
-      JSON.stringify({
-        version: 1,
-        strips: [
-          {
-            id: 'track-10',
-            inserts: [{ slot: 'pre', processor: 'effects.reverb.fdn', params: '{"dryWet":0.0}' }],
-          },
-        ],
-        buses: [],
-        connections: [],
-      }),
+      sceneStrip(
+        JSON.stringify({
+          version: 1,
+          strips: [
+            {
+              id: 'track-10',
+              inserts: [{ slot: 'pre', processor: 'effects.reverb.fdn', params: '{"dryWet":0.0}' }],
+            },
+          ],
+          buses: [],
+          connections: [],
+        }),
+      ),
     );
-    engine.setMasterStripJson(
-      JSON.stringify({
-        version: 1,
-        strips: [
-          {
-            id: 'master',
-            inserts: [
-              {
-                slot: 'pre',
-                processor: 'eq.parametric',
-                params: JSON.stringify({
-                  'band0.type': 1,
-                  'band0.frequencyHz': 1000,
-                  'band0.gainDb': 0,
-                  'band0.enabled': 1,
-                }),
-              },
-            ],
-          },
-        ],
-        buses: [],
-        connections: [],
-      }),
+    engine.setStrip(
+      'master',
+      sceneStrip(
+        JSON.stringify({
+          version: 1,
+          strips: [
+            {
+              id: 'master',
+              inserts: [
+                {
+                  slot: 'pre',
+                  processor: 'eq.parametric',
+                  params: JSON.stringify({
+                    'band0.type': 1,
+                    'band0.frequencyHz': 1000,
+                    'band0.gainDb': 0,
+                    'band0.enabled': 1,
+                  }),
+                },
+              ],
+            },
+          ],
+          buses: [],
+          connections: [],
+        }),
+      ),
     );
-    engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 1 }]);
-    engine.setBusStripJson(
+    engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 'stereo' }]);
+    engine.setBusStrip(
       1,
-      JSON.stringify({
-        version: 1,
-        strips: [],
-        buses: [
-          {
-            id: '1',
-            inserts: [
-              {
-                slot: 'pre',
-                processor: 'eq.parametric',
-                params: JSON.stringify({
-                  'band0.type': 1,
-                  'band0.frequencyHz': 1000,
-                  'band0.gainDb': 0,
-                  'band0.enabled': 1,
-                }),
-              },
-            ],
-          },
-        ],
-        connections: [],
-      }),
+      sceneBus(
+        JSON.stringify({
+          version: 1,
+          strips: [],
+          buses: [
+            {
+              id: '1',
+              inserts: [
+                {
+                  slot: 'pre',
+                  processor: 'eq.parametric',
+                  params: JSON.stringify({
+                    'band0.type': 1,
+                    'band0.frequencyHz': 1000,
+                    'band0.gainDb': 0,
+                    'band0.enabled': 1,
+                  }),
+                },
+              ],
+            },
+          ],
+          connections: [],
+        }),
+      ),
     );
 
     // apply-now returns true for a known insert/param and false (never a throw)
     // for an unknown target or name.
-    expect(engine.applyTrackStripInsertParamByNameNow(10, 0, 'dryWet', 1.0)).toBe(true);
-    expect(engine.applyTrackStripInsertParamByNameNow(10, 0, 'bogusParam', 1.0)).toBe(false);
-    expect(engine.applyTrackStripInsertParamByNameNow(99, 0, 'dryWet', 1.0)).toBe(false);
-    expect(engine.applyMasterStripInsertParamByNameNow(0, 'band0.gainDb', -3)).toBe(true);
-    expect(engine.applyMasterStripInsertParamByNameNow(0, 'bogusParam', -3)).toBe(false);
-    expect(engine.applyBusStripInsertParamByNameNow(1, 0, 'band0.gainDb', -3)).toBe(true);
-    expect(engine.applyBusStripInsertParamByNameNow(9, 0, 'band0.gainDb', -3)).toBe(false);
+    expect(engine.applyStripInsertParamNow(10, 0, { name: 'dryWet', value: 1.0 })).toBe(true);
+    expect(engine.applyStripInsertParamNow(10, 0, { name: 'bogusParam', value: 1.0 })).toBe(false);
+    expect(engine.applyStripInsertParamNow(99, 0, { name: 'dryWet', value: 1.0 })).toBe(false);
+    expect(engine.applyStripInsertParamNow('master', 0, { name: 'band0.gainDb', value: -3 })).toBe(
+      true,
+    );
+    expect(engine.applyStripInsertParamNow('master', 0, { name: 'bogusParam', value: -3 })).toBe(
+      false,
+    );
+    expect(engine.applyBusInsertParamNow(1, 0, { name: 'band0.gainDb', value: -3 })).toBe(true);
+    expect(engine.applyBusInsertParamNow(9, 0, { name: 'band0.gainDb', value: -3 })).toBe(false);
 
     // restore applies exactly and throws for an unknown track/bus.
-    expect(() => engine.restoreTrackStripInsertParamByName(10, 0, 'dryWet', 0.5)).not.toThrow();
-    expect(() => engine.restoreMasterStripInsertParamByName(0, 'band0.gainDb', 1)).not.toThrow();
-    expect(() => engine.restoreBusStripInsertParamByName(1, 0, 'band0.gainDb', 1)).not.toThrow();
+    expect(() =>
+      engine.restoreStripInsertParam(10, 0, { name: 'dryWet', value: 0.5 }),
+    ).not.toThrow();
+    expect(() =>
+      engine.restoreStripInsertParam('master', 0, { name: 'band0.gainDb', value: 1 }),
+    ).not.toThrow();
+    expect(() =>
+      engine.restoreBusInsertParam(1, 0, { name: 'band0.gainDb', value: 1 }),
+    ).not.toThrow();
 
     let restoreTrackError: unknown;
     try {
-      engine.restoreTrackStripInsertParamByName(99, 0, 'dryWet', 0.5);
+      engine.restoreStripInsertParam(99, 0, { name: 'dryWet', value: 0.5 });
     } catch (error) {
       restoreTrackError = error;
     }
@@ -1156,7 +1229,7 @@ describe('RealtimeEngine native binding', () => {
 
     let restoreBusError: unknown;
     try {
-      engine.restoreBusStripInsertParamByName(99, 0, 'band0.gainDb', 1);
+      engine.restoreBusInsertParam(99, 0, { name: 'band0.gainDb', value: 1 });
     } catch (error) {
       restoreBusError = error;
     }
@@ -1164,13 +1237,13 @@ describe('RealtimeEngine native binding', () => {
     expect(isSonareError(restoreBusError)).toBe(false);
 
     // clear works for a known target and throws for an unknown track/bus.
-    expect(() => engine.clearTrackInsertParameterBases(10)).not.toThrow();
-    expect(() => engine.clearMasterInsertParameterBases()).not.toThrow();
+    expect(() => engine.clearStripInsertParameterBases(10)).not.toThrow();
+    expect(() => engine.clearStripInsertParameterBases('master')).not.toThrow();
     expect(() => engine.clearBusInsertParameterBases(1)).not.toThrow();
 
     let clearTrackError: unknown;
     try {
-      engine.clearTrackInsertParameterBases(99);
+      engine.clearStripInsertParameterBases(99);
     } catch (error) {
       clearTrackError = error;
     }
@@ -1220,7 +1293,7 @@ describe('RealtimeEngine prime, reset, tail and latency', () => {
 
   /** A burst followed by silence, so a delay tail is still ringing when playback stops. */
   function makeRig(withDelay: boolean): RealtimeEngine {
-    const engine = new RealtimeEngine(48000, block);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: block });
     const samples = new Float32Array(frames);
     for (let i = 0; i < block * 4; i += 1) {
       samples[i] = 0.5 * Math.sin(i * 0.37);
@@ -1228,9 +1301,9 @@ describe('RealtimeEngine prime, reset, tail and latency', () => {
     engine.setClips([
       { id: 1, trackId: 10, channels: [samples], startPpq: 0, lengthSamples: frames },
     ]);
-    engine.setTrackLanes([10]);
+    engine.setTrackLanes([{ trackId: 10 }]);
     if (withDelay) {
-      engine.setTrackStripJson(10, delayStripJson);
+      engine.setStrip(10, sceneStrip(delayStripJson));
     }
     return engine;
   }
@@ -1317,17 +1390,17 @@ describe('RealtimeEngine prime, reset, tail and latency', () => {
 
   it('reports a tail only when an insert holds one', () => {
     const plain = makeRig(false);
-    expect(plain.tailSamples()).toBe(0);
+    expect(plain.tailSamples).toBe(0);
     plain.destroy();
 
     const delayed = makeRig(true);
-    expect(delayed.tailSamples()).toBeGreaterThan(0);
+    expect(delayed.tailSamples).toBeGreaterThan(0);
     delayed.destroy();
   });
 
   it('reports the graph latency as a number', () => {
     const engine = makeRig(false);
-    const latency = engine.graphLatencySamplesQ8();
+    const latency = engine.graphLatencySamples;
     expect(typeof latency).toBe('number');
     expect(Number.isInteger(latency)).toBe(true);
     engine.destroy();

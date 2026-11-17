@@ -1,5 +1,7 @@
 import { addon } from './native.js';
 import type { ChannelLayout } from './types_engine.js';
+import { assertClosedToken } from './validation.js';
+import { CHANNEL_LAYOUT_VALUES } from './value_coercion.js';
 
 /** Result of {@link decodeChannels}. */
 export interface DecodedChannels {
@@ -38,7 +40,7 @@ export interface DownmixOptions {
  * @example
  * ```ts
  * const { sampleRate, channels } = decodeChannels(bytes);
- * const stereo = channels.length > 2 ? downmix(channels, 1) : channels;
+ * const stereo = channels.length > 2 ? downmix(channels, 'stereo') : channels;
  * ```
  */
 export function decodeChannels(data: Uint8Array): DecodedChannels {
@@ -63,13 +65,14 @@ export function decodeChannels(data: Uint8Array): DecodedChannels {
  * calling.
  *
  * @param channels - One `Float32Array` per channel, all of the same length.
- * @param targetLayout - `0` mono, `1` stereo, `2` 5.1, `3` 7.1.
+ * @param targetLayout - `'mono'`, `'stereo'`, `'5.1'` or `'7.1'`; a number is a `TypeError`.
  * @param options - `normalize` scales the fold so the worst case (every input
  *   at full scale, in phase) cannot exceed unity; `includeLfe` folds the LFE
  *   plane in at -3 dB instead of dropping it. Both default to `false`.
  * @throws `RangeError` for an upmix, an unknown layout, no channels, or channels that
  *   differ in length;
- *   `TypeError` for an `options` that is not an object or a non-boolean option.
+ *   `TypeError` for a `targetLayout` that is not a layout string, an `options` that is
+ *   not an object, or a non-boolean option.
  * @returns One `Float32Array` per channel of the target layout.
  */
 export function downmix(
@@ -77,5 +80,7 @@ export function downmix(
   targetLayout: ChannelLayout,
   options?: DownmixOptions,
 ): Float32Array[] {
-  return addon.downmix(channels, targetLayout, options);
+  const layouts = Object.keys(CHANNEL_LAYOUT_VALUES) as ChannelLayout[];
+  assertClosedToken('downmix', targetLayout, layouts, 'targetLayout');
+  return addon.downmix(channels, CHANNEL_LAYOUT_VALUES[targetLayout], options);
 }

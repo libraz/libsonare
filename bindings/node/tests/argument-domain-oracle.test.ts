@@ -189,14 +189,31 @@ describe('spectralEdit op fields', () => {
 
 describe('Mixer send index', () => {
   function mixerWithTwoSends(): Mixer {
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('commentaryDucking'), 48000, 8);
-    expect(mixer.addSend('host', 's0', 'master', -6, 'postFader')).toBe(0);
-    expect(mixer.addSend('host', 's1', 'master', -6, 'postFader')).toBe(1);
+    const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+      sampleRate: 48000,
+      blockSize: 8,
+    });
+    expect(
+      mixer.addSend('host', {
+        id: 's0',
+        destinationBusId: 'master',
+        sendDb: -6,
+        timing: 'postFader',
+      }),
+    ).toBe(0);
+    expect(
+      mixer.addSend('host', {
+        id: 's1',
+        destinationBusId: 'master',
+        sendDb: -6,
+        timing: 'postFader',
+      }),
+    ).toBe(1);
     return mixer;
   }
 
   function sendIds(mixer: Mixer): string[] {
-    const scene = JSON.parse(mixer.toSceneJson());
+    const scene = JSON.parse(mixer.toJson());
     const host = scene.strips.find((strip: { id: string }) => strip.id === 'host');
     return (host.sends ?? []).map((send: { id: string }) => send.id);
   }
@@ -213,13 +230,17 @@ describe('Mixer send index', () => {
   it('refuses a strip or send index outside the uint32 domain by its name', () => {
     const mixer = mixerWithTwoSends();
     for (const index of [-1, 2 ** 32, 0.5]) {
-      expect(() => mixer.scheduleSendAutomation('host', index, 0, -3)).toThrow(
+      expect(() =>
+        mixer.scheduleSendAutomation('host', index, { samplePos: 0, sendDb: -3 }),
+      ).toThrow(
         expect.objectContaining({
           name: 'RangeError',
           message: expect.stringMatching(/sendIndex/),
         }),
       );
-      expect(() => mixer.scheduleInsertAutomation(index, 0, 0, 0, 0)).toThrow(
+      expect(() =>
+        mixer.scheduleInsertAutomation(index, 0, { paramId: 0, samplePos: 0, value: 0 }),
+      ).toThrow(
         expect.objectContaining({
           name: 'RangeError',
           message: expect.stringMatching(/stripIndex/),

@@ -7,7 +7,6 @@ import {
   Audio,
   engineAbiVersion,
   isSonareError,
-  MarkerKind,
   RealtimeEngine,
   voiceChangerAbiVersion,
 } from '../src/index.js';
@@ -36,12 +35,12 @@ describe('RealtimeEngine native binding', () => {
 
   it('rejects nonfinite and out-of-range engine sample rates', () => {
     for (const sampleRate of [Number.NaN, 7999, 384001]) {
-      expect(() => new RealtimeEngine(sampleRate, 128)).toThrow();
+      expect(() => new RealtimeEngine({ sampleRate, maxBlockSize: 128 })).toThrow();
     }
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       for (const sampleRate of [Number.NaN, 7999, 384001]) {
-        expect(() => engine.prepare(sampleRate, 128)).toThrow();
+        expect(() => engine.prepare({ sampleRate, maxBlockSize: 128 })).toThrow();
       }
     } finally {
       engine.destroy();
@@ -49,15 +48,48 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('accepts a declared channel capacity and rejects invalid capacities', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
-      expect(() => engine.prepare(48000, 128, 1024, 1024, 2)).not.toThrow();
-      expect(() => engine.prepare(48000, 128, 1024, 1024, 0)).toThrow();
-      expect(() => engine.prepare(48000, 128, 1024, 1024, 65)).toThrow();
+      expect(() =>
+        engine.prepare({
+          sampleRate: 48000,
+          maxBlockSize: 128,
+          commandCapacity: 1024,
+          telemetryCapacity: 1024,
+          maxNumChannels: 2,
+        }),
+      ).not.toThrow();
+      expect(() =>
+        engine.prepare({
+          sampleRate: 48000,
+          maxBlockSize: 128,
+          commandCapacity: 1024,
+          telemetryCapacity: 1024,
+          maxNumChannels: 0,
+        }),
+      ).toThrow();
+      expect(() =>
+        engine.prepare({
+          sampleRate: 48000,
+          maxBlockSize: 128,
+          commandCapacity: 1024,
+          telemetryCapacity: 1024,
+          maxNumChannels: 65,
+        }),
+      ).toThrow();
     } finally {
       engine.destroy();
     }
-    expect(() => new RealtimeEngine(48000, 128, 1024, 1024, 0)).toThrow();
+    expect(
+      () =>
+        new RealtimeEngine({
+          sampleRate: 48000,
+          maxBlockSize: 128,
+          commandCapacity: 1024,
+          telemetryCapacity: 1024,
+          maxNumChannels: 0,
+        }),
+    ).toThrow();
   });
 
   it('puts the channel ceiling exactly where the engine constant puts it', () => {
@@ -76,23 +108,45 @@ describe('RealtimeEngine native binding', () => {
     const maxChannels = Number(declared);
     expect(maxChannels).toBeGreaterThan(2);
 
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
-      expect(() => engine.prepare(48000, 128, 1024, 1024, maxChannels)).not.toThrow();
-      expect(() => engine.prepare(48000, 128, 1024, 1024, maxChannels + 1)).toThrow();
+      expect(() =>
+        engine.prepare({
+          sampleRate: 48000,
+          maxBlockSize: 128,
+          commandCapacity: 1024,
+          telemetryCapacity: 1024,
+          maxNumChannels: maxChannels,
+        }),
+      ).not.toThrow();
+      expect(() =>
+        engine.prepare({
+          sampleRate: 48000,
+          maxBlockSize: 128,
+          commandCapacity: 1024,
+          telemetryCapacity: 1024,
+          maxNumChannels: maxChannels + 1,
+        }),
+      ).toThrow();
     } finally {
       engine.destroy();
     }
   });
 
   it('reports oversized process channels after prepare as max-channel telemetry', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
-      engine.prepare(48000, 128, 1024, 1024, 2);
+      engine.prepare({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+        commandCapacity: 1024,
+        telemetryCapacity: 1024,
+        maxNumChannels: 2,
+      });
       engine.process([new Float32Array(128), new Float32Array(128), new Float32Array(128)]);
 
       expect(engine.drainTelemetry()).toContainEqual(
-        expect.objectContaining({ error: 20, value: 3 }),
+        expect.objectContaining({ error: 'maxChannelsExceeded', value: 3 }),
       );
     } finally {
       engine.destroy();
@@ -119,7 +173,7 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('installs tempo and time-signature segments and validates them', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     // Valid ramp then a valid time-signature map.
     engine.setTempoSegments([
       { startPpq: 0, bpm: 120 },
@@ -145,18 +199,20 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('rejects hostile metronome click lengths', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     expect(() => engine.setMetronome({ enabled: true, clickSamples: 2_000_000_000 })).toThrow();
-    expect(() =>
-      engine.setMetronome({ enabled: true, clickSamples: 0, clickSeconds: 2 }),
-    ).toThrow();
-    expect(() =>
-      engine.setMetronome({ enabled: true, clickSamples: 0, clickSeconds: Number.NaN }),
-    ).toThrow();
+    expect(() => engine.setMetronome({ enabled: true, clickSec: 2 })).toThrow();
+    expect(() => engine.setMetronome({ enabled: true, clickSec: Number.NaN })).toThrow();
+    // An explicit zero is refused, and so are both spellings together.
+    expect(() => engine.setMetronome({ enabled: true, clickSamples: 0 })).toThrow(RangeError);
+    expect(() => engine.setMetronome({ enabled: true, clickSec: 0 })).toThrow(RangeError);
+    expect(() => engine.setMetronome({ enabled: true, clickSamples: 16, clickSec: 0.01 })).toThrow(
+      RangeError,
+    );
   });
 
-  it('rejects out-of-range automation curve ordinals', () => {
-    const engine = new RealtimeEngine(48000, 128);
+  it('refuses an automation curve that is not a known name', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     engine.addParameter({
       id: 9,
       name: 'gain',
@@ -165,11 +221,16 @@ describe('RealtimeEngine native binding', () => {
       maxValue: 1,
       defaultValue: 0,
       rtSafe: true,
-      defaultCurve: 0,
+      defaultCurve: 'linear',
     });
-    // An out-of-range breakpoint curve is rejected, not clamped.
-    // @ts-expect-error deliberately out-of-range curve ordinal; the addon must reject it.
-    expect(() => engine.setAutomationLane(9, [{ ppq: 0, value: 0.5, curveToNext: 99 }])).toThrow();
+    // A number is refused as a type, an unknown spelling as a value; neither is clamped.
+    expect(() =>
+      // @ts-expect-error deliberately a number where a curve name belongs.
+      engine.setAutomationLane(9, [{ ppq: 0, value: 0.5, curveToNext: 99 }]),
+    ).toThrow(TypeError);
+    expect(() =>
+      engine.setAutomationLane(9, [{ ppq: 0, value: 0.5, curveToNext: 'wavy' as never }]),
+    ).toThrow(RangeError);
     // An out-of-range default curve is rejected on registration.
     expect(() =>
       engine.addParameter({
@@ -180,15 +241,15 @@ describe('RealtimeEngine native binding', () => {
         maxValue: 1,
         defaultValue: 0,
         rtSafe: true,
-        // @ts-expect-error deliberately out-of-range curve ordinal; the addon must reject it.
+        // @ts-expect-error deliberately a number where a curve name belongs.
         defaultCurve: 99,
       }),
-    ).toThrow();
+    ).toThrow(TypeError);
   });
 
   it('rejects a malformed parameter object without registering a bogus parameter', () => {
-    const engine = new RealtimeEngine(48000, 128);
-    const before = engine.parameterCount();
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    const before = engine.parameters().length;
     // A non-number id must be rejected outright (previously it coerced to 0 and
     // still registered a zero-value parameter).
     expect(() =>
@@ -206,30 +267,35 @@ describe('RealtimeEngine native binding', () => {
         maxValue: 1,
         defaultValue: 0,
         rtSafe: true,
-        defaultCurve: 0,
+        defaultCurve: 'linear',
       }),
     ).toThrow();
     // Neither malformed call may have leaked a registration.
-    expect(engine.parameterCount()).toBe(before);
+    expect(engine.parameters().length).toBe(before);
   });
 
   it('processes a block and drains telemetry', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     engine.setTempo(60);
     engine.setTimeSignature(3, 4);
     engine.setMarkers([
       { id: 11, ppq: 1, name: 'intro' },
       { id: 12, ppq: 2, name: 'out' },
     ]);
-    expect(engine.markerCount()).toBe(2);
-    expect(engine.markerByIndex(0).name).toBe('intro');
+    expect(engine.markers().length).toBe(2);
+    expect(engine.markers()[0].name).toBe('intro');
     expect(engine.marker(12).ppq).toBe(2);
     engine.setLoopFromMarkers(11, 12);
     engine.setMetronome({ enabled: true, beatGain: 0.25, accentGain: 0.75, clickSamples: 16 });
     expect(engine.metronome().enabled).toBe(true);
     expect(engine.metronome().clickSamples).toBe(16);
     engine.setMetronome({ enabled: true });
-    expect(engine.metronome().clickSamples).toBe(0);
+    expect(engine.metronome().clickSamples).toBeUndefined();
+    // The engine default click (0.002 s) is the spelling in effect.
+    expect(engine.metronome().clickSec).toBeCloseTo(0.002, 6);
+    engine.setMetronome({ enabled: true, clickSec: 0.01 });
+    expect(engine.metronome().clickSec).toBeCloseTo(0.01, 6);
+    expect(engine.metronome().clickSamples).toBeUndefined();
     expect(engine.countInEndSample(0, 2)).toBe(288000);
     engine.setMetronome({ enabled: false });
     engine.addParameter({
@@ -240,20 +306,20 @@ describe('RealtimeEngine native binding', () => {
       maxValue: 12,
       defaultValue: 0,
       rtSafe: true,
-      defaultCurve: 0, // canonical AutomationCurve::Linear
+      defaultCurve: 'linear',
     });
-    expect(engine.parameterCount()).toBe(1);
+    expect(engine.parameters().length).toBe(1);
     expect(engine.parameterInfo(7).name).toBe('gain');
-    expect(engine.parameterInfoByIndex(0).unit).toBe('dB');
+    expect(engine.parameters()[0].unit).toBe('dB');
     engine.setAutomationLane(7, [
       { ppq: 0, value: 0 },
-      { ppq: 1, value: 6.0205999, curveToNext: 0 }, // Linear
+      { ppq: 1, value: 6.0205999, curveToNext: 'linear' },
     ]);
-    expect(engine.automationLaneCount()).toBe(1);
+    expect(engine.automationLaneCount).toBe(1);
     engine.setGraph({
       nodes: [
         { id: 'in', numPorts: 2 },
-        { id: 'gain', type: 1, gainDb: 0, numPorts: 2 },
+        { id: 'gain', type: 'gain', gainDb: 0, numPorts: 2 },
         { id: 'out', numPorts: 2 },
       ],
       connections: [
@@ -267,8 +333,8 @@ describe('RealtimeEngine native binding', () => {
       numChannels: 2,
       parameterBindings: [{ paramId: 7, nodeId: 'gain' }],
     });
-    expect(engine.graphNodeCount()).toBe(3);
-    expect(engine.graphConnectionCount()).toBe(4);
+    expect(engine.graphNodeCount).toBe(3);
+    expect(engine.graphConnectionCount).toBe(4);
     engine.setClips([
       {
         id: 101,
@@ -277,12 +343,14 @@ describe('RealtimeEngine native binding', () => {
         lengthSamples: 128,
       },
     ]);
-    expect(engine.clipCount()).toBe(1);
-    const captureLeft = new Float32Array(128);
-    const captureRight = new Float32Array(128);
-    engine.setCaptureBuffer([captureLeft, captureRight]);
-    engine.setCapturePunch(48000, 48128);
-    engine.armCapture();
+    expect(engine.clipCount).toBe(1);
+    const capture = {
+      capacityFrames: 128,
+      numChannels: 2,
+      punch: { startSample: 48000, endSample: 48128 },
+    };
+    engine.configureCapture(capture);
+    engine.armCapture({ armed: true });
     engine.seekMarker(11);
     engine.play();
 
@@ -304,8 +372,6 @@ describe('RealtimeEngine native binding', () => {
     expect(captureStatus.source).toBe('output');
     expect(captureStatus.recordOffsetSamples).toBe(0);
     const captured = engine.capturedAudio();
-    expect(captureLeft[0]).toBe(0);
-    expect(captureRight[0]).toBe(0);
     expect(captured[0][0]).toBeCloseTo(0.75, 4);
     expect(captured[1][0]).toBeCloseTo(-0.75, 4);
     engine.resetCapture();
@@ -313,31 +379,31 @@ describe('RealtimeEngine native binding', () => {
 
     const telemetry = engine.drainTelemetry();
     expect(telemetry.length).toBeGreaterThan(0);
-    expect(telemetry.at(-1)?.type).toBe(0);
-    expect(telemetry.at(-1)?.error).toBe(0);
+    expect(telemetry.at(-1)?.type).toBe('processBlock');
+    expect(telemetry.at(-1)?.error).toBe('none');
+    expect(typeof telemetry.at(-1)?.graphLatencySamples).toBe('number');
     expect(telemetry.at(-1)?.renderFrame).toBe(0);
     expect(telemetry.at(-1)?.timelineSample).toBe(48000 + 128);
 
-    engine.setCaptureSource('input');
-    engine.setRecordOffsetSamples(-37);
-    engine.armCapture();
+    engine.configureCapture({ ...capture, source: 'input', recordOffsetSamples: -37 });
+    engine.armCapture({ armed: true });
     engine.seekMarker(11);
     engine.process([left, right]);
     const inputCaptureStatus = engine.captureStatus();
     expect(inputCaptureStatus.source).toBe('input');
     expect(inputCaptureStatus.recordOffsetSamples).toBe(-37);
-    expect(captureLeft[0]).toBe(0);
     expect(engine.capturedAudio()[0][0]).toBeCloseTo(0.25, 4);
     expect(engine.drainMeterTelemetry().some((record) => record.targetId === 0xffff)).toBe(true);
 
-    engine.setCaptureSource(0);
+    // A source is a name: an ordinal is refused.
+    expect(() => engine.configureCapture({ ...capture, source: 0 as never })).toThrow(TypeError);
+    engine.configureCapture(capture);
     expect(engine.captureStatus().source).toBe('output');
-    expect(captureRight[0]).toBe(0);
     expect(engine.capturedAudio()[1][0]).toBeCloseTo(-0.25, 4);
 
-    engine.setInputMonitor(false);
+    engine.configureCapture({ ...capture, inputMonitor: { enabled: false } });
     engine.resetCapture();
-    engine.armCapture();
+    engine.armCapture({ armed: true });
     engine.seekMarker(11);
     let monitored = engine.process([
       new Float32Array(128).fill(0.25),
@@ -345,10 +411,9 @@ describe('RealtimeEngine native binding', () => {
     ]);
     expect(monitored[0][0]).toBeCloseTo(0.25, 4);
     expect(monitored[1][0]).toBeCloseTo(-0.25, 4);
-    expect(captureLeft[0]).toBe(0);
     expect(engine.capturedAudio()[0][0]).toBeCloseTo(0.25, 4);
 
-    engine.setInputMonitor(true, 0.5);
+    engine.configureCapture({ ...capture, inputMonitor: { enabled: true, gain: 0.5 } });
     engine.seekMarker(11);
     monitored = engine.process([
       new Float32Array(128).fill(0.25),
@@ -358,7 +423,7 @@ describe('RealtimeEngine native binding', () => {
     expect(monitored[1][0]).toBeCloseTo(-0.5, 4);
     let badMonitorGainError: unknown;
     try {
-      engine.setInputMonitor(true, Number.NaN);
+      engine.configureCapture({ ...capture, inputMonitor: { enabled: true, gain: Number.NaN } });
     } catch (error) {
       badMonitorGainError = error;
     }
@@ -371,7 +436,7 @@ describe('RealtimeEngine native binding', () => {
   it('configures and drains scope telemetry', () => {
     const sampleRate = 48000;
     const blockSize = 256;
-    const engine = new RealtimeEngine(sampleRate, blockSize);
+    const engine = new RealtimeEngine({ sampleRate, maxBlockSize: blockSize });
     expect(engine.configureScopeTelemetry(256, 32)).toBe(32);
 
     const toneFreq = 1000;
@@ -392,7 +457,7 @@ describe('RealtimeEngine native binding', () => {
         lengthSamples: frames,
       },
     ]);
-    engine.setTrackLanes([10]);
+    engine.setTrackLanes([{ trackId: 10 }]);
     engine.play();
 
     let records: ReturnType<typeof engine.drainScopeTelemetry> = [];
@@ -418,14 +483,14 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('round-trips marker kind and key signature', () => {
-    const engine = new RealtimeEngine(48000, 128);
-    engine.setMarkers([
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    const stored = engine.setMarkers([
       { id: 1, ppq: 0, name: 'intro' },
       {
         id: 2,
         ppq: 4,
         name: 'G major',
-        kind: MarkerKind.KeySignature,
+        kind: 'keySignature',
         keyFifths: 1,
         keyMinor: false,
       },
@@ -433,24 +498,29 @@ describe('RealtimeEngine native binding', () => {
         id: 3,
         ppq: 8,
         name: 'A minor',
-        kind: MarkerKind.KeySignature,
+        kind: 'keySignature',
         keyFifths: 0,
         keyMinor: true,
       },
     ]);
-    // A marker with no kind defaults to MarkerKind.Marker with neutral key fields.
-    const intro = engine.markerByIndex(0);
-    expect(intro.kind).toBe(MarkerKind.Marker);
+    expect(stored.map((marker) => marker.id)).toEqual([1, 2, 3]);
+    expect(() => engine.setMarkers([{ id: 4, ppq: 0, kind: 4 as never }])).toThrow(TypeError);
+    expect(() => engine.setMarkers([{ id: 4, ppq: 0, kind: 'chapter' as never }])).toThrow(
+      RangeError,
+    );
+    // A marker with no kind defaults to 'marker' with neutral key fields.
+    const intro = engine.markers()[0];
+    expect(intro.kind).toBe('marker');
     expect(intro.keyFifths).toBe(0);
     expect(intro.keyMinor).toBe(false);
 
     const gMajor = engine.marker(2);
-    expect(gMajor.kind).toBe(MarkerKind.KeySignature);
+    expect(gMajor.kind).toBe('keySignature');
     expect(gMajor.keyFifths).toBe(1);
     expect(gMajor.keyMinor).toBe(false);
 
-    const aMinor = engine.markerByIndex(2);
-    expect(aMinor.kind).toBe(MarkerKind.KeySignature);
+    const aMinor = engine.markers()[2];
+    expect(aMinor.kind).toBe('keySignature');
     expect(aMinor.keyFifths).toBe(0);
     expect(aMinor.keyMinor).toBe(true);
     engine.destroy();
@@ -465,7 +535,7 @@ describe('RealtimeEngine native binding', () => {
       right[i] = -left[i];
     }
 
-    const realtime = new RealtimeEngine(48000, 128);
+    const realtime = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     realtime.play();
     const rtLeft: number[] = [];
     const rtRight: number[] = [];
@@ -479,15 +549,15 @@ describe('RealtimeEngine native binding', () => {
     }
     realtime.destroy();
 
-    const offline = new RealtimeEngine(48000, 128);
+    const offline = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     offline.play();
-    const rendered = offline.renderOffline([left, right], 128);
+    const rendered = offline.renderOffline({ channels: [left, right], blockSize: 128 });
     offline.destroy();
 
     expect(Array.from(rendered[0])).toEqual(rtLeft);
     expect(Array.from(rendered[1])).toEqual(rtRight);
 
-    const bounce = new RealtimeEngine(48000, 128);
+    const bounce = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     bounce.play();
     const bounced = bounce.bounceOffline({
       totalFrames: 256,
@@ -506,7 +576,7 @@ describe('RealtimeEngine native binding', () => {
     // result for digital silence; just assert a numeric value is reported.
     expect(typeof bounced.integratedLufs).toBe('number');
 
-    const freeze = new RealtimeEngine(48000, 128);
+    const freeze = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     freeze.setClips([
       {
         id: 7,
@@ -525,19 +595,19 @@ describe('RealtimeEngine native binding', () => {
     expect(frozen.clipId).toBe(77);
     expect(frozen.frames).toBe(128);
     expect(frozen.numChannels).toBe(2);
-    expect(freeze.clipCount()).toBe(1);
+    expect(freeze.clipCount).toBe(1);
     freeze.seekSample(0);
-    const frozenRendered = freeze.renderOffline(
-      [new Float32Array(128), new Float32Array(128)],
-      128,
-    );
+    const frozenRendered = freeze.renderOffline({
+      channels: [new Float32Array(128), new Float32Array(128)],
+      blockSize: 128,
+    });
     freeze.destroy();
     expect(frozenRendered[0][0]).toBeCloseTo(0.125, 4);
     expect(frozenRendered[1][0]).toBeCloseTo(-0.25, 4);
   });
 
   it('bounces at the prepared rate by default and still refuses a different source rate', () => {
-    const engine = new RealtimeEngine(44100, 128);
+    const engine = new RealtimeEngine({ sampleRate: 44100, maxBlockSize: 128 });
     try {
       const result = engine.bounceOffline({ totalFrames: 441, blockSize: 128 });
       expect(result.sampleRate).toBe(44100);
@@ -570,7 +640,7 @@ describe('RealtimeEngine native binding', () => {
     const bounce = (
       options: Partial<EngineBounceOptions> = {},
     ): { samples: Float32Array; lufs: number } => {
-      const engine = new RealtimeEngine(48000, 128);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       engine.setClips([
         { id: 1, channels: [tone, tone.slice()], startPpq: 0, lengthSamples: frames },
       ]);
@@ -600,13 +670,18 @@ describe('RealtimeEngine native binding', () => {
     expect(plain.samples.some((sample) => sample !== 0)).toBe(true);
     expect(Number.isFinite(plain.lufs)).toBe(true);
 
-    // Requested loudness is reached, and the documented 0 sentinel resolves to
-    // the shared -14 LUFS default rather than to a literal 0 LUFS target.
+    // Requested loudness is reached, an absent target is the shared -14 LUFS
+    // default, and an explicit 0 is refused rather than read as that default.
     for (const targetLufs of [-20, -9]) {
       const normalized = bounce({ normalizeLufs: true, targetLufs });
       expect(normalized.lufs).toBeCloseTo(targetLufs, 1);
     }
-    expect(bounce({ normalizeLufs: true, targetLufs: 0 }).lufs).toBeCloseTo(-14, 1);
+    expect(bounce({ normalizeLufs: true }).lufs).toBeCloseTo(-14, 1);
+    expect(() => bounce({ normalizeLufs: true, targetLufs: 0 })).toThrow(RangeError);
+    expect(() => bounce({ normalizeLufs: true, targetLufs: Number.NaN })).toThrow(RangeError);
+    // A number is not a dither name.
+    expect(() => bounce({ dither: 1 as never })).toThrow(TypeError);
+    expect(() => bounce({ dither: 'triangle' as never })).toThrow(RangeError);
 
     // Dither types are identified by what they do to the signal rather than by
     // the integer alone, so a remapped type cannot pass: RPDF and TPDF add
@@ -615,10 +690,10 @@ describe('RealtimeEngine native binding', () => {
     // target-depth grid.
     const bits = 8;
     const lsb = 1 / (1 << (bits - 1));
-    const none = bounce({ dither: 0, ditherBits: bits, ditherSeed: 1 });
-    const rpdf = bounce({ dither: 1, ditherBits: bits, ditherSeed: 1 });
-    const tpdf = bounce({ dither: 2, ditherBits: bits, ditherSeed: 1 });
-    const shaped = bounce({ dither: 3, ditherBits: bits, ditherSeed: 1 });
+    const none = bounce({ ditherBits: bits, ditherSeed: 1 });
+    const rpdf = bounce({ dither: 'rpdf', ditherBits: bits, ditherSeed: 1 });
+    const tpdf = bounce({ dither: 'tpdf', ditherBits: bits, ditherSeed: 1 });
+    const shaped = bounce({ dither: 'noiseShaped', ditherBits: bits, ditherSeed: 1 });
     const onGrid = (samples: Float32Array): number =>
       samples.reduce(
         (acc, sample) => acc + (Math.abs(sample / lsb - Math.round(sample / lsb)) < 1e-4 ? 1 : 0),
@@ -639,14 +714,14 @@ describe('RealtimeEngine native binding', () => {
 
     // A fixed seed is reproducible and a different seed is not, so the seed
     // reaches the generator instead of being dropped.
-    const repeat = bounce({ dither: 2, ditherBits: bits, ditherSeed: 1 });
+    const repeat = bounce({ dither: 'tpdf', ditherBits: bits, ditherSeed: 1 });
     expect(Array.from(repeat.samples)).toEqual(Array.from(tpdf.samples));
-    const otherSeed = bounce({ dither: 2, ditherBits: bits, ditherSeed: 2 });
+    const otherSeed = bounce({ dither: 'tpdf', ditherBits: bits, ditherSeed: 2 });
     expect(maxAbsDiff(otherSeed.samples, tpdf.samples)).toBeGreaterThan(0);
   });
 
   it('exposes transport state and live parameter injection', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     engine.setTempo(60);
     expect(engine.sampleAtPpq(1.5)).toBe(72000);
     let badPpqError: unknown;
@@ -659,7 +734,7 @@ describe('RealtimeEngine native binding', () => {
     expect(isSonareError(badPpqError)).toBe(false);
     expect(() => engine.sampleAtPpq(1e300)).toThrow();
     expect(() => engine.seekPpq(1e300)).toThrow();
-    expect(() => engine.setLoop(0, 1e300, true)).toThrow();
+    expect(() => engine.setLoop({ startPpq: 0, endPpq: 1e300, enabled: true })).toThrow();
     engine.setTempo(90);
     engine.addParameter({
       id: 3,
@@ -669,7 +744,7 @@ describe('RealtimeEngine native binding', () => {
       maxValue: 12,
       defaultValue: 0,
       rtSafe: true,
-      defaultCurve: 0, // canonical AutomationCurve::Linear
+      defaultCurve: 'linear',
     });
     // Live parameter injection must not throw.
     engine.setParameter(3, 3.0);
@@ -678,9 +753,9 @@ describe('RealtimeEngine native binding', () => {
     engine.play();
     engine.process([new Float32Array(128), new Float32Array(128)]);
 
-    const transport = engine.getTransportState();
+    const transport = engine.transportState();
     expect(transport.playing).toBe(true);
-    expect(transport.isPlaying).toBe(true);
+    expect('isPlaying' in transport).toBe(false);
     expect(transport.bpm).toBeCloseTo(90, 3);
     expect(transport.sampleRate).toBeCloseTo(48000, 1);
     expect(transport.samplePosition).toBeGreaterThanOrEqual(128);
@@ -707,8 +782,8 @@ describe('RealtimeEngine native binding', () => {
   // whether it is still sounding at the end of a chunk is exactly the state a
   // non-finalizing render has to preserve.
   const padEngine = (): RealtimeEngine => {
-    const engine = new RealtimeEngine(48000, 128);
-    engine.setBuiltinInstrument({ gain: 0.5 }, 5);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    engine.setBuiltinInstrument(5, { gain: 0.5 });
     engine.setMidiClips([
       {
         id: 1,
@@ -725,10 +800,10 @@ describe('RealtimeEngine native binding', () => {
   it('renderOffline accepts a request object identically to the positional form', () => {
     const frames = 2048;
     const positionalEngine = padEngine();
-    const positional = positionalEngine.renderOffline(
-      [new Float32Array(frames), new Float32Array(frames)],
-      128,
-    );
+    const positional = positionalEngine.renderOffline({
+      channels: [new Float32Array(frames), new Float32Array(frames)],
+      blockSize: 128,
+    });
     positionalEngine.destroy();
 
     const requestEngine = padEngine();
@@ -750,10 +825,9 @@ describe('RealtimeEngine native binding', () => {
     const total = chunk * chunks;
 
     const continuousEngine = padEngine();
-    const [continuous] = continuousEngine.renderOffline([
-      new Float32Array(total),
-      new Float32Array(total),
-    ]);
+    const [continuous] = continuousEngine.renderOffline({
+      channels: [new Float32Array(total), new Float32Array(total)],
+    });
     continuousEngine.destroy();
     expect(rms(continuous)).toBeGreaterThan(0);
 
@@ -791,7 +865,7 @@ describe('RealtimeEngine native binding', () => {
   it('refuses an offline block size above the prepared block size', () => {
     const frames = 256;
     const planes = () => [new Float32Array(frames), new Float32Array(frames)];
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       const refused = (run: () => unknown): void => {
         let caught: unknown;
@@ -803,21 +877,21 @@ describe('RealtimeEngine native binding', () => {
         expect(caught).toBeInstanceOf(RangeError);
         expect(isSonareError(caught)).toBe(false);
       };
-      refused(() => engine.renderOffline(planes(), 129));
+      refused(() => engine.renderOffline({ channels: planes(), blockSize: 129 }));
       refused(() => engine.renderOffline({ channels: planes(), blockSize: 129 }));
       refused(() => engine.primeOfflineParameters(2, 129));
       refused(() => engine.bounceOffline({ totalFrames: frames, blockSize: 129 }));
       refused(() => engine.freezeOffline({ totalFrames: frames, blockSize: 129 }));
       // The prepared block and anything smaller still render.
-      expect(() => engine.renderOffline(planes(), 128)).not.toThrow();
-      expect(() => engine.renderOffline(planes(), 64)).not.toThrow();
+      expect(() => engine.renderOffline({ channels: planes(), blockSize: 128 })).not.toThrow();
+      expect(() => engine.renderOffline({ channels: planes(), blockSize: 64 })).not.toThrow();
     } finally {
       engine.destroy();
     }
   });
 
   it('accepts a custom smoothed-parameter ramp time and rejects bad values', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     expect(() => engine.setParamSmoothingMs(0)).not.toThrow();
     expect(() => engine.setParamSmoothingMs(75)).not.toThrow();
     expect(() => engine.setParamSmoothingMs(-1)).toThrow();
@@ -826,14 +900,14 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('settles insert parameters and applies due commands without throwing', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     expect(() => engine.settleInsertParameters()).not.toThrow();
     expect(() => engine.applyCommandsDueNowPreservingFuture()).not.toThrow();
     engine.destroy();
   });
 
   it('clearing an automation lane with no points removes it', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     engine.addParameter({
       id: 7,
       name: 'gain',
@@ -842,15 +916,15 @@ describe('RealtimeEngine native binding', () => {
       maxValue: 12,
       defaultValue: 0,
       rtSafe: true,
-      defaultCurve: 0,
+      defaultCurve: 'linear',
     });
     engine.setAutomationLane(7, [
       { ppq: 0, value: 0 },
       { ppq: 1, value: 6 },
     ]);
-    expect(engine.automationLaneCount()).toBe(1);
+    expect(engine.automationLaneCount).toBe(1);
     engine.setAutomationLane(7, []);
-    expect(engine.automationLaneCount()).toBe(0);
+    expect(engine.automationLaneCount).toBe(0);
     engine.destroy();
   });
 });

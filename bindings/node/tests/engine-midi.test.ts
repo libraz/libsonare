@@ -4,8 +4,8 @@ import { midi1Word, rms } from './_engine_signals.js';
 
 describe('RealtimeEngine native binding', () => {
   it('renders scheduled MIDI clips through built-in instruments', () => {
-    const engine = new RealtimeEngine(48000, 128);
-    engine.setBuiltinInstrument({ gain: 0.5 }, 5);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    engine.setBuiltinInstrument(5, { gain: 0.5 });
     engine.setMidiClips([
       {
         id: 1,
@@ -59,7 +59,7 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('rejects MIDI byte arguments that would wrap through the uint8 cast', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     engine.setMidiInputSource(0);
     // group 256 must NOT silently wrap to a valid group 0 — it must throw.
     expect(() => engine.pushMidiInputNoteOn(256, 0, 60, 100)).toThrow(RangeError);
@@ -71,8 +71,13 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('takes a clip event group from word0 and rejects one that would wrap', () => {
-    const engine = new RealtimeEngine(48000, 128);
-    engine.prepare(48000, 128, 16, 16);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    engine.prepare({
+      sampleRate: 48000,
+      maxBlockSize: 128,
+      commandCapacity: 16,
+      telemetryCapacity: 16,
+    });
     engine.setMidiDestinationExternal(7, true);
 
     // A group of 256 narrows to 0 in the uint8 struct field, which is a valid
@@ -124,7 +129,7 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('drains external MIDI routing to the host', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     // Route destination 5 to the external queue instead of an instrument.
     engine.setMidiDestinationExternal(5, true);
     engine.setMidiClips([
@@ -152,13 +157,13 @@ describe('RealtimeEngine native binding', () => {
     expect(drained[1].bytes[0] & 0xf0).toBe(0x80); // note off
     expect(drained[1].renderFrame).toBe(48);
 
-    expect(engine.externalMidiDroppedCount()).toBe(0);
+    expect(engine.externalMidiDroppedCount).toBe(0);
     engine.destroy();
   });
 
   it('drains a MIDI 2.0 RPN as its four MIDI 1.0 CC messages', () => {
     // RPN 0/0 on channel 1, Data Entry MSB 12: CC 101, 100, 6, 38.
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     engine.setMidiDestinationExternal(5, true);
     const rpnWord0 = ((0x4 << 28) | (0x2 << 20) | (1 << 16)) >>> 0;
     engine.setMidiClips([
@@ -184,7 +189,7 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('reports external-destination table overflow instead of silently routing internally', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     for (let id = 0; id < 16; id++) {
       engine.setMidiDestinationExternal(id, true);
     }
@@ -204,7 +209,7 @@ describe('RealtimeEngine native binding', () => {
     // drain in batches with a cap that is neither a multiple of the internal
     // 256-slot buffer nor large enough to take everything at once, and assert
     // every event survives across repeated calls.
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     engine.setMidiDestinationExternal(5, true);
     const events = [];
     const kNotes = 24; // 48 events total (on+off), well above the cap below
@@ -229,7 +234,7 @@ describe('RealtimeEngine native binding', () => {
     }
 
     expect(collected.length).toBe(2 * kNotes);
-    expect(engine.externalMidiDroppedCount()).toBe(0);
+    expect(engine.externalMidiDroppedCount).toBe(0);
     // Losslessness: every queued note-on and note-off survives the capped drain.
     const noteOns = new Set();
     const noteOffs = new Set();
@@ -249,7 +254,7 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('forwards MIDI clock/transport to the external queue', () => {
-    const engine = new RealtimeEngine(48000, 24000);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 24000 });
     engine.setTempo(120);
     engine.setExternalMidiClockEnabled(true);
     engine.play(0);
@@ -273,7 +278,7 @@ describe('RealtimeEngine native binding', () => {
    * output queue. One note-on plus one note-off lower to one message each.
    */
   const engineWithQueuedExternalMidi = (): { engine: RealtimeEngine; queued: number } => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     engine.setMidiDestinationExternal(5, true);
     engine.setMidiClips([
       {
@@ -323,7 +328,7 @@ describe('RealtimeEngine native binding', () => {
         const { engine, queued } =
           queueState === 'non-empty'
             ? engineWithQueuedExternalMidi()
-            : { engine: new RealtimeEngine(48000, 128), queued: 0 };
+            : { engine: new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 }), queued: 0 };
         try {
           const call = () => (engine.drainExternalMidi as (max: unknown) => unknown[])(value);
           let drained = 0;
@@ -350,7 +355,7 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('rejects a bad maxRecords with the same error class as the sibling drains', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       const drains = [
         (max: unknown) => (engine.drainTelemetry as (m: unknown) => unknown)(max),
@@ -374,7 +379,7 @@ describe('RealtimeEngine native binding', () => {
   it('bounds every drained record to the fixed 3-byte message array', () => {
     // Covers both ends of the byte_count range in one drain: clock bytes lower
     // to one byte, channel-voice messages to three.
-    const engine = new RealtimeEngine(48000, 24000);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 24000 });
     engine.setTempo(120);
     engine.setExternalMidiClockEnabled(true);
     engine.setMidiDestinationExternal(5, true);
@@ -434,7 +439,7 @@ describe('live MIDI push argument and state rule', () => {
     ],
     [
       'pushMidiProgram',
-      (e) => e.pushMidiProgram(0, 0, 0, 0, true, 128, 0),
+      (e) => e.pushMidiProgram(0, 0, 0, 0, { msb: 128, lsb: 0 }),
       'bank_msb must be in [0, 127]',
     ],
     [
@@ -481,7 +486,7 @@ describe('live MIDI push argument and state rule', () => {
   ];
 
   it.each(refusals)('%s names the refused argument', (method, push, message) => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       expect(() => push(engine)).toThrow(new RangeError(`${method}: ${message}`));
     } finally {
@@ -503,11 +508,14 @@ describe('live MIDI push argument and state rule', () => {
       (e) => e.pushMidiInputPolyPressure(0, 0, 60, 64),
     ],
     ['sonare_engine_push_midi_input_ump', (e) => e.pushMidiInputUmp([0x40903c00, 0x80000000])],
-    ['sonare_engine_push_midi_input_program', (e) => e.pushMidiInputProgram(0, 0, 5, true, 8, 0)],
+    [
+      'sonare_engine_push_midi_input_program',
+      (e) => e.pushMidiInputProgram(0, 0, 5, { msb: 8, lsb: 0 }),
+    ],
   ];
 
   it.each(inputPushes)('%s refuses a disabled source as InvalidState', (cFunction, push) => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       let refused: unknown;
       try {

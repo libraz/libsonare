@@ -107,7 +107,7 @@ describe('insert param validation', () => {
       ],
       connections: [{ source: 'vocal', destination: 'master' }],
     });
-    const mixer = Mixer.fromSceneJson(ignored, 48000, 512);
+    const mixer = Mixer.fromJson(ignored, { sampleRate: 48000, blockSize: 512 });
     const warnings = mixer.sceneWarnings();
     expect(warnings.length).toBe(1);
     expect(warnings[0]).toContain('eq.parametric');
@@ -132,7 +132,9 @@ describe('insert param validation', () => {
       ],
       connections: [{ source: 'vocal', destination: 'master' }],
     });
-    expect(Mixer.fromSceneJson(clean, 48000, 512).sceneWarnings()).toEqual([]);
+    expect(Mixer.fromJson(clean, { sampleRate: 48000, blockSize: 512 }).sceneWarnings()).toEqual(
+      [],
+    );
   });
 
   it('reports an unknown scene key by path and exempts $ and x- keys', () => {
@@ -144,11 +146,16 @@ describe('insert param validation', () => {
         strips: [{ id: 'vocal', ...stripExtra }],
         connections: [{ source: 'vocal', destination: 'master' }],
       });
-    expect(Mixer.fromSceneJson(scene({}, { faderDB: -3 }), 48000, 512).sceneWarnings()).toEqual([
-      "unknown scene key 'strips[0].faderDB'",
-    ]);
+    expect(
+      Mixer.fromJson(scene({}, { faderDB: -3 }), {
+        sampleRate: 48000,
+        blockSize: 512,
+      }).sceneWarnings(),
+    ).toEqual(["unknown scene key 'strips[0].faderDB'"]);
     const annotated = scene({ $schema: 'x', 'x-note': 1 }, { 'x-color': 'red' });
-    expect(Mixer.fromSceneJson(annotated, 48000, 512).sceneWarnings()).toEqual([]);
+    expect(
+      Mixer.fromJson(annotated, { sampleRate: 48000, blockSize: 512 }).sceneWarnings(),
+    ).toEqual([]);
   });
 
   it('reports the one-shot true peak of a signal whose peak is in its last samples', () => {
@@ -161,7 +168,10 @@ describe('insert param validation', () => {
   });
 
   it("flushes a streaming mixer's meters on request", () => {
-    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 256);
+    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      sampleRate: 48000,
+      blockSize: 256,
+    });
     try {
       expect(() => mixer.flushMeters()).not.toThrow();
     } finally {

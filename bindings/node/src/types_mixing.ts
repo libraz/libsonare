@@ -4,7 +4,7 @@
  *
  * The assistant suggests; it does not apply. Every entry point returns
  * parameters and never audio, so realising a suggestion is the caller's own
- * second step through {@link Mixer.fromSceneJson}.
+ * second step through {@link Mixer.fromJson}.
  */
 
 import type { EqBandInput } from './types_features.js';
@@ -432,7 +432,7 @@ export interface MixSceneConnection {
 }
 
 /**
- * A mixer scene document, in the schema {@link Mixer.fromSceneJson} reads.
+ * A mixer scene document, in the schema {@link Mixer.fromJson} reads.
  * {@link suggestMixSceneJson} returns the same document as its JSON text.
  */
 export interface MixSceneDocument {

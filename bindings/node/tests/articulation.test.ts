@@ -16,8 +16,8 @@ import type { Articulation, SynthEngineMode } from '../src/types.js';
 
 /** An engine with one NativeSynth engine mode bound to destination 3. */
 const synthEngine = (engineMode: SynthEngineMode): RealtimeEngine => {
-  const engine = new RealtimeEngine(48000, 128);
-  engine.setSynthInstrument({ engineMode }, 3);
+  const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+  engine.setSynthInstrument(3, { engineMode });
   return engine;
 };
 
@@ -101,10 +101,10 @@ describe('RealtimeEngine articulation', () => {
     engine.destroy();
   });
 
-  it('accepts the C ordinal as well as the name', () => {
+  it('refuses the C ordinal: a name is the only spelling', () => {
     const engine = synthEngine('reed');
-    engine.setArticulation(3, 0, 2);
-    expect(engine.articulation(3, 0)).toBe('mono-legato');
+    expect(() => engine.setArticulation(3, 0, 2 as never)).toThrow(TypeError);
+    expect(engine.articulation(3, 0)).toBe('poly');
     engine.destroy();
   });
 
@@ -115,8 +115,8 @@ describe('RealtimeEngine articulation', () => {
     expect(() => engine.setArticulation(3, 0, 'legato' as never)).toThrow(
       /Unknown articulation name/,
     );
-    expect(() => engine.setArticulation(3, 0, 3)).toThrow(/ordinal in \[0, 3\)/);
-    expect(() => engine.setArticulation(3, 0, -1)).toThrow(/ordinal in \[0, 3\)/);
+    expect(() => engine.setArticulation(3, 0, 3 as never)).toThrow(TypeError);
+    expect(() => engine.setArticulation(3, 0, -1 as never)).toThrow(TypeError);
     expect(() => engine.setArticulation(3, 0, undefined as never)).toThrow();
     // None of the above took.
     expect(engine.articulation(3, 0)).toBe('poly');
@@ -141,7 +141,7 @@ describe('RealtimeEngine articulation', () => {
 
     // The built-in oscillator synth has no articulation of its own, which is a
     // different answer from having no instrument at all.
-    engine.setBuiltinInstrument({}, 5);
+    engine.setBuiltinInstrument(5, {});
     expect(codeNameOf(() => engine.setArticulation(5, 0, 'mono-legato'))).toBe('NotSupported');
     expect(codeNameOf(() => engine.articulation(5, 0))).toBe('NotSupported');
     // The counter refuses on the same terms rather than answering zero. All

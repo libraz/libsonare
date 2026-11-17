@@ -1,46 +1,50 @@
 import type { TimeSignature } from './types_analysis.js';
-import type { SendTiming } from './types_mixing.js';
-import type { ProjectWarpAnchor, WarpMode } from './types_project.js';
-// Type-only, so the erased import adds no runtime edge to the coercion module.
-import type { AUTOMATION_CURVE_VALUES } from './value_coercion.js';
+import type { AutomationCurve, SendTiming } from './types_mixing.js';
+import type { ProjectWarpAnchor } from './types_project.js';
 
-export type EngineTelemetryType = 0 | 1;
+/** Kind of a telemetry record: a processed block or an engine error. */
+export type EngineTelemetryType = 'processBlock' | 'error';
 
 /** One raw UMP message of 1 to 4 words, most significant word first. */
 export type UmpWords = Uint32Array | readonly number[];
 
 /** Per-track cue/monitor tap mode: off, pre-fader listen, or after-fader listen. */
-export type EngineTrackMonitorMode = 'off' | 'pfl' | 'afl' | 0 | 1 | 2;
+export type EngineTrackMonitorMode = 'off' | 'pfl' | 'afl';
 
+/** Reason an engine error telemetry record was published; `'none'` on a processed-block record. */
 export type EngineTelemetryError =
-  | 0
-  | 1
-  | 2
-  | 3
-  | 4
-  | 5
-  | 6
-  | 7
-  | 8
-  | 9
-  | 10
-  | 11
-  | 12
-  | 13
-  | 14
-  | 15
-  | 16
-  | 17
-  | 18
-  | 20;
+  | 'none'
+  | 'commandQueueOverflow'
+  | 'pendingCommandOverflow'
+  | 'boundaryOverflow'
+  | 'telemetryOverflow'
+  | 'captureOverflow'
+  | 'maxBlockExceeded'
+  | 'unknownTarget'
+  | 'nonRealtimeSafeParameter'
+  | 'notPrepared'
+  | 'nonQueueableCommand'
+  | 'automationBindTargetOverflow'
+  | 'staleAutomationLanes'
+  | 'smoothedParameterCapacity'
+  | 'commandBacklogDeferred'
+  | 'clipPageUnderrun'
+  | 'insertAutomationOverflow'
+  | 'midiClockOverflow'
+  | 'metronomeOverflow'
+  | 'invalidCommand'
+  | 'maxChannelsExceeded'
+  | 'parameterBaseOverflow';
 
+/** Telemetry record drained from {@link RealtimeEngine.drainTelemetry}. */
 export interface EngineTelemetry {
   type: EngineTelemetryType;
   error: EngineTelemetryError;
   renderFrame: number;
   timelineSample: number;
   audibleTimelineSample: number;
-  graphLatencySamplesQ8: number;
+  /** Processing latency of the engine in samples (fractional). */
+  graphLatencySamples: number;
   value: number;
 }
 
@@ -103,7 +107,7 @@ export interface EngineMeterTelemetry {
  * may lower to more than one message (e.g. a MIDI 2.0 program change with bank
  * select), so the drain returns one entry per lowered message.
  */
-export interface EngineExternalMidiEvent {
+export interface ExternalMidiEvent {
   /**
    * Originating track MIDI destination id, or the transport sentinel
    * `0xFFFFFFFF` (4294967295) for clock / start / continue / stop bytes meant
@@ -197,12 +201,10 @@ export interface EngineScopeTelemetry {
   points: { left: number; right: number }[];
 }
 
-/** Read-only engine transport snapshot from {@link RealtimeEngine.getTransportState}. */
+/** Read-only engine transport snapshot from {@link RealtimeEngine.transportState}. */
 export interface EngineTransportState {
   /** Whether the transport is currently playing. */
   playing: boolean;
-  /** @deprecated Use `playing`; kept for one release for compatibility. */
-  isPlaying?: boolean;
   /** Whether looping is enabled. */
   looping: boolean;
   /** Current render-frame counter. */
@@ -232,16 +234,6 @@ export interface EngineTransportState {
 }
 
 /**
- * Engine automation breakpoint curve as an integer code or a spelling.
- * Canonical ordinals (matches mixer `AutomationCurve`):
- *   0 = Linear (default), 1 = Exponential, 2 = Hold, 3 = SCurve.
- *
- * The spellings are derived from the resolver's own table, so this type and the
- * set the runtime accepts cannot drift apart.
- */
-export type EngineAutomationPointCurve = 0 | 1 | 2 | 3 | keyof typeof AUTOMATION_CURVE_VALUES;
-
-/**
  * Parameter descriptor accepted by {@link RealtimeEngine.addParameter}. The
  * optional fields fall back to the documented default when omitted; the
  * `parameterInfo` getters always return a fully populated object.
@@ -259,8 +251,8 @@ export interface EngineParameterInfo {
   defaultValue?: number;
   /** Whether the parameter is safe to change from the realtime thread. Default `true`. */
   rtSafe?: boolean;
-  /** Curve used by automation points that omit `curveToNext`. Default `1` (exponential). */
-  defaultCurve?: EngineAutomationPointCurve;
+  /** Curve used by automation points that omit `curveToNext`. Default `'exponential'`. */
+  defaultCurve?: AutomationCurve;
 }
 
 export interface EngineAutomationPoint {
@@ -272,24 +264,19 @@ export interface EngineAutomationPoint {
    * parameter the lane drives.
    */
   value: number;
-  curveToNext?: EngineAutomationPointCurve;
+  /** Curve to the next point. Default `'linear'`; a number or an unknown spelling is refused. */
+  curveToNext?: AutomationCurve;
 }
 
-/** Structured marker kind ordinals; mirror SonareMarkerKind / SmfMarkerKind. */
-export enum MarkerKind {
-  Marker = 0,
-  Text = 1,
-  Lyric = 2,
-  CuePoint = 3,
-  KeySignature = 4,
-}
+/** Structured marker kind; mirrors SonareMarkerKind / SmfMarkerKind. */
+export type MarkerKind = 'marker' | 'text' | 'lyric' | 'cuePoint' | 'keySignature';
 
 export interface EngineMarker {
   id: number;
   ppq: number;
   name?: string;
-  /** Marker kind (MarkerKind ordinal); defaults to MarkerKind.Marker. */
-  kind?: number;
+  /** Marker kind; defaults to `'marker'`. A number is refused. */
+  kind?: MarkerKind;
   /** Key signature only: -7..7 (sharps positive). */
   keyFifths?: number;
   /** Key signature only: false = major, true = minor. */
@@ -308,14 +295,20 @@ export interface ProjectMarker {
   keyMinor: boolean;
 }
 
+/**
+ * Metronome configuration. Give at most one of `clickSamples` and `clickSec`;
+ * both absent selects the sample-rate-derived click length. An explicit `0` for
+ * either is a `RangeError`. {@link RealtimeEngine.metronome} reports only the
+ * spelling that is in effect.
+ */
 export interface EngineMetronomeConfig {
   enabled: boolean;
   beatGain?: number;
   accentGain?: number;
-  /** Explicit click length in samples (0..384000). Default 0 selects the sample-rate-derived duration. */
+  /** Explicit click length in samples (1..384000). */
   clickSamples?: number;
-  /** Click duration in seconds (0..1); used when clickSamples is 0. */
-  clickSeconds?: number;
+  /** Click duration in seconds (0..1]. */
+  clickSec?: number;
 }
 
 export interface EngineClip {
@@ -329,29 +322,31 @@ export interface EngineClip {
   gain?: number;
   fadeInSamples?: number;
   fadeOutSamples?: number;
-  warpMode?: WarpMode;
+  /** Warp mode; absent is `'off'`. A number is refused. */
+  warpMode?: 'off' | 'repitch' | 'tempoSync' | 'timeStretch';
   warpAnchors?: ProjectWarpAnchor[];
   pageProvider?: number | { readonly id: number };
 }
 
 /**
  * Speaker bed layout for a bus or source, mirroring the C enum
- * `SonareChannelLayout`: `0` = mono, `1` = stereo, `2` = 5.1 (L R C LFE Ls Rs),
- * `3` = 7.1 (L R C LFE Ls Rs Lss Rss).
+ * `SonareChannelLayout`: `'mono'`, `'stereo'`, `'5.1'` (L R C LFE Ls Rs) and
+ * `'7.1'` (L R C LFE Ls Rs Lss Rss).
  */
-export type ChannelLayout = 0 | 1 | 2 | 3;
+export type ChannelLayout = 'mono' | 'stereo' | '5.1' | '7.1';
 
 export interface EngineTrackLane {
   trackId: number;
   sends?: EngineTrackSend[];
   /**
    * Bus the lane's post-fader output sums into instead of the master mix
-   * (group/folder routing); 0 or absent keeps the lane on the master mix.
+   * (group/folder routing); absent keeps the lane on the master mix. An explicit
+   * `0` is a `RangeError`.
    */
   outputBusId?: number;
   /**
    * Input channel layout of the source feeding this lane. Absent defaults to
-   * stereo. Only stereo (`1`) is accepted; any other layout throws until
+   * stereo. Only `'stereo'` is accepted; any other layout throws until
    * multichannel lanes are implemented.
    */
   sourceChannelLayout?: ChannelLayout;
@@ -365,7 +360,7 @@ export interface EngineTrackSend {
    * Tap point for the send relative to the lane fader. Absent defaults to
    * post-fader, preserving the behavior before this field existed.
    */
-  sendTiming?: SendTiming | number;
+  sendTiming?: SendTiming;
 }
 
 export interface EngineBus {
@@ -380,7 +375,8 @@ export interface EngineBus {
   channelLayout?: ChannelLayout;
   /**
    * Bus this bus's output sums into instead of the master mix (bus-to-bus
-   * routing); 0 or absent keeps the bus on the master mix. An output naming an
+   * routing); absent keeps the bus on the master mix and an explicit `0` is a
+   * `RangeError`. An output naming an
    * undeclared bus, itself, or forming a cycle (through outputs, sends, or
    * bus-sourced sidechain keys) is rejected.
    */
@@ -399,6 +395,12 @@ export interface EngineBus {
  * stereo when wider).
  */
 export type SidechainSourceKind = 'track' | 'bus';
+
+/** A sidechain key source: a track lane or a bus, by id (`id` is never 0; pass `null` to remove a binding). */
+export interface SidechainSource {
+  kind: SidechainSourceKind;
+  id: number;
+}
 
 /**
  * Why a sidechain binding would be refused; the camelCase form of the C ABI
@@ -434,18 +436,51 @@ export interface FileClipPageProviderOptions {
   dataOffsetBytes?: number;
 }
 
-/** Punch-in window for {@link RealtimeEngine.setCapturePunch}; each bound is samples or seconds, not both. */
-export interface EngineCapturePunchRequest {
-  /** First timeline sample captured. Not with `startSec`. */
+/**
+ * Punch-in window of {@link CaptureOptions}, half-open `[start, end)` on the
+ * timeline. Give exactly one start spelling and exactly one end spelling; each
+ * is rounded to the nearest sample at the engine's rate.
+ */
+export interface CapturePunch {
+  /** Start in quarter notes. */
+  startPpq?: number;
+  /** Start in timeline samples. */
   startSample?: number;
-  /** First timeline second captured, rounded to the nearest sample. Not with `startSample`. */
+  /** Start in timeline seconds. */
   startSec?: number;
-  /** One past the last timeline sample captured. Not with `endSec`. */
+  /** End in quarter notes. */
+  endPpq?: number;
+  /** End in timeline samples. */
   endSample?: number;
-  /** End of the window in timeline seconds, rounded to the nearest sample. Not with `endSample`. */
+  /** End in timeline seconds. */
   endSec?: number;
-  /** Whether the punch window is active. Default `true`. */
-  enabled?: boolean;
+}
+
+/**
+ * Input-monitor setting of {@link CaptureOptions}.
+ */
+export interface CaptureInputMonitor {
+  enabled: boolean;
+  /** Linear monitor gain. Default `1`. */
+  gain?: number;
+}
+
+/**
+ * Capture setup for {@link RealtimeEngine.configureCapture}. The set is applied
+ * as a whole: an absent `source` is `'output'`, an absent `recordOffsetSamples`
+ * is `0`, an absent `inputMonitor` is enabled at gain `1` (the engine default) and an absent `punch` is no punch.
+ */
+export interface CaptureOptions {
+  /** Capture length in frames per channel. Required, positive. */
+  capacityFrames: number;
+  /** Channels captured. Default `2`. */
+  numChannels?: number;
+  /** What is recorded: the engine output or the live input. Default `'output'`. */
+  source?: EngineCaptureSource;
+  /** Delay of the capture relative to the punch window, in samples. Default `0`. */
+  recordOffsetSamples?: number;
+  inputMonitor?: CaptureInputMonitor;
+  punch?: CapturePunch;
 }
 
 export interface EngineCaptureStatus {
@@ -457,7 +492,7 @@ export interface EngineCaptureStatus {
   recordOffsetSamples: number;
 }
 
-export type EngineCaptureSource = EngineCaptureStatus['source'] | number;
+export type EngineCaptureSource = EngineCaptureStatus['source'];
 
 export interface EngineBounceOptions {
   /**
@@ -479,30 +514,32 @@ export interface EngineBounceOptions {
   blockSize?: number;
   numChannels?: number;
   /**
-   * Output sample rate. Omitting it (or `0`) keeps the source rate, so nothing
-   * is resampled; a different rate resamples. The result's `sampleRate`
-   * reports the rate of the returned audio.
+   * Output sample rate. Omitting it keeps the source rate, so nothing is
+   * resampled; a different rate resamples. An explicit `0` is a `RangeError`.
+   * The result's `sampleRate` reports the rate of the returned audio.
    */
   targetSampleRate?: number;
   /**
-   * Rate `totalFrames` is counted in. Omitting it (or `0`) means the engine's
-   * prepared rate; a different value throws a `RangeError`,
-   * because the render always runs at the prepared rate.
+   * Rate `totalFrames` is counted in. Omitting it means the engine's prepared
+   * rate; a different value throws a `RangeError`, because the render always
+   * runs at the prepared rate, and so does an explicit `0`.
    */
   sourceSampleRate?: number;
   normalizeLufs?: boolean;
   /**
-   * Target integrated loudness when `normalizeLufs` is set. Omitting it, passing
-   * `0`, and passing a non-finite value all mean the library default of
-   * -14 LUFS: the non-finite case resolves rather than being reported, matching
-   * the C ABI, because the loudness stage derives a per-sample gain from this
-   * and checks nothing itself.
+   * Target integrated loudness in LUFS when `normalizeLufs` is set. Omitting it
+   * means -14 LUFS. `0` is a literal (if extreme) target and a non-finite value
+   * is a `RangeError`.
    */
   targetLufs?: number;
-  dither?: 0 | 1 | 2 | 3;
+  /** Dither applied when reducing bit depth; absent is none. A number is refused. */
+  dither?: EngineDither;
   ditherBits?: number;
   ditherSeed?: number;
 }
+
+/** Dither shape of {@link EngineBounceOptions.dither}. */
+export type EngineDither = 'rpdf' | 'tpdf' | 'noiseShaped';
 
 export interface EngineBounceResult {
   interleaved: Float32Array;
@@ -527,13 +564,14 @@ export interface EngineFreezeResult {
   numChannels: number;
 }
 
-export type EngineGraphNodeType = 0 | 1;
+/** Processing of a graph node: pass the signal through, or apply `gainDb`. */
+export type EngineGraphNodeType = 'passThrough' | 'gain';
 
 /**
- * Mixing intent for a graph edge: `0` replaces what the destination port already
- * holds, `1` adds to it. Omitted means add; any other value is refused.
+ * Mixing intent for a graph edge: `'replace'` replaces what the destination port
+ * already holds, `'add'` adds to it. Omitted means add; any other value is refused.
  */
-export type EngineGraphMix = 0 | 1;
+export type EngineGraphMix = 'replace' | 'add';
 
 export interface EngineGraphNode {
   id: string;
@@ -562,14 +600,6 @@ export interface EngineGraphSpec {
   outputNode: string;
   numChannels?: number;
   parameterBindings?: EngineGraphParameterBinding[];
-}
-
-/** Options for {@link RealtimeEngine.bindMidiCc}. All fields are optional. */
-export interface MidiCcBindOptions {
-  /** Lower end of the mapped parameter range. Default `0`. */
-  minValue?: number;
-  /** Upper end of the mapped parameter range. Default `1`. */
-  maxValue?: number;
 }
 
 /** One absolute render-frame MIDI event accepted by {@link RealtimeEngine.setMidiClips}. */
@@ -630,7 +660,10 @@ export interface EngineMidiClipSchedule {
   fadeOutSamples?: number;
 }
 
-/** Request form of {@link RealtimeEngine.renderOffline}. */
+/**
+ * Request of {@link RealtimeEngine.renderOffline}. The engine renders at its own
+ * sample rate, so the request carries none.
+ */
 export interface RenderOfflineRequest {
   /** One buffer per output plane; their common length is the render span. */
   channels: Float32Array[];
@@ -654,4 +687,59 @@ export interface RenderOfflineRequest {
    * boundary. Audio stays continuous either way; only bit-identity is lost.
    */
   finalize?: boolean;
+  /**
+   * Whether `channels` is scanned for NaN and Inf before rendering (a `RangeError`
+   * on a hit). Default `true`; `false` skips the O(n) scan.
+   */
+  validate?: boolean;
+}
+
+/**
+ * Construction and preparation settings of {@link RealtimeEngine}. An unknown key
+ * is a `TypeError`; an explicit `0` on an optional field is a `RangeError`
+ * (omit it for the default).
+ */
+export interface RealtimeEngineConfig {
+  /** Engine sample rate in Hz. Required. */
+  sampleRate: number;
+  /** Largest block the engine renders, in frames. Default `128`. */
+  maxBlockSize?: number;
+  /** Command ring capacity, at most 65536. Default `1024`. */
+  commandCapacity?: number;
+  /**
+   * Telemetry ring capacity, at most 16384. Default `1024`. The engine reserves
+   * that many meter records per metered lane, so the memory cost is far larger
+   * than the number given here.
+   */
+  telemetryCapacity?: number;
+  /** Most channels the engine renders. Default `64`. */
+  maxNumChannels?: number;
+}
+
+/** Loop region of {@link RealtimeEngine.setLoop}, in quarter notes. */
+export interface EngineLoop {
+  startPpq: number;
+  endPpq: number;
+  /** Whether looping is active. Default `true`. */
+  enabled?: boolean;
+}
+
+/** One tempo ramp segment of {@link RealtimeEngine.setTempoSegments}. */
+export interface EngineTempoSegment {
+  /** Segment start position in PPQ. */
+  startPpq: number;
+  /** Tempo in BPM at the segment start. */
+  bpm: number;
+  /** Tempo in BPM at the segment end for a ramp; `0` / omitted = constant tempo. */
+  endBpm?: number;
+}
+
+/** One time-signature segment of {@link RealtimeEngine.setTimeSignatureSegments}. */
+export interface EngineTimeSignatureSegment {
+  /** Segment start position in PPQ. */
+  startPpq: number;
+  /** Beats per bar. */
+  numerator: number;
+  /** Beat unit (e.g. `4` for quarter note). */
+  denominator: number;
 }

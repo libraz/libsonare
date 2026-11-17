@@ -9,7 +9,12 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import type { MixSceneBus, MixSceneStrip } from '../src/index.js';
 import { isSonareError, RealtimeEngine } from '../src/index.js';
+
+/** First strip / bus of a scene document: the object the engine strip setters take. */
+const sceneStrip = (json: string): MixSceneStrip => JSON.parse(json).strips[0];
+const sceneBus = (json: string): MixSceneBus => JSON.parse(json).buses[0];
 
 const BLOCK = 256;
 const FRAMES = BLOCK * 40;
@@ -29,9 +34,9 @@ function expectArgumentRefusal(call: () => void): void {
   expect(isSonareError(error)).toBe(false);
 }
 
-/** One mono DC(1.0) clip on `trackId`, routed onto lane->bus `outputBusId`. */
-function dcEngine(trackId: number, outputBusId: number): RealtimeEngine {
-  const engine = new RealtimeEngine(48000, BLOCK);
+/** One mono DC(1.0) clip on `trackId`, routed onto lane->bus `outputBusId` (absent: the master mix). */
+function dcEngine(trackId: number, outputBusId?: number): RealtimeEngine {
+  const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: BLOCK });
   engine.setClips([
     {
       id: trackId,
@@ -59,12 +64,12 @@ function settled(engine: RealtimeEngine, blocks = 30): number {
 
 describe('RealtimeEngine bus routing and sends', () => {
   it('routes a bus output into another bus', () => {
-    const direct = dcEngine(10, 0);
+    const direct = dcEngine(10);
     const x = settled(direct);
     direct.destroy();
     expect(x).toBeGreaterThan(0.5);
 
-    const throughBus2 = new RealtimeEngine(48000, BLOCK);
+    const throughBus2 = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: BLOCK });
     throughBus2.setClips([
       {
         id: 1,
@@ -85,12 +90,12 @@ describe('RealtimeEngine bus routing and sends', () => {
   });
 
   it('taps bus sends before or after gainDb', () => {
-    const direct = dcEngine(10, 0);
+    const direct = dcEngine(10);
     const x = settled(direct);
     direct.destroy();
 
     const run = (timing: 'preFader' | 'postFader'): number => {
-      const engine = new RealtimeEngine(48000, BLOCK);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: BLOCK });
       engine.setClips([
         {
           id: 1,
@@ -138,7 +143,7 @@ function expectSameRender(a: Float32Array, b: Float32Array): void {
 
 /** Two declared buses and one DC track (10) on the master mix, no sends. */
 function partialOpsEngine(): RealtimeEngine {
-  const engine = new RealtimeEngine(48000, BLOCK);
+  const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: BLOCK });
   engine.setClips([
     {
       id: 1,
@@ -210,7 +215,7 @@ describe('RealtimeEngine per-lane sends and output bus', () => {
     replaced.destroy();
   });
 
-  it('setTrackOutputBus matches setTrackLanes and 0 returns to the master mix', () => {
+  it('setTrackOutputBus matches setTrackLanes and null returns to the master mix', () => {
     const partial = partialOpsEngine();
     const replaced = partialOpsEngine();
     partial.setTrackSends(10, [{ busId: 2 }]);
@@ -222,7 +227,7 @@ describe('RealtimeEngine per-lane sends and output bus', () => {
     ]);
     expectSameRender(renderBlocks(partial), renderBlocks(replaced));
 
-    partial.setTrackOutputBus(10, 0);
+    partial.setTrackOutputBus(10, null);
     replaced.setTrackLanes([{ trackId: 10, sends: [{ busId: 2 }] }, { trackId: 11 }]);
     expectSameRender(renderBlocks(partial), renderBlocks(replaced));
     partial.destroy();
@@ -234,7 +239,7 @@ describe('RealtimeEngine per-lane sends and output bus', () => {
     const before = renderBlocks(engine);
     for (const call of [
       () => engine.setTrackSends(99, []),
-      () => engine.setTrackOutputBus(99, 0),
+      () => engine.setTrackOutputBus(99, null),
     ]) {
       let error: unknown;
       try {
@@ -376,7 +381,7 @@ const kDuckerTrackJson = JSON.stringify({
  * ducker. Mirrors sonare_c_engine_routing_test.cpp's make_keyed_rig().
  */
 function makeKeyedRig(): RealtimeEngine {
-  const engine = new RealtimeEngine(48000, BLOCK);
+  const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: BLOCK });
   engine.setClips([
     {
       id: 1,
@@ -401,17 +406,17 @@ function makeKeyedRig(): RealtimeEngine {
     { trackId: 10, outputBusId: 2 },
     { trackId: 30, outputBusId: 1 },
   ]);
-  engine.setBusStripJson(1, kLimiterBusJson);
-  engine.setBusStripJson(2, kDuckerBusJson);
-  engine.setMasterStripJson(kDuckerMasterJson);
-  engine.setBusSidechain(2, 0, 'bus', 1);
+  engine.setBusStrip(1, sceneBus(kLimiterBusJson));
+  engine.setBusStrip(2, sceneBus(kDuckerBusJson));
+  engine.setStrip('master', sceneStrip(kDuckerMasterJson));
+  engine.setBusSidechain(2, 0, { kind: 'bus', id: 1 });
   return engine;
 }
 
 describe('RealtimeEngine bus and master sidechain', () => {
-  it('ducks from a bus or track source and clears on sourceId 0', () => {
+  it('ducks from a bus or track source and clears on null', () => {
     const reference = makeKeyedRig();
-    reference.setBusSidechain(2, 0, 'bus', 0);
+    reference.setBusSidechain(2, 0, null);
     const unkeyed = settled(reference);
     reference.destroy();
     expect(unkeyed).toBeGreaterThan(0.02);
@@ -420,20 +425,20 @@ describe('RealtimeEngine bus and master sidechain', () => {
     expect(settled(engine)).toBeLessThan(unkeyed * 0.3);
 
     // A track-sourced key on bus 2 ducks it the same way.
-    engine.setBusSidechain(2, 0, 'track', 30);
+    engine.setBusSidechain(2, 0, { kind: 'track', id: 30 });
     expect(settled(engine)).toBeLessThan(unkeyed * 0.3);
 
     // The master ducker keyed from a track or a bus pulls the whole mix down.
-    engine.setMasterSidechain(0, 'track', 30);
+    engine.setStripSidechain('master', 0, { kind: 'track', id: 30 });
     expect(settled(engine)).toBeLessThan(unkeyed * 0.3);
-    engine.setMasterSidechain(0, 'bus', 1);
+    engine.setStripSidechain('master', 0, { kind: 'bus', id: 1 });
     expect(settled(engine)).toBeLessThan(unkeyed * 0.3);
 
     // Clearing the master key leaves bus 2 keyed alone; clearing that too
     // returns the render to the unkeyed level once the 80ms release runs out.
-    engine.setMasterSidechain(0, 'bus', 0);
+    engine.setStripSidechain('master', 0, null);
     expect(settled(engine)).toBeLessThan(unkeyed * 0.3);
-    engine.setBusSidechain(2, 0, 'track', 0);
+    engine.setBusSidechain(2, 0, null);
     for (let pass = 0; pass < 8; pass += 1) {
       settled(engine);
     }
@@ -446,12 +451,18 @@ describe('RealtimeEngine bus and master sidechain', () => {
     // An out-of-range numeric sourceKind is refused client-side, before it
     // ever reaches the C ABI (the same enum-ordinal validation every other
     // string/number union on this facade uses).
-    expect(() => engine.setBusSidechain(1, 0, 2, 30)).toThrow(RangeError);
-    expect(() => engine.setMasterSidechain(0, 2, 30)).toThrow(RangeError);
+    expect(() => engine.setBusSidechain(1, 0, { kind: 2 as never, id: 30 })).toThrow(TypeError);
+    expect(() =>
+      engine.setStripSidechain('master', 0, { kind: 'sideways' as never, id: 30 }),
+    ).toThrow(RangeError);
+    // Id 0 is the native "no binding": removing one is spelled null, never id 0.
+    expect(() => engine.setBusSidechain(1, 0, { kind: 'track', id: 0 })).toThrow(RangeError);
+    // A track strip keys only from a track.
+    expect(() => engine.setStripSidechain(10, 0, { kind: 'bus', id: 1 })).toThrow(RangeError);
     // A declared sourceKind naming an undeclared source is refused by the C
     // ABI itself.
-    expectArgumentRefusal(() => engine.setBusSidechain(1, 0, 'track', 99));
-    expectArgumentRefusal(() => engine.setMasterSidechain(0, 'bus', 9));
+    expectArgumentRefusal(() => engine.setBusSidechain(1, 0, { kind: 'track', id: 99 }));
+    expectArgumentRefusal(() => engine.setStripSidechain('master', 0, { kind: 'bus', id: 9 }));
     engine.destroy();
   });
 });
@@ -459,10 +470,14 @@ describe('RealtimeEngine bus and master sidechain', () => {
 describe('RealtimeEngine sidechain pre-check', () => {
   it('reports ok for a binding the setter accepts', () => {
     const engine = makeKeyedRig();
-    expect(engine.canSetBusSidechain(2, 0, 'track', 30)).toEqual({ ok: true, reason: null });
-    expect(engine.canSetMasterSidechain(0, 'bus', 1)).toEqual({ ok: true, reason: null });
-    // Unbinding is always acceptable.
-    expect(engine.canSetBusSidechain(2, 0, 'bus', 0)).toEqual({ ok: true, reason: null });
+    expect(engine.canSetBusSidechain(2, 0, { kind: 'track', id: 30 })).toEqual({
+      ok: true,
+      reason: null,
+    });
+    expect(engine.canSetStripSidechain('master', 0, { kind: 'bus', id: 1 })).toEqual({
+      ok: true,
+      reason: null,
+    });
     // The check changes nothing: the bus key set by the rig is still in force.
     expect(settled(engine)).toBeLessThan(0.02);
     engine.destroy();
@@ -470,67 +485,81 @@ describe('RealtimeEngine sidechain pre-check', () => {
 
   it('names the refusal reason without changing state', () => {
     const engine = makeKeyedRig();
-    expect(engine.canSetBusSidechain(9, 0, 'track', 30)).toEqual({
+    expect(engine.canSetBusSidechain(9, 0, { kind: 'track', id: 30 })).toEqual({
       ok: false,
       reason: 'invalidTarget',
     });
-    expect(engine.canSetBusSidechain(2, 7, 'track', 30)).toEqual({
+    expect(engine.canSetBusSidechain(2, 7, { kind: 'track', id: 30 })).toEqual({
       ok: false,
       reason: 'insertOutOfRange',
     });
-    expect(engine.canSetBusSidechain(2, 0, 'track', 99)).toEqual({
+    expect(engine.canSetBusSidechain(2, 0, { kind: 'track', id: 99 })).toEqual({
       ok: false,
       reason: 'undeclaredSource',
     });
-    expect(engine.canSetBusSidechain(2, 0, 'bus', 2)).toEqual({ ok: false, reason: 'selfKey' });
-    expect(engine.canSetMasterSidechain(5, 'bus', 1)).toEqual({
+    expect(engine.canSetBusSidechain(2, 0, { kind: 'bus', id: 2 })).toEqual({
+      ok: false,
+      reason: 'selfKey',
+    });
+    expect(engine.canSetStripSidechain('master', 5, { kind: 'bus', id: 1 })).toEqual({
       ok: false,
       reason: 'insertOutOfRange',
     });
-    expect(engine.canSetMasterSidechain(0, 'bus', 9)).toEqual({
+    expect(engine.canSetStripSidechain('master', 0, { kind: 'bus', id: 9 })).toEqual({
       ok: false,
       reason: 'undeclaredSource',
     });
-    expect(engine.canSetLaneSidechain(0, 0, 10)).toEqual({ ok: false, reason: 'invalidTarget' });
+    expect(engine.canSetStripSidechain(0, 0, { kind: 'track', id: 10 })).toEqual({
+      ok: false,
+      reason: 'invalidTarget',
+    });
     // Bus 2 is keyed from bus 1; keying bus 1 from bus 2 would close a loop.
-    expect(engine.canSetBusSidechain(1, 0, 'bus', 2)).toEqual({ ok: false, reason: 'cycle' });
+    expect(engine.canSetBusSidechain(1, 0, { kind: 'bus', id: 2 })).toEqual({
+      ok: false,
+      reason: 'cycle',
+    });
     engine.destroy();
   });
 
   it('refuses an unknown sourceKind by name like the setters do', () => {
     const engine = makeKeyedRig();
-    expect(() => engine.canSetBusSidechain(2, 0, 2, 30)).toThrow(RangeError);
-    expect(() => engine.canSetMasterSidechain(0, 'sideways' as never, 30)).toThrow(RangeError);
+    expect(() => engine.canSetBusSidechain(2, 0, { kind: 2 as never, id: 30 })).toThrow(TypeError);
+    expect(() =>
+      engine.canSetStripSidechain('master', 0, { kind: 'sideways' as never, id: 30 }),
+    ).toThrow(RangeError);
     engine.destroy();
   });
 
   it('names an undeclared source and an insert the lane strip lacks on the lane form', () => {
     const engine = makeKeyedRig();
-    expect(engine.canSetLaneSidechain(10, 0, 99)).toEqual({
+    expect(engine.canSetStripSidechain(10, 0, { kind: 'track', id: 99 })).toEqual({
       ok: false,
       reason: 'insertOutOfRange',
     });
-    engine.setTrackStripJson(10, kDuckerTrackJson);
-    expect(engine.canSetLaneSidechain(10, 0, 99)).toEqual({
+    engine.setStrip(10, sceneStrip(kDuckerTrackJson));
+    expect(engine.canSetStripSidechain(10, 0, { kind: 'track', id: 99 })).toEqual({
       ok: false,
       reason: 'undeclaredSource',
     });
-    expect(engine.canSetLaneSidechain(10, 3, 30)).toEqual({
+    expect(engine.canSetStripSidechain(10, 3, { kind: 'track', id: 30 })).toEqual({
       ok: false,
       reason: 'insertOutOfRange',
     });
-    expect(engine.canSetLaneSidechain(10, 0, 30)).toEqual({ ok: true, reason: null });
-    expectArgumentRefusal(() => engine.setLaneSidechain(10, 0, 99));
-    expectArgumentRefusal(() => engine.setLaneSidechain(10, 3, 30));
-    expect(() => engine.setLaneSidechain(10, 0, 30)).not.toThrow();
+    expect(engine.canSetStripSidechain(10, 0, { kind: 'track', id: 30 })).toEqual({
+      ok: true,
+      reason: null,
+    });
+    expectArgumentRefusal(() => engine.setStripSidechain(10, 0, { kind: 'track', id: 99 }));
+    expectArgumentRefusal(() => engine.setStripSidechain(10, 3, { kind: 'track', id: 30 }));
+    expect(() => engine.setStripSidechain(10, 0, { kind: 'track', id: 30 })).not.toThrow();
     engine.destroy();
   });
 
   it('agrees with the setter on the lane form', () => {
     const engine = makeKeyedRig();
-    const check = engine.canSetLaneSidechain(10, 0, 30);
+    const check = engine.canSetStripSidechain(10, 0, { kind: 'track', id: 30 });
     if (check.ok) {
-      expect(() => engine.setLaneSidechain(10, 0, 30)).not.toThrow();
+      expect(() => engine.setStripSidechain(10, 0, { kind: 'track', id: 30 })).not.toThrow();
     } else {
       expect(check.reason).not.toBeNull();
     }
@@ -548,8 +577,8 @@ describe('RealtimeEngine MIDI clip gain and fade', () => {
     fadeOutSamples?: number;
     lengthSamples?: number;
   }): Float32Array {
-    const engine = new RealtimeEngine(48000, BLOCK);
-    engine.setBuiltinInstrument({ gain: 0.5 }, destination);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: BLOCK });
+    engine.setBuiltinInstrument(destination, { gain: 0.5 });
     engine.setMidiClips([
       {
         id: 42,

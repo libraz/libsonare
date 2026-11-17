@@ -769,7 +769,7 @@ export class Project {
   }
 
   /**
-   * Replace the project's mixer scene from scene JSON (see {@link Mixer.fromSceneJson}).
+   * Replace the project's mixer scene from scene JSON (see {@link Mixer.fromJson}).
    *
    * @returns One warning per key the scene reader does not recognise (e.g.
    *   `unknown scene key 'strips[2].faderDB'`; `$`- and `x-`-prefixed keys are exempt).

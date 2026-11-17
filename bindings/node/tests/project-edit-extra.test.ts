@@ -699,7 +699,12 @@ describe('Project assist sidecar bindings', () => {
 
 describe('RealtimeEngine MIDI / parameter bindings', () => {
   function preparedEngine(): RealtimeEngine {
-    return new RealtimeEngine(48000, 128, 1024, 1024);
+    return new RealtimeEngine({
+      sampleRate: 48000,
+      maxBlockSize: 128,
+      commandCapacity: 1024,
+      telemetryCapacity: 1024,
+    });
   }
 
   it('pushMidiCc and pushMidiPanic do not throw on a prepared engine', () => {
@@ -738,17 +743,17 @@ describe('RealtimeEngine MIDI / parameter bindings', () => {
       maxValue: 12,
       defaultValue: 0,
       rtSafe: true,
-      defaultCurve: 0 as const,
+      defaultCurve: 'linear' as const,
     };
     engine.addParameter(info);
-    expect(engine.parameterCount()).toBe(1);
+    expect(engine.parameters().length).toBe(1);
     // Adding a duplicate id is rejected.
     expect(() => engine.addParameter(info)).toThrow();
     engine.clearParameters();
-    expect(engine.parameterCount()).toBe(0);
+    expect(engine.parameters().length).toBe(0);
     // After clearing, the same id registers again.
     expect(() => engine.addParameter(info)).not.toThrow();
-    expect(engine.parameterCount()).toBe(1);
+    expect(engine.parameters().length).toBe(1);
     engine.destroy();
   });
 });

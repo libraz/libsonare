@@ -6,7 +6,7 @@ import { ErrorCode, RealtimeEngine } from '../src/index.js';
 
 describe('RealtimeEngine native binding', () => {
   it('rejects clips without channels or a page provider without aborting', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     expect(() => engine.setClips([{ id: 1, startPpq: 0 }])).toThrow(
       /clip requires non-empty channels or a pageProvider/,
     );
@@ -17,14 +17,18 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('refuses a fractional engine sample rate', () => {
-    expect(() => new RealtimeEngine(44100.5, 128)).toThrow(RangeError);
-    const engine = new RealtimeEngine(44100, 128);
-    expect(() => engine.prepare(48000.25, 128)).toThrow(/whole number of hertz/);
+    expect(() => new RealtimeEngine({ sampleRate: 44100.5, maxBlockSize: 128 })).toThrow(
+      RangeError,
+    );
+    const engine = new RealtimeEngine({ sampleRate: 44100, maxBlockSize: 128 });
+    expect(() => engine.prepare({ sampleRate: 48000.25, maxBlockSize: 128 })).toThrow(
+      /whole number of hertz/,
+    );
     engine.destroy();
   });
 
   it('upserts and removes one clip while keeping the rest', () => {
-    const engine = new RealtimeEngine(48000, 4);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 4 });
     const plane = (value: number) => new Float32Array(4).fill(value);
     engine.setClips([
       { id: 1, channels: [plane(0.25)], startPpq: 0 },
@@ -38,11 +42,11 @@ describe('RealtimeEngine native binding', () => {
     expect(firstSample()).toBeCloseTo(0.75);
 
     engine.upsertClip({ id: 1, channels: [plane(0.25)], startPpq: 0, gain: 2 });
-    expect(engine.clipCount()).toBe(2);
+    expect(engine.clipCount).toBe(2);
     expect(firstSample()).toBeCloseTo(1.0);
 
     engine.removeClip(2);
-    expect(engine.clipCount()).toBe(1);
+    expect(engine.clipCount).toBe(1);
     expect(firstSample()).toBeCloseTo(0.5);
     expect(() => engine.removeClip(2)).toThrow();
     expect(() =>
@@ -53,7 +57,7 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('streams paged clip providers and drains page requests', () => {
-    const engine = new RealtimeEngine(48000, 8);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     const provider = engine.createClipPageProvider(1, 8, 4);
     provider.supply(0, [new Float32Array([1, 2, 3, 4])]);
 
@@ -71,7 +75,7 @@ describe('RealtimeEngine native binding', () => {
     const request = engine.popClipPageRequest();
     expect(request).toEqual({ clipId: 123, channel: 0, sample: 4 });
     expect(
-      engine.drainTelemetry().some((record) => record.type === 1 && record.value === 123),
+      engine.drainTelemetry().some((record) => record.type === 'error' && record.value === 123),
     ).toBe(true);
 
     provider.supply(1, [new Float32Array([5, 6, 7, 8])]);
@@ -84,7 +88,7 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('rejects paged providers whose metadata exceeds shared limits', () => {
-    const engine = new RealtimeEngine(48000, 8);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     expect(() => engine.createClipPageProvider(1, 1_000_000_000_000, 1)).toThrow();
     expect(() => engine.createClipPageProvider(65, 8, 4)).toThrow();
     engine.destroy();
@@ -97,7 +101,7 @@ describe('RealtimeEngine native binding', () => {
       const interleaved = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8]);
       writeFileSync(rawPath, Buffer.from(interleaved.buffer));
 
-      const engine = new RealtimeEngine(48000, 8);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
       const provider = engine.createFileClipPageProvider(rawPath, {
         numChannels: 1,
         numSamples: 8,
@@ -131,7 +135,7 @@ describe('RealtimeEngine native binding', () => {
     // (rather than pinned to literal numbers) because a failed
     // createFileClipPageProvider attempt above also consumes and immediately
     // frees one, and this test must not depend on how many ids came before it.
-    const engine = new RealtimeEngine(48000, 8);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     expect(() =>
       engine.createFileClipPageProvider('/definitely/missing/sonare-clip.f32', {
         numChannels: 1,
@@ -156,7 +160,7 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('refuses a clip bound to a destroyed provider instead of silently playing whatever now holds its old id', () => {
-    const engine = new RealtimeEngine(48000, 8);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     const stale = engine.createClipPageProvider(1, 8, 4);
     stale.destroy();
     // Before the fix this reused stale's numeric id, so the assertion below
@@ -175,7 +179,7 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('renders repitch warped clips from anchors', () => {
-    const engine = new RealtimeEngine(48000, 4);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 4 });
     engine.setClips([
       {
         id: 303,
@@ -198,7 +202,7 @@ describe('RealtimeEngine native binding', () => {
     expect(processed[0][3]).toBeCloseTo(15, 4);
     engine.destroy();
 
-    const badLoopWarpEngine = new RealtimeEngine(48000, 4);
+    const badLoopWarpEngine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 4 });
     expect(() =>
       badLoopWarpEngine.setClips([
         {
@@ -217,7 +221,7 @@ describe('RealtimeEngine native binding', () => {
     ).toThrow();
     badLoopWarpEngine.destroy();
 
-    const badWarpModeEngine = new RealtimeEngine(48000, 4);
+    const badWarpModeEngine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 4 });
     badWarpModeEngine.setClips([
       {
         id: 3032,
@@ -244,13 +248,13 @@ describe('RealtimeEngine native binding', () => {
         },
       ]),
     ).toThrow(/warpMode must be/);
-    expect(badWarpModeEngine.clipCount()).toBe(1);
+    expect(badWarpModeEngine.clipCount).toBe(1);
     badWarpModeEngine.seekSample(0);
     const afterBadWarpMode = badWarpModeEngine.process([new Float32Array(4)]);
     expect(Array.from(afterBadWarpMode[0])).toEqual([0.25, 0.5, 0.75, 1.0]);
     badWarpModeEngine.destroy();
 
-    const tempoEngine = new RealtimeEngine(48000, 8192);
+    const tempoEngine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8192 });
     const tempoSource = new Float32Array(4096);
     for (let i = 0; i < tempoSource.length; i++) {
       tempoSource[i] = Math.sin(i * 0.02);
@@ -261,7 +265,7 @@ describe('RealtimeEngine native binding', () => {
         channels: [tempoSource],
         startPpq: 0,
         lengthSamples: 8192,
-        warpMode: 'tempo-sync',
+        warpMode: 'tempoSync',
         warpAnchors: [
           { warpSample: 0, sourceSample: 0 },
           { warpSample: 2048, sourceSample: 1024 },
@@ -283,14 +287,14 @@ describe('RealtimeEngine native binding', () => {
     for (let i = 0; i < sourceSamples; i++) {
       source[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / sr);
     }
-    const engine = new RealtimeEngine(sr, outputSamples);
+    const engine = new RealtimeEngine({ sampleRate: sr, maxBlockSize: outputSamples });
     engine.setClips([
       {
         id: 305,
         channels: [source],
         startPpq: 0,
         lengthSamples: outputSamples,
-        warpMode: 'time-stretch',
+        warpMode: 'timeStretch',
         warpAnchors: [
           { warpSample: 0, sourceSample: 0 },
           { warpSample: outputSamples, sourceSample: sourceSamples },
@@ -324,42 +328,42 @@ describe('RealtimeEngine native binding', () => {
     // already covers. A fresh engine has dropped nothing, so the assertion is
     // that the counters EXIST and read zero -- the addon method missing
     // entirely is a TypeError, which is what this catches.
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
-      expect(engine.clipPageRequestOverflowCount()).toBe(0);
-      expect(engine.warpStretchOverflowCount()).toBe(0);
+      expect(engine.clipPageRequestOverflowCount).toBe(0);
+      expect(engine.warpStretchOverflowCount).toBe(0);
       // Positive control on the reader itself: the sibling counter that has
       // always existed reads the same way, so a zero here is the counter
       // answering rather than a stub returning a default.
-      expect(engine.externalMidiDroppedCount()).toBe(0);
-      expect(typeof engine.clipPageRequestOverflowCount()).toBe('number');
-      expect(typeof engine.warpStretchOverflowCount()).toBe('number');
+      expect(engine.externalMidiDroppedCount).toBe(0);
+      expect(typeof engine.clipPageRequestOverflowCount).toBe('number');
+      expect(typeof engine.warpStretchOverflowCount).toBe('number');
     } finally {
       engine.destroy();
     }
   });
 
   it('sets and reads the warp voice capacity, rejecting out-of-domain values', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
-      expect(engine.warpVoiceCapacity()).toBe(8);
+      expect(engine.warpVoiceCapacity).toBe(8);
 
       engine.setWarpVoiceCapacity(12);
-      expect(engine.warpVoiceCapacity()).toBe(12);
+      expect(engine.warpVoiceCapacity).toBe(12);
 
       engine.setWarpVoiceCapacity(0);
-      expect(engine.warpVoiceCapacity()).toBe(0);
+      expect(engine.warpVoiceCapacity).toBe(0);
 
       // Rejected values leave the previously accepted capacity (0) in place.
       expect(() => engine.setWarpVoiceCapacity(65)).toThrow(RangeError);
       expect(() => engine.setWarpVoiceCapacity(65)).toThrow(/voices/);
-      expect(engine.warpVoiceCapacity()).toBe(0);
+      expect(engine.warpVoiceCapacity).toBe(0);
 
       expect(() => engine.setWarpVoiceCapacity(-1)).toThrow(RangeError);
-      expect(engine.warpVoiceCapacity()).toBe(0);
+      expect(engine.warpVoiceCapacity).toBe(0);
 
       expect(() => engine.setWarpVoiceCapacity(1.5)).toThrow(RangeError);
-      expect(engine.warpVoiceCapacity()).toBe(0);
+      expect(engine.warpVoiceCapacity).toBe(0);
     } finally {
       engine.destroy();
     }
@@ -380,7 +384,7 @@ describe('RealtimeEngine native binding', () => {
       return provider.id;
     };
 
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     const second = engine.createClipPageProvider(1, pageFrames, pageFrames);
     const third = engine.createClipPageProvider(1, pageFrames, pageFrames);
     // Explicitly destroying one leaves a nulled slot: the release path has to
@@ -400,7 +404,7 @@ describe('RealtimeEngine native binding', () => {
     // free to hold freed blocks: loading the same pages again must land inside
     // the memory the first load released rather than stacking a second copy on
     // top of it (which is what the leak measured, at nearly twice this bound).
-    const reload = new RealtimeEngine(48000, 128);
+    const reload = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     loadPages(reload);
     expect(process.memoryUsage().rss - baselineRss).toBeLessThan(loadedDelta + supplied / 2);
     reload.destroy();
@@ -421,8 +425,8 @@ describe('RealtimeEngine native binding', () => {
     // an already-freed provider either.
     expect(() => third.destroy()).not.toThrow();
     // The process is still usable, not merely free of an escaping exception.
-    const after = new RealtimeEngine(48000, 128);
-    expect(after.getTransportState().playing).toBe(false);
+    const after = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    expect(after.transportState().playing).toBe(false);
     after.destroy();
   });
 });

@@ -137,7 +137,7 @@ function suggest(fnName: string, request: SuggestMixSceneRequest, sceneOnly: boo
  *
  * The assistant only ever returns parameters: it does not process audio and it
  * does not apply anything. Realising the suggestion is a separate explicit step
- * through {@link Mixer.fromSceneJson} — use {@link suggestMixSceneJson} to get
+ * through {@link Mixer.fromJson} — use {@link suggestMixSceneJson} to get
  * the scene as the JSON text that entry point reads.
  *
  * Offline / control thread only: this runs an STFT per track and evaluates
@@ -150,7 +150,7 @@ export function suggestMixScene(request: SuggestMixSceneRequest): MixAssistantRe
 
 /**
  * As {@link suggestMixScene}, but returns only the suggested scene, as the JSON
- * text {@link Mixer.fromSceneJson} reads. Provided so a caller that wants to
+ * text {@link Mixer.fromJson} reads. Provided so a caller that wants to
  * apply a suggestion does not have to dig the scene out of the fuller result
  * document and re-serialise it.
  */

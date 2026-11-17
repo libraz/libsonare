@@ -320,10 +320,15 @@ describe('bouncing a project through a sample patch', () => {
     const bank = new SampleBank();
     bank.addSample(sampleSine(), { rootKey: 60, sourceRate: SR });
     bank.addZone({ sampleIndex: 0 });
-    const engine = new RealtimeEngine();
+    const engine = new RealtimeEngine({ sampleRate: 48000 });
     try {
-      engine.prepare(SR, 128, 16, 16);
-      engine.setSynthInstrument({ engineMode: 'sample', sampleBank: bank }, 7);
+      engine.prepare({
+        sampleRate: SR,
+        maxBlockSize: 128,
+        commandCapacity: 16,
+        telemetryCapacity: 16,
+      });
+      engine.setSynthInstrument(7, { engineMode: 'sample', sampleBank: bank });
       // The engine took a share of the bank, so the caller's handle can go now
       // and the voice still has its pool.
       bank.destroy();

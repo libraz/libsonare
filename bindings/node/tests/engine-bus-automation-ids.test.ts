@@ -29,7 +29,7 @@ function settled(engine: RealtimeEngine, blocks = 30): number {
 
 describe('bus automation ids (Node)', () => {
   it('keeps a fader id on its bus across a reorder and retires it with the bus', () => {
-    const engine = new RealtimeEngine(48000, kBlock);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: kBlock });
     try {
       // Only track 20 sounds and it feeds bus 200, so the output reads bus 200's fader alone.
       engine.setClips([

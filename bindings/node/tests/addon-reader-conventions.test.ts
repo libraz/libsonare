@@ -90,6 +90,7 @@ import {
   transcribe,
 } from '../src/index.js';
 import { REQUEST_KEYS } from '../src/request_keys.js';
+import type { EngineMetronomeConfig } from '../src/types.js';
 import {
   addonEntryPoints,
   bareHasSites,
@@ -249,6 +250,17 @@ const meterAudio = (): Audio => {
   }
   return meterAudioHandle;
 };
+
+/**
+ * The part of the derived keys that belongs to one nesting level: the facade
+ * refuses a key at a level that does not declare it, while the reader scan
+ * derives one flat list for the whole call.
+ */
+const levelOf = (o: Record<string, unknown>, keys: readonly string[]): Record<string, unknown> =>
+  Object.fromEntries(Object.entries(o).filter(([key]) => keys.includes(key)));
+const GRAPH_NODE_KEYS = ['type', 'gainDb', 'numPorts'] as const;
+const GRAPH_CONNECTION_KEYS = ['mix'] as const;
+const TRACK_SEND_KEYS = ['levelDb', 'enabled', 'sendTiming'] as const;
 
 /**
  * How to invoke each covered entry point with an options bag. The option KEYS
@@ -809,7 +821,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) =>
       downmix(
         [0.1, 0.2, 0.3, 0.4, 0.05, 0.15].map((v) => new Float32Array(8).fill(v)),
-        1,
+        'stereo',
         o,
       ).map((plane) => Array.from(plane)),
   },
@@ -849,15 +861,24 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   },
   {
     jsName: 'setBuiltinInstrument',
-    invoke: (o) => withEngine((engine) => engine.setBuiltinInstrument(o, 1)),
+    invoke: (o) => withEngine((engine) => engine.setBuiltinInstrument(1, o)),
   },
   {
     jsName: 'setSf2Instrument',
-    invoke: (o) => withEngine((engine) => engine.setSf2Instrument(o)),
+    invoke: (o) => withEngine((engine) => engine.setSf2Instrument(0, o)),
   },
   {
     jsName: 'setMetronome',
-    invoke: (o) => withEngine((engine) => engine.setMetronome({ ...o, enabled: true })),
+    // The reader's `clickSeconds` is spelled `clickSec` on the facade.
+    invoke: (o) =>
+      withEngine((engine) => {
+        const { clickSeconds, ...rest } = o as Record<string, unknown>;
+        engine.setMetronome({
+          ...rest,
+          ...('clickSeconds' in o ? { clickSec: clickSeconds } : {}),
+          enabled: true,
+        } as EngineMetronomeConfig);
+      }),
   },
   {
     jsName: 'bindController',
@@ -865,7 +886,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
       withEngine((engine) => {
         // The call returns nothing, so the observable is the audio the binding
         // shapes: lo / hi / curve only surface once the bound CC moves.
-        engine.setSynthInstrument('clarinet', 0);
+        engine.setSynthInstrument(0, 'clarinet');
         engine.clearControllerBindings(0);
         engine.bindController(0, {
           ...o,
@@ -888,7 +909,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) =>
       withEngine((engine) => {
         engine.setMarkers([{ ...o, id: 1, ppq: 0 }]);
-        return engine.markerByIndex(0);
+        return engine.markers()[0];
       }),
   },
   {
@@ -907,7 +928,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
       withEngine((engine) => {
         engine.addParameter({ id: 1, name: 'p', minValue: 0, maxValue: 1, defaultValue: 0 });
         engine.setAutomationLane(1, [{ ...o, ppq: 0, value: 0.5 }]);
-        return engine.parameterCount();
+        return engine.parameters().length;
       }),
   },
   {
@@ -922,8 +943,8 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     jsName: 'bindMidiCcBinding',
     invoke: (o) =>
       withEngine((engine) => {
-        engine.bindMidiCcBinding({ ...o, ccNumber: 7, paramId: 1 });
-        return engine.midiCcBindingCount();
+        engine.bindMidiCc({ ...o, ccNumber: 7, paramId: 1 });
+        return engine.midiCcBindingCount;
       }),
   },
   { jsName: 'addTrack', invoke: (o) => withProject((p) => p.addTrack({ ...o, kind: 'audio' })) },
@@ -932,16 +953,24 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) =>
       withEngine((engine) => {
         engine.setGraph({
-          ...o,
+          ...levelOf(o, ['numChannels', 'parameterBindings']),
           nodes: [
-            { ...o, id: 'in' },
-            { ...o, id: 'out' },
+            { ...levelOf(o, GRAPH_NODE_KEYS), id: 'in' },
+            { ...levelOf(o, GRAPH_NODE_KEYS), id: 'out' },
           ],
-          connections: [{ ...o, sourceNode: 'in', sourcePort: 0, destNode: 'out', destPort: 0 }],
+          connections: [
+            {
+              ...levelOf(o, GRAPH_CONNECTION_KEYS),
+              sourceNode: 'in',
+              sourcePort: 0,
+              destNode: 'out',
+              destPort: 0,
+            },
+          ],
           inputNode: 'in',
           outputNode: 'out',
         });
-        return [engine.graphNodeCount(), engine.graphConnectionCount()];
+        return [engine.graphNodeCount, engine.graphConnectionCount];
       }),
   },
   {
@@ -951,7 +980,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
         engine.setClips([
           { ...o, id: 1, startPpq: 0, channels: [new Float32Array(64).fill(0.25)] },
         ]);
-        return engine.clipCount();
+        return engine.clipCount;
       }),
   },
   {
@@ -964,7 +993,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
           startPpq: 0,
           channels: [new Float32Array(64).fill(0.25)],
         });
-        return engine.clipCount();
+        return engine.clipCount;
       }),
   },
   {
@@ -972,7 +1001,13 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) =>
       withEngine((engine) => {
         engine.setTrackBuses([{ busId: 1 }]);
-        engine.setTrackLanes([{ ...o, trackId: 1, sends: [{ ...o, busId: 1 }] }]);
+        engine.setTrackLanes([
+          {
+            ...levelOf(o, ['outputBusId', 'sourceChannelLayout']),
+            trackId: 1,
+            sends: [{ ...levelOf(o, TRACK_SEND_KEYS), busId: 1 }],
+          },
+        ]);
         return 'accepted';
       }),
   },
@@ -981,8 +1016,8 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) =>
       withEngine((engine) => {
         engine.setTrackBuses([{ busId: 1 }]);
-        engine.setTrackLanes([1]);
-        engine.setTrackSends(1, [{ ...o, busId: 1 }]);
+        engine.setTrackLanes([{ trackId: 1 }]);
+        engine.setTrackSends(1, [{ ...levelOf(o, TRACK_SEND_KEYS), busId: 1 }]);
         return 'accepted';
       }),
   },
@@ -990,7 +1025,9 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     jsName: 'setTrackBuses',
     invoke: (o) =>
       withEngine((engine) => {
-        engine.setTrackBuses([{ ...o, busId: 1 }]);
+        engine.setTrackBuses([
+          { ...levelOf(o, ['gainDb', 'channelLayout', 'outputBusId']), busId: 1 },
+        ]);
         return 'accepted';
       }),
   },
@@ -1156,7 +1193,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) =>
       withMixer((mixer) => {
         mixer.addStrip('probe', { ...o });
-        return [mixer.stripCount(), mixer.toSceneJson()];
+        return [mixer.stripCount, mixer.toJson()];
       }),
   },
   { jsName: 'detectClipping', invoke: (o) => meterAudio().detectClipping(o) },
@@ -1166,7 +1203,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
 ];
 
 function withEngine<T>(body: (engine: RealtimeEngine) => T): T {
-  const engine = new RealtimeEngine(48000, 128);
+  const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
   try {
     return body(engine);
   } finally {
@@ -1184,7 +1221,10 @@ function withSampleBank<T>(body: (bank: SampleBank) => T): T {
 }
 
 function withMixer<T>(body: (mixer: Mixer) => T): T {
-  const mixer = Mixer.fromSceneJson(mixingScenePresetJson('commentaryDucking'), 48000, 8);
+  const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+    sampleRate: 48000,
+    blockSize: 8,
+  });
   try {
     return body(mixer);
   } finally {

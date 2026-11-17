@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import type { MixSceneStrip } from '../src/index.js';
 import { ErrorCode, Project, ProjectTimeline, RealtimeEngine } from '../src/index.js';
+
+/** First strip / bus of a scene document: the object the engine strip setters take. */
+const sceneStrip = (json: string): MixSceneStrip => JSON.parse(json).strips[0];
 
 const SAMPLE_RATE = 48000;
 const BLOCK_SIZE = 128;
@@ -64,8 +68,13 @@ function duckerStripJson(trackId: number): string {
 }
 
 function preparedEngine(): RealtimeEngine {
-  const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE);
-  engine.prepare(SAMPLE_RATE, BLOCK_SIZE, 64, 16);
+  const engine = new RealtimeEngine({ sampleRate: SAMPLE_RATE, maxBlockSize: BLOCK_SIZE });
+  engine.prepare({
+    sampleRate: SAMPLE_RATE,
+    maxBlockSize: BLOCK_SIZE,
+    commandCapacity: 64,
+    telemetryCapacity: 16,
+  });
   return engine;
 }
 
@@ -83,12 +92,11 @@ function engineBounce(engine: RealtimeEngine): Float32Array {
     sourceSampleRate: SAMPLE_RATE,
     targetSampleRate: SAMPLE_RATE,
     normalizeLufs: false,
-    dither: 0,
   });
   engine.stop();
   engine.seekSample(0);
   processBlock(engine);
-  expect(engine.getTransportState().playing).toBe(false);
+  expect(engine.transportState().playing).toBe(false);
   return result.interleaved;
 }
 
@@ -111,7 +119,7 @@ function peak(data: Float32Array): number {
 
 /** Binds a fresh instrument (so voice state cannot leak), compiles and applies. */
 function applyProject(engine: RealtimeEngine, project: Project): void {
-  engine.setBuiltinInstrument(SYNTH, DESTINATION);
+  engine.setBuiltinInstrument(DESTINATION, SYNTH);
   const { timeline, hasTimeline } = project.compileTimeline();
   expect(hasTimeline).toBe(true);
   expect(timeline).toBeInstanceOf(ProjectTimeline);
@@ -160,13 +168,13 @@ describe('project timeline', () => {
     const { timeline } = project.compileTimeline();
     engine.play();
     processBlock(engine);
-    expect(engine.getTransportState().playing).toBe(true);
+    expect(engine.transportState().playing).toBe(true);
     expect(() => engine.applyProjectTimeline(timeline as ProjectTimeline)).toThrow();
-    expect(engine.clipCount()).toBe(0);
+    expect(engine.clipCount).toBe(0);
     engine.stop();
     processBlock(engine);
     engine.applyProjectTimeline(timeline as ProjectTimeline);
-    expect(engine.clipCount()).toBeGreaterThan(0);
+    expect(engine.clipCount).toBeGreaterThan(0);
     timeline?.destroy();
     engine.destroy();
     project.destroy();
@@ -190,17 +198,17 @@ describe('project timeline', () => {
 
   it('rejects a self key and a cycle in lane sidechain bindings, keeping existing ones', () => {
     const engine = preparedEngine();
-    engine.setTrackLanes([1, 2]);
-    engine.setTrackStripJson(1, duckerStripJson(1));
-    engine.setTrackStripJson(2, duckerStripJson(2));
-    engine.setLaneSidechain(1, 0, 2);
-    expect(() => engine.setLaneSidechain(1, 0, 1)).toThrow();
-    expect(() => engine.setLaneSidechain(2, 0, 1)).toThrow();
+    engine.setTrackLanes([{ trackId: 1 }, { trackId: 2 }]);
+    engine.setStrip(1, sceneStrip(duckerStripJson(1)));
+    engine.setStrip(2, sceneStrip(duckerStripJson(2)));
+    engine.setStripSidechain(1, 0, { kind: 'track', id: 2 });
+    expect(() => engine.setStripSidechain(1, 0, { kind: 'track', id: 1 })).toThrow();
+    expect(() => engine.setStripSidechain(2, 0, { kind: 'track', id: 1 })).toThrow();
     // The first binding survived: re-setting it and removing it still work.
-    engine.setLaneSidechain(1, 0, 2);
-    engine.setLaneSidechain(1, 0, 0);
+    engine.setStripSidechain(1, 0, { kind: 'track', id: 2 });
+    engine.setStripSidechain(1, 0, null);
     // With it removed, the reverse direction is no longer a cycle.
-    engine.setLaneSidechain(2, 0, 1);
+    engine.setStripSidechain(2, 0, { kind: 'track', id: 1 });
     engine.destroy();
   });
 });

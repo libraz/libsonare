@@ -20,9 +20,9 @@ function programWords(
 
 /** Render one note on the no-SoundFont Sf2Player floor after `prepare` ran. */
 function renderNote(prepare: (engine: RealtimeEngine) => void, input = false): Float32Array {
-  const engine = new RealtimeEngine(48000, BLOCK);
+  const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: BLOCK });
   try {
-    engine.setSf2Instrument({}, DEST);
+    engine.setSf2Instrument(DEST, {});
     if (input) {
       engine.setMidiInputSource(DEST);
     }
@@ -53,9 +53,9 @@ function peak(a: Float32Array): number {
 
 describe('RealtimeEngine live program change', () => {
   it('renders bank 8 program 0 as the raw Program Change words do, apart from bank 0 and none', () => {
-    const viaOp = renderNote((e) => e.pushMidiProgram(DEST, 0, 0, 0, true, 8, 0));
+    const viaOp = renderNote((e) => e.pushMidiProgram(DEST, 0, 0, 0, { msb: 8, lsb: 0 }));
     const viaRaw = renderNote((e) => e.pushMidiUmp(DEST, programWords(0, 0, 0, true, 8, 0)));
-    const bank0 = renderNote((e) => e.pushMidiProgram(DEST, 0, 0, 0, true, 0, 0));
+    const bank0 = renderNote((e) => e.pushMidiProgram(DEST, 0, 0, 0, { msb: 0, lsb: 0 }));
     const none = renderNote(() => {});
     expect(peak(viaOp)).toBeGreaterThan(0);
     expect(equal(viaOp, viaRaw)).toBe(true);
@@ -64,28 +64,22 @@ describe('RealtimeEngine live program change', () => {
   });
 
   it('input source variant matches its raw UMP push and differs from bank 0', () => {
-    const viaOp = renderNote((e) => e.pushMidiInputProgram(0, 0, 0, true, 8, 0), true);
+    const viaOp = renderNote((e) => e.pushMidiInputProgram(0, 0, 0, { msb: 8, lsb: 0 }), true);
     const viaRaw = renderNote((e) => e.pushMidiInputUmp(programWords(0, 0, 0, true, 8, 0)), true);
-    const bank0 = renderNote((e) => e.pushMidiInputProgram(0, 0, 0, true, 0, 0), true);
+    const bank0 = renderNote((e) => e.pushMidiInputProgram(0, 0, 0, { msb: 0, lsb: 0 }), true);
     expect(peak(viaOp)).toBeGreaterThan(0);
     expect(equal(viaOp, viaRaw)).toBe(true);
     expect(equal(viaOp, bank0)).toBe(false);
   });
 
-  it('refuses a bank with bank-valid false on the pushes and the builder', () => {
-    const engine = new RealtimeEngine(48000, BLOCK);
+  it('refuses a malformed bank on the pushes', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: BLOCK });
     try {
-      // The pushes refuse an argument before the C call, so the error is a RangeError.
-      const bankRule = 'bank MSB and LSB must be 0 when bank-valid is false';
-      expect(() => engine.pushMidiProgram(DEST, 0, 0, 5, false, 8, 0)).toThrow(
-        new RangeError(`pushMidiProgram: ${bankRule}`),
-      );
-      expect(() => engine.pushMidiProgram(DEST, 0, 0, 5, false, 0, 1)).toThrow(
-        new RangeError(`pushMidiProgram: ${bankRule}`),
-      );
-      expect(() => engine.pushMidiInputProgram(0, 0, 5, false, 8, 0)).toThrow(
-        new RangeError(`pushMidiInputProgram: ${bankRule}`),
-      );
+      expect(() => engine.pushMidiProgram(DEST, 0, 0, 5, { msb: 8 } as never)).toThrow(TypeError);
+      expect(() =>
+        engine.pushMidiProgram(DEST, 0, 0, 5, { msb: 8, lsb: 0, extra: 1 } as never),
+      ).toThrow(/unknown request key 'extra'/);
+      expect(() => engine.pushMidiInputProgram(0, 0, 5, 3 as never)).toThrow(TypeError);
     } finally {
       engine.destroy();
     }
@@ -102,7 +96,7 @@ describe('RealtimeEngine live program change', () => {
   });
 
   it('refuses out-of-range and mistyped arguments like the sibling pushes', () => {
-    const engine = new RealtimeEngine(48000, BLOCK);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: BLOCK });
     try {
       expect(() => engine.pushMidiProgram(DEST, 16, 0, 0)).toThrow(
         new RangeError('pushMidiProgram: group must be in [0, 15]'),
@@ -115,20 +109,18 @@ describe('RealtimeEngine live program change', () => {
       expect(() => engine.pushMidiProgram(DEST, 0, 0, 128)).toThrow(
         new RangeError('pushMidiProgram: program must be in [0, 127]'),
       );
-      expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, true, 128, 0)).toThrow(
+      expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, { msb: 128, lsb: 0 })).toThrow(
         new RangeError('pushMidiProgram: bank_msb must be in [0, 127]'),
       );
       expect(() => engine.pushMidiProgram(DEST, 0, 0, 300)).toThrow(/program/);
-      expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, true, 300, 0)).toThrow(/bankMsb/);
-      expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, true, 0, 300)).toThrow(/bankLsb/);
-      expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, 'yes' as unknown as boolean)).toThrow(
-        /bankValid/,
-      );
+      expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, { msb: 300, lsb: 0 })).toThrow(/bankMsb/);
+      expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, { msb: 0, lsb: 300 })).toThrow(/bankLsb/);
+      expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, 'yes' as never)).toThrow(TypeError);
       expect(() => engine.pushMidiProgram('x' as unknown as number, 0, 0, 0)).toThrow(TypeError);
-      expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, false, 0, 0, -1)).toThrow(RangeError);
+      expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, null, -1)).toThrow(RangeError);
       expect(() => engine.pushMidiInputProgram(300, 0, 0)).toThrow(/group/);
       expect(() => engine.pushMidiInputProgram(0, 0, 300)).toThrow(/program/);
-      expect(() => engine.pushMidiInputProgram(0, 0, 0, true, 0, 300)).toThrow(/bankLsb/);
+      expect(() => engine.pushMidiInputProgram(0, 0, 0, { msb: 0, lsb: 300 })).toThrow(/bankLsb/);
     } finally {
       engine.destroy();
     }

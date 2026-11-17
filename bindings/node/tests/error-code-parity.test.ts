@@ -61,8 +61,8 @@ beforeAll(async () => {
 describe('a library or object-state failure reports one code on every surface', () => {
   it('a malformed scene JSON is InvalidFormat on Node, WASM and Python', () => {
     const answers = {
-      node: codeOf(() => NodeMixer.fromSceneJson('{not json')),
-      wasm: codeOf(() => WasmMixer.fromSceneJson('{not json')),
+      node: codeOf(() => NodeMixer.fromJson('{not json', { sampleRate: 48000 })),
+      wasm: codeOf(() => WasmMixer.fromJson('{not json', { sampleRate: 48000 })),
       python: pythonCode("libsonare.Mixer.from_scene_json('{not json')"),
     };
     expect(answers).toEqual({
@@ -75,14 +75,16 @@ describe('a library or object-state failure reports one code on every surface', 
   it('a released mixer is InvalidState on Node, WASM and Python', () => {
     const answers = {
       node: codeOf(() => {
-        const mixer = NodeMixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'));
+        const mixer = NodeMixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+          sampleRate: 48000,
+        });
         mixer.destroy();
-        mixer.stripCount();
+        mixer.stripCount;
       }),
       wasm: codeOf(() => {
-        const mixer = WasmMixer.fromSceneJson(wasmPresetJson('vocalReverbSend'));
+        const mixer = WasmMixer.fromJson(wasmPresetJson('vocalReverbSend'), { sampleRate: 48000 });
         mixer.destroy();
-        mixer.stripCount();
+        mixer.stripCount;
       }),
       python: pythonCode(
         "m = libsonare.Mixer.from_scene_json(libsonare.mixing_scene_preset_json('vocalReverbSend')); m.close(); m.strip_count()",
@@ -97,12 +99,14 @@ describe('a library or object-state failure reports one code on every surface', 
 
   it('a well-formed scene is accepted on every surface', () => {
     // Control: the refusals above come from the input, not from a broken constructor.
-    expect(codeOf(() => NodeMixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend')))).toBe(
-      'no refusal',
-    );
-    expect(codeOf(() => WasmMixer.fromSceneJson(wasmPresetJson('vocalReverbSend')))).toBe(
-      'no refusal',
-    );
+    expect(
+      codeOf(() =>
+        NodeMixer.fromJson(mixingScenePresetJson('vocalReverbSend'), { sampleRate: 48000 }),
+      ),
+    ).toBe('no refusal');
+    expect(
+      codeOf(() => WasmMixer.fromJson(wasmPresetJson('vocalReverbSend'), { sampleRate: 48000 })),
+    ).toBe('no refusal');
     expect(
       pythonCode(
         "libsonare.Mixer.from_scene_json(libsonare.mixing_scene_preset_json('vocalReverbSend'))",

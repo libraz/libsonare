@@ -60,7 +60,7 @@ describe('decodeChannels', () => {
   it('folds to the samples Audio.fromMemory returns', () => {
     for (const channelCount of [2, 6]) {
       const bytes = pcm16Wav(channelCount);
-      const mono = downmix(decodeChannels(bytes).channels, 0);
+      const mono = downmix(decodeChannels(bytes).channels, 'mono');
       expect(mono).toHaveLength(1);
       expect(Array.from(mono[0])).toEqual(Array.from(Audio.fromMemory(bytes).data));
     }
@@ -81,7 +81,7 @@ describe('downmix', () => {
   it('applies the BS.775 coefficients from 5.1 to stereo and mono', () => {
     const inv = Math.SQRT1_2;
     const surround = [0.1, 0.2, 0.3, 0.4, 0.05, 0.15].map(plane);
-    const stereo = downmix(surround, 1);
+    const stereo = downmix(surround, 'stereo');
     expect(stereo).toHaveLength(2);
     const left = 0.1 + inv * 0.3 + inv * 0.05;
     const right = 0.2 + inv * 0.3 + inv * 0.15;
@@ -91,7 +91,7 @@ describe('downmix', () => {
     for (const v of stereo[1]) {
       expect(v).toBeCloseTo(right, 6);
     }
-    const mono = downmix(surround, 0);
+    const mono = downmix(surround, 'mono');
     for (const v of mono[0]) {
       expect(v).toBeCloseTo(0.5 * (left + right), 6);
     }
@@ -101,41 +101,44 @@ describe('downmix', () => {
     const inv = Math.SQRT1_2;
     const full = Array.from({ length: 6 }, () => plane(1));
     // Six full-scale planes fold past full scale by default: 1 + 2 * 1/sqrt(2).
-    for (const v of downmix(full, 1)[0]) {
+    for (const v of downmix(full, 'stereo')[0]) {
       expect(v).toBeCloseTo(1 + 2 * inv, 5);
     }
-    for (const v of downmix(full, 1, { normalize: true })[0]) {
+    for (const v of downmix(full, 'stereo', { normalize: true })[0]) {
       expect(v).toBeCloseTo(1, 5);
     }
     const surround = [0.1, 0.2, 0.3, 0.4, 0.05, 0.15].map(plane);
     const left = 0.1 + inv * 0.3 + inv * 0.05;
-    for (const v of downmix(surround, 1, { includeLfe: true })[0]) {
+    for (const v of downmix(surround, 'stereo', { includeLfe: true })[0]) {
       expect(v).toBeCloseTo(left + inv * 0.4, 6);
     }
-    expect(downmix(surround, 1, {})[0][0]).toBeCloseTo(left, 6);
+    expect(downmix(surround, 'stereo', {})[0][0]).toBeCloseTo(left, 6);
   });
 
   it('refuses an options argument that is not an object and a non-boolean option', () => {
     const stereo = [plane(0.1), plane(0.1)];
-    expect(() => downmix(stereo, 0, 'x' as never)).toThrow(TypeError);
-    expect(() => downmix(stereo, 0, { normalize: 1 as never })).toThrow(TypeError);
-    expect(() => downmix(stereo, 0, { includeLfe: 'yes' as never })).toThrow(TypeError);
+    expect(() => downmix(stereo, 'mono', 'x' as never)).toThrow(TypeError);
+    expect(() => downmix(stereo, 'mono', { normalize: 1 as never })).toThrow(TypeError);
+    expect(() => downmix(stereo, 'mono', { includeLfe: 'yes' as never })).toThrow(TypeError);
   });
 
   it('copies on an identical layout and folds an unmodelled count by mean', () => {
     const stereo = [plane(0.25), plane(-0.5)];
-    expect(downmix(stereo, 1).map((p) => Array.from(p))).toEqual(stereo.map((p) => Array.from(p)));
+    expect(downmix(stereo, 'stereo').map((p) => Array.from(p))).toEqual(
+      stereo.map((p) => Array.from(p)),
+    );
     const three = [plane(0.3), plane(0.6), plane(0.9)];
-    for (const v of downmix(three, 0)[0]) {
+    for (const v of downmix(three, 'mono')[0]) {
       expect(v).toBeCloseTo(0.6, 6);
     }
   });
 
   it('refuses an upmix, an unknown layout, no channels and ragged channels', () => {
-    expect(() => downmix([plane(0.1), plane(0.1)], 2)).toThrow();
-    expect(() => downmix([plane(0.1), plane(0.1)], 4 as never)).toThrow();
-    expect(() => downmix([], 0)).toThrow();
-    expect(() => downmix([plane(0.1), new Float32Array(3)], 0)).toThrow(RangeError);
-    expect(() => downmix([[0.1, 0.2]] as unknown as Float32Array[], 0)).toThrow(TypeError);
+    expect(() => downmix([plane(0.1), plane(0.1)], '5.1')).toThrow();
+    expect(() => downmix([plane(0.1), plane(0.1)], '4.0' as never)).toThrow(RangeError);
+    expect(() => downmix([plane(0.1), plane(0.1)], 1 as never)).toThrow(TypeError);
+    expect(() => downmix([], 'mono')).toThrow();
+    expect(() => downmix([plane(0.1), new Float32Array(3)], 'mono')).toThrow(RangeError);
+    expect(() => downmix([[0.1, 0.2]] as unknown as Float32Array[], 'mono')).toThrow(TypeError);
   });
 });

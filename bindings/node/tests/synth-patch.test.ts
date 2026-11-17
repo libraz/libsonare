@@ -577,10 +577,15 @@ describe('Project.bounceWithSynthInstrument', () => {
 
 describe('RealtimeEngine.setSynthInstrument', () => {
   it('renders live MIDI through a preset patch', () => {
-    const engine = new RealtimeEngine();
+    const engine = new RealtimeEngine({ sampleRate: 48000 });
     try {
-      engine.prepare(48000, 128, 16, 16);
-      engine.setSynthInstrument('saw-lead', 7);
+      engine.prepare({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+        commandCapacity: 16,
+        telemetryCapacity: 16,
+      });
+      engine.setSynthInstrument(7, 'saw-lead');
       engine.pushMidiNoteOn(7, 0, 0, 60, 100);
       const out = engine.process([new Float32Array(128), new Float32Array(128)]);
       let p = 0;
@@ -591,18 +596,23 @@ describe('RealtimeEngine.setSynthInstrument', () => {
       }
       expect(p).toBeGreaterThan(0);
       // Unknown presets are rejected without disturbing the binding.
-      expect(() => engine.setSynthInstrument('no-such-preset', 7)).toThrow();
-      expect(engine.midiInstrumentCount()).toBe(1);
+      expect(() => engine.setSynthInstrument(7, 'no-such-preset')).toThrow();
+      expect(engine.midiInstrumentCount).toBe(1);
     } finally {
       engine.destroy();
     }
   });
 
   it('binds gain: 0 as silence, not the base level', () => {
-    const engine = new RealtimeEngine();
+    const engine = new RealtimeEngine({ sampleRate: 48000 });
     try {
-      engine.prepare(48000, 128, 16, 16);
-      engine.setSynthInstrument({ preset: 'warm-pad', gain: 0 }, 7);
+      engine.prepare({
+        sampleRate: 48000,
+        maxBlockSize: 128,
+        commandCapacity: 16,
+        telemetryCapacity: 16,
+      });
+      engine.setSynthInstrument(7, { preset: 'warm-pad', gain: 0 });
       engine.pushMidiNoteOn(7, 0, 0, 60, 100);
       const out = engine.process([new Float32Array(4096), new Float32Array(4096)]);
       let p = 0;
@@ -634,9 +644,9 @@ describe('RealtimeEngine.setSynthInstrument', () => {
     const blockSize = 128;
     const blockCount = 32;
     const renderProgram = (useGmPrograms: boolean, program: number): Float32Array => {
-      const engine = new RealtimeEngine(48000, blockSize);
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: blockSize });
       try {
-        engine.setSynthInstrument({ preset: 'saw-lead', useGmPrograms }, 1);
+        engine.setSynthInstrument(1, { preset: 'saw-lead', useGmPrograms });
         engine.setMidiClips([
           {
             id: 1,
@@ -673,13 +683,12 @@ describe('RealtimeEngine.setSynthInstrument', () => {
   });
 
   it('requires useGmPrograms to be a boolean when supplied', () => {
-    const engine = new RealtimeEngine();
+    const engine = new RealtimeEngine({ sampleRate: 48000 });
     try {
       expect(() =>
         engine.setSynthInstrument(
-          // @ts-expect-error Runtime validation intentionally covers a wrong JS type.
+          7, // @ts-expect-error Runtime validation intentionally covers a wrong JS type.
           { preset: 'saw-lead', useGmPrograms: 1 },
-          7,
         ),
       ).toThrow(/useGmPrograms/);
     } finally {
@@ -826,14 +835,14 @@ describe('SynthPatch.engineParams', () => {
   });
 
   it('binds engineParams on a realtime engine and surfaces a refusal', () => {
-    const engine = new RealtimeEngine();
+    const engine = new RealtimeEngine({ sampleRate: 48000 });
     try {
-      engine.setSynthInstrument({ engineMode: 'bowed-string', engineParams: { bowForce: 0.5 } }, 0);
+      engine.setSynthInstrument(0, { engineMode: 'bowed-string', engineParams: { bowForce: 0.5 } });
       expect(() =>
-        engine.setSynthInstrument(
-          { engineMode: 'bowed-string', engineParams: { noSuchField: 1 } },
-          0,
-        ),
+        engine.setSynthInstrument(0, {
+          engineMode: 'bowed-string',
+          engineParams: { noSuchField: 1 },
+        }),
       ).toThrow(
         expect.objectContaining({
           name: 'RangeError',

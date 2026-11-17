@@ -27,20 +27,54 @@ const declared = (keys: object): Record<string, undefined> =>
 
 const refusals = /unknown (request key|option)/;
 
+/** Shapes of class-method requests; they are not index functions and carry their own unknown-key cases. */
+const methodShapes = [
+  'Mixer',
+  'Mixer.fromJson',
+  'RealtimeEngine',
+  'addSend',
+  'applyBusInsertParamNow',
+  'applyProjectVocalEdit',
+  'applyStripInsertParamNow',
+  'armCapture',
+  'bakeMidiFx',
+  'bounceOffline',
+  'canSetBusSidechain',
+  'canSetStripSidechain',
+  'configureCapture',
+  'importExternalSeparatedStem',
+  'prepare',
+  'previewMidiFx',
+  'pushMidiInputProgram',
+  'pushMidiProgram',
+  'renderOffline',
+  'restoreBusInsertParam',
+  'restoreStripInsertParam',
+  'scheduleFaderAutomation',
+  'scheduleInsertAutomation',
+  'schedulePanAutomation',
+  'scheduleSendAutomation',
+  'scheduleWidthAutomation',
+  'setBusInsertBypassed',
+  'setBusInsertParam',
+  'setBusSidechain',
+  'setGraph',
+  'setLoop',
+  'setMetronome',
+  'setPartRig',
+  'setPolarityInvert',
+  'setStripInsertBypassed',
+  'setStripInsertParam',
+  'setStripSidechain',
+  'setTrackBuses',
+  'setTrackLanes',
+  'setTrackSoloMute',
+  'transcribeToClip',
+  'vocalApply',
+  'vocalRender',
+];
+
 describe('request objects refuse keys outside their declared set', () => {
-  // Shapes of class-method requests; their methods carry their own unknown-key cases.
-  const methodShapes = [
-    'applyProjectVocalEdit',
-    'bakeMidiFx',
-    'importExternalSeparatedStem',
-    'previewMidiFx',
-    'renderOffline',
-    'setCapturePunch',
-    'setPartRig',
-    'transcribeToClip',
-    'vocalApply',
-    'vocalRender',
-  ];
   const names = Object.keys(REQUEST_KEYS).filter((name) => !methodShapes.includes(name));
 
   it('declares every other shape for a function the package index exports', () => {
@@ -84,9 +118,11 @@ describe('request objects refuse keys outside their declared set', () => {
 });
 
 describe('nested options objects refuse keys outside their declared set', () => {
-  const nested = Object.entries(NESTED_REQUEST_KEYS).flatMap(([name, fields]) =>
-    Object.entries(fields).map(([field, keys]) => ({ name, field, keys })),
-  );
+  const nested = Object.entries(NESTED_REQUEST_KEYS)
+    .flatMap(([name, fields]) =>
+      Object.entries(fields).map(([field, keys]) => ({ name, field, keys })),
+    )
+    .filter(({ name }) => !methodShapes.includes(name));
 
   it.each(nested)('$name.$field refuses an unknown key, naming it', async ({ name, field }) => {
     const error = await outcome(name, { [field]: { notAnOption: 1 } });
@@ -108,7 +144,7 @@ describe('a misplaced key points at the object it belongs under', () => {
     ...Object.entries(NESTED_KEY_HINTS).flatMap(([name, fields]) =>
       Object.entries(fields ?? {}).map(([field, keys]) => ({ name, field, keys: keys as object })),
     ),
-  ];
+  ].filter(({ name }) => !methodShapes.includes(name));
 
   it.each(hinted)('$name suggests $field', async ({ name, field, keys }) => {
     const own = REQUEST_KEYS[name as keyof typeof REQUEST_KEYS];
@@ -121,6 +157,22 @@ describe('a misplaced key points at the object it belongs under', () => {
     expect(error?.message).toBe(
       `${name}: unknown request key '${misplaced}' ('${misplaced}' belongs under '${field}')`,
     );
+  });
+});
+
+describe('a class-method request refuses nested keys through an engine instance', () => {
+  it('configureCapture refuses an unknown punch key and suggests where a misplaced one belongs', () => {
+    const engine = new sonare.RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    try {
+      expect(() =>
+        engine.configureCapture({ capacityFrames: 128, punch: { notAnOption: 1 } } as never),
+      ).toThrow("configureCapture: unknown option 'notAnOption' in 'punch'");
+      expect(() =>
+        engine.configureCapture({ capacityFrames: 128, inputMonitor: { notAnOption: 1 } } as never),
+      ).toThrow("configureCapture: unknown option 'notAnOption' in 'inputMonitor'");
+    } finally {
+      engine.destroy();
+    }
   });
 });
 

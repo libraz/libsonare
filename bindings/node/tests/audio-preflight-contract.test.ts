@@ -575,8 +575,10 @@ describe('wrong-typed arguments are TypeErrors that name the argument', () => {
     );
   });
 
-  it('Mixer.fromSceneJson refuses a non-string scene as a TypeError', () => {
-    expect(() => sonare.Mixer.fromSceneJson(null as never, SR, 512)).toThrow(TypeError);
+  it('Mixer.fromJson refuses a non-string scene as a TypeError', () => {
+    expect(() => sonare.Mixer.fromJson(null as never, { sampleRate: SR, blockSize: 512 })).toThrow(
+      TypeError,
+    );
   });
 });
 

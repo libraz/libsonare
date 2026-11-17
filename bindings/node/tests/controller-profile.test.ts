@@ -33,8 +33,8 @@ describe('RealtimeEngine controller bindings', () => {
   // The patch-driven synth is the instrument that holds a profile; a reed is
   // also one of the engines whose exciter a live axis can reach.
   const reedEngine = (): RealtimeEngine => {
-    const engine = new RealtimeEngine(48000, 128);
-    engine.setSynthInstrument('clarinet', 0);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    engine.setSynthInstrument(0, 'clarinet');
     return engine;
   };
 
@@ -115,7 +115,7 @@ describe('RealtimeEngine controller bindings', () => {
   });
 
   it('reports a destination with no instrument rather than answering a count', () => {
-    const engine = new RealtimeEngine(48000, 128);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     expect(() => engine.controllerBindingCount(0)).toThrow();
     engine.destroy();
   });
@@ -125,8 +125,8 @@ describe('RealtimeEngine controller bindings reach the audio', () => {
   // One held note under a CC2 ramp, rendered block by block so the ramp lands
   // between blocks rather than all at once before the first.
   const renderRamp = (bindBreath: boolean): Float32Array => {
-    const engine = new RealtimeEngine(48000, 128);
-    engine.setSynthInstrument('clarinet', 0);
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    engine.setSynthInstrument(0, 'clarinet');
     // Both arms start from an empty profile, so the only difference between
     // them is the one binding under test rather than the gm default's three.
     engine.clearControllerBindings(0);

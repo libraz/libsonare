@@ -1,9 +1,6 @@
 import { SampleBank } from './sample_bank.js';
 import type {
   AutomationCurve,
-  EngineAutomationPoint,
-  EngineAutomationPointCurve,
-  EngineTrackMonitorMode,
   MeterTap,
   PanLawInput,
   PanMode,
@@ -20,10 +17,18 @@ import type {
   ProjectLoopMode,
   ProjectTrackDesc,
   SendTiming,
-  SidechainSourceKind,
   SynthPatch,
   WarpMode,
 } from './types.js';
+import type { ChannelLayout } from './types_engine.js';
+
+/** `SonareChannelLayout` ordinals of the channel-layout tokens. */
+export const CHANNEL_LAYOUT_VALUES: Readonly<Record<ChannelLayout, number>> = {
+  mono: 0,
+  stereo: 1,
+  '5.1': 2,
+  '7.1': 3,
+};
 
 /**
  * Internal coercion helpers shared by the Project, Mixer and RealtimeEngine
@@ -56,20 +61,6 @@ export function resolveEnumOrdinal(
   throw new TypeError(`${enumName} must be a name or an ordinal, got ${typeof value}`);
 }
 
-/** Resolve the public per-track monitor mode to its C ABI ordinal. */
-export function trackMonitorModeValue(mode: EngineTrackMonitorMode): 0 | 1 | 2 {
-  if (mode === 'off' || mode === 0) {
-    return 0;
-  }
-  if (mode === 'pfl' || mode === 1) {
-    return 1;
-  }
-  if (mode === 'afl' || mode === 2) {
-    return 2;
-  }
-  throw new RangeError(`Invalid track monitor mode: ${String(mode)}`);
-}
-
 export function trackKindValue(kind: ProjectTrackDesc['kind']): number {
   return resolveEnumOrdinal(kind ?? 'audio', { audio: 0, midi: 1, aux: 2 }, 'track kind');
 }
@@ -85,8 +76,8 @@ export function warpModeValue(mode: WarpMode | number | undefined): number {
 /**
  * Automation curve spellings and their `SonareAutomationCurve` ordinals.
  *
- * Single source of truth for the vocabulary: `AutomationCurve` and
- * `EngineAutomationPointCurve` are derived from these keys, so a spelling
+ * Single source of truth for the vocabulary: `AutomationCurve` is derived
+ * from these keys, so a spelling
  * cannot be documented without resolving, or resolve without being documented.
  */
 export const AUTOMATION_CURVE_VALUES = {
@@ -107,20 +98,9 @@ export const PROJECT_AUTOMATION_CURVE_VALUES = {
   scurve: 3,
 } as const;
 
-export function engineAutomationCurveValue(curve: EngineAutomationPointCurve | undefined): number {
-  return resolveEnumOrdinal(curve ?? 'linear', AUTOMATION_CURVE_VALUES, 'automation curve');
-}
-
 /** Resolve a Project automation breakpoint curve, legacy spellings included. */
 export function projectAutomationCurveValue(curve: ProjectAutomationCurve | undefined): number {
   return resolveEnumOrdinal(curve ?? 'linear', PROJECT_AUTOMATION_CURVE_VALUES, 'automation curve');
-}
-
-export function engineAutomationPointValue(point: EngineAutomationPoint): EngineAutomationPoint {
-  return {
-    ...point,
-    curveToNext: engineAutomationCurveValue(point.curveToNext) as EngineAutomationPointCurve,
-  };
 }
 
 export function projectFadeCurveValue(
@@ -241,15 +221,6 @@ export function meterTapValue(tap: MeterTap | number): number {
 
 export function sendTimingValue(timing: SendTiming | number): number {
   return resolveEnumOrdinal(timing, SEND_TIMING_VALUES, 'send timing');
-}
-
-const SIDECHAIN_SOURCE_KIND_VALUES: Record<SidechainSourceKind, number> = {
-  track: 0,
-  bus: 1,
-};
-
-export function sidechainSourceKindValue(kind: SidechainSourceKind | number): number {
-  return resolveEnumOrdinal(kind, SIDECHAIN_SOURCE_KIND_VALUES, 'sidechain source kind');
 }
 
 /**

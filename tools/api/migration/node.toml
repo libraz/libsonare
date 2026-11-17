@@ -7534,3 +7534,1129 @@ old = "DynamicsResult.loudnessTimes"
 new = "DynamicsResult.loudnessTimesSec"
 domain = "analysis"
 rule = "seconds-suffix"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.constructor"
+changed = "new RealtimeEngine(config: RealtimeEngineConfig) replaces the five positional optionals; sampleRate is required, an unknown key is a TypeError and an explicit 0 on a defaulted field is a RangeError"
+domain = "engine"
+rule = "construction"
+test = "bindings/node/tests/surface/engine.test.ts::takes one config object with a required sampleRate"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.constructor(maxChannels)"
+removed = true
+domain = "engine"
+rule = "construction"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.prepare"
+changed = "prepare(config: RealtimeEngineConfig) takes the constructor object with the same defaults and validation"
+domain = "engine"
+rule = "construction"
+test = "bindings/node/tests/surface/engine.test.ts::prepares from the same config object"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.getTransportState"
+new = "RealtimeEngine.transportState"
+domain = "engine"
+rule = "getters"
+
+[[entry]]
+kind = "field"
+old = "EngineTransportState.isPlaying"
+removed = true
+domain = "engine"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.graphLatencySamplesQ8"
+new = "RealtimeEngine.graphLatencySamples"
+domain = "engine"
+rule = "engine-vocabulary"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.tailSamples"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/node/tests/surface/engine.test.ts::reads counts and tail as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setLoop"
+changed = "setLoop({ startPpq, endPpq, enabled? }) replaces (startPpq, endPpq, enabled)"
+domain = "engine"
+rule = "no-positional-bools"
+test = "bindings/node/tests/surface/engine.test.ts::sets the loop from one object"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.parameterCount"
+removed = true
+domain = "engine"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.parameterInfoByIndex"
+removed = true
+domain = "engine"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.markerCount"
+removed = true
+domain = "engine"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.markerByIndex"
+removed = true
+domain = "engine"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.automationLaneCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/node/tests/surface/engine.test.ts::reads counts and tail as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.clipCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/node/tests/surface/engine.test.ts::reads counts and tail as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.midiInstrumentCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/node/tests/surface/engine.test.ts::reads counts and tail as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.midiCcBindingCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/node/tests/surface/engine.test.ts::reads counts and tail as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.graphNodeCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/node/tests/surface/engine.test.ts::reads counts and tail as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.graphConnectionCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/node/tests/surface/engine.test.ts::reads counts and tail as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.externalMidiDroppedCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/node/tests/surface/engine.test.ts::reads counts and tail as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.midiInputPendingCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/node/tests/surface/engine.test.ts::reads counts and tail as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.clipPageRequestOverflowCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/node/tests/surface/engine.test.ts::reads counts and tail as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.warpStretchOverflowCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/node/tests/surface/engine.test.ts::reads counts and tail as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.warpVoiceCapacity"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/node/tests/surface/engine.test.ts::reads counts and tail as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.clipPagePrefetchFrames"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/node/tests/surface/engine.test.ts::reads counts and tail as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setMarkers"
+changed = "returns the stored markers with their ids (was void)"
+domain = "engine"
+rule = "engine-vocabulary"
+test = "bindings/node/tests/surface/engine.test.ts::returns the stored markers with their ids from setMarkers"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTempoSegments"
+changed = "takes readonly EngineTempoSegment[]"
+domain = "engine"
+rule = "type-names"
+test = "bindings/node/tests/surface/engine.test.ts::takes tempo and time-signature segments as Engine*Segment records"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTimeSignatureSegments"
+changed = "takes readonly EngineTimeSignatureSegment[]"
+domain = "engine"
+rule = "type-names"
+test = "bindings/node/tests/surface/engine.test.ts::takes tempo and time-signature segments as Engine*Segment records"
+
+[[entry]]
+kind = "type"
+old = "EngineExternalMidiEvent"
+new = "ExternalMidiEvent"
+domain = "engine"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "EngineMetronomeConfig.clickSeconds"
+new = "EngineMetronomeConfig.clickSec"
+domain = "engine"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "EngineMetronomeConfig.clickSamples"
+changed = "optional; an explicit 0 is a RangeError and giving both clickSamples and clickSec is a RangeError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/engine.test.ts::refuses an explicit 0 click length and both spellings together"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.metronome"
+changed = "returns an EngineMetronomeConfig that carries only the click-length spelling in effect"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/engine.test.ts::spells the click length clickSec and reports only the spelling in effect"
+
+[[entry]]
+kind = "field"
+old = "EngineTelemetry.graphLatencySamplesQ8"
+new = "EngineTelemetry.graphLatencySamples"
+domain = "engine"
+rule = "engine-vocabulary"
+
+[[entry]]
+kind = "field"
+old = "EngineTelemetry.type"
+changed = "'processBlock' | 'error' instead of 0 | 1"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::names the record type and error and reports latency in samples"
+
+[[entry]]
+kind = "field"
+old = "EngineTelemetry.error"
+changed = "lowerCamel names of the engine telemetry errors instead of ordinals"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::names the record type and error and reports latency in samples"
+
+[[entry]]
+kind = "type"
+old = "EngineTelemetryType"
+changed = "string union 'processBlock' | 'error'"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::names the record type and error and reports latency in samples"
+
+[[entry]]
+kind = "type"
+old = "EngineTelemetryError"
+changed = "string union of the lowerCamel error names"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::names the record type and error and reports latency in samples"
+
+[[entry]]
+kind = "field"
+old = "EngineMarker.kind"
+changed = "MarkerKind name ('marker' | 'text' | 'lyric' | 'cuePoint' | 'keySignature'); a number is a TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::names a marker kind and refuses an ordinal"
+
+[[entry]]
+kind = "export"
+old = "MarkerKind"
+changed = "a string-union type only; the enum value is gone"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::names a marker kind and refuses an ordinal"
+
+[[entry]]
+kind = "type"
+old = "EngineAutomationPointCurve"
+removed = true
+domain = "engine"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "EngineAutomationPoint.curveToNext"
+changed = "AutomationCurve name only; a number is a TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::maps an automation curve name and refuses a number"
+
+[[entry]]
+kind = "field"
+old = "EngineParameterInfo.defaultCurve"
+changed = "AutomationCurve name (was a number)"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::maps an automation curve name and refuses a number"
+
+[[entry]]
+kind = "field"
+old = "EngineGraphNode.type"
+changed = "'passThrough' | 'gain' instead of 0 | 1"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::names graph node types and mixing intents"
+
+[[entry]]
+kind = "field"
+old = "EngineGraphConnection.mix"
+changed = "'replace' | 'add' instead of 0 | 1; absent is add"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::names graph node types and mixing intents"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceOptions.dither"
+changed = "'rpdf' | 'tpdf' | 'noiseShaped'; absent is none and a number is a TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::names the dither and refuses a number"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceOptions.targetSampleRate"
+changed = "absent keeps the source rate; an explicit 0 is a RangeError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/engine.test.ts::treats an explicit 0 on a rate as an error"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceOptions.sourceSampleRate"
+changed = "absent means the engine rate; an explicit 0 is a RangeError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/engine.test.ts::treats an explicit 0 on a rate as an error"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceOptions.targetLufs"
+changed = "absent is -14 LUFS; an explicit 0 and a non-finite value are RangeErrors"
+domain = "engine"
+rule = "non-finite-is-absent"
+test = "bindings/node/tests/surface/engine.test.ts::reads targetLufs 0 as an error"
+
+[[entry]]
+kind = "field"
+old = "EngineClip.warpMode"
+changed = "'off' | 'repitch' | 'tempoSync' | 'timeStretch'; a number is a TypeError"
+domain = "engine"
+rule = "token-case"
+test = "bindings/node/tests/surface/engine.test.ts::names a warp mode and refuses an ordinal"
+
+[[entry]]
+kind = "field"
+old = "EngineTrackLane.sourceChannelLayout"
+changed = "ChannelLayout name ('mono' | 'stereo' | '5.1' | '7.1')"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::names channel layouts, send timings and refuses ordinals"
+
+[[entry]]
+kind = "field"
+old = "EngineBus.channelLayout"
+changed = "ChannelLayout name"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::names channel layouts, send timings and refuses ordinals"
+
+[[entry]]
+kind = "type"
+old = "ChannelLayout"
+changed = "'mono' | 'stereo' | '5.1' | '7.1' instead of 0 | 1 | 2 | 3"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::names channel layouts, send timings and refuses ordinals"
+
+[[entry]]
+kind = "option"
+old = "downmix(targetLayout)"
+changed = "a ChannelLayout name ('mono' | 'stereo' | '5.1' | '7.1'); a number is a TypeError, an unknown name a RangeError"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/decode_channels.test.ts::refuses an upmix, an unknown layout"
+
+[[entry]]
+kind = "field"
+old = "EngineTrackLane.outputBusId"
+changed = "absent is the master mix; an explicit 0 is a RangeError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/engine.test.ts::refuses outputBusId 0 and takes null for the master mix"
+
+[[entry]]
+kind = "field"
+old = "EngineBus.outputBusId"
+changed = "absent is the master mix; an explicit 0 is a RangeError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/engine.test.ts::refuses outputBusId 0 and takes null for the master mix"
+
+[[entry]]
+kind = "field"
+old = "EngineTrackSend.sendTiming"
+changed = "SendTiming name only; a number is a TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::names channel layouts, send timings and refuses ordinals"
+
+[[entry]]
+kind = "type"
+old = "EngineTrackMonitorMode"
+changed = "'off' | 'pfl' | 'afl' only"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::names the monitor mode and refuses a number"
+
+[[entry]]
+kind = "type"
+old = "EngineCaptureSource"
+changed = "'output' | 'input' only"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::refuses a bad capture request by class"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackStripJson"
+removed = true
+domain = "engine"
+rule = "typed-results"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setMasterStripJson"
+removed = true
+domain = "engine"
+rule = "typed-results"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setBusStripJson"
+new = "RealtimeEngine.setBusStrip"
+domain = "engine"
+rule = "typed-results"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackStripEqBand"
+removed = true
+domain = "engine"
+rule = "typed-results"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setMasterStripEqBand"
+removed = true
+domain = "engine"
+rule = "typed-results"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackStripEqBandJson"
+removed = true
+domain = "engine"
+rule = "typed-results"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setMasterStripEqBandJson"
+removed = true
+domain = "engine"
+rule = "typed-results"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setBusStripEqBandJson"
+removed = true
+domain = "engine"
+rule = "typed-results"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setBusStripEqBand"
+new = "RealtimeEngine.setBusEqBand"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackStripInsertBypassed"
+removed = true
+domain = "engine"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setMasterStripInsertBypassed"
+removed = true
+domain = "engine"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setBusStripInsertBypassed"
+new = "RealtimeEngine.setBusInsertBypassed"
+domain = "engine"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackStripInsertParamByName"
+removed = true
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setMasterStripInsertParamByName"
+removed = true
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.applyTrackStripInsertParamByNameNow"
+removed = true
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.applyMasterStripInsertParamByNameNow"
+removed = true
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.restoreTrackStripInsertParamByName"
+removed = true
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.restoreMasterStripInsertParamByName"
+removed = true
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setBusStripInsertParamByName"
+new = "RealtimeEngine.setBusInsertParam"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.applyBusStripInsertParamByNameNow"
+new = "RealtimeEngine.applyBusInsertParamNow"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.restoreBusStripInsertParamByName"
+new = "RealtimeEngine.restoreBusInsertParam"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.clearTrackInsertParameterBases"
+removed = true
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.clearMasterInsertParameterBases"
+removed = true
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.resolveTrackInsertAutomationId"
+removed = true
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.resolveMasterInsertAutomationId"
+removed = true
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.resolveTrackLaneAutomationId"
+removed = true
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.resolveMasterAutomationId"
+removed = true
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackStripPan"
+new = "RealtimeEngine.setStripPan"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackStripPanLaw"
+new = "RealtimeEngine.setStripPanLaw"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackStripPanMode"
+new = "RealtimeEngine.setStripPanMode"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackStripDualPan"
+new = "RealtimeEngine.setStripDualPan"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackStripSurroundPan"
+new = "RealtimeEngine.setStripSurroundPan"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackStripChannelDelaySamples"
+new = "RealtimeEngine.setStripChannelDelaySamples"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setBusStripPan"
+new = "RealtimeEngine.setBusPan"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setBusStripPanLaw"
+new = "RealtimeEngine.setBusPanLaw"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setBusStripPanMode"
+new = "RealtimeEngine.setBusPanMode"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setBusStripDualPan"
+new = "RealtimeEngine.setBusDualPan"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setSoloMute"
+new = "RealtimeEngine.setTrackSoloMute"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackMonitorMode"
+changed = "the first argument is a track id, not a lane index; an unknown id is a RangeError"
+domain = "engine"
+rule = "strip-ref"
+test = "bindings/node/tests/surface/engine.test.ts::keys solo/mute and monitor mode by track id"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackLanes"
+changed = "takes readonly EngineTrackLane[]; the bare-number arm is a TypeError"
+domain = "engine"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/engine.test.ts::refuses an unknown lane or bus key and a bare number lane"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setTrackOutputBus"
+changed = "setTrackOutputBus(trackId, busId: number | null); null is the master mix and 0 is a RangeError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/engine.test.ts::refuses outputBusId 0 and takes null for the master mix"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setLaneSidechain"
+new = "RealtimeEngine.setStripSidechain"
+domain = "engine"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setMasterSidechain"
+removed = true
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setBusSidechain"
+changed = "setBusSidechain(busId, insertIndex, source: SidechainSource | null); null removes the binding"
+domain = "engine"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/engine.test.ts::keys a sidechain by strip and bus with one source object"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.canSetLaneSidechain"
+removed = true
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.canSetMasterSidechain"
+removed = true
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.canSetBusSidechain"
+changed = "canSetBusSidechain(busId, insertIndex, source: SidechainSource)"
+domain = "engine"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/engine.test.ts::keys a sidechain by strip and bus with one source object"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setCaptureBuffer"
+removed = true
+domain = "engine"
+rule = "engine-vocabulary"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setCapturePunch"
+removed = true
+domain = "engine"
+rule = "engine-vocabulary"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setCaptureSource"
+removed = true
+domain = "engine"
+rule = "engine-vocabulary"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setRecordOffsetSamples"
+removed = true
+domain = "engine"
+rule = "engine-vocabulary"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setInputMonitor"
+removed = true
+domain = "engine"
+rule = "engine-vocabulary"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.armCapture"
+changed = "armCapture({ armed }) replaces armCapture(armed = true)"
+domain = "engine"
+rule = "no-positional-bools"
+test = "bindings/node/tests/surface/engine.test.ts::arms from a labelled state object"
+
+[[entry]]
+kind = "type"
+old = "EngineCapturePunchRequest"
+new = "CapturePunch"
+domain = "engine"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.renderOffline"
+changed = "request-only renderOffline({ channels, blockSize?, finalize?, validate? }); the (channels, blockSize) overload is removed"
+domain = "engine"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/engine.test.ts::renders from a request object only"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setBuiltinInstrument"
+changed = "setBuiltinInstrument(destinationId, config?); the destination id leads and config.destinationId is refused"
+domain = "engine"
+rule = "engine-vocabulary"
+test = "bindings/node/tests/surface/engine.test.ts::binds an instrument to a destination id given first"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setSynthInstrument"
+changed = "setSynthInstrument(destinationId, patch?); the destination id leads and patch.destinationId is refused"
+domain = "engine"
+rule = "engine-vocabulary"
+test = "bindings/node/tests/surface/engine.test.ts::binds an instrument to a destination id given first"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setSf2Instrument"
+changed = "setSf2Instrument(destinationId, config?); the destination id leads and config.destinationId is refused"
+domain = "engine"
+rule = "engine-vocabulary"
+test = "bindings/node/tests/surface/engine.test.ts::binds an instrument to a destination id given first"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setPartRig"
+changed = "request-only; the positional (destinationId, part, mode, inserts?) form is gone, an absent part selects every part and insert params are an object"
+domain = "engine"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/engine.test.ts::takes the part rig as a request object with an optional part"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.bindMidiCc"
+changed = "bindMidiCc(binding: ProjectMidiCcBinding) takes one descriptor"
+domain = "engine"
+rule = "one-entry-per-operation"
+test = "bindings/node/tests/surface/engine.test.ts::binds one CC descriptor with bindMidiCc"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.bindMidiCcBinding"
+new = "RealtimeEngine.bindMidiCc"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "type"
+old = "MidiCcBindOptions"
+removed = true
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.pushMidiProgram"
+changed = "pushMidiProgram(destinationId, group, channel, program, bank?: { msb, lsb }, renderFrame?) replaces bankValid, bankMsb and bankLsb"
+domain = "engine"
+rule = "no-positional-bools"
+test = "bindings/node/tests/surface/engine.test.ts::pushes a program change with an optional bank object"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.pushMidiInputProgram"
+changed = "pushMidiInputProgram(group, channel, program, bank?, offsetInBlockSamples?) replaces bankValid, bankMsb and bankLsb"
+domain = "engine"
+rule = "no-positional-bools"
+test = "bindings/node/tests/surface/engine.test.ts::pushes a program change with an optional bank object"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setArticulation"
+changed = "the articulation is a name only; a number is a TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::refuses an ordinal for an articulation and a note-tracking name"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.articulation"
+changed = "returns an Articulation name only"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::refuses an ordinal for an articulation and a note-tracking name"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setControllerNoteTracking"
+changed = "dimension and tracking are names only; a number is a TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::refuses an ordinal for an articulation and a note-tracking name"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.controllerNoteTracking"
+changed = "takes a dimension name and returns a NoteTracking name only"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::refuses an ordinal for an articulation and a note-tracking name"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.bindController"
+changed = "binding.input and binding.axis are names only; a number is a TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine.test.ts::refuses an ordinal for an articulation and a note-tracking name"
+
+[[entry]]
+kind = "method"
+old = "Mixer.fromSceneJson"
+new = "Mixer.fromJson"
+domain = "engine"
+rule = "construction"
+
+[[entry]]
+kind = "method"
+old = "Mixer.constructor"
+changed = "public new Mixer({ scene?, sampleRate, blockSize? }); sampleRate is required, an absent scene gives an empty mixer, blockSize 0 is refused"
+domain = "engine"
+rule = "construction"
+test = "bindings/node/tests/surface/engine-mixer.test.ts::builds an empty mixer from new Mixer"
+
+[[entry]]
+kind = "method"
+old = "Mixer.fromJson"
+changed = "static fromJson(json, { sampleRate, blockSize? }) replaces fromSceneJson(json, sampleRate = 48000, blockSize = 512); sampleRate is required"
+domain = "engine"
+rule = "construction"
+test = "bindings/node/tests/surface/engine-mixer.test.ts::fromJson builds from a scene JSON string"
+
+[[entry]]
+kind = "method"
+old = "Mixer.toSceneJson"
+new = "Mixer.toJson"
+domain = "engine"
+rule = "typed-results"
+
+[[entry]]
+kind = "method"
+old = "Mixer.stripCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/node/tests/surface/engine-mixer.test.ts::reads counts, tail and latency as getters"
+
+[[entry]]
+kind = "method"
+old = "Mixer.busCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/node/tests/surface/engine-mixer.test.ts::reads counts, tail and latency as getters"
+
+[[entry]]
+kind = "method"
+old = "Mixer.vcaGroupCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/node/tests/surface/engine-mixer.test.ts::reads counts, tail and latency as getters"
+
+[[entry]]
+kind = "method"
+old = "Mixer.tailSamples"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/node/tests/surface/engine-mixer.test.ts::reads counts, tail and latency as getters"
+
+[[entry]]
+kind = "method"
+old = "Mixer.latencySamples"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/node/tests/surface/engine-mixer.test.ts::reads counts, tail and latency as getters"
+
+[[entry]]
+kind = "method"
+old = "Mixer.meterTap"
+new = "Mixer.stripMeter"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Mixer.stripMeter"
+changed = "stripMeter(strip, tap?: MeterTap); a numeric tap is a TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine-mixer.test.ts::stripMeter takes a tap token"
+
+[[entry]]
+kind = "method"
+old = "Mixer.addStrip"
+changed = "returns the new strip's index"
+domain = "engine"
+rule = "strip-ref"
+test = "bindings/node/tests/surface/engine-mixer.test.ts::addStrip returns the new strip index"
+
+[[entry]]
+kind = "method"
+old = "Mixer.stripById"
+changed = "returns number; an unknown id is a RangeError instead of null"
+domain = "engine"
+rule = "error-class-by-cause"
+test = "bindings/node/tests/surface/engine-mixer.test.ts::stripById returns the index"
+
+[[entry]]
+kind = "method"
+old = "Mixer.addBus"
+changed = "role is a MixBusRole token ('master' | 'aux' | 'submix'); an unknown role is a RangeError, a non-string a TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine-mixer.test.ts::addBus takes a role token"
+
+[[entry]]
+kind = "method"
+old = "Mixer.setPanLaw"
+changed = "takes a pan-law name only; a number is a TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/engine-mixer.test.ts::setPanLaw refuses a number"
+
+[[entry]]
+kind = "method"
+old = "Mixer.setPolarityInvert"
+changed = "setPolarityInvert(strip, { left, right }) replaces (strip, invertLeft, invertRight)"
+domain = "engine"
+rule = "no-positional-bools"
+test = "bindings/node/tests/surface/engine-mixer.test.ts::setPolarityInvert takes a left/right object"
+
+[[entry]]
+kind = "method"
+old = "Mixer.addSend"
+changed = "addSend(strip, { id, destinationBusId, sendDb?, timing? }) replaces the positional list; a numeric timing is a TypeError"
+domain = "engine"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/engine-mixer.test.ts::addSend takes a send object"
+
+[[entry]]
+kind = "method"
+old = "Mixer.scheduleFaderAutomation"
+changed = "scheduleFaderAutomation(strip, { samplePos, faderDb, curve? }); a numeric curve is a TypeError"
+domain = "engine"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/engine-mixer.test.ts::scheduleFaderAutomation takes a point object"
+
+[[entry]]
+kind = "method"
+old = "Mixer.schedulePanAutomation"
+changed = "schedulePanAutomation(strip, { samplePos, pan, curve? }); a numeric curve is a TypeError"
+domain = "engine"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/engine-mixer.test.ts::schedulePanAutomation takes a point object"
+
+[[entry]]
+kind = "method"
+old = "Mixer.scheduleWidthAutomation"
+changed = "scheduleWidthAutomation(strip, { samplePos, width, curve? }); a numeric curve is a TypeError"
+domain = "engine"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/engine-mixer.test.ts::scheduleWidthAutomation takes a point object"
+
+[[entry]]
+kind = "method"
+old = "Mixer.scheduleSendAutomation"
+changed = "scheduleSendAutomation(strip, sendIndex, { samplePos, sendDb, curve? }) (db is now sendDb)"
+domain = "engine"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/engine-mixer.test.ts::scheduleSendAutomation takes sendDb"
+
+[[entry]]
+kind = "method"
+old = "Mixer.scheduleInsertAutomation"
+changed = "scheduleInsertAutomation(strip, insertIndex, { paramId, samplePos, value, curve? })"
+domain = "engine"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/engine-mixer.test.ts::scheduleInsertAutomation takes a point object"
+
+[[entry]]
+kind = "option"
+old = "Mixer.scheduleInsertAutomation(stripIndex)"
+new = "Mixer.scheduleInsertAutomation(strip)"
+domain = "engine"
+rule = "strip-ref"
