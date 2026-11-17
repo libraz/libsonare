@@ -906,7 +906,7 @@ describe('v1.2 feature additions (WASM)', () => {
       mixer.setSoloSafe(vocal, true);
       mixer.setSoloed(vocal, false);
       mixer.setPolarityInvert(vocal, { left: false, right: true });
-      mixer.setPanLaw(vocal, 'linear0dB');
+      mixer.setPanLaw(vocal, 'linear0Db');
       mixer.setChannelDelaySamples(vocal, 0);
       mixer.setVcaOffsetDb(vocal, -1);
       mixer.setDualPan(vocal, -0.2, 0.2);
@@ -1012,24 +1012,25 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(engine.midiCcBindingCount).toBe(2);
       engine.clearMidiCcBindings();
       expect(engine.midiCcBindingCount).toBe(0);
-      expect(() => engine.setMidiFx(0, '{"transpose_semitones":12}')).not.toThrow();
+      expect(() => engine.setMidiFx(0, { transposeSemitones: 12 })).not.toThrow();
       expect(() =>
-        engine.setMidiFx(
-          0,
-          '{"arpeggiator_intervals":[0,12],"arpeggiator_step_ppq":0.25,"arpeggiator_gate_ppq":0.125}',
-        ),
+        engine.setMidiFx(0, {
+          arpeggiatorIntervals: [0, 12],
+          arpeggiatorStepPpq: 0.25,
+          arpeggiatorGatePpq: 0.125,
+        }),
       ).not.toThrow();
       expect(() => engine.clearMidiFx(0)).not.toThrow();
-      expect(() => engine.setMidiFx(0, '{bad json')).toThrow();
-      expect(() => engine.setMidiFx(0, '{"quantize_ppq":0}')).toThrow();
-      expect(() => engine.setMidiFx(0, '{"quantize_ppq":1e300}')).toThrow();
-      expect(() => engine.setMidiFx(0, '{"transpose_semitones":1e100}')).toThrow();
-      expect(() => engine.setMidiFx(0, '{"chord_intervals":[0,7.5]}')).toThrow();
+      expect(() => engine.setMidiFx(0, '{}' as never)).toThrow(TypeError);
+      expect(() => engine.setMidiFx(0, { quantizePpq: 0 })).toThrow();
+      expect(() => engine.setMidiFx(0, { quantizePpq: 1e300 })).toThrow();
+      expect(() => engine.setMidiFx(0, { transposeSemitones: 1e100 })).toThrow();
+      expect(() => engine.setMidiFx(0, { chordIntervals: [0, 7.5] })).toThrow();
       expect(() =>
-        engine.setMidiFx(0, '{"arpeggiator_intervals":[],"arpeggiator_step_ppq":0.25}'),
+        engine.setMidiFx(0, { arpeggiatorIntervals: [], arpeggiatorStepPpq: 0.25 }),
       ).toThrow();
       expect(() =>
-        engine.setMidiFx(0, '{"arpeggiator_intervals":[0],"arpeggiator_step_ppq":0}'),
+        engine.setMidiFx(0, { arpeggiatorIntervals: [0], arpeggiatorStepPpq: 0 }),
       ).toThrow();
       engine.setMidiInputSource(0);
       expect(engine.midiInputPendingCount).toBe(0);

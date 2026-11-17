@@ -2,15 +2,15 @@ import { ErrorCode, SonareError } from '../errors.js';
 import type { StreamFrames, StreamStats } from '../index.js';
 import { StreamAnalyzer } from '../index.js';
 import type { SonareStreamAnalyzerChunkMessage } from '../internal/stream_analyzer_messages.js';
+import type {
+  SonareStreamAnalyzerNodeOptions,
+  SonareStreamAnalyzerWorkletProcessorOptions,
+} from '../internal/worklet_messages.js';
 import {
   assertKnownProcessorOptions,
   isStreamAnalyzerChunkMessage,
   resolveContextSampleRate,
 } from './guards.js';
-import type {
-  SonareStreamAnalyzerNodeOptions,
-  SonareStreamAnalyzerWorkletProcessorOptions,
-} from './messages.js';
 import { isRecord } from './protocol.js';
 import { resolveStreamAnalyzerChunkFrames } from './stream-analyzer-processor.js';
 

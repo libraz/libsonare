@@ -1,6 +1,6 @@
 import type { EngineClip, EngineMidiClipSchedule, RealtimeEngine } from '../index.js';
+import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
 import { commitStore } from './engine-commit.js';
-import type { SonareEngineSyncMessage } from './messages.js';
 
 /**
  * Collaborator surface the audio/MIDI clip scheduling helpers need from the

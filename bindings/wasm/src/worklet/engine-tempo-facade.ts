@@ -4,12 +4,12 @@ import type {
   EngineTransportState,
   RealtimeEngine,
 } from '../index.js';
+import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
 import type { EngineLoop } from '../public_types_engine.js';
 import { requestObject } from '../validation.js';
 import { commitCommand, commitSync, type EngineCommitContext } from './engine-commit.js';
 import type { SonareRealtimeEngineNode } from './engine-node.js';
 import { buildTempoSync } from './engine-sync.js';
-import type { SonareEngineSyncMessage } from './messages.js';
 import { SonareEngineCommandType } from './protocol.js';
 
 interface TimeSignature {

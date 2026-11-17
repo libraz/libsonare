@@ -3,6 +3,10 @@ import { RealtimeVoiceChanger } from '../index.js';
 import { failurePayload } from '../internal/failure_payload.js';
 import type { SonareRealtimeVoiceChangerErrorMessage } from '../internal/voice_changer_messages.js';
 import type {
+  SonareRealtimeVoiceChangerWorkletProcessorOptions,
+  WorkletPort,
+} from '../internal/worklet_messages.js';
+import type {
   RealtimeVoiceChangerMonoBuffer,
   RealtimeVoiceChangerPlanarBuffer,
 } from '../realtime_voice_changer.js';
@@ -19,7 +23,6 @@ import {
   requireIntegerOption,
   resolveScopeSampleRate,
 } from './guards.js';
-import type { SonareRealtimeVoiceChangerWorkletProcessorOptions, WorkletPort } from './messages.js';
 
 export class SonareRealtimeVoiceChangerWorkletProcessor {
   private static warnedMonoOverflow = false;

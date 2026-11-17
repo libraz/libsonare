@@ -21,6 +21,8 @@ import {
   meteringPhaseScopeDecimated,
   meteringSpectrumFrame,
   meteringVectorscopeDecimated,
+  midiNoteOff,
+  midiNoteOn,
   mixingScenePresetJson,
   mixStereo,
   Project,
@@ -46,8 +48,8 @@ function buildMidiOnlyProject(): Project {
   project.setSampleRate(SR);
   const { clipId } = project.addMidiClip(0, 4);
   project.setMidiEvents(clipId, [
-    Project.midiNoteOn(0, 0, 0, 60, 100),
-    Project.midiNoteOff(3, 0, 0, 60, 0),
+    midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+    midiNoteOff({ ppq: 3, group: 0, channel: 0, note: 60, velocity: 0 }),
   ]);
   return project;
 }

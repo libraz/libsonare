@@ -2,6 +2,17 @@ import { ErrorCode, SonareError } from '../errors.js';
 import type { EngineCaptureStatus, EngineTransportState } from '../index.js';
 import { failureFromPayload, isFailurePayload } from '../internal/failure_payload.js';
 import { assertHandleLive, releasedHandleError } from '../internal/handle_guard.js';
+import type {
+  SonareEngineCaptureRequestMessage,
+  SonareEngineCaptureResponseMessageInternal,
+  SonareEngineClipPageRequestMessage,
+  SonareEngineSyncErrorMessage,
+  SonareEngineSyncMessage,
+  SonareEngineTransportResponseMessage,
+  SonareRealtimeEngineNodeCapabilities,
+  SonareRealtimeEngineNodeOptions,
+  SonareRealtimeEngineWorkletProcessorOptions,
+} from '../internal/worklet_messages.js';
 import { OwnerEpoch } from '../owner_epoch.js';
 import type { EngineTelemetry, ExternalMidiEvent } from '../public_types_engine.js';
 import { engineCapabilities } from '../realtime_engine.js';
@@ -24,17 +35,6 @@ import {
   resolveContextSampleRate,
   resolveScopeBandCount,
 } from './guards.js';
-import type {
-  SonareEngineCaptureRequestMessage,
-  SonareEngineCaptureResponseMessageInternal,
-  SonareEngineClipPageRequestMessage,
-  SonareEngineSyncErrorMessage,
-  SonareEngineSyncMessage,
-  SonareEngineTransportResponseMessage,
-  SonareRealtimeEngineNodeCapabilities,
-  SonareRealtimeEngineNodeOptions,
-  SonareRealtimeEngineWorkletProcessorOptions,
-} from './messages.js';
 import {
   createSonareClipPageRequestRingBuffer,
   createSonareEngineCommandRingBuffer,

@@ -2,16 +2,13 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { init, Mixer, mixingScenePresetJson } from '../dist/index.js';
 import {
   createSonareClipPageRequestRingBuffer,
-  createSonareEngineCommandRingBuffer,
   createSonareEngineTelemetryRingBuffer,
   createSonareExternalMidiRingBuffer,
   createSonareMeterRingBuffer,
   createSonareScopeRingBuffer,
   createSonareSpectrumRingBuffer,
   init as initWorklet,
-  popSonareEngineCommandRingBuffer,
   pushSonareClipPageRequestRingBuffer,
-  pushSonareEngineCommandRingBuffer,
   pushSonareExternalMidiRingBuffer,
   readSonareClipPageRequestRingBuffer,
   readSonareEngineTelemetryRingBuffer,
@@ -24,7 +21,6 @@ import {
   registerSonareWorkletProcessor,
   SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS,
   SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S,
-  SONARE_ENGINE_COMMAND_RECORD_BYTES,
   SONARE_ENGINE_RING_HEADER_INTS,
   SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
   SONARE_ENGINE_TELEMETRY_RING_PROTOCOL_VERSION,
@@ -38,7 +34,6 @@ import {
   SONARE_SPECTRUM_RING_HEADER_INTS,
   SONARE_SPECTRUM_RING_PROTOCOL_VERSION,
   SonareEngine,
-  SonareEngineCommandType,
   SonareEngineTelemetryError,
   SonareEngineTelemetryType,
   SonareRealtimeEngineNode,
@@ -47,14 +42,20 @@ import {
   SonareWorkletProcessor,
   StreamingMasteringChain,
   sonareClipPageRequestRingBufferByteLength,
-  sonareEngineCommandRingBufferByteLength,
   sonareEngineTelemetryRingBufferByteLength,
   sonareExternalMidiRingBufferByteLength,
   sonareMeterRingBufferByteLength,
   sonareScopeRingBufferByteLength,
   sonareSpectrumRingBufferByteLength,
-  writeSonareEngineTelemetryRingBuffer,
 } from '../dist/worklet.js';
+import {
+  createSonareEngineCommandRingBuffer,
+  popSonareEngineCommandRingBuffer,
+  pushSonareEngineCommandRingBuffer,
+  SONARE_ENGINE_COMMAND_RECORD_BYTES,
+  SonareEngineCommandType,
+  sonareEngineCommandRingBufferByteLength,
+} from '../src/internal/engine_command_ring.js';
 import {
   commitOverwriteWrite,
   commitSonareEngineTelemetryRingWrite,
@@ -66,6 +67,7 @@ import {
   spectrumRingFromSharedBuffer,
   tryAcquireOverwriteRead,
   tryBeginOverwriteWrite,
+  writeSonareEngineTelemetryRingBuffer,
 } from '../src/worklet/protocol.js';
 
 export {

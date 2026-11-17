@@ -563,3 +563,38 @@ export interface SidechainCheck {
   ok: boolean;
   reason: SidechainRefusal | null;
 }
+
+/**
+ * MIDI-FX chain configuration. Every field is optional; a stage runs only when
+ * one of its fields is present, and the stages run in the order listed here.
+ * A value the core refuses (out of range, non-integer where an integer is
+ * needed) is refused when the config is applied.
+ */
+export interface MidiFxConfig {
+  /** Transpose every note by this many semitones (integer). Present enables the stage. */
+  transposeSemitones?: number;
+  /** Velocity multiplier. Default `1`. Any of the three velocity fields enables the stage. */
+  velocityScale?: number;
+  /** Velocity offset added after scaling. Default `0`. */
+  velocityOffset?: number;
+  /** Velocity curve exponent, greater than `0`. Default `1`. */
+  velocityGamma?: number;
+  /** Quantize grid in PPQ, greater than `0`. Present enables the stage. */
+  quantizePpq?: number;
+  /** Quantize strength, `0` (none) to `1` (snap fully). Default `1`. */
+  quantizeStrength?: number;
+  /** Chord intervals in semitones above each note: 1 to 8 integers. Present enables the stage. */
+  chordIntervals?: number[];
+  /** Arpeggiator step intervals in semitones: 1 to 16 integers. Present enables the stage; needs `arpeggiatorStepPpq`. */
+  arpeggiatorIntervals?: number[];
+  /** Arpeggiator step length in PPQ, greater than `0`. Required with `arpeggiatorIntervals`. */
+  arpeggiatorStepPpq?: number;
+  /** Arpeggiator gate length in PPQ, greater than `0`, capped at the step length. Default: the step length. */
+  arpeggiatorGatePpq?: number;
+  /** Timing jitter in PPQ, `0` or more. Default `0`. Any humanize field (or `seed`) enables the stage. */
+  humanizePpq?: number;
+  /** Velocity jitter, integer `0` to `127`. Default `0`. */
+  humanizeVelocity?: number;
+  /** Random seed of the humanize stage, integer `0` or more. Default `0`. */
+  seed?: number;
+}

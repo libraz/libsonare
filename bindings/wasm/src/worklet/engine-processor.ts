@@ -1,18 +1,6 @@
 import type { EngineClip, SynthPatch } from '../index.js';
 import { RealtimeEngine } from '../index.js';
 import { failurePayload } from '../internal/failure_payload.js';
-import { engineNativeHandle } from '../realtime_engine.js';
-import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types.js';
-import { buildCaptureConfig } from './engine-offline.js';
-import {
-  assertKnownProcessorOptions,
-  requireChannelCount,
-  requireIntegerOption,
-  resolveScopeBandCount,
-  resolveScopeSampleRate,
-  SONARE_SCOPE_MAX_BANDS,
-  SONARE_SCOPE_MAX_POINTS,
-} from './guards.js';
 import {
   DEFAULT_METRONOME_CONFIG,
   type ResolvedMetronomeConfig,
@@ -27,7 +15,19 @@ import {
   type SonareEngineTransportResponseMessage,
   type SonareRealtimeEngineWorkletProcessorOptions,
   type WorkletTransport,
-} from './messages.js';
+} from '../internal/worklet_messages.js';
+import { engineNativeHandle } from '../realtime_engine.js';
+import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types.js';
+import { buildCaptureConfig } from './engine-offline.js';
+import {
+  assertKnownProcessorOptions,
+  requireChannelCount,
+  requireIntegerOption,
+  resolveScopeBandCount,
+  resolveScopeSampleRate,
+  SONARE_SCOPE_MAX_BANDS,
+  SONARE_SCOPE_MAX_POINTS,
+} from './guards.js';
 import {
   clipPageRequestRingFromSharedBuffer,
   commitOverwriteWrite,
@@ -833,7 +833,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         this.engine.setSf2Instrument(message.destinationId, message.config);
         break;
       case 'syncMidiFx':
-        this.engine.setMidiFx(message.destinationId, message.configJson ?? '');
+        this.engine.setMidiFx(message.destinationId, message.config ?? {});
         break;
       case 'syncClearMidiFx':
         this.engine.clearMidiFx(message.destinationId);

@@ -5,10 +5,10 @@ import {
   SONARE_METER_RING_PROTOCOL_VERSION,
   SONARE_SCOPE_RING_PROTOCOL_VERSION,
 } from '../dist/worklet.js';
+import type { SonareEngineSyncMessage } from '../src/internal/worklet_messages';
 // The accepted-type table itself, so the coverage below is generated from the
 // same source of truth as the guard rather than restated.
 import { ENGINE_SYNC_MESSAGE_TYPES, isEngineSyncMessage } from '../src/worklet/guards';
-import type { SonareEngineSyncMessage } from '../src/worklet/messages';
 import type {
   SonareEngineCommandRecord,
   SonareEngineTelemetryRecord,
@@ -2876,7 +2876,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         destinationId: 7,
         external: true,
       },
-      syncMidiFx: { type: 'syncMidiFx', destinationId: 4, configJson: '{}' },
+      syncMidiFx: { type: 'syncMidiFx', destinationId: 4, config: {} },
       syncMidiChannelPressure: {
         type: 'syncMidiChannelPressure',
         destinationId: 4,

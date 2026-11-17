@@ -499,7 +499,7 @@ describe('strip addressing', () => {
       engine.setStrip(10, { id: 'track-10' } as never);
       expect(() => engine.setStripPan(10, 0.25)).not.toThrow();
       expect(() => engine.setStripPan('master', 0.25)).toThrow(RangeError);
-      expect(() => engine.setStripPanLaw(10, 'const6dB')).not.toThrow();
+      expect(() => engine.setStripPanLaw(10, 'const6Db')).not.toThrow();
       expect(() => engine.setStripPanLaw(10, 1 as never)).toThrow(TypeError);
       expect(() => engine.setStripPanMode(10, 'dualPan')).not.toThrow();
       expect(() => engine.setStripPanMode(10, 2 as never)).toThrow(TypeError);
@@ -510,7 +510,7 @@ describe('strip addressing', () => {
       engine.setTrackBuses([{ busId: 1 }]);
       engine.setBusStrip(1, { id: '1' } as never);
       expect(() => engine.setBusPan(1, 0.5)).not.toThrow();
-      expect(() => engine.setBusPanLaw(1, 'const3dB')).not.toThrow();
+      expect(() => engine.setBusPanLaw(1, 'const3Db')).not.toThrow();
       expect(() => engine.setBusPanLaw(1, 0 as never)).toThrow(TypeError);
       expect(() => engine.setBusPanMode(1, 'balance')).not.toThrow();
       expect(() => engine.setBusDualPan(1, -1, 1)).not.toThrow();

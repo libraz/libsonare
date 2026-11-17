@@ -2,6 +2,12 @@ import { ErrorCode, SonareError } from '../errors.js';
 import type { MixerRealtimeBuffer } from '../index.js';
 import { Mixer } from '../index.js';
 import { failurePayload } from '../internal/failure_payload.js';
+import type {
+  SonareWorkletMessage,
+  SonareWorkletProcessorOptions,
+  WorkletPort,
+  WorkletTransport,
+} from '../internal/worklet_messages.js';
 import { leadingSamples, type WorkletInput, type WorkletOutput } from './audio_types.js';
 import { initializeEmbindInWorklet, isEmbindReady } from './embind-init.js';
 import {
@@ -10,12 +16,6 @@ import {
   requireIntegerOption,
   resolveScopeSampleRate,
 } from './guards.js';
-import type {
-  SonareWorkletMessage,
-  SonareWorkletProcessorOptions,
-  WorkletPort,
-  WorkletTransport,
-} from './messages.js';
 import {
   commitOverwriteWrite,
   encodeFrameHi,

@@ -18,6 +18,8 @@ import {
   init,
   isSonareError,
   MPE_DIMENSIONS,
+  midiNoteOff,
+  midiNoteOn,
   NOTE_TRACKINGS,
   PART_RIG_MODES,
   Project,
@@ -89,8 +91,8 @@ describe('Sonare WASM NativeSynth', () => {
     const { trackId, clipId } = project.addMidiClip(0, 4);
     project.setTrackMidiDestination(trackId, 0);
     project.setMidiEvents(clipId, [
-      Project.midiNoteOn(0, 0, 0, note, 100),
-      Project.midiNoteOff(2, 0, 0, note, 0),
+      midiNoteOn({ ppq: 0, group: 0, channel: 0, note, velocity: 100 }),
+      midiNoteOff({ ppq: 2, group: 0, channel: 0, note, velocity: 0 }),
     ]);
     return project;
   }

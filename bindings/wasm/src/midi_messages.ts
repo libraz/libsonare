@@ -1,0 +1,713 @@
+import { packMidi2Program } from './internal/midi_program_pack.js';
+import {
+  assertEventPpq,
+  midi2Byte,
+  midi2Event,
+  midi2I32,
+  midi2U16,
+  midi2U32,
+} from './internal/ump_events.js';
+import {
+  projectAutomationPointFromNative,
+  projectMidi1Event,
+  projectModule,
+} from './project_internal.js';
+import type {
+  MidiCcLearnOptions,
+  ProjectAutomationPoint,
+  ProjectMidiCcBinding,
+  ProjectMidiEvent,
+  ProjectMidiRouteConfig,
+  ProjectMidiRouteResult,
+} from './project_types.js';
+import type {
+  Gm2DrumNameRequest,
+  Gm2InstrumentNameRequest,
+  Midi2AssignableControllerRequest,
+  Midi2AssignablePerNoteControllerRequest,
+  Midi2CcRequest,
+  Midi2ChannelPressureRequest,
+  Midi2NoteOffRequest,
+  Midi2NoteOnRequest,
+  Midi2PerNoteManagementRequest,
+  Midi2PerNotePitchBendRequest,
+  Midi2PitchBendRequest,
+  Midi2PolyPressureRequest,
+  Midi2ProgramRequest,
+  Midi2RegisteredControllerRequest,
+  Midi2RegisteredPerNoteControllerRequest,
+  Midi2RelativeAssignableControllerRequest,
+  Midi2RelativeRegisteredControllerRequest,
+  MidiBank,
+  MidiBankProgramRequest,
+  MidiCcRequest,
+  MidiChannelPressureRequest,
+  MidiNoteOffRequest,
+  MidiNoteOnRequest,
+  MidiParamToCcRequest,
+  MidiPitchBendRequest,
+  MidiPolyPressureRequest,
+  MidiProgramRequest,
+} from './public_types_midi_messages.js';
+import { assertBoundedInteger, assertU7, optionalBoolean, requestObject } from './validation.js';
+
+/** A required number field: anything else is a `TypeError`. */
+function num(fnName: string, value: unknown, name: string): number {
+  if (typeof value !== 'number') {
+    throw new TypeError(`${fnName}: ${name} must be a number`);
+  }
+  return value;
+}
+
+/** An optional number field: absent (`undefined`/`null`) takes the fallback. */
+function numOr(fnName: string, value: unknown, name: string, fallback: number): number {
+  return value === undefined || value === null ? fallback : num(fnName, value, name);
+}
+
+/** A bank object `{ msb, lsb }`, each 0..127. */
+function bankPair(fnName: string, value: unknown): MidiBank {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new TypeError(`${fnName}: bank must be an object { msb, lsb }`);
+  }
+  const { msb, lsb } = value as Record<string, unknown>;
+  for (const key of Object.keys(value)) {
+    if (key !== 'msb' && key !== 'lsb') {
+      throw new TypeError(`${fnName}: unknown option '${key}' in 'bank'`);
+    }
+  }
+  return {
+    msb: assertU7(fnName, num(fnName, msb, 'bank.msb'), 'bank.msb'),
+    lsb: assertU7(fnName, num(fnName, lsb, 'bank.lsb'), 'bank.lsb'),
+  };
+}
+
+/** A MIDI 1.0 channel-voice event from a request carrying `ppq`, `group` and `channel`. */
+function midi1(
+  fn: 'midiNoteOn' | 'midiCc' | 'midiPolyPressure' | 'midiProgram' | 'midiChannelPressure',
+  request: unknown,
+  status: number,
+  data1: string,
+  data2?: string,
+): ProjectMidiEvent {
+  const r = requestObject(fn, request, 'request', true) as Record<string, unknown>;
+  return projectMidi1Event(
+    fn,
+    num(fn, r.ppq, 'ppq'),
+    num(fn, r.group, 'group'),
+    status,
+    num(fn, r.channel, 'channel'),
+    num(fn, r[data1], data1),
+    data2 === undefined ? 0 : num(fn, r[data2], data2),
+  );
+}
+
+/**
+ * Pack a MIDI 1.0 note-on event accepted by `Project.setMidiEvents`.
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midiNoteOn(request: MidiNoteOnRequest): ProjectMidiEvent {
+  return midi1('midiNoteOn', request, 0x9, 'note', 'velocity');
+}
+
+/**
+ * Pack a MIDI 1.0 note-off event.
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midiNoteOff(request: MidiNoteOffRequest): ProjectMidiEvent {
+  const fn = 'midiNoteOff';
+  const r = requestObject(fn, request, 'request', true);
+  return projectMidi1Event(
+    fn,
+    num(fn, r.ppq, 'ppq'),
+    num(fn, r.group, 'group'),
+    0x8,
+    num(fn, r.channel, 'channel'),
+    num(fn, r.note, 'note'),
+    numOr(fn, r.velocity, 'velocity', 0),
+  );
+}
+
+/**
+ * Pack a MIDI 1.0 control-change event.
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midiCc(request: MidiCcRequest): ProjectMidiEvent {
+  return midi1('midiCc', request, 0xb, 'controller', 'value');
+}
+
+/**
+ * Pack a MIDI 1.0 poly-pressure event.
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midiPolyPressure(request: MidiPolyPressureRequest): ProjectMidiEvent {
+  return midi1('midiPolyPressure', request, 0xa, 'note', 'pressure');
+}
+
+/**
+ * Pack a MIDI 1.0 program-change event.
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midiProgram(request: MidiProgramRequest): ProjectMidiEvent {
+  return midi1('midiProgram', request, 0xc, 'program');
+}
+
+/**
+ * Pack a MIDI 1.0 channel-pressure event.
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midiChannelPressure(request: MidiChannelPressureRequest): ProjectMidiEvent {
+  return midi1('midiChannelPressure', request, 0xd, 'pressure');
+}
+
+/**
+ * Pack a MIDI 1.0 pitch-bend event (`bend` is unsigned 14-bit, center = 8192).
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midiPitchBend(request: MidiPitchBendRequest): ProjectMidiEvent {
+  const fn = 'midiPitchBend';
+  const r = requestObject(fn, request, 'request', true);
+  const bend = num(fn, r.bend, 'bend');
+  assertBoundedInteger(fn, bend, 'bend', 0, 0x3fff);
+  return projectMidi1Event(
+    fn,
+    num(fn, r.ppq, 'ppq'),
+    num(fn, r.group, 'group'),
+    0xe,
+    num(fn, r.channel, 'channel'),
+    bend & 0x7f,
+    bend >> 7,
+  );
+}
+
+/**
+ * Pack a MIDI 2.0 note-on event. `velocity16` is the full 16-bit velocity (0 is
+ * a sounding note-on); `attributeType` 0 is none, 3 is pitch 7.9.
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midi2NoteOn(request: Midi2NoteOnRequest): ProjectMidiEvent {
+  const fn = 'midi2NoteOn';
+  const r = requestObject(fn, request, 'request', true);
+  const ppq = num(fn, r.ppq, 'ppq');
+  const group = num(fn, r.group, 'group');
+  const channel = num(fn, r.channel, 'channel');
+  const note = assertU7(fn, num(fn, r.note, 'note'), 'note');
+  const vel = midi2U16(fn, num(fn, r.velocity16, 'velocity16'), 'velocity16');
+  const type = midi2Byte(fn, numOr(fn, r.attributeType, 'attributeType', 0), 'attributeType');
+  const data = midi2U16(fn, numOr(fn, r.attributeData, 'attributeData', 0), 'attributeData');
+  return midi2Event(fn, ppq, group, 0x9, channel, note, type, ((vel << 16) | data) >>> 0);
+}
+
+/**
+ * Pack a MIDI 2.0 note-off event (`velocity16` is the full 16-bit release velocity).
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midi2NoteOff(request: Midi2NoteOffRequest): ProjectMidiEvent {
+  const fn = 'midi2NoteOff';
+  const r = requestObject(fn, request, 'request', true);
+  const ppq = num(fn, r.ppq, 'ppq');
+  const group = num(fn, r.group, 'group');
+  const channel = num(fn, r.channel, 'channel');
+  const note = assertU7(fn, num(fn, r.note, 'note'), 'note');
+  const vel = midi2U16(fn, numOr(fn, r.velocity16, 'velocity16', 0), 'velocity16');
+  return midi2Event(fn, ppq, group, 0x8, channel, note, 0, (vel << 16) >>> 0);
+}
+
+/**
+ * Pack a MIDI 2.0 control-change event (`value32` is the full 32-bit value).
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midi2Cc(request: Midi2CcRequest): ProjectMidiEvent {
+  const fn = 'midi2Cc';
+  const r = requestObject(fn, request, 'request', true);
+  const ppq = num(fn, r.ppq, 'ppq');
+  const group = num(fn, r.group, 'group');
+  const channel = num(fn, r.channel, 'channel');
+  const controller = assertU7(fn, num(fn, r.controller, 'controller'), 'controller');
+  const value = midi2U32(fn, num(fn, r.value32, 'value32'), 'value32');
+  return midi2Event(fn, ppq, group, 0xb, channel, controller, 0, value);
+}
+
+/**
+ * Pack a MIDI 2.0 poly-pressure event (`pressure32` is the full 32-bit pressure).
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midi2PolyPressure(request: Midi2PolyPressureRequest): ProjectMidiEvent {
+  const fn = 'midi2PolyPressure';
+  const r = requestObject(fn, request, 'request', true);
+  const ppq = num(fn, r.ppq, 'ppq');
+  const group = num(fn, r.group, 'group');
+  const channel = num(fn, r.channel, 'channel');
+  const note = assertU7(fn, num(fn, r.note, 'note'), 'note');
+  const pressure = midi2U32(fn, num(fn, r.pressure32, 'pressure32'), 'pressure32');
+  return midi2Event(fn, ppq, group, 0xa, channel, note, 0, pressure);
+}
+
+/**
+ * Pack a MIDI 2.0 channel-pressure event (`pressure32` is the full 32-bit pressure).
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midi2ChannelPressure(request: Midi2ChannelPressureRequest): ProjectMidiEvent {
+  const fn = 'midi2ChannelPressure';
+  const r = requestObject(fn, request, 'request', true);
+  const ppq = num(fn, r.ppq, 'ppq');
+  const group = num(fn, r.group, 'group');
+  const channel = num(fn, r.channel, 'channel');
+  const pressure = midi2U32(fn, num(fn, r.pressure32, 'pressure32'), 'pressure32');
+  return midi2Event(fn, ppq, group, 0xd, channel, 0, 0, pressure);
+}
+
+/**
+ * Pack a MIDI 2.0 pitch-bend event (`bend32` is unsigned 32-bit, center = 0x80000000).
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midi2PitchBend(request: Midi2PitchBendRequest): ProjectMidiEvent {
+  const fn = 'midi2PitchBend';
+  const r = requestObject(fn, request, 'request', true);
+  const ppq = num(fn, r.ppq, 'ppq');
+  const group = num(fn, r.group, 'group');
+  const channel = num(fn, r.channel, 'channel');
+  const bend = midi2U32(fn, num(fn, r.bend32, 'bend32'), 'bend32');
+  return midi2Event(fn, ppq, group, 0xe, channel, 0, 0, bend);
+}
+
+/**
+ * Pack a MIDI 2.0 program-change event. The bank travels in the same message;
+ * omit `bank` for none.
+ * @throws {TypeError} A non-object request, an unknown key or a wrong-typed field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midi2Program(request: Midi2ProgramRequest): ProjectMidiEvent {
+  const fn = 'midi2Program';
+  const r = requestObject(fn, request, 'request', true);
+  const ppq = num(fn, r.ppq, 'ppq');
+  assertEventPpq(fn, ppq);
+  const bank = r.bank === undefined || r.bank === null ? undefined : bankPair(fn, r.bank);
+  const [data0, data1] = packMidi2Program(
+    fn,
+    num(fn, r.group, 'group'),
+    num(fn, r.channel, 'channel'),
+    num(fn, r.program, 'program'),
+    bank !== undefined,
+    bank?.msb ?? 0,
+    bank?.lsb ?? 0,
+  );
+  return { ppq, data0, data1 };
+}
+
+/** The shared reader of the four bank/index controller messages. */
+function bankController(
+  fn:
+    | 'midi2RegisteredController'
+    | 'midi2AssignableController'
+    | 'midi2RelativeRegisteredController'
+    | 'midi2RelativeAssignableController',
+  request: unknown,
+  opcode: number,
+  valueName: 'value32' | 'delta32',
+): ProjectMidiEvent {
+  const r = requestObject(fn, request, 'request', true) as Record<string, unknown>;
+  const ppq = num(fn, r.ppq, 'ppq');
+  const group = num(fn, r.group, 'group');
+  const channel = num(fn, r.channel, 'channel');
+  const bank = assertU7(fn, num(fn, r.bank, 'bank'), 'bank');
+  const index = assertU7(fn, num(fn, r.index, 'index'), 'index');
+  const raw = num(fn, r[valueName], valueName);
+  const word =
+    valueName === 'delta32' ? midi2I32(fn, raw, valueName) : midi2U32(fn, raw, valueName);
+  return midi2Event(fn, ppq, group, opcode, channel, bank, index, word);
+}
+
+/**
+ * Pack a MIDI 2.0 registered controller (RPN) event.
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midi2RegisteredController(
+  request: Midi2RegisteredControllerRequest,
+): ProjectMidiEvent {
+  return bankController('midi2RegisteredController', request, 0x2, 'value32');
+}
+
+/**
+ * Pack a MIDI 2.0 assignable controller (NRPN) event.
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midi2AssignableController(
+  request: Midi2AssignableControllerRequest,
+): ProjectMidiEvent {
+  return bankController('midi2AssignableController', request, 0x3, 'value32');
+}
+
+/**
+ * Pack a MIDI 2.0 relative registered controller event (`delta32` is a signed change).
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midi2RelativeRegisteredController(
+  request: Midi2RelativeRegisteredControllerRequest,
+): ProjectMidiEvent {
+  return bankController('midi2RelativeRegisteredController', request, 0x4, 'delta32');
+}
+
+/**
+ * Pack a MIDI 2.0 relative assignable controller event (`delta32` is a signed change).
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midi2RelativeAssignableController(
+  request: Midi2RelativeAssignableControllerRequest,
+): ProjectMidiEvent {
+  return bankController('midi2RelativeAssignableController', request, 0x5, 'delta32');
+}
+
+/** The shared reader of the two per-note controller messages. */
+function perNoteController(
+  fn: 'midi2RegisteredPerNoteController' | 'midi2AssignablePerNoteController',
+  request: unknown,
+  opcode: number,
+): ProjectMidiEvent {
+  const r = requestObject(fn, request, 'request', true) as Record<string, unknown>;
+  const ppq = num(fn, r.ppq, 'ppq');
+  const group = num(fn, r.group, 'group');
+  const channel = num(fn, r.channel, 'channel');
+  const note = assertU7(fn, num(fn, r.note, 'note'), 'note');
+  const index = midi2Byte(fn, num(fn, r.index, 'index'), 'index');
+  const value = midi2U32(fn, num(fn, r.value32, 'value32'), 'value32');
+  return midi2Event(fn, ppq, group, opcode, channel, note, index, value);
+}
+
+/**
+ * Pack a MIDI 2.0 registered per-note controller event (`index` is 0..255).
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midi2RegisteredPerNoteController(
+  request: Midi2RegisteredPerNoteControllerRequest,
+): ProjectMidiEvent {
+  return perNoteController('midi2RegisteredPerNoteController', request, 0x0);
+}
+
+/**
+ * Pack a MIDI 2.0 assignable per-note controller event (`index` is 0..255).
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midi2AssignablePerNoteController(
+  request: Midi2AssignablePerNoteControllerRequest,
+): ProjectMidiEvent {
+  return perNoteController('midi2AssignablePerNoteController', request, 0x1);
+}
+
+/**
+ * Pack a MIDI 2.0 per-note pitch-bend event (`bend32` is unsigned 32-bit, center = 0x80000000).
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midi2PerNotePitchBend(request: Midi2PerNotePitchBendRequest): ProjectMidiEvent {
+  const fn = 'midi2PerNotePitchBend';
+  const r = requestObject(fn, request, 'request', true);
+  const ppq = num(fn, r.ppq, 'ppq');
+  const group = num(fn, r.group, 'group');
+  const channel = num(fn, r.channel, 'channel');
+  const note = assertU7(fn, num(fn, r.note, 'note'), 'note');
+  const bend = midi2U32(fn, num(fn, r.bend32, 'bend32'), 'bend32');
+  return midi2Event(fn, ppq, group, 0x6, channel, note, 0, bend);
+}
+
+/**
+ * Pack a MIDI 2.0 per-note management event. `detach` sets the D flag (detach
+ * per-note controllers from voices already sounding on `note`); `reset` sets
+ * the S flag (reset the note's per-note controllers).
+ * @throws {TypeError} A non-object request, an unknown key or a wrong-typed field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midi2PerNoteManagement(request: Midi2PerNoteManagementRequest): ProjectMidiEvent {
+  const fn = 'midi2PerNoteManagement';
+  const r = requestObject(fn, request, 'request', true);
+  const ppq = num(fn, r.ppq, 'ppq');
+  const group = num(fn, r.group, 'group');
+  const channel = num(fn, r.channel, 'channel');
+  const note = assertU7(fn, num(fn, r.note, 'note'), 'note');
+  const detach = optionalBoolean(fn, r.detach, 'detach', false);
+  const reset = optionalBoolean(fn, r.reset, 'reset', false);
+  const flags = (detach ? 0x02 : 0) | (reset ? 0x01 : 0);
+  return midi2Event(fn, ppq, group, 0xf, channel, note, flags, 0);
+}
+
+/** An integer argument in `[0, max]`: a non-number is a `TypeError`, anything else out of range a `RangeError`. */
+function lookupIndex(fnName: string, value: unknown, argName: string, max: number): number {
+  const n = num(fnName, value, argName);
+  if (!Number.isInteger(n) || n < 0 || n > max) {
+    throw new RangeError(`${fnName}: ${argName} must be an integer in [0, ${max}]`);
+  }
+  return n;
+}
+
+/** A string argument: anything else is a `TypeError`. */
+function lookupName(fnName: string, value: unknown, argName: string): string {
+  if (typeof value !== 'string') {
+    throw new TypeError(`${fnName}: ${argName} must be a string`);
+  }
+  return value;
+}
+
+/** The lookup result, or a `RangeError` when the native table has no entry. */
+function found<T>(value: T | null, fnName: string, what: string): T {
+  if (value === null) {
+    throw new RangeError(`${fnName}: ${what}`);
+  }
+  return value;
+}
+
+/**
+ * Return the General MIDI instrument name for `program` (0..127).
+ * @throws {TypeError} A non-number `program`.
+ * @throws {RangeError} A `program` outside 0..127.
+ */
+export function gmInstrumentName(program: number): string {
+  const n = lookupIndex('gmInstrumentName', program, 'program', 127);
+  return found(
+    projectModule().midiGmInstrumentName(n),
+    'gmInstrumentName',
+    `no instrument for program ${n}`,
+  );
+}
+
+/**
+ * Return the General MIDI program number for a canonical instrument name.
+ * @throws {TypeError} A non-string `name`.
+ * @throws {RangeError} An unknown name.
+ */
+export function gmProgramForName(name: string): number {
+  const s = lookupName('gmProgramForName', name, 'name');
+  const program = projectModule().midiGmProgramForName(s);
+  if (program < 0) {
+    throw new RangeError(`gmProgramForName: unknown instrument name '${s}'`);
+  }
+  return program;
+}
+
+/**
+ * Return the General MIDI family name for `family` (0..15).
+ * @throws {TypeError} A non-number `family`.
+ * @throws {RangeError} A `family` outside 0..15.
+ */
+export function gmFamilyName(family: number): string {
+  const n = lookupIndex('gmFamilyName', family, 'family', 15);
+  return found(projectModule().midiGmFamilyName(n), 'gmFamilyName', `no family ${n}`);
+}
+
+/**
+ * Return the first General MIDI program number in `family` (0..15).
+ * @throws {TypeError} A non-number `family`.
+ * @throws {RangeError} A `family` outside 0..15.
+ */
+export function gmFamilyFirstProgram(family: number): number {
+  const n = lookupIndex('gmFamilyFirstProgram', family, 'family', 15);
+  const program = projectModule().midiGmFamilyFirstProgram(n);
+  if (program < 0) {
+    throw new RangeError(`gmFamilyFirstProgram: no family ${n}`);
+  }
+  return program;
+}
+
+/**
+ * Return the GM2 bank/program instrument variation name.
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ * @throws {RangeError} A field outside 0..127, or a bank/program with no GM2 variation.
+ */
+export function gm2InstrumentName(request: Gm2InstrumentNameRequest): string {
+  const fn = 'gm2InstrumentName';
+  const r = requestObject(fn, request, 'request', true);
+  const bankLsb = lookupIndex(fn, r.bankLsb, 'bankLsb', 127);
+  const program = lookupIndex(fn, r.program, 'program', 127);
+  return found(
+    projectModule().midiGm2InstrumentName(bankLsb, program),
+    fn,
+    `no GM2 instrument for bankLsb ${bankLsb} program ${program}`,
+  );
+}
+
+/**
+ * Return the General MIDI drum name for `note` (0..127).
+ * @throws {TypeError} A non-number `note`.
+ * @throws {RangeError} A `note` with no drum name.
+ */
+export function gmDrumName(note: number): string {
+  const n = lookupIndex('gmDrumName', note, 'note', 127);
+  return found(projectModule().midiGmDrumName(n), 'gmDrumName', `no drum for note ${n}`);
+}
+
+/**
+ * Return the General MIDI drum note for a canonical drum name.
+ * @throws {TypeError} A non-string `name`.
+ * @throws {RangeError} An unknown name.
+ */
+export function gmDrumNoteForName(name: string): number {
+  const s = lookupName('gmDrumNoteForName', name, 'name');
+  const note = projectModule().midiGmDrumNoteForName(s);
+  if (note < 0) {
+    throw new RangeError(`gmDrumNoteForName: unknown drum name '${s}'`);
+  }
+  return note;
+}
+
+/**
+ * Return the GM2 drum-set name for `bankLsb` (0..127).
+ * @throws {TypeError} A non-number `bankLsb`.
+ * @throws {RangeError} A `bankLsb` with no drum set.
+ */
+export function gm2DrumSetName(bankLsb: number): string {
+  const n = lookupIndex('gm2DrumSetName', bankLsb, 'bankLsb', 127);
+  return found(
+    projectModule().midiGm2DrumSetName(n),
+    'gm2DrumSetName',
+    `no drum set for bankLsb ${n}`,
+  );
+}
+
+/**
+ * Return the GM2 drum name for `bankLsb`/`note`.
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ * @throws {RangeError} A field outside 0..127, or a drum set with no such note.
+ */
+export function gm2DrumName(request: Gm2DrumNameRequest): string {
+  const fn = 'gm2DrumName';
+  const r = requestObject(fn, request, 'request', true);
+  const bankLsb = lookupIndex(fn, r.bankLsb, 'bankLsb', 127);
+  const note = lookupIndex(fn, r.note, 'note', 127);
+  return found(
+    projectModule().midiGm2DrumName(bankLsb, note),
+    fn,
+    `no GM2 drum for bankLsb ${bankLsb} note ${note}`,
+  );
+}
+
+/**
+ * Return the MIDI CC name for `controller` (0..127).
+ * @throws {TypeError} A non-number `controller`.
+ * @throws {RangeError} A `controller` outside 0..127.
+ */
+export function midiCcName(controller: number): string {
+  const n = lookupIndex('midiCcName', controller, 'controller', 127);
+  return found(projectModule().midiCcName(n), 'midiCcName', `no name for controller ${n}`);
+}
+
+/**
+ * Return the MIDI CC number for a canonical controller name.
+ * @throws {TypeError} A non-string `name`.
+ * @throws {RangeError} An unknown name.
+ */
+export function midiCcIndexForName(name: string): number {
+  const s = lookupName('midiCcIndexForName', name, 'name');
+  const index = projectModule().midiCcIndexForName(s);
+  if (index < 0) {
+    throw new RangeError(`midiCcIndexForName: unknown controller name '${s}'`);
+  }
+  return index;
+}
+
+/**
+ * Return the MIDI 2.0 per-note controller name for `index` (0..255).
+ * @throws {TypeError} A non-number `index`.
+ * @throws {RangeError} An `index` with no name.
+ */
+export function perNoteControllerName(index: number): string {
+  const n = lookupIndex('perNoteControllerName', index, 'index', 255);
+  return found(
+    projectModule().midiPerNoteControllerName(n),
+    'perNoteControllerName',
+    `no name for per-note controller ${n}`,
+  );
+}
+
+/**
+ * Expand bank-select + program-change into MIDI events accepted by `Project.setMidiEvents`.
+ * @throws {TypeError} A non-object request, an unknown key or a wrong-typed field.
+ * @throws {RangeError} A field outside its range.
+ */
+export function midiBankProgram(request: MidiBankProgramRequest): ProjectMidiEvent[] {
+  const fn = 'midiBankProgram';
+  const r = requestObject(fn, request, 'request', true);
+  const bank = bankPair(fn, r.bank);
+  return projectModule().midiBankProgram(
+    num(fn, r.ppq, 'ppq'),
+    num(fn, r.group, 'group'),
+    num(fn, r.channel, 'channel'),
+    bank.msb,
+    bank.lsb,
+    num(fn, r.program, 'program'),
+  );
+}
+
+/**
+ * Route MIDI events through the native MidiRouter filter/remap/thru logic. A
+ * `null` or omitted config field is absent.
+ */
+export function midiRouteEvents(
+  events: ReadonlyArray<ProjectMidiEvent>,
+  config: ProjectMidiRouteConfig = {},
+): ProjectMidiRouteResult {
+  const present: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(config ?? {})) {
+    if (value !== null && value !== undefined) {
+      present[key] = value;
+    }
+  }
+  return projectModule().midiRouteEvents(events, present as ProjectMidiRouteConfig);
+}
+
+/** Run native MIDI learn over an event stream; returns `null` when nothing is learned. */
+export function midiCcLearn(
+  events: ReadonlyArray<ProjectMidiEvent>,
+  paramId: number,
+  options: MidiCcLearnOptions = {},
+): ProjectMidiCcBinding | null {
+  return projectModule().midiCcLearn(
+    events,
+    paramId,
+    options.minValue ?? 0,
+    options.maxValue ?? 1,
+    options.minMovement ?? 0,
+  );
+}
+
+/** Convert one CC event to an automation breakpoint using native CcMap. */
+export function midiCcToBreakpoint(
+  bindings: ReadonlyArray<ProjectMidiCcBinding>,
+  event: ProjectMidiEvent,
+): ProjectAutomationPoint | null {
+  const native = projectModule().midiCcToBreakpoint(bindings, event);
+  return native === null ? null : projectAutomationPointFromNative(native);
+}
+
+/**
+ * Convert one automation value back to a CC UMP event using native CcMap.
+ * Returns `null` when no binding carries `paramId`.
+ * @throws {TypeError} A non-object request, an unknown key or a non-number field.
+ */
+export function midiParamToCc(request: MidiParamToCcRequest): ProjectMidiEvent | null {
+  const fn = 'midiParamToCc';
+  const r = requestObject(fn, request, 'request', true);
+  return projectModule().midiParamToCc(
+    r.bindings,
+    num(fn, r.paramId, 'paramId'),
+    num(fn, r.unitValue, 'unitValue'),
+    num(fn, r.group, 'group'),
+    numOr(fn, r.ppq, 'ppq', 0),
+  );
+}

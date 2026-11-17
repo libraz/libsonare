@@ -403,7 +403,7 @@ describe('Sonare WASM Module', () => {
       const [dualLeft, dualRight] = settle();
       expect(rms(dualRight)).toBeLessThan(rms(flatRight) * 0.01);
       expect(rms(dualLeft)).toBeGreaterThan(rms(flatLeft) * 0.9);
-      engine.setBusPanLaw(1, 'const6dB');
+      engine.setBusPanLaw(1, 'const6Db');
       engine.setBusPanMode(1, 'balance');
       engine.setBusPan(1, 0);
       const [centredLeft] = settle();
@@ -423,7 +423,7 @@ describe('Sonare WASM Module', () => {
       expect(rms(restoredLeft)).toBeCloseTo(rms(flatLeft), 3);
 
       expectRefusalOf(() => engine.setBusPan(99, 0.5));
-      expectRefusalOf(() => engine.setBusPanLaw(99, 'const3dB'));
+      expectRefusalOf(() => engine.setBusPanLaw(99, 'const3Db'));
       expectRefusalOf(() => engine.setBusPanMode(99, 'balance'));
       expectRefusalOf(() => engine.setBusDualPan(99, -1, 1));
       expectRefusalOf(() => engine.setBusEqBand(99, 0, { type: 'Peak' }));

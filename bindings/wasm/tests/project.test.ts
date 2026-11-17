@@ -9,9 +9,34 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { ProjectBounceResult } from '../dist/index.js';
 import {
   ErrorCode,
+  gm2DrumName,
+  gm2DrumSetName,
+  gm2InstrumentName,
+  gmDrumName,
+  gmDrumNoteForName,
+  gmFamilyFirstProgram,
+  gmFamilyName,
+  gmInstrumentName,
+  gmProgramForName,
   init,
   isSonareError,
+  midi2Cc,
+  midiBankProgram,
+  midiCc,
+  midiCcIndexForName,
+  midiCcLearn,
+  midiCcName,
+  midiCcToBreakpoint,
+  midiChannelPressure,
+  midiNoteOff,
+  midiNoteOn,
+  midiParamToCc,
+  midiPitchBend,
+  midiPolyPressure,
+  midiProgram,
+  midiRouteEvents,
   Project,
+  perNoteControllerName,
   projectAbiVersion,
   synthGsDrumKitIsVoicedApart,
   synthGsDrumKitName,
@@ -54,8 +79,8 @@ describe('Sonare WASM Project', () => {
     });
     const { clipId } = project.addMidiClip(0, 4);
     project.setMidiEvents(clipId, [
-      Project.midiNoteOn(0, 0, 0, 60, 100),
-      Project.midiNoteOff(2, 0, 0, 60, 0),
+      midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+      midiNoteOff({ ppq: 2, group: 0, channel: 0, note: 60, velocity: 0 }),
     ]);
     return project;
   }
@@ -614,8 +639,8 @@ describe('Sonare WASM Project', () => {
     const { clipId } = project.addMidiClip(0, 4);
     // A short held note so the built-in synth produces sustained tone.
     project.setMidiEvents(clipId, [
-      Project.midiNoteOn(0, 0, 0, 60, 100),
-      Project.midiNoteOff(3, 0, 0, 60, 0),
+      midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+      midiNoteOff({ ppq: 3, group: 0, channel: 0, note: 60, velocity: 0 }),
     ]);
     return project;
   }
@@ -626,9 +651,9 @@ describe('Sonare WASM Project', () => {
     const { trackId, clipId } = project.addMidiClip(0, 1);
     project.setTrackMidiDestination(trackId, 0);
     project.setMidiEvents(clipId, [
-      Project.midiProgram(0, 0, 0, program),
-      Project.midiNoteOn(0, 0, 0, 60, 100),
-      Project.midiNoteOff(0.5, 0, 0, 60, 0),
+      midiProgram({ ppq: 0, group: 0, channel: 0, program }),
+      midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+      midiNoteOff({ ppq: 0.5, group: 0, channel: 0, note: 60, velocity: 0 }),
     ]);
     return project;
   }
@@ -814,9 +839,9 @@ describe('Sonare WASM Project', () => {
     project.setSampleRate(48000);
     const { clipId } = project.addMidiClip(0, 4);
     project.setMidiEvents(clipId, [
-      Project.midiProgram(0, 0, 0, 4), // Electric Piano 1 in the GM map.
-      Project.midiNoteOn(0, 0, 0, 60, 100),
-      Project.midiNoteOff(2, 0, 0, 60, 0),
+      midiProgram({ ppq: 0, group: 0, channel: 0, program: 4 }), // Electric Piano 1 in the GM map.
+      midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+      midiNoteOff({ ppq: 2, group: 0, channel: 0, note: 60, velocity: 0 }),
     ]);
     const options = { totalFrames: 24000, numChannels: 1 };
     try {
@@ -898,15 +923,15 @@ describe('Sonare WASM Project', () => {
     try {
       const { clipId } = project.addMidiClip(0, 2);
       project.setMidiEvents(clipId, [
-        Project.midiNoteOn(0.1, 0, 0, 60, 100),
-        Project.midiPolyPressure(0.2, 0, 0, 60, 70),
-        Project.midiChannelPressure(0.3, 0, 0, 80),
-        Project.midiPitchBend(0.4, 0, 0, 8192),
-        Project.midiNoteOff(1.1, 0, 0, 60, 0),
+        midiNoteOn({ ppq: 0.1, group: 0, channel: 0, note: 60, velocity: 100 }),
+        midiPolyPressure({ ppq: 0.2, group: 0, channel: 0, note: 60, pressure: 70 }),
+        midiChannelPressure({ ppq: 0.3, group: 0, channel: 0, pressure: 80 }),
+        midiPitchBend({ ppq: 0.4, group: 0, channel: 0, bend: 8192 }),
+        midiNoteOff({ ppq: 1.1, group: 0, channel: 0, note: 60, velocity: 0 }),
       ]);
       project.bakeMidiFx({
         clipId,
-        configJson: '{"transpose_semitones":12,"quantize_ppq":0.25,"quantize_strength":1.0}',
+        config: { transposeSemitones: 12, quantizePpq: 0.25, quantizeStrength: 1 },
       });
       project.setProgram(clipId, 42);
       project.setProgramOnChannel(clipId, {
@@ -957,13 +982,13 @@ describe('Sonare WASM Project', () => {
   it('reports MIDI-FX provenance and matches the plain bake', () => {
     const seed = (project: Project, clip: number) => {
       project.setMidiEvents(clip, [
-        Project.midiNoteOn(0, 0, 0, 60, 100),
-        Project.midiNoteOff(1, 0, 0, 60, 0),
-        Project.midiNoteOn(2, 0, 0, 64, 100),
-        Project.midiNoteOff(3, 0, 0, 64, 0),
+        midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+        midiNoteOff({ ppq: 1, group: 0, channel: 0, note: 60, velocity: 0 }),
+        midiNoteOn({ ppq: 2, group: 0, channel: 0, note: 64, velocity: 100 }),
+        midiNoteOff({ ppq: 3, group: 0, channel: 0, note: 64, velocity: 0 }),
       ]);
     };
-    const config = '{"chord_intervals":[0,4,7]}';
+    const config = { chordIntervals: [0, 4, 7] };
 
     const request = new Project();
     const positional = new Project();
@@ -971,10 +996,10 @@ describe('Sonare WASM Project', () => {
     try {
       const { clipId: requestClip } = request.addMidiClip(0, 4);
       seed(request, requestClip);
-      expect(request.previewMidiFxCount({ clipId: requestClip, configJson: config })).toBe(12);
+      expect(request.previewMidiFxCount({ clipId: requestClip, config })).toBe(12);
       const result = request.bakeMidiFx({
         clipId: requestClip,
-        configJson: config,
+        config,
         withSourceIndex: true,
       });
       expect(result.sourceIndex).toBeInstanceOf(Int32Array);
@@ -991,7 +1016,7 @@ describe('Sonare WASM Project', () => {
       // bake, and the positional form is refused.
       const { clipId: positionalClip } = positional.addMidiClip(0, 4);
       seed(positional, positionalClip);
-      positional.bakeMidiFx({ clipId: positionalClip, configJson: config });
+      positional.bakeMidiFx({ clipId: positionalClip, config });
       expect(() =>
         (positional as never as Record<string, (...a: unknown[]) => unknown>).bakeMidiFx(
           positionalClip,
@@ -1002,18 +1027,22 @@ describe('Sonare WASM Project', () => {
 
       const { clipId: bareClip } = bare.addMidiClip(0, 4);
       seed(bare, bareClip);
-      expect(bare.bakeMidiFx({ clipId: bareClip, configJson: config })).toEqual({});
+      expect(bare.bakeMidiFx({ clipId: bareClip, config })).toEqual({});
       expect(Array.from(bare.exportSmf())).toEqual(Array.from(positional.exportSmf()));
 
       // Errors travel the same path in both forms.
       expect(() =>
-        positional.bakeMidiFx({ clipId: positionalClip, configJson: '{bad json' }),
+        positional.bakeMidiFx({ clipId: positionalClip, config: { quantizePpq: 0 } }),
       ).toThrow();
       expect(() =>
-        request.bakeMidiFx({ clipId: requestClip, configJson: '{bad json', withSourceIndex: true }),
+        request.bakeMidiFx({
+          clipId: requestClip,
+          config: { quantizePpq: 0 },
+          withSourceIndex: true,
+        }),
       ).toThrow();
       expect(() =>
-        request.previewMidiFxCount({ clipId: requestClip, configJson: '{bad json' }),
+        request.previewMidiFxCount({ clipId: requestClip, config: { quantizePpq: 0 } }),
       ).toThrow();
     } finally {
       request.destroy();
@@ -1022,15 +1051,33 @@ describe('Sonare WASM Project', () => {
     }
   });
 
+  it('refuses a malformed MIDI-FX config before it reaches the core', () => {
+    const project = new Project();
+    try {
+      const { clipId } = project.addMidiClip(0, 4);
+      const bake = (config: unknown) => () =>
+        project.bakeMidiFx({ clipId, config: config as never });
+      expect(bake('{}')).toThrow(TypeError);
+      expect(bake(null)).toThrow(TypeError);
+      expect(bake({ transposeSemitones: '12' })).toThrow(/transposeSemitones/);
+      expect(bake({ chordIntervals: [0, '4'] })).toThrow(TypeError);
+      expect(bake({ transpose_semitones: 12 })).toThrow(TypeError);
+      expect(bake({ seed: Number.NaN })).toThrow(RangeError);
+      expect(() => project.previewMidiFxCount({ clipId, config: 1 as never })).toThrow(TypeError);
+    } finally {
+      project.destroy();
+    }
+  });
+
   it('preserves more than 512 events when baking MIDI FX', () => {
     const project = new Project();
     try {
       const { clipId } = project.addMidiClip(0, 8);
       const events = Array.from({ length: 600 }, (_, i) =>
-        Project.midiCc(i / 80, 0, 0, i % 128, (i * 3) % 128),
+        midiCc({ ppq: i / 80, group: 0, channel: 0, controller: i % 128, value: (i * 3) % 128 }),
       );
       project.setMidiEvents(clipId, events);
-      project.bakeMidiFx({ clipId, configJson: '{}' });
+      project.bakeMidiFx({ clipId, config: {} });
 
       const payload = JSON.parse(project.toJson()) as {
         midi_content: Record<string, Array<{ ppq: number; data0: number; data1: number }>>;
@@ -1040,7 +1087,7 @@ describe('Sonare WASM Project', () => {
       const roundtrip = new Project();
       try {
         const roundClip = roundtrip.importSmf(project.exportSmf());
-        roundtrip.bakeMidiFx({ clipId: roundClip, configJson: '{}' });
+        roundtrip.bakeMidiFx({ clipId: roundClip, config: {} });
         const roundPayload = JSON.parse(roundtrip.toJson()) as {
           midi_content: Record<string, Array<{ ppq: number; data0: number; data1: number }>>;
         };
@@ -1066,7 +1113,9 @@ describe('Sonare WASM Project', () => {
     const project = new Project();
     try {
       const { clipId } = project.addMidiClip(0, 4);
-      project.setMidiEvents(clipId, [Project.midiNoteOn(0, 0, 0, 60, 100)]);
+      project.setMidiEvents(clipId, [
+        midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+      ]);
       project.setClipLoop(clipId, { loopMode: 'loop', loopLengthPpq: 1e-9 });
       expect(() => project.exportSmf()).toThrow();
       expect(() => project.exportClipFile()).toThrow();
@@ -1131,8 +1180,8 @@ describe('Sonare WASM Project', () => {
       const { clipId } = project.addMidiClip(0, 4);
       // A well-paired note-on / note-off.
       project.setMidiEvents(clipId, [
-        Project.midiNoteOn(0, 0, 0, 60, 100),
-        Project.midiNoteOff(2, 0, 0, 60, 0),
+        midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+        midiNoteOff({ ppq: 2, group: 0, channel: 0, note: 60, velocity: 0 }),
       ]);
       const paired = project.validateMidiNotes(clipId);
       expect(paired.ok).toBe(true);
@@ -1140,7 +1189,9 @@ describe('Sonare WASM Project', () => {
       expect(paired.unmatchedNoteOffs).toBe(0);
 
       // A single hanging note-on (no matching note-off).
-      project.setMidiEvents(clipId, [Project.midiNoteOn(0, 0, 0, 60, 100)]);
+      project.setMidiEvents(clipId, [
+        midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+      ]);
       const hanging = project.validateMidiNotes(clipId);
       expect(hanging.ok).toBe(false);
       expect(hanging.unmatchedNoteOns).toBe(1);
@@ -1148,8 +1199,8 @@ describe('Sonare WASM Project', () => {
 
       // UMP groups are independent endpoint namespaces.
       project.setMidiEvents(clipId, [
-        Project.midiNoteOn(0, 0, 0, 60, 100),
-        Project.midiNoteOff(1, 1, 0, 60, 0),
+        midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+        midiNoteOff({ ppq: 1, group: 1, channel: 0, note: 60, velocity: 0 }),
       ]);
       const crossGroup = project.validateMidiNotes(clipId);
       expect(crossGroup.ok).toBe(false);
@@ -1160,8 +1211,8 @@ describe('Sonare WASM Project', () => {
       // it; export closes the note at the clip end, so it still validates.
       const { clipId: boundaryClip } = project.addMidiClip(0, 1);
       project.setMidiEvents(boundaryClip, [
-        Project.midiNoteOn(0, 0, 0, 61, 100),
-        Project.midiNoteOff(1, 0, 0, 61, 0),
+        midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 61, velocity: 100 }),
+        midiNoteOff({ ppq: 1, group: 0, channel: 0, note: 61, velocity: 0 }),
       ]);
       const boundary = project.validateMidiNotes(boundaryClip);
       expect(boundary.ok).toBe(true);
@@ -1248,53 +1299,109 @@ describe('Sonare WASM Project', () => {
   });
 
   // Golden vectors for the hand-written UMP MIDI-1.0 channel-voice packing
-  // (Project.midiNoteOn/Off/Cc/... build data0 in TS rather than via the native
+  // (midiNoteOn/Off/Cc/... build data0 in TS rather than via the native
   // packer). These exact words are what sonare::midi::make_midi1_* — and thus
   // the C-ABI sonare_midi_* packers Python delegates to — produce, so pinning
   // them here (with the identical vectors mirrored in the Node suite) makes any
   // silent drift between the two hand-written JS copies a CI failure.
   describe('UMP MIDI-1.0 packing matches the canonical word layout', () => {
     it('packs channel-voice messages into the spec word', () => {
-      expect(Project.midiNoteOn(0, 0, 0, 60, 100).data0 >>> 0).toBe(0x20903c64);
-      expect(Project.midiNoteOff(2, 0, 0, 60, 0).data0 >>> 0).toBe(0x20803c00);
-      expect(Project.midiCc(0, 0, 0, 7, 127).data0 >>> 0).toBe(0x20b0077f);
-      expect(Project.midiPolyPressure(0, 0, 0, 60, 64).data0 >>> 0).toBe(0x20a03c40);
-      expect(Project.midiProgram(0, 0, 0, 5).data0 >>> 0).toBe(0x20c00500);
-      expect(Project.midiChannelPressure(0, 0, 0, 90).data0 >>> 0).toBe(0x20d05a00);
+      expect(
+        midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }).data0 >>> 0,
+      ).toBe(0x20903c64);
+      expect(midiNoteOff({ ppq: 2, group: 0, channel: 0, note: 60, velocity: 0 }).data0 >>> 0).toBe(
+        0x20803c00,
+      );
+      expect(midiCc({ ppq: 0, group: 0, channel: 0, controller: 7, value: 127 }).data0 >>> 0).toBe(
+        0x20b0077f,
+      );
+      expect(
+        midiPolyPressure({ ppq: 0, group: 0, channel: 0, note: 60, pressure: 64 }).data0 >>> 0,
+      ).toBe(0x20a03c40);
+      expect(midiProgram({ ppq: 0, group: 0, channel: 0, program: 5 }).data0 >>> 0).toBe(
+        0x20c00500,
+      );
+      expect(midiChannelPressure({ ppq: 0, group: 0, channel: 0, pressure: 90 }).data0 >>> 0).toBe(
+        0x20d05a00,
+      );
       // Group and channel nibbles land in their own fields.
-      expect(Project.midiNoteOn(0, 0xa, 0x3, 60, 100).data0 >>> 0).toBe(0x2a933c64);
+      expect(
+        midiNoteOn({ ppq: 0, group: 0xa, channel: 0x3, note: 60, velocity: 100 }).data0 >>> 0,
+      ).toBe(0x2a933c64);
     });
 
     it('exposes ProgramMap names and bank/program lowering', () => {
-      expect(Project.gmInstrumentName(0)).toBe('Acoustic Grand Piano');
-      expect(Project.gmInstrumentName(40)).toBe('Violin');
-      expect(Project.gmInstrumentName(128)).toBeNull();
-      expect(Project.gmProgramForName('Violin')).toBe(40);
-      expect(Project.gmProgramForName('No Such Instrument')).toBe(-1);
-      expect(Project.gmFamilyName(4)).toBe('Bass');
-      expect(Project.gmFamilyFirstProgram(4)).toBe(32);
-      expect(Project.gm2InstrumentName(1, 24)).toBe('Ukulele');
-      expect(Project.gmDrumName(38)).toBe('Acoustic Snare');
-      expect(Project.gmDrumNoteForName('Open Triangle')).toBe(81);
-      expect(Project.gm2DrumSetName(40)).toBe('Brush');
-      expect(Project.gm2DrumName(40, 40)).toBe('Brush Swirl');
-      expect(Project.midiCcName(74)).toBe('Brightness');
-      expect(Project.midiCcIndexForName('Pan (MSB)')).toBe(10);
-      expect(Project.perNoteControllerName(11)).toBe('Expression');
+      expect(gmInstrumentName(0)).toBe('Acoustic Grand Piano');
+      expect(gmInstrumentName(40)).toBe('Violin');
+      expect(gmProgramForName('Violin')).toBe(40);
+      expect(gmFamilyName(4)).toBe('Bass');
+      expect(gmFamilyFirstProgram(4)).toBe(32);
+      expect(gm2InstrumentName({ bankLsb: 1, program: 24 })).toBe('Ukulele');
+      expect(gmDrumName(38)).toBe('Acoustic Snare');
+      expect(gmDrumNoteForName('Open Triangle')).toBe(81);
+      expect(gm2DrumSetName(40)).toBe('Brush');
+      expect(gm2DrumName({ bankLsb: 40, note: 40 })).toBe('Brush Swirl');
+      expect(midiCcName(74)).toBe('Brightness');
+      expect(midiCcIndexForName('Pan (MSB)')).toBe(10);
+      expect(perNoteControllerName(11)).toBe('Expression');
 
-      const events = Project.midiBankProgram(0, 0, 3, 0x79, 1, 24);
+      const events = midiBankProgram({
+        ppq: 0,
+        group: 0,
+        channel: 3,
+        program: 24,
+        bank: { msb: 0x79, lsb: 1 },
+      });
       expect(events.map((event) => event.data0 >>> 0)).toEqual([
         0x20b30079, 0x20b32001, 0x20c31800,
       ]);
       expect(events.every((event) => event.ppq === 0 && event.data1 === 0)).toBe(true);
     });
 
+    it('refuses an unknown name or an out-of-range number from every lookup', () => {
+      expect(() => gmInstrumentName(128)).toThrow(RangeError);
+      expect(() => gmInstrumentName(-1)).toThrow(RangeError);
+      expect(() => gmInstrumentName('0' as never)).toThrow(TypeError);
+      expect(() => gmProgramForName('No Such Instrument')).toThrow(
+        new RangeError("gmProgramForName: unknown instrument name 'No Such Instrument'"),
+      );
+      expect(() => gmProgramForName(5 as never)).toThrow(TypeError);
+      expect(() => gmFamilyName(16)).toThrow(RangeError);
+      expect(() => gmFamilyFirstProgram(16)).toThrow(RangeError);
+      expect(() => gm2InstrumentName({ bankLsb: 128, program: 0 })).toThrow(RangeError);
+      expect(() => gm2InstrumentName({ bankLsb: 1, program: 0.5 })).toThrow(RangeError);
+      expect(() => gmDrumName(128)).toThrow(RangeError);
+      expect(() => gmDrumNoteForName('No Such Drum')).toThrow(RangeError);
+      expect(() => gm2DrumSetName(128)).toThrow(RangeError);
+      expect(() => gm2DrumName({ bankLsb: 40, note: 128 })).toThrow(RangeError);
+      expect(() => midiCcName(128)).toThrow(RangeError);
+      expect(() => midiCcIndexForName('No Such Controller')).toThrow(RangeError);
+      expect(() => perNoteControllerName(256)).toThrow(RangeError);
+      expect(() => gm2InstrumentName({ bankLsb: 1 } as never)).toThrow(TypeError);
+    });
+
+    it('refuses an unknown request key and a wrong-typed field on a packer', () => {
+      expect(() =>
+        midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100, extra: 1 } as never),
+      ).toThrow(TypeError);
+      expect(() =>
+        midi2Cc({ ppq: 0, group: 0, channel: 0, controller: 7, value32: 0, extra: 1 } as never),
+      ).toThrow(TypeError);
+      expect(() =>
+        midiNoteOn({ ppq: 0, group: 0, channel: 0, note: '60', velocity: 100 } as never),
+      ).toThrow(TypeError);
+      expect(() => midiNoteOn([] as never)).toThrow(TypeError);
+      expect(() => midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 128, velocity: 100 })).toThrow(
+        RangeError,
+      );
+    });
+
     it('routes MIDI events through the native MidiRouter', () => {
-      const routed = Project.midiRouteEvents(
+      const routed = midiRouteEvents(
         [
-          Project.midiNoteOn(0, 0, 3, 60, 100),
-          Project.midiNoteOff(0.5, 0, 3, 60, 0),
-          Project.midiNoteOn(1, 0, 2, 61, 100),
+          midiNoteOn({ ppq: 0, group: 0, channel: 3, note: 60, velocity: 100 }),
+          midiNoteOff({ ppq: 0.5, group: 0, channel: 3, note: 60, velocity: 0 }),
+          midiNoteOn({ ppq: 1, group: 0, channel: 2, note: 61, velocity: 100 }),
         ],
         { filterChannel: 3, remapChannel: 7 },
       );
@@ -1305,16 +1412,34 @@ describe('Sonare WASM Project', () => {
       expect(routed.events.map((event) => (event.data0 >>> 16) & 0xf)).toEqual([7, 7]);
       expect((routed.events[1].data0 >>> 20) & 0xf).toBe(0x8);
 
-      const muted = Project.midiRouteEvents([Project.midiNoteOn(0, 0, 0, 60, 100)], {
-        thru: false,
-      });
+      const muted = midiRouteEvents(
+        [midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 })],
+        {
+          thru: false,
+        },
+      );
       expect(muted.events).toHaveLength(0);
       expect(muted.overflowed).toBe(false);
     });
 
+    it('reads a null route-config field as absent', () => {
+      const events = [
+        midiNoteOn({ ppq: 0, group: 0, channel: 3, note: 60, velocity: 100 }),
+        midiNoteOn({ ppq: 1, group: 0, channel: 2, note: 61, velocity: 100 }),
+      ];
+      const nulls = { filterGroup: null, filterChannel: null, remapChannel: null };
+      expect(midiRouteEvents(events, nulls as never)).toEqual(midiRouteEvents(events, {}));
+      expect(midiRouteEvents(events, { ...nulls, filterChannel: 3 } as never).events).toHaveLength(
+        1,
+      );
+    });
+
     it('exposes native CcMap learn and CC/automation conversion helpers', () => {
-      const learned14 = Project.midiCcLearn(
-        [Project.midiCc(0, 0, 2, 1, 64), Project.midiCc(0.1, 0, 2, 33, 12)],
+      const learned14 = midiCcLearn(
+        [
+          midiCc({ ppq: 0, group: 0, channel: 2, controller: 1, value: 64 }),
+          midiCc({ ppq: 0.1, group: 0, channel: 2, controller: 33, value: 12 }),
+        ],
         77,
         { minValue: -1, maxValue: 1 },
       );
@@ -1328,11 +1453,11 @@ describe('Sonare WASM Project', () => {
         maxValue: 1,
       });
 
-      const learnedRpn = Project.midiCcLearn(
+      const learnedRpn = midiCcLearn(
         [
-          Project.midiCc(0, 0, 3, 101, 0),
-          Project.midiCc(0.1, 0, 3, 100, 1),
-          Project.midiCc(0.2, 0, 3, 6, 64),
+          midiCc({ ppq: 0, group: 0, channel: 3, controller: 101, value: 0 }),
+          midiCc({ ppq: 0.1, group: 0, channel: 3, controller: 100, value: 1 }),
+          midiCc({ ppq: 0.2, group: 0, channel: 3, controller: 6, value: 64 }),
         ],
         78,
       );
@@ -1346,10 +1471,19 @@ describe('Sonare WASM Project', () => {
         minValue: -60,
         maxValue: 0,
       };
-      const point = Project.midiCcToBreakpoint([binding], Project.midiCc(2, 0, 4, 74, 127));
+      const point = midiCcToBreakpoint(
+        [binding],
+        midiCc({ ppq: 2, group: 0, channel: 4, controller: 74, value: 127 }),
+      );
       expect(point).toEqual({ ppq: 2, value: 0, curveToNext: 'linear' });
 
-      const event = Project.midiParamToCc([binding], 88, -60, 0, 3);
+      const event = midiParamToCc({
+        bindings: [binding],
+        paramId: 88,
+        unitValue: -60,
+        group: 0,
+        ppq: 3,
+      });
       expect(event?.ppq).toBe(3);
       expect(((event?.data0 ?? 0) >>> 16) & 0xf).toBe(4);
       expect(((event?.data0 ?? 0) >>> 8) & 0x7f).toBe(74);

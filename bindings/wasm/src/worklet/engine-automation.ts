@@ -1,7 +1,7 @@
 import type { EngineAutomationPoint, RealtimeEngine } from '../index.js';
+import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
 import { requestObject } from '../validation.js';
 import { commitStore } from './engine-commit.js';
-import type { SonareEngineSyncMessage } from './messages.js';
 
 /**
  * Collaborator surface the automation-lane helpers need from the owning

@@ -2,6 +2,10 @@ import type { ChannelLayout } from '../audio.js';
 import { sidechainSourceKindCode } from '../codes.js';
 import { ErrorCode, SonareError } from '../errors.js';
 import type { EngineBus, EngineTrackLane, EngineTrackSend, RealtimeEngine } from '../index.js';
+import type {
+  SonareEngineSyncMessage,
+  SonareEngineSyncMixerInsertParamOverride,
+} from '../internal/worklet_messages.js';
 import type { SidechainSource } from '../public_types_engine.js';
 import { engineNativeHandle } from '../realtime_engine.js';
 import type { RequestFn } from '../request_keys.js';
@@ -9,10 +13,6 @@ import { requestObject } from '../validation.js';
 import { commitSync } from './engine-commit.js';
 import { normalizeTrackLanes } from './engine-offline.js';
 import { buildMixerLanes, resolveTargetId } from './engine-sync.js';
-import type {
-  SonareEngineSyncMessage,
-  SonareEngineSyncMixerInsertParamOverride,
-} from './messages.js';
 
 /** A latest by-name insert value retained across a later topology replay. */
 export interface InsertParamOverride {

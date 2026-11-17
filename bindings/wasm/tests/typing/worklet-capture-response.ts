@@ -1,4 +1,4 @@
-import type { SonareEngineCaptureResponseMessage } from '../../src/worklet.js';
+import type { SonareEngineCaptureResponseMessage } from '../../src/internal/worklet_messages.js';
 
 const status = {
   capturedFrames: 128,

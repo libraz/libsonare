@@ -4,6 +4,7 @@ import type {
   EngineTrackLane,
   RealtimeEngine,
 } from '../index.js';
+import type { SonareEngineSyncCaptureMessage } from '../internal/worklet_messages.js';
 import type { CaptureOptions, EngineLoop } from '../public_types_engine.js';
 import {
   assertFloatValue,
@@ -14,7 +15,6 @@ import {
 } from '../validation.js';
 import { commitCommand, type EngineCommitContext, requireQueued } from './engine-commit.js';
 import { requireInteger, requireIntegerOption } from './guards.js';
-import type { SonareEngineSyncCaptureMessage } from './messages.js';
 import { SonareEngineCommandType } from './protocol.js';
 
 /** The resolved capture setup carried by the `syncCapture` message. */

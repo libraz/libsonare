@@ -14,9 +14,9 @@ import {
   attachOpfsClipStream as attachWorkletOpfsClipStream,
   init as initWorklet,
   SonareEngine,
-  SonareEngineCommandType,
   SonareRealtimeEngineWorkletProcessor,
 } from '../dist/worklet.js';
+import { SonareEngineCommandType } from '../src/internal/engine_command_ring.js';
 
 class FakeClipPageWorker {
   listener: ((event: MessageEvent) => void) | null = null;

@@ -1,5 +1,4 @@
 import type { EngineCaptureStatus } from '../index.js';
-import { PROCESSOR_OPTION_KEYS } from '../request_keys.js';
 import type {
   SonareEngineCaptureRequestMessage,
   SonareEngineCaptureResponseMessageInternal,
@@ -15,7 +14,8 @@ import type {
   SonareStreamAnalyzerMessage,
   SonareWorkletExternalMidiMessage,
   SonareWorkletMessage,
-} from './messages.js';
+} from '../internal/worklet_messages.js';
+import { PROCESSOR_OPTION_KEYS } from '../request_keys.js';
 import {
   isRecord,
   SONARE_SCOPE_DEFAULT_BANDS,

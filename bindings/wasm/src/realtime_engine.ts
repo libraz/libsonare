@@ -13,6 +13,7 @@ import { ErrorCode, SonareError } from './errors.js';
 import { CHANNEL_LAYOUT_VALUES } from './internal/channel_layout.js';
 import { eqBandJson } from './internal/eq_band_json.js';
 import { assertHandleLive, releasedHandleError } from './internal/handle_guard.js';
+import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { deinterleavePlanes } from './internal/pod_config.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -73,6 +74,7 @@ import type {
   EngineTrackSend,
   EngineTransportState,
   ExternalMidiEvent,
+  MidiFxConfig,
   RealtimeEngineConfig,
   RenderOfflineRequest,
   SidechainSource,
@@ -136,6 +138,7 @@ export type {
   EngineWarpMode,
   ExternalMidiEvent,
   MarkerKind,
+  MidiFxConfig,
   RealtimeEngineConfig,
   RenderOfflineRequest,
   SidechainSource,
@@ -970,8 +973,8 @@ export class RealtimeEngine {
   }
 
   /** Install/replace a live non-destructive MIDI-FX insert for one destination. */
-  setMidiFx(destinationId: number, configJson: string): void {
-    this.native.setMidiFx(destinationId, configJson);
+  setMidiFx(destinationId: number, config: MidiFxConfig): void {
+    this.native.setMidiFx(destinationId, midiFxConfigJson(config, 'setMidiFx'));
   }
 
   clearMidiFx(destinationId = 0): void {

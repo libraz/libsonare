@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, mixStereo, Project, RealtimeEngine } from '../dist/index.js';
+import { init, midiCc, midiCcLearn, mixStereo, RealtimeEngine } from '../dist/index.js';
 import type { MixOptions } from '../src/public_types_mixing';
 import { expectArgumentRefusal } from './_helpers';
 
@@ -69,19 +69,21 @@ describe('shared public-input conformance corpus (WASM)', () => {
   });
 
   it('rejects MIDI CC learn movement outside 0-127', () => {
-    const events = [60, 70].map((value) => Project.midiCc(0, 0, 0, 74, value));
+    const events = [60, 70].map((value) =>
+      midiCc({ ppq: 0, group: 0, channel: 0, controller: 74, value }),
+    );
     for (const minMovement of [-1, 128, 255, 256]) {
       let caught: unknown;
       try {
-        Project.midiCcLearn(events, 3, { minMovement });
+        midiCcLearn(events, 3, { minMovement });
       } catch (error) {
         caught = error;
       }
       expectArgumentRefusal(caught);
     }
-    expect(Project.midiCcLearn(events, 3, { minMovement: 10 })).not.toBeNull();
-    expect(Project.midiCcLearn(events, 3, { minMovement: 11 })).toBeNull();
-    expect(Project.midiCcLearn(events, 3, { minMovement: 127 })).toBeNull();
+    expect(midiCcLearn(events, 3, { minMovement: 10 })).not.toBeNull();
+    expect(midiCcLearn(events, 3, { minMovement: 11 })).toBeNull();
+    expect(midiCcLearn(events, 3, { minMovement: 127 })).toBeNull();
   });
 
   for (const testCase of corpus.marker_transaction.cases) {

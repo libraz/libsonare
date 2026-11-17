@@ -3,7 +3,6 @@ import { ErrorCode, init, isSonareError, SonareError } from '../../dist/index.js
 import * as worklet from '../../dist/worklet.js';
 import {
   createSonareClipPageRequestRingBuffer,
-  createSonareEngineCommandRingBuffer,
   createSonareEngineTelemetryRingBuffer,
   createSonareExternalMidiRingBuffer,
   createSonareMeterRingBuffer,
@@ -14,13 +13,16 @@ import {
   readSonareScopeRingBuffer,
   SonareRealtimeEngineNode,
   sonareClipPageRequestRingBufferByteLength,
-  sonareEngineCommandRingBufferByteLength,
   sonareEngineTelemetryRingBufferByteLength,
   sonareExternalMidiRingBufferByteLength,
   sonareMeterRingBufferByteLength,
   sonareScopeRingBufferByteLength,
   sonareSpectrumRingBufferByteLength,
 } from '../../dist/worklet.js';
+import {
+  createSonareEngineCommandRingBuffer,
+  sonareEngineCommandRingBufferByteLength,
+} from '../../src/internal/engine_command_ring.js';
 
 function caught(fn: () => unknown): unknown {
   try {
@@ -168,6 +170,26 @@ describe('SonareFailurePayload is not a public export', () => {
   it('exports no failure-payload helper from ./worklet', () => {
     expect('errorFromFailurePayload' in worklet).toBe(false);
     expect('failureFromPayload' in worklet).toBe(false);
+  });
+});
+
+describe('the worklet-internal transport is not a public export', () => {
+  it.each([
+    'createSonareEngineCommandRingBuffer',
+    'pushSonareEngineCommandRingBuffer',
+    'popSonareEngineCommandRingBuffer',
+    'sonareEngineCommandRingBufferByteLength',
+    'SONARE_ENGINE_COMMAND_RECORD_BYTES',
+    'SonareEngineCommandType',
+    'encodeFrameHi',
+    'encodeFrameLo',
+    'decodeFrame',
+    'ENGINE_MIXER_PARAM_FADER_DB',
+    'ENGINE_MIXER_PARAM_PAN',
+    'engineMixerMasterTarget',
+    'writeSonareEngineTelemetryRingBuffer',
+  ])('exports no %s from ./worklet', (name) => {
+    expect(name in worklet).toBe(false);
   });
 });
 

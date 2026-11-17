@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ErrorCode, isSonareError, Project, RealtimeEngine } from '../dist/index.js';
+import { ErrorCode, isSonareError, midi2Program, RealtimeEngine } from '../dist/index.js';
 import { SonareEngine, setupWorklet } from './_worklet_helpers';
 
 setupWorklet();
@@ -136,13 +136,17 @@ describe('RealtimeEngine.pushMidiInputProgram', () => {
   });
 });
 
-describe('Project.midi2Program bank rule', () => {
-  it('refuses a non-zero bank with bank-valid false and still packs the valid forms', () => {
-    expect(() => Project.midi2Program(0, 0, 0, 5, false, 1, 0)).toThrow(
-      new RangeError('Project.midi2Program: bank MSB and LSB must be 0 when bank-valid is false'),
-    );
-    expect(() => Project.midi2Program(0, 0, 0, 5, false, 0, 1)).toThrow(RangeError);
-    const e = Project.midi2Program(3, 1, 2, 5, true, 1, 2);
+describe('midi2Program bank', () => {
+  it('packs the bank when given, leaves it out otherwise and refuses a bad one', () => {
+    const none = midi2Program({ ppq: 0, group: 0, channel: 0, program: 5 });
+    expect([none.data0, none.data1]).toEqual([0x40c00000, 0x05000000]);
+    expect(() =>
+      midi2Program({ ppq: 0, group: 0, channel: 0, program: 5, bank: { msb: 128, lsb: 0 } }),
+    ).toThrow(RangeError);
+    expect(() =>
+      midi2Program({ ppq: 0, group: 0, channel: 0, program: 5, bank: { msb: 1 } as never }),
+    ).toThrow(TypeError);
+    const e = midi2Program({ ppq: 3, group: 1, channel: 2, program: 5, bank: { msb: 1, lsb: 2 } });
     expect([e.ppq, e.data0, e.data1]).toEqual([3, 0x41c20001, 0x05000102]);
   });
 });
@@ -169,7 +173,13 @@ describe('SonareEngine.pushMidiProgram (worklet facade)', () => {
       },
     });
     try {
-      const built = Project.midi2Program(0, 1, 2, 5, true, 1, 2);
+      const built = midi2Program({
+        ppq: 0,
+        group: 1,
+        channel: 2,
+        program: 5,
+        bank: { msb: 1, lsb: 2 },
+      });
       engine.pushMidiProgram(DEST, 1, 2, 5, { msb: 1, lsb: 2 }, 256);
       expect(posted).toContainEqual({
         type: 'syncMidiUmp',

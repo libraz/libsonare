@@ -176,11 +176,10 @@ test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ri
 [[entry]]
 kind = "function"
 old = "createSonareEngineCommandRingBuffer"
-changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
+removed = true
 domain = "engine"
-rule = "individual"
+rule = "worklet-scope"
 entry = "./worklet"
-test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ring from named options"
 
 [[entry]]
 kind = "function"
@@ -239,11 +238,10 @@ test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::sizes each ring
 [[entry]]
 kind = "function"
 old = "sonareEngineCommandRingBufferByteLength"
-changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
+removed = true
 domain = "engine"
-rule = "individual"
+rule = "worklet-scope"
 entry = "./worklet"
-test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::sizes each ring from named options"
 
 [[entry]]
 kind = "function"
@@ -16297,14 +16295,6 @@ rule = "unit-in-name"
 entry = "./worklet"
 
 [[entry]]
-kind = "field"
-old = "SonareEngineCommandRecord.sampleTime"
-new = "SonareEngineCommandRecord.renderFrame"
-domain = "engine"
-rule = "unit-in-name"
-entry = "./worklet"
-
-[[entry]]
 kind = "method"
 old = "SonareEngine.seekMarker"
 changed = "returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory instead of returning false; an unknown marker id is a RangeError"
@@ -22475,8 +22465,815 @@ test = "bindings/wasm/tests/project-edit-ops.test.ts::resolves every documented 
 
 [[entry]]
 kind = "method"
-old = "Project.midiCcToBreakpoint"
-changed = "the breakpoint's curveToNext is an AutomationCurve token instead of an ordinal"
+old = "Project.midiNoteOn"
+removed = true
 domain = "project"
-rule = "string-closed-sets"
-test = "bindings/wasm/tests/project.test.ts::CcMap"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiNoteOff"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiCc"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiPolyPressure"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiProgram"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2NoteOn"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2NoteOff"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2Cc"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2PolyPressure"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2ChannelPressure"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2PitchBend"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2Program"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2RegisteredController"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2AssignableController"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2RelativeRegisteredController"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2RelativeAssignableController"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2RegisteredPerNoteController"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2AssignablePerNoteController"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2PerNotePitchBend"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midi2PerNoteManagement"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gmInstrumentName"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gmProgramForName"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gmFamilyName"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gmFamilyFirstProgram"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gm2InstrumentName"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gmDrumName"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gmDrumNoteForName"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gm2DrumSetName"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.gm2DrumName"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiCcName"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiCcIndexForName"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.perNoteControllerName"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiBankProgram"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiRouteEvents"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiCcLearn"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiCcToBreakpoint"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiParamToCc"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiChannelPressure"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "method"
+old = "Project.midiPitchBend"
+removed = true
+domain = "project"
+rule = "midi-module-functions"
+
+[[entry]]
+kind = "field"
+old = "ProjectMidiFxBakeRequest.configJson"
+new = "ProjectMidiFxBakeRequest.config"
+domain = "project"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "ProjectMidiFxPreviewRequest.configJson"
+new = "ProjectMidiFxPreviewRequest.config"
+domain = "project"
+rule = "typed-results"
+
+[[entry]]
+kind = "method"
+old = "Project.previewMidiFxCount"
+changed = "takes a MidiFxConfig object in the request's config field instead of a configJson string; a non-object config, an unknown config key or a wrong-typed field is a TypeError"
+domain = "project"
+rule = "typed-results"
+test = "bindings/wasm/tests/project.test.ts::refuses a malformed MIDI-FX config"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.setMidiFx"
+changed = "takes a MidiFxConfig object instead of a JSON string; a non-object config, an unknown key or a wrong-typed field is a TypeError"
+domain = "engine"
+rule = "typed-results"
+test = "bindings/wasm/tests/new-apis.test.ts::honors tunable queue capacities"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.setMidiFx"
+changed = "takes a MidiFxConfig object instead of a JSON string; the worklet message still carries the serialized JSON"
+domain = "engine"
+rule = "typed-results"
+test = "bindings/wasm/tests/worklet_realtime_engine_node.test.ts::exposes the high-level SonareEngine facade"
+
+[[entry]]
+kind = "field"
+old = "ProjectMidiRouteConfig.filterGroup"
+changed = "filterGroup is typed number, not number | null; a null at runtime still reads as absent"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/project.test.ts::reads a null route-config field as absent"
+
+[[entry]]
+kind = "field"
+old = "ProjectMidiRouteConfig.filterChannel"
+changed = "filterChannel is typed number, not number | null; a null at runtime still reads as absent"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/project.test.ts::reads a null route-config field as absent"
+
+[[entry]]
+kind = "field"
+old = "ProjectMidiRouteConfig.remapChannel"
+changed = "remapChannel is typed number, not number | null; a null at runtime still reads as absent"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/project.test.ts::reads a null route-config field as absent"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineCaptureRequestMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineCaptureResponseMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineClipPageRequestMessage"
+removed = true
+domain = "project"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineInsertGainReductionRequestMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineInsertGainReductionResponseMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncAutomationMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncBuiltinInstrumentMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncBusStripEqBandMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncCaptureMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncClipsDeltaMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncClipsMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncErrorMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncLoadSoundFontMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncMarkersMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncMasterStripEqBandMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncMasterStripInsertBypassedMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncMetronomeMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncMidiCcMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncMidiClipsMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncMidiNoteMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncMidiPanicMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncMixerMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncSf2InstrumentMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncSynthInstrumentMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncTempoMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncTrackStripEqBandMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineSyncTrackStripInsertBypassedMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineTransportRequestMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineTransportResponseMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonarePlaybackConfigMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonarePlaybackDestroyMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonarePlaybackDiagnosticsReplyMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonarePlaybackDiagnosticsRequestMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonarePlaybackErrorMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonarePlaybackMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonarePlaybackOrientationMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonarePlaybackResetMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareWorkletDestroyMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareWorkletMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareWorkletScheduleInsertAutomationMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareWorkletSetMeterIntervalMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareWorkletTransportMessage"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "WorkletPort"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "WorkletTransport"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "function"
+old = "decodeFrame"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "export"
+old = "ENGINE_MIXER_PARAM_FADER_DB"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "export"
+old = "ENGINE_MIXER_PARAM_PAN"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "function"
+old = "encodeFrameHi"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "function"
+old = "encodeFrameLo"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "function"
+old = "engineMixerMasterTarget"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "function"
+old = "popSonareEngineCommandRingBuffer"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "function"
+old = "pushSonareEngineCommandRingBuffer"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SharedClipPageRequestRingWriter"
+removed = true
+domain = "project"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SharedExternalMidiRingWriter"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "export"
+old = "SONARE_ENGINE_COMMAND_RECORD_BYTES"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineCommandRecord"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineCommandRingBuffer"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "SonareEngineCommandType"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "function"
+old = "writeSonareEngineTelemetryRingBuffer"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"

@@ -20,6 +20,10 @@ import {
   init,
   masteringRepairDereverbClassical,
   meteringSpectrumFrame,
+  midiCcLearn,
+  midiNoteOn,
+  midiParamToCc,
+  midiRouteEvents,
   Project,
   RealtimeEngine,
   type SonareError,
@@ -79,15 +83,18 @@ describe('int fields refuse a saturating, fractional or non-finite value', () =>
   });
 
   it('keeps the -1 routing sentinel while refusing what a cast turned into a filter', () => {
-    const events = [Project.midiNoteOn(0, 0, 0, 60, 100), Project.midiNoteOn(1, 0, 3, 62, 100)];
+    const events = [
+      midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+      midiNoteOn({ ppq: 1, group: 0, channel: 3, note: 62, velocity: 100 }),
+    ];
     const routed = (config: Record<string, number>): number =>
-      Project.midiRouteEvents(events, config).events.length;
+      midiRouteEvents(events, config).events.length;
 
     // The control: two legal channels select different events.
     expect(routed({ filterChannel: 0 })).toBe(1);
     expect(routed({ filterChannel: 3 })).toBe(1);
-    expect(Project.midiRouteEvents(events, { filterChannel: 0 }).events[0]?.ppq).toBe(0);
-    expect(Project.midiRouteEvents(events, { filterChannel: 3 }).events[0]?.ppq).toBe(1);
+    expect(midiRouteEvents(events, { filterChannel: 0 }).events[0]?.ppq).toBe(0);
+    expect(midiRouteEvents(events, { filterChannel: 3 }).events[0]?.ppq).toBe(1);
     // -1 is "any group / any channel / no remap" and must survive the check.
     expect(routed({ filterChannel: -1 })).toBe(2);
     expect(routed({ filterGroup: -1 })).toBe(2);
@@ -227,7 +234,7 @@ describe('synth patch enum ordinals refuse a fractional or non-finite value', ()
 });
 
 describe('MIDI byte fields refuse a value that would wrap into the byte domain', () => {
-  type CcBinding = Parameters<typeof Project.midiParamToCc>[0][number];
+  type CcBinding = Parameters<typeof midiParamToCc>[0]['bindings'][number];
   const binding = (overrides: Record<string, number>): CcBinding =>
     ({
       ccNumber: 7,
@@ -241,7 +248,13 @@ describe('MIDI byte fields refuse a value that would wrap into the byte domain',
       // the declared type exists to forbid; the C++ reader is the subject here.
     }) as CcBinding;
   const encode = (overrides: Record<string, number>): number => {
-    const event = Project.midiParamToCc([binding(overrides)], 1, 0.5, 0, 0);
+    const event = midiParamToCc({
+      bindings: [binding(overrides)],
+      paramId: 1,
+      unitValue: 0.5,
+      group: 0,
+      ppq: 0,
+    });
     if (event === null) {
       throw new Error('the binding did not match the requested parameter');
     }
@@ -299,7 +312,7 @@ describe('a positional parameter id refuses what the positional path used to wra
   // 2**32 + 5 asked for a parameter that does not exist and was answered with
   // the binding whose id is 5. A wrapped id is in the legal domain by
   // construction, so no downstream range check could see it.
-  type CcBinding = Parameters<typeof Project.midiParamToCc>[0][number];
+  type CcBinding = Parameters<typeof midiParamToCc>[0]['bindings'][number];
   const bindings = [
     { ccNumber: 7, channel: 0, kind: 0, paramId: 5, minValue: 0, maxValue: 1 },
     { ccNumber: 64, channel: 0, kind: 0, paramId: 9, minValue: 0, maxValue: 1 },
@@ -307,7 +320,7 @@ describe('a positional parameter id refuses what the positional path used to wra
 
   /** The controller number the requested id selected, or null for no match. */
   const selectedCc = (paramId: number): number | null => {
-    const event = Project.midiParamToCc(bindings, paramId, 0.5, 0, 0);
+    const event = midiParamToCc({ bindings, paramId, unitValue: 0.5, group: 0, ppq: 0 });
     return event === null ? null : (event.data0 >>> 8) & 0xff;
   };
 
@@ -666,36 +679,46 @@ describe('array-like `.length` reads refuse a wrapped, negative or fractional co
   const WRAPPING_LENGTHS = [2 ** 32 + 5, -1, 1.5, 2 ** 40, ...NON_FINITE];
 
   it('routes midiRouteEvents from the real event count, not a lying `.length`', () => {
-    const oneEvent = [Project.midiNoteOn(0, 0, 0, 60, 100)];
-    const twoEvents = [Project.midiNoteOn(0, 0, 0, 60, 100), Project.midiNoteOn(1, 0, 0, 61, 100)];
+    const oneEvent = [midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 })];
+    const twoEvents = [
+      midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+      midiNoteOn({ ppq: 1, group: 0, channel: 0, note: 61, velocity: 100 }),
+    ];
     // The control: two legal event arrays route that many events.
-    expect(Project.midiRouteEvents(oneEvent, {}).events.length).toBe(1);
-    expect(Project.midiRouteEvents(twoEvents, {}).events.length).toBe(2);
+    expect(midiRouteEvents(oneEvent, {}).events.length).toBe(1);
+    expect(midiRouteEvents(twoEvents, {}).events.length).toBe(2);
     for (const value of WRAPPING_LENGTHS) {
       expectRangeRefusal(() =>
-        Project.midiRouteEvents({ length: value } as unknown as typeof oneEvent, {}),
+        midiRouteEvents({ length: value } as unknown as typeof oneEvent, {}),
       );
     }
   });
 
   it('reads midiCcLearn and midiParamToCc bindings from the real array length', () => {
-    type CcBinding = Parameters<typeof Project.midiParamToCc>[0][number];
+    type CcBinding = Parameters<typeof midiParamToCc>[0]['bindings'][number];
     const binding = (ccNumber: number): CcBinding =>
       ({ ccNumber, channel: 0, kind: 0, paramId: 1, minValue: 0, maxValue: 1 }) as CcBinding;
     // The control: an empty binding list matches nothing; one real, matching
     // binding does -- so the guard is reading how many bindings are really
     // there, not a value baked in ahead of time.
-    expect(Project.midiParamToCc([], 1, 0.5, 0, 0)).toBeNull();
-    expect(Project.midiParamToCc([binding(7)], 1, 0.5, 0, 0)).not.toBeNull();
+    expect(
+      midiParamToCc({ bindings: [], paramId: 1, unitValue: 0.5, group: 0, ppq: 0 }),
+    ).toBeNull();
+    expect(
+      midiParamToCc({ bindings: [binding(7)], paramId: 1, unitValue: 0.5, group: 0, ppq: 0 }),
+    ).not.toBeNull();
     for (const value of WRAPPING_LENGTHS) {
       expectRangeRefusal(() =>
-        Project.midiParamToCc({ length: value } as unknown as CcBinding[], 1, 0.5, 0, 0),
+        midiParamToCc({
+          bindings: { length: value } as unknown as CcBinding[],
+          paramId: 1,
+          unitValue: 0.5,
+          group: 0,
+          ppq: 0,
+        }),
       );
       expectRangeRefusal(() =>
-        Project.midiCcLearn(
-          { length: value } as unknown as ReturnType<typeof Project.midiNoteOn>[],
-          1,
-        ),
+        midiCcLearn({ length: value } as unknown as ReturnType<typeof midiNoteOn>[], 1),
       );
     }
   });

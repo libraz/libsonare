@@ -19,6 +19,8 @@ import {
   extractNotes,
   init,
   isSonareError,
+  midiNoteOff,
+  midiNoteOn,
   type NoteObject,
   noteTargetsFromSmf,
   Project,
@@ -426,10 +428,10 @@ describe('WASM note targets', () => {
         project.setTempoSegments([{ startPpq: 0, bpm: 120 }]);
         const { clipId } = project.addMidiClip(0, 8);
         project.setMidiEvents(clipId, [
-          Project.midiNoteOn(0, 0, 0, 72, 100),
-          Project.midiNoteOff(2, 0, 0, 72, 0),
-          Project.midiNoteOn(2, 0, 0, 74, 100),
-          Project.midiNoteOff(4, 0, 0, 74, 0),
+          midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 72, velocity: 100 }),
+          midiNoteOff({ ppq: 2, group: 0, channel: 0, note: 72, velocity: 0 }),
+          midiNoteOn({ ppq: 2, group: 0, channel: 0, note: 74, velocity: 100 }),
+          midiNoteOff({ ppq: 4, group: 0, channel: 0, note: 74, velocity: 0 }),
         ]);
         return project.exportSmf();
       } finally {

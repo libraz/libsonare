@@ -33,16 +33,16 @@ describe('WASM exception scope', () => {
     }
   });
 
-  it('reports malformed MIDI FX JSON as an error code, not a raw exception', () => {
-    // src/c_api/midi_fx_json.h catches json::JsonError and answers
-    // SONARE_ERROR_INVALID_FORMAT. It is an inline function, so the catch
+  it('reports a refused MIDI FX config as an error code, not a raw exception', () => {
+    // src/c_api/midi_fx_json.h answers SONARE_ERROR_INVALID_FORMAT for a value
+    // it refuses. It is an inline function, so the catch around its JSON parse
     // belongs to every unit that includes it rather than to the header -- the
     // reason a unit can be uncovered while its own text spells no catch at all.
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       let thrown: unknown;
       try {
-        engine.setMidiFx(0, '{bad');
+        engine.setMidiFx(0, { quantizePpq: 0 });
       } catch (error) {
         thrown = error;
       }

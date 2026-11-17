@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { RealtimeEngine } from '../src/index';
+import type { SonareRealtimeEngineNodeOptions } from '../src/internal/worklet_messages';
 import { SonareEngine } from '../src/worklet/engine';
 import { SonareRealtimeEngineNode } from '../src/worklet/engine-node';
-import type { SonareRealtimeEngineNodeOptions } from '../src/worklet/messages';
 
 type CapturedNodeOptions = AudioWorkletNodeOptions & {
   processorOptions?: Record<string, unknown>;

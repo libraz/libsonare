@@ -10,7 +10,16 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { ProjectBounceOptions, Sf2InstrumentConfig } from '../dist/index.js';
-import { ErrorCode, init, isSonareError, Project, RealtimeEngine } from '../dist/index.js';
+import {
+  ErrorCode,
+  init,
+  isSonareError,
+  midiNoteOff,
+  midiNoteOn,
+  midiProgram,
+  Project,
+  RealtimeEngine,
+} from '../dist/index.js';
 
 const fixturePath = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -60,8 +69,8 @@ describe('Sonare WASM SoundFont (SF2)', () => {
     const { trackId, clipId } = project.addMidiClip(0, 4);
     project.setTrackMidiDestination(trackId, 0);
     project.setMidiEvents(clipId, [
-      Project.midiNoteOn(0, 0, 0, 60, 100),
-      Project.midiNoteOff(2, 0, 0, 60, 0),
+      midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+      midiNoteOff({ ppq: 2, group: 0, channel: 0, note: 60, velocity: 0 }),
     ]);
     return project;
   }
@@ -121,9 +130,9 @@ describe('Sonare WASM SoundFont (SF2)', () => {
       const { trackId, clipId } = project.addMidiClip(0, 2);
       project.setTrackMidiDestination(trackId, 0);
       project.setMidiEvents(clipId, [
-        Project.midiProgram(0, 0, 0, program),
-        Project.midiNoteOn(0.05, 0, 0, 52, 110),
-        Project.midiNoteOff(1, 0, 0, 52, 0),
+        midiProgram({ ppq: 0, group: 0, channel: 0, program }),
+        midiNoteOn({ ppq: 0.05, group: 0, channel: 0, note: 52, velocity: 110 }),
+        midiNoteOff({ ppq: 1, group: 0, channel: 0, note: 52, velocity: 0 }),
       ]);
       const out = bounceSf2(
         project,

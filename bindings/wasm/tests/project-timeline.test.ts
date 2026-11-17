@@ -6,7 +6,15 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { ErrorCode, init, Project, type ProjectTimeline, RealtimeEngine } from '../dist/index.js';
+import {
+  ErrorCode,
+  init,
+  midiNoteOff,
+  midiNoteOn,
+  Project,
+  type ProjectTimeline,
+  RealtimeEngine,
+} from '../dist/index.js';
 
 const SAMPLE_RATE = 48000;
 const BLOCK_SIZE = 128;
@@ -60,10 +68,10 @@ function buildProject(): Built {
   });
   const { trackId, clipId } = project.addMidiClip(0, 2);
   project.setMidiEvents(clipId, [
-    Project.midiNoteOn(0.25, 0, 0, 60, 100),
-    Project.midiNoteOff(1, 0, 0, 60, 0),
-    Project.midiNoteOn(1, 0, 0, 64, 100),
-    Project.midiNoteOff(1.75, 0, 0, 64, 0),
+    midiNoteOn({ ppq: 0.25, group: 0, channel: 0, note: 60, velocity: 100 }),
+    midiNoteOff({ ppq: 1, group: 0, channel: 0, note: 60, velocity: 0 }),
+    midiNoteOn({ ppq: 1, group: 0, channel: 0, note: 64, velocity: 100 }),
+    midiNoteOff({ ppq: 1.75, group: 0, channel: 0, note: 64, velocity: 0 }),
   ]);
   project.setTrackMidiDestination(trackId, DESTINATION);
   return { project, audioClip };

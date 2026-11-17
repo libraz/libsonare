@@ -19,16 +19,16 @@ import type {
   StreamConfig,
   UmpWords,
 } from '../index.js';
-import type { SonareFailurePayload } from '../internal/failure_payload.js';
 import type { AutomationCurve, SurroundPan } from '../public_types.js';
-import type { ExternalMidiEvent } from '../public_types_engine.js';
+import type { ExternalMidiEvent, MidiFxConfig } from '../public_types_engine.js';
 import type {
   SonareEngineCommandRecord,
   SonareEngineTelemetryRecord,
   SonareWorkletMeterSnapshot,
   SonareWorkletScopeSnapshot,
   SonareWorkletSpectrumSnapshot,
-} from './protocol.js';
+} from '../worklet/protocol.js';
+import type { SonareFailurePayload } from './failure_payload.js';
 
 export interface SonareWorkletProcessorOptions {
   /**
@@ -145,7 +145,7 @@ export type {
   SonareRealtimeVoiceChangerNoteOnMessage,
   SonareRealtimeVoiceChangerResetMessage,
   SonareRealtimeVoiceChangerSetConfigMessage,
-} from '../internal/voice_changer_messages.js';
+} from './voice_changer_messages.js';
 
 export interface SonareStreamAnalyzerWorkletProcessorOptions {
   /** Mono samples per posted chunk. Integer of at least 128. Default 4096. */
@@ -173,7 +173,7 @@ export type {
   SonareStreamAnalyzerDestroyMessage,
   SonareStreamAnalyzerMessage,
   SonareStreamAnalyzerRecycleMessage,
-} from '../internal/stream_analyzer_messages.js';
+} from './stream_analyzer_messages.js';
 
 export interface SonarePlaybackWorkletProcessorOptions {
   /** Renderer configuration; parsed once, in the processor constructor. Default `{}`. */
@@ -792,8 +792,8 @@ export interface SonareEngineSyncLoadSoundFontMessage {
 export interface SonareEngineSyncMidiFxMessage {
   type: 'syncMidiFx' | 'syncClearMidiFx';
   destinationId: number;
-  /** Engine MIDI-FX config JSON; present for 'syncMidiFx', absent for a clear. */
-  configJson?: string;
+  /** Engine MIDI-FX config; present for 'syncMidiFx', absent for a clear. */
+  config?: MidiFxConfig;
 }
 
 export interface SonareEngineSyncMidiNoteMessage {

@@ -68,7 +68,7 @@ describe('wrong-typed option values are refused by name', () => {
       ['inputTrimDb', [0, -3]],
       ['faderDb', [0, -6]],
       ['pan', [0, 0.5]],
-      ['panMode', ['balance', 'dual-pan']],
+      ['panMode', ['balance', 'dualPan']],
       ['width', [1, 0.5]],
       ['muted', [false, true]],
     ])('refuses a %s array longer than the strip list', (key, value) => {

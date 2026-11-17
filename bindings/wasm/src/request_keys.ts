@@ -137,6 +137,16 @@ import type {
 } from './feature_spectrogram.js';
 import type { PartRigRequest } from './instrument_types.js';
 import type {
+  SonarePlaybackNodeOptions,
+  SonarePlaybackWorkletProcessorOptions,
+  SonareRealtimeEngineNodeOptions,
+  SonareRealtimeEngineWorkletProcessorOptions,
+  SonareRealtimeVoiceChangerWorkletProcessorOptions,
+  SonareStreamAnalyzerNodeOptions,
+  SonareStreamAnalyzerWorkletProcessorOptions,
+  SonareWorkletProcessorOptions,
+} from './internal/worklet_messages.js';
+import type {
   MasterAudioRequest,
   MasterAudioStereoRequest,
   MasteringChainRequest,
@@ -232,6 +242,34 @@ import type {
   PairAnalysis,
   StereoAnalysis,
 } from './public_types_mastering.js';
+import type {
+  Gm2DrumNameRequest,
+  Gm2InstrumentNameRequest,
+  Midi2AssignableControllerRequest,
+  Midi2AssignablePerNoteControllerRequest,
+  Midi2CcRequest,
+  Midi2ChannelPressureRequest,
+  Midi2NoteOffRequest,
+  Midi2NoteOnRequest,
+  Midi2PerNoteManagementRequest,
+  Midi2PerNotePitchBendRequest,
+  Midi2PitchBendRequest,
+  Midi2PolyPressureRequest,
+  Midi2ProgramRequest,
+  Midi2RegisteredControllerRequest,
+  Midi2RegisteredPerNoteControllerRequest,
+  Midi2RelativeAssignableControllerRequest,
+  Midi2RelativeRegisteredControllerRequest,
+  MidiBankProgramRequest,
+  MidiCcRequest,
+  MidiChannelPressureRequest,
+  MidiNoteOffRequest,
+  MidiNoteOnRequest,
+  MidiParamToCcRequest,
+  MidiPitchBendRequest,
+  MidiPolyPressureRequest,
+  MidiProgramRequest,
+} from './public_types_midi_messages.js';
 import type { MixAssistantOptions } from './public_types_mixing.js';
 import type { ChordFunctionsInput } from './public_types_music.js';
 import type { PlaybackRendererConfig, RenderPlaybackRequest } from './public_types_playback.js';
@@ -308,16 +346,6 @@ import type {
 } from './repair_trim.js';
 import type { TranscribeRequest } from './transcribe.js';
 import type { SonareRenderOfflineRequest } from './worklet/engine-export.js';
-import type {
-  SonarePlaybackNodeOptions,
-  SonarePlaybackWorkletProcessorOptions,
-  SonareRealtimeEngineNodeOptions,
-  SonareRealtimeEngineWorkletProcessorOptions,
-  SonareRealtimeVoiceChangerWorkletProcessorOptions,
-  SonareStreamAnalyzerNodeOptions,
-  SonareStreamAnalyzerWorkletProcessorOptions,
-  SonareWorkletProcessorOptions,
-} from './worklet/messages.js';
 
 /** Declared keys of `T`, without the index-signature widening. */
 type KnownKeys<T> = keyof {
@@ -2421,10 +2449,209 @@ const ImportExternalSeparatedStemRequestKeys = keysOf<ExternalSeparatedStemImpor
 ]);
 const BakeMidiFxRequestKeys = keysOf<ProjectMidiFxBakeRequest>()([
   'clipId',
-  'configJson',
+  'config',
   'withSourceIndex',
 ]);
-const PreviewMidiFxRequestKeys = keysOf<ProjectMidiFxPreviewRequest>()(['clipId', 'configJson']);
+const PreviewMidiFxRequestKeys = keysOf<ProjectMidiFxPreviewRequest>()(['clipId', 'config']);
+
+const Gm2DrumNameRequestKeys = keysOf<Gm2DrumNameRequest>()(['bankLsb', 'note']);
+
+const Gm2InstrumentNameRequestKeys = keysOf<Gm2InstrumentNameRequest>()(['bankLsb', 'program']);
+
+const Midi2AssignableControllerRequestKeys = keysOf<Midi2AssignableControllerRequest>()([
+  'ppq',
+  'group',
+  'channel',
+  'bank',
+  'index',
+  'value32',
+]);
+
+const Midi2AssignablePerNoteControllerRequestKeys =
+  keysOf<Midi2AssignablePerNoteControllerRequest>()([
+    'ppq',
+    'group',
+    'channel',
+    'note',
+    'index',
+    'value32',
+  ]);
+
+const Midi2CcRequestKeys = keysOf<Midi2CcRequest>()([
+  'ppq',
+  'group',
+  'channel',
+  'controller',
+  'value32',
+]);
+
+const Midi2ChannelPressureRequestKeys = keysOf<Midi2ChannelPressureRequest>()([
+  'ppq',
+  'group',
+  'channel',
+  'pressure32',
+]);
+
+const Midi2NoteOffRequestKeys = keysOf<Midi2NoteOffRequest>()([
+  'ppq',
+  'group',
+  'channel',
+  'note',
+  'velocity16',
+]);
+
+const Midi2NoteOnRequestKeys = keysOf<Midi2NoteOnRequest>()([
+  'ppq',
+  'group',
+  'channel',
+  'note',
+  'velocity16',
+  'attributeType',
+  'attributeData',
+]);
+
+const Midi2PerNoteManagementRequestKeys = keysOf<Midi2PerNoteManagementRequest>()([
+  'ppq',
+  'group',
+  'channel',
+  'note',
+  'detach',
+  'reset',
+]);
+
+const Midi2PerNotePitchBendRequestKeys = keysOf<Midi2PerNotePitchBendRequest>()([
+  'ppq',
+  'group',
+  'channel',
+  'note',
+  'bend32',
+]);
+
+const Midi2PitchBendRequestKeys = keysOf<Midi2PitchBendRequest>()([
+  'ppq',
+  'group',
+  'channel',
+  'bend32',
+]);
+
+const Midi2PolyPressureRequestKeys = keysOf<Midi2PolyPressureRequest>()([
+  'ppq',
+  'group',
+  'channel',
+  'note',
+  'pressure32',
+]);
+
+const Midi2ProgramRequestKeys = keysOf<Midi2ProgramRequest>()([
+  'ppq',
+  'group',
+  'channel',
+  'program',
+  'bank',
+]);
+
+const Midi2RegisteredControllerRequestKeys = keysOf<Midi2RegisteredControllerRequest>()([
+  'ppq',
+  'group',
+  'channel',
+  'bank',
+  'index',
+  'value32',
+]);
+
+const Midi2RegisteredPerNoteControllerRequestKeys =
+  keysOf<Midi2RegisteredPerNoteControllerRequest>()([
+    'ppq',
+    'group',
+    'channel',
+    'note',
+    'index',
+    'value32',
+  ]);
+
+const Midi2RelativeAssignableControllerRequestKeys =
+  keysOf<Midi2RelativeAssignableControllerRequest>()([
+    'ppq',
+    'group',
+    'channel',
+    'bank',
+    'index',
+    'delta32',
+  ]);
+
+const Midi2RelativeRegisteredControllerRequestKeys =
+  keysOf<Midi2RelativeRegisteredControllerRequest>()([
+    'ppq',
+    'group',
+    'channel',
+    'bank',
+    'index',
+    'delta32',
+  ]);
+
+const MidiBankProgramRequestKeys = keysOf<MidiBankProgramRequest>()([
+  'ppq',
+  'group',
+  'channel',
+  'program',
+  'bank',
+]);
+
+const MidiCcRequestKeys = keysOf<MidiCcRequest>()([
+  'ppq',
+  'group',
+  'channel',
+  'controller',
+  'value',
+]);
+
+const MidiChannelPressureRequestKeys = keysOf<MidiChannelPressureRequest>()([
+  'ppq',
+  'group',
+  'channel',
+  'pressure',
+]);
+
+const MidiNoteOffRequestKeys = keysOf<MidiNoteOffRequest>()([
+  'ppq',
+  'group',
+  'channel',
+  'note',
+  'velocity',
+]);
+
+const MidiNoteOnRequestKeys = keysOf<MidiNoteOnRequest>()([
+  'ppq',
+  'group',
+  'channel',
+  'note',
+  'velocity',
+]);
+
+const MidiParamToCcRequestKeys = keysOf<MidiParamToCcRequest>()([
+  'bindings',
+  'paramId',
+  'unitValue',
+  'group',
+  'ppq',
+]);
+
+const MidiPitchBendRequestKeys = keysOf<MidiPitchBendRequest>()([
+  'ppq',
+  'group',
+  'channel',
+  'bend',
+]);
+
+const MidiPolyPressureRequestKeys = keysOf<MidiPolyPressureRequest>()([
+  'ppq',
+  'group',
+  'channel',
+  'note',
+  'pressure',
+]);
+
+const MidiProgramRequestKeys = keysOf<MidiProgramRequest>()(['ppq', 'group', 'channel', 'program']);
 const ProjectAddClipRequestKeys = keysOf<ProjectClipDesc>()([
   'trackId',
   'isMidi',
@@ -2586,6 +2813,32 @@ export const REQUEST_SHAPES = {
   importExternalSeparatedStem: { keys: ImportExternalSeparatedStemRequestKeys },
   bakeMidiFx: { keys: BakeMidiFxRequestKeys },
   previewMidiFx: { keys: PreviewMidiFxRequestKeys },
+  gm2DrumName: { keys: Gm2DrumNameRequestKeys },
+  gm2InstrumentName: { keys: Gm2InstrumentNameRequestKeys },
+  midi2AssignableController: { keys: Midi2AssignableControllerRequestKeys },
+  midi2AssignablePerNoteController: { keys: Midi2AssignablePerNoteControllerRequestKeys },
+  midi2Cc: { keys: Midi2CcRequestKeys },
+  midi2ChannelPressure: { keys: Midi2ChannelPressureRequestKeys },
+  midi2NoteOff: { keys: Midi2NoteOffRequestKeys },
+  midi2NoteOn: { keys: Midi2NoteOnRequestKeys },
+  midi2PerNoteManagement: { keys: Midi2PerNoteManagementRequestKeys },
+  midi2PerNotePitchBend: { keys: Midi2PerNotePitchBendRequestKeys },
+  midi2PitchBend: { keys: Midi2PitchBendRequestKeys },
+  midi2PolyPressure: { keys: Midi2PolyPressureRequestKeys },
+  midi2Program: { keys: Midi2ProgramRequestKeys, nested: { bank: ['msb', 'lsb'] } },
+  midi2RegisteredController: { keys: Midi2RegisteredControllerRequestKeys },
+  midi2RegisteredPerNoteController: { keys: Midi2RegisteredPerNoteControllerRequestKeys },
+  midi2RelativeAssignableController: { keys: Midi2RelativeAssignableControllerRequestKeys },
+  midi2RelativeRegisteredController: { keys: Midi2RelativeRegisteredControllerRequestKeys },
+  midiBankProgram: { keys: MidiBankProgramRequestKeys, nested: { bank: ['msb', 'lsb'] } },
+  midiCc: { keys: MidiCcRequestKeys },
+  midiChannelPressure: { keys: MidiChannelPressureRequestKeys },
+  midiNoteOff: { keys: MidiNoteOffRequestKeys },
+  midiNoteOn: { keys: MidiNoteOnRequestKeys },
+  midiParamToCc: { keys: MidiParamToCcRequestKeys },
+  midiPitchBend: { keys: MidiPitchBendRequestKeys },
+  midiPolyPressure: { keys: MidiPolyPressureRequestKeys },
+  midiProgram: { keys: MidiProgramRequestKeys },
   'Project.addClip': { keys: ProjectAddClipRequestKeys },
   'Project.setMarker': { keys: ProjectSetMarkerRequestKeys },
   'Project.moveClip': { keys: ProjectMoveClipRequestKeys },

@@ -1,7 +1,7 @@
 import type { EngineMarker, RealtimeEngine } from '../index.js';
+import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
 import { commitCommand, commitStore, type EngineCommitContext } from './engine-commit.js';
 import { resolveMarkerSet } from './engine-offline.js';
-import type { SonareEngineSyncMessage } from './messages.js';
 import { SonareEngineCommandType } from './protocol.js';
 
 /**

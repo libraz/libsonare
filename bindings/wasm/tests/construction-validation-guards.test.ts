@@ -21,6 +21,8 @@ import {
   init,
   Mixer,
   masteringStreamingPreview,
+  midiNoteOff,
+  midiNoteOn,
   mixingScenePresetJson,
   Project,
   RealtimeEngine,
@@ -747,8 +749,8 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
     const trackId = project.addTrack({ kind: 'midi', name: 't' });
     const { clipId } = project.addMidiClip(0, 4);
     project.setMidiEvents(clipId, [
-      Project.midiNoteOn(0, 0, 0, 60, 100),
-      Project.midiNoteOff(3, 0, 0, 60, 0),
+      midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+      midiNoteOff({ ppq: 3, group: 0, channel: 0, note: 60, velocity: 0 }),
     ]);
     void trackId;
     return project;

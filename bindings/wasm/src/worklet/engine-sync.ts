@@ -6,7 +6,7 @@ import type {
   EngineTrackLane,
   EngineTrackSend,
 } from '../index.js';
-import type { SonareEngineSyncTempoMessage } from './messages.js';
+import type { SonareEngineSyncTempoMessage } from '../internal/worklet_messages.js';
 
 /**
  * Builds the ordered mixer-lane descriptors for a sync message.

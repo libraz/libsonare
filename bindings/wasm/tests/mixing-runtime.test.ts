@@ -138,7 +138,7 @@ describe('Mixer runtime controls (WASM)', () => {
         expect(() => mixer.setSoloed(vocal, false)).not.toThrow();
         expect(() => mixer.setSoloSafe(vocal, true)).not.toThrow();
         expect(() => mixer.setPolarityInvert(vocal, { left: false, right: true })).not.toThrow();
-        expect(() => mixer.setPanLaw(vocal, 'const4.5dB')).not.toThrow();
+        expect(() => mixer.setPanLaw(vocal, 'const4.5Db')).not.toThrow();
         expect(() => mixer.setChannelDelaySamples(vocal, 0)).not.toThrow();
         expect(() => mixer.setVcaOffsetDb(vocal, -1.5)).not.toThrow();
         expect(() => mixer.setDualPan(vocal, -0.3, 0.4)).not.toThrow();
@@ -281,7 +281,7 @@ describe('Mixer runtime controls (WASM)', () => {
       try {
         const vocal = mixer.stripById('vocal');
         assertStripIndex(vocal, 'vocal');
-        for (const law of ['const3dB', 'const4.5dB', 'const6dB', 'linear0dB'] as const) {
+        for (const law of ['const3Db', 'const4.5Db', 'const6Db', 'linear0Db'] as const) {
           expect(() => mixer.setPanLaw(vocal, law)).not.toThrow();
         }
         for (const timing of ['preFader', 'postFader'] as const) {
@@ -301,7 +301,7 @@ describe('Mixer runtime controls (WASM)', () => {
           [vocalL, new Float32Array(BLOCK)],
           [vocalL, new Float32Array(BLOCK)],
         );
-        // 'const6dB' / 'postFader' resolved end-to-end and produced audio.
+        // 'const6Db' / 'postFader' resolved end-to-end and produced audio.
         expect(blockEnergy(out)).toBeGreaterThan(0);
         expect(Number.isFinite(mixer.stripMeter(vocal, 'preFader').peakDbL)).toBe(true);
       } finally {

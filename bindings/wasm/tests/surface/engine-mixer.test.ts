@@ -186,7 +186,7 @@ describe('mixer strips', () => {
 
   it('setPanLaw refuses a number and an unknown name', () => {
     withPreset((mixer) => {
-      expect(() => mixer.setPanLaw('vocal', 'const6dB')).not.toThrow();
+      expect(() => mixer.setPanLaw('vocal', 'const6Db')).not.toThrow();
       expect(thrown(() => mixer.setPanLaw('vocal', 2 as never))).toBeInstanceOf(TypeError);
       expect(thrown(() => mixer.setPanLaw('vocal', 'bogus' as never))).toBeInstanceOf(RangeError);
     });

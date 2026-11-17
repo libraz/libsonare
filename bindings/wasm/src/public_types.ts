@@ -1,5 +1,10 @@
 export * from './public_types_acoustic.js';
-export type { SidechainCheck, SidechainRefusal, UmpWords } from './public_types_engine.js';
+export type {
+  MidiFxConfig,
+  SidechainCheck,
+  SidechainRefusal,
+  UmpWords,
+} from './public_types_engine.js';
 export * from './public_types_mastering.js';
 export * from './public_types_mixing.js';
 export * from './public_types_music.js';

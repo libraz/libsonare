@@ -1,11 +1,11 @@
 import { ErrorCode, SonareError } from '../errors.js';
 import type { EngineCaptureStatus, RealtimeEngine } from '../index.js';
+import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
 import type { CaptureOptions } from '../public_types_engine.js';
 import { requestObject, requireBoolean } from '../validation.js';
 import { commitCommand, commitSync, type EngineCommitContext } from './engine-commit.js';
 import type { SonareRealtimeEngineNode } from './engine-node.js';
 import { buildCaptureConfig, type CaptureSyncConfig } from './engine-offline.js';
-import type { SonareEngineSyncMessage } from './messages.js';
 import { SonareEngineCommandType } from './protocol.js';
 
 type CaptureConfig = CaptureSyncConfig;

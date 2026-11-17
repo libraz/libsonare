@@ -34,6 +34,7 @@ function message(call: () => unknown): string {
 const METHOD_SHAPES = [
   'Mixer',
   'Mixer.fromJson',
+  ...(Object.keys(REQUEST_SHAPES) as RequestFn[]).filter((name) => name.startsWith('Project.')),
   'RealtimeEngine',
   'SonareEngine.renderOffline',
   'addSend',
@@ -123,6 +124,15 @@ describe('request objects refuse unknown keys', () => {
   });
 });
 
+/** Positional arguments ahead of the request object on `Project` methods that take one. */
+const PROJECT_LEADING_ARGS: Partial<Record<string, unknown[]>> = {
+  'Project.moveClip': [0, 0],
+  'Project.setClipFade': [0],
+  'Project.setClipLoop': [0],
+  'Project.setClipTakes': [0, []],
+  'Project.setProgramOnChannel': [0],
+};
+
 describe('a class-method request refuses its keys through an instance', () => {
   beforeAll(async () => {
     await api.init();
@@ -139,6 +149,22 @@ describe('a class-method request refuses its keys through an instance', () => {
       ).toThrow("configureCapture: unknown option 'notAnOption' in 'inputMonitor'");
     } finally {
       engine.destroy();
+    }
+  });
+
+  it.each(
+    (Object.keys(REQUEST_SHAPES) as RequestFn[]).filter((name) => name.startsWith('Project.')),
+  )('%s refuses an undeclared key by name through an instance', (name) => {
+    const project = new api.Project();
+    try {
+      const method = (project as unknown as Record<string, (...args: unknown[]) => unknown>)[
+        name.slice('Project.'.length)
+      ];
+      const call = () => method.call(project, ...(PROJECT_LEADING_ARGS[name] ?? []), { bogus: 1 });
+      expect(call).toThrow(TypeError);
+      expect(message(call)).toBe(`${name}: unknown request key 'bogus'`);
+    } finally {
+      project.destroy();
     }
   });
 

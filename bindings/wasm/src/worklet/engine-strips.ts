@@ -12,7 +12,9 @@ import type {
 } from '../index.js';
 import { eqBandJson } from '../internal/eq_band_json.js';
 import { packMidi2Program } from '../internal/midi_program_pack.js';
+import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
 import type { SurroundPan } from '../public_types.js';
+import type { MidiFxConfig } from '../public_types_engine.js';
 import type { RequestFn } from '../request_keys.js';
 import { requestObject, resolveRenderFrame } from '../validation.js';
 import { commitSync } from './engine-commit.js';
@@ -24,7 +26,6 @@ import {
   replaceStripScene,
   type StripJsonTarget,
 } from './engine-mixer-facade.js';
-import type { SonareEngineSyncMessage } from './messages.js';
 
 /**
  * Collaborator surface the strip/pan/EQ/insert/instrument/MIDI setters need from
@@ -763,14 +764,14 @@ export function setExternalMidiClockEnabled(
 export function setMidiFx(
   ctx: EngineStripContext,
   trackId: string | number,
-  configJson: string,
+  config: MidiFxConfig,
 ): void {
   const destinationId = ctx.resolveTargetId(trackId);
   commitSync(
     ctx,
-    (offline) => offline.setMidiFx(destinationId, configJson),
+    (offline) => offline.setMidiFx(destinationId, config),
     () => {
-      ctx.postSync({ type: 'syncMidiFx', destinationId, configJson });
+      ctx.postSync({ type: 'syncMidiFx', destinationId, config });
     },
   );
 }

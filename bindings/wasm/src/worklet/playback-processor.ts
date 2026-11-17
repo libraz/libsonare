@@ -1,5 +1,13 @@
 import { ErrorCode, SonareError } from '../errors.js';
 import { HrtfSet, PlaybackRenderer } from '../index.js';
+import type {
+  SonarePlaybackDiagnosticsReplyMessage,
+  SonarePlaybackErrorMessage,
+  SonarePlaybackMessage,
+  SonarePlaybackNodeOptions,
+  SonarePlaybackWorkletProcessorOptions,
+  WorkletPort,
+} from '../internal/worklet_messages.js';
 import type { PlaybackRendererConfig } from '../public_types_playback.js';
 import type { WasmPlaybackRenderer } from '../sonare.js';
 import {
@@ -16,14 +24,6 @@ import {
   resolveContextSampleRate,
   resolveScopeSampleRate,
 } from './guards.js';
-import type {
-  SonarePlaybackDiagnosticsReplyMessage,
-  SonarePlaybackErrorMessage,
-  SonarePlaybackMessage,
-  SonarePlaybackNodeOptions,
-  SonarePlaybackWorkletProcessorOptions,
-  WorkletPort,
-} from './messages.js';
 
 /** Largest input channel count any layout accepts (7.1). */
 const MAX_INPUT_CHANNELS = 8;

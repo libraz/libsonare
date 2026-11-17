@@ -1,12 +1,15 @@
 import { ErrorCode, SonareError } from '../errors.js';
 import type { SonareStreamAnalyzerChunkMessage } from '../internal/stream_analyzer_messages.js';
+import type {
+  SonareStreamAnalyzerWorkletProcessorOptions,
+  WorkletPort,
+} from '../internal/worklet_messages.js';
 import type { WorkletInput, WorkletOutput } from './audio_types.js';
 import {
   assertKnownProcessorOptions,
   isStreamAnalyzerMessage,
   requireIntegerOption,
 } from './guards.js';
-import type { SonareStreamAnalyzerWorkletProcessorOptions, WorkletPort } from './messages.js';
 
 /** Default and minimum mono samples per posted chunk. */
 export const STREAM_ANALYZER_DEFAULT_CHUNK_FRAMES = 4096;

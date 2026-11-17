@@ -5,12 +5,12 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { init, RealtimeEngine } from '../dist/index.js';
+import { SONARE_METER_RING_PROTOCOL_VERSION } from '../dist/worklet.js';
 import {
   ENGINE_MIXER_PARAM_FADER_DB,
   ENGINE_MIXER_PARAM_PAN,
   engineMixerMasterTarget,
-  SONARE_METER_RING_PROTOCOL_VERSION,
-} from '../dist/worklet.js';
+} from '../src/worklet/protocol.js';
 
 describe('master automation ids (WASM)', () => {
   beforeAll(async () => {

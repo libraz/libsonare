@@ -7,6 +7,20 @@ export function engineMixerMasterTarget(paramKind: number): number {
 }
 
 export type {
+  SonareEngineCommandRecord,
+  SonareEngineCommandRingBuffer,
+} from '../internal/engine_command_ring.js';
+export {
+  createSonareEngineCommandRingBuffer,
+  pendingSonareEngineCommandCount,
+  popSonareEngineCommandRingBuffer,
+  pushSonareEngineCommandRingBuffer,
+  SONARE_ENGINE_COMMAND_RECORD_BYTES,
+  SonareEngineCommandType,
+  sonareEngineCommandRingBufferByteLength,
+  sonareEngineCommandRingHasRoom,
+} from '../internal/engine_command_ring.js';
+export type {
   ClipPagePageRequest,
   SharedClipPageRequestRingWriter,
   SonareClipPageRequestRingBuffer,
@@ -22,35 +36,25 @@ export {
   sonareClipPageRequestRingBufferByteLength,
 } from './clip-page-ring.js';
 export type {
-  SonareEngineCommandRecord,
-  SonareEngineCommandRingBuffer,
   SonareEngineTelemetryRecord,
   SonareEngineTelemetryRingBuffer,
   SonareEngineTelemetryRingReadResult,
 } from './engine-rings.js';
 export {
   commitSonareEngineTelemetryRingWrite,
-  createSonareEngineCommandRingBuffer,
   createSonareEngineTelemetryRingBuffer,
   decodeFrame,
   encodeFrameHi,
   encodeFrameLo,
   engineRingFromSharedBuffer,
   engineTelemetryRingFromSharedBuffer,
-  pendingSonareEngineCommandCount,
-  popSonareEngineCommandRingBuffer,
-  pushSonareEngineCommandRingBuffer,
   readSonareEngineTelemetryRingBuffer,
-  SONARE_ENGINE_COMMAND_RECORD_BYTES,
   SONARE_ENGINE_RING_HEADER_INTS,
   SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
   SONARE_ENGINE_TELEMETRY_RING_PROTOCOL_VERSION,
   SONARE_MAX_PUBLIC_PPQ,
-  SonareEngineCommandType,
   SonareEngineTelemetryError,
   SonareEngineTelemetryType,
-  sonareEngineCommandRingBufferByteLength,
-  sonareEngineCommandRingHasRoom,
   sonareEngineTelemetryRingBufferByteLength,
   telemetryFromEngine,
   writeSonareEngineTelemetryRingBuffer,

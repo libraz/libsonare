@@ -201,10 +201,10 @@ describe('enum-code helpers reject unknown strings instead of silently defaultin
   });
 
   it('still maps valid strings', () => {
-    expect(panLawCode('const6dB')).toBe(2);
+    expect(panLawCode('const6Db')).toBe(2);
     expect(panModeCode('balance')).toBe(0);
-    expect(panModeCode('stereo-pan')).toBe(1);
-    expect(panModeCode('dual-pan')).toBe(2);
+    expect(panModeCode('stereoPan')).toBe(1);
+    expect(panModeCode('dualPan')).toBe(2);
     expect(meterTapCode('postFader')).toBe(1);
   });
 
@@ -227,12 +227,8 @@ describe('enum-code helpers reject unknown strings instead of silently defaultin
     expect(panModeCode('balance')).toBe(0);
     // @ts-expect-error panModeCode no longer carries the generic 'pan' spelling
     expect(() => panModeCode('pan')).toThrow(RangeError);
-    // @ts-expect-error panModeCode lowercases its input; PanMode lists the canonical spellings
-    expect(panModeCode('stereopan')).toBe(1);
-    expect(panModeCode('stereo-pan')).toBe(1);
-    // @ts-expect-error panModeCode lowercases its input; PanMode lists the canonical spellings
-    expect(panModeCode('dualpan')).toBe(2);
-    expect(panModeCode('dual-pan')).toBe(2);
+    expect(panModeCode('stereoPan')).toBe(1);
+    expect(panModeCode('dualPan')).toBe(2);
   });
 
   it('sendTimingCode rejects an unknown string instead of defaulting to post-fader', () => {

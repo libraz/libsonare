@@ -15,7 +15,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { ProjectMidiEvent, TranscribeOptions, TranscribeRequest } from '../src/index';
-import { init, Project, transcribe } from '../src/index';
+import { init, midiNoteOff, midiNoteOn, Project, transcribe } from '../src/index';
 import { expectArgumentRefusal } from './_helpers';
 
 const sampleRate = 44100;
@@ -625,8 +625,8 @@ describe('WASM Project.transcribeToClip', () => {
     project.setSampleRate(48000);
     const { clipId } = project.addMidiClip(0, 8 * 960);
     project.setMidiEvents(clipId, [
-      Project.midiNoteOn(0, 0, 0, 30, 100),
-      Project.midiNoteOff(480, 0, 0, 30, 0),
+      midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 30, velocity: 100 }),
+      midiNoteOff({ ppq: 480, group: 0, channel: 0, note: 30, velocity: 0 }),
     ]);
     return { project, clipId, sourceId: project.clips()[0].sourceId };
   }

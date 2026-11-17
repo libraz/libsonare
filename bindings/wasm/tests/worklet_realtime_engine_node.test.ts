@@ -177,7 +177,7 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setSf2Instrument(3, { gain: 0.5 });
         // Program Change 5 on group 0, channel 0: it must reach the new instrument.
         engine.pushMidiUmp(3, 0x20c00500);
-        engine.setMidiFx(3, '{"transpose_semitones":12}');
+        engine.setMidiFx(3, { transposeSemitones: 12 });
         engine.clearMidiFx(3);
         expect(posted.map((message) => (message as { type?: unknown }).type)).toEqual([
           'syncLoadSoundFont',
@@ -1098,7 +1098,7 @@ describe('SonareRealtimeEngineNode', () => {
         expect(engine.setBusGainDb(100, -9)).toBeUndefined();
         // Realtime strip panner / channel-delay controls (R5).
         engine.setStripPan(3, -1);
-        engine.setStripPanLaw(3, 'const6dB');
+        engine.setStripPanLaw(3, 'const6Db');
         engine.setStripPanMode(3, 'dualPan');
         engine.setStripDualPan(3, -1, 1);
         engine.setStripChannelDelaySamples(3, 32);
@@ -1110,7 +1110,7 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setSynthInstrument(3, 'saw-lead');
         engine.setSf2Instrument(3, { gain: 0.5 });
         // Live, non-destructive MIDI-FX insert (install then bypass).
-        engine.setMidiFx(3, '{"transpose_semitones":12}');
+        engine.setMidiFx(3, { transposeSemitones: 12 });
         engine.clearMidiFx(3);
         engine.setMidiClips([
           {
@@ -1321,7 +1321,7 @@ describe('SonareRealtimeEngineNode', () => {
             expect.objectContaining({
               type: 'syncMidiFx',
               destinationId: 3,
-              configJson: '{"transpose_semitones":12}',
+              config: { transposeSemitones: 12 },
             }),
             expect.objectContaining({ type: 'syncClearMidiFx', destinationId: 3 }),
             expect.objectContaining({
@@ -2543,7 +2543,7 @@ describe('SonareRealtimeEngineNode', () => {
         );
         engine.setBusPanMode(100, 'stereoPan');
         engine.setBusPan(100, 0.6);
-        engine.setBusPanLaw(100, 'const6dB');
+        engine.setBusPanLaw(100, 'const6Db');
         engine.setBusEqBand(100, 2, {
           type: 'Peak',
           frequencyHz: 800,
@@ -3032,7 +3032,7 @@ describe('SonareRealtimeEngineNode', () => {
         );
         engine.setStripPanMode(7, 'stereoPan');
         engine.setStripPan(7, -0.5);
-        engine.setStripPanLaw(7, 'const6dB');
+        engine.setStripPanLaw(7, 'const6Db');
         engine.setStripPanMode(8, 'dualPan');
         engine.setStripDualPan(8, 0.2, 0.9);
         engine.setStripChannelDelaySamples(8, 16);

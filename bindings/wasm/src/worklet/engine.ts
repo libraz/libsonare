@@ -39,6 +39,10 @@ import type {
 } from '../index.js';
 import { RealtimeEngine } from '../index.js';
 import { releasedHandleError } from '../internal/handle_guard.js';
+import type {
+  SonareEngineSyncMessage,
+  SonareRealtimeEngineNodeCapabilities,
+} from '../internal/worklet_messages.js';
 import {
   createOpfsClipPageProvider,
   type OpfsClipPageProviderBinding,
@@ -49,6 +53,7 @@ import type {
   CaptureOptions,
   EngineLoop,
   ExternalMidiEvent,
+  MidiFxConfig,
   SidechainSource,
 } from '../public_types_engine.js';
 import type { ClipPageProvider } from '../realtime_engine.js';
@@ -86,7 +91,6 @@ import { resolveParamId, resolveTargetId } from './engine-sync.js';
 import type { EngineTempoContext } from './engine-tempo-facade.js';
 import * as tempo from './engine-tempo-facade.js';
 import { requireChannelCount, resolveContextSampleRate } from './guards.js';
-import type { SonareEngineSyncMessage, SonareRealtimeEngineNodeCapabilities } from './messages.js';
 import {
   SonareEngineCommandType,
   type SonareWorkletMeterSnapshot,
@@ -1010,11 +1014,11 @@ export class SonareEngine {
    * destination. The insert transforms the destination's MIDI before
    * synthesis (transpose, quantize, velocity shaping, humanize, harmonize,
    * arpeggiate) without rewriting any stored notes, so it can be bypassed by
-   * {@link clearMidiFx}. The config JSON is the flat object the engine's
-   * MIDI-FX accepts (the same schema as the offline `Project.bakeMidiFx`).
+   * {@link clearMidiFx}. `config` is a {@link MidiFxConfig}, the same object
+   * the offline `Project.bakeMidiFx` takes.
    */
-  setMidiFx(trackId: string | number, configJson: string): void {
-    strips.setMidiFx(this.stripContext, trackId, configJson);
+  setMidiFx(trackId: string | number, config: MidiFxConfig): void {
+    strips.setMidiFx(this.stripContext, trackId, config);
   }
 
   /** Remove the live MIDI-FX insert from one destination (a no-op when none). */

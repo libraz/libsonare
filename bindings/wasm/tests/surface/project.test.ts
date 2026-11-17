@@ -298,9 +298,9 @@ describe('edits', () => {
         TypeError,
       );
 
-      const fx = project.bakeMidiFx({ clipId, configJson: '{}' });
+      const fx = project.bakeMidiFx({ clipId, config: {} });
       expect(fx).not.toHaveProperty('sourceIndex');
-      const indexed = project.bakeMidiFx({ clipId, configJson: '{}', withSourceIndex: true });
+      const indexed = project.bakeMidiFx({ clipId, config: {}, withSourceIndex: true });
       expect(indexed.sourceIndex).toBeDefined();
       expect(() => loose(project).bakeMidiFx(clipId, '{}')).toThrow(TypeError);
 

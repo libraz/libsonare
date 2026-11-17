@@ -682,8 +682,8 @@ describe('Sonare WASM Project edit ops', () => {
     }
 
     const spellings: ProjectAutomationPoint[] = [
-      { ppq: 0, value: 1, curve: 's-curve' },
-      { ppq: 0, value: 1, curveToNext: 's-curve' },
+      { ppq: 0, value: 1, curve: 'sCurve' },
+      { ppq: 0, value: 1, curveToNext: 'sCurve' },
     ];
     const serialized = spellings.map((point) => {
       const project = new Project();
@@ -852,14 +852,14 @@ describe('Sonare WASM Project edit ops', () => {
     }
   });
 
-  it('accepts the canonical s-curve spelling and rejects unknown curves', () => {
+  it('accepts the canonical sCurve spelling and rejects unknown curves', () => {
     const { project, trackId } = buildAudioProject();
     try {
       expect(() =>
         project.addAutomationLane(trackId, {
           targetParamId: 1,
           points: [
-            { ppq: 0, value: 0.0, curve: 's-curve' },
+            { ppq: 0, value: 0.0, curve: 'sCurve' },
             { ppq: 4, value: 1.0, curve: 'hold' },
           ],
         }),

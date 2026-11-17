@@ -194,7 +194,7 @@ describe('SonareEngine shares the RealtimeEngine vocabulary', () => {
   it('refuses the master strip on a track-only pan setter', async () => {
     const { engine } = await newEngine();
     try {
-      expect(() => engine.setStripPanLaw('master', 'const3dB')).toThrow(RangeError);
+      expect(() => engine.setStripPanLaw('master', 'const3Db')).toThrow(RangeError);
       expect(() => engine.setStripPanMode('master', 'balance')).toThrow(RangeError);
       expect(() => engine.setStripDualPan('master', -1, 1)).toThrow(RangeError);
       expect(() => engine.setStripSurroundPan('master', {})).toThrow(RangeError);
