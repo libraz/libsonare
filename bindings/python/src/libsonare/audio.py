@@ -737,8 +737,8 @@ class Audio:
 
     def analyze_bpm(
         self,
-        bpm_min: float = 30.0,
-        bpm_max: float = 300.0,
+        bpm_min: float = 60.0,
+        bpm_max: float = 200.0,
         start_bpm: float = 120.0,
         n_fft: int = 2048,
         hop_length: int = 512,

@@ -603,8 +603,8 @@ def estimate_meter(
 def analyze_bpm(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-    bpm_min: float = 30.0,
-    bpm_max: float = 300.0,
+    bpm_min: float = 60.0,
+    bpm_max: float = 200.0,
     start_bpm: float = 120.0,
     n_fft: int = 2048,
     hop_length: int = 512,
@@ -614,13 +614,9 @@ def analyze_bpm(
 
     ``n_fft`` is the analysis window length in samples at 22050 Hz, rescaled to
     the input sample rate; ``hop_length`` is in samples of the input buffer.
-
-    Note:
-        ``bpm_min`` defaults to 30.0 here (lower than :func:`analyze_rhythm`'s
-        60.0). This wider search range lets the full BPM analyzer surface
-        half-tempo candidates and very slow material in its candidate list;
-        :func:`analyze_rhythm` keeps the narrower 60.0 floor for a single,
-        more stable tempo estimate. This difference is intentional.
+    The tempo search spans ``bpm_min``-``bpm_max``, 60-200 BPM by default like
+    every other tempo entry point; widen it to list half-tempo candidates or
+    very slow material.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)

@@ -5001,3 +5001,35 @@ old = "pitch_correct_to_midi_timevarying"
 removed = true
 domain = "effects"
 rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "option"
+old = "analyze_bpm(bpm_min)"
+changed = "default 30 -> 60, the shared tempo range"
+domain = "analysis"
+rule = "tempo-range"
+test = "bindings/python/tests/test_tempo_range_defaults.py::test_the_default_range_is_60_to_200"
+
+[[entry]]
+kind = "option"
+old = "analyze_bpm(bpm_max)"
+changed = "default 300 -> 200, the shared tempo range"
+domain = "analysis"
+rule = "tempo-range"
+test = "bindings/python/tests/test_tempo_range_defaults.py::test_the_default_range_is_60_to_200"
+
+[[entry]]
+kind = "option"
+old = "Audio.analyze_bpm(bpm_min)"
+changed = "default 30 -> 60, the shared tempo range"
+domain = "core"
+rule = "tempo-range"
+test = "bindings/python/tests/test_tempo_range_defaults.py::test_the_default_range_is_60_to_200"
+
+[[entry]]
+kind = "option"
+old = "Audio.analyze_bpm(bpm_max)"
+changed = "default 300 -> 200, the shared tempo range"
+domain = "core"
+rule = "tempo-range"
+test = "bindings/python/tests/test_tempo_range_defaults.py::test_the_default_range_is_60_to_200"

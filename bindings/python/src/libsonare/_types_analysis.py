@@ -193,9 +193,8 @@ class AnalysisResult:
     """Full audio analysis result.
 
     ``bpm_confidence`` is the winning tempo cluster's vote share within 60-200 BPM,
-    searched at 22050 Hz. :func:`analyze_bpm` searches 30-300 BPM at the input rate
-    by default, so the two can differ on the same input; pass ``bpm_min=60,
-    bpm_max=200`` and a 22050 Hz input to compare them.
+    searched at 22050 Hz. :func:`analyze_bpm` searches the same range at the input
+    rate, so the two can differ on an input at another rate.
     """
 
     bpm: float
@@ -308,9 +307,9 @@ class BpmAnalysisResult:
     """Detailed BPM analysis result.
 
     ``confidence`` is the winning tempo cluster's vote share within
-    ``bpm_min``-``bpm_max`` (30-300 by default), searched at the input rate;
-    :func:`analyze` searches 60-200 BPM at 22050 Hz, so its ``bpm_confidence``
-    can differ. ``candidates`` opens with the chosen tempo
+    ``bpm_min``-``bpm_max`` (60-200 by default), searched at the input rate;
+    :func:`analyze` searches at 22050 Hz, so its ``bpm_confidence`` can differ.
+    ``candidates`` opens with the chosen tempo
     (``candidates[0].bpm == bpm``); the other histogram bins follow by
     descending vote share.
     """
