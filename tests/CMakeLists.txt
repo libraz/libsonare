@@ -262,6 +262,8 @@ target_link_libraries(sonare_tests PRIVATE sonare_engine Catch2::Catch2WithMain)
 target_compile_options(sonare_tests PRIVATE ${SONARE_WARNING_FLAGS})
 target_include_directories(sonare_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
                                                 ${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/tools)
+# Absolute source root for tests that scan the tree; __FILE__ is relative on some generators.
+target_compile_definitions(sonare_tests PRIVATE SONARE_SOURCE_ROOT="${PROJECT_SOURCE_DIR}")
 
 # The C engine MIDI contract tests remain part of the no-arrangement matrix and
 # compare their C ABI results with the pure UMP constructors.  BUILD_ARRANGEMENT

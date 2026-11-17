@@ -1600,9 +1600,7 @@ TEST_CASE("host headers include no OS / plugin SDK headers", "[host]") {
       "<vst",        "<pluginterfaces/", "<clap/",         "<lv2",
   };
 
-  // Resolve src/host relative to this test file so the test is path-independent.
-  const fs::path host_dir =
-      fs::path(__FILE__).parent_path().parent_path().parent_path() / "src" / "host";
+  const fs::path host_dir = fs::path(SONARE_SOURCE_ROOT) / "src" / "host";
   REQUIRE(fs::is_directory(host_dir));
 
   size_t scanned = 0;

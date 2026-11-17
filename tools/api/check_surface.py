@@ -581,10 +581,41 @@ def chk_sample_rate_name(ctx):
 _PY_AUDIO_PARAMS = {"y", "samples", "left", "right", "channels"}
 
 
+def _js_handle_method_types(ctx) -> set[tuple[str, str]]:
+    """(surface, type) pairs only instance methods take; such a handle carries its own rate."""
+    kinds = collections.defaultdict(set)
+    for r in ctx.all_records:
+        if r["surface"] not in JS or not r.get("sigs"):
+            continue
+        if r["kind"] == "method":
+            kind = "static" if r.get("static") else "instance"
+        elif r["kind"] in ("function", "class"):
+            kind = "entry"
+        else:
+            continue
+        for s in r["sigs"]:
+            for p in s["params"]:
+                for t in re.findall(r"[A-Za-z_]\w*", p["type"]):
+                    kinds[(r["surface"], t)].add(kind)
+    return {k for k, v in kinds.items() if v == {"instance"}}
+
+
+def _py_rate_scoped(r) -> bool:
+    """Free functions, constructors and factories; an instance method runs at its handle's rate."""
+    if r["kind"] != "method":
+        return True
+    return r["member"] == "__init__" or bool(
+        {"classmethod", "staticmethod"} & set(r.get("decorators", []))
+    )
+
+
 def chk_sample_rate_required(ctx):
     cands, bad = 0, []
+    handle_types = _js_handle_method_types(ctx)
     for r in recs(ctx, JS, ("type",)):
         if not re.search(r"(Request|Options)$", r["name"]):
+            continue
+        if (r["surface"], r["name"]) in handle_types:
             continue
         fields = {m["member"]: m for m in ctx.members(r) if m["kind"] == "field"}
         if "samples" not in fields and "channels" not in fields:
@@ -596,7 +627,7 @@ def chk_sample_rate_required(ctx):
         if "validate" not in fields:
             bad.append((r, "takes samples but has no validate field"))
     for r in recs(ctx, ("python",), ("function", "method")):
-        if ctx.mirror(r):
+        if ctx.mirror(r) or not _py_rate_scoped(r):
             continue
         params = {p["name"]: p for s in r.get("sigs", []) for p in s["params"]}
         audio = bool(set(params) & _PY_AUDIO_PARAMS)
@@ -927,17 +958,35 @@ def chk_one_positional_form(ctx):
     return len(cands), bad
 
 
+def _named_setter_bool(r, sig) -> bool:
+    """`setMuted(strip, muted)`: one trailing boolean that the setter's own name already labels."""
+    bools = [p for p in sig["params"] if p["boolean"]]
+    if r["kind"] != "method" or len(bools) != 1 or sig["params"][-1] is not bools[0]:
+        return False
+    name, member = bools[0]["name"], bare(r)
+    return member.startswith("set") and member.endswith(name[:1].upper() + name[1:])
+
+
 def chk_no_positional_bools(ctx):
     cands = [r for r in recs(ctx, JS, ("function", "method")) if r.get("sigs")]
     bad = []
     for r in cands:
-        names = sorted({p["name"] for s in r["sigs"] for p in s["params"] if p["boolean"]})
+        names = sorted(
+            {
+                p["name"]
+                for s in r["sigs"]
+                if not _named_setter_bool(r, s)
+                for p in s["params"]
+                if p["boolean"]
+            }
+        )
         if names:
             bad.append((r, "positional boolean " + ", ".join(names)))
     return len(cands), bad
 
 
-_TOKEN = re.compile(r"^[a-z][a-zA-Z0-9.]*$")
+# A closed-set token is one lowerCamel word, or a bare number such as a channel layout ('5.1').
+_TOKEN = re.compile(r"^(?:[a-z][a-zA-Z0-9.]*|\d+(?:\.\d+)*)$")
 
 
 # How each binding spells an enum member, mapped onto the cross-binding member name.

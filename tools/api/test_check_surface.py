@@ -482,6 +482,133 @@ class RateFamily(CheckerCase):
         )
 
 
+def _param(name, *, type="number", boolean=False, optional=False):
+    return {
+        "name": name,
+        "type": type,
+        "optional": optional,
+        "boolean": boolean,
+        "literals": [],
+        "rest": False,
+    }
+
+
+def _js_method(owner, member, *params, static=False):
+    return _rec(
+        "node",
+        "method",
+        f"{owner}.{member}",
+        owner=owner,
+        member=member,
+        static=static,
+        sigs=[{"params": list(params), "returns": "void"}],
+    )
+
+
+class PositionalBools(CheckerCase):
+    def bools(self, *records):
+        self.add(*records)
+        _, lines = self.run_check("--surface", "node", "--check", "no-positional-bools")
+        return [x.strip() for x in lines if x.startswith("    node method Strip.")]
+
+    def test_a_trailing_bool_the_setter_names_is_labelled(self):
+        found = self.bools(
+            _js_method("Strip", "setMuted", _param("strip"), _param("muted", boolean=True)),
+            _js_method("Strip", "setClockEnabled", _param("enabled", type="boolean", boolean=True)),
+        )
+        self.assertEqual(found, [])
+
+    def test_a_bool_the_name_does_not_label_is_positional(self):
+        found = self.bools(
+            _js_method("Strip", "setAutoGain", _param("enabled", boolean=True)),
+            _js_method(
+                "Strip", "setPolarity", _param("left", boolean=True), _param("right", boolean=True)
+            ),
+            _js_method("Strip", "muteIf", _param("muted", boolean=True)),
+            _js_method("Strip", "setMuted", _param("muted", boolean=True), _param("strip")),
+        )
+        self.assertEqual(
+            found,
+            [
+                "node method Strip.muteIf: positional boolean muted",
+                "node method Strip.setAutoGain: positional boolean enabled",
+                "node method Strip.setMuted: positional boolean muted",
+                "node method Strip.setPolarity: positional boolean left, right",
+            ],
+        )
+
+
+class RateScope(CheckerCase):
+    def request(self, name, consumer):
+        fields = [
+            _rec("node", "field", f"{name}.samples", owner=name, member="samples", optional=False),
+        ]
+        self.add(_rec("node", "type", name), *fields, consumer)
+
+    def rate_lines(self):
+        _, lines = self.run_check("--check", "sample-rate-required")
+        return [x.strip() for x in lines if x.startswith(("    node type", "    python method"))]
+
+    def test_a_request_only_a_handle_method_takes_runs_at_the_handle_rate(self):
+        self.request(
+            "RenderRequest", _js_method("Engine", "render", _param("request", type="RenderRequest"))
+        )
+        self.assertEqual(self.rate_lines(), [])
+
+    def test_a_request_a_free_function_takes_needs_its_rate(self):
+        self.request(
+            "TrimRequest",
+            _rec(
+                "node",
+                "function",
+                "trim",
+                sigs=[{"params": [_param("request", type="TrimRequest")], "returns": "void"}],
+            ),
+        )
+        self.assertIn(
+            "node type TrimRequest: takes samples but sampleRate is not a required field",
+            self.rate_lines(),
+        )
+
+    def test_a_python_instance_method_runs_at_its_handle_rate_and_a_factory_does_not(self):
+        def method(member, decorators):
+            fn = _py_fn(member, ("samples", None))
+            fn.update(kind="method", name=f"Chain.{member}", owner="Chain", member=member)
+            fn["decorators"] = decorators
+            return fn
+
+        self.add(method("process", []), method("from_samples", ["classmethod"]))
+        self.assertEqual(
+            self.rate_lines(),
+            ["python method Chain.from_samples: takes audio but has no sample_rate parameter"],
+        )
+
+
+class NumericTokens(CheckerCase):
+    def test_a_channel_layout_number_is_a_token(self):
+        self.add(
+            _rec("node", "type", "Layout", literals=["stereo", "5.1", "7.1.4", "5_1", "5."]),
+            _rec(
+                "node",
+                "option",
+                "Bus(layout)",
+                owner="Bus",
+                member="layout",
+                inline_literals=True,
+                literals=["stereo", "5.1", "7.1.4", "5_1", "5."],
+            ),
+        )
+        _, lines = self.run_check("--surface", "node", "--check", "token-case")
+        bad = sorted(x.strip() for x in lines if x.startswith("    node option Bus(layout)"))
+        self.assertEqual(
+            bad,
+            [
+                "node option Bus(layout): token '5.' is not lowerCamel",
+                "node option Bus(layout): token '5_1' is not lowerCamel",
+            ],
+        )
+
+
 class MirrorSchema(CheckerCase):
     def problems(self, body):
         code, lines = self.run_check("--check", "doc-comments", mirrors=self.write("m.toml", body))

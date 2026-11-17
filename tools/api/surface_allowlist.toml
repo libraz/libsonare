@@ -7,3 +7,38 @@
 #   category  librosa-mirror | platform | wire-format | hot-path
 #   reason    one line
 # --audit-allowlist fails on an entry that excused nothing in a full run.
+
+[[allow]]
+check = "one-positional-form"
+surface = "node"
+name = "RealtimeEngine.pushMidi*"
+category = "hot-path"
+reason = "Per-event MIDI push runs once per message; a request object would allocate on every call."
+
+[[allow]]
+check = "one-positional-form"
+surface = "wasm"
+name = "RealtimeEngine.pushMidi*"
+category = "hot-path"
+reason = "Per-event MIDI push runs once per message; a request object would allocate on every call."
+
+[[allow]]
+check = "one-positional-form"
+surface = "wasm"
+name = "SonareEngine.pushMidi*"
+category = "hot-path"
+reason = "Worklet-side MIDI push runs on the audio thread, where a per-event allocation is not allowed."
+
+[[allow]]
+check = "one-positional-form"
+surface = "wasm"
+name = "WebMidiEngine.pushMidiInput*"
+category = "hot-path"
+reason = "Forwards each Web MIDI message as it arrives; a request object would allocate on every call."
+
+[[allow]]
+check = "one-positional-form"
+surface = "wasm"
+name = "Mixer.processStereoInto"
+category = "hot-path"
+reason = "Per-block render into caller-owned buffers; a request object would allocate on every block."

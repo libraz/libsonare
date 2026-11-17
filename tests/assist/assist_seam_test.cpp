@@ -2794,7 +2794,7 @@ bool file_contains(const std::filesystem::path& path, const std::string& needle)
 
 TEST_CASE("assist seam is not reachable from rt/ or engine/", "[assist]") {
   namespace fs = std::filesystem;
-  const fs::path src = fs::path(__FILE__).parent_path().parent_path().parent_path() / "src";
+  const fs::path src = fs::path(SONARE_SOURCE_ROOT) / "src";
 
   // rt/ and engine/ MUST NOT include midi/assist/ (the seam is control/offline
   // only and must never be pulled onto the RT path).

@@ -61,12 +61,6 @@ python = [
   # bindings/python/src/libsonare/_effects_voice.py:564.
   "realtime_voice_changer_preset_pod",
   "synth_enum_tables",      # facade-visible snapshot built from C enum names
-  # Result helpers over the librosa-mirror inverse functions, which keep their
-  # positional form; the JS surfaces take `{ result }` on the existing inverse request.
-  "mel_result_to_stft",
-  "mel_result_to_audio",
-  "mfcc_result_to_mel",
-  "mfcc_result_to_audio",
 ]
 
 # ---------------------------------------------------------------------------

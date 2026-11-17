@@ -138,7 +138,12 @@ def _mark_derived_counts(params: list[Param]) -> list[Param]:
     for prev, cur, nxt in zip(padded, padded[1:], padded[2:]):
         if "*" not in prev.type or cur.type.replace("const", "").strip() not in _INTEGER_TYPES:
             continue
-        if cur.name == f"n_{prev.name}" and not nxt.name.startswith("n_") or cur.name == "frames" and nxt.name == "channels":
+        if (
+            cur.name == f"n_{prev.name}"
+            and not nxt.name.startswith("n_")
+            or cur.name == "frames"
+            and nxt.name == "channels"
+        ):
             cur.structural = True
     return params
 
