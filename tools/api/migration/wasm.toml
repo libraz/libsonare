@@ -17654,19 +17654,19 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "field"
 old = "RirSynthOptions.crossfadeMs"
-changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+changed = "absent = 5 ms; an explicit 0 is a 0 ms crossfade (hard switch), where 1.x read 0 as the default; TSDoc states the default"
 domain = "effects"
 rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir refuses an explicit 0"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir reads an explicit 0 for %s literally"
 
 [[entry]]
 kind = "field"
 old = "RirSynthOptions.crossfadeMs"
-changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+changed = "absent = 5 ms; an explicit 0 is a 0 ms crossfade (hard switch), where 1.x read 0 as the default; TSDoc states the default"
 domain = "effects"
 rule = "absent-not-sentinel"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir refuses an explicit 0"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir reads an explicit 0 for %s literally"
 
 [[entry]]
 kind = "field"
@@ -17807,36 +17807,36 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::estimateRoom refuses an
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.airHumidityPercent"
-changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+changed = "absent = 50 %RH; an explicit 0 is 0 %RH, where 1.x read 0 as the default climate; TSDoc states the default"
 domain = "effects"
 rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::refuses airHumidityPercent = 0"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir reads an explicit 0 for %s literally"
 
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.airHumidityPercent"
-changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+changed = "absent = 50 %RH; an explicit 0 is 0 %RH, where 1.x read 0 as the default climate; TSDoc states the default"
 domain = "effects"
 rule = "absent-not-sentinel"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::refuses airHumidityPercent = 0"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir reads an explicit 0 for %s literally"
 
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.airTemperatureC"
-changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+changed = "absent = 20 degC; an explicit 0 is 0 degC, where 1.x read 0 as the default climate; TSDoc states the default"
 domain = "effects"
 rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::refuses airTemperatureC = 0"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir reads an explicit 0 for %s literally"
 
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.airTemperatureC"
-changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+changed = "absent = 20 degC; an explicit 0 is 0 degC, where 1.x read 0 as the default climate; TSDoc states the default"
 domain = "effects"
 rule = "absent-not-sentinel"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::refuses airTemperatureC = 0"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir reads an explicit 0 for %s literally"
 
 [[entry]]
 kind = "field"
@@ -17926,19 +17926,19 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes sou
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.seed"
-changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+changed = "absent = seed 1; an explicit 0 is a seed of its own, where 1.x read 0 as the default seed; TSDoc states the default"
 domain = "effects"
 rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::refuses seed = 0"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir reads an explicit 0 for %s literally"
 
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.seed"
-changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+changed = "absent = seed 1; an explicit 0 is a seed of its own, where 1.x read 0 as the default seed; TSDoc states the default"
 domain = "effects"
 rule = "absent-not-sentinel"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::refuses seed = 0"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir reads an explicit 0 for %s literally"
 
 [[entry]]
 kind = "field"
@@ -17994,19 +17994,19 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes sou
 [[entry]]
 kind = "field"
 old = "RoomMorphOptions.crossfadeMs"
-changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+changed = "absent = 5 ms; an explicit 0 is a 0 ms crossfade (hard switch), where 1.x read 0 as the default; TSDoc states the default"
 domain = "effects"
 rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::roomMorph refuses an explicit 0"
+test = "bindings/wasm/tests/acoustic.test.ts::reads crossfadeMs 0 as a hard switch"
 
 [[entry]]
 kind = "field"
 old = "RoomMorphOptions.crossfadeMs"
-changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+changed = "absent = 5 ms; an explicit 0 is a 0 ms crossfade (hard switch), where 1.x read 0 as the default; TSDoc states the default"
 domain = "effects"
 rule = "absent-not-sentinel"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::roomMorph refuses an explicit 0"
+test = "bindings/wasm/tests/acoustic.test.ts::reads crossfadeMs 0 as a hard switch"
 
 [[entry]]
 kind = "field"
