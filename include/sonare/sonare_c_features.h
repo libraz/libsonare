@@ -911,13 +911,11 @@ float sonare_mel_to_hz(float mel);
 float sonare_hz_to_midi(float hz);
 float sonare_midi_to_hz(float midi);
 /// @brief Nearest note name for @p hz (e.g. "A4", "C#5").
-/// @details Returns NULL when @p hz is not finite and positive or has no
-///   representable note name; @ref sonare_last_error_code is then
-///   SONARE_ERROR_INVALID_PARAMETER.
-///   Thread-local storage, overwritten in place by the next
-///   @ref sonare_hz_to_note call on the same thread and dangling once that
-///   thread exits. Copy it to keep it across either; never free it.
-const char* sonare_hz_to_note(float hz);
+/// @param[out] out_string Receives the name; the caller releases it with
+///   @ref sonare_free_string. Set to NULL on failure.
+/// @return SONARE_OK, or SONARE_ERROR_INVALID_PARAMETER when @p hz is not
+///   finite and positive or has no representable note name.
+SonareError sonare_hz_to_note(float hz, char** out_string);
 /// @brief Frequency in Hz of a note name (e.g. "A4", "C#5", "Db3"; octave defaults to 4).
 /// @details Returns NaN when @p note is NULL, does not parse, or names an octave
 ///   outside the representable range; @ref sonare_last_error_code is then

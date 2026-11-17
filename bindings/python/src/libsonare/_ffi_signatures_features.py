@@ -430,8 +430,8 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_midi_to_hz.restype = ctypes.c_float
     lib.sonare_midi_to_hz.argtypes = [ctypes.c_float]
 
-    lib.sonare_hz_to_note.restype = ctypes.c_char_p
-    lib.sonare_hz_to_note.argtypes = [ctypes.c_float]
+    lib.sonare_hz_to_note.restype = ctypes.c_int32
+    lib.sonare_hz_to_note.argtypes = [ctypes.c_float, ctypes.POINTER(ctypes.c_char_p)]
 
     lib.sonare_note_to_hz.restype = ctypes.c_float
     lib.sonare_note_to_hz.argtypes = [ctypes.c_char_p]

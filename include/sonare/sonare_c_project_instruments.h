@@ -263,12 +263,13 @@ SonareError sonare_synth_preset_patch(const char* name, SonareSynthPatch* out);
 ///          (against a wrapper enum such as `body`). What a field further
 ///          needs from a performance (velocity, a controller, overlapping
 ///          notes), or a value past which it saturates, is not stated. The default
-///          and sample modes have no engine section and answer `[]`. Valid
-///          until the next call on the same thread; the caller must NOT free
-///          it. Returns NULL with SONARE_ERROR_INVALID_PARAMETER as the last
-///          error for an out-of-range @p engine_mode, and with
-///          SONARE_ERROR_NOT_SUPPORTED in a build without arrangement support.
-const char* sonare_synth_engine_param_info(int engine_mode);
+///          and sample modes have no engine section and answer `[]`.
+/// @param[out] out_json Receives the document; the caller releases it with
+///   @ref sonare_free_string. Set to NULL on failure.
+/// @return SONARE_OK; SONARE_ERROR_INVALID_PARAMETER for an out-of-range
+///   @p engine_mode; SONARE_ERROR_NOT_SUPPORTED in a build without arrangement
+///   support.
+SonareError sonare_synth_engine_param_info(int engine_mode, char** out_json);
 
 /// @brief Describes every numeric @ref SonareSynthPatch field and the
 ///        @c one_shot switch, one descriptor per field in the layout of
@@ -279,11 +280,12 @@ const char* sonare_synth_engine_param_info(int engine_mode);
 ///          accepted in (a value outside it, or a non-finite one, is refused
 ///          when the patch is applied), and `default` is the init patch's value, which a zero
 ///          left in the field keeps when no preset is named. Enum fields, the
-///          preset name and the mod matrix are not described here. Owned by
-///          libsonare in static storage and remains valid for the program
-///          lifetime; the caller must NOT free it. Returns NULL with SONARE_ERROR_NOT_SUPPORTED in
-///          a build without arrangement support.
-const char* sonare_synth_patch_param_info(void);
+///          preset name and the mod matrix are not described here.
+/// @param[out] out_json Receives the document; the caller releases it with
+///   @ref sonare_free_string. Set to NULL on failure.
+/// @return SONARE_OK, or SONARE_ERROR_NOT_SUPPORTED in a build without
+///   arrangement support.
+SonareError sonare_synth_patch_param_info(char** out_json);
 
 /// @brief Returns the GS rhythm-set name a rhythm part's @p program selects
 ///        ("Standard", "Room", "Jazz", ...), or NULL when the module's own

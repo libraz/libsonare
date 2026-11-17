@@ -12,6 +12,8 @@
 #include <utility>
 #include <vector>
 
+#include "support/c_strings.h"
+
 TEST_CASE("StaleResult is error code 11 with its own message", "[surface][core]") {
   STATIC_REQUIRE(SONARE_ERROR_STALE_RESULT == 11);
   const std::string message = sonare_error_message(SONARE_ERROR_STALE_RESULT);
@@ -24,7 +26,7 @@ namespace {
 // Reads the flat `"features":{"name":bool,...}` object out of the capabilities
 // document without a JSON library, so the case stays a pure C-ABI consumer.
 std::vector<std::pair<std::string, bool>> capability_features() {
-  const std::string json = sonare_capabilities_json();
+  const std::string json = sonare_test::c_string(sonare_capabilities_json);
   const std::string marker = "\"features\":{";
   const size_t begin = json.find(marker);
   REQUIRE(begin != std::string::npos);

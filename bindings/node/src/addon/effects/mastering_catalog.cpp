@@ -165,26 +165,25 @@ Napi::Value SonareWrap::MasteringInsertParamInfo(const Napi::CallbackInfo& info)
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  // sonare_mastering_insert_param_info(name) returns a thread-local JSON array
-  // string (NOT to be freed); "[]" for an unknown name. The TS facade parses it
-  // into the typed MasteringInsertParamInfo[]. A sample rate selects the _at_rate form.
+  // A JSON array ("[]" for an unknown name) the TS facade parses into the typed
+  // MasteringInsertParamInfo[]. A sample rate selects the _at_rate form.
   const std::string name = node_narrow_string(env, info[0], "name");
-  if (info[1].IsUndefined() || info[1].IsNull()) {
-    const char* json = sonare_mastering_insert_param_info(name.c_str());
-    if (json == nullptr) {
-      ThrowLastSonareError(env, "mastering insert param info: ");
-      return env.Undefined();
-    }
-    return Napi::String::New(env, json);
-  }
   int sample_rate = 0;
-  if (!RequiredIntArg(env, info, 1, "sampleRate", &sample_rate)) return env.Undefined();
-  const char* json = sonare_mastering_insert_param_info_at_rate(name.c_str(), sample_rate);
-  if (json == nullptr) {
-    ThrowLastSonareError(env, "mastering insert param info: ");
+  const bool at_rate = !(info[1].IsUndefined() || info[1].IsNull());
+  if (at_rate && !RequiredIntArg(env, info, 1, "sampleRate", &sample_rate)) {
     return env.Undefined();
   }
-  return Napi::String::New(env, json);
+  char* json = nullptr;
+  const SonareError err =
+      at_rate ? sonare_mastering_insert_param_info_at_rate(name.c_str(), sample_rate, &json)
+              : sonare_mastering_insert_param_info(name.c_str(), &json);
+  if (err != SONARE_OK) {
+    ThrowSonareError(env, err, "mastering insert param info: ");
+    return env.Undefined();
+  }
+  std::string out(json);
+  sonare_free_string(json);
+  return Napi::String::New(env, out);
   SONARE_NODE_CATCH(env)
 }
 
@@ -243,43 +242,47 @@ Napi::Value SonareWrap::MasteringEnumValue(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::MasteringProcessorCatalog(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  // sonare_mastering_processor_catalog() returns a program-lifetime JSON array
-  // string (NOT to be freed). The TS facade parses it into the typed
-  // MasteringProcessorCatalogEntry[].
-  const char* json = sonare_mastering_processor_catalog();
-  if (json == nullptr) {
-    ThrowLastSonareError(env, "mastering processor catalog: ", SONARE_ERROR_UNKNOWN);
+  // The TS facade parses the array into the typed MasteringProcessorCatalogEntry[].
+  char* json = nullptr;
+  const SonareError err = sonare_mastering_processor_catalog(&json);
+  if (err != SONARE_OK) {
+    ThrowSonareError(env, err, "mastering processor catalog: ");
     return env.Undefined();
   }
-  return Napi::String::New(env, json);
+  std::string out(json);
+  sonare_free_string(json);
+  return Napi::String::New(env, out);
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::MasteringAmpPresetCatalog(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  // sonare_mastering_amp_preset_catalog() returns a thread-local JSON array
-  // string (NOT to be freed). The TS facade parses it
-  // into the typed MasteringAmpPresetCatalogEntry[].
-  const char* json = sonare_mastering_amp_preset_catalog();
-  if (json == nullptr) {
-    ThrowLastSonareError(env, "mastering amp preset catalog: ", SONARE_ERROR_UNKNOWN);
+  // The TS facade parses the array into the typed MasteringAmpPresetCatalogEntry[].
+  char* json = nullptr;
+  const SonareError err = sonare_mastering_amp_preset_catalog(&json);
+  if (err != SONARE_OK) {
+    ThrowSonareError(env, err, "mastering amp preset catalog: ");
     return env.Undefined();
   }
-  return Napi::String::New(env, json);
+  std::string out(json);
+  sonare_free_string(json);
+  return Napi::String::New(env, out);
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::CapabilityCatalog(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  // The aggregate C API owns this program-lifetime JSON string; the TypeScript
-  // facade parses it so each language receives the same catalog shape.
-  const char* json = sonare_capability_catalog_json();
-  if (json == nullptr) {
-    sonare_node::ThrowLastSonareError(env, "capability catalog: ", SONARE_ERROR_NOT_SUPPORTED);
+  // The TypeScript facade parses the document so each language receives the same catalog shape.
+  char* json = nullptr;
+  const SonareError err = sonare_capability_catalog_json(&json);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err, "capability catalog: ");
     return env.Undefined();
   }
-  return Napi::String::New(env, json);
+  std::string out(json);
+  sonare_free_string(json);
+  return Napi::String::New(env, out);
   SONARE_NODE_CATCH(env)
 }

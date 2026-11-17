@@ -503,13 +503,13 @@ SonareError sonare_last_error_code(void);
 /// @brief One entry of the structured diagnostic channel. Caller-allocated: fill
 ///        it with @ref sonare_diagnostic_init before passing it to
 ///        @ref sonare_last_diagnostic.
-/// @details @c code and @c message are borrowed: owned by libsonare, never NULL,
-///   and valid until the next API call that records or clears a diagnostic on
-///   the same thread.
+/// @details @c code and @c message are borrowed: owned by the library, never
+///   NULL, never freed by the caller, and valid until the next API call that records or clears a
+///   diagnostic on the same thread.
 ///
 ///   The warning codes a call publishes are stable strings a caller may switch on:
 ///   | code                           | published by                                   |
-///   |--------------------------------|------------------------------------------------|
+///   |---|---|
 ///   | `mixing.unknown_scene_key`     | sonare_mixer_from_scene_json                   |
 ///   | `mixing.ignored_insert_param`  | sonare_mixer_from_scene_json                   |
 ///   | `mixing.undeclared_send`       | sonare_mixer_from_scene_json                   |
@@ -554,19 +554,14 @@ const char* sonare_version(void);
 /// @brief Returns SONARE_ENGINE_ABI_VERSION as compiled into the library.
 uint32_t sonare_engine_abi_version(void);
 
-/// @brief Returns a JSON document describing the capabilities of this build, or
-///        NULL when the document could not be assembled.
+/// @brief Builds a JSON document describing the capabilities of this build.
 /// @details The document contains the library version, project and engine ABI
 ///   versions, platform, enabled feature families, available decode backends,
-///   SIMD mode, and reported hardware concurrency. The pointer is owned by
-///   libsonare and must not be freed. Copy the JSON before making another C API
-///   call on the same thread.
-///   - The document is rebuilt into thread-local storage on every call, so an
-///     allocation failure returns NULL rather than a partial or stale document.
-///     Check the pointer before dereferencing it;
-///     sonare_last_error_message() then carries the reason.
-/// @return Pointer to a NUL-terminated JSON document, or NULL on failure.
-const char* sonare_capabilities_json(void);
+///   SIMD mode, and reported hardware concurrency.
+/// @param[out] out_json Receives a NUL-terminated UTF-8 document the caller
+///   releases with @ref sonare_free_string; set to NULL on failure.
+/// @return SONARE_OK, or an error code with the reason in the last error.
+SonareError sonare_capabilities_json(char** out_json);
 
 /// @brief Returns 1 when the named feature is compiled into this build, 0 otherwise.
 /// @details Reads the same table as the @c features object of

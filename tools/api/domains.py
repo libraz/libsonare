@@ -6,8 +6,9 @@ the file, the declaring file's basename, a short list of key patterns when the
 basename names no domain, the symbol key (AREAS) for files whose declarations
 span domains (then that file's basename), and finally ``core``. A vote over those per-surface domains gives each name one
 domain (most surfaces, ties C > wasm > node > python, an override pins it); the
-result is frozen in domains.json, which the checker applies by name. A releaser
-``free_<struct>`` then takes the domain of the struct it releases.
+result is frozen in domains.json, which the checker applies by name. A
+``<function>_result`` / ``_request`` / ``_options`` type then takes the domain of
+its function, and a releaser ``free_<struct>`` the domain of the struct it releases.
 Members (methods, fields, options, values, flags) inherit their owner's domain,
 except the direct members of a MEMBER_KEYED override class, which classify by
 their own name; the inventory applies inheritance.
@@ -83,6 +84,11 @@ OVERRIDES: dict[str, str] = {
     "init": "core",
     "isinitialized": "core",
     "masteringrepair*": "effects",
+    # The geometry a room estimate returns; no function carries its name.
+    "roomgeometryestimate": "effects",
+    # The generic AudioWorklet base every processor extends.
+    "workletprocessor": "engine",
+    "sonareworkletprocessor": "engine",
     "sonaremasteringrepair*": "effects",
     "version": "core",
     "mixer": "engine",
@@ -474,6 +480,11 @@ def vote(records: list[dict]) -> dict[str, dict]:
             "tie": tie,
             "pinned": bool(pinned),
         }
+    # A result, request or options type belongs where its function does.
+    for key, v in out.items():
+        function = re.sub(r"_(result|request|options)$", "", key)
+        if function != key and function in out and not v["pinned"]:
+            v["domain"] = out[function]["domain"]
     # A releaser belongs where the struct it releases does.
     for key, v in out.items():
         released = out.get(key[len("free_") :]) if key.startswith("free_") else None

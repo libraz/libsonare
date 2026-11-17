@@ -471,14 +471,13 @@ int cmd_version(const CliArgs& args) {
 }
 
 int cmd_doctor(const CliArgs& args) {
-  const char* capabilities_json = sonare_capabilities_json();
-  // NULL is the documented failure return, and the accessor sets the last-error
-  // message before taking it. Passing it straight to the parser would make an
-  // allocation failure read as undefined behaviour rather than as the loud
-  // failure the C ABI already reported.
+  char* raw_capabilities = nullptr;
+  const SonareError capabilities_err = sonare_capabilities_json(&raw_capabilities);
   SONARE_CHECK_MSG(
-      capabilities_json != nullptr, sonare::ErrorCode::OutOfMemory,
+      capabilities_err == SONARE_OK, sonare::ErrorCode::OutOfMemory,
       std::string("Failed to read native capabilities: ") + sonare_last_error_message());
+  const std::string capabilities_json(raw_capabilities);
+  sonare_free_string(raw_capabilities);
   const auto native_capabilities = sonare::util::json::parse_strict(capabilities_json);
   const auto& native_object = native_capabilities.as_object();
 

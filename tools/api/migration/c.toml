@@ -191,3 +191,75 @@ old = "sonare_audio_free"
 new = "sonare_audio_destroy"
 domain = "core"
 rule = "c-free"
+
+[[entry]]
+kind = "function"
+old = "sonare_capabilities_json"
+changed = "returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string"
+domain = "core"
+rule = "c-free"
+test = "tests/api/sonare_c_engine_contract_test.cpp::TEST_CASE(\"sonare_capabilities_json\""
+
+[[entry]]
+kind = "function"
+old = "sonare_capability_catalog_json"
+changed = "returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string"
+domain = "mastering"
+rule = "c-free"
+test = "tests/api/sonare_c_mastering_test.cpp::sonare_capability_catalog_json aggregates processors and presets"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_processor_catalog"
+changed = "returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string"
+domain = "mastering"
+rule = "c-free"
+test = "tests/api/sonare_c_mastering_test.cpp::mastering name getters keep independent stable storage"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_amp_preset_catalog"
+changed = "returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string"
+domain = "mastering"
+rule = "c-free"
+test = "tests/api/sonare_c_mastering_test.cpp::sonare_mastering_amp_preset_catalog reports each rig's resolved config"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_insert_param_info"
+changed = "returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string; a NULL name is refused instead of answering []"
+domain = "mastering"
+rule = "c-free"
+test = "tests/api/sonare_c_engine_strip_test.cpp::sonare_mastering_insert_param_info reports realtime param descriptors"
+
+[[entry]]
+kind = "function"
+old = "sonare_mastering_insert_param_info_at_rate"
+changed = "returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string; a NULL name is refused instead of answering []"
+domain = "mastering"
+rule = "c-free"
+test = "tests/mastering/insert_param_metadata_test.cpp::the rate-specific descriptor query refuses a rate outside the supported range"
+
+[[entry]]
+kind = "function"
+old = "sonare_synth_engine_param_info"
+changed = "returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string"
+domain = "engine"
+rule = "c-free"
+test = "tests/bindings/binding_synth_patch_test.cpp::synth engine param info lists exactly the walker's engine section"
+
+[[entry]]
+kind = "function"
+old = "sonare_synth_patch_param_info"
+changed = "returns SonareError and writes a caller-owned document through out_json, released with sonare_free_string"
+domain = "engine"
+rule = "c-free"
+test = "tests/bindings/binding_synth_patch_test.cpp::synth patch param info describes every numeric patch field"
+
+[[entry]]
+kind = "function"
+old = "sonare_hz_to_note"
+changed = "returns SonareError and writes a caller-owned name through out_string, released with sonare_free_string"
+domain = "analysis"
+rule = "c-error-path"
+test = "tests/api/sonare_c_features_metering_test.cpp::sonare_hz_to_note hands each name to the caller"

@@ -411,7 +411,7 @@ const char* sonare_mastering_pair_analysis_names(void);
 const char* sonare_mastering_stereo_analysis_names(void);
 
 /// @brief Machine-readable classification catalog for every named processor id.
-/// @return A JSON array string whose entries contain `id`, `kind`,
+/// @details A JSON array whose entries contain `id`, `kind`,
 ///   `realtimeInsertable`, `stereoOnly`, `latencySamples`, `tailSamples`,
 ///   `realtimeCost`,
 ///   `channelPolicy`, `category`, `causal`, `params` and `slots` (UTF-8). `causal` is
@@ -439,12 +439,9 @@ const char* sonare_mastering_stereo_analysis_names(void);
 ///   universe is the union of @ref sonare_mastering_processor_names, the insert
 ///   set, and @ref sonare_mastering_pair_processor_names, so realtime-only and
 ///   pair-only ids are still reported.
-/// @details Backed by thread-local storage filled on first use; the pointer is
-///          valid for the calling thread's lifetime and stays valid across later
-///          API calls on that thread. Do NOT cache it across threads or use it
-///          after the producing thread exits, and do NOT free it (mirrors
-///          @ref sonare_mastering_processor_names).
-const char* sonare_mastering_processor_catalog(void);
+/// @param[out] out_json Receives the document; the caller releases it with
+///   @ref sonare_free_string. Set to NULL on failure.
+SonareError sonare_mastering_processor_catalog(char** out_json);
 
 /// @brief Returns the built-in amp-sim rig catalog as a UTF-8 JSON array.
 /// @details One entry per rig, in `saturation.ampSim` `presetIndex` order:
@@ -452,22 +449,20 @@ const char* sonare_mastering_processor_catalog(void);
 ///   resolved starting values under the insert's camelCase keys (`drive`,
 ///   `bassDb`, `ampModel`, ...), with enum-valued keys as integer ordinals.
 ///   Read-only metadata for an editor positioning inherited controls; the DSP
-///   is still driven by `presetIndex` plus sparse overrides. Backed by
-///   thread-local storage with the same lifetime rules as
-///   @ref sonare_mastering_processor_catalog; do NOT free it. Returns NULL if
-///   the catalog cannot be built.
-const char* sonare_mastering_amp_preset_catalog(void);
+///   is still driven by `presetIndex` plus sparse overrides.
+/// @param[out] out_json Receives the document; the caller releases it with
+///   @ref sonare_free_string. Set to NULL on failure.
+SonareError sonare_mastering_amp_preset_catalog(char** out_json);
 
 /// @brief Returns the complete host-facing capability catalog as UTF-8 JSON.
 /// @details Aggregates the processor catalog (including existing parameter
 ///   descriptors) with the built-in mastering, synth, mixing-scene, and
 ///   realtime voice-changer preset name lists. `version` and `abi` use the same
 ///   values as @ref sonare_capabilities_json. Parameter metadata follows @ref
-///   sonare_mastering_insert_param_info. Built once per process on first
-///   success into static storage: never invalidated by a later call, readable
-///   from any thread, and never to be freed.
-///   Returns NULL if the catalog cannot be built.
-const char* sonare_capability_catalog_json(void);
+///   sonare_mastering_insert_param_info.
+/// @param[out] out_json Receives the document; the caller releases it with
+///   @ref sonare_free_string. Set to NULL on failure.
+SonareError sonare_capability_catalog_json(char** out_json);
 
 /// @brief Returns the channel-strip insert / FX processor names that
 ///        sonare_mixing scene inserts can build, separated by '\n'. Includes the
@@ -498,11 +493,11 @@ const char* sonare_mastering_insert_param_names(const char* name);
 
 /// @brief Parameter descriptors for an insert processor: every key its
 ///        construction reads, plus every realtime automation target.
-/// @return A JSON array string
+/// @details A JSON array
 ///   `[{"name","id","rtSafe","type","min","max","minExclusive","maxExclusive","maxRelativeTo","default","unit","uiMin","uiMax","scale","choices","slot","dependsOn","coupledWith"},
-///   ...]` (UTF-8). Returns `"[]"` for an unknown @p name. The returned pointer is a thread-local
-///   valid only until the next API call on the same thread; the caller must NOT free it.
-/// @details Entries come in two runs. The first lists the processor's realtime
+///   ...]` (UTF-8), `[]` for an unknown @p name.
+///
+///   Entries come in two runs. The first lists the processor's realtime
 ///   automation targets in id order: `id` is the integer used by @ref
 ///   sonare_engine_set_track_strip_insert_param_by_name (and the master variant),
 ///   and `rtSafe` says whether the param can be changed live from the audio
@@ -589,8 +584,11 @@ const char* sonare_mastering_insert_param_names(const char* name);
 ///   `min` and `max` are measured with them at their defaults. All of these describe
 ///   what construction accepts; the realtime parameter path clamps instead of
 ///   refusing.
-/// @param name Insert processor name (see @ref sonare_mastering_insert_names).
-const char* sonare_mastering_insert_param_info(const char* name);
+/// @param name Insert processor name (see @ref sonare_mastering_insert_names);
+///   NULL is refused with SONARE_ERROR_INVALID_PARAMETER.
+/// @param[out] out_json Receives the document; the caller releases it with
+///   @ref sonare_free_string. Set to NULL on failure.
+SonareError sonare_mastering_insert_param_info(const char* name, char** out_json);
 /// @brief @ref sonare_mastering_insert_param_info with the rate-following ceilings
 ///        resolved for one host rate.
 /// @details Identical to the rate-less query except that every key whose
@@ -601,15 +599,16 @@ const char* sonare_mastering_insert_param_info(const char* name);
 ///   an EQ band frequency reaches 48000 for a 96000 Hz host; the rate-less query
 ///   keeps the 24000 cap of the 48 kHz probe and does not depend on earlier
 ///   calls here.
-/// @param name Insert processor name (see @ref sonare_mastering_insert_names).
+/// @param name Insert processor name (see @ref sonare_mastering_insert_names);
+///   NULL is refused with SONARE_ERROR_INVALID_PARAMETER.
 /// @param sample_rate Host rate in Hz, within the range the other sample-rate
-///   arguments of this header accept.
-/// @return A JSON array string with the layout of @ref sonare_mastering_insert_param_info
-///   (`"[]"` for an unknown or null @p name; thread-local, valid until the next
-///   API call on the same thread, must NOT be freed), or NULL with
-///   SONARE_ERROR_INVALID_PARAMETER in the last error when @p sample_rate is out
-///   of range.
-const char* sonare_mastering_insert_param_info_at_rate(const char* name, int sample_rate);
+///   arguments of this header accept; outside it the call fails with
+///   SONARE_ERROR_INVALID_PARAMETER.
+/// @param[out] out_json Receives a document in the layout of
+///   @ref sonare_mastering_insert_param_info (`[]` for an unknown @p name); the
+///   caller releases it with @ref sonare_free_string. Set to NULL on failure.
+SonareError sonare_mastering_insert_param_info_at_rate(const char* name, int sample_rate,
+                                                       char** out_json);
 /// @brief Latency and tail of one insert built from @p params and prepared at
 ///        @p sample_rate.
 /// @details What a host needs for delay compensation of a slot whose

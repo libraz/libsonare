@@ -227,18 +227,22 @@ const char* sonare_mastering_insert_names(void) {
   SONARE_C_CATCH_RETURN(nullptr)
 }
 
-const char* sonare_mastering_processor_catalog(void) {
+SonareError sonare_mastering_processor_catalog(char** out_json) {
+  SONARE_C_API_ENTRY;
+  if (!begin_string_output(out_json)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  static thread_local const std::string catalog = sonare::mastering::api::processor_catalog_json();
-  return catalog.c_str();
-  SONARE_C_CATCH_RETURN(nullptr)
+  *out_json = copy_string(sonare::mastering::api::processor_catalog_json());
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
-const char* sonare_mastering_amp_preset_catalog(void) {
+SonareError sonare_mastering_amp_preset_catalog(char** out_json) {
+  SONARE_C_API_ENTRY;
+  if (!begin_string_output(out_json)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  static thread_local const std::string catalog = sonare::mastering::api::amp_preset_catalog_json();
-  return catalog.c_str();
-  SONARE_C_CATCH_RETURN(nullptr)
+  *out_json = copy_string(sonare::mastering::api::amp_preset_catalog_json());
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 namespace {
@@ -309,12 +313,15 @@ std::string build_capability_catalog_json() {
 
 }  // namespace
 
-const char* sonare_capability_catalog_json(void) {
+SonareError sonare_capability_catalog_json(char** out_json) {
+  SONARE_C_API_ENTRY;
+  if (!begin_string_output(out_json)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  // A pure function of the build, so one serialization serves every thread and call.
+  // A pure function of the build, so one serialization serves every call.
   static const std::string serialized = build_capability_catalog_json();
-  return serialized.c_str();
-  SONARE_C_CATCH_RETURN(nullptr)
+  *out_json = copy_string(serialized);
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 namespace sonare_c_mastering_detail {
@@ -436,38 +443,37 @@ const char* sonare_mastering_insert_param_names(const char* name) {
   SONARE_C_CATCH_RETURN(nullptr)
 }
 
-const char* sonare_mastering_insert_param_info(const char* name) {
-  SONARE_C_TRY
-  // Argument-dependent like sonare_mastering_insert_param_names: recompute into a
-  // thread-local each call (valid until the next call on the same thread).
-  static thread_local std::string info;
-  info.clear();
+SonareError sonare_mastering_insert_param_info(const char* name, char** out_json) {
+  SONARE_C_API_ENTRY;
+  if (!begin_string_output(out_json)) return SONARE_ERROR_INVALID_PARAMETER;
   if (name == nullptr) {
-    info = "[]";
-    return info.c_str();
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "name must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
-  info = sonare::mastering::api::insert_param_info_json(name);
-  return info.c_str();
-  SONARE_C_CATCH_RETURN(nullptr)
+  SONARE_C_TRY
+  *out_json = copy_string(sonare::mastering::api::insert_param_info_json(name));
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
-const char* sonare_mastering_insert_param_info_at_rate(const char* name, int sample_rate) {
+SonareError sonare_mastering_insert_param_info_at_rate(const char* name, int sample_rate,
+                                                       char** out_json) {
+  SONARE_C_API_ENTRY;
+  if (!begin_string_output(out_json)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (name == nullptr) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "name must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SONARE_C_TRY
-  // Same thread-local contract as sonare_mastering_insert_param_info.
-  static thread_local std::string info;
-  info.clear();
   if (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    ("sample_rate " + std::to_string(sample_rate) + " is out of range").c_str());
-    return nullptr;
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
-  if (name == nullptr) {
-    info = "[]";
-    return info.c_str();
-  }
-  info = sonare::mastering::api::insert_param_info_json_at_rate(name, sample_rate);
-  return info.c_str();
-  SONARE_C_CATCH_RETURN(nullptr)
+  *out_json =
+      copy_string(sonare::mastering::api::insert_param_info_json_at_rate(name, sample_rate));
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_mastering_insert_timing(const char* name, const char* params, int sample_rate,

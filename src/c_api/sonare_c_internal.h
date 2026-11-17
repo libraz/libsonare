@@ -199,6 +199,17 @@ inline bool begin_vector_output(T** out, size_t* out_length) {
   return true;
 }
 
+/// @brief Clears a caller-owned string out-parameter before any other exit, or
+///        records INVALID_PARAMETER when it is NULL.
+inline bool begin_string_output(char** out) {
+  if (out == nullptr) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "the output pointer must not be NULL");
+    return false;
+  }
+  *out = nullptr;
+  return true;
+}
+
 template <typename T>
 T* release_array(std::unique_ptr<T[]>& ptr) {
   return ptr.release();

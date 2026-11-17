@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "sonare_c_test_helpers.h"
+#include "support/c_strings.h"
 
 TEST_CASE("sonare_onset_strength", "[c_api]") {
   SECTION("returns a finite onset envelope") {
@@ -171,28 +172,25 @@ TEST_CASE("chroma C API defines the whole out-struct on rejected input", "[c_api
   }
 }
 
-TEST_CASE("sonare_hz_to_note honours its documented borrow contract", "[c_api]") {
-  // The header says the buffer is thread-local and overwritten IN PLACE by the
-  // next call on the same thread. Assert both halves, so the doc and the code
-  // cannot drift apart: a future change to caller-owned storage would return a
-  // different address and fail here rather than silently widen the contract.
-  const char* a4 = sonare_hz_to_note(440.0f);
-  REQUIRE(a4 != nullptr);
-  const std::string first(a4);
-  REQUIRE(first == "A4");
-
-  const char* c4 = sonare_hz_to_note(261.6256f);
-  REQUIRE(c4 != nullptr);
-  REQUIRE(c4 == a4);                  // same storage, not a fresh allocation
-  REQUIRE(std::string(c4) != first);  // and the earlier value is gone
-  REQUIRE(std::string(a4) == std::string(c4));
+TEST_CASE("sonare_hz_to_note hands each name to the caller", "[c_api]") {
+  // Each call allocates its own string, so an earlier result survives a later call.
+  char* a4 = nullptr;
+  char* c4 = nullptr;
+  REQUIRE(sonare_hz_to_note(440.0f, &a4) == SONARE_OK);
+  REQUIRE(sonare_hz_to_note(261.6256f, &c4) == SONARE_OK);
+  REQUIRE(a4 != c4);
+  REQUIRE(std::string(a4) == "A4");
+  REQUIRE(std::string(c4) == "C4");
+  sonare_free_string(a4);
+  sonare_free_string(c4);
+  REQUIRE(sonare_hz_to_note(440.0f, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
 TEST_CASE("sonare_hz_to_note / sonare_note_to_hz report a refused argument", "[c_api]") {
   const float nan = std::numeric_limits<float>::quiet_NaN();
 
   for (float bad : {0.0f, -1.0f, nan, std::numeric_limits<float>::infinity()}) {
-    REQUIRE(sonare_hz_to_note(bad) == nullptr);
+    REQUIRE(sonare_test::c_string_error(sonare_hz_to_note, bad) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
   }
 
@@ -207,7 +205,7 @@ TEST_CASE("sonare_hz_to_note / sonare_note_to_hz report a refused argument", "[c
   // A valid call clears the failure it follows.
   REQUIRE(sonare_note_to_hz("A4") == Catch::Approx(440.0f).margin(0.01f));
   REQUIRE(sonare_last_error_code() == SONARE_OK);
-  REQUIRE(std::string(sonare_hz_to_note(440.0f)) == "A4");
+  REQUIRE(sonare_test::c_string(sonare_hz_to_note, 440.0f) == "A4");
 }
 
 TEST_CASE("frame/time conversions return a sentinel instead of throwing on invalid rate or hop",

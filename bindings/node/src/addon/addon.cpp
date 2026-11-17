@@ -614,12 +614,15 @@ Napi::Value SynthEngineParamInfo(const Napi::CallbackInfo& info) {
                                    "synth engine mode", &mode)) {
     return env.Undefined();
   }
-  const char* json = sonare_synth_engine_param_info(mode);
-  if (json == nullptr) {
-    sonare_node::ThrowLastSonareError(env, "synth engine param info: ");
+  char* json = nullptr;
+  const SonareError err = sonare_synth_engine_param_info(mode, &json);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err, "synth engine param info: ");
     return env.Undefined();
   }
-  return Napi::String::New(env, json);
+  std::string out(json);
+  sonare_free_string(json);
+  return Napi::String::New(env, out);
   SONARE_NODE_CATCH(env)
 }
 
@@ -627,12 +630,15 @@ Napi::Value SynthEngineParamInfo(const Napi::CallbackInfo& info) {
 Napi::Value SynthPatchParamInfo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  const char* json = sonare_synth_patch_param_info();
-  if (json == nullptr) {
-    sonare_node::ThrowLastSonareError(env, "synth patch param info: ");
+  char* json = nullptr;
+  const SonareError err = sonare_synth_patch_param_info(&json);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err, "synth patch param info: ");
     return env.Undefined();
   }
-  return Napi::String::New(env, json);
+  std::string out(json);
+  sonare_free_string(json);
+  return Napi::String::New(env, out);
   SONARE_NODE_CATCH(env)
 }
 

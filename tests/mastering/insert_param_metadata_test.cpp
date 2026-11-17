@@ -34,6 +34,7 @@
 #include "mastering/saturation/tape.h"
 #include "mastering/stereo/imager.h"
 #include "rt/processor_base.h"
+#include "support/c_strings.h"
 #include "support/depends_on_probe.h"
 #include "support/schema_paths.h"
 #include "util/constants.h"
@@ -598,17 +599,17 @@ TEST_CASE("a rate-specific descriptor publishes the ceiling accepted at that rat
 
 TEST_CASE("the rate-specific descriptor query refuses a rate outside the supported range",
           "[mastering][catalog]") {
-  CHECK(sonare_mastering_insert_param_info_at_rate("eq.parametric", 0) == nullptr);
-  CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(sonare_mastering_insert_param_info_at_rate("eq.parametric", -48000) == nullptr);
-  CHECK(sonare_mastering_insert_param_info_at_rate("eq.parametric", 100000000) == nullptr);
+  for (int rate : {0, -48000, 100000000}) {
+    CAPTURE(rate);
+    CHECK(sonare_test::c_string_error(sonare_mastering_insert_param_info_at_rate, "eq.parametric",
+                                      rate) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+  }
 
-  const char* at_rate = sonare_mastering_insert_param_info_at_rate("eq.parametric", 44100);
-  REQUIRE(at_rate != nullptr);
-  CHECK(std::string(at_rate) == insert_param_info_json_at_rate("eq.parametric", 44100.0));
-  const char* unknown = sonare_mastering_insert_param_info_at_rate("no.such.insert", 44100);
-  REQUIRE(unknown != nullptr);
-  CHECK(std::string(unknown) == "[]");
+  CHECK(sonare_test::c_string(sonare_mastering_insert_param_info_at_rate, "eq.parametric", 44100) ==
+        insert_param_info_json_at_rate("eq.parametric", 44100.0));
+  CHECK(sonare_test::c_string(sonare_mastering_insert_param_info_at_rate, "no.such.insert",
+                              44100) == "[]");
 }
 
 TEST_CASE("published defaults come from the config struct's own initializers",

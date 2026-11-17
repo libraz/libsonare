@@ -17,6 +17,7 @@
 #include "mastering/saturation/amp_presets.h"
 #include "sonare_c_test_helpers.h"
 #include "support/alloc_guard.h"
+#include "support/c_strings.h"
 #include "support/schema_paths.h"
 #include "util/db.h"
 #include "util/json.h"
@@ -945,24 +946,20 @@ TEST_CASE("sonare_mastering name getters return a stable pointer across calls",
   REQUIRE(sonare_mastering_pair_analysis_names() == sonare_mastering_pair_analysis_names());
   REQUIRE(sonare_mastering_stereo_analysis_names() == sonare_mastering_stereo_analysis_names());
   REQUIRE(sonare_mastering_insert_names() == sonare_mastering_insert_names());
-  REQUIRE(sonare_mastering_processor_catalog() == sonare_mastering_processor_catalog());
   REQUIRE(sonare_mastering_preset_names() == sonare_mastering_preset_names());
   const char* presets = sonare_mastering_preset_names();
   REQUIRE(presets != nullptr);
   REQUIRE(std::strlen(presets) > 0);
-  const char* catalog = sonare_mastering_processor_catalog();
-  REQUIRE(catalog != nullptr);
-  REQUIRE(std::strstr(catalog, "\"latencySamples\":") != nullptr);
-  REQUIRE(std::strstr(catalog, "\"tailSamples\":") != nullptr);
-  REQUIRE(std::strstr(catalog, "\"realtimeCost\":") != nullptr);
+  const std::string catalog = sonare_test::c_string(sonare_mastering_processor_catalog);
+  REQUIRE(catalog.find("\"latencySamples\":") != std::string::npos);
+  REQUIRE(catalog.find("\"tailSamples\":") != std::string::npos);
+  REQUIRE(catalog.find("\"realtimeCost\":") != std::string::npos);
 }
 
 TEST_CASE("sonare_mastering_amp_preset_catalog reports each rig's resolved config",
           "[c_api][mastering]") {
   namespace sat = sonare::mastering::saturation;
-  const char* raw = sonare_mastering_amp_preset_catalog();
-  REQUIRE(raw != nullptr);
-  REQUIRE(raw == sonare_mastering_amp_preset_catalog());
+  const std::string raw = sonare_test::c_string(sonare_mastering_amp_preset_catalog);
   const auto catalog = sonare::util::json::parse_strict(raw);
   const auto names = sat::amp_preset_names();
   REQUIRE(catalog.as_array().size() == names.size());
@@ -984,8 +981,7 @@ TEST_CASE("sonare_mastering_amp_preset_catalog reports each rig's resolved confi
 
 TEST_CASE("sonare_capability_catalog_json aggregates processors and presets",
           "[c_api][mastering]") {
-  const char* json = sonare_capability_catalog_json();
-  REQUIRE(json != nullptr);
+  const std::string json = sonare_test::c_string(sonare_capability_catalog_json);
   const auto catalog = sonare::util::json::parse_strict(json);
 
   REQUIRE(catalog["version"].as_string() == sonare_version());
@@ -1016,8 +1012,7 @@ TEST_CASE("sonare_capability_catalog_json aggregates processors and presets",
 }
 
 TEST_CASE("sonare_capability_catalog_json exposes masteringPresets", "[c_api][mastering]") {
-  const char* json = sonare_capability_catalog_json();
-  REQUIRE(json != nullptr);
+  const std::string json = sonare_test::c_string(sonare_capability_catalog_json);
   const auto catalog = sonare::util::json::parse_strict(json);
   REQUIRE(catalog["masteringPresets"].is_array());
   const auto& entries = catalog["masteringPresets"].as_array();
@@ -1071,8 +1066,7 @@ TEST_CASE("sonare_mastering_preset_params_json returns each preset's chain confi
 
 TEST_CASE("the capability catalog schema list matches what the writer emits",
           "[c_api][mastering]") {
-  const char* json = sonare_capability_catalog_json();
-  REQUIRE(json != nullptr);
+  const std::string json = sonare_test::c_string(sonare_capability_catalog_json);
   const auto actual = sonare::test::schema_paths_of(json);
   const auto& expected_paths = sonare_c_mastering_detail::capability_catalog_schema_paths();
   const std::set<std::string> expected(expected_paths.begin(), expected_paths.end());
@@ -1095,7 +1089,8 @@ TEST_CASE("the capability catalog schema list matches what the writer emits",
 TEST_CASE("the capability catalog's chain aliases name what the chain parser folds together",
           "[c_api][mastering]") {
   namespace api = sonare::mastering::api;
-  const auto catalog = sonare::util::json::parse_strict(sonare_capability_catalog_json());
+  const auto catalog =
+      sonare::util::json::parse_strict(sonare_test::c_string(sonare_capability_catalog_json));
   const auto& chain = catalog["chain"];
   const auto& aliases = chain["aliases"].as_array();
   REQUIRE(aliases.size() > 30);
@@ -1158,7 +1153,8 @@ TEST_CASE("the capability catalog's chain aliases name what the chain parser fol
 
 TEST_CASE("the capability catalog's chain-only params are measured through the chain",
           "[c_api][mastering]") {
-  const auto catalog = sonare::util::json::parse_strict(sonare_capability_catalog_json());
+  const auto catalog =
+      sonare::util::json::parse_strict(sonare_test::c_string(sonare_capability_catalog_json));
   const auto& chain = catalog["chain"];
   const auto find = [&](const std::string& name) -> const sonare::util::json::Value& {
     for (const auto& param : chain["params"].as_array()) {
@@ -1262,7 +1258,8 @@ TEST_CASE("sonare_mastering_insert_timing answers for the configured instance",
   CHECK(default_latency < latency);
 
   // At defaults and 48 kHz it is the catalog's own figure, for every insert.
-  const auto catalog = sonare::util::json::parse_strict(sonare_mastering_processor_catalog());
+  const auto catalog =
+      sonare::util::json::parse_strict(sonare_test::c_string(sonare_mastering_processor_catalog));
   int compared = 0;
   for (const auto& entry : catalog.as_array()) {
     if (!entry["realtimeInsertable"].as_bool()) continue;
@@ -1760,8 +1757,7 @@ TEST_CASE("sonare_eq_set_band refuses a band that would design non-finite taps",
   sonare_eq_destroy(eq);
 }
 
-TEST_CASE("mastering name and catalog getters keep independent stable storage",
-          "[c_api][mastering]") {
+TEST_CASE("mastering name getters keep independent stable storage", "[c_api][mastering]") {
   const std::array<const char* (*)(), 7> getters = {
       sonare_mastering_processor_names,     sonare_mastering_pair_processor_names,
       sonare_mastering_pair_analysis_names, sonare_mastering_stereo_analysis_names,
@@ -1776,24 +1772,19 @@ TEST_CASE("mastering name and catalog getters keep independent stable storage",
     REQUIRE(pointers[i] != nullptr);
     contents[i] = pointers[i];
   }
-  const char* processor_catalog = sonare_mastering_processor_catalog();
-  REQUIRE(processor_catalog != nullptr);
-  const std::string processor_contents = processor_catalog;
-  const char* amp_preset_catalog = sonare_mastering_amp_preset_catalog();
-  REQUIRE(amp_preset_catalog != nullptr);
-  const std::string amp_preset_contents = amp_preset_catalog;
+  // A catalog call in between hands out its own string and leaves the names in place.
+  const std::string processor_catalog = sonare_test::c_string(sonare_mastering_processor_catalog);
+  const std::string amp_preset_catalog = sonare_test::c_string(sonare_mastering_amp_preset_catalog);
 
   for (size_t i = 0; i < getters.size(); ++i) {
     REQUIRE(getters[i]() == pointers[i]);
   }
-  REQUIRE(sonare_mastering_processor_catalog() == processor_catalog);
-  REQUIRE(sonare_mastering_amp_preset_catalog() == amp_preset_catalog);
+  REQUIRE(sonare_test::c_string(sonare_mastering_processor_catalog) == processor_catalog);
+  REQUIRE(sonare_test::c_string(sonare_mastering_amp_preset_catalog) == amp_preset_catalog);
 
   for (size_t i = 0; i < getters.size(); ++i) {
     REQUIRE(pointers[i] == contents[i]);
   }
-  REQUIRE(processor_catalog == processor_contents);
-  REQUIRE(amp_preset_catalog == amp_preset_contents);
 }
 
 TEST_CASE("an unrealizable dynamic EQ gain never reaches the audio as NaN",

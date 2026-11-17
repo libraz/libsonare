@@ -27,6 +27,7 @@ from ._ffi import (
 from ._narrowing import _narrow_double
 from ._runtime import (
     SonareValueError,
+    _call_string,
     _check,
     _float_array_result,
     _get_lib,
@@ -339,27 +340,21 @@ def mastering_insert_param_info(
     prepared at that rate (an EQ band frequency reaches 48000 for a 96000 Hz
     host). Without it the rate-less answer is returned, with the 24000 cap of
     the 48 kHz probe. A rate outside the supported range raises.
-
-    The native layer returns a thread-local JSON array string the caller must
-    NOT free (same convention as the other mastering getters).
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_insert_param_info"):
         raise _not_supported("libsonare was built without mastering support")
     if sample_rate is None:
-        raw = lib.sonare_mastering_insert_param_info(_utf8_arg(name, "name"))
+        raw = _call_string(lib.sonare_mastering_insert_param_info, _utf8_arg(name, "name"))
     else:
         if not hasattr(lib, "sonare_mastering_insert_param_info_at_rate"):
             raise _not_supported("libsonare was built without mastering support")
-        raw = lib.sonare_mastering_insert_param_info_at_rate(
-            _utf8_arg(name, "name"), _to_c_int(sample_rate, "sample_rate")
+        raw = _call_string(
+            lib.sonare_mastering_insert_param_info_at_rate,
+            _utf8_arg(name, "name"),
+            _to_c_int(sample_rate, "sample_rate"),
         )
-    if raw is None:
-        raise _last_error(int(ErrorCode.INVALID_PARAMETER), "mastering insert param info failed")
-    if not raw:
-        return []
-    parsed = json.loads(raw.decode("utf-8"))
-    return cast("list[MasteringInsertParamInfo]", parsed)
+    return cast("list[MasteringInsertParamInfo]", json.loads(raw))
 
 
 def mastering_insert_timing(
@@ -422,20 +417,12 @@ def mastering_processor_catalog() -> list[MasteringProcessorCatalogEntry]:
     otherwise realtime-capable processor as ``"realtime"``, and the remainder
     as ``"offline"``. Returns an empty list when the build lacks mastering
     support.
-
-    The native layer returns a program-lifetime JSON array string the caller
-    must NOT free (same convention as the other mastering getters).
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_processor_catalog"):
         return []
-    raw = lib.sonare_mastering_processor_catalog()
-    if raw is None:
-        raise _last_error(int(ErrorCode.UNKNOWN), "failed to read the mastering processor catalog")
-    if not raw:
-        return []
-    parsed = json.loads(raw.decode("utf-8"))
-    return cast("list[MasteringProcessorCatalogEntry]", parsed)
+    raw = _call_string(lib.sonare_mastering_processor_catalog)
+    return cast("list[MasteringProcessorCatalogEntry]", json.loads(raw))
 
 
 def mastering_amp_preset_catalog() -> list[MasteringAmpPresetCatalogEntry]:
@@ -445,22 +432,13 @@ def mastering_amp_preset_catalog() -> list[MasteringAmpPresetCatalogEntry]:
     with ``index``, ``name``, and ``params`` (the rig's resolved starting
     values under the insert's camelCase keys, e.g. ``drive``, ``bassDb``,
     ``ampModel``, with enum-valued keys as integer ordinals). Returns an
-    empty list when the build lacks mastering support or the catalog cannot
-    be built.
-
-    The native layer returns a program-lifetime JSON array string the caller
-    must NOT free (same convention as :func:`mastering_processor_catalog`).
+    empty list when the build lacks mastering support.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_amp_preset_catalog"):
         return []
-    raw = lib.sonare_mastering_amp_preset_catalog()
-    if raw is None:
-        raise _last_error(int(ErrorCode.UNKNOWN), "failed to read the mastering amp preset catalog")
-    if not raw:
-        return []
-    parsed = json.loads(raw.decode("utf-8"))
-    return cast("list[MasteringAmpPresetCatalogEntry]", parsed)
+    raw = _call_string(lib.sonare_mastering_amp_preset_catalog)
+    return cast("list[MasteringAmpPresetCatalogEntry]", json.loads(raw))
 
 
 def capability_catalog() -> CapabilityCatalog:
@@ -472,12 +450,7 @@ def capability_catalog() -> CapabilityCatalog:
     lib = _get_lib()
     if not hasattr(lib, "sonare_capability_catalog_json"):
         raise _not_supported("libsonare was built without capability catalog support")
-    raw = lib.sonare_capability_catalog_json()
-    if not raw:
-        raise _last_error(
-            int(ErrorCode.NOT_SUPPORTED), "native capability catalog JSON is unavailable"
-        )
-    return cast("CapabilityCatalog", json.loads(raw.decode("utf-8")))
+    return cast("CapabilityCatalog", json.loads(_call_string(lib.sonare_capability_catalog_json)))
 
 
 @_guard_buffer("samples")

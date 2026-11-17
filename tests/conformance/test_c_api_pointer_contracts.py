@@ -37,12 +37,12 @@ SPEC.loader.exec_module(CHECKER)
 
 HEADER_DIR = ROOT / "include" / "sonare"
 
-# The declaration the non-vacuity break strips: a library-owned thread-local
-# string whose doc states both what invalidates it and that NULL is possible.
-BREAK_HEADER = "sonare_c_features.h"
-BREAK_DECLARATION = "sonare_hz_to_note"
-BREAK_FIRST_LINE = "///   Thread-local storage"
-BREAK_LAST_MARKER = "never free it."
+# The declaration the non-vacuity break strips: a library-owned static string
+# whose details paragraph alone states what invalidates it and whether NULL is possible.
+BREAK_HEADER = "sonare_c_types_functions.h"
+BREAK_DECLARATION = "sonare_error_message"
+BREAK_FIRST_LINE = "/// @details A string literal with static storage duration"
+BREAK_LAST_MARKER = "overwritten."
 
 # Floors, not targets.  Raise only alongside a real widening of the scan.
 MIN_DECLARATIONS = 600
@@ -199,7 +199,9 @@ class ClassificationTest(unittest.TestCase):
             "                         float** out,\n"
             "                         size_t* out_count);\n"
         )
-        self.assertEqual([f.subkinds for f in report.findings], [[CHECKER.SUBKIND_POINTER_TO_POINTER]])
+        self.assertEqual(
+            [f.subkinds for f in report.findings], [[CHECKER.SUBKIND_POINTER_TO_POINTER]]
+        )
 
 
 class TreeTest(unittest.TestCase):
@@ -219,7 +221,7 @@ class TreeTest(unittest.TestCase):
         named = [f for f in self.report.findings if f.name == BREAK_DECLARATION]
         self.assertEqual(named, [], "the calibration declaration must start clean")
 
-    def test_stripping_one_lifetime_sentence_names_exactly_that_declaration(self) -> None:
+    def test_stripping_one_lifetime_paragraph_names_exactly_that_declaration(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             copy = Path(tmp) / "sonare"
             shutil.copytree(HEADER_DIR, copy)
@@ -239,7 +241,7 @@ class TreeTest(unittest.TestCase):
                 (
                     CHECKER.CLASS_OWNED_RETURN,
                     BREAK_DECLARATION,
-                    "what invalidates the returned pointer",
+                    "what invalidates the returned pointer and whether NULL is possible",
                 )
             ],
         )

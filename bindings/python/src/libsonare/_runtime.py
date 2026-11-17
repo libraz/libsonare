@@ -106,6 +106,20 @@ def _check(rc: int) -> None:
         raise _generic_error(rc)
 
 
+def _call_string(fn: Callable[..., int], *args: Any) -> str:
+    """Call a C producer of a caller-owned string, raise on failure, and take the string.
+
+    ``fn`` receives ``args`` followed by the ``char**`` output; the string is
+    released with ``sonare_free_string`` once decoded.
+    """
+    out = ctypes.c_char_p()
+    _check(fn(*args, ctypes.byref(out)))
+    try:
+        return ctypes.string_at(out).decode("utf-8")
+    finally:
+        _get_lib().sonare_free_string(out)
+
+
 def _last_error(default_code: int, fallback_message: str) -> SonareError:
     """Build the thread-local error left by a C call that returned a null handle.
 

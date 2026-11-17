@@ -19,6 +19,7 @@
 
 #include "binding_project_parity_test_helpers.h"
 #include "c_api/synth_patch_common.h"
+#include "support/c_strings.h"
 #include "support/midi_render.h"
 #include "util/constants.h"
 #include "util/json.h"
@@ -135,8 +136,7 @@ std::string public_key_of(const std::string& path) {
   return key;
 }
 
-sonare::util::json::Value parse_info(const char* info) {
-  REQUIRE(info != nullptr);
+sonare::util::json::Value parse_info(const std::string& info) {
   const sonare::util::json::Value parsed = sonare::util::json::parse(info);
   REQUIRE(parsed.is_array());
   return parsed;
@@ -349,8 +349,8 @@ TEST_CASE("synth patch engine params are refused through the C ABI with the key 
   size_t out_len = 0;
 
   // bowForce: a bounded number of the bowed-string section.
-  const sonare::util::json::Value bowed =
-      parse_info(sonare_synth_engine_param_info(SONARE_SYNTH_ENGINE_BOWED_STRING));
+  const sonare::util::json::Value bowed = parse_info(
+      sonare_test::c_string(sonare_synth_engine_param_info, SONARE_SYNTH_ENGINE_BOWED_STRING));
   const sonare::util::json::Value* bow_force = nullptr;
   for (const auto& d : bowed.as_array()) {
     if (d["name"].as_string() == "bowForce") bow_force = &d;
@@ -364,7 +364,8 @@ TEST_CASE("synth patch engine params are refused through the C ABI with the key 
   int integer_mode = -1;
   std::string integer_key;
   for (int mode = 1; mode < SONARE_SYNTH_ENGINE_MODE_COUNT && integer_mode < 0; ++mode) {
-    const sonare::util::json::Value info = parse_info(sonare_synth_engine_param_info(mode));
+    const sonare::util::json::Value info =
+        parse_info(sonare_test::c_string(sonare_synth_engine_param_info, mode));
     for (const auto& d : info.as_array()) {
       if (d.contains("integer")) {
         integer_mode = mode;
@@ -435,8 +436,8 @@ TEST_CASE("an engine param reaches the render", "[project][synth_patch]") {
   REQUIRE(peak_of(reference) > 0.0f);
   // The middle of bowForce's range, which the violin does not sit on.
   double mid = 0.0;
-  const sonare::util::json::Value bowed =
-      parse_info(sonare_synth_engine_param_info(SONARE_SYNTH_ENGINE_BOWED_STRING));
+  const sonare::util::json::Value bowed = parse_info(
+      sonare_test::c_string(sonare_synth_engine_param_info, SONARE_SYNTH_ENGINE_BOWED_STRING));
   for (const auto& d : bowed.as_array()) {
     if (d["name"].as_string() == "bowForce") {
       mid = 0.5 * (d["min"].as_number() + d["max"].as_number());
@@ -453,8 +454,8 @@ TEST_CASE("an engine param reaches the render", "[project][synth_patch]") {
 
 TEST_CASE("the Karplus-Strong second plane's detune is a key in cents that reaches the render",
           "[project][synth_patch]") {
-  const sonare::util::json::Value info =
-      parse_info(sonare_synth_engine_param_info(SONARE_SYNTH_ENGINE_KARPLUS_STRONG));
+  const sonare::util::json::Value info = parse_info(
+      sonare_test::c_string(sonare_synth_engine_param_info, SONARE_SYNTH_ENGINE_KARPLUS_STRONG));
   bool listed = false;
   for (const auto& d : info.as_array()) {
     if (d["name"].as_string() != "polDetuneCents") continue;
@@ -485,8 +486,8 @@ TEST_CASE("the Karplus-Strong second plane's detune is a key in cents that reach
 
 TEST_CASE("the subtractive section is set by key and reaches the render",
           "[project][synth_patch]") {
-  const sonare::util::json::Value info =
-      parse_info(sonare_synth_engine_param_info(SONARE_SYNTH_ENGINE_SUBTRACTIVE));
+  const sonare::util::json::Value info = parse_info(
+      sonare_test::c_string(sonare_synth_engine_param_info, SONARE_SYNTH_ENGINE_SUBTRACTIVE));
   std::set<std::string> names;
   const std::set<std::string> levels{"osc2Level", "noiseLevel", "noiseAm", "bandNoiseLevel"};
   for (const auto& d : info.as_array()) {
@@ -535,7 +536,8 @@ TEST_CASE("synth engine param info lists exactly the walker's engine section",
           "[project][synth_patch]") {
   for (int mode = 0; mode < SONARE_SYNTH_ENGINE_MODE_COUNT; ++mode) {
     CAPTURE(mode);
-    const sonare::util::json::Value info = parse_info(sonare_synth_engine_param_info(mode));
+    const sonare::util::json::Value info =
+        parse_info(sonare_test::c_string(sonare_synth_engine_param_info, mode));
     std::set<std::string> names;
     for (const auto& d : info.as_array()) {
       require_descriptor_shape(d);
@@ -559,12 +561,12 @@ TEST_CASE("synth engine param info lists exactly the walker's engine section",
   }
   // Exactly these two have no section of their own.
   for (int mode : {SONARE_SYNTH_ENGINE_DEFAULT, SONARE_SYNTH_ENGINE_SAMPLE}) {
-    REQUIRE(std::string(sonare_synth_engine_param_info(mode)) == "[]");
+    REQUIRE(sonare_test::c_string(sonare_synth_engine_param_info, mode) == "[]");
   }
   for (int mode : {-1, SONARE_SYNTH_ENGINE_MODE_COUNT}) {
     CAPTURE(mode);
-    REQUIRE(sonare_synth_engine_param_info(mode) == nullptr);
-    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_test::c_string_error(sonare_synth_engine_param_info, mode) ==
+            SONARE_ERROR_INVALID_PARAMETER);
   }
 }
 
@@ -587,13 +589,15 @@ TEST_CASE("synth engine param gates name a key of their scope with a value it ca
       {"waveform", vocabulary(SONARE_SYNTH_ENUM_OSC_WAVEFORM)}};
   REQUIRE(enum_fields.at("body").count("violin") == 1);
   REQUIRE(enum_fields.at("waveform").count("square") == 1);
-  const sonare::util::json::Value patch_info = parse_info(sonare_synth_patch_param_info());
+  const sonare::util::json::Value patch_info =
+      parse_info(sonare_test::c_string(sonare_synth_patch_param_info));
 
   size_t conditions = 0;
   size_t patch_conditions = 0;
   for (int mode = 0; mode < SONARE_SYNTH_ENGINE_MODE_COUNT; ++mode) {
     CAPTURE(mode);
-    const sonare::util::json::Value info = parse_info(sonare_synth_engine_param_info(mode));
+    const sonare::util::json::Value info =
+        parse_info(sonare_test::c_string(sonare_synth_engine_param_info, mode));
     const auto named = [](const sonare::util::json::Value& table, const std::string& key) {
       const sonare::util::json::Value* found = nullptr;
       for (const auto& d : table.as_array()) {
@@ -642,7 +646,8 @@ TEST_CASE("synth engine param gates name a key of their scope with a value it ca
   REQUIRE(patch_conditions > 0);
 
   // The indexed threshold reads the slot's own index, and the emitted order is the table's.
-  const std::string percussion = sonare_synth_engine_param_info(SONARE_SYNTH_ENGINE_PERCUSSION);
+  const std::string percussion =
+      sonare_test::c_string(sonare_synth_engine_param_info, SONARE_SYNTH_ENGINE_PERCUSSION);
   const size_t at = percussion.find("{\"name\":\"modeRatios6\"");
   REQUIRE(at != std::string::npos);
   const std::string row = percussion.substr(at, percussion.find("]]}", at) + 3 - at);
@@ -674,7 +679,8 @@ TEST_CASE("synth patch param info describes every numeric patch field", "[projec
                                         "sampleHoldHz",    "bitDepth",          "pitchOffsetCents",
                                         "driftRateHz",     "ampDelayMs",        "ampHoldMs",
                                         "filterDelayMs",   "filterHoldMs",      "oneShot"};
-  const sonare::util::json::Value info = parse_info(sonare_synth_patch_param_info());
+  const sonare::util::json::Value info =
+      parse_info(sonare_test::c_string(sonare_synth_patch_param_info));
   std::set<std::string> names;
   const auto ends_with = [](const std::string& name, const std::string& suffix) {
     return name.size() > suffix.size() &&
@@ -837,7 +843,8 @@ bool convert_with_field(const BoundedPatchField& f, float value, const char** er
 
 TEST_CASE("synth patch conversion refuses each bounded field at the range the info publishes",
           "[project][synth_patch]") {
-  const sonare::util::json::Value info = parse_info(sonare_synth_patch_param_info());
+  const sonare::util::json::Value info =
+      parse_info(sonare_test::c_string(sonare_synth_patch_param_info));
   const auto published = [&](const std::string& name) -> const sonare::util::json::Value* {
     for (const auto& d : info.as_array()) {
       if (d["name"].as_string() == name) return &d;
@@ -947,7 +954,8 @@ TEST_CASE("synth patch conversion refuses out-of-range values rather than clampi
   REQUIRE(cfg.polyphony == 1);
 
   // A sample patch accepts the published ends of its level and start offset.
-  const sonare::util::json::Value info = parse_info(sonare_synth_patch_param_info());
+  const sonare::util::json::Value info =
+      parse_info(sonare_test::c_string(sonare_synth_patch_param_info));
   for (const auto& d : info.as_array()) {
     const std::string& name = d["name"].as_string();
     if (name != "sampleLevel" && name != "sampleStartOffset") continue;

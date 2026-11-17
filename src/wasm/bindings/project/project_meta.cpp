@@ -514,18 +514,26 @@ unsigned js_key_mode_from_analysis(const val& mode_val) {
 
 // The C ABI's descriptor JSON for an engine's section / the wrapper fields; the
 // facade parses it. A refusal (out-of-range mode) carries the C message.
+// Copies a library-allocated string out and releases it.
+std::string takeCString(char* value) {
+  std::string out(value);
+  sonare_free_string(value);
+  return out;
+}
+
 std::string js_synth_engine_param_info(const val& engine_mode) {
-  const char* json = sonare_synth_engine_param_info(checkedIntFromVal(engine_mode, "engineMode"));
-  if (json == nullptr)
-    throwLastCError("failed to describe engine: ", SONARE_ERROR_INVALID_PARAMETER);
-  return json;
+  char* json = nullptr;
+  const SonareError err =
+      sonare_synth_engine_param_info(checkedIntFromVal(engine_mode, "engineMode"), &json);
+  if (err != SONARE_OK) throwCError(err, "failed to describe engine");
+  return takeCString(json);
 }
 
 std::string js_synth_patch_param_info() {
-  const char* json = sonare_synth_patch_param_info();
-  if (json == nullptr)
-    throwLastCError("failed to describe synth patch: ", SONARE_ERROR_NOT_SUPPORTED);
-  return json;
+  char* json = nullptr;
+  const SonareError err = sonare_synth_patch_param_info(&json);
+  if (err != SONARE_OK) throwCError(err, "failed to describe synth patch");
+  return takeCString(json);
 }
 
 }  // namespace

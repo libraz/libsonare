@@ -19,6 +19,7 @@ from ._runtime import (
     SonareError,
     SonareValueError,
     _call_float_transform,
+    _call_string,
     _check,
     _float_array_result,
     _from_c_float_array,
@@ -86,10 +87,7 @@ def hz_to_note(hz: float) -> str:
         SonareValueError: If ``hz`` is not finite and positive.
     """
     lib = _get_lib()
-    result: bytes | None = lib.sonare_hz_to_note(_to_c_float(hz, "hz"))
-    if not result:
-        raise _refused_argument(f"hz has no note name: {hz!r}")
-    return result.decode("utf-8")
+    return _call_string(lib.sonare_hz_to_note, _to_c_float(hz, "hz"))
 
 
 def note_to_hz(note: str) -> float:

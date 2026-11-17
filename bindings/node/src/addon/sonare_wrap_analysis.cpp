@@ -1169,11 +1169,14 @@ Napi::Value SonareWrap::AbiVersion(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::Capabilities(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  const char* json = sonare_capabilities_json();
-  if (json == nullptr) {
-    sonare_node::ThrowLastSonareError(env, "capabilities: ", SONARE_ERROR_NOT_SUPPORTED);
+  char* raw = nullptr;
+  const SonareError err = sonare_capabilities_json(&raw);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err, "capabilities: ");
     return env.Undefined();
   }
+  const std::string json(raw);
+  sonare_free_string(raw);
 
   Napi::Object json_global = env.Global().Get("JSON").As<Napi::Object>();
   Napi::Function json_parse = json_global.Get("parse").As<Napi::Function>();

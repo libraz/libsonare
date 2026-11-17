@@ -589,13 +589,13 @@ float sonare_hz_to_midi(float hz) { return hz_to_midi(hz); }
 
 float sonare_midi_to_hz(float midi) { return midi_to_hz(midi); }
 
-const char* sonare_hz_to_note(float hz) {
+SonareError sonare_hz_to_note(float hz, char** out_string) {
+  SONARE_C_API_ENTRY;
+  if (!begin_string_output(out_string)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  static thread_local char buf[16];
-  std::string note = hz_to_note(hz);
-  copy_text(buf, sizeof(buf), note.c_str());
-  return buf;
-  SONARE_C_CATCH_RETURN(nullptr)
+  *out_string = copy_string(hz_to_note(hz));
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 float sonare_note_to_hz(const char* note) {

@@ -468,11 +468,18 @@ def validate_catalog(catalog: Any) -> dict[str, Any]:
 def render_catalog(library_path: Path) -> str:
     library = ctypes.CDLL(str(library_path))
     function = library.sonare_capability_catalog_json
-    function.argtypes = []
-    function.restype = ctypes.c_char_p
-    raw = function()
-    if raw is None:
-        raise RuntimeError("sonare_capability_catalog_json returned null")
+    function.argtypes = [ctypes.POINTER(ctypes.c_char_p)]
+    function.restype = ctypes.c_int32
+    library.sonare_free_string.argtypes = [ctypes.c_char_p]
+    library.sonare_free_string.restype = None
+    out = ctypes.c_char_p()
+    code = function(ctypes.byref(out))
+    if code != 0:
+        raise RuntimeError(f"sonare_capability_catalog_json failed with code {code}")
+    try:
+        raw = ctypes.string_at(out)
+    finally:
+        library.sonare_free_string(out)
     catalog = validate_catalog(json.loads(raw.decode("utf-8")))
     return json.dumps(catalog, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
 

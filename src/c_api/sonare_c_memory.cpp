@@ -287,13 +287,14 @@ static_assert(SONARE_ENGINE_ABI_VERSION == sonare::rt::kEngineAbiVersion,
 
 uint32_t sonare_engine_abi_version(void) { return SONARE_ENGINE_ABI_VERSION; }
 
-const char* sonare_capabilities_json(void) {
+SonareError sonare_capabilities_json(char** out_json) {
+  SONARE_C_API_ENTRY;
+  if (!begin_string_output(out_json)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  thread_local std::string capabilities;
-  capabilities = "{\"version\":\"" SONARE_VERSION_STRING "\",\"abi\":{\"project\":" +
-                 std::to_string(SONARE_PROJECT_ABI_VERSION) +
-                 ",\"engine\":" + std::to_string(sonare::rt::kEngineAbiVersion) +
-                 "},\"platform\":\"" + capability_platform() + "\",\"features\":{";
+  std::string capabilities = "{\"version\":\"" SONARE_VERSION_STRING "\",\"abi\":{\"project\":" +
+                             std::to_string(SONARE_PROJECT_ABI_VERSION) +
+                             ",\"engine\":" + std::to_string(sonare::rt::kEngineAbiVersion) +
+                             "},\"platform\":\"" + capability_platform() + "\",\"features\":{";
   bool first = true;
   for (const CapabilityFeature& feature : kCapabilityFeatures) {
     if (!first) capabilities += ',';
@@ -313,8 +314,9 @@ const char* sonare_capabilities_json(void) {
   const unsigned int concurrency = std::thread::hardware_concurrency();
   capabilities += std::to_string(concurrency == 0 ? 1 : concurrency);
   capabilities += '}';
-  return capabilities.c_str();
-  SONARE_C_CATCH_RETURN(nullptr)
+  *out_json = copy_string(capabilities);
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 int sonare_has_feature(const char* name) {

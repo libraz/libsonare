@@ -6,6 +6,7 @@
 #include "midi/synth/sf2_player.h"
 #include "sonare_c_engine_test_helpers.h"
 #include "support/alloc_guard.h"
+#include "support/c_strings.h"
 
 TEST_CASE("sonare_error_message", "[c_api]") {
   SECTION("returns messages for all error codes") {
@@ -37,8 +38,7 @@ TEST_CASE("sonare_version", "[c_api]") {
 }
 
 TEST_CASE("sonare_capabilities_json", "[c_api]") {
-  const char* json = sonare_capabilities_json();
-  REQUIRE(json != nullptr);
+  const std::string json = sonare_test::c_string(sonare_capabilities_json);
 
   const auto capabilities = sonare::util::json::parse_strict(json);
   REQUIRE(capabilities["version"].as_string() == sonare_version());

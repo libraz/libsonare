@@ -13,7 +13,7 @@ import numpy as np
 if TYPE_CHECKING:
     from ._types_capabilities import SynthParamInfo
 
-from ._errors import ErrorCode, _not_supported
+from ._errors import _not_supported
 from ._ffi_types_mastering_project import (
     SONARE_SYNTH_FIELD2_AMP_DELAY_MS,
     SONARE_SYNTH_FIELD2_AMP_HOLD_MS,
@@ -95,10 +95,10 @@ from ._runtime import (
     SonareSynthModRouting,
     SonareSynthPatch,
     SonareValueError,
+    _call_string,
     _check,
     _get_lib,
     _joined_names,
-    _last_error,
     _resolve_enum,
     _to_c_int,
     _utf8_arg,
@@ -708,10 +708,8 @@ def synth_preset_names() -> list[str]:
     return _joined_names(lib.sonare_synth_preset_names(), "synth preset names")
 
 
-def _synth_param_info(raw: bytes | None, what: str) -> list[SynthParamInfo]:
-    if raw is None:
-        raise _last_error(int(ErrorCode.INVALID_PARAMETER), what)
-    return cast("list[SynthParamInfo]", json.loads(raw.decode("utf-8")))
+def _synth_param_info(raw: str) -> list[SynthParamInfo]:
+    return cast("list[SynthParamInfo]", json.loads(raw))
 
 
 def synth_engine_param_info(engine_mode: str | int) -> list[SynthParamInfo]:
@@ -730,8 +728,7 @@ def synth_engine_param_info(engine_mode: str | int) -> list[SynthParamInfo]:
         raise _not_supported("libsonare was built without the NativeSynth ABI")
     mode = _synth_enum_value(engine_mode, _SYNTH_ENGINE_MODES, "engine mode")
     return _synth_param_info(
-        lib.sonare_synth_engine_param_info(_to_c_int(mode, "engine_mode")),
-        "synth engine param info",
+        _call_string(lib.sonare_synth_engine_param_info, _to_c_int(mode, "engine_mode"))
     )
 
 
@@ -747,7 +744,7 @@ def synth_patch_param_info() -> list[SynthParamInfo]:
     lib = _get_lib()
     if not hasattr(lib, "sonare_synth_patch_param_info"):
         raise _not_supported("libsonare was built without the NativeSynth ABI")
-    return _synth_param_info(lib.sonare_synth_patch_param_info(), "synth patch param info")
+    return _synth_param_info(_call_string(lib.sonare_synth_patch_param_info))
 
 
 def synth_gs_drum_kit_name(program: int) -> str | None:

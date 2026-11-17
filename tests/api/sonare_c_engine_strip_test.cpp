@@ -3,6 +3,7 @@
 
 #include "sonare_c_engine_test_helpers.h"
 #include "support/alloc_guard.h"
+#include "support/c_strings.h"
 
 #if defined(SONARE_WITH_MIXING)
 TEST_CASE("sonare_engine bounce scatters a strip's surround pan into a 5.1 master end-to-end",
@@ -2124,11 +2125,13 @@ TEST_CASE(
 #if defined(SONARE_WITH_MASTERING)
 TEST_CASE("sonare_mastering_insert_param_info reports realtime param descriptors",
           "[c_api][mastering]") {
-  // Unknown processor / null name yield an empty JSON array.
-  REQUIRE(std::string(sonare_mastering_insert_param_info("nope.nope")) == "[]");
-  REQUIRE(std::string(sonare_mastering_insert_param_info(nullptr)) == "[]");
+  // An unknown processor yields an empty JSON array; a null name is refused.
+  REQUIRE(sonare_test::c_string(sonare_mastering_insert_param_info, "nope.nope") == "[]");
+  REQUIRE(sonare_test::c_string_error(sonare_mastering_insert_param_info, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
 
-  const std::string fdn = sonare_mastering_insert_param_info("effects.reverb.fdn");
+  const std::string fdn =
+      sonare_test::c_string(sonare_mastering_insert_param_info, "effects.reverb.fdn");
   if (fdn == "[]") {
     SKIP("FX processors not built; realtime reverb descriptors unavailable");
   }
@@ -2138,7 +2141,8 @@ TEST_CASE("sonare_mastering_insert_param_info reports realtime param descriptors
 
   // Dattorro publishes a non-realtime-safe parameter (modDepthSamples, id 4,
   // which grows allpass buffers); the descriptor must flag it accordingly.
-  const std::string dat = sonare_mastering_insert_param_info("effects.reverb.dattorro");
+  const std::string dat =
+      sonare_test::c_string(sonare_mastering_insert_param_info, "effects.reverb.dattorro");
   REQUIRE(dat.find("\"name\":\"modDepthSamples\"") != std::string::npos);
   REQUIRE(dat.find("\"unit\":\"samples\"") != std::string::npos);
   REQUIRE(dat.find("\"rtSafe\":false") != std::string::npos);
@@ -2148,7 +2152,7 @@ TEST_CASE("sonare_mastering_insert_param_info reports realtime param descriptors
 TEST_CASE("sonare_engine_set_track_strip_insert_param_by_name changes reverb mix in realtime",
           "[c_api][engine]") {
 #if defined(SONARE_WITH_MASTERING)
-  if (std::string(sonare_mastering_insert_param_info("effects.reverb.fdn")) == "[]") {
+  if (sonare_test::c_string(sonare_mastering_insert_param_info, "effects.reverb.fdn") == "[]") {
     SKIP("FX processors not built");
   }
 #else
