@@ -272,7 +272,7 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
 
     # Each mono repair result is released by its own function, which frees the
     # samples and empties the struct.
-    for _name, _result in (
+    for _name, _mono_result in (
         ("declick", SonareDeclickResult),
         ("declip", SonareDeclipResult),
         ("decrackle", SonareDecrackleResult),
@@ -285,7 +285,7 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
         if _free is None:
             continue
         _free.restype = None
-        _free.argtypes = [ctypes.POINTER(_result)]
+        _free.argtypes = [ctypes.POINTER(_mono_result)]
 
     # Each stereo repair result is released by its own function, which frees
     # both channels and empties the struct.

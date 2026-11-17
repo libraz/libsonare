@@ -181,21 +181,21 @@ def _channels(feed: np.ndarray) -> int:
 
 def _denoise(feed: np.ndarray, sample_rate: int, params: dict) -> np.ndarray:
     return np.asarray(
-        libsonare.mastering_repair_denoise_classical(_f32(feed), sample_rate, **params),
+        libsonare.mastering_repair_denoise_classical(_f32(feed), sample_rate, **params).samples,
         dtype=np.float64,
     )
 
 
 def _declick(feed: np.ndarray, sample_rate: int, params: dict) -> np.ndarray:
     return np.asarray(
-        libsonare.mastering_repair_declick(_f32(feed), sample_rate, **params),
+        libsonare.mastering_repair_declick(_f32(feed), sample_rate, **params).samples,
         dtype=np.float64,
     )
 
 
 def _dereverb(feed: np.ndarray, sample_rate: int, params: dict) -> np.ndarray:
     return np.asarray(
-        libsonare.mastering_repair_dereverb_classical(_f32(feed), sample_rate, **params),
+        libsonare.mastering_repair_dereverb_classical(_f32(feed), sample_rate, **params).samples,
         dtype=np.float64,
     )
 
