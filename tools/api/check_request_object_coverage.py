@@ -118,7 +118,7 @@ METADATA_HELPERS = {
     "mixSourceClassFromName",
     "realtimeVoiceChangerPresetNames",
     "realtimeVoiceChangerPresetJson",
-    "validateRealtimeVoiceChangerPresetJson",
+    "realtimeVoiceChangerValidatePresetJson",
     "voiceCharacterPresetId",
     "realtimeVoiceChangerPresetConfig",
 }
