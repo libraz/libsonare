@@ -3479,6 +3479,38 @@ rule = "tempo-range"
 test = "bindings/python/tests/test_surface_analysis.py::test_tempo_search_range_is_keyword_only_and_validated"
 
 [[entry]]
+kind = "option"
+old = "Audio.detect_bpm(bpm_min)"
+changed = "keyword-only tempo search bound, default 60-200 BPM (1.x searched 30-300); an inverted range raises SonareValueError"
+domain = "core"
+rule = "tempo-range"
+test = "bindings/python/tests/test_surface_analysis.py::test_audio_tempo_search_range_matches_the_free_function"
+
+[[entry]]
+kind = "option"
+old = "Audio.detect_bpm(bpm_max)"
+changed = "keyword-only tempo search bound, default 60-200 BPM (1.x searched 30-300); an inverted range raises SonareValueError"
+domain = "core"
+rule = "tempo-range"
+test = "bindings/python/tests/test_surface_analysis.py::test_audio_tempo_search_range_matches_the_free_function"
+
+[[entry]]
+kind = "option"
+old = "Audio.detect_beats(bpm_min)"
+changed = "keyword-only tempo search bound, default 60-200 BPM (1.x searched 30-300); an inverted range raises SonareValueError"
+domain = "core"
+rule = "tempo-range"
+test = "bindings/python/tests/test_surface_analysis.py::test_audio_tempo_search_range_matches_the_free_function"
+
+[[entry]]
+kind = "option"
+old = "Audio.detect_beats(bpm_max)"
+changed = "keyword-only tempo search bound, default 60-200 BPM (1.x searched 30-300); an inverted range raises SonareValueError"
+domain = "core"
+rule = "tempo-range"
+test = "bindings/python/tests/test_surface_analysis.py::test_audio_tempo_search_range_matches_the_free_function"
+
+[[entry]]
 kind = "field"
 old = "StreamConfig.tuning_ref_hz"
 new = "StreamConfig.reference_hz"

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from ._analysis_detection import _DEFAULT_BPM_MAX, _DEFAULT_BPM_MIN
 from ._effects_repair_common import _linked_channel_planes
 from ._errors import SonareValueError, _not_supported, _require_open, _unknown_error
 from ._ffi_types_core import SonareDownmixOptions
@@ -551,20 +552,30 @@ class Audio:
         """
         return float(self._lib.sonare_audio_duration_sec(self._require_handle()))
 
-    def detect_bpm(self) -> float:
+    def detect_bpm(self, *, bpm_min: float | None = None, bpm_max: float | None = None) -> float:
         """Detect BPM (tempo).
 
         Each ``detect_*`` call runs its own analysis; nothing is cached, so
         four calls run the pipeline four times.
+
+        Args:
+            bpm_min: Lower bound of the tempo search in BPM (default 60).
+            bpm_max: Upper bound of the tempo search in BPM (default 200).
 
         Returns:
             Estimated tempo in beats per minute. For confidence and time
             signature, use :func:`libsonare.analyze` instead.
 
         Raises:
+            SonareValueError: If the range is non-finite, non-positive or inverted.
             RuntimeError: If the audio has been closed.
         """
-        return self._audio_float("sonare_audio_detect_bpm", self._require_handle())
+        return self._audio_float(
+            "sonare_audio_detect_bpm",
+            self._require_handle(),
+            _to_c_float(_DEFAULT_BPM_MIN if bpm_min is None else bpm_min, "bpm_min"),
+            _to_c_float(_DEFAULT_BPM_MAX if bpm_max is None else bpm_max, "bpm_max"),
+        )
 
     def detect_key(
         self,
@@ -625,11 +636,17 @@ class Audio:
             tuning_cents=tuning_cents,
         )
 
-    def detect_beats(self) -> np.ndarray:
+    def detect_beats(
+        self, *, bpm_min: float | None = None, bpm_max: float | None = None
+    ) -> np.ndarray:
         """Detect beat times in seconds.
 
         Each ``detect_*`` call runs its own analysis; nothing is cached, so
         four calls run the pipeline four times.
+
+        Args:
+            bpm_min: Lower bound of the tempo search in BPM (default 60).
+            bpm_max: Upper bound of the tempo search in BPM (default 200).
 
         Returns:
             A float32 array of beat times in seconds. For the beat-level accent evidence
@@ -643,7 +660,11 @@ class Audio:
         handle = self._require_handle()
         with _out_float_array(self._lib) as (out_times, out_count):
             rc = self._lib.sonare_audio_detect_beats(
-                handle, ctypes.byref(out_times), ctypes.byref(out_count)
+                handle,
+                _to_c_float(_DEFAULT_BPM_MIN if bpm_min is None else bpm_min, "bpm_min"),
+                _to_c_float(_DEFAULT_BPM_MAX if bpm_max is None else bpm_max, "bpm_max"),
+                ctypes.byref(out_times),
+                ctypes.byref(out_count),
             )
             _check(rc)
             return _from_c_float_array(out_times, out_count.value)

@@ -730,6 +730,26 @@ def test_tempo_search_range_is_keyword_only_and_validated(name: str) -> None:
         function(samples, SR, bpm_min=-1.0)
 
 
+@pytest.mark.parametrize("name", ["detect_bpm", "detect_beats"])
+def test_audio_tempo_search_range_matches_the_free_function(name: str) -> None:
+    samples = _signal()
+    audio = libsonare.Audio.from_buffer(samples, SR)
+    method = getattr(audio, name)
+    parameters = inspect.signature(method).parameters
+    for bound in ("bpm_min", "bpm_max"):
+        assert parameters[bound].kind is inspect.Parameter.KEYWORD_ONLY
+        assert parameters[bound].default is None
+    np.testing.assert_allclose(method(), getattr(libsonare, name)(samples, SR))
+    np.testing.assert_allclose(
+        method(bpm_min=80.0, bpm_max=180.0),
+        getattr(libsonare, name)(samples, SR, bpm_min=80.0, bpm_max=180.0),
+    )
+    with pytest.raises(SonareValueError):
+        method(bpm_min=180.0, bpm_max=80.0)
+    with pytest.raises(SonareValueError):
+        method(bpm_min=-1.0)
+
+
 def test_reattack_ratio_none_is_no_split_and_zero_is_refused() -> None:
     samples = _signal()
     libsonare.transcribe(samples, SR, polyphonic=True, tempo_bpm=120.0, reattack_ratio=None)
