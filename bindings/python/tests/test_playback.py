@@ -38,7 +38,7 @@ def _sine(count: int, hz: float = 220.0) -> list[float]:
 
 
 def test_capabilities_report_playback() -> None:
-    assert capabilities()["features"]["playback"] is True
+    assert capabilities().features.playback is True
 
 
 class _LibWithoutPlayback:

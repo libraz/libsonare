@@ -614,12 +614,12 @@ def test_empty_bounce_with_builtin_instrument_is_empty() -> None:
 # --- Audio buffer default sample rate ---------------------------------------
 
 
-def test_audio_from_buffer_default_sample_rate_is_48000() -> None:
-    """Audio.from_buffer defaults sample_rate to 48000 when omitted."""
+def test_audio_from_buffer_requires_the_sample_rate() -> None:
+    """Audio.from_buffer takes the buffer's rate as a required argument."""
     from libsonare import Audio
 
-    audio = Audio.from_buffer([0.0] * 1000)
-    assert audio.sample_rate == 48000
+    with pytest.raises(TypeError):
+        Audio.from_buffer([0.0] * 1000)  # type: ignore[call-arg]
 
     explicit = Audio.from_buffer([0.0] * 1000, sample_rate=16000)
     assert explicit.sample_rate == 16000

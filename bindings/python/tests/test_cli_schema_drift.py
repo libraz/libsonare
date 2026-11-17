@@ -179,7 +179,7 @@ def test_mastering_processor_json_marks_stereo_only_processor(monkeypatch, capsy
     monkeypatch.setattr(
         libsonare,
         "mastering_processor_catalog",
-        lambda: [{"id": "stereo.imager", "stereoOnly": True}],
+        lambda: [SimpleNamespace(id="stereo.imager", stereo_only=True)],
     )
     monkeypatch.setattr(
         libsonare,

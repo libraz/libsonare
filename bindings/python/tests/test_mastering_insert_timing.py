@@ -16,15 +16,15 @@ def test_soft_clipper_param_info_publishes_the_aliasing_enum() -> None:
     import libsonare
 
     params = {
-        param["name"]: param
+        param.name: param
         for param in libsonare.mastering_insert_param_info("saturation.softClipper")
     }
     aliasing = params["aliasing"]
-    assert aliasing["type"] == "enum"
-    assert aliasing["id"] is None
-    assert aliasing["rtSafe"] is False
-    assert aliasing["choices"] is not None
-    assert {"name": "oversample4x", "value": 3} in aliasing["choices"]
+    assert aliasing.type == "enum"
+    assert aliasing.id is None
+    assert aliasing.rt_safe is False
+    assert aliasing.choices is not None
+    assert libsonare.MasteringInsertParamChoice(name="oversample4x", value=3) in aliasing.choices
     assert "ceiling" in params
 
 
@@ -33,36 +33,35 @@ def test_param_info_flags_exclusive_bounds_and_nyquist_ceilings() -> None:
     import libsonare
 
     compressor = {
-        param["name"]: param
-        for param in libsonare.mastering_insert_param_info("dynamics.compressor")
+        param.name: param for param in libsonare.mastering_insert_param_info("dynamics.compressor")
     }
     hpf = compressor["sidechainHpfHz"]
-    assert hpf["min"] == 0
-    assert isinstance(hpf["minExclusive"], bool)
-    assert hpf["minExclusive"] is True
-    assert hpf["maxExclusive"] is False
-    assert hpf["maxRelativeTo"] is None
-    eq = {param["name"]: param for param in libsonare.mastering_insert_param_info("eq.parametric")}
-    assert eq["band0.frequencyHz"]["maxRelativeTo"] == "nyquist"
+    assert hpf.min == 0
+    assert isinstance(hpf.min_exclusive, bool)
+    assert hpf.min_exclusive is True
+    assert hpf.max_exclusive is False
+    assert hpf.max_relative_to is None
+    eq = {param.name: param for param in libsonare.mastering_insert_param_info("eq.parametric")}
+    assert eq["band0.frequencyHz"].max_relative_to == "nyquist"
 
 
 def test_param_info_sample_rate_resolves_the_nyquist_ceiling() -> None:
     """A host rate changes an EQ frequency ceiling and leaves a non-rate key alone."""
     import libsonare
 
-    def frequency(rate: int | None) -> dict:
+    def frequency(rate: int | None) -> libsonare.MasteringInsertParamInfo:
         info = libsonare.mastering_insert_param_info("eq.parametric", sample_rate=rate)
-        return {param["name"]: param for param in info}["band0.frequencyHz"]
+        return {param.name: param for param in info}["band0.frequencyHz"]
 
-    assert frequency(None)["max"] == 24000
-    assert frequency(44100)["max"] == 22050
-    assert frequency(44100)["maxExclusive"] is True
+    assert frequency(None).max == 24000
+    assert frequency(44100).max == 22050
+    assert frequency(44100).max_exclusive is True
     # An insert built for a known rate reaches that rate's Nyquist frequency.
-    assert frequency(96000)["max"] == 48000
+    assert frequency(96000).max == 48000
 
-    def ratio(rate: int | None) -> dict:
+    def ratio(rate: int | None) -> libsonare.MasteringInsertParamInfo:
         info = libsonare.mastering_insert_param_info("dynamics.compressor", sample_rate=rate)
-        return {param["name"]: param for param in info}["ratio"]
+        return {param.name: param for param in info}["ratio"]
 
     assert ratio(44100) == ratio(None)
     with pytest.raises(libsonare.SonareError):
@@ -74,8 +73,8 @@ def test_insert_timing_reports_positive_latency_for_oversampling() -> None:
     import libsonare
 
     timing = libsonare.mastering_insert_timing("saturation.softClipper", {"aliasing": 3}, 48000)
-    assert timing["latencySamples"] > 0
-    assert timing["tailSamples"] >= 0
+    assert timing.latency_samples > 0
+    assert timing.tail_samples >= 0
 
 
 def test_insert_timing_at_defaults_matches_the_capability_catalog() -> None:
@@ -85,12 +84,10 @@ def test_insert_timing_at_defaults_matches_the_capability_catalog() -> None:
     timing = libsonare.mastering_insert_timing("saturation.softClipper", {}, 48000)
     catalog = libsonare.capability_catalog()
     entry = next(
-        processor
-        for processor in catalog["processors"]
-        if processor["id"] == "saturation.softClipper"
+        processor for processor in catalog.processors if processor.id == "saturation.softClipper"
     )
-    assert timing["latencySamples"] == entry["latencySamples"]
-    assert timing["tailSamples"] == entry["tailSamples"]
+    assert timing.latency_samples == entry.latency_samples
+    assert timing.tail_samples == entry.tail_samples
 
 
 def test_insert_timing_rejects_an_unknown_key() -> None:
@@ -126,14 +123,14 @@ def test_insert_timing_accepts_boolean_values() -> None:
     import libsonare
 
     params = {
-        param["name"]: param
+        param.name: param
         for param in libsonare.mastering_insert_param_info("dynamics.parallelComp")
     }
-    assert params["linkedDetection"]["type"] == "boolean"
+    assert params["linkedDetection"].type == "boolean"
     timing = libsonare.mastering_insert_timing(
         "dynamics.parallelComp", {"linkedDetection": True}, 48000
     )
-    assert math.isfinite(timing["latencySamples"])
+    assert math.isfinite(timing.latency_samples)
 
 
 def test_causal_repair_stages_reach_the_generic_insert_path() -> None:
@@ -141,7 +138,7 @@ def test_causal_repair_stages_reach_the_generic_insert_path() -> None:
     import libsonare
 
     def latency(name: str, params: dict[str, float | bool]) -> int:
-        return int(libsonare.mastering_insert_timing(name, params, 48000)["latencySamples"])
+        return int(libsonare.mastering_insert_timing(name, params, 48000).latency_samples)
 
     assert latency("repair.decrackle", {}) == 1
     assert latency("repair.dehum", {}) == 0
@@ -150,20 +147,16 @@ def test_causal_repair_stages_reach_the_generic_insert_path() -> None:
     # n_fft - 1 plus the hop the gain smoothing lags by.
     assert latency("repair.denoiseClassical", {}) == 1279
 
-    mode = {p["name"]: p for p in libsonare.mastering_insert_param_info("repair.decrackle")}["mode"]
-    assert [choice["name"] for choice in mode["choices"] or []] == ["median"]
+    mode = {p.name: p for p in libsonare.mastering_insert_param_info("repair.decrackle")}["mode"]
+    assert [choice.name for choice in mode.choices or []] == ["median"]
     with pytest.raises(libsonare.SonareValueError) as excinfo:
         libsonare.mastering_insert_timing("repair.dereverbClassical", {"wpeEnabled": True}, 48000)
     assert excinfo.value.code == libsonare.ErrorCode.INVALID_PARAMETER
     # The quantile estimator (0) ranks a whole signal; the insert defaults to spp.
     with pytest.raises(libsonare.SonareError):
         libsonare.mastering_insert_timing("repair.denoiseClassical", {"noiseEstimator": 0}, 48000)
-    params = {
-        p["name"]: p for p in libsonare.mastering_insert_param_info("repair.denoiseClassical")
-    }
-    assert "quantile" not in [
-        choice["name"] for choice in params["noiseEstimator"]["choices"] or []
-    ]
+    params = {p.name: p for p in libsonare.mastering_insert_param_info("repair.denoiseClassical")}
+    assert "quantile" not in [choice.name for choice in params["noiseEstimator"].choices or []]
 
 
 def _scene_timing(processor: str, params: dict) -> tuple[int, int]:
@@ -188,7 +181,7 @@ def _timing_pair(processor: str, params: dict) -> tuple[int, int]:
     import libsonare
 
     timing = libsonare.mastering_insert_timing(processor, params, 48000)
-    return timing["latencySamples"], timing["tailSamples"]
+    return timing.latency_samples, timing.tail_samples
 
 
 def test_insert_timing_matches_the_constructed_insert_for_an_array_key() -> None:

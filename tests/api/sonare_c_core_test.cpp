@@ -273,8 +273,8 @@ TEST_CASE("sonare_decode_channels returns every source channel the core decoder 
     // Folding the decoded planes lands on the samples the mono decoder returns.
     const auto [mono_samples, mono_rate] = sonare::load_buffer(wav.data(), wav.size());
     float* folded = nullptr;
-    REQUIRE(sonare_downmix(planar, frames, out_channels, SONARE_CHANNEL_LAYOUT_MONO, &folded) ==
-            SONARE_OK);
+    REQUIRE(sonare_downmix(planar, frames, static_cast<size_t>(out_channels),
+                           SONARE_CHANNEL_LAYOUT_MONO, nullptr, &folded) == SONARE_OK);
     REQUIRE(mono_samples.size() == frames);
     for (size_t frame = 0; frame < frames; ++frame) {
       REQUIRE(folded[frame] == mono_samples[frame]);
@@ -327,8 +327,8 @@ TEST_CASE("sonare_downmix applies the BS.775 coefficients", "[c_api][audio_io]")
   }
 
   float* stereo = nullptr;
-  REQUIRE(sonare_downmix(surround.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_STEREO, &stereo) ==
-          SONARE_OK);
+  REQUIRE(sonare_downmix(surround.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_STEREO, nullptr,
+                         &stereo) == SONARE_OK);
   const float left = 0.10f + kInvSqrt2 * 0.30f + kInvSqrt2 * 0.05f;
   const float right = 0.20f + kInvSqrt2 * 0.30f + kInvSqrt2 * 0.15f;
   for (size_t frame = 0; frame < kFrames; ++frame) {
@@ -338,7 +338,7 @@ TEST_CASE("sonare_downmix applies the BS.775 coefficients", "[c_api][audio_io]")
   sonare_free_floats(stereo);
 
   float* mono = nullptr;
-  REQUIRE(sonare_downmix(surround.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_MONO, &mono) ==
+  REQUIRE(sonare_downmix(surround.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_MONO, nullptr, &mono) ==
           SONARE_OK);
   for (size_t frame = 0; frame < kFrames; ++frame) {
     REQUIRE(mono[frame] == Catch::Approx(0.5f * (left + right)).margin(1e-6));
@@ -347,18 +347,18 @@ TEST_CASE("sonare_downmix applies the BS.775 coefficients", "[c_api][audio_io]")
 
   // Stereo to mono is the plain average, and 5.1 to 5.1 is a copy.
   const float pair[4] = {0.5f, 0.5f, -0.25f, 0.75f};
-  REQUIRE(sonare_downmix(pair, 2, 2, SONARE_CHANNEL_LAYOUT_MONO, &mono) == SONARE_OK);
+  REQUIRE(sonare_downmix(pair, 2, 2, SONARE_CHANNEL_LAYOUT_MONO, nullptr, &mono) == SONARE_OK);
   REQUIRE(mono[0] == Catch::Approx(0.125f).margin(1e-7));
   REQUIRE(mono[1] == Catch::Approx(0.625f).margin(1e-7));
   sonare_free_floats(mono);
   float* copy = nullptr;
-  REQUIRE(sonare_downmix(surround.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_5_1, &copy) ==
+  REQUIRE(sonare_downmix(surround.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_5_1, nullptr, &copy) ==
           SONARE_OK);
   REQUIRE(std::equal(surround.begin(), surround.end(), copy));
   sonare_free_floats(copy);
 }
 
-TEST_CASE("sonare_downmix_ex reports the unnormalised fold and applies the options",
+TEST_CASE("sonare_downmix reports the unnormalised fold and applies the options",
           "[c_api][audio_io]") {
   using sonare::constants::kInvSqrt2;
   constexpr size_t kFrames = 8;
@@ -366,43 +366,63 @@ TEST_CASE("sonare_downmix_ex reports the unnormalised fold and applies the optio
 
   // The default fold of six full-scale planes exceeds full scale.
   float* stereo = nullptr;
-  REQUIRE(sonare_downmix(full.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_STEREO, &stereo) ==
+  REQUIRE(sonare_downmix(full.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_STEREO, nullptr, &stereo) ==
           SONARE_OK);
   CHECK(stereo[0] == Catch::Approx(1.0f + 2.0f * kInvSqrt2).margin(1e-5));
   sonare_free_floats(stereo);
 
-  REQUIRE(sonare_downmix_ex(full.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_STEREO, 0, 1, &stereo) ==
-          SONARE_OK);
+  SonareDownmixOptions options;
+  sonare_downmix_options_init(&options);
+  CHECK(options.struct_size == sizeof(SonareDownmixOptions));
+  CHECK(options.include_lfe == 0);
+  CHECK(options.normalize == 0);
+
+  options.normalize = 1;
+  REQUIRE(sonare_downmix(full.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_STEREO, &options,
+                         &stereo) == SONARE_OK);
   CHECK(stereo[0] == Catch::Approx(1.0f).margin(1e-5));
   sonare_free_floats(stereo);
 
-  REQUIRE(sonare_downmix_ex(full.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_STEREO, 1, 0, &stereo) ==
-          SONARE_OK);
+  options.normalize = 0;
+  options.include_lfe = 1;
+  REQUIRE(sonare_downmix(full.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_STEREO, &options,
+                         &stereo) == SONARE_OK);
   CHECK(stereo[0] == Catch::Approx(1.0f + 3.0f * kInvSqrt2).margin(1e-5));
   sonare_free_floats(stereo);
 
-  // Both options zero is sonare_downmix exactly.
+  // Initialised defaults are the NULL-options fold exactly.
+  sonare_downmix_options_init(&options);
   float* plain = nullptr;
-  REQUIRE(sonare_downmix_ex(full.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_STEREO, 0, 0, &plain) ==
+  REQUIRE(sonare_downmix(full.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_STEREO, &options, &plain) ==
           SONARE_OK);
   CHECK(plain[0] == Catch::Approx(1.0f + 2.0f * kInvSqrt2).margin(1e-5));
   sonare_free_floats(plain);
 
   float* out = nullptr;
-  CHECK(sonare_downmix_ex(full.data(), kFrames, 6, 4, 0, 0, &out) ==
+  CHECK(sonare_downmix(full.data(), kFrames, 6, 4, &options, &out) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(out == nullptr);
+
+  // A struct_size below this struct's is refused before anything is read.
+  options.struct_size = sizeof(uint32_t);
+  out = reinterpret_cast<float*>(0x1);
+  CHECK(sonare_downmix(full.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_STEREO, &options, &out) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(out == nullptr);
+  options.struct_size = 0;
+  CHECK(sonare_downmix(full.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_STEREO, &options, &out) ==
+        SONARE_ERROR_INVALID_PARAMETER);
 }
 
 TEST_CASE("sonare_downmix folds an unmodelled channel count to mono by mean", "[c_api][audio_io]") {
   const float planes[9] = {0.3f, 0.6f, 0.9f, 0.0f, 0.3f, 0.6f, 0.6f, 0.0f, 0.3f};
   float* mono = nullptr;
-  REQUIRE(sonare_downmix(planes, 3, 3, SONARE_CHANNEL_LAYOUT_MONO, &mono) == SONARE_OK);
+  REQUIRE(sonare_downmix(planes, 3, 3, SONARE_CHANNEL_LAYOUT_MONO, nullptr, &mono) == SONARE_OK);
   REQUIRE(mono[0] == Catch::Approx(0.3f).margin(1e-6));
   REQUIRE(mono[1] == Catch::Approx(0.3f).margin(1e-6));
   REQUIRE(mono[2] == Catch::Approx(0.6f).margin(1e-6));
   sonare_free_floats(mono);
-  REQUIRE(sonare_downmix(planes, 3, 3, SONARE_CHANNEL_LAYOUT_STEREO, &mono) ==
+  REQUIRE(sonare_downmix(planes, 3, 3, SONARE_CHANNEL_LAYOUT_STEREO, nullptr, &mono) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(mono == nullptr);
 }
@@ -411,18 +431,18 @@ TEST_CASE("sonare_downmix refuses an upmix, an unknown layout and malformed argu
           "[c_api][audio_io]") {
   const std::vector<float> stereo(16, 0.25f);
   float* out = reinterpret_cast<float*>(0x1);
-  REQUIRE(sonare_downmix(stereo.data(), 8, 2, SONARE_CHANNEL_LAYOUT_5_1, &out) ==
+  REQUIRE(sonare_downmix(stereo.data(), 8, 2, SONARE_CHANNEL_LAYOUT_5_1, nullptr, &out) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(out == nullptr);
-  REQUIRE(sonare_downmix(stereo.data(), 8, 2, 4, &out) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_downmix(stereo.data(), 8, 2, -1, &out) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_downmix(stereo.data(), 0, 2, SONARE_CHANNEL_LAYOUT_MONO, &out) ==
+  REQUIRE(sonare_downmix(stereo.data(), 8, 2, 4, nullptr, &out) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_downmix(stereo.data(), 8, 2, -1, nullptr, &out) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_downmix(stereo.data(), 0, 2, SONARE_CHANNEL_LAYOUT_MONO, nullptr, &out) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_downmix(stereo.data(), 8, 0, SONARE_CHANNEL_LAYOUT_MONO, &out) ==
+  REQUIRE(sonare_downmix(stereo.data(), 8, 0, SONARE_CHANNEL_LAYOUT_MONO, nullptr, &out) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_downmix(nullptr, 8, 2, SONARE_CHANNEL_LAYOUT_MONO, &out) ==
+  REQUIRE(sonare_downmix(nullptr, 8, 2, SONARE_CHANNEL_LAYOUT_MONO, nullptr, &out) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_downmix(stereo.data(), 8, 2, SONARE_CHANNEL_LAYOUT_MONO, nullptr) ==
+  REQUIRE(sonare_downmix(stereo.data(), 8, 2, SONARE_CHANNEL_LAYOUT_MONO, nullptr, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
 }
 

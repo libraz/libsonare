@@ -96,3 +96,513 @@ old = "Audio.duration"
 new = "Audio.duration_sec"
 domain = "core"
 rule = "seconds-suffix"
+
+# Capability and catalog results are frozen dataclasses with snake_case attributes.
+
+[[entry]]
+kind = "type"
+old = "CapabilitiesAbi"
+changed = "a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples"
+domain = "core"
+rule = "frozen-results"
+test = "bindings/python/tests/test_analyzer_core.py::test_capabilities_and_catalog_are_frozen"
+
+[[entry]]
+kind = "type"
+old = "CapabilitiesFeatures"
+changed = "a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples"
+domain = "core"
+rule = "frozen-results"
+test = "bindings/python/tests/test_analyzer_core.py::test_capabilities_and_catalog_are_frozen"
+
+[[entry]]
+kind = "field"
+old = "CapabilitiesFeatures.mixingAssistant"
+new = "CapabilitiesFeatures.mixing_assistant"
+domain = "core"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "CapabilitiesFeatures.instrumentParamAutomation"
+new = "CapabilitiesFeatures.instrument_param_automation"
+domain = "core"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "CapabilitiesFeatures.acousticSim"
+new = "CapabilitiesFeatures.acoustic_sim"
+domain = "core"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "CapabilitiesFeatures.pitchEditor"
+new = "CapabilitiesFeatures.pitch_editor"
+domain = "core"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "CapabilitiesFeatures.vocalEdit"
+new = "CapabilitiesFeatures.vocal_edit"
+domain = "core"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "CapabilitiesFeatures.voiceChanger"
+new = "CapabilitiesFeatures.voice_changer"
+domain = "core"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "type"
+old = "CapabilitiesDecode"
+changed = "a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples"
+domain = "core"
+rule = "frozen-results"
+test = "bindings/python/tests/test_analyzer_core.py::test_capabilities_and_catalog_are_frozen"
+
+[[entry]]
+kind = "type"
+old = "Capabilities"
+changed = "a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples"
+domain = "core"
+rule = "frozen-results"
+test = "bindings/python/tests/test_analyzer_core.py::test_capabilities_and_catalog_are_frozen"
+
+[[entry]]
+kind = "field"
+old = "Capabilities.hardwareConcurrency"
+new = "Capabilities.hardware_concurrency"
+domain = "core"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "type"
+old = "MasteringInsertParamChoice"
+changed = "a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples"
+domain = "mastering"
+rule = "frozen-results"
+test = "bindings/python/tests/test_analyzer_core.py::test_capability_catalog_processor_params_and_slots_are_typed"
+
+[[entry]]
+kind = "type"
+old = "MasteringInsertSlot"
+changed = "a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples"
+domain = "mastering"
+rule = "frozen-results"
+test = "bindings/python/tests/test_analyzer_core.py::test_capability_catalog_processor_params_and_slots_are_typed"
+
+[[entry]]
+kind = "field"
+old = "MasteringInsertSlot.minCrossoverCutoffs"
+new = "MasteringInsertSlot.min_crossover_cutoffs"
+domain = "mastering"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "type"
+old = "MasteringInsertParamDependency"
+changed = "a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples"
+domain = "mastering"
+rule = "frozen-results"
+test = "bindings/python/tests/test_analyzer_core.py::test_capability_catalog_processor_params_and_slots_are_typed"
+
+[[entry]]
+kind = "type"
+old = "SynthParamCondition"
+changed = "a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples"
+domain = "engine"
+rule = "frozen-results"
+test = "bindings/python/tests/test_synth_patch.py::test_engine_param_info_shape"
+
+[[entry]]
+kind = "type"
+old = "SynthParamInfo"
+changed = "a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples"
+domain = "engine"
+rule = "frozen-results"
+test = "bindings/python/tests/test_synth_patch.py::test_engine_param_info_shape"
+
+[[entry]]
+kind = "field"
+old = "SynthParamInfo.activeWhen"
+new = "SynthParamInfo.active_when"
+domain = "engine"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "type"
+old = "MasteringInsertParamInfo"
+changed = "a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples"
+domain = "mastering"
+rule = "frozen-results"
+test = "bindings/python/tests/test_analyzer_core.py::test_capability_catalog_processor_params_and_slots_are_typed"
+
+[[entry]]
+kind = "field"
+old = "MasteringInsertParamInfo.rtSafe"
+new = "MasteringInsertParamInfo.rt_safe"
+domain = "mastering"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "MasteringInsertParamInfo.minExclusive"
+new = "MasteringInsertParamInfo.min_exclusive"
+domain = "mastering"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "MasteringInsertParamInfo.maxExclusive"
+new = "MasteringInsertParamInfo.max_exclusive"
+domain = "mastering"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "MasteringInsertParamInfo.maxRelativeTo"
+new = "MasteringInsertParamInfo.max_relative_to"
+domain = "mastering"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "MasteringInsertParamInfo.uiMin"
+new = "MasteringInsertParamInfo.ui_min"
+domain = "mastering"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "MasteringInsertParamInfo.uiMax"
+new = "MasteringInsertParamInfo.ui_max"
+domain = "mastering"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "MasteringInsertParamInfo.dependsOn"
+new = "MasteringInsertParamInfo.depends_on"
+domain = "mastering"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "MasteringInsertParamInfo.coupledWith"
+new = "MasteringInsertParamInfo.coupled_with"
+domain = "mastering"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "type"
+old = "MasteringInsertTiming"
+changed = "a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples"
+domain = "mastering"
+rule = "frozen-results"
+test = "bindings/python/tests/test_analyzer_core.py::test_capability_catalog_processor_params_and_slots_are_typed"
+
+[[entry]]
+kind = "field"
+old = "MasteringInsertTiming.latencySamples"
+new = "MasteringInsertTiming.latency_samples"
+domain = "mastering"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "MasteringInsertTiming.tailSamples"
+new = "MasteringInsertTiming.tail_samples"
+domain = "mastering"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "type"
+old = "MasteringProcessorCatalogEntry"
+changed = "a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples"
+domain = "mastering"
+rule = "frozen-results"
+test = "bindings/python/tests/test_analyzer_core.py::test_capability_catalog_processor_params_and_slots_are_typed"
+
+[[entry]]
+kind = "field"
+old = "MasteringProcessorCatalogEntry.realtimeInsertable"
+new = "MasteringProcessorCatalogEntry.realtime_insertable"
+domain = "mastering"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "MasteringProcessorCatalogEntry.stereoOnly"
+new = "MasteringProcessorCatalogEntry.stereo_only"
+domain = "mastering"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "MasteringProcessorCatalogEntry.latencySamples"
+new = "MasteringProcessorCatalogEntry.latency_samples"
+domain = "mastering"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "MasteringProcessorCatalogEntry.tailSamples"
+new = "MasteringProcessorCatalogEntry.tail_samples"
+domain = "mastering"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "MasteringProcessorCatalogEntry.realtimeCost"
+new = "MasteringProcessorCatalogEntry.realtime_cost"
+domain = "mastering"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "MasteringProcessorCatalogEntry.channelPolicy"
+new = "MasteringProcessorCatalogEntry.channel_policy"
+domain = "mastering"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "type"
+old = "MasteringAmpPresetCatalogEntry"
+changed = "a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples"
+domain = "mastering"
+rule = "frozen-results"
+test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_mastering_amp_preset_catalog_reports_index_name_and_params"
+
+[[entry]]
+kind = "type"
+old = "CapabilityCatalogPresets"
+changed = "a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples"
+domain = "core"
+rule = "frozen-results"
+test = "bindings/python/tests/test_analyzer_core.py::test_capabilities_and_catalog_are_frozen"
+
+[[entry]]
+kind = "field"
+old = "CapabilityCatalogPresets.mixingScene"
+new = "CapabilityCatalogPresets.mixing_scene"
+domain = "core"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "CapabilityCatalogPresets.voiceChanger"
+new = "CapabilityCatalogPresets.voice_changer"
+domain = "core"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "CapabilityCatalogPresets.playbackRoom"
+new = "CapabilityCatalogPresets.playback_room"
+domain = "core"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "type"
+old = "MasteringPresetCatalogEntry"
+changed = "a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples"
+domain = "mastering"
+rule = "frozen-results"
+test = "bindings/python/tests/test_analyzer_core.py::test_capability_catalog_processor_params_and_slots_are_typed"
+
+[[entry]]
+kind = "field"
+old = "MasteringPresetCatalogEntry.targetLufs"
+new = "MasteringPresetCatalogEntry.target_lufs"
+domain = "mastering"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "MasteringPresetCatalogEntry.truePeakCeilingDb"
+new = "MasteringPresetCatalogEntry.true_peak_ceiling_db"
+domain = "mastering"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "MasteringPresetCatalogEntry.maxLimiterGainReductionDb"
+new = "MasteringPresetCatalogEntry.max_limiter_gain_reduction_db"
+domain = "mastering"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "type"
+old = "CapabilityCatalogChainStage"
+changed = "a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples"
+domain = "core"
+rule = "frozen-results"
+test = "bindings/python/tests/test_analyzer_core.py::test_capabilities_and_catalog_are_frozen"
+
+[[entry]]
+kind = "field"
+old = "CapabilityCatalogChainStage.enabledKey"
+new = "CapabilityCatalogChainStage.enabled_key"
+domain = "core"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "type"
+old = "CapabilityCatalogChainList"
+changed = "a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples"
+domain = "core"
+rule = "frozen-results"
+test = "bindings/python/tests/test_analyzer_core.py::test_capabilities_and_catalog_are_frozen"
+
+[[entry]]
+kind = "field"
+old = "CapabilityCatalogChainList.minItems"
+new = "CapabilityCatalogChainList.min_items"
+domain = "core"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "field"
+old = "CapabilityCatalogChainList.maxItems"
+new = "CapabilityCatalogChainList.max_items"
+domain = "core"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "type"
+old = "CapabilityCatalogChainAlias"
+changed = "a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples"
+domain = "core"
+rule = "frozen-results"
+test = "bindings/python/tests/test_analyzer_core.py::test_capabilities_and_catalog_are_frozen"
+
+[[entry]]
+kind = "type"
+old = "CapabilityCatalogChain"
+changed = "a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples"
+domain = "core"
+rule = "frozen-results"
+test = "bindings/python/tests/test_analyzer_core.py::test_capabilities_and_catalog_are_frozen"
+
+[[entry]]
+kind = "type"
+old = "CapabilityCatalog"
+changed = "a frozen dataclass read by attribute instead of a TypedDict read by key; lists are tuples"
+domain = "core"
+rule = "frozen-results"
+test = "bindings/python/tests/test_analyzer_core.py::test_capabilities_and_catalog_are_frozen"
+
+[[entry]]
+kind = "field"
+old = "CapabilityCatalog.masteringPresets"
+new = "CapabilityCatalog.mastering_presets"
+domain = "core"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "function"
+old = "capabilities"
+changed = "returns the frozen Capabilities dataclass; read capabilities().features.voice_changer, not capabilities()[\"features\"][\"voiceChanger\"]"
+domain = "core"
+rule = "frozen-results"
+test = "bindings/python/tests/test_analyzer_core.py::test_capabilities_and_catalog_are_frozen"
+
+[[entry]]
+kind = "function"
+old = "capability_catalog"
+changed = "returns the frozen CapabilityCatalog dataclass read by attribute"
+domain = "core"
+rule = "frozen-results"
+test = "bindings/python/tests/test_analyzer_core.py::test_capabilities_and_catalog_are_frozen"
+
+[[entry]]
+kind = "function"
+old = "mastering_processor_catalog"
+changed = "returns frozen MasteringProcessorCatalogEntry dataclasses read by attribute"
+domain = "mastering"
+rule = "frozen-results"
+test = "bindings/python/tests/test_analyzer_core.py::test_capability_catalog_processor_params_and_slots_are_typed"
+
+[[entry]]
+kind = "function"
+old = "mastering_amp_preset_catalog"
+changed = "returns frozen MasteringAmpPresetCatalogEntry dataclasses read by attribute"
+domain = "mastering"
+rule = "frozen-results"
+test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_mastering_amp_preset_catalog_reports_index_name_and_params"
+
+[[entry]]
+kind = "function"
+old = "mastering_insert_param_info"
+changed = "returns frozen MasteringInsertParamInfo dataclasses read by attribute"
+domain = "mastering"
+rule = "frozen-results"
+test = "bindings/python/tests/test_mastering_insert_timing.py::test_param_info_flags_exclusive_bounds_and_nyquist_ceilings"
+
+[[entry]]
+kind = "function"
+old = "mastering_insert_timing"
+changed = "returns the frozen MasteringInsertTiming dataclass with latency_samples and tail_samples"
+domain = "mastering"
+rule = "frozen-results"
+test = "bindings/python/tests/test_mastering_insert_timing.py::test_insert_timing_at_defaults_matches_the_capability_catalog"
+
+[[entry]]
+kind = "function"
+old = "synth_engine_param_info"
+changed = "returns frozen SynthParamInfo dataclasses read by attribute"
+domain = "engine"
+rule = "frozen-results"
+test = "bindings/python/tests/test_synth_patch.py::test_engine_param_info_shape"
+
+[[entry]]
+kind = "function"
+old = "synth_patch_param_info"
+changed = "returns frozen SynthParamInfo dataclasses read by attribute"
+domain = "engine"
+rule = "frozen-results"
+test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_second_presence_word_fields"
+
+[[entry]]
+kind = "export"
+old = "EXPECTED_ENGINE_ABI_VERSION"
+removed = true
+domain = "core"
+rule = "abi-probes"
+
+[[entry]]
+kind = "field"
+old = "SonareError.code"
+changed = "an ErrorCode member instead of an int; a code this binding does not know reads as ErrorCode.UNKNOWN"
+domain = "core"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_error_contract.py::test_unknown_code_reads_as_the_unknown_member"
+
+[[entry]]
+kind = "method"
+old = "SonareError.code_name"
+changed = "typed as the ErrorCodeName literal, the name every binding reports for the code"
+domain = "core"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_error_contract.py::test_code_name_is_the_shared_spelling_of_every_member"
+
+[[entry]]
+kind = "type"
+old = "ErrorCodeName"
+changed = "new exported Literal alias of the error code names shared with the JS codeName"
+domain = "core"
+rule = "error-class-by-cause"
+test = "bindings/python/tests/test_error_contract.py::test_code_name_is_the_shared_spelling_of_every_member"
+
+[[entry]]
+kind = "method"
+old = "Audio.from_buffer"
+changed = "sample_rate is required; it no longer defaults to 48000"
+domain = "core"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_binding_consistency.py::test_audio_from_buffer_requires_the_sample_rate"

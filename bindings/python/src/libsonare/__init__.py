@@ -41,7 +41,7 @@ from ._project import (
     synth_preset_patch,
 )
 from ._project_edit import PART_RIG_ALL_PARTS, PART_RIG_MODES
-from ._runtime import ErrorCode, SonareError, SonareValueError
+from ._runtime import ErrorCode, ErrorCodeName, SonareError, SonareValueError
 from .analyzer import (
     Mixer,
     MixerStereoResult,
@@ -795,6 +795,7 @@ __all__ = [
     "SonareError",
     "SonareValueError",
     "ErrorCode",
+    "ErrorCodeName",
     "SpectrumReport",
     "StageGainReduction",
     "StftResult",

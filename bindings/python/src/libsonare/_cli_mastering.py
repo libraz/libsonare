@@ -495,9 +495,7 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
     processor = getattr(args, "processor", None) or ""
     _reject_unknown_processor_params(processor, params)
     processor_name = cast("SoloProcessor", processor)
-    stereo_only = {
-        entry["id"] for entry in mastering_processor_catalog() if entry.get("stereoOnly", False)
-    }
+    stereo_only = {entry.id for entry in mastering_processor_catalog() if entry.stereo_only}
     # The file's own channel count and the library's own stereo-only set decide
     # this, with nothing in between. A two-channel source takes the stereo entry
     # point, which accepts every processor: whether a given one links its decision

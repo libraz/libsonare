@@ -857,7 +857,7 @@ def vocal_edit_abi_version() -> int | None:
     """Return the vocal-edit C ABI version of the loaded native library.
 
     ``None`` when libsonare was built without vocal-edit support; presence is
-    ``capabilities()["features"]["vocalEdit"]``.
+    ``capabilities().features.vocal_edit``.
     """
     lib = _get_lib()
     if not int(lib.sonare_has_feature(b"vocalEdit")):

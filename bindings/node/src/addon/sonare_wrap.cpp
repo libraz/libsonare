@@ -905,9 +905,12 @@ Napi::Value SonareWrap::Downmix(const Napi::CallbackInfo& info) {
     std::copy_n(inputs.ptrs[channel], frames,
                 packed.begin() + static_cast<std::ptrdiff_t>(channel * frames));
   }
+  SonareDownmixOptions fold;
+  sonare_downmix_options_init(&fold);
+  fold.include_lfe = include_lfe ? 1 : 0;
+  fold.normalize = normalize ? 1 : 0;
   float* out = nullptr;
-  SonareError err = sonare_downmix_ex(packed.data(), frames, static_cast<int>(inputs.ptrs.size()),
-                                      target, include_lfe ? 1 : 0, normalize ? 1 : 0, &out);
+  SonareError err = sonare_downmix(packed.data(), frames, inputs.ptrs.size(), target, &fold, &out);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

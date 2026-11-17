@@ -263,3 +263,18 @@ changed = "returns SonareError and writes a caller-owned name through out_string
 domain = "analysis"
 rule = "c-error-path"
 test = "tests/api/sonare_c_features_metering_test.cpp::sonare_hz_to_note hands each name to the caller"
+
+[[entry]]
+kind = "function"
+old = "sonare_downmix"
+changed = "takes num_channels as size_t and a const SonareDownmixOptions* (NULL for defaults) before out_samples; initialise the options with sonare_downmix_options_init"
+domain = "analysis"
+rule = "options-struct"
+test = "tests/api/sonare_c_core_test.cpp::sonare_downmix reports the unnormalised fold and applies the options"
+
+[[entry]]
+kind = "function"
+old = "sonare_downmix_ex"
+removed = true
+domain = "analysis"
+rule = "options-struct"

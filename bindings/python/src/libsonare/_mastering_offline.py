@@ -38,6 +38,7 @@ from ._runtime import (
     _to_c_size_t,
     _utf8_arg,
 )
+from ._types_capabilities import _from_wire
 from .types import (
     CapabilityCatalog,
     MasteringAmpPresetCatalogEntry,
@@ -139,7 +140,7 @@ def _insert_params(
     a non-finite number a ``SonareValueError``. A key the processor does not
     declare is left to the core, which refuses it by name.
     """
-    kinds = {info["name"]: info["type"] for info in mastering_insert_param_info(processor)}
+    kinds = {info.name: info.type for info in mastering_insert_param_info(processor)}
     out: dict[str, float | bool | str | list[float]] = {}
     for key, value in params.items():
         kind = kinds.get(key)
@@ -354,7 +355,7 @@ def mastering_insert_param_info(
             _utf8_arg(name, "name"),
             _to_c_int(sample_rate, "sample_rate"),
         )
-    return cast("list[MasteringInsertParamInfo]", json.loads(raw))
+    return [_from_wire(MasteringInsertParamInfo, entry) for entry in json.loads(raw)]
 
 
 def mastering_insert_timing(
@@ -394,7 +395,7 @@ def mastering_insert_timing(
     )
     _check(rc)
     return MasteringInsertTiming(
-        latencySamples=int(out_latency.value), tailSamples=int(out_tail.value)
+        latency_samples=int(out_latency.value), tail_samples=int(out_tail.value)
     )
 
 
@@ -422,7 +423,7 @@ def mastering_processor_catalog() -> list[MasteringProcessorCatalogEntry]:
     if not hasattr(lib, "sonare_mastering_processor_catalog"):
         return []
     raw = _call_string(lib.sonare_mastering_processor_catalog)
-    return cast("list[MasteringProcessorCatalogEntry]", json.loads(raw))
+    return [_from_wire(MasteringProcessorCatalogEntry, entry) for entry in json.loads(raw)]
 
 
 def mastering_amp_preset_catalog() -> list[MasteringAmpPresetCatalogEntry]:
@@ -438,7 +439,7 @@ def mastering_amp_preset_catalog() -> list[MasteringAmpPresetCatalogEntry]:
     if not hasattr(lib, "sonare_mastering_amp_preset_catalog"):
         return []
     raw = _call_string(lib.sonare_mastering_amp_preset_catalog)
-    return cast("list[MasteringAmpPresetCatalogEntry]", json.loads(raw))
+    return [_from_wire(MasteringAmpPresetCatalogEntry, entry) for entry in json.loads(raw)]
 
 
 def capability_catalog() -> CapabilityCatalog:
@@ -450,7 +451,9 @@ def capability_catalog() -> CapabilityCatalog:
     lib = _get_lib()
     if not hasattr(lib, "sonare_capability_catalog_json"):
         raise _not_supported("libsonare was built without capability catalog support")
-    return cast("CapabilityCatalog", json.loads(_call_string(lib.sonare_capability_catalog_json)))
+    return _from_wire(
+        CapabilityCatalog, json.loads(_call_string(lib.sonare_capability_catalog_json))
+    )
 
 
 @_guard_buffer("samples")

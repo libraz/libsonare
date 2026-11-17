@@ -10,6 +10,7 @@ import numpy as np
 
 from ._effects_repair_common import _linked_channel_planes
 from ._errors import SonareValueError, _not_supported, _require_open, _unknown_error
+from ._ffi_types_core import SonareDownmixOptions
 from ._runtime import (
     _check,
     _float_array_result,
@@ -290,10 +291,10 @@ def downmix(
         SonareError: For an upmix or an unknown ``target_layout``.
     """
     lib = _get_lib()
-    mix = getattr(lib, "sonare_downmix_ex", None)
+    mix = getattr(lib, "sonare_downmix", None)
     if mix is None:
         raise _not_supported(
-            "loaded libsonare does not expose sonare_downmix_ex; "
+            "loaded libsonare does not expose sonare_downmix; "
             "rebuild or install a newer native library"
         )
     if not isinstance(normalize, bool):
@@ -306,15 +307,18 @@ def downmix(
     if any(int(plane.shape[0]) != frame_count for plane in planes):
         raise SonareValueError("downmix: channels must all be the same length")
     packed = np.ascontiguousarray(np.stack(planes), dtype=np.float32)
+    fold = SonareDownmixOptions()
+    lib.sonare_downmix_options_init(ctypes.byref(fold))
+    fold.include_lfe = 1 if include_lfe else 0
+    fold.normalize = 1 if normalize else 0
     with _out_float_array(lib) as (out, _unused):
         _check(
             mix(
                 packed.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
                 _to_c_size_t(frame_count, "frames"),
-                _to_c_int(len(planes), "channels"),
+                _to_c_size_t(len(planes), "num_channels"),
                 _to_c_int(int(layout), "target_layout"),
-                ctypes.c_int(1 if include_lfe else 0),
-                ctypes.c_int(1 if normalize else 0),
+                ctypes.byref(fold),
                 ctypes.byref(out),
             )
         )
@@ -431,7 +435,7 @@ class Audio:
     def from_buffer(
         cls,
         data: Sequence[float] | list[float],
-        sample_rate: int = 48000,
+        sample_rate: int,
     ) -> Audio:
         """Create audio from a float sample buffer.
 
@@ -441,7 +445,7 @@ class Audio:
                 anything castable to ``float``). Multi-channel input must be
                 folded first with :func:`downmix` (``downmix(channels, 0)[0]``).
                 Values are nominally in ``[-1.0, 1.0]``.
-            sample_rate: Sample rate in Hz (default 48000).
+            sample_rate: Sample rate of ``data`` in Hz.
 
         Raises:
             SonareValueError: If ``data`` is empty or holds a NaN or Inf sample.
@@ -1411,9 +1415,11 @@ class Audio:
             self._handle = ctypes.c_void_p()
 
     def __enter__(self) -> Audio:
+        """Return this audio; leaving the ``with`` block closes it."""
         return self
 
     def __exit__(self, *args: object) -> None:
+        """Close the audio when the ``with`` block exits."""
         self.close()
 
     def __del__(self) -> None:

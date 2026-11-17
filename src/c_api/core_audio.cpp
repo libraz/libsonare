@@ -59,17 +59,19 @@ SonareError sonare_decode_channels(const uint8_t* data, size_t length, float** o
 
 namespace {
 
-SonareError downmix_planar(const float* channels, size_t frames, int channel_count,
+SonareError downmix_planar(const float* channels, size_t frames, size_t num_channels,
                            int target_layout, const mixing::DownmixOptions& options,
                            float** out_samples) {
   if (out_samples == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out_samples = nullptr;
   ChannelLayout to{};
-  if (channels == nullptr || frames == 0 || channel_count <= 0 ||
+  if (channels == nullptr || frames == 0 || num_channels == 0 ||
+      num_channels > static_cast<size_t>(std::numeric_limits<int>::max()) ||
       !ordinal_to_enum(target_layout, 0, kMaxChannelLayoutValue, &to)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  const size_t in_channels = static_cast<size_t>(channel_count);
+  const int channel_count = static_cast<int>(num_channels);
+  const size_t in_channels = num_channels;
   const size_t out_channels = static_cast<size_t>(sonare::channel_count(to));
   // The same rule the decoders apply: counts outside the speaker model fold to
   // mono as an unweighted mean and have no other target.
@@ -109,20 +111,26 @@ SonareError downmix_planar(const float* channels, size_t frames, int channel_cou
 
 }  // namespace
 
-SonareError sonare_downmix(const float* channels, size_t frames, int channel_count,
-                           int target_layout, float** out_samples) {
-  SONARE_C_API_ENTRY;
-  return downmix_planar(channels, frames, channel_count, target_layout, {}, out_samples);
+void sonare_downmix_options_init(SonareDownmixOptions* options) {
+  if (options == nullptr) return;
+  *options = {};
+  options->struct_size = sizeof(*options);
 }
 
-SonareError sonare_downmix_ex(const float* channels, size_t frames, int channel_count,
-                              int target_layout, int include_lfe, int normalize,
-                              float** out_samples) {
+SonareError sonare_downmix(const float* channels, size_t frames, size_t num_channels,
+                           int target_layout, const SonareDownmixOptions* options,
+                           float** out_samples) {
   SONARE_C_API_ENTRY;
-  mixing::DownmixOptions options;
-  options.include_lfe = include_lfe != 0;
-  options.normalize = normalize != 0;
-  return downmix_planar(channels, frames, channel_count, target_layout, options, out_samples);
+  mixing::DownmixOptions fold;
+  if (options != nullptr) {
+    if (options->struct_size < sizeof(SonareDownmixOptions)) {
+      if (out_samples != nullptr) *out_samples = nullptr;
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    fold.include_lfe = options->include_lfe != 0;
+    fold.normalize = options->normalize != 0;
+  }
+  return downmix_planar(channels, frames, num_channels, target_layout, fold, out_samples);
 }
 
 #ifndef __EMSCRIPTEN__

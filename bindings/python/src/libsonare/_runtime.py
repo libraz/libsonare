@@ -19,6 +19,7 @@ import numpy as np
 # The leaf modules below are forwarded the same way; the redundant aliases are
 # what marks a re-export to mypy's strict mode.
 from ._errors import ErrorCode as ErrorCode
+from ._errors import ErrorCodeName as ErrorCodeName
 from ._errors import SonareError as SonareError
 from ._errors import SonareValueError as SonareValueError
 from ._errors import _not_supported as _not_supported

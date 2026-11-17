@@ -130,61 +130,61 @@ def test_mastering_processor_catalog_reports_kind_and_flags() -> None:
     assert isinstance(catalog, list)
     assert len(catalog) > 0
 
-    by_id = {entry["id"]: entry for entry in catalog}
+    by_id = {entry.id: entry for entry in catalog}
 
     compressor = by_id["dynamics.compressor"]
-    assert compressor["kind"] == "realtime"
-    assert compressor["realtimeInsertable"] is True
-    assert isinstance(compressor["latencySamples"], int)
-    assert isinstance(compressor["tailSamples"], int)
-    assert compressor["realtimeCost"] == "low"
+    assert compressor.kind == "realtime"
+    assert compressor.realtime_insertable is True
+    assert isinstance(compressor.latency_samples, int)
+    assert isinstance(compressor.tail_samples, int)
+    assert compressor.realtime_cost == "low"
     # Per-channel/linked processors process every plane in one call.
-    assert compressor["channelPolicy"] == "multichannel"
+    assert compressor.channel_policy == "multichannel"
 
-    assert by_id["match.abCrossfade"]["kind"] == "pair"
+    assert by_id["match.abCrossfade"].kind == "pair"
 
     optimize = by_id["maximizer.loudnessOptimize"]
-    assert optimize["kind"] == "offline"
-    assert optimize["realtimeInsertable"] is False
+    assert optimize.kind == "offline"
+    assert optimize.realtime_insertable is False
 
-    assert by_id["eq.midSide"]["stereoOnly"] is True
+    assert by_id["eq.midSide"].stereo_only is True
     # Inherently-stereo processors are wrapped on the front L/R pair.
-    assert by_id["eq.midSide"]["channelPolicy"] == "stereoPairOnly"
-    assert by_id["stereo.imager"]["channelPolicy"] == "stereoPairOnly"
-    assert by_id["stereo.haasEnhancer"]["tailSamples"] == 576
-    assert by_id["stereo.phaseAlign"]["tailSamples"] == 0
-    assert by_id["effects.reverb.velvet"]["realtimeCost"] == "high"
-    assert by_id["effects.reverb.fdn"]["realtimeCost"] == "moderate"
+    assert by_id["eq.midSide"].channel_policy == "stereoPairOnly"
+    assert by_id["stereo.imager"].channel_policy == "stereoPairOnly"
+    assert by_id["stereo.haasEnhancer"].tail_samples == 576
+    assert by_id["stereo.phaseAlign"].tail_samples == 0
+    assert by_id["effects.reverb.velvet"].realtime_cost == "high"
+    assert by_id["effects.reverb.fdn"].realtime_cost == "moderate"
 
     # A repair stage publishes the bounds its own validation enforces, and says whether it can
     # be causal.
-    assert by_id["repair.declick"]["causal"] is False
-    assert by_id["repair.declip"]["causal"] is False
+    assert by_id["repair.declick"].causal is False
+    assert by_id["repair.declip"].causal is False
     for stage in ("decrackle", "dehum", "denoiseClassical", "dereverbClassical"):
-        assert by_id[f"repair.{stage}"]["causal"] is True
-    assert compressor["causal"] is True
-    click_run = next(p for p in by_id["repair.declick"]["params"] if p["name"] == "maxClickSamples")
-    assert (click_run["min"], click_run["max"], click_run["unit"]) == (1, 512, "samples")
-    assert click_run["id"] is None
-    assert click_run["rtSafe"] is False
+        assert by_id[f"repair.{stage}"].causal is True
+    assert compressor.causal is True
+    click_run = next(p for p in by_id["repair.declick"].params if p.name == "maxClickSamples")
+    assert (click_run.min, click_run.max, click_run.unit) == (1, 512, "samples")
+    assert click_run.id is None
+    assert click_run.rt_safe is False
 
     # The voice changer is a stereo-pair insert whose bounds are the ones construction refuses
     # outside of; its latency-changing switches are construction-only.
     voice = by_id["voice.changer"]
-    assert (voice["kind"], voice["category"], voice["channelPolicy"]) == (
+    assert (voice.kind, voice.category, voice.channel_policy) == (
         "realtime",
         "voice",
         "stereoPairOnly",
     )
-    assert voice["causal"] is True
-    assert voice["latencySamples"] > 0
-    voice_params = {p["name"]: p for p in voice["params"]}
+    assert voice.causal is True
+    assert voice.latency_samples > 0
+    voice_params = {p.name: p for p in voice.params}
     semitones = voice_params["retuneSemitones"]
-    assert (semitones["min"], semitones["max"], semitones["unit"]) == (-24, 24, "semitones")
-    assert semitones["rtSafe"] is True
+    assert (semitones.min, semitones.max, semitones.unit) == (-24, 24, "semitones")
+    assert semitones.rt_safe is True
     for name in ("retuneGrainSize", "limiterEnableIspLimiter", "reverbSeed"):
-        assert voice_params[name]["id"] is None
-        assert voice_params[name]["rtSafe"] is False
+        assert voice_params[name].id is None
+        assert voice_params[name].rt_safe is False
 
 
 def test_mastering_amp_preset_catalog_reports_index_name_and_params() -> None:
@@ -196,33 +196,35 @@ def test_mastering_amp_preset_catalog_reports_index_name_and_params() -> None:
     assert len(catalog) > 0
 
     for expected_index, entry in enumerate(catalog):
-        assert entry["index"] == expected_index
+        assert entry.index == expected_index
 
     first = catalog[0]
-    assert first["name"] == "cleanCombo"
-    assert "drive" in first["params"]
-    assert "ampModel" in first["params"]
+    assert first.name == "cleanCombo"
+    assert "drive" in first.params
+    assert "ampModel" in first.params
 
 
 def test_capability_catalog_aggregates_processors_and_presets() -> None:
     """The aggregate catalog retains native version, ABI, and processor metadata."""
+    import dataclasses
+
     import libsonare
 
     catalog = libsonare.capability_catalog()
 
-    assert catalog["version"] == libsonare.version()
-    assert catalog["abi"]["project"] == (libsonare.project_abi_version() or 0)
-    assert catalog["processors"]
-    assert "pop" in catalog["presets"]["mastering"]
-    assert "harp-plucked" in catalog["presets"]["synth"]
-    for names in catalog["presets"].values():
+    assert catalog.version == libsonare.version()
+    assert catalog.abi.project == (libsonare.project_abi_version() or 0)
+    assert catalog.processors
+    assert "pop" in catalog.presets.mastering
+    assert "harp-plucked" in catalog.presets.synth
+    for names in dataclasses.astuple(catalog.presets):
         assert len(names) == len(set(names))
-    compressor = next(
-        entry for entry in catalog["processors"] if entry["id"] == "dynamics.compressor"
-    )
-    assert compressor["category"] == "dynamics"
-    assert compressor["realtimeCost"] == "low"
-    assert {"name", "type", "min", "max", "default", "unit"} <= set(compressor["params"][0])
+    compressor = next(entry for entry in catalog.processors if entry.id == "dynamics.compressor")
+    assert compressor.category == "dynamics"
+    assert compressor.realtime_cost == "low"
+    assert {"name", "type", "min", "max", "default", "unit"} <= {
+        field.name for field in dataclasses.fields(compressor.params[0])
+    }
 
 
 def test_insert_param_metadata_reaches_the_python_facade() -> None:
@@ -235,34 +237,31 @@ def test_insert_param_metadata_reaches_the_python_facade() -> None:
     import libsonare
 
     params = {
-        param["name"]: param
-        for param in libsonare.mastering_insert_param_info("dynamics.compressor")
+        param.name: param for param in libsonare.mastering_insert_param_info("dynamics.compressor")
     }
     # A validated control publishes its accepted range; an open one publishes
     # null on both, which is the catalog stating no limit rather than "unknown".
-    assert params["ratio"]["min"] == 1.0
-    assert params["ratio"]["max"] is None
-    assert params["thresholdDb"]["min"] is None
+    assert params["ratio"].min == 1.0
+    assert params["ratio"].max is None
+    assert params["thresholdDb"].min is None
     # The default is the config struct's own field initializer.
-    assert params["ratio"]["default"] == 2.0
-    assert params["thresholdDb"]["default"] == -18.0
-    assert params["thresholdDb"]["unit"] == "dB"
+    assert params["ratio"].default == 2.0
+    assert params["thresholdDb"].default == -18.0
+    assert params["thresholdDb"].unit == "dB"
     # A boolean config field arrives as a JSON boolean, with no range.
-    assert params["autoMakeup"]["type"] == "boolean"
-    assert params["autoMakeup"]["default"] is False
-    assert params["autoMakeup"]["min"] is None
+    assert params["autoMakeup"].type == "boolean"
+    assert params["autoMakeup"].default is False
+    assert params["autoMakeup"].min is None
 
     # A two-sided range, and the per-band EQ surface, which is only declared
     # because the band readers publish their keys without being handed one.
-    imager = {
-        param["name"]: param for param in libsonare.mastering_insert_param_info("stereo.imager")
-    }
-    assert (imager["width"]["min"], imager["width"]["max"]) == (0.0, 2.0)
+    imager = {param.name: param for param in libsonare.mastering_insert_param_info("stereo.imager")}
+    assert (imager["width"].min, imager["width"].max) == (0.0, 2.0)
     parametric = {
-        param["name"]: param for param in libsonare.mastering_insert_param_info("eq.parametric")
+        param.name: param for param in libsonare.mastering_insert_param_info("eq.parametric")
     }
-    assert parametric["band0.frequencyHz"]["default"] == 1000.0
-    assert parametric["band0.gainDb"]["unit"] == "dB"
+    assert parametric["band0.frequencyHz"].default == 1000.0
+    assert parametric["band0.gainDb"].unit == "dB"
 
 
 def test_mastering_pair_accepts_differing_reference_length() -> None:

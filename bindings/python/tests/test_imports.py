@@ -380,7 +380,7 @@ def test_a_failed_handle_construction_reports_only_the_real_error(
 
     if subject == "engine":
         stub = SimpleNamespace(
-            sonare_engine_abi_version=lambda: engine_module.EXPECTED_ENGINE_ABI_VERSION + 1
+            sonare_engine_abi_version=lambda: engine_module._EXPECTED_ENGINE_ABI_VERSION + 1
         )
         monkeypatch.setattr(engine_module, "_get_lib", lambda: stub)
         construct = libsonare.RealtimeEngine

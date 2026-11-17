@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import TypeVar
+from typing import Literal, TypeVar, cast
 
 _Handle = TypeVar("_Handle")
 
@@ -26,35 +26,53 @@ class ErrorCode(IntEnum):
     UNKNOWN = 99
 
 
+ErrorCodeName = Literal[
+    "Ok",
+    "FileNotFound",
+    "InvalidFormat",
+    "DecodeFailed",
+    "InvalidParameter",
+    "OutOfMemory",
+    "NotSupported",
+    "InvalidState",
+    "Cancelled",
+    "EncodeFailed",
+    "AbiMismatch",
+    "StaleResult",
+    "Unknown",
+]
+"""The cross-binding spelling of each :class:`ErrorCode`, shared with the JS ``codeName``."""
+
+
+def _error_code(code: int) -> ErrorCode:
+    try:
+        return ErrorCode(int(code))
+    except ValueError:
+        return ErrorCode.UNKNOWN
+
+
 class SonareError(RuntimeError):
-    """Exception raised for non-OK Sonare C API return codes."""
+    """Exception raised for non-OK Sonare C API return codes.
+
+    :attr:`code` is an :class:`ErrorCode` member; a code this binding does not
+    know reads as :attr:`ErrorCode.UNKNOWN`.
+    """
+
+    code: ErrorCode
+    """The failure's :class:`ErrorCode` member."""
 
     def __init__(self, code: int, message: str) -> None:
-        self.code = int(code)
-        super().__init__(f"[{self.code}] {message}")
+        self.code = _error_code(code)
+        super().__init__(f"[{int(code)}] {message}")
 
     @property
-    def code_name(self) -> str:
-        """Canonical cross-binding name of :attr:`code`."""
-        names = {
-            ErrorCode.OK: "Ok",
-            ErrorCode.FILE_NOT_FOUND: "FileNotFound",
-            ErrorCode.INVALID_FORMAT: "InvalidFormat",
-            ErrorCode.DECODE_FAILED: "DecodeFailed",
-            ErrorCode.INVALID_PARAMETER: "InvalidParameter",
-            ErrorCode.OUT_OF_MEMORY: "OutOfMemory",
-            ErrorCode.NOT_SUPPORTED: "NotSupported",
-            ErrorCode.INVALID_STATE: "InvalidState",
-            ErrorCode.CANCELLED: "Cancelled",
-            ErrorCode.ENCODE_FAILED: "EncodeFailed",
-            ErrorCode.ABI_MISMATCH: "AbiMismatch",
-            ErrorCode.STALE_RESULT: "StaleResult",
-            ErrorCode.UNKNOWN: "Unknown",
-        }
-        try:
-            return names[ErrorCode(self.code)]
-        except ValueError:
-            return names[ErrorCode.UNKNOWN]
+    def code_name(self) -> ErrorCodeName:
+        """The name of :attr:`code` shared by every binding, such as ``"InvalidParameter"``.
+
+        It is the PascalCase form of the :class:`ErrorCode` member name and equals
+        the JS ``codeName``; :attr:`code` is the enum member itself.
+        """
+        return cast(ErrorCodeName, "".join(w.capitalize() for w in self.code.name.split("_")))
 
 
 class SonareValueError(SonareError, ValueError):
@@ -75,8 +93,8 @@ class SonareValueError(SonareError, ValueError):
     treat both origins identically.
     """
 
-    def __init__(self, message: str, code: int = int(ErrorCode.INVALID_PARAMETER)) -> None:
-        self.code = int(code)
+    def __init__(self, message: str, code: int = ErrorCode.INVALID_PARAMETER) -> None:
+        self.code = _error_code(code)
         ValueError.__init__(self, message)
 
 

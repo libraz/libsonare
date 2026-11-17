@@ -1913,6 +1913,30 @@
     ],
     "size": 32
   },
+  "SonareDownmixOptions": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "include_lfe",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "normalize",
+        "offset": 8,
+        "size": 4
+      }
+    ],
+    "size": 12
+  },
   "SonareDynamicRangeResult": {
     "align": 8,
     "fields": [

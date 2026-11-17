@@ -44,7 +44,6 @@ from .types import (
 # Planar audio: one buffer per channel, or a 2-D (channels, frames) array.
 PlanarChannels: TypeAlias = Sequence[FloatSamples] | np.ndarray[Any, Any]
 
-EXPECTED_ENGINE_ABI_VERSION: int
 MAX_TRACK_LANES: int
 
 class ClipPageProvider:

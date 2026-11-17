@@ -538,7 +538,7 @@ def project_abi_version() -> int | None:
     """Return the project C ABI version of the loaded native library.
 
     ``None`` when libsonare was built without the arrangement subsystem;
-    presence is ``capabilities()["features"]["project"]``.
+    presence is ``capabilities().features.project``.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_project_abi_version"):

@@ -271,7 +271,7 @@ def test_mastering_processor_stereo_only_catalog_auto_routes(monkeypatch, capsys
     monkeypatch.setattr(
         libsonare,
         "mastering_processor_catalog",
-        lambda: [{"id": "stereo.imager", "stereoOnly": True}],
+        lambda: [SimpleNamespace(id="stereo.imager", stereo_only=True)],
     )
     monkeypatch.setattr(
         libsonare,

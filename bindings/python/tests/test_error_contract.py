@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import re
+from typing import get_args
+
 import pytest
 
-from libsonare import ErrorCode, Mixer, SonareError, cli
+from libsonare import ErrorCode, ErrorCodeName, Mixer, SonareError, cli
 from libsonare._cli_common import EXIT_ABI_MISMATCH, EXIT_STALE_RESULT
 
 from ._helpers import LIB_AVAILABLE
@@ -79,3 +82,20 @@ def test_stale_result_code_and_exit_code() -> None:
     assert exc.code_name == "StaleResult"
     assert EXIT_STALE_RESULT == 14
     assert cli._exit_code_for(exc) == EXIT_STALE_RESULT
+
+
+def test_code_name_is_the_shared_spelling_of_every_member() -> None:
+    names = set(get_args(ErrorCodeName))
+    for member in ErrorCode:
+        exc = SonareError(member, "x")
+        assert exc.code is member
+        assert exc.code_name in names
+        assert re.sub(r"(?<!^)(?=[A-Z])", "_", exc.code_name).upper() == member.name
+    assert {SonareError(m, "x").code_name for m in ErrorCode} == names
+
+
+def test_unknown_code_reads_as_the_unknown_member() -> None:
+    exc = SonareError(12345, "x")
+    assert exc.code is ErrorCode.UNKNOWN
+    assert exc.code_name == "Unknown"
+    assert str(exc).startswith("[12345] ")

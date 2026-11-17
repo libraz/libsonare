@@ -7,6 +7,7 @@
 extern "C" {
 #endif
 
+/// Layout version of the vocal project structs; equals sonare_vocal_project_abi_version().
 #define SONARE_VOCAL_PROJECT_ABI_VERSION 1u
 #define SONARE_VOCAL_PROJECT_SIDECAR_KEY_CAPACITY 96u
 

@@ -20,7 +20,7 @@ def test_doctor_json_uses_the_closed_shared_capability_shape(monkeypatch, capsys
         "hardwareConcurrency": 10,
         "futureOnlyField": "not part of the CLI contract",
     }
-    monkeypatch.setattr(analysis_music, "capabilities", lambda: descriptor)
+    monkeypatch.setattr(analysis_music, "_capabilities_document", lambda: descriptor)
 
     def library_path_must_not_be_read() -> str:
         raise AssertionError("library path is a human-output detail, not shared JSON")

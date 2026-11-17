@@ -22,14 +22,14 @@ def test_every_logarithmic_parameter_publishes_a_positive_floor_and_a_finite_top
 
     defects: list[str] = []
     logarithmic = 0
-    for entry in libsonare.capability_catalog()["processors"]:
-        for param in entry["params"]:
-            if param["scale"] != "log":
+    for entry in libsonare.capability_catalog().processors:
+        for param in entry.params:
+            if param.scale != "log":
                 continue
             logarithmic += 1
-            low = param["uiMin"] if param["uiMin"] is not None else param["min"]
-            high = param["uiMax"] if param["uiMax"] is not None else param["max"]
-            label = f"{entry['id']}.{param['name']}"
+            low = param.ui_min if param.ui_min is not None else param.min
+            high = param.ui_max if param.ui_max is not None else param.max
+            label = f"{entry.id}.{param.name}"
             if low is None or not low > 0:
                 defects.append(f"{label} has no positive lower end")
             elif high is None:
@@ -44,29 +44,31 @@ def test_every_logarithmic_parameter_publishes_a_positive_floor_and_a_finite_top
 def test_transform_size_is_powers_of_two_and_the_hop_has_no_stale_maximum(stage: str) -> None:
     import libsonare
 
-    info = {param["name"]: param for param in libsonare.mastering_insert_param_info(stage)}
+    info = {param.name: param for param in libsonare.mastering_insert_param_info(stage)}
     n_fft, hop = info["nFft"], info["hopLength"]
-    assert n_fft["min"] is None and n_fft["max"] is None
-    sizes = [choice["value"] for choice in n_fft["choices"]]
+    assert n_fft.min is None and n_fft.max is None
+    sizes = [choice.value for choice in n_fft.choices]
     assert len(sizes) > 1
     assert all(size & (size - 1) == 0 for size in sizes)
-    assert [choice["name"] for choice in n_fft["choices"]] == [str(size) for size in sizes]
+    assert [choice.name for choice in n_fft.choices] == [str(size) for size in sizes]
     assert sizes[-1] == 524288
-    assert hop["choices"] is None
-    assert hop["min"] == 1
-    assert hop["max"] is None
-    assert hop["dependsOn"] == [{"key": "nFft", "relation": "le", "factor": 0.5}]
+    assert hop.choices is None
+    assert hop.min == 1
+    assert hop.max is None
+    assert hop.depends_on == (
+        libsonare.MasteringInsertParamDependency(key="nFft", relation="le", factor=0.5),
+    )
 
 
 def test_param_info_serves_the_catalog_rows_of_an_offline_repair_stage() -> None:
     import libsonare
 
-    catalog = {entry["id"]: entry for entry in libsonare.mastering_processor_catalog()}
+    catalog = {entry.id: entry for entry in libsonare.mastering_processor_catalog()}
     for stage in ("repair.declick", "repair.declip", "repair.trimSilence"):
         info = libsonare.mastering_insert_param_info(stage)
         assert info
-        assert info == catalog[stage]["params"]
-        assert all(param["id"] is None for param in info)
+        assert tuple(info) == catalog[stage].params
+        assert all(param.id is None for param in info)
     assert libsonare.mastering_insert_param_info("repair.noSuchStage") == []
 
 
@@ -75,11 +77,11 @@ def test_receiver_spacing_names_the_room_geometry_it_is_accepted_against(stage: 
     import libsonare
 
     info = libsonare.mastering_insert_param_info(stage)
-    spacing = {param["name"]: param for param in info}["receiverSpacingM"]
-    assert spacing["max"] == pytest.approx(2.5, abs=1e-3)
-    assert spacing["dependsOn"] == []
-    assert {"lengthM", "widthM", "listenerX", "listenerY"} <= set(spacing["coupledWith"])
-    assert all(isinstance(param["coupledWith"], list) for param in info)
+    spacing = {param.name: param for param in info}["receiverSpacingM"]
+    assert spacing.max == pytest.approx(2.5, abs=1e-3)
+    assert spacing.depends_on == ()
+    assert {"lengthM", "widthM", "listenerX", "listenerY"} <= set(spacing.coupled_with)
+    assert all(isinstance(param.coupled_with, tuple) for param in info)
 
 
 def test_eq_ceiling_follows_the_rate_the_insert_is_built_for() -> None:
@@ -88,7 +90,7 @@ def test_eq_ceiling_follows_the_rate_the_insert_is_built_for() -> None:
 
     def ceiling(rate: int | None) -> float:
         info = libsonare.mastering_insert_param_info("eq.parametric", rate)
-        return next(p for p in info if p["name"] == "band0.frequencyHz")["max"]
+        return next(p for p in info if p.name == "band0.frequencyHz").max
 
     assert ceiling(None) == 24000
     assert ceiling(96000) == 48000

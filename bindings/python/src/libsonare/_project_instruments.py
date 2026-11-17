@@ -6,12 +6,9 @@ import ctypes
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, Protocol, TypeAlias, cast
+from typing import Literal, Protocol, TypeAlias
 
 import numpy as np
-
-if TYPE_CHECKING:
-    from ._types_capabilities import SynthParamInfo
 
 from ._errors import _not_supported
 from ._ffi_types_mastering_project import (
@@ -104,6 +101,7 @@ from ._runtime import (
     _utf8_arg,
     _validate_c_int_field,
 )
+from ._types_capabilities import SynthParamInfo, _from_wire
 
 # Built-in synth waveform ordinals (mirror SonareSynthWaveform).
 SYNTH_WAVEFORM_SINE = 0
@@ -709,7 +707,7 @@ def synth_preset_names() -> list[str]:
 
 
 def _synth_param_info(raw: str) -> list[SynthParamInfo]:
-    return cast("list[SynthParamInfo]", json.loads(raw))
+    return [_from_wire(SynthParamInfo, entry) for entry in json.loads(raw)]
 
 
 def synth_engine_param_info(engine_mode: str | int) -> list[SynthParamInfo]:

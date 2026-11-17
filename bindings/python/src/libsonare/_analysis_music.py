@@ -5,7 +5,7 @@ from __future__ import annotations
 import ctypes
 import json
 from collections.abc import Mapping, Sequence
-from typing import cast
+from typing import Any
 
 from ._errors import _unknown_error
 from ._ffi import (
@@ -34,6 +34,7 @@ from ._runtime import (
     _to_c_size_t,
     _tuning_arg,
 )
+from ._types_capabilities import _from_wire
 from .types import (
     Boundary,
     BoundaryResult,
@@ -637,13 +638,8 @@ def version() -> str:
     return v.decode("utf-8") if v else ""
 
 
-def capabilities() -> Capabilities:
-    """Return the native library's build, platform, and decoder capabilities.
-
-    The returned dictionary is parsed directly from the canonical C ABI JSON
-    descriptor. Its contents describe the loaded native library, rather than
-    the Python package that happens to call it.
-    """
+def _capabilities_document() -> dict[str, Any]:
+    """The library's capabilities document as parsed JSON, keyed as the C ABI spells it."""
     lib = _get_lib()
     _require_export(
         lib,
@@ -654,7 +650,16 @@ def capabilities() -> Capabilities:
     descriptor = json.loads(_call_string(lib.sonare_capabilities_json))
     if not isinstance(descriptor, dict):
         raise _unknown_error("libsonare returned a non-object capabilities descriptor")
-    return cast(Capabilities, descriptor)
+    return descriptor
+
+
+def capabilities() -> Capabilities:
+    """Return the native library's build, platform, and decoder capabilities.
+
+    The descriptor describes the loaded native library, rather than the Python
+    package that happens to call it.
+    """
+    return _from_wire(Capabilities, _capabilities_document())
 
 
 def abi_version() -> int:
@@ -679,7 +684,7 @@ def voice_changer_abi_version() -> int | None:
     """Return the realtime voice-changer ABI version.
 
     ``None`` when libsonare was built without the voice changer; presence is
-    ``capabilities()["features"]["voiceChanger"]``.
+    ``capabilities().features.voice_changer``.
 
     Bindings that rely on the flat POD ``SonareRealtimeVoiceChangerConfig``
     layout (Rust FFI, raw C consumers) should call this at attach time and

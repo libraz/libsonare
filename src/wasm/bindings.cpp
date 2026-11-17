@@ -459,10 +459,13 @@ val js_downmix(val channels, val target_layout_value, val options) {
   }
   const bool include_lfe = boolProperty(options, "includeLfe", false);
   const bool normalize = boolProperty(options, "normalize", false);
+  SonareDownmixOptions fold;
+  sonare_downmix_options_init(&fold);
+  fold.include_lfe = include_lfe ? 1 : 0;
+  fold.normalize = normalize ? 1 : 0;
   CFloatBuffer mixed;
   const SonareError err =
-      sonare_downmix_ex(packed.data(), frames, static_cast<int>(count), target_layout,
-                        include_lfe ? 1 : 0, normalize ? 1 : 0, &mixed.data);
+      sonare_downmix(packed.data(), frames, count, target_layout, &fold, &mixed.data);
   if (err != SONARE_OK) throw_c_error(err, "downmix");
   const size_t out_channels =
       static_cast<size_t>(channel_count(static_cast<ChannelLayout>(target_layout)));

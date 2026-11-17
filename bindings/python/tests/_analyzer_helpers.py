@@ -71,7 +71,7 @@ def _has_ffmpeg_build_support() -> bool:
     try:
         import libsonare
 
-        return bool(libsonare.capabilities()["features"]["ffmpeg"])
+        return bool(libsonare.capabilities().features.ffmpeg)
     except Exception:
         return False
 

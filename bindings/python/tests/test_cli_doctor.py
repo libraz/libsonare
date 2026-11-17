@@ -26,7 +26,7 @@ def _descriptor() -> dict[str, object]:
 
 
 def test_doctor_json_uses_the_canonical_shared_capability_shape(monkeypatch, capsys) -> None:
-    monkeypatch.setattr(analysis_music, "capabilities", _descriptor)
+    monkeypatch.setattr(analysis_music, "_capabilities_document", _descriptor)
     monkeypatch.setattr(cli_common, "resolved_library_path", lambda: "/tmp/libsonare.dylib")
 
     assert cli_common.cmd_doctor(argparse.Namespace(json=True)) == 0
@@ -43,7 +43,7 @@ def test_doctor_json_uses_the_canonical_shared_capability_shape(monkeypatch, cap
 
 
 def test_doctor_human_output_summarizes_the_loaded_build(monkeypatch, capsys) -> None:
-    monkeypatch.setattr(analysis_music, "capabilities", _descriptor)
+    monkeypatch.setattr(analysis_music, "_capabilities_document", _descriptor)
     monkeypatch.setattr(cli_common, "resolved_library_path", lambda: "/tmp/libsonare.dylib")
 
     assert cli_common.cmd_doctor(argparse.Namespace(json=False)) == 0

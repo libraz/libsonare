@@ -42,23 +42,15 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_int),
         ]
     if hasattr(lib, "sonare_downmix"):
+        lib.sonare_downmix_options_init.restype = None
+        lib.sonare_downmix_options_init.argtypes = [ctypes.POINTER(SonareDownmixOptions)]
         lib.sonare_downmix.restype = ctypes.c_int32
         lib.sonare_downmix.argtypes = [
             ctypes.POINTER(ctypes.c_float),
             ctypes.c_size_t,
-            ctypes.c_int,
-            ctypes.c_int,
-            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
-        ]
-    if hasattr(lib, "sonare_downmix_ex"):
-        lib.sonare_downmix_ex.restype = ctypes.c_int32
-        lib.sonare_downmix_ex.argtypes = [
-            ctypes.POINTER(ctypes.c_float),
             ctypes.c_size_t,
             ctypes.c_int,
-            ctypes.c_int,
-            ctypes.c_int,
-            ctypes.c_int,
+            ctypes.POINTER(SonareDownmixOptions),
             ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ]
 

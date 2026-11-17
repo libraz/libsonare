@@ -269,9 +269,9 @@ def _color_enabled() -> bool:
 
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Print a concise diagnostic report for the loaded libsonare build."""
-    from ._analysis_music import capabilities
+    from ._analysis_music import _capabilities_document
 
-    descriptor = capabilities()
+    descriptor = _capabilities_document()
     payload = {
         "version": descriptor["version"],
         "abi": descriptor["abi"],

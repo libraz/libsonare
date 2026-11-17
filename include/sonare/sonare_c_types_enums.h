@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* Fixed underlying type for every public enum, applied as `typedef enum
+/** Fixed underlying type for every public enum, applied as `typedef enum
    SONARE_ENUM_BASE { ... } Name;`.
 
    An enum without a fixed underlying type may only hold the values its
@@ -19,8 +19,10 @@
    ordinary enum. Both spellings occupy 4 bytes and are laid out identically;
    the guards in src/c_api/core_common.cpp hold that claim mechanically. */
 #ifdef __cplusplus
+/// The 32-bit underlying type of every public enum (C++).
 #define SONARE_ENUM_BASE : int32_t
 #else
+/// Empty in C, whose enums keep the default 4-byte layout.
 #define SONARE_ENUM_BASE
 #endif
 
@@ -28,7 +30,8 @@
 extern "C" {
 #endif
 
-// Error codes
+/// Result code of every fallible C entry point; the binding error classes carry
+/// the same numbers.
 typedef enum SONARE_ENUM_BASE {
   SONARE_OK = 0,
   SONARE_ERROR_FILE_NOT_FOUND = 1,
@@ -50,9 +53,9 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_ERROR_UNKNOWN = 99
 } SonareError;
 
-/* Severity of one entry in the structured diagnostic channel
-   (sonare_last_diagnostic_*). Ordinals mirror sonare::Diagnostic::Severity; do
-   not reorder. */
+/// Severity of one entry in the structured diagnostic channel
+/// (sonare_last_diagnostic_*). Ordinals mirror sonare::Diagnostic::Severity; do
+/// not reorder.
 typedef enum SONARE_ENUM_BASE {
   SONARE_DIAGNOSTIC_INFO = 0,
   SONARE_DIAGNOSTIC_WARNING = 1,
@@ -75,7 +78,7 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_PITCH_B = 11
 } SonarePitchClass;
 
-// Mode enum
+/// Scale mode of a detected key.
 typedef enum SONARE_ENUM_BASE {
   SONARE_MODE_MAJOR = 0,
   SONARE_MODE_MINOR = 1,
@@ -103,9 +106,10 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_TEMPOGRAM_COSINE = 1
 } SonareTempogramMode;
 
-/* Ordinals mirror sonare::editing::voice_changer::VoiceCharacterPreset; do not
-   reorder. The string ids returned by sonare_voice_character_preset_id() are
-   exactly the entries (in this order) of SONARE_REALTIME_VOICE_CHANGER_PRESET_IDS. */
+/// Built-in voice changer character presets. Ordinals mirror
+/// sonare::editing::voice_changer::VoiceCharacterPreset; do not reorder. The
+/// string ids returned by sonare_voice_character_preset_id() are exactly the
+/// entries (in this order) of SONARE_REALTIME_VOICE_CHANGER_PRESET_IDS.
 typedef enum SONARE_ENUM_BASE {
   SONARE_VC_PRESET_NEUTRAL_MONITOR = 0,
   SONARE_VC_PRESET_BRIGHT_IDOL = 1,
@@ -140,17 +144,20 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_SCALE_CHROMATIC = 2
 } SonareScaleKind;
 
+/// Where the vocoder takes its carrier from: its own oscillator or a second input.
 typedef enum SONARE_ENUM_BASE {
   SONARE_VOCODER_CARRIER_INTERNAL = 0,
   SONARE_VOCODER_CARRIER_EXTERNAL = 1
 } SonareVocoderCarrierSource;
 
+/// Waveform of the vocoder's internal carrier.
 typedef enum SONARE_ENUM_BASE {
   SONARE_VOCODER_WAVE_SAW = 0,
   SONARE_VOCODER_WAVE_PULSE = 1,
   SONARE_VOCODER_WAVE_ENSEMBLE = 2
 } SonareVocoderCarrierWave;
 
+/// Character effect of the voice changer's output stage.
 typedef enum SONARE_ENUM_BASE {
   SONARE_CHARACTER_NONE = 0,
   SONARE_CHARACTER_MEGAPHONE = 1,
@@ -159,6 +166,7 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_CHARACTER_STROBO = 4
 } SonareCharacterType;
 
+/// Variation of the voice changer's reverb send.
 typedef enum SONARE_ENUM_BASE {
   SONARE_REVERB_VARIATION_REVERB = 0,
   SONARE_REVERB_VARIATION_ECHO = 1,
@@ -166,6 +174,7 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_REVERB_VARIATION_DUB_ECHO = 3
 } SonareReverbVariation;
 
+/// Note value a tempo-synced delay repeats at.
 typedef enum SONARE_ENUM_BASE {
   SONARE_NOTE_DIVISION_QUARTER = 0,
   SONARE_NOTE_DIVISION_EIGHTH = 1,
@@ -179,22 +188,26 @@ typedef enum SONARE_ENUM_BASE {
 } SonareMidiRelease;
 
 // Opaque types
+/// Decoded mono audio and its sample rate; released with sonare_audio_destroy.
 typedef struct SonareAudio SonareAudio;
 typedef struct SonareAnalyzer SonareAnalyzer;
 typedef struct SonareMixer SonareMixer;
+/// One mixer channel strip, borrowed from its SonareMixer.
 typedef struct SonareStrip SonareStrip;
+/// Realtime multi-band equalizer.
 typedef struct SonareEq SonareEq;
 typedef struct SonareRealtimeEngine SonareRealtimeEngine;
 typedef struct SonareRealtimeVoiceChanger SonareRealtimeVoiceChanger;
 typedef struct SonareStreamAnalyzer SonareStreamAnalyzer;
 typedef struct SonareClipPageProvider SonareClipPageProvider;
 
+/// Most bands one SonareEq holds.
 #define SONARE_EQ_MAX_BANDS 24
 #define SONARE_EQ_SPECTRUM_STREAM_CAPACITY 256
 #define SONARE_EQ_SPECTRUM_PROFILE_BANDS 16
 
-// Values match the offline `phaseMode` param and eq::PhaseMode ordinals;
-// 0 (Inherit) is invalid for a global phase mode.
+/// Phase response of a SonareEq. Values match the offline `phaseMode` param and
+/// eq::PhaseMode ordinals; 0 (Inherit) is invalid for a global phase mode.
 typedef enum SONARE_ENUM_BASE {
   SONARE_EQ_PHASE_ZERO_LATENCY = 1,
   SONARE_EQ_PHASE_NATURAL = 2,
@@ -225,11 +238,11 @@ typedef struct {
   float correlation;
 } SonareKeyCandidate;
 
-// Time signature structure
+/// Detected time signature.
 typedef struct {
-  int numerator;
-  int denominator;
-  float confidence;
+  int numerator;     ///< Beats per bar.
+  int denominator;   ///< Note value of one beat (4 = quarter note).
+  float confidence;  ///< Belief in this meter over the other candidates, in [0, 1].
 } SonareTimeSignature;
 
 /* Relationship between a tempo candidate and SonareAnalysisResult.bpm. */

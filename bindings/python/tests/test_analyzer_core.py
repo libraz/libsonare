@@ -22,22 +22,28 @@ def test_ffmpeg_presence_is_a_capabilities_feature() -> None:
     import libsonare
     from libsonare._runtime import _get_lib
 
-    ffmpeg = libsonare.capabilities()["features"]["ffmpeg"]
+    ffmpeg = libsonare.capabilities().features.ffmpeg
     assert isinstance(ffmpeg, bool)
     assert ffmpeg == bool(_get_lib().sonare_has_feature(b"ffmpeg"))
     assert not hasattr(libsonare, "has_ffmpeg_support")
 
 
 def test_capabilities_features_agree_with_has_feature() -> None:
-    """Every capabilities() feature key matches the native sonare_has_feature probe."""
+    """Every capabilities() feature field matches the native sonare_has_feature probe."""
+    import dataclasses
+
     import libsonare
     from libsonare._runtime import _get_lib
 
     lib = _get_lib()
-    features = libsonare.capabilities()["features"]
-    assert features
-    for key, present in features.items():
-        assert bool(lib.sonare_has_feature(key.encode())) is bool(present), key
+    features = libsonare.capabilities().features
+    names = [field.name for field in dataclasses.fields(features)]
+    assert names
+    for name in names:
+        head, *rest = name.split("_")
+        key = head + "".join(part.capitalize() for part in rest)
+        present = getattr(features, name)
+        assert bool(lib.sonare_has_feature(key.encode())) is present, key
 
 
 def test_vocal_edit_abi_version_is_none_when_feature_is_compiled_out() -> None:
@@ -73,42 +79,114 @@ def test_abi_versions_are_none_when_feature_is_compiled_out() -> None:
 
 
 def test_capabilities_returns_native_build_descriptor() -> None:
-    """capabilities returns the canonical C ABI build descriptor as a dict."""
+    """capabilities returns the canonical C ABI build descriptor as a dataclass."""
     import libsonare
 
     descriptor = libsonare.capabilities()
 
-    assert isinstance(descriptor, dict)
-    assert descriptor["version"] == libsonare.version()
-    assert descriptor["abi"]["project"] == (libsonare.project_abi_version() or 0)
-    assert descriptor["abi"]["engine"] == libsonare.engine_abi_version()
-    assert descriptor["decode"]["builtin"] == ["wav", "mp3"]
-    assert isinstance(descriptor["platform"], str)
-    assert isinstance(descriptor["simd"], str)
-    assert descriptor["hardwareConcurrency"] >= 1
+    assert isinstance(descriptor, libsonare.Capabilities)
+    assert descriptor.version == libsonare.version()
+    assert descriptor.abi.project == (libsonare.project_abi_version() or 0)
+    assert descriptor.abi.engine == libsonare.engine_abi_version()
+    assert descriptor.decode.builtin == ("wav", "mp3")
+    assert isinstance(descriptor.platform, str)
+    assert isinstance(descriptor.simd, str)
+    assert descriptor.hardware_concurrency >= 1
 
 
-def test_capabilities_typed_dicts_match_the_payload() -> None:
-    """The TypedDicts describe exactly the keys the C ABI JSON carries.
+def test_capabilities_dataclass_fields_match_the_payload() -> None:
+    """The dataclasses carry exactly the keys the C ABI JSON carries.
 
     Derived from the payload rather than from a written-down list, so a key
     added on the C side fails here instead of drifting until someone reads
     both files.
     """
+    import dataclasses
+
     import libsonare
-    from libsonare._types_capabilities import (
+    from libsonare._analysis_music import _capabilities_document
+    from libsonare.types import (
         CapabilitiesAbi,
         CapabilitiesDecode,
         CapabilitiesFeatures,
     )
 
+    def wire_key(name: str) -> str:
+        head, *rest = name.split("_")
+        return head + "".join(part.capitalize() for part in rest)
+
+    document = _capabilities_document()
     descriptor = libsonare.capabilities()
-    for section, typed_dict in (
+    for section, cls in (
         ("abi", CapabilitiesAbi),
         ("features", CapabilitiesFeatures),
         ("decode", CapabilitiesDecode),
     ):
-        assert set(descriptor[section]) == set(typed_dict.__annotations__), section
+        assert isinstance(getattr(descriptor, section), cls), section
+        names = {wire_key(field.name) for field in dataclasses.fields(cls)}
+        assert set(document[section]) == names, section
+
+
+def test_capabilities_and_catalog_are_frozen() -> None:
+    """Assigning an attribute of a capabilities or catalog result is refused."""
+    import dataclasses
+
+    import libsonare
+
+    descriptor = libsonare.capabilities()
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        descriptor.version = "other"  # type: ignore[misc]
+    catalog = libsonare.capability_catalog()
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        catalog.version = "other"  # type: ignore[misc]
+
+
+def test_capabilities_features_are_the_fifteen_build_options() -> None:
+    """capabilities().features has exactly one bool field per build option."""
+    import dataclasses
+
+    import libsonare
+
+    features = libsonare.capabilities().features
+    expected = [
+        "mastering",
+        "mixing",
+        "mixing_assistant",
+        "graph",
+        "fx",
+        "ffmpeg",
+        "instrument_param_automation",
+        "arrangement",
+        "project",
+        "acoustic_sim",
+        "playback",
+        "pitch_editor",
+        "vocal_edit",
+        "voice_changer",
+        "assist",
+    ]
+    assert sorted(field.name for field in dataclasses.fields(features)) == sorted(expected)
+    for name in expected:
+        assert isinstance(getattr(features, name), bool), name
+
+
+def test_capabilities_use_snake_case_attributes_only() -> None:
+    """The wire's camelCase spelling is not an attribute; the snake_case field is."""
+    import libsonare
+
+    descriptor = libsonare.capabilities()
+    assert not hasattr(descriptor, "hardwareConcurrency")
+    assert isinstance(descriptor.hardware_concurrency, int)
+    assert descriptor.hardware_concurrency > 0
+
+
+def test_capability_catalog_processor_params_and_slots_are_typed() -> None:
+    """A catalog processor carries per-param dataclasses and a tuple of slots."""
+    import libsonare
+
+    processor = libsonare.capability_catalog().processors[0]
+    assert isinstance(processor.params[0].rt_safe, bool)
+    assert isinstance(processor.slots, tuple)
 
 
 @pytest.mark.skipif(

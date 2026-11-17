@@ -286,8 +286,8 @@ node = [
   "mel_to_audio_checked_ex",
   "mfcc_to_audio_checked_ex",
   "mfcc_to_audio_checked_ex2",
-  # Fold options (normalize / include LFE) are folded into the downmix facade's options.
-  "downmix_ex",
+  # Seeds SonareDownmixOptions; the facades take normalize / include LFE as downmix options.
+  "downmix_options_init",
   # C-side canonical enum-name supplier consumed internally by the facade
   # snapshot/test helpers; not exposed as a same-named public function.
   "synth_enum_names",
@@ -411,8 +411,8 @@ wasm = [
   "mel_to_audio_checked_ex",
   "mfcc_to_audio_checked_ex",
   "mfcc_to_audio_checked_ex2",
-  # Fold options (normalize / include LFE) are folded into the downmix facade's options.
-  "downmix_ex",
+  # Seeds SonareDownmixOptions; the facades take normalize / include LFE as downmix options.
+  "downmix_options_init",
   "synth_enum_names",
   # Unified-analysis variants folded into the base facade analyze /
   # analyzeWithProgress / analyzeMelody (WASM keeps its native analyze() object).
@@ -541,8 +541,8 @@ python = [
   "mel_to_audio_checked_ex",
   "mfcc_to_audio_checked_ex",
   "mfcc_to_audio_checked_ex2",
-  # Fold options (normalize / include LFE) are folded into the downmix facade's options.
-  "downmix_ex",
+  # Seeds SonareDownmixOptions; the facades take normalize / include LFE as downmix options.
+  "downmix_options_init",
   "synth_enum_names",
   # Unified-analysis variants folded into the base facade `analyze` /
   # `analyze_with_progress` / `analyze_melody` (use_pyin/center params).

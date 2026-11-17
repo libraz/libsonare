@@ -92,8 +92,11 @@ class TimeSignature:
     """Detected time signature."""
 
     numerator: int
+    """Beats per bar."""
     denominator: int
+    """Note value of one beat (4 = quarter note)."""
     confidence: float
+    """Belief in this meter over the other candidates, in [0, 1]."""
 
     def __str__(self) -> str:
         return f"{self.numerator}/{self.denominator}"

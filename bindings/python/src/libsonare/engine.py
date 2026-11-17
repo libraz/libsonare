@@ -108,9 +108,9 @@ from .types import (
 )
 
 # Must match sonare::rt::kEngineAbiVersion (src/rt/command.h) and the WASM
-# binding's EXPECTED_ENGINE_ABI_VERSION. A mismatch means the loaded native
+# binding's _EXPECTED_ENGINE_ABI_VERSION. A mismatch means the loaded native
 # binary lays out engine structs differently than this wrapper expects.
-EXPECTED_ENGINE_ABI_VERSION = 3
+_EXPECTED_ENGINE_ABI_VERSION = 3
 
 # SONARE_ENGINE_MAX_TRACK_LANES: most lanes RealtimeEngine.set_track_lanes accepts.
 MAX_TRACK_LANES = 32
@@ -147,11 +147,11 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         self._handle: ctypes.c_void_p | None = None
         lib = _get_lib()
         abi_version = int(lib.sonare_engine_abi_version())
-        if abi_version != EXPECTED_ENGINE_ABI_VERSION:
+        if abi_version != _EXPECTED_ENGINE_ABI_VERSION:
             raise SonareError(
                 int(ErrorCode.ABI_MISMATCH),
                 f"libsonare engine ABI mismatch: native binary reports {abi_version}, "
-                f"expected {EXPECTED_ENGINE_ABI_VERSION}. The installed shared library is "
+                f"expected {_EXPECTED_ENGINE_ABI_VERSION}. The installed shared library is "
                 "incompatible with this Python binding.",
             )
         handle = ctypes.c_void_p()

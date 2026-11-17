@@ -30,6 +30,7 @@ from libsonare import (
     synth_preset_patch,
 )
 from libsonare._project import SYNTH_ENUM_TABLES
+from libsonare.types import SynthParamCondition
 
 EXPECTED_SYNTH_ENUM_TABLES = {
     "engine_modes": (
@@ -367,10 +368,10 @@ def test_synth_patch_second_presence_word_fields() -> None:
     finally:
         project.close()
 
-    names = {row["name"]: row for row in synth_patch_param_info()}
+    names = {row.name: row for row in synth_patch_param_info()}
     for name in ("driftRateHz", "ampDelayMs", "ampHoldMs", "filterDelayMs", "filterHoldMs"):
         assert name in names
-    assert names["oneShot"]["type"] == "boolean"
+    assert names["oneShot"].type == "boolean"
 
 
 def test_synth_patch_rejects_non_string_preset() -> None:
@@ -546,7 +547,7 @@ def test_synth_patch_gain_zero_renders_silence() -> None:
 def test_synth_patch_field_outside_the_published_range_is_refused_by_name() -> None:
     project = _build_midi_only_project()
     try:
-        info = {d["name"]: d for d in synth_patch_param_info()}
+        info = {d.name: d for d in synth_patch_param_info()}
         cases = [
             (SynthPatch(cutoff_hz=1e6), "cutoffHz"),
             (SynthPatch(stereo_spread=5.0), "stereoSpread"),
@@ -560,7 +561,7 @@ def test_synth_patch_field_outside_the_published_range_is_refused_by_name() -> N
             assert err.value.code == 4
         # The published ends are accepted.
         project.bounce_with_synth_instrument(
-            SynthPatch(cutoff_hz=info["cutoffHz"]["max"]), total_frames=128
+            SynthPatch(cutoff_hz=info["cutoffHz"].max), total_frames=128
         )
     finally:
         project.close()
@@ -895,7 +896,7 @@ def test_engine_params_change_a_render_and_default_to_none() -> None:
 
 
 def test_subtractive_engine_params_are_accepted_by_key() -> None:
-    rows = {row["name"]: row for row in synth_engine_param_info("subtractive")}
+    rows = {row.name: row for row in synth_engine_param_info("subtractive")}
     assert set(rows) == {
         "osc2IntervalCents",
         "osc2Level",
@@ -914,7 +915,7 @@ def test_subtractive_engine_params_are_accepted_by_key() -> None:
         "sustainKeySlopeDb",
     }
     levels = ("osc2Level", "noiseLevel", "noiseAm", "bandNoiseLevel")
-    assert all(rows[name]["default"] == 0 for name in levels)
+    assert all(rows[name].default == 0 for name in levels)
     project = _build_midi_only_project()
     try:
         plain = project.bounce_with_synth_instrument(
@@ -962,51 +963,56 @@ def test_engine_param_info_shape() -> None:
     for mode in ("default", "sample"):
         assert synth_engine_param_info(mode) == []
     bowed = synth_engine_param_info("bowed-string")
-    by_name = {row["name"]: row for row in bowed}
+    by_name = {row.name: row for row in bowed}
     force = by_name["bowForce"]
-    assert force["type"] == "number"
-    assert force["min"] <= force["default"] <= force["max"]
-    assert force["unit"]
+    assert force.type == "number"
+    assert force.min is not None and force.max is not None
+    assert force.min <= force.default <= force.max
+    assert force.unit
     assert synth_engine_param_info(SYNTH_ENUM_TABLES["engine_modes"].index("bowed-string")) == bowed
     with pytest.raises(Exception, match="engine mode"):
         synth_engine_param_info(99)
     patch_rows = synth_patch_param_info()
-    names = {row["name"] for row in patch_rows}
+    names = {row.name for row in patch_rows}
     assert {"gain", "busDrive"} <= names
-    assert all(row["unit"] for row in patch_rows)
+    assert all(row.unit for row in patch_rows)
 
 
 def test_engine_param_info_states_gates_only_where_set() -> None:
-    percussion = {row["name"]: row for row in synth_engine_param_info("percussion")}
+    percussion = {row.name: row for row in synth_engine_param_info("percussion")}
     gm_kit = percussion["gmKit"]
-    assert gm_kit["type"] == "boolean"
-    assert gm_kit["default"] is True
-    assert "activeWhen" not in gm_kit
-    kit_off = {"key": "gmKit", "scope": "engine", "relation": "eq", "value": False}
-    assert percussion["modeRatios6"]["activeWhen"] == [
-        [kit_off, {"key": "numModes", "scope": "engine", "relation": "gt", "value": 6}],
-    ]
+    assert gm_kit.type == "boolean"
+    assert gm_kit.default is True
+    assert gm_kit.active_when is None
+
+    def cond(key: str, scope: str, relation: str, value: float | bool | str) -> SynthParamCondition:
+        return SynthParamCondition(key=key, scope=scope, relation=relation, value=value)  # type: ignore[arg-type]
+
+    kit_off = cond("gmKit", "engine", "eq", False)
+    assert percussion["modeRatios6"].active_when == (
+        (kit_off, cond("numModes", "engine", "gt", 6)),
+    )
     # Reached through the direct contact or through the plate's: two alternatives.
-    assert percussion["contactMs"]["activeWhen"] == [
-        [kit_off, {"key": "contact", "scope": "engine", "relation": "gt", "value": 0}],
-        [
+    assert percussion["contactMs"].active_when == (
+        (kit_off, cond("contact", "engine", "gt", 0)),
+        (
             kit_off,
-            {"key": "plateGain", "scope": "engine", "relation": "gt", "value": 0},
-            {"key": "plateContact", "scope": "engine", "relation": "gt", "value": 0},
-        ],
-    ]
-    bowed = {row["name"]: row for row in synth_engine_param_info("bowed-string")}
-    assert bowed["corpusScale"]["activeWhen"] == [
-        [
-            {"key": "body", "scope": "patch", "relation": "eq", "value": "violin"},
-            {"key": "bodyMix", "scope": "patch", "relation": "gt", "value": 0},
-        ],
-    ]
+            cond("plateGain", "engine", "gt", 0),
+            cond("plateContact", "engine", "gt", 0),
+        ),
+    )
+    bowed = {row.name: row for row in synth_engine_param_info("bowed-string")}
+    assert bowed["corpusScale"].active_when == (
+        (
+            cond("body", "patch", "eq", "violin"),
+            cond("bodyMix", "patch", "gt", 0),
+        ),
+    )
     for mode in SYNTH_ENUM_TABLES["engine_modes"]:
         for row in synth_engine_param_info(mode):
-            if "activeWhen" in row:
-                assert row["activeWhen"], (mode, row["name"])
-                assert all(alternative for alternative in row["activeWhen"]), (mode, row["name"])
+            if row.active_when is not None:
+                assert row.active_when, (mode, row.name)
+                assert all(alternative for alternative in row.active_when), (mode, row.name)
 
 
 def _engine_params_patch() -> SynthPatch:

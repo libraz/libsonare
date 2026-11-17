@@ -136,7 +136,7 @@ MIRRORS: tuple[tuple[str, str, str], ...] = (
     # Engine ABI.
     (
         "bindings/python/src/libsonare/engine.py",
-        r"EXPECTED_ENGINE_ABI_VERSION\s*=\s*(\w+)",
+        r"_EXPECTED_ENGINE_ABI_VERSION\s*=\s*(\w+)",
         "engine",
     ),
     ("bindings/node/src/addon/engine/common.h", r"kExpectedEngineAbiVersion\s*=\s*(\w+)", "engine"),

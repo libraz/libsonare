@@ -283,7 +283,7 @@ typedef struct {
   size_t count;
 } SonareStringArray;
 
-/* Song-structure section types (mirrors sonare::SectionType ordinals). Every
+/** Song-structure section types (mirrors sonare::SectionType ordinals). Every
  * value is reachable. SONARE_SECTION_PRE_CHORUS is a repeated group that always
  * leads into the Chorus and is shorter than it. SONARE_SECTION_UNKNOWN means
  * the segment matched no labelling rule, including a track with no structure at

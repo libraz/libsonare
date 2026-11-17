@@ -24,6 +24,16 @@ class SonareDiagnostic(CStruct):
     ]
 
 
+class SonareDownmixOptions(CStruct):
+    """Maps to SonareDownmixOptions in sonare_c_types_functions.h."""
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("include_lfe", ctypes.c_int32),
+        ("normalize", ctypes.c_int32),
+    ]
+
+
 # SonarePitchCorrectionConfig.target_mode values.
 SONARE_PITCH_TARGET_FIXED_MIDI = 0
 SONARE_PITCH_TARGET_SCALE = 1

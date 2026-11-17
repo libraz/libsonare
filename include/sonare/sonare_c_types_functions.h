@@ -34,39 +34,47 @@ SonareError sonare_audio_from_memory(const uint8_t* data, size_t length, SonareA
 SonareError sonare_decode_channels(const uint8_t* data, size_t length, float** out_samples,
                                    size_t* out_frames, int* out_channels, int* out_sample_rate);
 
+/// @brief Fold options for @ref sonare_downmix.
+/// @details Fill with @ref sonare_downmix_options_init before setting fields.
+typedef struct {
+  /// Size of this struct in bytes, written by @ref sonare_downmix_options_init.
+  uint32_t struct_size;
+  /// Non-zero folds the LFE plane into the front pair at -3 dB instead of
+  /// dropping it. Default 0.
+  int32_t include_lfe;
+  /// Non-zero scales the output so the worst case, every input at full scale and
+  /// in phase, stays at or below unity. Default 0.
+  int32_t normalize;
+} SonareDownmixOptions;
+
+/// @brief Writes the defaults (both options off) and @c struct_size into
+///        @p options; a NULL @p options is ignored.
+void sonare_downmix_options_init(SonareDownmixOptions* options);
+
 /// @brief Downmixes planar channels to a narrower layout (ITU-R BS.775).
-/// @details @p channels holds @p channel_count planes of @p frames samples each. The
-///          source layout is the one @p channel_count names (1 mono, 2 stereo, 6 5.1,
+/// @details @p channels holds @p num_channels planes of @p frames samples each. The
+///          source layout is the one @p num_channels names (1 mono, 2 stereo, 6 5.1,
 ///          8 7.1; plane order as in @ref sonare_decode_channels). Center and
-///          surround enter the front pair at -3 dB, the LFE plane is dropped, the result is
-///          not normalised (it can exceed full scale; see @ref sonare_downmix_ex), and
-///          a stereo/5.1/7.1 source folds to mono through the same matrix the
-///          decoders use. @p target_layout is a @ref SonareChannelLayout value. Supported targets
-///          narrow the bed: 7.1 to 5.1, 5.1 and 7.1 to stereo, stereo/5.1/7.1 to mono, and the
-///          identity copy. A channel count outside 1/2/6/8 folds to
-///          @c SONARE_CHANNEL_LAYOUT_MONO as the unweighted mean of its planes,
-///          which is what the decoders do for such a source, and has no other
-///          target. Anything else (an upmix, an unknown @p target_layout, a zero
-///          @p frames or @p channel_count, a NULL pointer) returns
-///          @c SONARE_ERROR_INVALID_PARAMETER. @p out_samples receives the
-///          target layout's channel count of planes, @p frames samples each.
+///          surround enter the front pair at -3 dB and the LFE plane is dropped
+///          unless @p options asks to fold it. The BS.775 fold is not normalised, so
+///          a source with several full-scale planes can fold past full scale (six
+///          planes of 1.0 reach 2.414 on a stereo target) unless @p options asks to
+///          normalise. A stereo/5.1/7.1 source folds to mono through the same matrix
+///          the decoders use. @p target_layout is a @ref SonareChannelLayout value.
+///          Supported targets narrow the bed: 7.1 to 5.1, 5.1 and 7.1 to stereo,
+///          stereo/5.1/7.1 to mono, and the identity copy. A channel count outside
+///          1/2/6/8 folds to @c SONARE_CHANNEL_LAYOUT_MONO as the unweighted mean of
+///          its planes whatever the options, which is what the decoders do for such
+///          a source, and has no other target. A NULL @p options takes the defaults.
+///          Anything else (an upmix, an unknown @p target_layout, a zero @p frames or
+///          @p num_channels, a NULL pointer, an @p options whose @c struct_size is
+///          smaller than this struct) returns @c SONARE_ERROR_INVALID_PARAMETER.
+///          @p out_samples receives the target layout's channel count of planes,
+///          @p frames samples each.
 /// @note Free @p out_samples with @ref sonare_free_floats.
-SonareError sonare_downmix(const float* channels, size_t frames, int channel_count,
-                           int target_layout, float** out_samples);
-/// @brief @ref sonare_downmix with the fold options.
-/// @details The BS.775 fold is not normalised, so a source with several
-///          full-scale planes can fold past full scale (six planes of 1.0 reach
-///          2.414 on a stereo target). @p normalize non-zero scales the output so the
-///          worst case, every input at full scale and in phase, stays at or below
-///          unity; @p include_lfe non-zero folds the LFE plane into the front pair at
-///          -3 dB instead of dropping it. A channel count the speaker model does not
-///          name folds to mono as the plain mean whatever the options. Every other
-///          argument and return value is as for @ref sonare_downmix, which is this
-///          function with both options zero.
-/// @note Free @p out_samples with @ref sonare_free_floats.
-SonareError sonare_downmix_ex(const float* channels, size_t frames, int channel_count,
-                              int target_layout, int include_lfe, int normalize,
-                              float** out_samples);
+SonareError sonare_downmix(const float* channels, size_t frames, size_t num_channels,
+                           int target_layout, const SonareDownmixOptions* options,
+                           float** out_samples);
 
 #ifndef __EMSCRIPTEN__
 /// @note Release @p out with @ref sonare_audio_destroy; it is a handle, not a
@@ -103,6 +111,7 @@ SonareError sonare_audio_from_file_channel(const char* path, int channel_index, 
 SonareError sonare_audio_file_channel_count(const char* path, int* out_channels);
 #endif
 
+/// @brief Releases @p audio; a NULL @p audio is ignored.
 void sonare_audio_destroy(SonareAudio* audio);
 /// @brief Borrowed view of the handle's mono samples, or NULL for a NULL
 ///        @p audio.
@@ -114,8 +123,11 @@ void sonare_audio_destroy(SonareAudio* audio);
 ///          @ref sonare_audio_file_channel_count reports the channel count of a
 ///          file on disk, never the handle's.
 const float* sonare_audio_data(const SonareAudio* audio);
+/// @brief Sample count of @p audio's one plane, or 0 for a NULL @p audio.
 size_t sonare_audio_length(const SonareAudio* audio);
+/// @brief Sample rate of @p audio in Hz, or 0 for a NULL @p audio.
 int sonare_audio_sample_rate(const SonareAudio* audio);
+/// @brief Duration of @p audio in seconds, or 0 for a NULL @p audio.
 float sonare_audio_duration_sec(const SonareAudio* audio);
 SonareError sonare_audio_detect_bpm(const SonareAudio* audio, float* out_bpm);
 SonareError sonare_audio_detect_key(const SonareAudio* audio, SonareKey* out_key);
@@ -263,8 +275,8 @@ SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
    stage label. user_data is the opaque pointer passed to the analyze call. */
 typedef void (*SonareAnalyzeProgressCallback)(float progress, const char* stage, void* user_data);
 
-/* Cooperative cancellation callback for long-running offline operations.
-   Return nonzero to stop after the current progress-report boundary. */
+/// Cooperative cancellation callback for long-running offline operations.
+/// Return nonzero to stop after the current progress-report boundary.
 typedef int (*SonareCancelCallback)(void* user_data);
 
 /* Full analysis serialized to a camelCase JSON object. Unlike sonare_analyze
@@ -433,9 +445,11 @@ SonareError sonare_analyze_json_ex_with_progress(
     SonareAnalyzeProgressCallback callback, void* user_data, char** out_json,
     SonareCancelCallback cancel_cb, void* cancel_user_data);
 
-// Memory management
+/// @brief Releases a float buffer the library allocated; NULL is ignored.
 void sonare_free_floats(float* ptr);
+/// @brief Releases an int buffer the library allocated; NULL is ignored.
 void sonare_free_ints(int* ptr);
+/// @brief Releases a string the library handed to the caller; NULL is ignored.
 void sonare_free_string(char* ptr);
 void sonare_free_key_candidates(SonareKeyCandidate* ptr);
 void sonare_free_analysis_result(SonareAnalysisResult* result);
@@ -517,10 +531,10 @@ SonareError sonare_last_error_code(void);
 ///   | `acoustic.*`                   | sonare_synthesize_rir, sonare_room_morph,      |
 ///   |                                | sonare_room_morph_stereo                       |
 typedef struct {
-  uint32_t struct_size;
-  const char* code;
-  const char* message;
-  SonareDiagnosticSeverity severity;
+  uint32_t struct_size;               ///< Written by sonare_diagnostic_init.
+  const char* code;                   ///< Stable dotted code, such as `mixing.unknown_scene_key`.
+  const char* message;                ///< Human-readable detail.
+  SonareDiagnosticSeverity severity;  ///< How serious the entry is.
 } SonareDiagnostic;
 
 /// @brief Fills @p diagnostic with empty strings, SONARE_DIAGNOSTIC_INFO and its

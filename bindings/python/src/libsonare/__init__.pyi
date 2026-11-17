@@ -36,6 +36,7 @@ from ._project import synth_preset_patch as synth_preset_patch
 from ._project_edit import PART_RIG_ALL_PARTS as PART_RIG_ALL_PARTS
 from ._project_edit import PART_RIG_MODES as PART_RIG_MODES
 from ._runtime import ErrorCode as ErrorCode
+from ._runtime import ErrorCodeName as ErrorCodeName
 from ._runtime import SonareError as SonareError
 from ._runtime import SonareValueError as SonareValueError
 from .analyzer import (
@@ -1309,6 +1310,7 @@ from .types import (
 )
 
 __version__: str
+"""Installed package version, or the native library version in a source checkout."""
 
 from .vocal_edit import (
     VocalAnalysis as VocalAnalysis,

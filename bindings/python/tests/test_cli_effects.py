@@ -285,7 +285,7 @@ def test_mastering_processor_cli_uses_the_runtime_stereo_catalog(monkeypatch) ->
     monkeypatch.setattr(
         libsonare,
         "mastering_processor_catalog",
-        lambda: [{"id": "custom.stereo", "stereoOnly": True}],
+        lambda: [argparse.Namespace(id="custom.stereo", stereo_only=True)],
     )
 
     called: list[str] = []
