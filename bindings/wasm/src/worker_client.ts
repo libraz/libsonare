@@ -4,10 +4,10 @@ import './lifetime.js';
 import type { MasterAudioRequest, MasterAudioStereoRequest } from './mastering_chain.js';
 import type { ProgressCallback } from './public_types.js';
 import type {
+  AnalyzeRequest,
+  DetectBpmRequest,
   DetectChordsRequest,
   DetectKeyRequest,
-  MusicAnalyzeRequest,
-  SamplesRequest,
 } from './quick_analysis.js';
 import type { OfflineWorkerOperation, OfflineWorkerResponseMessage } from './worker_protocol.js';
 
@@ -184,7 +184,7 @@ export class OfflineWorkerClient {
    * @throws SonareError `Cancelled` on abort, `InvalidState` after {@link destroy}; the call rejects with `TypeError` for a function-valued request field such as `cancel`.
    */
   analyze(
-    request: WorkerRequest<MusicAnalyzeRequest>,
+    request: WorkerRequest<AnalyzeRequest>,
     options?: OfflineWorkerCallOptions,
   ): Promise<ReturnType<typeof import('./quick_analysis.js').analyze>> {
     return this.call('analyze', request, options);
@@ -192,7 +192,7 @@ export class OfflineWorkerClient {
 
   /** Detect BPM in the Worker. Same request, option and error contract as {@link analyze}. */
   detectBpm(
-    request: WorkerRequest<SamplesRequest>,
+    request: WorkerRequest<DetectBpmRequest>,
     options?: OfflineWorkerCallOptions,
   ): Promise<number> {
     return this.call('detectBpm', request, options);

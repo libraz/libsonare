@@ -128,12 +128,20 @@ const CASES: readonly FieldCase[] = [
   {
     entry: 'pcen',
     field: 'sampleRate',
-    run: (options) => pcen(matrix, PCEN_BINS, PCEN_FRAMES, options as Record<string, number>),
+    run: (options) =>
+      pcen({
+        values: { data: matrix, rows: PCEN_BINS, cols: PCEN_FRAMES },
+        ...(options as Record<string, number>),
+      }),
   },
   {
     entry: 'pcen',
     field: 'hopLength',
-    run: (options) => pcen(matrix, PCEN_BINS, PCEN_FRAMES, options as Record<string, number>),
+    run: (options) =>
+      pcen({
+        values: { data: matrix, rows: PCEN_BINS, cols: PCEN_FRAMES },
+        ...(options as Record<string, number>),
+      }),
   },
 ];
 

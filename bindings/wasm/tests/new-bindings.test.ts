@@ -93,7 +93,7 @@ describe('newly exposed WASM functions', () => {
   });
 
   it('spectralContrast returns an (nBands+1) x nFrames matrix', () => {
-    const r = spectralContrast(makeSine(1, 440), SR, 2048, 512, 6);
+    const r = spectralContrast(makeSine(1, 440), SR, { nFft: 2048, hopLength: 512, nBands: 6 });
     expect(r.rows).toBe(7);
     expect(r.cols).toBeGreaterThan(0);
     expect(r.data.length).toBe(r.rows * r.cols);
@@ -104,7 +104,12 @@ describe('newly exposed WASM functions', () => {
     // At a 64-point transform the bin is 344.5 Hz, so band 0 (below fmin = 200 Hz)
     // is emptied by the overlap trim and has nothing to average. That reaches the
     // caller as NaN rather than a level borrowed from the bins around it.
-    const r = spectralContrast(makeSine(1, 440), SR, 64, 16, 6, 200.0);
+    const r = spectralContrast(makeSine(1, 440), SR, {
+      nFft: 64,
+      hopLength: 16,
+      nBands: 6,
+      fminHz: 200.0,
+    });
     expect(r.rows).toBe(7);
     expect(r.cols).toBeGreaterThan(0);
 
@@ -119,7 +124,7 @@ describe('newly exposed WASM functions', () => {
   });
 
   it('polyFeatures returns an (order+1) x nFrames matrix', () => {
-    const r = polyFeatures(makeSine(1, 440), SR, 2048, 512, 1);
+    const r = polyFeatures(makeSine(1, 440), SR, { nFft: 2048, hopLength: 512, order: 1 });
     expect(r.rows).toBe(2);
     expect(r.cols).toBeGreaterThan(0);
     expect(allFinite(r.data)).toBe(true);
@@ -127,7 +132,7 @@ describe('newly exposed WASM functions', () => {
 
   it('zeroCrossings returns sorted in-range indices', () => {
     const x = makeSine(0.05, 440);
-    const idx = zeroCrossings(x);
+    const idx = zeroCrossings(x, SR);
     expect(idx.length).toBeGreaterThan(0);
     for (let i = 1; i < idx.length; i++) {
       expect(idx[i]).toBeGreaterThan(idx[i - 1]);
@@ -136,10 +141,10 @@ describe('newly exposed WASM functions', () => {
   });
 
   it('pitchTuning returns a finite deviation', () => {
-    const t = pitchTuning(new Float32Array([440, 880, 660]));
+    const t = pitchTuning({ frequencies: new Float32Array([440, 880, 660]) });
     expect(Number.isFinite(t)).toBe(true);
-    expect(t).toBeGreaterThanOrEqual(-0.5);
-    expect(t).toBeLessThan(0.5);
+    expect(t).toBeGreaterThanOrEqual(-50);
+    expect(t).toBeLessThan(50);
   });
 
   it('estimateTuning returns a finite deviation', () => {
@@ -469,20 +474,48 @@ describe('newly exposed WASM functions', () => {
 
   it('pitchYin returns librosa-style estimates for unvoiced frames', () => {
     const silence = new Float32Array(SR); // fully unvoiced
-    const nanRes = pitchYin(silence, SR, 2048, 512, 65, 2093, 0.3, false);
+    const nanRes = pitchYin(silence, SR, {
+      frameLength: 2048,
+      hopLength: 512,
+      f0MinHz: 65,
+      f0MaxHz: 2093,
+      threshold: 0.3,
+      fillNa: false,
+    });
     expect(nanRes.f0.every((v) => Number.isFinite(v))).toBe(true);
     expect(nanRes.voicedFlag.every((v) => !v)).toBe(true);
 
-    const filled = pitchYin(silence, SR, 2048, 512, 65, 2093, 0.3, true);
+    const filled = pitchYin(silence, SR, {
+      frameLength: 2048,
+      hopLength: 512,
+      f0MinHz: 65,
+      f0MaxHz: 2093,
+      threshold: 0.3,
+      fillNa: true,
+    });
     expect(filled.f0.every((v) => Number.isFinite(v))).toBe(true);
   });
 
   it('pitchPyin fillNa controls the unvoiced value', () => {
     const silence = new Float32Array(SR);
-    const nanRes = pitchPyin(silence, SR, 2048, 512, 65, 2093, 0.3, false);
+    const nanRes = pitchPyin(silence, SR, {
+      frameLength: 2048,
+      hopLength: 512,
+      f0MinHz: 65,
+      f0MaxHz: 2093,
+      threshold: 0.3,
+      fillNa: false,
+    });
     expect(nanRes.f0.some((v) => Number.isNaN(v))).toBe(true);
 
-    const filled = pitchPyin(silence, SR, 2048, 512, 65, 2093, 0.3, true);
+    const filled = pitchPyin(silence, SR, {
+      frameLength: 2048,
+      hopLength: 512,
+      f0MinHz: 65,
+      f0MaxHz: 2093,
+      threshold: 0.3,
+      fillNa: true,
+    });
     expect(filled.f0.every((v) => Number.isFinite(v))).toBe(true);
   });
 });

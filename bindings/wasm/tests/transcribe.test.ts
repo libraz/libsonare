@@ -280,8 +280,8 @@ describe('WASM transcribe', () => {
 
     const guarded = [
       'referenceHz',
-      'fmin',
-      'fmax',
+      'f0MinHz',
+      'f0MaxHz',
       'minNoteMs',
       'minNoteDivision',
       'segmentationThresholdCents',
@@ -317,8 +317,8 @@ describe('WASM transcribe', () => {
       samples: lowNote,
       sampleRate,
       polyphonic: true,
-      fmin: 55,
-      fmax: 1760,
+      f0MinHz: 55,
+      f0MaxHz: 1760,
       tempoBpm: 120,
     });
 
@@ -333,9 +333,9 @@ describe('WASM transcribe', () => {
     // even though the fixture contains no note in that range. Polyphonic uses
     // the salience tracker's 1760 Hz upper default and must refuse the same
     // partial request after resolving it.
-    expect(() => transcribe({ samples, sampleRate, fmin: 1800, tempoBpm: 120 })).not.toThrow();
+    expect(() => transcribe({ samples, sampleRate, f0MinHz: 1800, tempoBpm: 120 })).not.toThrow();
     expect(() =>
-      transcribe({ samples, sampleRate, polyphonic: true, fmin: 1800, tempoBpm: 120 }),
+      transcribe({ samples, sampleRate, polyphonic: true, f0MinHz: 1800, tempoBpm: 120 }),
     ).toThrow(/fmax must be above fmin/);
   });
 
@@ -359,12 +359,11 @@ describe('WASM transcribe', () => {
     // pointer, the length and the rate and NOTHING about the sample values, so
     // there is no second line of defence behind it. Measured with the scan
     // skipped, an all-NaN buffer came back as a SUCCESS reporting zero notes.
-    // `validate` is therefore not part of this request type, and a caller who
-    // sets it is refused by name rather than ignored.
-    const bypass = { samples: withNan, sampleRate, validate: false };
-    expect(() => transcribe(bypass as unknown as TranscribeRequest)).toThrow(
-      "transcribe: unknown request key 'validate'",
-    );
+    // `validate: false` skips only the facade's pre-scan, so the C ABI's own
+    // refusal is what a caller who sets it gets.
+    const bypass: TranscribeRequest = { samples: withNan, sampleRate, validate: false };
+    expect(() => transcribe(bypass)).toThrow(RangeError);
+    expect(() => transcribe(bypass)).not.toThrow(/unknown request key/);
     const allNan = new Float32Array(samples.length).fill(Number.NaN);
     expect(() => transcribe({ samples: allNan, sampleRate })).toThrow(RangeError);
   });
@@ -398,7 +397,7 @@ describe('WASM transcribe', () => {
       ['reattackRatio 1', { polyphonic: true, reattackRatio: 1 }],
       ['reattackRatio 0.5', { polyphonic: true, reattackRatio: 0.5 }],
       ['segmentationThresholdCents 0', { segmentationThresholdCents: 0 }],
-      ['fmax below fmin', { fmin: 500, fmax: 400 }],
+      ['fmax below fmin', { f0MinHz: 500, f0MaxHz: 400 }],
       ['channel above 15', { channel: 16 }],
       ['group above 15', { group: 16 }],
     ];
@@ -415,15 +414,16 @@ describe('WASM transcribe', () => {
   });
 
   it('names the offending field on a refusal the C ABI owns', () => {
-    // `fmax` below `fmin`, and `group` / `channel` out of [0, 15], are refused by
-    // the C ABI rather than by this surface's reader -- one rule in one place.
+    // `group` / `channel` out of [0, 15] are refused by the C ABI rather than by
+    // this surface's reader -- one rule in one place. The F0 bounds are refused
+    // by the facade under their public names.
     // What has to hold here is that the detail survives the boundary:
     // `throwCError` prefers `sonare_last_error_message()` over the generic text
     // for the code, so a caller is told which field rather than "Invalid
     // parameter". The field name is asserted rather than the whole sentence, so
     // this pins the seam without owning the C ABI's prose.
     const named: Array<[string, TranscribeOptions, RegExp]> = [
-      ['fmax below fmin', { fmin: 500, fmax: 400 }, /fmax/],
+      ['f0MaxHz below f0MinHz', { f0MinHz: 500, f0MaxHz: 400 }, /f0MaxHz must be above f0MinHz/],
       ['group above 15', { group: 16 }, /group/],
       ['channel above 15', { channel: 16 }, /channel/],
     ];
@@ -464,21 +464,33 @@ describe('WASM transcribe', () => {
     };
 
     const annotated = () =>
-      messageOf(() => transcribe({ samples, sampleRate, tempoBpm: 120, fmin: 500, fmax: 400 }));
+      messageOf(() => transcribe({ samples, sampleRate, tempoBpm: 120, group: 16 }));
     const unannotated = () =>
       messageOf(() => project.transcribeToClip({ clipId: unknownClipId, samples, sampleRate }));
 
-    expect(annotated()).toMatch(/fmax must be above fmin/);
+    expect(annotated()).toMatch(/group/);
     expect(unannotated()).toMatch(/:\s*Invalid parameter$/);
-    expect(unannotated()).not.toMatch(/fmax/);
+    expect(unannotated()).not.toMatch(/group/);
     // Once more in the other order, so neither result can be the one the slot
     // happened to be holding when the test started.
-    expect(annotated()).toMatch(/fmax must be above fmin/);
-    expect(unannotated()).not.toMatch(/fmax/);
+    expect(annotated()).toMatch(/group/);
+    expect(unannotated()).not.toMatch(/group/);
 
     // And a success after a failure is still a success -- the slot is not
     // consulted when there is nothing to report.
     expect(transcribe({ samples, sampleRate, tempoBpm: 120 }).noteCount).toBe(baseline.noteCount);
+  });
+
+  it('refuses a non-positive tempoBpm in both call forms and still detects when it is absent', () => {
+    for (const tempoBpm of [0, -1]) {
+      expect(() => transcribe({ samples, sampleRate, tempoBpm })).toThrow(RangeError);
+      expect(() => transcribe({ samples, sampleRate, tempoBpm })).toThrow(/tempoBpm/);
+      expect(() => transcribe(samples, sampleRate, { tempoBpm })).toThrow(RangeError);
+      expect(() => transcribe(samples, sampleRate, { tempoBpm })).toThrow(/tempoBpm/);
+    }
+    const detected = transcribe({ samples, sampleRate });
+    expect(Number.isFinite(detected.tempoBpm)).toBe(true);
+    expect(detected.tempoBpm).toBeGreaterThan(0);
   });
 
   it('lets maxPolyphony bound the voices of a chord', () => {
@@ -495,14 +507,17 @@ describe('WASM transcribe', () => {
     expect(maxSimultaneous(single)).toBeLessThan(maxSimultaneous(open));
   });
 
-  it('reads reattackRatio: omitted splits a re-struck tone, 0 does not', () => {
+  it('reads reattackRatio: omitted leaves a re-struck tone whole, an explicit ratio splits it', () => {
     const struck = restruck();
     const run = (extra: TranscribeOptions) =>
       transcribe({ samples: struck, sampleRate, tempoBpm: 120, polyphonic: true, ...extra });
     const omitted = run({});
-    const off = run({ reattackRatio: 0 });
-    expect(omitted.noteCount).toBe(2);
-    expect(off.noteCount).toBe(1);
+    expect(omitted.noteCount).toBe(1);
+    expect(run({ reattackRatio: 2 }).noteCount).toBe(2);
+    for (const bad of [0, 1, -1]) {
+      expect(() => run({ reattackRatio: bad })).toThrow(RangeError);
+      expect(() => run({ reattackRatio: bad })).toThrow(/reattackRatio must be greater than 1/);
+    }
     // A larger ratio than the second strike's rise also leaves the tone whole.
     expect(run({ reattackRatio: 50 }).noteCount).toBe(1);
   });

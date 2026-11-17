@@ -33,7 +33,7 @@ describe('splitSilenceCommon', () => {
 
   it('matches splitSilence exactly for a single signal', () => {
     const a = toneWindow(0, 0.2);
-    const solo = Array.from(splitSilence(a, topDb, frameLength, hopLength));
+    const solo = Array.from(splitSilence(a, sampleRate, { topDb, frameLength, hopLength }));
     const common = Array.from(splitSilenceCommon({ signals: [a], topDb, frameLength, hopLength }));
     expect(common).toEqual(solo);
   });
@@ -41,8 +41,8 @@ describe('splitSilenceCommon', () => {
   it('returns the union of each signal, not their intersection', () => {
     const a = toneWindow(0, 0.2);
     const b = toneWindow(0.5, 0.7);
-    const soloA = Array.from(splitSilence(a, topDb, frameLength, hopLength));
-    const soloB = Array.from(splitSilence(b, topDb, frameLength, hopLength));
+    const soloA = Array.from(splitSilence(a, sampleRate, { topDb, frameLength, hopLength }));
+    const soloB = Array.from(splitSilence(b, sampleRate, { topDb, frameLength, hopLength }));
     const combined = Array.from(
       splitSilenceCommon({ signals: [a, b], topDb, frameLength, hopLength }),
     );
@@ -69,7 +69,9 @@ describe('splitSilenceCommon', () => {
     const result = Array.from(
       splitSilenceCommon({ signals: [a, bCutShort], topDb, frameLength, hopLength }),
     );
-    expect(result).toEqual(Array.from(splitSilence(a, topDb, frameLength, hopLength)));
+    expect(result).toEqual(
+      Array.from(splitSilence(a, sampleRate, { topDb, frameLength, hopLength })),
+    );
   });
 
   it('succeeds with an empty result when every signal is silent', () => {

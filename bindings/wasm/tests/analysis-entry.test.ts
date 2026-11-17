@@ -73,10 +73,13 @@ describe('the analysis entry exports only what its binary registers', () => {
     'SonareError',
   ]);
 
+  /** Exported names that are a JS-side rename over a differently named native registration. */
+  const NATIVE_NAME: Readonly<Record<string, string>> = { onsetStrength: 'onsetEnvelope' };
+
   const entryFunctions = (): string[] =>
     Object.entries(analysis as Record<string, unknown>)
       .filter(([name, value]) => typeof value === 'function' && !JS_ONLY.has(name))
-      .map(([name]) => name);
+      .map(([name]) => NATIVE_NAME[name] ?? name);
 
   const registrations = async (): Promise<Set<string>> => {
     const createModule = (await import('../dist/sonare-analysis.js')).default;
@@ -105,11 +108,11 @@ describe('the analysis entry exports only what its binary registers', () => {
     const samples = new Float32Array(2048).map((_, i) => Math.sin((2 * Math.PI * 440 * i) / 22050));
     // feature_spectral, re-exported by name.
     expect(analysis.spectralCentroid(samples, 22050).length).toBeGreaterThan(0);
-    expect(analysis.zeroCrossingRate(samples).length).toBeGreaterThan(0);
+    expect(analysis.zeroCrossingRate(samples, 22050).length).toBeGreaterThan(0);
     // feature_spectrogram, re-exported by name. These answer a shaped object
     // rather than an array, so assert a field the native call has to fill.
-    expect(analysis.stft(samples).nFrames).toBeGreaterThan(0);
-    expect(analysis.melSpectrogram(samples, 22050).nMels).toBeGreaterThan(0);
-    expect(analysis.chroma(samples, 22050).nChroma).toBeGreaterThan(0);
+    expect(analysis.stft(samples, 22050).magnitude.cols).toBeGreaterThan(0);
+    expect(analysis.melSpectrogram(samples, 22050).power.rows).toBeGreaterThan(0);
+    expect(analysis.chroma(samples, 22050).features.rows).toBeGreaterThan(0);
   });
 });

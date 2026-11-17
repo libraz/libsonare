@@ -85,6 +85,7 @@ import type {
   ProjectVocalOriginalSource,
   ProjectVocalRehydrateItem,
 } from './public_types_vocal_project.js';
+import { nativeTranscribeOptions } from './transcribe.js';
 import {
   assertBoundedInteger,
   assertSampleRate,
@@ -1211,11 +1212,12 @@ export class Project {
   transcribeToClip(request: ProjectTranscribeRequest): number {
     assertSamples('Project.transcribeToClip', request.samples, true);
     assertSampleRate('Project.transcribeToClip', request.sampleRate);
+    const { clipId, samples, sampleRate, ...options } = request;
     return this.native.transcribeToClip(
-      request.clipId,
-      request.samples,
-      request.sampleRate,
-      request,
+      clipId,
+      samples,
+      sampleRate,
+      nativeTranscribeOptions('Project.transcribeToClip', options),
     );
   }
 

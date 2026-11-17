@@ -187,19 +187,19 @@ const FLOAT_FIELDS: FloatField[] = [
   {
     entry: 'preemphasis',
     key: 'zi',
-    run: (value: number) => preemphasis(emphasisInput, 0.97, value),
+    run: (value: number) => preemphasis(emphasisInput, SR, { coef: 0.97, zi: value }),
   },
   {
     entry: 'deemphasis',
     key: 'zi',
-    run: (value: number) => deemphasis(emphasisInput, 0.97, value),
+    run: (value: number) => deemphasis(emphasisInput, SR, { coef: 0.97, zi: value }),
   },
 ];
 
 /** The emphasis pair, typed so both can be driven by one body. */
 const EMPHASIS: [string, (x: Float32Array, coef: number, zi: number) => Float32Array][] = [
-  ['preemphasis', (x, coef, zi) => preemphasis(x, coef, zi)],
-  ['deemphasis', (x, coef, zi) => deemphasis(x, coef, zi)],
+  ['preemphasis', (x, coef, zi) => preemphasis(x, SR, { coef, zi })],
+  ['deemphasis', (x, coef, zi) => deemphasis(x, SR, { coef, zi })],
 ];
 
 beforeAll(async () => {
@@ -313,7 +313,7 @@ describe('spectralEdit consumes the region floats it accepts', () => {
 describe('the refusal is the same one the shared readers already raised', () => {
   it('answers a bag field and a positional field by the same code and wording', () => {
     const fromBag = capture(() => compressorWith({ thresholdDb: 1e300 }));
-    const fromPositional = capture(() => preemphasis(emphasisInput, 0.97, 1e300));
+    const fromPositional = capture(() => preemphasis(emphasisInput, SR, { coef: 0.97, zi: 1e300 }));
     expectRangeRefusal(fromBag, 'thresholdDb', 'compressor thresholdDb');
     expectRangeRefusal(fromPositional, 'zi', 'preemphasis zi');
     expect((fromBag as SonareError).code).toBe((fromPositional as SonareError).code);

@@ -124,14 +124,20 @@ describe('NaN/Inf guards (WASM)', () => {
     expect(() => resample(sine(), SR, 2_000_000_000)).toThrow();
   });
   it('feature-core wrappers reject NaN and inconsistent matrix dimensions', () => {
-    expect(() => pcen(new Float32Array([1, Number.NaN, 3, 4]), 2, 2)).toThrow();
-    expect(() => pcen(new Float32Array([1, 2, 3]), 2, 2)).toThrow();
-    expect(() => tempogram(withNaN(), SR)).toThrow();
-    expect(() => plp(withNaN(), SR)).toThrow();
+    expect(() =>
+      pcen({ values: { data: new Float32Array([1, Number.NaN, 3, 4]), rows: 2, cols: 2 } }),
+    ).toThrow();
+    expect(() =>
+      pcen({ values: { data: new Float32Array([1, 2, 3]), rows: 2, cols: 2 } }),
+    ).toThrow();
+    expect(() => tempogram({ onsetEnvelope: withNaN(), sampleRate: SR })).toThrow();
+    expect(() => plp({ onsetEnvelope: withNaN(), sampleRate: SR })).toThrow();
     // The cyclic and ratio tempogram wrappers previously skipped finiteness
     // validation and silently returned NaN-filled arrays (unlike the C ABI).
-    expect(() => cyclicTempogram(withNaN(), SR)).toThrow(/NaN|Inf/);
-    expect(() => tempogramRatio(withNaN(), 64, SR)).toThrow(/NaN|Inf/);
+    expect(() => cyclicTempogram({ onsetEnvelope: withNaN(), sampleRate: SR })).toThrow(/NaN|Inf/);
+    expect(() =>
+      tempogramRatio({ tempogram: { data: withNaN(), rows: 64, cols: 16 }, sampleRate: SR }),
+    ).toThrow(/NaN|Inf/);
   });
   it('StreamingEqualizer.match rejects non-finite reference audio', () => {
     const equalizer = new StreamingEqualizer({ sampleRate: SR, maxBlockSize: 128 });
@@ -250,7 +256,7 @@ describe('detailed-analysis config geometry matches the C ABI (WASM)', () => {
     expect(() => analyzeDynamics(audio, SR, { windowSec: 0 })).toThrow();
   });
   it('analyzeDynamics rejects a negative compression threshold', () => {
-    expect(() => analyzeDynamics(audio, SR, { compressionThreshold: -1 })).toThrow();
+    expect(() => analyzeDynamics(audio, SR, { compressionThresholdDb: -1 })).toThrow();
   });
   it('analyzeTimbre rejects non-positive nMels/nMfcc', () => {
     expect(() => analyzeTimbre(audio, SR, { nMels: 0 })).toThrow();

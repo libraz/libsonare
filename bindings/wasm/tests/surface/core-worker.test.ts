@@ -61,7 +61,10 @@ class LoopbackWorker {
 const clientOver = (worker: object, extra = {}): OfflineWorkerClient =>
   new OfflineWorkerClient({ worker: worker as OfflineWorkerLike, ...extra });
 
-const tiny = (): { samples: Float32Array } => ({ samples: new Float32Array([0, 0]) });
+const tiny = (): { samples: Float32Array; sampleRate: number } => ({
+  samples: new Float32Array([0, 0]),
+  sampleRate: 22050,
+});
 const isCode = (code: number) => (error: unknown) => isSonareError(error) && error.code === code;
 
 function tone(seconds: number, sampleRate = 22050): Float32Array {
@@ -96,7 +99,9 @@ describe('OfflineWorkerClient cancellation', () => {
     const reason = new Error('already aborted');
     const signal = AbortSignal.abort(reason);
     const samples = new Float32Array([0, 0]);
-    const error = await client.detectBpm({ samples }, { signal }).catch((e: unknown) => e);
+    const error = await client
+      .detectBpm({ samples, sampleRate: 22050 }, { signal })
+      .catch((e: unknown) => e);
     expect(isSonareError(error) && error.code).toBe(ErrorCode.Cancelled);
     expect((error as { cause?: unknown }).cause).toBe(reason);
     expect(worker.posted).toHaveLength(0);
@@ -137,6 +142,7 @@ describe('OfflineWorkerClient progress', () => {
     const seen: Array<[unknown, unknown]> = [];
     const result = await client.analyze({
       samples: tone(2),
+      sampleRate: 22050,
       onProgress: (progress, stage) => seen.push([progress, stage]),
     });
     expect(result.bpm).toBeGreaterThan(0);

@@ -96,12 +96,10 @@ function estimate(volume?: unknown): RoomEstimateResult {
 const configForRoom = (volume?: unknown) => masteringRepairDereverbConfigForRoom(estimate(volume));
 
 const pcenWith = (gain?: unknown, spectrogram: Float32Array = matrix) =>
-  pcen(
-    spectrogram,
-    PCEN_BINS,
-    PCEN_FRAMES,
-    (gain === undefined ? {} : { gain }) as Record<string, number>,
-  );
+  pcen({
+    values: { data: spectrogram, rows: PCEN_BINS, cols: PCEN_FRAMES },
+    ...(gain === undefined ? {} : { gain: gain as number }),
+  }).data;
 
 beforeAll(async () => {
   await init();

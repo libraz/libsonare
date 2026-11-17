@@ -61,10 +61,10 @@ describe('nnlsChroma STFT blend', () => {
   });
 
   it('accepts the domain edges', () => {
-    expect(
-      nnlsChroma(samples, SR, { stftBlendWeight: 0, stftBlendNFft: 2 }).nFrames,
-    ).toBeGreaterThan(0);
-    expect(nnlsChroma(samples, SR, { stftBlendWeight: 1 }).nFrames).toBeGreaterThan(0);
+    expect(nnlsChroma(samples, SR, { stftBlendWeight: 0, stftBlendNFft: 2 }).cols).toBeGreaterThan(
+      0,
+    );
+    expect(nnlsChroma(samples, SR, { stftBlendWeight: 1 }).cols).toBeGreaterThan(0);
   });
 });
 
@@ -113,7 +113,9 @@ describe('key detection hop under HPSS', () => {
 
 describe('chromaCqt bins per octave', () => {
   it('refuses a bin count that is not a multiple of nChroma, as the C ABI does', () => {
-    expectRefusalOf(() => chromaCqt(tone(0.5), SR, 512, 7, 36));
+    expectRefusalOf(() =>
+      chromaCqt(tone(0.5), SR, { hopLength: 512, nChroma: 7, binsPerOctave: 36 }),
+    );
   });
 });
 
@@ -135,29 +137,44 @@ describe('mel band edges', () => {
   const samples = tone(0.25);
   const nMels = 16;
   const nFrames = 4;
-  const power = new Float32Array(nMels * nFrames).fill(1);
-  const coefficients = new Float32Array(13 * nFrames);
+  const power = { data: new Float32Array(nMels * nFrames).fill(1), rows: nMels, cols: nFrames };
+  const coefficients = { data: new Float32Array(13 * nFrames), rows: 13, cols: nFrames };
 
   it('refuses a negative fmin or fmax on the forward and inverse entries', () => {
-    for (const [fmin, fmax] of [
+    for (const [fminHz, fmaxHz] of [
       [-1000, 0],
       [0, -1],
     ]) {
-      expectRefusalOf(() => melSpectrogram({ samples, sampleRate: SR, fmin, fmax }));
-      expectRefusalOf(() => mfcc({ samples, sampleRate: SR, fmin, fmax }));
-      expectRefusalOf(() => melToStft(power, nMels, nFrames, SR, 512, fmin, fmax));
-      expectRefusalOf(() => melToAudio(power, nMels, nFrames, SR, 512, 128, fmin, fmax, 1));
+      expectRefusalOf(() => melSpectrogram({ samples, sampleRate: SR, fminHz, fmaxHz }));
+      expectRefusalOf(() => mfcc({ samples, sampleRate: SR, fminHz, fmaxHz }));
+      expectRefusalOf(() => melToStft({ power, sampleRate: SR, nFft: 512, fminHz, fmaxHz }));
       expectRefusalOf(() =>
-        mfccToAudio(coefficients, 13, nFrames, nMels, SR, 512, 128, fmin, fmax, 1),
+        melToAudio({ power, sampleRate: SR, nFft: 512, hopLength: 128, fminHz, fmaxHz, nIter: 1 }),
+      );
+      expectRefusalOf(() =>
+        mfccToAudio({
+          coefficients,
+          nMels,
+          sampleRate: SR,
+          nFft: 512,
+          hopLength: 128,
+          fminHz,
+          fmaxHz,
+          nIter: 1,
+        }),
       );
     }
   });
 
   it('refuses an fmax at or below fmin and keeps 0 as the default spelling', () => {
-    expectRefusalOf(() => melSpectrogram({ samples, sampleRate: SR, fmin: 4000, fmax: 2000 }));
-    expectRefusalOf(() => melToStft(power, nMels, nFrames, SR, 512, 4000, 4000));
-    expect(melSpectrogram({ samples, sampleRate: SR, fmin: 0, fmax: 0 }).fmax).toBe(SR / 2);
-    expect(melToStft(power, nMels, nFrames, SR, 512, 0, 0).nFrames).toBe(nFrames);
+    expectRefusalOf(() => melSpectrogram({ samples, sampleRate: SR, fminHz: 4000, fmaxHz: 2000 }));
+    expectRefusalOf(() =>
+      melToStft({ power, sampleRate: SR, nFft: 512, fminHz: 4000, fmaxHz: 4000 }),
+    );
+    expect(melSpectrogram({ samples, sampleRate: SR, fminHz: 0, fmaxHz: 0 }).fmaxHz).toBe(SR / 2);
+    expect(melToStft({ power, sampleRate: SR, nFft: 512, fminHz: 0, fmaxHz: 0 }).cols).toBe(
+      nFrames,
+    );
   });
 });
 
@@ -168,8 +185,8 @@ describe('acoustic analysis options', () => {
   }
 
   it('refuses a negative band count and a non-positive decay window on both entries', () => {
-    expectRefusalOf(() => analyzeImpulseResponse(ir, 48000, -1));
-    expectRefusalOf(() => analyzeImpulseResponse(ir, 48000, 6, 0));
+    expectRefusalOf(() => analyzeImpulseResponse(ir, 48000, { nOctaveBands: -1 }));
+    expectRefusalOf(() => analyzeImpulseResponse(ir, 48000, { nOctaveBands: 6, minDecayDb: 0 }));
     expectRefusalOf(() =>
       analyzeImpulseResponse({ samples: ir, sampleRate: 48000, minDecayDb: -5 }),
     );
@@ -180,7 +197,7 @@ describe('acoustic analysis options', () => {
   });
 
   it('accepts zero bands', () => {
-    expect(analyzeImpulseResponse(ir, 48000, 0).rt60Bands.length).toBe(0);
+    expect(analyzeImpulseResponse(ir, 48000, { nOctaveBands: 0 }).rt60Bands.length).toBe(0);
   });
 });
 
@@ -190,20 +207,42 @@ describe('CQT family and melody frequency bounds', () => {
     expect.objectContaining({ name: 'RangeError', message: expect.stringContaining(key) });
 
   it('refuses a non-positive fmin naming it on every forward and inverse entry', () => {
-    const magnitude = new Float32Array(84 * 4).fill(0.1);
-    for (const fmin of [0, -1]) {
-      expect(() => cqt(samples, SR, 512, fmin)).toThrow(named('fmin'));
-      expect(() => pseudoCqt(samples, SR, 512, fmin)).toThrow(named('fmin'));
-      expect(() => hybridCqt(samples, SR, 512, fmin)).toThrow(named('fmin'));
-      expect(() => vqt(samples, SR, 512, fmin)).toThrow(named('fmin'));
-      expect(() => cqtToAudio(magnitude, 84, 4, SR, 512, fmin, 12, 1)).toThrow(named('fmin'));
-      expect(() => vqtToAudio(magnitude, 84, 4, SR, 512, fmin, 12, 0, 1)).toThrow(named('fmin'));
+    const magnitude = { data: new Float32Array(84 * 4).fill(0.1), rows: 84, cols: 4 };
+    for (const fminHz of [0, -1]) {
+      const opts = { hopLength: 512, fminHz };
+      expect(() => cqt(samples, SR, opts)).toThrow(named('fminHz'));
+      expect(() => pseudoCqt(samples, SR, opts)).toThrow(named('fminHz'));
+      expect(() => hybridCqt(samples, SR, opts)).toThrow(named('fminHz'));
+      expect(() => vqt(samples, SR, opts)).toThrow(named('fminHz'));
+      expect(() =>
+        cqtToAudio({
+          magnitude,
+          sampleRate: SR,
+          hopLength: 512,
+          fminHz,
+          binsPerOctave: 12,
+          nIter: 1,
+        }),
+      ).toThrow(named('fminHz'));
+      expect(() =>
+        vqtToAudio({
+          magnitude,
+          sampleRate: SR,
+          hopLength: 512,
+          fminHz,
+          binsPerOctave: 12,
+          gamma: 0,
+          nIter: 1,
+        }),
+      ).toThrow(named('fminHz'));
     }
   });
 
   it('refuses a melody band whose fmax is not above fmin, naming it', () => {
-    expect(() => analyzeMelody(samples, SR, { fmin: 400, fmax: 200 })).toThrow(named('fmax'));
-    expect(() => analyzeMelody(samples, SR, { fmin: 0 })).toThrow(named('fmin'));
+    expect(() => analyzeMelody(samples, SR, { f0MinHz: 400, f0MaxHz: 200 })).toThrow(
+      named('f0MaxHz'),
+    );
+    expect(() => analyzeMelody(samples, SR, { f0MinHz: 0 })).toThrow(named('f0MinHz'));
     expect(() => analyzeMelody(samples, SR, { threshold: 0 })).toThrow(named('threshold'));
   });
 });

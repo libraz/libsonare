@@ -5,6 +5,7 @@ import type {
   RealtimeVoiceChangerPodConfig,
   VoicePresetId,
 } from './public_types.js';
+import type { WasmRealtimeVoiceChangerPodConfig } from './sonare.js';
 import { assertString } from './validation.js';
 
 /**
@@ -66,6 +67,57 @@ function requirePodFormantMode(config: unknown): void {
   }
 }
 
+const NATIVE_SCALE_BY_KIND: Readonly<
+  Record<string, WasmRealtimeVoiceChangerPodConfig['pitchCorrectionScale']>
+> = {
+  major: 'major',
+  naturalMinor: 'natural_minor',
+  chromatic: 'chromatic',
+};
+
+/** Native spells the natural-minor scale `natural_minor`; the public token is `naturalMinor`. */
+export function podConfigToNative(
+  config: RealtimeVoiceChangerPodConfig,
+): WasmRealtimeVoiceChangerPodConfig {
+  const kind = config.pitchCorrectionScale;
+  // biome-ignore lint/suspicious/noPrototypeBuiltins: Object.hasOwn is newer than the ES2020 target.
+  const known = Object.prototype.hasOwnProperty.call(NATIVE_SCALE_BY_KIND, kind);
+  const scale = known ? NATIVE_SCALE_BY_KIND[kind] : undefined;
+  if (scale === undefined) {
+    throw new RangeError(
+      `pitchCorrectionScale must be 'major', 'naturalMinor' or 'chromatic', got '${String(config.pitchCorrectionScale)}'`,
+    );
+  }
+  return { ...config, pitchCorrectionScale: scale };
+}
+
+/** Inverse of {@link podConfigToNative}. */
+export function podConfigFromNative(
+  config: WasmRealtimeVoiceChangerPodConfig,
+): RealtimeVoiceChangerPodConfig {
+  const kind =
+    config.pitchCorrectionScale === 'natural_minor' ? 'naturalMinor' : config.pitchCorrectionScale;
+  if (kind !== 'major' && kind !== 'naturalMinor' && kind !== 'chromatic') {
+    throw new RangeError(
+      `Unknown native pitchCorrectionScale '${String(config.pitchCorrectionScale)}'`,
+    );
+  }
+  return { ...config, pitchCorrectionScale: kind };
+}
+
+/** Maps the scale token of a flat POD config; preset ids and nested documents pass through. */
+function configToNative(
+  config: RealtimeVoiceChangerConfigInput | RealtimeVoiceChangerPodConfig,
+): Record<string, unknown> | string {
+  if (config !== null && typeof config === 'object' && 'retuneSemitones' in config) {
+    return podConfigToNative(config as RealtimeVoiceChangerPodConfig) as unknown as Record<
+      string,
+      unknown
+    >;
+  }
+  return config as Record<string, unknown> | string;
+}
+
 export class RealtimeVoiceChanger {
   private changerHandle: import('./sonare.js').WasmRealtimeVoiceChanger;
   private released = false;
@@ -88,9 +140,7 @@ export class RealtimeVoiceChanger {
   ) {
     requirePodFormantMode(config);
     const module = getSonareModule();
-    this.changerHandle = module.createRealtimeVoiceChanger(
-      config as Record<string, unknown> | string,
-    );
+    this.changerHandle = module.createRealtimeVoiceChanger(configToNative(config));
     if (sampleRate !== undefined) {
       // `prepare` rejects a non-positive sample rate, a negative block size and
       // a channel count outside [1, 2]. The handle is already allocated by
@@ -122,7 +172,7 @@ export class RealtimeVoiceChanger {
     // The shared native parser recognizes the flat POD produced by
     // realtimeVoiceChangerPresetConfig, so bindings never duplicate its field mapping.
     requirePodFormantMode(config);
-    this.changer.setConfig(config as Record<string, unknown> | string);
+    this.changer.setConfig(configToNative(config));
   }
 
   /**
@@ -134,7 +184,7 @@ export class RealtimeVoiceChanger {
    * and the previous configuration stays in effect; nothing is clamped.
    */
   setPodConfig(config: RealtimeVoiceChangerPodConfig): void {
-    this.changer.setPodConfig(config);
+    this.changer.setPodConfig(podConfigToNative(config));
   }
 
   configJson(): string {

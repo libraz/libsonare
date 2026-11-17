@@ -6,7 +6,6 @@ import {
   analyzeImpulseResponse,
   analyzeRhythm,
   analyzeTimbre,
-  analyzeWithProgress,
   bassChroma,
   chordFunctionalAnalysis,
   chroma,
@@ -28,10 +27,9 @@ import {
   fourierTempogram,
   hybridCqt,
   init,
-  Mode,
   melSpectrogram,
   mfcc,
-  onsetEnvelope,
+  onsetStrength,
   onsetStrengthMulti,
   PitchClass,
   pitchPyin,
@@ -109,7 +107,7 @@ describe('WASM basic analysis request objects', () => {
 
   it('accepts the progress callback in the request object', () => {
     const stages: string[] = [];
-    const result = analyzeWithProgress({
+    const result = analyze({
       samples,
       sampleRate,
       onProgress: (_progress, stage) => stages.push(stage),
@@ -128,13 +126,18 @@ describe('WASM basic analysis request objects', () => {
     expect(analyzeTimbre({ samples, sampleRate })).toEqual(analyzeTimbre(samples, sampleRate));
     expect(detectChords({ samples, sampleRate })).toEqual(detectChords(samples, sampleRate));
     expect(
-      chordFunctionalAnalysis({ samples, sampleRate, keyRoot: PitchClass.C, keyMode: Mode.Major }),
-    ).toEqual(chordFunctionalAnalysis(samples, PitchClass.C, Mode.Major, sampleRate));
+      chordFunctionalAnalysis({ samples, sampleRate, keyRoot: PitchClass.C, keyMode: 'major' }),
+    ).toEqual(
+      chordFunctionalAnalysis(samples, sampleRate, { keyRoot: PitchClass.C, keyMode: 'major' }),
+    );
   });
 
   it('defaults functional chord analysis to major mode', () => {
     const request = chordFunctionalAnalysis({ samples, sampleRate, keyRoot: PitchClass.C });
-    const explicit = chordFunctionalAnalysis(samples, PitchClass.C, Mode.Major, sampleRate);
+    const explicit = chordFunctionalAnalysis(samples, sampleRate, {
+      keyRoot: PitchClass.C,
+      keyMode: 'major',
+    });
 
     expect(request).toEqual(explicit);
   });
@@ -159,225 +162,117 @@ describe('WASM basic analysis request objects', () => {
   });
 
   it('keeps pitch and resampling request objects equivalent', () => {
-    const yin = { sampleRate, frameLength: 1024, hopLength: 256, fmin: 65, fmax: 1000 };
-    expect(pitchYin({ samples, ...yin })).toEqual(
-      pitchYin(samples, yin.sampleRate, yin.frameLength, yin.hopLength, yin.fmin, yin.fmax),
-    );
-    expect(pitchPyin({ samples, ...yin })).toEqual(
-      pitchPyin(samples, yin.sampleRate, yin.frameLength, yin.hopLength, yin.fmin, yin.fmax),
-    );
-    expect(Array.from(resample({ samples, srcSr: sampleRate, targetSr: 16000 }))).toEqual(
-      Array.from(resample(samples, sampleRate, 16000)),
-    );
+    const yin = { frameLength: 1024, hopLength: 256, f0MinHz: 65, f0MaxHz: 1000 };
+    expect(pitchYin({ samples, sampleRate, ...yin })).toEqual(pitchYin(samples, sampleRate, yin));
+    expect(pitchPyin({ samples, sampleRate, ...yin })).toEqual(pitchPyin(samples, sampleRate, yin));
+    expect(
+      Array.from(resample({ samples, sourceSampleRate: sampleRate, targetSampleRate: 16000 })),
+    ).toEqual(Array.from(resample(samples, sampleRate, 16000)));
   });
 
   it('keeps Constant-Q transform request objects equivalent', () => {
-    const options = { sampleRate, hopLength: 512, fmin: 65.406, nBins: 12, binsPerOctave: 12 };
-    expect(cqt({ samples, ...options })).toEqual(
-      cqt(
-        samples,
-        options.sampleRate,
-        options.hopLength,
-        options.fmin,
-        options.nBins,
-        options.binsPerOctave,
-      ),
+    const options = { hopLength: 512, fminHz: 65.406, nBins: 12, binsPerOctave: 12 };
+    expect(cqt({ samples, sampleRate, ...options })).toEqual(cqt(samples, sampleRate, options));
+    expect(pseudoCqt({ samples, sampleRate, ...options })).toEqual(
+      pseudoCqt(samples, sampleRate, options),
     );
-    expect(pseudoCqt({ samples, ...options })).toEqual(
-      pseudoCqt(
-        samples,
-        options.sampleRate,
-        options.hopLength,
-        options.fmin,
-        options.nBins,
-        options.binsPerOctave,
-      ),
+    expect(hybridCqt({ samples, sampleRate, ...options })).toEqual(
+      hybridCqt(samples, sampleRate, options),
     );
-    expect(hybridCqt({ samples, ...options })).toEqual(
-      hybridCqt(
-        samples,
-        options.sampleRate,
-        options.hopLength,
-        options.fmin,
-        options.nBins,
-        options.binsPerOctave,
-      ),
-    );
-    expect(vqt({ samples, ...options, gamma: 0 })).toEqual(
-      vqt(
-        samples,
-        options.sampleRate,
-        options.hopLength,
-        options.fmin,
-        options.nBins,
-        options.binsPerOctave,
-        0,
-      ),
+    expect(vqt({ samples, sampleRate, ...options, gamma: 0 })).toEqual(
+      vqt(samples, sampleRate, { ...options, gamma: 0 }),
     );
   });
 
-  it('keeps CQT inverse request objects equivalent', () => {
-    const cqtOptions = { sampleRate, hopLength: 512, fmin: 65.406, nBins: 12, binsPerOctave: 12 };
-    const result = cqt({ samples, ...cqtOptions });
-    const inverse = {
-      magnitude: result.magnitude,
-      nBins: result.nBins,
-      nFrames: result.nFrames,
+  it('runs the CQT inverse requests on the matrix a forward transform returns', () => {
+    const result = cqt({
+      samples,
       sampleRate,
       hopLength: 512,
-      fmin: 65.406,
+      fminHz: 65.406,
+      nBins: 12,
+      binsPerOctave: 12,
+    });
+    const inverse = {
+      magnitude: result.magnitude,
+      sampleRate,
+      hopLength: 512,
+      fminHz: 65.406,
       binsPerOctave: 12,
       nIter: 1,
     };
-    expect(Array.from(cqtToAudio(inverse))).toEqual(
-      Array.from(
-        cqtToAudio(
-          inverse.magnitude,
-          inverse.nBins,
-          inverse.nFrames,
-          inverse.sampleRate,
-          inverse.hopLength,
-          inverse.fmin,
-          inverse.binsPerOctave,
-          inverse.nIter,
-        ),
-      ),
-    );
-    expect(Array.from(vqtToAudio({ ...inverse, gamma: 0 }))).toEqual(
-      Array.from(
-        vqtToAudio(
-          inverse.magnitude,
-          inverse.nBins,
-          inverse.nFrames,
-          inverse.sampleRate,
-          inverse.hopLength,
-          inverse.fmin,
-          inverse.binsPerOctave,
-          0,
-          inverse.nIter,
-        ),
-      ),
-    );
+    expect(result.magnitude.rows).toBe(12);
+    const audio = cqtToAudio(inverse);
+    expect(audio.length).toBeGreaterThan(0);
+    expect(Array.from(cqtToAudio(inverse))).toEqual(Array.from(audio));
+    const vqtAudio = vqtToAudio({ ...inverse, gamma: 0 });
+    expect(vqtAudio.length).toBeGreaterThan(0);
+    expect(Array.from(vqtToAudio({ ...inverse, gamma: 0 }))).toEqual(Array.from(vqtAudio));
   });
 
   it('keeps frame and spectrogram request objects equivalent', () => {
-    const frame = { sampleRate, nFft: 1024, hopLength: 256 };
+    const frame = { nFft: 1024, hopLength: 256 };
     for (const fn of [spectralCentroid, spectralBandwidth, spectralFlatness]) {
-      expect(Array.from(fn({ samples, ...frame }))).toEqual(
-        Array.from(fn(samples, frame.sampleRate, frame.nFft, frame.hopLength)),
+      expect(Array.from(fn({ samples, sampleRate, ...frame }))).toEqual(
+        Array.from(fn(samples, sampleRate, frame)),
       );
     }
-    expect(Array.from(spectralRolloff({ samples, ...frame, rollPercent: 0.9 }))).toEqual(
-      Array.from(spectralRolloff(samples, frame.sampleRate, frame.nFft, frame.hopLength, 0.9)),
-    );
-    const time = { sampleRate, frameLength: 1024, hopLength: 256 };
+    expect(
+      Array.from(spectralRolloff({ samples, sampleRate, ...frame, rollPercent: 0.9 })),
+    ).toEqual(Array.from(spectralRolloff(samples, sampleRate, { ...frame, rollPercent: 0.9 })));
+    const time = { frameLength: 1024, hopLength: 256 };
     for (const fn of [zeroCrossingRate, rmsEnergy]) {
-      expect(Array.from(fn({ samples, ...time }))).toEqual(
-        Array.from(fn(samples, time.sampleRate, time.frameLength, time.hopLength)),
+      expect(Array.from(fn({ samples, sampleRate, ...time }))).toEqual(
+        Array.from(fn(samples, sampleRate, time)),
       );
     }
-    expect(stft({ samples, ...frame })).toEqual(
-      stft(samples, frame.sampleRate, frame.nFft, frame.hopLength),
-    );
-    expect(stftDb({ samples, ...frame })).toEqual(
-      stftDb(samples, frame.sampleRate, frame.nFft, frame.hopLength),
-    );
-    const chromaOptions = { sampleRate, hopLength: 256, nChroma: 12 };
-    // A union of the three overloaded functions keeps only the request-object
-    // call signature, so the positional side names the shared one it drops.
+    expect(stft({ samples, sampleRate, ...frame })).toEqual(stft(samples, sampleRate, frame));
+    expect(stftDb({ samples, sampleRate, ...frame })).toEqual(stftDb(samples, sampleRate, frame));
+    const chromaOptions = { hopLength: 256, nChroma: 12 };
+    // A union of the overloaded functions keeps only the request-object call
+    // signature, so the positional side names the shared one it drops.
     type PositionalChromaFn = (
       samples: Float32Array,
-      sampleRate?: number,
-      hopLength?: number,
-      nChroma?: number,
+      sampleRate: number,
+      options?: { hopLength?: number; nChroma?: number },
     ) => ReturnType<typeof chromaCens>;
     for (const fn of [chromaCens, chromaCqt, bassChroma]) {
-      expect(fn({ samples, ...chromaOptions })).toEqual(
-        (fn as PositionalChromaFn)(
-          samples,
-          chromaOptions.sampleRate,
-          chromaOptions.hopLength,
-          chromaOptions.nChroma,
-        ),
+      expect(fn({ samples, sampleRate, ...chromaOptions })).toEqual(
+        (fn as PositionalChromaFn)(samples, sampleRate, chromaOptions),
       );
     }
-    expect(chroma({ samples, ...frame })).toEqual(
-      chroma(samples, frame.sampleRate, frame.nFft, frame.hopLength),
-    );
+    expect(chroma({ samples, sampleRate, ...frame })).toEqual(chroma(samples, sampleRate, frame));
   });
 
-  it('keeps onset and tempogram request objects equivalent', () => {
-    const onsetOptions = { sampleRate, nFft: 1024, hopLength: 256, nMels: 32 };
-    const onset = onsetEnvelope({ samples, ...onsetOptions });
-    expect(Array.from(onset)).toEqual(
-      Array.from(
-        onsetEnvelope(
-          samples,
-          onsetOptions.sampleRate,
-          onsetOptions.nFft,
-          onsetOptions.hopLength,
-          onsetOptions.nMels,
-        ),
-      ),
+  it('keeps onset request objects equivalent and shapes the tempogram requests', () => {
+    const onsetOptions = { nFft: 1024, hopLength: 256, nMels: 32 };
+    const onset = onsetStrength({ samples, sampleRate, ...onsetOptions });
+    expect(Array.from(onset)).toEqual(Array.from(onsetStrength(samples, sampleRate, onsetOptions)));
+    expect(onsetStrengthMulti({ samples, sampleRate, ...onsetOptions, nBands: 2 })).toEqual(
+      onsetStrengthMulti(samples, sampleRate, { ...onsetOptions, nBands: 2 }),
     );
-    expect(onsetStrengthMulti({ samples, ...onsetOptions, nBands: 2 })).toEqual(
-      onsetStrengthMulti(
-        samples,
-        onsetOptions.sampleRate,
-        onsetOptions.nFft,
-        onsetOptions.hopLength,
-        onsetOptions.nMels,
-        2,
-      ),
-    );
-    const tempogramOptions = {
+    const winLength = 64;
+    const fourier = fourierTempogram({
+      onsetEnvelope: onset,
       sampleRate,
       hopLength: 256,
-      winLength: 64,
+      winLength,
+      center: false,
+    });
+    const autocorrelation = tempogram({
+      onsetEnvelope: onset,
+      sampleRate,
+      hopLength: 256,
+      winLength,
       center: false,
       norm: false,
-    };
-    const fourier = fourierTempogram({ onsetEnvelope: onset, ...tempogramOptions });
-    expect(fourier).toEqual(
-      fourierTempogram(
-        onset,
-        tempogramOptions.sampleRate,
-        tempogramOptions.hopLength,
-        tempogramOptions.winLength,
-        tempogramOptions.center,
-        tempogramOptions.norm,
-      ),
-    );
-    expect(tempogram({ onsetEnvelope: onset, ...tempogramOptions })).toEqual(
-      tempogram(
-        onset,
-        tempogramOptions.sampleRate,
-        tempogramOptions.hopLength,
-        tempogramOptions.winLength,
-        'autocorrelation',
-        tempogramOptions.center,
-        tempogramOptions.norm,
-      ),
-    );
-    expect(
-      Array.from(
-        tempogramRatio({
-          tempogramData: fourier.data,
-          sampleRate: tempogramOptions.sampleRate,
-          hopLength: tempogramOptions.hopLength,
-          winLength: tempogramOptions.winLength,
-        }),
-      ),
-    ).toEqual(
-      Array.from(
-        tempogramRatio(
-          fourier.data,
-          tempogramOptions.winLength,
-          tempogramOptions.sampleRate,
-          tempogramOptions.hopLength,
-        ),
-      ),
-    );
+    });
+    expect(fourier.cols).toBeGreaterThan(0);
+    expect(autocorrelation.rows).toBe(winLength);
+    expect(autocorrelation.cols).toBe(fourier.cols);
+    const ratio = tempogramRatio({ tempogram: fourier, sampleRate, hopLength: 256 });
+    expect(ratio.length).toBeGreaterThan(0);
+    expect(ratio.every(Number.isFinite)).toBe(true);
   });
 
   it('keeps decomposition request objects equivalent', () => {
@@ -390,32 +285,15 @@ describe('WASM basic analysis request objects', () => {
   });
 
   it('keeps Mel spectrogram request objects equivalent', () => {
-    const options = { sampleRate, nFft: 1024, hopLength: 256, nMels: 32, fmin: 0, fmax: 8000 };
-    expect(melSpectrogram({ samples, ...options })).toEqual(
-      melSpectrogram(
-        samples,
-        options.sampleRate,
-        options.nFft,
-        options.hopLength,
-        options.nMels,
-        options.fmin,
-        options.fmax,
-      ),
+    const options = { nFft: 1024, hopLength: 256, nMels: 32, fminHz: 0, fmaxHz: 8000 };
+    expect(melSpectrogram({ samples, sampleRate, ...options })).toEqual(
+      melSpectrogram(samples, sampleRate, options),
     );
   });
 
   it('keeps MFCC request objects equivalent', () => {
-    const options = { sampleRate, nFft: 1024, hopLength: 256, nMels: 32, nMfcc: 8 };
-    expect(mfcc({ samples, ...options })).toEqual(
-      mfcc(
-        samples,
-        options.sampleRate,
-        options.nFft,
-        options.hopLength,
-        options.nMels,
-        options.nMfcc,
-      ),
-    );
+    const options = { nFft: 1024, hopLength: 256, nMels: 32, nMfcc: 8 };
+    expect(mfcc({ samples, sampleRate, ...options })).toEqual(mfcc(samples, sampleRate, options));
   });
 
   // Both call shapes funnel through one private normalizer, so an invalid input

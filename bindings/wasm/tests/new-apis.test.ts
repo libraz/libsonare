@@ -33,7 +33,7 @@ import {
   nnlsChroma,
   noteMove,
   noteStretch,
-  onsetEnvelope,
+  onsetStrength,
   onsetStrengthMulti,
   pitchCorrectTimevarying,
   pitchCorrectToMidi,
@@ -84,9 +84,9 @@ describe('v1.2 feature additions (WASM)', () => {
 
   const signal = generateSine(220, SR, 3.0);
 
-  describe('onset envelope', () => {
+  describe('onset strength', () => {
     it('returns a finite per-frame envelope sized to the audio length', () => {
-      const env = onsetEnvelope(signal, SR);
+      const env = onsetStrength(signal, SR);
       // ~ ceil(signal.length / hop_length=512). Allow ±2 for librosa-style padding/centering.
       const expectedFrames = Math.ceil(signal.length / 512);
       expect(env.length).toBeGreaterThanOrEqual(expectedFrames - 2);
@@ -96,10 +96,15 @@ describe('v1.2 feature additions (WASM)', () => {
 
     it('returns finite multi-band onset strength aligned to frames', () => {
       const nBands = 4;
-      const result = onsetStrengthMulti(signal, SR, 1024, 256, 48, nBands);
-      expect(result.nBands).toBe(nBands);
-      expect(result.nFrames).toBeGreaterThan(0);
-      expect(result.data.length).toBe(result.nBands * result.nFrames);
+      const result = onsetStrengthMulti(signal, SR, {
+        nFft: 1024,
+        hopLength: 256,
+        nMels: 48,
+        nBands,
+      });
+      expect(result.rows).toBe(nBands);
+      expect(result.cols).toBeGreaterThan(0);
+      expect(result.data.length).toBe(result.rows * result.cols);
       expect(allFinite(result.data)).toBe(true);
       for (const v of result.data) {
         expect(v).toBeGreaterThanOrEqual(0);
@@ -109,13 +114,13 @@ describe('v1.2 feature additions (WASM)', () => {
 
   describe('tempogram family', () => {
     it('Fourier tempogram returns an [nBins x nFrames] matrix of non-negative magnitudes', () => {
-      const env = onsetEnvelope(signal, SR);
-      const ft = fourierTempogram(env, SR);
+      const env = onsetStrength(signal, SR);
+      const ft = fourierTempogram({ onsetEnvelope: env, sampleRate: SR });
       // Default win_length is 384 → n_bins = win_length / 2 + 1 = 193.
-      expect(ft.nBins).toBe(193);
+      expect(ft.rows).toBe(193);
       // Fourier tempogram frames align to the onset-envelope length.
-      expect(ft.nFrames).toBe(env.length);
-      expect(ft.data.length).toBe(ft.nBins * ft.nFrames);
+      expect(ft.cols).toBe(env.length);
+      expect(ft.data.length).toBe(ft.rows * ft.cols);
       expect(allFinite(ft.data)).toBe(true);
       // Magnitudes must be non-negative.
       for (const v of ft.data) {
@@ -124,9 +129,9 @@ describe('v1.2 feature additions (WASM)', () => {
     });
 
     it('tempogram ratio returns one finite value per default factor', () => {
-      const env = onsetEnvelope(signal, SR);
-      const tg = tempogram(env, SR);
-      const ratios = tempogramRatio(tg.data, tg.winLength, SR);
+      const env = onsetStrength(signal, SR);
+      const tg = tempogram({ onsetEnvelope: env, sampleRate: SR });
+      const ratios = tempogramRatio({ tempogram: tg, sampleRate: SR });
       // Defaults to {0.5, 1, 2, 3, 4}.
       expect(ratios.length).toBe(5);
       expect(allFinite(ratios)).toBe(true);
@@ -137,21 +142,21 @@ describe('v1.2 feature additions (WASM)', () => {
     });
 
     it('tempogram ratio honors custom factors instead of silently defaulting', () => {
-      const env = onsetEnvelope(signal, SR);
-      const tg = tempogram(env, SR);
+      const env = onsetStrength(signal, SR);
+      const tg = tempogram({ onsetEnvelope: env, sampleRate: SR });
       const factors = new Float32Array([1, 2, 3]);
-      const ratios = tempogramRatio(tg.data, tg.winLength, SR, 512, factors);
+      const ratios = tempogramRatio({ tempogram: tg, sampleRate: SR, hopLength: 512, factors });
       // One value per requested factor — proves the argument reaches the core
       // instead of being dropped (which would yield the 5-value default).
       expect(ratios.length).toBe(3);
       expect(allFinite(ratios)).toBe(true);
-      const defaults = tempogramRatio(tg.data, tg.winLength, SR);
+      const defaults = tempogramRatio({ tempogram: tg, sampleRate: SR });
       expect(defaults.length).toBe(5);
     });
 
     it('plp returns a pulse curve aligned to the envelope', () => {
-      const env = onsetEnvelope(signal, SR);
-      const pulse = plp(env, SR);
+      const env = onsetStrength(signal, SR);
+      const pulse = plp({ onsetEnvelope: env, sampleRate: SR });
       expect(pulse.length).toBe(env.length);
       expect(allFinite(pulse)).toBe(true);
     });
@@ -160,12 +165,12 @@ describe('v1.2 feature additions (WASM)', () => {
   describe('NNLS chroma', () => {
     it('returns a 12 x nFrames matrix with normalized non-negative entries', () => {
       const result = nnlsChroma(signal, SR);
-      expect(result.nChroma).toBe(12);
-      // Aligns to the same hop grid as onset_envelope (~ signal.length / 512).
+      expect(result.rows).toBe(12);
+      // Aligns to the same hop grid as the onset strength (~ signal.length / 512).
       const expectedFrames = Math.ceil(signal.length / 512);
-      expect(result.nFrames).toBeGreaterThanOrEqual(expectedFrames - 2);
-      expect(result.nFrames).toBeLessThanOrEqual(expectedFrames + 2);
-      expect(result.data.length).toBe(result.nChroma * result.nFrames);
+      expect(result.cols).toBeGreaterThanOrEqual(expectedFrames - 2);
+      expect(result.cols).toBeLessThanOrEqual(expectedFrames + 2);
+      expect(result.data.length).toBe(result.rows * result.cols);
       expect(allFinite(result.data)).toBe(true);
       // NNLS chroma is non-negative and normalized to [0, 1] per librosa convention.
       for (const v of result.data) {
@@ -175,22 +180,22 @@ describe('v1.2 feature additions (WASM)', () => {
     });
 
     it('computes CENS and bass chroma matrices', () => {
-      const cens = chromaCens(signal, SR, 512, 12);
-      expect(cens.nChroma).toBe(12);
-      expect(cens.nFrames).toBeGreaterThan(0);
-      expect(cens.features.length).toBe(cens.nChroma * cens.nFrames);
+      const cens = chromaCens(signal, SR, { hopLength: 512, nChroma: 12 });
+      expect(cens.features.rows).toBe(12);
+      expect(cens.features.cols).toBeGreaterThan(0);
+      expect(cens.features.data.length).toBe(cens.features.rows * cens.features.cols);
       expect(cens.sampleRate).toBe(SR);
       expect(cens.hopLength).toBe(512);
-      expect(allFinite(cens.features)).toBe(true);
+      expect(allFinite(cens.features.data)).toBe(true);
       expect(allFinite(cens.meanEnergy)).toBe(true);
 
-      const bass = bassChroma(signal, SR, 512, 12);
-      expect(bass.nChroma).toBe(12);
-      expect(bass.nFrames).toBeGreaterThan(0);
-      expect(bass.features.length).toBe(bass.nChroma * bass.nFrames);
+      const bass = bassChroma(signal, SR, { hopLength: 512, nChroma: 12 });
+      expect(bass.features.rows).toBe(12);
+      expect(bass.features.cols).toBeGreaterThan(0);
+      expect(bass.features.data.length).toBe(bass.features.rows * bass.features.cols);
       expect(bass.sampleRate).toBe(SR);
       expect(bass.hopLength).toBe(512);
-      expect(allFinite(bass.features)).toBe(true);
+      expect(allFinite(bass.features.data)).toBe(true);
       expect(allFinite(bass.meanEnergy)).toBe(true);
     });
 
@@ -201,8 +206,8 @@ describe('v1.2 feature additions (WASM)', () => {
       for (const variant of [chromaCens, chromaCqt]) {
         const base = variant({ samples: signal, sampleRate: SR });
         const coarser = variant({ samples: signal, sampleRate: SR, binsPerOctave: 12 });
-        expect(coarser.features.length).toBe(base.features.length);
-        expect(Array.from(coarser.features)).not.toEqual(Array.from(base.features));
+        expect(coarser.features.data.length).toBe(base.features.data.length);
+        expect(Array.from(coarser.features.data)).not.toEqual(Array.from(base.features.data));
       }
     });
   });
@@ -213,7 +218,7 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(Number.isFinite(result.integratedLufs)).toBe(true);
       expect(Number.isFinite(result.momentaryLufs)).toBe(true);
       expect(Number.isFinite(result.shortTermLufs)).toBe(true);
-      expect(Number.isFinite(result.loudnessRange)).toBe(true);
+      expect(Number.isFinite(result.loudnessRangeLu)).toBe(true);
     });
 
     it('reports a louder signal as higher integrated LUFS', () => {
@@ -277,7 +282,12 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(peak).toBeGreaterThan(0.05);
       expect(peak).toBeLessThanOrEqual(1.0);
 
-      const detected = pitchPyin(out, SR, 2048, 512, 65, 1000);
+      const detected = pitchPyin(out, SR, {
+        frameLength: 2048,
+        hopLength: 512,
+        f0MinHz: 65,
+        f0MaxHz: 1000,
+      });
       const expectedHz = 220 * 2 ** (3 / 12);
       const centsError = 1200 * Math.log2(detected.medianF0 / expectedHz);
       expect(Math.abs(centsError)).toBeLessThan(5);
@@ -961,15 +971,15 @@ describe('v1.2 feature additions (WASM)', () => {
   });
 
   describe('Audio class methods', () => {
-    it('exposes onsetEnvelope/nnlsChroma/lufs/momentaryLufs/shortTermLufs with finite values', () => {
+    it('exposes onsetStrength/nnlsChroma/lufs/momentaryLufs/shortTermLufs with finite values', () => {
       const audio = Audio.fromBuffer(signal, SR);
-      const env = audio.onsetEnvelope();
+      const env = audio.onsetStrength();
       expect(env.length).toBeGreaterThan(0);
       expect(allFinite(env)).toBe(true);
 
       const nc = audio.nnlsChroma();
-      expect(nc.nChroma).toBe(12);
-      expect(nc.data.length).toBe(nc.nChroma * nc.nFrames);
+      expect(nc.rows).toBe(12);
+      expect(nc.data.length).toBe(nc.rows * nc.cols);
       expect(allFinite(nc.data)).toBe(true);
 
       const integrated = audio.lufs().integratedLufs;
@@ -1406,37 +1416,43 @@ describe('v1.2 feature additions (WASM)', () => {
   });
 
   describe('sections / melody / CQT / VQT parity', () => {
-    it('passes fmin/fmax through inverse Mel and MFCC paths', () => {
+    it('passes fminHz/fmaxHz through inverse Mel and MFCC paths', () => {
       const tone = generateSine(440, SR, 0.5);
       const nFft = 1024;
       const hop = 256;
       const nMels = 40;
-      const fmin = 80;
-      const fmax = 4000;
+      const fminHz = 80;
+      const fmaxHz = 4000;
 
-      const mel = melSpectrogram(tone, SR, nFft, hop, nMels);
-      const stft = melToStft(mel.power, nMels, mel.nFrames, SR, nFft, fmin, fmax);
-      expect(stft.nBins).toBe(nFft / 2 + 1);
-      expect(stft.nFrames).toBe(mel.nFrames);
-      expect(allFinite(stft.magnitude)).toBe(true);
+      const mel = melSpectrogram(tone, SR, { nFft, hopLength: hop, nMels });
+      const stft = melToStft({ power: mel.power, sampleRate: SR, nFft, fminHz, fmaxHz });
+      expect(stft.rows).toBe(nFft / 2 + 1);
+      expect(stft.cols).toBe(mel.power.cols);
+      expect(allFinite(stft.data)).toBe(true);
 
-      const audio = melToAudio(mel.power, nMels, mel.nFrames, SR, nFft, hop, fmin, fmax, 2);
+      const audio = melToAudio({
+        power: mel.power,
+        sampleRate: SR,
+        nFft,
+        hopLength: hop,
+        fminHz,
+        fmaxHz,
+        nIter: 2,
+      });
       expect(audio.length).toBeGreaterThan(0);
       expect(allFinite(audio)).toBe(true);
 
-      const coeffs = mfcc(tone, SR, nFft, hop, nMels, 13);
-      const mfccAudio = mfccToAudio(
-        coeffs.coefficients,
-        13,
-        coeffs.nFrames,
+      const coeffs = mfcc(tone, SR, { nFft, hopLength: hop, nMels, nMfcc: 13 });
+      const mfccAudio = mfccToAudio({
+        coefficients: coeffs.coefficients,
         nMels,
-        SR,
+        sampleRate: SR,
         nFft,
-        hop,
-        fmin,
-        fmax,
-        2,
-      );
+        hopLength: hop,
+        fminHz,
+        fmaxHz,
+        nIter: 2,
+      });
       expect(mfccAudio.length).toBeGreaterThan(0);
       expect(allFinite(mfccAudio)).toBe(true);
     });
@@ -1446,269 +1462,286 @@ describe('v1.2 feature additions (WASM)', () => {
       const nFft = 1024;
       const hop = 256;
       const nMels = 40;
-      const mel = melSpectrogram(tone, SR, nFft, hop, nMels, 0, 0, true);
+      const mel = melSpectrogram(tone, SR, { nFft, hopLength: hop, nMels, htk: true });
 
-      const slaney = melToStft(mel.power, nMels, mel.nFrames, SR, nFft, 0, 0, false);
-      const htk = melToStft(mel.power, nMels, mel.nFrames, SR, nFft, 0, 0, true);
-      expect(htk.nBins).toBe(nFft / 2 + 1);
-      expect(htk.nFrames).toBe(mel.nFrames);
-      expect(allFinite(htk.magnitude)).toBe(true);
+      const slaney = melToStft({ power: mel.power, sampleRate: SR, nFft, htk: false });
+      const htk = melToStft({ power: mel.power, sampleRate: SR, nFft, htk: true });
+      expect(htk.rows).toBe(nFft / 2 + 1);
+      expect(htk.cols).toBe(mel.power.cols);
+      expect(allFinite(htk.data)).toBe(true);
 
       let diff = 0;
-      for (let i = 0; i < htk.magnitude.length; i++) {
-        diff += (slaney.magnitude[i] - htk.magnitude[i]) ** 2;
+      for (let i = 0; i < htk.data.length; i++) {
+        diff += (slaney.data[i] - htk.data[i]) ** 2;
       }
       expect(diff).toBeGreaterThan(1e-6);
 
-      const audio = melToAudio(mel.power, nMels, mel.nFrames, SR, nFft, hop, 0, 0, 2, true);
+      const audio = melToAudio({
+        power: mel.power,
+        sampleRate: SR,
+        nFft,
+        hopLength: hop,
+        nIter: 2,
+        htk: true,
+      });
       expect(audio.length).toBeGreaterThan(0);
       expect(allFinite(audio)).toBe(true);
     });
 
-    it('accepts request objects for inverse Mel and MFCC reconstruction', () => {
+    it('reconstructs Mel and MFCC data from request objects', () => {
       const tone = generateSine(440, SR, 0.25);
       const nFft = 1024;
       const hopLength = 256;
       const nMels = 40;
       const nMfcc = 13;
-      const fmin = 80;
-      const fmax = 4000;
-      const mel = melSpectrogram(tone, SR, nFft, hopLength, nMels, fmin, fmax, true);
-      const coefficients = mfcc(tone, SR, nFft, hopLength, nMels, nMfcc, fmin, fmax, true);
-
-      const positionalStft = melToStft(mel.power, nMels, mel.nFrames, SR, nFft, fmin, fmax, true);
-      const requestStft = melToStft({
-        power: mel.power,
-        nMels,
-        nFrames: mel.nFrames,
-        sampleRate: SR,
+      const fminHz = 80;
+      const fmaxHz = 4000;
+      const mel = melSpectrogram(tone, SR, { nFft, hopLength, nMels, fminHz, fmaxHz, htk: true });
+      const coefficients = mfcc(tone, SR, {
         nFft,
-        fmin,
-        fmax,
+        hopLength,
+        nMels,
+        nMfcc,
+        fminHz,
+        fmaxHz,
         htk: true,
       });
-      expect(requestStft).toEqual(positionalStft);
+      expect(coefficients.coefficients.rows).toBe(nMfcc);
+      expect(coefficients.coefficients.cols).toBe(mel.power.cols);
 
-      const positionalMel = mfccToMel(
-        coefficients.coefficients,
-        nMfcc,
-        coefficients.nFrames,
-        nMels,
-      );
-      const requestMel = mfccToMel({
-        coefficients: coefficients.coefficients,
-        nMfcc,
-        nFrames: coefficients.nFrames,
-        nMels,
-      });
-      expect(requestMel).toEqual(positionalMel);
+      const stft = melToStft({ power: mel.power, sampleRate: SR, nFft, fminHz, fmaxHz, htk: true });
+      expect([stft.rows, stft.cols]).toEqual([nFft / 2 + 1, mel.power.cols]);
+      expect(allFinite(stft.data)).toBe(true);
+
+      const rebuilt = mfccToMel({ coefficients: coefficients.coefficients, nMels });
+      expect([rebuilt.rows, rebuilt.cols]).toEqual([nMels, coefficients.coefficients.cols]);
+      expect(allFinite(rebuilt.data)).toBe(true);
 
       const lifted = new Float32Array(5 * 4);
       for (let coefficient = 0; coefficient < 5; coefficient++) {
         const lift = 1 + 11 * Math.sin((Math.PI * coefficient) / 22);
         lifted.fill((0.2 + 0.1 * coefficient) * lift, coefficient * 4, coefficient * 4 + 4);
       }
-      const restored = mfccToMel(lifted, 5, 4, 8, 22);
-      const untreated = mfccToMel(lifted, 5, 4, 8);
+      const liftedMatrix = { data: lifted, rows: 5, cols: 4 };
+      const restored = mfccToMel({ coefficients: liftedMatrix, nMels: 8, lifter: 22 });
+      const untreated = mfccToMel({ coefficients: liftedMatrix, nMels: 8 });
       expect(
-        restored.power.some((value, index) => Math.abs(value - untreated.power[index]) > 1e-5),
+        restored.data.some((value, index) => Math.abs(value - untreated.data[index]) > 1e-5),
       ).toBe(true);
 
-      const positionalAudio = melToAudio(
-        mel.power,
-        nMels,
-        mel.nFrames,
-        SR,
-        nFft,
-        hopLength,
-        fmin,
-        fmax,
-        2,
-        true,
-      );
-      const requestAudio = melToAudio({
+      const audioRequest = {
         power: mel.power,
-        nMels,
-        nFrames: mel.nFrames,
         sampleRate: SR,
         nFft,
         hopLength,
-        fmin,
-        fmax,
+        fminHz,
+        fmaxHz,
         nIter: 2,
         htk: true,
-      });
-      expect(requestAudio).toEqual(positionalAudio);
+      };
+      const audio = melToAudio(audioRequest);
+      expect(audio.length).toBeGreaterThan(0);
+      expect(allFinite(audio)).toBe(true);
+      expect(melToAudio(audioRequest)).toEqual(audio);
 
-      const positionalMfccAudio = mfccToAudio(
-        coefficients.coefficients,
-        nMfcc,
-        coefficients.nFrames,
-        nMels,
-        SR,
-        nFft,
-        hopLength,
-        fmin,
-        fmax,
-        2,
-        true,
-      );
-      const requestMfccAudio = mfccToAudio({
+      const mfccAudio = mfccToAudio({
         coefficients: coefficients.coefficients,
-        nMfcc,
-        nFrames: coefficients.nFrames,
         nMels,
         sampleRate: SR,
         nFft,
         hopLength,
-        fmin,
-        fmax,
+        fminHz,
+        fmaxHz,
         nIter: 2,
         htk: true,
       });
-      expect(requestMfccAudio).toEqual(positionalMfccAudio);
+      expect(mfccAudio.length).toBeGreaterThan(0);
+      expect(allFinite(mfccAudio)).toBe(true);
     });
 
     it('computes CQT and VQT magnitude grids', () => {
-      const cqtResult = cqt(signal, SR, 512, 32.7, 24, 12);
-      expect(cqtResult.nBins).toBe(24);
-      expect(cqtResult.nFrames).toBeGreaterThan(0);
+      const grid = { hopLength: 512, fminHz: 32.7, nBins: 24, binsPerOctave: 12 };
+      const cqtResult = cqt(signal, SR, grid);
+      expect(cqtResult.magnitude.rows).toBe(24);
+      expect(cqtResult.magnitude.cols).toBeGreaterThan(0);
       expect(cqtResult.frequencies.length).toBe(24);
-      expect(cqtResult.magnitude.length).toBe(cqtResult.nBins * cqtResult.nFrames);
+      expect(cqtResult.magnitude.data.length).toBe(
+        cqtResult.magnitude.rows * cqtResult.magnitude.cols,
+      );
       expect(cqtResult.sampleRate).toBe(SR);
-      expect(allFinite(cqtResult.magnitude)).toBe(true);
+      expect(allFinite(cqtResult.magnitude.data)).toBe(true);
 
-      const vqtResult = vqt(signal, SR, 512, 32.7, 24, 12, 10);
-      expect(vqtResult.nBins).toBe(24);
-      expect(vqtResult.magnitude.length).toBe(vqtResult.nBins * vqtResult.nFrames);
-      expect(allFinite(vqtResult.magnitude)).toBe(true);
+      const vqtResult = vqt(signal, SR, { ...grid, gamma: 10 });
+      expect(vqtResult.magnitude.rows).toBe(24);
+      expect(vqtResult.magnitude.data.length).toBe(
+        vqtResult.magnitude.rows * vqtResult.magnitude.cols,
+      );
+      expect(allFinite(vqtResult.magnitude.data)).toBe(true);
 
       // Shared deterministic oracle fixture with Node/Python.
       const inverseSource = generateSine(261.6256, 8000, 0.256, 0.5);
-      const inverseCqt = cqt(inverseSource, 8000, 128, 130.8128, 12, 12);
-      const inverseVqt = vqt(inverseSource, 8000, 128, 130.8128, 12, 12, 0);
-      const cqtAudio = cqtToAudio(
-        inverseCqt.magnitude,
-        inverseCqt.nBins,
-        inverseCqt.nFrames,
-        8000,
-        128,
-        130.8128,
-        12,
-        2,
-      );
-      const vqtAudio = vqtToAudio(
-        inverseVqt.magnitude,
-        inverseVqt.nBins,
-        inverseVqt.nFrames,
-        8000,
-        128,
-        130.8128,
-        12,
-        0,
-        2,
-      );
+      const inverseGrid = { hopLength: 128, fminHz: 130.8128, nBins: 12, binsPerOctave: 12 };
+      const inverseCqt = cqt(inverseSource, 8000, inverseGrid);
+      const inverseVqt = vqt(inverseSource, 8000, { ...inverseGrid, gamma: 0 });
+      const cqtAudio = cqtToAudio({
+        magnitude: inverseCqt.magnitude,
+        sampleRate: 8000,
+        hopLength: 128,
+        fminHz: 130.8128,
+        binsPerOctave: 12,
+        nIter: 2,
+      });
+      const vqtAudio = vqtToAudio({
+        magnitude: inverseVqt.magnitude,
+        sampleRate: 8000,
+        gamma: 0,
+        hopLength: 128,
+        fminHz: 130.8128,
+        binsPerOctave: 12,
+        nIter: 2,
+      });
       expect(cqtAudio.length).toBe(inverseSource.length);
       expect(allFinite(cqtAudio)).toBe(true);
       expect(Math.max(...cqtAudio.map(Math.abs))).toBeGreaterThan(1e-5);
       expect(vqtAudio.length).toBe(inverseSource.length);
       expect(allFinite(vqtAudio)).toBe(true);
       expect(() =>
-        cqtToAudio(cqtResult.magnitude.subarray(1), cqtResult.nBins, cqtResult.nFrames),
+        cqtToAudio({
+          magnitude: {
+            data: cqtResult.magnitude.data.subarray(1),
+            rows: cqtResult.magnitude.rows,
+            cols: cqtResult.magnitude.cols,
+          },
+        }),
       ).toThrow(/length/);
       expect(() =>
-        vqtToAudio(
-          vqtResult.magnitude,
-          vqtResult.nBins,
-          vqtResult.nFrames,
-          SR,
-          512,
-          32.7,
-          12,
-          10,
-          257,
-        ),
+        vqtToAudio({
+          magnitude: vqtResult.magnitude,
+          sampleRate: SR,
+          hopLength: 512,
+          fminHz: 32.7,
+          binsPerOctave: 12,
+          gamma: 10,
+          nIter: 257,
+        }),
       ).toThrow(/nIter/);
 
-      const pseudo = pseudoCqt(signal, SR, 512, 32.7, 24, 12);
-      expect(pseudo.nBins).toBe(24);
+      const pseudo = pseudoCqt(signal, SR, grid);
+      expect(pseudo.magnitude.rows).toBe(24);
       expect(pseudo.frequencies.length).toBe(24);
-      expect(pseudo.magnitude.length).toBe(pseudo.nBins * pseudo.nFrames);
+      expect(pseudo.magnitude.data.length).toBe(pseudo.magnitude.rows * pseudo.magnitude.cols);
       expect(pseudo.sampleRate).toBe(SR);
-      expect(allFinite(pseudo.magnitude)).toBe(true);
+      expect(allFinite(pseudo.magnitude.data)).toBe(true);
 
-      const hybrid = hybridCqt(signal, SR, 512, 32.7, 24, 12);
-      expect(hybrid.nBins).toBe(24);
+      const hybrid = hybridCqt(signal, SR, grid);
+      expect(hybrid.magnitude.rows).toBe(24);
       expect(hybrid.frequencies.length).toBe(24);
-      expect(hybrid.magnitude.length).toBe(hybrid.nBins * hybrid.nFrames);
+      expect(hybrid.magnitude.data.length).toBe(hybrid.magnitude.rows * hybrid.magnitude.cols);
       expect(hybrid.sampleRate).toBe(SR);
-      expect(allFinite(hybrid.magnitude)).toBe(true);
+      expect(allFinite(hybrid.magnitude.data)).toBe(true);
     });
 
     it('guards music feature wrappers before native analysis', () => {
       expect(() => nnlsChroma(new Float32Array([Number.NaN]), SR)).toThrow(/NaN|Inf/);
       expect(() => cqt(signal, 7999)).toThrow(/sampleRate/);
-      expect(() => cqt(signal, SR, 0)).toThrow(/hopLength/);
+      expect(() => cqt(signal, SR, { hopLength: 0 })).toThrow(/hopLength/);
       // An omitted gamma is the automatic ERB-derived bandwidth; 0 is the
       // constant-Q transform. Negative, NaN and infinite gamma are refused.
+      const grid = { hopLength: 512, fminHz: 32.7, nBins: 24, binsPerOctave: 12 };
       for (const gamma of [Number.POSITIVE_INFINITY, Number.NaN, -1]) {
-        expect(() => vqt(signal, SR, 512, 32.7, 24, 12, gamma)).toThrow(/gamma/);
+        expect(() => vqt(signal, SR, { ...grid, gamma })).toThrow(/gamma/);
       }
-      expect(Array.from(vqt(signal, SR, 512, 32.7, 24, 12).magnitude)).not.toEqual(
-        Array.from(vqt(signal, SR, 512, 32.7, 24, 12, 0).magnitude),
+      expect(Array.from(vqt(signal, SR, grid).magnitude.data)).not.toEqual(
+        Array.from(vqt(signal, SR, { ...grid, gamma: 0 }).magnitude.data),
       );
       expect(() => analyzeSections(signal, SR, { minSectionSec: -1 })).toThrow(/minSectionSec/);
       expect(() => analyzeSections(signal, SR, { minSectionSec: 0 })).not.toThrow();
       expect(() => analyzeSections(signal, SR, { nFft: 0 })).toThrow(/nFft/);
-      expect(() => analyzeMelody(signal, SR, { fmin: 400, fmax: 200 })).toThrow(/fmax/);
+      expect(() => analyzeMelody(signal, SR, { f0MinHz: 400, f0MaxHz: 200 })).toThrow(/f0MaxHz/);
       // Strictly-positive parity with the C ABI (sonare_analyze_melody): a zero
-      // fmin or threshold is rejected, not silently replaced with the default.
-      expect(() => analyzeMelody(signal, SR, { fmin: 0 })).toThrow(/fmin/);
+      // f0MinHz or threshold is rejected, not silently replaced with the default.
+      expect(() => analyzeMelody(signal, SR, { f0MinHz: 0 })).toThrow(/f0MinHz/);
       expect(() => analyzeMelody(signal, SR, { threshold: 0 })).toThrow(/threshold/);
-      expect(() => onsetEnvelope(new Float32Array(), SR)).toThrow(/empty/);
-      expect(() => fourierTempogram(new Float32Array([1, Number.POSITIVE_INFINITY]), SR)).toThrow(
-        /NaN|Inf/,
-      );
-      expect(() => tempogramRatio(new Float32Array([1, 2]), 0, SR)).toThrow(/winLength/);
+      expect(() => onsetStrength(new Float32Array(), SR)).toThrow(/empty/);
+      expect(() =>
+        fourierTempogram({
+          onsetEnvelope: new Float32Array([1, Number.POSITIVE_INFINITY]),
+          sampleRate: SR,
+        }),
+      ).toThrow(/NaN|Inf/);
+      expect(() =>
+        tempogramRatio({
+          tempogram: { data: new Float32Array([1, 2]), rows: 0, cols: 2 },
+          sampleRate: SR,
+        }),
+      ).toThrow(/rows/);
     });
 
     it('guards spectrogram and inverse wrapper shape inputs', () => {
       expect(() => stft(new Float32Array([0, Number.NaN]), SR)).toThrow(/NaN|Inf/);
       expect(() => melSpectrogram(signal, 0)).toThrow(/sampleRate/);
-      expect(() => melSpectrogram(signal, SR, 1024, 256, 40, 5000, 4000)).toThrow(/fmax/);
+      expect(() =>
+        melSpectrogram(signal, SR, {
+          nFft: 1024,
+          hopLength: 256,
+          nMels: 40,
+          fminHz: 5000,
+          fmaxHz: 4000,
+        }),
+      ).toThrow(/fmax/);
 
-      expect(() => melToStft(new Float32Array(5), 2, 3, SR, 1024)).toThrow(/length/);
-      expect(() => melToAudio(new Float32Array([1, Number.NaN, 2, 3]), 2, 2, SR, 1024)).toThrow(
-        /NaN|Inf/,
-      );
-      expect(() => mfccToMel(new Float32Array(6), 0, 3, 40)).toThrow(/nMfcc/);
-      expect(() => mfccToAudio(new Float32Array(6), 2, 3, 40, 7999)).toThrow(/sampleRate/);
+      expect(() =>
+        melToStft({
+          power: { data: new Float32Array(5), rows: 2, cols: 3 },
+          sampleRate: SR,
+          nFft: 1024,
+        }),
+      ).toThrow(/length/);
+      expect(() =>
+        melToAudio({
+          power: { data: new Float32Array([1, Number.NaN, 2, 3]), rows: 2, cols: 2 },
+          sampleRate: SR,
+          nFft: 1024,
+        }),
+      ).toThrow(/NaN|Inf/);
+      expect(() =>
+        mfccToMel({ coefficients: { data: new Float32Array(6), rows: 0, cols: 3 }, nMels: 40 }),
+      ).toThrow(/rows/);
+      expect(() =>
+        mfccToAudio({
+          coefficients: { data: new Float32Array(6), rows: 2, cols: 3 },
+          nMels: 40,
+          sampleRate: 7999,
+        }),
+      ).toThrow(/sampleRate/);
     });
 
     it('analyzes melody contour with summary stats', () => {
-      // 440 Hz tone is squarely within the default melody fmin/fmax range.
+      // 440 Hz tone is squarely within the default melody f0 range.
       const tone = generateSine(440, SR, 1.0);
       const melody = analyzeMelody(tone, SR);
       expect(Array.isArray(melody.points)).toBe(true);
       expect(melody.points.length).toBeGreaterThan(0);
-      expect(Number.isFinite(melody.meanFrequency)).toBe(true);
+      expect(Number.isFinite(melody.meanFrequencyHz)).toBe(true);
       expect(Number.isFinite(melody.pitchRangeOctaves)).toBe(true);
       expect(Number.isFinite(melody.pitchStability)).toBe(true);
-      expect(Number.isFinite(melody.vibratoRate)).toBe(true);
+      expect(Number.isFinite(melody.vibratoRateHz)).toBe(true);
       const first = melody.points[0];
-      expect(Number.isFinite(first.time)).toBe(true);
-      expect(Number.isFinite(first.frequency)).toBe(true);
+      expect(Number.isFinite(first.timeSec)).toBe(true);
       expect(Number.isFinite(first.confidence)).toBe(true);
+      // frequencyHz is absent on an unvoiced frame; a steady tone has voiced ones.
+      const voiced = melody.points.find((point) => point.frequencyHz !== undefined);
+      expect(Number.isFinite(voiced?.frequencyHz)).toBe(true);
     });
 
     it('analyzes song-structure sections', () => {
       const sections = analyzeSections(signal, SR);
       expect(Array.isArray(sections)).toBe(true);
       for (const section of sections) {
-        expect(typeof section.name).toBe('string');
-        expect(Number.isFinite(section.start)).toBe(true);
-        expect(Number.isFinite(section.end)).toBe(true);
-        expect(section.end).toBeGreaterThanOrEqual(section.start);
+        expect(typeof section.type).toBe('string');
+        expect(Number.isFinite(section.startSec)).toBe(true);
+        expect(Number.isFinite(section.endSec)).toBe(true);
+        expect(section.endSec).toBeGreaterThanOrEqual(section.startSec);
         expect(Number.isFinite(section.energyLevel)).toBe(true);
         expect(Number.isFinite(section.confidence)).toBe(true);
       }
@@ -1732,6 +1765,6 @@ describe('v1.2 feature additions (WASM)', () => {
       stftBlendWeight: 0,
       stftBlendNFft: 2048,
     });
-    expect(chroma.data.length).toBe(12 * chroma.nFrames);
+    expect(chroma.data.length).toBe(12 * chroma.cols);
   });
 });

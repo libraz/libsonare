@@ -15,12 +15,12 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   analyze,
   analyzeMelody,
-  ChordQuality,
+  CHORD_QUALITIES,
   chordFunctionalAnalysis,
   chordFunctions,
   detectChords,
   init,
-  Mode,
+  type KeyMode,
   PitchClass,
 } from '../src/index';
 import { getSonareModule } from '../src/module_state';
@@ -69,7 +69,7 @@ describe('WASM wave3 analysis parity', () => {
 
       expect(Array.isArray(result.bpmCandidates)).toBe(true);
       expect(result.bpmCandidates[0]?.relation).toBe('primary');
-      expect(result.bpmCandidates[0]?.value).toBe(result.bpm);
+      expect(result.bpmCandidates[0]?.bpm).toBe(result.bpm);
       expect(Array.isArray(result.timeSignatureCandidates)).toBe(true);
       expect(result.timeSignatureCandidates.length).toBeGreaterThan(0);
 
@@ -92,12 +92,13 @@ describe('WASM wave3 analysis parity', () => {
       expect(result.melody).toBeDefined();
       expect(Number.isFinite(result.melody.pitchRangeOctaves)).toBe(true);
       expect(Number.isFinite(result.melody.pitchStability)).toBe(true);
-      expect(Number.isFinite(result.melody.meanFrequency)).toBe(true);
-      expect(Number.isFinite(result.melody.vibratoRate)).toBe(true);
+      expect(Number.isFinite(result.melody.meanFrequencyHz)).toBe(true);
+      expect(Number.isFinite(result.melody.vibratoRateHz)).toBe(true);
       expect(Array.isArray(result.melody.pitches)).toBe(true);
       for (const p of result.melody.pitches) {
-        expect(Number.isFinite(p.time)).toBe(true);
-        expect(Number.isFinite(p.frequency)).toBe(true);
+        expect(Number.isFinite(p.timeSec)).toBe(true);
+        // frequencyHz is absent on an unvoiced frame.
+        expect(p.frequencyHz === undefined || Number.isFinite(p.frequencyHz)).toBe(true);
         expect(Number.isFinite(p.confidence)).toBe(true);
       }
     });
@@ -118,8 +119,8 @@ describe('WASM wave3 analysis parity', () => {
     it('uses threshold to emit a continuous N.C. segment', () => {
       const silence = new Float32Array(4096);
       const common = {
-        minDuration: 0,
-        smoothingWindow: 0.01,
+        minDurationSec: 0,
+        smoothingWindowSec: 0.01,
         useTriadsOnly: true,
         nFft: 2048,
         hopLength: 512,
@@ -128,12 +129,12 @@ describe('WASM wave3 analysis parity', () => {
       const low = detectChords(silence, SR, { ...common, threshold: 0 });
       const high = detectChords(silence, SR, { ...common, threshold: 0.99 });
       expect(low.chords).toHaveLength(1);
-      expect(low.chords[0]?.quality).not.toBe(ChordQuality.Unknown);
+      expect(low.chords[0]?.quality).not.toBe('unknown');
       expect(high.chords).toHaveLength(1);
-      expect(high.chords[0]?.quality).toBe(ChordQuality.Unknown);
+      expect(high.chords[0]?.quality).toBe('unknown');
       expect(high.chords[0]?.name).toBe('N.C.');
-      expect(high.chords[0]?.start).toBe(0);
-      expect(high.chords[0]?.end).toBeGreaterThan(0);
+      expect(high.chords[0]?.startSec).toBe(0);
+      expect(high.chords[0]?.endSec).toBeGreaterThan(0);
     });
 
     it('throws on an out-of-range key root when key context is enabled', () => {
@@ -141,7 +142,7 @@ describe('WASM wave3 analysis parity', () => {
         detectChords(samples, SR, {
           useKeyContext: true,
           keyRoot: 99 as PitchClass,
-          keyMode: Mode.Major,
+          keyMode: 'major',
         }),
       ).toThrow();
     });
@@ -151,7 +152,7 @@ describe('WASM wave3 analysis parity', () => {
         detectChords(samples, SR, {
           useKeyContext: true,
           keyRoot: PitchClass.C,
-          keyMode: 42 as Mode,
+          keyMode: 'bogus' as KeyMode,
         }),
       ).toThrow();
     });
@@ -176,7 +177,7 @@ describe('WASM wave3 analysis parity', () => {
           24,
           false,
           PitchClass.C,
-          Mode.Major,
+          0,
           false,
           3,
           0,
@@ -188,7 +189,7 @@ describe('WASM wave3 analysis parity', () => {
     // smoothingWindow and a negative hmmBeamWidth are rejected on every
     // surface, not just passed through to the DSP layer.
     it('throws on a non-positive smoothingWindow', () => {
-      expect(() => detectChords(samples, SR, { smoothingWindow: 0 })).toThrow();
+      expect(() => detectChords(samples, SR, { smoothingWindowSec: 0 })).toThrow();
     });
 
     it('throws on a negative hmmBeamWidth', () => {
@@ -200,7 +201,12 @@ describe('WASM wave3 analysis parity', () => {
     const samples = makeSine(4, 261.63);
 
     it('succeeds on valid input', () => {
-      const labels = chordFunctionalAnalysis(samples, PitchClass.C, Mode.Major, SR);
+      const labels = chordFunctionalAnalysis({
+        samples,
+        sampleRate: SR,
+        keyRoot: PitchClass.C,
+        keyMode: 'major',
+      });
       expect(Array.isArray(labels)).toBe(true);
       expect(labels).toEqual(
         chordFunctions({
@@ -211,11 +217,25 @@ describe('WASM wave3 analysis parity', () => {
     });
 
     it('throws on an out-of-range key root (range-checked unconditionally)', () => {
-      expect(() => chordFunctionalAnalysis(samples, 99 as PitchClass, Mode.Major, SR)).toThrow();
+      expect(() =>
+        chordFunctionalAnalysis({
+          samples,
+          sampleRate: SR,
+          keyRoot: 99 as PitchClass,
+          keyMode: 'major',
+        }),
+      ).toThrow();
     });
 
     it('throws on an out-of-range key mode (range-checked unconditionally)', () => {
-      expect(() => chordFunctionalAnalysis(samples, PitchClass.C, 42 as Mode, SR)).toThrow();
+      expect(() =>
+        chordFunctionalAnalysis({
+          samples,
+          sampleRate: SR,
+          keyRoot: PitchClass.C,
+          keyMode: 'bogus' as KeyMode,
+        }),
+      ).toThrow();
     });
 
     it('throws on an out-of-range chromaMethod (raw module path)', () => {
@@ -224,7 +244,7 @@ describe('WASM wave3 analysis parity', () => {
         module.chordFunctionalAnalysis(
           samples,
           PitchClass.C,
-          Mode.Major,
+          0,
           SR,
           0.3,
           2.0,
@@ -245,13 +265,23 @@ describe('WASM wave3 analysis parity', () => {
 
     it('throws on a non-positive smoothingWindow', () => {
       expect(() =>
-        chordFunctionalAnalysis(samples, PitchClass.C, Mode.Major, SR, { smoothingWindow: 0 }),
+        chordFunctionalAnalysis({
+          samples,
+          sampleRate: SR,
+          keyRoot: PitchClass.C,
+          keyMode: 'major',
+          smoothingWindowSec: 0,
+        }),
       ).toThrow();
     });
 
     it('throws on a negative hmmBeamWidth', () => {
       expect(() =>
-        chordFunctionalAnalysis(samples, PitchClass.C, Mode.Major, SR, {
+        chordFunctionalAnalysis({
+          samples,
+          sampleRate: SR,
+          keyRoot: PitchClass.C,
+          keyMode: 'major',
           useHmm: true,
           hmmBeamWidth: -1,
         }),
@@ -263,8 +293,8 @@ describe('WASM wave3 analysis parity', () => {
     it('runs with usePyin: true and returns a contour', () => {
       const samples = makeSine(2, 440); // A4
       const result = analyzeMelody(samples, SR, {
-        fmin: 65.0,
-        fmax: 2093.0,
+        f0MinHz: 65.0,
+        f0MaxHz: 2093.0,
         frameLength: 2048,
         hopLength: 256,
         threshold: 0.1,
@@ -273,13 +303,14 @@ describe('WASM wave3 analysis parity', () => {
       });
       expect(Number.isFinite(result.pitchRangeOctaves)).toBe(true);
       expect(Number.isFinite(result.pitchStability)).toBe(true);
-      expect(Number.isFinite(result.meanFrequency)).toBe(true);
-      expect(Number.isFinite(result.vibratoRate)).toBe(true);
+      expect(Number.isFinite(result.meanFrequencyHz)).toBe(true);
+      expect(Number.isFinite(result.vibratoRateHz)).toBe(true);
       expect(Array.isArray(result.points)).toBe(true);
       expect(result.points.length).toBeGreaterThan(0);
       for (const p of result.points) {
-        expect(Number.isFinite(p.time)).toBe(true);
-        expect(Number.isFinite(p.frequency)).toBe(true);
+        expect(Number.isFinite(p.timeSec)).toBe(true);
+        // frequencyHz is absent on an unvoiced frame.
+        expect(p.frequencyHz === undefined || Number.isFinite(p.frequencyHz)).toBe(true);
         expect(Number.isFinite(p.confidence)).toBe(true);
       }
     });
@@ -288,7 +319,7 @@ describe('WASM wave3 analysis parity', () => {
       const samples = makeSine(2, 440);
       const result = analyzeMelody(samples, SR);
       expect(Array.isArray(result.points)).toBe(true);
-      expect(Number.isFinite(result.meanFrequency)).toBe(true);
+      expect(Number.isFinite(result.meanFrequencyHz)).toBe(true);
     });
   });
 });
@@ -303,13 +334,13 @@ describe('chord entry shape', () => {
     'bass',
     'bassName',
     'confidence',
-    'duration',
-    'end',
+    'durationSec',
+    'endSec',
     'name',
     'quality',
     'root',
     'rootName',
-    'start',
+    'startSec',
   ];
   const PITCH_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
@@ -335,10 +366,10 @@ describe('chord entry shape', () => {
     for (const chord of [...detected, ...analysed]) {
       expect(typeof chord.root).toBe('number');
       expect(typeof chord.bass).toBe('number');
-      expect(typeof chord.quality).toBe('number');
+      expect(CHORD_QUALITIES).toContain(chord.quality);
       expect(chord.rootName).toBe(PITCH_NAMES[chord.root]);
       expect(chord.bassName).toBe(PITCH_NAMES[chord.bass]);
-      expect(chord.duration).toBeCloseTo(chord.end - chord.start, 5);
+      expect(chord.durationSec).toBeCloseTo(chord.endSec - chord.startSec, 5);
     }
     const first = detected.find((chord) => chord.name !== 'N.C.');
     expect(first?.rootName).toBe('C');

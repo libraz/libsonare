@@ -1,4 +1,5 @@
-import type { Key, Mode, PitchClass, ScaleName } from './public_types_music.js';
+import type { Matrix2D } from './public_types.js';
+import type { Key, KeyMode, PitchClass } from './public_types_music.js';
 import type { ValidateOptions } from './validation.js';
 
 /**
@@ -27,7 +28,7 @@ export interface PitchCorrectOptions extends ValidateOptions {
    * Scale degrees enabled: a 12-bit mask (bit `i` = semitone `i` above the root)
    * or a mode name, as `scaleMaskForMode` resolves it. Default C major.
    */
-  scaleModeMask?: number | ScaleName;
+  scaleModeMask?: number | KeyMode;
   /** Reference MIDI anchoring the scale grid. Default 69 (A4). */
   referenceMidi?: number;
   /** Correction strength in `[0, 1]`; 1 = full snap, 0 = bypass. Default 1. */
@@ -47,8 +48,8 @@ export interface PitchCorrectOptions extends ValidateOptions {
 /** A key as `detectKey` reports it, which is what `autoTune` takes to name one. */
 export interface AutoTuneKey {
   root: PitchClass;
-  /** A `Mode` ordinal or its name (a `ScaleName`). */
-  mode: Mode | ScaleName;
+  /** The mode name `detectKey` reports. */
+  mode: KeyMode;
 }
 
 /** Tuning knobs of `autoTune`. All fields are optional. */
@@ -141,7 +142,7 @@ export interface NoteEdit {
    */
   timeOffsetSamples: number;
   /** Transpose applied to the note's span. */
-  pitchShiftSemitones: number;
+  pitchSemitones: number;
   /** Level change applied to the note's span. */
   gainDb: number;
   /**
@@ -155,11 +156,11 @@ export interface NoteEdit {
    *
    * 0 runs no warp at all, so a pitch-only edit is not charged for an LPC
    * analysis-resynthesis round it did not ask for. A pitch shift drags the
-   * formants with it, so holding them still is `-pitchShiftSemitones` and the
+   * formants with it, so holding them still is `-pitchSemitones` and the
    * chipmunk is the default. Saturates near -10.3 and +8.7 semitones rather
    * than being rejected.
    */
-  formantShiftSemitones: number;
+  formantSemitones: number;
   /**
    * Scales the vibrato measured over the note, stated as a change from it: 0
    * keeps it, -1 flattens it, +1 doubles it.
@@ -318,9 +319,9 @@ export type NoteTargetUnmatchedPolicy =
   | 'nearest';
 
 /** What `assignNoteTargets` returns. */
-export interface NoteTargetAssignResult {
+export interface AssignNoteTargetsResult {
   /**
-   * The note set with each assigned note's `edit.pitchShiftSemitones` — and,
+   * The note set with each assigned note's `edit.pitchSemitones` — and,
    * under `'mute'`, its `edit.muted` — rewritten. A new array: the notes handed
    * in are not touched, and every other field of a note comes back as it went.
    */
@@ -338,7 +339,7 @@ export interface NoteTargetAssignResult {
  * `decomposeNotePitch`.
  *
  * `driftCents[i] + vibratoCents[i]` is the note's own pitch at frame `i`, in
- * cents above `centreHz`, to within float rounding, so the three parts
+ * cents above `centerHz`, to within float rounding, so the three parts
  * reconstruct the curve. The drift filter is zero phase, so neither curve is
  * shifted in time against the audio.
  */
@@ -347,8 +348,8 @@ export interface PitchDecompositionResult {
    * The note's steady pitch in Hz. 0 when the note carries no usable pitch, and
    * then both curves are empty.
    */
-  centreHz: number;
-  /** Slow deviation from `centreHz` in cents, one entry per frame. */
+  centerHz: number;
+  /** Slow deviation from `centerHz` in cents, one entry per frame. */
   driftCents: Float32Array;
   /** Fast deviation in cents, over the same frames. */
   vibratoCents: Float32Array;
@@ -383,8 +384,8 @@ export interface PolyphonicAnalysisOptions {
   centsPerBin?: number;
   /** Top of the cent axis, in Hz. Default 8000. */
   centMaxHz?: number;
-  /** Stops weighting bins by tonality, which is on. Default `false`. */
-  tonalityOff?: boolean;
+  /** Weights bins by tonality. Default `true`. */
+  tonality?: boolean;
   /** Partials summed per F0 candidate. Default 20, at most 128. */
   salienceHarmonics?: number;
   /** Lowest F0 a candidate may take, in Hz. Default 55. */
@@ -405,26 +406,35 @@ export interface PolyphonicAnalysisOptions {
   maxPolyphony?: number;
   /**
    * Stops the per-frame iteration below this share of the frame's first peak.
-   * Default 0.20; **negative selects 0**.
+   * Absent takes the library default (0.20); an explicit 0 means 0; a negative is
+   * refused with a `RangeError`.
    */
   minFramePeakRatio?: number;
-  /** Closest two candidates of one frame may sit. Default 50; **negative selects 0**. */
+  /**
+   * Closest two candidates of one frame may sit, in cents. Absent takes the library
+   * default (50); an explicit 0 means 0; a negative is refused with a `RangeError`.
+   */
   minSeparationCents?: number;
   /** Share of a found voice removed before the next iteration. Default 1. */
   subtractionFactor?: number;
   /** A larger move between two frames breaks the ridge. Default 50 cents. */
   maxJumpCents?: number;
   /**
-   * A fade below this share of the ridge's own running peak breaks it. Default
-   * 0.10; **negative selects 0**.
+   * A fade below this share of the ridge's own running peak breaks it. Absent
+   * takes the library default (0.10); an explicit 0 means 0; a negative is
+   * refused with a `RangeError`.
    */
   minRidgePeakRatio?: number;
-  /** Shorter ridges are dropped. Default 140 ms; **negative selects 0**. */
+  /**
+   * Shorter ridges are dropped, in ms. Absent takes the library default (140); an
+   * explicit 0 means 0; a negative is refused with a `RangeError`.
+   */
   minRidgeDurationMs?: number;
   /**
    * Splits a ridge where its salience climbs past this multiple of the level
    * just before, the same pitch struck again while it sounds. Must be above `1`.
-   * Default off (`0` or omitted); a value in `(0, 1]` or a negative is refused.
+   * Absent leaves re-attack splitting off; an explicit 0 and a value in `(0, 1]`
+   * or a negative are refused with a `RangeError`.
    */
   reattackRatio?: number;
   /** Partials claimed per note. Default 20, at most 128. */
@@ -606,8 +616,8 @@ export interface PercussiveEventInput {
 /** How a `spectralEdit` region op modifies the masked bins. */
 export type SpectralEditMode = 'gain' | 'attenuate' | 'mute' | 'heal';
 
-/** Analysis/synthesis window used by `spectralEdit`. */
-export type SpectralEditWindow = 'hann' | 'hamming' | 'blackman' | 'rectangular' | 'rect';
+/** Analysis/synthesis window, shared by `spectralEdit` and the streaming analyzer. */
+export type WindowType = 'hann' | 'hamming' | 'blackman' | 'rectangular';
 
 /** One time x frequency rectangle edit op for `spectralEdit`. */
 export interface SpectralRegionOp {
@@ -639,7 +649,7 @@ export interface SpectralEditOptions {
   /** Hop length; must satisfy 0 < hop <= nFft/2. Default 512. */
   hopLength?: number;
   /** Analysis + synthesis window. Default 'hann'. */
-  window?: SpectralEditWindow;
+  window?: WindowType;
   /** Neighbour frames each side used by 'heal' (>= 1). Default 2. */
   healRadiusFrames?: number;
 }
@@ -649,40 +659,27 @@ export interface SpectralEditOptions {
  * `SonareCqtResult`).
  */
 export interface CqtResult {
-  /** Number of frequency bins. */
-  nBins: number;
-  /** Number of time frames. */
-  nFrames: number;
   /** Hop length in samples. */
   hopLength: number;
   /** Sample rate in Hz. */
   sampleRate: number;
-  /** Row-major `[nBins x nFrames]` magnitude matrix. */
-  magnitude: Float32Array;
+  /** Rows are CQT bins, cols are frames. */
+  magnitude: Matrix2D;
   /** Center frequency (Hz) of each of the `nBins` bins. */
   frequencies: Float32Array;
-}
-
-/**
- * Multi-band onset strength matrix result.
- */
-export interface OnsetStrengthMultiResult {
-  nBands: number;
-  nFrames: number;
-  data: Float32Array;
 }
 
 /**
  * STFT (Short-Time Fourier Transform) result
  */
 export interface StftResult {
-  nBins: number;
-  nFrames: number;
   nFft: number;
   hopLength: number;
   sampleRate: number;
-  magnitude: Float32Array;
-  power: Float32Array;
+  /** Rows are `nFft / 2 + 1` bins, cols are frames. */
+  magnitude: Matrix2D;
+  /** Rows are `nFft / 2 + 1` bins, cols are frames. */
+  power: Matrix2D;
 }
 
 /**
@@ -691,22 +688,20 @@ export interface StftResult {
  * `{ result }`.
  */
 export interface MelSpectrogramResult {
-  nMels: number;
-  nFrames: number;
   sampleRate: number;
   hopLength: number;
   /** FFT size of the source STFT. */
   nFft: number;
   /** Lower Mel band edge in Hz as applied. */
-  fmin: number;
+  fminHz: number;
   /** Upper Mel band edge in Hz as applied: the Nyquist when the request left it at 0. */
-  fmax: number;
+  fmaxHz: number;
   /** `true` for the HTK Mel formula, `false` for Slaney. */
   htk: boolean;
-  /** `true` when `power` holds dB values. A forward transform always reports `false`: `power` is linear power and `db` is its dB form. */
-  isDb: boolean;
-  power: Float32Array;
-  db: Float32Array;
+  /** Linear power; rows are mel bands, cols are frames. */
+  power: Matrix2D;
+  /** The dB form of `power`; rows are mel bands, cols are frames. */
+  db: Matrix2D;
 }
 
 /**
@@ -715,52 +710,29 @@ export interface MelSpectrogramResult {
  * `mfccToAudio` take it as `{ result }`.
  */
 export interface MfccResult {
-  nMfcc: number;
-  nFrames: number;
   sampleRate: number;
   hopLength: number;
   nFft: number;
   /** Mel bands the coefficients were taken from. */
   nMels: number;
-  fmin: number;
+  fminHz: number;
   /** Upper Mel band edge in Hz as applied: the Nyquist when the request left it at 0. */
-  fmax: number;
+  fmaxHz: number;
   htk: boolean;
-  /** Always `false`: the coefficients are a cepstrum, not a dB spectrogram. */
-  isDb: boolean;
   /** Cepstral lifter applied to the coefficients; 0 means none. */
   lifter: number;
-  coefficients: Float32Array;
-}
-
-/**
- * STFT magnitude spectrogram result (from inverse Mel reconstruction). The data
- * is magnitude, not squared magnitude.
- */
-export interface StftMagnitudeResult {
-  nBins: number;
-  nFrames: number;
-  magnitude: Float32Array;
-}
-
-/**
- * Mel power spectrogram result (from inverse MFCC reconstruction)
- */
-export interface MelPowerResult {
-  nMels: number;
-  nFrames: number;
-  power: Float32Array;
+  /** Rows are coefficients, cols are frames. */
+  coefficients: Matrix2D;
 }
 
 /**
  * Chroma features result
  */
 export interface ChromaResult {
-  nChroma: number;
-  nFrames: number;
   sampleRate: number;
   hopLength: number;
-  features: Float32Array;
+  /** Rows are chroma bins, cols are frames. */
+  features: Matrix2D;
   meanEnergy: number[];
 }
 
@@ -795,34 +767,28 @@ export interface PitchResult {
 
 /** Per-bin pitch candidates and peak magnitudes from spectral piptrack. */
 export interface PiptrackResult {
-  nBins: number;
-  nFrames: number;
-  pitches: Float32Array;
-  magnitudes: Float32Array;
+  /** Rows are FFT bins, cols are frames. */
+  pitches: Matrix2D;
+  /** Rows are FFT bins, cols are frames. */
+  magnitudes: Matrix2D;
 }
 
 /** Magnitude and reassigned time/frequency coordinates for every STFT bin. */
 export interface ReassignedSpectrogramResult {
-  nBins: number;
-  nFrames: number;
-  magnitude: Float32Array;
-  times: Float32Array;
-  frequencies: Float32Array;
-}
-
-/** Row-major matrix returned by librosa.segment-compatible APIs. */
-export interface SegmentMatrix {
-  rows: number;
-  cols: number;
-  values: Float32Array;
+  /** Rows are FFT bins, cols are frames. */
+  magnitude: Matrix2D;
+  /** Rows are FFT bins, cols are frames. */
+  times: Matrix2D;
+  /** Rows are FFT bins, cols are frames. */
+  frequencies: Matrix2D;
 }
 
 /** One stable monophonic note region segmented from an F0 track. */
 export interface NoteSegment {
   frameStart: number;
   frameEnd: number;
-  startSeconds: number;
-  endSeconds: number;
+  startSec: number;
+  endSec: number;
   medianCents: number;
 }
 
@@ -839,7 +805,7 @@ export interface LufsResult {
   maxMomentaryLufs: number;
   /** Maximum 3 s window (EBU R128 Max-S). */
   maxShortTermLufs: number;
-  loudnessRange: number;
+  loudnessRangeLu: number;
 }
 
 /**

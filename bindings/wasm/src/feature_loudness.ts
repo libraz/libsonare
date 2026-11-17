@@ -65,7 +65,12 @@ export function lufsInterleaved(
   assertAudioInput('lufsInterleaved', samples, sampleRate, options);
   // The preflight above already scanned the samples.
   assertInterleavedSamples('lufsInterleaved', samples, channels, false);
-  return requireModule().lufsInterleaved(samples, channels, sampleRate);
+  const { loudnessRange, ...measured } = requireModule().lufsInterleaved(
+    samples,
+    channels,
+    sampleRate,
+  );
+  return { ...measured, loudnessRangeLu: loudnessRange };
 }
 
 /**

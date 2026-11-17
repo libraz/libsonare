@@ -43,10 +43,10 @@ function note(startSec: number, endSec: number, medianHz = a4Hz): NoteObject {
     amplitude: new Float32Array([0.25, 0.5, 0.25]),
     edit: {
       timeOffsetSamples: 0,
-      pitchShiftSemitones: 0,
+      pitchSemitones: 0,
       gainDb: 0,
       timeStretchRatio: 1,
-      formantShiftSemitones: 0,
+      formantSemitones: 0,
       vibratoDepthChange: 0,
       driftChange: 0,
       muted: false,
@@ -90,9 +90,9 @@ describe('WASM note targets', () => {
       expect(result.assignedCount).toBe(1);
       // 72 - 69 = +3 semitones; the two notes the target does not reach are left
       // alone by the default policy.
-      expect(result.notes[0].edit.pitchShiftSemitones).toBeCloseTo(3, 4);
-      expect(result.notes[1].edit.pitchShiftSemitones).toBe(0);
-      expect(result.notes[2].edit.pitchShiftSemitones).toBe(0);
+      expect(result.notes[0].edit.pitchSemitones).toBeCloseTo(3, 4);
+      expect(result.notes[1].edit.pitchSemitones).toBe(0);
+      expect(result.notes[2].edit.pitchSemitones).toBe(0);
     });
 
     it('gives the three unmatched policies three different answers', () => {
@@ -106,12 +106,9 @@ describe('WASM note targets', () => {
 
       // The unmatched note at [1, 2): left as recorded, muted, or pulled onto the
       // one target there is. No two of the three agree on it.
-      expect([leave.notes[1].edit.pitchShiftSemitones, leave.notes[1].edit.muted]).toEqual([
-        0,
-        false,
-      ]);
-      expect([mute.notes[1].edit.pitchShiftSemitones, mute.notes[1].edit.muted]).toEqual([0, true]);
-      expect(nearest.notes[1].edit.pitchShiftSemitones).toBeCloseTo(3, 4);
+      expect([leave.notes[1].edit.pitchSemitones, leave.notes[1].edit.muted]).toEqual([0, false]);
+      expect([mute.notes[1].edit.pitchSemitones, mute.notes[1].edit.muted]).toEqual([0, true]);
+      expect(nearest.notes[1].edit.pitchSemitones).toBeCloseTo(3, 4);
       expect(nearest.notes[1].edit.muted).toBe(false);
 
       expect(leave.assignedCount).toBe(1);
@@ -157,19 +154,19 @@ describe('WASM note targets', () => {
       const bounded = run();
       const widened = run(15);
       const zeroed = run(0);
-      expect(bounded.notes[0].edit.pitchShiftSemitones).toBeCloseTo(12, 4);
-      expect(widened.notes[0].edit.pitchShiftSemitones).toBeCloseTo(15, 4);
-      expect(bounded.notes[0].edit.pitchShiftSemitones).not.toBeCloseTo(
-        widened.notes[0].edit.pitchShiftSemitones,
+      expect(bounded.notes[0].edit.pitchSemitones).toBeCloseTo(12, 4);
+      expect(widened.notes[0].edit.pitchSemitones).toBeCloseTo(15, 4);
+      expect(bounded.notes[0].edit.pitchSemitones).not.toBeCloseTo(
+        widened.notes[0].edit.pitchSemitones,
         4,
       );
       // 0 is its own meaning: every correction saturates to nothing. It must not
       // read as "unset" and pick the default 12 back up. The note is still
       // assigned, which is what separates this from a note no target reached.
-      expect(zeroed.notes[0].edit.pitchShiftSemitones).toBe(0);
+      expect(zeroed.notes[0].edit.pitchSemitones).toBe(0);
       expect(zeroed.assignedCount).toBe(1);
-      expect(zeroed.notes[0].edit.pitchShiftSemitones).not.toBeCloseTo(
-        bounded.notes[0].edit.pitchShiftSemitones,
+      expect(zeroed.notes[0].edit.pitchSemitones).not.toBeCloseTo(
+        bounded.notes[0].edit.pitchSemitones,
         4,
       );
     });
@@ -221,7 +218,7 @@ describe('WASM note targets', () => {
           { startSec: 0, endSec: 0.6, targetMidi: 72 },
           { startSec: 0.5, endSec: 1, targetMidi: 60 },
         ],
-      }).notes[0].edit.pitchShiftSemitones;
+      }).notes[0].edit.pitchSemitones;
       const shorter = assignNoteTargets({
         notes: [note(0, 1)],
         sampleRate,
@@ -230,7 +227,7 @@ describe('WASM note targets', () => {
           { startSec: 0, endSec: 0.5, targetMidi: 72 },
           { startSec: 0.4, endSec: 1, targetMidi: 60 },
         ],
-      }).notes[0].edit.pitchShiftSemitones;
+      }).notes[0].edit.pitchSemitones;
       expect(longer).toBeCloseTo(3, 4);
       expect(shorter).toBeCloseTo(-9, 4);
 
@@ -244,7 +241,7 @@ describe('WASM note targets', () => {
       ]) {
         expect(
           assignNoteTargets({ notes: [note(0, 1)], sampleRate, targets }).notes[0].edit
-            .pitchShiftSemitones,
+            .pitchSemitones,
         ).toBeCloseTo(3, 4);
       }
       // The mirror pair, so the tie rule is shown deciding rather than the first
@@ -253,7 +250,7 @@ describe('WASM note targets', () => {
       const lateHigh = { startSec: 0.25, endSec: 1, targetMidi: 72 };
       expect(
         assignNoteTargets({ notes: [note(0, 1)], sampleRate, targets: [lateHigh, earlyLow] })
-          .notes[0].edit.pitchShiftSemitones,
+          .notes[0].edit.pitchSemitones,
       ).toBeCloseTo(-9, 4);
     });
 
@@ -267,13 +264,13 @@ describe('WASM note targets', () => {
           const row = note(0, 1, medianHz);
           // A pending edit, so "never edited" is visible as it surviving rather
           // than as a zero that could have been written.
-          row.edit.pitchShiftSemitones = 5;
+          row.edit.pitchSemitones = 5;
           return row;
         });
         const result = assignNoteTargets({ notes, sampleRate, targets, unmatchedPolicy });
         expect(result.assignedCount).toBe(0);
         for (const row of result.notes) {
-          expect(row.edit.pitchShiftSemitones).toBe(5);
+          expect(row.edit.pitchSemitones).toBe(5);
           expect(row.edit.muted).toBe(false);
         }
       }
@@ -285,7 +282,7 @@ describe('WASM note targets', () => {
         targets,
       });
       expect(mixed.assignedCount).toBe(1);
-      expect(mixed.notes[1].edit.pitchShiftSemitones).toBeCloseTo(3, 4);
+      expect(mixed.notes[1].edit.pitchSemitones).toBeCloseTo(3, 4);
     });
 
     it('refuses a non-finite target instead of letting it reach the edit', () => {
@@ -350,7 +347,7 @@ describe('WASM note targets', () => {
       expect(notes[0].amplitude[0]).toBe(0.25);
       // The written fields did move, so the equality above is preservation and
       // not a call that did nothing.
-      expect(result.notes[0].edit.pitchShiftSemitones).toBeCloseTo(3, 4);
+      expect(result.notes[0].edit.pitchSemitones).toBeCloseTo(3, 4);
       expect(result.notes[1].edit.muted).toBe(true);
     });
 
@@ -358,7 +355,7 @@ describe('WASM note targets', () => {
       const notes = threeNotes();
       notes[0].edit.gainDb = -3;
       notes[0].edit.timeStretchRatio = 1.25;
-      notes[0].edit.formantShiftSemitones = 2;
+      notes[0].edit.formantSemitones = 2;
       notes[0].edit.timeOffsetSamples = 512;
       notes[0].edit.amplitudeEnvelope = new Float32Array([0.5, 1]);
       const result = assignNoteTargets({
@@ -378,11 +375,11 @@ describe('WASM note targets', () => {
       expect(Array.from(edited.amplitude)).toEqual(Array.from(source.amplitude));
       expect(edited.edit.gainDb).toBe(-3);
       expect(edited.edit.timeStretchRatio).toBe(1.25);
-      expect(edited.edit.formantShiftSemitones).toBe(2);
+      expect(edited.edit.formantSemitones).toBe(2);
       expect(edited.edit.timeOffsetSamples).toBe(512);
       expect(Array.from(edited.edit.amplitudeEnvelope)).toEqual([0.5, 1]);
       // Only the two fields the rule owns moved.
-      expect(edited.edit.pitchShiftSemitones).toBeCloseTo(3, 4);
+      expect(edited.edit.pitchSemitones).toBeCloseTo(3, 4);
     });
 
     it('assigns a target to notes that came out of extractNotes', () => {
@@ -409,7 +406,7 @@ describe('WASM note targets', () => {
         targets: [{ startSec: 0, endSec: durationSec, targetMidi: 72 }],
       });
       expect(result.assignedCount).toBe(notes.length);
-      expect(result.notes[0].edit.pitchShiftSemitones).toBeCloseTo(3, 1);
+      expect(result.notes[0].edit.pitchSemitones).toBeCloseTo(3, 1);
       // A measured note carries an amplitude curve, and it comes back untouched.
       expect(Array.from(result.notes[0].amplitude)).toEqual(Array.from(notes[0].amplitude));
     });
@@ -459,8 +456,8 @@ describe('WASM note targets', () => {
         targets,
       });
       expect(result.assignedCount).toBe(2);
-      expect(result.notes[0].edit.pitchShiftSemitones).toBeCloseTo(3, 4);
-      expect(result.notes[1].edit.pitchShiftSemitones).toBeCloseTo(5, 4);
+      expect(result.notes[0].edit.pitchSemitones).toBeCloseTo(3, 4);
+      expect(result.notes[1].edit.pitchSemitones).toBeCloseTo(5, 4);
     });
 
     it('refuses bytes that are not a readable SMF', () => {

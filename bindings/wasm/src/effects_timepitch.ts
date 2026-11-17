@@ -3,7 +3,7 @@
  * correction onto a target pitch.
  */
 
-import { keyModeName } from './analysis_helpers.js';
+import { keyModeName, keyModeOrdinal, pitchClassOrdinal } from './analysis_helpers.js';
 import { assertPitchTrackLengths, toVoicedFloat32 } from './internal/effects_common.js';
 import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
@@ -71,7 +71,10 @@ export interface AutoTuneRequest extends AutoTuneOptions {
   sampleRate?: number;
   /**
    * `'detect'` (default) finds the key with `detectKey`'s defaults; a
-   * `{ root, mode }` names it, as `detectKey`'s result does.
+   * `{ root, mode }` names it, as `detectKey`'s result does: `root` an integer
+   * pitch class `0..11` (`RangeError` otherwise, `TypeError` for a non-number),
+   * `mode` a {@link KeyMode} token (`RangeError` for an unknown one, `TypeError`
+   * for a non-string).
    */
   key?: 'detect' | AutoTuneKey;
 }
@@ -456,12 +459,17 @@ export function autoTune(request: AutoTuneRequest): AutoTuneResult {
   if (key !== 'detect' && (key === null || typeof key !== 'object')) {
     throw new TypeError("autoTune: key must be 'detect' or { root, mode }");
   }
-  const result = requireModule().autoTune(
-    samples,
-    sampleRate ?? 22050,
-    key === 'detect' ? null : key,
-    options,
-  ) as Omit<AutoTuneResult, 'key'> & {
+  let nativeKey: AutoTuneKey | null = null;
+  if (key !== 'detect') {
+    // Checked for the refusal only; native reads the pitch class and mode token as given.
+    pitchClassOrdinal(key.root, 'key.root');
+    keyModeOrdinal(key.mode, 'key.mode');
+    nativeKey = { root: key.root, mode: key.mode };
+  }
+  const result = requireModule().autoTune(samples, sampleRate ?? 22050, nativeKey, options) as Omit<
+    AutoTuneResult,
+    'key'
+  > & {
     key: Omit<AutoTuneResult['key'], 'mode'> & { mode: number };
   };
   return { ...result, key: { ...result.key, mode: keyModeName(result.key.mode) } };

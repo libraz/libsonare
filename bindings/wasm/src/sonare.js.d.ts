@@ -10,13 +10,13 @@
 import type { SplitSilenceCommonWithReportResult } from './feature_core.js';
 import type { StripMeteringOptions } from './mixer.js';
 import type {
+  AssignNoteTargetsResult,
   Capabilities,
   NoteEditInput,
   NoteObject,
   NoteObjectInput,
   NoteSetEntry,
   NoteTarget,
-  NoteTargetAssignResult,
   NoteTargetUnmatchedPolicy,
   PercussiveEvent,
   PercussiveEventInput,
@@ -2616,7 +2616,7 @@ export interface SonareModule {
       minOverlapRatio?: number;
       maxCorrectionSemitones?: number;
     },
-  ) => NoteTargetAssignResult;
+  ) => AssignNoteTargetsResult;
   /** Absent from a build without arrangement support, which is what links the MIDI reader. */
   noteTargetsFromSmf?: (data: Uint8Array, trackIndex: number) => NoteTarget[];
   createPolyphonicAnalysis: (

@@ -156,7 +156,7 @@ describe('OfflineWorkerClient', () => {
     const client = clientWith(worker);
     const progress: string[] = [];
     const result = await client.analyze(
-      { samples: makeTone(), onProgress: (_p, stage) => progress.push(stage) },
+      { samples: makeTone(), sampleRate: 22050, onProgress: (_p, stage) => progress.push(stage) },
       { copy: true },
     );
 
@@ -170,12 +170,14 @@ describe('OfflineWorkerClient', () => {
     const worker = new LoopbackWorker();
     const client = clientWith(worker);
     const transferred = makeTone();
-    const call = client.detectBpm({ samples: transferred });
+    const call = client.detectBpm({ samples: transferred, sampleRate: 22050 });
     expect(transferred.byteLength).toBe(0);
     expect(await call).toBeGreaterThan(0);
 
     const copied = makeTone();
-    expect(await client.detectBpm({ samples: copied }, { copy: true })).toBeGreaterThan(0);
+    expect(
+      await client.detectBpm({ samples: copied, sampleRate: 22050 }, { copy: true }),
+    ).toBeGreaterThan(0);
     expect(copied.byteLength).toBeGreaterThan(0);
     await client.destroy();
   });
@@ -185,7 +187,7 @@ describe('OfflineWorkerClient', () => {
     const client = clientWith(worker);
     const controller = new AbortController();
     const call = client.analyze(
-      { samples: makeTone(4) },
+      { samples: makeTone(4), sampleRate: 22050 },
       { copy: true, signal: controller.signal },
     );
     controller.abort();
@@ -225,6 +227,7 @@ describe('OfflineWorkerClient', () => {
         const call = client.analyze(
           {
             samples: makeTone(20),
+            sampleRate: 22050,
             onProgress: () => {
               ticks += 1;
               if (cancelOnFirstTick && ticks === 1) {
@@ -270,7 +273,7 @@ describe('OfflineWorkerClient', () => {
       terminateWorkerOnDestroy: true,
     });
     const samples = makeTone();
-    const bpm = await client.detectBpm({ samples });
+    const bpm = await client.detectBpm({ samples, sampleRate: 22050 });
 
     expect(samples.byteLength).toBe(0);
     expect(bpm).toBeGreaterThan(0);
@@ -290,7 +293,7 @@ describe('OfflineWorkerClient', () => {
       type: 'sonare:offline-run',
       id,
       operation: 'detectBpm',
-      request: { samples: samples() },
+      request: { samples: samples(), sampleRate: 22050 },
     });
     const first = await nextMessage();
     expect(first.type).toBe('sonare:offline-result');
@@ -305,7 +308,7 @@ describe('OfflineWorkerClient', () => {
       type: 'sonare:offline-run',
       id,
       operation: 'detectBpm',
-      request: { samples: samples() },
+      request: { samples: samples(), sampleRate: 22050 },
     });
     const second = await nextMessage();
     expect(second.type).toBe('sonare:offline-result');
@@ -319,7 +322,7 @@ describe('OfflineWorkerClient', () => {
     const client = clientWith(worker as unknown as LoopbackWorker);
     const controller = new AbortController();
     const call = client.detectBpm(
-      { samples: new Float32Array([0, 0]) },
+      { samples: new Float32Array([0, 0]), sampleRate: 22050 },
       { copy: true, signal: controller.signal },
     );
 
@@ -352,7 +355,10 @@ describe('OfflineWorkerClient', () => {
       throw new Error('dispatch reported late failure');
     });
     const client = clientWith(worker as unknown as LoopbackWorker);
-    const call = client.detectBpm({ samples: new Float32Array([0, 0]) }, { copy: true });
+    const call = client.detectBpm(
+      { samples: new Float32Array([0, 0]), sampleRate: 22050 },
+      { copy: true },
+    );
 
     await expect(call).resolves.toBe(result);
     expect(worker.calls).toHaveLength(1);
@@ -362,13 +368,16 @@ describe('OfflineWorkerClient', () => {
   it('rejects a request still pending at destroy with InvalidState, like a new call', async () => {
     const worker = new ThrowingWorker(() => undefined);
     const client = clientWith(worker as unknown as LoopbackWorker);
-    const call = client.detectBpm({ samples: new Float32Array([0, 0]) }, { copy: true });
+    const call = client.detectBpm(
+      { samples: new Float32Array([0, 0]), sampleRate: 22050 },
+      { copy: true },
+    );
     await client.destroy();
     await expect(call).rejects.toSatisfy(
       (error: unknown) => isSonareError(error) && error.code === ErrorCode.InvalidState,
     );
     await expect(
-      client.detectBpm({ samples: new Float32Array([0, 0]) }, { copy: true }),
+      client.detectBpm({ samples: new Float32Array([0, 0]), sampleRate: 22050 }, { copy: true }),
     ).rejects.toSatisfy((e: unknown) => isSonareError(e) && e.code === ErrorCode.InvalidState);
   });
 
@@ -390,7 +399,7 @@ describe('OfflineWorkerClient', () => {
     });
     const client = clientWith(worker as unknown as LoopbackWorker);
     try {
-      const samples = () => ({ samples: new Float32Array([0, 0]) });
+      const samples = () => ({ samples: new Float32Array([0, 0]), sampleRate: 22050 });
       await expect(client.detectBpm(samples(), { copy: true })).rejects.toSatisfy(
         (error: unknown) =>
           isSonareError(error) &&

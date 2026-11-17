@@ -214,10 +214,10 @@ describe('analyzePolyphonic', () => {
     for (const note of notes) {
       expect(note.edit).toEqual({
         timeOffsetSamples: 0,
-        pitchShiftSemitones: 0,
+        pitchSemitones: 0,
         gainDb: 0,
         timeStretchRatio: 1,
-        formantShiftSemitones: 0,
+        formantSemitones: 0,
         vibratoDepthChange: 0,
         driftChange: 0,
         muted: false,
@@ -326,7 +326,7 @@ describe('PolyphonicAnalysis.render', () => {
   });
 
   it('applies a pitch-shift edit to the note it was set on', () => {
-    edited.setNoteEdit(lower, { pitchShiftSemitones: 1 });
+    edited.setNoteEdit(lower, { pitchSemitones: 1 });
     const shifted = edited.render();
     expectEdited(shifted, identity);
     // Transposing one voice of a fifth moves the waveform by about its own peak —
@@ -340,7 +340,7 @@ describe('PolyphonicAnalysis.render', () => {
     // Every other assertion here passes on a wrapper that silently drops the
     // edit, so the readback is what says it was stored.
     const stored = edited.notes()[lower].edit;
-    expect(stored.pitchShiftSemitones).toBe(1);
+    expect(stored.pitchSemitones).toBe(1);
     // 0 is the identity spelling of a stretch ratio and reads back as 1.
     expect(stored.timeStretchRatio).toBe(1);
     expect(stored.muted).toBe(false);
@@ -348,7 +348,7 @@ describe('PolyphonicAnalysis.render', () => {
 
   it('restores the identity when the edit is cleared', () => {
     edited.setNoteEdit(lower, {});
-    expect(edited.notes()[lower].edit.pitchShiftSemitones).toBe(0);
+    expect(edited.notes()[lower].edit.pitchSemitones).toBe(0);
     expect(edited.render()).toEqual(identity);
   });
 
@@ -455,11 +455,17 @@ describe('PolyphonicAnalysis reattackRatio', () => {
   });
 
   it('refuses a value the ridge tracker refuses', () => {
-    for (const bad of [-1, 0.5, 1]) {
+    const negative = expectRefusalOf(() =>
+      analyzePolyphonic({ samples, sampleRate, reattackRatio: -1 }),
+    );
+    const message =
+      'analyzePolyphonic: reattackRatio must be greater than 1 (omit it for no split)';
+    expect(negative.message).toBe(message);
+    for (const bad of [0, 0.5, 1]) {
       const error = expectRefusalOf(() =>
         analyzePolyphonic({ samples, sampleRate, reattackRatio: bad }),
       );
-      expect(error.message).toBe('Invalid parameter');
+      expect(error.message).toBe(message);
     }
   });
 });

@@ -58,14 +58,12 @@ describe('WASM analyze() downbeats and meter options', () => {
   });
 
   describe('downbeat fields', () => {
-    it('exposes downbeatIndices as indices into beats plus a downbeatPhase', () => {
+    it('exposes downbeats as a subset of beats plus a downbeatPhase', () => {
       const result = analyze(samples, SR);
 
-      expect(Array.isArray(result.downbeatIndices)).toBe(true);
-      for (const index of result.downbeatIndices) {
-        expect(Number.isInteger(index)).toBe(true);
-        expect(index).toBeGreaterThanOrEqual(0);
-        expect(index).toBeLessThan(result.beats.length);
+      expect(Array.isArray(result.downbeats)).toBe(true);
+      for (const downbeat of result.downbeats) {
+        expect(result.beats.some((beat) => beat.timeSec === downbeat.timeSec)).toBe(true);
       }
       expect(Number.isInteger(result.downbeatPhase)).toBe(true);
       expect(result.downbeatPhase).toBeGreaterThanOrEqual(0);

@@ -1,6 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
-  ChordQuality,
   chordFunctionalAnalysis,
   chordFunctions,
   detectChords,
@@ -47,41 +46,46 @@ describe('a detected key goes straight back in', () => {
     await init();
   });
 
-  it('detectChords takes the key by name or ordinal, request and positional forms', () => {
-    const ordinals = detectChords({ ...base, useKeyContext: true, keyRoot: 7, keyMode: 1 });
-    expect(detectChords({ ...base, useKeyContext: true, keyRoot: 'G', keyMode: 'minor' })).toEqual(
-      ordinals,
-    );
+  it('detectChords takes the key as a pitch class number and a mode name, request and positional forms', () => {
+    const request = detectChords({ ...base, useKeyContext: true, keyRoot: 7, keyMode: 'minor' });
     const key = detectKey(samples, SAMPLE_RATE);
     expect(() =>
       detectChords({ ...base, useKeyContext: true, keyRoot: key.root, keyMode: key.mode }),
     ).not.toThrow();
     const options = { useBeatSync: false, useTriadsOnly: true, useKeyContext: true };
     expect(
-      detectChords(samples, SAMPLE_RATE, { ...options, keyRoot: 'G', keyMode: 'minor' }),
-    ).toEqual(detectChords(samples, SAMPLE_RATE, { ...options, keyRoot: 7, keyMode: 1 }));
+      detectChords(samples, SAMPLE_RATE, { ...options, keyRoot: 7, keyMode: 'minor' }),
+    ).toEqual(request);
   });
 
-  it('chordFunctionalAnalysis takes name or ordinal', () => {
+  it('chordFunctionalAnalysis takes the key as a pitch class number and a mode name', () => {
     const options = { useBeatSync: false, useTriadsOnly: true };
-    const byOrdinal = chordFunctionalAnalysis({ ...base, keyRoot: 0, keyMode: 0 });
-    expect(chordFunctionalAnalysis({ ...base, keyRoot: 'C', keyMode: 'major' })).toEqual(byOrdinal);
-    expect(chordFunctionalAnalysis(samples, 'C', 'major', SAMPLE_RATE, options)).toEqual(byOrdinal);
+    const request = chordFunctionalAnalysis({ ...base, keyRoot: 0, keyMode: 'major' });
+    expect(
+      chordFunctionalAnalysis(samples, SAMPLE_RATE, { ...options, keyRoot: 0, keyMode: 'major' }),
+    ).toEqual(request);
     const key = detectKey(samples, SAMPLE_RATE);
     expect(() =>
       chordFunctionalAnalysis({ ...base, keyRoot: key.root, keyMode: key.mode }),
     ).not.toThrow();
   });
 
-  it('chordFunctions takes the root by name or ordinal', () => {
-    const chords = [{ root: PitchClass.C, quality: ChordQuality.Major }];
-    const byOrdinal = chordFunctions({ chords, key: { root: 7, mode: 0 } });
-    expect(chordFunctions({ chords, key: { root: 'G', mode: 'major' } })).toEqual(byOrdinal);
+  it('chordFunctions takes the key root as a pitch class number', () => {
+    const chords = [{ root: PitchClass.C, quality: 'major' as const }];
+    const result = chordFunctions({ chords, key: { root: 7, mode: 'major' } });
+    expect(result).toHaveLength(1);
+    expect(() => chordFunctions({ chords, key: { root: 'G' as never, mode: 'major' } })).toThrow(
+      TypeError,
+    );
+    expect(() => chordFunctions({ chords, key: { root: 7, mode: 0 as never } })).toThrow(TypeError);
   });
 
-  it('refuses an unknown name naming the field, and a wrong type as a TypeError', () => {
-    expect(() => detectChords({ ...base, keyRoot: 'H' as never })).toThrow(RangeError);
-    expect(() => detectChords({ ...base, keyRoot: 'H' as never })).toThrow(/keyRoot/);
+  it('refuses a name for the root and an ordinal for the mode as TypeError, an unknown value as RangeError', () => {
+    expect(() => detectChords({ ...base, keyRoot: 'G' as never })).toThrow(TypeError);
+    expect(() => detectChords({ ...base, keyRoot: 'G' as never })).toThrow(/keyRoot/);
+    expect(() => detectChords({ ...base, keyRoot: 12 as never })).toThrow(RangeError);
+    expect(() => detectChords({ ...base, keyRoot: 12 as never })).toThrow(/keyRoot/);
+    expect(() => detectChords({ ...base, keyMode: 1 as never })).toThrow(TypeError);
     expect(() => detectChords({ ...base, keyMode: 'nope' as never })).toThrow(RangeError);
     expect(() => detectChords({ ...base, keyMode: 'nope' as never })).toThrow(/keyMode/);
     expect(() => detectChords({ ...base, keyRoot: {} as never })).toThrow(TypeError);

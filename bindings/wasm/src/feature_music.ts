@@ -1,3 +1,4 @@
+import { convertSection } from './analysis_helpers.js';
 import { validatePositiveIntegers } from './internal/feature_validation.js';
 import { resolveFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
@@ -7,23 +8,27 @@ import type {
   BoundaryResult,
   CqtResult,
   LufsResult,
+  Matrix2D,
   MelodyResult,
-  OnsetStrengthMultiResult,
   Section,
-  SectionType,
 } from './public_types.js';
-import type { WasmFourierTempogramResult, WasmNnlsChromaResult } from './sonare.js';
+import type { WasmCqtResult } from './sonare.js';
 import type { ValidateOptions } from './validation.js';
 import {
   assertAudioInput,
   assertFiniteScalar,
+  assertFrequencyBounds,
+  assertMatrix2D,
+  assertPositiveFloatValue,
   assertPositiveInteger,
   assertSampleRate,
   assertSamples,
   optionalBoolean,
-  optionsBag,
-  requestObject,
+  requestOnly,
   resolveOptionalNonNegative,
+  sampleOneShot,
+  toMatrix2D,
+  toMatrix2DByRows,
 } from './validation.js';
 
 function requireModule() {
@@ -31,89 +36,101 @@ function requireModule() {
 }
 
 type GuardedOptions = ValidateOptions;
-type AnalyzeSectionsGuardedOptions = AnalyzeSectionsOptions & ValidateOptions;
-type BoundaryGuardedOptions = BoundaryOptions & ValidateOptions;
-type MelodyGuardedOptions = MelodyOptions & ValidateOptions;
+
+/** The audio and its sample rate, which every one-shot over samples takes. */
+interface SampleInput {
+  samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
+}
+
+/** The settings of a request, as the positional form takes them. */
+type OptionsOf<R> = Omit<R, 'samples' | 'sampleRate'>;
 
 /** Canonical request form shared by the Constant-Q transform variants. */
-export interface CqtRequest extends GuardedOptions {
-  samples: Float32Array;
-  sampleRate?: number;
+export interface CqtRequest extends SampleInput, GuardedOptions {
+  /** Hop length in samples; default 512. */
   hopLength?: number;
-  fmin?: number;
+  /** Lowest bin frequency in Hz; default 32.70319566257483 (C1). */
+  fminHz?: number;
+  /** Number of frequency bins; default 84. */
   nBins?: number;
+  /** Bins per octave; default 12. */
   binsPerOctave?: number;
 }
 
+/** Canonical request form for {@link pseudoCqt}. */
+export interface PseudoCqtRequest extends CqtRequest {}
+
+/** Canonical request form for {@link hybridCqt}. */
+export interface HybridCqtRequest extends CqtRequest {}
+
 /** Canonical request form for {@link vqt}. */
 export interface VqtRequest extends CqtRequest {
+  /** Bandwidth offset; omit for the automatic ERB-derived value, 0 is equivalent to CQT. */
   gamma?: number;
 }
 
-export interface OnsetEnvelopeRequest extends GuardedOptions {
-  samples: Float32Array;
-  sampleRate?: number;
+/** Canonical request form for {@link onsetStrength}. */
+export interface OnsetStrengthRequest extends SampleInput, GuardedOptions {
   nFft?: number;
   hopLength?: number;
   nMels?: number;
 }
 
-export interface OnsetStrengthMultiRequest extends OnsetEnvelopeRequest {
+export interface OnsetStrengthMultiRequest extends OnsetStrengthRequest {
+  /** Number of onset bands; default 3. */
   nBands?: number;
 }
 
 export interface FourierTempogramRequest extends GuardedOptions {
   onsetEnvelope: Float32Array;
+  /** Sample rate in Hz of the audio the envelope came from; default 22050. */
   sampleRate?: number;
   hopLength?: number;
   winLength?: number;
   center?: boolean;
-  norm?: boolean;
 }
 
 export interface TempogramRatioRequest extends GuardedOptions {
-  tempogramData: Float32Array;
-  winLength?: number;
+  /** Tempogram as {@link Matrix2D}: rows = tempogram lags, cols = frames. */
+  tempogram: Matrix2D;
   sampleRate?: number;
   hopLength?: number;
+  /** Lag ratios to evaluate. When omitted or empty, the library default {0.5, 1, 2, 3, 4} is used. */
   factors?: Float32Array | number[];
 }
 
 export interface CqtToAudioRequest extends GuardedOptions {
-  magnitude: Float32Array;
-  nBins: number;
-  nFrames: number;
+  /** CQT magnitude as {@link Matrix2D}: rows = CQT bins, cols = frames. */
+  magnitude: Matrix2D;
   sampleRate?: number;
   hopLength?: number;
-  fmin?: number;
+  fminHz?: number;
+  binsPerOctave?: number;
+  /** Griffin-Lim iterations, at most 256; default 32. */
+  nIter?: number;
+}
+
+export interface VqtToAudioRequest extends GuardedOptions {
+  /** VQT magnitude as {@link Matrix2D}: rows = VQT bins, cols = frames. */
+  magnitude: Matrix2D;
+  sampleRate?: number;
+  gamma?: number;
+  hopLength?: number;
+  fminHz?: number;
   binsPerOctave?: number;
   nIter?: number;
 }
 
-export interface VqtToAudioRequest extends CqtToAudioRequest {
-  gamma?: number;
-}
-
-export interface AnalyzeSectionsRequest extends AnalyzeSectionsGuardedOptions {
-  samples: Float32Array;
-  sampleRate?: number;
-}
-/** Canonical (and only) call form for {@link detectBoundaries}. */
-export interface DetectBoundariesRequest extends BoundaryGuardedOptions {
-  samples: Float32Array;
-  sampleRate?: number;
-}
-export interface AnalyzeMelodyRequest extends MelodyGuardedOptions {
-  samples: Float32Array;
-  sampleRate?: number;
-}
-export interface LufsRequest extends ValidateOptions {
-  samples: Float32Array;
-  sampleRate?: number;
-}
-export interface NnlsChromaRequest extends GuardedOptions {
-  samples: Float32Array;
-  sampleRate?: number;
+export interface AnalyzeSectionsRequest extends SampleInput, AnalyzeSectionsOptions {}
+/** Canonical (and positional) call form for {@link detectBoundaries}. */
+export interface DetectBoundariesRequest extends SampleInput, BoundaryOptions {}
+export interface AnalyzeMelodyRequest extends SampleInput, MelodyOptions {}
+export interface LufsRequest extends SampleInput, GuardedOptions {}
+export interface MomentaryLufsRequest extends SampleInput, GuardedOptions {}
+export interface ShortTermLufsRequest extends SampleInput, GuardedOptions {}
+export interface NnlsChromaRequest extends SampleInput, GuardedOptions {
   enableStftBlend?: boolean;
   stftBlendWeight?: number;
   stftBlendNFft?: number;
@@ -124,398 +141,203 @@ export interface NnlsChromaRequest extends GuardedOptions {
  * Compute NNLS (non-negative least squares) chromagram.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @returns NNLS chroma result
+ * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
+ * @returns {@link Matrix2D} whose rows are the 12 chroma bins and cols are frames
  */
-export function nnlsChroma(request: NnlsChromaRequest): WasmNnlsChromaResult;
+export function nnlsChroma(request: NnlsChromaRequest): Matrix2D;
 export function nnlsChroma(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: Omit<NnlsChromaRequest, 'samples' | 'sampleRate'>,
-): WasmNnlsChromaResult;
-export function nnlsChroma(
-  samples: Float32Array | NnlsChromaRequest,
-  sampleRate = 22050,
-  options: Omit<NnlsChromaRequest, 'samples' | 'sampleRate'> = {},
-): WasmNnlsChromaResult {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('nnlsChroma', samples);
-    return nnlsChroma(samples.samples, samples.sampleRate, samples);
-  }
-  assertAudioInput('nnlsChroma', samples, sampleRate, options);
-  const hopLength = options.hopLength === undefined ? 512 : options.hopLength;
+  sampleRate: number,
+  options?: OptionsOf<NnlsChromaRequest>,
+): Matrix2D;
+export function nnlsChroma(...args: unknown[]): Matrix2D {
+  const request = sampleOneShot<NnlsChromaRequest>('nnlsChroma', args);
+  assertAudioInput('nnlsChroma', request.samples, request.sampleRate, request);
+  const hopLength = request.hopLength === undefined ? 512 : request.hopLength;
   assertPositiveInteger('nnlsChroma', hopLength, 'hopLength');
   if (hopLength > 2 ** 31 - 1) {
     throw new RangeError('nnlsChroma: hopLength must fit in a signed 32-bit integer');
   }
-  return requireModule().nnlsChromaEx(
-    samples,
-    sampleRate,
-    optionalBoolean('nnlsChroma', options.enableStftBlend, 'enableStftBlend', true),
-    options.stftBlendWeight ?? 0.55,
-    options.stftBlendNFft ?? 4096,
+  const result = requireModule().nnlsChromaEx(
+    request.samples,
+    request.sampleRate,
+    optionalBoolean('nnlsChroma', request.enableStftBlend, 'enableStftBlend', true),
+    request.stftBlendWeight ?? 0.55,
+    request.stftBlendNFft ?? 4096,
     hopLength,
   );
+  return toMatrix2D(result.data, result.nChroma, result.nFrames);
+}
+
+/** Shared body of the Constant-Q variants; `call` is the native transform. */
+function cqtFamily<R extends CqtRequest>(
+  fnName: 'cqt' | 'pseudoCqt' | 'hybridCqt' | 'vqt',
+  args: readonly unknown[],
+  call: (
+    request: R,
+    hopLength: number,
+    fminHz: number,
+    nBins: number,
+    binsPerOctave: number,
+  ) => WasmCqtResult,
+): CqtResult {
+  const request = sampleOneShot<R>(fnName, args);
+  assertAudioInput(fnName, request.samples, request.sampleRate, request);
+  const hopLength = request.hopLength ?? 512;
+  const nBins = request.nBins ?? 84;
+  const binsPerOctave = request.binsPerOctave ?? 12;
+  validatePositiveIntegers(fnName, { hopLength, nBins, binsPerOctave });
+  const fminHz = request.fminHz ?? 32.70319566257483;
+  assertPositiveFloatValue(fnName, fminHz, 'fminHz');
+  const native = call(request, hopLength, fminHz, nBins, binsPerOctave);
+  return {
+    hopLength: native.hopLength,
+    sampleRate: native.sampleRate,
+    magnitude: toMatrix2D(native.magnitude, native.nBins, native.nFrames),
+    frequencies: native.frequencies,
+  };
 }
 
 /**
  * Compute the Constant-Q Transform magnitude.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param hopLength - Hop length (default: 512)
- * @param fmin - Minimum frequency in Hz (default: 32.70319566257483, C1)
- * @param nBins - Number of frequency bins (default: 84)
- * @param binsPerOctave - Bins per octave (default: 12)
+ * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
+ * @param options - `hopLength` (512), `fminHz` (32.70319566257483, C1), `nBins` (84), `binsPerOctave` (12)
  * @returns CQT magnitude result
  */
 export function cqt(request: CqtRequest): CqtResult;
 export function cqt(
   samples: Float32Array,
-  sampleRate?: number,
-  hopLength?: number,
-  fmin?: number,
-  nBins?: number,
-  binsPerOctave?: number,
-  options?: GuardedOptions,
+  sampleRate: number,
+  options?: OptionsOf<CqtRequest>,
 ): CqtResult;
-export function cqt(
-  samples: Float32Array | CqtRequest,
-  sampleRate = 22050,
-  hopLength = 512,
-  fmin = 32.70319566257483,
-  nBins = 84,
-  binsPerOctave = 12,
-  options: GuardedOptions = {},
-): CqtResult {
-  optionsBag('cqt', options);
-  if (!(samples instanceof Float32Array)) {
-    requestObject('cqt', samples);
-    const request = samples;
-    return cqt(
-      request.samples,
-      request.sampleRate,
-      request.hopLength,
-      request.fmin,
-      request.nBins,
-      request.binsPerOctave,
-      request,
-    );
-  }
-  assertAudioInput('cqt', samples, sampleRate, options);
-  validatePositiveIntegers('cqt', { hopLength, nBins, binsPerOctave });
-  return requireModule().cqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave);
+export function cqt(...args: unknown[]): CqtResult {
+  return cqtFamily<CqtRequest>('cqt', args, (r, hop, fmin, nBins, bpo) =>
+    requireModule().cqt(r.samples, r.sampleRate, hop, fmin, nBins, bpo),
+  );
 }
 
 /**
- * Compute the pseudo Constant-Q Transform magnitude.
- *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param hopLength - Hop length (default: 512)
- * @param fmin - Minimum frequency in Hz (default: 32.70319566257483, C1)
- * @param nBins - Number of frequency bins (default: 84)
- * @param binsPerOctave - Bins per octave (default: 12)
- * @returns CQT magnitude result
+ * Compute the pseudo Constant-Q Transform magnitude. Settings and defaults are
+ * those of {@link cqt}.
  */
-export function pseudoCqt(request: CqtRequest): CqtResult;
+export function pseudoCqt(request: PseudoCqtRequest): CqtResult;
 export function pseudoCqt(
   samples: Float32Array,
-  sampleRate?: number,
-  hopLength?: number,
-  fmin?: number,
-  nBins?: number,
-  binsPerOctave?: number,
-  options?: GuardedOptions,
+  sampleRate: number,
+  options?: OptionsOf<PseudoCqtRequest>,
 ): CqtResult;
-export function pseudoCqt(
-  samples: Float32Array | CqtRequest,
-  sampleRate = 22050,
-  hopLength = 512,
-  fmin = 32.70319566257483,
-  nBins = 84,
-  binsPerOctave = 12,
-  options: GuardedOptions = {},
-): CqtResult {
-  optionsBag('pseudoCqt', options);
-  if (!(samples instanceof Float32Array)) {
-    requestObject('pseudoCqt', samples);
-    const request = samples;
-    return pseudoCqt(
-      request.samples,
-      request.sampleRate,
-      request.hopLength,
-      request.fmin,
-      request.nBins,
-      request.binsPerOctave,
-      request,
-    );
-  }
-  assertAudioInput('pseudoCqt', samples, sampleRate, options);
-  validatePositiveIntegers('pseudoCqt', { hopLength, nBins, binsPerOctave });
-  return requireModule().pseudoCqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave);
+export function pseudoCqt(...args: unknown[]): CqtResult {
+  return cqtFamily<PseudoCqtRequest>('pseudoCqt', args, (r, hop, fmin, nBins, bpo) =>
+    requireModule().pseudoCqt(r.samples, r.sampleRate, hop, fmin, nBins, bpo),
+  );
 }
 
 /**
- * Compute the hybrid Constant-Q Transform magnitude.
- *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param hopLength - Hop length (default: 512)
- * @param fmin - Minimum frequency in Hz (default: 32.70319566257483, C1)
- * @param nBins - Number of frequency bins (default: 84)
- * @param binsPerOctave - Bins per octave (default: 12)
- * @returns CQT magnitude result
+ * Compute the hybrid Constant-Q Transform magnitude. Settings and defaults are
+ * those of {@link cqt}.
  */
-export function hybridCqt(request: CqtRequest): CqtResult;
+export function hybridCqt(request: HybridCqtRequest): CqtResult;
 export function hybridCqt(
   samples: Float32Array,
-  sampleRate?: number,
-  hopLength?: number,
-  fmin?: number,
-  nBins?: number,
-  binsPerOctave?: number,
-  options?: GuardedOptions,
+  sampleRate: number,
+  options?: OptionsOf<HybridCqtRequest>,
 ): CqtResult;
-export function hybridCqt(
-  samples: Float32Array | CqtRequest,
-  sampleRate = 22050,
-  hopLength = 512,
-  fmin = 32.70319566257483,
-  nBins = 84,
-  binsPerOctave = 12,
-  options: GuardedOptions = {},
-): CqtResult {
-  optionsBag('hybridCqt', options);
-  if (!(samples instanceof Float32Array)) {
-    requestObject('hybridCqt', samples);
-    const request = samples;
-    return hybridCqt(
-      request.samples,
-      request.sampleRate,
-      request.hopLength,
-      request.fmin,
-      request.nBins,
-      request.binsPerOctave,
-      request,
-    );
-  }
-  assertAudioInput('hybridCqt', samples, sampleRate, options);
-  validatePositiveIntegers('hybridCqt', { hopLength, nBins, binsPerOctave });
-  return requireModule().hybridCqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave);
+export function hybridCqt(...args: unknown[]): CqtResult {
+  return cqtFamily<HybridCqtRequest>('hybridCqt', args, (r, hop, fmin, nBins, bpo) =>
+    requireModule().hybridCqt(r.samples, r.sampleRate, hop, fmin, nBins, bpo),
+  );
 }
 
 /**
- * Compute the Variable-Q Transform magnitude (gamma controls Q).
+ * Compute the Variable-Q Transform magnitude (gamma controls Q). Settings and
+ * defaults are those of {@link cqt}, plus `gamma`: omit it for the automatic
+ * ERB-derived value, while 0 is equivalent to CQT. A negative or non-finite
+ * value is refused.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param hopLength - Hop length (default: 512)
- * @param fmin - Minimum frequency in Hz (default: 32.70319566257483, C1)
- * @param nBins - Number of frequency bins (default: 84)
- * @param binsPerOctave - Bins per octave (default: 12)
- * @param gamma - Bandwidth offset; omit it for the automatic ERB-derived value,
- *   while 0 is equivalent to CQT. A negative or non-finite value is refused
  * @returns VQT magnitude result (same shape as CQT)
  */
 export function vqt(request: VqtRequest): CqtResult;
 export function vqt(
   samples: Float32Array,
-  sampleRate?: number,
-  hopLength?: number,
-  fmin?: number,
-  nBins?: number,
-  binsPerOctave?: number,
-  gamma?: number,
-  options?: GuardedOptions,
+  sampleRate: number,
+  options?: OptionsOf<VqtRequest>,
 ): CqtResult;
-export function vqt(
-  samples: Float32Array | VqtRequest,
-  sampleRate = 22050,
-  hopLength = 512,
-  fmin = 32.70319566257483,
-  nBins = 84,
-  binsPerOctave = 12,
-  gamma?: number,
-  options: GuardedOptions = {},
-): CqtResult {
-  optionsBag('vqt', options);
-  if (!(samples instanceof Float32Array)) {
-    requestObject('vqt', samples);
-    const request = samples;
-    return vqt(
-      request.samples,
-      request.sampleRate,
-      request.hopLength,
-      request.fmin,
-      request.nBins,
-      request.binsPerOctave,
-      request.gamma,
-      request,
-    );
-  }
-  assertAudioInput('vqt', samples, sampleRate, options);
-  validatePositiveIntegers('vqt', { hopLength, nBins, binsPerOctave });
-  return requireModule().vqt(
-    samples,
-    sampleRate,
-    hopLength,
-    fmin,
-    nBins,
-    binsPerOctave,
-    resolveOptionalNonNegative('vqt', gamma, 'gamma'),
+export function vqt(...args: unknown[]): CqtResult {
+  return cqtFamily<VqtRequest>('vqt', args, (r, hop, fmin, nBins, bpo) =>
+    requireModule().vqt(
+      r.samples,
+      r.sampleRate,
+      hop,
+      fmin,
+      nBins,
+      bpo,
+      resolveOptionalNonNegative('vqt', r.gamma, 'gamma'),
+    ),
   );
 }
 
-function validateCqtInverse(
-  fnName: string,
-  magnitude: Float32Array,
-  nBins: number,
-  nFrames: number,
-  sampleRate: number,
-  hopLength: number,
-  binsPerOctave: number,
-  nIter: number,
-  options: GuardedOptions,
-): void {
+/** Reads and checks the shared fields of a CQT/VQT inverse request. */
+function cqtInverseInput(
+  fnName: 'cqtToAudio' | 'vqtToAudio',
+  request: CqtToAudioRequest | VqtToAudioRequest,
+) {
+  assertMatrix2D(fnName, request.magnitude, 'magnitude', request.validate !== false);
+  const sampleRate = request.sampleRate ?? 22050;
+  const hopLength = request.hopLength ?? 512;
+  const binsPerOctave = request.binsPerOctave ?? 12;
+  const nIter = request.nIter ?? 32;
   assertSampleRate(fnName, sampleRate);
-  validatePositiveIntegers(fnName, { nBins, nFrames, hopLength, binsPerOctave, nIter });
+  validatePositiveIntegers(fnName, { hopLength, binsPerOctave, nIter });
   if (nIter > 256) {
     throw new RangeError(`${fnName}: nIter must be at most 256`);
   }
-  if (magnitude.length !== nBins * nFrames) {
-    throw new RangeError(`${fnName}: magnitude length must equal nBins * nFrames`);
-  }
-  assertSamples(fnName, magnitude, options.validate !== false);
+  const fminHz = request.fminHz ?? 32.70319566257483;
+  assertPositiveFloatValue(fnName, fminHz, 'fminHz');
+  return { sampleRate, hopLength, binsPerOctave, nIter, fminHz };
 }
 
-/** Reconstruct mono audio from row-major CQT magnitude via Griffin-Lim. */
-export function cqtToAudio(request: CqtToAudioRequest): Float32Array;
-export function cqtToAudio(
-  magnitude: Float32Array,
-  nBins: number,
-  nFrames: number,
-  sampleRate?: number,
-  hopLength?: number,
-  fmin?: number,
-  binsPerOctave?: number,
-  nIter?: number,
-  options?: GuardedOptions,
-): Float32Array;
-export function cqtToAudio(
-  magnitude: Float32Array | CqtToAudioRequest,
-  nBins = 0,
-  nFrames = 0,
-  sampleRate = 22050,
-  hopLength = 512,
-  fmin = 32.70319566257483,
-  binsPerOctave = 12,
-  nIter = 32,
-  options: GuardedOptions = {},
-): Float32Array {
-  optionsBag('cqtToAudio', options);
-  if (!(magnitude instanceof Float32Array)) {
-    requestObject('cqtToAudio', magnitude, 'magnitude');
-    const request = magnitude;
-    return cqtToAudio(
-      request.magnitude,
-      request.nBins,
-      request.nFrames,
-      request.sampleRate,
-      request.hopLength,
-      request.fmin,
-      request.binsPerOctave,
-      request.nIter,
-      request,
-    );
-  }
-  validateCqtInverse(
-    'cqtToAudio',
-    magnitude,
-    nBins,
-    nFrames,
-    sampleRate,
-    hopLength,
-    binsPerOctave,
-    nIter,
-    options,
-  );
+/**
+ * Reconstruct mono audio from CQT magnitude via Griffin-Lim.
+ *
+ * @throws {TypeError} when `magnitude` is not a {@link Matrix2D}
+ * @throws {RangeError} when the matrix data length is not `rows * cols`, or a setting is out of domain
+ */
+export function cqtToAudio(request: CqtToAudioRequest): Float32Array {
+  const r = requestOnly<CqtToAudioRequest>('cqtToAudio', [request]);
+  const c = cqtInverseInput('cqtToAudio', r);
   return requireModule().cqtToAudio(
-    magnitude,
-    nBins,
-    nFrames,
-    sampleRate,
-    hopLength,
-    fmin,
-    binsPerOctave,
-    nIter,
+    r.magnitude.data,
+    r.magnitude.rows,
+    r.magnitude.cols,
+    c.sampleRate,
+    c.hopLength,
+    c.fminHz,
+    c.binsPerOctave,
+    c.nIter,
   );
 }
 
-/** Reconstruct mono audio from row-major VQT magnitude via Griffin-Lim. */
-export function vqtToAudio(request: VqtToAudioRequest): Float32Array;
-export function vqtToAudio(
-  magnitude: Float32Array,
-  nBins: number,
-  nFrames: number,
-  sampleRate?: number,
-  hopLength?: number,
-  fmin?: number,
-  binsPerOctave?: number,
-  gamma?: number,
-  nIter?: number,
-  options?: GuardedOptions,
-): Float32Array;
-export function vqtToAudio(
-  magnitude: Float32Array | VqtToAudioRequest,
-  nBins = 0,
-  nFrames = 0,
-  sampleRate = 22050,
-  hopLength = 512,
-  fmin = 32.70319566257483,
-  binsPerOctave = 12,
-  gamma?: number,
-  nIter = 32,
-  options: GuardedOptions = {},
-): Float32Array {
-  optionsBag('vqtToAudio', options);
-  if (!(magnitude instanceof Float32Array)) {
-    requestObject('vqtToAudio', magnitude, 'magnitude');
-    const request = magnitude;
-    return vqtToAudio(
-      request.magnitude,
-      request.nBins,
-      request.nFrames,
-      request.sampleRate,
-      request.hopLength,
-      request.fmin,
-      request.binsPerOctave,
-      request.gamma,
-      request.nIter,
-      request,
-    );
-  }
-  validateCqtInverse(
-    'vqtToAudio',
-    magnitude,
-    nBins,
-    nFrames,
-    sampleRate,
-    hopLength,
-    binsPerOctave,
-    nIter,
-    options,
-  );
+/**
+ * Reconstruct mono audio from VQT magnitude via Griffin-Lim.
+ *
+ * @throws {TypeError} when `magnitude` is not a {@link Matrix2D}
+ * @throws {RangeError} when the matrix data length is not `rows * cols`, or a setting is out of domain
+ */
+export function vqtToAudio(request: VqtToAudioRequest): Float32Array {
+  const r = requestOnly<VqtToAudioRequest>('vqtToAudio', [request]);
+  const c = cqtInverseInput('vqtToAudio', r);
   return requireModule().vqtToAudio(
-    magnitude,
-    nBins,
-    nFrames,
-    sampleRate,
-    hopLength,
-    fmin,
-    binsPerOctave,
-    resolveOptionalNonNegative('vqtToAudio', gamma, 'gamma'),
-    nIter,
+    r.magnitude.data,
+    r.magnitude.rows,
+    r.magnitude.cols,
+    c.sampleRate,
+    c.hopLength,
+    c.fminHz,
+    c.binsPerOctave,
+    resolveOptionalNonNegative('vqtToAudio', r.gamma, 'gamma'),
+    c.nIter,
   );
 }
 
@@ -523,36 +345,25 @@ export function vqtToAudio(
  * Detect song-structure sections (intro/verse/chorus/...).
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param nFft - FFT size (default: 2048)
- * @param hopLength - Hop length (default: 512)
- * @param minSectionSec - Minimum section duration in seconds (default: 4.0)
+ * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
+ * @param options - `nFft` (2048), `hopLength` (512), `minSectionSec` (4.0)
  * @returns Array of detected sections
  */
 export function analyzeSections(request: AnalyzeSectionsRequest): Section[];
 export function analyzeSections(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: AnalyzeSectionsGuardedOptions,
+  sampleRate: number,
+  options?: OptionsOf<AnalyzeSectionsRequest>,
 ): Section[];
-export function analyzeSections(
-  samples: Float32Array | AnalyzeSectionsRequest,
-  sampleRate = 22050,
-  options: AnalyzeSectionsGuardedOptions = {},
-): Section[] {
-  optionsBag('analyzeSections', options);
-  if (!(samples instanceof Float32Array)) {
-    requestObject('analyzeSections', samples);
-    const r = samples;
-    return analyzeSections(r.samples, r.sampleRate, r);
-  }
-  assertAudioInput('analyzeSections', samples, sampleRate, options);
+export function analyzeSections(...args: unknown[]): Section[] {
+  const request = sampleOneShot<AnalyzeSectionsRequest>('analyzeSections', args);
+  assertAudioInput('analyzeSections', request.samples, request.sampleRate, request);
   validatePositiveIntegers('analyzeSections', {
-    nFft: options.nFft ?? 2048,
-    hopLength: options.hopLength ?? 512,
+    nFft: request.nFft ?? 2048,
+    hopLength: request.hopLength ?? 512,
   });
-  assertFiniteScalar('analyzeSections', options.minSectionSec ?? 4.0, 'minSectionSec');
-  if ((options.minSectionSec ?? 4.0) < 0) {
+  assertFiniteScalar('analyzeSections', request.minSectionSec ?? 4.0, 'minSectionSec');
+  if ((request.minSectionSec ?? 4.0) < 0) {
     throw new RangeError('analyzeSections: minSectionSec must be non-negative');
   }
   // The embind value marshalling returns an array whose constructor is not this
@@ -561,13 +372,13 @@ export function analyzeSections(
   // a Worker) rejects with "could not be cloned". Array.from() re-roots it as a
   // plain Array before mapping.
   const sections = requireModule().analyzeSections(
-    samples,
-    sampleRate,
-    options.nFft ?? 2048,
-    options.hopLength ?? 512,
-    options.minSectionSec ?? 4.0,
+    request.samples,
+    request.sampleRate,
+    request.nFft ?? 2048,
+    request.hopLength ?? 512,
+    request.minSectionSec ?? 4.0,
   );
-  return Array.from(sections, (s) => ({ ...s, type: s.type as SectionType }));
+  return Array.from(sections, convertSection);
 }
 
 /**
@@ -596,14 +407,19 @@ export function analyzeSections(
  * // `noveltyCurve[i] * noveltyPeak`.
  * ```
  */
-export function detectBoundaries(request: DetectBoundariesRequest): BoundaryResult {
-  requestObject('detectBoundaries', request, 'request', true);
-  const { samples, sampleRate = 22050 } = request;
+export function detectBoundaries(request: DetectBoundariesRequest): BoundaryResult;
+export function detectBoundaries(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: OptionsOf<DetectBoundariesRequest>,
+): BoundaryResult;
+export function detectBoundaries(...args: unknown[]): BoundaryResult {
+  const request = sampleOneShot<DetectBoundariesRequest>('detectBoundaries', args);
+  const { samples, sampleRate } = request;
   assertAudioInput('detectBoundaries', samples, sampleRate, request);
-  // The request IS the options bag: every field is read straight off it, so an
-  // omitted one reaches the embind wrapper absent and takes BoundaryConfig's own
-  // default. Restating the ten defaults here would make them the effective ones
-  // on npm and leave the core's unreachable, and nothing compares the two.
+  // Only the fields the caller set reach the embind wrapper, so an omitted one
+  // takes BoundaryConfig's own default; restating the defaults here would make
+  // them the effective ones on npm and leave the core's unreachable.
   const sizes: Record<string, number> = {};
   for (const name of ['nFft', 'hopLength', 'kernelSize', 'nMfcc', 'nChroma'] as const) {
     const value = request[name];
@@ -615,8 +431,8 @@ export function detectBoundaries(request: DetectBoundariesRequest): BoundaryResu
   for (const name of [
     'threshold',
     'absoluteThreshold',
-    'peakDistance',
-    'referenceWindow',
+    'peakDistanceSec',
+    'referenceWindowSec',
   ] as const) {
     const value = request[name];
     if (value == null) {
@@ -632,13 +448,22 @@ export function detectBoundaries(request: DetectBoundariesRequest): BoundaryResu
   if (request.useMfcc === false && request.useChroma === false) {
     throw new RangeError('detectBoundaries: require useMfcc or useChroma');
   }
-  const result = requireModule().detectBoundaries(samples, sampleRate, request);
+  const { peakDistanceSec, referenceWindowSec, ...rest } = request;
+  // Native keeps the unsuffixed spellings of the two durations.
+  const nativeOptions: Record<string, unknown> = { ...rest };
+  if (peakDistanceSec != null) {
+    nativeOptions.peakDistance = peakDistanceSec;
+  }
+  if (referenceWindowSec != null) {
+    nativeOptions.referenceWindow = referenceWindowSec;
+  }
+  const result = requireModule().detectBoundaries(samples, sampleRate, nativeOptions);
   // Re-root the embind array as a plain Array, for the reason analyzeSections
   // spells out: chaining onto it propagates a constructor structuredClone
   // rejects, so a result posted from a Worker would fail to clone.
   return {
     boundaries: Array.from(result.boundaries, (b) => ({
-      time: b.time,
+      timeSec: b.time,
       frame: b.frame,
       strength: b.strength,
     })),
@@ -652,11 +477,11 @@ export function detectBoundaries(request: DetectBoundariesRequest): BoundaryResu
 }
 
 /** Options for {@link analyzeMelody}. All fields are optional. */
-export interface MelodyOptions {
+export interface MelodyOptions extends GuardedOptions {
   /** Lowest f0 (Hz) the tracker will consider. Default 65 (≈ C2). */
-  fmin?: number;
+  f0MinHz?: number;
   /** Highest f0 (Hz) the tracker will consider. Default 2093 (≈ C7). */
-  fmax?: number;
+  f0MaxHz?: number;
   /** Analysis frame length in samples at 22050 Hz, rescaled to the input rate. Default 2048. */
   frameLength?: number;
   /** Hop length between frames in samples of the input buffer. Default 256. */
@@ -680,338 +505,239 @@ export interface MelodyOptions {
  * Extract the melody contour from monophonic audio via YIN (or pYIN).
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param options - Tracker + tuning options ({@link MelodyOptions})
+ * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
+ * @param options - Tracker options ({@link MelodyOptions})
  * @returns Melody contour with per-frame pitch points and summary stats
  */
 export function analyzeMelody(request: AnalyzeMelodyRequest): MelodyResult;
 export function analyzeMelody(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: MelodyGuardedOptions,
+  sampleRate: number,
+  options?: OptionsOf<AnalyzeMelodyRequest>,
 ): MelodyResult;
-export function analyzeMelody(
-  samples: Float32Array | AnalyzeMelodyRequest,
-  sampleRate = 22050,
-  options: MelodyGuardedOptions = {},
-): MelodyResult {
-  optionsBag('analyzeMelody', options);
-  if (!(samples instanceof Float32Array)) {
-    requestObject('analyzeMelody', samples);
-    const r = samples;
-    return analyzeMelody(r.samples, r.sampleRate, r);
-  }
-  assertAudioInput('analyzeMelody', samples, sampleRate, options);
-  const fmin = options.fmin ?? 65.0;
-  const fmax = options.fmax ?? 2093.0;
+export function analyzeMelody(...args: unknown[]): MelodyResult {
+  const request = sampleOneShot<AnalyzeMelodyRequest>('analyzeMelody', args);
+  assertAudioInput('analyzeMelody', request.samples, request.sampleRate, request);
   validatePositiveIntegers('analyzeMelody', {
-    frameLength: options.frameLength ?? 2048,
-    hopLength: options.hopLength ?? 256,
+    frameLength: request.frameLength ?? 2048,
+    hopLength: request.hopLength ?? 256,
   });
-  const threshold = options.threshold ?? 0.1;
+  const threshold = request.threshold ?? 0.1;
   assertFiniteScalar('analyzeMelody', threshold, 'threshold');
-  return requireModule().analyzeMelody(
-    samples,
-    sampleRate,
-    fmin,
-    fmax,
-    options.frameLength ?? 2048,
-    options.hopLength ?? 256,
+  const f0MinHz = request.f0MinHz ?? 65.0;
+  const f0MaxHz = request.f0MaxHz ?? 2093.0;
+  assertFrequencyBounds('analyzeMelody', f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
+  const result = requireModule().analyzeMelody(
+    request.samples,
+    request.sampleRate,
+    f0MinHz,
+    f0MaxHz,
+    request.frameLength ?? 2048,
+    request.hopLength ?? 256,
     threshold,
-    optionalBoolean('analyzeMelody', options.usePyin, 'usePyin', false),
-    optionalBoolean('analyzeMelody', options.center, 'center', true),
+    optionalBoolean('analyzeMelody', request.usePyin, 'usePyin', false),
+    optionalBoolean('analyzeMelody', request.center, 'center', true),
   );
+  return {
+    // Native reports an unvoiced frame as frequency 0; here it is absent.
+    points: Array.from(result.points, (p) =>
+      p.frequency > 0
+        ? { timeSec: p.time, frequencyHz: p.frequency, confidence: p.confidence }
+        : { timeSec: p.time, confidence: p.confidence },
+    ),
+    pitchRangeOctaves: result.pitchRangeOctaves,
+    pitchStability: result.pitchStability,
+    meanFrequencyHz: result.meanFrequency,
+    vibratoRateHz: result.vibratoRate,
+  };
 }
 
 /**
  * Compute the onset strength envelope.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param nFft - FFT size (default: 2048)
- * @param hopLength - Hop length (default: 512)
- * @param nMels - Number of Mel bands (default: 128)
- * @returns Onset envelope for each frame
+ * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
+ * @param options - `nFft` (2048), `hopLength` (512), `nMels` (128)
+ * @returns Onset strength for each frame
  */
-export function onsetEnvelope(request: OnsetEnvelopeRequest): Float32Array;
-export function onsetEnvelope(
+export function onsetStrength(request: OnsetStrengthRequest): Float32Array;
+export function onsetStrength(
   samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  nMels?: number,
-  options?: GuardedOptions,
+  sampleRate: number,
+  options?: OptionsOf<OnsetStrengthRequest>,
 ): Float32Array;
-export function onsetEnvelope(
-  samples: Float32Array | OnsetEnvelopeRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  nMels = 128,
-  options: GuardedOptions = {},
-): Float32Array {
-  optionsBag('onsetEnvelope', options);
-  if (!(samples instanceof Float32Array)) {
-    requestObject('onsetEnvelope', samples);
-    const request = samples;
-    return onsetEnvelope(
-      request.samples,
-      request.sampleRate,
-      request.nFft,
-      request.hopLength,
-      request.nMels,
-      request,
-    );
-  }
-  assertAudioInput('onsetEnvelope', samples, sampleRate, options);
-  const fft = resolveFftOptions('onsetEnvelope', nFft, hopLength);
-  validatePositiveIntegers('onsetEnvelope', { nMels });
-  return requireModule().onsetEnvelope(samples, sampleRate, fft.nFft, fft.hopLength, nMels);
+export function onsetStrength(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<OnsetStrengthRequest>('onsetStrength', args);
+  assertAudioInput('onsetStrength', request.samples, request.sampleRate, request);
+  const fft = resolveFftOptions('onsetStrength', request.nFft ?? 2048, request.hopLength ?? 512);
+  const nMels = request.nMels ?? 128;
+  validatePositiveIntegers('onsetStrength', { nMels });
+  return requireModule().onsetEnvelope(
+    request.samples,
+    request.sampleRate,
+    fft.nFft,
+    fft.hopLength,
+    nMels,
+  );
 }
 
 /**
  * Compute multi-band onset strength envelopes.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param nFft - FFT size (default: 2048)
- * @param hopLength - Hop length (default: 512)
- * @param nMels - Number of Mel bands (default: 128)
- * @param nBands - Number of onset bands (default: 3)
- * @returns Multi-band onset matrix
+ * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
+ * @param options - `nFft` (2048), `hopLength` (512), `nMels` (128), `nBands` (3)
+ * @returns {@link Matrix2D} whose rows are the onset bands and cols are frames
  */
-export function onsetStrengthMulti(request: OnsetStrengthMultiRequest): OnsetStrengthMultiResult;
+export function onsetStrengthMulti(request: OnsetStrengthMultiRequest): Matrix2D;
 export function onsetStrengthMulti(
   samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  nMels?: number,
-  nBands?: number,
-  options?: GuardedOptions,
-): OnsetStrengthMultiResult;
-export function onsetStrengthMulti(
-  samples: Float32Array | OnsetStrengthMultiRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  nMels = 128,
-  nBands = 3,
-  options: GuardedOptions = {},
-): OnsetStrengthMultiResult {
-  optionsBag('onsetStrengthMulti', options);
-  if (!(samples instanceof Float32Array)) {
-    requestObject('onsetStrengthMulti', samples);
-    const request = samples;
-    return onsetStrengthMulti(
-      request.samples,
-      request.sampleRate,
-      request.nFft,
-      request.hopLength,
-      request.nMels,
-      request.nBands,
-      request,
-    );
-  }
-  assertAudioInput('onsetStrengthMulti', samples, sampleRate, options);
-  const fft = resolveFftOptions('onsetStrengthMulti', nFft, hopLength);
+  sampleRate: number,
+  options?: OptionsOf<OnsetStrengthMultiRequest>,
+): Matrix2D;
+export function onsetStrengthMulti(...args: unknown[]): Matrix2D {
+  const request = sampleOneShot<OnsetStrengthMultiRequest>('onsetStrengthMulti', args);
+  assertAudioInput('onsetStrengthMulti', request.samples, request.sampleRate, request);
+  const fft = resolveFftOptions(
+    'onsetStrengthMulti',
+    request.nFft ?? 2048,
+    request.hopLength ?? 512,
+  );
+  const nMels = request.nMels ?? 128;
+  const nBands = request.nBands ?? 3;
   validatePositiveIntegers('onsetStrengthMulti', { nMels, nBands });
-  return requireModule().onsetStrengthMulti(
-    samples,
-    sampleRate,
+  const result = requireModule().onsetStrengthMulti(
+    request.samples,
+    request.sampleRate,
     fft.nFft,
     fft.hopLength,
     nMels,
     nBands,
   );
+  return toMatrix2D(result.data, result.nBands, result.nFrames);
 }
 
 /**
  * Compute the Fourier tempogram from an onset envelope.
  *
- * @param onsetEnvelope - Onset strength envelope (float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param hopLength - Hop length (default: 512)
- * @param winLength - Window length in frames (default: 384)
- * @returns Fourier tempogram result
+ * @returns {@link Matrix2D} whose rows are the tempo bins and cols are frames
+ * @throws {TypeError} when the request is not an object or `onsetEnvelope` is not a `Float32Array`
  */
-export function fourierTempogram(request: FourierTempogramRequest): WasmFourierTempogramResult;
-export function fourierTempogram(
-  onsetEnvelope: Float32Array,
-  sampleRate?: number,
-  hopLength?: number,
-  winLength?: number,
-  center?: boolean,
-  norm?: boolean,
-  options?: GuardedOptions,
-): WasmFourierTempogramResult;
-export function fourierTempogram(
-  onsetEnvelope: Float32Array | FourierTempogramRequest,
-  sampleRate = 22050,
-  hopLength = 512,
-  winLength = 384,
-  center = true,
-  norm = true,
-  options: GuardedOptions = {},
-): WasmFourierTempogramResult {
-  optionsBag('fourierTempogram', options);
-  if (!(onsetEnvelope instanceof Float32Array)) {
-    requestObject('fourierTempogram', onsetEnvelope, 'onsetEnvelope');
-    const request = onsetEnvelope;
-    return fourierTempogram(
-      request.onsetEnvelope,
-      request.sampleRate,
-      request.hopLength,
-      request.winLength,
-      request.center,
-      request.norm,
-      request,
-    );
+export function fourierTempogram(request: FourierTempogramRequest): Matrix2D {
+  const r = requestOnly<FourierTempogramRequest>('fourierTempogram', [request]);
+  const sampleRate = r.sampleRate ?? 22050;
+  const hopLength = r.hopLength ?? 512;
+  const winLength = r.winLength ?? 384;
+  if (!(r.onsetEnvelope instanceof Float32Array)) {
+    throw new TypeError('fourierTempogram: onsetEnvelope must be a Float32Array');
   }
   assertSampleRate('fourierTempogram', sampleRate);
-  assertSamples('fourierTempogram', onsetEnvelope, options.validate !== false, 'onsetEnvelope');
+  assertSamples('fourierTempogram', r.onsetEnvelope, r.validate !== false, 'onsetEnvelope');
   validatePositiveIntegers('fourierTempogram', { hopLength, winLength });
-  return requireModule().fourierTempogram(
-    onsetEnvelope,
+  // Native takes a `norm` flag; the normalised form is the only one exposed.
+  const result = requireModule().fourierTempogram(
+    r.onsetEnvelope,
     sampleRate,
     hopLength,
     winLength,
-    center,
-    norm,
+    optionalBoolean('fourierTempogram', r.center, 'center', true),
+    true,
   );
+  return toMatrix2DByRows(result.data, result.nBins);
 }
 
 /**
  * Compute tempogram ratio features.
  *
- * @param tempogramData - Tempogram data (float32)
- * @param winLength - Window length in frames (default: 384)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param hopLength - Hop length (default: 512)
- * @param factors - Lag ratios to evaluate. When omitted or empty, the library
- *   default {0.5, 1, 2, 3, 4} is used.
  * @returns Tempogram ratio features (one value per factor)
+ * @throws {TypeError} when `tempogram` is not a {@link Matrix2D}
+ * @throws {RangeError} when the matrix data length is not `rows * cols`
  */
-export function tempogramRatio(request: TempogramRatioRequest): Float32Array;
-export function tempogramRatio(
-  tempogramData: Float32Array,
-  winLength?: number,
-  sampleRate?: number,
-  hopLength?: number,
-  factors?: Float32Array | number[],
-  options?: GuardedOptions,
-): Float32Array;
-export function tempogramRatio(
-  tempogramData: Float32Array | TempogramRatioRequest,
-  winLength = 384,
-  sampleRate = 22050,
-  hopLength = 512,
-  factors?: Float32Array | number[],
-  options: GuardedOptions = {},
-): Float32Array {
-  optionsBag('tempogramRatio', options);
-  if (!(tempogramData instanceof Float32Array)) {
-    requestObject('tempogramRatio', tempogramData, 'tempogramData');
-    const request = tempogramData;
-    return tempogramRatio(
-      request.tempogramData,
-      request.winLength,
-      request.sampleRate,
-      request.hopLength,
-      request.factors,
-      request,
-    );
-  }
+export function tempogramRatio(request: TempogramRatioRequest): Float32Array {
+  const r = requestOnly<TempogramRatioRequest>('tempogramRatio', [request]);
+  const tempogram = assertMatrix2D(
+    'tempogramRatio',
+    r.tempogram,
+    'tempogram',
+    r.validate !== false,
+  );
+  const sampleRate = r.sampleRate ?? 22050;
+  const hopLength = r.hopLength ?? 512;
   assertSampleRate('tempogramRatio', sampleRate);
-  assertSamples('tempogramRatio', tempogramData, options.validate !== false, 'tempogramData');
-  validatePositiveIntegers('tempogramRatio', { winLength, hopLength });
-  return requireModule().tempogramRatio(tempogramData, winLength, sampleRate, hopLength, factors);
+  validatePositiveIntegers('tempogramRatio', { hopLength });
+  return requireModule().tempogramRatio(
+    tempogram.data,
+    tempogram.rows,
+    sampleRate,
+    hopLength,
+    r.factors,
+  );
 }
 
 /**
  * Measure loudness (EBU R128 / ITU-R BS.1770).
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz. The default (22050) is non-standard for
- *   audio; pass the buffer's actual rate, as K-weighting is sample-rate
- *   dependent and a wrong rate yields wrong loudness.
+ * @param sampleRate - Sample rate in Hz; K-weighting is sample-rate dependent, so
+ *   pass the buffer's actual rate
  * @returns Loudness measurement result
  */
 export function lufs(request: LufsRequest): LufsResult;
 export function lufs(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: ValidateOptions,
+  sampleRate: number,
+  options?: OptionsOf<LufsRequest>,
 ): LufsResult;
-export function lufs(
-  samples: Float32Array | LufsRequest,
-  sampleRate = 22050,
-  options: ValidateOptions = {},
-): LufsResult {
-  optionsBag('lufs', options);
-  if (!(samples instanceof Float32Array)) {
-    requestObject('lufs', samples);
-    const r = samples;
-    return lufs(r.samples, r.sampleRate, r);
-  }
-  assertAudioInput('lufs', samples, sampleRate, options);
-  return requireModule().lufs(samples, sampleRate);
+export function lufs(...args: unknown[]): LufsResult {
+  const request = sampleOneShot<LufsRequest>('lufs', args);
+  assertAudioInput('lufs', request.samples, request.sampleRate, request);
+  const native = requireModule().lufs(request.samples, request.sampleRate);
+  return {
+    integratedLufs: native.integratedLufs,
+    momentaryLufs: native.momentaryLufs,
+    shortTermLufs: native.shortTermLufs,
+    maxMomentaryLufs: native.maxMomentaryLufs,
+    maxShortTermLufs: native.maxShortTermLufs,
+    loudnessRangeLu: native.loudnessRange,
+  };
 }
 
 /**
  * Compute the momentary loudness (LUFS) over time.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz. The default (22050) is non-standard and
- *   K-weighting is sample-rate dependent; pass the buffer's actual rate.
+ * @param sampleRate - Sample rate in Hz; K-weighting is sample-rate dependent, so
+ *   pass the buffer's actual rate
  * @returns Momentary LUFS values over time
  */
-export function momentaryLufs(request: LufsRequest): Float32Array;
+export function momentaryLufs(request: MomentaryLufsRequest): Float32Array;
 export function momentaryLufs(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: ValidateOptions,
+  sampleRate: number,
+  options?: OptionsOf<MomentaryLufsRequest>,
 ): Float32Array;
-export function momentaryLufs(
-  samples: Float32Array | LufsRequest,
-  sampleRate = 22050,
-  options: ValidateOptions = {},
-): Float32Array {
-  optionsBag('momentaryLufs', options);
-  if (!(samples instanceof Float32Array)) {
-    requestObject('momentaryLufs', samples);
-    const r = samples;
-    return momentaryLufs(r.samples, r.sampleRate, r);
-  }
-  assertAudioInput('momentaryLufs', samples, sampleRate, options);
-  return requireModule().momentaryLufs(samples, sampleRate);
+export function momentaryLufs(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<MomentaryLufsRequest>('momentaryLufs', args);
+  assertAudioInput('momentaryLufs', request.samples, request.sampleRate, request);
+  return requireModule().momentaryLufs(request.samples, request.sampleRate);
 }
 
 /**
  * Compute the short-term loudness (LUFS) over time.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz. The default (22050) is non-standard and
- *   K-weighting is sample-rate dependent; pass the buffer's actual rate.
+ * @param sampleRate - Sample rate in Hz; K-weighting is sample-rate dependent, so
+ *   pass the buffer's actual rate
  * @returns Short-term LUFS values over time
  */
-export function shortTermLufs(request: LufsRequest): Float32Array;
+export function shortTermLufs(request: ShortTermLufsRequest): Float32Array;
 export function shortTermLufs(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: ValidateOptions,
+  sampleRate: number,
+  options?: OptionsOf<ShortTermLufsRequest>,
 ): Float32Array;
-export function shortTermLufs(
-  samples: Float32Array | LufsRequest,
-  sampleRate = 22050,
-  options: ValidateOptions = {},
-): Float32Array {
-  optionsBag('shortTermLufs', options);
-  if (!(samples instanceof Float32Array)) {
-    requestObject('shortTermLufs', samples);
-    const r = samples;
-    return shortTermLufs(r.samples, r.sampleRate, r);
-  }
-  assertAudioInput('shortTermLufs', samples, sampleRate, options);
-  return requireModule().shortTermLufs(samples, sampleRate);
+export function shortTermLufs(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<ShortTermLufsRequest>('shortTermLufs', args);
+  assertAudioInput('shortTermLufs', request.samples, request.sampleRate, request);
+  return requireModule().shortTermLufs(request.samples, request.sampleRate);
 }

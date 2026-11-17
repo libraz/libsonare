@@ -5,45 +5,133 @@
 
 import { getSonareModule } from './module_state.js';
 import type { Matrix2D } from './public_types.js';
-import { assertAudioInput, requestObject, requireBoolean } from './validation.js';
+import {
+  assertAudioInput,
+  assertPositiveFloatValue,
+  requireBoolean,
+  sampleOneShot,
+  type ValidateOptions,
+} from './validation.js';
 
 function requireModule() {
   return getSonareModule();
 }
 
-/** Canonical request form for frame-based spectral feature extraction. */
-export interface SpectralFrameRequest {
+/** The request fields a positional overload carries in its options bag. */
+type SampleOptions<R> = Omit<R, 'samples' | 'sampleRate'>;
+
+/** Spectral centroid request. */
+export interface SpectralCentroidRequest extends ValidateOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
+  /** FFT size. Default 2048. */
   nFft?: number;
+  /** Hop in samples. Default 512. */
   hopLength?: number;
 }
 
-export interface SpectralRolloffRequest extends SpectralFrameRequest {
+/** Spectral bandwidth request. */
+export interface SpectralBandwidthRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  /** FFT size. Default 2048. */
+  nFft?: number;
+  /** Hop in samples. Default 512. */
+  hopLength?: number;
+  /** Norm exponent. Default 2. */
+  p?: number;
+}
+
+/** Spectral rolloff request. */
+export interface SpectralRolloffRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  /** FFT size. Default 2048. */
+  nFft?: number;
+  /** Hop in samples. Default 512. */
+  hopLength?: number;
+  /** Energy fraction below the rolloff frequency. Default 0.85. */
   rollPercent?: number;
 }
 
-export interface ZeroCrossingRateRequest {
+/** Spectral flatness request. */
+export interface SpectralFlatnessRequest extends ValidateOptions {
   samples: Float32Array;
-  sampleRate?: number;
-  frameLength?: number;
+  sampleRate: number;
+  /** FFT size. Default 2048. */
+  nFft?: number;
+  /** Hop in samples. Default 512. */
   hopLength?: number;
 }
 
-export interface SpectralContrastRequest extends SpectralFrameRequest {
+/** Spectral flux request. */
+export interface SpectralFluxRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  /** FFT size. Default 2048. */
+  nFft?: number;
+  /** Hop in samples. Default 512. */
+  hopLength?: number;
+  /** Frame lag of the difference. Default 1. */
+  lag?: number;
+}
+
+/** Spectral contrast request. */
+export interface SpectralContrastRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  /** FFT size. Default 2048. */
+  nFft?: number;
+  /** Hop in samples. Default 512. */
+  hopLength?: number;
+  /** Contrast bands above the lowest. Default 6. */
   nBands?: number;
-  fmin?: number;
+  /** Upper edge of the lowest band, in Hz. Default 200. */
+  fminHz?: number;
+  /** Quantile separating peaks from valleys. Default 0.02. */
   quantile?: number;
 }
 
-export interface PolyFeaturesRequest extends SpectralFrameRequest {
+/** Polynomial feature request. */
+export interface PolyFeaturesRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  /** FFT size. Default 2048. */
+  nFft?: number;
+  /** Hop in samples. Default 512. */
+  hopLength?: number;
+  /** Polynomial order. Default 1. */
   order?: number;
 }
 
-export interface ZeroCrossingsRequest {
+/** Zero-crossing rate request. */
+export interface ZeroCrossingRateRequest extends ValidateOptions {
   samples: Float32Array;
+  sampleRate: number;
+  /** Frame length in samples. Default 2048. */
+  frameLength?: number;
+  /** Hop in samples. Default 512. */
+  hopLength?: number;
+}
+
+/** RMS energy request. */
+export interface RmsEnergyRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  /** Frame length in samples. Default 2048. */
+  frameLength?: number;
+  /** Hop in samples. Default 512. */
+  hopLength?: number;
+}
+
+/** Zero-crossing index request. The rate is validated but does not change the result. */
+export interface ZeroCrossingsRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  /** Magnitude below which a sample counts as zero. Default 1e-10. */
   threshold?: number;
   refMagnitude?: boolean;
+  /** Count a crossing at index 0. Default `true`. */
   pad?: boolean;
   zeroPos?: boolean;
 }
@@ -53,89 +141,57 @@ export interface ZeroCrossingsRequest {
 // ============================================================================
 
 /**
- * Compute spectral centroid (center of mass of spectrum).
- *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param nFft - FFT size (default: 2048)
- * @param hopLength - Hop length (default: 512)
- * @returns Spectral centroid in Hz for each frame
+ * Spectral centroid (center of mass of the spectrum) in Hz, one value per frame.
  */
-export function spectralCentroid(request: SpectralFrameRequest): Float32Array;
+export function spectralCentroid(request: SpectralCentroidRequest): Float32Array;
 export function spectralCentroid(
   samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
+  sampleRate: number,
+  options?: SampleOptions<SpectralCentroidRequest>,
 ): Float32Array;
-export function spectralCentroid(
-  samples: Float32Array | SpectralFrameRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-): Float32Array {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('spectralCentroid', samples);
-    return spectralCentroid(samples.samples, samples.sampleRate, samples.nFft, samples.hopLength);
-  }
-  assertAudioInput('spectralCentroid', samples, sampleRate);
-  return requireModule().spectralCentroid(samples, sampleRate, nFft, hopLength);
+export function spectralCentroid(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<SpectralCentroidRequest>('spectralCentroid', args);
+  assertAudioInput('spectralCentroid', r.samples, r.sampleRate, r);
+  return requireModule().spectralCentroid(
+    r.samples,
+    r.sampleRate,
+    r.nFft ?? 2048,
+    r.hopLength ?? 512,
+  );
 }
 
 /**
  * Compute spectral contrast (librosa.feature.spectral_contrast).
  *
  * @remarks
- * Band 0 spans `[0, fmin]`, so an `fmin` below one analysis bin
+ * Band 0 spans `[0, fminHz]`, so an `fminHz` below one analysis bin
  * (`sampleRate / nFft`) leaves it empty after the band trim. Row 0 is still
  * finite, but comes from the other bands' extremes rather than from itself, and
- * is neither level-invariant nor confined to the band. Keep `fmin` at or above
+ * is neither level-invariant nor confined to the band. Keep `fminHz` at or above
  * one bin width for row 0 to mean anything — at the defaults (22050 Hz, 2048)
- * one bin is 10.8 Hz, so only a small `nFft` or a tiny `fmin` reaches this.
+ * one bin is 10.8 Hz, so only a small `nFft` or a tiny `fminHz` reaches this.
  *
  * @returns {@link Matrix2D} whose rows are the `nBands + 1` contrast bands and cols are frames.
  */
 export function spectralContrast(request: SpectralContrastRequest): Matrix2D;
 export function spectralContrast(
   samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  nBands?: number,
-  fmin?: number,
-  quantile?: number,
+  sampleRate: number,
+  options?: SampleOptions<SpectralContrastRequest>,
 ): Matrix2D;
-export function spectralContrast(
-  samples: Float32Array | SpectralContrastRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  nBands = 6,
-  fmin = 200.0,
-  quantile = 0.02,
-): Matrix2D {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('spectralContrast', samples);
-    const r = samples;
-    return spectralContrast(
-      r.samples,
-      r.sampleRate,
-      r.nFft,
-      r.hopLength,
-      r.nBands,
-      r.fmin,
-      r.quantile,
-    );
-  }
-  assertAudioInput('spectralContrast', samples, sampleRate);
+export function spectralContrast(...args: unknown[]): Matrix2D {
+  const r = sampleOneShot<SpectralContrastRequest>('spectralContrast', args);
+  assertAudioInput('spectralContrast', r.samples, r.sampleRate, r);
+  const fminHz = r.fminHz ?? 200.0;
+  assertPositiveFloatValue('spectralContrast', fminHz, 'fminHz');
   return requireModule().spectralContrast(
-    samples,
-    sampleRate,
-    nFft,
-    hopLength,
-    nBands,
-    fmin,
-    quantile,
+    r.samples,
+    r.sampleRate,
+    r.nFft ?? 2048,
+    r.hopLength ?? 512,
+    r.nBands ?? 6,
+    fminHz,
+    r.quantile ?? 0.02,
   );
 }
 
@@ -147,25 +203,19 @@ export function spectralContrast(
 export function polyFeatures(request: PolyFeaturesRequest): Matrix2D;
 export function polyFeatures(
   samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  order?: number,
+  sampleRate: number,
+  options?: SampleOptions<PolyFeaturesRequest>,
 ): Matrix2D;
-export function polyFeatures(
-  samples: Float32Array | PolyFeaturesRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  order = 1,
-): Matrix2D {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('polyFeatures', samples);
-    const r = samples;
-    return polyFeatures(r.samples, r.sampleRate, r.nFft, r.hopLength, r.order);
-  }
-  assertAudioInput('polyFeatures', samples, sampleRate);
-  return requireModule().polyFeatures(samples, sampleRate, nFft, hopLength, order);
+export function polyFeatures(...args: unknown[]): Matrix2D {
+  const r = sampleOneShot<PolyFeaturesRequest>('polyFeatures', args);
+  assertAudioInput('polyFeatures', r.samples, r.sampleRate, r);
+  return requireModule().polyFeatures(
+    r.samples,
+    r.sampleRate,
+    r.nFft ?? 2048,
+    r.hopLength ?? 512,
+    r.order ?? 1,
+  );
 }
 
 /**
@@ -174,229 +224,140 @@ export function polyFeatures(
 export function zeroCrossings(request: ZeroCrossingsRequest): Int32Array;
 export function zeroCrossings(
   samples: Float32Array,
-  threshold?: number,
-  refMagnitude?: boolean,
-  pad?: boolean,
-  zeroPos?: boolean,
+  sampleRate: number,
+  options?: SampleOptions<ZeroCrossingsRequest>,
 ): Int32Array;
-export function zeroCrossings(
-  samples: Float32Array | ZeroCrossingsRequest,
-  threshold = 1e-10,
-  refMagnitude = false,
-  pad = true,
-  zeroPos = true,
-): Int32Array {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('zeroCrossings', samples);
-    const r = samples;
-    return zeroCrossings(r.samples, r.threshold, r.refMagnitude, r.pad, r.zeroPos);
-  }
+export function zeroCrossings(...args: unknown[]): Int32Array {
+  const r = sampleOneShot<ZeroCrossingsRequest>('zeroCrossings', args);
+  assertAudioInput('zeroCrossings', r.samples, r.sampleRate, r);
   return requireModule().zeroCrossings(
-    samples,
-    threshold,
-    requireBoolean('zeroCrossings', refMagnitude, 'refMagnitude'),
-    requireBoolean('zeroCrossings', pad, 'pad'),
-    requireBoolean('zeroCrossings', zeroPos, 'zeroPos'),
+    r.samples,
+    r.threshold ?? 1e-10,
+    requireBoolean('zeroCrossings', r.refMagnitude ?? false, 'refMagnitude'),
+    requireBoolean('zeroCrossings', r.pad ?? true, 'pad'),
+    requireBoolean('zeroCrossings', r.zeroPos ?? true, 'zeroPos'),
   );
 }
 
 /**
- * Compute spectral bandwidth.
- *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param nFft - FFT size (default: 2048)
- * @param hopLength - Hop length (default: 512)
- * @returns Spectral bandwidth in Hz for each frame
+ * Spectral bandwidth in Hz, one value per frame.
  */
-export function spectralBandwidth(request: SpectralFrameRequest & { p?: number }): Float32Array;
+export function spectralBandwidth(request: SpectralBandwidthRequest): Float32Array;
 export function spectralBandwidth(
   samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  p?: number,
+  sampleRate: number,
+  options?: SampleOptions<SpectralBandwidthRequest>,
 ): Float32Array;
-export function spectralBandwidth(
-  samples: Float32Array | (SpectralFrameRequest & { p?: number }),
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  p = 2,
-): Float32Array {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('spectralBandwidth', samples);
-    return spectralBandwidth(
-      samples.samples,
-      samples.sampleRate,
-      samples.nFft,
-      samples.hopLength,
-      samples.p,
-    );
-  }
-  assertAudioInput('spectralBandwidth', samples, sampleRate);
-  return requireModule().spectralBandwidth(samples, sampleRate, nFft, hopLength, p);
+export function spectralBandwidth(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<SpectralBandwidthRequest>('spectralBandwidth', args);
+  assertAudioInput('spectralBandwidth', r.samples, r.sampleRate, r);
+  return requireModule().spectralBandwidth(
+    r.samples,
+    r.sampleRate,
+    r.nFft ?? 2048,
+    r.hopLength ?? 512,
+    r.p ?? 2,
+  );
 }
 
 /**
- * Compute spectral rolloff frequency.
- *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param nFft - FFT size (default: 2048)
- * @param hopLength - Hop length (default: 512)
- * @param rollPercent - Percentage threshold (default: 0.85)
- * @returns Rolloff frequency in Hz for each frame
+ * Spectral rolloff frequency in Hz, one value per frame.
  */
 export function spectralRolloff(request: SpectralRolloffRequest): Float32Array;
 export function spectralRolloff(
   samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  rollPercent?: number,
+  sampleRate: number,
+  options?: SampleOptions<SpectralRolloffRequest>,
 ): Float32Array;
-export function spectralRolloff(
-  samples: Float32Array | SpectralRolloffRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  rollPercent = 0.85,
-): Float32Array {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('spectralRolloff', samples);
-    return spectralRolloff(
-      samples.samples,
-      samples.sampleRate,
-      samples.nFft,
-      samples.hopLength,
-      samples.rollPercent,
-    );
-  }
-  assertAudioInput('spectralRolloff', samples, sampleRate);
-  return requireModule().spectralRolloff(samples, sampleRate, nFft, hopLength, rollPercent);
+export function spectralRolloff(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<SpectralRolloffRequest>('spectralRolloff', args);
+  assertAudioInput('spectralRolloff', r.samples, r.sampleRate, r);
+  return requireModule().spectralRolloff(
+    r.samples,
+    r.sampleRate,
+    r.nFft ?? 2048,
+    r.hopLength ?? 512,
+    r.rollPercent ?? 0.85,
+  );
 }
 
 /**
- * Compute spectral flatness.
- *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param nFft - FFT size (default: 2048)
- * @param hopLength - Hop length (default: 512)
- * @returns Spectral flatness for each frame (0 = tonal, 1 = noise-like)
+ * Spectral flatness per frame (0 = tonal, 1 = noise-like).
  */
-export function spectralFlatness(request: SpectralFrameRequest): Float32Array;
+export function spectralFlatness(request: SpectralFlatnessRequest): Float32Array;
 export function spectralFlatness(
   samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
+  sampleRate: number,
+  options?: SampleOptions<SpectralFlatnessRequest>,
 ): Float32Array;
-export function spectralFlatness(
-  samples: Float32Array | SpectralFrameRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-): Float32Array {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('spectralFlatness', samples);
-    return spectralFlatness(samples.samples, samples.sampleRate, samples.nFft, samples.hopLength);
-  }
-  assertAudioInput('spectralFlatness', samples, sampleRate);
-  return requireModule().spectralFlatness(samples, sampleRate, nFft, hopLength);
-}
-
-export function spectralFlux(request: SpectralFrameRequest & { lag?: number }): Float32Array;
-export function spectralFlux(
-  samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  lag?: number,
-): Float32Array;
-export function spectralFlux(
-  samples: Float32Array | (SpectralFrameRequest & { lag?: number }),
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  lag = 1,
-): Float32Array {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('spectralFlux', samples);
-    return spectralFlux(
-      samples.samples,
-      samples.sampleRate,
-      samples.nFft,
-      samples.hopLength,
-      samples.lag,
-    );
-  }
-  assertAudioInput('spectralFlux', samples, sampleRate);
-  return requireModule().spectralFlux(samples, sampleRate, nFft, hopLength, lag);
+export function spectralFlatness(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<SpectralFlatnessRequest>('spectralFlatness', args);
+  assertAudioInput('spectralFlatness', r.samples, r.sampleRate, r);
+  return requireModule().spectralFlatness(
+    r.samples,
+    r.sampleRate,
+    r.nFft ?? 2048,
+    r.hopLength ?? 512,
+  );
 }
 
 /**
- * Compute zero crossing rate.
- *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param frameLength - Frame length (default: 2048)
- * @param hopLength - Hop length (default: 512)
- * @returns Zero crossing rate for each frame
+ * Spectral flux per frame.
+ */
+export function spectralFlux(request: SpectralFluxRequest): Float32Array;
+export function spectralFlux(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: SampleOptions<SpectralFluxRequest>,
+): Float32Array;
+export function spectralFlux(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<SpectralFluxRequest>('spectralFlux', args);
+  assertAudioInput('spectralFlux', r.samples, r.sampleRate, r);
+  return requireModule().spectralFlux(
+    r.samples,
+    r.sampleRate,
+    r.nFft ?? 2048,
+    r.hopLength ?? 512,
+    r.lag ?? 1,
+  );
+}
+
+/**
+ * Zero-crossing rate per frame.
  */
 export function zeroCrossingRate(request: ZeroCrossingRateRequest): Float32Array;
 export function zeroCrossingRate(
   samples: Float32Array,
-  sampleRate?: number,
-  frameLength?: number,
-  hopLength?: number,
+  sampleRate: number,
+  options?: SampleOptions<ZeroCrossingRateRequest>,
 ): Float32Array;
-export function zeroCrossingRate(
-  samples: Float32Array | ZeroCrossingRateRequest,
-  sampleRate = 22050,
-  frameLength = 2048,
-  hopLength = 512,
-): Float32Array {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('zeroCrossingRate', samples);
-    return zeroCrossingRate(
-      samples.samples,
-      samples.sampleRate,
-      samples.frameLength,
-      samples.hopLength,
-    );
-  }
-  assertAudioInput('zeroCrossingRate', samples, sampleRate);
-  return requireModule().zeroCrossingRate(samples, sampleRate, frameLength, hopLength);
+export function zeroCrossingRate(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<ZeroCrossingRateRequest>('zeroCrossingRate', args);
+  assertAudioInput('zeroCrossingRate', r.samples, r.sampleRate, r);
+  return requireModule().zeroCrossingRate(
+    r.samples,
+    r.sampleRate,
+    r.frameLength ?? 2048,
+    r.hopLength ?? 512,
+  );
 }
 
 /**
- * Compute RMS energy.
- *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param frameLength - Frame length (default: 2048)
- * @param hopLength - Hop length (default: 512)
- * @returns RMS energy for each frame
+ * RMS energy per frame.
  */
-export function rmsEnergy(request: ZeroCrossingRateRequest): Float32Array;
+export function rmsEnergy(request: RmsEnergyRequest): Float32Array;
 export function rmsEnergy(
   samples: Float32Array,
-  sampleRate?: number,
-  frameLength?: number,
-  hopLength?: number,
+  sampleRate: number,
+  options?: SampleOptions<RmsEnergyRequest>,
 ): Float32Array;
-export function rmsEnergy(
-  samples: Float32Array | ZeroCrossingRateRequest,
-  sampleRate = 22050,
-  frameLength = 2048,
-  hopLength = 512,
-): Float32Array {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('rmsEnergy', samples);
-    return rmsEnergy(samples.samples, samples.sampleRate, samples.frameLength, samples.hopLength);
-  }
-  assertAudioInput('rmsEnergy', samples, sampleRate);
-  return requireModule().rmsEnergy(samples, sampleRate, frameLength, hopLength);
+export function rmsEnergy(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<RmsEnergyRequest>('rmsEnergy', args);
+  assertAudioInput('rmsEnergy', r.samples, r.sampleRate, r);
+  return requireModule().rmsEnergy(
+    r.samples,
+    r.sampleRate,
+    r.frameLength ?? 2048,
+    r.hopLength ?? 512,
+  );
 }

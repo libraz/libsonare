@@ -7,7 +7,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
-  analyzeWithProgress,
+  analyze,
   chroma,
   detectOnsets,
   ErrorCode,
@@ -118,63 +118,65 @@ const DURATION = 1.0;
 
 describe('Feature API precision (reference compatibility)', () => {
   it('melDelta returns the slope of a linear feature row', () => {
-    const result = melDelta(new Float32Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), 2, 5, 5);
-    expect([...result]).toEqual(Array(10).fill(1));
+    const result = melDelta({
+      features: { data: new Float32Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), rows: 2, cols: 5 },
+      width: 5,
+    });
+    expect([...result.data]).toEqual(Array(10).fill(1));
   });
 
   it('piptrack returns equally shaped pitch and magnitude matrices', () => {
     const tone = generateSine(440, SR, 1);
-    const result = piptrack(tone, SR, 1024, 256, 100, 1000);
-    expect(result.nBins).toBe(513);
-    expect(result.pitches.length).toBe(result.nBins * result.nFrames);
-    expect(result.magnitudes.length).toBe(result.pitches.length);
+    const result = piptrack(tone, SR, { nFft: 1024, hopLength: 256, fminHz: 100, fmaxHz: 1000 });
+    expect(result.pitches.rows).toBe(513);
+    expect(result.pitches.data.length).toBe(result.pitches.rows * result.pitches.cols);
+    expect(result.magnitudes.rows).toBe(result.pitches.rows);
+    expect(result.magnitudes.cols).toBe(result.pitches.cols);
+    expect(result.magnitudes.data.length).toBe(result.pitches.data.length);
   });
 
   it('reassignedSpectrogram returns equally shaped coordinate matrices', () => {
-    const result = reassignedSpectrogram(generateSine(440, SR, 1), SR, 1024, 256);
-    expect(result.nBins).toBe(513);
-    expect(result.nFrames).toBeGreaterThan(0);
-    expect(result.magnitude.length).toBe(result.nBins * result.nFrames);
-    expect(result.times.length).toBe(result.magnitude.length);
-    expect(result.frequencies.length).toBe(result.magnitude.length);
+    const result = reassignedSpectrogram(generateSine(440, SR, 1), SR, {
+      nFft: 1024,
+      hopLength: 256,
+    });
+    expect(result.magnitude.rows).toBe(513);
+    expect(result.magnitude.cols).toBeGreaterThan(0);
+    expect(result.magnitude.data.length).toBe(result.magnitude.rows * result.magnitude.cols);
+    expect(result.times.rows).toBe(result.magnitude.rows);
+    expect(result.times.cols).toBe(result.magnitude.cols);
+    expect(result.frequencies.rows).toBe(result.magnitude.rows);
+    expect(result.frequencies.cols).toBe(result.magnitude.cols);
   });
 
   it('exposes every librosa.segment-compatible operation', () => {
-    const data = new Float32Array([1, 0, 1, 0, 1, 1]);
-    expect(
-      segmentCrossSimilarity({
-        x: data,
-        xRows: 2,
-        xCols: 3,
-        y: data,
-        yRows: 2,
-        yCols: 3,
-      }).values,
-    ).toHaveLength(9);
-    const recurrence = segmentRecurrenceMatrix({ data, rows: 2, cols: 3 });
-    expect(recurrence.values).toHaveLength(9);
-    const lag = segmentRecurrenceToLag({ recurrence: recurrence.values, n: 3, pad: true });
-    expect(lag.values).toHaveLength(18);
-    expect(segmentLagToRecurrence({ lag: lag.values, rows: 3, lags: 6 }).values).toHaveLength(9);
+    const data = { data: new Float32Array([1, 0, 1, 0, 1, 1]), rows: 2, cols: 3 };
+    const cross = segmentCrossSimilarity({ x: data, y: data });
+    expect(cross.data).toHaveLength(9);
+    const recurrence = segmentRecurrenceMatrix({ data });
+    expect(recurrence.data).toHaveLength(9);
+    const lag = segmentRecurrenceToLag({ recurrence, pad: true });
+    expect(lag.data).toHaveLength(18);
+    expect(segmentLagToRecurrence({ lag }).data).toHaveLength(9);
     // librosa 0.11.0 recurrence_to_lag on rec[r][c] = 4r + c: pad defaults to true, lag-by-time.
-    const asymmetric = Float32Array.from({ length: 16 }, (_, i) => i);
-    const padded = segmentRecurrenceToLag({ recurrence: asymmetric, n: 4 });
+    const asymmetric = {
+      data: Float32Array.from({ length: 16 }, (_, i) => i),
+      rows: 4,
+      cols: 4,
+    };
+    const padded = segmentRecurrenceToLag({ recurrence: asymmetric });
     expect(padded.rows).toBe(8);
     expect(padded.cols).toBe(4);
-    expect(Array.from(padded.values)).toEqual([
+    expect(Array.from(padded.data)).toEqual([
       0, 5, 10, 15, 4, 9, 14, 0, 8, 13, 0, 0, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 2, 7, 0, 1,
       6, 11,
     ]);
-    expect(
-      Array.from(segmentLagToRecurrence({ lag: padded.values, rows: 4, lags: 8 }).values),
-    ).toEqual(Array.from(asymmetric));
-    expect(
-      segmentSubsegment({ data, rows: 2, cols: 3, boundaries: new Int32Array([0, 3]) })[0],
-    ).toBe(0);
-    expect(segmentAgglomerative({ data, rows: 2, cols: 3, k: 2 })).toHaveLength(3);
-    expect(segmentPathEnhance({ recurrence: recurrence.values, n: 3, win: 1 }).values).toHaveLength(
-      9,
+    expect(Array.from(segmentLagToRecurrence({ lag: padded }).data)).toEqual(
+      Array.from(asymmetric.data),
     );
+    expect(segmentSubsegment({ data, boundaries: new Int32Array([0, 3]) })[0]).toBe(0);
+    expect(segmentAgglomerative({ data, k: 2 })).toHaveLength(3);
+    expect(segmentPathEnhance({ recurrence, win: 1 }).data).toHaveLength(9);
   });
   beforeAll(async () => {
     await init();
@@ -187,11 +189,11 @@ describe('Feature API precision (reference compatibility)', () => {
       frameRate: 100,
     });
     expect(segments).toHaveLength(2);
-    expect(segments[0]).toMatchObject({ frameStart: 0, frameEnd: 5, startSeconds: 0 });
+    expect(segments[0]).toMatchObject({ frameStart: 0, frameEnd: 5, startSec: 0 });
     expect(segments[1]).toMatchObject({ frameStart: 7, frameEnd: 12 });
-    expect(segments[0].endSeconds).toBeCloseTo(0.05);
-    expect(segments[1].startSeconds).toBeCloseTo(0.07);
-    expect(segments[1].endSeconds).toBeCloseTo(0.12);
+    expect(segments[0].endSec).toBeCloseTo(0.05);
+    expect(segments[1].startSec).toBeCloseTo(0.07);
+    expect(segments[1].endSec).toBeCloseTo(0.12);
   });
 
   describe('unit conversions', () => {
@@ -242,25 +244,14 @@ describe('Feature API precision (reference compatibility)', () => {
       expect(withinRel(midiToHz(60), 261.6255653, 1e-4)).toBe(true);
     });
 
-    it('frame, time and sample conversions answer a request object as their positional form', () => {
-      expect(framesToTime({ frames: 8, sr: 44100, hopLength: 128 })).toBe(
-        framesToTime(8, 44100, 128),
-      );
-      expect(framesToTime({ frames: 8 })).toBe(framesToTime(8));
-      expect(timeToFrames({ time: 0.5, sr: 44100, hopLength: 128 })).toBe(
-        timeToFrames(0.5, 44100, 128),
-      );
-      expect(timeToFrames({ time: 0.5 })).toBe(timeToFrames(0.5));
-      expect(framesToSamples({ frames: 8, hopLength: 128, nFft: 512 })).toBe(
-        framesToSamples(8, 128, 512),
-      );
-      expect(framesToSamples({ frames: 8 })).toBe(framesToSamples(8));
-      expect(samplesToFrames({ samples: 4096, hopLength: 128, nFft: 512 })).toBe(
-        samplesToFrames(4096, 128, 512),
-      );
-      expect(samplesToFrames({ samples: 4096 })).toBe(samplesToFrames(4096));
-      expect(() => framesToTime({ frames: 1, hopLength: 0 })).toThrow(RangeError);
-      expect(() => timeToFrames({ time: '1' as unknown as number })).toThrow(TypeError);
+    it('frame, time and sample conversions take their documented defaults and refuse bad arguments', () => {
+      expect(framesToTime(8)).toBe(framesToTime(8, 22050, 512));
+      expect(timeToFrames(0.5)).toBe(timeToFrames(0.5, 22050, 512));
+      expect(framesToSamples(8)).toBe(framesToSamples(8, 512));
+      expect(samplesToFrames(4096)).toBe(samplesToFrames(4096, 512));
+      expect(framesToTime(8, 44100, 128)).toBeCloseTo((8 * 128) / 44100, 9);
+      expect(() => framesToTime(1, 22050, 0)).toThrow(RangeError);
+      expect(() => timeToFrames('1' as unknown as number)).toThrow(TypeError);
     });
   });
 
@@ -270,14 +261,14 @@ describe('Feature API precision (reference compatibility)', () => {
 
     it('should produce correct magnitude_sum and magnitude_max', () => {
       const tone = generateSine(440, SR, DURATION);
-      const result = stft(tone, SR, 2048, 512);
+      const result = stft(tone, SR, { nFft: 2048, hopLength: 512 });
 
       let magSum = 0;
       let magMax = 0;
-      for (let i = 0; i < result.magnitude.length; i++) {
-        magSum += result.magnitude[i];
-        if (result.magnitude[i] > magMax) {
-          magMax = result.magnitude[i];
+      for (let i = 0; i < result.magnitude.data.length; i++) {
+        magSum += result.magnitude.data[i];
+        if (result.magnitude.data[i] > magMax) {
+          magMax = result.magnitude.data[i];
         }
       }
 
@@ -293,14 +284,14 @@ describe('Feature API precision (reference compatibility)', () => {
 
     it('should have correct output shape', () => {
       const tone = generateSine(440, SR, DURATION);
-      const result = stft(tone, SR, 2048, 512);
-      expect(result.nBins).toBe(refData.shape[0]);
-      expect(result.nFrames).toBe(refData.shape[1]);
+      const result = stft(tone, SR, { nFft: 2048, hopLength: 512 });
+      expect(result.magnitude.rows).toBe(refData.shape[0]);
+      expect(result.magnitude.cols).toBe(refData.shape[1]);
     });
 
     it('should match reference magnitude values (spot check)', () => {
       const tone = generateSine(440, SR, DURATION);
-      const result = stft(tone, SR, 2048, 512);
+      const result = stft(tone, SR, { nFft: 2048, hopLength: 512 });
       const refMag = refData.magnitude as number[];
       const [, nFrames] = refData.shape as [number, number];
 
@@ -337,8 +328,8 @@ describe('Feature API precision (reference compatibility)', () => {
         }
         compared += 1;
         expect(
-          withinRel(result.magnitude[i], refMag[i], 5e-2),
-          `magnitude[${i}]: got ${result.magnitude[i]}, expected ${refMag[i]}`,
+          withinRel(result.magnitude.data[i], refMag[i], 5e-2),
+          `magnitude[${i}]: got ${result.magnitude.data[i]}, expected ${refMag[i]}`,
         ).toBe(true);
       }
       // An empty comparison set must fail rather than pass with nothing run:
@@ -351,26 +342,26 @@ describe('Feature API precision (reference compatibility)', () => {
   describe('Mel spectrogram', () => {
     it('should produce correct shape and non-negative values', () => {
       const tone = generateSine(440, SR, DURATION);
-      const result = melSpectrogram(tone, SR, 2048, 512, 128);
+      const result = melSpectrogram(tone, SR, { nFft: 2048, hopLength: 512, nMels: 128 });
 
-      expect(result.nMels).toBe(128);
-      expect(result.nFrames).toBeGreaterThan(0);
-      expect(result.power.length).toBe(result.nMels * result.nFrames);
+      expect(result.power.rows).toBe(128);
+      expect(result.power.cols).toBeGreaterThan(0);
+      expect(result.power.data.length).toBe(result.power.rows * result.power.cols);
 
-      for (let i = 0; i < result.power.length; i++) {
-        expect(result.power[i]).toBeGreaterThanOrEqual(0);
+      for (let i = 0; i < result.power.data.length; i++) {
+        expect(result.power.data[i]).toBeGreaterThanOrEqual(0);
       }
     });
 
     it('should produce dB values in reasonable range', () => {
       const tone = generateSine(440, SR, DURATION);
-      const result = melSpectrogram(tone, SR, 2048, 512, 128);
+      const result = melSpectrogram(tone, SR, { nFft: 2048, hopLength: 512, nMels: 128 });
 
       let hasFinite = false;
-      for (let i = 0; i < result.db.length; i++) {
-        if (Number.isFinite(result.db[i])) {
+      for (let i = 0; i < result.db.data.length; i++) {
+        if (Number.isFinite(result.db.data[i])) {
           hasFinite = true;
-          expect(result.db[i]).toBeLessThan(100);
+          expect(result.db.data[i]).toBeLessThan(100);
         }
       }
       expect(hasFinite).toBe(true);
@@ -378,16 +369,22 @@ describe('Feature API precision (reference compatibility)', () => {
 
     it('should honour an explicit Mel range (fmin/fmax/htk)', () => {
       const tone = generateSine(440, SR, DURATION);
-      const base = melSpectrogram(tone, SR, 2048, 512, 40);
-      const ranged = melSpectrogram(tone, SR, 2048, 512, 40, 500, 4000);
-      const htk = melSpectrogram(tone, SR, 2048, 512, 40, 0, 0, true);
+      const base = melSpectrogram(tone, SR, { nFft: 2048, hopLength: 512, nMels: 40 });
+      const ranged = melSpectrogram(tone, SR, {
+        nFft: 2048,
+        hopLength: 512,
+        nMels: 40,
+        fminHz: 500,
+        fmaxHz: 4000,
+      });
+      const htk = melSpectrogram(tone, SR, { nFft: 2048, hopLength: 512, nMels: 40, htk: true });
 
-      expect(ranged.power.length).toBe(base.power.length);
+      expect(ranged.power.data.length).toBe(base.power.data.length);
       let dRange = 0;
       let dHtk = 0;
-      for (let i = 0; i < base.power.length; i++) {
-        dRange += (base.power[i] - ranged.power[i]) ** 2;
-        dHtk += (base.power[i] - htk.power[i]) ** 2;
+      for (let i = 0; i < base.power.data.length; i++) {
+        dRange += (base.power.data[i] - ranged.power.data[i]) ** 2;
+        dHtk += (base.power.data[i] - htk.power.data[i]) ** 2;
       }
       expect(dRange).toBeGreaterThan(1e-6);
       expect(dHtk).toBeGreaterThan(1e-6);
@@ -400,23 +397,24 @@ describe('Feature API precision (reference compatibility)', () => {
 
     it('should produce correct shape', () => {
       const tone = generateSine(440, SR, DURATION);
-      const result = mfcc(tone, SR, 2048, 512, 64, 13);
+      const result = mfcc(tone, SR, { nFft: 2048, hopLength: 512, nMels: 64, nMfcc: 13 });
 
-      expect(result.nMfcc).toBe(refData.shape[0]);
-      expect(result.nFrames).toBe(refData.shape[1]);
+      expect(result.coefficients.rows).toBe(refData.shape[0]);
+      expect(result.coefficients.cols).toBe(refData.shape[1]);
     });
 
     it('should match reference per-coefficient means', () => {
       const tone = generateSine(440, SR, DURATION);
-      const result = mfcc(tone, SR, 2048, 512, 64, 13);
+      const result = mfcc(tone, SR, { nFft: 2048, hopLength: 512, nMels: 64, nMfcc: 13 });
       const refMean = refData.mean as number[];
 
-      for (let c = 0; c < result.nMfcc; c++) {
+      const { rows, cols, data } = result.coefficients;
+      for (let c = 0; c < rows; c++) {
         let sum = 0;
-        for (let f = 0; f < result.nFrames; f++) {
-          sum += result.coefficients[c * result.nFrames + f];
+        for (let f = 0; f < cols; f++) {
+          sum += data[c * cols + f];
         }
-        const mean = sum / result.nFrames;
+        const mean = sum / cols;
 
         if (Math.abs(refMean[c]) > 1.0) {
           expect(
@@ -434,23 +432,23 @@ describe('Feature API precision (reference compatibility)', () => {
 
     it('should produce correct shape', () => {
       const chord = generateCMajorChord(SR, DURATION);
-      const result = chroma(chord, SR, 2048, 512);
+      const result = chroma(chord, SR, { nFft: 2048, hopLength: 512 });
 
-      expect(result.nChroma).toBe(12);
-      expect(result.nFrames).toBe(refData.shape[1]);
+      expect(result.features.rows).toBe(12);
+      expect(result.features.cols).toBe(refData.shape[1]);
     });
 
     it('should match reference mean_per_class within tolerance', () => {
       const chord = generateCMajorChord(SR, DURATION);
-      const result = chroma(chord, SR, 2048, 512);
+      const result = chroma(chord, SR, { nFft: 2048, hopLength: 512 });
       const refMean = refData.mean_per_class as number[];
 
       for (let c = 0; c < 12; c++) {
         let sum = 0;
-        for (let f = 0; f < result.nFrames; f++) {
-          sum += result.features[c * result.nFrames + f];
+        for (let f = 0; f < result.features.cols; f++) {
+          sum += result.features.data[c * result.features.cols + f];
         }
-        const mean = sum / result.nFrames;
+        const mean = sum / result.features.cols;
 
         expect(
           withinAbs(mean, refMean[c], 0.5),
@@ -461,16 +459,16 @@ describe('Feature API precision (reference compatibility)', () => {
 
     it('should show dominant G (class 7) for C major chord', () => {
       const chord = generateCMajorChord(SR, DURATION);
-      const result = chroma(chord, SR, 2048, 512);
+      const result = chroma(chord, SR, { nFft: 2048, hopLength: 512 });
 
       // Compute mean per class and find the dominant one
       const means: number[] = [];
       for (let c = 0; c < 12; c++) {
         let sum = 0;
-        for (let f = 0; f < result.nFrames; f++) {
-          sum += result.features[c * result.nFrames + f];
+        for (let f = 0; f < result.features.cols; f++) {
+          sum += result.features.data[c * result.features.cols + f];
         }
-        means.push(sum / result.nFrames);
+        means.push(sum / result.features.cols);
       }
 
       // G (class 7) should be the strongest in C major chord reference
@@ -486,7 +484,7 @@ describe('Feature API precision (reference compatibility)', () => {
 
     it('should match spectral centroid within tolerance', () => {
       const signal = generateTwoTone(440, 880, SR, DURATION);
-      const centroid = spectralCentroid(signal, SR, 2048, 512);
+      const centroid = spectralCentroid(signal, SR, { nFft: 2048, hopLength: 512 });
       const refCentroid = refData.centroid as number[];
 
       // Skip first 2 and last 2 boundary frames
@@ -502,8 +500,10 @@ describe('Feature API precision (reference compatibility)', () => {
 
     it('should match spectral bandwidth within tolerance', () => {
       const signal = generateTwoTone(440, 880, SR, DURATION);
-      const bandwidth = spectralBandwidth(signal, SR, 2048, 512);
-      expect(spectralBandwidth(signal, SR, 2048, 512, 1)).not.toEqual(bandwidth);
+      const bandwidth = spectralBandwidth(signal, SR, { nFft: 2048, hopLength: 512 });
+      expect(spectralBandwidth(signal, SR, { nFft: 2048, hopLength: 512, p: 1 })).not.toEqual(
+        bandwidth,
+      );
       const refBandwidth = refData.bandwidth as number[];
 
       for (let i = 2; i < bandwidth.length - 2 && i < refBandwidth.length - 2; i++) {
@@ -518,7 +518,7 @@ describe('Feature API precision (reference compatibility)', () => {
 
     it('should match spectral rolloff within tolerance', () => {
       const signal = generateTwoTone(440, 880, SR, DURATION);
-      const rolloff = spectralRolloff(signal, SR, 2048, 512);
+      const rolloff = spectralRolloff(signal, SR, { nFft: 2048, hopLength: 512 });
       const refRolloff = refData.rolloff as number[];
 
       for (let i = 2; i < rolloff.length - 2 && i < refRolloff.length - 2; i++) {
@@ -533,7 +533,7 @@ describe('Feature API precision (reference compatibility)', () => {
 
     it('should match spectral flatness within tolerance', () => {
       const signal = generateTwoTone(440, 880, SR, DURATION);
-      const flatness = spectralFlatness(signal, SR, 2048, 512);
+      const flatness = spectralFlatness(signal, SR, { nFft: 2048, hopLength: 512 });
       const refFlatness = refData.flatness as number[];
 
       for (let i = 2; i < flatness.length - 2 && i < refFlatness.length - 2; i++) {
@@ -546,32 +546,36 @@ describe('Feature API precision (reference compatibility)', () => {
 
     it('should return spectral flux with a configurable lag', () => {
       const signal = generateTwoTone(440, 880, SR, DURATION);
-      const flux = spectralFlux(signal, SR, 2048, 512);
+      const flux = spectralFlux(signal, SR, { nFft: 2048, hopLength: 512 });
       expect(flux).toBeInstanceOf(Float32Array);
       expect(flux.length).toBeGreaterThan(0);
-      expect(spectralFlux(signal, SR, 2048, 512, 2)).not.toEqual(flux);
+      expect(spectralFlux(signal, SR, { nFft: 2048, hopLength: 512, lag: 2 })).not.toEqual(flux);
     });
 
     it('should backtrack onset indices to energy minima', () => {
       expect(
         Array.from(
-          onsetBacktrack(new Int32Array([6]), new Float32Array([1, 0.8, 0.5, 0.2, 0.6, 0.9, 1.2])),
+          onsetBacktrack({
+            events: new Int32Array([6]),
+            energy: new Float32Array([1, 0.8, 0.5, 0.2, 0.6, 0.9, 1.2]),
+          }),
         ),
       ).toEqual([3]);
     });
 
     it('should reconstruct STFT magnitude with Griffin-Lim', () => {
-      const spectrum = stft(generateTwoTone(440, 880, SR, DURATION), SR, 1024, 256);
-      const result = griffinLim(
-        spectrum.magnitude,
-        spectrum.nBins,
-        spectrum.nFrames,
-        SR,
-        1024,
-        256,
-        1,
-        0,
-      );
+      const spectrum = stft(generateTwoTone(440, 880, SR, DURATION), SR, {
+        nFft: 1024,
+        hopLength: 256,
+      });
+      const result = griffinLim({
+        magnitude: spectrum.magnitude,
+        sampleRate: SR,
+        nFft: 1024,
+        hopLength: 256,
+        nIter: 1,
+        momentum: 0,
+      });
       expect(result).toBeInstanceOf(Float32Array);
       expect(result.length).toBeGreaterThan(0);
     });
@@ -580,7 +584,7 @@ describe('Feature API precision (reference compatibility)', () => {
   describe('Zero crossing rate and RMS', () => {
     it('should return non-empty zero crossing rate', () => {
       const tone = generateSine(440, SR, DURATION);
-      const zcr = zeroCrossingRate(tone, SR, 2048, 512);
+      const zcr = zeroCrossingRate(tone, SR, { frameLength: 2048, hopLength: 512 });
       expect(zcr.length).toBeGreaterThan(0);
       for (let i = 0; i < zcr.length; i++) {
         expect(zcr[i]).toBeGreaterThanOrEqual(0);
@@ -590,7 +594,7 @@ describe('Feature API precision (reference compatibility)', () => {
 
     it('should return non-empty RMS energy', () => {
       const tone = generateSine(440, SR, DURATION);
-      const rms = rmsEnergy(tone, SR, 2048, 512);
+      const rms = rmsEnergy(tone, SR, { frameLength: 2048, hopLength: 512 });
       expect(rms.length).toBeGreaterThan(0);
       for (let i = 0; i < rms.length; i++) {
         expect(rms[i]).toBeGreaterThanOrEqual(0);
@@ -601,7 +605,13 @@ describe('Feature API precision (reference compatibility)', () => {
   describe('Pitch detection', () => {
     it('should detect 440 Hz from a pure tone', () => {
       const tone = generateSine(440, SR, DURATION);
-      const result = pitchYin(tone, SR, 2048, 512, 65.0, 2093.0, 0.3);
+      const result = pitchYin(tone, SR, {
+        frameLength: 2048,
+        hopLength: 512,
+        f0MinHz: 65.0,
+        f0MaxHz: 2093.0,
+        threshold: 0.3,
+      });
 
       expect(result.nFrames).toBeGreaterThan(0);
       expect(result.medianF0).toBeGreaterThan(400);
@@ -648,18 +658,20 @@ describe('Feature API precision (reference compatibility)', () => {
     });
   });
 
-  describe('analyzeWithProgress', () => {
+  describe('analyze with progress', () => {
     it('should return analysis result and call progress callback', () => {
       const tone = generateSine(440, SR, DURATION);
       const progressValues: number[] = [];
       const stages: string[] = [];
 
-      const result = analyzeWithProgress(tone, SR, (progress, stage) => {
-        progressValues.push(progress);
-        stages.push(stage);
+      const result = analyze(tone, SR, {
+        onProgress: (progress, stage) => {
+          progressValues.push(progress);
+          stages.push(stage);
+        },
       });
 
-      // Verify result has expected structure (same as analyze())
+      // Verify result has expected structure
       expect(result.bpm).toBeGreaterThanOrEqual(0);
       expect(result.key).toBeDefined();
       expect(result.beats).toBeDefined();
@@ -674,13 +686,13 @@ describe('Feature API precision (reference compatibility)', () => {
 
     it('ignores a progress callback false result', () => {
       const tone = generateSine(440, SR, DURATION);
-      const result = analyzeWithProgress(tone, SR, () => false);
-      expect(result.beatTimes).toBeInstanceOf(Float32Array);
+      const result = analyze(tone, SR, { onProgress: () => false });
+      expect(Array.isArray(result.beats)).toBe(true);
     });
 
     it('cancels through the request cancel callback', () => {
       expect(() =>
-        analyzeWithProgress({ samples: generateSine(440, SR, DURATION), cancel: () => true }),
+        analyze({ samples: generateSine(440, SR, DURATION), sampleRate: SR, cancel: () => true }),
       ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled }));
     });
   });
@@ -813,16 +825,16 @@ describe('Feature API precision (reference compatibility)', () => {
   describe('STFT dB', () => {
     it('should return finite dB values with correct shape', () => {
       const tone = generateSine(440, SR, DURATION);
-      const result = stftDb(tone, SR, 2048, 512);
+      const result = stftDb(tone, SR, { nFft: 2048, hopLength: 512 });
 
-      expect(result.nBins).toBe(1025);
-      expect(result.nFrames).toBeGreaterThan(0);
-      expect(result.db).toBeInstanceOf(Float32Array);
-      expect(result.db.length).toBe(result.nBins * result.nFrames);
+      expect(result.rows).toBe(1025);
+      expect(result.cols).toBeGreaterThan(0);
+      expect(result.data).toBeInstanceOf(Float32Array);
+      expect(result.data.length).toBe(result.rows * result.cols);
 
       // All dB values should be finite
-      for (let i = 0; i < result.db.length; i++) {
-        expect(Number.isFinite(result.db[i])).toBe(true);
+      for (let i = 0; i < result.data.length; i++) {
+        expect(Number.isFinite(result.data[i])).toBe(true);
       }
     });
   });
@@ -830,7 +842,13 @@ describe('Feature API precision (reference compatibility)', () => {
   describe('Pitch pYIN', () => {
     it('should detect 440 Hz from a pure tone', () => {
       const tone = generateSine(440, SR, DURATION);
-      const result = pitchPyin(tone, SR, 2048, 512, 65.0, 2093.0, 0.3);
+      const result = pitchPyin(tone, SR, {
+        frameLength: 2048,
+        hopLength: 512,
+        f0MinHz: 65.0,
+        f0MaxHz: 2093.0,
+        threshold: 0.3,
+      });
 
       expect(result.nFrames).toBeGreaterThan(0);
       expect(result.medianF0).toBeGreaterThan(400);

@@ -162,16 +162,25 @@ describe('transform sampleRate defaults to 22050 (WASM parity with Node/Python)'
 });
 
 describe('analyzeMelody reports invalid params as a RangeError (WASM)', () => {
-  it('throws a RangeError for a non-positive fmin', () => {
+  it('throws a RangeError for a non-positive f0MinHz', () => {
     const samples = sine();
     let caught: unknown;
     try {
-      analyzeMelody(samples, sampleRate, { fmin: 0 });
+      analyzeMelody(samples, sampleRate, { f0MinHz: 0 });
     } catch (error) {
       caught = error;
     }
     expect(caught).toBeInstanceOf(RangeError);
-    expect((caught as Error).message).toMatch(/fmin must be finite and positive/);
+    expect((caught as Error).message).toMatch(/analyzeMelody: f0MinHz must be positive/);
+  });
+
+  it('throws a RangeError when f0MinHz is above f0MaxHz', () => {
+    expect(() => analyzeMelody(sine(), sampleRate, { f0MinHz: 800, f0MaxHz: 400 })).toThrow(
+      /analyzeMelody: f0MaxHz must be above f0MinHz/,
+    );
+    expect(() => analyzeMelody(sine(), sampleRate, { f0MinHz: 800, f0MaxHz: 400 })).toThrow(
+      RangeError,
+    );
   });
 });
 

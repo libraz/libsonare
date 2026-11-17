@@ -1,9 +1,9 @@
 import { ErrorCode, SonareError } from '../errors.js';
-import type { AnalyzerStats, FrameBuffer } from '../index.js';
+import type { StreamFrames, StreamStats } from '../index.js';
 import { StreamAnalyzer } from '../index.js';
+import type { SonareStreamAnalyzerChunkMessage } from '../internal/stream_analyzer_messages.js';
 import { isStreamAnalyzerChunkMessage, resolveContextSampleRate } from './guards.js';
 import type {
-  SonareStreamAnalyzerChunkMessage,
   SonareStreamAnalyzerNodeOptions,
   SonareStreamAnalyzerWorkletProcessorOptions,
 } from './messages.js';
@@ -34,8 +34,8 @@ export class SonareStreamAnalyzerNode {
   readonly node: AudioWorkletNode;
   readonly ready: Promise<void>;
   private readonly analyzer: StreamAnalyzer;
-  private readonly frameListeners = new Set<(frames: FrameBuffer) => void>();
-  private readonly statsListeners = new Set<(stats: AnalyzerStats) => void>();
+  private readonly frameListeners = new Set<(frames: StreamFrames) => void>();
+  private readonly statsListeners = new Set<(stats: StreamStats) => void>();
   private expectedSample = 0;
   private lastFrameCount = 0;
   private resolveReady!: () => void;
@@ -107,7 +107,7 @@ export class SonareStreamAnalyzerNode {
   }
 
   /** Subscribes to analysis frames, delivered in the analyzer's `readFrames` format. */
-  onFrames(callback: (frames: FrameBuffer) => void): () => void {
+  onFrames(callback: (frames: StreamFrames) => void): () => void {
     this.frameListeners.add(callback);
     return () => {
       this.frameListeners.delete(callback);
@@ -118,7 +118,7 @@ export class SonareStreamAnalyzerNode {
    * Subscribes to analyzer statistics, delivered when the key or tempo estimate
    * was re-estimated (`estimate.updated`).
    */
-  onStats(callback: (stats: AnalyzerStats) => void): () => void {
+  onStats(callback: (stats: StreamStats) => void): () => void {
     this.statsListeners.add(callback);
     return () => {
       this.statsListeners.delete(callback);
@@ -170,7 +170,7 @@ export class SonareStreamAnalyzerNode {
     this.node.port.postMessage({ type: 'recycle', samples }, [samples.buffer]);
     // Frames wait in the analyzer's bounded queue until someone listens.
     if (this.frameListeners.size > 0) {
-      const available = this.analyzer.availableFrames();
+      const available = this.analyzer.availableFrames;
       if (available > 0) {
         const frames = this.analyzer.readFrames(available);
         for (const listener of this.frameListeners) {
@@ -179,7 +179,7 @@ export class SonareStreamAnalyzerNode {
       }
     }
     if (this.statsListeners.size > 0) {
-      const frameCount = this.analyzer.frameCount();
+      const frameCount = this.analyzer.frameCount;
       if (frameCount !== this.lastFrameCount) {
         this.lastFrameCount = frameCount;
         const stats = this.analyzer.stats();

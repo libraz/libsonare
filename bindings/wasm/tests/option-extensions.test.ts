@@ -13,7 +13,7 @@ import {
   mfccToAudio,
   nnlsChroma,
   normalize,
-  onsetEnvelope,
+  onsetStrength,
   onsetStrengthMulti,
   phaseVocoder,
   pitchShift,
@@ -75,11 +75,13 @@ describe('additive effect and feature options', () => {
     const changedResidual = hpssWithResidual(samples, sampleRate, 31, 31, 1024, 256, true);
     expect(Array.from(changedResidual.residual)).not.toEqual(Array.from(residual.residual));
 
-    const chroma = nnlsChroma(samples);
+    const chroma = nnlsChroma(samples, sampleRate);
     const changedChroma = nnlsChroma(samples, sampleRate, { hopLength: 256 });
-    expect(changedChroma.nFrames).toBeGreaterThan(chroma.nFrames);
+    expect(changedChroma.cols).toBeGreaterThan(chroma.cols);
 
-    expect(() => analyzeImpulseResponse(samples, sampleRate, 6, 0)).toThrow(RangeError);
+    expect(() =>
+      analyzeImpulseResponse(samples, sampleRate, { nOctaveBands: 6, minDecayDb: 0 }),
+    ).toThrow(RangeError);
   });
 
   it('rejects invalid option types and ranges before native dispatch', () => {
@@ -180,13 +182,11 @@ describe('feature entry points share one nFft rule', () => {
       melSpectrogram: (f) => melSpectrogram({ samples, sampleRate, nMels, ...f }),
       mfcc: (f) => mfcc({ samples, sampleRate, nMels, nMfcc, ...f }),
       chroma: (f) => chromaStft({ samples, sampleRate, ...f }),
-      onsetEnvelope: (f) => onsetEnvelope({ samples, sampleRate, nMels, ...f }),
+      onsetStrength: (f) => onsetStrength({ samples, sampleRate, nMels, ...f }),
       onsetStrengthMulti: (f) => onsetStrengthMulti({ samples, sampleRate, nMels, ...f }),
       melToAudio: (f) =>
         melToAudio({
           power: mel.power,
-          nMels,
-          nFrames: mel.nFrames,
           sampleRate,
           nIter: 2,
           ...f,
@@ -194,8 +194,6 @@ describe('feature entry points share one nFft rule', () => {
       griffinLim: (f) =>
         griffinLim({
           magnitude: spectrum.magnitude,
-          nBins: spectrum.nBins,
-          nFrames: spectrum.nFrames,
           sampleRate,
           nIter: 2,
           ...f,
@@ -203,8 +201,6 @@ describe('feature entry points share one nFft rule', () => {
       mfccToAudio: (f) =>
         mfccToAudio({
           coefficients: cepstrum.coefficients,
-          nMfcc,
-          nFrames: cepstrum.nFrames,
           nMels,
           sampleRate,
           nIter: 2,
@@ -224,7 +220,7 @@ describe('feature entry points share one nFft rule', () => {
     'melSpectrogram',
     'mfcc',
     'chroma',
-    'onsetEnvelope',
+    'onsetStrength',
     'onsetStrengthMulti',
     'melToAudio',
     'griffinLim',
@@ -271,10 +267,10 @@ describe('feature entry points share one nFft rule', () => {
   // core, and on the Node surface, and the parity rule would refuse it.
   it('keeps melToStft off the parity rule, where an odd nFft is a distinct result', () => {
     const mel = melSpectrogram({ samples, sampleRate, nFft: 2048, hopLength: 512, nMels });
-    const shared = { power: mel.power, nMels, nFrames: mel.nFrames, sampleRate };
+    const shared = { power: mel.power, sampleRate };
     const even = melToStft({ ...shared, nFft: 2048 });
     const odd = melToStft({ ...shared, nFft: 2049 });
-    expect(odd.nBins).toBe(even.nBins);
-    expect(Array.from(odd.magnitude)).not.toEqual(Array.from(even.magnitude));
+    expect(odd.rows).toBe(even.rows);
+    expect(Array.from(odd.data)).not.toEqual(Array.from(even.data));
   });
 });

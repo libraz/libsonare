@@ -272,9 +272,11 @@ describe('Audio class', () => {
       const audio = Audio.fromBuffer(sineLong(), SR);
       const progressValues: number[] = [];
       const stages: string[] = [];
-      const result = audio.analyzeWithProgress((progress, stage) => {
-        progressValues.push(progress);
-        stages.push(stage);
+      const result = audio.analyze({
+        onProgress: (progress, stage) => {
+          progressValues.push(progress);
+          stages.push(stage);
+        },
       });
       expect(result.bpm).toBeGreaterThan(0);
       expect(progressValues.length).toBeGreaterThan(0);
@@ -371,43 +373,43 @@ describe('Audio class', () => {
     it('should compute STFT', () => {
       const audio = Audio.fromBuffer(sine(), SR);
       const result = audio.stft();
-      expect(result.nBins).toBeGreaterThan(0);
-      expect(result.nFrames).toBeGreaterThan(0);
-      expect(result.magnitude).toBeInstanceOf(Float32Array);
-      expect(result.power).toBeInstanceOf(Float32Array);
+      expect(result.magnitude.rows).toBeGreaterThan(0);
+      expect(result.magnitude.cols).toBeGreaterThan(0);
+      expect(result.magnitude.data).toBeInstanceOf(Float32Array);
+      expect(result.power.data).toBeInstanceOf(Float32Array);
     });
 
     it('should compute STFT in dB', () => {
       const audio = Audio.fromBuffer(sine(), SR);
       const result = audio.stftDb();
-      expect(result.nBins).toBeGreaterThan(0);
-      expect(result.nFrames).toBeGreaterThan(0);
-      expect(result.db).toBeInstanceOf(Float32Array);
+      expect(result.rows).toBeGreaterThan(0);
+      expect(result.cols).toBeGreaterThan(0);
+      expect(result.data).toBeInstanceOf(Float32Array);
     });
 
     it('should compute mel spectrogram', () => {
       const audio = Audio.fromBuffer(sine(), SR);
       const result = audio.melSpectrogram();
-      expect(result.nMels).toBe(128);
-      expect(result.nFrames).toBeGreaterThan(0);
-      expect(result.power).toBeInstanceOf(Float32Array);
-      expect(result.db).toBeInstanceOf(Float32Array);
+      expect(result.power.rows).toBe(128);
+      expect(result.power.cols).toBeGreaterThan(0);
+      expect(result.power.data).toBeInstanceOf(Float32Array);
+      expect(result.db.data).toBeInstanceOf(Float32Array);
     });
 
     it('should compute MFCC', () => {
       const audio = Audio.fromBuffer(sine(), SR);
       const result = audio.mfcc();
-      expect(result.nMfcc).toBe(20);
-      expect(result.nFrames).toBeGreaterThan(0);
-      expect(result.coefficients).toBeInstanceOf(Float32Array);
+      expect(result.coefficients.rows).toBe(20);
+      expect(result.coefficients.cols).toBeGreaterThan(0);
+      expect(result.coefficients.data).toBeInstanceOf(Float32Array);
     });
 
     it('should compute chroma', () => {
       const audio = Audio.fromBuffer(sine(), SR);
       const result = audio.chroma();
-      expect(result.nChroma).toBe(12);
-      expect(result.nFrames).toBeGreaterThan(0);
-      expect(result.features).toBeInstanceOf(Float32Array);
+      expect(result.features.rows).toBe(12);
+      expect(result.features.cols).toBeGreaterThan(0);
+      expect(result.features.data).toBeInstanceOf(Float32Array);
     });
 
     it('should compute spectral centroid', () => {
@@ -492,8 +494,8 @@ describe('Audio class', () => {
       const classResult = audio.stft();
       const standaloneResult = stft(samples, SR);
 
-      expect(classResult.nBins).toBe(standaloneResult.nBins);
-      expect(classResult.nFrames).toBe(standaloneResult.nFrames);
+      expect(classResult.magnitude.rows).toBe(standaloneResult.magnitude.rows);
+      expect(classResult.magnitude.cols).toBe(standaloneResult.magnitude.cols);
       expect(classResult.magnitude).toEqual(standaloneResult.magnitude);
       expect(classResult.power).toEqual(standaloneResult.power);
     });
@@ -505,8 +507,8 @@ describe('Audio class', () => {
       const classResult = audio.melSpectrogram();
       const standaloneResult = melSpectrogram(samples, SR);
 
-      expect(classResult.nMels).toBe(standaloneResult.nMels);
-      expect(classResult.nFrames).toBe(standaloneResult.nFrames);
+      expect(classResult.power.rows).toBe(standaloneResult.power.rows);
+      expect(classResult.power.cols).toBe(standaloneResult.power.cols);
       expect(classResult.power).toEqual(standaloneResult.power);
       expect(classResult.db).toEqual(standaloneResult.db);
     });

@@ -93,34 +93,8 @@ describe('request objects refuse unknown keys', () => {
 
 /** Positional overloads and the index of their options bag. */
 const POSITIONAL_OPTIONS: ReadonlyArray<readonly [string, number]> = [
-  ['analyze', 2],
-  ['analyzeBpm', 2],
-  ['analyzeDynamics', 2],
-  ['analyzeMelody', 2],
-  ['analyzeRhythm', 2],
-  ['analyzeSections', 2],
-  ['analyzeTimbre', 2],
-  ['bassChroma', 4],
-  ['chordFunctionalAnalysis', 4],
-  ['chroma', 4],
-  ['chromaCens', 5],
-  ['chromaCqt', 5],
-  ['cqt', 6],
-  ['cqtToAudio', 8],
-  ['detectAcoustic', 2],
-  ['detectBeats', 2],
-  ['detectBpm', 2],
-  ['detectChords', 2],
-  ['detectDownbeats', 2],
-  ['detectKey', 2],
-  ['detectKeyCandidates', 2],
-  ['detectOnsets', 2],
   ['estimateRoom', 2],
-  ['fourierTempogram', 6],
-  ['griffinLim', 8],
   ['harmonic', 2],
-  ['hybridCqt', 6],
-  ['lufs', 2],
   ['lufsInterleaved', 3],
   ['lufsSeriesInterleaved', 3],
   ['mastering', 2],
@@ -142,9 +116,6 @@ const POSITIONAL_OPTIONS: ReadonlyArray<readonly [string, number]> = [
   ['masteringRepairDetectReverb', 2],
   ['masteringRepairDetectTrimRange', 2],
   ['masteringRepairTrimSilence', 2],
-  ['melSpectrogram', 8],
-  ['melToAudio', 10],
-  ['melToStft', 8],
   ['meteringCrestFactorDb', 2],
   ['meteringDcOffset', 2],
   ['meteringDetectClipping', 2],
@@ -161,38 +132,74 @@ const POSITIONAL_OPTIONS: ReadonlyArray<readonly [string, number]> = [
   ['meteringTruePeakDb', 3],
   ['meteringVectorscope', 3],
   ['meteringVectorscopeDecimated', 4],
-  ['mfcc', 10],
-  ['mfccToAudio', 12],
-  ['mfccToMel', 5],
   ['mixStereo', 3],
-  ['momentaryLufs', 2],
   ['normalize', 4],
   ['noteMove', 2],
   ['noteStretch', 2],
-  ['onsetEnvelope', 5],
-  ['onsetStrengthMulti', 6],
   ['percussive', 2],
   ['pitchCorrectTimevarying', 4],
   ['pitchCorrectToMidi', 4],
   ['pitchCorrectToMidiTimevarying', 7],
   ['pitchShift', 5],
-  ['pseudoCqt', 6],
   ['roomGeometryFromEstimate', 1],
   ['roomMorph', 2],
-  ['shortTermLufs', 2],
   ['spectralEdit', 3],
-  ['stft', 4],
-  ['stftDb', 4],
-  ['tempogramRatio', 5],
   ['timeStretch', 5],
   ['trim', 5],
   ['voiceChange', 2],
   ['voiceChangeRealtime', 3],
-  ['vqt', 7],
-  ['vqtToAudio', 9],
   ['waveformPeakPyramid', 2],
   ['waveformPeaks', 2],
 ];
+
+/** Sample-taking entry points whose options bag is read by the shared `(samples, sampleRate, options)` normalizer. */
+const SAMPLE_OPTIONS = [
+  'analyze',
+  'analyzeBpm',
+  'analyzeDynamics',
+  'analyzeMelody',
+  'analyzeRhythm',
+  'analyzeSections',
+  'analyzeTimbre',
+  'bassChroma',
+  'chordFunctionalAnalysis',
+  'chroma',
+  'chromaCens',
+  'chromaCqt',
+  'cqt',
+  'detectAcoustic',
+  'detectBeats',
+  'detectBpm',
+  'detectChords',
+  'detectDownbeats',
+  'detectKey',
+  'detectKeyCandidates',
+  'detectOnsets',
+  'hybridCqt',
+  'lufs',
+  'melSpectrogram',
+  'mfcc',
+  'momentaryLufs',
+  'onsetStrengthMulti',
+  'pseudoCqt',
+  'shortTermLufs',
+  'stft',
+  'stftDb',
+  'vqt',
+];
+
+describe('sample-taking options bags refuse unknown keys', () => {
+  beforeAll(async () => {
+    await api.init();
+  });
+
+  it.each(SAMPLE_OPTIONS)('%s refuses an undeclared option by name', (name) => {
+    const call = () =>
+      (entry(name) as (...a: unknown[]) => unknown)(new Float32Array(2205), 22050, { bogus: 1 });
+    expect(call).toThrow(TypeError);
+    expect(message(call)).toBe(`${name}: unknown option 'bogus'`);
+  });
+});
 
 describe('positional options bags refuse unknown keys', () => {
   beforeAll(async () => {
@@ -241,10 +248,16 @@ describe('reported mistakes', () => {
     ).toBe("masterAudio: unknown request key 'loudness' ('loudness' belongs under 'overrides')");
   });
 
-  it('analyzeWithProgress takes analysis options flat, as analyze does', () => {
+  it('analyze takes analysis options and progress callbacks flat', () => {
     expect(
       message(() =>
-        api.analyzeWithProgress({ samples, sampleRate: 22050, hopLength: 512, tuning: 0 } as never),
+        api.analyze({
+          samples,
+          sampleRate: 22050,
+          hopLength: 512,
+          tuningCents: 0,
+          onProgress: () => {},
+        } as never),
       ),
     ).not.toMatch(/unknown/);
   });
@@ -255,18 +268,6 @@ describe('reported mistakes', () => {
     );
   });
 
-  it('analyzeWithProgress refuses an unknown option, in either form', () => {
-    const expected = "analyzeWithProgress: unknown option 'bogus' in 'options'";
-    expect(
-      message(() =>
-        api.analyzeWithProgress({ samples, sampleRate: 22050, options: { bogus: 1 } } as never),
-      ),
-    ).toBe(expected);
-    expect(
-      message(() => api.analyzeWithProgress(samples, 22050, () => {}, { bogus: 1 } as never)),
-    ).toBe(expected);
-  });
-
   it('detectBpm refuses a range it does not take', () => {
     expect(message(() => api.detectBpm({ samples, sampleRate: 22050, bpmMin: 60 } as never))).toBe(
       "detectBpm: unknown request key 'bpmMin'",
@@ -274,7 +275,7 @@ describe('reported mistakes', () => {
   });
 
   it('a declared key set to undefined is absent', () => {
-    expect(() => api.detectBpm({ samples, sampleRate: undefined })).not.toThrow(
+    expect(() => api.detectBpm({ samples, sampleRate: 22050, validate: undefined })).not.toThrow(
       /unknown request key/,
     );
   });

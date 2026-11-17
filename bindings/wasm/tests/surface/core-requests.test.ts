@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { detectKey, init } from '../../dist/index.js';
+import { type DetectKeyRequest, detectKey, init } from '../../dist/index.js';
 import { requestOnly, sampleOneShot } from '../../src/validation';
 
 const sampleRate = 22050;
@@ -24,7 +24,7 @@ describe('request objects', () => {
     const request = { samples: triad(), sampleRate, notAnOption: 1 } as unknown;
     let caught: unknown;
     try {
-      detectKey(request as Parameters<typeof detectKey>[0]);
+      detectKey(request as DetectKeyRequest);
     } catch (error) {
       caught = error;
     }
@@ -35,18 +35,22 @@ describe('request objects', () => {
   it('treats null for an optional boolean like omitting it', () => {
     const samples = triad();
     const omitted = detectKey({ samples, sampleRate });
-    const withNull = detectKey({ samples, sampleRate, useHpss: null } as unknown as Parameters<
-      typeof detectKey
-    >[0]);
+    const withNull = detectKey({
+      samples,
+      sampleRate,
+      useHpss: null,
+    } as unknown as DetectKeyRequest);
     expect(withNull).toEqual(omitted);
   });
 
   it('treats null for an optional string like omitting it', () => {
     const samples = triad();
     const omitted = detectKey({ samples, sampleRate });
-    const withNull = detectKey({ samples, sampleRate, genreHint: null } as unknown as Parameters<
-      typeof detectKey
-    >[0]);
+    const withNull = detectKey({
+      samples,
+      sampleRate,
+      genreHint: null,
+    } as unknown as DetectKeyRequest);
     expect(withNull).toEqual(omitted);
   });
 });

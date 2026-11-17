@@ -1,195 +1,158 @@
-import type { SpectralFrameRequest } from './feature_spectral.js';
 import { getSonareModule } from './module_state.js';
 import type { NoteSegment, PiptrackResult, PitchResult } from './public_types.js';
-import { assertAudioInput, requestObject } from './validation.js';
+import {
+  assertAudioInput,
+  assertFrequencyBounds,
+  requestOnly,
+  sampleOneShot,
+  toMatrix2D,
+  tuningCentsFromNative,
+  tuningCentsToNative,
+  type ValidateOptions,
+} from './validation.js';
 
 function requireModule() {
   return getSonareModule();
 }
 
+/** The request fields a positional overload carries in its options bag. */
+type SampleOptions<R> = Omit<R, 'samples' | 'sampleRate'>;
+
 // ============================================================================
 // Features - Pitch
 // ============================================================================
 
-/**
- * Detect pitch using YIN algorithm.
- *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param frameLength - Frame length (default: 2048)
- * @param hopLength - Hop length (default: 512)
- * @param fmin - Minimum frequency in Hz (default: 65)
- * @param fmax - Maximum frequency in Hz (default: 2093)
- * @param threshold - YIN threshold (default: 0.1)
- * @param fillNa - Retained for compatibility; YIN always returns a finite per-frame estimate.
- * @returns Pitch detection result
- */
-export interface PitchYinRequest {
+/** YIN pitch request. */
+export interface PitchYinRequest extends ValidateOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
+  /** Frame length in samples. Default 2048. */
   frameLength?: number;
+  /** Hop in samples. Default 512. */
   hopLength?: number;
-  fmin?: number;
-  fmax?: number;
+  /** Lowest pitch searched, in Hz. Default 65. */
+  f0MinHz?: number;
+  /** Highest pitch searched, in Hz. Default 2093. */
+  f0MaxHz?: number;
+  /** YIN threshold. Default 0.1. */
   threshold?: number;
+  /** Retained for compatibility; YIN always returns a finite per-frame estimate. */
   fillNa?: boolean;
 }
 
-export interface PiptrackRequest {
+/** pYIN pitch request. */
+export interface PitchPyinRequest extends ValidateOptions {
   samples: Float32Array;
-  sampleRate?: number;
-  nFft?: number;
+  sampleRate: number;
+  /** Frame length in samples. Default 2048. */
+  frameLength?: number;
+  /** Hop in samples. Default 512. */
   hopLength?: number;
-  fmin?: number;
-  fmax?: number;
+  /** Lowest pitch searched, in Hz. Default 65. */
+  f0MinHz?: number;
+  /** Highest pitch searched, in Hz. Default 2093. */
+  f0MaxHz?: number;
+  /** YIN threshold. Default 0.1. */
+  threshold?: number;
+  /** Return 0 for unvoiced f0 frames instead of NaN. Default `false`. */
+  fillNa?: boolean;
+}
+
+/** Spectral pitch-candidate request. */
+export interface PiptrackRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  /** FFT size. Default 2048. */
+  nFft?: number;
+  /** Hop in samples. Default 512. */
+  hopLength?: number;
+  /** Lowest frequency considered, in Hz. Default 150. */
+  fminHz?: number;
+  /** Highest frequency considered, in Hz. Default 4000. */
+  fmaxHz?: number;
+  /** Magnitude threshold relative to the column maximum. Default 0.1. */
   threshold?: number;
 }
 
-/** Per-bin spectral pitch candidates and peak magnitudes (librosa.piptrack). */
+/**
+ * Per-bin spectral pitch candidates and peak magnitudes (librosa.piptrack).
+ *
+ * @returns Result whose matrices have FFT bins on rows and frames on columns.
+ */
 export function piptrack(request: PiptrackRequest): PiptrackResult;
 export function piptrack(
   samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  fmin?: number,
-  fmax?: number,
-  threshold?: number,
+  sampleRate: number,
+  options?: SampleOptions<PiptrackRequest>,
 ): PiptrackResult;
-export function piptrack(
-  samples: Float32Array | PiptrackRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  fmin = 150,
-  fmax = 4000,
-  threshold = 0.1,
-): PiptrackResult {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('piptrack', samples);
-    const request = samples;
-    return piptrack(
-      request.samples,
-      request.sampleRate,
-      request.nFft,
-      request.hopLength,
-      request.fmin,
-      request.fmax,
-      request.threshold,
-    );
-  }
-  assertAudioInput('piptrack', samples, sampleRate);
-  return requireModule().piptrack(samples, sampleRate, nFft, hopLength, fmin, fmax, threshold);
+export function piptrack(...args: unknown[]): PiptrackResult {
+  const r = sampleOneShot<PiptrackRequest>('piptrack', args);
+  assertAudioInput('piptrack', r.samples, r.sampleRate, r);
+  const fminHz = r.fminHz ?? 150;
+  const fmaxHz = r.fmaxHz ?? 4000;
+  assertFrequencyBounds('piptrack', fminHz, fmaxHz, 'fminHz', 'fmaxHz');
+  const native = requireModule().piptrack(
+    r.samples,
+    r.sampleRate,
+    r.nFft ?? 2048,
+    r.hopLength ?? 512,
+    fminHz,
+    fmaxHz,
+    r.threshold ?? 0.1,
+  );
+  return {
+    pitches: toMatrix2D(native.pitches, native.nBins, native.nFrames),
+    magnitudes: toMatrix2D(native.magnitudes, native.nBins, native.nFrames),
+  };
 }
 
+/** Detect pitch using the YIN algorithm. */
 export function pitchYin(request: PitchYinRequest): PitchResult;
 export function pitchYin(
   samples: Float32Array,
-  sampleRate?: number,
-  frameLength?: number,
-  hopLength?: number,
-  fmin?: number,
-  fmax?: number,
-  threshold?: number,
-  fillNa?: boolean,
+  sampleRate: number,
+  options?: SampleOptions<PitchYinRequest>,
 ): PitchResult;
-export function pitchYin(
-  samples: Float32Array | PitchYinRequest,
-  sampleRate = 22050,
-  frameLength = 2048,
-  hopLength = 512,
-  fmin = 65.0,
-  fmax = 2093.0,
-  threshold = 0.1,
-  fillNa = false,
-): PitchResult {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('pitchYin', samples);
-    const request = samples;
-    return pitchYin(
-      request.samples,
-      request.sampleRate,
-      request.frameLength,
-      request.hopLength,
-      request.fmin,
-      request.fmax,
-      request.threshold,
-      request.fillNa,
-    );
-  }
-  assertAudioInput('pitchYin', samples, sampleRate);
+export function pitchYin(...args: unknown[]): PitchResult {
+  const r = sampleOneShot<PitchYinRequest>('pitchYin', args);
+  assertAudioInput('pitchYin', r.samples, r.sampleRate, r);
+  const f0MinHz = r.f0MinHz ?? 65.0;
+  const f0MaxHz = r.f0MaxHz ?? 2093.0;
+  assertFrequencyBounds('pitchYin', f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
   return requireModule().pitchYin(
-    samples,
-    sampleRate,
-    frameLength,
-    hopLength,
-    fmin,
-    fmax,
-    threshold,
-    fillNa,
+    r.samples,
+    r.sampleRate,
+    r.frameLength ?? 2048,
+    r.hopLength ?? 512,
+    f0MinHz,
+    f0MaxHz,
+    r.threshold ?? 0.1,
+    r.fillNa ?? false,
   );
 }
 
-/**
- * Detect pitch using pYIN algorithm (probabilistic YIN with HMM smoothing).
- *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param frameLength - Frame length (default: 2048)
- * @param hopLength - Hop length (default: 512)
- * @param fmin - Minimum frequency in Hz (default: 65)
- * @param fmax - Maximum frequency in Hz (default: 2093)
- * @param threshold - YIN threshold (default: 0.1)
- * @param fillNa - If true, return 0 for unvoiced f0 frames; otherwise keep NaN (default: false)
- * @returns Pitch detection result
- */
-export interface PitchPyinRequest extends PitchYinRequest {}
-
+/** Detect pitch using pYIN (probabilistic YIN with HMM smoothing). */
 export function pitchPyin(request: PitchPyinRequest): PitchResult;
 export function pitchPyin(
   samples: Float32Array,
-  sampleRate?: number,
-  frameLength?: number,
-  hopLength?: number,
-  fmin?: number,
-  fmax?: number,
-  threshold?: number,
-  fillNa?: boolean,
+  sampleRate: number,
+  options?: SampleOptions<PitchPyinRequest>,
 ): PitchResult;
-export function pitchPyin(
-  samples: Float32Array | PitchPyinRequest,
-  sampleRate = 22050,
-  frameLength = 2048,
-  hopLength = 512,
-  fmin = 65.0,
-  fmax = 2093.0,
-  threshold = 0.1,
-  fillNa = false,
-): PitchResult {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('pitchPyin', samples);
-    const request = samples;
-    return pitchPyin(
-      request.samples,
-      request.sampleRate,
-      request.frameLength,
-      request.hopLength,
-      request.fmin,
-      request.fmax,
-      request.threshold,
-      request.fillNa,
-    );
-  }
-  assertAudioInput('pitchPyin', samples, sampleRate);
+export function pitchPyin(...args: unknown[]): PitchResult {
+  const r = sampleOneShot<PitchPyinRequest>('pitchPyin', args);
+  assertAudioInput('pitchPyin', r.samples, r.sampleRate, r);
+  const f0MinHz = r.f0MinHz ?? 65.0;
+  const f0MaxHz = r.f0MaxHz ?? 2093.0;
+  assertFrequencyBounds('pitchPyin', f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
   return requireModule().pitchPyin(
-    samples,
-    sampleRate,
-    frameLength,
-    hopLength,
-    fmin,
-    fmax,
-    threshold,
-    fillNa,
+    r.samples,
+    r.sampleRate,
+    r.frameLength ?? 2048,
+    r.hopLength ?? 512,
+    f0MinHz,
+    f0MaxHz,
+    r.threshold ?? 0.1,
+    r.fillNa ?? false,
   );
 }
 
@@ -224,124 +187,112 @@ export interface NoteSegmentsRequest {
  * `f0Hz` and `voicedProb` must have the same non-zero length. Zero-Hz frames
  * and values below `voicedThreshold` (default `0.5`) are treated as unvoiced.
  */
-export function noteSegments(request: NoteSegmentsRequest): NoteSegment[] {
-  requestObject('noteSegments', request, 'request', true);
-  return requireModule().noteSegments(request.f0Hz, request.voicedProb, request.frameRate, {
-    segmentationThresholdCents: request.segmentationThresholdCents,
-    minNoteMs: request.minNoteMs,
-    referenceHz: request.referenceHz,
-    voicedThreshold: request.voicedThreshold,
+export function noteSegments(...args: [request: NoteSegmentsRequest]): NoteSegment[] {
+  const r = requestOnly<NoteSegmentsRequest>('noteSegments', args);
+  const native = requireModule().noteSegments(r.f0Hz, r.voicedProb, r.frameRate, {
+    segmentationThresholdCents: r.segmentationThresholdCents,
+    minNoteMs: r.minNoteMs,
+    referenceHz: r.referenceHz,
+    voicedThreshold: r.voicedThreshold,
   });
+  return native.map((segment) => ({
+    frameStart: segment.frameStart,
+    frameEnd: segment.frameEnd,
+    startSec: segment.startSeconds,
+    endSec: segment.endSeconds,
+    medianCents: segment.medianCents,
+  }));
 }
 
 // ============================================================================
 // Features - Tuning
 // ============================================================================
 
+/** Tuning-offset request over a set of frequencies. */
 export interface PitchTuningRequest {
   frequencies: Float32Array;
+  /** Resolution of the search, as a fraction of a bin. Default 0.01. */
   resolution?: number;
+  /** Bins per octave the offset is measured in. Default 12. */
   binsPerOctave?: number;
 }
 
-export interface EstimateTuningRequest extends SpectralFrameRequest {
+/** Tuning-offset request over an audio signal. */
+export interface EstimateTuningRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  /** Resolution of the search, as a fraction of a bin. Default 0.01. */
   resolution?: number;
+  /** Bins per octave the offset is measured in. Default 12. */
   binsPerOctave?: number;
+  /** FFT size. Default 2048. */
+  nFft?: number;
+  /** Hop in samples. Default 512. */
+  hopLength?: number;
 }
 
 /**
  * Estimate the global tuning offset from a set of frequencies
- * (librosa.pitch_tuning). Returns a deviation in fractions of a bin.
+ * (librosa.pitch_tuning).
+ *
+ * @returns The offset in cents of a semitone, in `[-50, 50)` at 12 bins per octave.
  */
-export function pitchTuning(request: PitchTuningRequest): number;
-export function pitchTuning(
-  frequencies: Float32Array,
-  resolution?: number,
-  binsPerOctave?: number,
-): number;
-export function pitchTuning(
-  frequencies: Float32Array | PitchTuningRequest,
-  resolution = 0.01,
-  binsPerOctave = 12,
-): number {
-  if (!(frequencies instanceof Float32Array)) {
-    requestObject('pitchTuning', frequencies, 'frequencies');
-    const r = frequencies;
-    return pitchTuning(r.frequencies, r.resolution, r.binsPerOctave);
-  }
-  return requireModule().pitchTuning(frequencies, resolution, binsPerOctave);
+export function pitchTuning(...args: [request: PitchTuningRequest]): number {
+  const r = requestOnly<PitchTuningRequest>('pitchTuning', args);
+  const binsPerOctave = r.binsPerOctave ?? 12;
+  const bins = requireModule().pitchTuning(r.frequencies, r.resolution ?? 0.01, binsPerOctave);
+  return tuningCentsFromNative((bins * 12) / binsPerOctave);
 }
 
 /**
- * Reference frequency of an A4 raised by `tuning` fractions of a semitone:
- * `a4 * 2 ** (tuning / 12)`. The converter from the analysis unit (`tuning`, in
- * `[-0.5, 0.5)` for the analysis options) to the Hz a pitch reference is stated
- * in, such as `referenceHz` and the streaming `tuningRefHz`.
+ * Reference frequency of an A4 raised by `tuningCents`: `a4Hz * 2 ** (tuningCents / 1200)`.
+ * The converter from the analysis unit (`tuningCents`) to the Hz a pitch
+ * reference is stated in, such as `referenceHz` and the streaming `referenceHz`.
  *
- * @param tuning - Finite fraction of a semitone.
- * @param a4 - Finite positive concert pitch the tuning is measured from. Default 440.
- * @throws `RangeError` for a non-finite `tuning`, `SonareError` for a non-positive `a4`.
+ * @param tuningCents - Finite offset in cents.
+ * @param a4Hz - Finite positive concert pitch the tuning is measured from. Default 440.
+ * @throws `RangeError` for a non-finite `tuningCents`, `SonareError` for a non-positive `a4Hz`.
  */
-export function tuningToReferenceHz(tuning: number, a4 = 440): number {
-  return requireModule().tuningToReferenceHz(tuning, a4);
+export function tuningToReferenceHz(tuningCents: number, a4Hz = 440): number {
+  return requireModule().tuningToReferenceHz(tuningCentsToNative(tuningCents), a4Hz);
 }
 
 /**
- * Tuning, in fractions of a semitone, of a recording whose A4 sits at `hz`:
- * `12 * log2(hz / a4)`. Inverse of {@link tuningToReferenceHz}.
+ * Tuning, in cents, of a recording whose A4 sits at `referenceHz`:
+ * `1200 * log2(referenceHz / a4Hz)`. Inverse of {@link tuningToReferenceHz}.
  *
- * @param hz - Finite positive reference frequency.
- * @param a4 - Finite positive concert pitch. Default 440.
- * @throws `RangeError` for a non-finite `hz` or `a4`, `SonareError` for a non-positive one.
+ * @param referenceHz - Finite positive reference frequency.
+ * @param a4Hz - Finite positive concert pitch. Default 440.
+ * @throws `RangeError` for a non-finite `referenceHz` or `a4Hz`, `SonareError` for a non-positive one.
  */
-export function referenceHzToTuning(hz: number, a4 = 440): number {
-  return requireModule().referenceHzToTuning(hz, a4);
+export function referenceHzToTuning(referenceHz: number, a4Hz = 440): number {
+  return tuningCentsFromNative(requireModule().referenceHzToTuning(referenceHz, a4Hz));
 }
 
 /**
  * Estimate the tuning offset of an audio signal (librosa.estimate_tuning).
  *
- * A librosa mirror: the offset is a fraction of a bin of `binsPerOctave`, which
- * is the semitone fraction the analysis options take only at 12 (otherwise
- * multiply by `12 / binsPerOctave`). Analysis measures the semitone fraction
- * itself with `tuning: 'auto'`; {@link tuningToReferenceHz} converts it to Hz.
+ * @returns The offset in cents of a semitone, in `[-50, 50)` at 12 bins per octave.
+ *   Analysis measures the same quantity itself with `tuningCents: 'auto'`, and
+ *   {@link tuningToReferenceHz} converts it to Hz.
  */
 export function estimateTuning(request: EstimateTuningRequest): number;
 export function estimateTuning(
   samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  resolution?: number,
-  binsPerOctave?: number,
+  sampleRate: number,
+  options?: SampleOptions<EstimateTuningRequest>,
 ): number;
-export function estimateTuning(
-  samples: Float32Array | EstimateTuningRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  resolution = 0.01,
-  binsPerOctave = 12,
-): number {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('estimateTuning', samples);
-    const r = samples;
-    return estimateTuning(
-      r.samples,
-      r.sampleRate,
-      r.nFft,
-      r.hopLength,
-      r.resolution,
-      r.binsPerOctave,
-    );
-  }
-  assertAudioInput('estimateTuning', samples, sampleRate);
-  return requireModule().estimateTuning(
-    samples,
-    sampleRate,
-    nFft,
-    hopLength,
-    resolution,
+export function estimateTuning(...args: unknown[]): number {
+  const r = sampleOneShot<EstimateTuningRequest>('estimateTuning', args);
+  assertAudioInput('estimateTuning', r.samples, r.sampleRate, r);
+  const binsPerOctave = r.binsPerOctave ?? 12;
+  const bins = requireModule().estimateTuning(
+    r.samples,
+    r.sampleRate,
+    r.nFft ?? 2048,
+    r.hopLength ?? 512,
+    r.resolution ?? 0.01,
     binsPerOctave,
   );
+  return tuningCentsFromNative((bins * 12) / binsPerOctave);
 }

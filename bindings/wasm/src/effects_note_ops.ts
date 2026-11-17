@@ -9,8 +9,10 @@ import {
   resolveEntryTimes,
   toVoicedFloat32,
 } from './internal/effects_common.js';
+import { notesFromNative, notesToNative } from './internal/note_native_keys.js';
 import { getSonareModule } from './module_state.js';
 import type {
+  AssignNoteTargetsResult,
   NoteExtractorOptions,
   NoteMoveOptions,
   NoteObject,
@@ -18,7 +20,6 @@ import type {
   NoteSetEntry,
   NoteStretchOptions,
   NoteTarget,
-  NoteTargetAssignResult,
   NoteTargetUnmatchedPolicy,
   PitchDecompositionResult,
   VoicedFlags,
@@ -371,7 +372,7 @@ export function noteMove(
  *   minNoteMs: 40,
  * });
  * // Lift the second note by a semitone and mute the third.
- * notes[1].edit.pitchShiftSemitones = 1;
+ * notes[1].edit.pitchSemitones = 1;
  * notes[2].edit.muted = true;
  * const edited = renderNotes({ samples, sampleRate, notes });
  * ```
@@ -379,14 +380,16 @@ export function noteMove(
 export function extractNotes(request: ExtractNotesRequest): NoteObject[] {
   requestObject('extractNotes', request, 'request', true);
   const voicedF32 = assertNoteTrack('extractNotes', request);
-  return requireModule().extractNotes(
-    request.samples,
-    request.sampleRate,
-    request.f0Hz,
-    request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
-    voicedF32,
-    request.frameRate,
-    request,
+  return notesFromNative(
+    requireModule().extractNotes(
+      request.samples,
+      request.sampleRate,
+      request.f0Hz,
+      request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
+      voicedF32,
+      request.frameRate,
+      request,
+    ),
   );
 }
 
@@ -471,7 +474,12 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
   }
   const options = { ...withoutVoiced, voiced };
   const notes = resolveEntryTimes('renderNotes', request.notes, 'notes', request.sampleRate, true);
-  return requireModule().renderNotes(request.samples, request.sampleRate, notes, options);
+  return requireModule().renderNotes(
+    request.samples,
+    request.sampleRate,
+    notesToNative(notes),
+    options,
+  );
 }
 
 /**
@@ -490,7 +498,7 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
  * explicitly suppressed. A false flag suppresses that frame and a true flag
  * cannot make an unusable F0 valid.
  *
- * A note with no usable pitch is reported as a zero `centreHz` and two empty
+ * A note with no usable pitch is reported as a zero `centerHz` and two empty
  * curves rather than as an error — that is a measurement which came up empty,
  * not a bad argument.
  *
@@ -506,7 +514,7 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
  * @example
  * ```ts
  * const note = notes[0];
- * const { centreHz, driftCents, vibratoCents } = decomposeNotePitch({
+ * const { centerHz, driftCents, vibratoCents } = decomposeNotePitch({
  *   f0Hz: f0Hz.subarray(note.frameStart, note.frameEnd),
  *   frameRate: sampleRate / 512,
  *   medianHz: note.medianHz,
@@ -522,13 +530,15 @@ export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDec
   const voiced =
     request.voiced == null ? undefined : toVoicedFloat32('decomposeNotePitch', request.voiced);
   assertPitchTrackLengths('decomposeNotePitch', request.f0Hz, request.voiced);
-  return requireModule().decomposeNotePitch(
+  // Native reports the steady pitch as `centreHz`.
+  const { centreHz, ...curves } = requireModule().decomposeNotePitch(
     request.f0Hz,
     voiced,
     request.frameRate,
     request.medianHz,
     request.vibratoCutoffHz ?? 0,
-  );
+  ) as unknown as { centreHz: number };
+  return { centerHz: centreHz, ...curves } as PitchDecompositionResult;
 }
 
 /**
@@ -585,17 +595,19 @@ export function splitNote(request: SplitNoteRequest): NoteObject[] {
   const notes = Array.isArray(request.notes)
     ? resolveEntryTimes('splitNote', request.notes, 'notes', request.sampleRate, false)
     : request.notes;
-  return requireModule().splitNote(
-    request.samples,
-    request.sampleRate,
-    request.f0Hz,
-    request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
-    voicedF32,
-    request.frameRate,
-    notes,
-    request.index,
-    request.frame,
-    request,
+  return notesFromNative(
+    requireModule().splitNote(
+      request.samples,
+      request.sampleRate,
+      request.f0Hz,
+      request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
+      voicedF32,
+      request.frameRate,
+      notesToNative(notes),
+      request.index,
+      request.frame,
+      request,
+    ),
   );
 }
 
@@ -644,17 +656,19 @@ export function mergeNotes(request: MergeNotesRequest): NoteObject[] {
   const notes = Array.isArray(request.notes)
     ? resolveEntryTimes('mergeNotes', request.notes, 'notes', request.sampleRate, false)
     : request.notes;
-  return requireModule().mergeNotes(
-    request.samples,
-    request.sampleRate,
-    request.f0Hz,
-    request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
-    voicedF32,
-    request.frameRate,
-    notes,
-    request.first,
-    request.last,
-    request,
+  return notesFromNative(
+    requireModule().mergeNotes(
+      request.samples,
+      request.sampleRate,
+      request.f0Hz,
+      request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
+      voicedF32,
+      request.frameRate,
+      notesToNative(notes),
+      request.first,
+      request.last,
+      request,
+    ),
   );
 }
 
@@ -700,7 +714,7 @@ export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarg
 }
 
 /**
- * Write each note's `edit.pitchShiftSemitones` from the reference target it
+ * Write each note's `edit.pitchSemitones` from the reference target it
  * overlaps, which is what makes a take follow a written melody instead of a
  * single stated interval.
  *
@@ -718,7 +732,7 @@ export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarg
  * exist; the policy governs notes that have a pitch and no target, which is a
  * different thing from having no pitch.
  *
- * The notes handed in are not modified. Only `edit.pitchShiftSemitones` and
+ * The notes handed in are not modified. Only `edit.pitchSemitones` and
  * `edit.muted` are written on the returned copies; every other field of a note —
  * its spans, its metrics, its amplitude curve and its other edits — comes back
  * exactly as it went in.
@@ -744,12 +758,13 @@ export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarg
  * const corrected = renderNotes({ samples, sampleRate, notes: retuned });
  * ```
  */
-export function assignNoteTargets(request: AssignNoteTargetsRequest): NoteTargetAssignResult {
+export function assignNoteTargets(request: AssignNoteTargetsRequest): AssignNoteTargetsResult {
   requestObject('assignNoteTargets', request, 'request', true);
-  return requireModule().assignNoteTargets(
-    request.notes,
+  const result = requireModule().assignNoteTargets(
+    notesToNative(request.notes),
     request.sampleRate,
     request.targets,
     request,
   );
+  return { ...result, notes: notesFromNative(result.notes) };
 }

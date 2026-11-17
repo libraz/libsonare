@@ -1,14 +1,12 @@
-import { keyModeOrdinal, pitchClassOrdinal } from './analysis_helpers.js';
-import { resolveEnumOrdinal } from './codes.js';
+import { chordQualityOrdinal, keyModeOrdinal, pitchClassOrdinal } from './analysis_helpers.js';
 import { projectModule } from './project_internal.js';
 import type { Chord, KeyMode } from './public_types.js';
-import { ChordQuality } from './public_types.js';
 
 /**
  * The annotation fields of one chord, named as {@link ProjectChordSymbol} names
  * them so the result spreads into an {@link Project.annotateChords} entry.
  */
-export interface ChordAnnotationFields {
+export interface ChordSymbolFields {
   /** Root pitch class 0..11 (C=0); kept as given, including for an unknown chord. */
   rootPc: number;
   /** Annotation chord quality 0..7, not the analysis quality. */
@@ -29,7 +27,7 @@ export interface ChordAnnotationFields {
  * caller places the result on the timeline with `startPpq` / `endPpq`.
  *
  * @param chord - An analysis chord; `root`, `bass` and `quality` are read, as a
- *   pitch class and chord quality name or ordinal
+ *   pitch class 0-11 and a chord quality token
  * @returns `{ rootPc, quality, extensions, slashBassPc }`
  * @throws {TypeError} when `chord` is not an object
  * @throws {RangeError} naming `root`, `bass` or `quality` for an unrecognised value
@@ -44,13 +42,13 @@ export interface ChordAnnotationFields {
  */
 export function chordSymbolFromAnalysis(
   chord: Pick<Chord, 'root' | 'bass' | 'quality'>,
-): ChordAnnotationFields {
+): ChordSymbolFields {
   if (typeof chord !== 'object' || chord === null || Array.isArray(chord)) {
     throw new TypeError('chordSymbolFromAnalysis: chord must be an object');
   }
   const root = pitchClassOrdinal(chord.root, 'root');
   const bass = pitchClassOrdinal(chord.bass, 'bass');
-  const quality = resolveEnumOrdinal(chord.quality, ChordQuality, 'quality');
+  const quality = chordQualityOrdinal(chord.quality, 'quality');
   return projectModule().chordSymbolFromAnalysis(root, quality, bass);
 }
 
@@ -61,11 +59,11 @@ export function chordSymbolFromAnalysis(
  * The annotation numbering reserves 0 for an unknown mode, so every analysis mode
  * lands one ordinal higher.
  *
- * @param mode - A mode name (`'major'`, `'minor'`, `'dorian'`, ...) or ordinal
+ * @param mode - A mode name (`'major'`, `'minor'`, `'dorian'`, ...)
  * @returns The annotation mode ordinal, 1..7
- * @throws {TypeError} when `mode` is neither a string nor a number
+ * @throws {TypeError} when `mode` is not a string
  * @throws {RangeError} naming `mode` for an unrecognised value
  */
-export function keyModeFromAnalysis(mode: KeyMode | number): number {
+export function keyModeFromAnalysis(mode: KeyMode): number {
   return projectModule().keyModeFromAnalysis(keyModeOrdinal(mode, 'mode'));
 }

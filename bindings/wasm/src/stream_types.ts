@@ -1,21 +1,18 @@
-import type { ChordQuality, PitchClass } from './public_types.js';
+import type { ChordQuality, Key, Matrix2D, PitchClass, WindowType } from './public_types.js';
 
-/**
- * A detected chord change in the progression
- */
-export interface ChordChange {
+/** A detected chord change in the progression. */
+export interface StreamChordChange {
   root: PitchClass;
   quality: ChordQuality;
-  /** Chord symbol (e.g. `C`, `C#m`, `N.C.`), spelled as the batch analysis spells it. */
+  /** Chord symbol (e.g. `C`, `C#m`), spelled as the batch analysis spells it. */
   name: string;
-  startTime: number;
+  /** Start of the chord in seconds. */
+  startSec: number;
   confidence: number;
 }
 
-/**
- * A chord detected at bar boundary (beat-synchronized)
- */
-export interface BarChord {
+/** A chord detected at a bar boundary (beat-synchronized). */
+export interface StreamBarChord {
   /**
    * Bar number, not the index of this entry in the array: bars with no
    * confident chord are not recorded and the oldest entries are dropped at the
@@ -28,58 +25,51 @@ export interface BarChord {
   /** Chord symbol, spelled as the batch analysis spells it. */
   name: string;
   /**
-   * Start of the bar, on the same timeline as `StreamFrame.timestamp`
-   * (including a `sampleOffset` anchor). Consecutive bars are `barDuration`
-   * apart rather than snapped to the analysis frame grid. Unused in
-   * `votedPattern`.
+   * Start of the bar in seconds, on the same timeline as
+   * `StreamFrames.timestampsSec` (including a `startSample` anchor).
+   * Consecutive bars are `barDurationSec` apart rather than snapped to the
+   * analysis frame grid. Unused in `votedPattern`.
    */
-  startTime: number;
+  startSec: number;
   confidence: number;
 }
 
-/**
- * Pattern score for known chord progressions
- */
-export interface PatternScore {
+/** Pattern score for known chord progressions. */
+export interface StreamPatternScore {
   name: string;
   score: number;
 }
 
 /**
- * Progressive estimation results for BPM, Key, and Chord
+ * Progressive estimation results for BPM, key and chord. A field is absent
+ * until the analyzer has an estimate for it.
  */
-export interface ProgressiveEstimate {
-  bpm: number;
-  bpmConfidence: number;
+export interface StreamProgressiveEstimate {
+  /** Tempo in BPM. */
+  bpm?: number;
+  bpmConfidence?: number;
   /**
    * Tempo candidates the most recent BPM estimate chose from; 0 until an
    * estimate has run. Same quantity as the batch analysis result's field of the
    * same name.
    */
   bpmCandidateCount: number;
-  key: PitchClass;
-  keyMinor: boolean;
-  keyConfidence: number;
-  /** Key name (e.g. `A minor`); `null` while no key is estimated. */
-  keyName: string | null;
-  /** Short key name (e.g. `Am`); `null` while no key is estimated. */
-  keyShortName: string | null;
-  chordRoot: PitchClass;
-  chordQuality: ChordQuality;
-  /** Current chord symbol; `N.C.` while no chord is detected. */
-  chordName: string;
-  chordConfidence: number;
-  chordStartTime: number;
-  chordProgression: ChordChange[];
-  barChordProgression: BarChord[];
-  currentBar: number;
-  barDuration: number;
-  votedPattern: BarChord[];
+  key?: Key;
+  /** Current chord. */
+  chord?: StreamChordChange;
+  chordProgression: StreamChordChange[];
+  barChordProgression: StreamBarChord[];
+  /** Index of the bar being played; absent until a bar is detected. */
+  currentBar?: number;
+  /** Bar length in seconds; absent until a bar is detected. */
+  barDurationSec?: number;
+  votedPattern: StreamBarChord[];
   patternLength: number;
-  detectedPatternName: string;
-  detectedPatternScore: number;
-  allPatternScores: PatternScore[];
-  accumulatedSeconds: number;
+  detectedPatternName?: string;
+  detectedPatternScore?: number;
+  allPatternScores: StreamPatternScore[];
+  /** Seconds of audio the estimates have accumulated. */
+  accumulatedSec: number;
   usedFrames: number;
   /**
    * True when the key or BPM was re-estimated since the previous stats
@@ -89,13 +79,12 @@ export interface ProgressiveEstimate {
   updated: boolean;
 }
 
-/**
- * Statistics and current state of the analyzer
- */
-export interface AnalyzerStats {
+/** Statistics and current state of the analyzer. */
+export interface StreamStats {
   totalFrames: number;
   totalSamples: number;
-  durationSeconds: number;
+  /** Duration of the audio processed so far, in seconds. */
+  durationSec: number;
   pendingFrames: number;
   droppedOutputFrames: number;
   droppedChordProgressionEntries: number;
@@ -113,35 +102,34 @@ export interface AnalyzerStats {
    * describes a segment rather than the analyzer.
    */
   nonFiniteDiscardBlocks: number;
-  estimate: ProgressiveEstimate;
+  estimate: StreamProgressiveEstimate;
 }
 
 /**
- * Frame buffer with analysis results
+ * Frames read from the analyzer. A feature array is absent when its feature is
+ * not computed; the chord arrays follow `computeChroma`.
  */
-export interface FrameBuffer {
+export interface StreamFrames {
   nFrames: number;
-  /** Number of mel bands; flat `mel` is `[nFrames * nMels]` row-major. */
-  nMels: number;
-  /** Chroma stride: 12 when enabled, otherwise 0. */
-  nChroma: number;
-  /** MEL=1, CHROMA=2, ONSET=4, SPECTRAL=8. */
-  featureFlags: number;
-  timestamps: Float32Array;
+  /** Per-frame time in seconds. */
+  timestampsSec: Float32Array;
   /**
-   * Mel spectrogram in LINEAR power (not dB) — the raw per-frame mel energies.
-   * The quantized read paths (`readFramesU8` / `readFramesI16`) convert to dB
-   * before packing, so their `mel` is dB-scaled; this float buffer is not.
+   * Mel spectrogram in LINEAR power (not dB), the raw per-frame mel energies:
+   * rows are mel bands, cols are frames. The quantized read paths
+   * (`readFramesU8` / `readFramesI16`) convert to dB before packing.
    */
-  mel: Float32Array;
-  chroma: Float32Array;
-  onsetStrength: Float32Array;
-  rmsEnergy: Float32Array;
-  spectralCentroid: Float32Array;
-  spectralFlatness: Float32Array;
-  chordRoot: Int32Array;
-  chordQuality: Int32Array;
-  chordConfidence: Float32Array;
+  mel?: Matrix2D;
+  /** Chromagram: rows are chroma bins, cols are frames. */
+  chroma?: Matrix2D;
+  onsetStrength?: Float32Array;
+  rmsEnergy?: Float32Array;
+  spectralCentroid?: Float32Array;
+  spectralFlatness?: Float32Array;
+  /** Pitch class of each frame's chord, or -1 where none was detected. */
+  chordRoot?: Int32Array;
+  /** Chord quality ordinal per frame; `CHORD_QUALITIES[ordinal]` is its token. */
+  chordQuality?: Int32Array;
+  chordConfidence?: Float32Array;
 }
 
 /**
@@ -163,47 +151,50 @@ export interface StreamQuantizeConfig {
   centroidMax?: number;
 }
 
+/** Frames quantized to uint8; a feature array is absent when not computed. */
 export interface StreamFramesU8 {
   nFrames: number;
   nMels: number;
   nChroma: number;
-  /** MEL=1, CHROMA=2, ONSET=4, SPECTRAL=8. */
-  featureFlags: number;
-  timestamps: Float32Array;
-  /** Row-major `[nFrames * nMels]` mel in dB, quantized over `[melDbMin, melDbMax]`. */
-  mel: Uint8Array;
-  chroma: Uint8Array;
-  onsetStrength: Uint8Array;
-  rmsEnergy: Uint8Array;
-  spectralCentroid: Uint8Array;
-  spectralFlatness: Uint8Array;
+  /** Per-frame time in seconds. */
+  timestampsSec: Float32Array;
+  /** Band-major `[nMels x nFrames]` mel in dB, quantized over `[melDbMin, melDbMax]`. */
+  mel?: Uint8Array;
+  /** Band-major `[nChroma x nFrames]` chroma. */
+  chroma?: Uint8Array;
+  onsetStrength?: Uint8Array;
+  rmsEnergy?: Uint8Array;
+  spectralCentroid?: Uint8Array;
+  spectralFlatness?: Uint8Array;
 }
 
+/** Frames quantized to int16; a feature array is absent when not computed. */
 export interface StreamFramesI16 {
   nFrames: number;
   nMels: number;
   nChroma: number;
-  /** MEL=1, CHROMA=2, ONSET=4, SPECTRAL=8. */
-  featureFlags: number;
-  timestamps: Float32Array;
-  /** Row-major `[nFrames * nMels]` mel in dB, quantized over `[melDbMin, melDbMax]`. */
-  mel: Int16Array;
-  chroma: Int16Array;
-  onsetStrength: Int16Array;
-  rmsEnergy: Int16Array;
-  spectralCentroid: Int16Array;
-  spectralFlatness: Int16Array;
+  /** Per-frame time in seconds. */
+  timestampsSec: Float32Array;
+  /** Band-major `[nMels x nFrames]` mel in dB, quantized over `[melDbMin, melDbMax]`. */
+  mel?: Int16Array;
+  /** Band-major `[nChroma x nFrames]` chroma. */
+  chroma?: Int16Array;
+  onsetStrength?: Int16Array;
+  rmsEnergy?: Int16Array;
+  spectralCentroid?: Int16Array;
+  spectralFlatness?: Int16Array;
 }
 
 /**
- * Configuration for StreamAnalyzer
+ * Configuration for StreamAnalyzer.
  *
- * Omitted values are read from the native StreamConfig defaults via
- * streamAnalyzerConfigDefault(), keeping the WASM wrapper in sync with core.
+ * Omitted values come from `streamAnalyzerConfigDefault()`, which reads the
+ * native defaults. Integer fields must be integers; an out-of-domain value is a
+ * RangeError.
  */
 export interface StreamConfig {
-  /** Sample rate in Hz. Optional for parity with the Node/Python bindings. */
-  sampleRate?: number;
+  /** Sample rate in Hz. Required. */
+  sampleRate: number;
   /**
    * Analysis window as a duration, in samples at 44100 Hz. Below that rate the
    * window is rescaled to the analysis rate, never shorter than `hopLength`. The
@@ -213,13 +204,12 @@ export interface StreamConfig {
   nFft?: number;
   hopLength?: number;
   nMels?: number;
-  fmin?: number;
-  fmax?: number;
-  /** A4 tuning reference in Hz. Defaults to 440; must be within 220..880, the
-   *  same range `setTuningRefHz` accepts live. */
-  tuningRefHz?: number;
-  /** Unsupported: no read path surfaces per-frame magnitude spectra. */
-  computeMagnitude?: boolean;
+  /** Lower edge of the mel band in Hz. */
+  fminHz?: number;
+  /** Upper edge of the mel band in Hz. Absent means Nyquist; an explicit 0 is refused. */
+  fmaxHz?: number;
+  /** A4 reference in Hz. Defaults to 440; must be within 220..880, the same range `setReferenceHz` accepts. */
+  referenceHz?: number;
   computeMel?: boolean;
   computeChroma?: boolean;
   computeOnset?: boolean;
@@ -232,9 +222,5 @@ export interface StreamConfig {
   maxProgressionEntries?: number;
   keyUpdateIntervalSec?: number;
   bpmUpdateIntervalSec?: number;
-  window?: number;
-  /** @deprecated Must be 0 (Float32). Use readFramesU8/readFramesI16 explicitly. */
-  outputFormat?: number;
+  window?: WindowType;
 }
-
-export type StreamConfigDefaults = Required<StreamConfig>;

@@ -71,7 +71,7 @@ describe('detectBoundaries', () => {
     expect(result.noveltyPeak).toBeGreaterThan(0);
 
     const tolerance = (2 * HOP) / SAMPLE_RATE;
-    const times = result.boundaries.map((b) => b.time);
+    const times = result.boundaries.map((b) => b.timeSec);
     for (const expected of [SECTION_SEC, 2 * SECTION_SEC]) {
       const nearest = times.reduce(
         (best, t) => (Math.abs(t - expected) < Math.abs(best - expected) ? t : best),
@@ -83,7 +83,7 @@ describe('detectBoundaries', () => {
     // `frame` indexes the same grid `time` is measured on, which is what makes
     // it interpretable at all.
     for (const boundary of result.boundaries) {
-      expect(boundary.frame).toBe(Math.round((boundary.time * result.sampleRate) / HOP));
+      expect(boundary.frame).toBe(Math.round((boundary.timeSec * result.sampleRate) / HOP));
       expect(boundary.strength).toBeGreaterThan(0);
     }
   });
@@ -126,7 +126,7 @@ describe('detectBoundaries', () => {
       samples,
       sampleRate: SAMPLE_RATE,
       absoluteThreshold: 0,
-      referenceWindow: 0,
+      referenceWindowSec: 0,
     });
     expect(unwindowed.boundaries.length).not.toBe(windowed.boundaries.length);
     // The default is 60 s, so stating it changes nothing.
@@ -134,7 +134,7 @@ describe('detectBoundaries', () => {
       samples,
       sampleRate: SAMPLE_RATE,
       absoluteThreshold: 0,
-      referenceWindow: 60,
+      referenceWindowSec: 60,
     });
     expect(explicit.boundaries).toEqual(windowed.boundaries);
   });
@@ -180,7 +180,7 @@ describe('detectBoundaries', () => {
       nMfcc: 13,
       nChroma: 12,
       peakDistance: 2.0,
-      referenceWindow: 60,
+      referenceWindowSec: 60,
       useMfcc: true,
       useChroma: true,
     };
@@ -217,17 +217,17 @@ describe('detectBoundaries', () => {
     expect(() =>
       detectBoundaries({ samples, sampleRate: SAMPLE_RATE, threshold: Number.NaN }),
     ).toThrow(RangeError);
-    expect(() => detectBoundaries({ samples, sampleRate: SAMPLE_RATE, peakDistance: -1 })).toThrow(
-      RangeError,
-    );
     expect(() =>
-      detectBoundaries({ samples, sampleRate: SAMPLE_RATE, referenceWindow: -1 }),
+      detectBoundaries({ samples, sampleRate: SAMPLE_RATE, peakDistanceSec: -1 }),
+    ).toThrow(RangeError);
+    expect(() =>
+      detectBoundaries({ samples, sampleRate: SAMPLE_RATE, referenceWindowSec: -1 }),
     ).toThrow(RangeError);
     expect(() =>
       detectBoundaries({
         samples,
         sampleRate: SAMPLE_RATE,
-        referenceWindow: '60' as unknown as number,
+        referenceWindowSec: '60' as unknown as number,
       }),
     ).toThrow();
   });

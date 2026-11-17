@@ -212,65 +212,131 @@ describe('Sonare WASM Module', () => {
 
   describe('compatibility utilities', () => {
     it('exposes numeric and signal utility functions', () => {
-      expect(framesToSamples(4, 512, 0)).toBe(2048);
-      expect(samplesToFrames(2048, 512, 0)).toBe(4);
+      expect(framesToSamples(4, 512)).toBe(2048);
+      expect(samplesToFrames(2048, 512)).toBe(4);
 
-      const powerDb = powerToDb(new Float32Array([1, 0.01]), 1, 1e-10, 80);
+      const powerDb = powerToDb({
+        values: new Float32Array([1, 0.01]),
+        ref: 1,
+        amin: 1e-10,
+        topDb: 80,
+      });
       expect(powerDb[0]).toBeCloseTo(0, 5);
       expect(powerDb[1]).toBeCloseTo(-20, 4);
-      expect(dbToPower(powerDb, 1)[1]).toBeCloseTo(0.01, 5);
+      expect(dbToPower({ values: powerDb, ref: 1 })[1]).toBeCloseTo(0.01, 5);
 
-      const ampDb = amplitudeToDb(new Float32Array([1, 0.5]), 1, 1e-5, 80);
+      const ampDb = amplitudeToDb({
+        values: new Float32Array([1, 0.5]),
+        ref: 1,
+        amin: 1e-5,
+        topDb: 80,
+      });
       expect(ampDb[0]).toBeCloseTo(0, 5);
-      expect(dbToAmplitude(ampDb, 1)[1]).toBeCloseTo(0.5, 5);
+      expect(dbToAmplitude({ values: ampDb, ref: 1 })[1]).toBeCloseTo(0.5, 5);
 
-      const emphasized = preemphasis(new Float32Array([1, 1, 1]), 0.5, 0);
+      const emphasized = preemphasis(new Float32Array([1, 1, 1]), 22050, { coef: 0.5, zi: 0 });
       expect(Array.from(emphasized)).toEqual([1, 0.5, 0.5]);
-      expect(deemphasis(emphasized, 0.5, 0)[2]).toBeCloseTo(1, 5);
+      expect(deemphasis(emphasized, 22050, { coef: 0.5, zi: 0 })[2]).toBeCloseTo(1, 5);
 
-      const framed = frameSignal(new Float32Array([1, 2, 3, 4]), 2, 1);
-      expect(framed.nFrames).toBe(3);
-      expect(Array.from(framed.frames)).toEqual([1, 2, 2, 3, 3, 4]);
-      expect(Array.from(fixLength(new Float32Array([1, 2]), 4, -1))).toEqual([1, 2, -1, -1]);
-      expect(Array.from(fixFrames(new Int32Array([2, 4]), 0, 5, true))).toEqual([0, 2, 4, 5]);
+      const framed = frameSignal(new Float32Array([1, 2, 3, 4]), 22050, {
+        frameLength: 2,
+        hopLength: 1,
+      });
+      expect(framed.cols).toBe(3);
+      expect(framed.rows).toBe(2);
+      expect(Array.from(framed.data)).toEqual([1, 2, 3, 2, 3, 4]);
+      expect(
+        Array.from(fixLength({ values: new Float32Array([1, 2]), targetSize: 4, padValue: -1 })),
+      ).toEqual([1, 2, -1, -1]);
+      expect(
+        Array.from(fixFrames({ frames: new Int32Array([2, 4]), xMin: 0, xMax: 5, pad: true })),
+      ).toEqual([0, 2, 4, 5]);
       // Matches librosa.util.peak_pick exactly (index 0 is a peak under its
       // first-frame rule: x[0] >= max/mean of the leading window).
-      expect(Array.from(peakPick(new Float32Array([0, 1, 0, 2, 0]), 1, 1, 1, 1, 0, 0))).toEqual([
-        0, 1, 3,
-      ]);
+      expect(
+        Array.from(
+          peakPick({
+            values: new Float32Array([0, 1, 0, 2, 0]),
+            preMax: 1,
+            postMax: 1,
+            preAvg: 1,
+            postAvg: 1,
+            delta: 0,
+            wait: 0,
+          }),
+        ),
+      ).toEqual([0, 1, 3]);
 
-      const normalized = vectorNormalize(new Float32Array([3, 4]), 2, 1e-12);
+      const normalized = vectorNormalize({
+        values: new Float32Array([3, 4]),
+        norm: 'l2',
+        threshold: 1e-12,
+      });
       expect(normalized[0]).toBeCloseTo(0.6, 5);
       expect(normalized[1]).toBeCloseTo(0.8, 5);
     });
 
     it('exposes silence and rhythm utility functions', () => {
       const samples = new Float32Array([0, 0, 1, 1, 0, 0]);
-      const trimmed = trimSilence(samples, 20, 2, 1);
+      const trimmed = trimSilence(samples, 22050, { topDb: 20, frameLength: 2, hopLength: 1 });
       expect(trimmed.audio.length).toBeGreaterThan(0);
       expect(trimmed.endSample).toBeGreaterThan(trimmed.startSample);
-      expect(splitSilence(samples, 20, 2, 1)).toBeInstanceOf(Int32Array);
+      expect(
+        splitSilence(samples, 22050, { topDb: 20, frameLength: 2, hopLength: 1 }),
+      ).toBeInstanceOf(Int32Array);
 
-      const pcenValues = pcen(new Float32Array([1, 2, 3, 4]), 2, 2);
-      expect(pcenValues).toBeInstanceOf(Float32Array);
-      expect(pcenValues.length).toBe(4);
+      const pcenValues = pcen({
+        values: { data: new Float32Array([1, 2, 3, 4]), rows: 2, cols: 2 },
+      });
+      expect(pcenValues.data).toBeInstanceOf(Float32Array);
+      expect(pcenValues.data.length).toBe(4);
 
       const chromaValues = new Float32Array(12 * 2);
       chromaValues[0] = 1;
       chromaValues[12] = 1;
-      const tonnetzValues = tonnetz(chromaValues, 12, 2);
-      expect(tonnetzValues).toBeInstanceOf(Float32Array);
-      expect(tonnetzValues.length).toBe(12);
+      const tonnetzValues = tonnetz({ chromagram: { data: chromaValues, rows: 12, cols: 2 } });
+      expect(tonnetzValues.data).toBeInstanceOf(Float32Array);
+      expect(tonnetzValues.rows).toBe(6);
+      expect(tonnetzValues.cols).toBe(2);
+      expect(tonnetzValues.data.length).toBe(12);
 
       const onset = new Float32Array([0, 1, 0, 1, 0, 1, 0, 1]);
-      const temp = tempogram(onset, 22050, 512, 4);
+      const temp = tempogram({
+        onsetEnvelope: onset,
+        sampleRate: 22050,
+        hopLength: 512,
+        winLength: 4,
+      });
       expect(temp.data).toBeInstanceOf(Float32Array);
-      expect(temp.winLength).toBe(4);
-      const cosine = tempogram(onset, 22050, 512, 4, 'cosine');
+      expect(temp.rows).toBe(4);
+      const cosine = tempogram({
+        onsetEnvelope: onset,
+        sampleRate: 22050,
+        hopLength: 512,
+        winLength: 4,
+        mode: 'cosine',
+      });
       expect(cosine.data).toBeInstanceOf(Float32Array);
       expect(cosine.data.length).toBe(4 * onset.length);
-      expect(() => tempogram(onset, 22050, 512, 4, 'invalid' as never)).toThrow();
-      expect(plp(onset, 22050, 512, 30, 300, 4)).toBeInstanceOf(Float32Array);
+      expect(() =>
+        tempogram({
+          onsetEnvelope: onset,
+          sampleRate: 22050,
+          hopLength: 512,
+          winLength: 4,
+          mode: 'invalid' as never,
+        }),
+      ).toThrow();
+      expect(
+        plp({
+          onsetEnvelope: onset,
+          sampleRate: 22050,
+          hopLength: 512,
+          bpmMin: 30,
+          bpmMax: 300,
+          winLength: 4,
+        }),
+      ).toBeInstanceOf(Float32Array);
     });
   });
 
@@ -327,8 +393,7 @@ describe('Sonare WASM Module', () => {
       expect(result.bpm).toBeGreaterThan(0);
       expect(result.key).toBeDefined();
       expect(result.timeSignature).toBeDefined();
-      expect(result.beatTimes).toBeInstanceOf(Float32Array);
-      expect(result.beats).toBeDefined();
+      expect(Array.isArray(result.beats)).toBe(true);
       expect(result.chords).toBeDefined();
       expect(result.sections).toBeDefined();
       expect(result.timbre).toBeDefined();

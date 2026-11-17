@@ -76,7 +76,7 @@ export {
   lufs,
   momentaryLufs,
   nnlsChroma,
-  onsetEnvelope,
+  onsetStrength,
   onsetStrengthMulti,
   pseudoCqt,
   shortTermLufs,

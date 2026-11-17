@@ -9,95 +9,162 @@ import { resolveFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type {
   ChromaResult,
+  Matrix2D,
   MelSpectrogramResult,
   MfccResult,
   ReassignedSpectrogramResult,
   StftResult,
 } from './public_types.js';
+import type { WasmChromaResult } from './sonare.js';
 import {
   assertAudioInput,
   assertFiniteScalar,
+  assertFloatFields,
+  assertMatrix2D,
   assertPositiveInteger,
   optionsBag,
   requestObject,
+  requestOnly,
+  sampleOneShot,
+  toMatrix2D,
 } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
 }
 
-/** Canonical request form for basic frame-based spectrogram features. */
-export interface SpectrogramRequest extends GuardedOptions {
+/** The request fields a positional overload carries in its options bag. */
+type SampleOptions<R> = Omit<R, 'samples' | 'sampleRate'>;
+
+/** STFT request. */
+export interface StftRequest extends GuardedOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
+  /** FFT size. Default 2048. */
   nFft?: number;
+  /** Hop in samples. Default 512. */
+  hopLength?: number;
+}
+
+/** STFT-in-dB request. */
+export interface StftDbRequest extends GuardedOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  /** FFT size. Default 2048. */
+  nFft?: number;
+  /** Hop in samples. Default 512. */
+  hopLength?: number;
+}
+
+/** STFT chromagram request. */
+export interface ChromaRequest extends GuardedOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  /** FFT size. Default 2048. */
+  nFft?: number;
+  /** Hop in samples. Default 512. */
   hopLength?: number;
 }
 
 /**
- * Options for the constant-Q chroma variants.
- *
- * Carries no `nFft`: these are built on a constant-Q transform, which resolves
- * frequency through per-bin filter lengths rather than a framed FFT, so there
- * is no FFT size to set. Use `chroma` for the STFT-framed chromagram.
+ * Chroma-energy-normalized request. Carries no `nFft`: it is built on a
+ * constant-Q transform, which has no FFT size to set.
  */
-export interface ChromaSpectrogramRequest extends GuardedOptions {
+export interface ChromaCensRequest extends GuardedOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
+  /** Hop in samples. Default 512. */
   hopLength?: number;
+  /** Chroma bins. Default 12. */
   nChroma?: number;
+  /** Constant-Q bins per octave; a multiple of `nChroma`. Default 36. */
+  binsPerOctave?: number;
+}
+
+/** Constant-Q chromagram request. Carries no `nFft`, like {@link ChromaCensRequest}. */
+export interface ChromaCqtRequest extends GuardedOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  /** Hop in samples. Default 512. */
+  hopLength?: number;
+  /** Chroma bins. Default 12. */
+  nChroma?: number;
+  /** Constant-Q bins per octave; a multiple of `nChroma`. Default 36. */
   binsPerOctave?: number;
 }
 
 /**
- * Options for the bass-focused chroma.
- *
- * Unlike {@link ChromaSpectrogramRequest} this carries no `binsPerOctave`: the
- * bass chroma fixes its bin count and its lowest frequency together, so the
- * resolution is not independently settable through this entry point.
+ * Bass-focused chroma request. Carries no `binsPerOctave`: the bass chroma fixes
+ * its bin count and its lowest frequency together.
  */
-export interface BassChromaSpectrogramRequest extends GuardedOptions {
+export interface BassChromaRequest extends GuardedOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
+  /** Hop in samples. Default 512. */
   hopLength?: number;
+  /** Chroma bins. Default 12. */
   nChroma?: number;
 }
 
-/**
- * Compile-time guard for the two request shapes above. A field the entry point
- * cannot forward is worse than a missing one: it type-checks, runs, and returns
- * the default silently. These aliases fail to compile if either field appears,
- * so adding one has to be a deliberate act.
- */
-type AbsentKey<T extends never> = T;
-
-type _ChromaRequestHasNoFftSize = AbsentKey<Extract<keyof ChromaSpectrogramRequest, 'nFft'>>;
-
-type _BassChromaRequestHasNoResolutionControls = AbsentKey<
-  Extract<keyof BassChromaSpectrogramRequest, 'nFft' | 'binsPerOctave'>
->;
-
-export interface MelSpectrogramRequest extends SpectrogramRequest {
+/** Mel spectrogram request. */
+export interface MelSpectrogramRequest extends GuardedOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  /** FFT size. Default 2048. */
+  nFft?: number;
+  /** Hop in samples. Default 512. */
+  hopLength?: number;
+  /** Mel bands. Default 128. */
   nMels?: number;
-  fmin?: number;
-  fmax?: number;
+  /** Lowest band edge in Hz. Default 0. */
+  fminHz?: number;
+  /** Highest band edge in Hz; absent or 0 is the Nyquist. */
+  fmaxHz?: number;
+  /** Use the HTK mel formula instead of Slaney. Default `false`. */
   htk?: boolean;
 }
 
-export interface MfccRequest extends MelSpectrogramRequest {
+/** MFCC request. */
+export interface MfccRequest extends GuardedOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  /** FFT size. Default 2048. */
+  nFft?: number;
+  /** Hop in samples. Default 512. */
+  hopLength?: number;
+  /** Mel bands. Default 128. */
+  nMels?: number;
+  /** Lowest band edge in Hz. Default 0. */
+  fminHz?: number;
+  /** Highest band edge in Hz; absent or 0 is the Nyquist. */
+  fmaxHz?: number;
+  /** Use the HTK mel formula instead of Slaney. Default `false`. */
+  htk?: boolean;
+  /** Coefficients kept. Default 20. */
   nMfcc?: number;
+  /** Cepstral liftering coefficient; 0 is none. Default 0. */
   lifter?: number;
 }
 
+/** First-order delta request. */
 export interface MelDeltaRequest extends GuardedOptions {
-  features: Float32Array;
-  nFeatures: number;
-  nFrames: number;
+  /** Rows are features, cols are frames. */
+  features: Matrix2D;
+  /** Regression window, odd and at least 3. Default 9. */
   width?: number;
 }
 
-export interface ReassignedSpectrogramRequest extends SpectrogramRequest {
+/** Reassigned spectrogram request. */
+export interface ReassignedSpectrogramRequest extends GuardedOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  /** FFT size. Default 2048. */
+  nFft?: number;
+  /** Hop in samples. Default 512. */
+  hopLength?: number;
+  /** Magnitude floor below which a bin is not reassigned. Default 1e-6. */
   refPower?: number;
+  /** Fill unreassigned bins with NaN instead of their own coordinates. Default `false`. */
   fillNan?: boolean;
 }
 
@@ -185,212 +252,128 @@ export function trim(
 // ============================================================================
 
 /**
- * Compute Short-Time Fourier Transform (STFT).
+ * Short-time Fourier transform.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param nFft - FFT size (default: 2048)
- * @param hopLength - Hop length (default: 512)
- * @returns STFT result with magnitude and power spectrograms
+ * @returns Magnitude and power matrices whose rows are `nFft / 2 + 1` bins and cols are frames.
  */
-export function stft(request: SpectrogramRequest): StftResult;
+export function stft(request: StftRequest): StftResult;
 export function stft(
   samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  options?: GuardedOptions,
+  sampleRate: number,
+  options?: SampleOptions<StftRequest>,
 ): StftResult;
-export function stft(
-  samples: Float32Array | SpectrogramRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  options: GuardedOptions = {},
-): StftResult {
-  optionsBag('stft', options);
-  if (!(samples instanceof Float32Array)) {
-    requestObject('stft', samples);
-    const request = samples;
-    return stft(request.samples, request.sampleRate, request.nFft, request.hopLength, request);
-  }
-  assertAudioInput('stft', samples, sampleRate, options);
-  const fft = resolveFftOptions('stft', nFft, hopLength);
-  return requireModule().stft(samples, sampleRate, fft.nFft, fft.hopLength);
+export function stft(...args: unknown[]): StftResult {
+  const r = sampleOneShot<StftRequest>('stft', args);
+  assertAudioInput('stft', r.samples, r.sampleRate, r);
+  const fft = resolveFftOptions('stft', r.nFft, r.hopLength);
+  const native = requireModule().stft(r.samples, r.sampleRate, fft.nFft, fft.hopLength);
+  return {
+    nFft: native.nFft,
+    hopLength: native.hopLength,
+    sampleRate: native.sampleRate,
+    magnitude: toMatrix2D(native.magnitude, native.nBins, native.nFrames),
+    power: toMatrix2D(native.power, native.nBins, native.nFrames),
+  };
 }
 
 /**
- * Compute STFT and return magnitude in decibels.
+ * STFT magnitude in decibels.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param nFft - FFT size (default: 2048)
- * @param hopLength - Hop length (default: 512)
- * @returns STFT result with dB values
+ * @returns {@link Matrix2D} whose rows are `nFft / 2 + 1` bins and cols are frames.
  */
-export function stftDb(request: SpectrogramRequest): {
-  nBins: number;
-  nFrames: number;
-  db: Float32Array;
-};
+export function stftDb(request: StftDbRequest): Matrix2D;
 export function stftDb(
   samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  options?: GuardedOptions,
-): { nBins: number; nFrames: number; db: Float32Array };
-export function stftDb(
-  samples: Float32Array | SpectrogramRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  options: GuardedOptions = {},
-): { nBins: number; nFrames: number; db: Float32Array } {
-  optionsBag('stftDb', options);
-  if (!(samples instanceof Float32Array)) {
-    requestObject('stftDb', samples);
-    const request = samples;
-    return stftDb(request.samples, request.sampleRate, request.nFft, request.hopLength, request);
-  }
-  assertAudioInput('stftDb', samples, sampleRate, options);
-  const fft = resolveFftOptions('stftDb', nFft, hopLength);
-  return requireModule().stftDb(samples, sampleRate, fft.nFft, fft.hopLength);
+  sampleRate: number,
+  options?: SampleOptions<StftDbRequest>,
+): Matrix2D;
+export function stftDb(...args: unknown[]): Matrix2D {
+  const r = sampleOneShot<StftDbRequest>('stftDb', args);
+  assertAudioInput('stftDb', r.samples, r.sampleRate, r);
+  const fft = resolveFftOptions('stftDb', r.nFft, r.hopLength);
+  const native = requireModule().stftDb(r.samples, r.sampleRate, fft.nFft, fft.hopLength);
+  return toMatrix2D(native.db, native.nBins, native.nFrames);
+}
+
+function chromaResult(native: WasmChromaResult): ChromaResult {
+  return {
+    sampleRate: native.sampleRate,
+    hopLength: native.hopLength,
+    features: toMatrix2D(native.features, native.nChroma, native.nFrames),
+    meanEnergy: native.meanEnergy,
+  };
 }
 
 /**
- * Compute Chroma Energy Normalized Statistics.
+ * Chroma Energy Normalized Statistics.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param hopLength - Hop length (default: 512)
- * @param nChroma - Number of chroma bins (default: 12)
- * @returns Chroma result
+ * @returns Chroma result; `features` rows are chroma bins and cols are frames.
  */
-export function chromaCens(request: ChromaSpectrogramRequest): ChromaResult;
+export function chromaCens(request: ChromaCensRequest): ChromaResult;
 export function chromaCens(
   samples: Float32Array,
-  sampleRate?: number,
-  hopLength?: number,
-  nChroma?: number,
-  binsPerOctave?: number,
-  options?: GuardedOptions,
+  sampleRate: number,
+  options?: SampleOptions<ChromaCensRequest>,
 ): ChromaResult;
-export function chromaCens(
-  samples: Float32Array | ChromaSpectrogramRequest,
-  sampleRate = 22050,
-  hopLength = 512,
-  nChroma = 12,
-  binsPerOctave = 36,
-  options: GuardedOptions = {},
-): ChromaResult {
-  optionsBag('chromaCens', options);
-  if (!(samples instanceof Float32Array)) {
-    requestObject('chromaCens', samples);
-    const request = samples;
-    return chromaCens(
-      request.samples,
-      request.sampleRate,
-      request.hopLength,
-      request.nChroma,
-      request.binsPerOctave,
-      request,
-    );
-  }
-  assertAudioInput('chromaCens', samples, sampleRate, options);
+export function chromaCens(...args: unknown[]): ChromaResult {
+  const r = sampleOneShot<ChromaCensRequest>('chromaCens', args);
+  assertAudioInput('chromaCens', r.samples, r.sampleRate, r);
+  const hopLength = r.hopLength ?? 512;
+  const nChroma = r.nChroma ?? 12;
+  const binsPerOctave = r.binsPerOctave ?? 36;
   validatePositiveIntegers('chromaCens', { hopLength, nChroma, binsPerOctave });
   if (binsPerOctave % nChroma !== 0) {
     throw new RangeError('chromaCens: binsPerOctave must be a multiple of nChroma');
   }
-  return requireModule().chromaCens(samples, sampleRate, hopLength, nChroma, binsPerOctave);
+  return chromaResult(
+    requireModule().chromaCens(r.samples, r.sampleRate, hopLength, nChroma, binsPerOctave),
+  );
 }
 
 /**
- * Compute a constant-Q chromagram (librosa.feature.chroma_cqt).
+ * Constant-Q chromagram (librosa.feature.chroma_cqt).
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param hopLength - Hop length (default: 512)
- * @param nChroma - Number of chroma bins (default: 12)
- * @returns Chroma result
+ * @returns Chroma result; `features` rows are chroma bins and cols are frames.
  */
-export function chromaCqt(request: ChromaSpectrogramRequest): ChromaResult;
+export function chromaCqt(request: ChromaCqtRequest): ChromaResult;
 export function chromaCqt(
   samples: Float32Array,
-  sampleRate?: number,
-  hopLength?: number,
-  nChroma?: number,
-  binsPerOctave?: number,
-  options?: GuardedOptions,
+  sampleRate: number,
+  options?: SampleOptions<ChromaCqtRequest>,
 ): ChromaResult;
-export function chromaCqt(
-  samples: Float32Array | ChromaSpectrogramRequest,
-  sampleRate = 22050,
-  hopLength = 512,
-  nChroma = 12,
-  binsPerOctave = 36,
-  options: GuardedOptions = {},
-): ChromaResult {
-  optionsBag('chromaCqt', options);
-  if (!(samples instanceof Float32Array)) {
-    requestObject('chromaCqt', samples);
-    const request = samples;
-    return chromaCqt(
-      request.samples,
-      request.sampleRate,
-      request.hopLength,
-      request.nChroma,
-      request.binsPerOctave,
-      request,
-    );
-  }
-  assertAudioInput('chromaCqt', samples, sampleRate, options);
+export function chromaCqt(...args: unknown[]): ChromaResult {
+  const r = sampleOneShot<ChromaCqtRequest>('chromaCqt', args);
+  assertAudioInput('chromaCqt', r.samples, r.sampleRate, r);
+  const hopLength = r.hopLength ?? 512;
+  const nChroma = r.nChroma ?? 12;
+  const binsPerOctave = r.binsPerOctave ?? 36;
   validatePositiveIntegers('chromaCqt', { hopLength, nChroma, binsPerOctave });
   if (binsPerOctave % nChroma !== 0) {
     throw new RangeError('chromaCqt: binsPerOctave must be a multiple of nChroma');
   }
-  return requireModule().chromaCqt(samples, sampleRate, hopLength, nChroma, binsPerOctave);
+  return chromaResult(
+    requireModule().chromaCqt(r.samples, r.sampleRate, hopLength, nChroma, binsPerOctave),
+  );
 }
 
 /**
- * Compute low-frequency bass chroma.
+ * Low-frequency bass chroma.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param hopLength - Hop length (default: 512)
- * @param nChroma - Number of chroma bins (default: 12)
- * @returns Chroma result
+ * @returns Chroma result; `features` rows are chroma bins and cols are frames.
  */
-export function bassChroma(request: BassChromaSpectrogramRequest): ChromaResult;
+export function bassChroma(request: BassChromaRequest): ChromaResult;
 export function bassChroma(
   samples: Float32Array,
-  sampleRate?: number,
-  hopLength?: number,
-  nChroma?: number,
-  options?: GuardedOptions,
+  sampleRate: number,
+  options?: SampleOptions<BassChromaRequest>,
 ): ChromaResult;
-export function bassChroma(
-  samples: Float32Array | BassChromaSpectrogramRequest,
-  sampleRate = 22050,
-  hopLength = 512,
-  nChroma = 12,
-  options: GuardedOptions = {},
-): ChromaResult {
-  optionsBag('bassChroma', options);
-  if (!(samples instanceof Float32Array)) {
-    requestObject('bassChroma', samples);
-    const request = samples;
-    return bassChroma(
-      request.samples,
-      request.sampleRate,
-      request.hopLength,
-      request.nChroma,
-      request,
-    );
-  }
-  assertAudioInput('bassChroma', samples, sampleRate, options);
+export function bassChroma(...args: unknown[]): ChromaResult {
+  const r = sampleOneShot<BassChromaRequest>('bassChroma', args);
+  assertAudioInput('bassChroma', r.samples, r.sampleRate, r);
+  const hopLength = r.hopLength ?? 512;
+  const nChroma = r.nChroma ?? 12;
   validatePositiveIntegers('bassChroma', { hopLength, nChroma });
-  return requireModule().bassChroma(samples, sampleRate, hopLength, nChroma);
+  return chromaResult(requireModule().bassChroma(r.samples, r.sampleRate, hopLength, nChroma));
 }
 
 // ============================================================================
@@ -398,232 +381,150 @@ export function bassChroma(
 // ============================================================================
 
 /**
- * Compute Mel spectrogram.
+ * Mel spectrogram.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param nFft - FFT size (default: 2048)
- * @param hopLength - Hop length (default: 512)
- * @param nMels - Number of Mel bands (default: 128)
- * @param fmin - Minimum Mel frequency in Hz (default: 0 = librosa default).
- *   Set with `fmax` to round-trip with `melToStft` / `melToAudio`.
- * @param fmax - Maximum Mel frequency in Hz (default: 0 = sampleRate / 2)
- * @param htk - Use the HTK Mel formula instead of Slaney (default: false)
- * @returns Mel spectrogram result
+ * `fminHz` and `fmaxHz` set together round-trip with `melToStft` / `melToAudio`.
+ *
+ * @returns Mel result; `power` and `db` rows are mel bands and cols are frames.
  */
 export function melSpectrogram(request: MelSpectrogramRequest): MelSpectrogramResult;
 export function melSpectrogram(
   samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  nMels?: number,
-  fmin?: number,
-  fmax?: number,
-  htk?: boolean,
-  options?: GuardedOptions,
+  sampleRate: number,
+  options?: SampleOptions<MelSpectrogramRequest>,
 ): MelSpectrogramResult;
-export function melSpectrogram(
-  samples: Float32Array | MelSpectrogramRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  nMels = 128,
-  fmin = 0,
-  fmax = 0,
-  htk = false,
-  options: GuardedOptions = {},
-): MelSpectrogramResult {
-  optionsBag('melSpectrogram', options);
-  if (!(samples instanceof Float32Array)) {
-    requestObject('melSpectrogram', samples);
-    const request = samples;
-    return melSpectrogram(
-      request.samples,
-      request.sampleRate,
-      request.nFft,
-      request.hopLength,
-      request.nMels,
-      request.fmin,
-      request.fmax,
-      request.htk,
-      request,
-    );
-  }
-  assertAudioInput('melSpectrogram', samples, sampleRate, options);
-  const fft = resolveFftOptions('melSpectrogram', nFft, hopLength);
+export function melSpectrogram(...args: unknown[]): MelSpectrogramResult {
+  const r = sampleOneShot<MelSpectrogramRequest>('melSpectrogram', args);
+  assertAudioInput('melSpectrogram', r.samples, r.sampleRate, r);
+  const fft = resolveFftOptions('melSpectrogram', r.nFft, r.hopLength);
+  const nMels = r.nMels ?? 128;
   validatePositiveIntegers('melSpectrogram', { nMels });
-  return requireModule().melSpectrogram(
-    samples,
-    sampleRate,
+  const fminHz = r.fminHz ?? 0;
+  const fmaxHz = r.fmaxHz ?? 0;
+  assertFloatFields('melSpectrogram', { fminHz, fmaxHz });
+  const native = requireModule().melSpectrogram(
+    r.samples,
+    r.sampleRate,
     fft.nFft,
     fft.hopLength,
     nMels,
-    fmin,
-    fmax,
-    htk,
+    fminHz,
+    fmaxHz,
+    r.htk ?? false,
   );
+  return {
+    sampleRate: native.sampleRate,
+    hopLength: native.hopLength,
+    nFft: native.nFft,
+    fminHz: native.fmin,
+    fmaxHz: native.fmax,
+    htk: native.htk,
+    power: toMatrix2D(native.power, native.nMels, native.nFrames),
+    db: toMatrix2D(native.db, native.nMels, native.nFrames),
+  };
 }
 
 /**
- * Compute MFCC (Mel-Frequency Cepstral Coefficients).
+ * Mel-frequency cepstral coefficients.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param nFft - FFT size (default: 2048)
- * @param hopLength - Hop length (default: 512)
- * @param nMels - Number of Mel bands (default: 128)
- * @param nMfcc - Number of MFCC coefficients (default: 20)
- * @param fmin - Minimum Mel frequency in Hz (default: 0 = librosa default)
- * @param fmax - Maximum Mel frequency in Hz (default: 0 = sampleRate / 2)
- * @param htk - Use the HTK Mel formula instead of Slaney (default: false)
- * @param lifter - Cepstral liftering coefficient (default: 0 = no liftering)
- * @returns MFCC result
+ * @returns MFCC result; `coefficients` rows are coefficients and cols are frames.
  */
 export function mfcc(request: MfccRequest): MfccResult;
 export function mfcc(
   samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  nMels?: number,
-  nMfcc?: number,
-  fmin?: number,
-  fmax?: number,
-  htk?: boolean,
-  lifter?: number,
-  options?: GuardedOptions,
+  sampleRate: number,
+  options?: SampleOptions<MfccRequest>,
 ): MfccResult;
-export function mfcc(
-  samples: Float32Array | MfccRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  nMels = 128,
-  nMfcc = 20,
-  fmin = 0,
-  fmax = 0,
-  htk = false,
-  lifter = 0,
-  options: GuardedOptions = {},
-): MfccResult {
-  optionsBag('mfcc', options);
-  if (!(samples instanceof Float32Array)) {
-    requestObject('mfcc', samples);
-    const request = samples;
-    return mfcc(
-      request.samples,
-      request.sampleRate,
-      request.nFft,
-      request.hopLength,
-      request.nMels,
-      request.nMfcc,
-      request.fmin,
-      request.fmax,
-      request.htk,
-      request.lifter,
-      request,
-    );
-  }
-  assertAudioInput('mfcc', samples, sampleRate, options);
-  const fft = resolveFftOptions('mfcc', nFft, hopLength);
+export function mfcc(...args: unknown[]): MfccResult {
+  const r = sampleOneShot<MfccRequest>('mfcc', args);
+  assertAudioInput('mfcc', r.samples, r.sampleRate, r);
+  const fft = resolveFftOptions('mfcc', r.nFft, r.hopLength);
+  const nMels = r.nMels ?? 128;
+  const nMfcc = r.nMfcc ?? 20;
   validatePositiveIntegers('mfcc', { nMels, nMfcc });
-  return requireModule().mfcc(
-    samples,
-    sampleRate,
+  const fminHz = r.fminHz ?? 0;
+  const fmaxHz = r.fmaxHz ?? 0;
+  assertFloatFields('mfcc', { fminHz, fmaxHz });
+  const native = requireModule().mfcc(
+    r.samples,
+    r.sampleRate,
     fft.nFft,
     fft.hopLength,
     nMels,
     nMfcc,
-    fmin,
-    fmax,
-    htk,
-    lifter,
+    fminHz,
+    fmaxHz,
+    r.htk ?? false,
+    r.lifter ?? 0,
   );
+  return {
+    sampleRate: native.sampleRate,
+    hopLength: native.hopLength,
+    nFft: native.nFft,
+    nMels: native.nMels,
+    fminHz: native.fmin,
+    fmaxHz: native.fmax,
+    htk: native.htk,
+    lifter: native.lifter,
+    coefficients: toMatrix2D(native.coefficients, native.nMfcc, native.nFrames),
+  };
 }
 
-/** First-order regression delta of a row-major feature matrix. */
-export function melDelta(request: MelDeltaRequest): Float32Array;
-export function melDelta(
-  features: Float32Array,
-  nFeatures: number,
-  nFrames: number,
-  width?: number,
-): Float32Array;
-export function melDelta(
-  features: Float32Array | MelDeltaRequest,
-  nFeatures?: number,
-  nFrames?: number,
-  width = 9,
-): Float32Array {
-  const request: MelDeltaRequest =
-    features instanceof Float32Array
-      ? { features, nFeatures: nFeatures ?? 0, nFrames: nFrames ?? 0, width }
-      : requestObject('melDelta', features, 'features');
-  assertPositiveInteger('melDelta', request.nFeatures, 'nFeatures');
-  assertPositiveInteger('melDelta', request.nFrames, 'nFrames');
-  assertPositiveInteger('melDelta', request.width ?? 9, 'width');
-  if ((request.width ?? 9) < 3 || (request.width ?? 9) % 2 === 0) {
+/**
+ * First-order regression delta of a feature matrix.
+ *
+ * @returns {@link Matrix2D} of the input's shape: rows are features, cols are frames.
+ */
+export function melDelta(...args: [request: MelDeltaRequest]): Matrix2D {
+  const r = requestOnly<MelDeltaRequest>('melDelta', args);
+  const features = assertMatrix2D('melDelta', r.features, 'features', r.validate !== false);
+  const width = r.width ?? 9;
+  assertPositiveInteger('melDelta', width, 'width');
+  if (width < 3 || width % 2 === 0) {
     throw new RangeError('melDelta: width must be an odd integer of at least 3');
   }
-  if (request.features.length !== request.nFeatures * request.nFrames) {
-    throw new RangeError('melDelta: feature matrix length must equal nFeatures * nFrames');
-  }
-  return requireModule().melDelta(
-    request.features,
-    request.nFeatures,
-    request.nFrames,
-    request.width ?? 9,
-  );
+  const out = requireModule().melDelta(features.data, features.rows, features.cols, width);
+  return toMatrix2D(out, features.rows, features.cols);
 }
 
-/** Auger-Flandrin reassigned spectrogram (row-major [nBins x nFrames] arrays). */
+/**
+ * Auger-Flandrin reassigned spectrogram.
+ *
+ * @returns Magnitude, time and frequency matrices whose rows are FFT bins and cols are frames.
+ */
 export function reassignedSpectrogram(
   request: ReassignedSpectrogramRequest,
 ): ReassignedSpectrogramResult;
 export function reassignedSpectrogram(
   samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  refPower?: number,
-  fillNan?: boolean,
+  sampleRate: number,
+  options?: SampleOptions<ReassignedSpectrogramRequest>,
 ): ReassignedSpectrogramResult;
-export function reassignedSpectrogram(
-  samples: Float32Array | ReassignedSpectrogramRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  refPower = 1e-6,
-  fillNan = false,
-): ReassignedSpectrogramResult {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('reassignedSpectrogram', samples);
-    const request = samples;
-    return reassignedSpectrogram(
-      request.samples,
-      request.sampleRate,
-      request.nFft,
-      request.hopLength,
-      request.refPower,
-      request.fillNan,
-    );
-  }
-  assertAudioInput('reassignedSpectrogram', samples, sampleRate);
+export function reassignedSpectrogram(...args: unknown[]): ReassignedSpectrogramResult {
+  const r = sampleOneShot<ReassignedSpectrogramRequest>('reassignedSpectrogram', args);
+  assertAudioInput('reassignedSpectrogram', r.samples, r.sampleRate, r);
+  const nFft = r.nFft ?? 2048;
+  const hopLength = r.hopLength ?? 512;
+  const refPower = r.refPower ?? 1e-6;
   assertPositiveInteger('reassignedSpectrogram', nFft, 'nFft');
   assertPositiveInteger('reassignedSpectrogram', hopLength, 'hopLength');
   assertFiniteScalar('reassignedSpectrogram', refPower, 'refPower');
   if (refPower < 0) {
     throw new RangeError('reassignedSpectrogram: refPower must be non-negative');
   }
-  return requireModule().reassignedSpectrogram(
-    samples,
-    sampleRate,
+  const native = requireModule().reassignedSpectrogram(
+    r.samples,
+    r.sampleRate,
     nFft,
     hopLength,
     refPower,
-    fillNan,
+    r.fillNan ?? false,
   );
+  return {
+    magnitude: toMatrix2D(native.magnitude, native.nBins, native.nFrames),
+    times: toMatrix2D(native.times, native.nBins, native.nFrames),
+    frequencies: toMatrix2D(native.frequencies, native.nBins, native.nFrames),
+  };
 }
 
 // ============================================================================
@@ -631,44 +532,26 @@ export function reassignedSpectrogram(
 // ============================================================================
 
 /**
- * Compute STFT chromagram (librosa.feature.chroma_stft).
+ * STFT chromagram (librosa.feature.chroma_stft).
  *
  * The chroma filterbank uses a fixed tuning of 0 (concert A440). Unlike
  * librosa.feature.chroma_stft — which estimates tuning from the signal when none
- * is given — this does NOT auto-estimate and takes no tuning argument. A
- * tuning offset (a fraction of a semitone, which {@link estimateTuning} returns
- * at 12 bins per octave) is applied through `analyze`'s `tuning` option (and to
- * chords through `detectChords`); both also measure it themselves with
- * `tuning: 'auto'`.
+ * is given — this does NOT auto-estimate and takes no tuning argument. A tuning
+ * offset in cents ({@link estimateTuning} returns one) is applied through
+ * `analyze`'s `tuningCents` option (and to chords through `detectChords`); both
+ * also measure it themselves with `tuningCents: 'auto'`.
  *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param nFft - FFT size (default: 2048)
- * @param hopLength - Hop length (default: 512)
- * @returns Chroma features result
+ * @returns Chroma result; `features` rows are chroma bins and cols are frames.
  */
-export function chroma(request: SpectrogramRequest): ChromaResult;
+export function chroma(request: ChromaRequest): ChromaResult;
 export function chroma(
   samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  options?: GuardedOptions,
+  sampleRate: number,
+  options?: SampleOptions<ChromaRequest>,
 ): ChromaResult;
-export function chroma(
-  samples: Float32Array | SpectrogramRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  options: GuardedOptions = {},
-): ChromaResult {
-  optionsBag('chroma', options);
-  if (!(samples instanceof Float32Array)) {
-    requestObject('chroma', samples);
-    const request = samples;
-    return chroma(request.samples, request.sampleRate, request.nFft, request.hopLength, request);
-  }
-  assertAudioInput('chroma', samples, sampleRate, options);
-  const fft = resolveFftOptions('chroma', nFft, hopLength);
-  return requireModule().chroma(samples, sampleRate, fft.nFft, fft.hopLength);
+export function chroma(...args: unknown[]): ChromaResult {
+  const r = sampleOneShot<ChromaRequest>('chroma', args);
+  assertAudioInput('chroma', r.samples, r.sampleRate, r);
+  const fft = resolveFftOptions('chroma', r.nFft, r.hopLength);
+  return chromaResult(requireModule().chroma(r.samples, r.sampleRate, fft.nFft, fft.hopLength));
 }

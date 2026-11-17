@@ -147,7 +147,7 @@ describe('analyze rejects the same configurations as the C ABI', () => {
   const rejected: Array<[string, AnalyzeOptions]> = [
     ['bpmMin below zero', { bpmMin: 0 }],
     ['an inverted bpm range', { bpmMin: 120, bpmMax: 60 }],
-    ['a negative chroma highpass', { chromaHighpassHz: -1 }],
+    ['a negative chroma highpass', { chromaHighPassHz: -1 }],
     ['a non-positive chord HMM beam width', { chordHmmBeamWidth: 0 }],
   ];
 
@@ -266,7 +266,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
         return Reflect.get(target, property, receiver);
       },
     });
-    expectRangeRefusal(() => fixFrames(lying, 0, -1, true));
+    expectRangeRefusal(() => fixFrames({ frames: lying, xMin: 0, pad: true }));
   });
 
   it('spectralEdit rejects an over-budget op-list length before reserving', () => {

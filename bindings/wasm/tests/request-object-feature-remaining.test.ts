@@ -43,19 +43,24 @@ beforeAll(async () => {
 });
 
 describe('remaining feature request-object compatibility', () => {
-  it('preserves positional spectral and reconstruction forms', () => {
+  it('matches the request and positional forms of spectral and reconstruction calls', () => {
     expect(spectralContrast({ samples, sampleRate, nFft: 512, hopLength: 128 })).toEqual(
-      spectralContrast(samples, sampleRate, 512, 128),
+      spectralContrast(samples, sampleRate, { nFft: 512, hopLength: 128 }),
     );
     expect(polyFeatures({ samples, sampleRate, nFft: 512, hopLength: 128, order: 2 })).toEqual(
-      polyFeatures(samples, sampleRate, 512, 128, 2),
+      polyFeatures(samples, sampleRate, { nFft: 512, hopLength: 128, order: 2 }),
     );
-    expect(zeroCrossings({ samples, threshold: 1e-5 })).toEqual(zeroCrossings(samples, 1e-5));
+    expect(zeroCrossings({ samples, sampleRate, threshold: 1e-5 })).toEqual(
+      zeroCrossings(samples, sampleRate, { threshold: 1e-5 }),
+    );
     expect(estimateTuning({ samples, sampleRate, nFft: 512, hopLength: 128 })).toBe(
-      estimateTuning(samples, sampleRate, 512, 128),
+      estimateTuning(samples, sampleRate, { nFft: 512, hopLength: 128 }),
     );
     const freqs = Float32Array.from([220, 440, 660]);
-    expect(pitchTuning({ frequencies: freqs })).toBe(pitchTuning(freqs));
+    const tuning = pitchTuning({ frequencies: freqs });
+    expect(tuning).toBeGreaterThanOrEqual(-50);
+    expect(tuning).toBeLessThan(50);
+    expect(pitchTuning({ frequencies: freqs, resolution: 0.01, binsPerOctave: 12 })).toBe(tuning);
     expect(nnFilter({ s: new Float32Array(12).fill(1), nFeatures: 3, nFrames: 4 })).toEqual(
       nnFilter(new Float32Array(12).fill(1), 3, 4),
     );
@@ -70,7 +75,7 @@ describe('remaining feature request-object compatibility', () => {
     );
   });
 
-  it('preserves request forms for music, loudness, and core rhythm', () => {
+  it('answers the request forms of music, loudness, and core rhythm', () => {
     expect(analyzeSections({ samples, sampleRate })).toEqual(analyzeSections(samples, sampleRate));
     expect(analyzeMelody({ samples, sampleRate })).toEqual(analyzeMelody(samples, sampleRate));
     expect(lufs({ samples, sampleRate })).toEqual(lufs(samples, sampleRate));
@@ -80,53 +85,76 @@ describe('remaining feature request-object compatibility', () => {
       lufsInterleaved(samples, 1, sampleRate),
     );
     const onset = new Float32Array(512).fill(0.2);
-    expect(tempogram({ onsetEnvelope: onset, sampleRate, hopLength: 128, winLength: 64 })).toEqual(
-      tempogram(onset, sampleRate, 128, 64),
-    );
-    expect(
-      cyclicTempogram({ onsetEnvelope: onset, sampleRate, hopLength: 128, winLength: 64 }),
-    ).toEqual(cyclicTempogram(onset, sampleRate, 128, 64));
+    const tempoGrid = tempogram({
+      onsetEnvelope: onset,
+      sampleRate,
+      hopLength: 128,
+      winLength: 64,
+    });
+    expect(tempoGrid.rows).toBe(64);
+    expect(tempoGrid.data.length).toBe(tempoGrid.rows * tempoGrid.cols);
+    const cyclic = cyclicTempogram({
+      onsetEnvelope: onset,
+      sampleRate,
+      hopLength: 128,
+      winLength: 64,
+    });
+    expect(cyclic.cols).toBe(tempoGrid.cols);
+    expect(cyclic.data.length).toBe(cyclic.rows * cyclic.cols);
+    // The defaults are the 60..200 BPM range.
     expect(plp({ onsetEnvelope: onset, sampleRate, hopLength: 128, winLength: 64 })).toEqual(
-      plp(onset, sampleRate, 128, 30, 300, 64),
+      plp({
+        onsetEnvelope: onset,
+        sampleRate,
+        hopLength: 128,
+        bpmMin: 60,
+        bpmMax: 200,
+        winLength: 64,
+      }),
     );
-    expect(pcen({ values: new Float32Array(12).fill(1), nBins: 3, nFrames: 4 })).toEqual(
-      pcen(new Float32Array(12).fill(1), 3, 4),
-    );
+    const normalized = pcen({ values: { data: new Float32Array(12).fill(1), rows: 3, cols: 4 } });
+    expect([normalized.rows, normalized.cols]).toEqual([3, 4]);
     expect(trim({ samples, sampleRate })).toEqual(trim(samples, sampleRate));
   });
 
-  it('preserves request forms for remaining feature utility operations', () => {
+  it('computes the remaining feature utility operations from request objects', () => {
     const emphasisInput = new Float32Array([1, 1, 1]);
-    expect(preemphasis({ samples: emphasisInput, coef: 0.5, zi: 0 })).toEqual(
-      preemphasis(emphasisInput, 0.5, 0),
-    );
-    const emphasized = preemphasis(emphasisInput, 0.5, 0);
-    expect(deemphasis({ samples: emphasized, coef: 0.5, zi: 0 })).toEqual(
-      deemphasis(emphasized, 0.5, 0),
-    );
+    const emphasized = preemphasis({ samples: emphasisInput, sampleRate, coef: 0.5, zi: 0 });
+    expect(emphasized).toEqual(preemphasis(emphasisInput, sampleRate, { coef: 0.5, zi: 0 }));
+    expect(Array.from(emphasized)).toEqual([1, 0.5, 0.5]);
+    const restored = deemphasis({ samples: emphasized, sampleRate, coef: 0.5, zi: 0 });
+    expect(restored).toEqual(deemphasis(emphasized, sampleRate, { coef: 0.5, zi: 0 }));
+    expect(Array.from(restored)).toEqual([1, 1, 1]);
     const vector = new Float32Array([1, 2]);
-    expect(padCenter({ values: vector, targetSize: 4, padValue: -1 })).toEqual(
-      padCenter(vector, 4, -1),
-    );
-    expect(fixLength({ values: vector, targetSize: 4, padValue: -1 })).toEqual(
-      fixLength(vector, 4, -1),
-    );
+    expect(Array.from(padCenter({ values: vector, targetSize: 4, padValue: -1 }))).toEqual([
+      -1, 1, 2, -1,
+    ]);
+    expect(Array.from(fixLength({ values: vector, targetSize: 4, padValue: -1 }))).toEqual([
+      1, 2, -1, -1,
+    ]);
     const frames = new Int32Array([2, 4]);
-    expect(fixFrames({ frames, xMin: 0, xMax: 5, pad: true })).toEqual(
-      fixFrames(frames, 0, 5, true),
-    );
+    expect(Array.from(fixFrames({ frames, xMin: 0, xMax: 5, pad: true }))).toEqual([0, 2, 4, 5]);
     const peaks = new Float32Array([0, 1, 0, 2, 0]);
     expect(
-      peakPick({ values: peaks, preMax: 1, postMax: 1, preAvg: 1, postAvg: 1, delta: 0, wait: 0 }),
-    ).toEqual(peakPick(peaks, 1, 1, 1, 1, 0, 0));
+      Array.from(
+        peakPick({
+          values: peaks,
+          preMax: 1,
+          postMax: 1,
+          preAvg: 1,
+          postAvg: 1,
+          delta: 0,
+          wait: 0,
+        }),
+      ),
+    ).toEqual([0, 1, 3]);
     const normalized = new Float32Array([3, 4]);
-    expect(vectorNormalize({ values: normalized, normType: 2, threshold: 1e-12 })).toEqual(
-      vectorNormalize(normalized, 2, 1e-12),
-    );
-    const chroma = new Float32Array(24).fill(1);
-    expect(tonnetz({ chromagram: chroma, nChroma: 12, nFrames: 2 })).toEqual(
-      tonnetz(chroma, 12, 2),
-    );
+    const unit = vectorNormalize({ values: normalized, norm: 'l2', threshold: 1e-12 });
+    expect(unit[0]).toBeCloseTo(0.6, 6);
+    expect(unit[1]).toBeCloseTo(0.8, 6);
+    const chroma = { data: new Float32Array(24).fill(1), rows: 12, cols: 2 };
+    const centroid = tonnetz({ chromagram: chroma });
+    expect([centroid.rows, centroid.cols]).toEqual([6, 2]);
   });
 
   it('preserves request forms for NNLS chroma and EBU loudness range', () => {

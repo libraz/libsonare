@@ -40,7 +40,9 @@ describe('boolean options', () => {
     );
     expect(() => detectKey({ samples, sampleRate: SR, useHpss: 'no' as never })).toThrow(TypeError);
     expect(() => chirp({ linear: 'false' as never })).toThrow(TypeError);
-    expect(() => zeroCrossings({ samples, pad: 'false' as never })).toThrow(TypeError);
+    expect(() => zeroCrossings({ samples, sampleRate: SR, pad: 'false' as never })).toThrow(
+      TypeError,
+    );
     expect(() => fixFrames({ frames: new Int32Array([1, 2]), pad: 'no' as never })).toThrow(
       TypeError,
     );
@@ -124,21 +126,30 @@ describe('enum ordinals', () => {
 });
 
 describe('detectKey vocabulary', () => {
-  it('accepts the spellings Node and Python accept', () => {
+  it('accepts the closed-set tokens', () => {
+    for (const profile of ['krumhanslSchmuckler', 'temperley'] as const) {
+      expect(() => detectKey({ samples, sampleRate: SR, profile })).not.toThrow();
+    }
+    expect(() => detectKey({ samples, sampleRate: SR, modes: ['major', 'minor'] })).not.toThrow();
+    expect(() => detectKey({ samples, sampleRate: SR, modes: 'majorMinor' })).not.toThrow();
+  });
+
+  it('refuses synonyms and other spellings of the closed-set tokens', () => {
     for (const profile of ['krumhansl-schmuckler', 'Temperley', 'KS']) {
-      expect(() => detectKey({ samples, sampleRate: SR, profile: profile as never })).not.toThrow();
+      expect(() => detectKey({ samples, sampleRate: SR, profile: profile as never })).toThrow(
+        RangeError,
+      );
     }
     expect(() =>
       detectKey({ samples, sampleRate: SR, modes: ['Major', 'minor'] as never }),
-    ).not.toThrow();
-    expect(() =>
-      detectKey({ samples, sampleRate: SR, modes: 'Major-Minor' as never }),
-    ).not.toThrow();
+    ).toThrow();
+    expect(() => detectKey({ samples, sampleRate: SR, modes: 'Major-Minor' as never })).toThrow();
+    expect(() => detectKey({ samples, sampleRate: SR, modes: 'major-minor' as never })).toThrow();
   });
 
   it('refuses a wrong-typed string option by name', () => {
     expect(() => detectKey({ samples, sampleRate: SR, genreHint: 5 as never })).toThrow(
-      /genreHint must be a string/,
+      /genreHint must be one of/,
     );
     expect(() => detectKey({ samples, sampleRate: SR, profile: 'nope' as never })).toThrow(
       RangeError,

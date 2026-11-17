@@ -63,7 +63,9 @@ function capture(run: () => unknown): unknown {
 /** Asserts the caught value is the float-range refusal naming `key`. */
 function expectRangeRefusal(caught: unknown, key: string, context: string): void {
   const error = expectArgumentRefusal(caught, RangeError, context);
-  expect(error.message, context).toBe(`${key} ${RANGE_MESSAGE}`);
+  expect(error.message, context).toMatch(
+    new RegExp(`^(?:[A-Za-z0-9]+: )?${key} ${RANGE_MESSAGE}$`),
+  );
 }
 
 /** Counts sign changes, a cheap proxy for how much high-frequency content a signal carries. */
@@ -90,6 +92,18 @@ const IMPULSE = new Float32Array([1, 0, 0, 0]);
 // local-max test too, so the result carries edge artefacts that move with the
 // window rather than with `delta`, which is the parameter under test.
 const PEAK_SIGNAL = new Float32Array([0, 1, 0, 5, 0, 1, 0]);
+
+function peakRequest(delta: number) {
+  return {
+    values: PEAK_SIGNAL,
+    preMax: 2,
+    postMax: 2,
+    preAvg: 2,
+    postAvg: 2,
+    delta,
+    wait: 1,
+  };
+}
 
 // Quiet header, loud tail: peak frame RMS is ~0.707 (from the loud half), so
 // `top_db` decides whether the quiet header's ~0.00707 RMS clears
@@ -125,57 +139,65 @@ const FLOAT_FIELDS: FloatField[] = [
   {
     entry: 'vectorNormalize',
     key: 'threshold',
-    run: (value) => vectorNormalize(new Float32Array([0.02, -0.01]), 0, value),
+    run: (value) =>
+      vectorNormalize({ values: new Float32Array([0.02, -0.01]), norm: 'max', threshold: value }),
   },
   {
     entry: 'peakPick',
     key: 'delta',
-    run: (value) => peakPick(PEAK_SIGNAL, 2, 2, 2, 2, value, 1),
+    run: (value) => peakPick(peakRequest(value)),
   },
   {
     entry: 'trimSilence',
     key: 'topDb',
-    run: (value) => trimSilence(silenceSignal, value, 2048, 512),
+    run: (value) =>
+      trimSilence(silenceSignal, SR, { topDb: value, frameLength: 2048, hopLength: 512 }),
   },
   {
     entry: 'splitSilence',
     key: 'topDb',
-    run: (value) => splitSilence(silenceSignal, value, 2048, 512),
+    run: (value) =>
+      splitSilence(silenceSignal, SR, { topDb: value, frameLength: 2048, hopLength: 512 }),
   },
   {
     entry: 'chirp',
-    key: 'fmin',
-    run: (value) => chirp(value, 880, SR, 0.01, true),
+    key: 'fminHz',
+    run: (value) =>
+      chirp({ fminHz: value, fmaxHz: 880, sampleRate: SR, durationSec: 0.01, linear: true }),
   },
   {
     entry: 'chirp',
-    key: 'fmax',
-    run: (value) => chirp(440, value, SR, 0.01, true),
+    key: 'fmaxHz',
+    run: (value) =>
+      chirp({ fminHz: 440, fmaxHz: value, sampleRate: SR, durationSec: 0.01, linear: true }),
   },
   {
     entry: 'preemphasis',
     key: 'coef',
-    run: (value) => preemphasis(IMPULSE, value, 0),
+    run: (value) => preemphasis(IMPULSE, SR, { coef: value, zi: 0 }),
   },
   {
     entry: 'deemphasis',
     key: 'coef',
-    run: (value) => deemphasis(IMPULSE, value, 0),
+    run: (value) => deemphasis(IMPULSE, SR, { coef: value, zi: 0 }),
   },
   {
     entry: 'tone',
-    key: 'frequency',
-    run: (value) => tone(value, SR, 0.01, 0, 1),
+    key: 'frequencyHz',
+    run: (value) =>
+      tone({ frequencyHz: value, sampleRate: SR, durationSec: 0.01, phase: 0, amplitude: 1 }),
   },
   {
     entry: 'tone',
     key: 'phase',
-    run: (value) => tone(440, SR, 0.01, value, 1),
+    run: (value) =>
+      tone({ frequencyHz: 440, sampleRate: SR, durationSec: 0.01, phase: value, amplitude: 1 }),
   },
   {
     entry: 'tone',
     key: 'amplitude',
-    run: (value) => tone(440, SR, 0.01, 0, value),
+    run: (value) =>
+      tone({ frequencyHz: 440, sampleRate: SR, durationSec: 0.01, phase: 0, amplitude: value }),
   },
   {
     entry: 'trim',
@@ -186,12 +208,14 @@ const FLOAT_FIELDS: FloatField[] = [
   {
     entry: 'padCenter',
     key: 'padValue',
-    run: (value) => padCenter(new Float32Array([1, 2, 3]), 5, value),
+    run: (value) =>
+      padCenter({ values: new Float32Array([1, 2, 3]), targetSize: 5, padValue: value }),
   },
   {
     entry: 'fixLength',
     key: 'padValue',
-    run: (value) => fixLength(new Float32Array([1, 2, 3]), 5, value),
+    run: (value) =>
+      fixLength({ values: new Float32Array([1, 2, 3]), targetSize: 5, padValue: value }),
   },
   {
     entry: 'scaleQuantizeMidi',
@@ -255,8 +279,8 @@ describe('vectorNormalize consumes the threshold it accepts', () => {
     const values = new Float32Array([0.02, -0.01]);
     // The Inf-norm of `values` is 0.02: a threshold below it normalizes, a
     // threshold above it is librosa's fill=None no-op.
-    const normalized = vectorNormalize(values, 0, 0);
-    const untouched = vectorNormalize(values, 0, 0.05);
+    const normalized = vectorNormalize({ values, norm: 'max', threshold: 0 });
+    const untouched = vectorNormalize({ values, norm: 'max', threshold: 0.05 });
     expect(normalized[0]).toBeCloseTo(1, 5);
     expect(untouched[0]).toBeCloseTo(0.02, 5);
     expect(normalized[0]).not.toBe(untouched[0]);
@@ -269,9 +293,9 @@ describe('peakPick consumes the delta it accepts', () => {
     // so raising it drops the weaker maximum before the stronger one. Three
     // levels rather than two: a binary pair cannot tell "delta is read" from
     // "delta is compared against zero".
-    const both = peakPick(PEAK_SIGNAL, 2, 2, 2, 2, 0, 1);
-    const strongerOnly = peakPick(PEAK_SIGNAL, 2, 2, 2, 2, 2, 1);
-    const suppressed = peakPick(PEAK_SIGNAL, 2, 2, 2, 2, 10, 1);
+    const both = peakPick(peakRequest(0));
+    const strongerOnly = peakPick(peakRequest(2));
+    const suppressed = peakPick(peakRequest(10));
     expect(Array.from(both)).toEqual([1, 3]);
     expect(Array.from(strongerOnly)).toEqual([3]);
     expect(Array.from(suppressed)).toEqual([]);
@@ -280,8 +304,12 @@ describe('peakPick consumes the delta it accepts', () => {
 
 describe('trimSilence and splitSilence consume the topDb they accept', () => {
   it('trimSilence reads two legitimate topDb values as two different trims', () => {
-    const strict = trimSilence(silenceSignal, 6, 2048, 512);
-    const lenient = trimSilence(silenceSignal, 80, 2048, 512);
+    const strict = trimSilence(silenceSignal, SR, { topDb: 6, frameLength: 2048, hopLength: 512 });
+    const lenient = trimSilence(silenceSignal, SR, {
+      topDb: 80,
+      frameLength: 2048,
+      hopLength: 512,
+    });
     expect(strict.startSample).toBeGreaterThan(lenient.startSample);
     expect(strict.audio.length).toBeLessThan(lenient.audio.length);
   });
@@ -294,16 +322,32 @@ describe('trimSilence and splitSilence consume the topDb they accept', () => {
       }
       return total;
     };
-    const strict = splitSilence(silenceSignal, 6, 2048, 512);
-    const lenient = splitSilence(silenceSignal, 80, 2048, 512);
+    const strict = splitSilence(silenceSignal, SR, { topDb: 6, frameLength: 2048, hopLength: 512 });
+    const lenient = splitSilence(silenceSignal, SR, {
+      topDb: 80,
+      frameLength: 2048,
+      hopLength: 512,
+    });
     expect(totalCovered(strict)).toBeLessThan(totalCovered(lenient));
   });
 });
 
-describe('chirp consumes the fmin/fmax it accepts', () => {
+describe('chirp consumes the fminHz/fmaxHz it accepts', () => {
   it('reads two legitimate sweep ranges as two different crossing counts', () => {
-    const low = chirp(100, 200, SR, 0.05, true);
-    const high = chirp(4000, 8000, SR, 0.05, true);
+    const low = chirp({
+      fminHz: 100,
+      fmaxHz: 200,
+      sampleRate: SR,
+      durationSec: 0.05,
+      linear: true,
+    });
+    const high = chirp({
+      fminHz: 4000,
+      fmaxHz: 8000,
+      sampleRate: SR,
+      durationSec: 0.05,
+      linear: true,
+    });
     expect(countZeroCrossings(high)).toBeGreaterThan(countZeroCrossings(low));
   });
 });
@@ -313,40 +357,78 @@ describe('preemphasis and deemphasis consume the coef they accept', () => {
   // preemphasis computes y[1] = x[1] - coef * x[0] = -coef,
   // deemphasis computes y[1] = x[1] + coef * y[0] = coef.
   it('preemphasis reads coef back at sample one, negated', () => {
-    expect(preemphasis(IMPULSE, 0.5, 0)[1]).toBe(Math.fround(-0.5));
-    expect(preemphasis(IMPULSE, 0.25, 0)[1]).toBe(Math.fround(-0.25));
+    expect(preemphasis(IMPULSE, SR, { coef: 0.5, zi: 0 })[1]).toBe(Math.fround(-0.5));
+    expect(preemphasis(IMPULSE, SR, { coef: 0.25, zi: 0 })[1]).toBe(Math.fround(-0.25));
   });
 
   it('deemphasis reads coef back at sample one, unchanged', () => {
-    expect(deemphasis(IMPULSE, 0.5, 0)[1]).toBe(Math.fround(0.5));
-    expect(deemphasis(IMPULSE, 0.25, 0)[1]).toBe(Math.fround(0.25));
+    expect(deemphasis(IMPULSE, SR, { coef: 0.5, zi: 0 })[1]).toBe(Math.fround(0.5));
+    expect(deemphasis(IMPULSE, SR, { coef: 0.25, zi: 0 })[1]).toBe(Math.fround(0.25));
   });
 });
 
 describe('tone consumes the frequency, phase and amplitude it accepts', () => {
   it('reads two legitimate frequencies as two different crossing counts', () => {
-    const low = tone(110, SR, 0.05, 0, 1);
-    const high = tone(8000, SR, 0.05, 0, 1);
+    const low = tone({
+      frequencyHz: 110,
+      sampleRate: SR,
+      durationSec: 0.05,
+      phase: 0,
+      amplitude: 1,
+    });
+    const high = tone({
+      frequencyHz: 8000,
+      sampleRate: SR,
+      durationSec: 0.05,
+      phase: 0,
+      amplitude: 1,
+    });
     expect(countZeroCrossings(high)).toBeGreaterThan(countZeroCrossings(low));
   });
 
   it('reads phase back at sample zero: y[0] = amplitude * sin(phase)', () => {
     // t = 0 on the first sample, so y[0] collapses to amplitude * sin(phase)
     // regardless of frequency -- an exact readback rather than a comparison.
-    expect(tone(440, SR, 0.05, 0, 1)[0]).toBeCloseTo(0, 5);
-    expect(tone(440, SR, 0.05, Math.PI / 2, 1)[0]).toBeCloseTo(1, 5);
+    expect(
+      tone({ frequencyHz: 440, sampleRate: SR, durationSec: 0.05, phase: 0, amplitude: 1 })[0],
+    ).toBeCloseTo(0, 5);
+    expect(
+      tone({
+        frequencyHz: 440,
+        sampleRate: SR,
+        durationSec: 0.05,
+        phase: Math.PI / 2,
+        amplitude: 1,
+      })[0],
+    ).toBeCloseTo(1, 5);
   });
 
   it('reads amplitude back at sample zero, scaling the same phase', () => {
-    expect(tone(440, SR, 0.05, Math.PI / 2, 1)[0]).toBeCloseTo(1, 5);
-    expect(tone(440, SR, 0.05, Math.PI / 2, 2)[0]).toBeCloseTo(2, 5);
+    expect(
+      tone({
+        frequencyHz: 440,
+        sampleRate: SR,
+        durationSec: 0.05,
+        phase: Math.PI / 2,
+        amplitude: 1,
+      })[0],
+    ).toBeCloseTo(1, 5);
+    expect(
+      tone({
+        frequencyHz: 440,
+        sampleRate: SR,
+        durationSec: 0.05,
+        phase: Math.PI / 2,
+        amplitude: 2,
+      })[0],
+    ).toBeCloseTo(2, 5);
   });
 });
 
 describe('the refusal is the same one the shared readers already raised', () => {
   it('answers a positional zi field and a positional coef field by the same code and wording', () => {
-    const fromZi = capture(() => preemphasis(IMPULSE, 0.97, 1e300));
-    const fromCoef = capture(() => preemphasis(IMPULSE, 1e300, 0));
+    const fromZi = capture(() => preemphasis(IMPULSE, SR, { coef: 0.97, zi: 1e300 }));
+    const fromCoef = capture(() => preemphasis(IMPULSE, SR, { coef: 1e300, zi: 0 }));
     expectRangeRefusal(fromZi, 'zi', 'preemphasis zi');
     expectRangeRefusal(fromCoef, 'coef', 'preemphasis coef');
     expect((fromZi as SonareError).code).toBe((fromCoef as SonareError).code);
@@ -367,12 +449,16 @@ describe('trim consumes the thresholdDb it accepts', () => {
 describe('padCenter and fixLength consume the padValue they accept', () => {
   it('padCenter fills both padded sides with a legitimate padValue', () => {
     // size=5 over a 3-sample input centers it with one pad sample on each side.
-    expect(Array.from(padCenter(new Float32Array([1, 2, 3]), 5, 7))).toEqual([7, 1, 2, 3, 7]);
+    expect(
+      Array.from(padCenter({ values: new Float32Array([1, 2, 3]), targetSize: 5, padValue: 7 })),
+    ).toEqual([7, 1, 2, 3, 7]);
   });
 
   it('fixLength fills the trailing padded region with a legitimate padValue', () => {
     // size=5 over a 3-sample input appends two pad samples at the tail.
-    expect(Array.from(fixLength(new Float32Array([1, 2, 3]), 5, 9))).toEqual([1, 2, 3, 9, 9]);
+    expect(
+      Array.from(fixLength({ values: new Float32Array([1, 2, 3]), targetSize: 5, padValue: 9 })),
+    ).toEqual([1, 2, 3, 9, 9]);
   });
 });
 

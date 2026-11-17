@@ -29,28 +29,30 @@ import type {
 } from './effects_timepitch.js';
 import type { VoiceChangeRealtimeRequest, VoiceChangeRequest } from './effects_voice_change.js';
 import type {
+  AmplitudeToDbRequest,
   ChirpRequest,
   ClicksRequest,
   CyclicTempogramRequest,
-  DbConversionRequest,
-  EmphasisRequest,
+  DbToAmplitudeRequest,
+  DbToPowerRequest,
+  DeemphasisRequest,
   FixFramesRequest,
   FixLengthRequest,
   FrameSignalRequest,
-  FramesToSamplesRequest,
-  FramesToTimeRequest,
   OnsetBacktrackRequest,
   PadCenterRequest,
   PcenRequest,
   PeakPickRequest,
   PlpRequest,
-  SamplesToFramesRequest,
-  SilenceRequest,
+  PowerToDbRequest,
+  PreemphasisRequest,
   SplitSilenceCommonRequest,
+  SplitSilenceCommonWithReportRequest,
+  SplitSilenceRequest,
   TempogramRequest,
-  TimeToFramesRequest,
   ToneRequest,
   TonnetzRequest,
+  TrimSilenceRequest,
   VectorNormalizeRequest,
 } from './feature_core.js';
 import type {
@@ -71,12 +73,8 @@ import type {
 } from './feature_decompose.js';
 import type {
   GriffinLimRequest,
-  MelResultToAudioRequest,
-  MelResultToStftRequest,
   MelToAudioRequest,
   MelToStftRequest,
-  MfccResultToAudioRequest,
-  MfccResultToMelRequest,
   MfccToAudioRequest,
   MfccToMelRequest,
   PhaseVocoderRequest,
@@ -93,10 +91,14 @@ import type {
   CqtToAudioRequest,
   DetectBoundariesRequest,
   FourierTempogramRequest,
+  HybridCqtRequest,
   LufsRequest,
+  MomentaryLufsRequest,
   NnlsChromaRequest,
-  OnsetEnvelopeRequest,
   OnsetStrengthMultiRequest,
+  OnsetStrengthRequest,
+  PseudoCqtRequest,
+  ShortTermLufsRequest,
   TempogramRatioRequest,
   VqtRequest,
   VqtToAudioRequest,
@@ -112,20 +114,27 @@ import type {
 import type { ResampleRequest } from './feature_resample.js';
 import type {
   PolyFeaturesRequest,
+  RmsEnergyRequest,
+  SpectralBandwidthRequest,
+  SpectralCentroidRequest,
   SpectralContrastRequest,
-  SpectralFrameRequest,
+  SpectralFlatnessRequest,
+  SpectralFluxRequest,
   SpectralRolloffRequest,
   ZeroCrossingRateRequest,
   ZeroCrossingsRequest,
 } from './feature_spectral.js';
 import type {
-  BassChromaSpectrogramRequest,
-  ChromaSpectrogramRequest,
+  BassChromaRequest,
+  ChromaCensRequest,
+  ChromaCqtRequest,
+  ChromaRequest,
   MelDeltaRequest,
   MelSpectrogramRequest,
   MfccRequest,
   ReassignedSpectrogramRequest,
-  SpectrogramRequest,
+  StftDbRequest,
+  StftRequest,
   TrimRequest,
 } from './feature_spectrogram.js';
 import type { PartRigRequest } from './instrument_types.js';
@@ -208,24 +217,24 @@ import type {
   AnalyzeBpmRequest,
   AnalyzeDynamicsRequest,
   AnalyzeImpulseResponseRequest,
+  AnalyzeRequest,
   AnalyzeRhythmRequest,
   AnalyzeTimbreRequest,
-  AnalyzeWithProgressRequest,
   ChordFunctionalAnalysisRequest,
   ChordFunctionsRequest,
   DetectAcousticRequest,
+  DetectBeatsRequest,
+  DetectBpmRequest,
   DetectChordsRequest,
+  DetectDownbeatsRequest,
   DetectKeyCandidatesRequest,
   DetectKeyRequest,
   DetectOnsetsRequest,
   EstimateMeterRequest,
   EstimateRoomRequest,
-  MusicAnalyzeOptions,
-  MusicAnalyzeRequest,
   RoomGeometryFromEstimateRequest,
   RoomMorphRequest,
   RoomMorphStereoRequest,
-  SamplesRequest,
 } from './quick_analysis.js';
 import type {
   MasteringRepairDereverbClassicalLinkedRequest,
@@ -304,20 +313,155 @@ const AlignTakeToReferenceRequestKeys = keysOf<AlignTakeToReferenceRequest>()([
   'hopLength',
   'binsPerOctave',
 ]);
-const DbConversionRequestKeys = keysOf<DbConversionRequest>()(['values', 'ref', 'amin', 'topDb']);
-const FramesToTimeRequestKeys = keysOf<FramesToTimeRequest>()(['frames', 'sr', 'hopLength']);
-const TimeToFramesRequestKeys = keysOf<TimeToFramesRequest>()(['time', 'sr', 'hopLength']);
-const FramesToSamplesRequestKeys = keysOf<FramesToSamplesRequest>()([
-  'frames',
-  'hopLength',
-  'nFft',
-]);
-const SamplesToFramesRequestKeys = keysOf<SamplesToFramesRequest>()([
+const AmplitudeToDbRequestKeys = keysOf<AmplitudeToDbRequest>()(['values', 'ref', 'amin', 'topDb']);
+const PowerToDbRequestKeys = keysOf<PowerToDbRequest>()(['values', 'ref', 'amin', 'topDb']);
+const DbToPowerRequestKeys = keysOf<DbToPowerRequest>()(['values', 'ref']);
+const DbToAmplitudeRequestKeys = keysOf<DbToAmplitudeRequest>()(['values', 'ref']);
+const PreemphasisRequestKeys = keysOf<PreemphasisRequest>()([
   'samples',
-  'hopLength',
-  'nFft',
+  'sampleRate',
+  'coef',
+  'zi',
+  'validate',
 ]);
-const MusicAnalyzeRequestKeys = keysOf<MusicAnalyzeRequest>()([
+const DeemphasisRequestKeys = keysOf<DeemphasisRequest>()([
+  'samples',
+  'sampleRate',
+  'coef',
+  'zi',
+  'validate',
+]);
+const TrimSilenceRequestKeys = keysOf<TrimSilenceRequest>()([
+  'samples',
+  'sampleRate',
+  'topDb',
+  'frameLength',
+  'hopLength',
+  'validate',
+]);
+const SplitSilenceRequestKeys = keysOf<SplitSilenceRequest>()([
+  'samples',
+  'sampleRate',
+  'topDb',
+  'frameLength',
+  'hopLength',
+  'validate',
+]);
+const SplitSilenceCommonWithReportRequestKeys = keysOf<SplitSilenceCommonWithReportRequest>()([
+  'signals',
+  'topDb',
+  'frameLength',
+  'hopLength',
+]);
+const StftRequestKeys = keysOf<StftRequest>()([
+  'samples',
+  'sampleRate',
+  'nFft',
+  'hopLength',
+  'validate',
+]);
+const StftDbRequestKeys = keysOf<StftDbRequest>()([
+  'samples',
+  'sampleRate',
+  'nFft',
+  'hopLength',
+  'validate',
+]);
+const ChromaRequestKeys = keysOf<ChromaRequest>()([
+  'samples',
+  'sampleRate',
+  'nFft',
+  'hopLength',
+  'validate',
+]);
+const ChromaCensRequestKeys = keysOf<ChromaCensRequest>()([
+  'samples',
+  'sampleRate',
+  'hopLength',
+  'nChroma',
+  'binsPerOctave',
+  'validate',
+]);
+const ChromaCqtRequestKeys = keysOf<ChromaCqtRequest>()([
+  'samples',
+  'sampleRate',
+  'hopLength',
+  'nChroma',
+  'binsPerOctave',
+  'validate',
+]);
+const BassChromaRequestKeys = keysOf<BassChromaRequest>()([
+  'samples',
+  'sampleRate',
+  'hopLength',
+  'nChroma',
+  'validate',
+]);
+const SpectralCentroidRequestKeys = keysOf<SpectralCentroidRequest>()([
+  'samples',
+  'sampleRate',
+  'nFft',
+  'hopLength',
+  'validate',
+]);
+const SpectralFlatnessRequestKeys = keysOf<SpectralFlatnessRequest>()([
+  'samples',
+  'sampleRate',
+  'nFft',
+  'hopLength',
+  'validate',
+]);
+const RmsEnergyRequestKeys = keysOf<RmsEnergyRequest>()([
+  'samples',
+  'sampleRate',
+  'frameLength',
+  'hopLength',
+  'validate',
+]);
+const DetectBpmRequestKeys = keysOf<DetectBpmRequest>()(['samples', 'sampleRate', 'validate']);
+const DetectBeatsRequestKeys = keysOf<DetectBeatsRequest>()(['samples', 'sampleRate', 'validate']);
+const DetectDownbeatsRequestKeys = keysOf<DetectDownbeatsRequest>()([
+  'samples',
+  'sampleRate',
+  'validate',
+]);
+const MomentaryLufsRequestKeys = keysOf<MomentaryLufsRequest>()([
+  'samples',
+  'sampleRate',
+  'validate',
+]);
+const ShortTermLufsRequestKeys = keysOf<ShortTermLufsRequest>()([
+  'samples',
+  'sampleRate',
+  'validate',
+]);
+const OnsetStrengthRequestKeys = keysOf<OnsetStrengthRequest>()([
+  'nFft',
+  'hopLength',
+  'nMels',
+  'samples',
+  'sampleRate',
+  'validate',
+]);
+const PseudoCqtRequestKeys = keysOf<PseudoCqtRequest>()([
+  'hopLength',
+  'fminHz',
+  'nBins',
+  'binsPerOctave',
+  'samples',
+  'sampleRate',
+  'validate',
+]);
+const HybridCqtRequestKeys = keysOf<HybridCqtRequest>()([
+  'hopLength',
+  'fminHz',
+  'nBins',
+  'binsPerOctave',
+  'samples',
+  'sampleRate',
+  'validate',
+]);
+const AnalyzeRequestKeys = keysOf<AnalyzeRequest>()([
   'samples',
   'sampleRate',
   'validate',
@@ -328,7 +472,7 @@ const MusicAnalyzeRequestKeys = keysOf<MusicAnalyzeRequest>()([
   'startBpm',
   'useTriadsOnly',
   'useHpss',
-  'chromaHighpassHz',
+  'chromaHighPassHz',
   'useBassWeighted',
   'chromaHopMultiplier',
   'useChordHmm',
@@ -340,7 +484,9 @@ const MusicAnalyzeRequestKeys = keysOf<MusicAnalyzeRequest>()([
   'computeTempoCurve',
   'meterCandidateNumerators',
   'meterDenominator',
-  'tuning',
+  'tuningCents',
+  'onProgress',
+  'cancel',
 ]);
 const AnalyzeBpmRequestKeys = keysOf<AnalyzeBpmRequest>()([
   'bpmMin',
@@ -356,7 +502,7 @@ const AnalyzeBpmRequestKeys = keysOf<AnalyzeBpmRequest>()([
 const AnalyzeDynamicsRequestKeys = keysOf<AnalyzeDynamicsRequest>()([
   'windowSec',
   'hopLength',
-  'compressionThreshold',
+  'compressionThresholdDb',
   'validate',
   'samples',
   'sampleRate',
@@ -371,14 +517,14 @@ const AnalyzeImpulseResponseRequestKeys = keysOf<AnalyzeImpulseResponseRequest>(
 const AnalyzeMelodyRequestKeys = keysOf<AnalyzeMelodyRequest>()([
   'samples',
   'sampleRate',
-  'fmin',
-  'fmax',
   'frameLength',
   'hopLength',
   'threshold',
   'usePyin',
   'center',
   'validate',
+  'f0MinHz',
+  'f0MaxHz',
 ]);
 const AnalyzePolyphonicRequestKeys = keysOf<AnalyzePolyphonicRequest>()([
   'samples',
@@ -389,7 +535,7 @@ const AnalyzePolyphonicRequestKeys = keysOf<AnalyzePolyphonicRequest>()([
   'centRefHz',
   'centsPerBin',
   'centMaxHz',
-  'tonalityOff',
+  'tonality',
   'salienceHarmonics',
   'f0MinHz',
   'f0MaxHz',
@@ -450,56 +596,6 @@ const AnalyzeTimbreRequestKeys = keysOf<AnalyzeTimbreRequest>()([
   'samples',
   'sampleRate',
 ]);
-const AnalyzeWithProgressRequestKeys = keysOf<AnalyzeWithProgressRequest>()([
-  'onProgress',
-  'cancel',
-  'options',
-  'samples',
-  'sampleRate',
-  'validate',
-  'nFft',
-  'hopLength',
-  'bpmMin',
-  'bpmMax',
-  'startBpm',
-  'useTriadsOnly',
-  'useHpss',
-  'chromaHighpassHz',
-  'useBassWeighted',
-  'chromaHopMultiplier',
-  'useChordHmm',
-  'useChordKeyContext',
-  'chordHmmBeamWidth',
-  'detectChordInversions',
-  'adaptiveTempo',
-  'tempoUpdateIntervalBeats',
-  'computeTempoCurve',
-  'meterCandidateNumerators',
-  'meterDenominator',
-  'tuning',
-]);
-const MusicAnalyzeOptionsKeys = keysOf<MusicAnalyzeOptions>()([
-  'nFft',
-  'hopLength',
-  'bpmMin',
-  'bpmMax',
-  'startBpm',
-  'useTriadsOnly',
-  'useHpss',
-  'chromaHighpassHz',
-  'useBassWeighted',
-  'chromaHopMultiplier',
-  'useChordHmm',
-  'useChordKeyContext',
-  'chordHmmBeamWidth',
-  'detectChordInversions',
-  'adaptiveTempo',
-  'tempoUpdateIntervalBeats',
-  'computeTempoCurve',
-  'meterCandidateNumerators',
-  'meterDenominator',
-  'tuning',
-]);
 const AssignNoteTargetsRequestKeys = keysOf<AssignNoteTargetsRequest>()([
   'notes',
   'sampleRate',
@@ -520,25 +616,18 @@ const AutoTuneRequestKeys = keysOf<AutoTuneRequest>()([
   'validate',
 ]);
 const AutoTuneKeyKeys = keysOf<AutoTuneKey>()(['root', 'mode']);
-const BassChromaSpectrogramRequestKeys = keysOf<BassChromaSpectrogramRequest>()([
-  'samples',
-  'sampleRate',
-  'hopLength',
-  'nChroma',
-  'validate',
-]);
 const ChirpRequestKeys = keysOf<ChirpRequest>()([
-  'fmin',
-  'fmax',
+  'fminHz',
+  'fmaxHz',
   'sampleRate',
-  'duration',
+  'durationSec',
   'linear',
 ]);
 const ChordFunctionalAnalysisRequestKeys = keysOf<ChordFunctionalAnalysisRequest>()([
   'keyRoot',
   'keyMode',
-  'minDuration',
-  'smoothingWindow',
+  'minDurationSec',
+  'smoothingWindowSec',
   'threshold',
   'useTriadsOnly',
   'nFft',
@@ -549,7 +638,7 @@ const ChordFunctionalAnalysisRequestKeys = keysOf<ChordFunctionalAnalysisRequest
   'useKeyContext',
   'detectInversions',
   'chromaMethod',
-  'tuning',
+  'tuningCents',
   'validate',
   'samples',
   'sampleRate',
@@ -558,44 +647,27 @@ const ChordFunctionsRequestKeys = keysOf<ChordFunctionsRequest<ChordFunctionsInp
   'chords',
   'key',
 ]);
-const SpectrogramRequestKeys = keysOf<SpectrogramRequest>()([
-  'samples',
-  'sampleRate',
-  'nFft',
-  'hopLength',
-  'validate',
-]);
-const ChromaSpectrogramRequestKeys = keysOf<ChromaSpectrogramRequest>()([
-  'samples',
-  'sampleRate',
-  'hopLength',
-  'nChroma',
-  'binsPerOctave',
-  'validate',
-]);
 const ClicksRequestKeys = keysOf<ClicksRequest>()([
   'times',
   'sampleRate',
   'length',
-  'frequency',
-  'clickDuration',
+  'frequencyHz',
+  'clickDurationSec',
 ]);
 const CqtRequestKeys = keysOf<CqtRequest>()([
   'samples',
   'sampleRate',
   'hopLength',
-  'fmin',
+  'fminHz',
   'nBins',
   'binsPerOctave',
   'validate',
 ]);
 const CqtToAudioRequestKeys = keysOf<CqtToAudioRequest>()([
   'magnitude',
-  'nBins',
-  'nFrames',
   'sampleRate',
   'hopLength',
-  'fmin',
+  'fminHz',
   'binsPerOctave',
   'nIter',
   'validate',
@@ -696,7 +768,6 @@ const DecomposeWithInitRequestKeys = keysOf<DecomposeWithInitRequest>()([
   'nIter',
   'beta',
 ]);
-const EmphasisRequestKeys = keysOf<EmphasisRequest>()(['samples', 'coef', 'zi']);
 const DetectAcousticRequestKeys = keysOf<DetectAcousticRequest>()([
   'nOctaveBands',
   'nThirdOctaveSubbands',
@@ -706,7 +777,6 @@ const DetectAcousticRequestKeys = keysOf<DetectAcousticRequest>()([
   'samples',
   'sampleRate',
 ]);
-const SamplesRequestKeys = keysOf<SamplesRequest>()(['samples', 'sampleRate', 'validate']);
 const DetectBoundariesRequestKeys = keysOf<DetectBoundariesRequest>()([
   'samples',
   'sampleRate',
@@ -717,15 +787,15 @@ const DetectBoundariesRequestKeys = keysOf<DetectBoundariesRequest>()([
   'absoluteThreshold',
   'nMfcc',
   'nChroma',
-  'peakDistance',
-  'referenceWindow',
+  'peakDistanceSec',
+  'referenceWindowSec',
   'useMfcc',
   'useChroma',
   'validate',
 ]);
 const DetectChordsRequestKeys = keysOf<DetectChordsRequest>()([
-  'minDuration',
-  'smoothingWindow',
+  'minDurationSec',
+  'smoothingWindowSec',
   'threshold',
   'useTriadsOnly',
   'nFft',
@@ -738,38 +808,38 @@ const DetectChordsRequestKeys = keysOf<DetectChordsRequest>()([
   'keyMode',
   'detectInversions',
   'chromaMethod',
-  'tuning',
+  'tuningCents',
   'validate',
   'samples',
   'sampleRate',
 ]);
 const DetectKeyRequestKeys = keysOf<DetectKeyRequest>()([
-  'tuning',
+  'tuningCents',
   'nFft',
   'hopLength',
   'useHpss',
   'loudnessWeighted',
-  'highPassHz',
   'modes',
   'profile',
   'genreHint',
   'validate',
   'samples',
   'sampleRate',
+  'chromaHighPassHz',
 ]);
 const DetectKeyCandidatesRequestKeys = keysOf<DetectKeyCandidatesRequest>()([
-  'tuning',
+  'tuningCents',
   'nFft',
   'hopLength',
   'useHpss',
   'loudnessWeighted',
-  'highPassHz',
   'modes',
   'profile',
   'genreHint',
   'validate',
   'samples',
   'sampleRate',
+  'chromaHighPassHz',
 ]);
 const DetectOnsetsRequestKeys = keysOf<DetectOnsetsRequest>()([
   'samples',
@@ -793,8 +863,7 @@ const Ebur128LoudnessRangeRequestKeys = keysOf<Ebur128LoudnessRangeRequest>()([
   'validate',
 ]);
 const EstimateMeterRequestKeys = keysOf<EstimateMeterRequest>()([
-  'beatTimes',
-  'beatStrengths',
+  'beats',
   'candidateNumerators',
   'denominator',
   'downbeatWeight',
@@ -822,6 +891,7 @@ const EstimateTuningRequestKeys = keysOf<EstimateTuningRequest>()([
   'sampleRate',
   'nFft',
   'hopLength',
+  'validate',
 ]);
 const ExtractNotesRequestKeys = keysOf<ExtractNotesRequest>()([
   'samples',
@@ -857,18 +927,17 @@ const FourierTempogramRequestKeys = keysOf<FourierTempogramRequest>()([
   'hopLength',
   'winLength',
   'center',
-  'norm',
   'validate',
 ]);
 const FrameSignalRequestKeys = keysOf<FrameSignalRequest>()([
   'samples',
   'frameLength',
   'hopLength',
+  'sampleRate',
+  'validate',
 ]);
 const GriffinLimRequestKeys = keysOf<GriffinLimRequest>()([
   'magnitude',
-  'nBins',
-  'nFrames',
   'sampleRate',
   'nFft',
   'hopLength',
@@ -1400,53 +1469,41 @@ const MasteringStreamingPreviewRequestKeys = keysOf<MasteringStreamingPreviewReq
 const MasteringStreamingPreviewStereoRequestKeys = keysOf<MasteringStreamingPreviewStereoRequest>()(
   ['left', 'right', 'sampleRate', 'platforms'],
 );
-const MelToStftRequestKeys = keysOf<MelToStftRequest & MelResultToStftRequest>()([
+const MelToStftRequestKeys = keysOf<MelToStftRequest>()([
   'power',
-  'result',
-  'nMels',
-  'nFrames',
   'sampleRate',
   'nFft',
-  'fmin',
-  'fmax',
+  'fminHz',
+  'fmaxHz',
   'htk',
   'validate',
 ]);
-const MelToAudioRequestKeys = keysOf<MelToAudioRequest & MelResultToAudioRequest>()([
+const MelToAudioRequestKeys = keysOf<MelToAudioRequest>()([
   'power',
-  'result',
-  'nMels',
-  'nFrames',
   'sampleRate',
   'nFft',
   'hopLength',
-  'fmin',
-  'fmax',
+  'fminHz',
+  'fmaxHz',
   'htk',
   'nIter',
   'validate',
 ]);
-const MfccToMelRequestKeys = keysOf<MfccToMelRequest & MfccResultToMelRequest>()([
+const MfccToMelRequestKeys = keysOf<MfccToMelRequest>()([
   'coefficients',
-  'result',
-  'nMfcc',
-  'nFrames',
   'nMels',
   'lifter',
   'validate',
 ]);
-const MfccToAudioRequestKeys = keysOf<MfccToAudioRequest & MfccResultToAudioRequest>()([
+const MfccToAudioRequestKeys = keysOf<MfccToAudioRequest>()([
   'coefficients',
-  'result',
-  'nMfcc',
-  'nFrames',
   'nMels',
   'lifter',
   'sampleRate',
   'nFft',
   'hopLength',
-  'fmin',
-  'fmax',
+  'fminHz',
+  'fmaxHz',
   'htk',
   'nIter',
   'validate',
@@ -1471,17 +1528,11 @@ const MasteringRepairNoiseBandBinsRequestKeys = keysOf<MasteringRepairNoiseBandB
   'nFft',
   'sampleRate',
 ]);
-const MelDeltaRequestKeys = keysOf<MelDeltaRequest>()([
-  'features',
-  'nFeatures',
-  'nFrames',
-  'width',
-  'validate',
-]);
+const MelDeltaRequestKeys = keysOf<MelDeltaRequest>()(['features', 'width', 'validate']);
 const MelSpectrogramRequestKeys = keysOf<MelSpectrogramRequest>()([
   'nMels',
-  'fmin',
-  'fmax',
+  'fminHz',
+  'fmaxHz',
   'htk',
   'samples',
   'sampleRate',
@@ -1578,8 +1629,8 @@ const MfccRequestKeys = keysOf<MfccRequest>()([
   'nMfcc',
   'lifter',
   'nMels',
-  'fmin',
-  'fmax',
+  'fminHz',
+  'fmaxHz',
   'htk',
   'samples',
   'sampleRate',
@@ -1662,14 +1713,6 @@ const NoteStretchRequestKeys = keysOf<NoteStretchRequest>()([
 ]);
 const NoteTargetsFromSmfRequestKeys = keysOf<NoteTargetsFromSmfRequest>()(['data', 'trackIndex']);
 const OnsetBacktrackRequestKeys = keysOf<OnsetBacktrackRequest>()(['events', 'energy']);
-const OnsetEnvelopeRequestKeys = keysOf<OnsetEnvelopeRequest>()([
-  'samples',
-  'sampleRate',
-  'nFft',
-  'hopLength',
-  'nMels',
-  'validate',
-]);
 const OnsetStrengthMultiRequestKeys = keysOf<OnsetStrengthMultiRequest>()([
   'nBands',
   'samples',
@@ -1682,8 +1725,6 @@ const OnsetStrengthMultiRequestKeys = keysOf<OnsetStrengthMultiRequest>()([
 const PadCenterRequestKeys = keysOf<PadCenterRequest>()(['values', 'targetSize', 'padValue']);
 const PcenRequestKeys = keysOf<PcenRequest>()([
   'values',
-  'nBins',
-  'nFrames',
   'sampleRate',
   'hopLength',
   'timeConstant',
@@ -1691,7 +1732,6 @@ const PcenRequestKeys = keysOf<PcenRequest>()([
   'bias',
   'power',
   'eps',
-  'options',
 ]);
 const PeakPickRequestKeys = keysOf<PeakPickRequest>()([
   'values',
@@ -1716,9 +1756,10 @@ const PiptrackRequestKeys = keysOf<PiptrackRequest>()([
   'sampleRate',
   'nFft',
   'hopLength',
-  'fmin',
-  'fmax',
+  'fminHz',
+  'fmaxHz',
   'threshold',
+  'validate',
 ]);
 const PitchCorrectTimevaryingRequestKeys = keysOf<PitchCorrectTimevaryingRequest>()([
   'samples',
@@ -1760,10 +1801,11 @@ const PitchPyinRequestKeys = keysOf<PitchPyinRequest>()([
   'sampleRate',
   'frameLength',
   'hopLength',
-  'fmin',
-  'fmax',
   'threshold',
   'fillNa',
+  'f0MinHz',
+  'f0MaxHz',
+  'validate',
 ]);
 const PitchShiftRequestKeys = keysOf<PitchShiftRequest>()([
   'samples',
@@ -1783,18 +1825,19 @@ const PitchYinRequestKeys = keysOf<PitchYinRequest>()([
   'sampleRate',
   'frameLength',
   'hopLength',
-  'fmin',
-  'fmax',
   'threshold',
   'fillNa',
+  'f0MinHz',
+  'f0MaxHz',
+  'validate',
 ]);
 const PlpRequestKeys = keysOf<PlpRequest>()([
   'onsetEnvelope',
   'sampleRate',
   'hopLength',
-  'tempoMin',
-  'tempoMax',
   'winLength',
+  'bpmMin',
+  'bpmMax',
 ]);
 const PolyFeaturesRequestKeys = keysOf<PolyFeaturesRequest>()([
   'order',
@@ -1802,6 +1845,7 @@ const PolyFeaturesRequestKeys = keysOf<PolyFeaturesRequest>()([
   'sampleRate',
   'nFft',
   'hopLength',
+  'validate',
 ]);
 const ReassignedSpectrogramRequestKeys = keysOf<ReassignedSpectrogramRequest>()([
   'refPower',
@@ -1859,7 +1903,11 @@ const PlaybackRendererConfigKeys = keysOf<PlaybackRendererConfig>()([
   'head_tracking',
   'output_limiter',
 ]);
-const ResampleRequestKeys = keysOf<ResampleRequest>()(['samples', 'srcSr', 'targetSr']);
+const ResampleRequestKeys = keysOf<ResampleRequest>()([
+  'samples',
+  'targetSampleRate',
+  'sourceSampleRate',
+]);
 const VocalRestoreRequestKeys = keysOf<VocalRestoreRequest>()([
   'samples',
   'sampleRate',
@@ -1871,6 +1919,7 @@ const ZeroCrossingRateRequestKeys = keysOf<ZeroCrossingRateRequest>()([
   'sampleRate',
   'frameLength',
   'hopLength',
+  'validate',
 ]);
 const RoomGeometryFromEstimateRequestKeys = keysOf<RoomGeometryFromEstimateRequest>()([
   'estimate',
@@ -1940,30 +1989,19 @@ const RoomMorphStereoRequestKeys = keysOf<RoomMorphStereoRequest>()([
 ]);
 const SegmentAgglomerativeRequestKeys = keysOf<SegmentAgglomerativeRequest>()([
   'data',
-  'rows',
-  'cols',
   'k',
   'linkage',
 ]);
 const SegmentCrossSimilarityRequestKeys = keysOf<SegmentCrossSimilarityRequest>()([
   'x',
-  'xRows',
-  'xCols',
   'y',
-  'yRows',
-  'yCols',
   'k',
   'metric',
   'mode',
 ]);
-const SegmentLagToRecurrenceRequestKeys = keysOf<SegmentLagToRecurrenceRequest>()([
-  'lag',
-  'rows',
-  'lags',
-]);
+const SegmentLagToRecurrenceRequestKeys = keysOf<SegmentLagToRecurrenceRequest>()(['lag']);
 const SegmentPathEnhanceRequestKeys = keysOf<SegmentPathEnhanceRequest>()([
   'recurrence',
-  'n',
   'win',
   'maxRatio',
   'minRatio',
@@ -1971,8 +2009,6 @@ const SegmentPathEnhanceRequestKeys = keysOf<SegmentPathEnhanceRequest>()([
 ]);
 const SegmentRecurrenceMatrixRequestKeys = keysOf<SegmentRecurrenceMatrixRequest>()([
   'data',
-  'rows',
-  'cols',
   'k',
   'width',
   'sym',
@@ -1981,37 +2017,30 @@ const SegmentRecurrenceMatrixRequestKeys = keysOf<SegmentRecurrenceMatrixRequest
 ]);
 const SegmentRecurrenceToLagRequestKeys = keysOf<SegmentRecurrenceToLagRequest>()([
   'recurrence',
-  'n',
   'pad',
 ]);
 const SegmentSubsegmentRequestKeys = keysOf<SegmentSubsegmentRequest>()([
   'data',
-  'rows',
-  'cols',
   'boundaries',
   'nSegments',
 ]);
-const SpectralBandwidthRequestKeys = keysOf<SpectralFrameRequest & { p?: number }>()([
+const SpectralBandwidthRequestKeys = keysOf<SpectralBandwidthRequest>()([
   'samples',
   'sampleRate',
   'nFft',
   'hopLength',
   'p',
-]);
-const SpectralFrameRequestKeys = keysOf<SpectralFrameRequest>()([
-  'samples',
-  'sampleRate',
-  'nFft',
-  'hopLength',
+  'validate',
 ]);
 const SpectralContrastRequestKeys = keysOf<SpectralContrastRequest>()([
   'nBands',
-  'fmin',
+  'fminHz',
   'quantile',
   'samples',
   'sampleRate',
   'nFft',
   'hopLength',
+  'validate',
 ]);
 const SpectralEditRequestKeys = keysOf<SpectralEditRequest>()([
   'samples',
@@ -2023,12 +2052,13 @@ const SpectralEditRequestKeys = keysOf<SpectralEditRequest>()([
   'healRadiusFrames',
   'validate',
 ]);
-const SpectralFluxRequestKeys = keysOf<SpectralFrameRequest & { lag?: number }>()([
+const SpectralFluxRequestKeys = keysOf<SpectralFluxRequest>()([
   'samples',
   'sampleRate',
   'nFft',
   'hopLength',
   'lag',
+  'validate',
 ]);
 const SpectralRolloffRequestKeys = keysOf<SpectralRolloffRequest>()([
   'rollPercent',
@@ -2036,6 +2066,7 @@ const SpectralRolloffRequestKeys = keysOf<SpectralRolloffRequest>()([
   'sampleRate',
   'nFft',
   'hopLength',
+  'validate',
 ]);
 const SplitNoteRequestKeys = keysOf<SplitNoteRequest>()([
   'index',
@@ -2052,12 +2083,6 @@ const SplitNoteRequestKeys = keysOf<SplitNoteRequest>()([
   'referenceHz',
   'voicedThreshold',
   'validate',
-]);
-const SilenceRequestKeys = keysOf<SilenceRequest>()([
-  'samples',
-  'topDb',
-  'frameLength',
-  'hopLength',
 ]);
 const SplitSilenceCommonRequestKeys = keysOf<SplitSilenceCommonRequest>()([
   'signals',
@@ -2132,8 +2157,7 @@ const TempogramRequestKeys = keysOf<TempogramRequest>()([
   'norm',
 ]);
 const TempogramRatioRequestKeys = keysOf<TempogramRatioRequest>()([
-  'tempogramData',
-  'winLength',
+  'tempogram',
   'sampleRate',
   'hopLength',
   'factors',
@@ -2148,21 +2172,19 @@ const TimeStretchRequestKeys = keysOf<TimeStretchRequest>()([
   'validate',
 ]);
 const ToneRequestKeys = keysOf<ToneRequest>()([
-  'frequency',
+  'frequencyHz',
   'sampleRate',
-  'duration',
+  'durationSec',
   'phase',
   'amplitude',
 ]);
-const TonnetzRequestKeys = keysOf<TonnetzRequest>()(['chromagram', 'nChroma', 'nFrames']);
+const TonnetzRequestKeys = keysOf<TonnetzRequest>()(['chromagram']);
 const TranscribeRequestKeys = keysOf<TranscribeRequest>()([
   'samples',
   'sampleRate',
   'tempoBpm',
   'polyphonic',
   'referenceHz',
-  'fmin',
-  'fmax',
   'minNoteMs',
   'minNoteDivision',
   'segmentationThresholdCents',
@@ -2175,6 +2197,9 @@ const TranscribeRequestKeys = keysOf<TranscribeRequest>()([
   'reattackRatio',
   'group',
   'channel',
+  'f0MinHz',
+  'f0MaxHz',
+  'validate',
 ]);
 const TrimRequestKeys = keysOf<TrimRequest>()([
   'samples',
@@ -2186,7 +2211,7 @@ const TrimRequestKeys = keysOf<TrimRequest>()([
 ]);
 const VectorNormalizeRequestKeys = keysOf<VectorNormalizeRequest>()([
   'values',
-  'normType',
+  'norm',
   'threshold',
 ]);
 const VoiceChangeRequestKeys = keysOf<VoiceChangeRequest>()([
@@ -2210,7 +2235,7 @@ const VqtRequestKeys = keysOf<VqtRequest>()([
   'samples',
   'sampleRate',
   'hopLength',
-  'fmin',
+  'fminHz',
   'nBins',
   'binsPerOctave',
   'validate',
@@ -2218,11 +2243,9 @@ const VqtRequestKeys = keysOf<VqtRequest>()([
 const VqtToAudioRequestKeys = keysOf<VqtToAudioRequest>()([
   'gamma',
   'magnitude',
-  'nBins',
-  'nFrames',
   'sampleRate',
   'hopLength',
-  'fmin',
+  'fminHz',
   'binsPerOctave',
   'nIter',
   'validate',
@@ -2245,6 +2268,8 @@ const ZeroCrossingsRequestKeys = keysOf<ZeroCrossingsRequest>()([
   'refMagnitude',
   'pad',
   'zeroPos',
+  'sampleRate',
+  'validate',
 ]);
 
 const SetPartRigRequestKeys = keysOf<PartRigRequest>()([
@@ -2281,8 +2306,6 @@ const TranscribeToClipRequestKeys = keysOf<ProjectTranscribeRequest>()([
   'sampleRate',
   'polyphonic',
   'referenceHz',
-  'fmin',
-  'fmax',
   'minNoteMs',
   'minNoteDivision',
   'segmentationThresholdCents',
@@ -2295,6 +2318,8 @@ const TranscribeToClipRequestKeys = keysOf<ProjectTranscribeRequest>()([
   'reattackRatio',
   'group',
   'channel',
+  'f0MinHz',
+  'f0MaxHz',
 ]);
 const ApplyProjectVocalEditRequestKeys = keysOf<ProjectVocalEditApplyRequest>()([
   'clipId',
@@ -2327,8 +2352,8 @@ export const REQUEST_SHAPES = {
   vocalApply: { keys: VocalApplyRequestKeys },
   vocalRender: { keys: VocalRenderRequestKeys },
   alignTakeToReference: { keys: AlignTakeToReferenceRequestKeys },
-  amplitudeToDb: { keys: DbConversionRequestKeys },
-  analyze: { keys: MusicAnalyzeRequestKeys },
+  amplitudeToDb: { keys: AmplitudeToDbRequestKeys },
+  analyze: { keys: AnalyzeRequestKeys },
   analyzeBpm: { keys: AnalyzeBpmRequestKeys },
   analyzeDynamics: { keys: AnalyzeDynamicsRequestKeys },
   analyzeImpulseResponse: { keys: AnalyzeImpulseResponseRequestKeys },
@@ -2337,19 +2362,15 @@ export const REQUEST_SHAPES = {
   analyzeRhythm: { keys: AnalyzeRhythmRequestKeys },
   analyzeSections: { keys: AnalyzeSectionsRequestKeys },
   analyzeTimbre: { keys: AnalyzeTimbreRequestKeys },
-  analyzeWithProgress: {
-    keys: AnalyzeWithProgressRequestKeys,
-    nested: { options: MusicAnalyzeOptionsKeys },
-  },
   assignNoteTargets: { keys: AssignNoteTargetsRequestKeys },
   autoTune: { keys: AutoTuneRequestKeys, hints: { key: AutoTuneKeyKeys } },
-  bassChroma: { keys: BassChromaSpectrogramRequestKeys },
+  bassChroma: { keys: BassChromaRequestKeys },
   chirp: { keys: ChirpRequestKeys },
   chordFunctionalAnalysis: { keys: ChordFunctionalAnalysisRequestKeys },
   chordFunctions: { keys: ChordFunctionsRequestKeys },
-  chroma: { keys: SpectrogramRequestKeys },
-  chromaCens: { keys: ChromaSpectrogramRequestKeys },
-  chromaCqt: { keys: ChromaSpectrogramRequestKeys },
+  chroma: { keys: ChromaRequestKeys },
+  chromaCens: { keys: ChromaCensRequestKeys },
+  chromaCqt: { keys: ChromaCqtRequestKeys },
   clicks: { keys: ClicksRequestKeys },
   cqt: { keys: CqtRequestKeys },
   cqtToAudio: { keys: CqtToAudioRequestKeys },
@@ -2364,13 +2385,15 @@ export const REQUEST_SHAPES = {
   decomposeStems: { keys: DecomposeStemsRequestKeys },
   decomposeStemsLinked: { keys: DecomposeStemsLinkedRequestKeys },
   decomposeWithInit: { keys: DecomposeWithInitRequestKeys },
-  deemphasis: { keys: EmphasisRequestKeys },
+  deemphasis: { keys: DeemphasisRequestKeys },
   detectAcoustic: { keys: DetectAcousticRequestKeys },
-  detectBeats: { keys: SamplesRequestKeys },
+  detectBeats: { keys: DetectBeatsRequestKeys },
   detectBoundaries: { keys: DetectBoundariesRequestKeys },
-  detectBpm: { keys: SamplesRequestKeys },
+  dbToAmplitude: { keys: DbToAmplitudeRequestKeys },
+  dbToPower: { keys: DbToPowerRequestKeys },
+  detectBpm: { keys: DetectBpmRequestKeys },
   detectChords: { keys: DetectChordsRequestKeys },
-  detectDownbeats: { keys: SamplesRequestKeys },
+  detectDownbeats: { keys: DetectDownbeatsRequestKeys },
   detectKey: { keys: DetectKeyRequestKeys },
   detectKeyCandidates: { keys: DetectKeyCandidatesRequestKeys },
   detectOnsets: { keys: DetectOnsetsRequestKeys },
@@ -2384,13 +2407,11 @@ export const REQUEST_SHAPES = {
   fixLength: { keys: FixLengthRequestKeys },
   fourierTempogram: { keys: FourierTempogramRequestKeys },
   frameSignal: { keys: FrameSignalRequestKeys },
-  framesToSamples: { keys: FramesToSamplesRequestKeys },
-  framesToTime: { keys: FramesToTimeRequestKeys },
   griffinLim: { keys: GriffinLimRequestKeys },
   harmonic: { keys: HarmonicRequestKeys },
   hpss: { keys: HpssRequestKeys },
   hpssWithResidual: { keys: HpssWithResidualRequestKeys },
-  hybridCqt: { keys: CqtRequestKeys },
+  hybridCqt: { keys: HybridCqtRequestKeys },
   lufs: { keys: LufsRequestKeys },
   lufsInterleaved: { keys: LufsInterleavedRequestKeys },
   lufsSeriesInterleaved: { keys: LufsSeriesInterleavedRequestKeys },
@@ -2500,7 +2521,7 @@ export const REQUEST_SHAPES = {
   mfccToAudio: { keys: MfccToAudioRequestKeys },
   mfccToMel: { keys: MfccToMelRequestKeys },
   mixStereo: { keys: MixStereoRequestKeys },
-  momentaryLufs: { keys: LufsRequestKeys },
+  momentaryLufs: { keys: MomentaryLufsRequestKeys },
   nnFilter: { keys: NnFilterRequestKeys },
   nnlsChroma: { keys: NnlsChromaRequestKeys },
   normalize: { keys: NormalizeRequestKeys },
@@ -2510,7 +2531,7 @@ export const REQUEST_SHAPES = {
   noteStretch: { keys: NoteStretchRequestKeys },
   noteTargetsFromSmf: { keys: NoteTargetsFromSmfRequestKeys },
   onsetBacktrack: { keys: OnsetBacktrackRequestKeys },
-  onsetEnvelope: { keys: OnsetEnvelopeRequestKeys },
+  onsetStrength: { keys: OnsetStrengthRequestKeys },
   onsetStrengthMulti: { keys: OnsetStrengthMultiRequestKeys },
   padCenter: { keys: PadCenterRequestKeys },
   pcen: { keys: PcenRequestKeys },
@@ -2527,9 +2548,9 @@ export const REQUEST_SHAPES = {
   pitchYin: { keys: PitchYinRequestKeys },
   plp: { keys: PlpRequestKeys },
   polyFeatures: { keys: PolyFeaturesRequestKeys },
-  powerToDb: { keys: DbConversionRequestKeys },
-  preemphasis: { keys: EmphasisRequestKeys },
-  pseudoCqt: { keys: CqtRequestKeys },
+  powerToDb: { keys: PowerToDbRequestKeys },
+  preemphasis: { keys: PreemphasisRequestKeys },
+  pseudoCqt: { keys: PseudoCqtRequestKeys },
   reassignedSpectrogram: { keys: ReassignedSpectrogramRequestKeys },
   remix: { keys: RemixRequestKeys },
   remixAlignedIntervals: { keys: RemixRequestKeys },
@@ -2544,14 +2565,13 @@ export const REQUEST_SHAPES = {
     keys: VocalRestoreRequestKeys,
     nested: { limits: VocalSessionLimitsKeys },
   },
-  rmsEnergy: { keys: ZeroCrossingRateRequestKeys },
+  rmsEnergy: { keys: RmsEnergyRequestKeys },
   roomGeometryFromEstimate: {
     keys: RoomGeometryFromEstimateRequestKeys,
     hints: { source: RoomPlacementKeys, listener: RoomPlacementKeys },
   },
   roomMorph: { keys: RoomMorphRequestKeys },
   roomMorphStereo: { keys: RoomMorphStereoRequestKeys },
-  samplesToFrames: { keys: SamplesToFramesRequestKeys },
   segmentAgglomerative: { keys: SegmentAgglomerativeRequestKeys },
   segmentCrossSimilarity: { keys: SegmentCrossSimilarityRequestKeys },
   segmentLagToRecurrence: { keys: SegmentLagToRecurrenceRequestKeys },
@@ -2559,20 +2579,20 @@ export const REQUEST_SHAPES = {
   segmentRecurrenceMatrix: { keys: SegmentRecurrenceMatrixRequestKeys },
   segmentRecurrenceToLag: { keys: SegmentRecurrenceToLagRequestKeys },
   segmentSubsegment: { keys: SegmentSubsegmentRequestKeys },
-  shortTermLufs: { keys: LufsRequestKeys },
+  shortTermLufs: { keys: ShortTermLufsRequestKeys },
   spectralBandwidth: { keys: SpectralBandwidthRequestKeys },
-  spectralCentroid: { keys: SpectralFrameRequestKeys },
+  spectralCentroid: { keys: SpectralCentroidRequestKeys },
   spectralContrast: { keys: SpectralContrastRequestKeys },
   spectralEdit: { keys: SpectralEditRequestKeys },
-  spectralFlatness: { keys: SpectralFrameRequestKeys },
+  spectralFlatness: { keys: SpectralFlatnessRequestKeys },
   spectralFlux: { keys: SpectralFluxRequestKeys },
   spectralRolloff: { keys: SpectralRolloffRequestKeys },
   splitNote: { keys: SplitNoteRequestKeys },
-  splitSilence: { keys: SilenceRequestKeys },
+  splitSilence: { keys: SplitSilenceRequestKeys },
   splitSilenceCommon: { keys: SplitSilenceCommonRequestKeys },
-  splitSilenceCommonWithReport: { keys: SplitSilenceCommonRequestKeys },
-  stft: { keys: SpectrogramRequestKeys },
-  stftDb: { keys: SpectrogramRequestKeys },
+  splitSilenceCommonWithReport: { keys: SplitSilenceCommonWithReportRequestKeys },
+  stft: { keys: StftRequestKeys },
+  stftDb: { keys: StftDbRequestKeys },
   streamingLoudnessGain: {
     keys: StreamingLoudnessGainRequestKeys,
     hints: { config: MasteringChainConfigKeys },
@@ -2592,13 +2612,12 @@ export const REQUEST_SHAPES = {
   synthesizeRir: { keys: RirSynthOptionsKeys },
   tempogram: { keys: TempogramRequestKeys },
   tempogramRatio: { keys: TempogramRatioRequestKeys },
-  timeToFrames: { keys: TimeToFramesRequestKeys },
   timeStretch: { keys: TimeStretchRequestKeys },
   tone: { keys: ToneRequestKeys },
   tonnetz: { keys: TonnetzRequestKeys },
   transcribe: { keys: TranscribeRequestKeys },
   trim: { keys: TrimRequestKeys },
-  trimSilence: { keys: SilenceRequestKeys },
+  trimSilence: { keys: TrimSilenceRequestKeys },
   vectorNormalize: { keys: VectorNormalizeRequestKeys },
   voiceChange: { keys: VoiceChangeRequestKeys },
   voiceChangeRealtime: { keys: VoiceChangeRealtimeRequestKeys },
@@ -2614,4 +2633,3 @@ export const REQUEST_SHAPES = {
 export type RequestFn = keyof typeof REQUEST_SHAPES;
 
 /** Option fields {@link analyzeWithProgress} reads from the request itself as well as from `options`. */
-export const MUSIC_ANALYZE_OPTION_KEYS: readonly string[] = MusicAnalyzeOptionsKeys;

@@ -1,25 +1,262 @@
-import { resolveOrdinalInRange } from './codes.js';
-import { ErrorCode, SonareError } from './errors.js';
+import { chordQualityToken } from './analysis_helpers.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { getSonareModule } from './module_state.js';
-import type { ChordQuality, PitchClass } from './public_types.js';
-import type { WasmStreamAnalyzer } from './sonare.js';
+import type { Key, PitchClass, WindowType } from './public_types.js';
 import type {
-  AnalyzerStats,
-  FrameBuffer,
+  WasmAnalyzerStats,
+  WasmBarChord,
+  WasmChordChange,
+  WasmFrameBuffer,
+  WasmStreamAnalyzer,
+  WasmStreamFramesI16,
+  WasmStreamFramesU8,
+} from './sonare.js';
+import type {
+  StreamBarChord,
+  StreamChordChange,
   StreamConfig,
-  StreamConfigDefaults,
+  StreamFrames,
   StreamFramesI16,
   StreamFramesU8,
+  StreamProgressiveEstimate,
   StreamQuantizeConfig,
+  StreamStats,
 } from './stream_types.js';
+import { assertFloatValue, assertIntegerValue, assertSampleRate } from './validation.js';
 
-// ============================================================================
-// StreamAnalyzer Class
-// ============================================================================
+const WINDOW_TOKENS: readonly WindowType[] = ['hann', 'hamming', 'blackman', 'rectangular'];
+const REFERENCE_HZ_RANGE = [220, 880] as const;
+const CONFIG_KEYS: ReadonlySet<string> = new Set([
+  'sampleRate',
+  'nFft',
+  'hopLength',
+  'nMels',
+  'fminHz',
+  'fmaxHz',
+  'referenceHz',
+  'computeMel',
+  'computeChroma',
+  'computeOnset',
+  'computeSpectral',
+  'emitEveryNFrames',
+  'magnitudeDownsample',
+  'maxPendingFrames',
+  'maxProgressionEntries',
+  'keyUpdateIntervalSec',
+  'bpmUpdateIntervalSec',
+  'window',
+]);
 
-export function streamAnalyzerConfigDefaults(): StreamConfigDefaults {
-  return getSonareModule().streamAnalyzerConfigDefault();
+// Feature bits of the native frame buffers.
+const FEATURE_MEL = 1;
+const FEATURE_CHROMA = 2;
+const FEATURE_ONSET = 4;
+const FEATURE_SPECTRAL = 8;
+
+/** Native stream buffers hold frame-major data; the public layout is band-major. */
+function bandMajor<T extends Float32Array | Uint8Array | Int16Array>(
+  flat: T,
+  nFrames: number,
+  nBands: number,
+): T {
+  const out = new (flat.constructor as new (length: number) => T)(flat.length);
+  for (let f = 0; f < nFrames; f++) {
+    for (let b = 0; b < nBands; b++) {
+      out[b * nFrames + f] = flat[f * nBands + b];
+    }
+  }
+  return out;
+}
+
+interface NativeFrames<T extends Float32Array | Uint8Array | Int16Array> {
+  nFrames: number;
+  nMels: number;
+  nChroma: number;
+  featureFlags: number;
+  timestamps: Float32Array;
+  mel: T;
+  chroma: T;
+  onsetStrength: T;
+  rmsEnergy: T;
+  spectralCentroid: T;
+  spectralFlatness: T;
+}
+
+/** The per-frame arrays every read path shares, absent where the feature was not computed. */
+function sharedFrameArrays<T extends Float32Array | Uint8Array | Int16Array>(
+  native: NativeFrames<T>,
+): {
+  onsetStrength?: T;
+  rmsEnergy: T;
+  spectralCentroid?: T;
+  spectralFlatness?: T;
+} {
+  const flags = native.featureFlags;
+  const out: {
+    onsetStrength?: T;
+    rmsEnergy: T;
+    spectralCentroid?: T;
+    spectralFlatness?: T;
+  } = { rmsEnergy: native.rmsEnergy };
+  if (flags & FEATURE_ONSET) out.onsetStrength = native.onsetStrength;
+  if (flags & FEATURE_SPECTRAL) {
+    out.spectralCentroid = native.spectralCentroid;
+    out.spectralFlatness = native.spectralFlatness;
+  }
+  return out;
+}
+
+function quantizedFrames<T extends Uint8Array | Int16Array>(
+  native: NativeFrames<T>,
+): StreamFramesU8 | StreamFramesI16 {
+  const out: {
+    nFrames: number;
+    nMels: number;
+    nChroma: number;
+    timestampsSec: Float32Array;
+    mel?: T;
+    chroma?: T;
+  } = {
+    nFrames: native.nFrames,
+    nMels: native.nMels,
+    nChroma: native.nChroma,
+    // Native names the per-frame time `timestamps`.
+    timestampsSec: native.timestamps,
+  };
+  if (native.featureFlags & FEATURE_MEL) {
+    out.mel = bandMajor(native.mel, native.nFrames, native.nMels);
+  }
+  if (native.featureFlags & FEATURE_CHROMA) {
+    out.chroma = bandMajor(native.chroma, native.nFrames, native.nChroma);
+  }
+  return { ...out, ...sharedFrameArrays(native) } as StreamFramesU8 | StreamFramesI16;
+}
+
+function chordChange(c: WasmChordChange): StreamChordChange {
+  return {
+    root: c.root as PitchClass,
+    quality: chordQualityToken(c.quality),
+    name: c.name,
+    // Native names the chord start `startTime`.
+    startSec: c.startTime,
+    confidence: c.confidence,
+  };
+}
+
+function barChord(c: WasmBarChord): StreamBarChord {
+  return {
+    barIndex: c.barIndex,
+    root: c.root as PitchClass,
+    quality: chordQualityToken(c.quality),
+    name: c.name,
+    // Native names the bar start `startTime`.
+    startSec: c.startTime,
+    confidence: c.confidence,
+  };
+}
+
+function estimateOf(e: WasmAnalyzerStats['estimate']): StreamProgressiveEstimate {
+  const out: StreamProgressiveEstimate = {
+    bpmCandidateCount: e.bpmCandidateCount,
+    chordProgression: e.chordProgression.map(chordChange),
+    barChordProgression: e.barChordProgression.map(barChord),
+    votedPattern: (e.votedPattern || []).map(barChord),
+    patternLength: e.patternLength,
+    allPatternScores: (e.allPatternScores || []).map((p) => ({ name: p.name, score: p.score })),
+    // Native names the accumulated duration `accumulatedSeconds`.
+    accumulatedSec: e.accumulatedSeconds,
+    usedFrames: e.usedFrames,
+    updated: e.updated,
+  };
+  if (e.bpm > 0) {
+    out.bpm = e.bpm;
+    out.bpmConfidence = e.bpmConfidence;
+  }
+  if (e.keyName !== null && e.keyShortName !== null && e.key >= 0) {
+    const key: Key = {
+      root: e.key as PitchClass,
+      mode: e.keyMinor ? 'minor' : 'major',
+      confidence: e.keyConfidence,
+      name: e.keyName,
+      shortName: e.keyShortName,
+    };
+    out.key = key;
+  }
+  if (e.chordRoot >= 0) {
+    out.chord = {
+      root: e.chordRoot as PitchClass,
+      quality: chordQualityToken(e.chordQuality),
+      name: e.chordName,
+      // Native names the chord start `chordStartTime`.
+      startSec: e.chordStartTime,
+      confidence: e.chordConfidence,
+    };
+  }
+  if (e.currentBar >= 0) {
+    out.currentBar = e.currentBar;
+    // Native names the bar length `barDuration`.
+    out.barDurationSec = e.barDuration;
+  }
+  if (e.detectedPatternName) {
+    out.detectedPatternName = e.detectedPatternName;
+    out.detectedPatternScore = e.detectedPatternScore;
+  }
+  return out;
+}
+
+/** Refuses an A4 reference outside what native accepts, as a RangeError. */
+function assertReferenceHz(fnName: string, referenceHz: unknown): asserts referenceHz is number {
+  if (typeof referenceHz !== 'number') {
+    throw new TypeError(`${fnName}: referenceHz must be a number`);
+  }
+  if (
+    !Number.isFinite(referenceHz) ||
+    referenceHz < REFERENCE_HZ_RANGE[0] ||
+    referenceHz > REFERENCE_HZ_RANGE[1]
+  ) {
+    throw new RangeError(
+      `${fnName}: referenceHz must be within ${REFERENCE_HZ_RANGE[0]}..${REFERENCE_HZ_RANGE[1]} Hz`,
+    );
+  }
+}
+
+function windowOrdinal(window: unknown): number {
+  if (typeof window !== 'string') {
+    throw new TypeError(`StreamAnalyzer: window must be one of ${WINDOW_TOKENS.join(', ')}`);
+  }
+  const ordinal = WINDOW_TOKENS.indexOf(window as WindowType);
+  if (ordinal < 0) {
+    throw new RangeError(`StreamAnalyzer: window must be one of ${WINDOW_TOKENS.join(', ')}`);
+  }
+  return ordinal;
+}
+
+/**
+ * The native configuration defaults. `fmaxHz` is Nyquist, the value the
+ * analyzer reads an absent upper edge as.
+ */
+export function streamAnalyzerConfigDefault(): Required<StreamConfig> {
+  const d = getSonareModule().streamAnalyzerConfigDefault();
+  return {
+    sampleRate: d.sampleRate,
+    nFft: d.nFft,
+    hopLength: d.hopLength,
+    nMels: d.nMels,
+    fminHz: d.fmin,
+    fmaxHz: d.fmax > 0 ? d.fmax : d.sampleRate / 2,
+    referenceHz: d.tuningRefHz,
+    computeMel: d.computeMel,
+    computeChroma: d.computeChroma,
+    computeOnset: d.computeOnset,
+    computeSpectral: d.computeSpectral,
+    emitEveryNFrames: d.emitEveryNFrames,
+    magnitudeDownsample: d.magnitudeDownsample,
+    maxPendingFrames: d.maxPendingFrames,
+    maxProgressionEntries: d.maxProgressionEntries,
+    keyUpdateIntervalSec: d.keyUpdateIntervalSec,
+    bpmUpdateIntervalSec: d.bpmUpdateIntervalSec,
+    window: WINDOW_TOKENS[d.window],
+  };
 }
 
 /**
@@ -39,14 +276,14 @@ export function streamAnalyzerConfigDefaults(): StreamConfigDefaults {
  * // Get current analysis state
  * const stats = analyzer.stats();
  * console.log('BPM:', stats.estimate.bpm);
- * console.log('Key:', stats.estimate.key);
+ * console.log('Key:', stats.estimate.key?.name);
  * console.log('Chord progression:', stats.estimate.chordProgression);
  * ```
  *
  * The native analyzer supports one serialized producer (`process`,
  * `processWithOffset`, or `finalize`) concurrently with one serialized consumer
  * (`availableFrames`, a `readFrames*` method, `stats`, `frameCount`, or
- * `currentTime`) when a threaded WASM host shares the native instance.
+ * `currentTimeSec`) when a threaded WASM host shares the native instance.
  * Publication is allocation-free release/acquire. `reset`, setters, and
  * deletion require both roles to be stopped. A full pending ring drops the
  * newly produced output frame while analysis totals keep advancing. Ordinary
@@ -65,39 +302,59 @@ export class StreamAnalyzer {
   /**
    * Create a new StreamAnalyzer.
    *
-   * @param config - Configuration options
+   * @param config - Configuration; `sampleRate` is required (TypeError when
+   *   absent, RangeError when not a supported integer rate). An unknown key is a
+   *   TypeError and an out-of-domain value a RangeError.
    */
-  constructor(config: StreamConfig = {}) {
-    if (config.computeMagnitude) {
-      throw new SonareError(
-        ErrorCode.NotSupported,
-        'computeMagnitude is not supported because magnitude frames are not exposed by StreamAnalyzer read paths.',
-      );
+  constructor(config: StreamConfig) {
+    if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+      throw new TypeError('StreamAnalyzer: config must be an object with a sampleRate');
     }
-    if (
-      config.outputFormat !== undefined &&
-      (typeof config.outputFormat !== 'number' ||
-        !Number.isFinite(config.outputFormat) ||
-        !Number.isInteger(config.outputFormat) ||
-        config.outputFormat !== 0)
-    ) {
-      throw new TypeError('outputFormat must be the integer 0 (Float32)');
+    for (const key of Object.keys(config)) {
+      if (!CONFIG_KEYS.has(key)) {
+        throw new TypeError(`StreamAnalyzer: unknown config key '${key}'`);
+      }
     }
-    const window =
-      config.window === undefined
-        ? undefined
-        : resolveOrdinalInRange(config.window, 0, 3, 'stream analyzer window');
+    assertSampleRate('StreamAnalyzer', config.sampleRate);
+    if (config.window !== undefined) {
+      windowOrdinal(config.window);
+    }
+    if (config.fminHz !== undefined) {
+      assertFloatValue('StreamAnalyzer', config.fminHz, 'fminHz');
+    }
+    if (config.fmaxHz !== undefined) {
+      assertFloatValue('StreamAnalyzer', config.fmaxHz, 'fmaxHz');
+      if (!(config.fmaxHz > 0)) {
+        throw new RangeError('StreamAnalyzer: fmaxHz must be positive (omit it for Nyquist)');
+      }
+    }
+    if (config.referenceHz !== undefined) {
+      assertReferenceHz('StreamAnalyzer', config.referenceHz);
+    }
+    for (const key of [
+      'nFft',
+      'hopLength',
+      'nMels',
+      'emitEveryNFrames',
+      'magnitudeDownsample',
+      'maxPendingFrames',
+      'maxProgressionEntries',
+    ] as const) {
+      if (config[key] !== undefined) {
+        assertIntegerValue('StreamAnalyzer', config[key], key);
+      }
+    }
     const module = getSonareModule();
-    const defaults = streamAnalyzerConfigDefaults();
+    const defaults = module.streamAnalyzerConfigDefault();
     this.analyzerHandle = new module.StreamAnalyzer(
-      config.sampleRate ?? defaults.sampleRate,
+      config.sampleRate,
       config.nFft ?? defaults.nFft,
       config.hopLength ?? defaults.hopLength,
       config.nMels ?? defaults.nMels,
-      config.fmin ?? defaults.fmin,
-      config.fmax ?? defaults.fmax,
-      config.tuningRefHz ?? defaults.tuningRefHz,
-      config.computeMagnitude ?? defaults.computeMagnitude,
+      config.fminHz ?? defaults.fmin,
+      config.fmaxHz ?? defaults.fmax,
+      config.referenceHz ?? defaults.tuningRefHz,
+      defaults.computeMagnitude,
       config.computeMel ?? defaults.computeMel,
       config.computeChroma ?? defaults.computeChroma,
       config.computeOnset ?? defaults.computeOnset,
@@ -108,8 +365,8 @@ export class StreamAnalyzer {
       config.maxProgressionEntries ?? defaults.maxProgressionEntries,
       config.keyUpdateIntervalSec ?? defaults.keyUpdateIntervalSec,
       config.bpmUpdateIntervalSec ?? defaults.bpmUpdateIntervalSec,
-      window ?? defaults.window,
-      config.outputFormat ?? defaults.outputFormat,
+      config.window === undefined ? defaults.window : windowOrdinal(config.window),
+      defaults.outputFormat,
     );
   }
 
@@ -131,10 +388,10 @@ export class StreamAnalyzer {
    * a finalized analyzer.
    *
    * @param samples - Audio samples (mono, float32)
-   * @param sampleOffset - Cumulative sample count at start of this chunk
+   * @param startSample - Cumulative sample count at the start of this chunk
    */
-  processWithOffset(samples: Float32Array, sampleOffset: number): void {
-    this.analyzer.processWithOffset(samples, sampleOffset);
+  processWithOffset(samples: Float32Array, startSample: number): void {
+    this.analyzer.processWithOffset(samples, startSample);
   }
 
   /**
@@ -150,52 +407,83 @@ export class StreamAnalyzer {
     this.analyzer.finalize();
   }
 
-  /**
-   * Get the number of frames available to read.
-   */
-  availableFrames(): number {
+  /** Number of frames available to read. */
+  get availableFrames(): number {
     return this.analyzer.availableFrames();
   }
 
   /**
-   * Read processed frames as Structure of Arrays.
+   * Read processed frames. A feature array is absent when its feature is not
+   * computed.
    *
    * @param maxFrames - Maximum number of frames to read
-   * @returns Frame buffer with analysis results
+   * @returns Frames; `mel` and `chroma` are band-major matrices (rows are
+   *   bands, cols are frames)
    */
-  readFrames(maxFrames: number): FrameBuffer {
-    return this.analyzer.readFramesSoa(maxFrames);
+  readFrames(maxFrames: number): StreamFrames {
+    const native: WasmFrameBuffer = this.analyzer.readFramesSoa(maxFrames);
+    const flags = native.featureFlags;
+    const out: StreamFrames = {
+      nFrames: native.nFrames,
+      // Native names the per-frame time `timestamps`.
+      timestampsSec: native.timestamps,
+      ...sharedFrameArrays(native),
+    };
+    if (flags & FEATURE_MEL) {
+      out.mel = {
+        data: bandMajor(native.mel, native.nFrames, native.nMels),
+        rows: native.nMels,
+        cols: native.nFrames,
+      };
+    }
+    if (flags & FEATURE_CHROMA) {
+      out.chroma = {
+        data: bandMajor(native.chroma, native.nFrames, native.nChroma),
+        rows: native.nChroma,
+        cols: native.nFrames,
+      };
+    }
+    if (native.featureFlags & FEATURE_CHROMA) {
+      out.chordRoot = native.chordRoot;
+      out.chordQuality = native.chordQuality;
+      out.chordConfidence = native.chordConfidence;
+    }
+    return out;
   }
 
   /**
-   * Read frames as uint8-quantized arrays.
+   * Read frames as uint8-quantized arrays; `mel` and `chroma` are band-major
+   * (rows are bands, cols are frames).
    *
    * @param maxFrames - Maximum number of frames to read
    * @param quantizeConfig - Optional quantization ranges; widen these for a
    *   stream louder or quieter than the defaults (omitted keeps the defaults)
    */
   readFramesU8(maxFrames: number, quantizeConfig?: StreamQuantizeConfig): StreamFramesU8 {
-    return this.analyzer.readFramesU8(maxFrames, quantizeConfig) as StreamFramesU8;
+    const native = this.analyzer.readFramesU8(maxFrames, quantizeConfig) as WasmStreamFramesU8;
+    return quantizedFrames(native) as StreamFramesU8;
   }
 
   /**
-   * Read frames as int16-quantized arrays.
+   * Read frames as int16-quantized arrays; `mel` and `chroma` are band-major
+   * (rows are bands, cols are frames).
    *
    * @param maxFrames - Maximum number of frames to read
    * @param quantizeConfig - Optional quantization ranges; widen these for a
    *   stream louder or quieter than the defaults (omitted keeps the defaults)
    */
   readFramesI16(maxFrames: number, quantizeConfig?: StreamQuantizeConfig): StreamFramesI16 {
-    return this.analyzer.readFramesI16(maxFrames, quantizeConfig) as StreamFramesI16;
+    const native = this.analyzer.readFramesI16(maxFrames, quantizeConfig) as WasmStreamFramesI16;
+    return quantizedFrames(native) as StreamFramesI16;
   }
 
   /**
    * Reset the analyzer state.
    *
-   * @param baseSampleOffset - Starting sample offset (default 0)
+   * @param startSample - Sample the new stream starts at (default 0)
    */
-  reset(baseSampleOffset = 0): void {
-    this.analyzer.reset(baseSampleOffset);
+  reset(startSample = 0): void {
+    this.analyzer.reset(startSample);
   }
 
   /**
@@ -203,98 +491,45 @@ export class StreamAnalyzer {
    *
    * @returns Analyzer statistics including BPM, key, and chord progression
    */
-  stats(): AnalyzerStats {
+  stats(): StreamStats {
     const s = this.analyzer.stats();
     return {
       totalFrames: s.totalFrames,
       totalSamples: s.totalSamples,
-      durationSeconds: s.durationSeconds,
+      // Native names the duration `durationSeconds`.
+      durationSec: s.durationSeconds,
       pendingFrames: s.pendingFrames,
       droppedOutputFrames: s.droppedOutputFrames,
       droppedChordProgressionEntries: s.droppedChordProgressionEntries,
       droppedBarProgressionEntries: s.droppedBarProgressionEntries,
       nonFiniteDiscardBlocks: s.nonFiniteDiscardBlocks,
-      estimate: {
-        bpm: s.estimate.bpm,
-        bpmConfidence: s.estimate.bpmConfidence,
-        bpmCandidateCount: s.estimate.bpmCandidateCount,
-        key: s.estimate.key as PitchClass,
-        keyMinor: s.estimate.keyMinor,
-        keyConfidence: s.estimate.keyConfidence,
-        keyName: s.estimate.keyName,
-        keyShortName: s.estimate.keyShortName,
-        chordRoot: s.estimate.chordRoot as PitchClass,
-        chordQuality: s.estimate.chordQuality as ChordQuality,
-        chordName: s.estimate.chordName,
-        chordConfidence: s.estimate.chordConfidence,
-        chordStartTime: s.estimate.chordStartTime,
-        chordProgression: s.estimate.chordProgression.map((c) => ({
-          root: c.root as PitchClass,
-          quality: c.quality as ChordQuality,
-          name: c.name,
-          startTime: c.startTime,
-          confidence: c.confidence,
-        })),
-        barChordProgression: s.estimate.barChordProgression.map((c) => ({
-          barIndex: c.barIndex,
-          root: c.root as PitchClass,
-          quality: c.quality as ChordQuality,
-          name: c.name,
-          startTime: c.startTime,
-          confidence: c.confidence,
-        })),
-        currentBar: s.estimate.currentBar,
-        barDuration: s.estimate.barDuration,
-        votedPattern: (s.estimate.votedPattern || []).map((c) => ({
-          barIndex: c.barIndex,
-          root: c.root as PitchClass,
-          quality: c.quality as ChordQuality,
-          name: c.name,
-          startTime: c.startTime,
-          confidence: c.confidence,
-        })),
-        patternLength: s.estimate.patternLength,
-        detectedPatternName: s.estimate.detectedPatternName || '',
-        detectedPatternScore: s.estimate.detectedPatternScore || 0,
-        allPatternScores: (s.estimate.allPatternScores || []).map((p) => ({
-          name: p.name,
-          score: p.score,
-        })),
-        accumulatedSeconds: s.estimate.accumulatedSeconds,
-        usedFrames: s.estimate.usedFrames,
-        updated: s.estimate.updated,
-      },
+      estimate: estimateOf(s.estimate),
     };
   }
 
-  /**
-   * Get total frames processed.
-   */
-  frameCount(): number {
+  /** Total frames processed. */
+  get frameCount(): number {
     return this.analyzer.frameCount();
   }
 
-  /**
-   * Get current time position in seconds.
-   */
-  currentTime(): number {
+  /** Current time position in seconds. */
+  get currentTimeSec(): number {
+    // Native names the position `currentTime`.
     return this.analyzer.currentTime();
   }
 
-  /**
-   * Get the sample rate.
-   */
-  sampleRate(): number {
+  /** Sample rate in Hz. */
+  get sampleRate(): number {
     return this.analyzer.sampleRate();
   }
 
   /**
    * Set the expected total duration for pattern lock timing.
    *
-   * @param durationSeconds - Total duration in seconds
+   * @param durationSec - Total duration in seconds
    */
-  setExpectedDuration(durationSeconds: number): void {
-    this.analyzer.setExpectedDuration(durationSeconds);
+  setExpectedDuration(durationSec: number): void {
+    this.analyzer.setExpectedDuration(durationSec);
   }
 
   /**
@@ -315,20 +550,21 @@ export class StreamAnalyzer {
   }
 
   /**
-   * Set tuning reference frequency for non-standard tuning.
+   * Set the A4 reference frequency for non-standard tuning.
    *
-   * Throws for a value outside 220..880 Hz rather than clamping into it, so
-   * this and `tuningRefHz` at create time accept exactly the same range.
+   * A wrong-typed value is a TypeError; one outside 220..880 Hz is a
+   * RangeError rather than being clamped, so this and `referenceHz` at create
+   * time accept exactly the same range.
    *
-   * @param refHz - Reference frequency for A4 (default 440 Hz, range 220..880)
+   * @param referenceHz - Reference frequency for A4 in Hz (default 440)
    * @example
    * // If audio is 1 semitone sharp (A4 = 466.16 Hz)
-   * analyzer.setTuningRefHz(466.16);
-   * // If audio is 1 semitone flat (A4 = 415.30 Hz)
-   * analyzer.setTuningRefHz(415.30);
+   * analyzer.setReferenceHz(466.16);
    */
-  setTuningRefHz(refHz: number): void {
-    this.analyzer.setTuningRefHz(refHz);
+  setReferenceHz(referenceHz: number): void {
+    assertReferenceHz('StreamAnalyzer.setReferenceHz', referenceHz);
+    // Native names the setter `setTuningRefHz`.
+    this.analyzer.setTuningRefHz(referenceHz);
   }
 
   /** Release the underlying WASM object. Idempotent, as the Node facade is. */

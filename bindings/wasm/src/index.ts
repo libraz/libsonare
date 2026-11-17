@@ -32,16 +32,12 @@ import type {
   SonareModuleHandle,
   VoicePresetId,
 } from './public_types.js';
+import { podConfigFromNative } from './realtime_voice_changer.js';
 import type {
   SonareModule,
-  WasmCyclicTempogramResult,
   WasmDecomposeResult,
-  WasmFourierTempogramResult,
   WasmFrameResult,
   WasmHpssWithResidualResult,
-  WasmNnlsChromaResult,
-  WasmTempogramResult,
-  WasmTrimResult,
 } from './sonare.js';
 
 export { alignTakeToReference } from './align_take.js';
@@ -52,7 +48,7 @@ export type {
   DownmixOptions,
 } from './audio.js';
 export { Audio, decodeChannels, decodeChannelsWithBrowserFallback, downmix } from './audio.js';
-export type { ChordAnnotationFields } from './chord_annotation.js';
+export type { ChordSymbolFields } from './chord_annotation.js';
 export { chordSymbolFromAnalysis, keyModeFromAnalysis } from './chord_annotation.js';
 export type {
   ClipPageStreamerEngine,
@@ -281,30 +277,32 @@ export type {
 export type { ErrorCodeName } from './errors.js';
 export { ErrorCode, isSonareError, SonareError } from './errors.js';
 export type {
+  AmplitudeToDbRequest,
   ChirpRequest,
   ClicksRequest,
   CyclicTempogramRequest,
-  DbConversionRequest,
-  EmphasisRequest,
+  DbToAmplitudeRequest,
+  DbToPowerRequest,
+  DeemphasisRequest,
   FixFramesRequest,
   FixLengthRequest,
   FrameSignalRequest,
-  FramesToSamplesRequest,
-  FramesToTimeRequest,
   OnsetBacktrackRequest,
   PadCenterRequest,
   PcenRequest,
   PeakPickRequest,
   PlpRequest,
-  SamplesToFramesRequest,
+  PowerToDbRequest,
+  PreemphasisRequest,
   SilenceCommonReport,
-  SilenceRequest,
   SplitSilenceCommonRequest,
+  SplitSilenceCommonWithReportRequest,
   SplitSilenceCommonWithReportResult,
+  SplitSilenceRequest,
   TempogramRequest,
-  TimeToFramesRequest,
   ToneRequest,
   TonnetzRequest,
+  TrimSilenceRequest,
   VectorNormalizeRequest,
 } from './feature_core.js';
 export type {
@@ -327,12 +325,8 @@ export type {
 } from './feature_decompose.js';
 export type {
   GriffinLimRequest,
-  MelResultToAudioRequest,
-  MelResultToStftRequest,
   MelToAudioRequest,
   MelToStftRequest,
-  MfccResultToAudioRequest,
-  MfccResultToMelRequest,
   MfccToAudioRequest,
   MfccToMelRequest,
   PhaseVocoderRequest,
@@ -349,11 +343,15 @@ export type {
   CqtToAudioRequest,
   DetectBoundariesRequest,
   FourierTempogramRequest,
+  HybridCqtRequest,
   LufsRequest,
   MelodyOptions,
+  MomentaryLufsRequest,
   NnlsChromaRequest,
-  OnsetEnvelopeRequest,
   OnsetStrengthMultiRequest,
+  OnsetStrengthRequest,
+  PseudoCqtRequest,
+  ShortTermLufsRequest,
   TempogramRatioRequest,
   VqtRequest,
   VqtToAudioRequest,
@@ -369,20 +367,27 @@ export type {
 export type { ResampleRequest } from './feature_resample.js';
 export type {
   PolyFeaturesRequest,
+  RmsEnergyRequest,
+  SpectralBandwidthRequest,
+  SpectralCentroidRequest,
   SpectralContrastRequest,
-  SpectralFrameRequest,
+  SpectralFlatnessRequest,
+  SpectralFluxRequest,
   SpectralRolloffRequest,
   ZeroCrossingRateRequest,
   ZeroCrossingsRequest,
 } from './feature_spectral.js';
 export type {
-  BassChromaSpectrogramRequest,
-  ChromaSpectrogramRequest,
+  BassChromaRequest,
+  ChromaCensRequest,
+  ChromaCqtRequest,
+  ChromaRequest,
   MelDeltaRequest,
   MelSpectrogramRequest,
   MfccRequest,
   ReassignedSpectrogramRequest,
-  SpectrogramRequest,
+  StftDbRequest,
+  StftRequest,
   TrimRequest,
 } from './feature_spectrogram.js';
 export {
@@ -438,7 +443,7 @@ export {
   noteSegments,
   noteToHz,
   onsetBacktrack,
-  onsetEnvelope,
+  onsetStrength,
   onsetStrengthMulti,
   padCenter,
   pcen,
@@ -718,21 +723,27 @@ export type {
   AcousticOptions,
   AcousticResult,
   AnalysisChord,
+  AnalysisDynamics,
+  AnalysisMelody,
   AnalysisResult,
+  AnalysisRhythm,
   AnalyzeBpmOptions,
   AnalyzeDynamicsOptions,
   AnalyzeRhythmOptions,
   AnalyzeSectionsOptions,
   AnalyzeTimbreOptions,
+  AssignNoteTargetsResult,
   AutomationCurve,
   AutoTuneKey,
   AutoTuneOptions,
   AutoTuneResult,
   Beat,
+  BeatObservations,
   Boundary,
   BoundaryOptions,
   BoundaryResult,
-  BpmHypothesis,
+  BpmCandidate,
+  BpmCandidateRelation,
   Capabilities,
   CapabilityCatalog,
   CapabilityCatalogChain,
@@ -742,10 +753,12 @@ export type {
   CapabilityCatalogPresets,
   Chord,
   ChordAnalysisResult,
+  ChordChromaMethod,
   ChordDetectionOptions,
   ChordFunction,
   ChordFunctionsInput,
   ChordFunctionsKey,
+  ChordQuality,
   ChromaResult,
   ClickDetection,
   ClipDetection,
@@ -757,8 +770,7 @@ export type {
   DehumReport,
   DenoiseReport,
   DereverbReport,
-  DetectKeyOptions,
-  Dynamics,
+  DynamicsResult,
   EqBand,
   EqBandPhase,
   EqBandType,
@@ -767,7 +779,9 @@ export type {
   EqSpectrumSnapshot,
   EqStereoPlacement,
   FunctionalChord,
+  GenreHint,
   GoniometerPoint,
+  GrooveType,
   HpssResult,
   HumDetection,
   JsonResult,
@@ -776,7 +790,7 @@ export type {
   KeyDetection,
   KeyDetectionOptions,
   KeyMode,
-  KeyProfileName,
+  KeyProfile,
   LoudnessMatchResult,
   LoudnessMatchStereoResult,
   LufsResult,
@@ -825,7 +839,6 @@ export type {
   Matrix2D,
   MelodyPoint,
   MelodyResult,
-  MelPowerResult,
   MelSpectrogramResult,
   MeterEstimate,
   MeterTap,
@@ -854,6 +867,7 @@ export type {
   MixTrackAlignment,
   MultibandCompressorBand,
   NoiseDetection,
+  NormType,
   NoteEdit,
   NoteEditInput,
   NoteExtractorOptions,
@@ -864,9 +878,7 @@ export type {
   NoteSetEntry,
   NoteStretchOptions,
   NoteTarget,
-  NoteTargetAssignResult,
   NoteTargetUnmatchedPolicy,
-  OnsetStrengthMultiResult,
   PairAnalysis,
   PairAnalysisResultMap,
   PairProcessor,
@@ -879,7 +891,6 @@ export type {
   PercussiveEventEditInput,
   PercussiveEventInput,
   PiptrackResult,
-  PitchClassName,
   PitchCorrectOptions,
   PitchDecompositionResult,
   PitchResult,
@@ -907,7 +918,7 @@ export type {
   RenderPlaybackRequest,
   RenderPlaybackResult,
   ReverbDetection,
-  RhythmFeatures,
+  RhythmResult,
   RirDiagnostic,
   RirResult,
   RirSynthOptions,
@@ -919,9 +930,8 @@ export type {
   RoomMorphResult,
   RoomMorphStereoResult,
   RoomPlacement,
-  ScaleName,
   Section,
-  SegmentMatrix,
+  SectionType,
   SendTiming,
   SidechainCheck,
   SidechainRefusal,
@@ -930,7 +940,6 @@ export type {
   SonareModuleHandle,
   SpectralEditMode,
   SpectralEditOptions,
-  SpectralEditWindow,
   SpectralRegionOp,
   StageGainReduction,
   StereoAnalysis,
@@ -939,7 +948,6 @@ export type {
   StereoMonoCompatCheckLogBandsResult,
   StereoMonoCompatCheckResult,
   StereoPairProcessor,
-  StftMagnitudeResult,
   StftResult,
   StreamingEqualizerConfig,
   StreamingLoudnessGainResult,
@@ -948,7 +956,8 @@ export type {
   StreamingRetuneConfig,
   SurroundPan,
   TempogramMode,
-  Timbre,
+  TimbreFrame,
+  TimbreResult,
   TimeSignature,
   TrimRange,
   TrimReport,
@@ -965,46 +974,36 @@ export type {
   VoiceScaleKind,
   VoiceVocoderCarrierSource,
   VoiceVocoderCarrierWave,
+  WindowType,
 } from './public_types.js';
-export {
-  ChordQuality,
-  KeyProfile,
-  Mode,
-  PitchClass,
-  SectionType,
-} from './public_types.js';
+export { CHORD_QUALITIES, Mode, PitchClass } from './public_types.js';
 export type * from './public_types_vocal_edit.js';
 export type {
   AnalyzeBpmRequest,
   AnalyzeDynamicsRequest,
   AnalyzeImpulseResponseRequest,
+  AnalyzeRequest,
   AnalyzeRhythmRequest,
   AnalyzeTimbreRequest,
-  AnalyzeWithProgressRequest,
   BpmAnalysisResult,
-  BpmCandidate,
   ChordFunctionalAnalysisRequest,
   ChordFunctionsRequest,
   DetectAcousticRequest,
+  DetectBeatsRequest,
+  DetectBpmRequest,
   DetectChordsRequest,
+  DetectDownbeatsRequest,
   DetectKeyCandidatesRequest,
   DetectKeyRequest,
   DetectOnsetsRequest,
-  DynamicsAnalysisResult,
-  DynamicsResult,
   EstimateMeterRequest,
   EstimateRoomRequest,
   MusicAnalyzeOptions,
-  MusicAnalyzeRequest,
   OnsetDetectOptions,
-  RhythmAnalysisResult,
   RoomGeometryEstimate,
   RoomGeometryFromEstimateRequest,
   RoomMorphRequest,
   RoomMorphStereoRequest,
-  SamplesRequest,
-  TimbreAnalysisResult,
-  TimbreFrame,
 } from './quick_analysis.js';
 export {
   analyze,
@@ -1013,7 +1012,6 @@ export {
   analyzeImpulseResponse,
   analyzeRhythm,
   analyzeTimbre,
-  analyzeWithProgress,
   chordFunctionalAnalysis,
   chordFunctions,
   detectAcoustic,
@@ -1077,19 +1075,18 @@ export {
   scaleQuantizeMidi,
 } from './scale.js';
 export type { ProgressCallback } from './sonare.js';
-export { StreamAnalyzer, streamAnalyzerConfigDefaults } from './stream_analyzer.js';
+export { StreamAnalyzer, streamAnalyzerConfigDefault } from './stream_analyzer.js';
 export type {
-  AnalyzerStats,
-  BarChord,
-  ChordChange,
-  FrameBuffer,
-  PatternScore,
-  ProgressiveEstimate,
+  StreamBarChord,
+  StreamChordChange,
   StreamConfig,
-  StreamConfigDefaults,
+  StreamFrames,
   StreamFramesI16,
   StreamFramesU8,
+  StreamPatternScore,
+  StreamProgressiveEstimate,
   StreamQuantizeConfig,
+  StreamStats,
 } from './stream_types.js';
 export type {
   MixerMeterSnapshot,
@@ -1154,18 +1151,14 @@ export { OfflineWorkerClient } from './worker_client.js';
 export type DecomposeResult = WasmDecomposeResult;
 /** Harmonic / percussive / residual signals from {@link hpssWithResidual}. */
 export type HpssWithResidualResult = WasmHpssWithResidualResult;
-/** Tempogram frames from {@link tempogram}. */
-export type TempogramResult = WasmTempogramResult;
-/** Cyclic tempogram from {@link cyclicTempogram}. */
-export type CyclicTempogramResult = WasmCyclicTempogramResult;
-/** Fourier tempogram from {@link fourierTempogram}. */
-export type FourierTempogramResult = WasmFourierTempogramResult;
 /** Framed signal from {@link frameSignal}. */
 export type FrameResult = WasmFrameResult;
-/** NNLS chroma from {@link nnlsChroma}. */
-export type NnlsChromaResult = WasmNnlsChromaResult;
-/** Trimmed signal and its bounds from {@link trimSilence}. */
-export type TrimResult = WasmTrimResult;
+/** Trimmed signal and its bounds, in samples of the input. */
+export interface TrimResult {
+  audio: Float32Array;
+  startSample: number;
+  endSample: number;
+}
 
 // ============================================================================
 // Module State
@@ -1357,13 +1350,13 @@ export function realtimeVoiceChangerPresetConfig(
   if (!module) {
     throw notInitializedError();
   }
-  return module.realtimeVoiceChangerPresetConfig(resolveVoicePresetOrdinal(preset));
+  return podConfigFromNative(
+    module.realtimeVoiceChangerPresetConfig(resolveVoicePresetOrdinal(preset)),
+  );
 }
 
 // ============================================================================
 // Re-exports
 // ============================================================================
-
-export { PitchClass as Pitch } from './public_types.js';
 
 export type * from './public_types_vocal_project.js';

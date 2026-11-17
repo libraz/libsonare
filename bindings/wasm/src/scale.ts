@@ -1,5 +1,5 @@
 import { getSonareModule } from './module_state.js';
-import type { Mode, ScaleName } from './public_types_music.js';
+import type { KeyMode, Mode } from './public_types_music.js';
 import { assertFiniteScalar } from './validation.js';
 
 // ============================================================================
@@ -18,7 +18,7 @@ import { assertFiniteScalar } from './validation.js';
  * @example
  * scaleMaskForMode(0, 'major'); // 0b101010110101
  */
-export function scaleMaskForMode(root: number, mode: ScaleName | Mode): number {
+export function scaleMaskForMode(root: number, mode: KeyMode | Mode): number {
   return getSonareModule().scaleMaskForMode(root, mode);
 }
 

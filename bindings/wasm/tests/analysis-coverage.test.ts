@@ -18,7 +18,6 @@ import {
   chordFunctionalAnalysis,
   ErrorCode,
   init,
-  Mode,
   masterAudio,
   masterAudioStereo,
   masterAudioStereoWithProgress,
@@ -139,10 +138,15 @@ describe('WASM analyzer coverage parity', () => {
       // A simple tonal signal; the exact labels depend on detection, but the
       // surface must return the timed entries (one per detected chord, with roman and function).
       const samples = makeSine(4, 261.63); // C4
-      const labels = chordFunctionalAnalysis(samples, PitchClass.C, Mode.Major, SR);
+      const labels = chordFunctionalAnalysis({
+        samples,
+        sampleRate: SR,
+        keyRoot: PitchClass.C,
+        keyMode: 'major',
+      });
       expect(Array.isArray(labels)).toBe(true);
       for (const entry of labels) {
-        expect(entry.roman.length).toBeGreaterThan(0);
+        expect(entry.romanNumeral.length).toBeGreaterThan(0);
         expect(entry.function.length).toBeGreaterThan(0);
       }
     });

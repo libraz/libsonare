@@ -20,21 +20,6 @@ export const PitchClass = {
 
 export type PitchClass = (typeof PitchClass)[keyof typeof PitchClass];
 
-/** A pitch class by name, as `Chord.rootName` spells it. */
-export type PitchClassName =
-  | 'C'
-  | 'C#'
-  | 'D'
-  | 'D#'
-  | 'E'
-  | 'F'
-  | 'F#'
-  | 'G'
-  | 'G#'
-  | 'A'
-  | 'A#'
-  | 'B';
-
 /**
  * Musical mode
  */
@@ -60,91 +45,89 @@ export type KeyMode =
   | 'mixolydian'
   | 'locrian';
 
-/** A scale named by the mode names `detectKey` reports, as `scaleMaskForMode` takes it. */
-export type ScaleName = KeyMode;
+/** Autocorrelation or cosine-similarity tempogram. */
+export type TempogramMode = 'autocorrelation' | 'cosine';
 
-export type TempogramMode = 'autocorrelation' | 'auto' | 'ac' | 'cosine' | 0 | 1;
-
-export const KeyProfile = {
-  KrumhanslSchmuckler: 0,
-  Temperley: 1,
-  Shaath: 2,
-  FaraldoEDMT: 3,
-  FaraldoEDMA: 4,
-  FaraldoEDMM: 5,
-  BellmanBudge: 6,
-} as const;
-
-export type KeyProfile = (typeof KeyProfile)[keyof typeof KeyProfile];
-
-export type KeyProfileName =
-  | 'ks'
-  | 'krumhansl'
-  | 'krumhansl-schmuckler'
+/** Key-profile family; a closed set of lowerCamelCase names, numbers refused. */
+export type KeyProfile =
+  | 'krumhanslSchmuckler'
   | 'temperley'
   | 'shaath'
-  | 'keyfinder'
-  | 'faraldo-edmt'
-  | 'edmt'
-  | 'faraldo-edma'
-  | 'edma'
-  | 'faraldo-edmm'
-  | 'edmm'
-  | 'bellman-budge'
-  | 'bellman';
+  | 'faraldoEdmt'
+  | 'faraldoEdma'
+  | 'faraldoEdmm'
+  | 'bellmanBudge';
+
+/** Genre hint that picks a key profile; an unknown value is refused with `RangeError`. */
+export type GenreHint = 'auto' | 'edm' | 'electronic' | 'dance' | 'pop' | 'classical' | 'jazz';
+
+/** Normalisation used by `vectorNormalize`. */
+export type NormType = 'max' | 'l1' | 'l2' | 'power';
+
+/** Chroma front end for chord detection; `'cqt'` is the default. */
+export type ChordChromaMethod = 'stft' | 'nnls' | 'cqt';
+
+/** Rhythmic feel reported by the rhythm analysis. */
+export type GrooveType = 'straight' | 'shuffle' | 'swing';
+
+/** How a tempo hypothesis relates to the chosen tempo. */
+export type BpmCandidateRelation = 'primary' | 'half' | 'double' | 'other';
 
 /**
- * Chord quality
+ * Chord quality tokens, indexed by the native ordinal: `CHORD_QUALITIES[ordinal]`
+ * names the quality a native result or a streaming frame reports.
  */
-export const ChordQuality = {
-  Major: 0,
-  Minor: 1,
-  Diminished: 2,
-  Augmented: 3,
-  Dominant7: 4,
-  Major7: 5,
-  Minor7: 6,
-  Sus2: 7,
-  Sus4: 8,
-  Unknown: 9,
-  Add9: 10,
-  MinorAdd9: 11,
-  Dim7: 12,
-  HalfDim7: 13,
-  Major9: 14,
-  Dominant9: 15,
-  Sus2Add4: 16,
-  Major6: 17,
-  Minor6: 18,
-  MinorMajor7: 19,
-  Dominant7Sus4: 20,
-  Dominant11: 21,
-  Dominant13: 22,
-  Dominant7Flat9: 23,
-  Dominant7Sharp9: 24,
-} as const;
+export const CHORD_QUALITIES = [
+  'major',
+  'minor',
+  'diminished',
+  'augmented',
+  'dominant7',
+  'major7',
+  'minor7',
+  'sus2',
+  'sus4',
+  'unknown',
+  'add9',
+  'minorAdd9',
+  'dim7',
+  'halfDim7',
+  'major9',
+  'dominant9',
+  'sus2Add4',
+  'major6',
+  'minor6',
+  'minorMajor7',
+  'dominant7Sus4',
+  'dominant11',
+  'dominant13',
+  'dominant7Flat9',
+  'dominant7Sharp9',
+] as const;
 
-export type ChordQuality = (typeof ChordQuality)[keyof typeof ChordQuality];
+/** Chord quality as a token; `'unknown'` is a chord the analyzer did not name. */
+export type ChordQuality = (typeof CHORD_QUALITIES)[number];
 
 /**
- * Section type.
+ * Section type tokens, indexed by the native ordinal.
  *
- * `Unknown` means the analyzer did not name the segment: no boundary was
+ * `'unknown'` means the analyzer did not name the segment: no boundary was
  * detected, the segment matched none of the positive branches, or the evidence
  * for a musical function was too weak to assert one. Its `confidence` is 0.
  */
-export const SectionType = {
-  Intro: 0,
-  Verse: 1,
-  PreChorus: 2,
-  Chorus: 3,
-  Bridge: 4,
-  Instrumental: 5,
-  Outro: 6,
-  Unknown: 7,
-} as const;
+export const SECTION_TYPES = [
+  'intro',
+  'verse',
+  'preChorus',
+  'chorus',
+  'bridge',
+  'instrumental',
+  'outro',
+  'unknown',
+] as const;
 
-export type SectionType = (typeof SectionType)[keyof typeof SectionType];
+/** Section type as a token. */
+export type SectionType = (typeof SECTION_TYPES)[number];
 
 /**
  * Detected musical key
@@ -174,8 +157,8 @@ export interface Key {
 
 /** A detected key together with the tuning its chroma was built with. */
 export interface KeyDetection extends Key {
-  /** Tuning used, in fractions of a semitone: the given value, or the measured one under `'auto'`. */
-  tuning: number;
+  /** Tuning used, in cents: the given value, or the measured one under `'auto'`. */
+  tuningCents: number;
 }
 
 export interface KeyDetectionOptions extends ValidateOptions {
@@ -183,25 +166,25 @@ export interface KeyDetectionOptions extends ValidateOptions {
   hopLength?: number;
   useHpss?: boolean;
   loudnessWeighted?: boolean;
-  highPassHz?: number;
-  modes?: Mode[] | KeyMode[] | 'major-minor' | 'all' | 'modal';
+  /** Chroma high-pass cutoff in Hz; absent = 80, 0 = no filter. */
+  chromaHighPassHz?: number;
+  /** Modes to score: a list of names, or `'majorMinor'`, `'all'` (every mode) or `'modal'`. */
+  modes?: KeyMode[] | 'majorMinor' | 'all' | 'modal';
   /**
    * Pins the key-profile family; a pinned profile outranks `genreHint`. Omitted, `genreHint`
    * chooses it, or the chroma does under the default `'auto'` hint.
    */
-  profile?: KeyProfile | KeyProfileName;
-  genreHint?: 'auto' | 'edm' | 'electronic' | 'dance' | 'pop' | 'classical' | 'jazz' | string;
+  profile?: KeyProfile;
+  /** Genre hint; an unknown value is refused with `RangeError`. */
+  genreHint?: GenreHint;
   /**
-   * Tuning offset of the recording in fractions of a semitone, in `[-0.5, 0.5)`;
-   * 0 is concert A440. Omitted or `'auto'` measures it from the audio. The value
-   * used is reported as {@link KeyDetection.tuning}; {@link referenceHzToTuning}
-   * converts a reference pitch to this unit. Pass 0 to read the chroma at A440.
+   * Tuning offset of the recording in cents, in `[-50, 50)`; 0 is concert A440.
+   * Omitted or `'auto'` measures it from the audio. The value used is reported
+   * as {@link KeyDetection.tuningCents}; {@link referenceHzToTuning} converts a
+   * reference pitch to this unit. Pass 0 to read the chroma at A440.
    */
-  tuning?: number | 'auto';
+  tuningCents?: number | 'auto';
 }
-
-/** Options of `detectKey`; the same set `detectKeyCandidates` takes. */
-export type DetectKeyOptions = KeyDetectionOptions;
 
 export interface KeyCandidate {
   key: Key;
@@ -209,8 +192,10 @@ export interface KeyCandidate {
 }
 
 export interface ChordDetectionOptions extends ValidateOptions {
-  minDuration?: number;
-  smoothingWindow?: number;
+  /** Shortest chord kept, in seconds. */
+  minDurationSec?: number;
+  /** Chord smoothing window, in seconds. */
+  smoothingWindowSec?: number;
   /** Final-template correlation threshold in [0, 1]; below it emits Unknown / N.C. */
   threshold?: number;
   useTriadsOnly?: boolean;
@@ -221,27 +206,27 @@ export interface ChordDetectionOptions extends ValidateOptions {
   useHmm?: boolean;
   hmmBeamWidth?: number;
   useKeyContext?: boolean;
-  /** Pitch class ordinal or name, e.g. `detectKey`'s `root`. */
-  keyRoot?: PitchClass | PitchClassName;
-  /** Mode ordinal or name, e.g. `detectKey`'s `mode`. */
-  keyMode?: Mode | KeyMode;
+  /** Pitch class 0-11, e.g. `detectKey`'s `root`. */
+  keyRoot?: PitchClass;
+  /** Mode name, e.g. `detectKey`'s `mode`. */
+  keyMode?: KeyMode;
   detectInversions?: boolean;
   /** Chroma front end; default `'cqt'`. */
-  chromaMethod?: 'stft' | 'nnls' | 'cqt';
+  chromaMethod?: ChordChromaMethod;
   /**
-   * Tuning offset of the recording in fractions of a semitone; must be in
-   * `[-0.5, 0.5)`. Omitted or `'auto'` measures it from the audio; the value used
-   * is reported as {@link ChordAnalysisResult.tuning}. {@link referenceHzToTuning}
-   * converts a reference pitch to this unit. Pass 0 for concert A440.
+   * Tuning offset of the recording in cents; must be in `[-50, 50)`. Omitted or
+   * `'auto'` measures it from the audio; the value used is reported as
+   * {@link ChordAnalysisResult.tuningCents}. {@link referenceHzToTuning} converts
+   * a reference pitch to this unit. Pass 0 for concert A440.
    */
-  tuning?: number | 'auto';
+  tuningCents?: number | 'auto';
 }
 
 /** Options for `analyzeBpm`. All fields are optional. */
 export interface AnalyzeBpmOptions extends ValidateOptions {
-  /** Lowest BPM to consider. Default 30. */
+  /** Lowest BPM to consider. Default 60. */
   bpmMin?: number;
-  /** Highest BPM to consider. Default 300. */
+  /** Highest BPM to consider. Default 200. */
   bpmMax?: number;
   /** Tempo prior the tracker is biased toward. Default 120. */
   startBpm?: number;
@@ -274,7 +259,7 @@ export interface AnalyzeDynamicsOptions extends ValidateOptions {
   /** Hop length for the loudness curve. Default 512. */
   hopLength?: number;
   /** Crest-factor (dB) below which the signal is flagged as compressed. Default 6. */
-  compressionThreshold?: number;
+  compressionThresholdDb?: number;
 }
 
 /** Options for `analyzeTimbre`. All fields are optional. */
@@ -292,7 +277,7 @@ export interface AnalyzeTimbreOptions extends ValidateOptions {
 }
 
 /** Options for `analyzeSections`. All fields are optional. */
-export interface AnalyzeSectionsOptions {
+export interface AnalyzeSectionsOptions extends ValidateOptions {
   /** FFT size. Default 2048. */
   nFft?: number;
   /** Hop length. Default 512. */
@@ -306,7 +291,7 @@ export interface AnalyzeSectionsOptions {
  */
 export interface Beat {
   /** Beat position in seconds. */
-  time: number;
+  timeSec: number;
   /**
    * Onset-envelope value sampled at the beat's frame.
    *
@@ -362,10 +347,10 @@ export interface Chord {
   /** Canonical core spelling; stable across all language bindings. */
   bassName: string;
   quality: ChordQuality;
-  start: number;
-  end: number;
-  /** Derived from `end - start`; the core carries only the two endpoints. */
-  duration: number;
+  startSec: number;
+  endSec: number;
+  /** Derived from `endSec - startSec`; the core carries only the two endpoints. */
+  durationSec: number;
   confidence: number;
   name: string;
 }
@@ -394,23 +379,23 @@ export interface ChordFunctionsInput {
 
 /** A key given as `detectKey` reports it. */
 export interface ChordFunctionsKey {
-  /** Pitch class ordinal or name. */
-  root: PitchClass | PitchClassName;
-  /** Mode name as `detectKey` reports it, or its `Mode` ordinal. */
-  mode: KeyMode | Mode;
+  /** Pitch class 0-11. */
+  root: PitchClass;
+  /** Mode name as `detectKey` reports it. */
+  mode: KeyMode;
 }
 
 /** A timed chord with its Roman numeral and harmonic function in a key. */
 export type FunctionalChord<T extends ChordFunctionsInput = Chord> = T & {
   /** Roman numeral relative to the key (`'I'`, `'V7'`, `'vi'`; `'N.C.'` for an unknown chord). */
-  roman: string;
+  romanNumeral: string;
   function: ChordFunction;
 };
 
 export interface ChordAnalysisResult {
   chords: Chord[];
-  /** Tuning the chroma was built with, in fractions of a semitone: the given value, or the measured one under `tuning: 'auto'`. */
-  tuning: number;
+  /** Tuning the chroma was built with, in cents: the given value, or the measured one under `tuningCents: 'auto'`. */
+  tuningCents: number;
 }
 
 /**
@@ -418,8 +403,8 @@ export interface ChordAnalysisResult {
  */
 export interface Section {
   type: SectionType;
-  start: number;
-  end: number;
+  startSec: number;
+  endSec: number;
   /** Median frame RMS in the section over the loudest section's, in `[0, 1]`. */
   energyLevel: number;
   /** Confidence in `type`, in `[0, 1]`; always 0 for `Unknown`. */
@@ -433,7 +418,7 @@ export interface Section {
 }
 
 /** Options for `detectBoundaries`. All fields are optional. */
-export interface BoundaryOptions {
+export interface BoundaryOptions extends ValidateOptions {
   /** FFT size used for the structural features. Default 2048. */
   nFft?: number;
   /** Hop length in samples. Default 512. */
@@ -442,7 +427,7 @@ export interface BoundaryOptions {
   kernelSize?: number;
   /**
    * Relative novelty threshold: a peak must reach this fraction of the largest raw
-   * novelty event within {@link referenceWindow} of it, a lone dominant event (one
+   * novelty event within {@link referenceWindowSec} of it, a lone dominant event (one
    * no other event in the window comes within 30% of) set aside. Selects
    * how prominent a peak is *among its neighbours*; it says nothing about how much
    * the features actually changed. Default 0.3.
@@ -463,7 +448,7 @@ export interface BoundaryOptions {
   /** Number of chroma bins. Default 12. */
   nChroma?: number;
   /** Minimum spacing between peaks, in seconds. Default 2. */
-  peakDistance?: number;
+  peakDistanceSec?: number;
   /**
    * One-sided span in seconds over which the local novelty maximum that
    * `threshold` is measured against is taken. Must be finite and non-negative;
@@ -471,7 +456,7 @@ export interface BoundaryOptions {
    * A value at least the track length makes the reference whole-track, still with
    * a lone dominant event set aside. Default 60.
    */
-  referenceWindow?: number;
+  referenceWindowSec?: number;
   /** Use MFCC features. Default `true`. */
   useMfcc?: boolean;
   /** Use chroma features. Default `true`. */
@@ -483,11 +468,11 @@ export interface BoundaryOptions {
  */
 export interface Boundary {
   /** Boundary time in seconds (the authoritative output). */
-  time: number;
+  timeSec: number;
   /**
    * Index into the analysis grid, on {@link BoundaryResult.sampleRate}'s time
    * base rather than the source's. For a long-form input the feature grid is
-   * additionally mean-pooled, so this indexes the pooled grid; use `time` for
+   * additionally mean-pooled, so this indexes the pooled grid; use `timeSec` for
    * sample/second mapping either way.
    */
   frame: number;
@@ -535,9 +520,9 @@ export interface BoundaryResult {
  */
 export interface MelodyPoint {
   /** Frame time in seconds. */
-  time: number;
-  /** Estimated fundamental frequency in Hz (0 when unvoiced). */
-  frequency: number;
+  timeSec: number;
+  /** Estimated fundamental frequency in Hz; absent when the frame is unvoiced. */
+  frequencyHz?: number;
   /** Voicing confidence in `[0, 1]`. */
   confidence: number;
 }
@@ -549,29 +534,19 @@ export interface MelodyResult {
   points: MelodyPoint[];
   pitchRangeOctaves: number;
   pitchStability: number;
-  meanFrequency: number;
-  vibratoRate: number;
+  meanFrequencyHz: number;
+  vibratoRateHz: number;
 }
 
 /**
- * Timbre characteristics
+ * Dynamics characteristics from the unified analysis.
  */
-export interface Timbre {
-  brightness: number;
-  warmth: number;
-  density: number;
-  roughness: number;
-  complexity: number;
-}
-
-/**
- * Dynamics characteristics
- */
-export interface Dynamics {
+export interface AnalysisDynamics {
   dynamicRangeDb: number;
   peakDb: number;
   rmsDb: number;
-  loudnessRangeDb: number;
+  /** Loudness range in LU (EBU R128). */
+  loudnessRangeLu: number;
   crestFactor: number;
   isCompressed: boolean;
 }
@@ -672,19 +647,12 @@ export interface MeterEstimate {
   candidates: TimeSignature[];
 }
 
-/** Existing tempo-estimator hypothesis retained by unified analysis. */
-export interface BpmHypothesis {
-  value: number;
-  confidence: number;
-  relation: 'primary' | 'half' | 'double' | 'other';
-}
-
 /**
- * Rhythm features
+ * Rhythm features from the unified analysis.
  */
-export interface RhythmFeatures {
+export interface AnalysisRhythm {
   syncopation: number;
-  grooveType: string;
+  grooveType: GrooveType;
   patternRegularity: number;
   tempoStability: number;
   timeSignature: TimeSignature;
@@ -693,11 +661,11 @@ export interface RhythmFeatures {
 /**
  * Melody contour from the unified analysis (pitch trajectory + summary stats).
  */
-export interface MelodyContour {
+export interface AnalysisMelody {
   pitchRangeOctaves: number;
   pitchStability: number;
-  meanFrequency: number;
-  vibratoRate: number;
+  meanFrequencyHz: number;
+  vibratoRateHz: number;
   pitches: MelodyPoint[];
 }
 
@@ -708,32 +676,26 @@ export interface AnalysisResult {
   bpm: number;
   /**
    * Winning tempo cluster's vote share within the searched range: 60–200 BPM at 22050 Hz.
-   * `analyzeBpm()` searches 30–300 BPM at the input rate by default, so the two can differ on
-   * the same input; pass `bpmMin: 60, bpmMax: 200` and a 22050 Hz input to compare them.
+   * `analyzeBpm()` searches 60–200 BPM at the input rate, so the two can differ on the same
+   * input; use a 22050 Hz input to compare them.
    */
   bpmConfidence: number;
-  bpmCandidates: BpmHypothesis[];
+  bpmCandidates: BpmCandidate[];
   key: Key;
   timeSignature: TimeSignature;
   timeSignatureCandidates: TimeSignature[];
-  beatTimes: Float32Array;
   beats: Beat[];
   /**
-   * Indices into {@link AnalysisResult.beats} that fall on a measure start.
-   *
-   * @remarks
-   * Not the same length as `beats` — it holds one entry per detected downbeat,
-   * and each entry indexes `beats`, so `beats[downbeatIndices[k]]` is the k-th
-   * downbeat. Testing a beat for downbeat status is a membership check on this
-   * list rather than a time comparison against a separate downbeat series.
+   * The beats that fall on a measure start, in time order: one entry per detected
+   * downbeat, each also present in {@link AnalysisResult.beats}.
    */
-  downbeatIndices: number[];
+  downbeats: Beat[];
   /**
    * Beat index the first measure starts on, in `[0, timeSignature.numerator)`.
    *
    * @remarks
-   * The meter estimator's phase, so `downbeatIndices` normally begins at this
-   * value. It is not re-derived when downbeats are refined from chord and
+   * The meter estimator's phase, so the first downbeat normally sits at this
+   * beat. It is not re-derived when downbeats are refined from chord and
    * low-frequency-energy evidence, so the two can disagree when the refinement
    * moves the first measure start.
    */
@@ -765,11 +727,74 @@ export interface AnalysisResult {
   beatLocalBpm: number[];
   chords: AnalysisChord[];
   sections: Section[];
-  timbre: Timbre;
-  dynamics: Dynamics;
-  rhythm: RhythmFeatures;
-  melody: MelodyContour;
+  timbre: TimbreFrame;
+  dynamics: AnalysisDynamics;
+  rhythm: AnalysisRhythm;
+  melody: AnalysisMelody;
   form: string;
-  /** Tuning the chromagrams were built with, in fractions of a semitone: the given value, or the measured one under `tuning: 'auto'`. */
-  tuning: number;
+  /** Tuning the chromagrams were built with, in cents: the given value, or the measured one under `tuningCents: 'auto'`. */
+  tuningCents: number;
+}
+
+/** A tempo hypothesis from the analysis. */
+export interface BpmCandidate {
+  bpm: number;
+  confidence: number;
+  /** How the candidate relates to the chosen tempo; present on `AnalysisResult.bpmCandidates`. */
+  relation?: BpmCandidateRelation;
+}
+
+export interface RhythmResult {
+  timeSignature: { numerator: number; denominator: number; confidence: number };
+  syncopation: number;
+  grooveType: GrooveType;
+  patternRegularity: number;
+  tempoStability: number;
+  /**
+   * The beat tracker's own tempo, refined from the local beat period. It is a
+   * third figure rather than either tempo entry point's: measured against
+   * synthesized click trains it differs from both at every sample rate, and
+   * lands closer to the known tempo than either. Analysed at the sample rate
+   * you pass: `nFft` is a window length in samples at 22050 Hz, rescaled to
+   * that rate, and `hopLength` is in samples of your buffer.
+   */
+  bpm: number;
+  beatIntervals: Float32Array;
+}
+
+/**
+ * Dynamics metrics returned by {@link analyzeDynamics}.
+ *
+ * The Node package declares the same shape under the same name; the two are
+ * pinned to one field list by `tests/conformance/shared_type_shapes.json`.
+ */
+export interface DynamicsResult {
+  dynamicRangeDb: number;
+  peakDb: number;
+  rmsDb: number;
+  crestFactor: number;
+  /** Loudness range in LU (EBU R128). */
+  loudnessRangeLu: number;
+  isCompressed: boolean;
+  /** Loudness curve timestamps (seconds), parallel to {@link loudnessRmsDb}. */
+  loudnessTimes: Float32Array;
+  /** Loudness curve RMS values (dB), parallel to {@link loudnessTimes}. */
+  loudnessRmsDb: Float32Array;
+}
+
+/** Timbre metrics for one analysis window. Entries are ordered by time in `timbreOverTime`. */
+export interface TimbreFrame {
+  brightness: number;
+  warmth: number;
+  density: number;
+  roughness: number;
+  complexity: number;
+}
+
+export interface TimbreResult extends TimbreFrame {
+  spectralCentroid: Float32Array;
+  spectralFlatness: Float32Array;
+  spectralRolloff: Float32Array;
+  /** Time-varying timbre metrics, one entry per analysis window. */
+  timbreOverTime: TimbreFrame[];
 }

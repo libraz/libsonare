@@ -189,7 +189,7 @@ export type VoicePitchEngine = 'grain' | 'psola';
 export type VoicePitchCorrectionMode = 'off' | 'auto' | 'robot';
 
 /** Scale used by auto pitch and harmony. */
-export type VoiceScaleKind = 'major' | 'natural_minor' | 'chromatic';
+export type VoiceScaleKind = 'major' | 'naturalMinor' | 'chromatic';
 
 /** Where the vocoder carrier comes from. */
 export type VoiceVocoderCarrierSource = 'internal' | 'external';

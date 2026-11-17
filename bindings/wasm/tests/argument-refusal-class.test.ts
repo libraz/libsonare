@@ -38,7 +38,6 @@ import {
   mixStereo,
   RealtimeEngine,
   renderPlayback,
-  StreamAnalyzer,
   StreamingEqualizer,
   samplesToFrames,
   timeToFrames,
@@ -148,7 +147,7 @@ describe('argument refusal classes shared with the Node surface', () => {
       () => hzToMidi(wrong),
       () => midiToHz(wrong),
       () => hzToNote(wrong),
-      () => dbToAmplitude(new Float32Array(2), wrong),
+      () => dbToAmplitude({ values: new Float32Array(2), ref: wrong }),
       () => framesToTime(wrong),
       () => framesToSamples(wrong),
       () => samplesToFrames(wrong),
@@ -252,30 +251,17 @@ describe('argument refusal classes shared with the Node surface', () => {
     expect(isSonareError(error)).toBe(false);
   });
 
-  it('reports StreamAnalyzer computeMagnitude as a coded NotSupported SonareError', () => {
-    const error = thrown(() => new StreamAnalyzer({ sampleRate: 22050, computeMagnitude: true }));
-    expect(isSonareError(error)).toBe(true);
-    expect((error as { code: number }).code).toBe(ErrorCode.NotSupported);
-    expect((error as Error).message).toMatch(/computeMagnitude is not supported/);
-  });
-
   it('refuses a misspelt request key of the inverse transforms by name', () => {
-    const power = new Float32Array(8);
+    const power = { data: new Float32Array(8), rows: 2, cols: 4 };
     const refused = (call: () => unknown, key: string) => {
       const error = thrown(call);
       expect(error).toBeInstanceOf(TypeError);
       expect((error as Error).message).toContain(`'${key}'`);
     };
-    refused(() => melToStft({ power, nMels: 2, nFrames: 4, nfft: 4096 } as never), 'nfft');
-    refused(() => melToAudio({ power, nMels: 2, nFrames: 4, nfft: 4096 } as never), 'nfft');
-    refused(
-      () => mfccToMel({ coefficients: power, nMfcc: 2, nFrames: 4, nmels: 8 } as never),
-      'nmels',
-    );
-    refused(
-      () => mfccToAudio({ coefficients: power, nMfcc: 2, nFrames: 4, nfft: 4096 } as never),
-      'nfft',
-    );
+    refused(() => melToStft({ power, nfft: 4096 } as never), 'nfft');
+    refused(() => melToAudio({ power, nfft: 4096 } as never), 'nfft');
+    refused(() => mfccToMel({ coefficients: power, nmels: 8 } as never), 'nmels');
+    refused(() => mfccToAudio({ coefficients: power, nfft: 4096 } as never), 'nfft');
     refused(() => masteringRepairNoiseBandBins({ nfft: 4096 } as never), 'nfft');
     refused(
       () => masteringRepairDereverbConfigForRoom({ estimate: {}, bogus: 1 } as never),

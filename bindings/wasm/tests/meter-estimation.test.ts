@@ -9,7 +9,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { analyze, estimateMeter, init } from '../src/index';
+import { analyze, type Beat, estimateMeter, init } from '../src/index';
 
 const SR = 22050;
 
@@ -21,22 +21,20 @@ const SR = 22050;
  * @param measures - Number of measures to render.
  * @param weakAmp - Strength of the unaccented beats relative to the downbeat.
  * @param beatSec - Beat period in seconds.
- * @returns Parallel beat times and strengths.
+ * @returns The beats, in time order.
  */
 function beatSeries(
   numerator: number,
   measures: number,
   weakAmp = 0.25,
   beatSec = 0.5,
-): { beatTimes: Float32Array; beatStrengths: Float32Array } {
+): { beats: Beat[] } {
   const count = numerator * measures;
-  const beatTimes = new Float32Array(count);
-  const beatStrengths = new Float32Array(count);
+  const beats: Beat[] = [];
   for (let i = 0; i < count; i++) {
-    beatTimes[i] = i * beatSec;
-    beatStrengths[i] = i % numerator === 0 ? 1 : weakAmp;
+    beats.push({ timeSec: i * beatSec, strength: i % numerator === 0 ? 1 : weakAmp });
   }
-  return { beatTimes, beatStrengths };
+  return { beats };
 }
 
 /**
@@ -115,10 +113,7 @@ describe('WASM estimateMeter', () => {
       // the phase has somewhere to move to.
       for (const offset of [0, 1, 2, 3]) {
         const series = beatSeries(4, 8);
-        const result = estimateMeter({
-          beatTimes: series.beatTimes.slice(offset),
-          beatStrengths: series.beatStrengths.slice(offset),
-        });
+        const result = estimateMeter({ beats: series.beats.slice(offset) });
 
         expect(Number.isInteger(result.downbeatPhase)).toBe(true);
         expect(result.downbeatPhase).toBeGreaterThanOrEqual(0);
@@ -153,11 +148,11 @@ describe('WASM estimateMeter', () => {
       // and runs well above 1, so scoring divides the series by its own maximum
       // and a caller has no scale to supply. Saturating it instead would
       // flatten every beat to one value and tie every candidate.
-      const { beatTimes, beatStrengths } = beatSeries(4, 8);
-      const scaled = Float32Array.from(beatStrengths, (value) => value * 20);
+      const { beats } = beatSeries(4, 8);
+      const scaled = beats.map((beat) => ({ ...beat, strength: beat.strength * 20 }));
 
-      const unit = estimateMeter({ beatTimes, beatStrengths });
-      const loud = estimateMeter({ beatTimes, beatStrengths: scaled });
+      const unit = estimateMeter({ beats });
+      const loud = estimateMeter({ beats: scaled });
 
       expect(loud).toEqual(unit);
       expect(loud.timeSignature.numerator).toBe(4);
@@ -168,58 +163,31 @@ describe('WASM estimateMeter', () => {
       // Zero is what a numerator reaches on beats carrying no meter, so a flat
       // series lands under it, and the wider the numerator the further under:
       // it searched more phases and found nothing in any of them.
-      const beatTimes = Float32Array.from({ length: 48 }, (_, i) => i * 0.5);
-      const beatStrengths = new Float32Array(48).fill(0.5);
+      const beats = Array.from({ length: 48 }, (_, i) => ({ timeSec: i * 0.5, strength: 0.5 }));
 
-      const result = estimateMeter({ beatTimes, beatStrengths, candidateNumerators: [3, 4, 13] });
+      const result = estimateMeter({ beats, candidateNumerators: [3, 4, 13] });
 
       expect(result.candidateScores.every((score) => score < 0)).toBe(true);
       expect(result.candidateScores).toEqual([...result.candidateScores].sort((a, b) => b - a));
       expect(result.timeSignature.confidence).toBeLessThan(0.6);
     });
-
-    it('accepts a plain number array as well as a Float32Array', () => {
-      const series = beatSeries(4, 8);
-      const fromTyped = estimateMeter(series);
-      const fromPlain = estimateMeter({
-        beatTimes: Array.from(series.beatTimes),
-        beatStrengths: Array.from(series.beatStrengths),
-      });
-
-      expect(fromPlain).toEqual(fromTyped);
-    });
   });
 
   describe('input validation', () => {
-    it('rejects mismatched beatTimes / beatStrengths lengths', () => {
-      const series = beatSeries(4, 8);
-      expect(() =>
-        estimateMeter({
-          beatTimes: series.beatTimes,
-          beatStrengths: series.beatStrengths.slice(1),
-        }),
-      ).toThrow();
-    });
-
     it('rejects an empty beat series', () => {
       // No beats is nothing to search, so answering it with the fixed
       // low-confidence 4/4 would read as a detection result. Matched on an
       // unanchored substring because the surrounding decoration differs
       // between surfaces, and on `beatTimes` specifically so this cannot pass
       // on the separate "candidateNumerators must not be empty" guard.
-      expect(() => estimateMeter({ beatTimes: [], beatStrengths: [] })).toThrow(
-        /beatTimes must not be empty/,
-      );
-      expect(() =>
-        estimateMeter({ beatTimes: new Float32Array(0), beatStrengths: new Float32Array(0) }),
-      ).toThrow(/beatTimes must not be empty/);
+      expect(() => estimateMeter({ beats: [] })).toThrow(/beatTimes must not be empty/);
     });
 
     it('still answers a single-beat series, so the line is drawn at empty not at short', () => {
       // One beat is something to score, so it keeps the low-confidence default
       // rather than being rejected. Without this the guard above would be
       // satisfied just as well by a wrong rule that rejected any short series.
-      const result = estimateMeter({ beatTimes: [0], beatStrengths: [1] });
+      const result = estimateMeter({ beats: [{ timeSec: 0, strength: 1 }] });
 
       expect(result.timeSignature.numerator).toBe(4);
       expect(result.timeSignature.denominator).toBe(4);
@@ -252,9 +220,9 @@ describe('WASM estimateMeter', () => {
 
     it('rejects out-of-order beat times', () => {
       const series = beatSeries(4, 8);
-      const beatTimes = Float32Array.from(series.beatTimes);
-      beatTimes[3] = beatTimes[2] - 0.1;
-      expect(() => estimateMeter({ beatTimes, beatStrengths: series.beatStrengths })).toThrow();
+      const beats = series.beats.map((beat) => ({ ...beat }));
+      beats[3].timeSec = beats[2].timeSec - 0.1;
+      expect(() => estimateMeter({ beats })).toThrow();
     });
   });
 });
@@ -305,8 +273,7 @@ describe('WASM analyze() beatObservations', () => {
     expect(Math.max(...observations)).toBeGreaterThan(1);
 
     const estimate = estimateMeter({
-      beatTimes: result.beats.map((beat) => beat.time),
-      beatStrengths: observations,
+      beats: result.beats.map((beat, i) => ({ timeSec: beat.timeSec, strength: observations[i] })),
     });
 
     expect(estimate.timeSignature.numerator).toBeGreaterThanOrEqual(2);
@@ -326,12 +293,9 @@ describe('WASM analyze() beatObservations', () => {
  *
  * @param grouping - Beats per accent group within one bar.
  * @param measures - Number of measures to render.
- * @returns Parallel beat times and strengths.
+ * @returns The beats, in time order.
  */
-function groupedSeries(
-  grouping: number[],
-  measures = 12,
-): { beatTimes: Float32Array; beatStrengths: Float32Array } {
+function groupedSeries(grouping: number[], measures = 12): { beats: Beat[] } {
   const accents = new Set<number>();
   let position = 0;
   for (const part of grouping.slice(0, -1)) {
@@ -341,14 +305,12 @@ function groupedSeries(
 
   const numerator = grouping.reduce((sum, part) => sum + part, 0);
   const count = numerator * measures;
-  const beatTimes = new Float32Array(count);
-  const beatStrengths = new Float32Array(count);
+  const beats: Beat[] = [];
   for (let i = 0; i < count; i++) {
     const pos = i % numerator;
-    beatTimes[i] = i * 0.5;
-    beatStrengths[i] = pos === 0 ? 1 : accents.has(pos) ? 0.65 : 0.35;
+    beats.push({ timeSec: i * 0.5, strength: pos === 0 ? 1 : accents.has(pos) ? 0.65 : 0.35 });
   }
-  return { beatTimes, beatStrengths };
+  return { beats };
 }
 
 describe('WASM estimateMeter grouping', () => {
@@ -394,11 +356,8 @@ describe('WASM estimateMeter grouping', () => {
   it('leaves a bar undivided when nothing divided it', () => {
     // Below the search floor no scoring ran at all, so the bar comes back whole
     // rather than carrying the 2+2 a four would have been given.
-    const { beatTimes, beatStrengths } = beatSeries(4, 8);
-    const result = estimateMeter({
-      beatTimes: beatTimes.slice(0, 4),
-      beatStrengths: beatStrengths.slice(0, 4),
-    });
+    const { beats } = beatSeries(4, 8);
+    const result = estimateMeter({ beats: beats.slice(0, 4) });
 
     expect(result.timeSignature.confidence).toBeLessThanOrEqual(0.5);
     expect(result.grouping).toEqual([result.timeSignature.numerator]);
@@ -432,24 +391,16 @@ describe('WASM estimateMeter grouping', () => {
   });
 
   it('says whether a search ran, so a fallback is not read as a detection', () => {
-    const { beatTimes, beatStrengths } = groupedSeries([2, 2]);
-    expect(estimateMeter({ beatTimes, beatStrengths }).searched).toBe(true);
+    const { beats } = groupedSeries([2, 2]);
+    expect(estimateMeter({ beats }).searched).toBe(true);
 
     for (let count = 1; count < 8; count += 1) {
-      const short = estimateMeter({
-        beatTimes: beatTimes.slice(0, count),
-        beatStrengths: beatStrengths.slice(0, count),
-      });
+      const short = estimateMeter({ beats: beats.slice(0, count) });
       expect(short.searched).toBe(false);
       expect(short.timeSignature.numerator).toBe(4);
       expect(short.candidateScores.every((score) => score === 0)).toBe(true);
     }
 
-    expect(
-      estimateMeter({
-        beatTimes: beatTimes.slice(0, 8),
-        beatStrengths: beatStrengths.slice(0, 8),
-      }).searched,
-    ).toBe(true);
+    expect(estimateMeter({ beats: beats.slice(0, 8) }).searched).toBe(true);
   });
 });

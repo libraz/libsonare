@@ -79,7 +79,6 @@ const TABLE: Entry[] = [
     'detectDownbeats',
     'detectChords',
     'analyze',
-    'analyzeWithProgress',
     'analyzeImpulseResponse',
     'detectAcoustic',
     'estimateRoom',
@@ -95,13 +94,13 @@ const TABLE: Entry[] = [
     'analyzeSections',
     'detectBoundaries',
     'analyzeMelody',
-    'onsetEnvelope',
+    'onsetStrength',
     'onsetStrengthMulti',
     'lufs',
     'momentaryLufs',
     'shortTermLufs',
     'ebur128LoudnessRange',
-  ].map((name) => mono(name, name === 'analyzeWithProgress' ? { onProgress: () => {} } : {})),
+  ].map((name) => mono(name)),
   mono('chordFunctionalAnalysis', { keyRoot: 0 }),
   mono('roomMorph', { wet: 0.4 }),
   stereo('roomMorphStereo'),
@@ -142,14 +141,9 @@ const TABLE: Entry[] = [
   mono('remix', { intervals: [0, 4096] }),
   mono('remixAlignedIntervals', { intervals: [0, 4096] }),
   linked('decomposeStemsLinked'),
+  mono('trimSilence'),
+  mono('splitSilence'),
   // Silence and waveform helpers without a sample rate
-  ...['trimSilence', 'splitSilence'].map(
-    (name): Entry => ({
-      name,
-      noRate: true,
-      call: (samples) => fn(name)({ samples }),
-    }),
-  ),
   ...['splitSilenceCommon', 'splitSilenceCommonWithReport'].map(
     (name): Entry => ({
       name,
@@ -371,7 +365,7 @@ const NOT_AUDIO: string[] = [
     'voiceChangerAbiVersion',
     'vocalEditAbiVersion',
     'isSonareError',
-    'streamAnalyzerConfigDefaults',
+    'streamAnalyzerConfigDefault',
   ],
   // Analysis-to-annotation conversions over a chord or a key mode.
   ...['chordSymbolFromAnalysis', 'keyModeFromAnalysis'],

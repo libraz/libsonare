@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { init, StreamAnalyzer } from '../../dist/index.js';
+import { init, type Matrix2D, StreamAnalyzer, type StreamFrames } from '../../dist/index.js';
 import {
   init as initWorklet,
   registerSonareStreamAnalyzerWorkletProcessor,
@@ -300,11 +300,25 @@ describe('SonareStreamAnalyzerNode', () => {
     return out;
   }
 
-  function collect(frames: Array<{ rmsEnergy: Float32Array; timestamps: Float32Array }>) {
+  function collect(frames: StreamFrames[]) {
     return {
-      rms: frames.flatMap((f) => Array.from(f.rmsEnergy)),
-      timestamps: frames.flatMap((f) => Array.from(f.timestamps)),
+      rms: frames.flatMap((f) => Array.from(f.rmsEnergy ?? [])),
+      timestamps: frames.flatMap((f) => Array.from(f.timestampsSec)),
     };
+  }
+
+  /** Frame-major flattening of a band-major matrix, so chunks concatenate in time order. */
+  function frameMajor(m: Matrix2D | undefined): number[] {
+    const out: number[] = [];
+    if (m === undefined) {
+      return out;
+    }
+    for (let col = 0; col < m.cols; col++) {
+      for (let row = 0; row < m.rows; row++) {
+        out.push(m.data[row * m.cols + col]);
+      }
+    }
+    return out;
   }
 
   it('creates a zero-output sink that is not remixed by the browser', async () => {
@@ -342,8 +356,7 @@ describe('SonareStreamAnalyzerNode', () => {
 
   it('delivers the frames a direct StreamAnalyzer produces over the same samples', async () => {
     const { analyzerNode, send } = await createNode();
-    const seen: Array<{ rmsEnergy: Float32Array; timestamps: Float32Array; mel: Float32Array }> =
-      [];
+    const seen: StreamFrames[] = [];
     analyzerNode.onFrames((frames) => seen.push(frames));
     const samples = signal(CHUNK * 5);
     for (let i = 0; i < 5; i++) {
@@ -352,14 +365,14 @@ describe('SonareStreamAnalyzerNode', () => {
 
     const direct = new StreamAnalyzer(CONFIG);
     direct.process(samples);
-    const expected = direct.readFrames(direct.availableFrames());
+    const expected = direct.readFrames(direct.availableFrames);
     direct.destroy();
 
     expect(expected.nFrames).toBeGreaterThan(10);
     const got = collect(seen);
-    expect(got.rms).toEqual(Array.from(expected.rmsEnergy));
-    expect(got.timestamps).toEqual(Array.from(expected.timestamps));
-    expect(seen.flatMap((f) => Array.from(f.mel))).toEqual(Array.from(expected.mel));
+    expect(got.rms).toEqual(Array.from(expected.rmsEnergy ?? []));
+    expect(got.timestamps).toEqual(Array.from(expected.timestampsSec));
+    expect(seen.flatMap((f) => frameMajor(f.mel))).toEqual(frameMajor(expected.mel));
   });
 
   it('returns every consumed chunk buffer to the processor', async () => {
@@ -374,7 +387,7 @@ describe('SonareStreamAnalyzerNode', () => {
 
   it('resets the analyzer offset on a gap or a flagged discontinuity instead of splicing', async () => {
     const { analyzerNode, send } = await createNode();
-    const seen: Array<{ rmsEnergy: Float32Array; timestamps: Float32Array }> = [];
+    const seen: StreamFrames[] = [];
     analyzerNode.onFrames((frames) => seen.push(frames));
     const a = signal(CHUNK * 2, 3);
     const b = signal(CHUNK, 4);
@@ -387,8 +400,8 @@ describe('SonareStreamAnalyzerNode', () => {
     send(c, CHUNK * 6, true);
 
     const direct = new StreamAnalyzer(CONFIG);
-    const expected: Array<{ rmsEnergy: Float32Array; timestamps: Float32Array }> = [];
-    const drain = () => expected.push(direct.readFrames(direct.availableFrames()));
+    const expected: StreamFrames[] = [];
+    const drain = () => expected.push(direct.readFrames(direct.availableFrames));
     direct.processWithOffset(a.slice(0, CHUNK), 0);
     direct.processWithOffset(a.slice(CHUNK), CHUNK);
     drain();
@@ -401,8 +414,8 @@ describe('SonareStreamAnalyzerNode', () => {
     direct.destroy();
 
     expect(collect(seen)).toEqual(collect(expected));
-    const gapFrames = seen.at(-2) as { timestamps: Float32Array };
-    expect(gapFrames.timestamps[0]).toBeGreaterThanOrEqual((CHUNK * 5) / 22050 - 0.05);
+    const gapFrames = seen.at(-2) as StreamFrames;
+    expect(gapFrames.timestampsSec[0]).toBeGreaterThanOrEqual((CHUNK * 5) / 22050 - 0.05);
   });
 
   it('stops delivering to a listener once it unsubscribes', async () => {

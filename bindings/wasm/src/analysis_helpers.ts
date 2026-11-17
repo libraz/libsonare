@@ -1,22 +1,24 @@
-import { resolveEnumOrdinal } from './codes.js';
 import type {
   AnalysisResult,
   ChordAnalysisResult,
-  ChordDetectionOptions,
+  ChordChromaMethod,
   ChordQuality,
+  GenreHint,
   KeyCandidate,
   KeyDetectionOptions,
   KeyMode,
-  KeyProfileName,
   PitchClass,
-  SectionType,
+  Section,
 } from './public_types.js';
-import { KeyProfile as KeyProfileValues, Mode } from './public_types.js';
+import { CHORD_QUALITIES, SECTION_TYPES } from './public_types.js';
 import type {
   WasmAnalysisResult,
   WasmChordAnalysisResult,
+  WasmChordResult,
   WasmKeyCandidateResult,
+  WasmSectionResult,
 } from './sonare.js';
+import { tuningCentsFromNative } from './validation.js';
 
 const PITCH_CLASS_NAMES = [
   'C',
@@ -69,89 +71,73 @@ export function convertKeyCandidate(wasm: WasmKeyCandidateResult): KeyCandidate 
   };
 }
 
-// Consolidated spelling -> ordinal tables, resolved through the same
-// resolveEnumOrdinal() primitive as panModeCode/panLawCode/etc. in ./codes.
-// An unmapped string or an out-of-range numeric ordinal throws RangeError
-// instead of silently resolving to `undefined` (which used to reach the WASM
-// layer as a mistyped argument) or passing an unvalidated raw number through.
-const KEY_MODE_VALUES: Readonly<Record<string, number>> = {
-  major: Mode.Major,
-  maj: Mode.Major,
-  minor: Mode.Minor,
-  min: Mode.Minor,
-  m: Mode.Minor,
-  dorian: Mode.Dorian,
-  phrygian: Mode.Phrygian,
-  lydian: Mode.Lydian,
-  mixolydian: Mode.Mixolydian,
-  locrian: Mode.Locrian,
-};
-
-const KEY_PROFILE_VALUES: Readonly<Record<KeyProfileName, number>> = {
-  ks: KeyProfileValues.KrumhanslSchmuckler,
-  krumhansl: KeyProfileValues.KrumhanslSchmuckler,
-  'krumhansl-schmuckler': KeyProfileValues.KrumhanslSchmuckler,
-  temperley: KeyProfileValues.Temperley,
-  shaath: KeyProfileValues.Shaath,
-  keyfinder: KeyProfileValues.Shaath,
-  'faraldo-edmt': KeyProfileValues.FaraldoEDMT,
-  edmt: KeyProfileValues.FaraldoEDMT,
-  'faraldo-edma': KeyProfileValues.FaraldoEDMA,
-  edma: KeyProfileValues.FaraldoEDMA,
-  'faraldo-edmm': KeyProfileValues.FaraldoEDMM,
-  edmm: KeyProfileValues.FaraldoEDMM,
-  'bellman-budge': KeyProfileValues.BellmanBudge,
-  bellman: KeyProfileValues.BellmanBudge,
-};
-
-const PITCH_CLASS_VALUES: Readonly<Record<string, number>> = Object.fromEntries(
-  PITCH_CLASS_NAMES.map((name, ordinal) => [name, ordinal]),
-);
-
-function assertNameOrOrdinal(value: unknown, field: string, what: string): void {
-  if (typeof value !== 'number' && typeof value !== 'string') {
-    throw new TypeError(`${field} must be ${what} name or ordinal`);
+function closedSetOrdinal(value: unknown, tokens: readonly string[], field: string): number {
+  if (typeof value !== 'string') {
+    throw new TypeError(`${field} must be one of ${tokens.map((t) => `'${t}'`).join(', ')}`);
   }
+  const ordinal = tokens.indexOf(value);
+  if (ordinal < 0) {
+    throw new RangeError(
+      `${field} must be one of ${tokens.map((t) => `'${t}'`).join(', ')}, got '${value}'`,
+    );
+  }
+  return ordinal;
 }
 
-/** Mode and profile spellings are matched case-insensitively, as on Node and Python. */
-function foldCase(value: unknown): unknown {
-  return typeof value === 'string' ? value.toLowerCase() : value;
-}
-
-/** Ordinal of a key mode given by name or ordinal; anything else is refused. */
+/** Ordinal of a key mode given by name; numbers and synonyms are refused. */
 export function keyModeOrdinal(mode: unknown, field = 'key mode'): number {
-  assertNameOrOrdinal(mode, field, 'a mode');
-  return resolveEnumOrdinal(foldCase(mode), KEY_MODE_VALUES, field);
+  return closedSetOrdinal(mode, KEY_MODE_NAMES, field);
 }
 
-/** Ordinal of a pitch class given by name (`'C'`, `'C#'`, ...) or ordinal; anything else is refused. */
+/** Ordinal of a pitch class 0-11; names and non-integers are refused. */
 export function pitchClassOrdinal(root: unknown, field = 'pitch class'): number {
-  assertNameOrOrdinal(root, field, 'a pitch class');
-  return resolveEnumOrdinal(root, PITCH_CLASS_VALUES, field);
+  if (typeof root !== 'number') {
+    throw new TypeError(`${field} must be a pitch class number 0-11`);
+  }
+  if (!Number.isInteger(root) || root < 0 || root > 11) {
+    throw new RangeError(`${field} must be an integer in [0, 11]`);
+  }
+  return root;
 }
+
+/** Native ordinal of a chord-quality token; numbers are refused. */
+export function chordQualityOrdinal(quality: unknown, field = 'chord quality'): number {
+  return closedSetOrdinal(quality, CHORD_QUALITIES, field);
+}
+
+/** Token of a native chord-quality ordinal; an ordinal outside the table is refused. */
+export function chordQualityToken(ordinal: number): ChordQuality {
+  const token = CHORD_QUALITIES[ordinal];
+  if (token === undefined) {
+    throw new RangeError(`Invalid chord quality ordinal: ${String(ordinal)}`);
+  }
+  return token;
+}
+
+function sectionTypeToken(ordinal: number): Section['type'] {
+  const token = SECTION_TYPES[ordinal];
+  if (token === undefined) {
+    throw new RangeError(`Invalid section type ordinal: ${String(ordinal)}`);
+  }
+  return token;
+}
+
+const ALL_MODE_ORDINALS = [0, 1, 2, 3, 4, 5, 6];
 
 export function keyModeValues(modes: KeyDetectionOptions['modes'] | undefined): number[] {
   if (modes === undefined || modes === null) {
     return [];
   }
   if (typeof modes === 'string') {
-    const key = modes.toLowerCase();
-    if (key === 'major-minor' || key === 'majmin' || key === 'diatonic') {
-      return [Mode.Major, Mode.Minor];
+    if (modes === 'majorMinor') {
+      return [0, 1];
     }
-    if (key === 'all' || key === 'modal') {
-      return [
-        Mode.Major,
-        Mode.Minor,
-        Mode.Dorian,
-        Mode.Phrygian,
-        Mode.Lydian,
-        Mode.Mixolydian,
-        Mode.Locrian,
-      ];
+    if (modes === 'all' || modes === 'modal') {
+      return ALL_MODE_ORDINALS;
     }
-    return [keyModeOrdinal(key, 'key mode')];
+    throw new RangeError(
+      `modes must be an array of mode names, 'majorMinor', 'all' or 'modal', got '${modes}'`,
+    );
   }
   if (!Array.isArray(modes)) {
     throw new TypeError('modes must be an array or mode-set string');
@@ -159,55 +145,79 @@ export function keyModeValues(modes: KeyDetectionOptions['modes'] | undefined): 
   return modes.map((mode) => keyModeOrdinal(mode, 'key mode'));
 }
 
+const KEY_PROFILE_TOKENS = [
+  'krumhanslSchmuckler',
+  'temperley',
+  'shaath',
+  'faraldoEdmt',
+  'faraldoEdma',
+  'faraldoEdmm',
+  'bellmanBudge',
+] as const;
+
 export function keyProfileValue(profile: KeyDetectionOptions['profile'] | undefined): number {
   if (profile === undefined || profile === null) {
     return -1;
   }
-  assertNameOrOrdinal(profile, 'key profile', 'a profile');
-  return resolveEnumOrdinal(foldCase(profile), KEY_PROFILE_VALUES, 'key profile');
+  return closedSetOrdinal(profile, KEY_PROFILE_TOKENS, 'key profile');
+}
+
+const GENRE_HINTS = ['auto', 'edm', 'electronic', 'dance', 'pop', 'classical', 'jazz'] as const;
+
+/** The genre hint the module reads (`''` when none is given); an unknown token is refused here. */
+export function genreHintValue(hint: GenreHint | undefined | null): string {
+  if (hint === undefined || hint === null) {
+    return '';
+  }
+  closedSetOrdinal(hint, GENRE_HINTS, 'genreHint');
+  return hint;
+}
+
+export function chordChromaMethodValue(method: ChordChromaMethod | undefined): number {
+  return closedSetOrdinal(method, ['stft', 'nnls', 'cqt'], 'chromaMethod');
+}
+
+export function convertSection(s: WasmSectionResult): Section {
+  return {
+    type: sectionTypeToken(s.type),
+    startSec: s.start,
+    endSec: s.end,
+    energyLevel: s.energyLevel,
+    confidence: s.confidence,
+    group: s.group,
+    name: s.name,
+  };
+}
+
+function convertChord(c: WasmChordResult) {
+  return {
+    root: c.root as PitchClass,
+    bass: c.bass as PitchClass,
+    rootName: pitchClassName(c.root),
+    bassName: pitchClassName(c.bass),
+    quality: chordQualityToken(c.quality),
+    startSec: c.start,
+    endSec: c.end,
+    durationSec: c.end - c.start,
+    confidence: c.confidence,
+    name: c.name,
+  };
 }
 
 export function convertChordAnalysisResult(wasm: WasmChordAnalysisResult): ChordAnalysisResult {
   return {
-    chords: wasm.chords.map((c) => ({
-      root: c.root as PitchClass,
-      bass: c.bass as PitchClass,
-      rootName: pitchClassName(c.root),
-      bassName: pitchClassName(c.bass),
-      quality: c.quality as ChordQuality,
-      start: c.start,
-      end: c.end,
-      duration: c.end - c.start,
-      confidence: c.confidence,
-      name: c.name,
-    })),
-    tuning: wasm.tuning,
+    chords: wasm.chords.map(convertChord),
+    tuningCents: tuningCentsFromNative(wasm.tuning),
   };
 }
 
-export function chordChromaMethodValue(method: ChordDetectionOptions['chromaMethod']): number {
-  if (method === 'stft') {
-    return 0;
-  }
-  if (method === 'nnls') {
-    return 1;
-  }
-  if (method === 'cqt') {
-    return 2;
-  }
-  throw new RangeError(`Invalid chord chroma method: ${method}`);
-}
-
 export function convertAnalysisResult(wasm: WasmAnalysisResult): AnalysisResult {
-  const beatTimes = new Float32Array(wasm.beats.length);
-  for (let i = 0; i < wasm.beats.length; i++) {
-    beatTimes[i] = wasm.beats[i].time;
-  }
+  const beats = wasm.beats.map((b) => ({ timeSec: b.time, strength: b.strength }));
   return {
     bpm: wasm.bpm,
     bpmConfidence: wasm.bpmConfidence,
     bpmCandidates: wasm.bpmCandidates.map((candidate) => ({
-      value: candidate.value,
+      bpm: candidate.value,
       confidence: candidate.confidence,
       relation: candidate.relation,
     })),
@@ -220,39 +230,39 @@ export function convertAnalysisResult(wasm: WasmAnalysisResult): AnalysisResult 
     },
     timeSignature: wasm.timeSignature,
     timeSignatureCandidates: wasm.timeSignatureCandidates,
-    beatTimes,
-    beats: wasm.beats,
-    downbeatIndices: wasm.downbeatIndices,
+    beats,
+    downbeats: wasm.downbeatIndices.map((i) => beats[i]),
     downbeatPhase: wasm.downbeatPhase,
     beatObservations: wasm.beatObservations,
     beatLocalBpm: wasm.beatLocalBpm,
-    chords: wasm.chords.map((c) => ({
-      root: c.root as PitchClass,
-      bass: c.bass as PitchClass,
-      rootName: pitchClassName(c.root),
-      bassName: pitchClassName(c.bass),
-      quality: c.quality as ChordQuality,
-      start: c.start,
-      end: c.end,
-      duration: c.end - c.start,
-      confidence: c.confidence,
-      name: c.name,
-      romanNumeral: c.romanNumeral,
-    })),
-    sections: wasm.sections.map((s) => ({
-      type: s.type as SectionType,
-      start: s.start,
-      end: s.end,
-      energyLevel: s.energyLevel,
-      confidence: s.confidence,
-      group: s.group,
-      name: s.name,
-    })),
+    chords: wasm.chords.map((c) => ({ ...convertChord(c), romanNumeral: c.romanNumeral })),
+    sections: wasm.sections.map(convertSection),
     timbre: wasm.timbre,
-    dynamics: wasm.dynamics,
-    rhythm: wasm.rhythm,
-    melody: wasm.melody,
+    dynamics: {
+      dynamicRangeDb: wasm.dynamics.dynamicRangeDb,
+      peakDb: wasm.dynamics.peakDb,
+      rmsDb: wasm.dynamics.rmsDb,
+      loudnessRangeLu: wasm.dynamics.loudnessRangeDb,
+      crestFactor: wasm.dynamics.crestFactor,
+      isCompressed: wasm.dynamics.isCompressed,
+    },
+    rhythm: {
+      ...wasm.rhythm,
+      grooveType: wasm.rhythm.grooveType as AnalysisResult['rhythm']['grooveType'],
+    },
+    melody: {
+      pitchRangeOctaves: wasm.melody.pitchRangeOctaves,
+      pitchStability: wasm.melody.pitchStability,
+      meanFrequencyHz: wasm.melody.meanFrequency,
+      vibratoRateHz: wasm.melody.vibratoRate,
+      // Native reports an unvoiced frame as frequency 0; here it is absent.
+      pitches: wasm.melody.pitches.map((p) =>
+        p.frequency > 0
+          ? { timeSec: p.time, frequencyHz: p.frequency, confidence: p.confidence }
+          : { timeSec: p.time, confidence: p.confidence },
+      ),
+    },
     form: wasm.form,
-    tuning: wasm.tuning,
+    tuningCents: tuningCentsFromNative(wasm.tuning),
   };
 }

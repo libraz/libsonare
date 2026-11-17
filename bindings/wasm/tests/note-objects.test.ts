@@ -194,13 +194,13 @@ function maxDifference(a: Float32Array, b: Float32Array): number {
 }
 
 type PitchSplit = {
-  centreHz: number;
+  centerHz: number;
   driftCents: Float32Array;
   vibratoCents: Float32Array;
 };
 
 function expectPitchSplitClose(actual: PitchSplit, expected: PitchSplit): void {
-  expect(Math.abs(actual.centreHz - expected.centreHz)).toBeLessThanOrEqual(1e-6);
+  expect(Math.abs(actual.centerHz - expected.centerHz)).toBeLessThanOrEqual(1e-6);
   expect(maxDifference(actual.driftCents, expected.driftCents)).toBeLessThanOrEqual(1e-6);
   expect(maxDifference(actual.vibratoCents, expected.vibratoCents)).toBeLessThanOrEqual(1e-6);
 }
@@ -267,7 +267,7 @@ type RawNoteModule = Omit<
     frameRate: number,
     medianHz: number,
     vibratoCutoffHz: number,
-  ) => PitchSplit;
+  ) => Omit<PitchSplit, 'centerHz'> & { centreHz: number };
 };
 
 /** A renderable note carrying nothing but its span, its frames and its centre. */
@@ -377,10 +377,10 @@ describe('extractNotes', () => {
     for (const note of notes) {
       expect(note.edit).toEqual({
         timeOffsetSamples: 0,
-        pitchShiftSemitones: 0,
+        pitchSemitones: 0,
         gainDb: 0,
         timeStretchRatio: 1,
-        formantShiftSemitones: 0,
+        formantSemitones: 0,
         vibratoDepthChange: 0,
         driftChange: 0,
         muted: false,
@@ -1112,7 +1112,9 @@ describe('renderNotes formant shift', () => {
     renderNotes({
       samples: source,
       sampleRate: fixtureRate,
-      notes: [{ ...handNote(0, 6400, 200), edit: { formantShiftSemitones, gainDb } }],
+      notes: [
+        { ...handNote(0, 6400, 200), edit: { formantSemitones: formantShiftSemitones, gainDb } },
+      ],
     });
 
   it('runs no warp at all at 0, so the edit is still the identity', () => {
@@ -1447,7 +1449,7 @@ describe('decomposeNotePitch', () => {
       medianHz: centreHz,
       vibratoCutoffHz: 3,
     });
-    expect(split.centreHz).toBe(centreHz);
+    expect(split.centerHz).toBe(centreHz);
     expect(split.driftCents).toHaveLength(curveFrames);
     expect(split.vibratoCents).toHaveLength(curveFrames);
 
@@ -1519,7 +1521,7 @@ describe('decomposeNotePitch', () => {
       medianHz: centreHz,
       vibratoCutoffHz: 3,
     });
-    expect(empty.centreHz).toBe(0);
+    expect(empty.centerHz).toBe(0);
     expect(empty.driftCents).toHaveLength(0);
     expect(empty.vibratoCents).toHaveLength(0);
   });
@@ -1567,7 +1569,7 @@ describe('decomposeNotePitch', () => {
     // rather than rejected.
     const expectEmpty = (f0: Float32Array, medianHz: number): void => {
       const split = decomposeNotePitch({ f0Hz: f0, frameRate: fixtureFrameRate, medianHz });
-      expect(split.centreHz).toBe(0);
+      expect(split.centerHz).toBe(0);
       expect(split.driftCents).toHaveLength(0);
       expect(split.vibratoCents).toHaveLength(0);
     };
@@ -1583,7 +1585,7 @@ describe('decomposeNotePitch', () => {
       frameRate: fixtureFrameRate,
       medianHz: centreHz,
     });
-    expect(usable.centreHz).toBe(centreHz);
+    expect(usable.centerHz).toBe(centreHz);
     expect(usable.driftCents).toHaveLength(curveFrames);
   });
 
@@ -1607,7 +1609,7 @@ describe('decomposeNotePitch', () => {
     for (const noPitch of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1]) {
       const track = Float32Array.from(curve);
       track[7] = noPitch;
-      expect(decomposeNotePitch({ ...base, f0Hz: track }).centreHz).toBeGreaterThan(0);
+      expect(decomposeNotePitch({ ...base, f0Hz: track }).centerHz).toBeGreaterThan(0);
     }
     for (const badRate of [0, -100]) {
       expectRangeRefusal(() => decomposeNotePitch({ ...base, frameRate: badRate }));
@@ -1653,7 +1655,10 @@ describe('raw note pitch entry points', () => {
 
     const maskedSplit = module.decomposeNotePitch(track, voiced, fixtureFrameRate, 220, 3);
     const baselineSplit = module.decomposeNotePitch(zeroed, undefined, fixtureFrameRate, 220, 3);
-    expectPitchSplitClose(maskedSplit, baselineSplit);
+    expectPitchSplitClose(
+      { ...maskedSplit, centerHz: maskedSplit.centreHz },
+      { ...baselineSplit, centerHz: baselineSplit.centreHz },
+    );
   });
 
   it('enforces voiced shape requirements through raw calls', () => {
@@ -2116,7 +2121,7 @@ describe('mergeNotes', () => {
     const merged = mergeNotes({ ...source, notes: edited, first: 0, last: 1 });
     expect(merged).toHaveLength(2);
     expect(merged[0].edit.gainDb).toBe(-3);
-    expect(merged[0].edit.pitchShiftSemitones).toBe(2);
+    expect(merged[0].edit.pitchSemitones).toBe(2);
     // The second note's edit does not survive: the rule is the first note's
     // edit, not a merge of the two.
     expect(merged[0].edit.muted).toBe(false);
@@ -2250,7 +2255,7 @@ describe('the documented pitchPyin to extractNotes pipeline', () => {
 
     // The notes go back where they came from: the whole point of extracting
     // them is to edit and render them.
-    notes[0].edit.pitchShiftSemitones = 1;
+    notes[0].edit.pitchSemitones = 1;
     expect(renderNotes({ samples: gappedTone, sampleRate, notes })).toHaveLength(pipelineLength);
   });
 });

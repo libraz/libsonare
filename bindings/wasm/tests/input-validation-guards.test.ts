@@ -204,33 +204,42 @@ describe('detectKey / detectKeyCandidates reject unknown enum spellings and out-
     expect(() => detectKey(samples, 22050, { profile: 'edm' as never })).toThrow(RangeError);
   });
 
-  it('rejects an out-of-range numeric key profile ordinal', () => {
-    expect(() => detectKey(samples, 22050, { profile: 99 as never })).toThrow(RangeError);
+  it('rejects a numeric key profile ordinal', () => {
+    expect(() => detectKey(samples, 22050, { profile: 99 as never })).toThrow(TypeError);
+    expect(() => detectKey(samples, 22050, { profile: 0 as never })).toThrow(TypeError);
   });
 
   it("rejects a typo'd key mode name instead of silently becoming Major", () => {
     expect(() => detectKey(samples, 22050, { modes: ['typo' as never] })).toThrow(RangeError);
   });
 
-  it('rejects an out-of-range numeric key mode ordinal', () => {
-    expect(() => detectKeyCandidates(samples, 22050, { modes: [99 as never] })).toThrow(RangeError);
+  it('rejects a numeric key mode ordinal', () => {
+    expect(() => detectKeyCandidates(samples, 22050, { modes: [99 as never] })).toThrow(TypeError);
+    expect(() => detectKeyCandidates(samples, 22050, { modes: [0 as never] })).toThrow(TypeError);
+  });
+
+  it('rejects the synonym spellings of a key profile', () => {
+    for (const profile of [
+      'ks',
+      'krumhansl',
+      'keyfinder',
+      'edmt',
+      'faraldo-edmt',
+      'bellman-budge',
+    ]) {
+      expect(() => detectKey(samples, 22050, { profile: profile as never })).toThrow(RangeError);
+    }
   });
 
   it('accepts every documented key profile and key mode spelling', () => {
     for (const profile of [
-      'ks',
-      'krumhansl',
+      'krumhanslSchmuckler',
       'temperley',
       'shaath',
-      'keyfinder',
-      'faraldo-edmt',
-      'edmt',
-      'faraldo-edma',
-      'edma',
-      'faraldo-edmm',
-      'edmm',
-      'bellman-budge',
-      'bellman',
+      'faraldoEdmt',
+      'faraldoEdma',
+      'faraldoEdmm',
+      'bellmanBudge',
     ] as const) {
       expect(() => detectKey(samples, 22050, { profile })).not.toThrow();
     }
@@ -248,27 +257,36 @@ describe('detectKey / detectKeyCandidates reject unknown enum spellings and out-
   });
 });
 
-describe('StreamAnalyzer rejects an out-of-range window ordinal instead of silently defaulting to Hann', () => {
-  it('rejects non-safe-integer window values before the Embind constructor', () => {
+describe('StreamAnalyzer rejects a window that is not a known name instead of silently defaulting to Hann', () => {
+  it('rejects a non-string window before the Embind constructor', () => {
     for (const window of [
       -1,
+      0,
       4,
-      99,
       0.5,
       Number.NaN,
       Number.POSITIVE_INFINITY,
       Number.NEGATIVE_INFINITY,
-      '0',
       null,
       true,
     ]) {
-      expect(() => new StreamAnalyzer({ window: window as never })).toThrow(RangeError);
+      expect(() => new StreamAnalyzer({ sampleRate: 22050, window: window as never })).toThrow(
+        TypeError,
+      );
     }
   });
 
-  it('accepts every valid window ordinal', () => {
-    for (const window of [0, 1, 2, 3] as const) {
-      const analyzer = new StreamAnalyzer({ window });
+  it('rejects an unknown window name', () => {
+    for (const window of ['0', 'Hann', 'triangle', '']) {
+      expect(() => new StreamAnalyzer({ sampleRate: 22050, window: window as never })).toThrow(
+        RangeError,
+      );
+    }
+  });
+
+  it('accepts every valid window name', () => {
+    for (const window of ['hann', 'hamming', 'blackman', 'rectangular'] as const) {
+      const analyzer = new StreamAnalyzer({ sampleRate: 22050, window });
       analyzer.destroy();
     }
   });
@@ -634,13 +652,13 @@ describe('offline boundary validation is enforced by the native WASM layer', () 
   it('rejects non-finite values in all signal transforms', () => {
     const bad = new Float32Array([0, Number.POSITIVE_INFINITY, 1]);
     const calls = [
-      () => preemphasis(bad),
-      () => deemphasis(bad),
-      () => trimSilence(bad, 20, 2, 1),
-      () => splitSilence(bad, 20, 2, 1),
-      () => frameSignal(bad, 2, 1),
-      () => padCenter(bad, 4),
-      () => fixLength(bad, 4),
+      () => preemphasis(bad, 22050),
+      () => deemphasis(bad, 22050),
+      () => trimSilence(bad, 22050, { topDb: 20, frameLength: 2, hopLength: 1 }),
+      () => splitSilence(bad, 22050, { topDb: 20, frameLength: 2, hopLength: 1 }),
+      () => frameSignal(bad, 22050, { frameLength: 2, hopLength: 1 }),
+      () => padCenter({ values: bad, targetSize: 4 }),
+      () => fixLength({ values: bad, targetSize: 4 }),
     ];
     for (const call of calls) {
       expect(call).toThrow();
@@ -649,8 +667,8 @@ describe('offline boundary validation is enforced by the native WASM layer', () 
 
   it('rejects negative target sizes without attempting an allocation', () => {
     const values = new Float32Array([1, 2]);
-    expect(() => padCenter(values, -1)).toThrow();
-    expect(() => fixLength(values, -1)).toThrow();
+    expect(() => padCenter({ values, targetSize: -1 })).toThrow();
+    expect(() => fixLength({ values, targetSize: -1 })).toThrow();
   });
 
   it('rejects invalid time-varying pitch tracks and configuration', () => {

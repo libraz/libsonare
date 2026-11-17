@@ -1,7 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   analyze,
-  analyzeWithProgress,
   chordFunctionalAnalysis,
   detectChords,
   detectKey,
@@ -54,18 +53,18 @@ beforeAll(async () => {
 
 describe('tuning on batch analysis', () => {
   it('reads the flat recording as a negative offset', () => {
-    expect(estimate).toBeLessThan(-0.4);
-    expect(estimate).toBeGreaterThan(-0.5);
+    expect(estimate).toBeLessThan(-40);
+    expect(estimate).toBeGreaterThan(-50);
   });
 
   it('recovers plain triads in detectChords, positional and request forms alike', () => {
     // The STFT front end with the full vocabulary is the one a detuned triad misleads.
     const front = { chromaMethod: 'stft', useTriadsOnly: false } as const;
     const off = new Set(
-      detectChords(detuned, sampleRate, { ...front, tuning: 0 }).chords.map((c) => c.name),
+      detectChords(detuned, sampleRate, { ...front, tuningCents: 0 }).chords.map((c) => c.name),
     );
-    const on = detectChords({ samples: detuned, sampleRate, ...front, tuning: estimate });
-    expect(on).toEqual(detectChords(detuned, sampleRate, { ...front, tuning: estimate }));
+    const on = detectChords({ samples: detuned, sampleRate, ...front, tuningCents: estimate });
+    expect(on).toEqual(detectChords(detuned, sampleRate, { ...front, tuningCents: estimate }));
     const onNames = new Set(on.chords.map((c) => c.name));
     for (const triad of ['C', 'G', 'Am', 'F']) {
       expect(onNames.has(triad)).toBe(true);
@@ -76,17 +75,22 @@ describe('tuning on batch analysis', () => {
   it('measures the tuning by default and reads the triads and key from it', () => {
     const front = { chromaMethod: 'stft', useTriadsOnly: false } as const;
     const byDefault = detectChords(detuned, sampleRate, front);
-    expect(byDefault.tuning).toBeCloseTo(-0.45, 1);
+    expect(byDefault.tuningCents).toBeCloseTo(-45, -1);
     const names = new Set(byDefault.chords.map((c) => c.name));
     for (const triad of ['C', 'G', 'Am', 'F']) {
       expect(names.has(triad)).toBe(true);
     }
     const key = detectKey(detuned, sampleRate);
-    expect(key.tuning).toBeCloseTo(-0.45, 1);
+    expect(key.tuningCents).toBeCloseTo(-45, -1);
     expect([key.root, key.mode]).toEqual([0, 'major']);
     const candidates = detectKeyCandidates(detuned, sampleRate);
     expect([candidates[0].key.root, candidates[0].key.mode]).toEqual([0, 'major']);
-    const labels = chordFunctionalAnalysis(detuned, 0, 0, sampleRate);
+    const labels = chordFunctionalAnalysis({
+      samples: detuned,
+      sampleRate,
+      keyRoot: 0,
+      keyMode: 'major',
+    });
     expect(labels.map((c) => c.name)).toEqual(
       detectChords(detuned, sampleRate).chords.map((c) => c.name),
     );
@@ -95,12 +99,12 @@ describe('tuning on batch analysis', () => {
   it('re-centres analyze on C major and numbers its chords like chordFunctionalAnalysis', () => {
     // On the constant-Q front end the off key can still read C major; what is
     // pinned is that the given tuning is the one reported.
-    const off = analyze(detuned, sampleRate, { tuning: 0 });
-    const on = analyze({ samples: detuned, sampleRate, tuning: estimate });
+    const off = analyze(detuned, sampleRate, { tuningCents: 0 });
+    const on = analyze({ samples: detuned, sampleRate, tuningCents: estimate });
     const byDefault = analyze(detuned, sampleRate);
-    expect(off.tuning).toBe(0);
-    expect(on.tuning).toBeCloseTo(estimate, 6);
-    expect(byDefault.tuning).toBeCloseTo(-0.45, 1);
+    expect(off.tuningCents).toBe(0);
+    expect(on.tuningCents).toBeCloseTo(estimate, 4);
+    expect(byDefault.tuningCents).toBeCloseTo(-45, -1);
     expect([byDefault.key.root, byDefault.key.mode]).toEqual([0, 'major']);
     expect([on.key.root, on.key.mode]).toEqual([0, 'major']);
     const numerals = new Set(on.chords.filter((c) => c.name !== 'N.C.').map((c) => c.romanNumeral));
@@ -112,12 +116,12 @@ describe('tuning on batch analysis', () => {
       samples: detuned,
       sampleRate,
       keyRoot: 0,
-      keyMode: 0,
-      tuning: estimate,
+      keyMode: 'major',
+      tuningCents: estimate,
     });
-    const detected = detectChords({ samples: detuned, sampleRate, tuning: estimate }).chords;
+    const detected = detectChords({ samples: detuned, sampleRate, tuningCents: estimate }).chords;
     expect(labels.map((c) => c.name)).toEqual(detected.map((c) => c.name));
-    const labelByName = new Map(labels.map((c) => [c.name, c.roman]));
+    const labelByName = new Map(labels.map((c) => [c.name, c.romanNumeral]));
     let compared = 0;
     for (const chord of on.chords) {
       if (chord.name === 'N.C.' || !labelByName.has(chord.name)) {
@@ -136,38 +140,42 @@ describe('tuning on batch analysis', () => {
 
   it('rejects an out-of-range tuning on every entry point', () => {
     const short = detuned.subarray(0, sampleRate);
-    expect(() => analyze(short, sampleRate, { tuning: 0.5 })).toThrow();
+    expect(() => analyze(short, sampleRate, { tuningCents: 50 })).toThrow();
+    expect(() => analyze({ samples: short, sampleRate, tuningCents: -60 })).toThrow();
+    expect(() => detectChords(short, sampleRate, { tuningCents: 50 })).toThrow();
     expect(() =>
-      analyzeWithProgress({ samples: short, sampleRate, options: { tuning: -0.6 } }),
+      chordFunctionalAnalysis({
+        samples: short,
+        sampleRate,
+        keyRoot: 0,
+        keyMode: 'major',
+        tuningCents: 50,
+      }),
     ).toThrow();
-    expect(() => detectChords(short, sampleRate, { tuning: 0.5 })).toThrow();
-    expect(() => chordFunctionalAnalysis(short, 0, 0, sampleRate, { tuning: 0.5 })).toThrow();
   });
 });
 
-describe('analyzeWithProgress options', () => {
+describe('analyze progress options', () => {
   const samples = detuned.subarray(0, 4 * sampleRate);
-  const options = { computeTempoCurve: true, tuning: -0.45 };
+  const options = { computeTempoCurve: true, tuningCents: -45 };
 
   it('returns what analyze returns under the same options, in both forms', () => {
     const stages: string[] = [];
-    const request = analyzeWithProgress({
+    const request = analyze({
       samples,
       sampleRate,
-      options,
+      ...options,
       onProgress: (_p, stage) => {
         stages.push(stage);
       },
     });
     let positionalCalls = 0;
-    const positional = analyzeWithProgress(
-      samples,
-      sampleRate,
-      () => {
+    const positional = analyze(samples, sampleRate, {
+      ...options,
+      onProgress: () => {
         positionalCalls++;
       },
-      options,
-    );
+    });
     const plain = analyze(samples, sampleRate, options);
     expect(request).toEqual(plain);
     expect(positional).toEqual(plain);
@@ -177,13 +185,11 @@ describe('analyzeWithProgress options', () => {
   });
 
   it('keeps the defaults when options are omitted', () => {
-    expect(analyzeWithProgress({ samples, sampleRate })).toEqual(analyze(samples, sampleRate));
-    expect(analyzeWithProgress({ samples, sampleRate }).beatLocalBpm).toEqual([]);
+    expect(analyze({ samples, sampleRate })).toEqual(analyze(samples, sampleRate));
+    expect(analyze({ samples, sampleRate }).beatLocalBpm).toEqual([]);
   });
 
   it('still honours cancellation with options', () => {
-    expect(() =>
-      analyzeWithProgress({ samples, sampleRate, options, cancel: () => true }),
-    ).toThrow();
+    expect(() => analyze({ samples, sampleRate, ...options, cancel: () => true })).toThrow();
   });
 });

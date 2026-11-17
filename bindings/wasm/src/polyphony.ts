@@ -1,4 +1,5 @@
 import { releasedHandleError } from './internal/handle_guard.js';
+import { noteEditToNative, notesFromNative } from './internal/note_native_keys.js';
 import { getSonareModule } from './module_state.js';
 import type {
   NoteEditInput,
@@ -8,7 +9,14 @@ import type {
 } from './public_types.js';
 import type { WasmPolyphonicAnalysis } from './sonare.js';
 import type { ValidateOptions } from './validation.js';
-import { assertAudioInput, requestObject, resolveSampleBound } from './validation.js';
+import {
+  assertAudioInput,
+  assertFloatValue,
+  assertNumber,
+  requestObject,
+  resolveSampleBound,
+  sampleOneShot,
+} from './validation.js';
 
 /** Canonical request form for {@link analyzePolyphonic}. */
 export interface AnalyzePolyphonicRequest extends PolyphonicAnalysisOptions, ValidateOptions {
@@ -19,6 +27,61 @@ export interface AnalyzePolyphonicRequest extends PolyphonicAnalysisOptions, Val
    * with this rate, so a wrong value silently analyses differently.
    */
   sampleRate: number;
+}
+
+/** Fields whose native `0` means "library default" and whose native negative means a real 0. */
+const FLOOR_FIELDS = [
+  'minFramePeakRatio',
+  'minSeparationCents',
+  'minRidgePeakRatio',
+  'minRidgeDurationMs',
+] as const;
+
+/** The native config of a request: the fields native reads, in its own spellings. */
+function nativePolyphonicConfig(request: AnalyzePolyphonicRequest): Record<string, unknown> {
+  const { samples, sampleRate, validate, ...rest } = request as unknown as Record<string, unknown>;
+  const config = rest;
+  // `tonality: false` is native's `tonalityOff`.
+  if ('tonality' in config) {
+    const { tonality } = config;
+    delete config.tonality;
+    if (tonality !== undefined && tonality !== null) {
+      if (typeof tonality !== 'boolean') {
+        throw new TypeError('analyzePolyphonic: tonality must be a boolean');
+      }
+      if (!tonality) {
+        config.tonalityOff = true;
+      }
+    }
+  }
+  for (const key of FLOOR_FIELDS) {
+    const value = config[key];
+    if (value === undefined || value === null) {
+      delete config[key];
+      continue;
+    }
+    assertNumber('analyzePolyphonic', value, key);
+    if ((value as number) < 0) {
+      throw new RangeError(`analyzePolyphonic: ${key} must not be negative`);
+    }
+    // Native reads a written 0 as "default" and a negative as the real 0.
+    if (value === 0) {
+      config[key] = -1;
+    }
+  }
+  const reattack = config.reattackRatio;
+  if (reattack === undefined || reattack === null) {
+    // Absent is "no split"; native reads 0 as exactly that.
+    config.reattackRatio = 0;
+  } else {
+    assertFloatValue('analyzePolyphonic', reattack, 'reattackRatio');
+    if ((reattack as number) <= 1) {
+      throw new RangeError(
+        'analyzePolyphonic: reattackRatio must be greater than 1 (omit it for no split)',
+      );
+    }
+  }
+  return config;
 }
 
 /**
@@ -53,7 +116,7 @@ export class PolyphonicAnalysis {
     this.native = module.createPolyphonicAnalysis(
       request.samples,
       request.sampleRate,
-      request as unknown as Record<string, unknown>,
+      nativePolyphonicConfig(request),
     );
   }
 
@@ -87,7 +150,7 @@ export class PolyphonicAnalysis {
    * curve, read once per note.
    */
   notes(): NoteObject[] {
-    return this.handle().notes();
+    return notesFromNative(this.handle().notes());
   }
 
   /**
@@ -96,7 +159,8 @@ export class PolyphonicAnalysis {
    * The only thing a host writes. Everything else on a note is a measurement, and
    * the order is the pairing with the claim sets, so neither is settable.
    *
-   * An omitted field is the identity, so `{}` restores the identity edit. The
+   * An omitted field is the identity, so `{}` restores the identity edit, and
+   * omitting `edit` altogether clears the note's edit the same way. The
    * envelope is `edit.amplitudeEnvelope`, which the handle copies, and its points
    * are per-frame linear gains over the note's span on top of `gainDb` — stretched
    * over whatever length the note renders at, so one entry is a constant gain and
@@ -107,10 +171,10 @@ export class PolyphonicAnalysis {
    * @param note - Index below {@link noteCount}
    * @throws {RangeError} when `note` is out of range
    */
-  setNoteEdit(note: number, edit: NoteEditInput): void {
-    let nativeEdit = edit;
-    if (edit !== null && typeof edit === 'object' && !Array.isArray(edit)) {
-      const { timeOffsetSec, ...rest } = edit;
+  setNoteEdit(note: number, edit?: NoteEditInput): void {
+    let nativeEdit: NoteEditInput = edit ?? {};
+    if (nativeEdit !== null && typeof nativeEdit === 'object' && !Array.isArray(nativeEdit)) {
+      const { timeOffsetSec, ...rest } = nativeEdit;
       nativeEdit = {
         ...rest,
         timeOffsetSamples: resolveSampleBound(
@@ -124,7 +188,7 @@ export class PolyphonicAnalysis {
         ),
       };
     }
-    this.handle().setNoteEdit(note, nativeEdit);
+    this.handle().setNoteEdit(note, noteEditToNative(nativeEdit));
   }
 
   /**
@@ -268,6 +332,7 @@ export class PolyphonicAnalysis {
  * minutes of audio against a 2 GiB linear-memory cap — so analyse the passage you
  * are editing and {@link PolyphonicAnalysis.destroy} it when done.
  *
+ * @throws {TypeError} when `sampleRate` is missing or not a number
  * @throws {RangeError} on empty samples, a non-finite sample, or a `sampleRate`
  *   outside `[8000, 384000]`
  * @throws {RangeError} on a config value the chain rejects,
@@ -281,14 +346,19 @@ export class PolyphonicAnalysis {
  *   // Transpose the lowest note of the chord up a semitone.
  *   const notes = analysis.notes();
  *   const lowest = notes.reduce((a, b) => (a.medianHz <= b.medianHz ? a : b));
- *   analysis.setNoteEdit(notes.indexOf(lowest), { pitchShiftSemitones: 1 });
+ *   analysis.setNoteEdit(notes.indexOf(lowest), { pitchSemitones: 1 });
  *   const edited = analysis.render();
  * } finally {
  *   analysis.destroy();
  * }
  * ```
  */
-export function analyzePolyphonic(request: AnalyzePolyphonicRequest): PolyphonicAnalysis {
-  requestObject('analyzePolyphonic', request, 'request', true);
-  return new PolyphonicAnalysis(request);
+export function analyzePolyphonic(request: AnalyzePolyphonicRequest): PolyphonicAnalysis;
+export function analyzePolyphonic(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<AnalyzePolyphonicRequest, 'samples' | 'sampleRate'>,
+): PolyphonicAnalysis;
+export function analyzePolyphonic(...args: unknown[]): PolyphonicAnalysis {
+  return new PolyphonicAnalysis(sampleOneShot<AnalyzePolyphonicRequest>('analyzePolyphonic', args));
 }

@@ -1,12 +1,8 @@
 import { ErrorCode, SonareError } from '../errors.js';
+import type { SonareStreamAnalyzerChunkMessage } from '../internal/stream_analyzer_messages.js';
 import type { WorkletInput, WorkletOutput } from './audio_types.js';
 import { isStreamAnalyzerMessage, requireIntegerOption } from './guards.js';
-import type {
-  SonareStreamAnalyzerChunkMessage,
-  SonareStreamAnalyzerMessage,
-  SonareStreamAnalyzerWorkletProcessorOptions,
-  WorkletPort,
-} from './messages.js';
+import type { SonareStreamAnalyzerWorkletProcessorOptions, WorkletPort } from './messages.js';
 
 /** Default and minimum mono samples per posted chunk. */
 export const STREAM_ANALYZER_DEFAULT_CHUNK_FRAMES = 4096;
@@ -65,9 +61,9 @@ export class SonareStreamAnalyzerWorkletProcessor {
     this.port?.postMessage?.({ type: 'ready' });
   }
 
-  /** Handles a control message; runs between render quanta. */
-  receiveMessage(message: SonareStreamAnalyzerMessage): void {
-    if (this.destroyed) {
+  /** Handles a control message; runs between render quanta. Anything that is not a control message is ignored. */
+  receiveMessage(message: unknown): void {
+    if (this.destroyed || !isStreamAnalyzerMessage(message)) {
       return;
     }
     if (message.type === 'recycle') {

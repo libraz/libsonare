@@ -1,150 +1,171 @@
 import { getSonareModule } from './module_state.js';
-import type { TempogramMode } from './public_types.js';
-import type {
-  WasmCyclicTempogramResult,
-  WasmFrameResult,
-  WasmTempogramResult,
-  WasmTrimResult,
-} from './sonare.js';
+import type { Matrix2D, NormType, TempogramMode } from './public_types.js';
 import {
+  assertAudioInput,
   assertAudioSamples,
+  assertFloatFields,
+  assertMatrix2D,
   assertNumber,
   assertPositiveInteger,
   assertString,
   optionalBoolean,
-  requestObject,
+  requestOnly,
   requireBoolean,
+  requireToken,
   resolveOptionalNonNegative,
+  sampleOneShot,
+  toInt32Array,
+  toMatrix2D,
+  toMatrix2DByRows,
+  type ValidateOptions,
 } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
 }
 
-export function tone(request?: ToneRequest): Float32Array;
-export function tone(
-  frequency?: number,
-  sampleRate?: number,
-  duration?: number,
-  phase?: number,
-  amplitude?: number,
-): Float32Array;
-export function tone(
-  frequency: number | ToneRequest = 440,
-  sampleRate = 22050,
-  duration = 1,
-  phase = 0,
-  amplitude = 1,
-): Float32Array {
-  const request =
-    typeof frequency === 'number'
-      ? { frequency, sampleRate, duration, phase, amplitude }
-      : requestObject('tone', frequency, 'request', true);
-  return requireModule().tone(
-    request.frequency ?? 440,
-    request.sampleRate ?? 22050,
-    request.duration ?? 1,
-    request.phase ?? 0,
-    request.amplitude ?? 1,
-  );
+/** Trimmed audio and the half-open sample span `[startSample, endSample)` it was cut from. */
+interface TrimSilenceResult {
+  audio: Float32Array;
+  startSample: number;
+  endSample: number;
 }
 
-export function chirp(request?: ChirpRequest): Float32Array;
-export function chirp(
-  fmin?: number,
-  fmax?: number,
-  sampleRate?: number,
-  duration?: number,
-  linear?: boolean,
-): Float32Array;
-export function chirp(
-  fmin: number | ChirpRequest = 440,
-  fmax = 880,
-  sampleRate = 22050,
-  duration = 1,
-  linear = true,
-): Float32Array {
-  const request =
-    typeof fmin === 'number'
-      ? { fmin, fmax, sampleRate, duration, linear }
-      : requestObject('chirp', fmin, 'request', true);
-  return requireModule().chirp(
-    request.fmin ?? 440,
-    request.fmax ?? 880,
-    request.sampleRate ?? 22050,
-    request.duration ?? 1,
-    optionalBoolean('chirp', request.linear, 'linear', true),
-  );
+/** The request fields a positional overload carries in its options bag. */
+type SampleOptions<R> = Omit<R, 'samples' | 'sampleRate'>;
+
+/** Sine tone request. Every field is optional. */
+export interface ToneRequest {
+  /** Default 440. */
+  frequencyHz?: number;
+  /** Default 22050. */
+  sampleRate?: number;
+  /** Default 1. */
+  durationSec?: number;
+  /** Starting phase in radians. Default 0. */
+  phase?: number;
+  /** Default 1. */
+  amplitude?: number;
 }
 
-export function clicks(request: ClicksRequest): Float32Array;
-export function clicks(
-  times: Float32Array,
-  sampleRate?: number,
-  length?: number,
-  frequency?: number,
-  clickDuration?: number,
-): Float32Array;
-export function clicks(
-  times: Float32Array | ClicksRequest,
-  sampleRate = 22050,
-  length = 0,
-  frequency = 1000,
-  clickDuration = 0.1,
-): Float32Array {
-  const request =
-    times instanceof Float32Array
-      ? { times, sampleRate, length, frequency, clickDuration }
-      : requestObject('clicks', times, 'times');
-  return requireModule().clicks(
-    request.times,
-    request.sampleRate ?? 22050,
-    request.length ?? 0,
-    request.frequency ?? 1000,
-    request.clickDuration ?? 0.1,
-  );
+/** Frequency sweep request from `fminHz` to `fmaxHz`. Every field is optional. */
+export interface ChirpRequest {
+  /** Default 440. */
+  fminHz?: number;
+  /** Default 880. */
+  fmaxHz?: number;
+  /** Default 22050. */
+  sampleRate?: number;
+  /** Default 1. */
+  durationSec?: number;
+  /** `true` for a linear sweep, `false` for an exponential one. Default `false`. */
+  linear?: boolean;
 }
 
-export interface FramesToTimeRequest {
-  frames: number;
-  sr?: number;
-  hopLength?: number;
+/** Click train request. */
+export interface ClicksRequest {
+  /** Click onsets in seconds. */
+  times: Float32Array;
+  /** Default 22050. */
+  sampleRate?: number;
+  /** Output length in samples; absent derives it from the last click, an explicit 0 is refused. */
+  length?: number;
+  /** Default 1000. */
+  frequencyHz?: number;
+  /** Default 0.1. */
+  clickDurationSec?: number;
 }
 
-export interface TimeToFramesRequest {
-  time: number;
-  sr?: number;
-  hopLength?: number;
-}
-
-export interface FramesToSamplesRequest {
-  frames: number;
-  hopLength?: number;
-  nFft?: number;
-}
-
-export interface SamplesToFramesRequest {
-  samples: number;
-  hopLength?: number;
-  nFft?: number;
-}
-
-export interface DbConversionRequest {
+/** Power-to-dB conversion request. */
+export interface PowerToDbRequest {
   values: Float32Array;
+  /** Reference power. Default 1. */
   ref?: number;
+  /** Floor applied before the log. Default 1e-10. */
   amin?: number;
+  /** Dynamic range kept below the peak, in dB. Default 80. */
   topDb?: number;
 }
 
-export interface SilenceRequest {
-  samples: Float32Array;
+/** Amplitude-to-dB conversion request. */
+export interface AmplitudeToDbRequest {
+  values: Float32Array;
+  /** Reference amplitude. Default 1. */
+  ref?: number;
+  /** Floor applied before the log. Default 1e-5. */
+  amin?: number;
+  /** Dynamic range kept below the peak, in dB. Default 80. */
   topDb?: number;
+}
+
+/** dB-to-power conversion request. */
+export interface DbToPowerRequest {
+  values: Float32Array;
+  /** Reference power. Default 1. */
+  ref?: number;
+}
+
+/** dB-to-amplitude conversion request. */
+export interface DbToAmplitudeRequest {
+  values: Float32Array;
+  /** Reference amplitude. Default 1. */
+  ref?: number;
+}
+
+/** Pre-emphasis filter request. */
+export interface PreemphasisRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  /** Filter coefficient. Default 0.97. */
+  coef?: number;
+  /** Initial filter state. */
+  zi?: number;
+}
+
+/** De-emphasis filter request. */
+export interface DeemphasisRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  /** Filter coefficient. Default 0.97. */
+  coef?: number;
+  /** Initial filter state. */
+  zi?: number;
+}
+
+/** Silence trim request. */
+export interface TrimSilenceRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  /** Threshold below the peak, in dB. Default 60. */
+  topDb?: number;
+  /** Analysis frame in samples. Default 2048. */
   frameLength?: number;
+  /** Hop in samples. Default 512. */
+  hopLength?: number;
+}
+
+/** Non-silent interval request for one signal. */
+export interface SplitSilenceRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  /** Threshold below the peak, in dB. Default 60. */
+  topDb?: number;
+  /** Analysis frame in samples. Default 2048. */
+  frameLength?: number;
+  /** Hop in samples. Default 512. */
   hopLength?: number;
 }
 
 /** Canonical request form for the common-silence union of several signals. */
 export interface SplitSilenceCommonRequest {
+  signals: Float32Array[];
+  topDb?: number;
+  frameLength?: number;
+  hopLength?: number;
+}
+
+/** Request form of {@link splitSilenceCommonWithReport}; the fields of {@link SplitSilenceCommonRequest}. */
+export interface SplitSilenceCommonWithReportRequest {
   signals: Float32Array[];
   topDb?: number;
   frameLength?: number;
@@ -209,62 +230,44 @@ export interface SplitSilenceCommonWithReportResult {
   report: SilenceCommonReport;
 }
 
-export interface FrameSignalRequest {
+/** Overlapping frames of a signal. The rate is validated but does not change the result. */
+export interface FrameSignalRequest extends ValidateOptions {
   samples: Float32Array;
+  sampleRate: number;
+  /** Frame size in samples. */
   frameLength: number;
+  /** Hop between frames in samples. */
   hopLength: number;
 }
-export interface ToneRequest {
-  frequency?: number;
-  sampleRate?: number;
-  duration?: number;
-  phase?: number;
-  amplitude?: number;
-}
-export interface ChirpRequest {
-  fmin?: number;
-  fmax?: number;
-  sampleRate?: number;
-  duration?: number;
-  linear?: boolean;
-}
-export interface ClicksRequest {
-  times: Float32Array;
-  sampleRate?: number;
-  length?: number;
-  frequency?: number;
-  clickDuration?: number;
-}
-/** Canonical request form for pre/de-emphasis filters. */
-export interface EmphasisRequest {
-  samples: Float32Array;
-  coef?: number;
-  zi?: number;
-}
+
 /** Canonical request form for centering or extending a vector. */
 export interface PadCenterRequest {
   values: Float32Array;
   targetSize: number;
   padValue?: number;
 }
+
 /** Canonical request form for resizing a vector. */
 export interface FixLengthRequest {
   values: Float32Array;
   targetSize: number;
   padValue?: number;
 }
+
 /** Canonical request form for bounding a frame-index vector. */
 export interface FixFramesRequest {
-  frames: Int32Array;
+  frames: Int32Array | ArrayLike<number>;
   xMin?: number;
   /** Upper bound; omit for none. Negative is refused. */
   xMax?: number;
   pad?: boolean;
 }
+
 export interface OnsetBacktrackRequest {
-  events: Int32Array;
+  events: Int32Array | ArrayLike<number>;
   energy: Float32Array;
 }
+
 /** Canonical request form for peak selection. */
 export interface PeakPickRequest {
   values: Float32Array;
@@ -275,22 +278,24 @@ export interface PeakPickRequest {
   delta: number;
   wait: number;
 }
+
 /** Canonical request form for vector normalization. */
 export interface VectorNormalizeRequest {
   values: Float32Array;
-  normType?: number;
+  /** Default `'max'`. */
+  norm?: NormType;
   threshold?: number;
 }
+
 /** Canonical request form for tonal centroid projection. */
 export interface TonnetzRequest {
-  chromagram: Float32Array;
-  nChroma: number;
-  nFrames: number;
+  /** Rows are chroma bins, cols are frames. */
+  chromagram: Matrix2D;
 }
+
 export interface PcenRequest {
-  values: Float32Array;
-  nBins: number;
-  nFrames: number;
+  /** Rows are bins, cols are frames. */
+  values: Matrix2D;
   sampleRate?: number;
   hopLength?: number;
   timeConstant?: number;
@@ -298,9 +303,8 @@ export interface PcenRequest {
   bias?: number;
   power?: number;
   eps?: number;
-  /** @deprecated Put PCEN fields directly on the request object. */
-  options?: Record<string, number>;
 }
+
 export interface TempogramRequest {
   onsetEnvelope: Float32Array;
   sampleRate?: number;
@@ -310,6 +314,7 @@ export interface TempogramRequest {
   center?: boolean;
   norm?: boolean;
 }
+
 export interface CyclicTempogramRequest {
   onsetEnvelope: Float32Array;
   sampleRate?: number;
@@ -318,13 +323,76 @@ export interface CyclicTempogramRequest {
   bpmMin?: number;
   nBins?: number;
 }
+
+/** Predominant local pulse request. The tempo range defaults to 60-200 BPM, narrower than librosa's. */
 export interface PlpRequest {
   onsetEnvelope: Float32Array;
   sampleRate?: number;
   hopLength?: number;
-  tempoMin?: number;
-  tempoMax?: number;
+  bpmMin?: number;
+  bpmMax?: number;
   winLength?: number;
+}
+
+// ============================================================================
+// Core - Synthesis
+// ============================================================================
+
+/**
+ * Sine tone.
+ *
+ * @returns The samples, `durationSec * sampleRate` long.
+ */
+export function tone(...args: [request?: ToneRequest]): Float32Array {
+  const r = requestOnly<ToneRequest>('tone', args.length === 0 ? [{}] : args);
+  const frequencyHz = r.frequencyHz ?? 440;
+  const durationSec = r.durationSec ?? 1;
+  assertFloatFields('tone', { frequencyHz, durationSec });
+  return requireModule().tone(
+    frequencyHz,
+    r.sampleRate ?? 22050,
+    durationSec,
+    r.phase ?? 0,
+    r.amplitude ?? 1,
+  );
+}
+
+/** Frequency sweep; exponential unless `linear` is set. */
+export function chirp(...args: [request?: ChirpRequest]): Float32Array {
+  const r = requestOnly<ChirpRequest>('chirp', args.length === 0 ? [{}] : args);
+  const fminHz = r.fminHz ?? 440;
+  const fmaxHz = r.fmaxHz ?? 880;
+  const durationSec = r.durationSec ?? 1;
+  assertFloatFields('chirp', { fminHz, fmaxHz, durationSec });
+  return requireModule().chirp(
+    fminHz,
+    fmaxHz,
+    r.sampleRate ?? 22050,
+    durationSec,
+    optionalBoolean('chirp', r.linear, 'linear', false),
+  );
+}
+
+/**
+ * Click train.
+ *
+ * @throws RangeError for an explicit `length` of 0.
+ */
+export function clicks(...args: [request: ClicksRequest]): Float32Array {
+  const r = requestOnly<ClicksRequest>('clicks', args);
+  if (r.length !== undefined && r.length !== null) {
+    assertPositiveInteger('clicks', r.length, 'length');
+  }
+  const frequencyHz = r.frequencyHz ?? 1000;
+  const clickDurationSec = r.clickDurationSec ?? 0.1;
+  assertFloatFields('clicks', { frequencyHz, clickDurationSec });
+  return requireModule().clicks(
+    r.times,
+    r.sampleRate ?? 22050,
+    r.length ?? 0,
+    frequencyHz,
+    clickDurationSec,
+  );
 }
 
 // ============================================================================
@@ -421,204 +489,158 @@ export function noteToHz(note: string): number {
  * Convert frame index to time in seconds.
  *
  * @param frames - Frame index
- * @param sr - Sample rate in Hz (default: 22050)
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param hopLength - Hop length in samples (default: 512)
  * @returns Time in seconds
  */
-export function framesToTime(request: FramesToTimeRequest): number;
-export function framesToTime(frames: number, sr?: number, hopLength?: number): number;
-export function framesToTime(
-  frames: number | FramesToTimeRequest,
-  sr = 22050,
-  hopLength = 512,
-): number {
-  if (typeof frames === 'object' && frames !== null) {
-    requestObject('framesToTime', frames, 'request', true);
-    return framesToTime(frames.frames, frames.sr, frames.hopLength);
-  }
+export function framesToTime(frames: number, sampleRate = 22050, hopLength = 512): number {
   assertNumber('framesToTime', frames, 'frames');
-  assertNumber('framesToTime', sr, 'sr');
+  assertNumber('framesToTime', sampleRate, 'sampleRate');
   assertPositiveInteger('framesToTime', hopLength, 'hopLength');
-  return requireModule().framesToTime(frames, sr, hopLength);
+  return requireModule().framesToTime(frames, sampleRate, hopLength);
 }
 
 /**
  * Convert time in seconds to frame index.
  *
- * @param time - Time in seconds
- * @param sr - Sample rate in Hz (default: 22050)
+ * @param timeSec - Time in seconds
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param hopLength - Hop length in samples (default: 512)
  * @returns Frame index
  */
-export function timeToFrames(request: TimeToFramesRequest): number;
-export function timeToFrames(time: number, sr?: number, hopLength?: number): number;
-export function timeToFrames(
-  time: number | TimeToFramesRequest,
-  sr = 22050,
-  hopLength = 512,
-): number {
-  if (typeof time === 'object' && time !== null) {
-    requestObject('timeToFrames', time, 'request', true);
-    return timeToFrames(time.time, time.sr, time.hopLength);
-  }
-  assertNumber('timeToFrames', time, 'time');
-  assertNumber('timeToFrames', sr, 'sr');
+export function timeToFrames(timeSec: number, sampleRate = 22050, hopLength = 512): number {
+  assertNumber('timeToFrames', timeSec, 'timeSec');
+  assertNumber('timeToFrames', sampleRate, 'sampleRate');
   assertPositiveInteger('timeToFrames', hopLength, 'hopLength');
-  return requireModule().timeToFrames(time, sr, hopLength);
+  return requireModule().timeToFrames(timeSec, sampleRate, hopLength);
 }
 
-export function framesToSamples(request: FramesToSamplesRequest): number;
-export function framesToSamples(frames: number, hopLength?: number, nFft?: number): number;
-export function framesToSamples(
-  frames: number | FramesToSamplesRequest,
-  hopLength = 512,
-  nFft = 0,
-): number {
-  if (typeof frames === 'object' && frames !== null) {
-    requestObject('framesToSamples', frames, 'request', true);
-    return framesToSamples(frames.frames, frames.hopLength, frames.nFft);
+// Absent nFft is the native "no centring" 0; an explicit 0 is out of domain.
+function resolveOptionalFft(fnName: string, nFft: number | undefined | null): number {
+  if (nFft === undefined || nFft === null) {
+    return 0;
   }
+  assertNumber(fnName, nFft, 'nFft');
+  if (nFft === 0) {
+    throw new RangeError(`${fnName}: nFft must not be 0 (omit it for no centring)`);
+  }
+  return nFft;
+}
+
+/**
+ * Convert frame index to a sample index.
+ *
+ * @param nFft - FFT size of a centred analysis; absent applies no centring offset, an explicit 0 throws `RangeError`.
+ */
+export function framesToSamples(frames: number, hopLength = 512, nFft?: number): number {
   assertNumber('framesToSamples', frames, 'frames');
   assertNumber('framesToSamples', hopLength, 'hopLength');
-  assertNumber('framesToSamples', nFft, 'nFft');
-  return requireModule().framesToSamples(frames, hopLength, nFft);
+  const fft = resolveOptionalFft('framesToSamples', nFft);
+  return requireModule().framesToSamples(frames, hopLength, fft);
 }
 
-export function samplesToFrames(request: SamplesToFramesRequest): number;
-export function samplesToFrames(samples: number, hopLength?: number, nFft?: number): number;
-export function samplesToFrames(
-  samples: number | SamplesToFramesRequest,
-  hopLength = 512,
-  nFft = 0,
-): number {
-  if (typeof samples === 'object' && samples !== null) {
-    requestObject('samplesToFrames', samples, 'request', true);
-    return samplesToFrames(samples.samples, samples.hopLength, samples.nFft);
-  }
+/**
+ * Convert a sample index to a frame index.
+ *
+ * @param nFft - FFT size of a centred analysis; absent applies no centring offset, an explicit 0 throws `RangeError`.
+ */
+export function samplesToFrames(samples: number, hopLength = 512, nFft?: number): number {
   assertNumber('samplesToFrames', samples, 'samples');
   assertNumber('samplesToFrames', hopLength, 'hopLength');
-  assertNumber('samplesToFrames', nFft, 'nFft');
-  return requireModule().samplesToFrames(samples, hopLength, nFft);
+  const fft = resolveOptionalFft('samplesToFrames', nFft);
+  return requireModule().samplesToFrames(samples, hopLength, fft);
 }
 
-export function powerToDb(request: DbConversionRequest): Float32Array;
-export function powerToDb(
-  values: Float32Array,
-  ref?: number,
-  amin?: number,
-  topDb?: number,
-): Float32Array;
-export function powerToDb(
-  values: Float32Array | DbConversionRequest,
-  ref = 1.0,
-  amin = 1e-10,
-  topDb = 80.0,
-): Float32Array {
-  if (!(values instanceof Float32Array)) {
-    requestObject('powerToDb', values, 'values');
-    return powerToDb(values.values, values.ref, values.amin, values.topDb);
-  }
-  return requireModule().powerToDb(values, ref, amin, topDb);
+// ============================================================================
+// Core - dB conversion and filters
+// ============================================================================
+
+/** Power values to dB. */
+export function powerToDb(...args: [request: PowerToDbRequest]): Float32Array {
+  const r = requestOnly<PowerToDbRequest>('powerToDb', args);
+  return requireModule().powerToDb(r.values, r.ref ?? 1.0, r.amin ?? 1e-10, r.topDb ?? 80.0);
 }
 
-export function amplitudeToDb(request: DbConversionRequest): Float32Array;
-export function amplitudeToDb(
-  values: Float32Array,
-  ref?: number,
-  amin?: number,
-  topDb?: number,
-): Float32Array;
-export function amplitudeToDb(
-  values: Float32Array | DbConversionRequest,
-  ref = 1.0,
-  amin = 1e-5,
-  topDb = 80.0,
-): Float32Array {
-  if (!(values instanceof Float32Array)) {
-    requestObject('amplitudeToDb', values, 'values');
-    return amplitudeToDb(values.values, values.ref, values.amin, values.topDb);
-  }
-  return requireModule().amplitudeToDb(values, ref, amin, topDb);
+/** Amplitude values to dB. */
+export function amplitudeToDb(...args: [request: AmplitudeToDbRequest]): Float32Array {
+  const r = requestOnly<AmplitudeToDbRequest>('amplitudeToDb', args);
+  return requireModule().amplitudeToDb(r.values, r.ref ?? 1.0, r.amin ?? 1e-5, r.topDb ?? 80.0);
 }
 
-export function dbToPower(values: Float32Array, ref = 1.0): Float32Array {
-  assertNumber('dbToPower', ref, 'ref');
-  return requireModule().dbToPower(values, ref);
+/** dB values to power. */
+export function dbToPower(...args: [request: DbToPowerRequest]): Float32Array {
+  const r = requestOnly<DbToPowerRequest>('dbToPower', args);
+  assertNumber('dbToPower', r.ref ?? 1.0, 'ref');
+  return requireModule().dbToPower(r.values, r.ref ?? 1.0);
 }
 
-export function dbToAmplitude(values: Float32Array, ref = 1.0): Float32Array {
-  assertNumber('dbToAmplitude', ref, 'ref');
-  return requireModule().dbToAmplitude(values, ref);
+/** dB values to amplitude. */
+export function dbToAmplitude(...args: [request: DbToAmplitudeRequest]): Float32Array {
+  const r = requestOnly<DbToAmplitudeRequest>('dbToAmplitude', args);
+  assertNumber('dbToAmplitude', r.ref ?? 1.0, 'ref');
+  return requireModule().dbToAmplitude(r.values, r.ref ?? 1.0);
 }
 
-export function preemphasis(request: EmphasisRequest): Float32Array;
-export function preemphasis(samples: Float32Array, coef?: number, zi?: number): Float32Array;
+/** First-order pre-emphasis filter. */
+export function preemphasis(request: PreemphasisRequest): Float32Array;
 export function preemphasis(
-  samples: Float32Array | EmphasisRequest,
-  coef = 0.97,
-  zi?: number,
-): Float32Array {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('preemphasis', samples);
-    return preemphasis(samples.samples, samples.coef, samples.zi);
-  }
-  return requireModule().preemphasis(samples, coef, zi ?? null);
+  samples: Float32Array,
+  sampleRate: number,
+  options?: SampleOptions<PreemphasisRequest>,
+): Float32Array;
+export function preemphasis(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<PreemphasisRequest>('preemphasis', args);
+  assertAudioInput('preemphasis', r.samples, r.sampleRate, r);
+  return requireModule().preemphasis(r.samples, r.coef ?? 0.97, r.zi ?? null);
 }
 
-export function deemphasis(request: EmphasisRequest): Float32Array;
-export function deemphasis(samples: Float32Array, coef?: number, zi?: number): Float32Array;
+/** First-order de-emphasis filter, the inverse of {@link preemphasis}. */
+export function deemphasis(request: DeemphasisRequest): Float32Array;
 export function deemphasis(
-  samples: Float32Array | EmphasisRequest,
-  coef = 0.97,
-  zi?: number,
-): Float32Array {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('deemphasis', samples);
-    return deemphasis(samples.samples, samples.coef, samples.zi);
-  }
-  return requireModule().deemphasis(samples, coef, zi ?? null);
+  samples: Float32Array,
+  sampleRate: number,
+  options?: SampleOptions<DeemphasisRequest>,
+): Float32Array;
+export function deemphasis(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<DeemphasisRequest>('deemphasis', args);
+  assertAudioInput('deemphasis', r.samples, r.sampleRate, r);
+  return requireModule().deemphasis(r.samples, r.coef ?? 0.97, r.zi ?? null);
 }
 
-export function trimSilence(request: SilenceRequest): WasmTrimResult;
+/** Trim leading and trailing silence. */
+export function trimSilence(request: TrimSilenceRequest): TrimSilenceResult;
 export function trimSilence(
   samples: Float32Array,
-  topDb?: number,
-  frameLength?: number,
-  hopLength?: number,
-): WasmTrimResult;
-export function trimSilence(
-  samples: Float32Array | SilenceRequest,
-  topDb = 60.0,
-  frameLength = 2048,
-  hopLength = 512,
-): WasmTrimResult {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('trimSilence', samples);
-    return trimSilence(samples.samples, samples.topDb, samples.frameLength, samples.hopLength);
-  }
-  assertAudioSamples('trimSilence', samples);
-  return requireModule().trimSilence(samples, topDb, frameLength, hopLength);
+  sampleRate: number,
+  options?: SampleOptions<TrimSilenceRequest>,
+): TrimSilenceResult;
+export function trimSilence(...args: unknown[]): TrimSilenceResult {
+  const r = sampleOneShot<TrimSilenceRequest>('trimSilence', args);
+  assertAudioInput('trimSilence', r.samples, r.sampleRate, r);
+  return requireModule().trimSilence(
+    r.samples,
+    r.topDb ?? 60.0,
+    r.frameLength ?? 2048,
+    r.hopLength ?? 512,
+  );
 }
 
-export function splitSilence(request: SilenceRequest): Int32Array;
+/** Non-silent `[start, end)` sample intervals, flattened. */
+export function splitSilence(request: SplitSilenceRequest): Int32Array;
 export function splitSilence(
   samples: Float32Array,
-  topDb?: number,
-  frameLength?: number,
-  hopLength?: number,
+  sampleRate: number,
+  options?: SampleOptions<SplitSilenceRequest>,
 ): Int32Array;
-export function splitSilence(
-  samples: Float32Array | SilenceRequest,
-  topDb = 60.0,
-  frameLength = 2048,
-  hopLength = 512,
-): Int32Array {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('splitSilence', samples);
-    return splitSilence(samples.samples, samples.topDb, samples.frameLength, samples.hopLength);
-  }
-  assertAudioSamples('splitSilence', samples);
-  return requireModule().splitSilence(samples, topDb, frameLength, hopLength);
+export function splitSilence(...args: unknown[]): Int32Array {
+  const r = sampleOneShot<SplitSilenceRequest>('splitSilence', args);
+  assertAudioInput('splitSilence', r.samples, r.sampleRate, r);
+  return requireModule().splitSilence(
+    r.samples,
+    r.topDb ?? 60.0,
+    r.frameLength ?? 2048,
+    r.hopLength ?? 512,
+  );
 }
 
 /** Preflight each signal; an empty or non-array `signals` is left to the native refusal. */
@@ -639,14 +661,14 @@ function assertCommonSignals(fnName: string, signals: unknown): void {
  *   where they touch. A single signal returns exactly what `splitSilence`
  *   does for it.
  */
-export function splitSilenceCommon(request: SplitSilenceCommonRequest): Int32Array {
-  requestObject('splitSilenceCommon', request, 'request', true);
-  assertCommonSignals('splitSilenceCommon', request.signals);
+export function splitSilenceCommon(...args: [request: SplitSilenceCommonRequest]): Int32Array {
+  const r = requestOnly<SplitSilenceCommonRequest>('splitSilenceCommon', args);
+  assertCommonSignals('splitSilenceCommon', r.signals);
   return requireModule().splitSilenceCommon(
-    request.signals,
-    request.topDb ?? 60.0,
-    request.frameLength ?? 2048,
-    request.hopLength ?? 512,
+    r.signals,
+    r.topDb ?? 60.0,
+    r.frameLength ?? 2048,
+    r.hopLength ?? 512,
   );
 }
 
@@ -663,311 +685,196 @@ export function splitSilenceCommon(request: SplitSilenceCommonRequest): Int32Arr
  * @returns The union intervals and the report measured on the same RMS pass
  */
 export function splitSilenceCommonWithReport(
-  request: SplitSilenceCommonRequest,
+  ...args: [request: SplitSilenceCommonWithReportRequest]
 ): SplitSilenceCommonWithReportResult {
-  requestObject('splitSilenceCommonWithReport', request, 'request', true);
-  assertCommonSignals('splitSilenceCommonWithReport', request.signals);
+  const r = requestOnly<SplitSilenceCommonWithReportRequest>('splitSilenceCommonWithReport', args);
+  assertCommonSignals('splitSilenceCommonWithReport', r.signals);
   return requireModule().splitSilenceCommonWithReport(
-    request.signals,
-    request.topDb ?? 60.0,
-    request.frameLength ?? 2048,
-    request.hopLength ?? 512,
+    r.signals,
+    r.topDb ?? 60.0,
+    r.frameLength ?? 2048,
+    r.hopLength ?? 512,
   );
 }
 
-export function frameSignal(request: FrameSignalRequest): WasmFrameResult;
+/**
+ * Overlapping frames of a signal.
+ *
+ * @returns {@link Matrix2D} whose rows are the `frameLength` samples of a frame and cols are frames.
+ * @throws TypeError when `frameLength` or `hopLength` is missing.
+ */
+export function frameSignal(request: FrameSignalRequest): Matrix2D;
 export function frameSignal(
   samples: Float32Array,
-  frameLength: number,
-  hopLength: number,
-): WasmFrameResult;
-export function frameSignal(
-  samples: Float32Array | FrameSignalRequest,
-  frameLength?: number,
-  hopLength?: number,
-): WasmFrameResult {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('frameSignal', samples);
-    return frameSignal(samples.samples, samples.frameLength, samples.hopLength);
+  sampleRate: number,
+  options: SampleOptions<FrameSignalRequest>,
+): Matrix2D;
+export function frameSignal(...args: unknown[]): Matrix2D {
+  const r = sampleOneShot<FrameSignalRequest>('frameSignal', args);
+  assertAudioInput('frameSignal', r.samples, r.sampleRate, r);
+  for (const name of ['frameLength', 'hopLength'] as const) {
+    if (typeof r[name] !== 'number') {
+      throw new TypeError(`frameSignal: ${name} is required`);
+    }
   }
-  return requireModule().frameSignal(samples, frameLength as number, hopLength as number);
+  const { nFrames, frames } = requireModule().frameSignal(r.samples, r.frameLength, r.hopLength);
+  // Native stores one frame after another; the surface puts samples on rows and frames on columns.
+  const data = new Float32Array(frames.length);
+  for (let f = 0; f < nFrames; f++) {
+    for (let i = 0; i < r.frameLength; i++) {
+      data[i * nFrames + f] = frames[f * r.frameLength + i] as number;
+    }
+  }
+  return toMatrix2D(data, r.frameLength, nFrames);
 }
 
-export function padCenter(request: PadCenterRequest): Float32Array;
-export function padCenter(
-  values: Float32Array,
-  targetSize: number,
-  padValue?: number,
-): Float32Array;
-export function padCenter(
-  values: Float32Array | PadCenterRequest,
-  targetSize?: number,
-  padValue = 0.0,
-): Float32Array {
-  if (!(values instanceof Float32Array)) {
-    requestObject('padCenter', values, 'values');
-    return padCenter(values.values, values.targetSize, values.padValue);
-  }
-  return requireModule().padCenter(values, targetSize as number, padValue);
+/** Center `values` in a vector of `targetSize`. */
+export function padCenter(...args: [request: PadCenterRequest]): Float32Array {
+  const r = requestOnly<PadCenterRequest>('padCenter', args);
+  return requireModule().padCenter(r.values, r.targetSize, r.padValue ?? 0.0);
 }
 
-export function fixLength(request: FixLengthRequest): Float32Array;
-export function fixLength(
-  values: Float32Array,
-  targetSize: number,
-  padValue?: number,
-): Float32Array;
-export function fixLength(
-  values: Float32Array | FixLengthRequest,
-  targetSize?: number,
-  padValue = 0.0,
-): Float32Array {
-  if (!(values instanceof Float32Array)) {
-    requestObject('fixLength', values, 'values');
-    return fixLength(values.values, values.targetSize, values.padValue);
-  }
-  return requireModule().fixLength(values, targetSize as number, padValue);
+/** Pad or truncate `values` to `targetSize`. */
+export function fixLength(...args: [request: FixLengthRequest]): Float32Array {
+  const r = requestOnly<FixLengthRequest>('fixLength', args);
+  return requireModule().fixLength(r.values, r.targetSize, r.padValue ?? 0.0);
 }
 
-export function fixFrames(request: FixFramesRequest): Int32Array;
-export function fixFrames(
-  frames: Int32Array,
-  xMin?: number,
-  xMax?: number,
-  pad?: boolean,
-): Int32Array;
-export function fixFrames(
-  frames: Int32Array | FixFramesRequest,
-  xMin = 0,
-  xMax?: number,
-  pad = true,
-): Int32Array {
-  if (!(frames instanceof Int32Array)) {
-    requestObject('fixFrames', frames, 'request', true);
-    return fixFrames(frames.frames, frames.xMin, frames.xMax, frames.pad);
-  }
+/** Bound a frame-index vector to `[xMin, xMax]`, padding the ends when `pad` is set. */
+export function fixFrames(...args: [request: FixFramesRequest]): Int32Array {
+  const r = requestOnly<FixFramesRequest>('fixFrames', args);
   return requireModule().fixFrames(
-    frames,
-    xMin,
-    resolveOptionalNonNegative('fixFrames', xMax, 'xMax'),
-    requireBoolean('fixFrames', pad, 'pad'),
+    toInt32Array('fixFrames', r.frames, 'frames'),
+    r.xMin ?? 0,
+    resolveOptionalNonNegative('fixFrames', r.xMax, 'xMax'),
+    requireBoolean('fixFrames', r.pad ?? true, 'pad'),
   );
 }
 
-export function onsetBacktrack(request: OnsetBacktrackRequest): Int32Array;
-export function onsetBacktrack(events: Int32Array, energy: Float32Array): Int32Array;
-export function onsetBacktrack(
-  events: Int32Array | OnsetBacktrackRequest,
-  energy?: Float32Array,
-): Int32Array {
-  if (!(events instanceof Int32Array)) {
-    requestObject('onsetBacktrack', events, 'request', true);
-    return onsetBacktrack(events.events, events.energy);
-  }
-  return requireModule().onsetBacktrack(events, energy as Float32Array);
+/** Roll each onset event back to the preceding energy minimum. */
+export function onsetBacktrack(...args: [request: OnsetBacktrackRequest]): Int32Array {
+  const r = requestOnly<OnsetBacktrackRequest>('onsetBacktrack', args);
+  const events = toInt32Array('onsetBacktrack', r.events, 'events');
+  return requireModule().onsetBacktrack(events, r.energy);
 }
 
-export function peakPick(request: PeakPickRequest): Int32Array;
-export function peakPick(
-  values: Float32Array,
-  preMax: number,
-  postMax: number,
-  preAvg: number,
-  postAvg: number,
-  delta: number,
-  wait: number,
-): Int32Array;
-export function peakPick(
-  values: Float32Array | PeakPickRequest,
-  preMax?: number,
-  postMax?: number,
-  preAvg?: number,
-  postAvg?: number,
-  delta?: number,
-  wait?: number,
-): Int32Array {
-  if (!(values instanceof Float32Array)) {
-    requestObject('peakPick', values, 'values');
-    const r = values;
-    return peakPick(r.values, r.preMax, r.postMax, r.preAvg, r.postAvg, r.delta, r.wait);
-  }
+/** Pick peaks from an onset-strength-like vector (librosa.util.peak_pick). */
+export function peakPick(...args: [request: PeakPickRequest]): Int32Array {
+  const r = requestOnly<PeakPickRequest>('peakPick', args);
   return requireModule().peakPick(
-    values,
-    preMax as number,
-    postMax as number,
-    preAvg as number,
-    postAvg as number,
-    delta as number,
-    wait as number,
+    r.values,
+    r.preMax,
+    r.postMax,
+    r.preAvg,
+    r.postAvg,
+    r.delta,
+    r.wait,
   );
 }
 
-export function vectorNormalize(request: VectorNormalizeRequest): Float32Array;
-export function vectorNormalize(
-  values: Float32Array,
-  normType?: number,
-  threshold?: number,
-): Float32Array;
-export function vectorNormalize(
-  values: Float32Array | VectorNormalizeRequest,
-  normType = 0,
-  threshold = 0.0,
-): Float32Array {
-  if (!(values instanceof Float32Array)) {
-    requestObject('vectorNormalize', values, 'values');
-    return vectorNormalize(values.values, values.normType, values.threshold);
-  }
-  return requireModule().vectorNormalize(values, normType, threshold);
+const NORM_TOKENS = ['max', 'l1', 'l2', 'power'] as const;
+
+/**
+ * Normalize a vector.
+ *
+ * @throws TypeError for a non-string `norm`, RangeError for an unknown token.
+ */
+export function vectorNormalize(...args: [request: VectorNormalizeRequest]): Float32Array {
+  const r = requestOnly<VectorNormalizeRequest>('vectorNormalize', args);
+  const norm = requireToken('vectorNormalize', r.norm, 'norm', NORM_TOKENS, 'max');
+  return requireModule().vectorNormalize(r.values, NORM_TOKENS.indexOf(norm), r.threshold ?? 0.0);
 }
 
-export function pcen(request: PcenRequest): Float32Array;
-export function pcen(
-  values: Float32Array,
-  nBins: number,
-  nFrames: number,
-  options?: Record<string, number>,
-): Float32Array;
-export function pcen(
-  values: Float32Array | PcenRequest,
-  nBins = 0,
-  nFrames = 0,
-  options: Record<string, number> = {},
-): Float32Array {
-  if (!(values instanceof Float32Array)) {
-    requestObject('pcen', values, 'values');
-    const r = values;
-    const {
-      values: requestValues,
-      nBins: requestBins,
-      nFrames: requestFrames,
-      options: legacyOptions,
-      ...flatOptions
-    } = r;
-    return pcen(requestValues, requestBins, requestFrames, {
-      ...legacyOptions,
-      ...flatOptions,
-    });
+const PCEN_OPTION_KEYS = [
+  'sampleRate',
+  'hopLength',
+  'timeConstant',
+  'gain',
+  'bias',
+  'power',
+  'eps',
+] as const;
+
+/**
+ * Per-channel energy normalisation.
+ *
+ * @returns {@link Matrix2D} of the input's shape: rows are bins, cols are frames.
+ */
+export function pcen(...args: [request: PcenRequest]): Matrix2D {
+  const r = requestOnly<PcenRequest>('pcen', args);
+  const values = assertMatrix2D('pcen', r.values, 'values');
+  const options: Record<string, number> = {};
+  for (const key of PCEN_OPTION_KEYS) {
+    if (r[key] !== undefined && r[key] !== null) {
+      options[key] = r[key] as number;
+    }
   }
-  return requireModule().pcen(values, nBins, nFrames, options);
+  const out = requireModule().pcen(values.data, values.rows, values.cols, options);
+  return toMatrix2D(out, values.rows, values.cols);
 }
 
-export function tonnetz(request: TonnetzRequest): Float32Array;
-export function tonnetz(chromagram: Float32Array, nChroma: number, nFrames: number): Float32Array;
-export function tonnetz(
-  chromagram: Float32Array | TonnetzRequest,
-  nChroma?: number,
-  nFrames?: number,
-): Float32Array {
-  if (!(chromagram instanceof Float32Array)) {
-    requestObject('tonnetz', chromagram, 'chromagram');
-    return tonnetz(chromagram.chromagram, chromagram.nChroma, chromagram.nFrames);
-  }
-  return requireModule().tonnetz(chromagram, nChroma as number, nFrames as number);
+/**
+ * Tonal centroid features.
+ *
+ * @returns {@link Matrix2D} whose rows are the 6 tonnetz dimensions and cols are frames.
+ */
+export function tonnetz(...args: [request: TonnetzRequest]): Matrix2D {
+  const r = requestOnly<TonnetzRequest>('tonnetz', args);
+  const chromagram = assertMatrix2D('tonnetz', r.chromagram, 'chromagram');
+  const out = requireModule().tonnetz(chromagram.data, chromagram.rows, chromagram.cols);
+  return toMatrix2D(out, 6, chromagram.cols);
 }
 
-export function tempogram(request: TempogramRequest): WasmTempogramResult;
-export function tempogram(
-  onsetEnvelope: Float32Array,
-  sampleRate?: number,
-  hopLength?: number,
-  winLength?: number,
-  mode?: TempogramMode,
-  center?: boolean,
-  norm?: boolean,
-): WasmTempogramResult;
-export function tempogram(
-  onsetEnvelope: Float32Array | TempogramRequest,
-  sampleRate = 22050,
-  hopLength = 512,
-  winLength = 384,
-  mode: TempogramMode = 'autocorrelation',
-  center = true,
-  norm = true,
-): WasmTempogramResult {
-  if (!(onsetEnvelope instanceof Float32Array)) {
-    requestObject('tempogram', onsetEnvelope, 'onsetEnvelope');
-    const r = onsetEnvelope;
-    return tempogram(
-      r.onsetEnvelope,
-      r.sampleRate,
-      r.hopLength,
-      r.winLength,
-      r.mode,
-      r.center,
-      r.norm,
-    );
-  }
-  return requireModule().tempogram(
-    onsetEnvelope,
-    sampleRate,
-    hopLength,
-    winLength,
+const TEMPOGRAM_MODES = ['autocorrelation', 'cosine'] as const;
+
+/**
+ * Tempogram of an onset-strength envelope.
+ *
+ * @returns {@link Matrix2D} whose rows are the `winLength` lags and cols are frames.
+ * @throws TypeError for a non-string `mode`, RangeError for one other than `'autocorrelation'` or `'cosine'`.
+ */
+export function tempogram(...args: [request: TempogramRequest]): Matrix2D {
+  const r = requestOnly<TempogramRequest>('tempogram', args);
+  const mode = requireToken('tempogram', r.mode, 'mode', TEMPOGRAM_MODES, 'autocorrelation');
+  const native = requireModule().tempogram(
+    r.onsetEnvelope,
+    r.sampleRate ?? 22050,
+    r.hopLength ?? 512,
+    r.winLength ?? 384,
     mode,
-    center,
-    norm,
+    r.center ?? true,
+    r.norm ?? true,
   );
+  return toMatrix2DByRows(native.data, native.winLength);
 }
 
-export function cyclicTempogram(request: CyclicTempogramRequest): WasmCyclicTempogramResult;
-export function cyclicTempogram(
-  onsetEnvelope: Float32Array,
-  sampleRate?: number,
-  hopLength?: number,
-  winLength?: number,
-  bpmMin?: number,
-  nBins?: number,
-): WasmCyclicTempogramResult;
-export function cyclicTempogram(
-  onsetEnvelope: Float32Array | CyclicTempogramRequest,
-  sampleRate = 22050,
-  hopLength = 512,
-  winLength = 384,
-  bpmMin = 60.0,
-  nBins = 60,
-): WasmCyclicTempogramResult {
-  if (!(onsetEnvelope instanceof Float32Array)) {
-    requestObject('cyclicTempogram', onsetEnvelope, 'onsetEnvelope');
-    const r = onsetEnvelope;
-    return cyclicTempogram(
-      r.onsetEnvelope,
-      r.sampleRate,
-      r.hopLength,
-      r.winLength,
-      r.bpmMin,
-      r.nBins,
-    );
-  }
-  return requireModule().cyclicTempogram(
-    onsetEnvelope,
-    sampleRate,
-    hopLength,
-    winLength,
-    bpmMin,
-    nBins,
+/**
+ * Tempogram folded onto one octave of tempo.
+ *
+ * @returns {@link Matrix2D} whose rows are the `nBins` tempo bins and cols are frames.
+ */
+export function cyclicTempogram(...args: [request: CyclicTempogramRequest]): Matrix2D {
+  const r = requestOnly<CyclicTempogramRequest>('cyclicTempogram', args);
+  const native = requireModule().cyclicTempogram(
+    r.onsetEnvelope,
+    r.sampleRate ?? 22050,
+    r.hopLength ?? 512,
+    r.winLength ?? 384,
+    r.bpmMin ?? 60.0,
+    r.nBins ?? 60,
   );
+  return toMatrix2DByRows(native.data, native.nBins);
 }
 
-export function plp(request: PlpRequest): Float32Array;
-export function plp(
-  onsetEnvelope: Float32Array,
-  sampleRate?: number,
-  hopLength?: number,
-  tempoMin?: number,
-  tempoMax?: number,
-  winLength?: number,
-): Float32Array;
-export function plp(
-  onsetEnvelope: Float32Array | PlpRequest,
-  sampleRate = 22050,
-  hopLength = 512,
-  tempoMin = 30.0,
-  tempoMax = 300.0,
-  winLength = 384,
-): Float32Array {
-  if (!(onsetEnvelope instanceof Float32Array)) {
-    requestObject('plp', onsetEnvelope, 'onsetEnvelope');
-    const r = onsetEnvelope;
-    return plp(r.onsetEnvelope, r.sampleRate, r.hopLength, r.tempoMin, r.tempoMax, r.winLength);
-  }
-  return requireModule().plp(onsetEnvelope, sampleRate, hopLength, tempoMin, tempoMax, winLength);
+/** Predominant local pulse curve; the default range is 60-200 BPM. */
+export function plp(...args: [request: PlpRequest]): Float32Array {
+  const r = requestOnly<PlpRequest>('plp', args);
+  return requireModule().plp(
+    r.onsetEnvelope,
+    r.sampleRate ?? 22050,
+    r.hopLength ?? 512,
+    r.bpmMin ?? 60.0,
+    r.bpmMax ?? 200.0,
+    r.winLength ?? 384,
+  );
 }

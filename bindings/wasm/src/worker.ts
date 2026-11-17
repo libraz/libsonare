@@ -14,12 +14,12 @@ import { init } from './index.js';
 import type { MasterAudioRequest, MasterAudioStereoRequest } from './mastering_chain.js';
 import { masterAudio, masterAudioStereo } from './mastering_chain.js';
 import type {
+  AnalyzeRequest,
+  DetectBpmRequest,
   DetectChordsRequest,
   DetectKeyRequest,
-  MusicAnalyzeRequest,
-  SamplesRequest,
 } from './quick_analysis.js';
-import { analyzeWithProgress, detectBpm, detectChords, detectKey } from './quick_analysis.js';
+import { analyze, detectBpm, detectChords, detectKey } from './quick_analysis.js';
 import type {
   OfflineWorkerErrorMessage,
   OfflineWorkerRequestMessage,
@@ -118,14 +118,14 @@ export function installOfflineWorkerEndpoint(endpoint: OfflineWorkerEndpoint): v
       let result: unknown;
       switch (message.operation) {
         case 'analyze':
-          result = analyzeWithProgress({
-            ...(message.request as unknown as MusicAnalyzeRequest),
+          result = analyze({
+            ...(message.request as unknown as AnalyzeRequest),
             onProgress,
             cancel: isCancelled,
           });
           break;
         case 'detectBpm':
-          result = detectBpm(message.request as unknown as SamplesRequest);
+          result = detectBpm(message.request as unknown as DetectBpmRequest);
           break;
         case 'detectKey':
           result = detectKey(message.request as unknown as DetectKeyRequest);

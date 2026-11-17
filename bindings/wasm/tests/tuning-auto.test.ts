@@ -12,8 +12,8 @@ import {
 } from '../src/index';
 
 const sampleRate = 22050;
-/** A4 = 446 Hz, as a semitone fraction. */
-const detune = 12 * Math.log2(446 / 440);
+/** A4 = 446 Hz, in cents. */
+const detune = 1200 * Math.log2(446 / 440);
 
 /** I-V-vi-IV in C major at 120 BPM, re-struck every beat, every partial detuned. */
 function detunedPopLoop(detuneSemitones: number): Float32Array {
@@ -45,7 +45,7 @@ function detunedPopLoop(detuneSemitones: number): Float32Array {
   return out;
 }
 
-const loop = detunedPopLoop(detune);
+const loop = detunedPopLoop(detune / 100);
 let measured = 0;
 
 beforeAll(async () => {
@@ -53,55 +53,64 @@ beforeAll(async () => {
   measured = estimateTuning(loop, sampleRate);
 });
 
-describe("tuning: 'auto'", () => {
-  it('measures the semitone fraction of an A4 = 446 Hz recording on every entry point', () => {
-    expect(measured).toBeCloseTo(detune, 1);
-    const chords = detectChords({ samples: loop, sampleRate, tuning: 'auto' });
-    expect(chords.tuning).toBeCloseTo(measured, 5);
-    expect(detectChords(loop, sampleRate, { tuning: 'auto' }).tuning).toBe(chords.tuning);
-    const key = detectKey({ samples: loop, sampleRate, tuning: 'auto' });
-    expect(key.tuning).toBeCloseTo(measured, 5);
-    expect(key.tuning).toBeCloseTo(detune, 1);
-    expect(analyze({ samples: loop, sampleRate, tuning: 'auto' }).tuning).toBeCloseTo(measured, 5);
+describe("tuningCents: 'auto'", () => {
+  it('measures the tuning in cents of an A4 = 446 Hz recording on every entry point', () => {
+    expect(measured).toBeCloseTo(detune, -1);
+    const chords = detectChords({ samples: loop, sampleRate, tuningCents: 'auto' });
+    expect(chords.tuningCents).toBeCloseTo(measured, 3);
+    expect(detectChords(loop, sampleRate, { tuningCents: 'auto' }).tuningCents).toBe(
+      chords.tuningCents,
+    );
+    const key = detectKey({ samples: loop, sampleRate, tuningCents: 'auto' });
+    expect(key.tuningCents).toBeCloseTo(measured, 3);
+    expect(key.tuningCents).toBeCloseTo(detune, -1);
+    expect(analyze({ samples: loop, sampleRate, tuningCents: 'auto' }).tuningCents).toBeCloseTo(
+      measured,
+      3,
+    );
   });
 
   it('reports a given tuning as given, 0 included, and the measured one by default', () => {
-    expect(detectChords(loop, sampleRate, { tuning: 0.1 }).tuning).toBeCloseTo(0.1, 6);
-    expect(detectChords(loop, sampleRate, { tuning: 0 }).tuning).toBe(0);
-    expect(detectChords(loop, sampleRate).tuning).toBeCloseTo(detune, 1);
-    expect(detectKey(loop, sampleRate, { tuning: 0.2 }).tuning).toBeCloseTo(0.2, 6);
-    expect(detectKey(loop, sampleRate, { tuning: 0 }).tuning).toBe(0);
+    expect(detectChords(loop, sampleRate, { tuningCents: 10 }).tuningCents).toBeCloseTo(10, 4);
+    expect(detectChords(loop, sampleRate, { tuningCents: 0 }).tuningCents).toBe(0);
+    expect(detectChords(loop, sampleRate).tuningCents).toBeCloseTo(detune, -1);
+    expect(detectKey(loop, sampleRate, { tuningCents: 20 }).tuningCents).toBeCloseTo(20, 4);
+    expect(detectKey(loop, sampleRate, { tuningCents: 0 }).tuningCents).toBe(0);
     const byDefault = detectKey(loop, sampleRate);
-    expect(byDefault.tuning).toBeCloseTo(detune, 1);
-    expect(byDefault.tuning).toBeCloseTo(measured, 5);
+    expect(byDefault.tuningCents).toBeCloseTo(detune, -1);
+    expect(byDefault.tuningCents).toBeCloseTo(measured, 3);
     expect([byDefault.root, byDefault.mode]).toEqual([0, 'major']);
-    expect(analyze(loop, sampleRate, { tuning: -0.3 }).tuning).toBeCloseTo(-0.3, 6);
-    expect(analyze(loop, sampleRate, { tuning: 0 }).tuning).toBe(0);
-    expect(analyze(loop, sampleRate).tuning).toBeCloseTo(detune, 1);
+    expect(analyze(loop, sampleRate, { tuningCents: -30 }).tuningCents).toBeCloseTo(-30, 4);
+    expect(analyze(loop, sampleRate, { tuningCents: 0 }).tuningCents).toBe(0);
+    expect(analyze(loop, sampleRate).tuningCents).toBeCloseTo(detune, -1);
   });
 
   it('lets the key candidates take a tuning, measured by default', () => {
     const byDefault = detectKeyCandidates(loop, sampleRate);
     expect(byDefault[0].key.root).toBe(0);
     expect(byDefault[0].key.mode).toBe('major');
-    expect(detectKeyCandidates({ samples: loop, sampleRate, tuning: 'auto' })).toEqual(byDefault);
-    expect(detectKeyCandidates({ samples: loop, sampleRate, tuning: measured })).toEqual(byDefault);
-    const off = detectKeyCandidates({ samples: loop, sampleRate, tuning: 0 });
+    expect(detectKeyCandidates({ samples: loop, sampleRate, tuningCents: 'auto' })).toEqual(
+      byDefault,
+    );
+    expect(detectKeyCandidates({ samples: loop, sampleRate, tuningCents: measured })).toEqual(
+      byDefault,
+    );
+    const off = detectKeyCandidates({ samples: loop, sampleRate, tuningCents: 0 });
     expect(off).not.toEqual(byDefault);
-    expect(() => detectKeyCandidates({ samples: loop, sampleRate, tuning: 0.7 })).toThrow();
+    expect(() => detectKeyCandidates({ samples: loop, sampleRate, tuningCents: 70 })).toThrow();
   });
 
   it('gives the result a measured tuning applied explicitly would give', () => {
-    const auto = detectKey({ samples: loop, sampleRate, tuning: 'auto' });
-    const explicit = detectKey({ samples: loop, sampleRate, tuning: measured });
+    const auto = detectKey({ samples: loop, sampleRate, tuningCents: 'auto' });
+    const explicit = detectKey({ samples: loop, sampleRate, tuningCents: measured });
     expect(auto).toEqual(explicit);
   });
 
   it('refuses a tuning that is neither a number nor auto, by name', () => {
-    expect(() => detectKey({ samples: loop, sampleRate, tuning: 'other' as never })).toThrow(
-      /tuning must be a number or 'auto'/,
+    expect(() => detectKey({ samples: loop, sampleRate, tuningCents: 'other' as never })).toThrow(
+      /tuningCents must be a number of cents or 'auto'/,
     );
-    expect(() => detectKey({ samples: loop, sampleRate, tuning: 0.7 })).toThrow();
+    expect(() => detectKey({ samples: loop, sampleRate, tuningCents: 70 })).toThrow();
   });
 });
 
@@ -109,10 +118,10 @@ describe('tuning converters', () => {
   it('round-trip and name the reference pitch', () => {
     expect(tuningToReferenceHz(0)).toBeCloseTo(440, 4);
     expect(tuningToReferenceHz(detune)).toBeCloseTo(446, 1);
-    expect(referenceHzToTuning(446)).toBeCloseTo(detune, 3);
+    expect(referenceHzToTuning(446)).toBeCloseTo(detune, 1);
     expect(tuningToReferenceHz(0, 432)).toBeCloseTo(432, 4);
-    for (const tuning of [-0.5, -0.2, 0.2349, 0.49, 7]) {
-      expect(referenceHzToTuning(tuningToReferenceHz(tuning, 432), 432)).toBeCloseTo(tuning, 3);
+    for (const tuning of [-50, -20, 23.49, 49, 700]) {
+      expect(referenceHzToTuning(tuningToReferenceHz(tuning, 432), 432)).toBeCloseTo(tuning, 1);
     }
   });
 
@@ -162,7 +171,7 @@ describe("transcribe referenceHz: 'auto'", () => {
 
   it('reports the tuning a given reference amounts to', () => {
     const result = transcribe({ samples: tones(1), sampleRate, tempoBpm: 120, referenceHz: 432 });
-    expect(result.tuning).toBeCloseTo(referenceHzToTuning(432), 4);
+    expect(result.tuning).toBeCloseTo(referenceHzToTuning(432) / 100, 4);
     expect(transcribe({ samples: tones(1), sampleRate, tempoBpm: 120 }).tuning).toBe(0);
   });
 

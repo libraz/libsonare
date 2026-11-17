@@ -7,8 +7,18 @@ describe('synthetic audio generation', () => {
   });
 
   it('generates tone, chirp, and clicks', () => {
-    expect(tone(440, 22050, 0.01)).toHaveLength(220);
-    expect(chirp(200, 800, 22050, 0.01)).toHaveLength(220);
-    expect(clicks(new Float32Array([0]), 22050, 32, 1000, 0.01)).toHaveLength(32);
+    expect(tone({ frequencyHz: 440, sampleRate: 22050, durationSec: 0.01 })).toHaveLength(220);
+    expect(chirp({ fminHz: 200, fmaxHz: 800, sampleRate: 22050, durationSec: 0.01 })).toHaveLength(
+      220,
+    );
+    expect(
+      clicks({
+        times: new Float32Array([0]),
+        sampleRate: 22050,
+        length: 32,
+        frequencyHz: 1000,
+        clickDurationSec: 0.01,
+      }),
+    ).toHaveLength(32);
   });
 });

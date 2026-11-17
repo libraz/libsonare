@@ -27,111 +27,166 @@ beforeAll(async () => {
 
 describe('mel results carry the forward parameters', () => {
   it('reports the transform it came from, with fmax resolved', () => {
-    const mel = melSpectrogram(samples, sampleRate, 1024, 256, 40, 100, 0, true);
-    expect(mel).toMatchObject({
+    const mel = melSpectrogram(samples, sampleRate, {
+      nFft: 1024,
+      hopLength: 256,
       nMels: 40,
+      fminHz: 100,
+      fmaxHz: 0,
+      htk: true,
+    });
+    expect(mel).toMatchObject({
       sampleRate,
       hopLength: 256,
       nFft: 1024,
-      fmin: 100,
-      fmax: sampleRate / 2,
+      fminHz: 100,
+      fmaxHz: sampleRate / 2,
       htk: true,
-      isDb: false,
     });
+    expect(mel.power.rows).toBe(40);
+    expect(mel).not.toHaveProperty('isDb');
   });
 
   it('MFCC results carry the Mel parameters and the lifter', () => {
-    const result = mfcc(samples, sampleRate, 1024, 256, 40, 13, 0, 8000, false, 22);
-    expect(result).toMatchObject({
+    const result = mfcc(samples, sampleRate, {
+      nFft: 1024,
+      hopLength: 256,
+      nMels: 40,
       nMfcc: 13,
+      fminHz: 0,
+      fmaxHz: 8000,
+      htk: false,
+      lifter: 22,
+    });
+    expect(result).toMatchObject({
       nMels: 40,
       sampleRate,
       hopLength: 256,
       nFft: 1024,
-      fmin: 0,
-      fmax: 8000,
+      fminHz: 0,
+      fmaxHz: 8000,
       htk: false,
-      isDb: false,
       lifter: 22,
     });
+    expect(result.coefficients.rows).toBe(13);
+    expect(result).not.toHaveProperty('isDb');
   });
 });
 
-describe('inverse from a result equals the inverse with explicit arguments', () => {
-  const mel = () => melSpectrogram(samples, sampleRate, 1024, 256, 40, 100, 4000, true);
+describe('inverse from the parameters a result carries', () => {
+  const mel = () =>
+    melSpectrogram(samples, sampleRate, {
+      nFft: 1024,
+      hopLength: 256,
+      nMels: 40,
+      fminHz: 100,
+      fmaxHz: 4000,
+      htk: true,
+    });
 
-  it('melToStft', () => {
+  it('melToStft with the carried parameters equals the explicit call', () => {
     const result = mel();
     const explicit = melToStft({
       power: result.power,
-      nMels: result.nMels,
-      nFrames: result.nFrames,
       sampleRate,
       nFft: 1024,
-      fmin: 100,
-      fmax: 4000,
+      fminHz: 100,
+      fmaxHz: 4000,
       htk: true,
     });
-    expect(melToStft({ result })).toEqual(explicit);
+    expect(
+      melToStft({
+        power: result.power,
+        sampleRate: result.sampleRate,
+        nFft: result.nFft,
+        fminHz: result.fminHz,
+        fmaxHz: result.fmaxHz,
+        htk: result.htk,
+      }),
+    ).toEqual(explicit);
+    expect(explicit.rows).toBe(1024 / 2 + 1);
+    expect(explicit.cols).toBe(result.power.cols);
   });
 
-  it('melToAudio, with an extra argument the result does not carry', () => {
+  it('melToAudio with the carried parameters equals the explicit call', () => {
     const result = mel();
     const explicit = melToAudio({
       power: result.power,
-      nMels: result.nMels,
-      nFrames: result.nFrames,
       sampleRate,
       nFft: 1024,
       hopLength: 256,
-      fmin: 100,
-      fmax: 4000,
+      fminHz: 100,
+      fmaxHz: 4000,
       htk: true,
       nIter: 2,
     });
-    expect(melToAudio({ result, nIter: 2 })).toEqual(explicit);
+    expect(
+      melToAudio({
+        power: result.power,
+        sampleRate: result.sampleRate,
+        nFft: result.nFft,
+        hopLength: result.hopLength,
+        fminHz: result.fminHz,
+        fmaxHz: result.fmaxHz,
+        htk: result.htk,
+        nIter: 2,
+      }),
+    ).toEqual(explicit);
   });
 
-  it('accepts a redundant argument that agrees, including fmax 0 for the Nyquist', () => {
-    const full = melSpectrogram(samples, sampleRate, 1024, 256, 40);
-    expect(melToStft({ result: full, sampleRate, nFft: 1024, fmax: 0 })).toEqual(
-      melToStft({ result: full }),
+  it('a resolved Nyquist fmaxHz and an absent one give the same inverse', () => {
+    const full = melSpectrogram(samples, sampleRate, { nFft: 1024, hopLength: 256, nMels: 40 });
+    expect(melToStft({ power: full.power, sampleRate, nFft: 1024, fmaxHz: full.fmaxHz })).toEqual(
+      melToStft({ power: full.power, sampleRate, nFft: 1024 }),
     );
   });
 
   it('mfccToMel and mfccToAudio undo the lifter the result carries', () => {
-    const result = mfcc(samples, sampleRate, 1024, 256, 40, 13, 0, 8000, false, 22);
-    const fromResult = mfccToMel({ result });
-    expect(fromResult).toEqual(
-      mfccToMel({
-        coefficients: result.coefficients,
-        nMfcc: 13,
-        nFrames: result.nFrames,
-        nMels: 40,
-        lifter: 22,
-      }),
+    const result = mfcc(samples, sampleRate, {
+      nFft: 1024,
+      hopLength: 256,
+      nMels: 40,
+      nMfcc: 13,
+      fminHz: 0,
+      fmaxHz: 8000,
+      htk: false,
+      lifter: 22,
+    });
+    const fromCarried = mfccToMel({
+      coefficients: result.coefficients,
+      nMels: result.nMels,
+      lifter: result.lifter,
+    });
+    expect(fromCarried).toEqual(
+      mfccToMel({ coefficients: result.coefficients, nMels: 40, lifter: 22 }),
     );
+    expect(fromCarried.rows).toBe(40);
+    expect(fromCarried.cols).toBe(result.coefficients.cols);
     // The lifter is part of the answer: dropping it changes the Mel matrix.
-    expect(
-      mfccToMel({
-        coefficients: result.coefficients,
-        nMfcc: 13,
-        nFrames: result.nFrames,
-        nMels: 40,
-      }),
-    ).not.toEqual(fromResult);
+    expect(mfccToMel({ coefficients: result.coefficients, nMels: 40 })).not.toEqual(fromCarried);
 
-    expect(mfccToAudio({ result, nIter: 2 })).toEqual(
+    expect(
       mfccToAudio({
         coefficients: result.coefficients,
-        nMfcc: 13,
-        nFrames: result.nFrames,
+        nMels: result.nMels,
+        sampleRate: result.sampleRate,
+        nFft: result.nFft,
+        hopLength: result.hopLength,
+        fminHz: result.fminHz,
+        fmaxHz: result.fmaxHz,
+        htk: result.htk,
+        lifter: result.lifter,
+        nIter: 2,
+      }),
+    ).toEqual(
+      mfccToAudio({
+        coefficients: result.coefficients,
         nMels: 40,
         sampleRate,
         nFft: 1024,
         hopLength: 256,
-        fmin: 0,
-        fmax: 8000,
+        fminHz: 0,
+        fmaxHz: 8000,
         htk: false,
         lifter: 22,
         nIter: 2,
@@ -140,53 +195,13 @@ describe('inverse from a result equals the inverse with explicit arguments', () 
   });
 });
 
-describe('a result request is refused when it contradicts the result', () => {
-  let mel: ReturnType<typeof melSpectrogram>;
-  let coefficients: ReturnType<typeof mfcc>;
-
-  beforeAll(() => {
-    mel = melSpectrogram(samples, sampleRate, 1024, 256, 40);
-    coefficients = mfcc(samples, sampleRate, 1024, 256, 40, 13, 0, 0, false, 22);
-  });
-
-  it('refuses a disagreeing explicit argument with a RangeError naming it', () => {
-    expect(() => melToStft({ result: mel, sampleRate: 44100 })).toThrow(RangeError);
-    expect(() => melToStft({ result: mel, sampleRate: 44100 })).toThrow(/sampleRate 44100/);
-    expect(() => melToStft({ result: mel, nFft: 2048 })).toThrow(/nFft 2048/);
-    expect(() => melToAudio({ result: mel, hopLength: 512 })).toThrow(/hopLength 512/);
-    expect(() => melToStft({ result: mel, htk: true })).toThrow(/htk true/);
-    expect(() => mfccToMel({ result: coefficients, lifter: 0 })).toThrow(RangeError);
-    expect(() => mfccToAudio({ result: coefficients, nMels: 64 })).toThrow(/nMels 64/);
-  });
-
-  it('refuses a result in dB with a message naming the conversion', () => {
-    const inDb = { ...mel, power: mel.db, isDb: true };
-    expect(() => melToStft({ result: inDb })).toThrow(RangeError);
-    expect(() => melToAudio({ result: inDb })).toThrow(/dbToPower/);
-  });
-
-  it('names a hand-built result that lacks a parameter', () => {
-    const { nFft: _nFft, ...incomplete } = mel;
-    expect(() => melToStft({ result: incomplete as never })).toThrow(/result\.nFft is missing/);
-  });
-
-  it('no longer reads the request names that differed from the result', () => {
-    const { nMels, nFrames } = mel;
-    expect(() => melToStft({ melPower: mel.power, nMels, nFrames } as never)).toThrow();
-    expect(() => melToAudio({ melPower: mel.power, nMels, nFrames } as never)).toThrow();
-    expect(() =>
-      mfccToMel({
-        mfccCoefficients: coefficients.coefficients,
-        nMfcc: 13,
-        nFrames: coefficients.nFrames,
-      } as never),
-    ).toThrow();
-    expect(() =>
-      mfccToAudio({
-        mfccCoefficients: coefficients.coefficients,
-        nMfcc: 13,
-        nFrames: coefficients.nFrames,
-      } as never),
-    ).toThrow();
+describe('the inverse requests', () => {
+  it('refuse the removed request names', () => {
+    const mel = melSpectrogram(samples, sampleRate, { nFft: 1024, hopLength: 256, nMels: 40 });
+    const coefficients = mfcc(samples, sampleRate, { nFft: 1024, hopLength: 256, nMels: 40 });
+    expect(() => melToStft({ melPower: mel.power } as never)).toThrow();
+    expect(() => melToAudio({ melPower: mel.power } as never)).toThrow();
+    expect(() => mfccToMel({ mfccCoefficients: coefficients.coefficients } as never)).toThrow();
+    expect(() => mfccToAudio({ mfccCoefficients: coefficients.coefficients } as never)).toThrow();
   });
 });

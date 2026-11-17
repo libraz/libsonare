@@ -7,12 +7,12 @@ import {
   autoTune,
   detectKey,
   init,
+  type KeyMode,
   Mode,
   PitchClass,
   type PitchCorrectTimevaryingRequest,
   pitchCorrectTimevarying,
   pitchPyin,
-  type ScaleName,
   scaleMaskForMode,
 } from '../src/index';
 
@@ -23,7 +23,7 @@ const DETUNE_CENTS = 35;
 const TOLERANCE_CENTS = 10;
 const MELODY = [60, 64, 67, 64, 62, 65, 69, 67, 60, 64, 67, 72];
 
-const MASKS: Record<ScaleName, number> = {
+const MASKS: Record<KeyMode, number> = {
   major: 0b101010110101,
   minor: 0b010110101101,
   dorian: 0b011010101101,
@@ -74,7 +74,7 @@ describe('scaleMaskForMode (WASM)', () => {
   it('returns each mode as its 12-bit mask, for every root', () => {
     for (const [name, mask] of Object.entries(MASKS)) {
       for (const root of [0, 5, 11]) {
-        expect(scaleMaskForMode(root, name as ScaleName)).toBe(mask);
+        expect(scaleMaskForMode(root, name as KeyMode)).toBe(mask);
       }
     }
   });
@@ -85,7 +85,7 @@ describe('scaleMaskForMode (WASM)', () => {
   });
 
   it('refuses an unknown mode and an out-of-range root', () => {
-    expect(() => scaleMaskForMode(0, 'whole-tone' as ScaleName)).toThrow();
+    expect(() => scaleMaskForMode(0, 'whole-tone' as KeyMode)).toThrow();
     expect(() => scaleMaskForMode(12, 'major')).toThrow();
     expect(() => scaleMaskForMode(-1, 'major')).toThrow();
     expect(() => scaleMaskForMode(0, 7 as Mode)).toThrow();
@@ -118,9 +118,7 @@ describe('scaleModeMask as a mode name (WASM)', () => {
   });
 
   it('refuses an unknown name', () => {
-    expect(() =>
-      pitchCorrectTimevarying({ ...base, scaleModeMask: 'nope' as ScaleName }),
-    ).toThrow();
+    expect(() => pitchCorrectTimevarying({ ...base, scaleModeMask: 'nope' as KeyMode })).toThrow();
   });
 });
 
@@ -135,7 +133,7 @@ describe('autoTune (WASM)', () => {
     const { samples, key } = autoTune({
       samples: input,
       sampleRate: SR,
-      key: { root: PitchClass.C, mode: Mode.Major },
+      key: { root: PitchClass.C, mode: 'major' },
     });
     expect(samples.length).toBe(input.length);
     expect(key).toMatchObject({ root: PitchClass.C, mode: 'major', confidence: 1 });
@@ -162,26 +160,27 @@ describe('autoTune (WASM)', () => {
     );
   });
 
-  it('takes the key mode by name as well as by ordinal', () => {
+  it('takes the key mode by name and refuses an ordinal', () => {
     const byName = autoTune({
       samples: input,
       sampleRate: SR,
       key: { root: PitchClass.D, mode: 'dorian' },
     });
-    const byOrdinal = autoTune({
-      samples: input,
-      sampleRate: SR,
-      key: { root: PitchClass.D, mode: Mode.Dorian },
-    });
-    expect(byOrdinal.samples).toEqual(byName.samples);
-    expect(byOrdinal.key.mode).toBe('dorian');
+    expect(byName.key.mode).toBe('dorian');
+    expect(() =>
+      autoTune({
+        samples: input,
+        sampleRate: SR,
+        key: { root: PitchClass.D, mode: Mode.Dorian as never },
+      }),
+    ).toThrow();
   });
 
   it('strength 0 leaves the audio unchanged', () => {
     const { samples } = autoTune({
       samples: input,
       sampleRate: SR,
-      key: { root: PitchClass.C, mode: Mode.Major },
+      key: { root: PitchClass.C, mode: 'major' },
       strength: 0,
     });
     let worst = 0;
@@ -197,14 +196,14 @@ describe('autoTune (WASM)', () => {
       autoTune({
         samples: input,
         sampleRate: SR,
-        key: { root: 12 as PitchClass, mode: Mode.Major },
+        key: { root: 12 as PitchClass, mode: 'major' },
       }),
     ).toThrow();
     expect(() =>
       autoTune({
         samples: input,
         sampleRate: SR,
-        key: { root: PitchClass.C, mode: Mode.Major },
+        key: { root: PitchClass.C, mode: 'major' },
         strength: 2,
       }),
     ).toThrow();

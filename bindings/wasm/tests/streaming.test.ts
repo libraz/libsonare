@@ -3,13 +3,19 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { detectKey, init, StreamAnalyzer, streamAnalyzerConfigDefaults } from '../dist/index.js';
+import {
+  CHORD_QUALITIES,
+  detectKey,
+  init,
+  StreamAnalyzer,
+  streamAnalyzerConfigDefault,
+} from '../dist/index.js';
 
 const PITCH_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
-/** The spelling a chord symbol must have given only its numeric fields. */
+/** The spelling a chord symbol must have given only its root. */
 function expectedChordPrefix(root: number): string {
-  return root < 0 ? 'N.C.' : PITCH_NAMES[root];
+  return PITCH_NAMES[root];
 }
 
 function chordProgressionSamples(sampleRate: number): Float32Array {
@@ -37,16 +43,15 @@ describe('StreamAnalyzer', () => {
 
   describe('lifecycle', () => {
     it('uses native StreamConfig defaults for omitted WASM options', () => {
-      const defaults = streamAnalyzerConfigDefaults();
+      const defaults = streamAnalyzerConfigDefault();
       expect(defaults).toEqual({
         sampleRate: 44100,
         nFft: 2048,
         hopLength: 512,
         nMels: 128,
-        fmin: 0,
-        fmax: 0,
-        tuningRefHz: 440,
-        computeMagnitude: false,
+        fminHz: 0,
+        fmaxHz: 22050,
+        referenceHz: 440,
         computeMel: true,
         computeChroma: true,
         computeOnset: true,
@@ -57,12 +62,11 @@ describe('StreamAnalyzer', () => {
         maxProgressionEntries: 4096,
         keyUpdateIntervalSec: 5,
         bpmUpdateIntervalSec: 10,
-        window: 0,
-        outputFormat: 0,
+        window: 'hann',
       });
 
-      const analyzer = new StreamAnalyzer();
-      expect(analyzer.sampleRate()).toBe(defaults.sampleRate);
+      const analyzer = new StreamAnalyzer({ sampleRate: defaults.sampleRate });
+      expect(analyzer.sampleRate).toBe(defaults.sampleRate);
       analyzer.destroy();
     });
 
@@ -86,9 +90,12 @@ describe('StreamAnalyzer', () => {
       analyzer.destroy();
     });
 
-    it('rejects computeMagnitude because there is no magnitude read path', () => {
-      expect(() => new StreamAnalyzer({ sampleRate: 22050, computeMagnitude: true })).toThrow(
-        /computeMagnitude is not supported/,
+    it('rejects computeMagnitude and outputFormat as unknown config keys', () => {
+      expect(
+        () => new StreamAnalyzer({ sampleRate: 22050, computeMagnitude: true } as never),
+      ).toThrow(/computeMagnitude/);
+      expect(() => new StreamAnalyzer({ sampleRate: 22050, outputFormat: 1 } as never)).toThrow(
+        /outputFormat/,
       );
     });
 
@@ -102,7 +109,7 @@ describe('StreamAnalyzer', () => {
       expect(
         () => new StreamAnalyzer({ sampleRate: 22050, nFft: 1024, hopLength: 2048 }),
       ).toThrow();
-      expect(() => new StreamAnalyzer({ sampleRate: 22050, fmin: 8000, fmax: 4000 })).toThrow();
+      expect(() => new StreamAnalyzer({ sampleRate: 22050, fminHz: 8000, fmaxHz: 4000 })).toThrow();
       expect(() => new StreamAnalyzer({ sampleRate: 22050, maxProgressionEntries: 0 })).toThrow();
     });
 
@@ -214,8 +221,8 @@ describe('StreamAnalyzer', () => {
       for (const chord of stats.estimate.chordProgression) {
         expect(chord.root).toBeGreaterThanOrEqual(0);
         expect(chord.root).toBeLessThanOrEqual(11);
-        expect(chord.quality).toBeGreaterThanOrEqual(0);
-        expect(chord.startTime).toBeGreaterThanOrEqual(0);
+        expect(CHORD_QUALITIES).toContain(chord.quality);
+        expect(chord.startSec).toBeGreaterThanOrEqual(0);
         expect(chord.confidence).toBeGreaterThanOrEqual(0);
       }
 
@@ -234,20 +241,25 @@ describe('StreamAnalyzer', () => {
       expect(estimate.chordProgression.length).toBeGreaterThan(0);
       for (const chord of [...estimate.chordProgression, ...estimate.barChordProgression]) {
         expect(chord.name.startsWith(expectedChordPrefix(chord.root))).toBe(true);
-        if (chord.quality === 0) {
+        if (chord.quality === 'major') {
           expect(chord.name).toBe(PITCH_NAMES[chord.root]);
         }
-        if (chord.quality === 1) {
+        if (chord.quality === 'minor') {
           expect(chord.name).toBe(`${PITCH_NAMES[chord.root]}m`);
         }
       }
-      expect(estimate.chordName.startsWith(expectedChordPrefix(estimate.chordRoot))).toBe(true);
+      expect(estimate.chord).toBeDefined();
+      expect(estimate.chord?.name.startsWith(expectedChordPrefix(estimate.chord.root))).toBe(true);
 
-      expect(estimate.key).toBeGreaterThanOrEqual(0);
-      const mode = estimate.keyMinor ? 'minor' : 'major';
-      expect(estimate.keyName).toBe(`${PITCH_NAMES[estimate.key]} ${mode}`);
-      expect(estimate.keyShortName).toBe(
-        estimate.keyMinor ? `${PITCH_NAMES[estimate.key]}m` : PITCH_NAMES[estimate.key],
+      const key = estimate.key;
+      expect(key).toBeDefined();
+      if (key === undefined) {
+        throw new Error('no key estimate');
+      }
+      expect(key.root).toBeGreaterThanOrEqual(0);
+      expect(key.name).toBe(`${PITCH_NAMES[key.root]} ${key.mode}`);
+      expect(key.shortName).toBe(
+        key.mode === 'minor' ? `${PITCH_NAMES[key.root]}m` : PITCH_NAMES[key.root],
       );
       analyzer.destroy();
     });
@@ -265,19 +277,17 @@ describe('StreamAnalyzer', () => {
       analyzer.process(samples);
       const { estimate } = analyzer.stats();
       const batch = detectKey(samples, sampleRate);
-      expect(estimate.keyName).toBe(batch.name);
-      expect(estimate.keyShortName).toBe(batch.shortName);
-      expect(estimate.keyName).toBe('C major');
+      expect(estimate.key?.name).toBe(batch.name);
+      expect(estimate.key?.shortName).toBe(batch.shortName);
+      expect(estimate.key?.name).toBe('C major');
       analyzer.destroy();
     });
 
-    it('reports no key name and N.C. before any estimate exists', () => {
+    it('reports no key and no chord before any estimate exists', () => {
       const analyzer = new StreamAnalyzer({ sampleRate: 22050 });
       const estimate = analyzer.stats().estimate;
-      expect(estimate.key).toBe(-1);
-      expect(estimate.keyName).toBeNull();
-      expect(estimate.keyShortName).toBeNull();
-      expect(estimate.chordName).toBe('N.C.');
+      expect(estimate.key).toBeUndefined();
+      expect(estimate.chord).toBeUndefined();
       analyzer.destroy();
     });
 
@@ -300,9 +310,10 @@ describe('StreamAnalyzer', () => {
       const stats = analyzer.stats();
 
       // Current chord should be valid
-      expect(stats.estimate.chordRoot).toBeGreaterThanOrEqual(0);
-      expect(stats.estimate.chordRoot).toBeLessThanOrEqual(11);
-      expect(stats.estimate.chordConfidence).toBeGreaterThan(0);
+      expect(stats.estimate.chord).toBeDefined();
+      expect(stats.estimate.chord?.root).toBeGreaterThanOrEqual(0);
+      expect(stats.estimate.chord?.root).toBeLessThanOrEqual(11);
+      expect(stats.estimate.chord?.confidence).toBeGreaterThan(0);
 
       analyzer.destroy();
     });
@@ -322,9 +333,9 @@ describe('StreamAnalyzer', () => {
       analyzer.process(samples);
       const stats = analyzer.stats();
 
-      expect(stats.durationSeconds).toBeGreaterThan(3);
+      expect(stats.durationSec).toBeGreaterThan(3);
       expect(stats.totalFrames).toBeGreaterThan(0);
-      expect(stats.estimate.accumulatedSeconds).toBeGreaterThan(0);
+      expect(stats.estimate.accumulatedSec).toBeGreaterThan(0);
 
       analyzer.destroy();
     });
@@ -347,9 +358,9 @@ describe('StreamAnalyzer', () => {
       analyzer.process(samples);
       const stats = analyzer.stats();
 
-      expect(stats.estimate.key).toBeGreaterThanOrEqual(0);
-      expect(stats.estimate.key).toBeLessThanOrEqual(11);
-      expect(stats.estimate.keyConfidence).toBeGreaterThanOrEqual(0);
+      expect(stats.estimate.key?.root).toBeGreaterThanOrEqual(0);
+      expect(stats.estimate.key?.root).toBeLessThanOrEqual(11);
+      expect(stats.estimate.key?.confidence).toBeGreaterThanOrEqual(0);
 
       analyzer.destroy();
     });
@@ -404,8 +415,8 @@ describe('StreamAnalyzer', () => {
 
       // After 15 seconds, BPM should be somewhat stable
       // Bar chord progression should start detecting
-      if (stats.estimate.bpmConfidence >= 0.3) {
-        expect(stats.estimate.barDuration).toBeGreaterThan(0);
+      if ((stats.estimate.bpmConfidence ?? 0) >= 0.3) {
+        expect(stats.estimate.barDurationSec).toBeGreaterThan(0);
         expect(stats.estimate.currentBar).toBeGreaterThanOrEqual(0);
 
         // If bar chords were detected, verify their structure
@@ -414,8 +425,8 @@ describe('StreamAnalyzer', () => {
             expect(chord.barIndex).toBeGreaterThanOrEqual(0);
             expect(chord.root).toBeGreaterThanOrEqual(0);
             expect(chord.root).toBeLessThanOrEqual(11);
-            expect(chord.quality).toBeGreaterThanOrEqual(0);
-            expect(chord.startTime).toBeGreaterThanOrEqual(0);
+            expect(CHORD_QUALITIES).toContain(chord.quality);
+            expect(chord.startSec).toBeGreaterThanOrEqual(0);
             expect(chord.confidence).toBeGreaterThanOrEqual(0);
           }
         }
@@ -455,14 +466,15 @@ describe('StreamAnalyzer', () => {
 
       // If BPM is stable and close to 120, bar duration should be ~2 seconds
       if (
-        stats.estimate.bpmConfidence >= 0.3 &&
+        (stats.estimate.bpmConfidence ?? 0) >= 0.3 &&
+        stats.estimate.bpm !== undefined &&
         stats.estimate.bpm > 100 &&
         stats.estimate.bpm < 140
       ) {
         // bar_duration = 4 * 60 / bpm
         // For 120 BPM: 4 * 60 / 120 = 2.0 seconds
         const expectedBarDuration = (4 * 60) / stats.estimate.bpm;
-        expect(stats.estimate.barDuration).toBeCloseTo(expectedBarDuration, 1);
+        expect(stats.estimate.barDurationSec).toBeCloseTo(expectedBarDuration, 1);
       }
 
       analyzer.destroy();
@@ -483,8 +495,8 @@ describe('StreamAnalyzer', () => {
 
       // BPM should not be stable yet
       expect(stats.estimate.barChordProgression.length).toBe(0);
-      expect(stats.estimate.currentBar).toBe(-1);
-      expect(stats.estimate.barDuration).toBe(0);
+      expect(stats.estimate.currentBar).toBeUndefined();
+      expect(stats.estimate.barDurationSec).toBeUndefined();
 
       analyzer.destroy();
     });
@@ -514,8 +526,8 @@ describe('StreamAnalyzer', () => {
 
       // All bar tracking should be reset
       expect(stats.estimate.barChordProgression.length).toBe(0);
-      expect(stats.estimate.currentBar).toBe(-1);
-      expect(stats.estimate.barDuration).toBe(0);
+      expect(stats.estimate.currentBar).toBeUndefined();
+      expect(stats.estimate.barDurationSec).toBeUndefined();
 
       analyzer.destroy();
     });
@@ -572,7 +584,10 @@ describe('StreamAnalyzer', () => {
       const stats = analyzer.stats();
 
       // Verify BPM is detected and bar tracking started
-      if (stats.estimate.bpmConfidence >= 0.3 && stats.estimate.barChordProgression.length >= 4) {
+      if (
+        (stats.estimate.bpmConfidence ?? 0) >= 0.3 &&
+        stats.estimate.barChordProgression.length >= 4
+      ) {
         // Root values: C=0, G=7, Am=9, F=5
         const expectedRoots = [0, 7, 9, 5];
 
@@ -597,10 +612,10 @@ describe('StreamAnalyzer', () => {
 
         expect(patternFound).toBe(true);
 
-        // Verify Am is detected as minor (quality=1)
+        // Verify Am is detected as minor
         const amChords = stats.estimate.barChordProgression.filter((c) => c.root === 9);
         if (amChords.length > 0) {
-          expect(amChords[0].quality).toBe(1); // Minor
+          expect(amChords[0].quality).toBe('minor');
         }
       }
 
@@ -666,7 +681,7 @@ describe('StreamAnalyzer', () => {
           expect(chord.barIndex).toBeGreaterThanOrEqual(0);
           expect(chord.root).toBeGreaterThanOrEqual(0);
           expect(chord.root).toBeLessThanOrEqual(11);
-          expect(chord.quality).toBeGreaterThanOrEqual(0);
+          expect(CHORD_QUALITIES).toContain(chord.quality);
           expect(chord.confidence).toBeGreaterThanOrEqual(0);
           expect(chord.confidence).toBeLessThanOrEqual(1);
         }
@@ -811,8 +826,8 @@ describe('StreamAnalyzer', () => {
 
       // Pattern detection should be reset
       expect(stats.estimate.votedPattern.length).toBe(0);
-      expect(stats.estimate.detectedPatternName).toBe('');
-      expect(stats.estimate.detectedPatternScore).toBe(0);
+      expect(stats.estimate.detectedPatternName).toBeUndefined();
+      expect(stats.estimate.detectedPatternScore).toBeUndefined();
       expect(stats.estimate.allPatternScores.length).toBe(0);
 
       analyzer.destroy();
@@ -825,13 +840,13 @@ describe('StreamAnalyzer', () => {
       const audio = new Float32Array(4096);
       const reference = new StreamAnalyzer({ sampleRate });
       reference.process(audio);
-      const expected = reference.readFrames(64).timestamps;
+      const expected = reference.readFrames(64).timestampsSec;
 
       const analyzer = new StreamAnalyzer({ sampleRate });
       for (let offset = 0; offset < audio.length; offset += 128) {
         analyzer.processWithOffset(audio.subarray(offset, offset + 128), offset);
       }
-      const actual = analyzer.readFrames(64).timestamps;
+      const actual = analyzer.readFrames(64).timestampsSec;
       expect(Array.from(actual)).toEqual(Array.from(expected));
 
       analyzer.reset();
@@ -875,11 +890,11 @@ describe('StreamAnalyzer', () => {
   describe('sampleRate', () => {
     it('should return the configured sample rate', () => {
       const analyzer44 = new StreamAnalyzer({ sampleRate: 44100 });
-      expect(analyzer44.sampleRate()).toBe(44100);
+      expect(analyzer44.sampleRate).toBe(44100);
       analyzer44.destroy();
 
       const analyzer22 = new StreamAnalyzer({ sampleRate: 22050 });
-      expect(analyzer22.sampleRate()).toBe(22050);
+      expect(analyzer22.sampleRate).toBe(22050);
       analyzer22.destroy();
     });
   });
@@ -927,12 +942,12 @@ describe('StreamAnalyzer', () => {
     });
   });
 
-  describe('setTuningRefHz', () => {
+  describe('setReferenceHz', () => {
     it('should not crash and should process audio after setting tuning', () => {
       const sampleRate = 22050;
       const analyzer = new StreamAnalyzer({ sampleRate });
 
-      analyzer.setTuningRefHz(442.0);
+      analyzer.setReferenceHz(442.0);
 
       const samples = new Float32Array(sampleRate);
       for (let i = 0; i < samples.length; i++) {
@@ -959,13 +974,13 @@ describe('StreamAnalyzer', () => {
       }
       analyzer.process(samples);
 
-      expect(analyzer.frameCount()).toBeGreaterThan(0);
-      expect(analyzer.currentTime()).toBeGreaterThan(0);
+      expect(analyzer.frameCount).toBeGreaterThan(0);
+      expect(analyzer.currentTimeSec).toBeGreaterThan(0);
 
       // Reset
       analyzer.reset();
 
-      expect(analyzer.frameCount()).toBe(0);
+      expect(analyzer.frameCount).toBe(0);
 
       const stats = analyzer.stats();
       expect(stats.estimate.chordProgression.length).toBe(0);
@@ -989,8 +1004,8 @@ describe('StreamAnalyzer', () => {
       }
 
       const stats = analyzer.stats();
-      expect(stats.durationSeconds).toBeGreaterThan(1.8);
-      expect(stats.durationSeconds).toBeLessThan(2.2);
+      expect(stats.durationSec).toBeGreaterThan(1.8);
+      expect(stats.durationSec).toBeLessThan(2.2);
 
       analyzer.destroy();
     });
@@ -1007,13 +1022,15 @@ describe('StreamAnalyzer', () => {
       }
       analyzer.process(samples);
 
-      const availableFrames = analyzer.availableFrames();
+      const availableFrames = analyzer.availableFrames;
       expect(availableFrames).toBeGreaterThan(0);
 
       const buffer = analyzer.readFrames(availableFrames);
       expect(buffer.nFrames).toBe(availableFrames);
-      expect(buffer.timestamps.length).toBe(availableFrames);
-      expect(buffer.chroma.length).toBe(availableFrames * 12);
+      expect(buffer.timestampsSec.length).toBe(availableFrames);
+      expect(buffer.chroma?.rows).toBe(12);
+      expect(buffer.chroma?.cols).toBe(availableFrames);
+      expect(buffer.chroma?.data.length).toBe(availableFrames * 12);
 
       analyzer.destroy();
     });
@@ -1035,21 +1052,25 @@ describe('StreamAnalyzer', () => {
 
       analyzer.process(samples);
 
-      const buffer = analyzer.readFrames(analyzer.availableFrames());
+      const buffer = analyzer.readFrames(analyzer.availableFrames);
 
       // Verify chord arrays exist and have correct length
-      expect(buffer.chordRoot).toBeDefined();
-      expect(buffer.chordQuality).toBeDefined();
-      expect(buffer.chordConfidence).toBeDefined();
-      expect(buffer.chordRoot.length).toBe(buffer.nFrames);
-      expect(buffer.chordQuality.length).toBe(buffer.nFrames);
-      expect(buffer.chordConfidence.length).toBe(buffer.nFrames);
+      const { chordRoot, chordQuality, chordConfidence } = buffer;
+      expect(chordRoot).toBeDefined();
+      expect(chordQuality).toBeDefined();
+      expect(chordConfidence).toBeDefined();
+      if (!chordRoot || !chordQuality || !chordConfidence) {
+        throw new Error('chord arrays missing');
+      }
+      expect(chordRoot.length).toBe(buffer.nFrames);
+      expect(chordQuality.length).toBe(buffer.nFrames);
+      expect(chordConfidence.length).toBe(buffer.nFrames);
 
       // Verify chord data is valid
       for (let i = 0; i < buffer.nFrames; i++) {
-        expect(buffer.chordRoot[i]).toBeGreaterThanOrEqual(0);
-        expect(buffer.chordRoot[i]).toBeLessThanOrEqual(11);
-        expect(buffer.chordConfidence[i]).toBeGreaterThanOrEqual(0);
+        expect(chordRoot[i]).toBeGreaterThanOrEqual(0);
+        expect(chordRoot[i]).toBeLessThanOrEqual(11);
+        expect(chordConfidence[i]).toBeGreaterThanOrEqual(0);
       }
 
       analyzer.destroy();
@@ -1081,12 +1102,16 @@ describe('StreamAnalyzer', () => {
 
       analyzer.process(samples);
 
-      const buffer = analyzer.readFrames(analyzer.availableFrames());
+      const buffer = analyzer.readFrames(analyzer.availableFrames);
 
       // Find unique chords in the buffer
+      const { chordRoot, chordQuality } = buffer;
+      if (!chordRoot || !chordQuality) {
+        throw new Error('chord arrays missing');
+      }
       const uniqueChords = new Set<string>();
       for (let i = 0; i < buffer.nFrames; i++) {
-        uniqueChords.add(`${buffer.chordRoot[i]}-${buffer.chordQuality[i]}`);
+        uniqueChords.add(`${chordRoot[i]}-${chordQuality[i]}`);
       }
 
       // Should have detected at least 2 different chords (C and G)
@@ -1097,7 +1122,8 @@ describe('StreamAnalyzer', () => {
   });
 
   describe('quantize-config override', () => {
-    it('uses feature flags and empty arrays for every disabled-feature combination and read type', () => {
+    it('leaves a disabled feature absent for every combination and read type', () => {
+      type FrameArray = { length: number } | undefined;
       const input = new Float32Array(32);
       input[8] = 0.5;
       for (let mask = 0; mask < 16; mask += 1) {
@@ -1122,15 +1148,22 @@ describe('StreamAnalyzer', () => {
                   ? analyzer.readFramesU8(1)
                   : analyzer.readFramesI16(1);
             expect(frames.nFrames).toBe(1);
-            expect(frames.featureFlags).toBe(mask);
-            expect(frames.nMels).toBe(mask & 1 ? 8 : 0);
-            expect(frames.nChroma).toBe(mask & 2 ? 12 : 0);
-            expect(frames.mel.length).toBe(mask & 1 ? 8 : 0);
-            expect(frames.chroma.length).toBe(mask & 2 ? 12 : 0);
-            expect(frames.onsetStrength.length).toBe(mask & 4 ? 1 : 0);
-            expect(frames.rmsEnergy.length).toBe(1);
-            expect(frames.spectralCentroid.length).toBe(mask & 8 ? 1 : 0);
-            expect(frames.spectralFlatness.length).toBe(mask & 8 ? 1 : 0);
+            expect(frames.timestampsSec.length).toBe(1);
+            // Quantized reads carry flat band-major arrays; the float read carries matrices.
+            const lengthOf = (
+              value: FrameArray | { data: { length: number } },
+            ): number | undefined =>
+              value === undefined ? undefined : 'data' in value ? value.data.length : value.length;
+            if ('nMels' in frames) {
+              expect(frames.nMels).toBe(mask & 1 ? 8 : 0);
+              expect(frames.nChroma).toBe(mask & 2 ? 12 : 0);
+            }
+            expect(lengthOf(frames.mel)).toBe(mask & 1 ? 8 : undefined);
+            expect(lengthOf(frames.chroma)).toBe(mask & 2 ? 12 : undefined);
+            expect(lengthOf(frames.onsetStrength)).toBe(mask & 4 ? 1 : undefined);
+            expect(lengthOf(frames.rmsEnergy)).toBe(1);
+            expect(lengthOf(frames.spectralCentroid)).toBe(mask & 8 ? 1 : undefined);
+            expect(lengthOf(frames.spectralFlatness)).toBe(mask & 8 ? 1 : undefined);
           } finally {
             analyzer.destroy();
           }
@@ -1139,10 +1172,11 @@ describe('StreamAnalyzer', () => {
     });
 
     it('rejects legacy outputFormat selectors', () => {
-      expect(() => new StreamAnalyzer({ outputFormat: 1 })).toThrow();
-      expect(() => new StreamAnalyzer({ outputFormat: 2 })).toThrow();
+      const sampleRate = 22050;
+      expect(() => new StreamAnalyzer({ sampleRate, outputFormat: 1 } as never)).toThrow();
+      expect(() => new StreamAnalyzer({ sampleRate, outputFormat: 2 } as never)).toThrow();
       for (const value of [0.5, Number.NaN, Number.POSITIVE_INFINITY, '0']) {
-        expect(() => new StreamAnalyzer({ outputFormat: value as unknown as number })).toThrow();
+        expect(() => new StreamAnalyzer({ sampleRate, outputFormat: value } as never)).toThrow();
       }
     });
 
@@ -1172,8 +1206,10 @@ describe('StreamAnalyzer', () => {
 
         expect(narrow.nFrames).toBe(broad.nFrames);
         expect(narrow.nFrames).toBeGreaterThan(0);
-        expect(narrow.spectralCentroid[0]).toBe(255); // saturated by the narrow range
-        expect(Array.from(narrow.spectralCentroid)).not.toEqual(Array.from(broad.spectralCentroid));
+        expect(narrow.spectralCentroid?.[0]).toBe(255); // saturated by the narrow range
+        expect(Array.from(narrow.spectralCentroid ?? [])).not.toEqual(
+          Array.from(broad.spectralCentroid ?? []),
+        );
 
         // Omitting the config keeps the default ranges (no throw, same shape).
         const fallback = wide.readFramesU8(4);

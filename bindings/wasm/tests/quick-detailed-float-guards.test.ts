@@ -52,7 +52,9 @@ function capture(run: () => unknown): unknown {
 /** Asserts the caught value is the float-range refusal naming `key`. */
 function expectRangeRefusal(caught: unknown, key: string, context: string): void {
   const error = expectArgumentRefusal(caught, RangeError, context);
-  expect(error.message, context).toBe(`${key} ${RANGE_MESSAGE}`);
+  expect(error.message, context).toMatch(
+    new RegExp(`^(?:[A-Za-z0-9]+: )?${key} ${RANGE_MESSAGE}$`),
+  );
 }
 
 // A 256-sample silent buffer. checkedFloatFromVal refuses before this file's
@@ -132,8 +134,8 @@ const FLOAT_FIELDS: FloatField[] = [
   },
   {
     entry: 'analyzeDynamics',
-    key: 'compressionThreshold',
-    run: (v) => analyzeDynamics(REFUSAL_AUDIO, REFUSAL_SR, { compressionThreshold: v }),
+    key: 'compressionThresholdDb',
+    run: (v) => analyzeDynamics(REFUSAL_AUDIO, REFUSAL_SR, { compressionThresholdDb: v }),
   },
   {
     entry: 'analyzeTimbre',
@@ -277,12 +279,12 @@ describe('analyzeRhythm consumes bpmMin, bpmMax and startBpm it accepts', () => 
   });
 });
 
-describe('analyzeDynamics consumes windowSec and compressionThreshold it accepts', () => {
+describe('analyzeDynamics consumes windowSec and compressionThresholdDb it accepts', () => {
   // Eight single-sample bursts of amplitude 1 in an otherwise silent 8000-sample
   // (1s @ 8000 Hz) buffer: sum of squares is exactly 8, so
   // rms = sqrt(8/8000) = sqrt(1e-3) = 10^-1.5, giving rms_db = -30 dB exactly and
   // peak_db = 0 dB, for a crest factor of 30 dB -- comfortably clear of the 8 dB
-  // "compressed" floor regardless of compressionThreshold.
+  // "compressed" floor regardless of compressionThresholdDb.
   const DYNAMICS_SR = 8000;
   const DYNAMICS_SAMPLES = 8000;
   const SPIKE_SPACING = 1000;
@@ -294,15 +296,15 @@ describe('analyzeDynamics consumes windowSec and compressionThreshold it accepts
     return out;
   })();
 
-  it('reads compressionThreshold as flipping isCompressed', () => {
+  it('reads compressionThresholdDb as flipping isCompressed', () => {
     // dynamicRangeDb (p95 - p10 of the loudness curve) is never negative by
     // construction, so a threshold of 0 always keeps the first isCompressed
     // clause false; the 30 dB crest factor above keeps the second clause
     // false too. A threshold of 1000 dB is far past any value a dB spread
     // computed from a finite epsilon floor could reach, so the first clause
     // is always true instead.
-    const lenient = analyzeDynamics(spikyBuffer, DYNAMICS_SR, { compressionThreshold: 0 });
-    const strict = analyzeDynamics(spikyBuffer, DYNAMICS_SR, { compressionThreshold: 1000 });
+    const lenient = analyzeDynamics(spikyBuffer, DYNAMICS_SR, { compressionThresholdDb: 0 });
+    const strict = analyzeDynamics(spikyBuffer, DYNAMICS_SR, { compressionThresholdDb: 1000 });
     expect(lenient.isCompressed).toBe(false);
     expect(strict.isCompressed).toBe(true);
   });

@@ -61,14 +61,14 @@ describe('Symbol.dispose / using', () => {
   it('Mixer, SampleBank and StreamAnalyzer release through Symbol.dispose', () => {
     const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), SR, BLOCK);
     const bank = new SampleBank();
-    const analyzer = new StreamAnalyzer();
+    const analyzer = new StreamAnalyzer({ sampleRate: SR });
     for (const handle of [mixer, bank, analyzer]) {
       handle[Symbol.dispose]();
       expect(() => handle.destroy()).not.toThrow();
     }
     expectInvalidState(() => mixer.drainTailStereo(BLOCK));
     expectInvalidState(() => bank.sampleCount());
-    expectInvalidState(() => analyzer.frameCount());
+    expectInvalidState(() => analyzer.frameCount);
   });
 
   it('destroy() is idempotent', () => {
@@ -144,8 +144,8 @@ describe('Symbol.dispose / using', () => {
     { name: 'SampleBank', make: () => new SampleBank(), call: (h: SampleBank) => h.sampleCount() },
     {
       name: 'StreamAnalyzer',
-      make: () => new StreamAnalyzer(),
-      call: (h: StreamAnalyzer) => h.frameCount(),
+      make: () => new StreamAnalyzer({ sampleRate: SR }),
+      call: (h: StreamAnalyzer) => h.frameCount,
     },
     { name: 'Project', make: () => new Project(), call: (h: Project) => h.toJson() },
   ];

@@ -43,7 +43,7 @@ import {
 } from '../dist/index.js';
 import { init as initSource } from '../src/index';
 import { getSonareModule } from '../src/module_state';
-import { expectRefusalOf } from './_helpers';
+import { type ArgumentRefusalClass, expectRefusalOf } from './_helpers';
 
 beforeAll(async () => {
   await init();
@@ -52,8 +52,12 @@ beforeAll(async () => {
 /** The spellings `val::as<int>()` saturates: every one of them used to arrive as INT_MAX. */
 const SATURATING = [2 ** 31, 2 ** 40, 3e9, 4294967295];
 
-function expectRefusalNaming(field: string, run: () => unknown): void {
-  const error = expectRefusalOf(run);
+function expectRefusalNaming(
+  field: string,
+  run: () => unknown,
+  kind: ArgumentRefusalClass = RangeError,
+): void {
+  const error = expectRefusalOf(run, kind);
   // The field has to be named, or the message cannot tell the caller which of
   // the options they passed was the bad one.
   expect(error.message).toContain(field);
@@ -419,10 +423,16 @@ describe('the automation curve refuses an ordinal the embind path used to take',
 // Ordinal domain: tempogram mode
 // ---------------------------------------------------------------------------
 
-describe('the tempogram mode refuses an ordinal that is not whole', () => {
+describe('the tempogram mode takes its two names and refuses every number', () => {
   const envelope = new Float32Array(2000).map((_, i) => (i % 20 === 0 ? 1 : 0.05));
   const run = (mode: number | string): string => {
-    const { data } = tempogram(envelope, 22050, 512, 128, mode as never);
+    const { data } = tempogram({
+      onsetEnvelope: envelope,
+      sampleRate: 22050,
+      hopLength: 512,
+      winLength: 128,
+      mode: mode as never,
+    });
     let sum = 0;
     for (const value of data) {
       sum += value * value;
@@ -431,24 +441,19 @@ describe('the tempogram mode refuses an ordinal that is not whole', () => {
   };
 
   it('separates its two modes', () => {
-    expect(run(0)).not.toBe(run(1));
+    expect(run('autocorrelation')).not.toBe(run('cosine'));
   });
 
-  it('renders each ordinal bit-identically to its name', () => {
-    expect(run(0)).toBe(run('autocorrelation'));
-    expect(run(1)).toBe(run('cosine'));
-  });
-
-  it('refuses a fractional or non-finite mode instead of truncating onto a member', () => {
+  it('refuses a number, whole or not, instead of truncating onto a member', () => {
     // 0.5 ran autocorrelation and 1.5 ran cosine, both reporting success.
-    for (const value of [0.5, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
-      expectRefusalNaming('tempogram mode', () => run(value));
+    for (const value of [0, 1, 0.5, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expectRefusalNaming('mode', () => run(value), TypeError);
     }
   });
 
-  it('still refuses an ordinal outside the set', () => {
-    for (const value of [99, -1]) {
-      expectRefusalNaming('tempogram mode', () => run(value));
+  it('still refuses a name outside the set', () => {
+    for (const value of ['nope', 'Cosine']) {
+      expectRefusalNaming('mode', () => run(value));
     }
   });
 });

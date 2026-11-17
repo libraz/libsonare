@@ -1,3 +1,4 @@
+import type { Matrix2D } from './public_types.js';
 import { REQUEST_SHAPES, type RequestFn, type RequestShape } from './request_keys.js';
 
 /**
@@ -109,6 +110,64 @@ export function assertFiniteScalar(fnName: string, value: number, argName: strin
 export function assertNumber(fnName: string, value: unknown, argName: string): void {
   if (typeof value !== 'number') {
     throw new TypeError(`${fnName}: ${argName} must be a number`);
+  }
+}
+
+const FLOAT32_MAX = 3.4028234663852886e38;
+
+/** A scalar native reads as a float: `TypeError` unless a number, `RangeError` unless finite and within the 32-bit float range. */
+export function assertFloatValue(fnName: string, value: unknown, argName: string): void {
+  if (typeof value !== 'number') {
+    throw new TypeError(`${fnName}: ${argName} must be a number`);
+  }
+  if (!Number.isFinite(value) || Math.abs(value) > FLOAT32_MAX) {
+    throw new RangeError(
+      `${fnName}: ${argName} must be a finite number within the 32-bit float range`,
+    );
+  }
+}
+
+/** {@link assertFloatValue} plus a floor: strictly positive. */
+export function assertPositiveFloatValue(fnName: string, value: unknown, argName: string): void {
+  assertFloatValue(fnName, value, argName);
+  if ((value as number) <= 0) {
+    throw new RangeError(`${fnName}: ${argName} must be positive`);
+  }
+}
+
+/** {@link assertFloatValue} plus a floor of zero. */
+export function assertNonNegativeFloatValue(fnName: string, value: unknown, argName: string): void {
+  assertFloatValue(fnName, value, argName);
+  if ((value as number) < 0) {
+    throw new RangeError(`${fnName}: ${argName} must be non-negative`);
+  }
+}
+
+/** {@link assertFloatValue} over every entry of `fields`, each named by its key. */
+export function assertFloatFields(fnName: string, fields: Record<string, unknown>): void {
+  for (const [name, value] of Object.entries(fields)) {
+    assertFloatValue(fnName, value, name);
+  }
+}
+
+/** A frequency band: each given bound is a positive float, and a given pair is strictly ordered. Absent (`undefined` / `null`) is skipped. */
+export function assertFrequencyBounds(
+  fnName: string,
+  min: unknown,
+  max: unknown,
+  minName: string,
+  maxName: string,
+): void {
+  const hasMin = min !== undefined && min !== null;
+  const hasMax = max !== undefined && max !== null;
+  if (hasMin) {
+    assertPositiveFloatValue(fnName, min, minName);
+  }
+  if (hasMax) {
+    assertPositiveFloatValue(fnName, max, maxName);
+  }
+  if (hasMin && hasMax && !((max as number) > (min as number))) {
+    throw new RangeError(`${fnName}: ${maxName} must be above ${minName}`);
   }
 }
 
@@ -672,6 +731,78 @@ export function requestObject<T>(
   }
   assertKnownRequestKeys(fnName, value);
   return value;
+}
+
+/** Builds a {@link Matrix2D} from a native flat buffer and its dimensions. */
+export function toMatrix2D(data: Float32Array, rows: number, cols: number): Matrix2D {
+  return { data, rows, cols };
+}
+
+/** Builds a {@link Matrix2D} whose cols are read back from the buffer native returned, given its row count. */
+export function toMatrix2DByRows(data: Float32Array, rows: number): Matrix2D {
+  return { data, rows, cols: rows > 0 ? data.length / rows : 0 };
+}
+
+/**
+ * Checks a caller-supplied {@link Matrix2D}: `TypeError` unless an object with a
+ * `Float32Array` `data` and integer `rows` / `cols`, `RangeError` for a
+ * non-positive dimension, a `data` length other than `rows * cols`, or (unless
+ * `validate` is `false`) a NaN or infinity.
+ */
+export function assertMatrix2D(
+  fnName: string,
+  value: unknown,
+  argName: string,
+  validate = true,
+): Matrix2D {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new TypeError(`${fnName}: ${argName} must be a Matrix2D`);
+  }
+  const m = value as Partial<Matrix2D>;
+  if (!(m.data instanceof Float32Array)) {
+    throw new TypeError(`${fnName}: ${argName}.data must be a Float32Array`);
+  }
+  assertIntegerValue(fnName, m.rows as number, `${argName}.rows`);
+  assertIntegerValue(fnName, m.cols as number, `${argName}.cols`);
+  assertPositiveInteger(fnName, m.rows as number, `${argName}.rows`);
+  assertPositiveInteger(fnName, m.cols as number, `${argName}.cols`);
+  const expected = (m.rows as number) * (m.cols as number);
+  if (!Number.isSafeInteger(expected) || m.data.length !== expected) {
+    throw new RangeError(`${fnName}: ${argName}.data length must equal rows * cols`);
+  }
+  assertSamples(fnName, m.data, validate, `${argName}.data`);
+  return m as Matrix2D;
+}
+
+/**
+ * A closed string set: `TypeError` unless a string, `RangeError` for a string
+ * outside `tokens`. Absent (`undefined` / `null`) takes `fallback`.
+ */
+export function requireToken<T extends string>(
+  fnName: string,
+  value: unknown,
+  argName: string,
+  tokens: readonly T[],
+  fallback: T,
+): T {
+  if (value === undefined || value === null) {
+    return fallback;
+  }
+  assertString(fnName, value, argName);
+  if (!(tokens as readonly string[]).includes(value as string)) {
+    throw new RangeError(`${fnName}: ${argName} must be one of ${tokens.join(', ')}`);
+  }
+  return value as T;
+}
+
+/** Native reports a tuning as a semitone fraction; the JS surface speaks cents. */
+export function tuningCentsFromNative(semitoneFraction: number): number {
+  return semitoneFraction * 100;
+}
+
+/** Native takes a tuning as a semitone fraction; the JS surface speaks cents. */
+export function tuningCentsToNative(cents: number): number {
+  return cents / 100;
 }
 
 /** A request carrying audio plus the rate it was recorded at. */

@@ -6,16 +6,17 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
-  ChordQuality,
+  CHORD_QUALITIES,
+  type ChordQuality,
   chordSymbolFromAnalysis,
   init,
   keyModeFromAnalysis,
   Project,
 } from '../src/index';
 
-const QUALITIES = Object.values(ChordQuality);
+const QUALITIES = CHORD_QUALITIES;
 
-const chord = (root: number, quality: number, bass: number = root) =>
+const chord = (root: number, quality: ChordQuality, bass: number = root) =>
   ({ root, bass, quality }) as Parameters<typeof chordSymbolFromAnalysis>[0];
 
 describe('chordSymbolFromAnalysis', () => {
@@ -24,14 +25,14 @@ describe('chordSymbolFromAnalysis', () => {
   });
 
   it.each([
-    ['Major', ChordQuality.Major, 1, []],
-    ['Minor', ChordQuality.Minor, 2, []],
-    ['Dominant7', ChordQuality.Dominant7, 5, [7]],
-    ['HalfDim7', ChordQuality.HalfDim7, 6, [7]],
-    ['Sus4', ChordQuality.Sus4, 7, [4]],
-    ['Dominant13', ChordQuality.Dominant13, 5, [7, 9, 13]],
-    ['Unknown', ChordQuality.Unknown, 0, []],
-  ])(
+    ['Major', 'major', 1, []],
+    ['Minor', 'minor', 2, []],
+    ['Dominant7', 'dominant7', 5, [7]],
+    ['HalfDim7', 'halfDim7', 6, [7]],
+    ['Sus4', 'sus4', 7, [4]],
+    ['Dominant13', 'dominant13', 5, [7, 9, 13]],
+    ['Unknown', 'unknown', 0, []],
+  ] as const)(
     'maps %s to annotation quality %i with extensions %j',
     (_name, quality, mapped, extensions) => {
       const out = chordSymbolFromAnalysis(chord(7, quality));
@@ -40,17 +41,17 @@ describe('chordSymbolFromAnalysis', () => {
   );
 
   it('keeps the root of an unknown chord and reports a distinct bass as slash bass', () => {
-    expect(chordSymbolFromAnalysis(chord(2, ChordQuality.Unknown)).rootPc).toBe(2);
-    expect(chordSymbolFromAnalysis(chord(0, ChordQuality.Major, 7)).slashBassPc).toBe(7);
+    expect(chordSymbolFromAnalysis(chord(2, 'unknown')).rootPc).toBe(2);
+    expect(chordSymbolFromAnalysis(chord(0, 'major', 7)).slashBassPc).toBe(7);
   });
 
-  it('accepts names as well as ordinals', () => {
-    const out = chordSymbolFromAnalysis({
-      root: 'D',
-      bass: 'D',
-      quality: 'Minor',
-    } as unknown as Parameters<typeof chordSymbolFromAnalysis>[0]);
-    expect(out).toEqual({ rootPc: 2, quality: 2, extensions: [], slashBassPc: 255 });
+  it('refuses a quality ordinal and a pitch-class name', () => {
+    expect(() => chordSymbolFromAnalysis({ root: 2, bass: 2, quality: 1 } as never)).toThrow(
+      TypeError,
+    );
+    expect(() =>
+      chordSymbolFromAnalysis({ root: 'D', bass: 2, quality: 'minor' } as never),
+    ).toThrow(TypeError);
   });
 
   it('yields all 25 analysis qualities as annotations the project accepts and keeps', () => {
@@ -88,15 +89,14 @@ describe('chordSymbolFromAnalysis', () => {
   });
 
   it('names the field of an out-of-domain value as a RangeError', () => {
-    expect(() => chordSymbolFromAnalysis(chord(12, 0))).toThrow(RangeError);
-    expect(() => chordSymbolFromAnalysis(chord(12, 0))).toThrow(/root/);
-    expect(() => chordSymbolFromAnalysis(chord(0, 0, 12))).toThrow(/bass/);
-    expect(() => chordSymbolFromAnalysis(chord(0, 25))).toThrow(RangeError);
-    expect(() => chordSymbolFromAnalysis(chord(0, 25))).toThrow(/quality/);
-    expect(() => chordSymbolFromAnalysis(chord(0, -1))).toThrow(/quality/);
-    expect(() => chordSymbolFromAnalysis({ root: 'H', bass: 'C', quality: 0 } as never)).toThrow(
-      /root/,
-    );
+    expect(() => chordSymbolFromAnalysis(chord(12, 'major'))).toThrow(RangeError);
+    expect(() => chordSymbolFromAnalysis(chord(12, 'major'))).toThrow(/root/);
+    expect(() => chordSymbolFromAnalysis(chord(0, 'major', 12))).toThrow(/bass/);
+    expect(() => chordSymbolFromAnalysis(chord(0, 'ninth' as ChordQuality))).toThrow(RangeError);
+    expect(() => chordSymbolFromAnalysis(chord(0, 'ninth' as ChordQuality))).toThrow(/quality/);
+    expect(() =>
+      chordSymbolFromAnalysis({ root: 'H', bass: 0, quality: 'major' } as never),
+    ).toThrow(/root/);
   });
 });
 
@@ -127,8 +127,8 @@ describe('keyModeFromAnalysis', () => {
     }
   });
 
-  it('accepts a mode ordinal', () => {
-    expect(keyModeFromAnalysis(1)).toBe(2);
+  it('refuses a mode ordinal', () => {
+    expect(() => keyModeFromAnalysis(1 as never)).toThrow(TypeError);
   });
 
   it('refuses a wrong type as a TypeError and an unknown mode as a RangeError naming mode', () => {
@@ -136,7 +136,7 @@ describe('keyModeFromAnalysis', () => {
     expect(() => keyModeFromAnalysis({} as never)).toThrow(TypeError);
     expect(() => keyModeFromAnalysis('ionian' as never)).toThrow(RangeError);
     expect(() => keyModeFromAnalysis('ionian' as never)).toThrow(/mode/);
-    expect(() => keyModeFromAnalysis(7)).toThrow(RangeError);
-    expect(() => keyModeFromAnalysis(-1)).toThrow(RangeError);
+    expect(() => keyModeFromAnalysis(7 as never)).toThrow(TypeError);
+    expect(() => keyModeFromAnalysis(-1 as never)).toThrow(TypeError);
   });
 });
