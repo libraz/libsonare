@@ -216,11 +216,9 @@ def _js_runner(surface: str, module_path: Path, use_gm_programs: bool) -> str:
     if surface == "node":
         import_line = f"import {{ Project }} from {json.dumps(module_url)};"
         init_line = ""
-        close_line = "project.destroy();"
     else:
         import_line = f"import {{ init, Project }} from {json.dumps(module_url)};"
         init_line = "await init();"
-        close_line = "project.delete();"
     return f"""\
 import fs from 'node:fs';
 {import_line}
@@ -230,14 +228,16 @@ const projectJson = Buffer.from(encoded, 'base64').toString('utf8');
 {init_line}
 const project = Project.fromJson(projectJson);
 try {{
-  const samples = project.bounceWithSynthInstrument(
-    {{ preset: 'sine', useGmPrograms: {use_gm_programs_literal} }},
-    {{ totalFrames: {TOTAL_FRAMES}, blockSize: {BLOCK_SIZE}, numChannels: {NUM_CHANNELS}, sampleRate: {SAMPLE_RATE} }},
+  const result = project.bounceWithSynthInstruments(
+    {{ instrument: {{ preset: 'sine', useGmPrograms: {use_gm_programs_literal} }} }},
+    {{ totalFrames: {TOTAL_FRAMES}, blockSize: {BLOCK_SIZE}, numChannels: {NUM_CHANNELS} }},
   );
+  if (result.sampleRate !== {SAMPLE_RATE}) throw new Error(`render rate ${{result.sampleRate}}`);
+  const samples = result.channels[0];
   if (!(samples instanceof Float32Array)) throw new Error('render did not return Float32Array');
   process.stdout.write(Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength).toString('base64'));
 }} finally {{
-  {close_line}
+  project.destroy();
 }}
 """
 
