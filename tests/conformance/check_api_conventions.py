@@ -425,6 +425,81 @@ def _probe_violation(r: dict) -> str | None:
     return "a feature probe is capabilities().features.<name>, not has*Support / *Available"
 
 
+_STEREO_PARAM = re.compile(r"^(source|reference)?_?(left|right)(_?channels)?$")
+_TWO_CHANNEL_ALGORITHM = re.compile(r"mid|side|width|pan|correlation|scope|goniometer")
+_STEREO_SUFFIX = re.compile(r"stereo(into)?$")
+_ALL_SURFACES = ("node", "wasm", "python")
+
+
+def _fold(name: str) -> str:
+    """Case- and underscore-insensitive name, without a trailing Into/Async variant marker."""
+    return re.sub(r"(into|async)$", "", name.replace("_", "").lower())
+
+
+def _stereo_calls(records: list[dict]) -> list[dict]:
+    """One record per callable that takes a left/right pair, or is a *Stereo member."""
+    direct: dict[tuple[str, str], set[str]] = {}
+    nested: dict[tuple[str, str], set[str]] = {}
+    for r in records:
+        # A flag pair (polarity invert) is not an audio input.
+        if (
+            r["kind"] == "field"
+            and r["surface"] in ("node", "wasm")
+            and not r.get("type", "").startswith("boolean")
+        ):
+            direct.setdefault((r["surface"], r["owner"]), set()).add(r["member"])
+            nested.setdefault((r["surface"], r["owner"]), set()).update(
+                _TYPE_IDENT.findall(r.get("type", ""))
+            )
+    request_fields = {
+        key: members.union(*(direct.get((key[0], t), set()) for t in nested.get(key, ())))
+        for key, members in direct.items()
+    }
+    calls: list[dict] = []
+    for r in records:
+        if r["kind"] not in ("function", "method") or r["surface"] not in _ALL_SURFACES:
+            continue
+        sigs = r.get("sigs") or []
+        if not sigs:
+            continue
+        names = {p["name"] for p in sigs[0].get("params", [])}
+        for p in sigs[0].get("params", []):
+            for ident in _TYPE_IDENT.findall(p.get("type", "")):
+                names |= request_fields.get((r["surface"], ident), set())
+        takes_pair = any(_STEREO_PARAM.match(_fold(n)) for n in names)
+        member = r.get("member") or r["name"]
+        if takes_pair or _STEREO_SUFFIX.search(_fold(member)):
+            calls.append(
+                {
+                    "surface": r["surface"],
+                    "kind": "stereo-call",
+                    "name": r["name"],
+                    "family": ("", _fold(member)),
+                    "pair": takes_pair,
+                    "channels": "channels" in names,
+                    "stereo_member": _STEREO_SUFFIX.search(_fold(member)) is not None,
+                }
+            )
+    families: dict[tuple[str, str], set[str]] = {}
+    for c in calls:
+        if c["stereo_member"]:
+            families.setdefault(c["family"], set()).add(c["surface"])
+    return [{**c, "family_surfaces": sorted(families.get(c["family"], ()))} for c in calls]
+
+
+def _stereo_pair_violation(c: dict) -> str | None:
+    if _TWO_CHANNEL_ALGORITHM.search(c["family"][1]):
+        return None
+    if not c["stereo_member"]:
+        return "only a two-channel algorithm takes left and right; other multichannel inputs take channels"
+    missing = [s for s in _ALL_SURFACES if s not in c["family_surfaces"]]
+    if missing:
+        return f"a *Stereo member exists on every surface; absent on {', '.join(missing)}"
+    if c["channels"]:
+        return "a *Stereo member takes left and right, never channels"
+    return None
+
+
 RULES: list[Rule] = [
     Rule(
         name="getters",
@@ -587,6 +662,27 @@ RULES: list[Rule] = [
         ),
         violation=_probe_violation,
         exempt={"wasm:isWebMidiAvailable": "probes the host, not the library"},
+    ),
+    Rule(
+        name="stereo-pair",
+        summary="left/right only for two-channel algorithms and *Stereo families on every surface",
+        population=lambda r: r["kind"] == "stereo-call",
+        violation=_stereo_pair_violation,
+        derive=_stereo_calls,
+        pending={
+            "python:mastering_chain_stereo": "no Node/WASM counterpart; masterAudioStereo is the entry there, drop the Python-only twin or add the family",
+            "python:mastering_process_stereo": "rename to mastering_apply_processor_stereo (Node/WASM masteringApplyProcessorStereo)",
+            "python:mastering_pair_process_stereo": "rename to mastering_apply_pair_processor_stereo (Node/WASM masteringApplyPairProcessorStereo)",
+            "python:normalize_rms_stereo": "Node/WASM normalizeStereo takes left/right; no normalizeRmsStereo exists there",
+            "python:RealtimeVoiceChanger.process_planar_stereo": "Node/WASM RealtimeVoiceChanger.processPlanar takes channels",
+            "python:RealtimeVoiceChanger.process_planar_stereo_with_carrier": "Node/WASM RealtimeVoiceChanger.processPlanarWithCarrier takes channels",
+            "node:masteringApplyProcessorStereo": "Python spells it mastering_process_stereo",
+            "wasm:masteringApplyProcessorStereo": "Python spells it mastering_process_stereo",
+            "node:masteringApplyPairProcessorStereo": "Python spells it mastering_pair_process_stereo",
+            "wasm:masteringApplyPairProcessorStereo": "Python spells it mastering_pair_process_stereo",
+            "node:mixingAssistantSuggest": "MixAssistantTrack carries left/right; a mixing track takes channels",
+            "wasm:mixingAssistantSuggest": "MixAssistantTrack carries left/right; a mixing track takes channels",
+        },
     ),
 ]
 

@@ -467,6 +467,42 @@ class AbiProbesRule(unittest.TestCase):
         self.assertEqual([f.key for f in verdict.violations], ["python:vocal_edit_available"])
 
 
+def stereo_fn(surface: str, name: str, *params: str, owner: str = "") -> dict:
+    rec = function(surface, name, "Result", *[(p, "Float32Array") for p in params])
+    rec["owner"], rec["member"] = owner, name
+    return rec
+
+
+class StereoPairRule(unittest.TestCase):
+    CLEAN = [
+        stereo_fn("node", "normalizeStereo", "left", "right"),
+        stereo_fn("wasm", "normalizeStereo", "left", "right"),
+        stereo_fn("python", "normalize_stereo", "left", "right"),
+        stereo_fn("node", "meteringStereoCorrelation", "left", "right"),
+        stereo_fn("node", "normalize", "channels"),
+    ]
+
+    def test_clean_surface_passes(self) -> None:
+        verdict = run("stereo-pair", self.CLEAN)
+        self.assertEqual(verdict.read, 4)
+        self.assertFalse(verdict.failed)
+
+    def test_python_only_stereo_twin_is_named(self) -> None:
+        planted = stereo_fn("python", "repair_declick_stereo", "left", "right")
+        verdict = run("stereo-pair", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["python:repair_declick_stereo"])
+
+    def test_left_right_outside_two_channel_algorithm_is_named(self) -> None:
+        planted = stereo_fn("wasm", "denoise", "left", "right")
+        verdict = run("stereo-pair", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["wasm:denoise"])
+
+    def test_stereo_family_member_taking_channels_is_named(self) -> None:
+        records = [stereo_fn(s, "repairStereo", "channels") for s in ("node", "wasm", "python")]
+        verdict = run("stereo-pair", [*self.CLEAN, *records])
+        self.assertEqual(len(verdict.violations), 3)
+
+
 class Framework(unittest.TestCase):
     def test_reading_nothing_fails(self) -> None:
         verdict = check.judge(rule("getters"), [])
