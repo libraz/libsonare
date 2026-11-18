@@ -239,6 +239,14 @@ JsInstrumentSlot instrumentSlotFromVal(const val& desc, InstrumentFailure* failu
   return slot;
 }
 
+// A project bounce result: the interleaved render and the width it was mixed at.
+val bounceResultToVal(const std::vector<float>& samples, int num_channels) {
+  val out = val::object();
+  out.set("interleaved", vectorToFloat32Array(samples));
+  out.set("numChannels", num_channels);
+  return out;
+}
+
 }  // namespace
 
 SampleBankWasm::SampleBankWasm() : bank_(sonare_sample_bank_create()), id_(nextSampleBankId()) {
@@ -435,14 +443,16 @@ val ProjectWasm::bounce(val options) {
   SonareProjectBounceOptions opts = bounceOptionsFromVal(options);
   float* interleaved = nullptr;
   size_t len = 0;
-  const SonareError err = sonare_project_bounce(project_.get(), &opts, &interleaved, &len);
+  int num_channels = 0;
+  const SonareError err =
+      sonare_project_bounce(project_.get(), &opts, &interleaved, &len, &num_channels);
   if (err != SONARE_OK) {
     sonare_free_floats(interleaved);
     throwCError(err, "failed to bounce project");
   }
   std::vector<float> samples(interleaved, interleaved + len);
   sonare_free_floats(interleaved);
-  return vectorToFloat32Array(samples);
+  return bounceResultToVal(samples, num_channels);
 }
 
 val ProjectWasm::bounceWithBuiltinInstrument(val bindings, val options) {
@@ -450,16 +460,17 @@ val ProjectWasm::bounceWithBuiltinInstrument(val bindings, val options) {
   SonareProjectBounceOptions opts = bounceOptionsFromVal(options);
   float* interleaved = nullptr;
   size_t len = 0;
+  int num_channels = 0;
   const SonareError err = sonare_project_bounce_with_builtin_instruments(
       project_.get(), &opts, synths.empty() ? nullptr : synths.data(), synths.size(), &interleaved,
-      &len);
+      &len, &num_channels);
   if (err != SONARE_OK) {
     sonare_free_floats(interleaved);
     throwCError(err, "failed to bounce project with built-in instrument");
   }
   std::vector<float> samples(interleaved, interleaved + len);
   sonare_free_floats(interleaved);
-  return vectorToFloat32Array(samples);
+  return bounceResultToVal(samples, num_channels);
 }
 
 val ProjectWasm::bounceWithInstruments(val bindings, val options) {
@@ -485,9 +496,10 @@ val ProjectWasm::bounceWithInstruments(val bindings, val options) {
   SonareProjectBounceOptions opts = bounceOptionsFromVal(options);
   float* interleaved = nullptr;
   size_t len = 0;
+  int num_channels = 0;
   const SonareError err = sonare_project_bounce_with_instruments(
       project_keepalive.get(), &opts, instruments.empty() ? nullptr : instruments.data(),
-      instruments.size(), &interleaved, &len);
+      instruments.size(), &interleaved, &len, &num_channels);
   // A JS throw from here would skip every destructor in this frame, so a
   // throwing callback is returned as data and the TypeScript facade rethrows it.
   // The native failure is reported ahead of a callback's, as in the Python binding.
@@ -503,7 +515,7 @@ val ProjectWasm::bounceWithInstruments(val bindings, val options) {
   }
   std::vector<float> samples(interleaved, interleaved + len);
   sonare_free_floats(interleaved);
-  return vectorToFloat32Array(samples);
+  return bounceResultToVal(samples, num_channels);
 }
 
 val ProjectWasm::bounceWithSynthInstrument(val bindings, val options) {
@@ -536,16 +548,17 @@ val ProjectWasm::bounceWithSynthInstrument(val bindings, val options) {
   SonareProjectBounceOptions opts = bounceOptionsFromVal(options);
   float* interleaved = nullptr;
   size_t len = 0;
+  int num_channels = 0;
   const SonareError err = sonare_project_bounce_with_synth_instruments(
       project_.get(), &opts, synths.empty() ? nullptr : synths.data(), synths.size(), &interleaved,
-      &len);
+      &len, &num_channels);
   if (err != SONARE_OK) {
     sonare_free_floats(interleaved);
     throwCError(err, "failed to bounce project with synth instrument");
   }
   std::vector<float> samples(interleaved, interleaved + len);
   sonare_free_floats(interleaved);
-  return vectorToFloat32Array(samples);
+  return bounceResultToVal(samples, num_channels);
 }
 
 void ProjectWasm::loadSoundFont(val data) {
@@ -647,16 +660,17 @@ val ProjectWasm::bounceWithSf2Instrument(val bindings, val options) {
   SonareProjectBounceOptions opts = bounceOptionsFromVal(options);
   float* interleaved = nullptr;
   size_t len = 0;
+  int num_channels = 0;
   const SonareError err = sonare_project_bounce_with_sf2_instruments(
       project_.get(), &opts, players.empty() ? nullptr : players.data(), players.size(),
-      &interleaved, &len);
+      &interleaved, &len, &num_channels);
   if (err != SONARE_OK) {
     sonare_free_floats(interleaved);
     throwCError(err, "failed to bounce project with SF2 instrument");
   }
   std::vector<float> samples(interleaved, interleaved + len);
   sonare_free_floats(interleaved);
-  return vectorToFloat32Array(samples);
+  return bounceResultToVal(samples, num_channels);
 }
 
 // NativeSynth preset catalog ('\n'-joined program-lifetime string from the C
