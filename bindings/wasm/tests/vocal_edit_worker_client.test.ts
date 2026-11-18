@@ -325,7 +325,7 @@ class BridgeWorker implements VocalEditWorker {
         }
         return notes;
       },
-      outputLengthSamples: () => 480,
+      outputLengthSamples: 480,
       history: () => ({ canUndo: false, canRedo: true }),
       evaluatePitch: () => pitch(0),
       sourceSampleToDestinationSample: (_noteId, sample) => sample + 10,

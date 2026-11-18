@@ -28219,3 +28219,44 @@ removed = "set bands[1].thresholdDb; the low/mid/high shorthand is refused"
 domain = "mastering"
 rule = "aliases-removed"
 entry = "./analysis"
+
+[[entry]]
+kind = "method"
+old = "SampleBank.sampleCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/sample-bank.test.ts::reads the counts as getters"
+
+[[entry]]
+kind = "method"
+old = "SampleBank.setCount"
+changed = "readonly getter (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/wasm/tests/sample-bank.test.ts::reads the counts as getters"
+
+[[entry]]
+kind = "method"
+old = "VocalEditSession.outputLengthSamples"
+changed = "readonly getter (was a method)"
+domain = "project"
+rule = "getters"
+test = "bindings/wasm/tests/vocal_edit.test.ts::reads the output length as a getter"
+
+[[entry]]
+kind = "method"
+old = "VocalRenderSnapshot.outputLengthSamples"
+changed = "readonly getter (was a method)"
+domain = "project"
+rule = "getters"
+test = "bindings/wasm/tests/vocal_edit.test.ts::reads the output length as a getter"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerNativeSession.outputLengthSamples"
+entry = "./vocal-edit-worker"
+changed = "readonly property (was a method), matching VocalEditSession"
+domain = "project"
+rule = "getters"
+test = "bindings/wasm/tests/vocal_edit_worker.test.ts::answers every read-only command against the session or the open draft"

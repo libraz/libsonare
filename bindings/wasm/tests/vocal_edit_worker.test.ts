@@ -84,7 +84,7 @@ function readOnlyOps(scope: 'session' | 'draft') {
 
 const sessionReadOnlyOps = {
   ...readOnlyOps('session'),
-  outputLengthSamples: () => 480,
+  outputLengthSamples: 480,
   history: () => ({ canUndo: true, canRedo: false }),
 };
 

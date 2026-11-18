@@ -670,7 +670,7 @@ export class VocalEditSession {
   }
 
   /** Length of the rendered output in samples. */
-  outputLengthSamples(): number {
+  get outputLengthSamples(): number {
     return requireSample(
       module().vocalEditSessionOutputLength(this.native()),
       'outputLengthSamples',
@@ -919,7 +919,7 @@ export class VocalRenderSnapshot {
   }
 
   /** Length of the rendered output in samples. */
-  outputLengthSamples(): number {
+  get outputLengthSamples(): number {
     return requireSample(
       module().vocalEditSnapshotOutputLength(this.native()),
       'outputLengthSamples',
@@ -932,7 +932,7 @@ export class VocalRenderSnapshot {
     if (request.signal?.aborted) {
       throw new SonareError(ErrorCode.Cancelled, 'The render was cancelled');
     }
-    const normalized = normalizeRequest(request, this.outputLengthSamples(), this.sampleRate);
+    const normalized = normalizeRequest(request, this.outputLengthSamples, this.sampleRate);
     return copyRender(
       module().vocalEditSnapshotRender(
         handle,
@@ -949,7 +949,7 @@ export class VocalRenderSnapshot {
     if (request.signal?.aborted) {
       throw new SonareError(ErrorCode.Cancelled, 'The render was cancelled');
     }
-    const normalized = normalizeRequest(request, this.outputLengthSamples(), this.sampleRate);
+    const normalized = normalizeRequest(request, this.outputLengthSamples, this.sampleRate);
     return new VocalRenderJob(
       module().vocalEditRenderJobBegin(
         handle,

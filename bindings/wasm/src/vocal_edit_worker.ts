@@ -90,7 +90,7 @@ export interface VocalEditWorkerNativeSession {
   /** Redoes the last undone edit; `expectedRevision`, when given, must match the current revision. */
   redo(expectedRevision?: string): VocalEditResult;
   /** Length of the output in samples. */
-  outputLengthSamples(): number;
+  readonly outputLengthSamples: number;
   /** Undo/redo history. */
   history(): VocalHistory;
   /** Pitch curves of a note after the session's edits. */
@@ -412,7 +412,7 @@ async function execute(
           result = session.value.exportState();
           break;
         case 'outputLength':
-          result = session.value.outputLengthSamples();
+          result = session.value.outputLengthSamples;
           break;
         case 'history':
           result = session.value.history();

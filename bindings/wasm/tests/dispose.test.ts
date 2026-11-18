@@ -70,7 +70,7 @@ describe('Symbol.dispose / using', () => {
       expect(() => handle.destroy()).not.toThrow();
     }
     expectInvalidState(() => mixer.drainTailStereo(BLOCK));
-    expectInvalidState(() => bank.sampleCount());
+    expectInvalidState(() => bank.sampleCount);
     expectInvalidState(() => analyzer.frameCount);
   });
 
@@ -148,7 +148,7 @@ describe('Symbol.dispose / using', () => {
         }),
       call: (h: Mixer) => h.drainTailStereo(BLOCK),
     },
-    { name: 'SampleBank', make: () => new SampleBank(), call: (h: SampleBank) => h.sampleCount() },
+    { name: 'SampleBank', make: () => new SampleBank(), call: (h: SampleBank) => h.sampleCount },
     {
       name: 'StreamAnalyzer',
       make: () => new StreamAnalyzer({ sampleRate: SR }),

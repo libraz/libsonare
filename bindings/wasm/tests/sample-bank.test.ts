@@ -91,6 +91,14 @@ function expectTypeRefusal(action: () => void): void {
 }
 
 describe('Sonare WASM sample bank', () => {
+  it('reads the counts as getters', () => {
+    for (const name of ['sampleCount', 'setCount']) {
+      expect(typeof Object.getOwnPropertyDescriptor(SampleBank.prototype, name)?.get).toBe(
+        'function',
+      );
+    }
+  });
+
   beforeAll(async () => {
     await init();
   });
@@ -114,11 +122,11 @@ describe('Sonare WASM sample bank', () => {
       const pcm = tone(261.6256, 0.2);
 
       expectRangeRefusal(() => bank.addSample(new Float32Array(0)));
-      expect(bank.sampleCount()).toBe(0);
-      expect(bank.setCount()).toBe(0);
+      expect(bank.sampleCount).toBe(0);
+      expect(bank.setCount).toBe(0);
 
       expect(bank.addSample(pcm)).toBe(0);
-      expect(bank.sampleCount()).toBe(1);
+      expect(bank.sampleCount).toBe(1);
 
       // Descriptor fields are range- and type-checked before they are narrowed:
       // a bare cast would wrap 200 into a valid-looking MIDI key.
@@ -135,7 +143,7 @@ describe('Sonare WASM sample bank', () => {
       expectTypeRefusal(() => bank.addSample(pcm, { loopMode: 3 as never }));
       expect(bank.addSample(pcm, { loopMode: 'continuous' })).toBe(1);
       expect(bank.addSample(pcm, { loopMode: 'keyDown' })).toBe(2);
-      expect(bank.sampleCount()).toBe(3);
+      expect(bank.sampleCount).toBe(3);
 
       expectCoreRefusal(() => bank.addZone({ sampleIndex: 9 }));
       expectCoreRefusal(() => bank.addZone({ setIndex: 4096, sampleIndex: 0 }));
@@ -145,14 +153,14 @@ describe('Sonare WASM sample bank', () => {
       expectCoreRefusal(() => bank.addZone({ velLo: 100, velHi: 10 }));
       expectRangeRefusal(() => bank.addZone({ setIndex: -1 }));
       expectRangeRefusal(() => bank.addZone({ keyLo: 200 }));
-      expect(bank.setCount()).toBe(0);
+      expect(bank.setCount).toBe(0);
 
       bank.addZone({ sampleIndex: 0 });
-      expect(bank.setCount()).toBe(1);
+      expect(bank.setCount).toBe(1);
 
       // A set index creates the sets below it, so the count follows the highest.
       bank.addZone({ setIndex: 3, sampleIndex: 0 });
-      expect(bank.setCount()).toBe(4);
+      expect(bank.setCount).toBe(4);
     } finally {
       bank.destroy();
     }

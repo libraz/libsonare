@@ -6,7 +6,12 @@ import type {
   VocalErrorDetail,
   VocalSessionLimits,
 } from '../src/public_types_vocal_edit';
-import { createVocalEditSession, restoreVocalEditSession } from '../src/vocal_edit';
+import {
+  createVocalEditSession,
+  restoreVocalEditSession,
+  VocalEditSession,
+  VocalRenderSnapshot,
+} from '../src/vocal_edit';
 
 const SAMPLE_RATE = 16000;
 
@@ -115,13 +120,21 @@ describe('WASM vocal edit facade', () => {
     }
   });
 
+  it('reads the output length as a getter', () => {
+    for (const owner of [VocalEditSession.prototype, VocalRenderSnapshot.prototype]) {
+      expect(typeof Object.getOwnPropertyDescriptor(owner, 'outputLengthSamples')?.get).toBe(
+        'function',
+      );
+    }
+  });
+
   it('renders the complete destination when range is omitted', () => {
     const source = tone(512);
     const session = createVocalEditSession({ samples: source, sampleRate: SAMPLE_RATE });
     try {
       const snapshot = session.captureRenderSnapshot();
       try {
-        expect(snapshot.outputLengthSamples()).toBe(source.length);
+        expect(snapshot.outputLengthSamples).toBe(source.length);
         const rendered = snapshot.render({});
         expect(rendered.startSample).toBe(0);
         expect(rendered.samples.length).toBe(source.length);
@@ -199,7 +212,7 @@ describe('WASM vocal edit facade', () => {
     draft.destroy();
     const snapshot = session.captureRenderSnapshot();
     snapshot.destroy();
-    expect(() => snapshot.outputLengthSamples()).toThrow(/disposed/);
+    expect(() => snapshot.outputLengthSamples).toThrow(/disposed/);
     session.destroy();
     expect(() => session.token).toThrow(/disposed/);
     expect(() => session.destroy()).not.toThrow();
