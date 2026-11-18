@@ -250,6 +250,11 @@ export class StreamingMasteringChain {
     return this.chain.latencySamples();
   }
 
+  /** Largest block a process call accepts, as the native side resolved it (the library default when `maxBlockSize` was omitted). */
+  get maxBlockSize(): number {
+    return this.chain.maxBlockSize();
+  }
+
   /** Ordered stage names that will run (e.g. `"eq.tilt"`); a new array per call. */
   stageNames(): string[] {
     return this.chain.stageNames();
@@ -473,6 +478,11 @@ export class StreamingEqualizer {
   /** Reported processing latency in samples (non-zero for linear-phase bands). */
   get latencySamples(): number {
     return this.eq.latencySamples();
+  }
+
+  /** Largest block a process call accepts, as the native side resolved it (the library default when `maxBlockSize` was omitted). */
+  get maxBlockSize(): number {
+    return this.eq.maxBlockSize();
   }
 
   /**

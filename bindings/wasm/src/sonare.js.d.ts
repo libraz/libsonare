@@ -3834,6 +3834,7 @@ export interface WasmStreamingMasteringChain {
   flushStereo: () => { left: Float32Array; right: Float32Array };
   reset: () => void;
   latencySamples: () => number;
+  maxBlockSize: () => number;
   stageNames: () => string[];
   /** Cumulative since prepare(), which rebuilds the stages and so clears it. */
   nonFiniteSubstitutionCount: () => number;
@@ -3866,6 +3867,7 @@ export interface WasmStreamingEqualizer {
   clearSidechain: () => void;
   lastAutoGainDb: () => number;
   latencySamples: () => number;
+  maxBlockSize: () => number;
   nonFiniteDiscardCount: () => number;
   processMono: (samples: Float32Array) => Float32Array;
   processStereo: (

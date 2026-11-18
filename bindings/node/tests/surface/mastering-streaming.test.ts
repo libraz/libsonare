@@ -148,6 +148,51 @@ describe('StreamingMasteringChain.constructor', () => {
   });
 });
 
+describe('maxBlockSize', () => {
+  it('reports the library default a chain accepts when maxBlockSize is omitted', () => {
+    const { maxBlockSize: _omitted, ...withoutBlock } = chainConfig;
+    const chain = new StreamingMasteringChain(withoutBlock);
+    try {
+      const max = chain.maxBlockSize;
+      expect(max).toBeGreaterThan(0);
+      expect(chain.processMono(tone(max)).length).toBe(max);
+      expect(() => chain.processMono(tone(max + 1))).toThrow(RangeError);
+    } finally {
+      chain.destroy();
+    }
+  });
+
+  it('reports the given block size on a chain', () => {
+    const chain = new StreamingMasteringChain(chainConfig);
+    try {
+      expect(chain.maxBlockSize).toBe(block);
+    } finally {
+      chain.destroy();
+    }
+  });
+
+  it('reports the library default an equalizer accepts when maxBlockSize is omitted', () => {
+    const eq = new StreamingEqualizer({ sampleRate });
+    try {
+      const max = eq.maxBlockSize;
+      expect(max).toBeGreaterThan(0);
+      expect(eq.processMono(tone(max)).length).toBe(max);
+      expect(() => eq.processMono(tone(max + 1))).toThrow(RangeError);
+    } finally {
+      eq.destroy();
+    }
+  });
+
+  it('reports the given block size on an equalizer', () => {
+    const eq = new StreamingEqualizer({ sampleRate, maxBlockSize: block });
+    try {
+      expect(eq.maxBlockSize).toBe(block);
+    } finally {
+      eq.destroy();
+    }
+  });
+});
+
 describe('StreamingMasteringChainConfig', () => {
   it('carries the construction fields beside the chain sections', () => {
     expectTypeOf<StreamingMasteringChainConfig['sampleRate']>().toEqualTypeOf<number>();
