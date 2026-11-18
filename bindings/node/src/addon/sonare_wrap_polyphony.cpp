@@ -25,7 +25,7 @@ namespace {
 /// @return false with one pending JS exception; the caller must return before any
 ///         further N-API call.
 bool ReadPolyphonicConfig(Napi::Env env, const Napi::Value& value, SonarePolyphonicConfig* out) {
-  out->struct_version = 2;
+  sonare_polyphonic_config_init(out);
   if (value.IsUndefined() || value.IsNull()) {
     return true;
   }
@@ -36,51 +36,58 @@ bool ReadPolyphonicConfig(Napi::Env env, const Napi::Value& value, SonarePolypho
   }
   Napi::Object opts = value.As<Napi::Object>();
 
-  out->n_fft = IntProperty(opts, "nFft", kZeroIsSentinel);
-  out->hop_length = IntProperty(opts, "hopLength", kZeroIsSentinel);
-  out->win_length = IntProperty(opts, "winLength", kZeroIsSentinel);
+  out->n_fft = IntProperty(opts, "nFft", out->n_fft);
+  out->hop_length = IntProperty(opts, "hopLength", out->hop_length);
+  out->win_length = IntProperty(opts, "winLength", out->win_length);
 
-  out->cent_ref_hz = FloatProperty(opts, "centRefHz", 0.0f);
-  out->cents_per_bin = FloatProperty(opts, "centsPerBin", 0.0f);
-  out->cent_max_hz = FloatProperty(opts, "centMaxHz", 0.0f);
-  out->tonality_off = BoolProperty(opts, "tonalityOff", false) ? 1 : 0;
+  out->cent_ref_hz = FloatProperty(opts, "centRefHz", out->cent_ref_hz);
+  out->cents_per_bin = FloatProperty(opts, "centsPerBin", out->cents_per_bin);
+  out->cent_max_hz = FloatProperty(opts, "centMaxHz", out->cent_max_hz);
+  out->tonality_off = BoolProperty(opts, "tonalityOff", out->tonality_off != 0) ? 1 : 0;
 
-  out->salience_harmonics = IntProperty(opts, "salienceHarmonics", kZeroIsSentinel);
-  out->f0_min_hz = FloatProperty(opts, "f0MinHz", 0.0f);
-  out->f0_max_hz = FloatProperty(opts, "f0MaxHz", 0.0f);
-  out->salience_alpha_hz = FloatProperty(opts, "salienceAlphaHz", 0.0f);
-  out->salience_beta_hz = FloatProperty(opts, "salienceBetaHz", 0.0f);
-  out->salience_inharmonicity = FloatProperty(opts, "salienceInharmonicity", 0.0f);
+  out->salience_harmonics = IntProperty(opts, "salienceHarmonics", out->salience_harmonics);
+  out->f0_min_hz = FloatProperty(opts, "f0MinHz", out->f0_min_hz);
+  out->f0_max_hz = FloatProperty(opts, "f0MaxHz", out->f0_max_hz);
+  out->salience_alpha_hz = FloatProperty(opts, "salienceAlphaHz", out->salience_alpha_hz);
+  out->salience_beta_hz = FloatProperty(opts, "salienceBetaHz", out->salience_beta_hz);
+  out->salience_inharmonicity =
+      FloatProperty(opts, "salienceInharmonicity", out->salience_inharmonicity);
 
-  out->max_polyphony = IntProperty(opts, "maxPolyphony", kZeroIsSentinel);
-  out->min_frame_peak_ratio = FloatProperty(opts, "minFramePeakRatio", 0.0f);
-  out->min_separation_cents = FloatProperty(opts, "minSeparationCents", 0.0f);
-  out->subtraction_factor = FloatProperty(opts, "subtractionFactor", 0.0f);
+  out->max_polyphony = IntProperty(opts, "maxPolyphony", out->max_polyphony);
+  out->min_frame_peak_ratio = FloatProperty(opts, "minFramePeakRatio", out->min_frame_peak_ratio);
+  out->min_separation_cents = FloatProperty(opts, "minSeparationCents", out->min_separation_cents);
+  out->subtraction_factor = FloatProperty(opts, "subtractionFactor", out->subtraction_factor);
 
-  out->max_jump_cents = FloatProperty(opts, "maxJumpCents", 0.0f);
-  out->min_ridge_peak_ratio = FloatProperty(opts, "minRidgePeakRatio", 0.0f);
-  out->min_ridge_duration_ms = FloatProperty(opts, "minRidgeDurationMs", 0.0f);
+  out->max_jump_cents = FloatProperty(opts, "maxJumpCents", out->max_jump_cents);
+  out->min_ridge_peak_ratio = FloatProperty(opts, "minRidgePeakRatio", out->min_ridge_peak_ratio);
+  out->min_ridge_duration_ms =
+      FloatProperty(opts, "minRidgeDurationMs", out->min_ridge_duration_ms);
 
-  out->mask_harmonics = IntProperty(opts, "maskHarmonics", kZeroIsSentinel);
-  out->claim_lobes = FloatProperty(opts, "claimLobes", 0.0f);
-  out->inharmonicity = FloatProperty(opts, "inharmonicity", 0.0f);
-  out->estimate_inharmonicity = BoolProperty(opts, "estimateInharmonicity", false) ? 1 : 0;
-  out->inharmonicity_min_partials = IntProperty(opts, "inharmonicityMinPartials", kZeroIsSentinel);
-  out->inharmonicity_max_residual_bins = FloatProperty(opts, "inharmonicityMaxResidualBins", 0.0f);
-  out->inharmonicity_max_stretch = FloatProperty(opts, "inharmonicityMaxStretch", 0.0f);
+  out->mask_harmonics = IntProperty(opts, "maskHarmonics", out->mask_harmonics);
+  out->claim_lobes = FloatProperty(opts, "claimLobes", out->claim_lobes);
+  out->inharmonicity = FloatProperty(opts, "inharmonicity", out->inharmonicity);
+  out->estimate_inharmonicity =
+      BoolProperty(opts, "estimateInharmonicity", out->estimate_inharmonicity != 0) ? 1 : 0;
+  out->inharmonicity_min_partials =
+      IntProperty(opts, "inharmonicityMinPartials", out->inharmonicity_min_partials);
+  out->inharmonicity_max_residual_bins =
+      FloatProperty(opts, "inharmonicityMaxResidualBins", out->inharmonicity_max_residual_bins);
+  out->inharmonicity_max_stretch =
+      FloatProperty(opts, "inharmonicityMaxStretch", out->inharmonicity_max_stretch);
 
-  out->window_frames = IntProperty(opts, "windowFrames", kZeroIsSentinel);
-  out->min_partial_separation = FloatProperty(opts, "minPartialSeparation", 0.0f);
-  out->max_fit_residual = FloatProperty(opts, "maxFitResidual", 0.0f);
-  out->max_weight_modulus = FloatProperty(opts, "maxWeightModulus", 0.0f);
-  out->max_refine_hz = FloatProperty(opts, "maxRefineHz", 0.0f);
-  out->f0_tolerance_cents = FloatProperty(opts, "f0ToleranceCents", 0.0f);
+  out->window_frames = IntProperty(opts, "windowFrames", out->window_frames);
+  out->min_partial_separation =
+      FloatProperty(opts, "minPartialSeparation", out->min_partial_separation);
+  out->max_fit_residual = FloatProperty(opts, "maxFitResidual", out->max_fit_residual);
+  out->max_weight_modulus = FloatProperty(opts, "maxWeightModulus", out->max_weight_modulus);
+  out->max_refine_hz = FloatProperty(opts, "maxRefineHz", out->max_refine_hz);
+  out->f0_tolerance_cents = FloatProperty(opts, "f0ToleranceCents", out->f0_tolerance_cents);
 
-  out->segmentation_threshold_cents = FloatProperty(opts, "segmentationThresholdCents", 0.0f);
-  out->min_note_ms = FloatProperty(opts, "minNoteMs", 0.0f);
-  out->reference_hz = FloatProperty(opts, "referenceHz", 0.0f);
-  // 0 is off; any other value is range-checked by the core (> 1).
-  out->reattack_ratio = FloatProperty(opts, "reattackRatio", 0.0f);
+  out->segmentation_threshold_cents =
+      FloatProperty(opts, "segmentationThresholdCents", out->segmentation_threshold_cents);
+  out->min_note_ms = FloatProperty(opts, "minNoteMs", out->min_note_ms);
+  out->reference_hz = FloatProperty(opts, "referenceHz", out->reference_hz);
+  out->reattack_ratio = FloatProperty(opts, "reattackRatio", out->reattack_ratio);
   return !env.IsExceptionPending();
 }
 

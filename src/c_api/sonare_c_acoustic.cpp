@@ -31,6 +31,7 @@ using sonare_c_detail::begin_vector_output;
 using sonare::Audio;
 using sonare_c_detail::run_mono_offline;
 using sonare_c_detail::run_offline;
+using sonare_c_detail::struct_size_accepted;
 #endif
 
 namespace {
@@ -130,14 +131,6 @@ void init_room_fields(Config* config) {
   const AirAbsorption air{};
   config->air_temperature_c = air.temperature_c;
   config->air_humidity_percent = air.humidity_percent;
-}
-
-// Refuses a struct_size below the struct this library was built with, naming it.
-bool struct_size_accepted(uint32_t struct_size, size_t expected, const char* name) {
-  if (struct_size >= expected) return true;
-  sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                                  (std::string(name) + ".struct_size is below sizeof").c_str());
-  return false;
 }
 
 template <size_t N>

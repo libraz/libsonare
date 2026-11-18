@@ -36,95 +36,75 @@ namespace {
 using sonare_wasm_editing::noteEditFromVal;
 using sonare_wasm_editing::noteObjectsToVal;
 
-// Mirrors sonare_c_polyphony.cpp's resolve_config: 0 takes the default on every
-// field, and on the four that accept 0 as a value as well a negative selects it.
-// Anything a stage range-checks is forwarded as given and refused there, so one
-// bound is stated in one place.
+// Mirrors sonare_c_polyphony.cpp: an absent key keeps the core default, which is
+// what sonare_polyphonic_config_init sets, and a present one is read literally. Every
+// range is the stage's own, refused where it is read.
 editing::polyphony::PolyphonicEditConfig configFromVal(const val& config) {
   editing::polyphony::PolyphonicEditConfig out;
-  // Absence and the default are this function's own; the conversion is the shared
-  // reader's, and a value that cannot be a setting at all is refused here.
-  const auto read = [&config](const char* key) {
-    const float value = floatProperty(config, key, 0.0f);
+  // Absence is this function's own; the conversion is the shared reader's, and a
+  // value that cannot be a setting at all is refused here.
+  const auto set_float = [&config](const char* key, float& field) {
+    const float value = floatProperty(config, key, field);
     if (!std::isfinite(value)) {
       throw WasmRangeError(std::string(key) + " must be a finite number");
     }
-    return value;
+    field = value;
   };
-  const auto set_positive = [&read](const char* key, float& field) {
-    const float value = read(key);
-    if (value != 0.0f) field = value;
-  };
-  // The sentinel predicate is not what keeps a NaN out -- `value != 0.0f` is true of
-  // one and `value < 0.0f` is not. Two layers refuse it: the read above, and
-  // multi_f0.cpp, which re-checks finiteness on all four fields this writes.
-  const auto set_floor = [&read](const char* key, float& field) {
-    const float value = read(key);
-    if (value < 0.0f) {
-      field = 0.0f;
-    } else if (value != 0.0f) {
-      field = value;
-    }
-  };
-  const auto set_count = [&config](const char* key, int& field) {
-    const int value = intProperty(config, key, 0);
-    if (value != 0) field = value;
+  const auto set_int = [&config](const char* key, int& field) {
+    field = intProperty(config, key, field);
   };
 
   auto& stft = out.extraction.stft;
-  set_count("nFft", stft.n_fft);
-  set_count("hopLength", stft.hop_length);
-  set_count("winLength", stft.win_length);
+  set_int("nFft", stft.n_fft);
+  set_int("hopLength", stft.hop_length);
+  set_int("winLength", stft.win_length);
 
   auto& spectrum = out.extraction.spectrum;
-  set_positive("centRefHz", spectrum.ref_hz);
-  set_positive("centsPerBin", spectrum.cents_per_bin);
-  set_positive("centMaxHz", spectrum.max_hz);
-  if (boolProperty(config, "tonalityOff", false)) spectrum.use_tonality = false;
+  set_float("centRefHz", spectrum.ref_hz);
+  set_float("centsPerBin", spectrum.cents_per_bin);
+  set_float("centMaxHz", spectrum.max_hz);
+  spectrum.use_tonality = !boolProperty(config, "tonalityOff", !spectrum.use_tonality);
 
   auto& salience = out.extraction.estimation.salience;
-  set_count("salienceHarmonics", salience.n_harmonics);
-  set_positive("f0MinHz", salience.f0_min_hz);
-  set_positive("f0MaxHz", salience.f0_max_hz);
-  set_positive("salienceAlphaHz", salience.alpha_hz);
-  set_positive("salienceBetaHz", salience.beta_hz);
-  // Zero is this field's default and also a stretch of zero, so it needs no
-  // sentinel.
-  salience.inharmonicity = read("salienceInharmonicity");
+  set_int("salienceHarmonics", salience.n_harmonics);
+  set_float("f0MinHz", salience.f0_min_hz);
+  set_float("f0MaxHz", salience.f0_max_hz);
+  set_float("salienceAlphaHz", salience.alpha_hz);
+  set_float("salienceBetaHz", salience.beta_hz);
+  set_float("salienceInharmonicity", salience.inharmonicity);
 
   auto& estimation = out.extraction.estimation;
-  set_count("maxPolyphony", estimation.max_polyphony);
-  set_floor("minFramePeakRatio", estimation.min_frame_peak_ratio);
-  set_floor("minSeparationCents", estimation.min_separation_cents);
-  set_positive("subtractionFactor", estimation.subtraction_factor);
+  set_int("maxPolyphony", estimation.max_polyphony);
+  set_float("minFramePeakRatio", estimation.min_frame_peak_ratio);
+  set_float("minSeparationCents", estimation.min_separation_cents);
+  set_float("subtractionFactor", estimation.subtraction_factor);
 
   auto& ridges = out.extraction.ridges;
-  set_positive("maxJumpCents", ridges.max_jump_cents);
-  set_floor("minRidgePeakRatio", ridges.min_ridge_peak_ratio);
-  set_floor("minRidgeDurationMs", ridges.min_duration_ms);
-  // 0 is off here and the core refuses a negative or a value in (0, 1].
-  set_positive("reattackRatio", ridges.reattack_ratio);
+  set_float("maxJumpCents", ridges.max_jump_cents);
+  set_float("minRidgePeakRatio", ridges.min_ridge_peak_ratio);
+  set_float("minRidgeDurationMs", ridges.min_duration_ms);
+  set_float("reattackRatio", ridges.reattack_ratio);
 
-  set_count("maskHarmonics", out.masks.n_harmonics);
-  set_positive("claimLobes", out.masks.claim_lobes);
-  out.masks.inharmonicity = read("inharmonicity");
+  set_int("maskHarmonics", out.masks.n_harmonics);
+  set_float("claimLobes", out.masks.claim_lobes);
+  set_float("inharmonicity", out.masks.inharmonicity);
 
-  out.estimate_inharmonicity = boolProperty(config, "estimateInharmonicity", false);
-  set_count("inharmonicityMinPartials", out.inharmonicity.min_partials);
-  set_positive("inharmonicityMaxResidualBins", out.inharmonicity.max_residual_bins);
-  set_positive("inharmonicityMaxStretch", out.inharmonicity.max_inharmonicity);
+  out.estimate_inharmonicity =
+      boolProperty(config, "estimateInharmonicity", out.estimate_inharmonicity);
+  set_int("inharmonicityMinPartials", out.inharmonicity.min_partials);
+  set_float("inharmonicityMaxResidualBins", out.inharmonicity.max_residual_bins);
+  set_float("inharmonicityMaxStretch", out.inharmonicity.max_inharmonicity);
 
-  set_count("windowFrames", out.shared_bins.window_frames);
-  set_positive("minPartialSeparation", out.shared_bins.min_partial_separation);
-  set_positive("maxFitResidual", out.shared_bins.max_fit_residual);
-  set_positive("maxWeightModulus", out.shared_bins.max_weight_modulus);
-  // Zero already means "derive one" on this field.
-  out.shared_bins.max_refine_hz = read("maxRefineHz");
-  set_positive("f0ToleranceCents", out.shared_bins.f0_tolerance_cents);
+  set_int("windowFrames", out.shared_bins.window_frames);
+  set_float("minPartialSeparation", out.shared_bins.min_partial_separation);
+  set_float("maxFitResidual", out.shared_bins.max_fit_residual);
+  set_float("maxWeightModulus", out.shared_bins.max_weight_modulus);
+  set_float("maxRefineHz", out.shared_bins.max_refine_hz);
+  set_float("f0ToleranceCents", out.shared_bins.f0_tolerance_cents);
 
-  set_positive("segmentationThresholdCents", out.notes.segmenter.segmentation_threshold_cents);
-  set_positive("minNoteMs", out.notes.segmenter.min_note_ms);
-  set_positive("referenceHz", out.notes.segmenter.reference_hz);
+  set_float("segmentationThresholdCents", out.notes.segmenter.segmentation_threshold_cents);
+  set_float("minNoteMs", out.notes.segmenter.min_note_ms);
+  set_float("referenceHz", out.notes.segmenter.reference_hz);
   return out;
 }
 

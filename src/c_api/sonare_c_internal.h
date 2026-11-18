@@ -94,6 +94,14 @@ const char* last_error_message() noexcept;
 /// @details @p code is the SonareError the failing call returns, or would have
 ///          returned had it not reported failure through a NULL handle.
 void set_last_error(SonareError code, const char* msg) noexcept;
+/// @brief Refuses a @c struct_size below the struct this library was built with,
+///        naming the struct in the recorded message.
+inline bool struct_size_accepted(uint32_t struct_size, size_t expected, const char* name) {
+  if (struct_size >= expected) return true;
+  set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                 (std::string(name) + ".struct_size is below sizeof").c_str());
+  return false;
+}
 /// @brief Records @p code with @p msg, a string with static storage duration.
 /// @details Never allocates: the message is read through the fallback pointer
 ///          instead of being copied, so a refusal made before any buffer exists

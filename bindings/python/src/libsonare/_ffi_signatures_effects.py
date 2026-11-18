@@ -276,6 +276,8 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
 
     # sonare_polyphonic_* (the handle door onto the same note objects)
     if hasattr(lib, "sonare_polyphonic_analyze"):
+        lib.sonare_polyphonic_config_init.restype = None
+        lib.sonare_polyphonic_config_init.argtypes = [ctypes.POINTER(SonarePolyphonicConfig)]
         lib.sonare_polyphonic_analyze.restype = ctypes.c_int32
         lib.sonare_polyphonic_analyze.argtypes = [
             ctypes.POINTER(ctypes.c_float),

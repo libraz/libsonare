@@ -979,3 +979,11 @@ changed = "translates the snake_case built-in assist module ids of a document ol
 domain = "project"
 rule = "token-case"
 test = "tests/serialize/project_serializer_roundtrip_test.cpp::an older document's built-in assist module ids load as the lowerCamel ids"
+
+[[entry]]
+kind = "type"
+old = "SonarePolyphonicConfig"
+changed = "leads with uint32_t struct_size instead of struct_version; prepare it with sonare_polyphonic_config_init, after which every field is read literally and range-checked (a 0 is a 0, so min_frame_peak_ratio, min_separation_cents, min_ridge_peak_ratio and min_ridge_duration_ms take 0 directly and refuse a negative); reattack_ratio moves beside the other tracking fields; win_length 0 (n_fft), max_refine_hz 0 (derived) and reattack_ratio 0 (no split) keep their named meanings"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_polyphony_test.cpp::sonare_polyphonic_config_init sets every documented default"

@@ -16,6 +16,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "util/constants.h"
@@ -28,6 +30,13 @@
 namespace {
 
 constexpr int kSampleRate = 44100;
+
+/// @brief A config prepared the way the header asks, so every field holds its default.
+SonarePolyphonicConfig initialized_config() {
+  SonarePolyphonicConfig config;
+  sonare_polyphonic_config_init(&config);
+  return config;
+}
 constexpr size_t kSourceSamples = 22050;
 constexpr int kPartials = 10;
 constexpr float kLowHz = 329.6276f;
@@ -154,7 +163,7 @@ sonare::editing::polyphony::PolyphonicEditConfig fitted_core_config() {
 }
 
 SonarePolyphonicConfig fitted_c_config() {
-  SonarePolyphonicConfig config{};
+  SonarePolyphonicConfig config = initialized_config();
   config.max_polyphony = 1;
   config.inharmonicity = kDeclaredStretch;
   config.estimate_inharmonicity = 1;
@@ -298,8 +307,17 @@ TEST_CASE("the polyphonic handle forwards the chain exactly", "[c_api][polyphony
   // second code path reached the samples.
   for (size_t i = 0; i < got.size(); ++i) REQUIRE(got[i] == wanted_render[i]);
 
+  SECTION("and an initialized config is the NULL config") {
+    const SonarePolyphonicConfig config = initialized_config();
+    const Handle seeded(&config, samples);
+    REQUIRE(seeded.error() == SONARE_OK);
+    const std::vector<float> got_seeded = render(seeded.get());
+    REQUIRE(got_seeded.size() == wanted_render.size());
+    for (size_t i = 0; i < got_seeded.size(); ++i) REQUIRE(got_seeded[i] == wanted_render[i]);
+  }
+
   SECTION("and a config field reaches the stage it belongs to") {
-    SonarePolyphonicConfig config{};
+    SonarePolyphonicConfig config = initialized_config();
     config.hop_length = 1024;
     const Handle wider(&config, samples);
     REQUIRE(wider.error() == SONARE_OK);
@@ -312,18 +330,18 @@ TEST_CASE("the polyphonic handle forwards the chain exactly", "[c_api][polyphony
     REQUIRE(wide_frames < default_frames);
   }
 
-  SECTION("and a negative selects the zero a zero cannot") {
-    // The sentinel's whole claim: a negative is the value 0, not a refusal and not
-    // the default. Measured against the chain asked for 0 directly.
+  SECTION("and a zero on a floor field is the value zero") {
+    // Measured against the chain asked for 0 directly, so a 0 read as the default
+    // (50 cents, 140 ms) cannot pass.
     sonare::editing::polyphony::PolyphonicEditConfig zeroed;
     zeroed.extraction.estimation.min_separation_cents = 0.0f;
     zeroed.extraction.ridges.min_duration_ms = 0.0f;
     const sonare::editing::polyphony::PolyphonicAnalysis direct =
         sonare::editing::polyphony::analyze_polyphonic(audio, zeroed);
 
-    SonarePolyphonicConfig config{};
-    config.min_separation_cents = -1.0f;
-    config.min_ridge_duration_ms = -1.0f;
+    SonarePolyphonicConfig config = initialized_config();
+    config.min_separation_cents = 0.0f;
+    config.min_ridge_duration_ms = 0.0f;
     const Handle floored(&config, samples);
     REQUIRE(floored.error() == SONARE_OK);
     REQUIRE(note_count_of(floored.get()) == direct.notes.size());
@@ -333,6 +351,52 @@ TEST_CASE("the polyphonic handle forwards the chain exactly", "[c_api][polyphony
     REQUIRE(got_floored.size() == wanted_floored.size());
     for (size_t i = 0; i < got_floored.size(); ++i) REQUIRE(got_floored[i] == wanted_floored[i]);
   }
+}
+
+TEST_CASE("sonare_polyphonic_config_init sets every documented default", "[c_api][polyphony]") {
+  // The header states each default beside its field and the bindings relay them,
+  // so they are pinned here against the values written there.
+  const SonarePolyphonicConfig c = initialized_config();
+  CHECK(c.struct_size == sizeof(SonarePolyphonicConfig));
+  CHECK(c.n_fft == 4096);
+  CHECK(c.hop_length == 512);
+  CHECK(c.win_length == 0);
+  CHECK(c.cent_ref_hz == 55.0f);
+  CHECK(c.cents_per_bin == 100.0f / 3.0f);
+  CHECK(c.cent_max_hz == 8000.0f);
+  CHECK(c.tonality_off == 0);
+  CHECK(c.salience_harmonics == 20);
+  CHECK(c.f0_min_hz == 55.0f);
+  CHECK(c.f0_max_hz == 1760.0f);
+  CHECK(c.salience_alpha_hz == 27.0f);
+  CHECK(c.salience_beta_hz == 320.0f);
+  CHECK(c.salience_inharmonicity == 0.0f);
+  CHECK(c.max_polyphony == 4);
+  CHECK(c.min_frame_peak_ratio == 0.20f);
+  CHECK(c.min_separation_cents == 50.0f);
+  CHECK(c.subtraction_factor == 1.0f);
+  CHECK(c.max_jump_cents == 50.0f);
+  CHECK(c.min_ridge_peak_ratio == 0.10f);
+  CHECK(c.min_ridge_duration_ms == 140.0f);
+  CHECK(c.reattack_ratio == 0.0f);
+  CHECK(c.mask_harmonics == 20);
+  CHECK(c.claim_lobes == 1.0f);
+  CHECK(c.inharmonicity == 0.0f);
+  CHECK(c.estimate_inharmonicity == 0);
+  CHECK(c.inharmonicity_min_partials == 3);
+  CHECK(c.inharmonicity_max_residual_bins == 0.5f);
+  CHECK(c.inharmonicity_max_stretch == 0.03125f);
+  CHECK(c.window_frames == 8);
+  CHECK(c.min_partial_separation == 0.01f);
+  CHECK(c.max_fit_residual == 0.02f);
+  CHECK(c.max_weight_modulus == 8.0f);
+  CHECK(c.max_refine_hz == 0.0f);
+  CHECK(c.f0_tolerance_cents == 50.0f);
+  CHECK(c.segmentation_threshold_cents == 50.0f);
+  CHECK(c.min_note_ms == 30.0f);
+  CHECK(c.reference_hz == 440.0f);
+
+  sonare_polyphonic_config_init(nullptr);
 }
 
 TEST_CASE("the edit is the one thing a host writes, and it reaches the render",
@@ -423,15 +487,59 @@ TEST_CASE("the polyphonic C API refuses what it cannot do", "[c_api][polyphony]"
     CHECK(sonare_polyphonic_analyze(samples.data(), 0, kSampleRate, nullptr, &out) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
+    // A zeroed struct was never initialized, so it is refused rather than read as
+    // the defaults.
     SonarePolyphonicConfig config{};
-    config.struct_version = 3;
     CHECK(sonare_polyphonic_analyze(samples.data(), samples.size(), kSampleRate, &config, &out) ==
           SONARE_ERROR_INVALID_PARAMETER);
-    config.struct_version = 0;
-    config.max_polyphony = -1;
+    config = initialized_config();
+    config.struct_size = sizeof(SonarePolyphonicConfig) - 1;
     CHECK(sonare_polyphonic_analyze(samples.data(), samples.size(), kSampleRate, &config, &out) ==
           SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()).find("SonarePolyphonicConfig.struct_size") !=
+          std::string::npos);
     CHECK(out == nullptr);
+  }
+
+  SECTION("a field outside its range, 0 included where 0 is not a value") {
+    struct NamedField {
+      const char* what;
+      void (*set)(SonarePolyphonicConfig&);
+    };
+    const NamedField fields[] = {
+        {"n_fft 0", [](SonarePolyphonicConfig& c) { c.n_fft = 0; }},
+        {"hop_length 0", [](SonarePolyphonicConfig& c) { c.hop_length = 0; }},
+        {"win_length above n_fft", [](SonarePolyphonicConfig& c) { c.win_length = c.n_fft + 1; }},
+        {"cents_per_bin 0", [](SonarePolyphonicConfig& c) { c.cents_per_bin = 0.0f; }},
+        {"f0_min_hz 0", [](SonarePolyphonicConfig& c) { c.f0_min_hz = 0.0f; }},
+        {"max_polyphony 0", [](SonarePolyphonicConfig& c) { c.max_polyphony = 0; }},
+        {"max_polyphony -1", [](SonarePolyphonicConfig& c) { c.max_polyphony = -1; }},
+        {"min_frame_peak_ratio -1",
+         [](SonarePolyphonicConfig& c) { c.min_frame_peak_ratio = -1.0f; }},
+        {"min_separation_cents -1",
+         [](SonarePolyphonicConfig& c) { c.min_separation_cents = -1.0f; }},
+        {"subtraction_factor 0", [](SonarePolyphonicConfig& c) { c.subtraction_factor = 0.0f; }},
+        {"max_jump_cents 0", [](SonarePolyphonicConfig& c) { c.max_jump_cents = 0.0f; }},
+        {"min_ridge_peak_ratio -1",
+         [](SonarePolyphonicConfig& c) { c.min_ridge_peak_ratio = -1.0f; }},
+        {"min_ridge_duration_ms -1",
+         [](SonarePolyphonicConfig& c) { c.min_ridge_duration_ms = -1.0f; }},
+        {"mask_harmonics 0", [](SonarePolyphonicConfig& c) { c.mask_harmonics = 0; }},
+        {"claim_lobes 0", [](SonarePolyphonicConfig& c) { c.claim_lobes = 0.0f; }},
+        {"window_frames 0", [](SonarePolyphonicConfig& c) { c.window_frames = 0; }},
+        {"max_fit_residual 0", [](SonarePolyphonicConfig& c) { c.max_fit_residual = 0.0f; }},
+        {"f0_tolerance_cents 0", [](SonarePolyphonicConfig& c) { c.f0_tolerance_cents = 0.0f; }},
+        {"reference_hz 0", [](SonarePolyphonicConfig& c) { c.reference_hz = 0.0f; }},
+    };
+    for (const NamedField& field : fields) {
+      INFO(field.what);
+      SonarePolyphonicConfig config = initialized_config();
+      field.set(config);
+      SonarePolyphonicAnalysis* out = nullptr;
+      CHECK(sonare_polyphonic_analyze(samples.data(), samples.size(), kSampleRate, &config, &out) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(out == nullptr);
+    }
   }
 
   SECTION("a NULL handle, and a note index the analysis does not have") {
@@ -493,7 +601,7 @@ TEST_CASE("the stretch fit crosses as one entry per note, or not at all", "[c_ap
   }
 
   SECTION("asked for") {
-    SonarePolyphonicConfig config{};
+    SonarePolyphonicConfig config = initialized_config();
     config.estimate_inharmonicity = 1;
     config.inharmonicity = kDeclaredStretch;
     const Handle handle(&config, samples);
@@ -572,19 +680,15 @@ TEST_CASE("a fitted stretch and a refused one are different answers at the C doo
   }
 }
 
-TEST_CASE("the fit's four fields take their defaults at zero and reach the core otherwise",
+TEST_CASE("the fit's four fields start at the core's defaults and reach the core",
           "[c_api][polyphony]") {
-  // A zeroed struct is the defaults, so a field silently dropped would produce a
-  // correct-looking array measured under something the caller did not ask for.
-  // Each field is read off both ends: the value it takes at zero, and a value the
-  // core answers differently for.
+  // A field silently dropped would produce a correct-looking array measured under
+  // something the caller did not ask for, so each is read off both ends: the value
+  // init gives it, and a value the core answers differently for.
   const std::vector<float> samples = stretched_tone();
 
-  SECTION("zero is the default on all four") {
-    SonarePolyphonicConfig config = fitted_c_config();
-    config.inharmonicity_min_partials = 0;
-    config.inharmonicity_max_residual_bins = 0.0f;
-    config.inharmonicity_max_stretch = 0.0f;
+  SECTION("init sets the core's default on all four") {
+    const SonarePolyphonicConfig config = fitted_c_config();
     const Handle handle(&config, samples);
     REQUIRE(handle.error() == SONARE_OK);
     REQUIRE(inharmonicity_of(handle.get()) ==
@@ -634,24 +738,23 @@ TEST_CASE("the fit's four fields take their defaults at zero and reach the core 
   }
 
   SECTION("a value outside the core's range is refused, and only where the fit runs") {
-    // The sharper half of the zero rule: 1 is rejected while 0 is the default 3,
-    // so the sentinel cannot be a field the wrapper forwards unchanged. And a
+    // 0 is read literally, so it is refused with the other out-of-range counts. And a
     // field read only when the fit was asked for refuses nobody who did not ask.
     std::vector<std::pair<const char*, SonarePolyphonicConfig>> rejected;
-    for (const int32_t partials : {1, 129}) {
-      SonarePolyphonicConfig config{};
+    for (const int32_t partials : {0, 1, 129}) {
+      SonarePolyphonicConfig config = initialized_config();
       config.inharmonicity_min_partials = partials;
       rejected.emplace_back("a partial count outside [2, 128]", config);
     }
-    {
-      SonarePolyphonicConfig config{};
-      config.inharmonicity_max_residual_bins = -1.0f;
-      rejected.emplace_back("a negative misfit ceiling", config);
+    for (const float ceiling : {0.0f, -1.0f}) {
+      SonarePolyphonicConfig config = initialized_config();
+      config.inharmonicity_max_residual_bins = ceiling;
+      rejected.emplace_back("a misfit ceiling that is not positive", config);
     }
-    {
-      SonarePolyphonicConfig config{};
-      config.inharmonicity_max_stretch = -1.0f;
-      rejected.emplace_back("a negative stretch ceiling", config);
+    for (const float ceiling : {0.0f, -1.0f}) {
+      SonarePolyphonicConfig config = initialized_config();
+      config.inharmonicity_max_stretch = ceiling;
+      rejected.emplace_back("a stretch ceiling that is not positive", config);
     }
 
     for (const auto& entry : rejected) {
@@ -673,7 +776,7 @@ TEST_CASE("the fit's four fields take their defaults at zero and reach the core 
 
 TEST_CASE("the stretch accessor sizes a buffer the way its siblings do", "[c_api][polyphony]") {
   const std::vector<float> samples = chord();
-  SonarePolyphonicConfig config{};
+  SonarePolyphonicConfig config = initialized_config();
   config.estimate_inharmonicity = 1;
   const Handle handle(&config, samples);
   REQUIRE(handle.error() == SONARE_OK);
@@ -704,26 +807,18 @@ TEST_CASE("the stretch accessor sizes a buffer the way its siblings do", "[c_api
 }
 
 TEST_CASE("reattack_ratio splits a pitch struck again while it sounds", "[c_api][polyphony]") {
-  SonarePolyphonicConfig config{};
-  config.struct_version = 2;
+  SonarePolyphonicConfig config = initialized_config();
+  REQUIRE(config.reattack_ratio == 0.0f);
   const size_t off = restruck_note_count(config);
 
   config.reattack_ratio = 2.5f;
   const size_t split = restruck_note_count(config);
   CHECK(split > off);
-
-  SECTION("a version-1 struct never reads the trailing field") {
-    config.struct_version = 1;
-    CHECK(restruck_note_count(config) == off);
-    config.struct_version = 0;
-    CHECK(restruck_note_count(config) == off);
-  }
 }
 
 TEST_CASE("reattack_ratio outside 0 or above 1 is refused", "[c_api][polyphony]") {
   const std::vector<float> samples = chord();
-  SonarePolyphonicConfig config{};
-  config.struct_version = 2;
+  SonarePolyphonicConfig config = initialized_config();
   for (const float ratio : {-1.0f, 0.5f, 1.0f, std::nanf("")}) {
     config.reattack_ratio = ratio;
     SonarePolyphonicAnalysis* out = nullptr;

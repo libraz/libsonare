@@ -28,83 +28,66 @@ namespace {
 
 using sonare::editing::polyphony::PolyphonicEditConfig;
 
-/// @brief Resolves a versioned config onto the core defaults.
-/// @details 0 takes the default on every field. On the four that also accept 0 as a
-///          value, a negative selects it; each of those rejects a negative otherwise,
-///          so the two meanings cannot collide.
+/// @brief Copies @p in onto the core config field by field; NULL keeps the defaults.
+/// @details Nothing is resolved here: every range is the core's, checked where each
+///          stage reads it, so one stage's bounds are stated in one place.
 SonareError resolve_config(const SonarePolyphonicConfig* in, PolyphonicEditConfig& out) {
   if (in == nullptr) return SONARE_OK;
-  if (in->struct_version < 0 || in->struct_version > 2) return SONARE_ERROR_INVALID_PARAMETER;
-
-  // Anything the core range-checks is forwarded as given and refused there, so one
-  // stage's bounds are stated in one place. Only the sentinels are resolved here.
-  const auto set_positive = [](float value, float& field) {
-    if (value != 0.0f) field = value;
-  };
-  const auto set_floor = [](float value, float& field) {
-    if (value < 0.0f) {
-      field = 0.0f;
-    } else if (value != 0.0f) {
-      field = value;
-    }
-  };
-  const auto set_count = [](int32_t value, int& field) {
-    if (value != 0) field = static_cast<int>(value);
-  };
+  if (!struct_size_accepted(in->struct_size, sizeof(SonarePolyphonicConfig),
+                            "SonarePolyphonicConfig")) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
 
   auto& stft = out.extraction.stft;
-  set_count(in->n_fft, stft.n_fft);
-  set_count(in->hop_length, stft.hop_length);
-  set_count(in->win_length, stft.win_length);
+  stft.n_fft = in->n_fft;
+  stft.hop_length = in->hop_length;
+  stft.win_length = in->win_length;
 
   auto& spectrum = out.extraction.spectrum;
-  set_positive(in->cent_ref_hz, spectrum.ref_hz);
-  set_positive(in->cents_per_bin, spectrum.cents_per_bin);
-  set_positive(in->cent_max_hz, spectrum.max_hz);
-  if (in->tonality_off != 0) spectrum.use_tonality = false;
+  spectrum.ref_hz = in->cent_ref_hz;
+  spectrum.cents_per_bin = in->cents_per_bin;
+  spectrum.max_hz = in->cent_max_hz;
+  spectrum.use_tonality = in->tonality_off == 0;
 
   auto& salience = out.extraction.estimation.salience;
-  set_count(in->salience_harmonics, salience.n_harmonics);
-  set_positive(in->f0_min_hz, salience.f0_min_hz);
-  set_positive(in->f0_max_hz, salience.f0_max_hz);
-  set_positive(in->salience_alpha_hz, salience.alpha_hz);
-  set_positive(in->salience_beta_hz, salience.beta_hz);
-  // Zero is this field's default and also a stretch of zero, so it needs no sentinel.
+  salience.n_harmonics = in->salience_harmonics;
+  salience.f0_min_hz = in->f0_min_hz;
+  salience.f0_max_hz = in->f0_max_hz;
+  salience.alpha_hz = in->salience_alpha_hz;
+  salience.beta_hz = in->salience_beta_hz;
   salience.inharmonicity = in->salience_inharmonicity;
 
   auto& estimation = out.extraction.estimation;
-  set_count(in->max_polyphony, estimation.max_polyphony);
-  set_floor(in->min_frame_peak_ratio, estimation.min_frame_peak_ratio);
-  set_floor(in->min_separation_cents, estimation.min_separation_cents);
-  set_positive(in->subtraction_factor, estimation.subtraction_factor);
+  estimation.max_polyphony = in->max_polyphony;
+  estimation.min_frame_peak_ratio = in->min_frame_peak_ratio;
+  estimation.min_separation_cents = in->min_separation_cents;
+  estimation.subtraction_factor = in->subtraction_factor;
 
   auto& ridges = out.extraction.ridges;
-  set_positive(in->max_jump_cents, ridges.max_jump_cents);
-  set_floor(in->min_ridge_peak_ratio, ridges.min_ridge_peak_ratio);
-  set_floor(in->min_ridge_duration_ms, ridges.min_duration_ms);
-  // Version 2 only; 0 is off and any other value is range-checked by the core.
-  if (in->struct_version >= 2) ridges.reattack_ratio = in->reattack_ratio;
+  ridges.max_jump_cents = in->max_jump_cents;
+  ridges.min_ridge_peak_ratio = in->min_ridge_peak_ratio;
+  ridges.min_duration_ms = in->min_ridge_duration_ms;
+  ridges.reattack_ratio = in->reattack_ratio;
 
-  set_count(in->mask_harmonics, out.masks.n_harmonics);
-  set_positive(in->claim_lobes, out.masks.claim_lobes);
+  out.masks.n_harmonics = in->mask_harmonics;
+  out.masks.claim_lobes = in->claim_lobes;
   out.masks.inharmonicity = in->inharmonicity;
 
   out.estimate_inharmonicity = in->estimate_inharmonicity != 0;
-  set_count(in->inharmonicity_min_partials, out.inharmonicity.min_partials);
-  set_positive(in->inharmonicity_max_residual_bins, out.inharmonicity.max_residual_bins);
-  set_positive(in->inharmonicity_max_stretch, out.inharmonicity.max_inharmonicity);
+  out.inharmonicity.min_partials = in->inharmonicity_min_partials;
+  out.inharmonicity.max_residual_bins = in->inharmonicity_max_residual_bins;
+  out.inharmonicity.max_inharmonicity = in->inharmonicity_max_stretch;
 
-  set_count(in->window_frames, out.shared_bins.window_frames);
-  set_positive(in->min_partial_separation, out.shared_bins.min_partial_separation);
-  set_positive(in->max_fit_residual, out.shared_bins.max_fit_residual);
-  set_positive(in->max_weight_modulus, out.shared_bins.max_weight_modulus);
-  // Zero already means "derive one" on this field.
+  out.shared_bins.window_frames = in->window_frames;
+  out.shared_bins.min_partial_separation = in->min_partial_separation;
+  out.shared_bins.max_fit_residual = in->max_fit_residual;
+  out.shared_bins.max_weight_modulus = in->max_weight_modulus;
   out.shared_bins.max_refine_hz = in->max_refine_hz;
-  set_positive(in->f0_tolerance_cents, out.shared_bins.f0_tolerance_cents);
+  out.shared_bins.f0_tolerance_cents = in->f0_tolerance_cents;
 
-  set_positive(in->segmentation_threshold_cents, out.notes.segmenter.segmentation_threshold_cents);
-  set_positive(in->min_note_ms, out.notes.segmenter.min_note_ms);
-  set_positive(in->reference_hz, out.notes.segmenter.reference_hz);
+  out.notes.segmenter.segmentation_threshold_cents = in->segmentation_threshold_cents;
+  out.notes.segmenter.min_note_ms = in->min_note_ms;
+  out.notes.segmenter.reference_hz = in->reference_hz;
   return SONARE_OK;
 }
 
@@ -158,6 +141,65 @@ SonareError check_note(const SonarePolyphonicAnalysis* analysis, size_t note, si
 struct SonarePolyphonicAnalysis {};
 
 #endif
+
+void sonare_polyphonic_config_init(SonarePolyphonicConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+#if defined(SONARE_WITH_PITCH_EDITOR)
+  const PolyphonicEditConfig defaults;
+  const auto& stft = defaults.extraction.stft;
+  config->n_fft = stft.n_fft;
+  config->hop_length = stft.hop_length;
+  config->win_length = stft.win_length;
+
+  const auto& spectrum = defaults.extraction.spectrum;
+  config->cent_ref_hz = spectrum.ref_hz;
+  config->cents_per_bin = spectrum.cents_per_bin;
+  config->cent_max_hz = spectrum.max_hz;
+  config->tonality_off = spectrum.use_tonality ? 0 : 1;
+
+  const auto& salience = defaults.extraction.estimation.salience;
+  config->salience_harmonics = salience.n_harmonics;
+  config->f0_min_hz = salience.f0_min_hz;
+  config->f0_max_hz = salience.f0_max_hz;
+  config->salience_alpha_hz = salience.alpha_hz;
+  config->salience_beta_hz = salience.beta_hz;
+  config->salience_inharmonicity = salience.inharmonicity;
+
+  const auto& estimation = defaults.extraction.estimation;
+  config->max_polyphony = estimation.max_polyphony;
+  config->min_frame_peak_ratio = estimation.min_frame_peak_ratio;
+  config->min_separation_cents = estimation.min_separation_cents;
+  config->subtraction_factor = estimation.subtraction_factor;
+
+  const auto& ridges = defaults.extraction.ridges;
+  config->max_jump_cents = ridges.max_jump_cents;
+  config->min_ridge_peak_ratio = ridges.min_ridge_peak_ratio;
+  config->min_ridge_duration_ms = ridges.min_duration_ms;
+  config->reattack_ratio = ridges.reattack_ratio;
+
+  config->mask_harmonics = defaults.masks.n_harmonics;
+  config->claim_lobes = defaults.masks.claim_lobes;
+  config->inharmonicity = defaults.masks.inharmonicity;
+
+  config->estimate_inharmonicity = defaults.estimate_inharmonicity ? 1 : 0;
+  config->inharmonicity_min_partials = defaults.inharmonicity.min_partials;
+  config->inharmonicity_max_residual_bins = defaults.inharmonicity.max_residual_bins;
+  config->inharmonicity_max_stretch = defaults.inharmonicity.max_inharmonicity;
+
+  config->window_frames = defaults.shared_bins.window_frames;
+  config->min_partial_separation = defaults.shared_bins.min_partial_separation;
+  config->max_fit_residual = defaults.shared_bins.max_fit_residual;
+  config->max_weight_modulus = defaults.shared_bins.max_weight_modulus;
+  config->max_refine_hz = defaults.shared_bins.max_refine_hz;
+  config->f0_tolerance_cents = defaults.shared_bins.f0_tolerance_cents;
+
+  config->segmentation_threshold_cents = defaults.notes.segmenter.segmentation_threshold_cents;
+  config->min_note_ms = defaults.notes.segmenter.min_note_ms;
+  config->reference_hz = defaults.notes.segmenter.reference_hz;
+#endif
+}
 
 SonareError sonare_polyphonic_analyze(const float* samples, size_t length, int sample_rate,
                                       const SonarePolyphonicConfig* config,

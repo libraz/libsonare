@@ -279,6 +279,9 @@ node = [
   # for an absent one.
   "rir_synth_config_init",
   "room_morph_config_init",
+  # Seed the polyphonic analysis config; the facades take each field as an option and keep the
+  # core default for an absent one.
+  "polyphonic_config_init",
   # C-side canonical enum-name supplier consumed internally by the facade
   # snapshot/test helpers; not exposed as a same-named public function.
   "synth_enum_names",
@@ -407,6 +410,9 @@ wasm = [
   # for an absent one.
   "rir_synth_config_init",
   "room_morph_config_init",
+  # Seed the polyphonic analysis config; the facades take each field as an option and keep the
+  # core default for an absent one.
+  "polyphonic_config_init",
   "synth_enum_names",
   # Unified-analysis variants folded into the base facade analyze /
   # analyzeWithProgress / analyzeMelody (WASM keeps its native analyze() object).
@@ -538,6 +544,9 @@ python = [
   # for an absent one.
   "rir_synth_config_init",
   "room_morph_config_init",
+  # Seed the polyphonic analysis config; the facades take each field as an option and keep the
+  # core default for an absent one.
+  "polyphonic_config_init",
   "synth_enum_names",
   # Unified-analysis variants folded into the base facade `analyze` /
   # `analyze_with_progress` / `analyze_melody` (use_pyin/center params).

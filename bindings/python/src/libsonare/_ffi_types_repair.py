@@ -764,7 +764,7 @@ class SonarePolyphonicConfig(CStruct):
     """Maps to SonarePolyphonicConfig in sonare_c_polyphony.h."""
 
     _fields_ = [
-        ("struct_version", ctypes.c_int32),
+        ("struct_size", ctypes.c_uint32),
         ("n_fft", ctypes.c_int32),
         ("hop_length", ctypes.c_int32),
         ("win_length", ctypes.c_int32),
@@ -785,6 +785,7 @@ class SonarePolyphonicConfig(CStruct):
         ("max_jump_cents", ctypes.c_float),
         ("min_ridge_peak_ratio", ctypes.c_float),
         ("min_ridge_duration_ms", ctypes.c_float),
+        ("reattack_ratio", ctypes.c_float),
         ("mask_harmonics", ctypes.c_int32),
         ("claim_lobes", ctypes.c_float),
         ("inharmonicity", ctypes.c_float),
@@ -801,5 +802,4 @@ class SonarePolyphonicConfig(CStruct):
         ("segmentation_threshold_cents", ctypes.c_float),
         ("min_note_ms", ctypes.c_float),
         ("reference_hz", ctypes.c_float),
-        ("reattack_ratio", ctypes.c_float),
     ]

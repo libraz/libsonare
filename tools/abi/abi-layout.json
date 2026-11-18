@@ -6195,8 +6195,8 @@
     "align": 4,
     "fields": [
       {
-        "kind": "signed",
-        "name": "struct_version",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
@@ -6321,104 +6321,104 @@
         "size": 4
       },
       {
-        "kind": "signed",
-        "name": "mask_harmonics",
+        "kind": "float",
+        "name": "reattack_ratio",
         "offset": 84,
         "size": 4
       },
       {
-        "kind": "float",
-        "name": "claim_lobes",
+        "kind": "signed",
+        "name": "mask_harmonics",
         "offset": 88,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "inharmonicity",
+        "name": "claim_lobes",
         "offset": 92,
         "size": 4
       },
       {
-        "kind": "signed",
-        "name": "estimate_inharmonicity",
+        "kind": "float",
+        "name": "inharmonicity",
         "offset": 96,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "inharmonicity_min_partials",
+        "name": "estimate_inharmonicity",
         "offset": 100,
         "size": 4
       },
       {
-        "kind": "float",
-        "name": "inharmonicity_max_residual_bins",
+        "kind": "signed",
+        "name": "inharmonicity_min_partials",
         "offset": 104,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "inharmonicity_max_stretch",
+        "name": "inharmonicity_max_residual_bins",
         "offset": 108,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "inharmonicity_max_stretch",
+        "offset": 112,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "window_frames",
-        "offset": 112,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "min_partial_separation",
         "offset": 116,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "max_fit_residual",
+        "name": "min_partial_separation",
         "offset": 120,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "max_weight_modulus",
+        "name": "max_fit_residual",
         "offset": 124,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "max_refine_hz",
+        "name": "max_weight_modulus",
         "offset": 128,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "f0_tolerance_cents",
+        "name": "max_refine_hz",
         "offset": 132,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "segmentation_threshold_cents",
+        "name": "f0_tolerance_cents",
         "offset": 136,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "min_note_ms",
+        "name": "segmentation_threshold_cents",
         "offset": 140,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "reference_hz",
+        "name": "min_note_ms",
         "offset": 144,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "reattack_ratio",
+        "name": "reference_hz",
         "offset": 148,
         "size": 4
       }
