@@ -1598,18 +1598,12 @@ RULES: list[Rule] = [
                 for m in (
                     "bind_midi_cc_binding",
                     "load_soundfont",
-                    "set_bus_strip_eq_band_json",
-                    "set_bus_strip_json",
                     "set_capture_buffer",
                     "set_capture_punch",
                     "set_capture_source",
                     "set_input_monitor",
-                    "set_master_strip_eq_band_json",
-                    "set_master_strip_json",
                     "set_record_offset_samples",
                     "set_solo_mute",
-                    "set_track_strip_eq_band_json",
-                    "set_track_strip_json",
                 )
             },
             **{
@@ -1617,8 +1611,6 @@ RULES: list[Rule] = [
                 for m in (
                     "configureCapture",
                     "loadSoundFont",
-                    "setBusStrip",
-                    "setStrip",
                     "setTrackSoloMute",
                 )
             },
