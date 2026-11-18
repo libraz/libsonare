@@ -394,7 +394,7 @@ describe('SonareEngine shares the RealtimeEngine vocabulary', () => {
       expect(() => engine.setSf2Instrument(3, { destinationId: 3 } as never)).toThrow(
         /destinationId/,
       );
-      expect(engine.setSynthInstrument(3, 'saw-lead')).toBeUndefined();
+      expect(engine.setSynthInstrument(3, 'sawLead')).toBeUndefined();
     } finally {
       engine.destroy();
     }
