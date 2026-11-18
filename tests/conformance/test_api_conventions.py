@@ -663,6 +663,35 @@ class DerivedSummaryRule(unittest.TestCase):
         self.assertEqual([f.key for f in verdict.violations], ["python:TakeResult.take_count"])
 
 
+class CollectionsRule(unittest.TestCase):
+    CLEAN = [
+        method("node", "Project", "markers"),
+        method("node", "Mixer", "stripCount"),
+        method("python", "Mixer", "strip_count"),
+    ]
+
+    def test_clean_surface_passes(self) -> None:
+        verdict = run("collections", self.CLEAN)
+        self.assertEqual(verdict.read, 2)
+        self.assertFalse(verdict.failed)
+
+    def test_count_and_index_pair_is_named(self) -> None:
+        planted = [
+            method("wasm", "Project", "markerCount"),
+            method("wasm", "Project", "markerByIndex", params=["i"]),
+        ]
+        verdict = run("collections", [*self.CLEAN, *planted])
+        self.assertEqual([f.key for f in verdict.violations], ["wasm:Project.markerCount"])
+
+    def test_python_count_and_index_pair_is_named(self) -> None:
+        planted = [
+            method("python", "Project", "track_count"),
+            method("python", "Project", "track_by_index", params=["i"]),
+        ]
+        verdict = run("collections", [*self.CLEAN, *planted])
+        self.assertEqual([f.key for f in verdict.violations], ["python:Project.track_count"])
+
+
 class Framework(unittest.TestCase):
     def test_reading_nothing_fails(self) -> None:
         verdict = check.judge(rule("getters"), [])

@@ -685,6 +685,38 @@ def _derived_summary_records(records: list[dict]) -> list[dict]:
     return out
 
 
+_COUNT_MEMBER = re.compile(r"^(?P<stem>\w+?)(?:Count|_count)$")
+
+
+def _collection_records(records: list[dict]) -> list[dict]:
+    members: dict[tuple[str, str], set[str]] = {}
+    for r in records:
+        if (
+            r["kind"] in ("method", "field")
+            and r["surface"] in ("node", "wasm", "python")
+            and r["owner"]
+        ):
+            members.setdefault((r["surface"], r["owner"]), set()).add(r["member"])
+    out: list[dict] = []
+    for (surface, owner), names in members.items():
+        for name in sorted(names):
+            match = _COUNT_MEMBER.match(name)
+            if not match or "." in owner:
+                continue
+            stem = match.group("stem")
+            candidates = (f"{stem}ByIndex", f"{stem}_by_index", f"{stem}At", f"{stem}_at")
+            index = [c for c in candidates if c in names]
+            out.append(
+                {
+                    "surface": surface,
+                    "kind": "count-member",
+                    "name": f"{owner}.{name}",
+                    "index": index,
+                }
+            )
+    return out
+
+
 RULES: list[Rule] = [
     Rule(
         name="getters",
@@ -1026,6 +1058,17 @@ RULES: list[Rule] = [
             for s in ("node", "wasm")
             for r in ("EngineBounceResult", "ProjectBounceResult")
         },
+    ),
+    Rule(
+        name="collections",
+        summary="a collection is one method returning an array, not a *Count beside an index getter",
+        population=lambda r: r["kind"] == "count-member",
+        violation=lambda r: (
+            f"a count and {r['index'][0]} pair is replaced by one collection method"
+            if r["index"]
+            else None
+        ),
+        derive=_collection_records,
     ),
 ]
 
