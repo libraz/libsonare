@@ -22,7 +22,9 @@ import {
 // Scope ring header: [writeIndex, capacity, recordFloats, bands, maxPoints,
 // protocolVersion]. Record layout: [frameLo, frameHi, targetId, bandCount, pointCount,
 // band0..band(bands-1), l0, r0, l1, r1, ... (maxPoints stereo pairs)].
+/** Int32 slots in the scope ring header. */
 export const SONARE_SCOPE_RING_HEADER_INTS = 6;
+/** Record layout version the scope ring writer publishes; a reader refuses any other with `AbiMismatch`. */
 export const SONARE_SCOPE_RING_PROTOCOL_VERSION = 1;
 export const SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS = 5;
 
@@ -52,18 +54,29 @@ export interface SonareWorkletScopeSnapshot {
   points: Float32Array;
 }
 
+/** Main-thread views over a shared scope ring, as returned by {@link createSonareScopeRingBuffer}. */
 export interface SonareScopeRingBuffer {
+  /** Shared memory holding the header, the records and the per-slot states; hand it to the worklet. */
   sharedBuffer: SharedArrayBuffer;
+  /** Header view: write cursor, capacity, record floats, bands, max points, protocol version. */
   header: Int32Array;
+  /** Record view, `capacity` records of `5 + bands + 2 * maxPoints` floats each. */
   records: Float32Array;
+  /** Per-slot publish/read states, one per record. */
   slotStates: Int32Array;
+  /** Records the ring holds, at least 1. */
   capacity: number;
+  /** Spectrum band slots per record, 1..64. */
   bands: number;
+  /** Goniometer point slots per record (stereo pairs), 0..32. */
   maxPoints: number;
 }
 
+/** Result of {@link readSonareScopeRingBuffer}. */
 export interface SonareScopeRingReadResult {
+  /** Cursor to pass as `readIndex` on the next read. */
   nextReadIndex: number;
+  /** Scope records published since `readIndex`, oldest first. */
   scopes: SonareWorkletScopeSnapshot[];
 }
 
@@ -85,7 +98,7 @@ export function sonareScopeRingRecordFloats(bands: number, maxPoints: number): n
 export interface SonareScopeRingOptions {
   /** Records the ring holds, an integer of at least 1. Default 64 when creating. */
   capacity?: number;
-  /** Spectrum bands per record, an integer in [1, 64]. Default 32. */
+  /** Spectrum bands per record, an integer in [1, 64]. Default 48. */
   bands?: number;
   /** Waveform points per record, an integer in [0, 32]. Default 32. */
   maxPoints?: number;
@@ -169,6 +182,13 @@ export function createSonareScopeRingBuffer(
   };
 }
 
+/**
+ * Reads the scope records published since `readIndex` (default 0, the start). A reader that fell
+ * more than `capacity` records behind resumes at the oldest record not yet overwritten.
+ *
+ * @throws SonareError `InvalidFormat` when the views or header descriptors do not match the ring;
+ *   `AbiMismatch` when the writer published a different protocol version.
+ */
 export function readSonareScopeRingBuffer(
   ring: SonareScopeRingBuffer,
   readIndex = 0,
