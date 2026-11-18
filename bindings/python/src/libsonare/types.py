@@ -722,9 +722,6 @@ from ._types_streaming import (
     StreamChordChange as StreamChordChange,
 )
 from ._types_streaming import (
-    StreamConfig as StreamConfig,
-)
-from ._types_streaming import (
     StreamFrames as StreamFrames,
 )
 from ._types_streaming import (

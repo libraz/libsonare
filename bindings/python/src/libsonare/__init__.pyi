@@ -1382,9 +1382,6 @@ from .types import (
     StreamChordChange as StreamChordChange,
 )
 from .types import (
-    StreamConfig as StreamConfig,
-)
-from .types import (
     StreamFrames as StreamFrames,
 )
 from .types import (

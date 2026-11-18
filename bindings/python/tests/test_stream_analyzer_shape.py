@@ -1,9 +1,9 @@
 """The streaming analyzer takes and returns the shapes the batch analysis uses.
 
-``StreamConfig`` names its band edges in Hz, spells the window as a token and
-requires the sample rate. Frames are band-major arrays with ``None`` for a
-feature that was not computed, and the progressive estimate sits under
-``StreamStats.estimate`` with ``None`` until the analyzer has one.
+``StreamAnalyzer`` takes its settings as keywords, names its band edges in Hz,
+spells the window as a token and requires the sample rate. Frames are band-major
+arrays with ``None`` for a feature that was not computed, and the progressive
+estimate sits under ``StreamStats.estimate`` with ``None`` until the analyzer has one.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 import libsonare
-from libsonare import SonareValueError, StreamAnalyzer, StreamConfig
+from libsonare import SonareValueError, StreamAnalyzer
 from libsonare.types import WindowType
 
 from ._helpers import LIB_AVAILABLE
@@ -32,7 +32,7 @@ def _triad(seconds: float) -> np.ndarray:
 
 
 def _mel(**config: object) -> np.ndarray:
-    with StreamAnalyzer(StreamConfig(sample_rate=SR, n_mels=32, **config)) as analyzer:  # type: ignore[arg-type]
+    with StreamAnalyzer(sample_rate=SR, n_mels=32, **config) as analyzer:  # type: ignore[arg-type]
         analyzer.process(_triad(0.5))
         mel = analyzer.read_frames(4).mel
     assert mel is not None
@@ -40,8 +40,7 @@ def _mel(**config: object) -> np.ndarray:
 
 
 def test_the_sample_rate_is_required() -> None:
-    with pytest.raises(TypeError):
-        StreamConfig()  # type: ignore[call-arg]
+    assert not hasattr(libsonare, "StreamConfig")
     with pytest.raises(TypeError):
         StreamAnalyzer()  # type: ignore[call-arg]
     with pytest.raises(TypeError):
@@ -56,7 +55,7 @@ def test_an_absent_upper_edge_is_nyquist() -> None:
 @pytest.mark.parametrize("value", [0.0, -1.0])
 def test_an_upper_edge_that_is_not_positive_is_refused(value: float) -> None:
     with pytest.raises(SonareValueError, match="fmax_hz"):
-        StreamAnalyzer(StreamConfig(sample_rate=SR, fmax_hz=value))
+        StreamAnalyzer(sample_rate=SR, fmax_hz=value)
 
 
 def test_the_lower_edge_reaches_the_core() -> None:
@@ -72,15 +71,15 @@ def test_every_window_token_runs_and_the_window_reaches_the_core() -> None:
 @pytest.mark.parametrize(("value", "error"), [("Hann", SonareValueError), (1, TypeError)])
 def test_a_window_outside_the_tokens_is_refused(value: object, error: type) -> None:
     with pytest.raises(error):
-        StreamAnalyzer(StreamConfig(sample_rate=SR, window=value))  # type: ignore[arg-type]
+        StreamAnalyzer(sample_rate=SR, window=value)  # type: ignore[arg-type]
 
 
 def test_frames_are_band_major_columns_per_frame() -> None:
-    config = StreamConfig(sample_rate=SR, n_mels=16)
-    with StreamAnalyzer(config) as whole:
+    config = dict(sample_rate=SR, n_mels=16)
+    with StreamAnalyzer(**config) as whole:
         whole.process(_triad(0.5))
         batch = whole.read_frames(4)
-    with StreamAnalyzer(config) as single:
+    with StreamAnalyzer(**config) as single:
         single.process(_triad(0.5))
         columns = [single.read_frames(1) for _ in range(batch.n_frames)]
     assert batch.mel is not None and batch.chroma is not None
@@ -94,10 +93,10 @@ def test_frames_are_band_major_columns_per_frame() -> None:
 
 @pytest.mark.parametrize("read", ["read_frames", "read_frames_u8", "read_frames_i16"])
 def test_a_feature_that_is_not_computed_is_none(read: str) -> None:
-    config = StreamConfig(
+    config = dict(
         sample_rate=SR, n_mels=8, compute_mel=False, compute_onset=False, compute_spectral=False
     )
-    with StreamAnalyzer(config) as analyzer:
+    with StreamAnalyzer(**config) as analyzer:
         analyzer.process(_triad(0.25))
         frames = getattr(analyzer, read)(2)
     assert frames.mel is None
@@ -110,7 +109,7 @@ def test_a_feature_that_is_not_computed_is_none(read: str) -> None:
 
 
 def test_the_estimate_is_absent_before_any_audio() -> None:
-    with StreamAnalyzer(StreamConfig(sample_rate=SR)) as analyzer:
+    with StreamAnalyzer(sample_rate=SR) as analyzer:
         stats = analyzer.stats()
     estimate = stats.estimate
     assert (estimate.bpm, estimate.key, estimate.chord, estimate.current_bar) == (
@@ -125,7 +124,7 @@ def test_the_estimate_is_absent_before_any_audio() -> None:
 
 
 def test_the_estimate_carries_a_key_and_a_named_chord() -> None:
-    with StreamAnalyzer(StreamConfig(sample_rate=SR)) as analyzer:
+    with StreamAnalyzer(sample_rate=SR) as analyzer:
         analyzer.process(_triad(6.0))
         estimate = analyzer.stats().estimate
     assert isinstance(estimate.key, libsonare.Key)
@@ -138,7 +137,7 @@ def test_the_estimate_carries_a_key_and_a_named_chord() -> None:
 
 
 def test_state_reads_are_properties_and_close_is_the_only_teardown() -> None:
-    analyzer = StreamAnalyzer(StreamConfig(sample_rate=SR))
+    analyzer = StreamAnalyzer(sample_rate=SR)
     try:
         analyzer.process(_triad(0.25))
         assert analyzer.sample_rate == SR
@@ -152,7 +151,7 @@ def test_state_reads_are_properties_and_close_is_the_only_teardown() -> None:
 
 
 def test_a_new_timeline_is_anchored_by_start_sample() -> None:
-    with StreamAnalyzer(StreamConfig(sample_rate=SR)) as analyzer:
+    with StreamAnalyzer(sample_rate=SR) as analyzer:
         analyzer.reset(start_sample=SR)
         analyzer.process_with_offset(_triad(0.25), start_sample=SR)
         assert analyzer.read_frames(1).timestamps_sec[0] >= 1.0
@@ -162,7 +161,7 @@ def test_a_new_timeline_is_anchored_by_start_sample() -> None:
 
 def test_the_quantize_ranges_take_the_stream_name() -> None:
     assert not hasattr(libsonare, "QuantizeConfig")
-    with StreamAnalyzer(StreamConfig(sample_rate=SR)) as analyzer:
+    with StreamAnalyzer(sample_rate=SR) as analyzer:
         analyzer.process(_triad(0.25))
         frames = analyzer.read_frames_u8(2, libsonare.StreamQuantizeConfig(centroid_max=1.0))
     assert frames.spectral_centroid is not None

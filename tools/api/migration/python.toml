@@ -3246,13 +3246,6 @@ rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_surface_analysis.py::test_reattack_ratio_none_is_no_split_and_zero_is_refused"
 
 [[entry]]
-kind = "field"
-old = "StreamConfig.tuning_ref_hz"
-new = "StreamConfig.reference_hz"
-domain = "analysis"
-rule = "unit-in-name"
-
-[[entry]]
 kind = "method"
 old = "StreamAnalyzer.set_tuning_ref_hz"
 new = "StreamAnalyzer.set_reference_hz"
@@ -4698,48 +4691,18 @@ rule = "tempo-range"
 test = "bindings/python/tests/test_tempo_range_defaults.py::test_the_default_range_is_60_to_200"
 
 [[entry]]
-kind = "field"
-old = "StreamConfig.fmin"
-new = "StreamConfig.fmin_hz"
+kind = "type"
+old = "StreamConfig"
+removed = "pass each setting as its own keyword to StreamAnalyzer: sample_rate= (required), fmin_hz= and fmax_hz= (were fmin/fmax), reference_hz= (was tuning_ref_hz), window= as a WindowType token; compute_magnitude and output_format had no effect and are gone"
 domain = "analysis"
-rule = "frequency-bounds"
+rule = "construction"
 
 [[entry]]
-kind = "field"
-old = "StreamConfig.fmax"
-new = "StreamConfig.fmax_hz"
+kind = "option"
+old = "StreamAnalyzer.constructor(config)"
+removed = "pass each setting as its own keyword (sample_rate=, n_fft=, hop_length=, ...)"
 domain = "analysis"
-rule = "frequency-bounds"
-
-[[entry]]
-kind = "field"
-old = "StreamConfig.compute_magnitude"
-removed = "drop the argument; it never had any effect"
-domain = "analysis"
-rule = "aliases-removed"
-
-[[entry]]
-kind = "field"
-old = "StreamConfig.output_format"
-removed = "drop the argument; it never had any effect"
-domain = "analysis"
-rule = "aliases-removed"
-
-[[entry]]
-kind = "field"
-old = "StreamConfig.sample_rate"
-changed = "required (was default 44100)"
-domain = "analysis"
-rule = "sample-rate-required"
-test = "bindings/python/tests/test_stream_analyzer_shape.py::test_the_sample_rate_is_required"
-
-[[entry]]
-kind = "field"
-old = "StreamConfig.window"
-changed = "a WindowType token 'hann' | 'hamming' | 'blackman' | 'rectangular' (was an ordinal)"
-domain = "analysis"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_stream_analyzer_shape.py::test_every_window_token_runs_and_the_window_reaches_the_core"
+rule = "construction"
 
 [[entry]]
 kind = "type"

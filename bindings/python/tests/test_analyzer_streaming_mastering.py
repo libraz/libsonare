@@ -21,27 +21,27 @@ def test_stream_analyzer_rejects_malformed_config_geometry() -> None:
     and positive-value contract, so Python construction raises instead of
     silently producing garbage spectra.
     """
-    from libsonare import SonareError, StreamAnalyzer, StreamConfig
+    from libsonare import SonareError, StreamAnalyzer
 
     for bad in (
-        StreamConfig(sample_rate=0),
-        StreamConfig(sample_rate=22050, n_fft=0),
-        StreamConfig(sample_rate=22050, n_mels=0),
-        StreamConfig(sample_rate=22050, n_fft=1024, hop_length=2048),
-        StreamConfig(sample_rate=22050, fmin_hz=8000.0, fmax_hz=4000.0),
-        StreamConfig(sample_rate=22050, max_progression_entries=0),
+        dict(sample_rate=0),
+        dict(sample_rate=22050, n_fft=0),
+        dict(sample_rate=22050, n_mels=0),
+        dict(sample_rate=22050, n_fft=1024, hop_length=2048),
+        dict(sample_rate=22050, fmin_hz=8000.0, fmax_hz=4000.0),
+        dict(sample_rate=22050, max_progression_entries=0),
     ):
         with pytest.raises(SonareError):
-            StreamAnalyzer(bad)
+            StreamAnalyzer(**bad)
 
-    # A well-formed config still constructs.
-    StreamAnalyzer(StreamConfig(sample_rate=22050)).close()
+    # A well-formed set of keywords still constructs.
+    StreamAnalyzer(sample_rate=22050).close()
 
 
 def test_stream_analyzer_bounds_unread_frames_and_reports_drops() -> None:
-    from libsonare import StreamAnalyzer, StreamConfig
+    from libsonare import StreamAnalyzer
 
-    config = StreamConfig(
+    config = dict(
         sample_rate=8000,
         n_fft=32,
         hop_length=32,
@@ -49,7 +49,7 @@ def test_stream_analyzer_bounds_unread_frames_and_reports_drops() -> None:
         max_pending_frames=3,
         max_progression_entries=3,
     )
-    with StreamAnalyzer(config) as analyzer:
+    with StreamAnalyzer(**config) as analyzer:
         analyzer.process([0.0] * (32 * 64))
         stats = analyzer.stats()
         assert stats.pending_frames == 3
@@ -645,10 +645,10 @@ def test_stream_analyzer_counts_a_call_whose_input_it_scrubbed() -> None:
     every estimate is produced as usual -- this count is the only report that
     they stopped describing the input.
     """
-    from libsonare import StreamAnalyzer, StreamConfig
+    from libsonare import StreamAnalyzer
 
-    config = StreamConfig(sample_rate=8000, n_fft=32, hop_length=32, n_mels=8)
-    with StreamAnalyzer(config) as analyzer:
+    config = dict(sample_rate=8000, n_fft=32, hop_length=32, n_mels=8)
+    with StreamAnalyzer(**config) as analyzer:
         clean = [0.5 * math.sin(2 * math.pi * 220 * i / 8000) for i in range(256)]
         analyzer.process(clean)
         # The stream really was analyzed, so the zero below is a measurement
@@ -692,12 +692,12 @@ def _chord_progression_samples(sample_rate: int) -> list[float]:
 
 
 def test_stream_analyzer_names_agree_with_numeric_fields() -> None:
-    from libsonare import StreamAnalyzer, StreamConfig
+    from libsonare import StreamAnalyzer
 
     pitches = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
     sr = 22050
     samples = _chord_progression_samples(sr)
-    with StreamAnalyzer(StreamConfig(sample_rate=sr)) as analyzer:
+    with StreamAnalyzer(sample_rate=sr) as analyzer:
         for i in range(0, len(samples), 4096):
             analyzer.process(samples[i : i + 4096])
         stats = analyzer.stats()
@@ -722,12 +722,12 @@ def test_stream_analyzer_names_agree_with_numeric_fields() -> None:
 
 
 def test_stream_analyzer_key_name_matches_batch_spelling() -> None:
-    from libsonare import StreamAnalyzer, StreamConfig, detect_key
+    from libsonare import StreamAnalyzer, detect_key
 
     sr = 22050
     notes = [261.63, 293.66, 329.63, 349.23, 392.0, 440.0, 493.88]
     samples = [math.sin(2 * math.pi * note * i / sr) * 0.5 for note in notes for i in range(sr)]
-    with StreamAnalyzer(StreamConfig(sample_rate=sr)) as analyzer:
+    with StreamAnalyzer(sample_rate=sr) as analyzer:
         for i in range(0, len(samples), 4096):
             analyzer.process(samples[i : i + 4096])
         stats = analyzer.stats()
@@ -740,9 +740,9 @@ def test_stream_analyzer_key_name_matches_batch_spelling() -> None:
 
 
 def test_stream_estimates_are_absent_before_any_audio() -> None:
-    from libsonare import StreamAnalyzer, StreamConfig
+    from libsonare import StreamAnalyzer
 
-    with StreamAnalyzer(StreamConfig(sample_rate=22050)) as analyzer:
+    with StreamAnalyzer(sample_rate=22050) as analyzer:
         estimate = analyzer.stats().estimate
     assert estimate.key is None
     assert estimate.chord is None

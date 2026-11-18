@@ -796,9 +796,7 @@ def test_note_segments_voiced_wins_over_voiced_prob() -> None:
 
 
 def test_stream_names_carry_their_unit() -> None:
-    config = libsonare.StreamConfig(sample_rate=SR, reference_hz=432.0, fmin_hz=50.0)
-    assert (config.reference_hz, config.fmin_hz, config.fmax_hz) == (432.0, 50.0, None)
-    analyzer = libsonare.StreamAnalyzer(config)
+    analyzer = libsonare.StreamAnalyzer(sample_rate=SR, reference_hz=432.0, fmin_hz=50.0)
     try:
         assert analyzer.current_time_sec == 0.0
         analyzer.set_reference_hz(440.0)

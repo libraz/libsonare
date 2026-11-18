@@ -165,7 +165,7 @@ _CLASS_INSTANCES: dict[str, Callable[[], Any]] = {
     "Project": lambda: libsonare.Project(),
     "RealtimeVoiceChanger": lambda: libsonare.RealtimeVoiceChanger(22050, num_channels=2),
     "SampleBank": lambda: libsonare.SampleBank(),
-    "StreamAnalyzer": lambda: libsonare.StreamAnalyzer(libsonare.StreamConfig(sample_rate=22050)),
+    "StreamAnalyzer": lambda: libsonare.StreamAnalyzer(sample_rate=22050),
     "StreamingEqualizer": lambda: libsonare.StreamingEqualizer(sample_rate=22050),
     "StreamingMasteringChain": lambda: libsonare.StreamingMasteringChain(
         sample_rate=22050, num_channels=1

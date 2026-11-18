@@ -49,9 +49,7 @@ def test_a_wrapped_struct_field_is_refused_rather_than_read_as_a_smaller_one() -
     """The struct-field route: assignment applies the same conversion."""
 
     def frames(n_fft: int) -> int:
-        analyzer = ls.StreamAnalyzer(
-            ls.StreamConfig(sample_rate=8000, n_fft=n_fft, hop_length=16, n_mels=8)
-        )
+        analyzer = ls.StreamAnalyzer(sample_rate=8000, n_fft=n_fft, hop_length=16, n_mels=8)
         analyzer.process([0.01 * i for i in range(512)])
         return analyzer.stats().total_frames
 
@@ -64,9 +62,7 @@ def test_a_wrapped_struct_field_is_refused_rather_than_read_as_a_smaller_one() -
 
 def test_a_negative_size_is_refused_rather_than_read_as_the_largest_one() -> None:
     """The unsigned readers: a negative wraps to the top of the range, not to zero."""
-    with ls.StreamAnalyzer(
-        ls.StreamConfig(sample_rate=8000, n_fft=32, hop_length=32, n_mels=8)
-    ) as analyzer:
+    with ls.StreamAnalyzer(sample_rate=8000, n_fft=32, hop_length=32, n_mels=8) as analyzer:
         analyzer.process([0.01 * i for i in range(512)])
         assert analyzer.read_frames(1).n_frames != analyzer.read_frames(3).n_frames
         for value in (-1, -2, 2**64, 2**64 + 2):

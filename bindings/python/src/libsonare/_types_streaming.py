@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from ._types_analysis import Key
-    from ._types_enums import PitchClass, WindowType
+    from ._types_enums import PitchClass
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -55,61 +55,6 @@ class StreamQuantizeConfig:
     """Largest expected RMS energy."""
     centroid_max: float = 11025.0
     """Largest expected spectral centroid in Hz."""
-
-
-@dataclass(frozen=True, slots=True)
-class StreamConfig:
-    """Construction config for :class:`StreamAnalyzer`.
-
-    Field defaults mirror the C ``sonare_stream_analyzer_config_default`` values.
-
-    ``n_fft`` is the analysis window as a duration, in samples at 44100 Hz. Below
-    that rate the window is rescaled to the analysis rate, never shorter than
-    ``hop_length``; ``hop_length`` itself is in samples at the analysis rate.
-    The emitted bin count is fixed by the FFT length the window is zero-padded
-    to, not by ``n_fft // 2 + 1``.
-
-    ``fmax_hz`` is ``None`` for Nyquist; an explicit value must be positive.
-    ``reference_hz`` is the A4 reference and must be within 220..880, the same
-    range :meth:`StreamAnalyzer.set_reference_hz` accepts.
-    """
-
-    sample_rate: int
-    """Input sample rate in Hz."""
-    n_fft: int = 2048
-    """Analysis window in samples at 44100 Hz; rescaled below that rate."""
-    hop_length: int = 512
-    """Hop between frames, in samples at the analysis rate."""
-    n_mels: int = 128
-    """Number of mel bands."""
-    fmin_hz: float = 0.0
-    """Minimum mel frequency in Hz."""
-    fmax_hz: float | None = None
-    """Maximum mel frequency in Hz; None for Nyquist."""
-    reference_hz: float = 440.0
-    """A4 tuning reference in Hz, within 220..880."""
-    compute_mel: bool = True
-    """Compute mel spectra."""
-    compute_chroma: bool = True
-    """Compute chroma and the per-frame chord arrays."""
-    compute_onset: bool = True
-    """Compute onset strength."""
-    compute_spectral: bool = True
-    """Compute the spectral scalar features (centroid, flatness)."""
-    emit_every_n_frames: int = 1
-    """Emit every Nth frame, for throttling; at least 1."""
-    magnitude_downsample: int = 1
-    """Downsample factor for the magnitude output."""
-    max_pending_frames: int = 4096  # Overflow drops the newly produced frame.
-    """Cap on unread frames retained."""
-    max_progression_entries: int = 4096  # Overflow drops the oldest entry.
-    """Cap on entries in each chord and bar progression."""
-    key_update_interval_sec: float = 5.0
-    """Interval between key re-estimates, in seconds."""
-    bpm_update_interval_sec: float = 10.0
-    """Interval between BPM re-estimates, in seconds."""
-    window: WindowType = "hann"
-    """Window function applied before the FFT (:data:`WindowType` token)."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)

@@ -7,37 +7,10 @@ import numpy as np
 import pytest
 
 import libsonare as ls
-from libsonare._runtime import SonareStreamConfig, _get_lib
 
 
 def _sine(n, freq, sr):
     return [0.5 * math.sin(2.0 * math.pi * freq * i / sr) for i in range(n)]
-
-
-def test_stream_config_defaults_match_native_config():
-    raw = SonareStreamConfig()
-    lib = _get_lib()
-    assert lib.sonare_stream_analyzer_config_default(ctypes.byref(raw)) == 0
-
-    cfg = ls.StreamConfig(sample_rate=raw.sample_rate)
-    assert cfg.n_fft == raw.n_fft
-    assert cfg.hop_length == raw.hop_length
-    assert cfg.n_mels == raw.n_mels
-    assert cfg.fmin_hz == raw.fmin_hz
-    # An absent upper edge is the native 0, which the core reads as Nyquist.
-    assert cfg.fmax_hz is None and raw.fmax_hz == 0.0
-    assert cfg.reference_hz == raw.reference_hz
-    assert int(cfg.compute_mel) == raw.compute_mel
-    assert int(cfg.compute_chroma) == raw.compute_chroma
-    assert int(cfg.compute_onset) == raw.compute_onset
-    assert int(cfg.compute_spectral) == raw.compute_spectral
-    assert cfg.emit_every_n_frames == raw.emit_every_n_frames
-    assert cfg.magnitude_downsample == raw.magnitude_downsample
-    assert cfg.max_pending_frames == raw.max_pending_frames
-    assert cfg.max_progression_entries == raw.max_progression_entries
-    assert cfg.key_update_interval_sec == raw.key_update_interval_sec
-    assert cfg.bpm_update_interval_sec == raw.bpm_update_interval_sec
-    assert cfg.window == "hann" and raw.window == 0
 
 
 def test_mel_inverse_roundtrip():
@@ -195,8 +168,8 @@ def test_stream_analyzer_abi_and_stats():
     n_samples = sr * 4  # 4 seconds
     audio = _sine(n_samples, 440.0, sr)
 
-    cfg = ls.StreamConfig(sample_rate=sr, n_fft=2048, hop_length=512, n_mels=128)
-    with ls.StreamAnalyzer(cfg) as sa:
+    cfg = dict(sample_rate=sr, n_fft=2048, hop_length=512, n_mels=128)
+    with ls.StreamAnalyzer(**cfg) as sa:
         # Feed in two blocks to exercise cumulative offset tracking.
         half = n_samples // 2
         sa.process(audio[:half])
@@ -210,10 +183,10 @@ def test_stream_analyzer_abi_and_stats():
         # total_samples is a size_t immediately after an int32 field and before a
         # float field. The analyzer reports samples consumed into complete frames
         # (total_frames * hop_length), with a sub-frame remainder still buffered.
-        hop = cfg.hop_length
+        hop = cfg["hop_length"]
         assert stats.total_samples == stats.total_frames * hop
         # Bounded by what we fed (within one analysis window).
-        assert n_samples - cfg.n_fft <= stats.total_samples <= n_samples
+        assert n_samples - cfg["n_fft"] <= stats.total_samples <= n_samples
         # ABI cross-check: the size_t field and the float field that straddle the
         # padding boundary must be mutually consistent. Misaligned padding would
         # make these disagree.
@@ -257,8 +230,8 @@ def test_stream_analyzer_abi_and_stats():
 
 def test_stream_analyzer_quantized_python_api():
     sr = 22050
-    cfg = ls.StreamConfig(sample_rate=sr, n_fft=1024, hop_length=256, n_mels=32, window="hamming")
-    with ls.StreamAnalyzer(cfg) as sa:
+    cfg = dict(sample_rate=sr, n_fft=1024, hop_length=256, n_mels=32, window="hamming")
+    with ls.StreamAnalyzer(**cfg) as sa:
         sa.process(_sine(sr // 2, 440.0, sr))
         frames = sa.read_frames_u8(4)
         assert 0 < frames.n_frames <= 4
@@ -277,7 +250,7 @@ def test_stream_analyzer_feature_shape_contract_all_combinations_and_read_types(
     input_samples = [0.0] * 32
     input_samples[8] = 0.5
     for mask in range(16):
-        cfg = ls.StreamConfig(
+        cfg = dict(
             sample_rate=8000,
             n_fft=32,
             hop_length=32,
@@ -288,7 +261,7 @@ def test_stream_analyzer_feature_shape_contract_all_combinations_and_read_types(
             compute_spectral=bool(mask & 8),
         )
         for method_name in ("read_frames", "read_frames_u8", "read_frames_i16"):
-            with ls.StreamAnalyzer(cfg) as analyzer:
+            with ls.StreamAnalyzer(**cfg) as analyzer:
                 analyzer.process(input_samples)
                 frames = getattr(analyzer, method_name)(1)
                 assert frames.n_frames == 1
@@ -306,24 +279,26 @@ def test_stream_analyzer_feature_shape_contract_all_combinations_and_read_types(
                     assert shape(frames.chord_root) == ((1,) if mask & 2 else None)
 
 
-@pytest.mark.parametrize("field", ["output_format", "compute_magnitude", "fmin", "fmax"])
-def test_stream_config_has_no_dead_or_unitless_fields(field):
+@pytest.mark.parametrize(
+    "field", ["output_format", "compute_magnitude", "fmin", "fmax", "tuning_ref_hz", "config"]
+)
+def test_stream_analyzer_has_no_dead_or_unitless_keywords(field):
     with pytest.raises(TypeError):
-        ls.StreamConfig(sample_rate=22050, **{field: 0})
+        ls.StreamAnalyzer(sample_rate=22050, **{field: 0})
 
 
 def test_stream_analyzer_quantize_config_override():
     sr = 22050
-    cfg = ls.StreamConfig(sample_rate=sr, n_fft=1024, hop_length=256, n_mels=32, window="hamming")
+    cfg = dict(sample_rate=sr, n_fft=1024, hop_length=256, n_mels=32, window="hamming")
 
     # A tiny centroid_max saturates the (positive) spectral centroid to the u8
     # maximum; a huge centroid_max collapses it toward zero. Reading identical
     # audio with the two configs must differ, proving the override reaches the
     # native quantizer.
-    with ls.StreamAnalyzer(cfg) as tight:
+    with ls.StreamAnalyzer(**cfg) as tight:
         tight.process(_sine(sr // 2, 440.0, sr))
         narrow = tight.read_frames_u8(4, ls.StreamQuantizeConfig(centroid_max=1.0))
-    with ls.StreamAnalyzer(cfg) as wide:
+    with ls.StreamAnalyzer(**cfg) as wide:
         wide.process(_sine(sr // 2, 440.0, sr))
         broad = wide.read_frames_u8(4, ls.StreamQuantizeConfig(centroid_max=1.0e9))
 
@@ -335,13 +310,13 @@ def test_stream_analyzer_quantize_config_override():
 
 def test_stream_analyzer_reset():
     sr = 22050
-    cfg = ls.StreamConfig(sample_rate=sr)
-    sa = ls.StreamAnalyzer(cfg)
+    cfg = dict(sample_rate=sr, hop_length=512)
+    sa = ls.StreamAnalyzer(**cfg)
     try:
         sa.process(_sine(sr, 330.0, sr))
         before = sa.stats()
         assert before.total_samples > 0
-        assert before.total_samples == before.total_frames * cfg.hop_length
+        assert before.total_samples == before.total_frames * cfg["hop_length"]
         sa.reset()
         assert sa.stats().total_samples == 0
         assert sa.frame_count == 0
@@ -350,12 +325,12 @@ def test_stream_analyzer_reset():
 
 
 def test_stream_analyzer_external_offsets_preserve_buffered_timestamps_and_reject_gaps():
-    cfg = ls.StreamConfig(sample_rate=22050, n_fft=2048, hop_length=512)
+    cfg = dict(sample_rate=22050, n_fft=2048, hop_length=512)
     audio = [0.0] * 4096
-    with ls.StreamAnalyzer(cfg) as reference:
+    with ls.StreamAnalyzer(**cfg) as reference:
         reference.process(audio)
         expected = reference.read_frames(64).timestamps_sec
-    with ls.StreamAnalyzer(cfg) as analyzer:
+    with ls.StreamAnalyzer(**cfg) as analyzer:
         for offset in range(0, len(audio), 128):
             analyzer.process_with_offset(audio[offset : offset + 128], offset)
         assert analyzer.read_frames(64).timestamps_sec == pytest.approx(expected, abs=1e-7)
@@ -371,9 +346,7 @@ def test_stream_analyzer_rejects_invalid_size_arguments_without_wrapping():
     size_t_max = (1 << (ctypes.sizeof(ctypes.c_size_t) * 8)) - 1
     invalid_values = (-1, 1.5, float("nan"), float("inf"), size_t_max + 1, True)
 
-    with ls.StreamAnalyzer(
-        ls.StreamConfig(sample_rate=8000, n_fft=32, hop_length=32, n_mels=8)
-    ) as analyzer:
+    with ls.StreamAnalyzer(sample_rate=8000, n_fft=32, hop_length=32, n_mels=8) as analyzer:
         operations = (
             lambda value: analyzer.process_with_offset([0.0], value),
             analyzer.read_frames,

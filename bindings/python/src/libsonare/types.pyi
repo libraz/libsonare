@@ -3172,50 +3172,6 @@ class StreamQuantizeConfig:
         centroid_max: float = 11025.0,
     ) -> None: ...
 
-class StreamConfig:
-    """``fmax_hz`` is ``None`` for Nyquist; an explicit value must be positive."""
-
-    sample_rate: int
-    # Window in samples at 44100 Hz; rescaled below that rate, never shorter than hop_length.
-    n_fft: int
-    hop_length: int
-    n_mels: int
-    fmin_hz: float
-    fmax_hz: float | None
-    reference_hz: float
-    compute_mel: bool
-    compute_chroma: bool
-    compute_onset: bool
-    compute_spectral: bool
-    emit_every_n_frames: int
-    magnitude_downsample: int
-    max_pending_frames: int  # Overflow drops the newly produced frame.
-    max_progression_entries: int
-    key_update_interval_sec: float
-    bpm_update_interval_sec: float
-    window: WindowType
-    def __init__(
-        self,
-        sample_rate: int,
-        n_fft: int = 2048,
-        hop_length: int = 512,
-        n_mels: int = 128,
-        fmin_hz: float = 0.0,
-        fmax_hz: float | None = None,
-        reference_hz: float = 440.0,
-        compute_mel: bool = True,
-        compute_chroma: bool = True,
-        compute_onset: bool = True,
-        compute_spectral: bool = True,
-        emit_every_n_frames: int = 1,
-        magnitude_downsample: int = 1,
-        max_pending_frames: int = 4096,
-        max_progression_entries: int = 4096,
-        key_update_interval_sec: float = 5.0,
-        bpm_update_interval_sec: float = 10.0,
-        window: WindowType = "hann",
-    ) -> None: ...
-
 class StreamFrames:
     """Matrices are band-major ``(bands, n_frames)``; a feature not computed is
     ``None``. ``mel`` is linear power."""

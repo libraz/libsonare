@@ -18,7 +18,6 @@ from ._runtime import (
     PitchClass,
     StreamBarChord,
     StreamChordChange,
-    StreamConfig,
     StreamFrames,
     StreamFramesI16,
     StreamFramesU8,
@@ -36,6 +35,7 @@ from ._runtime import (
     _token_ordinal,
 )
 from ._types_analysis import CHORD_QUALITIES, _chord_symbol
+from ._types_enums import WindowType
 
 
 def _quantize_config_to_c(
@@ -76,50 +76,101 @@ class StreamAnalyzer:
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 
-    def __init__(self, config: StreamConfig) -> None:
-        # Set first so a failed create (e.g. rejected malformed config) leaves a
-        # valid attribute for __del__/close() instead of raising AttributeError.
+    def __init__(
+        self,
+        *,
+        sample_rate: int,
+        n_fft: int | None = None,
+        hop_length: int | None = None,
+        n_mels: int | None = None,
+        fmin_hz: float | None = None,
+        fmax_hz: float | None = None,
+        reference_hz: float | None = None,
+        compute_mel: bool | None = None,
+        compute_chroma: bool | None = None,
+        compute_onset: bool | None = None,
+        compute_spectral: bool | None = None,
+        emit_every_n_frames: int | None = None,
+        magnitude_downsample: int | None = None,
+        max_pending_frames: int | None = None,
+        max_progression_entries: int | None = None,
+        key_update_interval_sec: float | None = None,
+        bpm_update_interval_sec: float | None = None,
+        window: WindowType | None = None,
+    ) -> None:
+        """Create an analyzer for input at ``sample_rate``.
+
+        Every keyword left as None takes the library default.
+
+        ``n_fft`` is the analysis window as a duration, in samples at 44100 Hz. Below
+        that rate the window is rescaled to the analysis rate, never shorter than
+        ``hop_length``; ``hop_length`` itself is in samples at the analysis rate.
+        The emitted bin count is fixed by the FFT length the window is zero-padded
+        to, not by ``n_fft // 2 + 1``.
+
+        ``fmin_hz`` / ``fmax_hz`` bound the mel bands; an omitted ``fmax_hz`` is
+        Nyquist, and an explicit one must be positive. ``reference_hz`` is the A4
+        tuning reference, within 220..880 as :meth:`set_reference_hz` accepts.
+        ``compute_mel`` / ``compute_chroma`` / ``compute_onset`` / ``compute_spectral``
+        choose the features computed; the chord arrays follow ``compute_chroma``.
+        ``emit_every_n_frames`` throttles emission (at least 1) and
+        ``magnitude_downsample`` downsamples the magnitude output.
+        ``max_pending_frames`` caps the unread frames retained (overflow drops the
+        newly produced frame) and ``max_progression_entries`` caps each chord and bar
+        progression (overflow drops the oldest entry). ``key_update_interval_sec`` and
+        ``bpm_update_interval_sec`` space the key and BPM re-estimates. ``window`` is
+        the :data:`WindowType` token applied before the FFT.
+        """
+        # Set first so a failed create leaves a valid attribute for __del__/close().
         self._handle: ctypes.c_void_p | None = None
-        if not isinstance(config, StreamConfig):
-            raise TypeError(
-                f"StreamAnalyzer: config must be a StreamConfig, got {type(config).__name__}"
-            )
         lib = _get_lib()
         if not hasattr(lib, "sonare_stream_analyzer_create"):
             raise _not_supported("libsonare was built without StreamAnalyzer support")
         raw = _ffi_streaming.SonareStreamConfig()
-        # Seed real-time defaults from the native layer, then override.
         _check(lib.sonare_stream_analyzer_config_default(ctypes.byref(raw)))
         # Integer fields are assigned bare: SonareStreamConfig is a CStruct, so
-        # each field narrows onto its own declared type and refuses a fraction
-        # an int() here would have truncated into a legal setting.
-        raw.sample_rate = config.sample_rate
-        raw.n_fft = config.n_fft
-        raw.hop_length = config.hop_length
-        raw.n_mels = config.n_mels
-        raw.fmin_hz = _narrow_double(config.fmin_hz, "config.fmin_hz")
-        # The C ABI reads 0 as Nyquist, so only an absent bound may reach it.
-        raw.fmax_hz = _narrow_double(
-            _resolve_zero_default(config.fmax_hz, "config.fmax_hz"), "config.fmax_hz"
-        )
-        raw.reference_hz = _narrow_double(config.reference_hz, "config.reference_hz")
-        # The flags are the exception: that guard refuses a bool, so the 0/1 is
-        # spelled out here.
-        raw.compute_mel = int(config.compute_mel)
-        raw.compute_chroma = int(config.compute_chroma)
-        raw.compute_onset = int(config.compute_onset)
-        raw.compute_spectral = int(config.compute_spectral)
-        raw.emit_every_n_frames = config.emit_every_n_frames
-        raw.magnitude_downsample = config.magnitude_downsample
-        raw.max_pending_frames = config.max_pending_frames
-        raw.max_progression_entries = config.max_progression_entries
-        raw.key_update_interval_sec = _narrow_double(
-            config.key_update_interval_sec, "config.key_update_interval_sec"
-        )
-        raw.bpm_update_interval_sec = _narrow_double(
-            config.bpm_update_interval_sec, "config.bpm_update_interval_sec"
-        )
-        raw.window = _token_ordinal(config.window, _WINDOW_TYPES, "config.window")
+        # each field narrows onto its own declared type and refuses a fraction.
+        raw.sample_rate = sample_rate
+        if n_fft is not None:
+            raw.n_fft = n_fft
+        if hop_length is not None:
+            raw.hop_length = hop_length
+        if n_mels is not None:
+            raw.n_mels = n_mels
+        if fmin_hz is not None:
+            raw.fmin_hz = _narrow_double(fmin_hz, "fmin_hz")
+        # The C ABI reads 0 as Nyquist, so an explicit 0 is refused.
+        if fmax_hz is not None:
+            raw.fmax_hz = _narrow_double(_resolve_zero_default(fmax_hz, "fmax_hz"), "fmax_hz")
+        if reference_hz is not None:
+            raw.reference_hz = _narrow_double(reference_hz, "reference_hz")
+        # The flags are spelled out as 0/1: the field guard refuses a bool.
+        if compute_mel is not None:
+            raw.compute_mel = int(compute_mel)
+        if compute_chroma is not None:
+            raw.compute_chroma = int(compute_chroma)
+        if compute_onset is not None:
+            raw.compute_onset = int(compute_onset)
+        if compute_spectral is not None:
+            raw.compute_spectral = int(compute_spectral)
+        if emit_every_n_frames is not None:
+            raw.emit_every_n_frames = emit_every_n_frames
+        if magnitude_downsample is not None:
+            raw.magnitude_downsample = magnitude_downsample
+        if max_pending_frames is not None:
+            raw.max_pending_frames = max_pending_frames
+        if max_progression_entries is not None:
+            raw.max_progression_entries = max_progression_entries
+        if key_update_interval_sec is not None:
+            raw.key_update_interval_sec = _narrow_double(
+                key_update_interval_sec, "key_update_interval_sec"
+            )
+        if bpm_update_interval_sec is not None:
+            raw.bpm_update_interval_sec = _narrow_double(
+                bpm_update_interval_sec, "bpm_update_interval_sec"
+            )
+        if window is not None:
+            raw.window = _token_ordinal(window, _WINDOW_TYPES, "window")
         handle = ctypes.c_void_p()
         _check(lib.sonare_stream_analyzer_create(ctypes.byref(raw), ctypes.byref(handle)))
         self._handle = handle
@@ -341,7 +392,7 @@ class StreamAnalyzer:
         """Set the A4 tuning reference (Hz) and rebuild the chroma filterbank.
 
         ``reference_hz`` must be within 220..880, the same range
-        :attr:`StreamConfig.reference_hz` accepts at create time. A value
+        the ``reference_hz`` constructor keyword accepts. A value
         outside it raises instead of being clamped into range.
         """
         _check(
