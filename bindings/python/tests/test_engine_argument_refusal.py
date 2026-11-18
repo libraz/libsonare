@@ -9,7 +9,7 @@ import pytest
 from libsonare import RealtimeEngine, SonareError, SonareValueError, SynthPatch
 from libsonare._errors import ErrorCode
 
-_BAND = '{"type":"peak","frequencyHz":1000,"gainDb":3,"q":1,"enabled":true}'
+_BAND = {"type": "peak", "frequencyHz": 1000, "gainDb": 3, "q": 1, "enabled": True}
 _UNKNOWN_ID = 99
 
 _VALUE_REFUSALS: list[tuple[str, Callable[[RealtimeEngine], object]]] = [
@@ -39,7 +39,7 @@ def test_value_refusal_is_sonare_value_error(
 
 
 _MASTER_STRIP_SETTERS: list[tuple[str, Callable[[RealtimeEngine], object]]] = [
-    ("eq_band_json", lambda e: e.set_master_strip_eq_band_json(0, _BAND)),
+    ("eq_band", lambda e: e.set_strip_eq_band("master", 0, _BAND)),
     ("insert_bypassed", lambda e: e.set_strip_insert_bypassed("master", 0, True)),
     (
         "insert_param_by_name",

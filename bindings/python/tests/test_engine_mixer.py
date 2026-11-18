@@ -20,7 +20,7 @@ from libsonare import (
 )
 from libsonare._engine_conversions import _track_monitor_mode_value
 
-from ._helpers import raises_coded
+from ._helpers import raises_coded, scene_bus, scene_strip
 
 _PAN_LAW_CORPUS = json.loads(
     (Path(__file__).resolve().parents[3] / "tests/conformance/pan_law_names.json").read_text(
@@ -70,9 +70,9 @@ def test_engine_track_monitor_mode_pfl_and_afl() -> None:
             ]
         )
         engine.set_track_lanes([{"track_id": 10, "source_channel_layout": "stereo"}])
-        engine.set_track_strip_json(
+        engine.set_strip(
             10,
-            '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
+            scene_strip('{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}'),
         )
         engine.play()
         engine.set_track_monitor_mode(0, "pfl", render_frame=block // 2)
@@ -225,16 +225,17 @@ def test_engine_track_buses_route_lane_sends() -> None:
         out = engine.process([[0.0] * 256])[0]
         assert 0.99 < out[-1] < 1.01
 
-        with pytest.raises(SonareError) as bad_json_error:
-            engine.set_bus_strip_json(1, "{bad json")
-        assert bad_json_error.value.code == 2
-        engine.set_bus_strip_json(
+        with pytest.raises(TypeError, match="json.loads"):
+            engine.set_bus_strip(1, "{bad json")  # type: ignore[arg-type]
+        engine.set_bus_strip(
             1,
-            '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
+            scene_bus(
+                '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}'
+            ),
         )
 
 
-def test_engine_track_strip_json_routes_lane_strip() -> None:
+def test_engine_set_strip_routes_a_track_strip() -> None:
     frames = 256 * 4
     with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
         engine.set_clips(
@@ -260,23 +261,26 @@ def test_engine_track_strip_json_routes_lane_strip() -> None:
             '{"version":1,"strips":[{"id":"track-10","faderDb":-12,"panLaw":"linear0Db"}],'
             '"buses":[],"connections":[]}'
         )
-        engine.set_track_strip_json(10, scene_json)
-        with pytest.raises(SonareError) as bad_json_error:
-            engine.set_track_strip_json(10, "{bad json")
-        assert bad_json_error.value.code == 2
+        engine.set_strip(10, scene_strip(scene_json))
+        with pytest.raises(TypeError, match="json.loads"):
+            engine.set_strip(10, "{bad json")  # type: ignore[arg-type]
         with pytest.raises(SonareValueError) as bad_processor_error:
-            engine.set_track_strip_json(
+            engine.set_strip(
                 10,
-                '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",'
-                '"processor":"missing.processor","params":{}}]}],"buses":[],"connections":[]}',
+                scene_strip(
+                    '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",'
+                    '"processor":"missing.processor","params":{}}]}],"buses":[],"connections":[]}'
+                ),
             )
         assert bad_processor_error.value.code == 4
         with pytest.raises(SonareValueError) as bad_param_error:
-            engine.set_track_strip_json(
+            engine.set_strip(
                 10,
-                '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",'
-                '"processor":"eq.parametric","params":{"band0.gainDb":"loud"}}]}],'
-                '"buses":[],"connections":[]}',
+                scene_strip(
+                    '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",'
+                    '"processor":"eq.parametric","params":{"band0.gainDb":"loud"}}]}],'
+                    '"buses":[],"connections":[]}'
+                ),
             )
         assert bad_param_error.value.code == 4
 
@@ -302,7 +306,7 @@ def test_strip_scene_refuses_earlier_spellings(strip_fields: str, current: str) 
     with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
         engine.set_track_lanes([{"track_id": 10}])
         with raises_coded(int(ErrorCode.INVALID_FORMAT), match=current):
-            engine.set_track_strip_json(10, _STRIP % strip_fields)
+            engine.set_strip(10, scene_strip(_STRIP % strip_fields))
 
 
 def test_engine_track_strip_eq_insert_is_bounded_by_the_engine_rate_nyquist() -> None:
@@ -316,14 +320,14 @@ def test_engine_track_strip_eq_insert_is_bounded_by_the_engine_rate_nyquist() ->
 
     with RealtimeEngine(sample_rate=96000.0, max_block_size=256) as engine:
         engine.set_track_lanes([{"track_id": 10}])
-        engine.set_track_strip_json(10, strip_json(30000))
+        engine.set_strip(10, scene_strip(strip_json(30000)))
         with pytest.raises(SonareError):
-            engine.set_track_strip_json(10, strip_json(48000))
+            engine.set_strip(10, scene_strip(strip_json(48000)))
     with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
         engine.set_track_lanes([{"track_id": 10}])
         with pytest.raises(SonareError):
-            engine.set_track_strip_json(10, strip_json(30000))
-        engine.set_track_strip_json(10, strip_json(20000))
+            engine.set_strip(10, scene_strip(strip_json(30000)))
+        engine.set_strip(10, scene_strip(strip_json(20000)))
 
 
 def test_engine_track_strip_insert_bypass_toggles_insert() -> None:
@@ -342,12 +346,14 @@ def test_engine_track_strip_insert_bypass_toggles_insert() -> None:
             ]
         )
         engine.set_track_lanes([{"track_id": 10}])
-        engine.set_track_strip_json(
+        engine.set_strip(
             10,
-            '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",'
-            '"processor":"eq.parametric","params":{"band0.type":1,'
-            '"band0.frequencyHz":1000,"band0.gainDb":12,"band0.enabled":1}}]}],'
-            '"buses":[],"connections":[]}',
+            scene_strip(
+                '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",'
+                '"processor":"eq.parametric","params":{"band0.type":1,'
+                '"band0.frequencyHz":1000,"band0.gainDb":12,"band0.enabled":1}}]}],'
+                '"buses":[],"connections":[]}'
+            ),
         )
         with pytest.raises(SonareValueError) as bad_index_error:
             engine.set_strip_insert_bypassed(10, 7, True)
@@ -381,9 +387,9 @@ def test_engine_track_strip_eq_band_updates_embedded_eq() -> None:
             ]
         )
         engine.set_track_lanes([{"track_id": 10}])
-        engine.set_track_strip_json(
+        engine.set_strip(
             10,
-            '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
+            scene_strip('{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}'),
         )
         with pytest.raises(SonareValueError) as bad_index_error:
             engine.set_strip_eq_band(10, 99, {"type": "peak", "enabled": True})
@@ -411,7 +417,7 @@ def test_engine_track_strip_eq_band_updates_embedded_eq() -> None:
         )
 
 
-def test_engine_master_strip_json_routes_master_strip() -> None:
+def test_engine_set_strip_routes_the_master_strip() -> None:
     frames = 256 * 16
     with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
         engine.set_clips(
@@ -434,15 +440,17 @@ def test_engine_master_strip_json_routes_master_strip() -> None:
             '{"version":1,"strips":[{"id":"master","faderDb":-12,"panLaw":"linear0Db"}],'
             '"buses":[],"connections":[]}'
         )
-        engine.set_master_strip_json(scene_json)
-        with pytest.raises(SonareError) as bad_json_error:
-            engine.set_master_strip_json("{bad json")
-        assert bad_json_error.value.code == 2
+        engine.set_strip("master", scene_strip(scene_json))
+        with pytest.raises(TypeError, match="json.loads"):
+            engine.set_strip("master", "{bad json")  # type: ignore[arg-type]
         with pytest.raises(SonareValueError) as bad_param_error:
-            engine.set_master_strip_json(
-                '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre",'
-                '"processor":"eq.parametric","params":{"band0.gainDb":"loud"}}]}],'
-                '"buses":[],"connections":[]}'
+            engine.set_strip(
+                "master",
+                scene_strip(
+                    '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre",'
+                    '"processor":"eq.parametric","params":{"band0.gainDb":"loud"}}]}],'
+                    '"buses":[],"connections":[]}'
+                ),
             )
         assert bad_param_error.value.code == 4
         with pytest.raises(SonareValueError) as bad_bypass_error:
@@ -500,8 +508,9 @@ def test_engine_master_strip_eq_band_updates_embedded_eq() -> None:
                 )
             ]
         )
-        engine.set_master_strip_json(
-            '{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}'
+        engine.set_strip(
+            "master",
+            scene_strip('{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}'),
         )
         with pytest.raises(SonareValueError) as bad_index_error:
             engine.set_strip_eq_band("master", 99, {"type": "peak", "enabled": True})
@@ -558,9 +567,9 @@ def test_engine_track_strip_pan_and_send_setters() -> None:
         )
         engine.set_track_lanes([{"track_id": 10}])
         # A lane strip must exist before its pan can be set.
-        engine.set_track_strip_json(
+        engine.set_strip(
             10,
-            '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
+            scene_strip('{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}'),
         )
 
         # An unknown / zero track id is rejected by every setter.
@@ -615,9 +624,9 @@ def test_realtime_engine_dual_pan_routes_left_input_to_expected_output() -> None
     with RealtimeEngine(sample_rate=48000.0, max_block_size=block) as engine:
         engine.set_clips([clip])
         engine.set_track_lanes([{"track_id": 10}])
-        engine.set_track_strip_json(
+        engine.set_strip(
             10,
-            '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
+            scene_strip('{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}'),
         )
         engine.set_strip_pan_mode(10, "dualPan")
 
@@ -655,9 +664,11 @@ def test_engine_bus_strip_pan_and_send_setters() -> None:
         engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}])
         engine.set_track_lanes([{"track_id": 10, "output_bus_id": 1}])
         # A bus strip must exist before its pan can be set.
-        engine.set_bus_strip_json(
+        engine.set_bus_strip(
             1,
-            '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
+            scene_bus(
+                '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}'
+            ),
         )
 
         # An unknown / zero bus id is rejected by every setter.
@@ -708,9 +719,11 @@ def test_engine_bus_strip_pan_rejects_surround_bus() -> None:
         # A 5.1 bus rejects every pan setter outright (unknown and surround
         # buses share one generic failure), but keeps its EQ available.
         engine.set_track_buses([{"bus_id": 1, "channel_layout": "5.1"}])
-        engine.set_bus_strip_json(
+        engine.set_bus_strip(
             1,
-            '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
+            scene_bus(
+                '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}'
+            ),
         )
         with pytest.raises(SonareValueError) as surround_pan_error:
             engine.set_bus_pan(1, 0.0)
@@ -741,9 +754,11 @@ def test_engine_bus_strip_eq_band_updates_embedded_eq() -> None:
         )
         engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0, "channel_layout": "mono"}])
         engine.set_track_lanes([{"track_id": 10, "output_bus_id": 1}])
-        engine.set_bus_strip_json(
+        engine.set_bus_strip(
             1,
-            '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
+            scene_bus(
+                '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}'
+            ),
         )
         with pytest.raises(SonareValueError) as bad_index_error:
             engine.set_bus_eq_band(1, 99, {"type": "peak", "enabled": True})

@@ -368,6 +368,12 @@ from ._types_engine import (
     MixResult as MixResult,
 )
 from ._types_engine import (
+    MixSceneBusInput as MixSceneBusInput,
+)
+from ._types_engine import (
+    MixSceneStripInput as MixSceneStripInput,
+)
+from ._types_engine import (
     ParameterInfo as ParameterInfo,
 )
 from ._types_engine import (

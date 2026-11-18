@@ -43,6 +43,8 @@ from .types import (
     MeterTelemetryRecord,
     MeterTelemetryRecordWide,
     MidiFxConfig,
+    MixSceneBusInput,
+    MixSceneStripInput,
     PanLaw,
     PanMode,
     ParameterInfo,
@@ -225,8 +227,11 @@ class RealtimeEngine:
     def set_track_buses(self, buses: Sequence[Mapping[str, object]]) -> None:
         """Declare the group buses from their mappings."""
         ...
-    def set_bus_strip_json(self, bus_id: int, scene_json: str) -> None:
-        """Install a bus strip from a scene JSON document."""
+    def set_bus_strip(self, bus_id: int, bus: MixSceneBusInput) -> None:
+        """Replace a bus's strip with ``bus``; the bus must exist via :meth:`set_track_buses`."""
+        ...
+    def set_strip(self, ref: StripRef, strip: MixSceneStripInput) -> None:
+        """Replace a strip with ``strip``: a track id or ``"master"``."""
         ...
     def set_strip_eq_band(self, ref: StripRef, band_index: int, band: EqBandInput) -> None:
         """Replace one equalizer band of a strip in realtime; a track id or ``"master"``."""
@@ -352,21 +357,6 @@ class RealtimeEngine:
     def resolve_bus_automation_id(self, bus_id: int, param_name: str) -> int:
         """Resolve a bus's ``"faderDb"`` to its automation id; an unknown bus or name raises
         SonareValueError."""
-        ...
-    def set_bus_strip_eq_band_json(self, bus_id: int, band_index: int, band_json: str) -> None:
-        """Realtime change of one bus-strip EQ band from a JSON document."""
-        ...
-    def set_track_strip_json(self, track_id: int, scene_json: str) -> None:
-        """Install a track strip from a scene JSON document."""
-        ...
-    def set_track_strip_eq_band_json(self, track_id: int, band_index: int, band_json: str) -> None:
-        """Realtime change of one track-strip EQ band from a JSON document."""
-        ...
-    def set_master_strip_json(self, scene_json: str) -> None:
-        """Install the master strip from a scene JSON document."""
-        ...
-    def set_master_strip_eq_band_json(self, band_index: int, band_json: str) -> None:
-        """Realtime change of one master-strip EQ band from a JSON document."""
         ...
     def insert_parameter_constructed_value(self, param_id: int) -> float:
         """Return an insert parameter's immutable construction value."""

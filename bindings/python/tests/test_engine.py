@@ -19,7 +19,7 @@ from libsonare import (
     voice_changer_abi_version,
 )
 
-from ._helpers import raises_coded
+from ._helpers import raises_coded, scene_bus, scene_strip
 
 
 def test_engine_abi_version() -> None:
@@ -234,12 +234,14 @@ def test_engine_prepare_accepts_declared_channel_capacity() -> None:
 def test_engine_resolve_and_set_bus_master_insert_automation_ids() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
         engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}])
-        engine.set_bus_strip_json(
+        engine.set_bus_strip(
             1,
-            '{"version":1,"strips":[],"buses":[{"id":"1","inserts":['
-            '{"slot":"pre","processor":"eq.parametric",'
-            '"params":{"band0.type":1,"band0.frequencyHz":1000,'
-            '"band0.gainDb":0,"band0.enabled":1}}]}],"connections":[]}',
+            scene_bus(
+                '{"version":1,"strips":[],"buses":[{"id":"1","inserts":['
+                '{"slot":"pre","processor":"eq.parametric",'
+                '"params":{"band0.type":1,"band0.frequencyHz":1000,'
+                '"band0.gainDb":0,"band0.enabled":1}}]}],"connections":[]}'
+            ),
         )
 
         # Resolving an insert parameter yields a reserved automation id
@@ -262,11 +264,14 @@ def test_engine_resolve_and_set_bus_master_insert_automation_ids() -> None:
             engine.set_bus_insert_param(9, 0, "band0.gainDb", 1.0)
 
         # Master strip insert resolution mirrors the bus path.
-        engine.set_master_strip_json(
-            '{"version":1,"strips":[{"id":"master","inserts":['
-            '{"slot":"pre","processor":"dynamics.compressor",'
-            '"params":{"thresholdDb":-3,"ratio":4}}]}],'
-            '"buses":[],"connections":[]}'
+        engine.set_strip(
+            "master",
+            scene_strip(
+                '{"version":1,"strips":[{"id":"master","inserts":['
+                '{"slot":"pre","processor":"dynamics.compressor",'
+                '"params":{"thresholdDb":-3,"ratio":4}}]}],'
+                '"buses":[],"connections":[]}'
+            ),
         )
         master_param = engine.resolve_strip_insert_automation_id("master", 0, "thresholdDb")
         assert master_param & 0xE0000000 == 0xE0000000
@@ -323,26 +328,33 @@ def test_engine_empty_automation_lane_removes_it() -> None:
 def test_engine_apply_restore_clear_insert_param_by_name_now() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
         engine.set_track_lanes([{"track_id": 10}])
-        engine.set_track_strip_json(
+        engine.set_strip(
             10,
-            '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",'
-            '"processor":"eq.parametric","params":{"band0.type":1,'
-            '"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1}}]}],'
-            '"buses":[],"connections":[]}',
+            scene_strip(
+                '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",'
+                '"processor":"eq.parametric","params":{"band0.type":1,'
+                '"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1}}]}],'
+                '"buses":[],"connections":[]}'
+            ),
         )
         engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}])
-        engine.set_bus_strip_json(
+        engine.set_bus_strip(
             1,
-            '{"version":1,"strips":[],"buses":[{"id":"1","inserts":['
-            '{"slot":"pre","processor":"eq.parametric",'
-            '"params":{"band0.type":1,"band0.frequencyHz":1000,'
-            '"band0.gainDb":0,"band0.enabled":1}}]}],"connections":[]}',
+            scene_bus(
+                '{"version":1,"strips":[],"buses":[{"id":"1","inserts":['
+                '{"slot":"pre","processor":"eq.parametric",'
+                '"params":{"band0.type":1,"band0.frequencyHz":1000,'
+                '"band0.gainDb":0,"band0.enabled":1}}]}],"connections":[]}'
+            ),
         )
-        engine.set_master_strip_json(
-            '{"version":1,"strips":[{"id":"master","inserts":['
-            '{"slot":"pre","processor":"dynamics.compressor",'
-            '"params":{"thresholdDb":-3,"ratio":4}}]}],'
-            '"buses":[],"connections":[]}'
+        engine.set_strip(
+            "master",
+            scene_strip(
+                '{"version":1,"strips":[{"id":"master","inserts":['
+                '{"slot":"pre","processor":"dynamics.compressor",'
+                '"params":{"thresholdDb":-3,"ratio":4}}]}],'
+                '"buses":[],"connections":[]}'
+            ),
         )
 
         # A known target applies immediately and reports True.

@@ -2558,6 +2558,8 @@ SidechainRefusal = Literal[
 ]
 EngineCaptureSource = Literal["output", "input"]
 MidiFxConfig = dict[str, Any]
+MixSceneStripInput = dict[str, Any]
+MixSceneBusInput = dict[str, Any]
 
 class SidechainSource:
     kind: SidechainSourceKind

@@ -9180,7 +9180,7 @@ test = "bindings/python/tests/test_block_size_absence.py::test_a_clip_states_its
 kind = "option"
 old = "RealtimeEngine.set_track_strip_eq_band(band)"
 to = "RealtimeEngine.set_strip_eq_band(band)"
-changed = "takes a band mapping only; a JSON string is TypeError and goes to set_track_strip_eq_band_json instead"
+changed = "takes a band mapping only; a JSON string is TypeError; parse JSON text with json.loads first"
 domain = "engine"
 rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_a_positional_tuple_or_descriptor_in_place_of_a_mapping_is_a_type_error"
@@ -9189,7 +9189,7 @@ test = "bindings/python/tests/test_mapping_keys.py::test_a_positional_tuple_or_d
 kind = "option"
 old = "RealtimeEngine.set_bus_strip_eq_band(band)"
 to = "RealtimeEngine.set_bus_eq_band(band)"
-changed = "takes a band mapping only; a JSON string is TypeError and goes to set_bus_strip_eq_band_json instead"
+changed = "takes a band mapping only; a JSON string is TypeError; parse JSON text with json.loads first"
 domain = "engine"
 rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_a_positional_tuple_or_descriptor_in_place_of_a_mapping_is_a_type_error"
@@ -9198,7 +9198,7 @@ test = "bindings/python/tests/test_mapping_keys.py::test_a_positional_tuple_or_d
 kind = "option"
 old = "RealtimeEngine.set_master_strip_eq_band(band)"
 to = "RealtimeEngine.set_strip_eq_band(band)"
-changed = "takes a band mapping only; a JSON string is TypeError and goes to set_master_strip_eq_band_json instead"
+changed = "takes a band mapping only; a JSON string is TypeError; parse JSON text with json.loads first"
 domain = "engine"
 rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_a_positional_tuple_or_descriptor_in_place_of_a_mapping_is_a_type_error"
@@ -11078,3 +11078,51 @@ changed = "the source is one SidechainSource(kind, id) record; source.id 0 raise
 domain = "engine"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_engine_routing.py::test_sidechain_source_is_a_record_and_none_is_the_only_removal"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_track_strip_json"
+to = "RealtimeEngine.set_strip"
+changed = "set_strip(track_id, strip) takes one MixSceneStripInput mapping instead of a whole scene JSON document; JSON text is TypeError (parse it with json.loads and pass its strips[0])"
+domain = "engine"
+rule = "one-input-form"
+test = "bindings/python/tests/test_engine_mixer.py::test_engine_set_strip_routes_a_track_strip"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_master_strip_json"
+to = "RealtimeEngine.set_strip"
+changed = "set_strip('master', strip) takes one MixSceneStripInput mapping instead of a whole scene JSON document; JSON text is TypeError (parse it with json.loads and pass its strips[0])"
+domain = "engine"
+rule = "one-input-form"
+test = "bindings/python/tests/test_engine_mixer.py::test_engine_set_strip_routes_the_master_strip"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_bus_strip_json"
+to = "RealtimeEngine.set_bus_strip"
+changed = "set_bus_strip(bus_id, bus) takes one MixSceneBusInput mapping instead of a whole scene JSON document; JSON text is TypeError (parse it with json.loads and pass its buses[0])"
+domain = "engine"
+rule = "one-input-form"
+test = "bindings/python/tests/test_engine_mixer.py::test_engine_track_buses_route_lane_sends"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_track_strip_eq_band_json"
+removed = "call set_strip_eq_band(track_id, band_index, band) with an EqBandInput mapping (json.loads the text first)"
+domain = "engine"
+rule = "one-input-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_master_strip_eq_band_json"
+removed = "call set_strip_eq_band('master', band_index, band) with an EqBandInput mapping (json.loads the text first)"
+domain = "engine"
+rule = "one-input-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_bus_strip_eq_band_json"
+removed = "call set_bus_eq_band(bus_id, band_index, band) with an EqBandInput mapping (json.loads the text first)"
+domain = "engine"
+rule = "one-input-form"

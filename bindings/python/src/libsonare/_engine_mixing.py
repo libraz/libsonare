@@ -6,7 +6,7 @@ import ctypes
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Literal, cast
 
-from ._engine_conversions import _band_json_arg
+from ._engine_conversions import _band_json_arg, _scene_entry_json
 from ._errors import SonareValueError, _unknown_error
 from ._ffi import SonareSurroundPan
 from ._mixing import StripRef
@@ -38,6 +38,8 @@ from ._runtime import (
 )
 from ._types_engine import (
     _SIDECHAIN_REFUSALS,
+    MixSceneBusInput,
+    MixSceneStripInput,
     SidechainCheck,
     SidechainRefusal,
     SidechainSource,
@@ -340,14 +342,34 @@ class _EngineMixingMixin:
             )
         _check(_get_lib().sonare_engine_set_track_buses(self._require_handle(), raw, len(buses)))
 
-    def set_bus_strip_json(self, bus_id: int, scene_json: str) -> None:
+    def set_bus_strip(self, bus_id: int, bus: MixSceneBusInput) -> None:
+        """Replace a bus's strip with ``bus``; the bus must exist via :meth:`set_track_buses`.
+
+        ``bus`` is a :data:`MixSceneBusInput` mapping; anything else raises ``TypeError``.
+        """
         _check(
             _get_lib().sonare_engine_set_bus_strip_json(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
-                _utf8_arg(scene_json, "scene_json"),
+                _scene_entry_json(bus, "buses", "bus"),
             )
         )
+
+    def set_strip(self, ref: StripRef, strip: MixSceneStripInput) -> None:
+        """Replace a strip with ``strip``: a track id or ``"master"`` names the strip.
+
+        ``strip`` is a :data:`MixSceneStripInput` mapping; anything else raises ``TypeError``. The
+        mapping carries its own ``id``; the engine applies it to the addressed strip.
+        """
+        track_id = _strip_target("set_strip", ref)
+        payload = _scene_entry_json(strip, "strips", "strip")
+        if track_id is None:
+            rc = _get_lib().sonare_engine_set_master_strip_json(self._require_handle(), payload)
+        else:
+            rc = _get_lib().sonare_engine_set_track_strip_json(
+                self._require_handle(), _to_c_uint32(track_id, "strip"), payload
+            )
+        _check(rc)
 
     def set_strip_eq_band(self, ref: StripRef, band_index: int, band: EqBandInput) -> None:
         """Replace one equalizer band of a strip in realtime; a track id or ``"master"``."""
@@ -408,7 +430,7 @@ class _EngineMixingMixin:
     ) -> None:
         """Bus counterpart of :meth:`set_strip_insert_bypassed`.
 
-        ``bus_id`` must carry a strip configured via :meth:`set_bus_strip_json`.
+        ``bus_id`` must carry a strip configured via :meth:`set_bus_strip`.
         """
         _check(
             _get_lib().sonare_engine_set_bus_strip_insert_bypassed(
@@ -450,7 +472,7 @@ class _EngineMixingMixin:
     def set_bus_insert_param(self, bus_id: int, insert_index: int, name: str, value: float) -> None:
         """Bus counterpart of :meth:`set_strip_insert_param`.
 
-        ``bus_id`` must carry a strip configured via :meth:`set_bus_strip_json`.
+        ``bus_id`` must carry a strip configured via :meth:`set_bus_strip`.
         """
         _check(
             _get_lib().sonare_engine_set_bus_strip_insert_param_by_name(
@@ -517,7 +539,7 @@ class _EngineMixingMixin:
         """Restore a retained strip insert value exactly, without a ramp.
 
         Retires any in-flight smoother for the parameter and records the value as the
-        manual base. Used to replay retained edits after :meth:`set_track_strip_json`
+        manual base. Used to replay retained edits after :meth:`set_strip`
         replaced the strip. Raises if the strip, insert or name is unknown; not safe
         concurrently with :meth:`process`.
         """
@@ -556,7 +578,7 @@ class _EngineMixingMixin:
     def clear_strip_insert_parameter_bases(self, ref: StripRef) -> None:
         """Forget the remembered manual insert-parameter values of one strip.
 
-        Also discards its queued insert edits. Call before :meth:`set_track_strip_json`
+        Also discards its queued insert edits. Call before :meth:`set_strip`
         replaces the strip when its old values must not carry over; the setter never
         does this itself, since a queued edit may already target the new chain. Raises
         if a track is not a published lane; not safe concurrently with :meth:`process`.
@@ -776,7 +798,7 @@ class _EngineMixingMixin:
     ) -> int:
         """Bus-strip counterpart of :meth:`resolve_strip_insert_automation_id`.
 
-        ``bus_id`` must carry a strip configured via :meth:`set_bus_strip_json`.
+        ``bus_id`` must carry a strip configured via :meth:`set_bus_strip`.
         """
         out_id = ctypes.c_uint32()
         _check(
@@ -840,49 +862,3 @@ class _EngineMixingMixin:
             )
         )
         return int(out_id.value)
-
-    def set_bus_strip_eq_band_json(self, bus_id: int, band_index: int, band_json: str) -> None:
-        _check(
-            _get_lib().sonare_engine_set_bus_strip_eq_band_json(
-                self._require_handle(),
-                _to_c_uint32(bus_id, "bus_id"),
-                _to_c_int(band_index, "band_index"),
-                _utf8_arg(band_json, "band_json"),
-            )
-        )
-
-    def set_track_strip_json(self, track_id: int, scene_json: str) -> None:
-        _check(
-            _get_lib().sonare_engine_set_track_strip_json(
-                self._require_handle(),
-                _to_c_uint32(track_id, "track_id"),
-                _utf8_arg(scene_json, "scene_json"),
-            )
-        )
-
-    def set_track_strip_eq_band_json(self, track_id: int, band_index: int, band_json: str) -> None:
-        _check(
-            _get_lib().sonare_engine_set_track_strip_eq_band_json(
-                self._require_handle(),
-                _to_c_uint32(track_id, "track_id"),
-                _to_c_int(band_index, "band_index"),
-                _utf8_arg(band_json, "band_json"),
-            )
-        )
-
-    def set_master_strip_json(self, scene_json: str) -> None:
-        _check(
-            _get_lib().sonare_engine_set_master_strip_json(
-                self._require_handle(),
-                _utf8_arg(scene_json, "scene_json"),
-            )
-        )
-
-    def set_master_strip_eq_band_json(self, band_index: int, band_json: str) -> None:
-        _check(
-            _get_lib().sonare_engine_set_master_strip_eq_band_json(
-                self._require_handle(),
-                _to_c_int(band_index, "band_index"),
-                _utf8_arg(band_json, "band_json"),
-            )
-        )

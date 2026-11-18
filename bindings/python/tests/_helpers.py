@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import json
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
@@ -20,6 +21,18 @@ def sine(freq: float, duration_sec: float, sr: int = 22050, amp: float = 0.5) ->
     """
     n = int(sr * duration_sec)
     return (amp * np.sin(2.0 * np.pi * freq * np.arange(n) / sr)).astype(np.float32)
+
+
+def scene_strip(scene_json: str) -> dict[str, Any]:
+    """The first strip of a mixer scene given as JSON text, for ``RealtimeEngine.set_strip``."""
+    strip: dict[str, Any] = json.loads(scene_json)["strips"][0]
+    return strip
+
+
+def scene_bus(scene_json: str) -> dict[str, Any]:
+    """The first bus of a mixer scene given as JSON text, for ``RealtimeEngine.set_bus_strip``."""
+    bus: dict[str, Any] = json.loads(scene_json)["buses"][0]
+    return bus
 
 
 def same_value(a: Any, b: Any) -> bool:

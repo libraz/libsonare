@@ -211,6 +211,20 @@ unknown key raises ``SonareError`` (InvalidFormat) naming it; a non-finite value
 InvalidFormat too. JSON text is parsed by the caller (``json.loads``) before it is passed.
 """
 
+MixSceneStripInput = dict[str, Any]
+"""One mixer scene strip with camelCase keys, as :meth:`RealtimeEngine.set_strip` takes it.
+
+``id`` is required; every other key is optional and takes the scene parser's default. An unknown
+key or token raises ``SonareError`` (InvalidFormat) naming it.
+"""
+
+MixSceneBusInput = dict[str, Any]
+"""One mixer scene bus with camelCase keys, as :meth:`RealtimeEngine.set_bus_strip` takes it.
+
+``id`` and ``role`` are required; every other key is optional and takes the scene parser's default.
+An unknown key or token raises ``SonareError`` (InvalidFormat) naming it.
+"""
+
 
 EngineCaptureSource = Literal["output", "input"]
 """What the realtime engine's recording sink captures."""

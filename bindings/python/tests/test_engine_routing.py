@@ -31,6 +31,8 @@ from libsonare._ffi_types_mastering_project import (
 )
 from libsonare._runtime import _sidechain_source_kind_value
 
+from ._helpers import scene_bus, scene_strip
+
 _FRAMES = 256 * 40
 _BLOCK = 256
 
@@ -275,9 +277,9 @@ def _make_keyed_rig() -> RealtimeEngine:
             {"track_id": 30, "output_bus_id": 1},
         ]
     )
-    engine.set_bus_strip_json(1, _LIMITER_BUS_JSON)
-    engine.set_bus_strip_json(2, _DUCKER_BUS_JSON)
-    engine.set_master_strip_json(_DUCKER_MASTER_JSON)
+    engine.set_bus_strip(1, scene_bus(_LIMITER_BUS_JSON))
+    engine.set_bus_strip(2, scene_bus(_DUCKER_BUS_JSON))
+    engine.set_strip("master", scene_strip(_DUCKER_MASTER_JSON))
     engine.set_bus_sidechain(2, 0, SidechainSource("bus", 1))
     return engine
 
@@ -468,7 +470,7 @@ def test_lane_sidechain_refuses_self_key_and_cycles_but_keeps_valid_bindings() -
     try:
         engine.set_track_lanes([{"track_id": 10}, {"track_id": 20}])
         for track_id in (10, 20):
-            engine.set_track_strip_json(track_id, _strip_json(track_id, [_PASS_LIMITER]))
+            engine.set_strip(track_id, scene_strip(_strip_json(track_id, [_PASS_LIMITER])))
         engine.set_strip_sidechain(10, 0, SidechainSource("track", 20))
         with pytest.raises(SonareError):
             engine.set_strip_sidechain(10, 0, SidechainSource("track", 10))
@@ -519,7 +521,7 @@ def test_can_set_sidechain_reports_each_refusal_and_matches_the_setters() -> Non
     try:
         # Lane keys; each lane carries one insert to key.
         for track_id in (10, 30):
-            engine.set_track_strip_json(track_id, _strip_json(track_id, [_PASS_LIMITER]))
+            engine.set_strip(track_id, scene_strip(_strip_json(track_id, [_PASS_LIMITER])))
         check(engine.can_set_strip_sidechain(0, 0, SidechainSource("track", 30)), "invalidTarget")
         check(
             engine.can_set_strip_sidechain(10, 1, SidechainSource("track", 30)), "insertOutOfRange"
@@ -566,7 +568,7 @@ def test_can_set_sidechain_reports_each_refusal_and_matches_the_setters() -> Non
     # Table full: every slot of the binding table taken by lane 10, then a new key.
     with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as full:
         full.set_track_lanes([{"track_id": 10}, {"track_id": 30}])
-        full.set_track_strip_json(10, _strip_json(10, [_PASS_LIMITER] * 33))
+        full.set_strip(10, scene_strip(_strip_json(10, [_PASS_LIMITER] * 33)))
         for insert in range(32):
             full.set_strip_sidechain(10, insert, SidechainSource("track", 30))
         check(full.can_set_strip_sidechain(10, 32, SidechainSource("track", 30)), "tableFull")
@@ -583,9 +585,12 @@ def test_can_set_sidechain_reports_each_refusal_and_matches_the_setters() -> Non
     )
     with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as plan:
         plan.set_track_lanes([{"track_id": 10}, {"track_id": 20}, {"track_id": 30}])
-        plan.set_track_strip_json(20, _strip_json(20, [long_limiter]))
-        plan.set_track_strip_json(
-            30, _strip_json(30, [(limiter[0], {**limiter[1], "lookaheadMs": 1.0}), ducker])
+        plan.set_strip(20, scene_strip(_strip_json(20, [long_limiter])))
+        plan.set_strip(
+            30,
+            scene_strip(
+                _strip_json(30, [(limiter[0], {**limiter[1], "lookaheadMs": 1.0}), ducker])
+            ),
         )
         check(plan.can_set_strip_sidechain(30, 1, SidechainSource("track", 20)), "planRefused")
         with pytest.raises(SonareError):

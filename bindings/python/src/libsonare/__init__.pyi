@@ -1247,6 +1247,12 @@ from .types import MixMonoRisk as MixMonoRisk
 from .types import (
     MixResult as MixResult,
 )
+from .types import (
+    MixSceneBusInput as MixSceneBusInput,
+)
+from .types import (
+    MixSceneStripInput as MixSceneStripInput,
+)
 from .types import MixSourceClass as MixSourceClass
 from .types import MixTrackAlignment as MixTrackAlignment
 from .types import (

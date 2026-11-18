@@ -7,6 +7,8 @@ import pytest
 
 from libsonare import EngineClip, RealtimeEngine, SonareError
 
+from ._helpers import scene_strip
+
 _STRIP_JSON = (
     '{"version":1,"strips":[{"id":"track-10","inserts":['
     '{"slot":"pre","processor":"eq.parametric","params":{'
@@ -33,7 +35,7 @@ def test_meter_input_peaks_and_reset_command() -> None:
 def test_constructed_insert_value_and_invalid_id() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_track_lanes([{"track_id": 10}])
-        engine.set_track_strip_json(10, _STRIP_JSON)
+        engine.set_strip(10, scene_strip(_STRIP_JSON))
         param_id = engine.resolve_strip_insert_automation_id(10, 0, "band0.gainDb")
         assert param_id > 0
         assert engine.insert_parameter_constructed_value(param_id) == pytest.approx(-3.0, abs=1e-5)
@@ -76,7 +78,7 @@ def test_meter_target_insert_gain_reduction() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=block) as engine:
         engine.set_clips([clip])
         engine.set_track_lanes([{"track_id": 10}])
-        engine.set_track_strip_json(10, _DYNAMICS_STRIP_JSON)
+        engine.set_strip(10, scene_strip(_DYNAMICS_STRIP_JSON))
         engine.play()
         lane: list[object] = []
         for _ in range(12):

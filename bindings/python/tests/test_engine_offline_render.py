@@ -22,7 +22,7 @@ from libsonare import (
     SonareValueError,
 )
 
-from ._helpers import _midi1_word
+from ._helpers import _midi1_word, scene_strip
 
 
 def test_bounce_options_default_seeded_from_native_layer() -> None:
@@ -218,7 +218,7 @@ def _plate_engine() -> RealtimeEngine:
         ]
     )
     engine.set_track_lanes([{"track_id": 10}])
-    engine.set_track_strip_json(10, _PLATE_STRIP)
+    engine.set_strip(10, scene_strip(_PLATE_STRIP))
     return engine
 
 
@@ -299,28 +299,30 @@ def test_tail_and_latency_follow_the_configured_strips() -> None:
         assert engine.graph_latency_samples == 0.0
         engine.set_track_lanes([{"track_id": 10}])
         # A 1 ms limiter lookahead is 48 samples at 48 kHz: 48 * 256 in q8.
-        engine.set_track_strip_json(
+        engine.set_strip(
             10,
-            json.dumps(
-                {
-                    "version": 1,
-                    "strips": [
-                        {
-                            "id": "s",
-                            "inserts": [
-                                {
-                                    "slot": "pre",
-                                    "processor": "dynamics.limiter",
-                                    "params": {
-                                        "thresholdDb": 24.0,
-                                        "releaseMs": 50.0,
-                                        "lookaheadMs": 1.0,
-                                    },
-                                }
-                            ],
-                        }
-                    ],
-                }
+            scene_strip(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "strips": [
+                            {
+                                "id": "s",
+                                "inserts": [
+                                    {
+                                        "slot": "pre",
+                                        "processor": "dynamics.limiter",
+                                        "params": {
+                                            "thresholdDb": 24.0,
+                                            "releaseMs": 50.0,
+                                            "lookaheadMs": 1.0,
+                                        },
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                )
             ),
         )
         assert engine.graph_latency_samples == 48.0
@@ -329,15 +331,17 @@ def test_tail_and_latency_follow_the_configured_strips() -> None:
 def test_tail_samples_reports_a_lane_channel_delay() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=_RESET_BLOCK) as engine:
         engine.set_track_lanes([{"track_id": 10}])
-        engine.set_track_strip_json(
+        engine.set_strip(
             10,
-            json.dumps(
-                {
-                    "version": 1,
-                    "strips": [{"id": "s", "inserts": []}],
-                    "buses": [],
-                    "connections": [],
-                }
+            scene_strip(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "strips": [{"id": "s", "inserts": []}],
+                        "buses": [],
+                        "connections": [],
+                    }
+                )
             ),
         )
         # An insert-free strip adds nothing, so the tail is the channel delay alone.
@@ -374,7 +378,7 @@ def test_graph_latency_is_the_native_q8_reading_in_fractional_samples() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=_RESET_BLOCK) as engine:
         engine.set_track_lanes([{"track_id": 10}])
         # Aliasing mode 1 (first-order ADAA) delays its stage by half a sample.
-        engine.set_track_strip_json(10, _adaa1_clipper_strip())
+        engine.set_strip(10, scene_strip(_adaa1_clipper_strip()))
         q8 = ctypes.c_int()
         assert lib.sonare_engine_graph_latency_samples_q8(engine._handle, ctypes.byref(q8)) == 0
         assert engine.graph_latency_samples == q8.value / 256

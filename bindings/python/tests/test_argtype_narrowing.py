@@ -21,6 +21,8 @@ import libsonare as ls
 from libsonare import RealtimeEngine, SonareValueError
 from libsonare.types import EngineMarker
 
+from ._helpers import scene_bus
+
 # One bus strip with two inserts, so bus id and insert index each select a
 # different automation id.
 _BUS_STRIP = (
@@ -74,8 +76,8 @@ def test_a_wrapped_bus_id_or_insert_index_is_refused_rather_than_resolving_anoth
     """Two mixer parameters at once: a ``c_uint32`` id and a ``c_uint`` index."""
     with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
         engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}, {"bus_id": 2, "gain_db": 0.0}])
-        engine.set_bus_strip_json(1, _BUS_STRIP.format(bus=1))
-        engine.set_bus_strip_json(2, _BUS_STRIP.format(bus=2))
+        engine.set_bus_strip(1, scene_bus(_BUS_STRIP.format(bus=1)))
+        engine.set_bus_strip(2, scene_bus(_BUS_STRIP.format(bus=2)))
 
         first = engine.resolve_bus_insert_automation_id(1, 0, "band0.gainDb")
         other_bus = engine.resolve_bus_insert_automation_id(2, 0, "band0.gainDb")

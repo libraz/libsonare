@@ -97,6 +97,13 @@ def _band_json_arg(band: Mapping[str, object]) -> bytes:
     return _utf8_arg(json.dumps(dict(band)), "band")
 
 
+def _scene_entry_json(entry: Mapping[str, object], key: str, name: str) -> bytes:
+    """Wrap one strip or bus mapping as the one-entry scene document the engine setters read."""
+    if not isinstance(entry, Mapping):
+        raise TypeError(f"{name} must be a mapping (parse JSON text with json.loads first)")
+    return _utf8_arg(json.dumps({key: [dict(entry)]}), name)
+
+
 def _fixed_bytes(value: str, capacity: int, name: str) -> bytes:
     # Truncate on a UTF-8 character boundary: slicing the encoded bytes at an
     # arbitrary offset can split a multi-byte codepoint and leave invalid UTF-8.

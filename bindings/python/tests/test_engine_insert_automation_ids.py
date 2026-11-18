@@ -6,6 +6,8 @@ import pytest
 
 from libsonare import RealtimeEngine, SonareError
 
+from ._helpers import scene_bus, scene_strip
+
 
 def _scene(kind: str, strip_id: str, processors: list[str]) -> str:
     inserts = [
@@ -34,8 +36,8 @@ def _alive(engine: RealtimeEngine, param_id: int) -> bool:
 def test_track_id_survives_reorder_and_removal_of_another_track() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
         engine.set_track_lanes([{"track_id": 10}, {"track_id": 20}])
-        engine.set_track_strip_json(10, _scene("strips", "track-10", ["utility.gain"]))
-        engine.set_track_strip_json(20, _scene("strips", "track-20", ["utility.gain"]))
+        engine.set_strip(10, scene_strip(_scene("strips", "track-10", ["utility.gain"])))
+        engine.set_strip(20, scene_strip(_scene("strips", "track-20", ["utility.gain"])))
         id10 = engine.resolve_strip_insert_automation_id(10, 0, "levelDb")
         id20 = engine.resolve_strip_insert_automation_id(20, 0, "levelDb")
         assert id10 != id20
@@ -48,7 +50,7 @@ def test_track_id_survives_reorder_and_removal_of_another_track() -> None:
         assert not _alive(engine, id20)
 
         engine.set_track_lanes([{"track_id": 20}, {"track_id": 10}])
-        engine.set_track_strip_json(20, _scene("strips", "track-20", ["utility.gain"]))
+        engine.set_strip(20, scene_strip(_scene("strips", "track-20", ["utility.gain"])))
         assert not _alive(engine, id20)
         assert engine.resolve_strip_insert_automation_id(20, 0, "levelDb") != id20
 
@@ -56,8 +58,8 @@ def test_track_id_survives_reorder_and_removal_of_another_track() -> None:
 def test_bus_id_survives_reorder_and_retires_when_the_bus_is_removed() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
         engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}, {"bus_id": 2, "gain_db": 0.0}])
-        engine.set_bus_strip_json(1, _scene("buses", "1", ["utility.gain"]))
-        engine.set_bus_strip_json(2, _scene("buses", "2", ["utility.gain"]))
+        engine.set_bus_strip(1, scene_bus(_scene("buses", "1", ["utility.gain"])))
+        engine.set_bus_strip(2, scene_bus(_scene("buses", "2", ["utility.gain"])))
         id1 = engine.resolve_bus_insert_automation_id(1, 0, "levelDb")
         id2 = engine.resolve_bus_insert_automation_id(2, 0, "levelDb")
         assert id1 != id2
@@ -70,7 +72,7 @@ def test_bus_id_survives_reorder_and_retires_when_the_bus_is_removed() -> None:
         assert _alive(engine, id2)
         assert not _alive(engine, id1)
         engine.set_track_buses([{"bus_id": 2, "gain_db": 0.0}, {"bus_id": 1, "gain_db": 0.0}])
-        engine.set_bus_strip_json(1, _scene("buses", "1", ["utility.gain"]))
+        engine.set_bus_strip(1, scene_bus(_scene("buses", "1", ["utility.gain"])))
         assert not _alive(engine, id1)
         assert engine.resolve_bus_insert_automation_id(1, 0, "levelDb") != id1
 
@@ -81,9 +83,9 @@ def test_ids_retire_when_the_slot_changes_processor_type() -> None:
         engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}])
 
         def set_all(processor: str) -> None:
-            engine.set_track_strip_json(10, _scene("strips", "track-10", [processor]))
-            engine.set_bus_strip_json(1, _scene("buses", "1", [processor]))
-            engine.set_master_strip_json(_scene("strips", "master", [processor]))
+            engine.set_strip(10, scene_strip(_scene("strips", "track-10", [processor])))
+            engine.set_bus_strip(1, scene_bus(_scene("buses", "1", [processor])))
+            engine.set_strip("master", scene_strip(_scene("strips", "master", [processor])))
 
         def resolve_all(key: str) -> list[int]:
             return [
@@ -113,9 +115,9 @@ def test_strip_change_overflowing_the_id_table_is_refused() -> None:
         gain = _scene("strips", "master", ["utility.gain"] * 64)
         tilt = _scene("strips", "master", ["eq.tilt"] * 64)
         for round_index in range(128):
-            engine.set_master_strip_json(gain if round_index % 2 == 0 else tilt)
+            engine.set_strip("master", scene_strip(gain if round_index % 2 == 0 else tilt))
         before = engine.resolve_strip_insert_automation_id("master", 0, "tiltDb")
         with pytest.raises(SonareError):
-            engine.set_master_strip_json(gain)
+            engine.set_strip("master", scene_strip(gain))
         assert _alive(engine, before)
-        engine.set_master_strip_json(tilt)
+        engine.set_strip("master", scene_strip(tilt))

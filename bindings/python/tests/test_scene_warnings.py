@@ -6,6 +6,8 @@ import pytest
 
 from libsonare import ErrorCode, Project, RealtimeEngine, SonareError, SonareValueError
 
+from ._helpers import scene_strip
+
 _TYPO_SCENE = (
     '{"version":1,"$schema":"s","strips":[{"id":"lead","faderDB":-3,"x-note":1}],"buses":[]}'
 )
@@ -27,8 +29,8 @@ def test_engine_strip_setters_refuse_an_unknown_key() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
         engine.set_track_lanes([{"track_id": 10}])
         for call in (
-            lambda: engine.set_track_strip_json(10, _TYPO_STRIP),
-            lambda: engine.set_master_strip_json(_TYPO_STRIP),
+            lambda: engine.set_strip(10, scene_strip(_TYPO_STRIP)),
+            lambda: engine.set_strip("master", scene_strip(_TYPO_STRIP)),
         ):
             with pytest.raises(SonareError) as refused:
                 call()
@@ -36,4 +38,4 @@ def test_engine_strip_setters_refuse_an_unknown_key() -> None:
             assert refused.value.code == int(ErrorCode.INVALID_FORMAT)
             assert "unknown scene key 'strips[0].faderDB'" in str(refused.value)
         annotated = '{"$schema":"s","version":1,"strips":[{"id":"s","faderDb":-3,"x-t":1}]}'
-        engine.set_track_strip_json(10, annotated)
+        engine.set_strip(10, scene_strip(annotated))
