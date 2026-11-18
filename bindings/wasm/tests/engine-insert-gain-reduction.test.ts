@@ -222,6 +222,7 @@ describe('insert gain reduction query', () => {
     const node = await SonareRealtimeEngineNode.create(
       { sampleRate: 48000, audioWorklet: { addModule: () => Promise.resolve() } } as never,
       {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () => {
           queueMicrotask(() =>

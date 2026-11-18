@@ -232,7 +232,7 @@ export class SonareEngine {
 
   static async create(
     context: BaseAudioContext,
-    options: SonareEngineOptions = {},
+    options: SonareEngineOptions,
   ): Promise<SonareEngine> {
     const sampleRate = resolveContextSampleRate(options.sampleRate, context, 'SonareEngine.create');
     const {
@@ -244,7 +244,6 @@ export class SonareEngine {
     const blockSize = offlineBlockSize ?? options.maxBlockSize ?? AUDIO_WORKLET_RENDER_QUANTUM;
     const numChannels = requireChannelCount(
       offlineNumChannels ?? options.numChannels,
-      2,
       offlineNumChannels === undefined ? 'numChannels' : 'offlineNumChannels',
     );
     const realtimeNode = await SonareRealtimeEngineNode.create(context, nodeOptions);

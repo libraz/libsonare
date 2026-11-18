@@ -42,6 +42,7 @@ async function createNodeWithPort(
   disconnect: () => void = () => undefined,
 ): Promise<SonareRealtimeEngineNode> {
   return SonareRealtimeEngineNode.create(fakeContext(), {
+    numChannels: 2,
     mode: 'sab',
     engineAbiVersion: 1,
     nodeFactory: () => ({ port, disconnect }) as unknown as AudioWorkletNode,
@@ -50,6 +51,7 @@ async function createNodeWithPort(
 
 async function createNode(): Promise<SonareRealtimeEngineNode> {
   return SonareRealtimeEngineNode.create(fakeContext(), {
+    numChannels: 2,
     mode: 'sab',
     engineAbiVersion: 1,
     nodeFactory: () => fakeNode(),
@@ -62,7 +64,7 @@ describe('SonareRealtimeEngineNode numChannels', () => {
     const node = await SonareRealtimeEngineNode.create(fakeContext(), {
       mode: 'sab',
       engineAbiVersion: 1,
-      numChannels,
+      numChannels: numChannels as number,
       nodeFactory: (_ctx, _name, nodeOptions) => {
         captured = nodeOptions;
         return fakeNode();
@@ -88,6 +90,11 @@ describe('SonareRealtimeEngineNode numChannels', () => {
     },
   );
 
+  it('requires a count instead of following the destination', async () => {
+    await expect(capture(undefined)).rejects.toThrow(TypeError);
+    await expect(capture(undefined)).rejects.toThrow(/numChannels is required/);
+  });
+
   it('leaves the ceiling to the engine', async () => {
     expect((await capture(1e9)).outputChannelCount).toEqual([1e9]);
   });
@@ -99,6 +106,7 @@ describe('SonareRealtimeEngineNode integer ring options', () => {
   ): Promise<AudioWorkletNodeOptions> {
     let captured: AudioWorkletNodeOptions | undefined;
     const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+      numChannels: 2,
       mode: 'sab',
       engineAbiVersion: 1,
       ...options,

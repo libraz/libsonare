@@ -25,6 +25,7 @@ async function newEngine(options: Record<string, unknown> = {}) {
   const posted: unknown[] = [];
   const port: Port = { postMessage: (message: unknown) => posted.push(message) };
   const engine = await SonareEngine.create(fakeContext(), {
+    numChannels: 2,
     mode: 'postMessage',
     nodeFactory: () => readyNode(port),
     ...options,
@@ -42,6 +43,10 @@ beforeAll(async () => {
 });
 
 describe('SonareEngine shares the RealtimeEngine vocabulary', () => {
+  it('requires numChannels rather than following the destination', async () => {
+    await expect(newEngine({ numChannels: undefined })).rejects.toThrow(/numChannels is required/);
+  });
+
   it('reads state through transportState and getters', async () => {
     const { engine } = await newEngine();
     try {

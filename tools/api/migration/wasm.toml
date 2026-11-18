@@ -16263,10 +16263,12 @@ entry = "./worklet"
 [[entry]]
 kind = "field"
 old = "SonareRealtimeEngineNodeOptions.channelCount"
-new = "SonareRealtimeEngineNodeOptions.numChannels"
+to = "SonareRealtimeEngineNodeOptions.numChannels"
+changed = "channelCount -> numChannels, required: it has no default and is not taken from the AudioContext destination (was 2)"
 domain = "engine"
 rule = "num-channels"
 entry = "./worklet"
+test = "bindings/wasm/tests/worklet/engine-node.test.ts::requires a count instead of following the destination"
 
 [[entry]]
 kind = "method"
@@ -20131,10 +20133,12 @@ entry = "./worklet"
 [[entry]]
 kind = "field"
 old = "SonareRealtimeEngineWorkletProcessorOptions.channelCount"
-new = "SonareRealtimeEngineWorkletProcessorOptions.numChannels"
+to = "SonareRealtimeEngineWorkletProcessorOptions.numChannels"
+changed = "channelCount -> numChannels, required: it has no default and is not taken from the AudioContext destination (was 2)"
 domain = "engine"
 rule = "num-channels"
 entry = "./worklet"
+test = "bindings/wasm/tests/worklet/engine-node.test.ts::requires a count instead of following the destination"
 
 [[entry]]
 kind = "field"

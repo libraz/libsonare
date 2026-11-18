@@ -198,10 +198,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     dropped: 0,
   };
 
-  constructor(
-    options: SonareRealtimeEngineWorkletProcessorOptions = {},
-    transport?: WorkletTransport,
-  ) {
+  constructor(options: SonareRealtimeEngineWorkletProcessorOptions, transport?: WorkletTransport) {
     assertKnownProcessorOptions('SonareRealtimeEngineWorkletProcessor', 'engineProcessor', options);
     this.sampleRate = resolveScopeSampleRate(
       options.sampleRate,
@@ -209,7 +206,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     );
     this.clipPageRepostFrames = Math.max(1, Math.round(this.sampleRate * CLIP_PAGE_REPOST_SECONDS));
     this.blockSize = options.maxBlockSize ?? AUDIO_WORKLET_RENDER_QUANTUM;
-    this.channelCount = requireChannelCount(options.numChannels, 2, 'numChannels');
+    this.channelCount = requireChannelCount(options.numChannels, 'numChannels');
     this.transport = transport;
     // Zero is the off switch for meter publication, so the floor is 0.
     this.meterIntervalFrames = requireIntegerOption(

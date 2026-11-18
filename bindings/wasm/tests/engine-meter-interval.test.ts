@@ -35,6 +35,7 @@ async function captureNodeOptions(
 ): Promise<CapturedNodeOptions> {
   let captured: CapturedNodeOptions | undefined;
   const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+    numChannels: 2,
     mode: 'postMessage',
     engineAbiVersion: 1,
     ...options,
@@ -73,6 +74,7 @@ describe('meterIntervalFrames forwarding', () => {
   it('forwards meterIntervalFrames through the high-level SonareEngine facade', async () => {
     let captured: CapturedNodeOptions | undefined;
     const engine = await SonareEngine.create(fakeContext(), {
+      numChannels: 2,
       mode: 'postMessage',
       engineAbiVersion: 1,
       meterIntervalFrames: 321,
@@ -94,6 +96,7 @@ describe('meterIntervalFrames forwarding', () => {
     async (meterIntervalFrames) => {
       await expect(
         SonareEngine.create(fakeContext(), {
+          numChannels: 2,
           mode: 'postMessage',
           engineAbiVersion: 1,
           meterIntervalFrames,

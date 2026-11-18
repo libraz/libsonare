@@ -79,6 +79,7 @@ describe('SonareRealtimeEngineNode', () => {
       > = { postMessage: () => undefined };
       let handler: ((event: MessageEvent<unknown>) => void) | null | undefined;
       const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () => {
           queueMicrotask(() => {
@@ -104,6 +105,7 @@ describe('SonareRealtimeEngineNode', () => {
         unknown
       > = { postMessage: () => undefined };
       const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () => readyWorkletNode(port),
       });
@@ -118,6 +120,7 @@ describe('SonareRealtimeEngineNode', () => {
         unknown
       > = { postMessage: () => undefined };
       const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+        numChannels: 2,
         mode: 'sab',
         nodeFactory: () => readyWorkletNode(port),
       });
@@ -163,6 +166,7 @@ describe('SonareRealtimeEngineNode', () => {
         unknown
       > = { postMessage: () => undefined };
       const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+        numChannels: 2,
         mode: 'sab',
         nodeFactory: () => readyWorkletNode(port),
       });
@@ -190,6 +194,7 @@ describe('SonareRealtimeEngineNode', () => {
         unknown
       > = { postMessage: (message: unknown) => posted.push(message) };
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () => readyWorkletNode(port),
       });
@@ -238,6 +243,7 @@ describe('SonareRealtimeEngineNode', () => {
         unknown
       > = { postMessage: (message: unknown) => posted.push(message) };
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () => readyWorkletNode(port),
         ...options,
@@ -405,14 +411,23 @@ describe('SonareRealtimeEngineNode', () => {
     it('refuses a sampleRate that differs from the AudioContext before creating a node', async () => {
       const factory = vi.fn(() => ({ port: {}, disconnect: () => undefined }) as never);
       await expect(
-        SonareRealtimeEngineNode.create(fakeContext(), { sampleRate: 44100, nodeFactory: factory }),
+        SonareRealtimeEngineNode.create(fakeContext(), {
+          numChannels: 2,
+          sampleRate: 44100,
+          nodeFactory: factory,
+        }),
       ).rejects.toThrow(RangeError);
       await expect(
-        SonareEngine.create(fakeContext(), { sampleRate: 44100, nodeFactory: factory }),
+        SonareEngine.create(fakeContext(), {
+          numChannels: 2,
+          sampleRate: 44100,
+          nodeFactory: factory,
+        }),
       ).rejects.toThrow(RangeError);
       expect(factory).not.toHaveBeenCalled();
       const port: Record<string, unknown> = { postMessage: () => undefined };
       const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+        numChannels: 2,
         sampleRate: 48000,
         mode: 'postMessage',
         nodeFactory: () => readyWorkletNode(port),
@@ -427,6 +442,7 @@ describe('SonareRealtimeEngineNode', () => {
         unknown
       > = { postMessage: (message: unknown) => posted.push(message) };
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () => readyWorkletNode(port),
       });
@@ -455,6 +471,7 @@ describe('SonareRealtimeEngineNode', () => {
         unknown
       > = { postMessage: (message: unknown) => posted.push(message) };
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () => readyWorkletNode(port),
       });
@@ -646,6 +663,7 @@ describe('SonareRealtimeEngineNode', () => {
 
     it('drains clip-page requests from the SAB ring and reports bounded drops', async () => {
       const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+        numChannels: 2,
         clipPageRequestRingCapacity: 1,
         nodeFactory: () => readyWorkletNode({ postMessage: () => undefined, onmessage: undefined }),
       });
@@ -676,6 +694,7 @@ describe('SonareRealtimeEngineNode', () => {
         onmessage: undefined as ((event: MessageEvent<unknown>) => void) | undefined,
       };
       const enginePromise = SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () => ({ port, disconnect: () => undefined }) as unknown as AudioWorkletNode,
       });
@@ -695,6 +714,7 @@ describe('SonareRealtimeEngineNode', () => {
     it('rejects a block size smaller than the AudioWorklet render quantum', async () => {
       await expect(
         SonareRealtimeEngineNode.create(fakeContext(), {
+          numChannels: 2,
           maxBlockSize: 64,
           nodeFactory: () =>
             readyWorkletNode({ postMessage: () => undefined, onmessage: undefined }),
@@ -708,6 +728,7 @@ describe('SonareRealtimeEngineNode', () => {
         onmessage: undefined as ((event: MessageEvent<unknown>) => void) | undefined,
       };
       const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () => ({ port, disconnect: () => undefined }) as unknown as AudioWorkletNode,
       });
@@ -727,6 +748,7 @@ describe('SonareRealtimeEngineNode', () => {
         onmessage: undefined as ((event: MessageEvent<unknown>) => void) | null | undefined,
       };
       const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () => ({ port, disconnect: () => undefined }) as unknown as AudioWorkletNode,
       });
@@ -750,6 +772,7 @@ describe('SonareRealtimeEngineNode', () => {
         onmessage: undefined as ((event: MessageEvent<unknown>) => void) | undefined,
       };
       const enginePromise = SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () => ({ port, disconnect: () => undefined }) as unknown as AudioWorkletNode,
       });
@@ -791,6 +814,7 @@ describe('SonareRealtimeEngineNode', () => {
         originalFlush();
       };
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         offlineEngine: offline,
         nodeFactory: () => readyWorkletNode({ postMessage: () => undefined, onmessage: undefined }),
@@ -811,6 +835,7 @@ describe('SonareRealtimeEngineNode', () => {
     it('syncs registered parameters and rejects unresolved parameter names', async () => {
       const posted: unknown[] = [];
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () =>
           readyWorkletNode({
@@ -876,6 +901,7 @@ describe('SonareRealtimeEngineNode', () => {
       const destinationUmp = vi.spyOn(offline, 'pushMidiUmp').mockImplementation(() => undefined);
       const inputUmp = vi.spyOn(offline, 'pushMidiInputUmp').mockImplementation(() => undefined);
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         offlineEngine: offline,
         nodeFactory: () =>
@@ -964,6 +990,7 @@ describe('SonareRealtimeEngineNode', () => {
     it('refuses scopeBands past the 64-band ceiling instead of clamping it', async () => {
       const create = (scopeBands: number) =>
         SonareRealtimeEngineNode.create(fakeContext(), {
+          numChannels: 2,
           moduleUrl: 'sonare-worklet.js',
           scopeIntervalFrames: 128,
           scopeBands,
@@ -983,6 +1010,7 @@ describe('SonareRealtimeEngineNode', () => {
     it('falls back to postMessage commands when requested', async () => {
       const posted: unknown[] = [];
       const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () =>
           readyWorkletNode({
@@ -1010,6 +1038,7 @@ describe('SonareRealtimeEngineNode', () => {
           value: undefined,
         });
         const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+          numChannels: 2,
           nodeFactory: () =>
             ({
               port: {
@@ -1036,6 +1065,7 @@ describe('SonareRealtimeEngineNode', () => {
       let constructed = false;
       await expect(
         SonareRealtimeEngineNode.create(fakeContext(), {
+          numChannels: 2,
           engineAbiVersion: 1,
           expectedEngineAbiVersion: 2,
           nodeFactory: () => {
@@ -1070,6 +1100,7 @@ describe('SonareRealtimeEngineNode', () => {
         defaultCurve: 'hold', // canonical AutomationCurve::Hold (preserve original semantic)
       });
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         offlineEngine: offline,
         offlineNumChannels: 2,
@@ -1398,6 +1429,7 @@ describe('SonareRealtimeEngineNode', () => {
         maxBlockSize: 128,
       }) as unknown as OfflineEngineOption;
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         offlineEngine: offline,
         offlineNumChannels: 1,
@@ -1457,6 +1489,7 @@ describe('SonareRealtimeEngineNode', () => {
     it('sends long pre-baked clips as bounded transferable PCM pages', async () => {
       const posted: unknown[] = [];
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         offlineNumChannels: 1,
         nodeFactory: () =>
@@ -1516,6 +1549,7 @@ describe('SonareRealtimeEngineNode', () => {
     it('declares mixer lanes in explicit order via setTrackLanes', async () => {
       const posted: unknown[] = [];
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () =>
           readyWorkletNode({
@@ -1600,6 +1634,7 @@ describe('SonareRealtimeEngineNode', () => {
     it('retains explicit source channel layouts across mixer syncs', async () => {
       const posted: unknown[] = [];
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () =>
           readyWorkletNode({
@@ -1638,6 +1673,7 @@ describe('SonareRealtimeEngineNode', () => {
     it('refuses a non-stereo lane layout before posting to the worklet', async () => {
       const posted: unknown[] = [];
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () =>
           readyWorkletNode({
@@ -1665,6 +1701,7 @@ describe('SonareRealtimeEngineNode', () => {
     it('does not cache a rejected output-bus route', async () => {
       const posted: unknown[] = [];
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () =>
           readyWorkletNode({
@@ -1696,6 +1733,7 @@ describe('SonareRealtimeEngineNode', () => {
     it('does not cache rejected sends', async () => {
       const posted: unknown[] = [];
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () =>
           readyWorkletNode({
@@ -1724,6 +1762,7 @@ describe('SonareRealtimeEngineNode', () => {
     it('does not cache a rejected explicit lane update', async () => {
       const posted: unknown[] = [];
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () =>
           readyWorkletNode({
@@ -1763,6 +1802,7 @@ describe('SonareRealtimeEngineNode', () => {
     it('does not retain an implicitly added lane rejected at the native limit', async () => {
       const posted: unknown[] = [];
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () =>
           readyWorkletNode({
@@ -1822,6 +1862,7 @@ describe('SonareRealtimeEngineNode', () => {
           maxBlockSize: blockSize,
         }) as unknown as OfflineEngineOption;
         const engine = await SonareEngine.create(fakeContext(), {
+          numChannels: 2,
           mode: 'postMessage',
           offlineEngine: offline,
           offlineNumChannels: 2,
@@ -1916,6 +1957,7 @@ describe('SonareRealtimeEngineNode', () => {
           maxBlockSize: blockSize,
         }) as unknown as OfflineEngineOption;
         const engine = await SonareEngine.create(fakeContext(), {
+          numChannels: 2,
           mode: 'postMessage',
           offlineEngine: offline,
           offlineNumChannels: 2,
@@ -1979,6 +2021,7 @@ describe('SonareRealtimeEngineNode', () => {
         maxBlockSize: 128,
       }) as unknown as OfflineEngineOption;
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         offlineEngine: offline,
         offlineNumChannels: 2,
@@ -2045,6 +2088,7 @@ describe('SonareRealtimeEngineNode', () => {
         maxBlockSize: 128,
       }) as unknown as OfflineEngineOption;
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         offlineEngine: offline,
         offlineNumChannels: 2,
@@ -2138,6 +2182,7 @@ describe('SonareRealtimeEngineNode', () => {
         maxBlockSize: blockSize,
       }) as unknown as OfflineEngineOption;
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         offlineEngine: offline,
         offlineNumChannels: 2,
@@ -2308,6 +2353,7 @@ describe('SonareRealtimeEngineNode', () => {
         maxBlockSize: blockSize,
       }) as unknown as OfflineEngineOption;
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         offlineEngine: offline,
         offlineNumChannels: 2,
@@ -2381,6 +2427,7 @@ describe('SonareRealtimeEngineNode', () => {
         maxBlockSize: blockSize,
       }) as unknown as OfflineEngineOption;
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         offlineEngine: offline,
         offlineNumChannels: 2,
@@ -2484,6 +2531,7 @@ describe('SonareRealtimeEngineNode', () => {
         maxBlockSize: blockSize,
       }) as unknown as OfflineEngineOption;
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         offlineEngine: offline,
         offlineNumChannels: 2,
@@ -3033,6 +3081,7 @@ describe('SonareRealtimeEngineNode', () => {
         maxBlockSize: blockSize,
       }) as unknown as OfflineEngineOption;
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         offlineEngine: offline,
         offlineNumChannels: 2,
@@ -3176,6 +3225,7 @@ describe('SonareRealtimeEngineNode', () => {
         },
       };
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () => readyWorkletNode(port),
       });
@@ -3207,6 +3257,7 @@ describe('SonareRealtimeEngineNode', () => {
         },
       };
       const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () => readyWorkletNode(port),
       });
@@ -3286,6 +3337,7 @@ describe('SonareRealtimeEngineNode', () => {
         },
       };
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () => readyWorkletNode(port),
       });
@@ -3341,6 +3393,7 @@ describe('SonareRealtimeEngineNode', () => {
     it('replaces the whole marker set via setMarkers', async () => {
       const posted: unknown[] = [];
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () =>
           readyWorkletNode({
@@ -3389,6 +3442,7 @@ describe('SonareRealtimeEngineNode', () => {
     it('replaces and clears automation lanes via setAutomationLane', async () => {
       const posted: unknown[] = [];
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () =>
           readyWorkletNode({
@@ -3453,6 +3507,7 @@ describe('SonareRealtimeEngineNode', () => {
     it('clears insert automation on full strip replacement without clearing other strips', async () => {
       const posted: unknown[] = [];
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () =>
           readyWorkletNode({
@@ -3548,6 +3603,7 @@ describe('SonareRealtimeEngineNode', () => {
     it('removes a deleted bus automation lane before its identity is reused', async () => {
       const posted: unknown[] = [];
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () =>
           readyWorkletNode({
@@ -3595,6 +3651,7 @@ describe('SonareRealtimeEngineNode', () => {
     it('sets and reads the warp voice capacity, mirroring it to the worklet', async () => {
       const posted: unknown[] = [];
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () =>
           readyWorkletNode({
@@ -3639,6 +3696,7 @@ describe('SonareRealtimeEngineNode', () => {
         },
       } as BaseAudioContext & { suspend: () => Promise<void>; resume: () => Promise<void> };
       const engine = await SonareEngine.create(context, {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () => {
           const node = readyWorkletNode({
@@ -3668,6 +3726,7 @@ describe('SonareRealtimeEngineNode', () => {
     it('reports a destroyed node as InvalidState on every command and request family', async () => {
       const posted: unknown[] = [];
       const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () =>
           readyWorkletNode({
@@ -3716,6 +3775,7 @@ describe('SonareRealtimeEngineNode', () => {
     it('commits a control edit to the offline mirror only when the live engine takes it', async () => {
       const posted: unknown[] = [];
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () =>
           readyWorkletNode({
@@ -3762,6 +3822,7 @@ describe('SonareRealtimeEngineNode', () => {
 
     it('keeps the offline recording when the live capture reset is refused', async () => {
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         nodeFactory: () =>
           readyWorkletNode({

@@ -209,6 +209,7 @@ describe('onSyncError listeners receive a coded error', () => {
       audioWorklet: { addModule: () => Promise.resolve() },
     } as unknown as BaseAudioContext;
     const node = await SonareRealtimeEngineNode.create(context, {
+      numChannels: 2,
       mode: 'postMessage',
       nodeFactory: () => {
         queueMicrotask(() =>

@@ -59,7 +59,8 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
   /** Largest render quantum the processor renders per call, in frames. Default 128. */
   maxBlockSize?: number;
   /**
-   * Output plane count (default 2). Planes follow the canonical order
+   * Output plane count, required: the engine does not pick one, and in particular
+   * does not follow `audioContext.destination.channelCount`. Planes follow the canonical order
    * L R C LFE Ls Rs [Lss Rss] for 6 (5.1) and 8 (7.1) planes.
    *
    * The Web Audio default destination is 2-channel `'speakers'`, so a wider
@@ -70,7 +71,7 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
    * and `'discrete'` copies the first planes and drops the rest. With equal
    * counts the planes pass through unchanged in either mode.
    */
-  numChannels?: number;
+  numChannels: number;
   meterIntervalFrames?: number;
   commandSharedBuffer?: SharedArrayBuffer;
   commandRingCapacity?: number;

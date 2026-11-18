@@ -160,6 +160,7 @@ describe('SonareEngine.pushMidiProgram (worklet facade)', () => {
   it('posts syncMidiUmp with the builder words and refuses like the packer', async () => {
     const posted: unknown[] = [];
     const engine = await SonareEngine.create(fakeContext, {
+      numChannels: 2,
       mode: 'postMessage',
       nodeFactory: () => {
         const port = {

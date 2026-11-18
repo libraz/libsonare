@@ -5,6 +5,7 @@ it('queues a master loudness reset through the postMessage node transport', asyn
   const posted: unknown[] = [];
   const context = { sampleRate: 48000 } as unknown as BaseAudioContext;
   const node = await SonareRealtimeEngineNode.create(context, {
+    numChannels: 2,
     mode: 'postMessage',
     engineAbiVersion: 1,
     nodeFactory: () => {

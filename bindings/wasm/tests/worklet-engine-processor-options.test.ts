@@ -64,7 +64,12 @@ describe('engine and mixer processorOptions refuse undeclared keys', () => {
         new TypeError(`engine-test: unknown option '${key}'`),
       );
       expect(
-        () => new SonareRealtimeEngineWorkletProcessor({ ...base, [key]: value } as never),
+        () =>
+          new SonareRealtimeEngineWorkletProcessor({
+            numChannels: 2,
+            ...base,
+            [key]: value,
+          } as never),
       ).toThrow(new TypeError(`SonareRealtimeEngineWorkletProcessor: unknown option '${key}'`));
     });
 
@@ -90,7 +95,11 @@ describe('engine and mixer processorOptions refuse undeclared keys', () => {
         return { port: {} } as unknown as AudioWorkletNode;
       };
       await expect(
-        SonareRealtimeEngineNode.create(context, { nodeFactory, [key]: value } as never),
+        SonareRealtimeEngineNode.create(context, {
+          numChannels: 2,
+          nodeFactory,
+          [key]: value,
+        } as never),
       ).rejects.toThrow(new TypeError(`SonareRealtimeEngineNode.create: unknown option '${key}'`));
       expect(nodes).toBe(0);
     });

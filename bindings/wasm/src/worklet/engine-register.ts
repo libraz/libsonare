@@ -38,7 +38,9 @@ export function registerSonareRealtimeEngineWorkletProcessor(
     constructor(options?: { processorOptions?: SonareRealtimeEngineWorkletProcessorOptions }) {
       super();
       const port = this.port;
-      const processorOptions = options?.processorOptions ?? {};
+      // A missing processorOptions reaches the processor, which refuses the absent numChannels.
+      const processorOptions =
+        options?.processorOptions ?? ({} as SonareRealtimeEngineWorkletProcessorOptions);
       assertKnownProcessorOptions(name, 'engineProcessor', processorOptions);
       void this.initializeEmbind(processorOptions, port);
       const onMessage = (event: { data: unknown }) => {

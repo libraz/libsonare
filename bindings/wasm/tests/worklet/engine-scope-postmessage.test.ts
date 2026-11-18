@@ -28,6 +28,7 @@ describe('realtime engine scope postMessage transport', () => {
     const node = await SonareRealtimeEngineNode.create(
       { sampleRate: 48000 } as unknown as BaseAudioContext,
       {
+        numChannels: 2,
         mode: 'postMessage',
         scopeIntervalFrames: 256,
         scopeBands: 48,

@@ -325,7 +325,7 @@ export class SonareRealtimeEngineNode {
 
   static async create(
     context: BaseAudioContext,
-    options: SonareRealtimeEngineNodeOptions = {},
+    options: SonareRealtimeEngineNodeOptions,
   ): Promise<SonareRealtimeEngineNode> {
     assertKnownProcessorOptions('SonareRealtimeEngineNode.create', 'engineNode', options);
     const maxBlockSize = workletBlockSize(options.maxBlockSize);
@@ -458,7 +458,7 @@ export class SonareRealtimeEngineNode {
       mode === 'sab'
         ? createSonareExternalMidiRingBuffer({ capacity: externalMidiRingCapacity })
         : undefined;
-    const channelCount = requireChannelCount(options.numChannels, 2, 'numChannels');
+    const channelCount = requireChannelCount(options.numChannels, 'numChannels');
     const cueOutput = options.cueOutput === true;
     const processorOptions: SonareRealtimeEngineWorkletProcessorOptions = {
       sampleRate,

@@ -101,6 +101,7 @@ describe('track lane automation ids (WASM)', () => {
     const posted: unknown[] = [];
     const offline = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: kBlock });
     const engine = await SonareEngine.create(fakeContext(), {
+      numChannels: 2,
       mode: 'postMessage',
       offlineEngine: offline as unknown as OfflineEngineOption,
       offlineNumChannels: 1,

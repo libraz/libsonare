@@ -482,6 +482,7 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
         maxBlockSize: 128,
       }) as unknown as OfflineEngineOption;
       const engine = await SonareEngine.create(fakeContext(), {
+        numChannels: 2,
         mode: 'postMessage',
         offlineEngine: offline,
         nodeFactory: () =>

@@ -3502,6 +3502,7 @@ describe('processor state reset through the worklet facade', () => {
 
   const createFacade = async (posted: unknown[], mirror: RealtimeEngine) =>
     SonareEngine.create(fakeContext(), {
+      numChannels: 2,
       mode: 'postMessage',
       offlineEngine: mirror as unknown as NonNullable<
         NonNullable<Parameters<typeof SonareEngine.create>[1]>['offlineEngine']
@@ -3659,6 +3660,7 @@ describe('processor state reset through the worklet facade', () => {
     const context = { sampleRate: SR } as unknown as BaseAudioContext;
     const { SonareRealtimeEngineNode } = await import('../dist/worklet.js');
     const node = await SonareRealtimeEngineNode.create(context, {
+      numChannels: 2,
       mode: 'postMessage',
       engineAbiVersion: 1,
       nodeFactory: () => readyNode(posted),

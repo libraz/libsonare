@@ -337,6 +337,7 @@ describe('strip state retention', () => {
       destroy: () => undefined,
     } as unknown as RealtimeEngine;
     const engine = await SonareEngine.create(fakeAudioContext(), {
+      numChannels: 2,
       mode: 'postMessage',
       engineAbiVersion: 1,
       offlineEngine,
@@ -366,6 +367,7 @@ describe('strip state retention', () => {
       destroy: () => undefined,
     } as unknown as RealtimeEngine;
     const engine = await SonareEngine.create(fakeAudioContext(), {
+      numChannels: 2,
       mode: 'postMessage',
       engineAbiVersion: 1,
       offlineEngine,

@@ -93,6 +93,7 @@ describe('worklet capture response protocol', () => {
     const node = await SonareRealtimeEngineNode.create(
       { sampleRate: 48000 } as unknown as BaseAudioContext,
       {
+        numChannels: 2,
         mode: 'postMessage',
         engineAbiVersion: 1,
         nodeFactory: () => ({ port, disconnect: () => undefined }) as unknown as AudioWorkletNode,

@@ -488,6 +488,7 @@ describe('worklet attachOpfsClipStream', () => {
       onmessage: undefined as ((event: MessageEvent<unknown>) => void) | undefined,
     };
     const engine = await SonareEngine.create({ sampleRate: 48000 } as BaseAudioContext, {
+      numChannels: 2,
       mode: 'postMessage',
       nodeFactory: () => {
         queueMicrotask(() => port.onmessage?.({ data: { type: 'ready' } } as MessageEvent));
@@ -575,6 +576,7 @@ describe('worklet attachOpfsClipStream', () => {
       onmessage: undefined as ((event: MessageEvent<unknown>) => void) | undefined,
     };
     const engine = await SonareEngine.create({ sampleRate: 48000 } as BaseAudioContext, {
+      numChannels: 2,
       mode: 'postMessage',
       nodeFactory: () => {
         queueMicrotask(() => port.onmessage?.({ data: { type: 'ready' } } as MessageEvent));
@@ -605,6 +607,7 @@ describe('worklet attachOpfsClipStream', () => {
     };
     const context = { sampleRate: 48000 } as BaseAudioContext;
     const engine = await SonareEngine.create(context, {
+      numChannels: 2,
       mode: 'postMessage',
       nodeFactory: () => {
         queueMicrotask(() => port.onmessage?.({ data: { type: 'ready' } } as MessageEvent));

@@ -7,7 +7,7 @@ export interface SonareEngineOptions extends SonareRealtimeEngineNodeOptions {
   offlineEngine?: RealtimeEngine;
   /** Offline render block size in frames. Default: `maxBlockSize`, else `128`. */
   offlineBlockSize?: number;
-  /** Planes the offline mirror renders and captures. Default: `numChannels`, else `2`. */
+  /** Planes the offline mirror renders and captures. Default: `numChannels`. */
   offlineNumChannels?: number;
 }
 

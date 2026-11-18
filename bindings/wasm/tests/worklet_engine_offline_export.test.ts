@@ -67,6 +67,7 @@ async function createFacade(
     onmessage: undefined as ((event: MessageEvent<unknown>) => void) | undefined,
   };
   const engine = await SonareEngine.create({ sampleRate: SR } as BaseAudioContext, {
+    numChannels: 2,
     mode: options.mode ?? 'postMessage',
     offlineEngine: mirror as unknown as OfflineEngineOption,
     offlineNumChannels: 2,
