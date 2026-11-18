@@ -1268,6 +1268,12 @@ from .types import (
 from .types import MixSourceClass as MixSourceClass
 from .types import MixTrackAlignment as MixTrackAlignment
 from .types import (
+    NmfInit as NmfInit,
+)
+from .types import (
+    NnFilterAggregate as NnFilterAggregate,
+)
+from .types import (
     NoiseDetection as NoiseDetection,
 )
 from .types import (

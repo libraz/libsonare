@@ -283,6 +283,17 @@ def test_an_omitted_nmf_init_is_the_library_default_and_an_empty_one_is_refused(
         libsonare.decompose_with_init(spec, 12, 20, 2, n_iter=5, init="")  # type: ignore[arg-type]
 
 
+def test_an_omitted_nn_filter_aggregate_is_the_library_default() -> None:
+    """aggregate=None reaches the C ABI as NULL ("mean"); "" is an unknown token, not absence."""
+    rng = np.random.default_rng(3)
+    spec = np.abs(rng.standard_normal((12, 20))).astype(np.float32).ravel()
+    omitted = libsonare.nn_filter(spec, 12, 20)
+    np.testing.assert_array_equal(omitted, libsonare.nn_filter(spec, 12, 20, aggregate="mean"))
+    assert not np.array_equal(omitted, libsonare.nn_filter(spec, 12, 20, aggregate="max"))
+    with pytest.raises(SonareValueError, match="aggregate"):
+        libsonare.nn_filter(spec, 12, 20, aggregate="")  # type: ignore[arg-type]
+
+
 @pytest.mark.parametrize(
     ("call", "field"),
     [

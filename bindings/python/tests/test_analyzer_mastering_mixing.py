@@ -48,6 +48,27 @@ def test_the_true_peak_ceiling_keyword_is_ceiling_dbtp() -> None:
     assert float(np.max(np.abs(result.samples))) <= 10 ** ((-3.0 + 0.2) / 20)
 
 
+def test_an_omitted_true_peak_oversample_is_the_library_default() -> None:
+    """Omitted hands the core its 4x default; 0 is refused and the core owns the set."""
+    import libsonare
+
+    sr = 22050
+    samples = [0.2 * math.sin(2 * math.pi * 440 * i / sr) for i in range(sr // 2)]
+    omitted = libsonare.mastering(samples, sample_rate=sr, target_lufs=-6.0)
+    explicit = libsonare.mastering(
+        samples, sample_rate=sr, target_lufs=-6.0, true_peak_oversample=4
+    )
+    np.testing.assert_array_equal(omitted.samples, explicit.samples)
+    audio = libsonare.Audio.from_buffer(samples, sample_rate=sr)
+    np.testing.assert_array_equal(audio.mastering(target_lufs=-6.0).samples, omitted.samples)
+    with pytest.raises(libsonare.SonareValueError, match="true_peak_oversample"):
+        libsonare.mastering(samples, sample_rate=sr, true_peak_oversample=0)
+    with pytest.raises(libsonare.SonareValueError, match="true_peak_oversample"):
+        audio.mastering(true_peak_oversample=0)
+    with pytest.raises(libsonare.SonareValueError, match="1, 2, 4, 8"):
+        libsonare.mastering(samples, sample_rate=sr, true_peak_oversample=3)
+
+
 def test_mastering_accepts_release_and_input_rate_knobs() -> None:
     """The appended maximizer knobs are accepted and zero-init stays default."""
     import libsonare

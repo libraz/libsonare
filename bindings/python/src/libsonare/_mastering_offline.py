@@ -62,7 +62,7 @@ def mastering(
     sample_rate: int,
     target_lufs: float = -14.0,
     ceiling_dbtp: float = -1.0,
-    true_peak_oversample: int = 4,
+    true_peak_oversample: int | None = None,
     release_ms: float | None = None,
     apply_gain_at_input_rate: bool = False,
 ) -> MasteringResult:
@@ -74,9 +74,10 @@ def mastering(
     ``apply_gain_at_input_rate`` applies the static loudness gain at the input
     (pre-oversample) rate.
 
-    ``ceiling_dbtp`` is held on the true peak read at ``true_peak_oversample``
-    (4x, the BS.1770 measure, by default); a finer meter can read up to
-    ~0.15 dB higher.
+    ``ceiling_dbtp`` is held on the true peak read at ``true_peak_oversample``,
+    one of 1, 2, 4, 8 or 16. Default: 4 (the library's), the BS.1770 measure; a
+    finer meter can read up to ~0.15 dB higher. An explicit 0 raises
+    ``SonareValueError``.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_process"):
@@ -86,7 +87,7 @@ def mastering(
     config = SonareMasteringConfig(
         target_lufs=target_lufs,
         ceiling_dbtp=ceiling_dbtp,
-        true_peak_oversample=true_peak_oversample,
+        true_peak_oversample=_resolve_zero_default(true_peak_oversample, "true_peak_oversample"),
         release_ms=_resolve_zero_default(release_ms, "release_ms"),
         apply_gain_at_input_rate=1 if apply_gain_at_input_rate else 0,
     )

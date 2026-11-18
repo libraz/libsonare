@@ -103,6 +103,50 @@ def test_metering_detect_clipping_rejects_negative_min_region() -> None:
         libsonare.metering_detect_clipping(_sine(440.0, 0.1), SR, min_region_samples=-1)
 
 
+def _clipping_fixture() -> np.ndarray:
+    """Runs a 0.9 threshold or a 4-sample minimum would treat differently from the defaults."""
+    samples = np.full(8000, 0.1, dtype=np.float32)
+    samples[1000:1064] = 1.0
+    samples[3000] = 1.0
+    samples[5000:5040] = 0.95
+    return samples
+
+
+@pytest.mark.parametrize(
+    ("field", "library_default", "other"),
+    [("threshold", 0.999, 0.9), ("min_region_samples", 1, 4)],
+)
+def test_an_omitted_clipping_setting_is_the_library_default(
+    field: str, library_default: float, other: float
+) -> None:
+    """Leaving a setting out hands the core its default, which equals the explicit value."""
+    samples = _clipping_fixture()
+    omitted = libsonare.metering_detect_clipping(samples, SR)
+    assert omitted == libsonare.metering_detect_clipping(samples, SR, **{field: library_default})
+    assert omitted != libsonare.metering_detect_clipping(samples, SR, **{field: other})
+    with libsonare.Audio.from_buffer(samples, sample_rate=SR) as audio:
+        assert audio.detect_clipping() == omitted
+        assert audio.detect_clipping(**{field: library_default}) == omitted
+
+
+@pytest.mark.parametrize("field", ["threshold", "min_region_samples"])
+def test_an_explicit_zero_clipping_setting_is_refused(field: str) -> None:
+    """0 is the C ABI's spelling of the default; absence is None."""
+    samples = _clipping_fixture()
+    with pytest.raises(libsonare.SonareValueError, match=field):
+        libsonare.metering_detect_clipping(samples, SR, **{field: 0})
+    with (
+        libsonare.Audio.from_buffer(samples, sample_rate=SR) as audio,
+        pytest.raises(libsonare.SonareValueError, match=field),
+    ):
+        audio.detect_clipping(**{field: 0})
+
+
+def test_a_clipping_threshold_above_full_scale_is_refused_by_the_core() -> None:
+    with pytest.raises(libsonare.SonareValueError):
+        libsonare.metering_detect_clipping(_clipping_fixture(), SR, threshold=1.5)
+
+
 def test_metering_dynamic_range_returns_positive_dr_for_varying_signal() -> None:
     # Default config has window=3 s / hop=1 s, so we need more than 3 s of audio
     # with varying level for high - low percentiles to differ.

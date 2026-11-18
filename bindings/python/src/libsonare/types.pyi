@@ -447,6 +447,7 @@ PitchTargetMode: TypeAlias = Literal["midi", "scale"]
 
 WindowType: TypeAlias = Literal["hann", "hamming", "blackman", "rectangular"]
 NmfInit: TypeAlias = Literal["random", "nndsvd"]
+NnFilterAggregate: TypeAlias = Literal["mean", "median", "min", "max"]
 
 SpectralEditMode: TypeAlias = Literal["gain", "attenuate", "mute", "heal"]
 

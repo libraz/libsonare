@@ -207,7 +207,7 @@ class Audio:
         self,
         target_lufs: float = -14.0,
         ceiling_dbtp: float = -1.0,
-        true_peak_oversample: int = 4,
+        true_peak_oversample: int | None = None,
         release_ms: float | None = None,
         apply_gain_at_input_rate: bool = False,
     ) -> MasteringResult: ...
@@ -279,7 +279,7 @@ class Audio:
     ) -> float: ...
     def true_peak_dbtp(self, oversample_factor: int | None = None) -> float: ...
     def detect_clipping(
-        self, threshold: float = 0.999, min_region_samples: int = 1
+        self, threshold: float | None = None, min_region_samples: int | None = None
     ) -> ClippingReport: ...
     def dynamic_range(
         self,

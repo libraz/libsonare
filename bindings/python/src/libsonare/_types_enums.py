@@ -175,6 +175,9 @@ WindowType = Literal["hann", "hamming", "blackman", "rectangular"]
 NmfInit = Literal["random", "nndsvd"]
 """NMF initialiser: seeded random factors or the SVD-based warm start."""
 
+NnFilterAggregate = Literal["mean", "median", "min", "max"]
+"""How :func:`nn_filter` combines a frame's nearest neighbours."""
+
 SpectralEditMode = Literal["gain", "attenuate", "mute", "heal"]
 """What a :class:`SpectralRegionOp` does to its rectangle."""
 

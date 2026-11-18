@@ -47,9 +47,10 @@ from ._runtime import (
     _validate_samples,
     _validate_stft_n_fft,
 )
-from .types import HpssResult, NmfInit
+from .types import HpssResult, NmfInit, NnFilterAggregate
 
 _NMF_INITS: tuple[str, ...] = get_args(NmfInit)
+_NN_FILTER_AGGREGATES: tuple[str, ...] = get_args(NnFilterAggregate)
 
 # ============================================================================
 # Effects - decomposition / separation
@@ -421,7 +422,7 @@ def nn_filter(
     s: Sequence[float] | list[float],
     n_features: int,
     n_frames: int,
-    aggregate: str = "mean",
+    aggregate: NnFilterAggregate | None = None,
     k: int | None = None,
     width: int | None = None,
 ) -> np.ndarray:
@@ -431,7 +432,9 @@ def nn_filter(
         s: Input spectrogram, flattened row-major ``[n_features x n_frames]``.
         n_features: Feature dimension (rows). Must be > 0.
         n_frames: Number of time frames. Must be > 0.
-        aggregate: Aggregator: ``"mean"``, ``"median"``, ``"min"`` or ``"max"``.
+        aggregate: Aggregator: ``"mean"``, ``"median"``, ``"min"`` or ``"max"``;
+            any other string, the empty one included, is refused. Default:
+            ``"mean"`` (the library's).
         k: Number of nearest neighbours; None takes the library default (7).
             Must be positive when given.
         width: Time exclusion half-width; None takes the library default (1).
@@ -445,7 +448,11 @@ def nn_filter(
     c_array, length = _to_c_float_array(s)
     if length != n_features * n_frames:
         raise SonareValueError("s length must equal n_features * n_frames")
-    aggregate_bytes = _utf8_arg(aggregate, "aggregate") if aggregate else None
+    aggregate_bytes = (
+        None
+        if aggregate is None
+        else _utf8_arg(_token_arg(aggregate, _NN_FILTER_AGGREGATES, "aggregate"), "aggregate")
+    )
     with _out_float_array(lib) as (out, out_length):
         _check(
             lib.sonare_nn_filter(

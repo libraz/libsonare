@@ -215,6 +215,14 @@ sonare frames-to-samples --frames 10
 after = '''
 sonare frames-to-samples --frames 10 --n-fft 2048  # omitted, no centring offset is applied
 '''
+[[rule.example]]
+surface = "python"
+before = '''
+libsonare.hpss(samples, sample_rate=44100, n_fft=4096)  # hop was 512
+'''
+after = '''
+libsonare.hpss(samples, sample_rate=44100, n_fft=4096, hop_length=512)  # omitted, the hop is n_fft // 4
+'''
 
 [[rule]]
 slug = "non-finite-is-absent"

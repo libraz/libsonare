@@ -97,6 +97,7 @@ from .types import (
     MixResult,
     MixSceneDocument,
     NmfInit,
+    NnFilterAggregate,
     NoiseDetection,
     NormalizeStereoResult,
     NormType,
@@ -1284,7 +1285,7 @@ def mastering(
     sample_rate: int,
     target_lufs: float = -14.0,
     ceiling_dbtp: float = -1.0,
-    true_peak_oversample: int = 4,
+    true_peak_oversample: int | None = None,
     release_ms: float | None = None,
     apply_gain_at_input_rate: bool = False,
 ) -> MasteringResult: ...
@@ -2048,7 +2049,7 @@ def nn_filter(
     s: FloatSamples,
     n_features: int,
     n_frames: int,
-    aggregate: str = "mean",
+    aggregate: NnFilterAggregate | None = None,
     k: int | None = None,
     width: int | None = None,
 ) -> np.ndarray[Any, Any]: ...
@@ -2704,8 +2705,8 @@ def metering_true_peak_dbtp(
 def metering_detect_clipping(
     samples: FloatSamples,
     sample_rate: int,
-    threshold: float = 0.999,
-    min_region_samples: int = 1,
+    threshold: float | None = None,
+    min_region_samples: int | None = None,
     *,
     validate: bool = True,
 ) -> ClippingReport: ...

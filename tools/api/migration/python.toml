@@ -8104,7 +8104,7 @@ kind = "option"
 old = "nn_filter(k)"
 changed = "None takes the library default k (was the literal 7); k below 1 raises SonareValueError"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_new_bindings.py::test_a_sentinel_count_is_refused_by_name"
 
 [[entry]]
@@ -8112,7 +8112,7 @@ kind = "option"
 old = "nn_filter(width)"
 changed = "None takes the library default width (was the literal 1); a negative width raises SonareValueError"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_new_bindings.py::test_a_sentinel_count_is_refused_by_name"
 
 [[entry]]
@@ -8120,7 +8120,7 @@ kind = "option"
 old = "decompose(n_iter)"
 changed = "None takes the library default iteration count (was the literal 50); n_iter below 1 raises SonareValueError"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_new_bindings.py::test_a_sentinel_count_is_refused_by_name"
 
 [[entry]]
@@ -8128,7 +8128,7 @@ kind = "option"
 old = "decompose_with_init(n_iter)"
 changed = "None takes the library default iteration count (was the literal 50); n_iter below 1 raises SonareValueError"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_new_bindings.py::test_a_sentinel_count_is_refused_by_name"
 
 [[entry]]
@@ -8941,7 +8941,7 @@ old = "Mixer.from_scene_json(block_size)"
 to = "Mixer.from_json(max_block_size)"
 changed = "renamed max_block_size after the C parameter; omitted takes the library default (was 512) and an explicit 0 raises SonareValueError"
 domain = "engine"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_block_size_absence.py::test_an_explicit_non_positive_block_size_is_refused"
 
 [[entry]]
@@ -8974,7 +8974,7 @@ kind = "option"
 old = "RealtimeEngine.prepare(command_capacity)"
 changed = "omitted takes the library default (was 1024) and an explicit 0 raises SonareValueError"
 domain = "engine"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_block_size_absence.py::test_engine_capacities_take_none_and_refuse_zero"
 
 [[entry]]
@@ -8982,7 +8982,7 @@ kind = "option"
 old = "RealtimeEngine.prepare(telemetry_capacity)"
 changed = "omitted takes the library default (was 1024) and an explicit 0 raises SonareValueError"
 domain = "engine"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_block_size_absence.py::test_engine_capacities_take_none_and_refuse_zero"
 
 [[entry]]
@@ -8990,7 +8990,7 @@ kind = "option"
 old = "RealtimeEngine.prepare(max_channels)"
 changed = "omitted takes the library default (was 64) and an explicit 0 raises SonareValueError"
 domain = "engine"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_block_size_absence.py::test_engine_capacities_take_none_and_refuse_zero"
 
 [[entry]]
@@ -9006,7 +9006,7 @@ kind = "option"
 old = "RealtimeEngine.render_offline(block_size)"
 changed = "omitted takes the library default (was 128) and an explicit 0 raises SonareValueError"
 domain = "engine"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_block_size_absence.py::test_engine_offline_block_size_takes_none_and_refuses_zero"
 
 [[entry]]
@@ -9022,7 +9022,7 @@ kind = "field"
 old = "EngineBounceOptions.block_size"
 changed = "omitted takes the library default (was 128) and an explicit 0 raises SonareValueError"
 domain = "engine"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_block_size_absence.py::test_engine_offline_block_size_takes_none_and_refuses_zero"
 
 [[entry]]
@@ -9038,7 +9038,7 @@ kind = "field"
 old = "EngineFreezeOptions.block_size"
 changed = "omitted takes the library default (was 128) and an explicit 0 raises SonareValueError"
 domain = "engine"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_block_size_absence.py::test_an_explicit_non_positive_block_size_is_refused"
 
 [[entry]]
@@ -11326,7 +11326,7 @@ kind = "option"
 old = "griffin_lim(n_fft)"
 changed = "omitted is implied by the bin count, (n_bins - 1) * 2 (was 2048); an explicit value that disagrees raises SonareValueError"
 domain = "analysis"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_analyzer_features.py::test_griffin_lim_infers_n_fft_from_the_bin_count"
 
 [[entry]]
@@ -11334,7 +11334,7 @@ kind = "option"
 old = "griffin_lim(hop_length)"
 changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes"
 domain = "analysis"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_inverse_hop_is_a_quarter_of_n_fft"
 
 [[entry]]
@@ -11342,7 +11342,7 @@ kind = "option"
 old = "mel_to_audio(hop_length)"
 changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes"
 domain = "analysis"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_inverse_hop_is_a_quarter_of_n_fft"
 
 [[entry]]
@@ -11350,7 +11350,7 @@ kind = "option"
 old = "mfcc_to_audio(hop_length)"
 changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes"
 domain = "analysis"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_inverse_hop_is_a_quarter_of_n_fft"
 
 [[entry]]
@@ -11358,7 +11358,7 @@ kind = "option"
 old = "hpss(hop_length)"
 changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_hpss_hop_is_a_quarter_of_n_fft"
 
 [[entry]]
@@ -11366,7 +11366,7 @@ kind = "option"
 old = "hpss_with_residual(hop_length)"
 changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_hpss_hop_is_a_quarter_of_n_fft"
 
 [[entry]]
@@ -11374,7 +11374,7 @@ kind = "option"
 old = "time_stretch(hop_length)"
 changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_time_stretch_hop_is_a_quarter_of_n_fft"
 
 [[entry]]
@@ -11382,7 +11382,7 @@ kind = "option"
 old = "pitch_shift(hop_length)"
 changed = "omitted is n_fft // 4 (at least 1) instead of a fixed 512, so a small n_fft with no hop resynthesizes"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_analyzer_features.py::test_an_omitted_pitch_shift_hop_is_a_quarter_of_n_fft"
 
 [[entry]]
@@ -11390,7 +11390,7 @@ kind = "option"
 old = "decompose_stems(n_fft)"
 changed = "omitted hands the core its default (was the literal 2048); an explicit 0 raises SonareValueError"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_new_bindings.py::test_an_omitted_stems_framing_is_the_library_default"
 
 [[entry]]
@@ -11398,7 +11398,7 @@ kind = "option"
 old = "decompose_stems(hop_length)"
 changed = "omitted hands the core its default (was the literal 512); an explicit 0 raises SonareValueError"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_new_bindings.py::test_an_omitted_stems_framing_is_the_library_default"
 
 [[entry]]
@@ -11406,7 +11406,7 @@ kind = "option"
 old = "decompose_stems(n_components)"
 changed = "omitted hands the core its default (was the literal 4); an explicit 0 raises SonareValueError"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_new_bindings.py::test_a_stems_sentinel_is_refused_by_name"
 
 [[entry]]
@@ -11414,7 +11414,7 @@ kind = "option"
 old = "decompose_stems(n_iter)"
 changed = "omitted hands the core its default (was the literal 100); an explicit 0 raises SonareValueError"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_new_bindings.py::test_a_stems_sentinel_is_refused_by_name"
 
 [[entry]]
@@ -11422,7 +11422,7 @@ kind = "option"
 old = "decompose_stems(mask_power)"
 changed = "omitted hands the core its default (was the literal 1.0); an explicit 0 raises SonareValueError"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_new_bindings.py::test_a_stems_sentinel_is_refused_by_name"
 
 [[entry]]
@@ -11430,7 +11430,7 @@ kind = "option"
 old = "decompose_stems(beta)"
 changed = "omitted hands the core its default (was the literal 2.0)"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_new_bindings.py::test_an_omitted_stems_setting_is_the_library_default"
 
 [[entry]]
@@ -11446,7 +11446,7 @@ kind = "option"
 old = "decompose_stems_linked(n_fft)"
 changed = "omitted hands the core its default (was the literal 2048); an explicit 0 raises SonareValueError"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_new_bindings.py::test_an_omitted_stems_framing_is_the_library_default"
 
 [[entry]]
@@ -11454,7 +11454,7 @@ kind = "option"
 old = "decompose_stems_linked(hop_length)"
 changed = "omitted hands the core its default (was the literal 512); an explicit 0 raises SonareValueError"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_new_bindings.py::test_an_omitted_stems_framing_is_the_library_default"
 
 [[entry]]
@@ -11462,7 +11462,7 @@ kind = "option"
 old = "decompose_stems_linked(n_components)"
 changed = "omitted hands the core its default (was the literal 4); an explicit 0 raises SonareValueError"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_new_bindings.py::test_a_stems_sentinel_is_refused_by_name"
 
 [[entry]]
@@ -11470,7 +11470,7 @@ kind = "option"
 old = "decompose_stems_linked(n_iter)"
 changed = "omitted hands the core its default (was the literal 100); an explicit 0 raises SonareValueError"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_new_bindings.py::test_a_stems_sentinel_is_refused_by_name"
 
 [[entry]]
@@ -11478,7 +11478,7 @@ kind = "option"
 old = "decompose_stems_linked(mask_power)"
 changed = "omitted hands the core its default (was the literal 1.0); an explicit 0 raises SonareValueError"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_new_bindings.py::test_a_stems_sentinel_is_refused_by_name"
 
 [[entry]]
@@ -11486,7 +11486,7 @@ kind = "option"
 old = "decompose_stems_linked(beta)"
 changed = "omitted hands the core its default (was the literal 2.0)"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_new_bindings.py::test_an_omitted_stems_setting_is_the_library_default"
 
 [[entry]]
@@ -11510,7 +11510,7 @@ kind = "option"
 old = "spectral_edit(n_fft)"
 changed = "omitted hands the core its default (was the literal 2048); an explicit 0 raises SonareValueError instead of selecting the default"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_spectral_edit.py::test_an_explicit_zero_is_refused_rather_than_read_as_the_default"
 
 [[entry]]
@@ -11518,7 +11518,7 @@ kind = "option"
 old = "spectral_edit(hop_length)"
 changed = "omitted hands the core its default (was the literal 512); an explicit 0 raises SonareValueError instead of selecting the default"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_spectral_edit.py::test_an_explicit_zero_is_refused_rather_than_read_as_the_default"
 
 [[entry]]
@@ -11526,5 +11526,61 @@ kind = "option"
 old = "spectral_edit(heal_radius_frames)"
 changed = "omitted hands the core its default (was the literal 2); an explicit 0 raises SonareValueError instead of selecting the default"
 domain = "effects"
-rule = "absent-not-sentinel"
+rule = "library-owned-defaults"
 test = "bindings/python/tests/test_spectral_edit.py::test_an_explicit_zero_is_refused_rather_than_read_as_the_default"
+
+[[entry]]
+kind = "option"
+old = "metering_detect_clipping(threshold)"
+changed = "omitted hands the core its default (was the literal 0.999); an explicit 0 raises SonareValueError"
+domain = "mastering"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_metering_and_scale.py::test_an_omitted_clipping_setting_is_the_library_default"
+
+[[entry]]
+kind = "option"
+old = "metering_detect_clipping(min_region_samples)"
+changed = "omitted hands the core its default (was the literal 1); an explicit 0 raises SonareValueError"
+domain = "mastering"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_metering_and_scale.py::test_an_explicit_zero_clipping_setting_is_refused"
+
+[[entry]]
+kind = "option"
+old = "Audio.detect_clipping(threshold)"
+changed = "omitted hands the core its default (was the literal 0.999); an explicit 0 raises SonareValueError"
+domain = "core"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_metering_and_scale.py::test_an_omitted_clipping_setting_is_the_library_default"
+
+[[entry]]
+kind = "option"
+old = "Audio.detect_clipping(min_region_samples)"
+changed = "omitted hands the core its default (was the literal 1); an explicit 0 raises SonareValueError"
+domain = "core"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_metering_and_scale.py::test_an_explicit_zero_clipping_setting_is_refused"
+
+[[entry]]
+kind = "option"
+old = "mastering(true_peak_oversample)"
+changed = "omitted hands the core its default (was the literal 4); an explicit 0 raises SonareValueError"
+domain = "mastering"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_an_omitted_true_peak_oversample_is_the_library_default"
+
+[[entry]]
+kind = "option"
+old = "Audio.mastering(true_peak_oversample)"
+changed = "omitted hands the core its default (was the literal 4); an explicit 0 raises SonareValueError"
+domain = "core"
+rule = "library-owned-defaults"
+test = "bindings/python/tests/test_analyzer_mastering_mixing.py::test_an_omitted_true_peak_oversample_is_the_library_default"
+
+[[entry]]
+kind = "option"
+old = "nn_filter(aggregate)"
+changed = "one of the NnFilterAggregate tokens, omitted hands the core its default (was the literal \"mean\"); an empty string or any other value raises SonareValueError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_new_bindings.py::test_an_omitted_nn_filter_aggregate_is_the_library_default"

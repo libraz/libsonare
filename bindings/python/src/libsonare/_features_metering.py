@@ -68,6 +68,16 @@ def _oversample_factor(oversample_factor: int | None) -> int | float:
     return _resolve_zero_default(oversample_factor, "oversample_factor")
 
 
+def _clipping_args(
+    threshold: float | None, min_region_samples: int | None
+) -> tuple[int | float, int | float]:
+    """The clipping arguments, ``None`` mapped to the C default and 0 refused."""
+    return (
+        _resolve_zero_default(threshold, "threshold"),
+        _resolve_zero_default(min_region_samples, "min_region_samples"),
+    )
+
+
 def _spectrum_args(
     n_fft: int | None, octave_fraction: int | None, db_ref: float | None, db_amin: float | None
 ) -> tuple[int | float, int | float, int | float, int | float]:
@@ -452,14 +462,19 @@ def metering_true_peak_dbtp(
 def metering_detect_clipping(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-    threshold: float = 0.999,
-    min_region_samples: int = 1,
+    threshold: float | None = None,
+    min_region_samples: int | None = None,
     *,
     validate: bool = True,
 ) -> ClippingReport:
-    """Detect contiguous runs of clipped samples."""
-    if not isinstance(min_region_samples, int) or min_region_samples < 0:
-        raise SonareValueError("min_region_samples must be a non-negative integer")
+    """Detect contiguous runs of clipped samples.
+
+    ``threshold`` is the absolute level a clipped sample reaches, in ``(0, 1]``.
+    Default: 0.999 (the library's). ``min_region_samples`` is the shortest run
+    reported. Default: 1 (the library's). An explicit 0 for either raises
+    :class:`SonareValueError`; leave it out for the default.
+    """
+    c_threshold, c_min_region = _clipping_args(threshold, min_region_samples)
     sample_buf = _validate_samples("metering_detect_clipping", samples, validate=validate)
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
@@ -468,8 +483,8 @@ def metering_detect_clipping(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_float(threshold, "threshold"),
-        _to_c_size_t(min_region_samples, "min_region_samples"),
+        _to_c_float(c_threshold, "threshold"),
+        _to_c_size_t(c_min_region, "min_region_samples"),
         ctypes.byref(out),
     )
     _check(rc)

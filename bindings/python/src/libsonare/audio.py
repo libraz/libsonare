@@ -13,7 +13,12 @@ from . import _ffi_types_core as _ffi_core
 from ._analysis_detection import _DEFAULT_BPM_MAX, _DEFAULT_BPM_MIN
 from ._effects_repair_common import _linked_channel_planes
 from ._errors import SonareValueError, _not_supported, _require_open, _unknown_error
-from ._features_metering import _dynamic_range_args, _oversample_factor, _spectrum_args
+from ._features_metering import (
+    _clipping_args,
+    _dynamic_range_args,
+    _oversample_factor,
+    _spectrum_args,
+)
 from ._runtime import (
     _channel_layout_value,
     _check,
@@ -989,7 +994,7 @@ class Audio:
         self,
         target_lufs: float = -14.0,
         ceiling_dbtp: float = -1.0,
-        true_peak_oversample: int = 4,
+        true_peak_oversample: int | None = None,
         release_ms: float | None = None,
         apply_gain_at_input_rate: bool = False,
     ) -> MasteringResult:
@@ -1258,18 +1263,19 @@ class Audio:
 
     def detect_clipping(
         self,
-        threshold: float = 0.999,
-        min_region_samples: int = 1,
+        threshold: float | None = None,
+        min_region_samples: int | None = None,
     ) -> ClippingReport:
-        """Detect contiguous runs of clipped samples."""
+        """Detect clipped runs; see :func:`libsonare.metering_detect_clipping`."""
         from ._ffi import SonareClippingResult
 
+        c_threshold, c_min_region = _clipping_args(threshold, min_region_samples)
         handle = self._require_handle()
         out = SonareClippingResult()
         rc = self._lib.sonare_audio_detect_clipping(
             handle,
-            _to_c_float(threshold, "threshold"),
-            _to_c_size_t(min_region_samples, "min_region_samples"),
+            _to_c_float(c_threshold, "threshold"),
+            _to_c_size_t(c_min_region, "min_region_samples"),
             ctypes.byref(out),
         )
         _check(rc)
