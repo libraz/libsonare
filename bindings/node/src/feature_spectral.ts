@@ -22,12 +22,15 @@ import {
 
 /** Request for {@link stft}. `validate: false` skips the NaN/Inf pre-scan. */
 export interface StftRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Even FFT size in samples. Default 2048. */
   nFft?: number;
   /** Hop in samples. Default 512. */
   hopLength?: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
   validate?: boolean;
 }
 
@@ -42,7 +45,9 @@ export type SpectralFlatnessRequest = StftRequest;
 
 /** Request for {@link melSpectrogram}. */
 export interface MelSpectrogramRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Mel bands. Default 128. */
   nMels?: number;
@@ -52,25 +57,37 @@ export interface MelSpectrogramRequest {
   fmaxHz?: number;
   /** HTK mel formula instead of Slaney. Default false. */
   htk?: boolean;
+  /** Even FFT size in samples. Default `2048`. */
   nFft?: number;
+  /** Hop in samples. Default `512`. */
   hopLength?: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
   validate?: boolean;
 }
 
 /** Request for {@link mfcc}. */
 export interface MfccRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Coefficients kept. Default 20. */
   nMfcc?: number;
   /** Cepstral lifter; 0 means none. Default 0. */
   lifter?: number;
+  /** Mel bands. Default `128`. */
   nMels?: number;
+  /** Lower Mel band edge in Hz. Default `0`. */
   fminHz?: number;
+  /** Upper Mel band edge in Hz. Absent means the Nyquist. */
   fmaxHz?: number;
+  /** HTK mel formula instead of Slaney. Default `false`. */
   htk?: boolean;
+  /** Even FFT size in samples. Default `2048`. */
   nFft?: number;
+  /** Hop in samples. Default `512`. */
   hopLength?: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
   validate?: boolean;
 }
 
@@ -80,25 +97,33 @@ export interface MelDeltaRequest {
   features: Matrix2D;
   /** Odd regression width of at least 3. Default 9. */
   width?: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of `features`. Default `true`. */
   validate?: boolean;
 }
 
 /** Request for {@link reassignedSpectrogram}. */
 export interface ReassignedSpectrogramRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Power floor under which a bin is not reassigned. Default 1e-6. */
   refPower?: number;
   /** Fill unreassigned bins with NaN instead of the bin centre. Default false. */
   fillNan?: boolean;
+  /** Even FFT size in samples. Default `2048`. */
   nFft?: number;
+  /** Hop in samples. Default `512`. */
   hopLength?: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
   validate?: boolean;
 }
 
 /** Request for {@link spectralContrast}. */
 export interface SpectralContrastRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Contrast bands. Default 6. */
   nBands?: number;
@@ -106,73 +131,107 @@ export interface SpectralContrastRequest {
   fminHz?: number;
   /** Quantile separating peak from valley. Default 0.02. */
   quantile?: number;
+  /** Even FFT size in samples. Default `2048`. */
   nFft?: number;
+  /** Hop in samples. Default `512`. */
   hopLength?: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
   validate?: boolean;
 }
 
 /** Request for {@link polyFeatures}. */
 export interface PolyFeaturesRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Polynomial order. Default 1. */
   order?: number;
+  /** Even FFT size in samples. Default `2048`. */
   nFft?: number;
+  /** Hop in samples. Default `512`. */
   hopLength?: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
   validate?: boolean;
 }
 
 /** Request for {@link zeroCrossings}. */
 export interface ZeroCrossingsRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
+  /** Magnitude at or below which a sample counts as zero. Default `1e-10`. */
   threshold?: number;
+  /** Scale `threshold` by the maximum absolute sample. Default `false`. */
   refMagnitude?: boolean;
+  /** Always report index 0 as a crossing. Default `true`. */
   pad?: boolean;
+  /** Treat the sign of zero as positive. Default `true`. */
   zeroPos?: boolean;
+  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
   validate?: boolean;
 }
 
 /** Request for {@link spectralBandwidth}. */
 export interface SpectralBandwidthRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
+  /** Even FFT size in samples. Default `2048`. */
   nFft?: number;
+  /** Hop in samples. Default `512`. */
   hopLength?: number;
   /** Norm order of the deviation. Default 2. */
   p?: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
   validate?: boolean;
 }
 
 /** Request for {@link spectralRolloff}. */
 export interface SpectralRolloffRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Energy fraction below the rolloff frequency. Default 0.85. */
   rollPercent?: number;
+  /** Even FFT size in samples. Default `2048`. */
   nFft?: number;
+  /** Hop in samples. Default `512`. */
   hopLength?: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
   validate?: boolean;
 }
 
 /** Request for {@link spectralFlux}. */
 export interface SpectralFluxRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
+  /** Even FFT size in samples. Default `2048`. */
   nFft?: number;
+  /** Hop in samples. Default `512`. */
   hopLength?: number;
   /** Frame lag of the difference. Default 1. */
   lag?: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
   validate?: boolean;
 }
 
 /** Request for {@link zeroCrossingRate}. */
 export interface ZeroCrossingRateRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Framing window in samples. Default 2048. */
   frameLength?: number;
+  /** Hop in samples. Default `512`. */
   hopLength?: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
   validate?: boolean;
 }
 

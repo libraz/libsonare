@@ -14,8 +14,11 @@ function toLufsResult(
 
 /** Request for {@link lufs}. `validate: false` skips the NaN/Inf pre-scan. */
 export interface LufsRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. Required. */
   sampleRate: number;
+  /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
   validate?: boolean;
 }
 
@@ -47,6 +50,7 @@ export interface LufsSeriesMultichannelRequest {
 
 /** Request for {@link ebur128LoudnessRange}. */
 export interface Ebur128LoudnessRangeRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
   sampleRate: number;

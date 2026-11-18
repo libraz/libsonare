@@ -4,6 +4,7 @@ import { assertPositiveInteger, requestOnly } from './validation.js';
 
 /** Request for {@link powerToDb}. */
 export interface PowerToDbRequest {
+  /** Power values to convert. */
   values: Float32Array;
   /** Reference power. Default 1. */
   ref?: number;
@@ -15,6 +16,7 @@ export interface PowerToDbRequest {
 
 /** Request for {@link amplitudeToDb}. */
 export interface AmplitudeToDbRequest {
+  /** Amplitude values to convert. */
   values: Float32Array;
   /** Reference amplitude. Default 1. */
   ref?: number;
@@ -26,6 +28,7 @@ export interface AmplitudeToDbRequest {
 
 /** Request for {@link dbToPower}. */
 export interface DbToPowerRequest {
+  /** Decibel values to convert to power. */
   values: Float32Array;
   /** Reference power. Default 1. */
   ref?: number;
@@ -33,6 +36,7 @@ export interface DbToPowerRequest {
 
 /** Request for {@link dbToAmplitude}. */
 export interface DbToAmplitudeRequest {
+  /** Decibel values to convert to amplitude. */
   values: Float32Array;
   /** Reference amplitude. Default 1. */
   ref?: number;

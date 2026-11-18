@@ -24,12 +24,15 @@ import {
 
 /** Request for {@link chroma}. `validate: false` skips the NaN/Inf pre-scan. */
 export interface ChromaRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Even FFT size in samples. Default 2048. */
   nFft?: number;
   /** Hop in samples. Default 512. */
   hopLength?: number;
+  /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
   validate?: boolean;
 }
 
@@ -38,13 +41,17 @@ export interface ChromaRequest {
  * set; use {@link chroma} for the STFT-framed chromagram.
  */
 export interface ChromaCensRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
+  /** Hop length in samples. Default `512`. */
   hopLength?: number;
   /** Chroma bins. Default 12. */
   nChroma?: number;
   /** Constant-Q bins per octave. Default 36. */
   binsPerOctave?: number;
+  /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
   validate?: boolean;
 }
 
@@ -56,10 +63,15 @@ export type ChromaCqtRequest = ChromaCensRequest;
  * and lowest frequency are chosen together, so the resolution is not settable.
  */
 export interface BassChromaRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
+  /** Hop length in samples. Default `512`. */
   hopLength?: number;
+  /** Chroma bins. Default `12`. */
   nChroma?: number;
+  /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
   validate?: boolean;
 }
 
@@ -77,8 +89,11 @@ type _BassChromaRequestHasNoResolutionControls = AbsentKey<
 
 /** Request for {@link cqt}. */
 export interface CqtRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
+  /** Hop length in samples. Default `512`. */
   hopLength?: number;
   /** Lowest bin frequency in Hz. Default C1 (32.70 Hz). */
   fminHz?: number;
@@ -86,6 +101,7 @@ export interface CqtRequest {
   nBins?: number;
   /** Bins per octave. Default 12. */
   binsPerOctave?: number;
+  /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
   validate?: boolean;
 }
 
@@ -103,30 +119,41 @@ export interface VqtRequest extends CqtRequest {
 
 /** Request for {@link estimateTuning}. */
 export interface EstimateTuningRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Search resolution as a fraction of a bin. Default 0.01. */
   resolution?: number;
+  /** Bins per octave of the tuning grid. Default `12`. */
   binsPerOctave?: number;
+  /** FFT size in samples. Default `2048`. */
   nFft?: number;
+  /** Hop length in samples. Default `512`. */
   hopLength?: number;
+  /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
   validate?: boolean;
 }
 
 /** Request for {@link pitchYin}. */
 export interface PitchYinRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Framing window in samples. Default 2048. */
   frameLength?: number;
+  /** Hop length in samples. Default `512`. */
   hopLength?: number;
   /** Lowest f0 searched, in Hz. Default 65. */
   f0MinHz?: number;
   /** Highest f0 searched, in Hz. Default 2093. */
   f0MaxHz?: number;
+  /** YIN threshold in [0, 1] for voiced/unvoiced decisions. Default `0.1`. */
   threshold?: number;
   /** pYIN: fill unvoiced f0 with zero. Retained but ignored by YIN, which always estimates f0. */
   fillNa?: boolean;
+  /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
   validate?: boolean;
 }
 
@@ -135,20 +162,27 @@ export type PitchPyinRequest = PitchYinRequest;
 
 /** Request for {@link piptrack}. */
 export interface PiptrackRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
+  /** FFT size in samples. Default `2048`. */
   nFft?: number;
+  /** Hop length in samples. Default `512`. */
   hopLength?: number;
   /** Lowest frequency considered, in Hz. Default 150. */
   fminHz?: number;
   /** Highest frequency considered, in Hz. Default 4000. */
   fmaxHz?: number;
+  /** Magnitude threshold, as a fraction of the frame's maximum, below which a peak is dropped. Default `0.1`. */
   threshold?: number;
+  /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
   validate?: boolean;
 }
 
 /** Request for {@link noteSegments}. Give exactly one of `voicedProb` and `voicedFlags`. */
 export interface NoteSegmentsRequest {
+  /** Per-frame F0 track in Hz, one value per frame, at `frameRate` frames per second. */
   f0Hz: Float32Array;
   /**
    * Per-frame voicing values in `[0, 1]`; anything below `voicedThreshold` is
@@ -182,9 +216,11 @@ export interface NoteSegmentsRequest {
 
 /** Request for {@link pitchTuning}. */
 export interface PitchTuningRequest {
+  /** Frequencies in Hz to estimate the tuning offset from. */
   frequencies: Float32Array;
   /** Search resolution as a fraction of a bin. Default 0.01. */
   resolution?: number;
+  /** Bins per octave of the tuning grid. Default `12`. */
   binsPerOctave?: number;
 }
 
@@ -196,12 +232,19 @@ export interface TonnetzRequest {
 
 /** Request for {@link nnlsChroma}. */
 export interface NnlsChromaRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
+  /** Blend an STFT chroma into the NNLS chroma. Default `true`. */
   enableStftBlend?: boolean;
+  /** Weight of the blended STFT chroma. Default `0.55`. */
   stftBlendWeight?: number;
+  /** FFT size in samples of the blended STFT chroma. Default `4096`. */
   stftBlendNFft?: number;
+  /** Hop length in samples. Default `512`. */
   hopLength?: number;
+  /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
   validate?: boolean;
 }
 

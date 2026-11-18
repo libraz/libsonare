@@ -315,22 +315,36 @@ function chordAnalysisFromNative(raw: Native): ChordAnalysisResult {
 
 /** Peak-picking configuration for {@link detectOnsets}. */
 export interface OnsetDetectOptions {
+  /** FFT window in samples. Default `2048`. */
   nFft?: number;
+  /** Hop length in samples. Default `512`. */
   hopLength?: number;
+  /** Peak-picking threshold on the onset envelope. Default `0`. */
   threshold?: number;
+  /** Frames before a peak over which it must be the maximum. Default `1`. */
   preMax?: number;
+  /** Frames after a peak over which it must be the maximum. Default `1`. */
   postMax?: number;
+  /** Frames before a peak averaged for the local mean. Default `3`. */
   preAvg?: number;
+  /** Frames after a peak averaged for the local mean. Default `4`. */
   postAvg?: number;
+  /** Offset added to the local mean, in onset-envelope units. Default `0.06`. */
   delta?: number;
+  /** Minimum frames between consecutive onsets. Default `1`. */
   wait?: number;
+  /** Move each onset back to the preceding envelope minimum. Default `false`. */
   backtrack?: boolean;
+  /** Frames searched backwards when `backtrack` is set. Default `10`. */
   backtrackRange?: number;
   /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
   validate?: boolean;
 }
+/** Request for {@link detectOnsets}. */
 export interface DetectOnsetsRequest extends OnsetDetectOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
 }
 
@@ -344,44 +358,60 @@ export interface TempoRangeOptions {
 
 /** Request for {@link detectBpm}. */
 export interface DetectBpmRequest extends ValidateOptions, TempoRangeOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
 }
 /** Request for {@link detectBeats}. */
 export interface DetectBeatsRequest extends ValidateOptions, TempoRangeOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
 }
 /** Request for {@link detectDownbeats}. */
 export interface DetectDownbeatsRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
 }
 
+/** Request for {@link detectKey}. */
 export interface DetectKeyRequest extends KeyDetectionOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
 }
+/** Request for {@link detectKeyCandidates}. */
 export interface DetectKeyCandidatesRequest extends KeyDetectionOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
 }
 
 /** Request for {@link estimateRoom}. */
 export interface EstimateRoomRequest extends RoomEstimateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
 }
 /** Request for {@link roomMorph}. */
 export interface RoomMorphRequest extends RoomMorphOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
 }
 /** Request for {@link roomMorphStereo}. */
 export interface RoomMorphStereoRequest extends RoomMorphOptions {
+  /** Left channel samples. */
   left: Float32Array;
+  /** Right channel samples; same length as `left`. */
   right: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -390,37 +420,55 @@ export interface RoomMorphStereoRequest extends RoomMorphOptions {
 }
 /** The room fields of an estimate that {@link roomGeometryFromEstimate} reads. */
 export type RoomGeometryEstimate = Pick<RoomEstimateResult, 'lengthM' | 'widthM' | 'heightM'> & {
+  /** Per-band absorption coefficients of the estimated room. */
   bandAbsorption?: Float32Array | number[];
 };
 /** Request for {@link roomGeometryFromEstimate}. */
 export interface RoomGeometryFromEstimateRequest {
+  /** The room estimate to read the geometry from. */
   estimate: RoomGeometryEstimate;
   /** Replaces the source placement scaled into the estimated room. */
   source?: RoomPlacement;
   /** Replaces the listener placement scaled into the estimated room. */
   listener?: RoomPlacement;
 }
+/** Request for {@link chordFunctions}. */
 export interface ChordFunctionsRequest<T extends ChordFunctionsInput = Chord> {
   /** `detectChords`' timed result or its `chords` array, or the same shape built by hand. */
   chords: readonly T[] | { chords: readonly T[] };
+  /** Key the chords are labelled against. */
   key: ChordFunctionsKey;
 }
 
+/** Settings for {@link analyze}. Every field is optional and falls back to the core default when omitted. */
 export interface MusicAnalyzeOptions {
+  /** FFT window in samples at 22050 Hz, rescaled to the input rate. Default `2048`. */
   nFft?: number;
+  /** Hop length in samples. Default `512`. */
   hopLength?: number;
+  /** Lowest tempo searched, in BPM. Default `60`. */
   bpmMin?: number;
+  /** Highest tempo searched, in BPM. Default `200`. */
   bpmMax?: number;
+  /** Prior tempo estimate in BPM. Default `120`. */
   startBpm?: number;
+  /** Detect triads only, with no seventh chords. Default `true`. */
   useTriadsOnly?: boolean;
+  /** Apply harmonic-percussive separation before the chord chroma. Default `false`. */
   useHpss?: boolean;
   /** Chroma high-pass corner in Hz. Absent = 80; 0 = no filter. */
   chromaHighPassHz?: number;
+  /** Combine the chroma with a bass weighting. Default `true`. */
   useBassWeighted?: boolean;
+  /** Chroma hop as a multiple of `hopLength`; larger is faster. Default `4`. */
   chromaHopMultiplier?: number;
+  /** Smooth the chord sequence with a Viterbi HMM. Default `true`. */
   useChordHmm?: boolean;
+  /** Bias the chord HMM transitions with the detected key. Default `false`. */
   useChordKeyContext?: boolean;
+  /** Candidate beam width of the chord HMM. Default `24`. */
   chordHmmBeamWidth?: number;
+  /** Estimate slash-chord bass notes. Default `false`. */
   detectChordInversions?: boolean;
   /** Track a locally updated tempo prior through beat tracking. Default false. */
   adaptiveTempo?: boolean;
@@ -468,7 +516,9 @@ export interface MusicAnalyzeOptions {
 
 /** Request for {@link analyze}: the settings plus audio and optional progress reporting. */
 export interface AnalyzeRequest extends MusicAnalyzeOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
   /** Called with a progress value in `[0, 1]` and the current stage name; its return value is ignored. */
   onProgress?: ProgressCallback;
@@ -518,53 +568,90 @@ export interface EstimateMeterRequest {
   compoundSubdivisionThreshold?: number;
 }
 
+/** Request for {@link analyzeSections}. */
 export interface AnalyzeSectionsRequest extends AnalyzeSectionsOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
 }
+/** Request for {@link detectBoundaries}. */
 export interface DetectBoundariesRequest extends BoundaryOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
 }
+/** Request for {@link analyzeMelody}. */
 export interface AnalyzeMelodyRequest extends MelodyOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
 }
+/** Request for {@link analyzeBpm}. */
 export interface AnalyzeBpmRequest extends AnalyzeBpmOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
 }
+/** Request for {@link analyzeRhythm}. */
 export interface AnalyzeRhythmRequest extends AnalyzeRhythmOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
 }
+/** Request for {@link analyzeDynamics}. */
 export interface AnalyzeDynamicsRequest extends AnalyzeDynamicsOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
 }
+/** Request for {@link analyzeImpulseResponse}. */
 export interface AnalyzeImpulseResponseRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
+  /** Octave bands. Default `6`. */
   nOctaveBands?: number;
+  /** Minimum decay range in dB for a valid RT60 fit. Default `30`. */
   minDecayDb?: number;
 }
+/** Request for {@link detectAcoustic}. */
 export interface DetectAcousticRequest extends AcousticOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
 }
+/** Request for {@link analyzeTimbre}. */
 export interface AnalyzeTimbreRequest extends AnalyzeTimbreOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
 }
+/** Request for {@link detectChords}. */
 export interface DetectChordsRequest extends ChordDetectionOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
 }
+/** Request for {@link chordFunctionalAnalysis}. */
 export interface ChordFunctionalAnalysisRequest
   extends Omit<ChordDetectionOptions, 'keyRoot' | 'keyMode'> {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
+  /** Pitch class 0-11 of the key. */
   keyRoot: PitchClass;
+  /** Mode of the key. Default `'major'`. */
   keyMode?: KeyMode;
 }
 
@@ -1101,6 +1188,7 @@ export function analyzeBpm(...args: unknown[]): BpmAnalysisResult {
   );
 }
 
+/** Detailed rhythm analysis (time signature, groove, syncopation, beat intervals). */
 export function analyzeRhythm(request: AnalyzeRhythmRequest): RhythmResult;
 export function analyzeRhythm(
   samples: Float32Array,
@@ -1121,6 +1209,7 @@ export function analyzeRhythm(...args: unknown[]): RhythmResult {
   );
 }
 
+/** Dynamics analysis (RMS, peak, crest factor, LRA, loudness curve). */
 export function analyzeDynamics(request: AnalyzeDynamicsRequest): DynamicsResult;
 export function analyzeDynamics(
   samples: Float32Array,
@@ -1142,6 +1231,7 @@ export function analyzeDynamics(...args: unknown[]): DynamicsResult {
   return { ...raw, loudnessRangeLu: loudnessRangeDb };
 }
 
+/** Measure room acoustics from an impulse response. */
 export function analyzeImpulseResponse(request: AnalyzeImpulseResponseRequest): AcousticResult;
 export function analyzeImpulseResponse(
   samples: Float32Array,
@@ -1166,6 +1256,7 @@ export function analyzeImpulseResponse(...args: unknown[]): AcousticResult {
   );
 }
 
+/** Detect room acoustic parameters from a recording. */
 export function detectAcoustic(request: DetectAcousticRequest): AcousticResult;
 export function detectAcoustic(
   samples: Float32Array,
@@ -1190,6 +1281,7 @@ export function detectAcoustic(...args: unknown[]): AcousticResult {
   );
 }
 
+/** Timbre analysis (brightness, warmth, density, roughness and related descriptors). */
 export function analyzeTimbre(request: AnalyzeTimbreRequest): TimbreResult;
 export function analyzeTimbre(
   samples: Float32Array,

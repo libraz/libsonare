@@ -23,17 +23,25 @@ export interface OnsetBacktrackRequest {
 
 /** Request for {@link peakPick}. */
 export interface PeakPickRequest {
+  /** Signal to pick peaks from, usually an onset envelope. */
   values: Float32Array;
+  /** Frames before a candidate that its local maximum is taken over; zero or more. */
   preMax: number;
+  /** Frames after a candidate that its local maximum is taken over; zero or more. */
   postMax: number;
+  /** Frames before a candidate that its running mean is taken over; zero or more. */
   preAvg: number;
+  /** Frames after a candidate that its running mean is taken over; zero or more. */
   postAvg: number;
+  /** Offset added to the running mean, in the units of `values`. */
   delta: number;
+  /** Frames to skip after a picked peak before another may be picked; zero or more. */
   wait: number;
 }
 
 /** Request for {@link tempogram}. */
 export interface TempogramRequest {
+  /** Onset strength envelope, one value per frame. */
   onsetEnvelope: Float32Array;
   /** Default 22050. */
   sampleRate?: number;
@@ -51,9 +59,13 @@ export interface TempogramRequest {
 
 /** Request for {@link cyclicTempogram}. */
 export interface CyclicTempogramRequest {
+  /** Onset strength envelope, one value per frame. */
   onsetEnvelope: Float32Array;
+  /** Sample rate of the audio the envelope came from, in Hz. Default `22050`. */
   sampleRate?: number;
+  /** Hop length in samples between envelope frames. Default `512`. */
   hopLength?: number;
+  /** Autocorrelation window in frames. Default `384`. */
   winLength?: number;
   /** Lowest tempo folded in, in BPM. Default 60. */
   bpmMin?: number;
@@ -63,11 +75,17 @@ export interface CyclicTempogramRequest {
 
 /** Request for {@link fourierTempogram}. */
 export interface FourierTempogramRequest {
+  /** Onset strength envelope, one value per frame. */
   onsetEnvelope: Float32Array;
+  /** Sample rate of the audio the envelope came from, in Hz. Default `22050`. */
   sampleRate?: number;
+  /** Hop length in samples between envelope frames. Default `512`. */
   hopLength?: number;
+  /** Analysis window in frames. Default `384`. */
   winLength?: number;
+  /** Centre the windows. Default `true`. */
   center?: boolean;
+  /** `false` skips the NaN/Inf pre-scan of the envelope. Default `true`. */
   validate?: boolean;
 }
 
@@ -76,36 +94,51 @@ export interface FourierTempogramRequest {
  * `bpmMin` / `bpmMax` say otherwise; that default range differs from librosa's.
  */
 export interface PlpRequest {
+  /** Onset strength envelope, one value per frame. */
   onsetEnvelope: Float32Array;
+  /** Sample rate of the audio the envelope came from, in Hz. Default `22050`. */
   sampleRate?: number;
+  /** Hop length in samples between envelope frames. Default `512`. */
   hopLength?: number;
   /** Lowest tempo searched, in BPM. Default 60. */
   bpmMin?: number;
   /** Highest tempo searched, in BPM. Default 200. */
   bpmMax?: number;
+  /** Analysis window in frames. Default `384`. */
   winLength?: number;
 }
 
 /** Request for {@link onsetStrength}. */
 export interface OnsetStrengthRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
+  /** FFT size in samples. Default `2048`. */
   nFft?: number;
+  /** Hop length in samples. Default `512`. */
   hopLength?: number;
   /** Mel bands the flux is taken over. Default 128. */
   nMels?: number;
+  /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
   validate?: boolean;
 }
 
 /** Request for {@link onsetStrengthMulti}. */
 export interface OnsetStrengthMultiRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Frequency bands. Default 3. */
   nBands?: number;
+  /** FFT size in samples. Default `2048`. */
   nFft?: number;
+  /** Hop length in samples. Default `512`. */
   hopLength?: number;
+  /** Mel bands the flux is taken over. Default `128`. */
   nMels?: number;
+  /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
   validate?: boolean;
 }
 
@@ -113,7 +146,9 @@ export interface OnsetStrengthMultiRequest {
 export interface TempogramRatioRequest {
   /** Autocorrelation tempogram: rows = tempogram lags, cols = frames. */
   tempogram: Matrix2D;
+  /** Sample rate of the audio the tempogram came from, in Hz. Default `22050`. */
   sampleRate?: number;
+  /** Hop length in samples between frames. Default `512`. */
   hopLength?: number;
   /**
    * Tempo multiples the ratio is taken against; omit for the defaults. Every
@@ -122,6 +157,7 @@ export interface TempogramRatioRequest {
    * folded an out-of-range entry to an infinity before the call.
    */
   factors?: Float32Array | number[];
+  /** `false` skips the NaN/Inf pre-scan of the tempogram. Default `true`. */
   validate?: boolean;
 }
 

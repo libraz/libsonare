@@ -38,8 +38,11 @@ export interface SegmentCrossSimilarityRequest {
   x: Matrix2D;
   /** Feature matrix: rows = features, cols = frames. */
   y: Matrix2D;
+  /** Nearest neighbours kept per frame. Absent: the librosa default, `min(n, 2 * ceil(sqrt(n)))` for `n` frames of `y`. */
   k?: number;
+  /** Distance metric. Default `'cosine'`. */
   metric?: 'cosine' | 'euclidean';
+  /** `'connectivity'` for a binary matrix or `'affinity'` for weighted similarity. Default `'connectivity'`. */
   mode?: 'connectivity' | 'affinity';
 }
 
@@ -47,10 +50,15 @@ export interface SegmentCrossSimilarityRequest {
 export interface SegmentRecurrenceMatrixRequest {
   /** Feature matrix: rows = features, cols = frames. */
   data: Matrix2D;
+  /** Nearest neighbours kept per frame. Absent: the librosa default, derived from the frame count. */
   k?: number;
+  /** Frames either side of a frame excluded from its neighbours. Default `1`. */
   width?: number;
+  /** Make the matrix symmetric. Default `false`. */
   sym?: boolean;
+  /** Distance metric. Default `'euclidean'`. */
   metric?: 'cosine' | 'euclidean';
+  /** `'connectivity'` for a binary matrix or `'affinity'` for weighted similarity. Default `'connectivity'`. */
   mode?: 'connectivity' | 'affinity';
 }
 
@@ -72,7 +80,9 @@ export interface SegmentLagToRecurrenceRequest {
 export interface SegmentSubsegmentRequest {
   /** Feature matrix: rows = features, cols = frames. */
   data: Matrix2D;
+  /** Segment boundaries as frame indices. */
   boundaries: Int32Array | ArrayLike<number>;
+  /** Sub-segments per segment. Default `4`. */
   nSegments?: number;
 }
 
@@ -80,7 +90,9 @@ export interface SegmentSubsegmentRequest {
 export interface SegmentAgglomerativeRequest {
   /** Feature matrix: rows = features, cols = frames. */
   data: Matrix2D;
+  /** Number of segments to produce. */
   k: number;
+  /** Cluster linkage. Default `'average'`. */
   linkage?: 'average' | 'single' | 'complete' | 'ward';
 }
 
@@ -88,9 +100,13 @@ export interface SegmentAgglomerativeRequest {
 export interface SegmentPathEnhanceRequest {
   /** Recurrence matrix: square, rows = cols = frames. */
   recurrence: Matrix2D;
+  /** Smoothing window length in frames; positive. */
   win: number;
+  /** Largest diagonal slope tried, as a ratio. Default `2`. */
   maxRatio?: number;
+  /** Smallest diagonal slope tried, as a ratio. Default `0`. */
   minRatio?: number;
+  /** Number of diagonal filters. Default `7`. */
   nFilters?: number;
 }
 
@@ -118,6 +134,7 @@ export interface DecomposeResult {
 
 /** Request for {@link decomposeStems}. */
 export interface DecomposeStemsRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -148,6 +165,7 @@ export interface DecomposeStemsResult {
   w: Float32Array;
   /** Activation matrix [nComponents x nFrames], row-major. */
   h: Float32Array;
+  /** Sample rate of the component signals in Hz. */
   sampleRate: number;
 }
 /** Closed set of aggregation methods of {@link nnFilter}. */
@@ -169,6 +187,7 @@ export interface NnFilterRequest {
 
 /** Request for {@link hpssWithResidual}. */
 export interface HpssWithResidualRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -384,6 +403,7 @@ export function decomposeStems(...args: unknown[]): DecomposeStemsResult {
   });
 }
 
+/** Request for {@link decomposeStemsLinked}. */
 export interface DecomposeStemsLinkedRequest extends ValidateOptions {
   /** One plane per channel, all of the same length. At least one. */
   channels: Float32Array[];
@@ -416,6 +436,7 @@ export interface DecomposeStemsLinkedResult {
   w: Float32Array;
   /** Activation matrix [nComponents x nFrames], row-major. */
   h: Float32Array;
+  /** Sample rate of the component signals in Hz. */
   sampleRate: number;
 }
 
@@ -486,6 +507,7 @@ export function nnFilter(...args: unknown[]): Matrix2D {
 
 /** Request for {@link remix} and {@link remixAlignedIntervals}. */
 export interface RemixRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;

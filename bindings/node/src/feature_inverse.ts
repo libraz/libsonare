@@ -22,9 +22,11 @@ export interface CqtToAudioRequest {
   magnitude: Matrix2D;
   /** Default 22050. */
   sampleRate?: number;
+  /** Hop length in samples. Default `512`. */
   hopLength?: number;
   /** Lowest bin frequency in Hz. Default C1 (32.70 Hz). */
   fminHz?: number;
+  /** CQT bins per octave. Default `12`. */
   binsPerOctave?: number;
   /** Griffin-Lim iterations. Default 32. */
   nIter?: number;
@@ -50,12 +52,15 @@ export interface MelToStftRequest {
   fminHz?: number;
   /** Upper band edge in Hz. Absent means the Nyquist. */
   fmaxHz?: number;
+  /** Use the HTK mel formula instead of Slaney. Default `false`. */
   htk?: boolean;
+  /** `false` skips the NaN/Inf pre-scan of the matrix. Default `true`. */
   validate?: boolean;
 }
 
 /** Request for {@link melToAudio}. */
 export interface MelToAudioRequest extends MelToStftRequest {
+  /** Hop length in samples. Default `512`. */
   hopLength?: number;
   /** Griffin-Lim iterations. Default 32. */
   nIter?: number;
@@ -67,12 +72,15 @@ export interface GriffinLimRequest {
   magnitude: Matrix2D;
   /** Default 22050. */
   sampleRate?: number;
+  /** FFT size in samples. Default `2048`. */
   nFft?: number;
+  /** Hop length in samples. Default `512`. */
   hopLength?: number;
   /** Griffin-Lim iterations. Default 32. */
   nIter?: number;
   /** Fast Griffin-Lim momentum. Default 0.99. */
   momentum?: number;
+  /** `false` skips the NaN/Inf pre-scan of the matrix. Default `true`. */
   validate?: boolean;
 }
 
@@ -84,6 +92,7 @@ export interface MfccToMelRequest {
   nMels?: number;
   /** Lifter used by the forward MFCC transform; zero means no liftering. */
   lifter?: number;
+  /** `false` skips the NaN/Inf pre-scan of the matrix. Default `true`. */
   validate?: boolean;
 }
 
@@ -91,17 +100,23 @@ export interface MfccToMelRequest {
 export interface MfccToAudioRequest extends MfccToMelRequest {
   /** Default 22050. */
   sampleRate?: number;
+  /** FFT size in samples. Default `2048`. */
   nFft?: number;
+  /** Hop length in samples. Default `512`. */
   hopLength?: number;
+  /** Lower mel band edge in Hz. Default `0`. */
   fminHz?: number;
+  /** Upper mel band edge in Hz. Absent means the Nyquist. */
   fmaxHz?: number;
   /** Griffin-Lim iterations. Default 32. */
   nIter?: number;
+  /** Use the HTK mel formula instead of Slaney. Default `false`. */
   htk?: boolean;
 }
 
 /** Request for {@link phaseVocoder}. */
 export interface PhaseVocoderRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
@@ -124,7 +139,9 @@ export interface ToneRequest {
   sampleRate?: number;
   /** Default 1. */
   durationSec?: number;
+  /** Starting phase in radians. Default `0`. */
   phase?: number;
+  /** Peak amplitude. Default `1`. */
   amplitude?: number;
 }
 
@@ -134,6 +151,7 @@ export interface ChirpRequest {
   fminHz?: number;
   /** End frequency in Hz. Default 880. */
   fmaxHz?: number;
+  /** Output sample rate in Hz. Default `22050`. */
   sampleRate?: number;
   /** Default 1. */
   durationSec?: number;
@@ -145,6 +163,7 @@ export interface ChirpRequest {
 export interface ClicksRequest {
   /** Click times in seconds. */
   times: Float32Array;
+  /** Output sample rate in Hz. Default `22050`. */
   sampleRate?: number;
   /** Output length in samples. Absent derives it from the last click; an explicit 0 is refused. */
   length?: number;

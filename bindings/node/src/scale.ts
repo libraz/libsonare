@@ -52,6 +52,7 @@ export function scaleCorrectionSemitones(
   return addon.scaleCorrectionSemitones(root, modeMask, midi, reference);
 }
 
+/** Whether `pitchClass` (0-11, absolute) is enabled by `modeMask` relative to `root`. */
 export function scalePitchClassEnabled(
   root: number,
   modeMask: number,

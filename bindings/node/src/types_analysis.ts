@@ -3,9 +3,11 @@ import type { ValidateOptions } from './validation.js';
 /** Pitch class, C = 0 through B = 11. */
 export type PitchClass = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
 
+/** A detected musical key. */
 export interface Key {
   /** Pitch class of the tonic (C = 0). */
   root: PitchClass;
+  /** Mode name (`'major'`, `'minor'`, `'dorian'`, ...). */
   mode: KeyMode;
   /**
    * Share of the model's belief that this key is the answer, in `[0, 1)`.
@@ -22,10 +24,13 @@ export interface Key {
    * material.
    */
   confidence: number;
+  /** Full key name, e.g. `'C major'`. */
   name: string;
+  /** Short key name: the tonic for major, with an `m` suffix for minor, e.g. `'C'`, `'Am'`. */
   shortName: string;
 }
 
+/** A key mode by name. */
 export type KeyMode =
   | 'major'
   | 'minor'
@@ -50,6 +55,7 @@ export type BpmCandidateRelation = 'primary' | 'half' | 'double' | 'other';
 /** Genre hint that picks the key-profile family; an unknown value is a `RangeError`. */
 export type GenreHint = 'auto' | 'edm' | 'electronic' | 'dance' | 'pop' | 'classical' | 'jazz';
 
+/** Key-profile family; a closed set of lowerCamelCase names. */
 export type KeyProfile =
   | 'krumhanslSchmuckler'
   | 'temperley'
@@ -64,9 +70,13 @@ export type KeyProfile =
  * request fields and as the positional `options`.
  */
 export interface KeyDetectionOptions {
+  /** Analysis window in samples at 22050 Hz, rescaled to the input rate. Default `2048`. */
   nFft?: number;
+  /** Hop length in samples of the input buffer. Default `512`. */
   hopLength?: number;
+  /** Separate the harmonic part before the chroma. Default `false`. */
   useHpss?: boolean;
+  /** Weight chroma frames by the RMS of the input. Default `false`. */
   loudnessWeighted?: boolean;
   /** Chroma high-pass corner in Hz, as in {@link analyze}. Absent = 80; 0 = no filter. */
   chromaHighPassHz?: number;
@@ -96,8 +106,11 @@ export interface KeyDetection extends Key {
   tuningCents: number;
 }
 
+/** A candidate key with the correlation that ranked it. */
 export interface KeyCandidate {
+  /** The candidate key. */
   key: Key;
+  /** Correlation of the chroma with this key profile. */
   correlation: number;
 }
 
@@ -166,34 +179,51 @@ export interface AnalysisChord extends Chord {
 
 /** Aggregate dynamics summary in {@link AnalysisResult.dynamics}. */
 export interface AnalysisDynamics {
+  /** Dynamic range in dB. */
   dynamicRangeDb: number;
+  /** Peak level in dB. */
   peakDb: number;
+  /** RMS level in dB. */
   rmsDb: number;
+  /** Peak-to-RMS ratio of the signal. */
   crestFactor: number;
   /** Loudness range in LU. */
   loudnessRangeLu: number;
+  /** True when the signal is flagged as compressed. */
   isCompressed: boolean;
 }
 
 /** Aggregate rhythm summary in {@link AnalysisResult.rhythm}. */
 export interface AnalysisRhythm {
+  /** Estimated time signature. */
   timeSignature: TimeSignature;
+  /** Syncopation level in `[0, 1]`. */
   syncopation: number;
+  /** Rhythmic feel of the track. */
   grooveType: GrooveType;
+  /** Regularity of the beat intervals in `[0, 1]`; 0 with no beat interval. */
   patternRegularity: number;
+  /** Tempo stability over time in `[0, 1]`; 0 below two beat intervals. */
   tempoStability: number;
 }
 
 /** Melody-contour summary in {@link AnalysisResult.melody}. */
 export interface AnalysisMelody {
+  /** Span between the lowest and highest voiced pitch, in octaves. */
   pitchRangeOctaves: number;
+  /** Pitch stability in `[0, 1]`; 1 is very stable. */
   pitchStability: number;
+  /** Mean fundamental frequency of the voiced frames, in Hz. */
   meanFrequencyHz: number;
+  /** Vibrato rate in Hz; 0 when there is no vibrato. */
   vibratoRateHz: number;
+  /** Pitch contour, one point per analysis frame. */
   pitches: MelodyPoint[];
 }
 
+/** Complete result of the unified {@link analyze} call. */
 export interface AnalysisResult {
+  /** Global tempo in beats per minute. */
   bpm: number;
   /**
    * Winning tempo cluster's vote share within the searched range: 60–200 BPM at 22050 Hz.
@@ -201,10 +231,15 @@ export interface AnalysisResult {
    * still differ on the same input.
    */
   bpmConfidence: number;
+  /** Tempo hypotheses, the chosen tempo first. */
   bpmCandidates: BpmCandidate[];
+  /** Detected musical key. */
   key: Key;
+  /** Estimated time signature. */
   timeSignature: TimeSignature;
+  /** Time-signature hypotheses ordered by descending support. */
   timeSignatureCandidates: TimeSignature[];
+  /** Detected beats, in time order. */
   beats: Beat[];
   /** Per-beat evidence behind the downbeat and meter decisions. */
   beatObservations: BeatObservations;
@@ -477,7 +512,9 @@ export interface Boundary {
   strength: number;
 }
 
+/** Result of {@link detectBoundaries}. */
 export interface BoundaryResult {
+  /** Detected structural transitions, in time order. */
   boundaries: Boundary[];
   /**
    * The novelty curve scaled by its own maximum, so values are in `[0, 1]` and
@@ -514,7 +551,9 @@ export type SectionType =
   | 'outro'
   | 'unknown';
 
+/** One detected song-structure section. */
 export interface Section {
+  /** Section type. */
   type: SectionType;
   /** Human-readable section name (e.g. `'Chorus'`). */
   name: string;
@@ -530,6 +569,7 @@ export interface Section {
   group: number;
 }
 
+/** One frame of a melody contour. */
 export interface MelodyPoint {
   /** Frame time in seconds. */
   timeSec: number;
@@ -539,22 +579,33 @@ export interface MelodyPoint {
   confidence: number;
 }
 
+/** Result of {@link analyzeMelody}. */
 export interface MelodyResult {
+  /** Melody contour, one point per analysis frame. */
   points: MelodyPoint[];
+  /** Span between the lowest and highest voiced pitch, in octaves. */
   pitchRangeOctaves: number;
+  /** Pitch stability in `[0, 1]`; 1 is very stable. */
   pitchStability: number;
+  /** Mean fundamental frequency of the voiced frames, in Hz. */
   meanFrequencyHz: number;
+  /** Vibrato rate in Hz; 0 when there is no vibrato. */
   vibratoRateHz: number;
 }
 
+/** A tempo hypothesis with its confidence. */
 export interface BpmCandidate {
+  /** Tempo in beats per minute. */
   bpm: number;
+  /** Winning tempo cluster's vote share, in `[0, 1]`. */
   confidence: number;
   /** Relation to the primary tempo; present on {@link AnalysisResult.bpmCandidates}. */
   relation?: BpmCandidateRelation;
 }
 
+/** Result of {@link analyzeBpm}. */
 export interface BpmAnalysisResult {
+  /** Chosen tempo in beats per minute. */
   bpm: number;
   /**
    * Winning tempo cluster's vote share within `bpmMin`–`bpmMax` (60–200 by default), searched at
@@ -566,7 +617,9 @@ export interface BpmAnalysisResult {
    * bins by descending vote share.
    */
   candidates: BpmCandidate[];
+  /** Autocorrelation of the onset envelope over tempo lags. */
   autocorrelation: Float32Array;
+  /** Tempogram of the onset envelope, flattened. */
   tempogram: Float32Array;
 }
 
@@ -587,16 +640,27 @@ export interface BpmAnalysisResult {
  * by the same band index as `rt60Bands`.
  */
 export interface AcousticResult {
+  /** Reverberation time RT60 in seconds. */
   rt60: number;
+  /** Early decay time in seconds; NaN when `isBlind` is true. */
   edt: number;
+  /** Clarity C50 in dB; NaN when `isBlind` is true. */
   c50: number;
+  /** Clarity C80 in dB; NaN when `isBlind` is true. */
   c80: number;
+  /** Definition D50, the early-energy fraction in `[0, 1]`; NaN when `isBlind` is true. */
   d50: number;
+  /** RT60 per octave band, in seconds. */
   rt60Bands: Float32Array;
+  /** Early decay time per octave band, in seconds; all NaN when `isBlind` is true. */
   edtBands: Float32Array;
+  /** Clarity C50 per octave band, in dB; empty when `isBlind` is true. */
   c50Bands: Float32Array;
+  /** Clarity C80 per octave band, in dB; empty when `isBlind` is true. */
   c80Bands: Float32Array;
+  /** Confidence of the estimate, in `[0, 1]`. */
   confidence: number;
+  /** True when the result was estimated from a recording rather than a measured impulse response. */
   isBlind: boolean;
 }
 
@@ -608,8 +672,11 @@ export type AcousticModeName = 'auto' | 'blind' | 'impulseResponse';
 
 /** Shoebox geometry + placement shared by RIR synthesis and the room morph. */
 export interface RoomGeometryOptions {
+  /** Room length in metres. Default `7`. */
   lengthM?: number;
+  /** Room width in metres. Default `5`. */
   widthM?: number;
+  /** Room height in metres. Default `3`. */
   heightM?: number;
   /**
    * Uniform wall absorption, clamped to [0, 0.999] (the back-compat scalar).
@@ -695,12 +762,17 @@ export interface SynthesizeRirRequest extends RoomGeometryOptions {
 export interface RirDiagnostic {
   /** Stable machine-readable id, e.g. `acoustic.source_outside_room`. */
   code: string;
+  /** Human-readable description of the condition. */
   message: string;
+  /** How serious the condition is. */
   severity: 'info' | 'warning' | 'error';
 }
 
+/** A synthesized room impulse response and the diagnostics the synthesis reported. */
 export interface RirResult {
+  /** Impulse response samples. */
   rir: Float32Array;
+  /** Sample rate of `rir` in Hz. */
   sampleRate: number;
   /**
    * Every diagnostic the synthesizer reported, in order. A refused synthesis
@@ -741,6 +813,7 @@ export interface RoomEstimateOptions extends ValidateOptions {
   noiseFloorMarginDb?: number;
 }
 
+/** Result of {@link estimateRoom}: the estimated room and its decay. */
 export interface RoomEstimateResult {
   /**
    * Equivalent volume (m^3) and representative dimensions (m), under the names
@@ -750,10 +823,15 @@ export interface RoomEstimateResult {
    * `rt60Bands`.
    */
   volume: number;
+  /** Estimated room length in metres. */
   lengthM: number;
+  /** Estimated room width in metres. */
   widthM: number;
+  /** Estimated room height in metres. */
   heightM: number;
+  /** Direct-to-reverberant ratio in dB. */
   drrDb: number;
+  /** Confidence of the estimate, in `[0, 1]`; 0 when nothing was measurable. */
   confidence: number;
   /**
    * Per-octave-band mean absorption and RT60 (s). The two are independent
@@ -762,13 +840,17 @@ export interface RoomEstimateResult {
    * to the shorter (possibly empty) one.
    */
   bandAbsorption: Float32Array;
+  /** RT60 per octave band, in seconds. */
   rt60Bands: Float32Array;
 }
 
 /** A position inside a room, in metres. */
 export interface RoomPlacement {
+  /** Position along the room length, in metres. */
   x: number;
+  /** Position along the room width, in metres. */
   y: number;
+  /** Height above the floor, in metres. */
   z: number;
 }
 
@@ -799,6 +881,7 @@ export interface RoomMorphOptions extends RoomGeometryOptions, ValidateOptions {
 export interface RoomMorphResult {
   /** Morphed samples: input length plus the target room's reverb tail. */
   audio: Float32Array;
+  /** Sample rate of `audio` in Hz. */
   sampleRate: number;
   /**
    * Every diagnostic the target-room synthesis reported, in order. Each says the
@@ -833,6 +916,7 @@ export interface RoomMorphStereoResult {
   left: Float32Array;
   /** Right channel, the same length as `left`. */
   right: Float32Array;
+  /** Sample rate of both channels in Hz. */
   sampleRate: number;
   /**
    * Every diagnostic the target-room synthesis reported, in order. Each says the
@@ -865,6 +949,7 @@ export interface Matrix2D {
   cols: number;
 }
 
+/** Result of {@link analyzeRhythm}. */
 export interface RhythmResult {
   /**
    * The beat tracker's own tempo, refined from the local beat period. It is a
@@ -875,11 +960,17 @@ export interface RhythmResult {
    * that rate, and `hopLength` is in samples of your buffer.
    */
   bpm: number;
+  /** Estimated time signature. */
   timeSignature: TimeSignature;
+  /** Rhythmic feel of the track. */
   grooveType: GrooveType;
+  /** Syncopation level in `[0, 1]`. */
   syncopation: number;
+  /** Regularity of the beat intervals in `[0, 1]`; 0 with no beat interval. */
   patternRegularity: number;
+  /** Tempo stability over time in `[0, 1]`; 0 below two beat intervals. */
   tempoStability: number;
+  /** Intervals between consecutive beats, in seconds. */
   beatIntervals: Float32Array;
 }
 
@@ -891,12 +982,17 @@ export interface RhythmResult {
  * processor envelope is `DynamicsProcessorResult`, which is a different shape.
  */
 export interface DynamicsResult {
+  /** Dynamic range in dB. */
   dynamicRangeDb: number;
+  /** Peak level in dB. */
   peakDb: number;
+  /** RMS level in dB. */
   rmsDb: number;
+  /** Peak-to-RMS ratio of the signal. */
   crestFactor: number;
   /** Loudness range in LU. */
   loudnessRangeLu: number;
+  /** True when the signal is flagged as compressed. */
   isCompressed: boolean;
   /** Loudness curve timestamps in seconds, parallel to {@link loudnessRmsDb}. */
   loudnessTimesSec: Float32Array;
@@ -906,21 +1002,35 @@ export interface DynamicsResult {
 
 /** Timbre metrics for one analysis window. Entries are ordered by time in {@link TimbreResult.timbreOverTime}. */
 export interface TimbreFrame {
+  /** Spectral brightness in `[0, 1]`; high is bright. */
   brightness: number;
+  /** Spectral warmth in `[0, 1]`; high is warm. */
   warmth: number;
+  /** Spectral density in `[0, 1]`; high is rich. */
   density: number;
+  /** Spectral roughness in `[0, 1]`; high is rough. */
   roughness: number;
+  /** Harmonic complexity in `[0, 1]`; high is complex. */
   complexity: number;
 }
 
+/** Result of {@link analyzeTimbre}: overall timbre metrics and per-frame spectral curves. */
 export interface TimbreResult {
+  /** Spectral brightness in `[0, 1]`; high is bright. */
   brightness: number;
+  /** Spectral warmth in `[0, 1]`; high is warm. */
   warmth: number;
+  /** Spectral density in `[0, 1]`; high is rich. */
   density: number;
+  /** Spectral roughness in `[0, 1]`; high is rough. */
   roughness: number;
+  /** Harmonic complexity in `[0, 1]`; high is complex. */
   complexity: number;
+  /** Spectral centroid per analysis frame, in Hz. */
   spectralCentroid: Float32Array;
+  /** Spectral flatness per analysis frame, in `[0, 1]`. */
   spectralFlatness: Float32Array;
+  /** Spectral roll-off frequency per analysis frame, in Hz. */
   spectralRolloff: Float32Array;
   /** Time-varying timbre metrics, one entry per analysis window. */
   timbreOverTime: TimbreFrame[];
@@ -961,6 +1071,7 @@ export const CHORD_QUALITIES = [
 /** Chord quality token; see {@link CHORD_QUALITIES}. Numbers are refused. */
 export type ChordQuality = (typeof CHORD_QUALITIES)[number];
 
+/** One detected chord. */
 export interface Chord {
   /** Root pitch class (C = 0). */
   root: PitchClass;
@@ -970,12 +1081,17 @@ export interface Chord {
   rootName: string;
   /** Canonical core spelling of `bass`; stable across all language bindings. */
   bassName: string;
+  /** Chord quality token; `'unknown'` for a chord the analyzer did not name. */
   quality: ChordQuality;
   /** Canonical core chord symbol (e.g. `'Cmaj7'`, `'Am/C'`, `'N.C.'`). */
   name: string;
+  /** Chord start time in seconds. */
   startSec: number;
+  /** Chord end time in seconds. */
   endSec: number;
+  /** Chord length in seconds, `endSec - startSec`. */
   durationSec: number;
+  /** Correlation of the chroma with the chosen chord template, in `[0, 1]`. */
   confidence: number;
 }
 
@@ -989,22 +1105,29 @@ export type ChordFunction = 'tonic' | 'subdominant' | 'dominant' | 'chromatic' |
 export type FunctionalChord<T extends ChordFunctionsInput = Chord> = T & {
   /** Roman numeral relative to the key (`'I'`, `'V7'`, `'vi'`; `'N.C.'` for an unknown chord). */
   romanNumeral: string;
+  /** Harmonic function of the chord in the key. */
   function: ChordFunction;
 };
 
 /** The fields {@link chordFunctions} reads from a chord; everything else is carried through. */
 export interface ChordFunctionsInput {
+  /** Root pitch class (C = 0). */
   root: PitchClass;
+  /** Chord quality token. */
   quality: ChordQuality;
 }
 
 /** A key as `detectKey` reports it. */
 export interface ChordFunctionsKey {
+  /** Pitch class of the tonic (C = 0). */
   root: PitchClass;
+  /** Mode of the key. */
   mode: KeyMode;
 }
 
+/** Result of {@link detectChords}. */
 export interface ChordAnalysisResult {
+  /** Detected chords, in time order. */
   chords: Chord[];
   /** Tuning the chroma was built with, in cents: the given value, or the measured one under `tuningCents: 'auto'`. */
   tuningCents: number;
@@ -1024,19 +1147,27 @@ export interface ChordDetectionOptions {
   smoothingWindowSec?: number;
   /** Final-template correlation threshold in [0, 1]; below it emits `unknown` / N.C. */
   threshold?: number;
+  /** Use only triad templates, no seventh chords. Default `true`. */
   useTriadsOnly?: boolean;
   /** STFT chroma window in samples at 22050 Hz, rescaled to the input rate so its duration is the same at every rate. */
   nFft?: number;
+  /** Hop length in samples of the input buffer. Default `512`. */
   hopLength?: number;
+  /** Detect chords on beat boundaries. Default `true`. */
   useBeatSync?: boolean;
+  /** Smooth chord candidates with a Viterbi HMM. Default `true`. */
   useHmm?: boolean;
+  /** Candidate beam width of the HMM smoothing. Default `24`. */
   hmmBeamWidth?: number;
+  /** Bias the HMM transitions by the key given in `keyRoot` and `keyMode`. Default `false`. */
   useKeyContext?: boolean;
   /** Pitch class of the key, e.g. {@link detectKey}'s `root`. */
   keyRoot?: PitchClass;
   /** Mode of the key, e.g. {@link detectKey}'s `mode`. */
   keyMode?: KeyMode;
+  /** Estimate the bass pitch class and emit slash chords. Default `false`. */
   detectInversions?: boolean;
+  /** Chroma front end. Default `'cqt'`. */
   chromaMethod?: ChordChromaMethod;
   /**
    * Tuning offset of the recording in cents; must be in `[-50, 50)`. Omitted or
@@ -1049,8 +1180,12 @@ export interface ChordDetectionOptions {
   validate?: boolean;
 }
 
+/** Harmonic and percussive components from harmonic-percussive separation. */
 export interface HpssResult {
+  /** Harmonic component, the same length as the input. */
   harmonic: Float32Array;
+  /** Percussive component, the same length as the input. */
   percussive: Float32Array;
+  /** Sample rate of both components in Hz. */
   sampleRate: number;
 }

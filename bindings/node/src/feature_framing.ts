@@ -20,7 +20,9 @@ import {
 
 /** Request for {@link trimSilence}. `validate: false` skips the NaN/Inf pre-scan. */
 export interface TrimSilenceRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Threshold under the peak, in dB. Default 60. */
   topDb?: number;
@@ -28,6 +30,7 @@ export interface TrimSilenceRequest {
   frameLength?: number;
   /** Hop in samples. Default 512. */
   hopLength?: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
   validate?: boolean;
 }
 
@@ -36,9 +39,13 @@ export type SplitSilenceRequest = TrimSilenceRequest;
 
 /** Request for {@link splitSilenceCommon}. */
 export interface SplitSilenceCommonRequest {
+  /** Signals to compare; lengths may differ. */
   signals: Float32Array[];
+  /** Threshold below each signal's peak, in dB. Default `60`. */
   topDb?: number;
+  /** Framing window in samples. Default `2048`. */
   frameLength?: number;
+  /** Hop in samples. Default `512`. */
   hopLength?: number;
 }
 
@@ -56,21 +63,29 @@ function assertSilenceSignals(fnName: string, request: SplitSilenceCommonRequest
 
 /** Request for {@link frameSignal}. */
 export interface FrameSignalRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
   /** Required for rule uniformity; framing itself is rate-independent. */
   sampleRate: number;
+  /** Frame size in samples. */
   frameLength: number;
+  /** Hop between frames in samples. */
   hopLength: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
   validate?: boolean;
 }
 
 /** Request for {@link preemphasis}. `zi` is the initial delay value. */
 export interface PreemphasisRequest {
+  /** Mono audio samples. */
   samples: Float32Array;
+  /** Sample rate of `samples` in Hz. */
   sampleRate: number;
   /** Filter coefficient. Default 0.97. */
   coef?: number;
+  /** Initial filter state. */
   zi?: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
   validate?: boolean;
 }
 
@@ -79,7 +94,9 @@ export type DeemphasisRequest = PreemphasisRequest;
 
 /** Request for {@link padCenter}. */
 export interface PadCenterRequest {
+  /** Input values. */
   values: Float32Array;
+  /** Length of the result in elements. */
   targetSize: number;
   /** Literal fill value for every added element. Default 0. */
   padValue?: number;
@@ -90,6 +107,7 @@ export type FixLengthRequest = PadCenterRequest;
 
 /** Request for {@link fixFrames}. */
 export interface FixFramesRequest {
+  /** Frame indices to bound. */
   frames: Int32Array | ArrayLike<number>;
   /** Lower bound. Default 0. */
   xMin?: number;
@@ -101,9 +119,11 @@ export interface FixFramesRequest {
 
 /** Request for {@link vectorNormalize}. */
 export interface VectorNormalizeRequest {
+  /** Values to normalize. */
   values: Float32Array;
   /** Norm applied. Default `'max'`. */
   norm?: NormType;
+  /** Magnitude below which a norm is treated as zero and the value left unscaled. Default `0`. */
   threshold?: number;
 }
 
@@ -111,6 +131,7 @@ const NORM_ORDINALS: Readonly<Record<NormType, number>> = { max: 0, l1: 1, l2: 2
 
 /** Request for {@link trim}. */
 export interface TrimRequest extends ValidateOptions {
+  /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
