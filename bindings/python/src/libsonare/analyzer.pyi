@@ -1928,7 +1928,7 @@ def decompose(
     n_features: int,
     n_frames: int,
     n_components: int,
-    n_iter: int = 50,
+    n_iter: int | None = None,
     beta: float = 2.0,
 ) -> tuple[np.ndarray[Any, Any], np.ndarray[Any, Any]]: ...
 def decompose_with_init(
@@ -1936,7 +1936,7 @@ def decompose_with_init(
     n_features: int,
     n_frames: int,
     n_components: int,
-    n_iter: int = 50,
+    n_iter: int | None = None,
     beta: float = 2.0,
     init: str = "random",
 ) -> tuple[np.ndarray[Any, Any], np.ndarray[Any, Any]]: ...
@@ -1971,8 +1971,8 @@ def nn_filter(
     n_features: int,
     n_frames: int,
     aggregate: str = "mean",
-    k: int = 7,
-    width: int = 1,
+    k: int | None = None,
+    width: int | None = None,
 ) -> np.ndarray[Any, Any]: ...
 def remix(
     samples: FloatSamples,

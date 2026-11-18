@@ -10,7 +10,12 @@ import numpy as np
 from ._effects_repair_common import _linked_channel_planes
 from ._errors import _not_supported
 from ._ffi import SonareDecomposeStemsConfig, SonareHpssResult
-from ._narrowing import _narrow_double
+from ._narrowing import (
+    _narrow_double,
+    _resolve_absent_positive,
+    _resolve_optional_non_negative,
+    _resolve_zero_default,
+)
 from ._runtime import (
     _DEFAULT_EFFECT_HOP_LENGTH,
     _DEFAULT_EFFECT_N_FFT,
@@ -50,7 +55,7 @@ def decompose(
     n_features: int,
     n_frames: int,
     n_components: int,
-    n_iter: int = 50,
+    n_iter: int | None = None,
     beta: float = 2.0,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Non-negative matrix factorisation (librosa.decompose.decompose).
@@ -60,7 +65,8 @@ def decompose(
         n_features: Feature dimension (rows). Must be > 0.
         n_frames: Number of time frames. Must be > 0.
         n_components: Target number of components (k). Must be > 0.
-        n_iter: Number of multiplicative-update iterations (default 50).
+        n_iter: Number of multiplicative-update iterations; None takes the
+            library default (50). Must be positive when given.
         beta: Beta divergence (2 = Frobenius, 1 = KL, 0 = Itakura-Saito).
 
     Returns:
@@ -82,7 +88,7 @@ def decompose(
                 _to_c_int(n_features, "n_features"),
                 _to_c_int(n_frames, "n_frames"),
                 _to_c_int(n_components, "n_components"),
-                _to_c_int(n_iter, "n_iter"),
+                _to_c_int(_resolve_zero_default(n_iter, "n_iter"), "n_iter"),
                 _to_c_float(beta, "beta"),
                 ctypes.byref(out_w),
                 ctypes.byref(out_w_length),
@@ -101,7 +107,7 @@ def decompose_with_init(
     n_features: int,
     n_frames: int,
     n_components: int,
-    n_iter: int = 50,
+    n_iter: int | None = None,
     beta: float = 2.0,
     init: str = "random",
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -132,7 +138,7 @@ def decompose_with_init(
                 _to_c_int(n_features, "n_features"),
                 _to_c_int(n_frames, "n_frames"),
                 _to_c_int(n_components, "n_components"),
-                _to_c_int(n_iter, "n_iter"),
+                _to_c_int(_resolve_zero_default(n_iter, "n_iter"), "n_iter"),
                 _to_c_float(beta, "beta"),
                 _utf8_arg(init, "init") if init else None,
                 ctypes.byref(out_w),
@@ -383,8 +389,8 @@ def nn_filter(
     n_features: int,
     n_frames: int,
     aggregate: str = "mean",
-    k: int = 7,
-    width: int = 1,
+    k: int | None = None,
+    width: int | None = None,
 ) -> np.ndarray:
     """Nearest-neighbour spectrogram filter (librosa.decompose.nn_filter).
 
@@ -393,8 +399,10 @@ def nn_filter(
         n_features: Feature dimension (rows). Must be > 0.
         n_frames: Number of time frames. Must be > 0.
         aggregate: Aggregator: ``"mean"``, ``"median"``, ``"min"`` or ``"max"``.
-        k: Number of nearest neighbours (default 7).
-        width: Time exclusion half-width (default 1).
+        k: Number of nearest neighbours; None takes the library default (7).
+            Must be positive when given.
+        width: Time exclusion half-width; None takes the library default (1).
+            Must be non-negative when given.
 
     Returns:
         The smoothed spectrogram as a float32 array of shape
@@ -412,8 +420,8 @@ def nn_filter(
                 _to_c_int(n_features, "n_features"),
                 _to_c_int(n_frames, "n_frames"),
                 aggregate_bytes,
-                _to_c_int(k, "k"),
-                _to_c_int(width, "width"),
+                _to_c_int(_resolve_absent_positive(k, "k"), "k"),
+                _to_c_int(_resolve_optional_non_negative(width, "width"), "width"),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
             )

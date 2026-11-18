@@ -669,6 +669,7 @@ def _capture(frames: int, **kwargs: Any) -> tuple[int, list[int], int]:
             0.0,
             1.0,
             np.full(frames, 0.5, dtype=np.float32),
+            audio_channels=1,
             audio_sample_rate=48000,
             **kwargs,
         )
@@ -705,7 +706,12 @@ def test_partial_take_mark_survives_json_round_trip() -> None:
         project.set_sample_rate(48000.0)
         track_id = project.add_track("audio", "record")
         project.add_loop_recording_takes(
-            track_id, 0.0, 1.0, np.full(36000, 0.5, dtype=np.float32), audio_sample_rate=48000
+            track_id,
+            0.0,
+            1.0,
+            np.full(36000, 0.5, dtype=np.float32),
+            audio_channels=1,
+            audio_sample_rate=48000,
         )
         text = project.to_json_bytes()
         reloaded = Project.from_json(text.decode())
@@ -756,6 +762,34 @@ def test_add_loop_recording_takes_refuses_mismatched_planar_lengths() -> None:
                 0.0,
                 1.0,
                 [np.zeros(100, dtype=np.float32), np.zeros(99, dtype=np.float32)],
+                audio_sample_rate=48000,
+            )
+    finally:
+        project.close()
+
+
+def test_add_loop_recording_takes_requires_the_capture_format() -> None:
+    """The library has no default for a capture's format, so each part is asked for by name."""
+    project = Project()
+    try:
+        track_id = project.add_track("audio", "record")
+        mono = np.zeros(4800, dtype=np.float32)
+        with pytest.raises(SonareValueError, match="audio_channels"):
+            project.add_loop_recording_takes(track_id, 0.0, 1.0, mono, audio_sample_rate=48000)
+        with pytest.raises(TypeError, match="audio_sample_rate"):
+            project.add_loop_recording_takes(track_id, 0.0, 1.0, mono, audio_channels=1)  # type: ignore[call-arg]
+        with pytest.raises(SonareValueError, match="audio_sample_rate"):
+            project.add_loop_recording_takes(
+                track_id, 0.0, 1.0, mono, audio_channels=1, audio_sample_rate=0
+            )
+        with pytest.raises(SonareValueError, match="audio_channels"):
+            project.add_loop_recording_takes(
+                track_id,
+                0.0,
+                1.0,
+                np.zeros((2, 2400), dtype=np.float32),
+                audio_channels=1,
+                audio_sample_rate=48000,
             )
     finally:
         project.close()

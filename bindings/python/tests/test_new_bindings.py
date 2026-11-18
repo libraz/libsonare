@@ -184,6 +184,39 @@ def test_nn_filter_preserves_shape() -> None:
     assert _finite(out)
 
 
+def test_nn_filter_and_decompose_take_none_for_the_library_default() -> None:
+    """None is the library's own default; the values pinned here are the core's documented ones."""
+    n_features, n_frames = 12, 20
+    rng = np.random.default_rng(1)
+    spec = np.abs(rng.standard_normal((n_features, n_frames))).astype(np.float32).ravel()
+    np.testing.assert_array_equal(
+        libsonare.nn_filter(spec, n_features, n_frames),
+        libsonare.nn_filter(spec, n_features, n_frames, k=7, width=1),
+    )
+    for fn in (libsonare.decompose, libsonare.decompose_with_init):
+        omitted = fn(spec, n_features, n_frames, 2)
+        stated = fn(spec, n_features, n_frames, 2, n_iter=50)
+        np.testing.assert_array_equal(omitted[0], stated[0])
+        np.testing.assert_array_equal(omitted[1], stated[1])
+
+
+@pytest.mark.parametrize(
+    ("call", "field"),
+    [
+        (lambda spec: libsonare.nn_filter(spec, 12, 20, k=0), "k"),
+        (lambda spec: libsonare.nn_filter(spec, 12, 20, k=-1), "k"),
+        (lambda spec: libsonare.nn_filter(spec, 12, 20, width=-1), "width"),
+        (lambda spec: libsonare.decompose(spec, 12, 20, 2, n_iter=0), "n_iter"),
+        (lambda spec: libsonare.decompose_with_init(spec, 12, 20, 2, n_iter=0), "n_iter"),
+    ],
+)
+def test_a_sentinel_count_is_refused_by_name(call: Any, field: str) -> None:
+    """Absence is None; the C ABI's -1 / 0 default spellings are not counts a caller can pass."""
+    spec = np.ones(12 * 20, dtype=np.float32)
+    with pytest.raises(libsonare.SonareValueError, match=field):
+        call(spec)
+
+
 def test_remix_concatenates_intervals() -> None:
     x = _tone(440.0, 0.5)
     half = len(x) // 2

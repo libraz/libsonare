@@ -378,16 +378,18 @@ class _ProjectEditMixin:
         loop_length_ppq: float,
         audio: Sequence[float] | Sequence[Sequence[float]] | np.ndarray,
         *,
-        audio_channels: int = 1,
-        audio_sample_rate: int = 48000,
+        audio_channels: int | None = None,
+        audio_sample_rate: int,
         partial_tail: str = "keep",
     ) -> tuple[int, int]:
         """Split a captured loop recording into takes and add one clip.
 
-        ``audio`` is either interleaved float32 capture data (with
-        ``audio_channels``) or planar: a channels-first 2-D array or a sequence
+        ``audio`` is either interleaved float32 capture data, which requires
+        ``audio_channels``, or planar: a channels-first 2-D array or a sequence
         of equal-length per-channel sequences, whose channel count is the number
-        of rows and which makes ``audio_channels`` irrelevant. Each loop-length
+        of rows (an ``audio_channels`` given beside it must agree). The capture's
+        ``audio_sample_rate`` is required: the library has no default for the
+        format of audio the caller recorded. Each loop-length
         span becomes a separate take and the last take is made active, except
         that a partial last take (the capture does not fill the last loop) is
         kept but not made active when an earlier complete take exists. A capture
@@ -411,11 +413,22 @@ class _ProjectEditMixin:
             if any(plane.shape[0] != planar[0].shape[0] for plane in planar):
                 raise SonareValueError("planar audio channels must have equal lengths")
             channels = len(planar)
+            if audio_channels is not None and (
+                _narrow_int(audio_channels, "audio_channels", _C_INT_MIN, _C_INT_MAX) != channels
+            ):
+                raise SonareValueError(
+                    f"audio_channels {audio_channels} disagrees with the {channels} planar channels"
+                )
             audio = np.stack(planar, axis=1).reshape(-1)
         else:
+            if audio_channels is None:
+                raise SonareValueError("audio_channels is required for interleaved audio")
             # Narrowed before the frame count is derived from it, so a fractional
             # channel count is refused rather than silently becoming its floor.
             channels = _narrow_int(audio_channels, "audio_channels", _C_INT_MIN, _C_INT_MAX)
+        sample_rate = _narrow_int(audio_sample_rate, "audio_sample_rate", _C_INT_MIN, _C_INT_MAX)
+        if sample_rate <= 0:
+            raise SonareValueError("audio_sample_rate must be positive")
         backing, total = _to_c_float_array(audio, arg_name="audio")
         if channels <= 0 or total % channels != 0:
             raise SonareValueError("audio length must be a multiple of audio_channels")
@@ -428,7 +441,7 @@ class _ProjectEditMixin:
             audio_interleaved=backing,
             audio_frames=frames,
             audio_channels=channels,
-            audio_sample_rate=audio_sample_rate,
+            audio_sample_rate=sample_rate,
         )
         out_clip = ctypes.c_uint32()
         out_take_count = ctypes.c_size_t()

@@ -8006,3 +8006,51 @@ changed = "None selects the transport fallback tempo; 0 and negatives raise Sona
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_mixing_assistant.py::test_a_non_positive_tempo_is_refused"
+
+[[entry]]
+kind = "option"
+old = "nn_filter(k)"
+changed = "None takes the library default k (was the literal 7); k below 1 raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_new_bindings.py::test_a_sentinel_count_is_refused_by_name"
+
+[[entry]]
+kind = "option"
+old = "nn_filter(width)"
+changed = "None takes the library default width (was the literal 1); a negative width raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_new_bindings.py::test_a_sentinel_count_is_refused_by_name"
+
+[[entry]]
+kind = "option"
+old = "decompose(n_iter)"
+changed = "None takes the library default iteration count (was the literal 50); n_iter below 1 raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_new_bindings.py::test_a_sentinel_count_is_refused_by_name"
+
+[[entry]]
+kind = "option"
+old = "decompose_with_init(n_iter)"
+changed = "None takes the library default iteration count (was the literal 50); n_iter below 1 raises SonareValueError"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_new_bindings.py::test_a_sentinel_count_is_refused_by_name"
+
+[[entry]]
+kind = "option"
+old = "Project.add_loop_recording_takes(audio_sample_rate)"
+changed = "audio_sample_rate is required (1.x defaulted to 48000); a non-positive rate raises SonareValueError"
+domain = "project"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_project.py::test_add_loop_recording_takes_requires_the_capture_format"
+
+[[entry]]
+kind = "option"
+old = "Project.add_loop_recording_takes(audio_channels)"
+changed = "audio_channels is required for interleaved audio (1.x defaulted to 1); planar audio derives it, and a disagreeing value raises SonareValueError"
+domain = "project"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_project.py::test_add_loop_recording_takes_requires_the_capture_format"
