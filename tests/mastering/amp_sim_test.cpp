@@ -2396,7 +2396,7 @@ TEST_CASE("a numeric preset index picks the same rig the name does",
 TEST_CASE("the synthesized cabinet reaches the offline path too", "[mastering][saturation][amp]") {
   // `cabIrGenerate` was implemented in the insert factory alone, so the same
   // key a streaming caller could use did nothing at all through the one-shot
-  // entry every binding's `mastering_process` goes to.
+  // entry every binding's `mastering_apply_processor` goes to.
   const std::vector<float> input = sine(220.0, 0.3f, 8192);
   const std::vector<sonare::mastering::api::Param> plain{{"drive", 0.7}};
   const std::vector<sonare::mastering::api::Param> generated{{"drive", 0.7},
