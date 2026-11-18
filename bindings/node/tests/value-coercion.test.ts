@@ -13,15 +13,14 @@ import {
 
 interface PanLawCorpus {
   accepted: Array<{ value: string; ordinal: number }>;
-  normalization: Array<{ value: string; ordinal: number }>;
-  numeric: number[];
   rejected: string[];
+  rejected_numeric: number[];
 }
 
 interface AutomationCurveCorpus {
   accepted: Array<{ value: string; ordinal: number }>;
-  numeric: number[];
   rejected: string[];
+  rejected_numeric: number[];
 }
 
 const panLawCorpus = JSON.parse(
@@ -38,27 +37,27 @@ const curveCorpus = JSON.parse(
 ) as AutomationCurveCorpus;
 
 describe('enum ordinal coercion', () => {
-  it('accepts only declared ordinals and spellings', () => {
+  it('accepts only declared spellings and refuses every number as a wrong type', () => {
     expect(resolveEnumOrdinal('a', { a: 0, b: 1 }, 'test enum')).toBe(0);
-    expect(resolveEnumOrdinal(1, { a: 0, b: 1 }, 'test enum')).toBe(1);
-    expect(() => resolveEnumOrdinal(2, { a: 0, b: 1 }, 'test enum')).toThrow(RangeError);
-    expect(() => resolveEnumOrdinal(0.5, { a: 0, b: 1 }, 'test enum')).toThrow(RangeError);
-  });
-
-  it('does not pass unknown values through to the C ABI', () => {
-    // biome-ignore lint/suspicious/noExplicitAny: exercise direct JavaScript callers.
-    expect(() => meterTapValue(2 as any)).toThrow(RangeError);
-  });
-
-  it('resolves every shared pan-law spelling and conservative normalization', () => {
-    for (const { value, ordinal } of [...panLawCorpus.accepted, ...panLawCorpus.normalization]) {
-      expect(panLawValue(value as never)).toBe(ordinal);
+    for (const value of [1, 2, 0.5]) {
+      expect(() => resolveEnumOrdinal(value, { a: 0, b: 1 }, 'test enum')).toThrow(TypeError);
     }
-    for (const value of panLawCorpus.numeric) {
-      expect(panLawValue(value)).toBe(value);
+  });
+
+  it('does not pass a raw ordinal through to the C ABI', () => {
+    // biome-ignore lint/suspicious/noExplicitAny: exercise direct JavaScript callers.
+    expect(() => meterTapValue(1 as any)).toThrow(TypeError);
+  });
+
+  it('resolves exactly the shared pan-law spellings and refuses every other', () => {
+    for (const { value, ordinal } of panLawCorpus.accepted) {
+      expect(panLawValue(value as never)).toBe(ordinal);
     }
     for (const value of panLawCorpus.rejected) {
       expect(() => panLawValue(value as never)).toThrow(RangeError);
+    }
+    for (const value of panLawCorpus.rejected_numeric) {
+      expect(() => panLawValue(value as never)).toThrow(TypeError);
     }
   });
 
@@ -78,7 +77,7 @@ describe('enum ordinal coercion', () => {
       expect(curve(value)).toBe(ordinal);
     }
     // A Project curve is a token on every path, so an ordinal is a type error.
-    for (const value of curveCorpus.numeric) {
+    for (const value of curveCorpus.rejected_numeric) {
       expect(() => curve(value)).toThrow(TypeError);
     }
     for (const value of curveCorpus.rejected) {
@@ -126,9 +125,9 @@ describe('resolveEnumOrdinal resolves declared names only', () => {
     expect(resolveEnumOrdinal('on', values, 'mode')).toBe(1);
   });
 
-  it('refuses an unknown name as RangeError and a non-name, non-ordinal as TypeError', () => {
+  it('refuses an unknown name as RangeError and a non-name as TypeError', () => {
     expect(() => resolveEnumOrdinal('nope', values, 'mode')).toThrow(RangeError);
-    for (const bad of [null, undefined, true, {}, []]) {
+    for (const bad of [null, undefined, true, {}, [], 0, 1]) {
       expect(() => resolveEnumOrdinal(bad, values, 'mode')).toThrow(TypeError);
     }
   });

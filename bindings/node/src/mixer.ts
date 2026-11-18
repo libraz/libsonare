@@ -12,7 +12,7 @@ import type {
   MixerProcessResult,
   MixMeterSnapshot,
   MixSceneDocument,
-  PanLawName,
+  PanLaw,
   PanMode,
   SendTiming,
   StripMeteringOptions,
@@ -606,10 +606,10 @@ export class Mixer {
    *
    * @throws TypeError for a non-string (a number never selects a law); RangeError for an unknown name
    */
-  setPanLaw(strip: StripRef, panLaw: PanLawName): void {
+  setPanLaw(strip: StripRef, panLaw: PanLaw): void {
     this.native.setPanLaw(
       strip,
-      tokenArg('setPanLaw', panLaw, 'panLaw', (token) => panLawValue(token as PanLawName)),
+      tokenArg('setPanLaw', panLaw, 'panLaw', (token) => panLawValue(token as PanLaw)),
     );
   }
 

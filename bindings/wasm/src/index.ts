@@ -951,8 +951,6 @@ export type {
   PairAnalysisResultMap,
   PairProcessor,
   PanLaw,
-  PanLawInput,
-  PanLawName,
   PanMode,
   PercussiveEvent,
   PercussiveEventEdit,

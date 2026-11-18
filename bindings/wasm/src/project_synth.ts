@@ -127,7 +127,7 @@ function synthInfoModule(): SynthInfoModule {
  * for an engine mode: key, type, range, unit and the engine's base preset's
  * value. `[]` for modes with no section (`'default'`, `'sample'`). Throws for an unknown mode.
  */
-export function synthEngineParamInfo(engineMode: SynthEngineMode | number): SynthParamInfo[] {
+export function synthEngineParamInfo(engineMode: SynthEngineMode): SynthParamInfo[] {
   const ordinal = resolveEnumOrdinal(
     engineMode,
     Object.fromEntries(SYNTH_ENGINE_MODES.map((name, index) => [name, index])),

@@ -561,7 +561,6 @@ describe('Sonare WASM NativeSynth', () => {
       expect(synthEngineParamInfo(mode)).toEqual([]);
     }
     const bowed = synthEngineParamInfo('bowed-string');
-    expect(bowed).toEqual(synthEngineParamInfo(SYNTH_ENGINE_MODES.indexOf('bowed-string')));
     const force = bowed.find((info) => info.name === 'bowForce');
     expect(force).toBeDefined();
     expect(force?.type).toBe('number');
@@ -574,7 +573,8 @@ describe('Sonare WASM NativeSynth', () => {
     expect(() => synthEngineParamInfo('no-such-engine' as unknown as SynthEngineMode)).toThrow(
       RangeError,
     );
-    expect(() => synthEngineParamInfo(99)).toThrow(RangeError);
+    // biome-ignore lint/suspicious/noExplicitAny: direct JS callers bypass TypeScript unions.
+    expect(() => synthEngineParamInfo(1 as any)).toThrow(TypeError);
 
     const wrapper = synthPatchParamInfo();
     const names = wrapper.map((info) => info.name);

@@ -3,7 +3,7 @@ import { SampleBank } from './sample_bank.js';
 import type {
   AutomationCurve,
   MeterTap,
-  PanLawInput,
+  PanLaw,
   PanMode,
   PartRigInsert,
   PartRigKey,
@@ -34,25 +34,23 @@ export const CHANNEL_LAYOUT_VALUES: Readonly<Record<ChannelLayout, number>> = {
  * everything else here is a pure function over type-only inputs.
  */
 
-/** Resolve only declared enum spellings and ordinals at the JS/C ABI boundary. */
+/**
+ * Resolve a public enum spelling to its C ABI ordinal. Only the exact declared
+ * spelling is accepted: anything that is not a string (a number included) is a
+ * `TypeError`, an unknown string a `RangeError`.
+ */
 export function resolveEnumOrdinal(
   value: unknown,
   values: Readonly<Record<string, number>>,
   enumName: string,
 ): number {
-  if (typeof value === 'number') {
-    if (!Number.isSafeInteger(value) || !Object.values(values).includes(value)) {
-      throw new RangeError(`Invalid ${enumName}: ${String(value)}`);
-    }
-    return value;
+  if (typeof value !== 'string') {
+    throw new TypeError(`${enumName} must be a name, got ${typeof value}`);
   }
-  if (typeof value === 'string') {
-    if (Object.hasOwn(values, value)) {
-      return values[value] as number;
-    }
-    throw new RangeError(`Invalid ${enumName}: ${value}`);
+  if (Object.hasOwn(values, value)) {
+    return values[value] as number;
   }
-  throw new TypeError(`${enumName} must be a name or an ordinal, got ${typeof value}`);
+  throw new RangeError(`Invalid ${enumName}: ${value}`);
 }
 
 /**
@@ -66,7 +64,6 @@ export const AUTOMATION_CURVE_VALUES = {
   linear: 0,
   exponential: 1,
   hold: 2,
-  's-curve': 3,
   sCurve: 3,
 } as const;
 
@@ -120,20 +117,17 @@ export function projectAutomationLaneValue(
   };
 }
 
-const PAN_LAW_VALUES: Readonly<Record<string, number>> = {
-  const3db: 0,
-  'const-3db': 0,
-  '-3db': 0,
-  'const4.5db': 1,
-  'const-4.5db': 1,
-  '-4.5db': 1,
-  const6db: 2,
-  'const-6db': 2,
-  '-6db': 2,
-  linear0db: 3,
-  'linear-0db': 3,
-  linear: 3,
-  '0db': 3,
+const PAN_LAW_VALUES: Record<PanLaw, number> = {
+  const3Db: 0,
+  'const4.5Db': 1,
+  const6Db: 2,
+  linear0Db: 3,
+};
+
+const PAN_MODE_VALUES: Record<PanMode, number> = {
+  balance: 0,
+  stereoPan: 1,
+  dualPan: 2,
 };
 
 const METER_TAP_VALUES: Record<MeterTap, number> = {
@@ -152,25 +146,19 @@ export function automationCurveValue(curve: AutomationCurve): number {
   return resolveEnumOrdinal(curve, AUTOMATION_CURVE_VALUES, 'automation curve');
 }
 
-export function panLawValue(panLaw: PanLawInput): number {
-  const normalized = typeof panLaw === 'string' ? panLaw.toLowerCase().replace(/_/g, '-') : panLaw;
-  return resolveEnumOrdinal(normalized, PAN_LAW_VALUES, 'pan law');
+export function panLawValue(panLaw: PanLaw): number {
+  return resolveEnumOrdinal(panLaw, PAN_LAW_VALUES, 'pan law');
 }
 
 export function panModeValue(panMode: PanMode): number {
-  const mode = typeof panMode === 'string' ? panMode.replace(/_/g, '-').toLowerCase() : panMode;
-  return resolveEnumOrdinal(
-    mode,
-    { balance: 0, stereopan: 1, 'stereo-pan': 1, dualpan: 2, 'dual-pan': 2 },
-    'pan mode',
-  );
+  return resolveEnumOrdinal(panMode, PAN_MODE_VALUES, 'pan mode');
 }
 
-export function meterTapValue(tap: MeterTap | number): number {
+export function meterTapValue(tap: MeterTap): number {
   return resolveEnumOrdinal(tap, METER_TAP_VALUES, 'meter tap');
 }
 
-export function sendTimingValue(timing: SendTiming | number): number {
+export function sendTimingValue(timing: SendTiming): number {
   return resolveEnumOrdinal(timing, SEND_TIMING_VALUES, 'send timing');
 }
 

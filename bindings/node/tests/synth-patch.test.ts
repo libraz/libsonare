@@ -4,10 +4,10 @@ import {
   BUILTIN_SYNTH_WAVEFORMS,
   CONTROLLER_AXES,
   CONTROLLER_INPUTS,
+  MPE_DIMENSIONS,
   midiNoteOff,
   midiNoteOn,
   midiProgram,
-  MPE_DIMENSIONS,
   NOTE_TRACKINGS,
   PART_RIG_MODES,
   Project,
@@ -884,14 +884,16 @@ describe('synth parameter descriptors', () => {
       expect(synthEngineParamInfo(mode)).toEqual([]);
     }
     const bowed = synthEngineParamInfo('bowed-string');
-    expect(synthEngineParamInfo(SYNTH_ENGINE_MODES.indexOf('bowed-string'))).toEqual(bowed);
+    // biome-ignore lint/suspicious/noExplicitAny: direct JS callers bypass TypeScript unions.
+    expect(() => synthEngineParamInfo(SYNTH_ENGINE_MODES.indexOf('bowed-string') as any)).toThrow(
+      TypeError,
+    );
     const force = bowed.find((field) => field.name === 'bowForce');
     expect(force).toBeDefined();
     expect(force?.type).toBe('number');
     expect(typeof force?.default).toBe('number');
     expect(typeof force?.unit).toBe('string');
     expect(() => synthEngineParamInfo('no-such-engine' as never)).toThrow(/synth engine mode/);
-    expect(() => synthEngineParamInfo(SYNTH_ENGINE_MODES.length)).toThrow(RangeError);
   });
 
   it('states a gate only where a field has one, and a switch default as a boolean', () => {

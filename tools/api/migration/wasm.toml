@@ -27642,3 +27642,41 @@ changed = "readonly getter (was a method)"
 domain = "engine"
 rule = "getters"
 test = "bindings/wasm/tests/playback.test.ts::reads cheap scalar state as getters"
+
+[[entry]]
+kind = "type"
+old = "PanLawName"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "type"
+old = "PanLawName"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "PanLawInput"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "type"
+old = "PanLawInput"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "option"
+old = "synthEngineParamInfo(engineMode)"
+changed = "takes the engine mode name only; an ordinal is a TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/synth-patch.test.ts::describes engine sections and wrapper fields"

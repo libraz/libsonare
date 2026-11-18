@@ -22,8 +22,8 @@ import { expectArgumentRefusal } from './_helpers';
 
 interface AutomationCurveCorpus {
   accepted: Array<{ value: string; ordinal: number }>;
-  numeric: number[];
   rejected: string[];
+  rejected_numeric: number[];
 }
 
 // The same corpus the Node suite reads: the automation-curve vocabulary is one
@@ -645,7 +645,7 @@ describe('Sonare WASM Project edit ops', () => {
     }
   });
 
-  it('resolves every documented curve spelling and alias to one serialized ordinal', () => {
+  it('resolves every documented curve spelling to one serialized ordinal', () => {
     // The vocabulary comes from the shared corpus rather than being restated
     // here, and the Node suite reads the same file: a spelling one facade takes
     // must land on the same ordinal on the other, not throw or fall back to
@@ -674,7 +674,7 @@ describe('Sonare WASM Project edit ops', () => {
       expect(laneWith(value)).toBe(ordinal);
     }
     // A Project curve is a token on every path, so an ordinal is a type error.
-    for (const value of curveCorpus.numeric) {
+    for (const value of curveCorpus.rejected_numeric) {
       expect(() => laneWith(value)).toThrow(TypeError);
     }
     for (const value of curveCorpus.rejected) {

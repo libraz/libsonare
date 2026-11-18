@@ -93,9 +93,15 @@ export function synthEnumTables(): SynthEnumTables {
 /**
  * Describe the fields {@link SynthPatch.engineParams} accepts for an engine
  * mode: key, type, range, default (the engine's base preset's value) and unit.
- * Empty for `'default'` and `'sample'`, which have no engine section. An unknown mode name or an out-of-range ordinal throws.
+ * Empty for `'default'` and `'sample'`, which have no engine section. An unknown mode name is a
+ * `RangeError` and anything that is not a name a `TypeError`.
  */
-export function synthEngineParamInfo(engineMode: SynthEngineMode | number): SynthParamInfo[] {
+export function synthEngineParamInfo(engineMode: SynthEngineMode): SynthParamInfo[] {
+  if (typeof engineMode !== 'string') {
+    throw new TypeError(
+      `synthEngineParamInfo: engineMode must be a name, got ${typeof engineMode}`,
+    );
+  }
   return JSON.parse(addon.synthEngineParamInfo(engineMode)) as SynthParamInfo[];
 }
 

@@ -4,9 +4,15 @@
     { "value": "linear", "ordinal": 0 },
     { "value": "exponential", "ordinal": 1 },
     { "value": "hold", "ordinal": 2 },
-    { "value": "s-curve", "ordinal": 3 },
     { "value": "sCurve", "ordinal": 3 }
   ],
-  "numeric": [0, 1, 2, 3],
-  "rejected": ["", "curve", "bezier", "s curve", "scurve"]
+  "rejected": [
+    "s-curve",
+    "",
+    "curve",
+    "bezier",
+    "s curve",
+    "scurve"
+  ],
+  "rejected_numeric": [0, 1, 2, 3]
 }

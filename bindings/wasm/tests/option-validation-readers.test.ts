@@ -126,14 +126,15 @@ describe('enum ordinals', () => {
     expect(() => resolveEnumOrdinal('constructor', values, 'curve')).toThrow(RangeError);
     expect(() => resolveEnumOrdinal('__proto__', values, 'curve')).toThrow(RangeError);
     expect(resolveEnumOrdinal('hold', values, 'curve')).toBe(2);
-    expect(resolveEnumOrdinal(0, values, 'curve')).toBe(0);
   });
 
   it('refuse a wrong type with TypeError and an unknown value with RangeError', () => {
     expect(() => resolveEnumOrdinal(true, values, 'curve')).toThrow(TypeError);
     expect(() => resolveEnumOrdinal(null, values, 'curve')).toThrow(TypeError);
     expect(() => resolveEnumOrdinal('nope', values, 'curve')).toThrow(RangeError);
-    expect(() => resolveEnumOrdinal(7, values, 'curve')).toThrow(RangeError);
+    for (const ordinal of [0, 7]) {
+      expect(() => resolveEnumOrdinal(ordinal, values, 'curve')).toThrow(TypeError);
+    }
   });
 });
 

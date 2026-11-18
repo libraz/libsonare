@@ -313,8 +313,6 @@ export type {
   PairAnalysisResultMap,
   PairProcessor,
   PanLaw,
-  PanLawInput,
-  PanLawName,
   PanMode,
   PartRigEntry,
   PartRigInsert,

@@ -30,9 +30,8 @@ const sampleRate = 22050;
 
 interface PanLawCorpus {
   accepted: Array<{ value: string; ordinal: number }>;
-  normalization: Array<{ value: string; ordinal: number }>;
-  numeric: number[];
   rejected: string[];
+  rejected_numeric: number[];
 }
 
 const panLawCorpus = JSON.parse(
@@ -210,15 +209,15 @@ describe('enum-code helpers reject unknown strings instead of silently defaultin
     expect(meterTapCode('postFader')).toBe(1);
   });
 
-  it('resolves every shared pan-law spelling and conservative normalization', () => {
-    for (const { value, ordinal } of [...panLawCorpus.accepted, ...panLawCorpus.normalization]) {
+  it('resolves exactly the shared pan-law spellings and refuses every other', () => {
+    for (const { value, ordinal } of panLawCorpus.accepted) {
       expect(panLawCode(value as never)).toBe(ordinal);
-    }
-    for (const value of panLawCorpus.numeric) {
-      expect(panLawCode(value)).toBe(value);
     }
     for (const value of panLawCorpus.rejected) {
       expect(() => panLawCode(value as never)).toThrow(RangeError);
+    }
+    for (const value of panLawCorpus.rejected_numeric) {
+      expect(() => panLawCode(value as never)).toThrow(TypeError);
     }
   });
 
@@ -238,14 +237,15 @@ describe('enum-code helpers reject unknown strings instead of silently defaultin
     expect(() => sendTimingCode('bogus' as any)).toThrow();
     expect(sendTimingCode('postFader')).toBe(0);
     expect(sendTimingCode('preFader')).toBe(1);
-    expect(() => sendTimingCode(7)).toThrow(/Invalid send timing/);
+    // biome-ignore lint/suspicious/noExplicitAny: direct JS callers bypass TypeScript unions.
+    expect(() => sendTimingCode(1 as any)).toThrow(TypeError);
   });
 
-  it('rejects unknown raw ordinals across code and project resolvers', () => {
+  it('refuses raw ordinals across code and project resolvers', () => {
     // biome-ignore lint/suspicious/noExplicitAny: direct JS callers bypass TypeScript unions.
-    expect(() => panLawCode(99 as any)).toThrow(RangeError);
+    expect(() => panLawCode(99 as any)).toThrow(TypeError);
     // biome-ignore lint/suspicious/noExplicitAny: direct JS callers bypass TypeScript unions.
-    expect(() => meterTapCode(-1 as any)).toThrow(RangeError);
+    expect(() => meterTapCode(-1 as any)).toThrow(TypeError);
     // biome-ignore lint/suspicious/noExplicitAny: direct JS callers bypass TypeScript unions.
     expect(() => projectTrackKindValue('bus' as any, 'addTrack')).toThrow(RangeError);
     // biome-ignore lint/suspicious/noExplicitAny: direct JS callers bypass TypeScript unions.

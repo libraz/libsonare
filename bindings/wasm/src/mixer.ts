@@ -20,7 +20,7 @@ import type {
   MixerProcessResult,
   MixMeterSnapshot,
   MixSceneDocument,
-  PanLawName,
+  PanLaw,
   PanMode,
   SendTiming,
   SurroundPan,
@@ -696,10 +696,10 @@ export class Mixer {
    * @param panMode - Optional pan mode. When omitted the strip's current pan
    *   mode is kept (passes `SONARE_PAN_MODE_KEEP`), so a plain pan nudge does
    *   not reset a scene-defined `'stereoPan'` / `'dualPan'` mode back to
-   *   balance. Pass `'balance'` (or `0`) explicitly to force balance mode.
+   *   balance. Pass `'balance'` explicitly to force balance mode.
    * @throws {RangeError} when `pan` is outside `[-1, 1]` or non-finite.
    */
-  setPan(strip: StripRef, pan: number, panMode?: PanMode | number): void {
+  setPan(strip: StripRef, pan: number, panMode?: PanMode): void {
     // SONARE_PAN_MODE_KEEP (-1) = keep the strip's current pan mode.
     const mode = panMode === undefined ? -1 : panModeCode(panMode);
     this.mixer.setPan(this.stripIndex('setPan', strip), pan, mode);
@@ -788,10 +788,10 @@ export class Mixer {
    *
    * @throws TypeError for a non-string (a number never selects a law); RangeError for an unknown name
    */
-  setPanLaw(strip: StripRef, panLaw: PanLawName): void {
+  setPanLaw(strip: StripRef, panLaw: PanLaw): void {
     this.mixer.setPanLaw(
       this.stripIndex('setPanLaw', strip),
-      tokenArg('setPanLaw', panLaw, 'panLaw', (token) => panLawCode(token as PanLawName)),
+      tokenArg('setPanLaw', panLaw, 'panLaw', (token) => panLawCode(token as PanLaw)),
     );
   }
 
