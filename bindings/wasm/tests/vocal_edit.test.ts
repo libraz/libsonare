@@ -9,7 +9,9 @@ import type {
 import {
   createVocalEditSession,
   restoreVocalEditSession,
+  VocalEditDraft,
   VocalEditSession,
+  VocalRenderJob,
   VocalRenderSnapshot,
 } from '../src/vocal_edit';
 
@@ -508,6 +510,21 @@ describe('WASM vocal edit facade', () => {
     } finally {
       session.destroy();
     }
+  });
+
+  it('keeps the handle constructors out of the public type', () => {
+    // Never called: the type check is the assertion, the handles would be refused at runtime.
+    const constructors = () => [
+      // @ts-expect-error the constructor is protected; sessions come from the factories
+      new VocalEditSession(0, SAMPLE_RATE),
+      // @ts-expect-error the constructor is protected; drafts come from beginEdit
+      new VocalEditDraft(0, undefined as unknown as VocalEditSession, SAMPLE_RATE),
+      // @ts-expect-error the constructor is protected; snapshots come from captureRenderSnapshot
+      new VocalRenderSnapshot(0, SAMPLE_RATE),
+      // @ts-expect-error the constructor is protected; jobs come from beginRenderJob
+      new VocalRenderJob(0),
+    ];
+    expect(typeof constructors).toBe('function');
   });
 
   it('polls a synchronous cancel hook on render', () => {

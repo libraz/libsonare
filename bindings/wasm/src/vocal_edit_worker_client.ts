@@ -291,7 +291,7 @@ class ClientCore {
     }
     return reply.then(({ result }) => {
       const state: SessionState = { id: sessionId, token: result.token, disposed: false };
-      const session = new VocalEditWorkerSession(CONSTRUCT, this, state, {
+      const session = new VocalEditWorkerSessionHandle(CONSTRUCT, this, state, {
         notes: result.notes,
         analysis: result.analysis,
         capabilities: result.capabilities,
@@ -686,7 +686,7 @@ export class VocalEditWorkerDraft {
   private readonly draftState: DraftState;
 
   /** @internal Created by {@link VocalEditWorkerSession.beginEdit}. */
-  constructor(
+  protected constructor(
     guard: typeof CONSTRUCT,
     core: ClientCore,
     sessionState: SessionState,
@@ -828,7 +828,7 @@ export class VocalEditWorkerSession {
   private destroying: Promise<void> | undefined;
 
   /** @internal Created by {@link VocalEditWorkerClient.create} and {@link VocalEditWorkerClient.restore}. */
-  constructor(
+  protected constructor(
     guard: typeof CONSTRUCT,
     core: ClientCore,
     state: SessionState,
@@ -932,7 +932,7 @@ export class VocalEditWorkerSession {
     });
     const draftState: DraftState = { token, open: true };
     this.state.draft = draftState;
-    return new VocalEditWorkerDraft(CONSTRUCT, this.core, this.state, draftState);
+    return new VocalEditWorkerDraftHandle(CONSTRUCT, this.core, this.state, draftState);
   }
 
   /** Reverts the last commit. `expectedRevision` defaults to the current revision. */
@@ -1007,5 +1007,29 @@ export class VocalEditWorkerSession {
     if (this.state.disposed) {
       throw releasedHandleError('vocal Worker session', 'has already been disposed');
     }
+  }
+}
+
+// The public wrappers have protected constructors; these subclasses are the module's only
+// construction path, and the guard still refuses a call from outside it at runtime.
+class VocalEditWorkerDraftHandle extends VocalEditWorkerDraft {
+  constructor(
+    guard: typeof CONSTRUCT,
+    core: ClientCore,
+    sessionState: SessionState,
+    draftState: DraftState,
+  ) {
+    super(guard, core, sessionState, draftState);
+  }
+}
+
+class VocalEditWorkerSessionHandle extends VocalEditWorkerSession {
+  constructor(
+    guard: typeof CONSTRUCT,
+    core: ClientCore,
+    state: SessionState,
+    created: VocalEditWorkerCreated,
+  ) {
+    super(guard, core, state, created);
   }
 }

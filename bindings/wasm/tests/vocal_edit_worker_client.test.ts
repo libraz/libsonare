@@ -23,6 +23,7 @@ import {
   type VocalEditWorker,
   VocalEditWorkerClient,
   VocalEditWorkerDraft,
+  VocalEditWorkerSession,
 } from '../src/vocal_edit_worker_client';
 
 const token: VocalStateToken = {
@@ -163,6 +164,17 @@ class FakeWorker implements VocalEditWorker {
 }
 
 describe('vocal edit Worker client', () => {
+  it('keeps the guarded constructors out of the public type', () => {
+    // Never called: the type check is the assertion, the guard refuses the call at runtime.
+    const constructors = (guard: never) => [
+      // @ts-expect-error the constructor is protected; drafts come from beginEdit
+      new VocalEditWorkerDraft(guard, guard, guard, guard),
+      // @ts-expect-error the constructor is protected; sessions come from the client
+      new VocalEditWorkerSession(guard, guard, guard, guard),
+    ];
+    expect(typeof constructors).toBe('function');
+  });
+
   it('keeps intent counters increasing across decimal digit boundaries', async () => {
     const worker = new FakeWorker();
     const client = new VocalEditWorkerClient({ worker });

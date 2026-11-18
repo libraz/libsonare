@@ -599,7 +599,7 @@ export function createVocalEditSession(request: VocalCreateRequest): VocalEditSe
     throw new SonareError(ErrorCode.NotSupported, 'vocal edit is unavailable in this WASM build');
   }
   const native = limits === undefined ? request : { ...request, limits };
-  return new VocalEditSession(
+  return new VocalEditSessionHandle(
     module().vocalEditSessionCreate(request.samples, request.sampleRate, native),
     request.sampleRate,
   );
@@ -618,7 +618,7 @@ export function restoreVocalEditSession(request: VocalRestoreRequest): VocalEdit
     throw new SonareError(ErrorCode.NotSupported, 'vocal edit is unavailable in this WASM build');
   }
   const native = limits === undefined ? request : { ...request, limits };
-  return new VocalEditSession(
+  return new VocalEditSessionHandle(
     module().vocalEditSessionRestore(request.samples, request.sampleRate, request.state, native),
     request.sampleRate,
   );
@@ -632,7 +632,7 @@ export class VocalEditSession {
   private readonly sampleRate: number;
 
   /** @internal Instances are created by {@link createVocalEditSession} and {@link restoreVocalEditSession}. */
-  constructor(handle: number, sampleRate: number) {
+  protected constructor(handle: number, sampleRate: number) {
     requireHandle(handle, 'session');
     this.handle = handle;
     this.sampleRate = sampleRate;
@@ -706,7 +706,7 @@ export class VocalEditSession {
 
   /** Opens a draft for batching edits. `expectedRevision` defaults to the current revision; a mismatch is refused with a `revisionConflict` detail. */
   beginEdit(options: RevisionArgument = {}): VocalEditDraft {
-    const draft = new VocalEditDraft(
+    const draft = new VocalEditDraftHandle(
       module().vocalEditSessionBeginEdit(this.native(), resolveRevision(options, this.revision)),
       this,
       this.sampleRate,
@@ -770,7 +770,7 @@ export class VocalEditSession {
 
   /** Freezes the committed state for rendering; the snapshot is unaffected by later edits. */
   captureRenderSnapshot(): VocalRenderSnapshot {
-    return new VocalRenderSnapshot(
+    return new VocalRenderSnapshotHandle(
       module().vocalEditCaptureSnapshot(this.native(), false),
       this.sampleRate,
     );
@@ -795,7 +795,7 @@ export class VocalEditDraft {
   private readonly sampleRate: number;
 
   /** @internal Instances are created by {@link VocalEditSession.beginEdit}. */
-  constructor(handle: number, owner: VocalEditSession, sampleRate: number) {
+  protected constructor(handle: number, owner: VocalEditSession, sampleRate: number) {
     requireHandle(handle, 'draft');
     this.handle = handle;
     this.owner = owner;
@@ -895,7 +895,7 @@ export class VocalEditDraft {
 
   /** Freezes the draft state for rendering. */
   captureRenderSnapshot(): VocalRenderSnapshot {
-    return new VocalRenderSnapshot(
+    return new VocalRenderSnapshotHandle(
       module().vocalEditCaptureSnapshot(this.native(), true),
       this.sampleRate,
     );
@@ -925,7 +925,7 @@ export class VocalRenderSnapshot {
   private readonly sampleRate: number;
 
   /** @internal Instances are created by a session or draft. */
-  constructor(handle: number, sampleRate: number) {
+  protected constructor(handle: number, sampleRate: number) {
     requireHandle(handle, 'snapshot');
     this.handle = handle;
     this.sampleRate = sampleRate;
@@ -972,7 +972,7 @@ export class VocalRenderSnapshot {
   beginRenderJob(request: VocalRenderJobRequest): VocalRenderJob {
     const handle = this.native();
     const normalized = normalizeRequest(request, this.outputLengthSamples, this.sampleRate);
-    return new VocalRenderJob(
+    return new VocalRenderJobHandle(
       module().vocalEditRenderJobBegin(
         handle,
         normalized.range.startSample,
@@ -1042,7 +1042,7 @@ export class VocalRenderJob {
   private disposed = false;
 
   /** @internal Instances are created by {@link VocalRenderSnapshot.beginRenderJob}. */
-  constructor(handle: number) {
+  protected constructor(handle: number) {
     requireHandle(handle, 'render job');
     this.handle = handle;
   }
@@ -1097,3 +1097,29 @@ export type {
   VocalEditResult,
   VocalHistory,
 } from './public_types_vocal_edit.js';
+
+// The public wrappers have protected constructors so a raw handle never appears in the
+// package declaration; these subclasses are the module's only construction path.
+class VocalEditSessionHandle extends VocalEditSession {
+  constructor(handle: number, sampleRate: number) {
+    super(handle, sampleRate);
+  }
+}
+
+class VocalEditDraftHandle extends VocalEditDraft {
+  constructor(handle: number, owner: VocalEditSession, sampleRate: number) {
+    super(handle, owner, sampleRate);
+  }
+}
+
+class VocalRenderSnapshotHandle extends VocalRenderSnapshot {
+  constructor(handle: number, sampleRate: number) {
+    super(handle, sampleRate);
+  }
+}
+
+class VocalRenderJobHandle extends VocalRenderJob {
+  constructor(handle: number) {
+    super(handle);
+  }
+}

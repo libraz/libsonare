@@ -1194,11 +1194,6 @@ RULES: list[Rule] = [
             "wasm:SonareRealtimeEngineWorkletProcessor": "fold transport into the options object",
             "wasm:SonareStreamAnalyzerWorkletProcessor": "fold port into the options object",
             "wasm:SonareWorkletProcessor": "fold transport into the options object",
-            "wasm:VocalEditDraft": "declare the handle constructor private, as Node does",
-            "wasm:VocalEditSession": "declare the handle constructor private, as Node does",
-            "wasm:VocalRenderSnapshot": "declare the handle constructor private, as Node does",
-            "wasm:VocalEditWorkerDraft": "declare the guarded constructor private",
-            "wasm:VocalEditWorkerSession": "declare the guarded constructor private",
         },
     ),
     Rule(
