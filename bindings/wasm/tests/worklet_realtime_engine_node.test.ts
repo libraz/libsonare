@@ -1143,12 +1143,12 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setStrip('master', stripDocument(masterStripJson));
         expect(engine.setStripFaderDb('master', -3)).toBeUndefined();
         expect(engine.setStripPan('master', -0.25)).toBeUndefined();
-        engine.setStripEqBand(3, 0, { type: 'Peak', frequencyHz: 1000, gainDb: 6 });
-        engine.setStripEqBand('master', 0, { type: 'Peak', frequencyHz: 1000, gainDb: 3 });
+        engine.setStripEqBand(3, 0, { type: 'peak', frequencyHz: 1000, gainDb: 6 });
+        engine.setStripEqBand('master', 0, { type: 'peak', frequencyHz: 1000, gainDb: 3 });
         engine.setStripInsertBypassed(3, 0, { bypassed: true, resetOnBypass: true });
         engine.setStripInsertBypassed('master', 0, { bypassed: true, resetOnBypass: true });
-        engine.setStripEqBand(3, 0, { type: 'Peak', frequencyHz: 2000, gainDb: 2 });
-        engine.setStripEqBand('master', 0, { type: 'Peak', frequencyHz: 3000, gainDb: 1 });
+        engine.setStripEqBand(3, 0, { type: 'peak', frequencyHz: 2000, gainDb: 2 });
+        engine.setStripEqBand('master', 0, { type: 'peak', frequencyHz: 3000, gainDb: 1 });
         engine.setStripInsertBypassed(3, 0, { bypassed: false });
         engine.setStripInsertBypassed('master', 0, { bypassed: false });
         engine.setStrip(3, stripDocument(trackStripJson));
@@ -2624,20 +2624,20 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setBusPan(100, 0.6);
         engine.setBusPanLaw(100, 'const6Db');
         engine.setBusEqBand(100, 2, {
-          type: 'Peak',
+          type: 'peak',
           frequencyHz: 800,
           gainDb: 9,
           q: 1,
           enabled: true,
         });
         engine.setStripEqBand('master', 1, {
-          type: 'Peak',
+          type: 'peak',
           frequencyHz: 3000,
           gainDb: -6,
           q: 2,
           enabled: true,
         });
-        engine.setStripEqBand(7, 0, { type: 'Peak', frequencyHz: 1500, gainDb: 6, enabled: true });
+        engine.setStripEqBand(7, 0, { type: 'peak', frequencyHz: 1500, gainDb: 6, enabled: true });
         const replay = (messages: unknown[]): void => {
           for (const message of messages) {
             const type = (message as { type?: unknown }).type;

@@ -239,7 +239,7 @@ describe('Sonare WASM Module', () => {
       );
       let badIndexError: unknown;
       try {
-        engine.setStripEqBand(10, 99, { type: 'Peak', enabled: true });
+        engine.setStripEqBand(10, 99, { type: 'peak', enabled: true });
       } catch (error) {
         badIndexError = error;
       }
@@ -249,7 +249,7 @@ describe('Sonare WASM Module', () => {
       engine.play();
       const [flatOut] = engine.process([new Float32Array(256)]);
       engine.setStripEqBand(10, 0, {
-        type: 'Peak',
+        type: 'peak',
         frequencyHz: 1000,
         gainDb: 12,
         q: 1,
@@ -336,7 +336,7 @@ describe('Sonare WASM Module', () => {
       );
       let badIndexError: unknown;
       try {
-        engine.setStripEqBand('master', 99, { type: 'Peak', enabled: true });
+        engine.setStripEqBand('master', 99, { type: 'peak', enabled: true });
       } catch (error) {
         badIndexError = error;
       }
@@ -346,7 +346,7 @@ describe('Sonare WASM Module', () => {
       engine.play();
       const [flatOut] = engine.process([new Float32Array(256)]);
       engine.setStripEqBand('master', 0, {
-        type: 'Peak',
+        type: 'peak',
         frequencyHz: 1000,
         gainDb: 12,
         q: 1,
@@ -410,7 +410,7 @@ describe('Sonare WASM Module', () => {
       expect(rms(centredLeft)).toBeCloseTo(rms(flatLeft), 3);
 
       engine.setBusEqBand(1, 0, {
-        type: 'Peak',
+        type: 'peak',
         frequencyHz: 1000,
         gainDb: 12,
         q: 1,
@@ -418,7 +418,7 @@ describe('Sonare WASM Module', () => {
       });
       const [boostedLeft] = settle();
       expect(rms(boostedLeft)).toBeGreaterThan(rms(flatLeft) * 1.5);
-      engine.setBusEqBand(1, 0, { type: 'Peak', frequencyHz: 1000, gainDb: 0 });
+      engine.setBusEqBand(1, 0, { type: 'peak', frequencyHz: 1000, gainDb: 0 });
       const [restoredLeft] = settle();
       expect(rms(restoredLeft)).toBeCloseTo(rms(flatLeft), 3);
 
@@ -426,9 +426,9 @@ describe('Sonare WASM Module', () => {
       expectRefusalOf(() => engine.setBusPanLaw(99, 'const3Db'));
       expectRefusalOf(() => engine.setBusPanMode(99, 'balance'));
       expectRefusalOf(() => engine.setBusDualPan(99, -1, 1));
-      expectRefusalOf(() => engine.setBusEqBand(99, 0, { type: 'Peak' }));
-      expectRefusalOf(() => engine.setBusEqBand(1, 99, { type: 'Peak' }));
-      expectRefusalOf(() => engine.setBusEqBand(1, -1, { type: 'Peak' }));
+      expectRefusalOf(() => engine.setBusEqBand(99, 0, { type: 'peak' }));
+      expectRefusalOf(() => engine.setBusEqBand(1, 99, { type: 'peak' }));
+      expectRefusalOf(() => engine.setBusEqBand(1, -1, { type: 'peak' }));
       // A surround bus has no stereo image to pan; its EQ is still addressable.
       engine.setTrackBuses([
         { busId: 1, gainDb: 0 },
@@ -436,7 +436,7 @@ describe('Sonare WASM Module', () => {
       ]);
       expectRefusalOf(() => engine.setBusPan(2, 0.5));
       expectRefusalOf(() => engine.setBusDualPan(2, -1, 0));
-      engine.setBusEqBand(2, 0, { type: 'Peak', frequencyHz: 500, gainDb: 3 });
+      engine.setBusEqBand(2, 0, { type: 'peak', frequencyHz: 500, gainDb: 3 });
       engine.destroy();
     });
 

@@ -626,7 +626,7 @@ describe('strip addressing', () => {
       engine.setTrackLanes([{ trackId: 10 }]);
       expect(() => engine.setStripEqBand(10, 0, '{"type":"Peak"}' as never)).toThrow(TypeError);
       expect(() => engine.setBusEqBand(1, 0, '{"type":"Peak"}' as never)).toThrow(TypeError);
-      expect(() => engine.setStripEqBand('10', 0, { type: 'Peak' })).toThrow(RangeError);
+      expect(() => engine.setStripEqBand('10', 0, { type: 'peak' })).toThrow(RangeError);
     });
   });
 

@@ -114,7 +114,7 @@ describe('RealtimeEngine state refusals stay a coded InvalidState', () => {
   it('refuses master-strip edits before a master strip is configured', () => {
     withEngine((engine) => {
       expectInvalidState(() => engine.setStripInsertBypassed('master', 0, { bypassed: true }));
-      expectInvalidState(() => engine.setStripEqBand('master', 0, { type: 'Peak' }));
+      expectInvalidState(() => engine.setStripEqBand('master', 0, { type: 'peak' }));
       expectInvalidState(() => engine.resolveStripInsertAutomationId('master', 0, 'thresholdDb'));
       // Once a master strip exists, the same setter refuses a bad index as the argument.
       engine.setStrip('master', JSON.parse(LIMITER_MASTER).strips[0]);
