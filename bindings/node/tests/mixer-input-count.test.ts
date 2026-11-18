@@ -27,3 +27,17 @@ describe('Mixer input count (Node)', () => {
     );
   });
 });
+
+describe('Mixer block size (Node)', () => {
+  it('takes an omitted maxBlockSize as the library default and refuses an explicit 0', () => {
+    const scene = JSON.stringify(mixingScenePreset('commentaryDucking'));
+    expect(() => Mixer.fromJson(scene, { sampleRate: 48000, maxBlockSize: 0 })).toThrow(RangeError);
+    const mixer = Mixer.fromJson(scene, { sampleRate: 48000 });
+    try {
+      expect(mixer.drainTailStereo(512).left).toHaveLength(512);
+      expect(() => mixer.drainTailStereo(513)).toThrow(RangeError);
+    } finally {
+      mixer.destroy();
+    }
+  });
+});

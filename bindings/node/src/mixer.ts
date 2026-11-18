@@ -38,9 +38,6 @@ export type MixBusRole = 'master' | 'aux' | 'submix';
 
 const MIX_BUS_ROLES: readonly MixBusRole[] = ['master', 'aux', 'submix'];
 
-/** Default maximum block size of a {@link Mixer}, in samples. */
-const DEFAULT_BLOCK_SIZE = 512;
-
 /** Construction options of a {@link Mixer}. */
 export interface MixerConfig {
   /** Scene to build the mixer from; omitted gives an empty mixer. */
@@ -189,9 +186,10 @@ function tokenArg(
 
 const curveToken = (token: string): number => automationCurveValue(token as AutomationCurve);
 
-function maxBlockSizeOf(fnName: string, value: unknown): number {
+/** An omitted block size stays undefined, which the addon passes on as the library default. */
+function maxBlockSizeOf(fnName: string, value: unknown): number | undefined {
   if (isAbsent(value)) {
-    return DEFAULT_BLOCK_SIZE;
+    return undefined;
   }
   assertIntegerValue(fnName, value, 'maxBlockSize');
   if (value === 0) {

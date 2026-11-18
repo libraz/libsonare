@@ -67,3 +67,21 @@ describe('Mixer input count (WASM)', () => {
     b.destroy();
   });
 });
+
+describe('Mixer block size (WASM)', () => {
+  beforeAll(async () => {
+    await init();
+  });
+
+  it('takes an omitted maxBlockSize as the library default and refuses an explicit 0', () => {
+    const scene = JSON.stringify(mixingScenePreset('commentaryDucking'));
+    expect(() => Mixer.fromJson(scene, { sampleRate: SR, maxBlockSize: 0 })).toThrow(RangeError);
+    const mixer = Mixer.fromJson(scene, { sampleRate: SR });
+    try {
+      expect(mixer.drainTailStereo(512).left).toHaveLength(512);
+      expect(() => mixer.drainTailStereo(513)).toThrow(RangeError);
+    } finally {
+      mixer.destroy();
+    }
+  });
+});

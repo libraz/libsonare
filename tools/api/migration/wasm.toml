@@ -27490,3 +27490,10 @@ changed = "blockSize is optional: omit it for the library default; an explicit 0
 domain = "engine"
 rule = "absent-not-sentinel"
 test = "bindings/wasm/tests/surface/engine.test.ts::takes an omitted block size or record count as the library default and refuses 0"
+[[entry]]
+kind = "class"
+old = "Mixer"
+changed = "maxBlockSize: the facade default is gone: omit it for the library default; an explicit 0 is a RangeError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/mixer-input-count.test.ts::takes an omitted maxBlockSize as the library default and refuses an explicit 0"

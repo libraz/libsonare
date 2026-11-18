@@ -46,9 +46,6 @@ export type MixBusRole = 'master' | 'aux' | 'submix';
 
 const MIX_BUS_ROLES: readonly MixBusRole[] = ['master', 'aux', 'submix'];
 
-/** Default maximum block size of a {@link Mixer}, in samples. */
-const DEFAULT_BLOCK_SIZE = 512;
-
 /**
  * Field of the meter snapshot latched by {@link Mixer.latchMeterSnapshot}, as
  * read by {@link Mixer.meterScratchValue}.
@@ -202,9 +199,9 @@ function tokenArg(
 
 const curveToken = (token: string): number => automationCurveCode(token as AutomationCurve);
 
-function maxBlockSizeOf(fnName: string, value: unknown): number {
+function maxBlockSizeOf(fnName: string, value: unknown): number | undefined {
   if (isAbsent(value)) {
-    return DEFAULT_BLOCK_SIZE;
+    return undefined;
   }
   assertIntegerValue(fnName, value, 'maxBlockSize');
   if (value === 0) {
@@ -271,7 +268,6 @@ export class Mixer {
     assertHandleLive(this.released, 'Mixer');
     return this.mixerHandle;
   }
-  private readonly maxBlockSize: number;
 
   /**
    * Build a mixer from a scene document.
@@ -306,7 +302,6 @@ export class Mixer {
       bag.sampleRate as number,
       maxBlockSize,
     );
-    this.maxBlockSize = maxBlockSize;
   }
 
   /**
@@ -1074,11 +1069,6 @@ export class Mixer {
    * master (`left`, `right`, `sampleRate`).
    */
   drainTailStereo(numSamples: number): MixerProcessResult {
-    if (!Number.isSafeInteger(numSamples) || numSamples <= 0 || numSamples > this.maxBlockSize) {
-      throw new RangeError(
-        `Mixer.drainTailStereo: numSamples must be an integer in [1, ${this.maxBlockSize}]`,
-      );
-    }
     return this.mixer.drainTailStereo(numSamples);
   }
 

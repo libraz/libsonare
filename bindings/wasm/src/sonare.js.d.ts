@@ -3795,7 +3795,11 @@ export interface SonareModule {
   ) => { samples: Float32Array; channels: number };
 
   // Mixing - scene-based Mixer
-  createMixerFromSceneJson: (json: string, sampleRate: number, blockSize: number) => WasmMixer;
+  createMixerFromSceneJson: (
+    json: string,
+    sampleRate: number,
+    blockSize: number | undefined,
+  ) => WasmMixer;
 
   // Decodes a thrown native exception-object pointer (emscripten classic EH
   // surfaces a C++ throw as the raw pointer number) into a structured error.
