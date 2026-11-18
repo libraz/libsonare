@@ -392,28 +392,18 @@ bool sidecar_from_json(const Value& v, arrangement::AssistSidecar* out, size_t m
                                        max_payload_bytes);
 }
 
-mixing::api::Scene scene_from_value(const Value& v, BoundedDiagnostics* diagnostics) {
+mixing::api::Scene scene_from_value(const Value& v) {
   try {
     // Walk the already-parsed sub-tree. Dumping it back to text and re-parsing
     // would cost a second full parse of the scene and would put that parse under
     // a different (unlimited) resource regime than the one the document as a
     // whole was admitted under.
-    std::vector<std::string> unknown_keys;
-    mixing::api::Scene scene = mixing::api::scene_from_value(v, &unknown_keys);
-    // The scene sits under the document's `scene` key, so its paths start there.
-    if (diagnostics != nullptr) {
-      for (const auto& warning : unknown_keys) {
-        diagnostics->warn(
-            "unknown_scene_key",
-            "unknown scene key 'scene." + mixing::api::unknown_scene_key_path(warning) + "'");
-      }
-    }
-    return scene;
+    return mixing::api::scene_from_value(v);
   } catch (const SonareException& error) {
     // A scene nested in a project is malformed persisted input, while the
     // standalone control-thread API reports InvalidParameter. Keep the project
     // serializer's stable InvalidFormat diagnostic channel at this boundary.
-    throw SonareException(ErrorCode::InvalidFormat, error.what());
+    throw SonareException(ErrorCode::InvalidFormat, std::string("scene: ") + error.what());
   }
 }
 

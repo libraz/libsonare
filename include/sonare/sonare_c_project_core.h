@@ -184,10 +184,11 @@ SonareError sonare_project_serialize(const SonareProject* project, char** out_js
 ///        warnings are what this reports. So a non-NULL string does NOT mean
 ///        failure -- the return code alone does -- and the caller owns the string
 ///        on every return code and must release it with @ref sonare_free_string.
-///        A key the embedded mixer scene does not consume (other than `$`- and
-///        `x-`-prefixed ones) is reported as `unknown scene key 'scene.strips[2].faderDB'`,
-///        its path rooted at the document's `scene` key; the rest of the document is not
-///        checked for unknown keys.
+///        A key no record of the document reads (other than `$`- and `x-`-prefixed ones)
+///        fails the load as `invalid_format`, naming its path: `unknown project key
+///        'clips[3].bogus'`, or `scene: unknown scene key 'strips[2].faderDB'` inside the
+///        embedded mixer scene. Insert `params` bags and the MIDI content map's keys are data
+///        and are not checked.
 ///        Pass NULL to ignore the diagnostics entirely. Malformed input returns
 ///        an error WITHOUT crashing.
 SonareError sonare_project_deserialize(const char* json, size_t len, SonareProject** out,
@@ -446,11 +447,9 @@ SonareError sonare_project_get_audio_source_uri(const SonareProject* project, ui
 void sonare_free_project_audio_source_metadata(SonareProjectAudioSourceMetadata* metadata);
 
 /// @brief Replaces the project's mixer scene from scene JSON.
-/// @details Keys the scene reader does not consume (other than `$`- and `x-`-prefixed
-///   ones) do not fail the call; each is one `project.unknown_scene_key` entry of
-///   @ref sonare_last_diagnostic, e.g. the message `unknown scene key 'strips[2].faderDB'`.
-///   The list is cleared on entry, so a count of 0 after a successful call means the
-///   scene was clean.
+/// @details A key the scene reader does not consume (other than `$`- and `x-`-prefixed ones)
+///   fails the call with SONARE_ERROR_INVALID_FORMAT naming it, e.g.
+///   `unknown scene key 'strips[2].faderDB'`; the project's scene is left unchanged.
 SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const char* scene_json);
 
 /// @brief Reads the project sample rate (Hz).

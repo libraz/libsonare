@@ -99,14 +99,12 @@ std::vector<sonare::engine::TrackLaneConfig::Send> readSends(const val& sends) {
 // Parses a strip scene fragment as sonare_engine_set_*_strip_json does: only a
 // syntactic JSON failure becomes InvalidFormat; a coded semantic refusal keeps its code.
 sonare::mixing::api::Scene parseStripScene(const std::string& scene_json) {
-  std::vector<std::string> unknown_keys;
   sonare::mixing::api::Scene scene;
   try {
-    scene = sonare::mixing::api::scene_from_json(scene_json, &unknown_keys);
+    scene = sonare::mixing::api::scene_from_json(scene_json);
   } catch (const sonare::util::json::JsonError& e) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, e.what());
   }
-  sonare::mixing::api::refuse_unknown_strip_keys(unknown_keys);
   return scene;
 }
 

@@ -569,15 +569,13 @@ SonareError sonare_last_error_code(void);
 ///   The warning codes a call publishes are stable strings a caller may switch on:
 ///   | code                           | published by                                   |
 ///   |---|---|
-///   | `mixing.unknown_scene_key`     | sonare_mixer_from_scene_json                   |
 ///   | `mixing.ignored_insert_param`  | sonare_mixer_from_scene_json                   |
 ///   | `mixing.undeclared_send`       | sonare_mixer_from_scene_json                   |
-///   | `project.unknown_scene_key`    | sonare_project_set_mixer_scene_json            |
 ///   | `acoustic.*`                   | sonare_synthesize_rir, sonare_room_morph,      |
 ///   |                                | sonare_room_morph_stereo                       |
 typedef struct {
   uint32_t struct_size;               ///< Written by sonare_diagnostic_init.
-  const char* code;                   ///< Stable dotted code, such as `mixing.unknown_scene_key`.
+  const char* code;                   ///< Stable dotted code, such as `mixing.undeclared_send`.
   const char* message;                ///< Human-readable detail.
   SonareDiagnosticSeverity severity;  ///< How serious the entry is.
 } SonareDiagnostic;

@@ -312,33 +312,29 @@ TEST_CASE("Mixing Scene JSON round-trips all extended strip fields", "[mixing]")
   REQUIRE(out.channel_delay_samples == 17);
 }
 
-TEST_CASE("Mixing Scene JSON ignores unknown forward-compat fields", "[mixing]") {
-  // A scene authored by a newer version may carry fields this parser does not
-  // know. Unknown scalars, arrays, and nested objects at both the scene level
-  // and inside a strip object must be skipped without throwing, while known
-  // fields still parse correctly.
-  const std::string json =
-      "{"
-      "\"version\":1,"
-      "\"futureScalar\":42,"
-      "\"unknownArray\":[1,2,3],"
-      "\"futureField\":{\"nested\":{\"deep\":[true,false],\"s\":\"x\"}},"
-      "\"strips\":[{"
-      "\"id\":\"vox\","
-      "\"faderDb\":-4.5,"
-      "\"panLaw\":\"const6Db\","
-      "\"channelDelaySamples\":9,"
-      "\"futureStripScalar\":\"hello\","
-      "\"futureStripObject\":{\"a\":1,\"b\":[{\"c\":2}]},"
-      "\"futureStripArray\":[{\"x\":1},{\"y\":2}]"
-      "}],"
-      "\"buses\":[],"
-      "\"vcaGroups\":[],"
-      "\"connections\":[]"
-      "}";
+TEST_CASE("Mixing Scene JSON refuses unknown fields and keeps annotation keys", "[mixing]") {
+  // The reader accepts exactly one version, so an unknown key is a typo or a stale spelling.
+  const auto refusal = [](const std::string& json) -> std::string {
+    try {
+      (void)sonare::mixing::api::scene_from_json(json);
+    } catch (const sonare::SonareException& error) {
+      CHECK(error.code() == sonare::ErrorCode::InvalidFormat);
+      return error.what();
+    }
+    return {};
+  };
+  CHECK(refusal(R"({"version":1,"futureScalar":42})") == "unknown scene key 'futureScalar'");
+  CHECK(refusal(R"({"version":1,"futureField":{"nested":{}}})") ==
+        "unknown scene key 'futureField'");
+  CHECK(refusal(R"({"version":1,"strips":[{"id":"vox","futureStripArray":[{"x":1}]}]})") ==
+        "unknown scene key 'strips[0].futureStripArray'");
 
+  const std::string annotated =
+      R"({"version":1,"x-future":{"nested":[1,2]},"$comment":"c",)"
+      R"("strips":[{"id":"vox","faderDb":-4.5,"panLaw":"const6Db","channelDelaySamples":9,)"
+      R"("x-strip":{"a":1}}],"buses":[],"vcaGroups":[],"connections":[]})";
   sonare::mixing::api::Scene parsed;
-  REQUIRE_NOTHROW(parsed = sonare::mixing::api::scene_from_json(json));
+  REQUIRE_NOTHROW(parsed = sonare::mixing::api::scene_from_json(annotated));
   REQUIRE(parsed.version == 1);
   REQUIRE(parsed.strips.size() == 1);
   REQUIRE(parsed.strips[0].id == "vox");

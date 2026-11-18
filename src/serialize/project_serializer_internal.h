@@ -189,9 +189,9 @@ bool earlier_assist_module_id(const std::string& module_id, std::string* current
 
 bool sidecar_from_json(const Value& v, arrangement::AssistSidecar* out,
                        size_t max_payload_bytes = std::numeric_limits<size_t>::max());
-/// Reports each key the scene reader does not consume as an `unknown_scene_key` warning whose
-/// path starts at the document's `scene` key; null `diagnostics` drops them.
-mixing::api::Scene scene_from_value(const Value& v, BoundedDiagnostics* diagnostics);
+/// Decodes the document's `scene` subtree; every refusal, an unknown key included, is
+/// InvalidFormat with its message prefixed by `scene: `.
+mixing::api::Scene scene_from_value(const Value& v);
 
 }  // namespace detail
 }  // namespace sonare::serialize

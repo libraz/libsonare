@@ -1,5 +1,5 @@
 /// @file project_serializer_roundtrip_test.cpp
-/// @brief project serializer byte-equality, round-trip fidelity, unknown-field-ignore, and
+/// @brief project serializer byte-equality, round-trip fidelity, unknown-key refusal, and
 ///        AssistSidecar lossless tests for the project serializer.
 
 #include <algorithm>
@@ -1057,26 +1057,76 @@ TEST_CASE("project deserialize preserves next id counters without gaps", "[seria
   CHECK(new_marker == max_marker + 1);
 }
 
-TEST_CASE("unknown fields are ignored and dropped on re-serialize", "[serialize]") {
+TEST_CASE("a key no record reads is refused by its path at every level", "[serialize]") {
+  const auto doc = [](const std::string& body) {
+    return std::string(R"({"version":7,)") + body + "}";
+  };
+  const struct {
+    std::string document;
+    const char* path;
+  } kCases[] = {
+      {R"({"version":7,"future_feature":1})", "future_feature"},
+      {doc(R"("tempo_segments":[{"start_ppq":0,"bpm":120,"x":1}])"), "tempo_segments[0].x"},
+      {doc(R"("time_signatures":[{"start_ppq":0,"x":1}])"), "time_signatures[0].x"},
+      {doc(R"("sources":[{"kind":0,"id":1,"x":1}])"), "sources[0].x"},
+      {doc(R"("sources":[{"kind":1,"id":1,"uri":"a.wav"}])"), "sources[0].uri"},
+      {doc(R"("tracks":[{"id":1},{"id":2,"x":1}])"), "tracks[1].x"},
+      {doc(R"("tracks":[{"id":1,"automation_lanes":[{"target_param_id":1,"x":1}]}])"),
+       "tracks[0].automation_lanes[0].x"},
+      {doc(R"("tracks":[{"id":1,"automation_lanes":[{"points":[{"ppq":0,"x":1}]}]}])"),
+       "tracks[0].automation_lanes[0].points[0].x"},
+      {doc(R"("clips":[{"id":1,"x":1}])"), "clips[0].x"},
+      {doc(R"("clips":[{"id":1,"fade_out":{"curve":0,"x":1}}])"), "clips[0].fade_out.x"},
+      {doc(R"("clips":[{"id":1,"takes":[{"id":1,"x":1}]}])"), "clips[0].takes[0].x"},
+      {doc(R"("clips":[{"id":1,"comp_segments":[{"take_id":1,"x":1}]}])"),
+       "clips[0].comp_segments[0].x"},
+      {doc(R"("clips":[{"id":1,"comp_render_parts":[{"take_id":1,"x":1}]}])"),
+       "clips[0].comp_render_parts[0].x"},
+      {doc(R"("warp_maps":[{"id":1,"anchors":[{"warp_sample":0,"x":1}]}])"),
+       "warp_maps[0].anchors[0].x"},
+      {doc(R"("part_rigs":[{"destination_id":1,"inserts":[{"processor":"a","x":1}]}])"),
+       "part_rigs[0].inserts[0].x"},
+      {doc(R"("markers":[{"id":1,"x":1}])"), "markers[0].x"},
+      {doc(R"("annotation":{"x":1})"), "annotation.x"},
+      {doc(R"("annotation":{"chords":[{"start_ppq":0,"x":1}]})"), "annotation.chords[0].x"},
+      {doc(R"("annotation":{"onsets":[{"ppq":0,"x":1}]})"), "annotation.onsets[0].x"},
+      {doc(R"("midi_content":{"4":[{"ppq":0,"x":1}]})"), "midi_content.4[0].x"},
+      {doc(R"("assist_sidecars":[{"module_id":"a.b","x":1}])"), "assist_sidecars[0].x"},
+  };
+  for (const auto& c : kCases) {
+    CAPTURE(c.document);
+    const auto refused = project_from_json(c.document);
+    CHECK_FALSE(refused.ok());
+    CHECK_FALSE(refused.project.has_value());
+    REQUIRE_FALSE(refused.diagnostics.empty());
+    CHECK(refused.diagnostics.back().code == "invalid_format");
+    CHECK(refused.diagnostics.back().message ==
+          std::string("unknown project key '") + c.path + "'");
+  }
+
+  // The embedded scene refuses through its own reader, prefixed with the subtree.
+  const auto scene = project_from_json(doc(R"("scene":{"version":1,"strips":[{"id":"a","x":1}]})"));
+  CHECK_FALSE(scene.ok());
+  REQUIRE_FALSE(scene.diagnostics.empty());
+  CHECK(scene.diagnostics.back().message == "scene: unknown scene key 'strips[0].x'");
+
+  // A control character in a key cannot forge a second line.
+  const auto forged = project_from_json(doc("\"clips\":[{\"id\":1,\"x\\nunknown\":1}]"));
+  REQUIRE_FALSE(forged.diagnostics.empty());
+  CHECK(forged.diagnostics.back().message.find('\n') == std::string::npos);
+  CHECK(forged.diagnostics.back().message.find("\\x0a") != std::string::npos);
+}
+
+TEST_CASE("annotation keys are exempt from the unknown-key refusal", "[serialize]") {
   Fixture f = make_fixture();
-  const std::string s1 = project_to_json(f.project, f.midi);
-
-  // Inject extra unknown keys at the top level and inside a clip object.
-  auto root = util::json::parse(s1);
-  root.as_object()["__unknown_top__"] = std::string("ignore me");
-  root.as_object()["future_feature"] = 1234.5;
+  auto root = util::json::parse(project_to_json(f.project, f.midi));
+  root.as_object()["$schema"] = std::string("project");
   REQUIRE(root["clips"].is_array());
-  REQUIRE(!root["clips"].as_array().empty());
-  root.as_object()["clips"].as_array()[0].as_object()["__unknown_clip__"] = true;
-  const std::string injected = util::json::dump(root);
-
-  auto result = project_from_json(injected);
+  REQUIRE_FALSE(root["clips"].as_array().empty());
+  root.as_object()["clips"].as_array()[0].as_object()["x-note"] = true;
+  const auto result = project_from_json(util::json::dump(root));
   REQUIRE(result.ok());
   CHECK_FALSE(result.has_error());
-
-  // Re-serialization drops the unknown fields => identical to the clean form.
-  const std::string s2 = project_to_json(*result.project, result.midi);
-  CHECK(s2 == s1);
 }
 
 TEST_CASE("AssistSidecar with unregistered module + binary payload round-trips losslessly",
@@ -3104,7 +3154,7 @@ TEST_CASE("a MIDI event word in its earlier spelling is refused naming the curre
     CHECK_FALSE(refused.ok());
     CHECK_FALSE(refused.project.has_value());
     REQUIRE_FALSE(refused.diagnostics.empty());
-    CHECK(refused.diagnostics.back().message.find(std::string("write \"") + e.current_key) !=
+    CHECK(refused.diagnostics.back().message.find(std::string("write ") + e.current_key) !=
           std::string::npos);
   }
 }

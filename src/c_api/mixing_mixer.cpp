@@ -489,13 +489,12 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
   // entry from an earlier load never leaks into a later, clean one.
   sonare_c_detail::clear_last_diagnostics();
   SONARE_C_TRY
-  std::vector<std::string> unknown_scene_keys;
   std::vector<std::string> insert_param_notes;
   sonare::mixing::api::Scene scene;
   // A malformed document is InvalidFormat, as on the engine's scene entry point;
   // without this arm it would reach the std::exception tail as Unknown.
   try {
-    scene = sonare::mixing::api::scene_from_json(json, &unknown_scene_keys);
+    scene = sonare::mixing::api::scene_from_json(json);
   } catch (const sonare::util::json::JsonError& e) {
     sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, e.what());
     return nullptr;
@@ -667,9 +666,6 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
   build_and_compile(mixer.get());
   std::vector<std::string> send_notes = undeclared_send_notes(mixer.get());
   // Scene loaded successfully; publish what it ignored, one Warning per note.
-  for (std::string& key : unknown_scene_keys) {
-    sonare_c_detail::add_last_warning("mixing.unknown_scene_key", std::move(key));
-  }
   for (std::string& note : insert_param_notes) {
     sonare_c_detail::add_last_warning("mixing.ignored_insert_param", std::move(note));
   }

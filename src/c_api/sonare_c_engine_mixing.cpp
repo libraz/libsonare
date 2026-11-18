@@ -25,18 +25,15 @@ namespace {
 /// Parses a mixing scene from a JSON string, mapping a syntactic parse failure
 /// to SONARE_ERROR_INVALID_FORMAT. Shared by the strip-setter entry points that
 /// accept a scene JSON payload. A semantic failure inside a well-formed document
-/// is left to SONARE_C_CATCH; the scene reader codes every refusal of the document as
-/// InvalidFormat. A key the scene reader does not consume is refused by name (InvalidFormat)
-/// rather than reported, because the fragment is applied to the live engine.
+/// is left to SONARE_C_CATCH; the scene reader codes every refusal of the document,
+/// an unknown key included, as InvalidFormat.
 SonareError parse_scene_json(const char* json, mixing::api::Scene* out) {
-  std::vector<std::string> unknown_keys;
   try {
-    *out = mixing::api::scene_from_json(json, &unknown_keys);
+    *out = mixing::api::scene_from_json(json);
   } catch (const util::json::JsonError& e) {
     set_last_error(SONARE_ERROR_INVALID_FORMAT, e.what());
     return SONARE_ERROR_INVALID_FORMAT;
   }
-  mixing::api::refuse_unknown_strip_keys(unknown_keys);
   return SONARE_OK;
 }
 

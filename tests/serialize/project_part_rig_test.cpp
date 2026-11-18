@@ -237,7 +237,7 @@ TEST_CASE("part rig decode honours the schema version and shape", "[serialize][p
       R"({"destination_id":3,"part":2,"mode":"bogus"},)"
       R"({"destination_id":3,"part":4,"mode":"chain"},)"
       R"({"destination_id":3,"part":5,"mode":"bank","inserts":[{"processor":"a","params":{}}]},)"
-      R"({"destination_id":3,"part":6,"mode":"chain","unknown":1,)"
+      R"({"destination_id":3,"part":6,"mode":"chain",)"
       R"("inserts":[{"processor":"x.y","params":{}}]}]})";
 
   const auto v5 = project_from_json(std::string(R"({"version":7,)") + body);

@@ -182,19 +182,11 @@ struct Scene {
 
 std::string scene_to_json(const Scene& scene);
 
-/// Parses a scene document. When `warnings` is non-null, every key the reader does not
-/// consume is appended as `unknown scene key '<path>'` (array indices are the original
-/// positions). Keys starting with `$` or `x-` are exempt at every level, and insert
-/// `params` bags are not walked. Unknown keys never fail the parse.
-Scene scene_from_json(const std::string& json, std::vector<std::string>* warnings = nullptr);
-
-/// Returns the path inside one `unknown scene key '<path>'` warning.
-std::string unknown_scene_key_path(const std::string& warning);
-
-/// Throws InvalidParameter naming the first of `warnings` (as produced by
-/// @ref scene_from_json) as `unknown strip key '<path>'`; no-op when empty. Partial strip
-/// fragments refuse an unknown key where a whole scene document only reports it.
-void refuse_unknown_strip_keys(const std::vector<std::string>& warnings);
+/// Parses a scene document. A key the reader does not consume is refused as InvalidFormat
+/// naming its path (`unknown scene key '<path>'`, array indices are the original positions).
+/// Keys starting with `$` or `x-` are exempt at every level, and insert `params` bags are not
+/// walked.
+Scene scene_from_json(const std::string& json);
 
 /// Canonical field paths for one Scene document, rooted at the document object
 /// (no leading `scene.`). Array item fields use `[]`, e.g. `strips[].id`. Kept
@@ -209,7 +201,6 @@ const std::vector<std::string>& scene_schema_paths();
 /// the round trip costs a second parse and puts it under whatever resource
 /// limits that second parse happens to carry, instead of the ones the enclosing
 /// document was admitted under.
-Scene scene_from_value(const SONARE_JSON_NAMESPACE::Value& value,
-                       std::vector<std::string>* warnings = nullptr);
+Scene scene_from_value(const SONARE_JSON_NAMESPACE::Value& value);
 
 }  // namespace sonare::mixing::api

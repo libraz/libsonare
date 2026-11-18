@@ -119,7 +119,7 @@ namespace {
 constexpr const char* kSceneWithEveryMixingWarning = R"({
   "version": 1,
   "buses": [{"id": "master", "role": "master"}],
-  "strips": [{"id": "a", "faderDB": -3,
+  "strips": [{"id": "a", "faderDb": -3,
     "inserts": [{"slot": "post", "processor": "eq.parametric",
                  "params": {"highPassHz":80}}],
     "sends": [{"id": "s", "destinationBusId": "aux1typo", "sendDb": 0}]}],
@@ -133,12 +133,10 @@ TEST_CASE("Mixer scene warnings carry their public codes in a fixed order", "[su
   REQUIRE(mixer != nullptr);
   const auto diagnostics = diagnostic_codes_and_messages();
   sonare_mixer_destroy(mixer);
-  REQUIRE(diagnostics.size() == 3);
-  CHECK(diagnostics[0].first == "mixing.unknown_scene_key");
-  CHECK(diagnostics[0].second == "unknown scene key 'strips[0].faderDB'");
-  CHECK(diagnostics[1].first == "mixing.ignored_insert_param");
-  CHECK(diagnostics[2].first == "mixing.undeclared_send");
-  CHECK(diagnostics[2].second ==
+  REQUIRE(diagnostics.size() == 2);
+  CHECK(diagnostics[0].first == "mixing.ignored_insert_param");
+  CHECK(diagnostics[1].first == "mixing.undeclared_send");
+  CHECK(diagnostics[1].second ==
         "send 'a' targets undeclared bus 'aux1typo'; created as implicit aux");
 }
 
@@ -147,7 +145,7 @@ TEST_CASE("sonare_last_diagnostic refuses a bad request and leaves the list inta
   SonareMixer* mixer = sonare_mixer_from_scene_json(kSceneWithEveryMixingWarning, 48000, 512);
   REQUIRE(mixer != nullptr);
   sonare_mixer_destroy(mixer);
-  REQUIRE(sonare_last_diagnostic_count() == 3);
+  REQUIRE(sonare_last_diagnostic_count() == 2);
 
   SonareDiagnostic diagnostic;
   sonare_diagnostic_init(&diagnostic);
@@ -162,11 +160,11 @@ TEST_CASE("sonare_last_diagnostic refuses a bad request and leaves the list inta
     CHECK(diagnostic.code == untouched_code);
   }
   SECTION("index past the count") {
-    CHECK(sonare_last_diagnostic(3, &diagnostic) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_last_diagnostic(2, &diagnostic) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(diagnostic.code == untouched_code);
   }
   // A refused read neither clears the list nor records an error message.
-  CHECK(sonare_last_diagnostic_count() == 3);
+  CHECK(sonare_last_diagnostic_count() == 2);
   CHECK(std::string(sonare_last_error_message()).empty());
 }
 
@@ -174,17 +172,16 @@ TEST_CASE("sonare_last_diagnostic refuses a bad request and leaves the list inta
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 
-TEST_CASE("Project scene warnings carry their public code", "[surface][core]") {
+TEST_CASE("Project scene refuses an unknown key instead of warning", "[surface][core]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   const char* typo = R"({"version":1,"strips":[{"id":"lead","faderDB":-3.0}],)"
                      R"("buses":[{"id":"master","role":"master"}]})";
-  REQUIRE(sonare_project_set_mixer_scene_json(project, typo) == SONARE_OK);
-  const auto diagnostics = diagnostic_codes_and_messages();
+  CHECK(sonare_project_set_mixer_scene_json(project, typo) == SONARE_ERROR_INVALID_FORMAT);
+  CHECK(std::string(sonare_last_error_message()).find("unknown scene key 'strips[0].faderDB'") !=
+        std::string::npos);
+  CHECK(diagnostic_codes_and_messages().empty());
   sonare_project_destroy(project);
-  REQUIRE(diagnostics.size() == 1);
-  CHECK(diagnostics[0].first == "project.unknown_scene_key");
-  CHECK(diagnostics[0].second == "unknown scene key 'strips[0].faderDB'");
 }
 
 #endif

@@ -362,10 +362,9 @@ SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const ch
   if (!project || !scene_json) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   sonare::mixing::api::Scene scene;
-  std::vector<std::string> unknown_keys;
   sonare_c_detail::clear_last_diagnostics();
   try {
-    scene = sonare::mixing::api::scene_from_json(scene_json, &unknown_keys);
+    scene = sonare::mixing::api::scene_from_json(scene_json);
   } catch (const sonare::util::json::JsonError& ex) {
     // Malformed JSON is INVALID_FORMAT at every other C-ABI JSON entry point;
     // without this arm it reached SONARE_C_CATCH's std::exception tail as
@@ -375,10 +374,6 @@ SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const ch
   }
   auto command = std::make_unique<arr::SetScene>(std::move(scene));
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
-  // The scene is applied; each unknown key is one Warning diagnostic.
-  for (std::string& key : unknown_keys) {
-    sonare_c_detail::add_last_warning("project.unknown_scene_key", std::move(key));
-  }
   return SONARE_OK;
   SONARE_C_CATCH
 #else

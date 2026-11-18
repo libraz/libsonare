@@ -490,8 +490,8 @@ SonareError sonare_engine_can_set_master_sidechain(SonareEngine* engine, unsigne
 /// @brief Configure a bus strip from the first bus in a mixer scene JSON.
 /// @details The bus must already exist via sonare_engine_set_track_buses. A key the scene
 ///          reader does not consume (other than `$`- and `x-`-prefixed ones) is refused with
-///          SONARE_ERROR_INVALID_PARAMETER and a message naming it, e.g.
-///          `unknown strip key 'strips[0].faderDB'`.
+///          SONARE_ERROR_INVALID_FORMAT and a message naming it, e.g.
+///          `unknown scene key 'strips[0].faderDB'`.
 /// @return SONARE_ERROR_INVALID_PARAMETER for an unknown bus or a spec the bus
 ///   cannot take; SONARE_ERROR_INVALID_STATE when a rebuilt insert chain would not
 ///   fit the automation id table or its latency cannot be aligned;

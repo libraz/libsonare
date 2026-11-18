@@ -1175,55 +1175,68 @@ TEST_CASE("A bus insert reports its ignored params the way a strip insert does",
 
 namespace {
 
-std::vector<std::string> scene_key_warnings(const std::string& json) {
-  std::vector<std::string> warnings;
-  (void)sonare::mixing::api::scene_from_json(json, &warnings);
-  return warnings;
+// The refusal message of a scene load, or empty when it loads.
+std::string scene_refusal(const std::string& json) {
+  try {
+    (void)sonare::mixing::api::scene_from_json(json);
+  } catch (const sonare::SonareException& error) {
+    CHECK(error.code() == sonare::ErrorCode::InvalidFormat);
+    return error.what();
+  }
+  return {};
 }
 
 }  // namespace
 
-TEST_CASE("Scene load reports each unknown key by its path", "[mixing][routing][warning]") {
-  using Catch::Matchers::UnorderedEquals;
-  const std::string typos = R"({
-    "version": 1,
-    "strips": [
-      {"id": "a", "inserts": [{"processor": "dynamics.compressor", "sidechainkey": "k"}],
-       "eq": {"bands": [{"freqHz": 1000}]}},
-      {"id": "b", "faderDB": -3}
-    ],
-    "buses": [{"id": "master", "roel": "master"}],
-    "connections": [{"source": "a", "destination": "master", "dest": "master"}]
-  })";
-  CHECK_THAT(scene_key_warnings(typos),
-             UnorderedEquals(std::vector<std::string>{
-                 "unknown scene key 'strips[1].faderDB'", "unknown scene key 'buses[0].roel'",
-                 "unknown scene key 'strips[0].inserts[0].sidechainkey'",
-                 "unknown scene key 'strips[0].eq.bands[0].freqHz'",
-                 "unknown scene key 'connections[0].dest'"}));
-
-  // A null warning list is accepted and the scene still loads.
-  CHECK_NOTHROW(sonare::mixing::api::scene_from_json(typos));
+TEST_CASE("Scene load refuses an unknown key at every nesting level, naming its path",
+          "[mixing][routing]") {
+  struct Case {
+    const char* document;
+    const char* path;
+  };
+  const Case cases[] = {
+      {R"({"version":1,"bogus":1})", "bogus"},
+      {R"({"version":1,"strips":[{"id":"b","faderDB":-3}]})", "strips[0].faderDB"},
+      {R"({"version":1,"buses":[{"id":"master","roel":"master"}]})", "buses[0].roel"},
+      {R"({"version":1,"strips":[{"id":"a","inserts":[{"processor":"dynamics.compressor","sidechainkey":"k"}]}]})",
+       "strips[0].inserts[0].sidechainkey"},
+      {R"({"version":1,"strips":[{"id":"a","eq":{"bands":[{"freqHz":1000}]}}]})",
+       "strips[0].eq.bands[0].freqHz"},
+      {R"({"version":1,"strips":[{"id":"a","eq":{"bogus":1}}]})", "strips[0].eq.bogus"},
+      {R"({"version":1,"strips":[{"id":"a","sends":[{"id":"s","bogus":1}]}]})",
+       "strips[0].sends[0].bogus"},
+      {R"({"version":1,"strips":[{"id":"a","surroundPan":{"bogus":1}}]})",
+       "strips[0].surroundPan.bogus"},
+      {R"({"version":1,"strips":[{"id":"a","metering":{"bogus":1}}]})", "strips[0].metering.bogus"},
+      {R"({"version":1,"vcaGroups":[{"id":"g","bogus":1}]})", "vcaGroups[0].bogus"},
+      {R"({"version":1,"connections":[{"source":"a","destination":"master","dest":"master"}]})",
+       "connections[0].dest"},
+  };
+  for (const Case& c : cases) {
+    CAPTURE(c.document);
+    CHECK(scene_refusal(c.document) == std::string("unknown scene key '") + c.path + "'");
+  }
 }
 
-TEST_CASE("Scene load reports the original array index and escapes control characters",
-          "[mixing][routing][warning]") {
-  const auto indexed =
-      scene_key_warnings(R"({"version":1,"strips":[{"id":"a"},{"id":"b"},{"id":"c","bogus":1}]})");
-  REQUIRE(indexed.size() == 1);
-  CHECK(indexed[0] == "unknown scene key 'strips[2].bogus'");
-  // A non-object element is refused, so no warning can be indexed past one.
-  CHECK_THROWS_AS(scene_key_warnings(R"({"version":1,"strips":[1,{"id":"b","bogus":1}]})"),
-                  sonare::SonareException);
+TEST_CASE(
+    "Scene load refuses an unknown key under its original array index and escapes control "
+    "characters",
+    "[mixing][routing]") {
+  CHECK(scene_refusal(R"({"version":1,"strips":[{"id":"a"},{"id":"b"},{"id":"c","bogus":1}]})") ==
+        "unknown scene key 'strips[2].bogus'");
+  // A non-object element is refused too.
+  CHECK_THROWS_AS(
+      sonare::mixing::api::scene_from_json(R"({"version":1,"strips":[1,{"id":"b","bogus":1}]})"),
+      sonare::SonareException);
 
-  const auto forged = scene_key_warnings(
+  const auto forged = scene_refusal(
       "{\"version\":1,\"strips\":[{\"id\":\"a\",\"x\\nunknown scene key 'strips[9].fake'\":1}]}");
-  REQUIRE(forged.size() == 1);
-  CHECK(forged[0].find('\n') == std::string::npos);
-  CHECK(forged[0].find("\\x0a") != std::string::npos);
+  REQUIRE_FALSE(forged.empty());
+  CHECK(forged.find('\n') == std::string::npos);
+  CHECK(forged.find("\\x0a") != std::string::npos);
 }
 
-TEST_CASE("Scene load exempts $ and x- keys at every level", "[mixing][routing][warning]") {
+TEST_CASE("Scene load exempts $ and x- keys at every level", "[mixing][routing]") {
   const std::string annotated = R"({
     "$schema": "https://libraz.net/schemas/libsonare/mixer-scene.schema.json",
     "x-note": "top",
@@ -1237,8 +1250,15 @@ TEST_CASE("Scene load exempts $ and x- keys at every level", "[mixing][routing][
     "vcaGroups": [{"id": "g", "x-g": 1}],
     "connections": [{"source": "a", "destination": "m", "x-c": 1}]
   })";
-  CHECK(scene_key_warnings(annotated).empty());
-  CHECK(scene_key_warnings(R"({"version":1,"xnote":1})").size() == 1);
+  CHECK_NOTHROW(sonare::mixing::api::scene_from_json(annotated));
+  CHECK(scene_refusal(R"({"version":1,"xnote":1})") == "unknown scene key 'xnote'");
+}
+
+TEST_CASE("Scene load reports an earlier spelling as such, not as an unknown key",
+          "[mixing][routing]") {
+  const auto message = scene_refusal(R"({"version":1,"strips":[{"id":"a","fader_db":-1}]})");
+  CHECK(message.find("is an earlier spelling; write faderDb") != std::string::npos);
+  CHECK(message.find("unknown scene key") == std::string::npos);
 }
 
 TEST_CASE("Scene load refuses every earlier snake_case spelling, naming the current one",
@@ -1319,7 +1339,7 @@ TEST_CASE("Scene load refuses the earlier pan and send-timing values, naming the
       ContainsSubstring("strips[0].inserts[0].params") && ContainsSubstring("JSON object"));
 }
 
-TEST_CASE("Scene writer output carries no unknown key", "[mixing][routing][warning]") {
+TEST_CASE("Scene writer output loads without an unknown key", "[mixing][routing]") {
   // A maximal document: every field the writer can emit, at a non-default value.
   const std::string maximal = R"({
     "version": 1,
@@ -1352,36 +1372,33 @@ TEST_CASE("Scene writer output carries no unknown key", "[mixing][routing][warni
     "vcaGroups": [{"id": "g", "gainDb": -2, "members": ["a"]}],
     "connections": [{"source": "a", "destination": "m"}]
   })";
-  std::vector<std::string> warnings;
-  const auto scene = sonare::mixing::api::scene_from_json(maximal, &warnings);
-  CHECK(warnings.empty());
-  CHECK(scene_key_warnings(sonare::mixing::api::scene_to_json(scene)).empty());
+  const auto scene = sonare::mixing::api::scene_from_json(maximal);
+  CHECK_NOTHROW(sonare::mixing::api::scene_from_json(sonare::mixing::api::scene_to_json(scene)));
 }
 
-TEST_CASE("Built-in scene presets carry no unknown key", "[mixing][routing][warning]") {
+TEST_CASE("Built-in scene presets load without an unknown key", "[mixing][routing]") {
   for (const auto& name : sonare::mixing::api::scene_preset_names()) {
     DYNAMIC_SECTION(name) {
       const auto preset =
           sonare::mixing::api::scene_preset(sonare::mixing::api::scene_preset_from_string(name));
-      CHECK(scene_key_warnings(sonare::mixing::api::scene_to_json(preset)).empty());
+      CHECK_NOTHROW(
+          sonare::mixing::api::scene_from_json(sonare::mixing::api::scene_to_json(preset)));
     }
   }
 }
 
-TEST_CASE("sonare_mixer_from_scene_json reports unknown scene keys on the warning channel",
-          "[mixing][routing][warning]") {
+TEST_CASE("sonare_mixer_from_scene_json refuses an unknown scene key", "[mixing][routing]") {
   const std::string typo = R"({
     "version": 1,
     "buses": [{"id": "master", "role": "master"}],
     "strips": [{"id": "vocal", "faderDB": -3}],
     "connections": [{"source": "vocal", "destination": "master"}]
   })";
-  SonareMixer* mixer = sonare_mixer_from_scene_json(typo.c_str(), 48000, 512);
-  REQUIRE(mixer != nullptr);
-  CHECK(sonare_test::diagnostic_messages("mixing.unknown_scene_key") ==
-        std::vector<std::string>{"unknown scene key 'strips[0].faderDB'"});
-  CHECK(sonare_last_diagnostic_count() == 1);
-  sonare_mixer_destroy(mixer);
+  CHECK(sonare_mixer_from_scene_json(typo.c_str(), 48000, 512) == nullptr);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_FORMAT);
+  CHECK(std::string(sonare_last_error_message()).find("unknown scene key 'strips[0].faderDB'") !=
+        std::string::npos);
+  CHECK(sonare_last_diagnostic_count() == 0);
 }
 
 TEST_CASE("sonare_mastering_insert_param_names enumerates an insert's keys",

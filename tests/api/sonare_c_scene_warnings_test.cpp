@@ -1,6 +1,6 @@
 /// @file sonare_c_scene_warnings_test.cpp
-/// @brief Unknown mixing scene keys through the C ABI: a whole scene or project document
-///        reports them, a partial strip fragment applied to the live engine refuses them.
+/// @brief Unknown mixing scene keys through the C ABI: a whole scene or project document and a
+///        partial strip fragment applied to the live engine all refuse them, naming the key path.
 
 #include <sonare/sonare_c.h>
 #include <sonare/sonare_c_engine.h>
@@ -11,9 +11,13 @@
 #include <string>
 #include <vector>
 
-#include "support/c_diagnostics.h"
-
 namespace {
+
+#if defined(SONARE_WITH_ARRANGEMENT) || defined(SONARE_WITH_MIXING)
+
+std::string last_error() { return sonare_last_error_message(); }
+
+#endif
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 
@@ -34,40 +38,45 @@ std::string take_diagnostics(char* diagnostics) {
   return out;
 }
 
-TEST_CASE("sonare_project_set_mixer_scene_json reports unknown scene keys as warnings",
-          "[c_api][project][warning]") {
+TEST_CASE("sonare_project_set_mixer_scene_json refuses unknown scene keys", "[c_api][project]") {
   OwnedProject project;
 
+  // Extension keys are allowed; the first unknown key is refused by path.
   const char* typo =
       R"({"version":1,"strips":[{"id":"lead","faderDB":-3.0,"x-note":1}],"$schema":"s",)"
-      R"("buses":[{"id":"master","role":"master","roel":"aux"}]})";
-  REQUIRE(sonare_project_set_mixer_scene_json(project.handle, typo) == SONARE_OK);
-  // One warning per key, and only the unknown ones: extension keys are allowed.
-  CHECK(sonare_test::diagnostic_messages("project.unknown_scene_key") ==
-        std::vector<std::string>{"unknown scene key 'strips[0].faderDB'",
-                                 "unknown scene key 'buses[0].roel'"});
-  CHECK(sonare_test::last_diagnostics().size() == 2);
+      R"("buses":[{"id":"master","role":"master"}]})";
+  REQUIRE(sonare_project_set_mixer_scene_json(project.handle, typo) == SONARE_ERROR_INVALID_FORMAT);
+  CHECK(last_error().find("unknown scene key 'strips[0].faderDB'") != std::string::npos);
+  CHECK(sonare_last_diagnostic_count() == 0);
 
-  // A clean scene clears the previous call's warnings.
+  const char* bus_typo = R"({"version":1,"buses":[{"id":"master","role":"master","roel":"aux"}]})";
+  REQUIRE(sonare_project_set_mixer_scene_json(project.handle, bus_typo) ==
+          SONARE_ERROR_INVALID_FORMAT);
+  CHECK(last_error().find("unknown scene key 'buses[0].roel'") != std::string::npos);
+
+  const char* annotated =
+      R"({"$schema":"s","x-note":1,"version":1,"strips":[{"id":"lead","x-tag":1}]})";
+  REQUIRE(sonare_project_set_mixer_scene_json(project.handle, annotated) == SONARE_OK);
   REQUIRE(sonare_project_set_mixer_scene_json(project.handle, kCleanScene) == SONARE_OK);
   CHECK(sonare_last_diagnostic_count() == 0);
 }
 
-TEST_CASE("sonare_project_deserialize reports unknown scene keys with the project path",
-          "[c_api][project][warning]") {
+TEST_CASE("sonare_project_deserialize refuses unknown scene keys", "[c_api][project]") {
   const std::string typo =
       R"({"version":7,"scene":{"version":1,"strips":[{"id":"lead","faderDB":-3.0}],)"
       R"("buses":[{"id":"master","role":"master","x-note":true}]}})";
   SonareProject* loaded = nullptr;
   char* diagnostics = nullptr;
-  REQUIRE(sonare_project_deserialize(typo.data(), typo.size(), &loaded, &diagnostics) == SONARE_OK);
+  REQUIRE(sonare_project_deserialize(typo.data(), typo.size(), &loaded, &diagnostics) ==
+          SONARE_ERROR_INVALID_FORMAT);
   const std::string report = take_diagnostics(diagnostics);
-  sonare_project_destroy(loaded);
-  CHECK(report.find("unknown_scene_key: unknown scene key 'scene.strips[0].faderDB'") !=
+  CHECK(loaded == nullptr);
+  CHECK(report.find("invalid_format: scene: unknown scene key 'strips[0].faderDB'") !=
         std::string::npos);
+  CHECK(report.find("unknown_scene_key") == std::string::npos);
   CHECK(report.find("x-note") == std::string::npos);
 
-  // The writer's own output carries no unknown key.
+  // The writer's own output loads without a diagnostic.
   OwnedProject project;
   REQUIRE(sonare_project_set_mixer_scene_json(project.handle, kCleanScene) == SONARE_OK);
   char* json = nullptr;
@@ -79,7 +88,7 @@ TEST_CASE("sonare_project_deserialize reports unknown scene keys with the projec
   diagnostics = nullptr;
   REQUIRE(sonare_project_deserialize(saved.data(), saved.size(), &loaded, &diagnostics) ==
           SONARE_OK);
-  CHECK(take_diagnostics(diagnostics).find("unknown_scene_key") == std::string::npos);
+  CHECK(take_diagnostics(diagnostics).find("unknown scene key") == std::string::npos);
   sonare_project_destroy(loaded);
 }
 
@@ -102,29 +111,28 @@ struct StripEngine {
   StripEngine& operator=(const StripEngine&) = delete;
 };
 
-std::string last_error() { return sonare_last_error_message(); }
-
-TEST_CASE("engine strip setters refuse an unknown key by name", "[c_api][engine][warning]") {
+TEST_CASE("engine strip setters refuse an unknown key by name", "[c_api][engine]") {
   StripEngine f;
   const char* strip_typo = R"({"version":1,"strips":[{"id":"s","faderDB":-3}]})";
   const char* bus_typo = R"({"version":1,"buses":[{"id":"1","roel":"aux"}]})";
 
   REQUIRE(sonare_engine_set_track_strip_json(f.engine, 10, strip_typo) ==
           SONARE_ERROR_INVALID_FORMAT);
-  CHECK(last_error().find("unknown strip key 'strips[0].faderDB'") != std::string::npos);
+  CHECK(last_error().find("unknown scene key 'strips[0].faderDB'") != std::string::npos);
   REQUIRE(sonare_engine_set_master_strip_json(f.engine, strip_typo) == SONARE_ERROR_INVALID_FORMAT);
-  CHECK(last_error().find("unknown strip key 'strips[0].faderDB'") != std::string::npos);
+  CHECK(last_error().find("unknown scene key 'strips[0].faderDB'") != std::string::npos);
   REQUIRE(sonare_engine_set_bus_strip_json(f.engine, 1, bus_typo) == SONARE_ERROR_INVALID_FORMAT);
-  CHECK(last_error().find("unknown strip key 'buses[0].roel'") != std::string::npos);
+  CHECK(last_error().find("unknown scene key 'buses[0].roel'") != std::string::npos);
 
   // A key that would forge a second line is reported escaped, on one line.
   const char* control = "{\"version\":1,\"strips\":[{\"id\":\"s\",\"a\\nb\":1}]}";
   REQUIRE(sonare_engine_set_track_strip_json(f.engine, 10, control) == SONARE_ERROR_INVALID_FORMAT);
   CHECK(last_error().find('\n') == std::string::npos);
+  CHECK(last_error().find("\\x0a") != std::string::npos);
 }
 
 TEST_CASE("engine strip setters accept annotation keys and refuse earlier spellings",
-          "[c_api][engine][warning]") {
+          "[c_api][engine]") {
   StripEngine f;
   const char* annotated =
       R"({"$schema":"s","x-note":1,"version":1,"strips":[{"id":"s","faderDb":-3,"x-tag":[1]}]})";
@@ -139,7 +147,7 @@ TEST_CASE("engine strip setters accept annotation keys and refuse earlier spelli
   CHECK(std::string(sonare_last_error_message()).find("panMode") != std::string::npos);
 }
 
-TEST_CASE("engine EQ band setters refuse an unknown key by name", "[c_api][engine][warning]") {
+TEST_CASE("engine EQ band setters refuse an unknown key by name", "[c_api][engine]") {
   StripEngine f;
   const char* typo = R"({"type":"peak","frequencyHz":1000,"gainDB":3,"qq":1})";
   REQUIRE(sonare_engine_set_track_strip_eq_band_json(f.engine, 10, 0, typo) ==

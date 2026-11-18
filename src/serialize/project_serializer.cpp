@@ -26,6 +26,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/json_budget.h"
+#include "util/json_key.h"
 #include "util/numeric_validation.h"
 #include "util/resource_limits.h"
 
@@ -82,6 +83,194 @@ std::optional<arrangement::ProjectPartRig> part_rig_from_json(const Value& v) {
     }
   }
   return entry;
+}
+
+using KeyList = std::initializer_list<const char*>;
+
+std::string key_path(const std::string& parent, const std::string& key) {
+  return parent.empty() ? key : parent + "." + key;
+}
+
+// Refuses the first key of @p object outside @p known, naming its path. `$`- and `x-`-prefixed
+// annotation keys are exempt, as in every other reader that refuses an unknown key.
+void refuse_unknown_keys(const Value& object, const std::string& path, KeyList known) {
+  for (const auto& entry : object.as_object()) {
+    const std::string& key = entry.first;
+    if (json::is_annotation_key(key)) continue;
+    const bool listed = std::any_of(known.begin(), known.end(),
+                                    [&key](const char* candidate) { return key == candidate; });
+    if (!listed) {
+      throw SonareException(ErrorCode::InvalidFormat,
+                            "unknown project key '" + key_path(path, json::escape_key(key)) + "'");
+    }
+  }
+}
+
+// Calls @p check on each object element of the array at @p key. A container or element of
+// the wrong type is left to the decoder, which refuses it with its own message.
+template <typename Check>
+void each_record(const Value& parent, const char* key, const std::string& path, Check check) {
+  const Value* array = parent.find(key);
+  if (array == nullptr || !array->is_array()) return;
+  const auto& elements = array->as_array();
+  for (std::size_t index = 0; index < elements.size(); ++index) {
+    if (!elements[index].is_object()) continue;
+    check(elements[index], key_path(path, key) + "[" + std::to_string(index) + "]");
+  }
+}
+
+template <typename Check>
+void with_object(const Value& parent, const char* key, const std::string& path, Check check) {
+  const Value* object = parent.find(key);
+  if (object != nullptr && object->is_object()) check(*object, key_path(path, key));
+}
+
+void check_clip_keys(const Value& clip, const std::string& path) {
+  refuse_unknown_keys(clip, path,
+                      {"id",
+                       "track_id",
+                       "source_id",
+                       "start_ppq",
+                       "length_ppq",
+                       "source_offset_ppq",
+                       "source_offset_seconds",
+                       "gain",
+                       "fade_in",
+                       "fade_out",
+                       "loop_mode",
+                       "loop_length_ppq",
+                       "loop_crossfade_ppq",
+                       "loop_period_seconds",
+                       "loop_phase_seconds",
+                       "warp_ref_id",
+                       "warp_mode",
+                       "takes",
+                       "active_take_id",
+                       "comp_segments",
+                       "comp_render_parts"});
+  for (const char* fade : {"fade_in", "fade_out"}) {
+    with_object(clip, fade, path, [](const Value& v, const std::string& p) {
+      refuse_unknown_keys(v, p, {"length_ppq", "curve"});
+    });
+  }
+  each_record(clip, "takes", path, [](const Value& v, const std::string& p) {
+    refuse_unknown_keys(
+        v, p, {"id", "source_id", "source_offset_ppq", "name", "source_offset_seconds", "partial"});
+  });
+  each_record(clip, "comp_segments", path, [](const Value& v, const std::string& p) {
+    refuse_unknown_keys(v, p, {"start_ppq", "end_ppq", "take_id", "crossfade_ppq"});
+  });
+  each_record(clip, "comp_render_parts", path, [](const Value& v, const std::string& p) {
+    refuse_unknown_keys(
+        v, p,
+        {"visible_start_ppq", "visible_end_ppq", "reference_start_ppq", "reference_end_ppq",
+         "take_id", "seam_fade_in_ppq", "seam_fade_out_ppq", "retained_only"});
+  });
+}
+
+void check_annotation_keys(const Value& annotation, const std::string& path) {
+  refuse_unknown_keys(annotation, path,
+                      {"tempo_confidence", "keys", "chords", "sections", "onsets"});
+  each_record(annotation, "keys", path, [](const Value& v, const std::string& p) {
+    refuse_unknown_keys(v, p, {"start_ppq", "end_ppq", "tonic_pc", "mode"});
+  });
+  each_record(annotation, "chords", path, [](const Value& v, const std::string& p) {
+    refuse_unknown_keys(v, p,
+                        {"start_ppq", "end_ppq", "root_pc", "quality", "extensions",
+                         "slash_bass_pc", "roman_numeral", "modulation_boundary"});
+  });
+  each_record(annotation, "sections", path, [](const Value& v, const std::string& p) {
+    refuse_unknown_keys(v, p, {"start_ppq", "end_ppq", "label"});
+  });
+  each_record(annotation, "onsets", path, [](const Value& v, const std::string& p) {
+    refuse_unknown_keys(v, p, {"ppq", "confidence"});
+  });
+}
+
+// The MIDI content store is a map keyed by clip id (plus the SysEx payload table keyed by
+// handle), so only its event records are checked. An earlier event spelling is refused naming
+// the current one.
+void check_midi_content_keys(const Value& content, const std::string& path) {
+  for (const auto& [clip_key, events] : content.as_object()) {
+    if (clip_key == "__sysex_payloads" || !events.is_array()) continue;
+    const auto& elements = events.as_array();
+    for (std::size_t index = 0; index < elements.size(); ++index) {
+      const Value& event = elements[index];
+      if (!event.is_object()) continue;
+      const std::string event_path =
+          key_path(path, json::escape_key(clip_key)) + "[" + std::to_string(index) + "]";
+      for (const auto& [earlier, current] :
+           {std::pair<const char*, const char*>{"data0", "word0"}, {"data1", "word1"}}) {
+        if (event.find(earlier) != nullptr) {
+          throw SonareException(
+              ErrorCode::InvalidFormat,
+              key_path(event_path, earlier) + " is an earlier spelling; write " + current);
+        }
+      }
+      refuse_unknown_keys(event, event_path, {"ppq", "word0", "word1", "sysex_handle"});
+    }
+  }
+}
+
+// Refuses a key no record of the document reads, before any of the model is built. The scene
+// subtree is checked by the scene reader itself, and insert `params` bags are not walked.
+void check_project_keys(const Value& root) {
+  refuse_unknown_keys(root, "",
+                      {"version", "sample_rate", "overlap_policy", "tempo_segments",
+                       "time_signatures", "sources", "tracks", "clips", "warp_maps", "part_rigs",
+                       "markers", "annotation", "midi_content", "scene", "assist_sidecars"});
+  each_record(root, "tempo_segments", "", [](const Value& v, const std::string& p) {
+    refuse_unknown_keys(v, p, {"start_ppq", "bpm", "start_sample", "end_bpm"});
+  });
+  each_record(root, "time_signatures", "", [](const Value& v, const std::string& p) {
+    refuse_unknown_keys(v, p, {"start_ppq", "numerator", "denominator"});
+  });
+  each_record(root, "sources", "", [](const Value& v, const std::string& p) {
+    const Value* kind = v.find("kind");
+    const bool midi = kind != nullptr && kind->is_number() &&
+                      kind->as_number() == static_cast<double>(arrangement::SourceKind::kMidi);
+    if (midi) {
+      refuse_unknown_keys(v, p, {"kind", "id", "name", "channel_hint"});
+    } else {
+      refuse_unknown_keys(v, p,
+                          {"kind", "id", "uri", "channel_count", "sample_rate_hint",
+                           "storage_handle_id", "content_hash", "external_stem_role"});
+    }
+  });
+  each_record(root, "tracks", "", [](const Value& v, const std::string& p) {
+    refuse_unknown_keys(v, p,
+                        {"id", "name", "kind", "gain", "mute", "solo", "pan", "channel_strip_ref",
+                         "output_target", "midi_destination_id", "automation_lanes"});
+    each_record(v, "automation_lanes", p, [](const Value& lane, const std::string& lane_path) {
+      refuse_unknown_keys(lane, lane_path, {"target_kind", "target_param_id", "points"});
+      each_record(lane, "points", lane_path, [](const Value& point, const std::string& pp) {
+        refuse_unknown_keys(point, pp, {"ppq", "value", "curve_to_next"});
+      });
+    });
+  });
+  each_record(root, "clips", "", check_clip_keys);
+  each_record(root, "warp_maps", "", [](const Value& v, const std::string& p) {
+    refuse_unknown_keys(v, p, {"id", "name", "anchors"});
+    each_record(v, "anchors", p, [](const Value& anchor, const std::string& ap) {
+      refuse_unknown_keys(anchor, ap, {"warp_sample", "source_sample"});
+    });
+  });
+  each_record(root, "part_rigs", "", [](const Value& v, const std::string& p) {
+    refuse_unknown_keys(v, p, {"destination_id", "part", "mode", "inserts"});
+    each_record(v, "inserts", p, [](const Value& insert, const std::string& ip) {
+      refuse_unknown_keys(insert, ip, {"processor", "params"});
+    });
+  });
+  each_record(root, "markers", "", [](const Value& v, const std::string& p) {
+    refuse_unknown_keys(v, p, {"id", "ppq", "name", "kind", "key_fifths", "key_minor"});
+  });
+  with_object(root, "annotation", "", check_annotation_keys);
+  with_object(root, "midi_content", "", check_midi_content_keys);
+  each_record(root, "assist_sidecars", "", [](const Value& v, const std::string& p) {
+    refuse_unknown_keys(v, p,
+                        {"module_id", "schema_version", "target_track_id", "region_start_ppq",
+                         "region_end_ppq", "payload_b64"});
+  });
 }
 
 bool count_array_entities(const Value& value, std::size_t limit, std::size_t* total) {
@@ -344,6 +533,8 @@ DeserializeResult project_from_json(const std::string& json_text) {
                std::to_string(SONARE_PROJECT_SCHEMA_VERSION) + ")"});
       return result;
     }
+
+    check_project_keys(root);
 
     arrangement::Project project;
     const auto invalid_entity_id = [](uint32_t id) {
@@ -680,7 +871,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
 
     // Mixer scene.
     if (const auto* sv = object_value_at(root, "scene")) {
-      project.scene() = scene_from_value(*sv, &decode_diagnostics);
+      project.scene() = scene_from_value(*sv);
     }
 
     // Assist sidecars (lossless, even for unregistered modules). The payload
@@ -784,14 +975,6 @@ DeserializeResult project_from_json(const std::string& json_text) {
         for (const auto& element : value.as_array()) {
           const Value& ev = object_element(element, "midi_content");
           arrangement::MidiClipEvent e;
-          for (const auto& [earlier, current] :
-               {std::pair<const char*, const char*>{"data0", "word0"}, {"data1", "word1"}}) {
-            if (ev.find(earlier) != nullptr) {
-              throw SonareException(ErrorCode::InvalidFormat,
-                                    std::string("midi_content event key \"") + earlier +
-                                        "\" is an earlier spelling; write \"" + current + "\"");
-            }
-          }
           e.ppq = num_or(ev, "ppq", 0.0);
           e.word0 = midi_word_or_warn(ev, "word0", clip_id, &decode_diagnostics);
           e.word1 = midi_word_or_warn(ev, "word1", clip_id, &decode_diagnostics);
