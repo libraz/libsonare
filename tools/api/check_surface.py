@@ -1981,6 +1981,13 @@ UNREAD = {
         "cli-native",
         "native CLI help (the registry carries no flag descriptions)",
     ),
+    "catalog-unit-suffix": (
+        "c",
+        (
+            "whether each processor applies every parameter the catalog advertises for it"
+            " (a shared band reader can publish fields a processor never reads)"
+        ),
+    ),
 }
 
 

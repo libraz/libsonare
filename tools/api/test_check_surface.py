@@ -469,6 +469,7 @@ class Conventions(CheckerCase):
                     and "v1.10.0" not in x
                     and "native CLI help" not in x
                     and "enum-coded" not in x
+                    and "the catalog advertises" not in x
                     for x in lines
                 )
             )
