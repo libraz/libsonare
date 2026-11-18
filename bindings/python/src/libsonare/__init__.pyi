@@ -1350,6 +1350,9 @@ from .types import (
     SidechainRefusal as SidechainRefusal,
 )
 from .types import (
+    SidechainSource as SidechainSource,
+)
+from .types import (
     SidechainSourceKind as SidechainSourceKind,
 )
 from .types import (

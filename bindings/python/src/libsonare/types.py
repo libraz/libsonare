@@ -395,6 +395,9 @@ from ._types_engine import (
     SidechainRefusal as SidechainRefusal,
 )
 from ._types_engine import (
+    SidechainSource as SidechainSource,
+)
+from ._types_engine import (
     TransportState as TransportState,
 )
 from ._types_enums import (

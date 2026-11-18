@@ -57,7 +57,7 @@ def test_engine_mixing_mappings_take_one_spelling() -> None:
     from libsonare import RealtimeEngine
 
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
-        bus = {"bus_id": 1, "gain_db": 0.0, "channel_layout": "stereo", "output_bus_id": 0}
+        bus = {"bus_id": 1, "gain_db": 0.0, "channel_layout": "stereo", "output_bus_id": None}
         target = {"bus_id": 2, "gain_db": 0.0}
         _refuses(lambda m: engine.set_track_buses([m, target]), bus, "gainDb")
         engine.set_track_buses([bus, target])

@@ -22,7 +22,7 @@ _VALUE_REFUSALS: list[tuple[str, Callable[[RealtimeEngine], object]]] = [
     ),
     ("unknown_synth_preset", lambda e: e.set_synth_instrument("no-such-preset", destination_id=3)),
     ("track_sends_unknown_track", lambda e: e.set_track_sends(_UNKNOWN_ID, [])),
-    ("track_output_bus_unknown_track", lambda e: e.set_track_output_bus(_UNKNOWN_ID, 0)),
+    ("track_output_bus_unknown_track", lambda e: e.set_track_output_bus(_UNKNOWN_ID, None)),
     ("bus_strip_pan_bus_zero", lambda e: e.set_bus_pan(0, 0.0)),
 ]
 
@@ -65,7 +65,7 @@ def test_call_on_closed_engine_is_coded_invalid_state() -> None:
     engine = RealtimeEngine(sample_rate=48000.0, max_block_size=64)
     engine.close()
     with pytest.raises(SonareError) as exc:
-        engine.set_track_output_bus(1, 0)
+        engine.set_track_output_bus(1, None)
     assert not isinstance(exc.value, SonareValueError)
     assert exc.value.code == int(ErrorCode.INVALID_STATE)
 

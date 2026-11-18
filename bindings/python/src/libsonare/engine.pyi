@@ -48,7 +48,7 @@ from .types import (
     ParameterInfo,
     ScopeTelemetryRecord,
     SidechainCheck,
-    SidechainSourceKind,
+    SidechainSource,
     TransportState,
 )
 
@@ -130,46 +130,28 @@ class RealtimeEngine:
     def settle_insert_parameters(self) -> None: ...
     def apply_commands_due_now_preserving_future(self) -> None: ...
     def apply_project_timeline(self, timeline: ProjectTimeline) -> None: ...
-    def set_lane_sidechain(self, track_id: int, insert_index: int, source_track_id: int) -> None:
-        """Key a lane insert from another lane's post-strip audio; ``source_track_id`` 0 removes
-        the binding."""
-        ...
-    def set_bus_sidechain(
-        self,
-        bus_id: int,
-        insert_index: int,
-        source_kind: SidechainSourceKind,
-        source_id: int,
+    def set_strip_sidechain(
+        self, ref: StripRef, insert_index: int, source: SidechainSource | None
     ) -> None:
-        """Key a bus-strip insert from a track or bus signal; ``source_id`` 0 removes
-        the binding."""
-        ...
-    def set_master_sidechain(
-        self, insert_index: int, source_kind: SidechainSourceKind, source_id: int
-    ) -> None:
-        """Key a master-strip insert from a track or bus signal; ``source_id`` 0 removes the
+        """Key a strip insert from a track lane or (master only) a bus; ``None`` removes the
         binding."""
         ...
-    def can_set_lane_sidechain(
-        self, track_id: int, insert_index: int, source_track_id: int
+    def can_set_strip_sidechain(
+        self, ref: StripRef, insert_index: int, source: SidechainSource
     ) -> SidechainCheck:
-        """Report whether :meth:`set_lane_sidechain` would accept the binding, without changing
+        """Report whether :meth:`set_strip_sidechain` would accept the binding, without changing
         anything."""
+        ...
+    def set_bus_sidechain(
+        self, bus_id: int, insert_index: int, source: SidechainSource | None
+    ) -> None:
+        """Key a bus-strip insert from a track lane or another bus; ``None`` removes the
+        binding."""
         ...
     def can_set_bus_sidechain(
-        self,
-        bus_id: int,
-        insert_index: int,
-        source_kind: SidechainSourceKind,
-        source_id: int,
+        self, bus_id: int, insert_index: int, source: SidechainSource
     ) -> SidechainCheck:
         """Report whether :meth:`set_bus_sidechain` would accept the binding, without changing
-        anything."""
-        ...
-    def can_set_master_sidechain(
-        self, insert_index: int, source_kind: SidechainSourceKind, source_id: int
-    ) -> SidechainCheck:
-        """Report whether :meth:`set_master_sidechain` would accept the binding, without changing
         anything."""
         ...
     def seek_ppq(self, ppq: float, render_frame: int | None = None) -> None: ...
@@ -236,9 +218,9 @@ class RealtimeEngine:
         """Replace one track lane's sends (``bus_id``, ``level_db``, ``enabled``, ``send_timing``);
         an empty sequence clears them."""
         ...
-    def set_track_output_bus(self, track_id: int, bus_id: int) -> None:
-        """Route a track lane to a bus; ``bus_id`` 0 returns it to the master mix. Unknown track or
-        undeclared bus raises SonareValueError."""
+    def set_track_output_bus(self, track_id: int, bus_id: int | None) -> None:
+        """Route a track lane to a bus; ``None`` returns it to the master mix and 0 is refused.
+        Unknown track or undeclared bus raises SonareValueError."""
         ...
     def set_track_buses(self, buses: Sequence[Mapping[str, object]]) -> None:
         """Declare the group buses from their mappings."""

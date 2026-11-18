@@ -2559,6 +2559,11 @@ SidechainRefusal = Literal[
 EngineCaptureSource = Literal["output", "input"]
 MidiFxConfig = dict[str, Any]
 
+class SidechainSource:
+    kind: SidechainSourceKind
+    id: int
+    def __init__(self, kind: SidechainSourceKind, id: int) -> None: ...
+
 class SidechainCheck:
     ok: bool
     reason: SidechainRefusal | None

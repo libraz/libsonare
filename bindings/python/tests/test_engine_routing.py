@@ -20,6 +20,7 @@ from libsonare import (
     EngineMidiEvent,
     RealtimeEngine,
     SidechainCheck,
+    SidechainSource,
     SonareError,
     SonareValueError,
 )
@@ -86,7 +87,7 @@ def test_engine_bus_output_bus_id_routes_into_another_bus() -> None:
     x = _direct_level()
     half = 10.0 ** (-6.0 / 20.0)
 
-    def run(bus1_output: int) -> float:
+    def run(bus1_output: int | None) -> float:
         with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as engine:
             engine.set_clips(
                 [
@@ -108,7 +109,7 @@ def test_engine_bus_output_bus_id_routes_into_another_bus() -> None:
             engine.set_track_lanes([{"track_id": 10, "output_bus_id": 1}])
             return _render_last(engine)
 
-    assert run(0) == pytest.approx(x, rel=1e-3)
+    assert run(None) == pytest.approx(x, rel=1e-3)
     # Through bus 2, its -6 dB gain_db applies on top.
     assert run(2) == pytest.approx(x * half, rel=1e-3)
 
@@ -198,7 +199,7 @@ def test_set_track_sends_matches_set_track_lanes_with_the_same_final_config() ->
 
 
 def test_set_track_output_bus_matches_set_track_lanes_with_the_same_final_config() -> None:
-    for target in (2, 0):
+    for target in (2, None):
         with (
             _routing_engine([{"track_id": 10, "output_bus_id": 1, "sends": _SEND_TO_2}]) as partial,
             _routing_engine(
@@ -215,7 +216,7 @@ def test_partial_lane_edits_refuse_bad_input_and_leave_the_lane_rendering() -> N
         with pytest.raises(SonareError, match="unknown track id 99"):
             engine.set_track_sends(99, [])
         with pytest.raises(SonareError, match="unknown track id 99"):
-            engine.set_track_output_bus(99, 0)
+            engine.set_track_output_bus(99, None)
         with pytest.raises(SonareError):
             engine.set_track_sends(10, [{"bus_id": 7}])
         with pytest.raises(SonareError):
@@ -277,14 +278,14 @@ def _make_keyed_rig() -> RealtimeEngine:
     engine.set_bus_strip_json(1, _LIMITER_BUS_JSON)
     engine.set_bus_strip_json(2, _DUCKER_BUS_JSON)
     engine.set_master_strip_json(_DUCKER_MASTER_JSON)
-    engine.set_bus_sidechain(2, 0, "bus", 1)
+    engine.set_bus_sidechain(2, 0, SidechainSource("bus", 1))
     return engine
 
 
 def test_engine_bus_and_master_sidechain_duck_and_clear() -> None:
     # Unkeyed reference: the same rig with its bus key cleared before any render.
     reference = _make_keyed_rig()
-    reference.set_bus_sidechain(2, 0, "bus", 0)
+    reference.set_bus_sidechain(2, 0, None)
     unkeyed = _render_last(reference)
     reference.close()
     assert unkeyed > 0.02
@@ -294,20 +295,20 @@ def test_engine_bus_and_master_sidechain_duck_and_clear() -> None:
         # Bus 1's loud key ducks bus 2, which carries nearly all of the mix.
         assert _render_last(engine) < unkeyed * 0.3
         # A track-sourced key on bus 2 ducks it the same way.
-        engine.set_bus_sidechain(2, 0, "track", 30)
+        engine.set_bus_sidechain(2, 0, SidechainSource("track", 30))
         assert _render_last(engine) < unkeyed * 0.3
         # The master ducker keyed from a track or a bus pulls the whole mix down.
-        engine.set_master_sidechain(0, "track", 30)
+        engine.set_strip_sidechain("master", 0, SidechainSource("track", 30))
         assert _render_last(engine) < unkeyed * 0.3
-        engine.set_master_sidechain(0, "bus", 1)
+        engine.set_strip_sidechain("master", 0, SidechainSource("bus", 1))
         assert _render_last(engine) < unkeyed * 0.3
 
-        # source_id 0 clears a binding: the master one leaves bus 2 keyed alone,
+        # A None source clears a binding: the master one leaves bus 2 keyed alone,
         # and clearing that too returns the render to the unkeyed level once the
         # ducker's release has run out over several replays.
-        engine.set_master_sidechain(0, "bus", 0)
+        engine.set_strip_sidechain("master", 0, None)
         assert _render_last(engine) < unkeyed * 0.3
-        engine.set_bus_sidechain(2, 0, "track", 0)
+        engine.set_bus_sidechain(2, 0, None)
         for _ in range(8):
             _render_last(engine)
         assert _render_last(engine) == pytest.approx(unkeyed, rel=1e-3)
@@ -320,17 +321,50 @@ def test_engine_bus_and_master_sidechain_reject_invalid_source_kind() -> None:
     try:
         # An unrecognized string name is rejected before it ever reaches the C ABI.
         with pytest.raises(SonareValueError):
-            engine.set_bus_sidechain(2, 0, "lane", 30)
+            engine.set_bus_sidechain(2, 0, SidechainSource("lane", 30))
         with pytest.raises(SonareValueError):
-            engine.set_master_sidechain(0, "lane", 30)
+            engine.set_strip_sidechain("master", 0, SidechainSource("lane", 30))
         # An ordinal is not a token.
         for bad_kind in (0, 2, -1, True):
             with pytest.raises(TypeError):
-                engine.set_bus_sidechain(2, 0, bad_kind, 30)  # type: ignore[arg-type]
+                engine.set_bus_sidechain(2, 0, SidechainSource(bad_kind, 30))  # type: ignore[arg-type]
             with pytest.raises(TypeError):
-                engine.set_master_sidechain(0, bad_kind, 30)  # type: ignore[arg-type]
+                engine.set_strip_sidechain("master", 0, SidechainSource(bad_kind, 30))  # type: ignore[arg-type]
     finally:
         engine.close()
+
+
+def test_sidechain_source_is_a_record_and_none_is_the_only_removal() -> None:
+    engine = _make_keyed_rig()
+    try:
+        with pytest.raises(SonareValueError, match="must not be 0"):
+            engine.set_bus_sidechain(2, 0, SidechainSource("bus", 0))
+        with pytest.raises(SonareValueError, match="must not be 0"):
+            engine.set_strip_sidechain("master", 0, SidechainSource("track", 0))
+        with pytest.raises(SonareValueError, match="kind 'track'"):
+            engine.set_strip_sidechain(10, 0, SidechainSource("bus", 1))
+        with pytest.raises(SonareValueError, match="kind 'track'"):
+            engine.can_set_strip_sidechain(10, 0, SidechainSource("bus", 1))
+        with pytest.raises(TypeError, match="SidechainSource"):
+            engine.set_bus_sidechain(2, 0, ("bus", 1))  # type: ignore[arg-type]
+        with pytest.raises(TypeError, match="SidechainSource"):
+            engine.can_set_bus_sidechain(2, 0, None)  # type: ignore[arg-type]
+        with pytest.raises(SonareValueError, match="'master'"):
+            engine.set_strip_sidechain("bus", 0, None)
+    finally:
+        engine.close()
+
+
+def test_an_optional_bus_is_none_and_bus_id_zero_is_refused() -> None:
+    with _routing_engine([{"track_id": 10, "output_bus_id": 1}]) as engine:
+        with pytest.raises(SonareValueError, match="bus_id"):
+            engine.set_track_output_bus(10, 0)
+        with pytest.raises(SonareValueError, match="output_bus_id"):
+            engine.set_track_lanes([{"track_id": 10, "output_bus_id": 0}])
+        with pytest.raises(SonareValueError, match="output_bus_id"):
+            engine.set_track_buses([{"bus_id": 1, "output_bus_id": 0}, {"bus_id": 2}])
+        engine.set_track_output_bus(10, None)
+        engine.set_track_lanes([{"track_id": 10, "output_bus_id": None}])
 
 
 def test_sidechain_source_kind_value_takes_exact_tokens() -> None:
@@ -435,18 +469,18 @@ def test_lane_sidechain_refuses_self_key_and_cycles_but_keeps_valid_bindings() -
         engine.set_track_lanes([{"track_id": 10}, {"track_id": 20}])
         for track_id in (10, 20):
             engine.set_track_strip_json(track_id, _strip_json(track_id, [_PASS_LIMITER]))
-        engine.set_lane_sidechain(10, 0, 20)
+        engine.set_strip_sidechain(10, 0, SidechainSource("track", 20))
         with pytest.raises(SonareError):
-            engine.set_lane_sidechain(10, 0, 10)
+            engine.set_strip_sidechain(10, 0, SidechainSource("track", 10))
         # 20 keyed from 10 would close the 10 <-> 20 cycle over the bindings.
         with pytest.raises(SonareError):
-            engine.set_lane_sidechain(20, 0, 10)
+            engine.set_strip_sidechain(20, 0, SidechainSource("track", 10))
         # The refused bindings changed nothing: the first one still stands, and
         # clearing it frees the opposite direction.
-        engine.set_lane_sidechain(10, 0, 0)
-        engine.set_lane_sidechain(20, 0, 10)
+        engine.set_strip_sidechain(10, 0, None)
+        engine.set_strip_sidechain(20, 0, SidechainSource("track", 10))
         with pytest.raises(SonareError):
-            engine.set_lane_sidechain(10, 0, 20)
+            engine.set_strip_sidechain(10, 0, SidechainSource("track", 20))
     finally:
         engine.close()
 
@@ -486,36 +520,46 @@ def test_can_set_sidechain_reports_each_refusal_and_matches_the_setters() -> Non
         # Lane keys; each lane carries one insert to key.
         for track_id in (10, 30):
             engine.set_track_strip_json(track_id, _strip_json(track_id, [_PASS_LIMITER]))
-        check(engine.can_set_lane_sidechain(0, 0, 30), "invalidTarget")
-        check(engine.can_set_lane_sidechain(10, 1, 30), "insertOutOfRange")
-        check(engine.can_set_lane_sidechain(10, 0, 99), "undeclaredSource")
+        check(engine.can_set_strip_sidechain(0, 0, SidechainSource("track", 30)), "invalidTarget")
+        check(
+            engine.can_set_strip_sidechain(10, 1, SidechainSource("track", 30)), "insertOutOfRange"
+        )
+        check(
+            engine.can_set_strip_sidechain(10, 0, SidechainSource("track", 99)), "undeclaredSource"
+        )
         with pytest.raises(SonareError):
-            engine.set_lane_sidechain(10, 1, 30)
+            engine.set_strip_sidechain(10, 1, SidechainSource("track", 30))
         with pytest.raises(SonareError):
-            engine.set_lane_sidechain(10, 0, 99)
-        check(engine.can_set_lane_sidechain(10, 0, 10), "selfKey")
-        check(engine.can_set_lane_sidechain(10, 0, 30), None)
-        engine.set_lane_sidechain(10, 0, 30)
-        check(engine.can_set_lane_sidechain(30, 0, 10), "cycle")
+            engine.set_strip_sidechain(10, 0, SidechainSource("track", 99))
+        check(engine.can_set_strip_sidechain(10, 0, SidechainSource("track", 10)), "selfKey")
+        check(engine.can_set_strip_sidechain(10, 0, SidechainSource("track", 30)), None)
+        engine.set_strip_sidechain(10, 0, SidechainSource("track", 30))
+        check(engine.can_set_strip_sidechain(30, 0, SidechainSource("track", 10)), "cycle")
         with pytest.raises(SonareError):
-            engine.set_lane_sidechain(30, 0, 10)
+            engine.set_strip_sidechain(30, 0, SidechainSource("track", 10))
         # Bus keys; the rig already keys bus 2 insert 0 from bus 1.
-        check(engine.can_set_bus_sidechain(9, 0, "track", 10), "invalidTarget")
-        check(engine.can_set_bus_sidechain(1, 1, "track", 30), "insertOutOfRange")
-        check(engine.can_set_bus_sidechain(1, 0, "track", 99), "undeclaredSource")
+        check(engine.can_set_bus_sidechain(9, 0, SidechainSource("track", 10)), "invalidTarget")
+        check(engine.can_set_bus_sidechain(1, 1, SidechainSource("track", 30)), "insertOutOfRange")
+        check(engine.can_set_bus_sidechain(1, 0, SidechainSource("track", 99)), "undeclaredSource")
         with pytest.raises(TypeError):
-            engine.can_set_bus_sidechain(1, 0, 2, 30)  # type: ignore[arg-type]
-        check(engine.can_set_bus_sidechain(1, 0, "bus", 1), "selfKey")
-        check(engine.can_set_bus_sidechain(1, 0, "bus", 2), "cycle")
-        check(engine.can_set_bus_sidechain(2, 0, "track", 30), None)
+            engine.can_set_bus_sidechain(1, 0, SidechainSource(2, 30))  # type: ignore[arg-type]
+        check(engine.can_set_bus_sidechain(1, 0, SidechainSource("bus", 1)), "selfKey")
+        check(engine.can_set_bus_sidechain(1, 0, SidechainSource("bus", 2)), "cycle")
+        check(engine.can_set_bus_sidechain(2, 0, SidechainSource("track", 30)), None)
         # Master keys.
-        check(engine.can_set_master_sidechain(1, "track", 30), "insertOutOfRange")
-        check(engine.can_set_master_sidechain(0, "track", 99), "undeclaredSource")
+        check(
+            engine.can_set_strip_sidechain("master", 1, SidechainSource("track", 30)),
+            "insertOutOfRange",
+        )
+        check(
+            engine.can_set_strip_sidechain("master", 0, SidechainSource("track", 99)),
+            "undeclaredSource",
+        )
         with pytest.raises(TypeError):
-            engine.can_set_master_sidechain(0, 2, 30)  # type: ignore[arg-type]
-        check(engine.can_set_master_sidechain(0, "bus", 1), None)
+            engine.can_set_strip_sidechain("master", 0, SidechainSource(2, 30))  # type: ignore[arg-type]
+        check(engine.can_set_strip_sidechain("master", 0, SidechainSource("bus", 1)), None)
         # Queries leave the bindings alone: the refused reverse bus key stays refused.
-        check(engine.can_set_bus_sidechain(1, 0, "bus", 2), "cycle")
+        check(engine.can_set_bus_sidechain(1, 0, SidechainSource("bus", 2)), "cycle")
     finally:
         engine.close()
 
@@ -524,10 +568,10 @@ def test_can_set_sidechain_reports_each_refusal_and_matches_the_setters() -> Non
         full.set_track_lanes([{"track_id": 10}, {"track_id": 30}])
         full.set_track_strip_json(10, _strip_json(10, [_PASS_LIMITER] * 33))
         for insert in range(32):
-            full.set_lane_sidechain(10, insert, 30)
-        check(full.can_set_lane_sidechain(10, 32, 30), "tableFull")
+            full.set_strip_sidechain(10, insert, SidechainSource("track", 30))
+        check(full.can_set_strip_sidechain(10, 32, SidechainSource("track", 30)), "tableFull")
         with pytest.raises(SonareError):
-            full.set_lane_sidechain(10, 32, 30)
+            full.set_strip_sidechain(10, 32, SidechainSource("track", 30))
 
     # Plan refused: lane 20 reports 4 s (192000 samples) of lookahead, so keying
     # lane 30's insert 1 from it needs an alignment past the delay ceiling.
@@ -543,10 +587,10 @@ def test_can_set_sidechain_reports_each_refusal_and_matches_the_setters() -> Non
         plan.set_track_strip_json(
             30, _strip_json(30, [(limiter[0], {**limiter[1], "lookaheadMs": 1.0}), ducker])
         )
-        check(plan.can_set_lane_sidechain(30, 1, 20), "planRefused")
+        check(plan.can_set_strip_sidechain(30, 1, SidechainSource("track", 20)), "planRefused")
         with pytest.raises(SonareError):
-            plan.set_lane_sidechain(30, 1, 20)
-        check(plan.can_set_lane_sidechain(30, 1, 10), None)
+            plan.set_strip_sidechain(30, 1, SidechainSource("track", 20))
+        check(plan.can_set_strip_sidechain(30, 1, SidechainSource("track", 10)), None)
 
     # The facade refuses a bad source kind before the C ABI can report it, so the
     # code-to-reason table is exercised directly.

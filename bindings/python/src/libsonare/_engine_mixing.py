@@ -17,7 +17,6 @@ from ._runtime import (
     PanLaw,
     PanMode,
     SendTiming,
-    SidechainSourceKind,
     SonareEngineBus,
     SonareEngineTrackLane,
     SonareEngineTrackSend,
@@ -37,7 +36,12 @@ from ._runtime import (
     _token_arg,
     _utf8_arg,
 )
-from ._types_engine import _SIDECHAIN_REFUSALS, SidechainCheck, SidechainRefusal
+from ._types_engine import (
+    _SIDECHAIN_REFUSALS,
+    SidechainCheck,
+    SidechainRefusal,
+    SidechainSource,
+)
 from .types import EqBandInput
 
 StripAutomationKind = Literal["faderDb", "pan", "width"]
@@ -57,8 +61,40 @@ def _track_only(fn: str, ref: StripRef) -> int:
     """Return the track id a strip reference names, refusing the master strip."""
     track_id = _strip_target(fn, ref)
     if track_id is None:
-        raise SonareValueError(f"{fn}: the master strip has no such setter")
+        raise SonareValueError(f"{fn}: the master strip has no {fn.removeprefix('set_')}")
     return track_id
+
+
+_TRACK_SOURCE_KIND = 0
+
+
+def _sidechain_source_pair(
+    fn: str, source: SidechainSource | None, *, removable: bool
+) -> tuple[int, int]:
+    """Return the C ``(kind, id)`` of a sidechain source; ``None`` removes when ``removable``."""
+    if source is None:
+        if not removable:
+            raise TypeError(f"{fn}: source must be a SidechainSource")
+        return _TRACK_SOURCE_KIND, 0
+    if not isinstance(source, SidechainSource):
+        raise TypeError(f"{fn}: source must be a SidechainSource or None")
+    kind = _sidechain_source_kind_value(source.kind)
+    source_id = _narrow_int(source.id, "source.id", 0, _UINT32_MAX)
+    if source_id == 0:
+        raise SonareValueError(f"{fn}: source.id must not be 0 (pass None to remove the binding)")
+    return kind, source_id
+
+
+def _require_track_source(fn: str, kind: int) -> None:
+    if kind != _TRACK_SOURCE_KIND:
+        raise SonareValueError(f"{fn}: a track strip accepts only a source of kind 'track'")
+
+
+def _optional_bus_id(value: object, name: str) -> int:
+    """Return the C bus id of an optional bus: None is the master mix (0) and 0 is refused."""
+    if value is None:
+        return 0
+    return _narrow_int(value, name, 1, _UINT32_MAX)
 
 
 def _sidechain_check(refusal: int) -> SidechainCheck:
@@ -125,11 +161,8 @@ class _EngineMixingMixin:
             # Narrowed rather than coerced: int(0.5) is the 0 this field
             # reads as "stay on the master mix", so a fractional bus id
             # would leave the lane unrouted and report success.
-            raw[i].output_bus_id = _narrow_int(
-                lane.get("output_bus_id", 0),
-                f"{where}.output_bus_id",
-                0,
-                _UINT32_MAX,
+            raw[i].output_bus_id = _optional_bus_id(
+                lane.get("output_bus_id"), f"{where}.output_bus_id"
             )
             if "source_channel_layout" in lane:
                 raw[i].source_channel_layout = _channel_layout_value(
@@ -158,10 +191,10 @@ class _EngineMixingMixin:
             )
         )
 
-    def set_track_output_bus(self, track_id: int, bus_id: int) -> None:
+    def set_track_output_bus(self, track_id: int, bus_id: int | None) -> None:
         """Route one track lane to a bus, leaving its sends and every other lane as published.
 
-        ``bus_id`` 0 returns the lane to the master mix. Raises ``SonareValueError``
+        ``None`` returns the lane to the master mix; 0 is refused. Raises ``SonareValueError``
         for an unknown track or an undeclared bus. Control thread only; not concurrent
         with processing.
         """
@@ -169,126 +202,111 @@ class _EngineMixingMixin:
             _get_lib().sonare_engine_set_track_output_bus(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
-                _to_c_uint32(bus_id, "bus_id"),
+                _to_c_uint32(_optional_bus_id(bus_id, "bus_id"), "bus_id"),
             )
         )
 
-    def set_lane_sidechain(self, track_id: int, insert_index: int, source_track_id: int) -> None:
-        """Key one insert of a lane strip from another lane's post-strip audio.
+    def set_strip_sidechain(
+        self, ref: StripRef, insert_index: int, source: SidechainSource | None
+    ) -> None:
+        """Key one insert of a strip from another signal; ``None`` removes the binding.
 
-        Sidechain for ducking/sidechainRouter inserts: the source lane's
-        post-strip, pre-fader audio feeds the insert's key input. Lanes are
-        processed in key order and the key is delay-compensated, so the result
-        depends on neither lane order nor block size. ``source_track_id`` 0
-        removes the binding. Raises (bindings unchanged) for a lane keying
-        itself, a binding that closes a cycle over the lane bindings, a full
-        binding table, or an alignment past the delay ceiling. Control thread
-        only; not concurrent with processing.
+        For ducking/sidechainRouter inserts. A track strip accepts only a source of kind
+        ``"track"``; the master strip takes a track lane or a bus, and for it
+        ``insert_index`` counts the pre-fader inserts first, then the post-fader ones.
+        A key naming the track itself, or a binding that would close a cycle across the
+        bindings as a whole, raises and leaves the existing bindings unchanged. The key
+        is taken after the source's lane strip and delay-compensated, so the result
+        depends on neither lane order nor block size. Control thread only; not
+        concurrent with processing.
         """
-        _check(
-            _get_lib().sonare_engine_set_lane_sidechain(
+        fn = "set_strip_sidechain"
+        track_id = _strip_target(fn, ref)
+        kind, source_id = _sidechain_source_pair(fn, source, removable=True)
+        if track_id is None:
+            rc = _get_lib().sonare_engine_set_master_sidechain(
                 self._require_handle(),
-                _to_c_uint32(track_id, "track_id"),
                 _to_c_uint(insert_index, "insert_index"),
-                _to_c_uint32(source_track_id, "source_track_id"),
+                _to_c_int(kind, "source.kind"),
+                _to_c_uint32(source_id, "source.id"),
             )
-        )
+        else:
+            _require_track_source(fn, kind)
+            rc = _get_lib().sonare_engine_set_lane_sidechain(
+                self._require_handle(),
+                _to_c_uint32(track_id, "strip"),
+                _to_c_uint(insert_index, "insert_index"),
+                _to_c_uint32(source_id, "source.id"),
+            )
+        _check(rc)
 
-    def can_set_lane_sidechain(
-        self, track_id: int, insert_index: int, source_track_id: int
+    def can_set_strip_sidechain(
+        self, ref: StripRef, insert_index: int, source: SidechainSource
     ) -> SidechainCheck:
-        """Report whether :meth:`set_lane_sidechain` would accept a binding.
+        """Report whether :meth:`set_strip_sidechain` would accept a binding.
 
         Changes nothing; same threading contract as the setter.
         """
+        fn = "can_set_strip_sidechain"
+        track_id = _strip_target(fn, ref)
+        kind, source_id = _sidechain_source_pair(fn, source, removable=False)
         refusal = ctypes.c_int()
-        _check(
-            _get_lib().sonare_engine_can_set_lane_sidechain(
+        if track_id is None:
+            rc = _get_lib().sonare_engine_can_set_master_sidechain(
                 self._require_handle(),
-                _to_c_uint32(track_id, "track_id"),
                 _to_c_uint(insert_index, "insert_index"),
-                _to_c_uint32(source_track_id, "source_track_id"),
+                _to_c_int(kind, "source.kind"),
+                _to_c_uint32(source_id, "source.id"),
                 ctypes.byref(refusal),
             )
-        )
+        else:
+            _require_track_source(fn, kind)
+            rc = _get_lib().sonare_engine_can_set_lane_sidechain(
+                self._require_handle(),
+                _to_c_uint32(track_id, "strip"),
+                _to_c_uint(insert_index, "insert_index"),
+                _to_c_uint32(source_id, "source.id"),
+                ctypes.byref(refusal),
+            )
+        _check(rc)
         return _sidechain_check(refusal.value)
 
+    def set_bus_sidechain(
+        self, bus_id: int, insert_index: int, source: SidechainSource | None
+    ) -> None:
+        """Key one insert of a bus strip from a track lane or another bus; ``None`` removes it.
+
+        The key is taken before the source's lane fader or bus gain. Control thread
+        only; not concurrent with processing.
+        """
+        kind, source_id = _sidechain_source_pair("set_bus_sidechain", source, removable=True)
+        _check(
+            _get_lib().sonare_engine_set_bus_sidechain(
+                self._require_handle(),
+                _to_c_uint32(bus_id, "bus_id"),
+                _to_c_uint(insert_index, "insert_index"),
+                _to_c_int(kind, "source.kind"),
+                _to_c_uint32(source_id, "source.id"),
+            )
+        )
+
     def can_set_bus_sidechain(
-        self,
-        bus_id: int,
-        insert_index: int,
-        source_kind: SidechainSourceKind,
-        source_id: int,
+        self, bus_id: int, insert_index: int, source: SidechainSource
     ) -> SidechainCheck:
         """Report whether :meth:`set_bus_sidechain` would accept a binding."""
+        kind, source_id = _sidechain_source_pair("can_set_bus_sidechain", source, removable=False)
         refusal = ctypes.c_int()
         _check(
             _get_lib().sonare_engine_can_set_bus_sidechain(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
                 _to_c_uint(insert_index, "insert_index"),
-                _to_c_int(_sidechain_source_kind_value(source_kind), "source_kind"),
-                _to_c_uint32(source_id, "source_id"),
+                _to_c_int(kind, "source.kind"),
+                _to_c_uint32(source_id, "source.id"),
                 ctypes.byref(refusal),
             )
         )
         return _sidechain_check(refusal.value)
-
-    def can_set_master_sidechain(
-        self, insert_index: int, source_kind: SidechainSourceKind, source_id: int
-    ) -> SidechainCheck:
-        """Report whether :meth:`set_master_sidechain` would accept a binding."""
-        refusal = ctypes.c_int()
-        _check(
-            _get_lib().sonare_engine_can_set_master_sidechain(
-                self._require_handle(),
-                _to_c_uint(insert_index, "insert_index"),
-                _to_c_int(_sidechain_source_kind_value(source_kind), "source_kind"),
-                _to_c_uint32(source_id, "source_id"),
-                ctypes.byref(refusal),
-            )
-        )
-        return _sidechain_check(refusal.value)
-
-    def set_bus_sidechain(
-        self,
-        bus_id: int,
-        insert_index: int,
-        source_kind: SidechainSourceKind,
-        source_id: int,
-    ) -> None:
-        """Key one insert of a bus strip from a track's or another bus's signal.
-
-        Bus-strip counterpart of :meth:`set_lane_sidechain`. ``source_kind`` is
-        ``"track"``/``"bus"`` (or the matching 0/1 ordinal); ``source_id`` 0
-        removes the binding. Control-thread-only: do not call concurrently
-        with :meth:`process`.
-        """
-        _check(
-            _get_lib().sonare_engine_set_bus_sidechain(
-                self._require_handle(),
-                _to_c_uint32(bus_id, "bus_id"),
-                _to_c_uint(insert_index, "insert_index"),
-                _to_c_int(_sidechain_source_kind_value(source_kind), "source_kind"),
-                _to_c_uint32(source_id, "source_id"),
-            )
-        )
-
-    def set_master_sidechain(
-        self, insert_index: int, source_kind: SidechainSourceKind, source_id: int
-    ) -> None:
-        """Key one insert of the master strip from a track's or a bus's signal.
-
-        Master-strip counterpart of :meth:`set_bus_sidechain`.
-        """
-        _check(
-            _get_lib().sonare_engine_set_master_sidechain(
-                self._require_handle(),
-                _to_c_uint(insert_index, "insert_index"),
-                _to_c_int(_sidechain_source_kind_value(source_kind), "source_kind"),
-                _to_c_uint32(source_id, "source_id"),
-            )
-        )
 
     def set_track_buses(self, buses: Sequence[Mapping[str, object]]) -> None:
         raw = (SonareEngineBus * len(buses))()
@@ -317,11 +335,8 @@ class _EngineMixingMixin:
             # Narrowed rather than coerced: int(0.5) is the 0 this field reads
             # as "stay on the master mix", so a fractional bus id would leave
             # the bus unrouted and report success.
-            raw[i].output_bus_id = _narrow_int(
-                bus.get("output_bus_id", 0),
-                f"{where}.output_bus_id",
-                0,
-                _UINT32_MAX,
+            raw[i].output_bus_id = _optional_bus_id(
+                bus.get("output_bus_id"), f"{where}.output_bus_id"
             )
         _check(_get_lib().sonare_engine_set_track_buses(self._require_handle(), raw, len(buses)))
 

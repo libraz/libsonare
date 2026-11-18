@@ -22,6 +22,7 @@ from ._types_enums import (
     EngineTelemetryType,
     ProjectWarpMode,
     SectionType,
+    SidechainSourceKind,
 )
 
 if TYPE_CHECKING:
@@ -214,6 +215,20 @@ InvalidFormat too. JSON text is parsed by the caller (``json.loads``) before it 
 EngineCaptureSource = Literal["output", "input"]
 """What the realtime engine's recording sink captures."""
 _CAPTURE_SOURCES: tuple[str, ...] = get_args(EngineCaptureSource)
+
+
+@dataclass(frozen=True, slots=True)
+class SidechainSource:
+    """A sidechain key source: a track lane or a bus, by id.
+
+    Passed to ``set_strip_sidechain`` / ``set_bus_sidechain`` and their ``can_set_*``
+    queries; pass ``None`` instead of a source to remove a binding.
+    """
+
+    kind: SidechainSourceKind
+    """``"track"`` or ``"bus"``: what ``id`` names."""
+    id: int
+    """Track id or bus id, per ``kind``; never 0."""
 
 
 @dataclass(frozen=True, slots=True)

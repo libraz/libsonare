@@ -304,7 +304,7 @@ def test_a_fractional_click_length_is_refused_rather_than_read_as_derived_from_s
 
 
 def test_a_fractional_output_bus_is_refused_rather_than_read_as_the_master_mix() -> None:
-    """0 on a lane's output_bus_id keeps the lane on the master mix."""
+    """None on a lane's output_bus_id keeps the lane on the master mix; 0 is refused."""
     frames = 256
 
     def bus_peak_db(output_bus_id) -> float:
@@ -332,7 +332,8 @@ def test_a_fractional_output_bus_is_refused_rather_than_read_as_the_master_mix()
             return round(max(bus.peak_db), 3)
 
     omitted = bus_peak_db(None)
-    assert bus_peak_db(0) == omitted
+    with pytest.raises(SonareValueError, match="output_bus_id"):
+        bus_peak_db(0)
     assert bus_peak_db(1) != omitted  # positive control: the lane reaches the group bus
     for value in (0.5, 1.5):
         with pytest.raises(SonareValueError, match="output_bus_id"):

@@ -6098,6 +6098,7 @@ test = "bindings/python/tests/test_engine_mixer.py::test_engine_bus_strip_pan_an
 [[entry]]
 kind = "option"
 old = "RealtimeEngine.set_bus_sidechain(source_kind)"
+to = "RealtimeEngine.set_bus_sidechain(source)"
 changed = "'track' or 'bus' exactly; other casings are SonareValueError, an ordinal is TypeError"
 domain = "engine"
 rule = "string-closed-sets"
@@ -6106,6 +6107,7 @@ test = "bindings/python/tests/test_engine_routing.py::test_engine_bus_and_master
 [[entry]]
 kind = "option"
 old = "RealtimeEngine.set_master_sidechain(source_kind)"
+to = "RealtimeEngine.set_strip_sidechain(source)"
 changed = "'track' or 'bus' exactly; other casings are SonareValueError, an ordinal is TypeError"
 domain = "engine"
 rule = "string-closed-sets"
@@ -6114,6 +6116,7 @@ test = "bindings/python/tests/test_engine_routing.py::test_engine_bus_and_master
 [[entry]]
 kind = "option"
 old = "RealtimeEngine.can_set_bus_sidechain(source_kind)"
+to = "RealtimeEngine.can_set_bus_sidechain(source)"
 changed = "'track' or 'bus' exactly; an ordinal is TypeError"
 domain = "engine"
 rule = "string-closed-sets"
@@ -6122,6 +6125,7 @@ test = "bindings/python/tests/test_engine_routing.py::test_can_set_sidechain_rep
 [[entry]]
 kind = "option"
 old = "RealtimeEngine.can_set_master_sidechain(source_kind)"
+to = "RealtimeEngine.can_set_strip_sidechain(source)"
 changed = "'track' or 'bus' exactly; an ordinal is TypeError"
 domain = "engine"
 rule = "string-closed-sets"
@@ -8692,7 +8696,7 @@ test = "bindings/python/tests/test_engine_clips.py::test_realtime_engine_warp_mo
 [[entry]]
 kind = "option"
 old = "RealtimeEngine.set_track_lanes(lanes)"
-changed = "each lane is a mapping (a bare track id is TypeError) taking track_id, sends, output_bus_id and source_channel_layout only, and a send takes bus_id, level_db, enabled and send_timing only; trackId, busId, levelDb, outputBusId, sourceChannelLayout, sendTiming and timing raise SonareValueError naming the key"
+changed = "each lane is a mapping (a bare track id is TypeError) taking track_id, sends, output_bus_id and source_channel_layout only, and a send takes bus_id, level_db, enabled and send_timing only; trackId, busId, levelDb, outputBusId, sourceChannelLayout, sendTiming and timing raise SonareValueError naming the key; an absent or None output_bus_id keeps the lane on the master mix and 0 raises SonareValueError"
 domain = "engine"
 rule = "one-input-form"
 test = "bindings/python/tests/test_mapping_keys.py::test_engine_mixing_mappings_take_one_spelling"
@@ -8700,7 +8704,7 @@ test = "bindings/python/tests/test_mapping_keys.py::test_engine_mixing_mappings_
 [[entry]]
 kind = "option"
 old = "RealtimeEngine.set_track_buses(buses)"
-changed = "a bus mapping takes bus_id, gain_db, channel_layout, sends and output_bus_id only, and its sends take the set_track_lanes send keys; busId, gainDb, channelLayout, outputBusId, sendTiming and timing raise SonareValueError naming the key"
+changed = "a bus mapping takes bus_id, gain_db, channel_layout, sends and output_bus_id only, and its sends take the set_track_lanes send keys; busId, gainDb, channelLayout, outputBusId, sendTiming and timing raise SonareValueError naming the key; an absent or None output_bus_id keeps the bus on the master mix and 0 raises SonareValueError"
 domain = "engine"
 rule = "snake-case-only"
 test = "bindings/python/tests/test_mapping_keys.py::test_engine_mixing_mappings_take_one_spelling"
@@ -10970,3 +10974,107 @@ old = "RealtimeEngine.set_track_strip_surround_pan(track_id)"
 new = "RealtimeEngine.set_strip_surround_pan(ref)"
 domain = "engine"
 rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_lane_sidechain"
+new = "RealtimeEngine.set_strip_sidechain"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_master_sidechain"
+new = "RealtimeEngine.set_strip_sidechain"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.can_set_lane_sidechain"
+new = "RealtimeEngine.can_set_strip_sidechain"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.can_set_master_sidechain"
+new = "RealtimeEngine.can_set_strip_sidechain"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_bus_sidechain(source_id)"
+to = "RealtimeEngine.set_bus_sidechain(source)"
+changed = "the source is one SidechainSource(kind, id) record or None; None removes the binding, source.id 0 raises SonareValueError and anything else raises TypeError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_engine_routing.py::test_sidechain_source_is_a_record_and_none_is_the_only_removal"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.can_set_bus_sidechain(source_id)"
+to = "RealtimeEngine.can_set_bus_sidechain(source)"
+changed = "the source is one SidechainSource(kind, id) record; source.id 0 raises SonareValueError and anything else raises TypeError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_engine_routing.py::test_sidechain_source_is_a_record_and_none_is_the_only_removal"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_track_output_bus(bus_id)"
+changed = "None returns the lane to the master mix; bus_id 0 raises SonareValueError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_engine_routing.py::test_an_optional_bus_is_none_and_bus_id_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_lane_sidechain(track_id)"
+new = "RealtimeEngine.set_strip_sidechain(ref)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.can_set_lane_sidechain(track_id)"
+new = "RealtimeEngine.can_set_strip_sidechain(ref)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_lane_sidechain(source_track_id)"
+to = "RealtimeEngine.set_strip_sidechain(source)"
+changed = "the source is one SidechainSource('track', id) record or None; None removes the binding, source.id 0 raises SonareValueError, and a track strip refuses a source of kind 'bus' with SonareValueError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_engine_routing.py::test_sidechain_source_is_a_record_and_none_is_the_only_removal"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.can_set_lane_sidechain(source_track_id)"
+to = "RealtimeEngine.can_set_strip_sidechain(source)"
+changed = "the source is one SidechainSource('track', id) record; source.id 0 raises SonareValueError and a track strip refuses a source of kind 'bus' with SonareValueError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_engine_routing.py::test_sidechain_source_is_a_record_and_none_is_the_only_removal"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_master_sidechain(source_id)"
+to = "RealtimeEngine.set_strip_sidechain(source)"
+changed = "the source is one SidechainSource(kind, id) record or None; None removes the binding and source.id 0 raises SonareValueError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_engine_routing.py::test_sidechain_source_is_a_record_and_none_is_the_only_removal"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.can_set_master_sidechain(source_id)"
+to = "RealtimeEngine.can_set_strip_sidechain(source)"
+changed = "the source is one SidechainSource(kind, id) record; source.id 0 raises SonareValueError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_engine_routing.py::test_sidechain_source_is_a_record_and_none_is_the_only_removal"
