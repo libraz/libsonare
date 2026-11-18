@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   ErrorCode,
@@ -6,6 +7,19 @@ import {
   PART_RIG_ALL_PARTS,
   RealtimeEngine,
 } from '../../dist/index.js';
+
+interface MarkerIdStep {
+  set: Array<{ ppq: number; id?: number }>;
+  ids?: number[];
+  stored: number[];
+  refused?: boolean;
+}
+const MARKER_ID_CASES: Array<{ name: string; steps: MarkerIdStep[] }> = JSON.parse(
+  readFileSync(
+    new URL('../../../../tests/conformance/marker_id_allocation.json', import.meta.url),
+    'utf8',
+  ),
+).cases;
 
 const BLOCK = 128;
 
@@ -195,26 +209,26 @@ describe('collections', () => {
   });
 
   it('assigns an id-less marker the lowest free id and never reuses one', () => {
-    withEngine((engine) => {
-      const first = engine.setMarkers([
-        { ppq: 960, name: 'b' },
-        { id: 1, ppq: 0, name: 'a' },
-      ]);
-      expect(first.map((m) => [m.id, m.name])).toEqual([
-        [2, 'b'],
-        [1, 'a'],
-      ]);
-      expect(first[0]).toEqual(engine.marker(2));
-      expect(engine.setMarkers([{ ppq: 0, name: 'c' }]).map((m) => m.id)).toEqual([3]);
-      expect(() =>
-        engine.setMarkers([
-          { id: 5, ppq: 0 },
-          { id: 5, ppq: 1 },
-        ]),
-      ).toThrow(RangeError);
-      expect(engine.markers().map((m) => m.id)).toEqual([3]);
-      expect(engine.setMarkers([{ ppq: 0 }]).map((m) => m.id)).toEqual([4]);
-    });
+    expect(MARKER_ID_CASES.length).toBeGreaterThan(0);
+    for (const { name, steps } of MARKER_ID_CASES) {
+      withEngine((engine) => {
+        for (const [index, step] of steps.entries()) {
+          const label = `${name}, step ${index}`;
+          if (step.refused) {
+            expect(() => engine.setMarkers(step.set), label).toThrow(RangeError);
+          } else {
+            expect(
+              engine.setMarkers(step.set).map((m) => m.id),
+              label,
+            ).toEqual(step.ids);
+          }
+          expect(
+            engine.markers().map((m) => m.id),
+            label,
+          ).toEqual(step.stored);
+        }
+      });
+    }
   });
 
   it('pops clip page requests as undefined when none is queued', () => {

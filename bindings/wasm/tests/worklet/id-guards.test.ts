@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 /**
  * Ids the engine accepts are the ids the caller named.
  *
@@ -74,9 +75,33 @@ describe('marker ppq and id carry the domain the native setter enforces', () => 
     expect(() => resolveMarkerSet([{ ppq: 480, id: 0 }], 1)).toThrow(RangeError);
   });
 
-  it('assigns an id-less marker an id the list does not already carry', () => {
-    const { resolved, nextMarkerId } = resolveMarkerSet([{ ppq: 0 }, { ppq: 480, id: 1 }], 1);
-    expect(resolved.map((marker) => marker.id)).toEqual([2, 1]);
-    expect(nextMarkerId).toBe(3);
+  it('assigns ids by the shared marker id allocation cases', () => {
+    const cases: Array<{
+      name: string;
+      steps: Array<{ set: Array<{ ppq: number; id?: number }>; ids?: number[]; refused?: boolean }>;
+    }> = JSON.parse(
+      readFileSync(
+        new URL('../../../../tests/conformance/marker_id_allocation.json', import.meta.url),
+        'utf8',
+      ),
+    ).cases;
+    expect(cases.length).toBeGreaterThan(0);
+    for (const { name, steps } of cases) {
+      // The worklet's store follows the setter, so threading the counter is the whole state.
+      let next = 1;
+      for (const [index, step] of steps.entries()) {
+        const label = `${name}, step ${index}`;
+        if (step.refused) {
+          expect(() => resolveMarkerSet(step.set, next), label).toThrow(RangeError);
+          continue;
+        }
+        const { resolved, nextMarkerId } = resolveMarkerSet(step.set, next);
+        expect(
+          resolved.map((marker) => marker.id),
+          label,
+        ).toEqual(step.ids);
+        next = nextMarkerId;
+      }
+    }
   });
 });

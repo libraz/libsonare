@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "description": "Marker id allocation shared by every engine marker setter. Each case runs its steps in order on one fresh engine. A step replaces the whole marker set with `set`; `ids` are the ids the setter returns, in the order given; `stored` are the stored ids in timeline order. A step with `refused: true` must be refused as an out-of-domain argument and leave the stored set and the counter as they were.",
+  "cases": [
+    {
+      "name": "id-less entries count up from 1",
+      "steps": [
+        { "set": [{ "ppq": 480 }, { "ppq": 0 }], "ids": [1, 2], "stored": [2, 1] }
+      ]
+    },
+    {
+      "name": "a higher explicit id moves the counter past it",
+      "steps": [
+        { "set": [{ "ppq": 0 }, { "ppq": 480, "id": 5 }], "ids": [1, 5], "stored": [1, 5] },
+        { "set": [{ "ppq": 0 }], "ids": [6], "stored": [6] }
+      ]
+    },
+    {
+      "name": "an id-less entry skips an id a later entry carries",
+      "steps": [
+        { "set": [{ "ppq": 0 }, { "ppq": 480, "id": 1 }], "ids": [2, 1], "stored": [2, 1] }
+      ]
+    },
+    {
+      "name": "an id is not reused after its marker is removed",
+      "steps": [
+        { "set": [{ "ppq": 0 }, { "ppq": 480 }, { "ppq": 960 }], "ids": [1, 2, 3], "stored": [1, 2, 3] },
+        { "set": [{ "ppq": 0, "id": 1 }], "ids": [1], "stored": [1] },
+        { "set": [{ "ppq": 0, "id": 1 }, { "ppq": 480 }], "ids": [1, 4], "stored": [1, 4] },
+        { "set": [], "ids": [], "stored": [] },
+        { "set": [{ "ppq": 0 }], "ids": [5], "stored": [5] }
+      ]
+    },
+    {
+      "name": "a duplicate explicit id is refused and changes nothing",
+      "steps": [
+        { "set": [{ "ppq": 0, "id": 1 }], "ids": [1], "stored": [1] },
+        { "set": [{ "ppq": 0, "id": 5 }, { "ppq": 480, "id": 5 }], "refused": true, "stored": [1] },
+        { "set": [{ "ppq": 0 }], "ids": [2], "stored": [2] }
+      ]
+    }
+  ]
+}
