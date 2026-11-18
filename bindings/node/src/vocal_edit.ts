@@ -10,6 +10,7 @@ import type {
   VocalErrorDetail,
   VocalHistory,
   VocalNote,
+  VocalNotesResult,
   VocalPitchEvaluation,
   VocalRange,
   VocalRangeInput,
@@ -167,10 +168,7 @@ function guardNative<T extends object>(native: T): T {
   });
 }
 
-function convertNotesResult(value: NativeNotes): {
-  notes: VocalNote[];
-  transitions: VocalTransition[];
-} {
+function convertNotesResult(value: NativeNotes): VocalNotesResult {
   return {
     notes: value.notes.map((note) => ({
       ...note,
@@ -244,7 +242,7 @@ export class VocalEditSession implements Disposable {
   ) {}
 
   /** Notes and transitions of the current state, copied. */
-  notes(): { notes: VocalNote[]; transitions: VocalTransition[] } {
+  notes(): VocalNotesResult {
     this.requireAlive();
     return convertNotesResult(this.native.notes());
   }
@@ -370,7 +368,7 @@ export class VocalEditDraft implements Disposable {
   ) {}
 
   /** Notes and transitions of the current state, copied. */
-  notes(): { notes: VocalNote[]; transitions: VocalTransition[] } {
+  notes(): VocalNotesResult {
     this.requireAlive();
     return convertNotesResult(this.native.notes());
   }
@@ -829,6 +827,7 @@ export type {
   VocalMergeOperation,
   VocalNote,
   VocalNoteEdit,
+  VocalNotesResult,
   VocalPitchEdit,
   VocalPitchEvaluation,
   VocalPitchPoint,

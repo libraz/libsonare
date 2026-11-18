@@ -140,6 +140,14 @@ export interface VocalTransition {
   curve: 'smoothstep';
 }
 
+/** Notes and transitions of a session or draft. */
+export interface VocalNotesResult {
+  /** Notes in source order. */
+  notes: VocalNote[];
+  /** Transitions between adjacent notes. */
+  transitions: VocalTransition[];
+}
+
 /** The pitch analysis a session was built from. */
 export interface VocalAnalysis {
   /** Source sample of the first analysis frame. */
