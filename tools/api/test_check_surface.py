@@ -1360,6 +1360,19 @@ class MetadataOnlyDocs(CheckerCase):
         self.assertIn("states only the catalog metadata", flagged["node field Gen.metaOnly"])
         self.assertIn("    metadata-only doc: 1", lines)
 
+    def test_a_member_inherited_from_a_dependency_is_not_compared(self):
+        lib = "bindings/node/node_modules/typescript/lib/lib.es5.d.ts"
+        self.add(
+            _rec(
+                "node", "field", "Err.stack", owner="Err", member="stack", has_doc=False, file=lib
+            ),
+            _rec("node", "field", "Err.code", owner="Err", member="code", has_doc=False),
+        )
+        _, lines = self.run_check("--surface", "node", "--check", "doc-comments")
+        flagged = [x.strip() for x in lines if x.strip().startswith("node field Err.")]
+        self.assertEqual([x.split(":")[0] for x in flagged], ["node field Err.code"])
+        self.assertTrue(any("declared in a dependency (node_modules)" in x for x in lines))
+
 
 class GeneratedCatalogDocs(CheckerCase):
     """A field generated from the catalog may be documented by catalog metadata alone."""

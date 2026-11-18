@@ -1900,7 +1900,14 @@ _GENERATED_CATALOG = frozenset({"MasteringProcessorParamMap"})
 
 
 def chk_doc_comments(ctx):
-    cands = recs(ctx, LANG, ("function", "method", "class", "type", "field", "export"))
+    every = recs(ctx, LANG, ("function", "method", "class", "type", "field", "export"))
+    # A member inherited from a dependency's declarations (Error.message) has no doc site here.
+    cands = [r for r in every if "/node_modules/" not in r.get("file", "")]
+    inherited = len(every) - len(cands)
+    if inherited:
+        ctx.not_compared["doc-comments"].append(
+            f"{inherited} members declared in a dependency (node_modules), which carry no doc here"
+        )
     generated = {
         _js_declaration(r)
         for r in cands
