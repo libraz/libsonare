@@ -15033,3 +15033,11 @@ old = "FileClipPageProvider.id"
 removed = "a clip names its provider by instance, not by id"
 rule = "construction"
 domain = "project"
+
+[[entry]]
+kind = "option"
+old = "Audio.fromBuffer(sampleRate)"
+changed = "required: the rate of the caller's samples has no default (was 48000)"
+domain = "core"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/core-audio.test.ts::requires the sample rate of the caller"

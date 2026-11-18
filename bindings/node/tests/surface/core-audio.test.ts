@@ -23,6 +23,15 @@ function expectInvalidState(read: () => unknown): void {
   expect((caught as SonareError).codeName).toBe('InvalidState');
 }
 
+describe('Audio.fromBuffer', () => {
+  it("requires the sample rate of the caller's samples", () => {
+    const fromBuffer = Audio.fromBuffer as (samples: Float32Array, sampleRate?: number) => Audio;
+    expect(() => fromBuffer(new Float32Array(16))).toThrow(
+      new TypeError('Audio.fromBuffer: sampleRate must be a number'),
+    );
+  });
+});
+
 describe('Audio getters', () => {
   it('reads data, length, sampleRate and durationSec as getters', () => {
     const samples = ramp();

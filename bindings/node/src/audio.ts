@@ -143,7 +143,7 @@ import type {
   TimbreResult,
 } from './types.js';
 import type { OptionsOf, ValidateOptions } from './validation.js';
-import { assertPositiveInteger } from './validation.js';
+import { assertPositiveInteger, assertSampleRate } from './validation.js';
 
 /**
  * The request an {@link Audio} method hands to its module function: the
@@ -213,10 +213,11 @@ export class Audio {
   }
 
   /**
-   * Wrap raw mono float samples as an {@link Audio}. `sampleRate` defaults to
-   * `48000` (the project default) when omitted.
+   * Wrap raw mono float samples as an {@link Audio}. `sampleRate` is the rate
+   * of the caller's samples and is required.
    */
-  static fromBuffer(samples: Float32Array, sampleRate = 48000): Audio {
+  static fromBuffer(samples: Float32Array, sampleRate: number): Audio {
+    assertSampleRate('Audio.fromBuffer', sampleRate);
     return new Audio(addon.Audio.fromBuffer(samples, sampleRate));
   }
 

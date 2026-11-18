@@ -27017,3 +27017,11 @@ old = "createOpfsClipPageProvider(engine)"
 removed = "createOpfsClipPageProvider(options) takes no engine; the clip names the provider instance"
 domain = "project"
 rule = "construction"
+
+[[entry]]
+kind = "option"
+old = "Audio.fromBuffer(sampleRate)"
+changed = "required: the rate of the caller's samples has no default (was 48000)"
+domain = "core"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/core-audio.test.ts::requires the sample rate of the caller"

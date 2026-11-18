@@ -431,10 +431,9 @@ export class Audio {
    * Create an Audio instance from raw sample data.
    *
    * @param samples - Mono float samples.
-   * @param sampleRate - Sample rate in Hz (default `48000`, matching the
-   *   Node/Python surfaces).
+   * @param sampleRate - Sample rate of the samples in Hz. Required.
    */
-  static fromBuffer(samples: Float32Array, sampleRate = 48000): Audio {
+  static fromBuffer(samples: Float32Array, sampleRate: number): Audio {
     validateAudioBuffer(samples, sampleRate);
     return new Audio(samples.slice(), sampleRate);
   }
