@@ -533,10 +533,12 @@ def cmd_project(args: argparse.Namespace) -> int:
     if subcommand == "compile":
         project = cast(Project, _load_project(args.input))
         try:
-            result = cast(Any, project).compile()
-            # The CLI JSON keeps the native front-end's summary keys, derived here
-            # from the diagnostics: a timeline exists exactly when no error does.
-            has_timeline = not any(d.severity == "error" for d in result.diagnostics)
+            # Compiled for the timeline only to report whether one was produced,
+            # as the native front-end reports the C result's own flag.
+            result = cast(Any, project).compile_timeline()
+            has_timeline = result.timeline is not None
+            if has_timeline:
+                result.timeline.close()
             if args.json:
                 print(
                     _strict_json_dumps(

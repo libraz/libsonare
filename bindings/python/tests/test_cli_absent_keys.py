@@ -153,31 +153,67 @@ def test_polyphonic_notes_omit_the_median_of_a_note_with_no_usable_pitch(
     assert "median_hz" not in unmeasured
 
 
-def test_project_compile_omits_the_target_of_a_project_wide_diagnostic(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
+def _compile_with(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    diagnostics: tuple[SimpleNamespace, ...],
+    *,
+    has_timeline: bool,
+) -> tuple[int, dict[str, Any], list[str]]:
+    closed: list[str] = []
+
+    class _Timeline:
+        def close(self) -> None:
+            closed.append("timeline")
+
     result = SimpleNamespace(
-        diagnostics=(
-            SimpleNamespace(code=1, severity="error", target_id=7, message="clip"),
-            SimpleNamespace(code=2, severity="error", target_id=None, message="project"),
-        ),
+        diagnostics=diagnostics, timeline=_Timeline() if has_timeline else None
     )
 
     class _Project:
-        def compile(self) -> SimpleNamespace:
+        def compile_timeline(self) -> SimpleNamespace:
             return result
 
         def close(self) -> None:
-            pass
+            closed.append("project")
 
     monkeypatch.setattr(_cli_project, "_load_project", lambda _path: _Project())
     args = argparse.Namespace(project_command="compile", input="p.json", json=True, output=None)
+    code = _cli_project.cmd_project(args)
+    return code, _json_out(capsys), closed
 
-    assert _cli_project.cmd_project(args) != 0
-    payload = _json_out(capsys)
-    assert payload["has_timeline"] is False
+
+def test_project_compile_omits_the_target_of_a_project_wide_diagnostic(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code, payload, _ = _compile_with(
+        monkeypatch,
+        capsys,
+        (
+            SimpleNamespace(code=1, severity="error", target_id=7, message="clip"),
+            SimpleNamespace(code=2, severity="error", target_id=None, message="project"),
+        ),
+        has_timeline=False,
+    )
+    assert code != 0
     assert payload["diagnostic_count"] == 2
     assert payload["messages"] == "clip\nproject"
     targeted, project_wide = payload["diagnostics"]
     assert targeted["target_id"] == 7
     assert "target_id" not in project_wide
+
+
+def test_project_compile_reports_the_timeline_it_got_not_one_inferred_from_severity(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    error = SimpleNamespace(code=1, severity="error", target_id=None, message="late")
+    code, payload, closed = _compile_with(monkeypatch, capsys, (error,), has_timeline=True)
+    assert payload["has_timeline"] is True
+    assert code == 0
+    assert closed == ["timeline", "project"]
+
+    code, payload, closed = _compile_with(monkeypatch, capsys, (), has_timeline=False)
+    assert payload["has_timeline"] is False
+    assert payload["diagnostic_count"] == 0
+    assert code != 0
+    assert closed == ["project"]
