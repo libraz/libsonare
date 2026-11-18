@@ -111,8 +111,10 @@ TEST_CASE("an out-of-range value is refused by name", "[playback][config]") {
   CHECK(mentions(refusal(R"({"target": {"kind": "speakers", "layout": "stereo",
                                "bassManagement": {"crossoverHz": 20}}})"),
                  "target.bassManagement.crossoverHz"));
+  CHECK(mentions(refusal(R"({"outputLimiter": {"ceilingDb": 0.5}})"), "outputLimiter.ceilingDb"));
+  // A sample-peak limiter's ceiling is dB, not dBTP: the true-peak spelling is an unknown key.
   CHECK(
-      mentions(refusal(R"({"outputLimiter": {"ceilingDbtp": 0.5}})"), "outputLimiter.ceilingDbtp"));
+      mentions(refusal(R"({"outputLimiter": {"ceilingDbtp": -1}})"), "outputLimiter.ceilingDbtp"));
   CHECK(mentions(refusal(R"({"room": {"preset": "cathedral"}})"), "room.preset"));
   CHECK(mentions(refusal(R"({"upmix": {"enabled": 1}})"), "upmix.enabled"));
 }
@@ -357,6 +359,38 @@ TEST_CASE("the document carries version 2 and an absent version reads as current
   CHECK(mentions(refusal(R"({"version": null})"), "version"));
 }
 
+TEST_CASE("an unset value is an absent key: null is refused and never written",
+          "[playback][config]") {
+  CHECK(mentions(refusal(R"({"loudness": {"programLufs": null}})"),
+                 "loudness.programLufs must be a number"));
+  CHECK(mentions(refusal(R"({"target": {"kind": "speakers", "layout": "stereo",)"
+                         R"( "speakers": {"left": {"distanceM": null}}}})"),
+                 "distanceM must be a number"));
+  CHECK(mentions(refusal(R"({"input": {"layout": "stereo", "channelMap": null}})"),
+                 "input.channelMap must be an array"));
+
+  RendererConfig speakers;
+  REQUIRE_NOTHROW(
+      speakers = parse_renderer_config(R"({"target": {"kind": "speakers", "layout": "stereo"}})"));
+  const std::string unset = serialize_renderer_config(speakers);
+  CHECK_FALSE(mentions(unset, "null"));
+  CHECK_FALSE(mentions(unset, "programLufs"));
+  CHECK_FALSE(mentions(unset, "distanceM"));
+  CHECK_FALSE(mentions(unset, "channelMap"));
+
+  RendererConfig set;
+  REQUIRE_NOTHROW(set = parse_renderer_config(
+                      R"({"input": {"layout": "stereo", "channelMap": ["right", "left"]},)"
+                      R"( "target": {"kind": "speakers", "layout": "stereo",)"
+                      R"( "speakers": {"left": {"distanceM": 2}}},)"
+                      R"( "loudness": {"programLufs": -20}})"));
+  const std::string given = serialize_renderer_config(set);
+  CHECK(mentions(given, "\"channelMap\":[\"right\",\"left\"]"));
+  CHECK(mentions(given, "\"distanceM\":2"));
+  CHECK(mentions(given, "\"programLufs\":-20"));
+  CHECK(serialize_renderer_config(parse_renderer_config(given)) == given);
+}
+
 TEST_CASE("an earlier key spelling is refused by name", "[playback][config]") {
   const auto earlier = [](const std::string& json, const std::string& path,
                           const std::string& replacement) {
@@ -366,7 +400,7 @@ TEST_CASE("an earlier key spelling is refused by name", "[playback][config]") {
   earlier(R"({"lfe_mix_db": 0})", "lfe_mix_db", "lfeMixDb");
   earlier(R"({"night_mode": {"amount": 0.5}})", "night_mode", "nightMode");
   earlier(R"({"output_limiter": {"enabled": true}})", "output_limiter", "outputLimiter");
-  earlier(R"({"outputLimiter": {"ceiling_db": -1}})", "outputLimiter.ceiling_db", "ceilingDbtp");
+  earlier(R"({"outputLimiter": {"ceiling_db": -1}})", "outputLimiter.ceiling_db", "ceilingDb");
   earlier(R"({"upmix": {"center_width": 0.3}})", "upmix.center_width", "centerWidth");
   earlier(R"({"input": {"layout": "stereo", "channel_map": null}})", "input.channel_map",
           "channelMap");

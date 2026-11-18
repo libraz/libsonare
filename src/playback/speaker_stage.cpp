@@ -99,7 +99,7 @@ void SpeakerStage::prepare(double sample_rate, int max_block_size, ChannelLayout
 
   // Distance delay = (max distance among the speakers with one - this speaker's
   // distance) / speed of sound. A speaker without `distance_m` gets no delay,
-  // matching "null = no compensation".
+  // matching an absent `distanceM` (no compensation).
   double max_distance = 0.0;
   bool any_distance = false;
   for (int p = 0; p < m.plane_count; ++p) {

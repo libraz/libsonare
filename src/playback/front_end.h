@@ -35,7 +35,7 @@ struct LoudnessGain {
   bool clamped = false;
 };
 
-/// `target - program` clamped to [-40, +12] dB; 0 when program is null.
+/// `target - program` clamped to [-40, +12] dB; 0 when program is absent.
 LoudnessGain compute_loudness_gain(const RealtimeConfig& config) noexcept;
 
 class FrontEnd {

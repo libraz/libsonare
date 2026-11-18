@@ -136,7 +136,7 @@ constexpr ChannelLayout to_channel_layout(InputLayout layout) noexcept {
 
 /// Prepare half of `target.speakers.<role>`.
 struct SpeakerPrepare {
-  bool has_distance = false;  ///< false: `distance_m` is null (no compensation)
+  bool has_distance = false;  ///< false: `distanceM` is absent (no compensation)
   float distance_m = 0.0f;    ///< [0.1, 30]
   SpeakerSize size = SpeakerSize::Large;
 };
@@ -172,7 +172,7 @@ struct RealtimeConfig {
   float upmix_front_ambience = 0.5f;  ///< [0, 1]
   bool upmix_lfe_from_upmix = false;
   float dialogue_level_db = 0.0f;  ///< [-12, 12]
-  bool has_program_lufs = false;   ///< false: `loudness.programLufs` is null
+  bool has_program_lufs = false;   ///< false: `loudness.programLufs` is absent
   float program_lufs = -24.0f;     ///< [-70, 0]
   float target_lufs = -24.0f;      ///< [-40, -5]
   float night_amount = 0.0f;       ///< [0, 1]

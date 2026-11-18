@@ -47,7 +47,7 @@ constexpr EarlierKey kEarlierKeys[] = {
     {"mix_db", "mixDb"},
     {"head_tracking", "headTracking"},
     {"output_limiter", "outputLimiter"},
-    {"ceiling_db", "ceilingDbtp"},
+    {"ceiling_db", "ceilingDb"},
 };
 
 struct EarlierRole {
@@ -179,8 +179,8 @@ void parse_input(const Value& input, PrepareConfig& prepare) {
     }
   }
   const Value* map = input.find("channelMap");
-  if (map == nullptr || map->is_null()) return;
-  if (!map->is_array()) fail("input.channelMap must be an array or null");
+  if (map == nullptr) return;
+  if (!map->is_array()) fail("input.channelMap must be an array");
   if (prepare.input_layout == InputLayout::Auto) {
     fail("input.channelMap requires a fixed input.layout");
   }
@@ -210,8 +210,8 @@ void parse_speaker(const Value& speaker, SpeakerRole role, RendererConfig& confi
   check_keys(speaker, path, {"distanceM", "trimDb", "size"});
   SpeakerPrepare& prepare = config.prepare.speakers[static_cast<size_t>(role)];
   if (const Value* distance = speaker.find("distanceM")) {
-    prepare.has_distance = !distance->is_null();
-    if (prepare.has_distance) prepare.distance_m = read_float(*distance, path + ".distanceM");
+    prepare.has_distance = true;
+    prepare.distance_m = read_float(*distance, path + ".distanceM");
   }
   if (const Value* trim = speaker.find("trimDb")) {
     config.realtime.trim_db[static_cast<size_t>(role)] = read_float(*trim, path + ".trimDb");
@@ -310,8 +310,8 @@ void parse_sections(const Value& root, RendererConfig& config) {
   if (const Value* loudness = root.find("loudness")) {
     check_keys(*loudness, "loudness", {"programLufs", "targetLufs"});
     if (const Value* v = loudness->find("programLufs")) {
-      rt.has_program_lufs = !v->is_null();
-      if (rt.has_program_lufs) rt.program_lufs = read_float(*v, "loudness.programLufs");
+      rt.has_program_lufs = true;
+      rt.program_lufs = read_float(*v, "loudness.programLufs");
     }
     if (const Value* v = loudness->find("targetLufs")) {
       rt.target_lufs = read_float(*v, "loudness.targetLufs");
@@ -347,12 +347,12 @@ void parse_sections(const Value& root, RendererConfig& config) {
     }
   }
   if (const Value* limiter = root.find("outputLimiter")) {
-    check_keys(*limiter, "outputLimiter", {"enabled", "ceilingDbtp"});
+    check_keys(*limiter, "outputLimiter", {"enabled", "ceilingDb"});
     if (const Value* v = limiter->find("enabled")) {
       rt.limiter_enabled = read_bool(*v, "outputLimiter.enabled");
     }
-    if (const Value* v = limiter->find("ceilingDbtp")) {
-      rt.limiter_ceiling_db = read_float(*v, "outputLimiter.ceilingDbtp");
+    if (const Value* v = limiter->find("ceilingDb")) {
+      rt.limiter_ceiling_db = read_float(*v, "outputLimiter.ceilingDb");
     }
   }
 }
@@ -454,9 +454,9 @@ std::string serialize_renderer_config(const RendererConfig& config) {
   const RealtimeConfig& rt = config.realtime;
   std::string out = "{\"version\":2,\"input\":{\"layout\":\"";
   out += input_layout_name(p.input_layout);
-  out += "\",\"channelMap\":";
+  out += '"';
   if (p.has_channel_map && p.input_layout != InputLayout::Auto) {
-    out += '[';
+    out += ",\"channelMap\":[";
     const int count = channel_count(to_channel_layout(p.input_layout));
     for (int i = 0; i < count; ++i) {
       if (i > 0) out += ',';
@@ -465,8 +465,6 @@ std::string serialize_renderer_config(const RendererConfig& config) {
       out += '"';
     }
     out += ']';
-  } else {
-    out += "null";
   }
   out += "},\"target\":{\"kind\":\"";
   const bool speakers = p.target_kind == TargetKind::Speakers;
@@ -488,9 +486,9 @@ std::string serialize_renderer_config(const RendererConfig& config) {
       first = false;
       out += '"';
       out += speaker_role_name(role);
-      out += "\":{\"distanceM\":";
-      out += sp.has_distance ? float_text(sp.distance_m) : std::string("null");
-      out += ",\"trimDb\":" + float_text(rt.trim_db[static_cast<size_t>(role)]);
+      out += "\":{";
+      if (sp.has_distance) out += "\"distanceM\":" + float_text(sp.distance_m) + ',';
+      out += "\"trimDb\":" + float_text(rt.trim_db[static_cast<size_t>(role)]);
       out += ",\"size\":\"";
       out += sp.size == SpeakerSize::Small ? "small" : "large";
       out += "\"}";
@@ -510,9 +508,9 @@ std::string serialize_renderer_config(const RendererConfig& config) {
   out += ",\"lfeFromUpmix\":";
   out += bool_text(rt.upmix_lfe_from_upmix);
   out += "},\"dialogueLevelDb\":" + float_text(rt.dialogue_level_db);
-  out += ",\"loudness\":{\"programLufs\":";
-  out += rt.has_program_lufs ? float_text(rt.program_lufs) : std::string("null");
-  out += ",\"targetLufs\":" + float_text(rt.target_lufs);
+  out += ",\"loudness\":{";
+  if (rt.has_program_lufs) out += "\"programLufs\":" + float_text(rt.program_lufs) + ',';
+  out += "\"targetLufs\":" + float_text(rt.target_lufs);
   out += "},\"nightMode\":{\"amount\":" + float_text(rt.night_amount);
   out += "},\"room\":{\"preset\":\"";
   out += room_preset_name(p.room_preset);
@@ -523,7 +521,7 @@ std::string serialize_renderer_config(const RendererConfig& config) {
   out += bool_text(rt.head_tracking_enabled);
   out += "},\"outputLimiter\":{\"enabled\":";
   out += bool_text(rt.limiter_enabled);
-  out += ",\"ceilingDbtp\":" + float_text(rt.limiter_ceiling_db);
+  out += ",\"ceilingDb\":" + float_text(rt.limiter_ceiling_db);
   out += "}}";
   return out;
 }
@@ -583,7 +581,7 @@ void validate_renderer_config(const RendererConfig& config) {
   check_range(rt.target_lufs, -40.0f, -5.0f, "loudness.targetLufs");
   check_range(rt.night_amount, 0.0f, 1.0f, "nightMode.amount");
   check_range(rt.room_mix_db, -30.0f, 6.0f, "room.mixDb");
-  check_range(rt.limiter_ceiling_db, -12.0f, 0.0f, "outputLimiter.ceilingDbtp");
+  check_range(rt.limiter_ceiling_db, -12.0f, 0.0f, "outputLimiter.ceilingDb");
 }
 
 std::string first_prepare_difference(const PrepareConfig& current, const PrepareConfig& next) {
