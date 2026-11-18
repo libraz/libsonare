@@ -53,6 +53,7 @@ const methodShapes = [
   'canSetStripSidechain',
   'clearPartRig',
   'configureCapture',
+  'configureMeter',
   'importExternalSeparatedStem',
   'importExternalStems',
   'moveClip',
