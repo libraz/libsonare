@@ -40,7 +40,8 @@ def _target(e: dict) -> str:
         return f"`{_cell(e['new'])}`"
     if "removed" in e:
         return "removed"
-    return _cell(str(e.get("changed", "")))
+    text = _cell(str(e.get("changed", "")))
+    return f"`{_cell(e['to'])}`: {text}" if "to" in e else text
 
 
 def _old(surface: str, e: dict) -> str:

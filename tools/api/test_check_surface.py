@@ -247,6 +247,158 @@ class LedgerValidation(CheckerCase):
         self.assertEqual(code, 0, "\n".join(lines))
 
 
+class LedgerTo(LedgerValidation):
+    def test_to_without_changed(self):
+        self.assertProblem("to is only for changed entries; a plain rename is new", to="find_bpm")
+
+    def test_to_naming_old(self):
+        self.assertProblem(
+            "to must name the member the changed one became",
+            new=None,
+            changed="x",
+            test="tools/api/testdata/changed_case.txt::detect_bpm requires",
+            to="detect_bpm",
+        )
+
+
+def _sig_rec(surface, kind, name, *params, **kw):
+    sig = {"params": [{"name": p, "type": "number", "optional": False} for p in params]}
+    return _rec(surface, kind, name, sigs=[sig], **kw)
+
+
+class ConstructorKeys(unittest.TestCase):
+    """A public constructor is a method key a ledger row can name; a private one is not."""
+
+    def test_public_constructor_is_keyed_and_private_is_not(self):
+        lookup = check_surface.build_lookup(
+            [
+                _rec("node", "class", "Engine", ctor_private=False),
+                _rec("node", "class", "Timeline", ctor_private=True),
+            ]
+        )
+        self.assertIn(("node", "method", "Engine.constructor", None), lookup)
+        self.assertNotIn(("node", "method", "Timeline.constructor", None), lookup)
+
+
+class LedgerAgainstBaseline(CheckerCase):
+    """Row targets at tip, row old names at the base release, and the completeness direction."""
+
+    CHANGED = 'test = "tools/api/testdata/changed_case.txt::detect_bpm requires"\n'
+
+    def setUp(self):
+        super().setUp()
+        self.base = copy.deepcopy(BASE)
+        self.base["records"] += [
+            _rec("wasm", "function", "getBpm", sigs=[]),
+            _rec("node", "function", "getBpm", sigs=[]),
+            _rec("python", "function", "bpm_legacy", sigs=[]),
+            _rec("cli-native", "flag", "bpm --verbose", owner="bpm", member="verbose"),
+        ]
+
+    def run_base(self, *extra, ledger_dir=None):
+        path = self.dir / "base.json"
+        path.write_text(json.dumps(self.base), encoding="utf-8")
+        return self.run_check("--baseline-inventory-file", str(path), *extra, ledger_dir=ledger_dir)
+
+    def wasm_row(self, body, domain="analysis"):
+        fixture = (TD / "ledgers" / "wasm.toml").read_text(encoding="utf-8")
+        return self.ledgers(
+            wasm=f'{fixture}\n[[entry]]\ndomain = "{domain}"\nrule = "getters"\n' + body,
+            node=(TD / "ledgers" / "node.toml").read_text(encoding="utf-8"),
+            python=(TD / "ledgers" / "python.toml").read_text(encoding="utf-8"),
+            cli=(TD / "ledgers" / "cli.toml").read_text(encoding="utf-8"),
+        )
+
+    def test_fixture_is_green_against_its_baseline(self):
+        code, lines = self.run_base()
+        self.assertEqual(code, 0, "\n".join(lines))
+        self.assertIn("v1.10.0 names gone with no ledger row: 0", lines)
+
+    def test_without_a_baseline_both_directions_are_not_compared(self):
+        _, lines = self.run_check()
+        self.assertTrue(any("not compared: ledger old names against v1.10.0" in x for x in lines))
+        self.assertTrue(any("not compared: v1.10.0 names gone with no row" in x for x in lines))
+
+    def test_old_name_absent_from_the_base_release_fails(self):
+        self.base["records"] = [r for r in self.base["records"] if r["name"] != "bpm_legacy"]
+        code, lines = self.run_base()
+        self.assertEqual(code, 1)
+        self.assertIn("  python function bpm_legacy: old name not in v1.10.0", lines)
+
+    def test_changed_name_absent_without_to_fails(self):
+        self.base["records"].append(_rec("wasm", "function", "tempo", sigs=[]))
+        led = self.wasm_row('kind = "function"\nold = "tempo"\nchanged = "x"\n' + self.CHANGED)
+        code, lines = self.run_base(ledger_dir=led)
+        self.assertEqual(code, 1)
+        self.assertIn(
+            "  wasm function tempo: changed name not present;"
+            " a renamed member names its target in to",
+            lines,
+        )
+
+    def test_changed_with_to_names_the_target(self):
+        self.base["records"].append(_rec("wasm", "function", "tempo", sigs=[]))
+        row = 'kind = "function"\nold = "tempo"\nchanged = "x"\n' + self.CHANGED
+        code, lines = self.run_base(ledger_dir=self.wasm_row(row + 'to = "detectBpm"\n'))
+        self.assertEqual(code, 0, "\n".join(lines))
+        code, lines = self.run_base(ledger_dir=self.wasm_row(row + 'to = "findBpm"\n'))
+        self.assertEqual(code, 1)
+        self.assertIn("  wasm function tempo: to name findBpm not present", lines)
+
+    def test_getter_claim_needs_an_accessor(self):
+        row = 'kind = "method"\nold = "Session.destroy"\nchanged = "readonly getter now"\n'
+        led = self.wasm_row(row + self.CHANGED, domain="engine")
+        code, lines = self.run_base(ledger_dir=led)
+        self.assertEqual(code, 1)
+        self.assertIn(
+            "  wasm method Session.destroy: text claims a getter but Session.destroy is not one",
+            lines,
+        )
+        for r in self.inv["records"]:
+            if r["surface"] == "wasm" and r["name"] == "Session.destroy":
+                r["ts_kind"] = "accessor"
+        code, lines = self.run_base(ledger_dir=led)
+        self.assertEqual(code, 0, "\n".join(lines))
+
+    def test_a_vanished_name_with_no_row_is_an_orphan(self):
+        self.base["records"].append(_rec("node", "field", "BpmRequest.window"))
+        code, lines = self.run_base()
+        self.assertEqual(code, 1)
+        self.assertIn("v1.10.0 names gone with no ledger row: 1", lines)
+        self.assertIn("  node field BpmRequest.window", lines)
+
+    def test_a_removed_owner_speaks_for_its_members(self):
+        self.base["records"].append(_rec("python", "field", "bpm_legacy.window"))
+        code, lines = self.run_base()
+        self.assertEqual(code, 0, "\n".join(lines))
+
+    def test_a_plain_rename_claims_its_members_moved(self):
+        self.base["records"].append(_rec("wasm", "option", "getBpm(window)", owner="getBpm"))
+        code, lines = self.run_base()
+        self.assertEqual(code, 1)
+        self.assertIn("  wasm option getBpm(window)", lines)
+
+    def test_a_positional_parameter_rename_needs_no_row_while_the_count_survives(self):
+        self.base["records"] = [
+            r for r in self.base["records"] if (r["surface"], r["name"]) != ("wasm", "getBpm")
+        ]
+        self.base["records"] += [
+            _sig_rec("wasm", "function", "getBpm", "input"),
+            _rec("wasm", "option", "getBpm(input)", owner="getBpm"),
+        ]
+        code, lines = self.run_base()
+        self.assertEqual(code, 0, "\n".join(lines))
+        self.assertIn(
+            "  not compared: wasm option, 1 names (a TypeScript caller passes them by position"
+            " and the parameter count survived)",
+            lines,
+        )
+        self.base["records"][-2] = _sig_rec("wasm", "function", "getBpm", "input", "rate")
+        code, lines = self.run_base()
+        self.assertEqual(code, 1)
+        self.assertIn("  wasm option getBpm(input)", lines)
+
+
 class Conventions(CheckerCase):
     ZERO_FAIL = "    FAIL options-struct:struct-size: no candidates on the selected surfaces; its extractor found nothing"
 
@@ -257,7 +409,9 @@ class Conventions(CheckerCase):
             self.assertEqual(code, 1)
             self.assertIn("  check options-struct:struct-size: checked 0, violations 0", lines)
             self.assertIn(self.ZERO_FAIL, lines)
-            self.assertFalse(any(x.lstrip().startswith("not compared:") for x in lines))
+            self.assertFalse(
+                any(x.lstrip().startswith("not compared:") and "v1.10.0" not in x for x in lines)
+            )
 
     def test_c_free_accepts_the_plain_buffer_set_and_names_the_rest(self):
         def free_fn(name, param_type):
@@ -998,6 +1152,10 @@ class UpgradeNotes(unittest.TestCase):
             text.index("## Title of sample-rate-required"), text.index("## Title of individual")
         )
         self.assertNotIn("## Title of teardown", text)
+
+    def test_changed_row_leads_with_its_target(self):
+        e = {"old": "a", "changed": "takes an object", "to": "b"}
+        self.assertEqual(upgrade_notes._target(e), "`b`: takes an object")
 
     def test_entry_order_does_not_change_output(self):
         with tempfile.TemporaryDirectory() as tmp:

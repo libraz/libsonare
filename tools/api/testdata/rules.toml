@@ -121,6 +121,11 @@ title = "Title of one-positional-form"
 summary = "Summary of one-positional-form."
 
 [[rule]]
+slug = "midi-module-functions"
+title = "Title of midi-module-functions"
+summary = "Summary of midi-module-functions."
+
+[[rule]]
 slug = "options-struct"
 title = "Title of options-struct"
 summary = "Summary of options-struct."

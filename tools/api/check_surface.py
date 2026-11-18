@@ -117,6 +117,8 @@ ALLOW_CATEGORIES = ("librosa-mirror", "platform", "wire-format", "hot-path")
 EXAMPLE_SURFACES = ("wasm", "node", "python", "c", "cli")
 
 DEFAULT_LEDGER_DIR = HERE / "migration"
+# The release the ledgers migrate from: every row's old name existed there.
+BASELINE_TAG = "v1.10.0"
 DEFAULT_RULES = HERE / "migration" / "rules.toml"
 DEFAULT_MIRRORS = HERE / "librosa_mirrors.toml"
 DEFAULT_ALLOWLIST = HERE / "surface_allowlist.toml"
@@ -251,6 +253,7 @@ _LEDGER_KEYS = {
     "new",
     "removed",
     "changed",
+    "to",
     "test",
     "domain",
     "rule",
@@ -305,6 +308,11 @@ def validate_ledger(entries: list[LedgerEntry], slugs: set[str], root: Path) -> 
                     bad.append(f"test file {tpath} does not contain {sub!r}")
         elif "test" in e:
             bad.append("test is only for changed entries")
+        if "to" in e:
+            if "changed" not in e:
+                bad.append("to is only for changed entries; a plain rename is new")
+            elif not isinstance(e["to"], str) or not e["to"] or e["to"] == e.get("old"):
+                bad.append("to must name the member the changed one became")
         if "frontend" in e:
             if le.surface != "cli":
                 bad.append("frontend is only allowed in cli.toml")
@@ -361,7 +369,8 @@ def ledger_domains(entries: list[LedgerEntry], frozen: dict[str, dict]):
         if not le.valid or e["kind"] in ("command", "flag"):
             continue
         old_key = _ledger_key(e["old"])
-        new_key = _ledger_key(e["new"]) if "new" in e else None
+        target = e.get("new") or e.get("to")
+        new_key = _ledger_key(target) if target else None
         expected = frozen.get(old_key) or (frozen.get(new_key) if new_key else None)
         if expected and e["domain"] != expected["domain"]:
             problems.append(
@@ -380,9 +389,33 @@ def ledger_surfaces(le: LedgerEntry) -> list[str]:
     return [f"cli-{fe}"] if fe else ["cli-python", "cli-native"]
 
 
-def check_ledger(entries, lookup, selected):
-    """Return (failures, changed) for valid entries on the selected surfaces."""
+# A changed text that opens by calling the member a getter (TS) or property (Python).
+_GETTER_CLAIM = {
+    "wasm": r"^(?:an? |readonly )*(getter)\b",
+    "node": r"^(?:an? |readonly )*(getter)\b",
+    "python": r"^(?:an? |readonly )*(property)\b",
+}
+
+
+def _is_getter(r: dict | None) -> bool:
+    if r is None:
+        return False
+    if r["surface"] == "python":
+        return any("property" in d for d in r.get("decorators", []))
+    return r.get("ts_kind") == "accessor"
+
+
+def check_ledger(entries, lookup, selected, by_key=None, baseline=None):
+    """Return (failures, changed) for valid entries on the selected surfaces.
+
+    ``by_key`` maps a lookup key to its record, for the getter claim; ``baseline``
+    is the lookup of the release the ledger migrates from, or None when it could
+    not be built.
+    """
     failures, changed = [], []
+    by_key = by_key or {}
+    # A changed member may change kind with it (a method that became a field).
+    named = {(s, n, e) for (s, _k, n, e) in lookup}
     for le in entries:
         if not le.valid:
             continue
@@ -394,18 +427,34 @@ def check_ledger(entries, lookup, selected):
             if s not in selected:
                 continue
             here = (s, kind, old, entry) in lookup
-            fail = None
+            msgs = []
+            if baseline is not None and (s, kind, old, entry) not in baseline:
+                msgs.append(f"old name not in {BASELINE_TAG}")
             if "removed" in e:
                 if here:
-                    fail = "removed name still present"
+                    msgs.append("removed name still present")
             elif "new" in e:
-                msgs = []
                 if here:
                     msgs.append("old name still present")
                 if (s, kind, e["new"], entry) not in lookup:
                     msgs.append(f"new name {e['new']} not present")
-                fail = "; ".join(msgs) or None
             else:
+                target = e.get("to", old)
+                if "to" in e:
+                    if (s, old, entry) in named:
+                        msgs.append("old name still present")
+                    if (s, target, entry) not in named:
+                        msgs.append(f"to name {target} not present")
+                elif (s, old, entry) not in named:
+                    msgs.append("changed name not present; a renamed member names its target in to")
+                claim = _GETTER_CLAIM.get(s)
+                m = claim and re.match(claim, e["changed"])
+                if m and (s, target, entry) in named:
+                    rec = by_key.get((s, kind, target, entry)) or by_key.get(
+                        (s, "method", target, entry)
+                    )
+                    if not _is_getter(rec):
+                        msgs.append(f"text claims a {m.group(1)} but {target} is not one")
                 changed.append(
                     {
                         "surface": s,
@@ -415,17 +464,106 @@ def check_ledger(entries, lookup, selected):
                         "text": e["changed"],
                     }
                 )
-            if fail:
+            if msgs:
                 failures.append(
                     {
                         "surface": s,
                         "kind": kind,
                         "name": old + tag,
                         "domain": e["domain"],
-                        "message": fail,
+                        "message": "; ".join(msgs),
                     }
                 )
     return failures, changed
+
+
+# Surfaces whose callers pass parameters by position: a renamed parameter breaks no call,
+# so its old name needs no row as long as the call shape (the parameter count) survives.
+POSITIONAL_SURFACES = {"c": "C", "wasm": "TypeScript", "node": "TypeScript"}
+
+
+def _arities(records) -> dict:
+    """(surface, callable, entry) -> the parameter counts of its signatures."""
+    out = collections.defaultdict(set)
+    for r in records:
+        if r["kind"] not in ("function", "method", "class") or not r.get("sigs"):
+            continue
+        name = f"{r['name']}.constructor" if r["kind"] == "class" else r["name"]
+        for e in (r["entries"] or ["."]) if r["surface"] == "wasm" else [None]:
+            out[(r["surface"], name, e)] |= {len(sig["params"]) for sig in r["sigs"]}
+    return out
+
+
+def _owner_names(kind: str, name: str) -> list[str]:
+    """Names whose ledger row speaks for this one, innermost first."""
+    out = []
+    if kind == "flag":
+        return [name.split(" --", 1)[0]]
+    m = re.match(r"^(.*)\((\w+)\)$", name)
+    base = m.group(1) if m else name
+    if m:
+        out.append(base)
+    m = re.match(r"^([\w.]+)=", base)
+    if m:
+        base = m.group(1)
+        out.append(base)
+    parts = base.split(".")
+    out += [".".join(parts[:i]) for i in range(len(parts) - 1, 0, -1)]
+    return out
+
+
+def check_completeness(entries, lookup, baseline, selected, base_records=(), records=()):
+    """Return (orphans, exempt): baseline names gone at tip that no row accounts for.
+
+    A name is accounted for by its own row of the same kind, or by a row on an owner:
+    a removed or changed owner speaks for its members, while a plain rename (new)
+    claims the members moved with it, so each must exist under the new owner.
+    """
+    rows = collections.defaultdict(list)
+    for le in entries:
+        if not le.valid:
+            continue
+        for s in ledger_surfaces(le):
+            rows[(s, le.data["old"])].append(le.data)
+    present = {(s, n) for (s, _k, n, _e) in lookup}
+    was, now = _arities(base_records), _arities(records)
+    renamed = {
+        (s, le.data["old"]): le.data.get("new") or le.data.get("to")
+        for le in entries
+        if le.valid and (le.data.get("new") or le.data.get("to"))
+        for s in ledger_surfaces(le)
+    }
+    orphans, exempt = [], collections.Counter()
+    for key in sorted(baseline - lookup, key=lambda k: (k[0], k[1], k[2], k[3] or "")):
+        s, kind, name, entry = key
+        if s not in selected:
+            continue
+        m = re.match(r"^(.*)\((\w+)\)$", name) if kind == "option" else None
+        if m and s in POSITIONAL_SURFACES:
+            fn = m.group(1)
+            before = was.get((s, fn, entry), set())
+            after = now.get((s, renamed.get((s, fn), fn), entry), set())
+            if before and before <= after:
+                exempt[(s, kind)] += 1
+                continue
+        if any(r["kind"] == kind for r in rows[(s, name)]):
+            continue
+        covered = False
+        for o in _owner_names(kind, name):
+            if not rows[(s, o)]:
+                continue
+            hit = rows[(s, o)][0]
+            covered = "new" not in hit or (s, hit["new"] + name[len(o) :]) in present
+            break
+        if not covered:
+            orphans.append(
+                {
+                    "surface": s,
+                    "kind": kind,
+                    "name": name + (f" [{entry}]" if entry and entry != "." else ""),
+                }
+            )
+    return orphans, exempt
 
 
 # ------------------------------------------------------------------ checks
@@ -1374,13 +1512,18 @@ def selected_surfaces(arg: str | None) -> tuple[str, ...]:
 
 
 def build_lookup(records):
+    """Keys every record by (surface, kind, name, entry); a public constructor is a method."""
     lookup = set()
     for r in records:
-        if r["surface"] == "wasm":
-            for e in r["entries"] or ["."]:
-                lookup.add((r["surface"], r["kind"], r["name"], e))
-        else:
-            lookup.add((r["surface"], r["kind"], r["name"], None))
+        names = [(r["kind"], r["name"])]
+        if r["kind"] == "class" and not r.get("ctor_private"):
+            names.append(("method", f"{r['name']}.constructor"))
+        for kind, name in names:
+            if r["surface"] == "wasm":
+                for e in r["entries"] or ["."]:
+                    lookup.add((r["surface"], kind, name, e))
+            else:
+                lookup.add((r["surface"], kind, name, None))
     return lookup
 
 
@@ -1506,9 +1649,47 @@ def run(args) -> tuple[int, list[str], dict]:
         return not matches or any(m in str(le.data.get("old", "")) for m in matches)
 
     lookup = build_lookup(records)
-    lfail, changed = check_ledger([e for e in entries if keep_entry(e)], lookup, selected)
+    by_key = {}
+    for r in records:
+        for e in (r["entries"] or ["."]) if r["surface"] == "wasm" else [None]:
+            by_key[(r["surface"], r["kind"], r["name"], e)] = r
+    if args.baseline_inventory_file:
+        base_inv = json.loads(Path(args.baseline_inventory_file).read_text(encoding="utf-8"))
+        why = ""
+    elif args.inventory_file:
+        base_inv, why = None, "the inventory was read from a file; pass --baseline-inventory-file"
+    else:
+        import inventory
+
+        base_inv, why = inventory.build_at_tag(root, BASELINE_TAG)
+    baseline = build_lookup(base_inv["records"]) if base_inv else None
+    lfail, changed = check_ledger(
+        [e for e in entries if keep_entry(e)], lookup, selected, by_key, baseline
+    )
     out.append(f"Ledger failures: {len(lfail)}")
     out += [f"  {line_of(f)}" for f in sorted(lfail, key=line_of)]
+    if baseline is None:
+        out.append(f"  not compared: ledger old names against {BASELINE_TAG} ({why})")
+        out.append(f"  not compared: {BASELINE_TAG} names gone with no row ({why})")
+        orphans = []
+    elif want_domains or matches:
+        out.append(f"  not compared: {BASELINE_TAG} names gone with no row (--domain / --match)")
+        orphans = []
+    else:
+        orphans, exempt = check_completeness(
+            entries, lookup, baseline, selected, base_inv["records"], records
+        )
+        out.append(f"{BASELINE_TAG} names gone with no ledger row: {len(orphans)}")
+        out += [f"  {o['surface']} {o['kind']} {o['name']}" for o in orphans]
+        for (s, k), n in sorted(exempt.items()):
+            out.append(
+                f"  not compared: {s} {k}, {n} names (a {POSITIONAL_SURFACES[s]} caller passes"
+                " them by position and the parameter count survived)"
+            )
+        dom = {(r["surface"], r["kind"], r["name"]): r["domain"] for r in base_inv["records"]}
+        for o in orphans:
+            d = dom.get((o["surface"], o["kind"], o["name"].split(" [")[0]), "")
+            lfail.append({**o, "domain": d, "message": f"in {BASELINE_TAG}, gone, and no row"})
     out.append(f"Changed entries: {len(changed)}")
     out += [
         f"  {c['surface']} {c['kind']} {c['name']}: {c['text']}"
@@ -1653,6 +1834,11 @@ def parse_args(argv):
     ap.add_argument("--inventory", action="store_true", help="print the inventory as TSV and exit")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--inventory-file", type=Path)
+    ap.add_argument(
+        "--baseline-inventory-file",
+        type=Path,
+        help=f"the {BASELINE_TAG} inventory as JSON, instead of building it from the tag",
+    )
     ap.add_argument("--ledger-dir", type=Path, default=DEFAULT_LEDGER_DIR)
     ap.add_argument("--rules-file", type=Path, default=DEFAULT_RULES)
     ap.add_argument("--mirrors-file", type=Path, default=DEFAULT_MIRRORS)

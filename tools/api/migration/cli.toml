@@ -6,11 +6,14 @@
 #
 # Keys:
 #   kind     function | method | class | type | field | option | value | export | flag | command
-#   old      the 1.x public name, spelled as below
+#   old      the 1.x public name, spelled as below; it must exist in v1.10.0
 #   new      the 2.0.0 name (old must be absent, new present, same kind and entry)
 #   removed  true when the name is gone with no replacement (old must be absent)
-#   changed  one line saying what a caller must change when the name stays the same;
-#            requires test = "<file>::<case name substring>", which must exist
+#   changed  one line saying what a caller must change; requires
+#            test = "<file>::<case name substring>", which must exist. Without to,
+#            old must still be present (in any kind)
+#   to       with changed: the 2.0.0 name of a member renamed and reshaped at once
+#            (old must be absent, to present); a plain rename is new
 #   domain   core | analysis | effects | mastering | engine | project
 #   rule     a slug from tools/api/migration/rules.toml
 #   entry    WASM subpath ("./analysis", "./worklet", ...); omitted means "."
@@ -37,3 +40,38 @@
 # method entry with changed + test, not old/new.
 # A parameter that becomes a request field is an option entry with removed = true, plus a
 # changed entry (with test) on the function that now takes the request.
+[[entry]]
+kind = "flag"
+old = "analyze --no-hpss"
+changed = "harmonic-percussive separation is off by default; pass --hpss to turn it on"
+to = "analyze --hpss"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_option_analysis.py::test_analyze_hpss_is_opt_in"
+
+[[entry]]
+kind = "flag"
+old = "chords --triads-only"
+changed = "triads are the default; --with-seventh adds seventh chords"
+to = "chords --with-seventh"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_option_analysis.py::test_chords_option_flags_override_the_defaults"
+
+[[entry]]
+kind = "flag"
+old = "chords --nnls"
+changed = "use --chroma-method nnls"
+to = "chords --chroma-method"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_option_analysis.py::test_chords_option_flags_override_the_defaults"
+
+[[entry]]
+kind = "flag"
+old = "chords --use-hmm"
+changed = "HMM decoding is the default; --no-hmm turns it off"
+to = "chords --no-hmm"
+domain = "analysis"
+rule = "cli-front-end-parity"
+test = "bindings/python/tests/test_cli_option_analysis.py::test_chords_option_flags_override_the_defaults"

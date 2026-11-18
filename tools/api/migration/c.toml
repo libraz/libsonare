@@ -6,11 +6,14 @@
 #
 # Keys:
 #   kind     function | method | class | type | field | option | value | export | flag | command
-#   old      the 1.x public name, spelled as below
+#   old      the 1.x public name, spelled as below; it must exist in v1.10.0
 #   new      the 2.0.0 name (old must be absent, new present, same kind and entry)
 #   removed  true when the name is gone with no replacement (old must be absent)
-#   changed  one line saying what a caller must change when the name stays the same;
-#            requires test = "<file>::<case name substring>", which must exist
+#   changed  one line saying what a caller must change; requires
+#            test = "<file>::<case name substring>", which must exist. Without to,
+#            old must still be present (in any kind)
+#   to       with changed: the 2.0.0 name of a member renamed and reshaped at once
+#            (old must be absent, to present); a plain rename is new
 #   domain   core | analysis | effects | mastering | engine | project
 #   rule     a slug from tools/api/migration/rules.toml
 #   entry    WASM subpath ("./analysis", "./worklet", ...); omitted means "."
@@ -79,54 +82,6 @@ old = "sonare_vocal_available"
 removed = true
 domain = "core"
 rule = "abi-probes"
-
-[[entry]]
-kind = "function"
-old = "sonare_has_feature"
-changed = "new: returns 1 when the named capabilities features key is compiled in, 0 for an absent, unknown or NULL name"
-domain = "core"
-rule = "abi-probes"
-test = "tests/api/surface_core_test.cpp::sonare_has_feature agrees with every capabilities feature"
-
-[[entry]]
-kind = "export"
-old = "SONARE_ENGINE_ABI_VERSION"
-changed = "new: the engine ABI counter as a macro, equal to sonare_engine_abi_version()"
-domain = "core"
-rule = "abi-probes"
-test = "tests/api/surface_core_test.cpp::Each ABI counter accessor returns its macro"
-
-[[entry]]
-kind = "export"
-old = "SONARE_VERSION_MAJOR"
-changed = "now reachable from sonare_c.h through sonare_c_version.h"
-domain = "core"
-rule = "abi-probes"
-test = "tests/api/surface_core_test.cpp::Version macros are reachable from sonare_c.h"
-
-[[entry]]
-kind = "export"
-old = "SONARE_VERSION_MINOR"
-changed = "now reachable from sonare_c.h through sonare_c_version.h"
-domain = "core"
-rule = "abi-probes"
-test = "tests/api/surface_core_test.cpp::Version macros are reachable from sonare_c.h"
-
-[[entry]]
-kind = "export"
-old = "SONARE_VERSION_PATCH"
-changed = "now reachable from sonare_c.h through sonare_c_version.h"
-domain = "core"
-rule = "abi-probes"
-test = "tests/api/surface_core_test.cpp::Version macros are reachable from sonare_c.h"
-
-[[entry]]
-kind = "export"
-old = "SONARE_VERSION_STRING"
-changed = "now reachable from sonare_c.h through sonare_c_version.h"
-domain = "core"
-rule = "abi-probes"
-test = "tests/api/surface_core_test.cpp::Version macros are reachable from sonare_c.h"
 
 [[entry]]
 kind = "function"
@@ -511,13 +466,6 @@ rule = "high-pass"
 
 [[entry]]
 kind = "option"
-old = "sonare_detect_key_candidates_with_tuning(high_pass_hz)"
-new = "sonare_detect_key_candidates_with_tuning(chroma_high_pass_hz)"
-domain = "analysis"
-rule = "high-pass"
-
-[[entry]]
-kind = "option"
 old = "sonare_tuning_to_reference_hz(a4)"
 new = "sonare_tuning_to_reference_hz(a4_hz)"
 domain = "analysis"
@@ -626,21 +574,8 @@ rule = "pitch-semitones"
 
 [[entry]]
 kind = "option"
-old = "sonare_detect_key_candidates_with_tuning(tuning)"
-new = "sonare_detect_key_candidates_with_tuning(tuning_cents)"
-domain = "analysis"
-rule = "pitch-semitones"
-
-[[entry]]
-kind = "option"
-old = "sonare_detect_key_candidates_with_tuning(out_tuning)"
-new = "sonare_detect_key_candidates_with_tuning(out_tuning_cents)"
-domain = "analysis"
-rule = "pitch-semitones"
-
-[[entry]]
-kind = "option"
 old = "sonare_vector_normalize(norm_type)"
+to = "sonare_vector_normalize(norm)"
 changed = "norm_type is a SonareNormType (SONARE_NORM_MAX, _L1, _L2, _POWER); the ordinals are unchanged"
 domain = "analysis"
 rule = "string-closed-sets"
@@ -713,13 +648,6 @@ domain = "effects"
 rule = "absent-not-sentinel"
 
 [[entry]]
-kind = "export"
-old = "SONARE_AIR_ABSORPTION_DEFAULT"
-removed = true
-domain = "effects"
-rule = "absent-not-sentinel"
-
-[[entry]]
 kind = "function"
 old = "sonare_mastering_repair_declick"
 changed = "writes a SonareDeclickResult (samples, length and the pass's report) instead of float** out / size_t* out_length; release it with sonare_free_declick_result"
@@ -775,20 +703,6 @@ domain = "effects"
 rule = "typed-results"
 test = "tests/api/sonare_c_mastering_repair_test.cpp::mono repair returns its report beside the audio"
 
-
-[[entry]]
-kind = "field"
-old = "SonareRealtimeVoiceChangerConfig.voice_engine_engine"
-new = "SonareRealtimeVoiceChangerConfig.voice_engine"
-domain = "effects"
-rule = "individual"
-
-[[entry]]
-kind = "field"
-old = "SonareRealtimeVoiceChangerConfig.reverb_variation_variation"
-new = "SonareRealtimeVoiceChangerConfig.reverb_variation"
-domain = "effects"
-rule = "individual"
 
 [[entry]]
 kind = "field"
@@ -994,3 +908,353 @@ old = "SonarePolyphonicConfig.tonality_off"
 new = "SonarePolyphonicConfig.tonality"
 domain = "analysis"
 rule = "no-positional-bools"
+
+[[entry]]
+kind = "field"
+old = "SonareBoundary.time"
+new = "SonareBoundary.time_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareBoundaryOptions.peak_distance"
+new = "SonareBoundaryOptions.peak_distance_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareBoundaryOptions.reference_window"
+new = "SonareBoundaryOptions.reference_window_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareChord.end"
+new = "SonareChord.end_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareChord.start"
+new = "SonareChord.start_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareChordDetectionOptions.min_duration"
+new = "SonareChordDetectionOptions.min_duration_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareChordDetectionOptions.smoothing_window"
+new = "SonareChordDetectionOptions.smoothing_window_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareClipDetection.sample_count"
+new = "SonareClipDetection.clipped_samples"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "SonareClipDetection.sample_fraction"
+new = "SonareClipDetection.clipped_ratio"
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareDynamicsResult.loudness_range_db"
+new = "SonareDynamicsResult.loudness_range_lu"
+domain = "analysis"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "SonareEngineMetronomeConfig.click_seconds"
+new = "SonareEngineMetronomeConfig.click_sec"
+domain = "engine"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareLufsResult.loudness_range"
+new = "SonareLufsResult.loudness_range_lu"
+domain = "analysis"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "SonareMasteringChainResult.output_lra"
+new = "SonareMasteringChainResult.output_loudness_range_lu"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "SonareMasteringChainStereoResult.output_lra"
+new = "SonareMasteringChainStereoResult.output_loudness_range_lu"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "SonareMasteringLoudnessSummary.loudness_range"
+new = "SonareMasteringLoudnessSummary.loudness_range_lu"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "SonareMelodyPoint.frequency"
+new = "SonareMelodyPoint.frequency_hz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "SonareMelodyPoint.time"
+new = "SonareMelodyPoint.time_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareMelodyResult.mean_frequency"
+new = "SonareMelodyResult.mean_frequency_hz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "SonareMelodyResult.vibrato_rate"
+new = "SonareMelodyResult.vibrato_rate_hz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "SonareMfccResult.fmax"
+new = "SonareMfccResult.fmax_hz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "SonareMfccResult.fmin"
+new = "SonareMfccResult.fmin_hz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "SonarePitchDecompositionResult.centre_hz"
+new = "SonarePitchDecompositionResult.center_hz"
+domain = "effects"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "SonareProjectSource.channel_count"
+new = "SonareProjectSource.num_channels"
+domain = "project"
+rule = "num-channels"
+
+[[entry]]
+kind = "field"
+old = "SonareSection.end"
+new = "SonareSection.end_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareSection.start"
+new = "SonareSection.start_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareStreamConfig.fmax"
+new = "SonareStreamConfig.fmax_hz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "SonareStreamConfig.fmin"
+new = "SonareStreamConfig.fmin_hz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "SonareStreamingLoudnessGain.true_peak_db"
+new = "SonareStreamingLoudnessGain.true_peak_dbtp"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "function"
+old = "sonare_audio_file_channel_count"
+new = "sonare_audio_file_num_channels"
+domain = "core"
+rule = "num-channels"
+
+[[entry]]
+kind = "function"
+old = "sonare_audio_true_peak_db"
+new = "sonare_audio_true_peak_dbtp"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "function"
+old = "sonare_metering_true_peak_db"
+new = "sonare_metering_true_peak_dbtp"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "function"
+old = "sonare_playback_renderer_input_channel_count"
+new = "sonare_playback_renderer_num_input_channels"
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "function"
+old = "sonare_playback_renderer_output_channel_count"
+new = "sonare_playback_renderer_num_output_channels"
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "SonareMeterTelemetryRecord.max_true_peak_db"
+new = "SonareMeterTelemetryRecord.max_true_peak_dbtp"
+domain = "engine"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "SonareMeterTelemetryRecord.true_peak_db_l"
+new = "SonareMeterTelemetryRecord.true_peak_dbtp_l"
+domain = "engine"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "SonareMeterTelemetryRecord.true_peak_db_r"
+new = "SonareMeterTelemetryRecord.true_peak_dbtp_r"
+domain = "engine"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "SonareMeterTelemetryRecordV2.max_true_peak_db"
+new = "SonareMeterTelemetryRecordV2.max_true_peak_dbtp"
+domain = "engine"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "SonareMeterTelemetryRecordV2.true_peak_db_l"
+new = "SonareMeterTelemetryRecordV2.true_peak_dbtp_l"
+domain = "engine"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "SonareMeterTelemetryRecordV2.true_peak_db_r"
+new = "SonareMeterTelemetryRecordV2.true_peak_dbtp_r"
+domain = "engine"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "SonareMixMeterSnapshot.max_true_peak_db"
+new = "SonareMixMeterSnapshot.max_true_peak_dbtp"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "SonareMixMeterSnapshot.true_peak_db_l"
+new = "SonareMixMeterSnapshot.true_peak_dbtp_l"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "SonareMixMeterSnapshot.true_peak_db_r"
+new = "SonareMixMeterSnapshot.true_peak_dbtp_r"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "SonareMeterTelemetryRecordWide.max_true_peak_db"
+new = "SonareMeterTelemetryRecordWide.max_true_peak_dbtp"
+domain = "engine"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "SonareMeterTelemetryRecordWide.true_peak_db"
+new = "SonareMeterTelemetryRecordWide.true_peak_dbtp"
+domain = "engine"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "SonareMeterTelemetryRecordWide.channel_count"
+new = "SonareMeterTelemetryRecordWide.num_channels"
+domain = "engine"
+rule = "num-channels"
+
+[[entry]]
+kind = "field"
+old = "SonareMeterTelemetryRecordWideV2.max_true_peak_db"
+new = "SonareMeterTelemetryRecordWideV2.max_true_peak_dbtp"
+domain = "engine"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "SonareMeterTelemetryRecordWideV2.true_peak_db"
+new = "SonareMeterTelemetryRecordWideV2.true_peak_dbtp"
+domain = "engine"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "SonareMeterTelemetryRecordWideV2.channel_count"
+new = "SonareMeterTelemetryRecordWideV2.num_channels"
+domain = "engine"
+rule = "num-channels"
+
+[[entry]]
+kind = "field"
+old = "SonareMixMeterSnapshot.true_peak_db"
+new = "SonareMixMeterSnapshot.true_peak_dbtp"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "SonareMixMeterSnapshot.channel_count"
+new = "SonareMixMeterSnapshot.num_channels"
+domain = "mastering"
+rule = "num-channels"

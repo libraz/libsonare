@@ -20,10 +20,13 @@ from __future__ import annotations
 import argparse
 import ast
 import collections
+import io
 import json
 import re
 import subprocess
 import sys
+import tarfile
+import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -519,7 +522,10 @@ def extract_python(root: Path) -> tuple[list[dict], dict[str, int], dict]:
             continue
         stem, node, file = hit
         line = getattr(node, "lineno", 0)
-        stub = pkg.stub_node(stem, name)
+        # A name defined in a private module is stubbed in the public module re-exporting it.
+        stub = pkg.stub_node(stem, name) or next(
+            (pkg.stub_node(m, name) for m in modules if pkg.stub_node(m, name) is not None), None
+        )
         files_pref = (f"{PY_PACKAGE}/{stem}.pyi", file)
         common = {"in_all": in_all, "modules": modules}
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -1440,6 +1446,56 @@ def build(root: Path = ROOT) -> dict:
         "errors": errors,
         **meta,
     }
+
+
+def _tag_python_scope(tree: Path) -> dict[str, object]:
+    """The python extractor's module lists as the tagged tree itself declared them."""
+    src = (tree / "tools/parity/extractors/python_pyi.py").read_text(encoding="utf-8")
+    scope = {}
+    for node in ast.parse(src).body:
+        target = node.targets[0] if isinstance(node, ast.Assign) else getattr(node, "target", None)
+        if isinstance(target, ast.Name) and target.id in ("_SCANNED", "_NOT_SCANNED"):
+            scope[target.id] = ast.literal_eval(node.value)
+    return scope
+
+
+def build_at_tag(root: Path, tag: str) -> tuple[dict | None, str]:
+    """Build the inventory of a tagged release with today's extractors.
+
+    Returns (inventory, "") or (None, reason) when the tag is not in this clone
+    or its tree cannot be read. The python module lists come from the tagged tree,
+    since today's lists name modules the release did not have.
+    """
+    probe = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "-q", "--verify", f"refs/tags/{tag}"],
+        capture_output=True,
+        check=False,
+    )
+    if probe.returncode != 0:
+        return None, f"tag {tag} is not in this clone"
+    with tempfile.TemporaryDirectory(prefix="sonare-api-tag-") as d:
+        tree = Path(d)
+        arch = subprocess.run(
+            ["git", "-C", str(root), "archive", tag, "--", "bindings", "include", "tools", "tests"],
+            capture_output=True,
+            check=False,
+        )
+        if arch.returncode != 0:
+            return None, f"git archive {tag} failed: {arch.stderr.decode()[:200]}"
+        with tarfile.open(fileobj=io.BytesIO(arch.stdout)) as tar:
+            tar.extractall(tree, filter="data")
+        for pkg in ("bindings/wasm", "bindings/node"):
+            (tree / pkg / "node_modules").symlink_to(root / pkg / "node_modules")
+        saved = {k: getattr(python_pyi, k) for k in ("_SCANNED", "_NOT_SCANNED")}
+        try:
+            for k, v in _tag_python_scope(tree).items():
+                setattr(python_pyi, k, v)
+            return build(tree), ""
+        except (InventoryError, python_pyi.PythonScopeError, OSError) as exc:
+            return None, f"{tag} tree unreadable: {exc}"
+        finally:
+            for k, v in saved.items():
+                setattr(python_pyi, k, v)
 
 
 def scan_failures(inv: dict) -> list[str]:

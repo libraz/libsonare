@@ -6,11 +6,14 @@
 #
 # Keys:
 #   kind     function | method | class | type | field | option | value | export | flag | command
-#   old      the 1.x public name, spelled as below
+#   old      the 1.x public name, spelled as below; it must exist in v1.10.0
 #   new      the 2.0.0 name (old must be absent, new present, same kind and entry)
 #   removed  true when the name is gone with no replacement (old must be absent)
-#   changed  one line saying what a caller must change when the name stays the same;
-#            requires test = "<file>::<case name substring>", which must exist
+#   changed  one line saying what a caller must change; requires
+#            test = "<file>::<case name substring>", which must exist. Without to,
+#            old must still be present (in any kind)
+#   to       with changed: the 2.0.0 name of a member renamed and reshaped at once
+#            (old must be absent, to present); a plain rename is new
 #   domain   core | analysis | effects | mastering | engine | project
 #   rule     a slug from tools/api/migration/rules.toml
 #   entry    WASM subpath ("./analysis", "./worklet", ...); omitted means "."
@@ -39,36 +42,12 @@
 # changed entry (with test) on the function that now takes the request.
 
 [[entry]]
-kind = "option"
-old = "detectKey(useHpss)"
-changed = "null is now accepted for optional boolean options and reads as omitted (was TypeError); the same holds for every optional boolean reader"
-domain = "analysis"
-rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/surface/core-requests.test.ts::treats null for an optional boolean"
-
-[[entry]]
-kind = "option"
-old = "detectKey(genreHint)"
-changed = "null is now accepted for optional string options and reads as omitted (was TypeError); the same holds for every optional string reader"
-domain = "analysis"
-rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/surface/core-requests.test.ts::treats null for an optional string"
-
-[[entry]]
-kind = "value"
+kind = "type"
 old = "ErrorCode"
 changed = "ErrorCode is a const object plus same-named union type instead of a TS enum; there is no reverse mapping, and StaleResult = 11 is added"
 domain = "core"
 rule = "string-closed-sets"
 test = "bindings/wasm/tests/surface/core-errors.test.ts::is a plain object"
-
-[[entry]]
-kind = "type"
-old = "ErrorCodeName"
-changed = "new exported union type of the ErrorCode keys"
-domain = "core"
-rule = "string-closed-sets"
-test = "bindings/wasm/tests/surface/core-errors.test.ts::types a code as the union"
 
 [[entry]]
 kind = "field"
@@ -85,22 +64,6 @@ changed = "typed as the ErrorCodeName union instead of string, and derived from 
 domain = "core"
 rule = "error-class-by-cause"
 test = "bindings/wasm/tests/surface/core-errors.test.ts::derives codeName from code"
-
-[[entry]]
-kind = "method"
-old = "SonareError.constructor"
-changed = "new SonareError(code, message, { cause }) replaces the (code, codeName, message) argument order"
-domain = "core"
-rule = "error-class-by-cause"
-test = "bindings/wasm/tests/surface/core-errors.test.ts::takes (code, message, options) only"
-
-[[entry]]
-kind = "field"
-old = "SonareError.cause"
-changed = "cause is passed through to Error"
-domain = "core"
-rule = "error-class-by-cause"
-test = "bindings/wasm/tests/surface/core-errors.test.ts::derives codeName from code and keeps the cause"
 
 [[entry]]
 kind = "method"
@@ -253,34 +216,7 @@ entry = "./worklet"
 test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::sizes each ring from named options"
 
 [[entry]]
-kind = "type"
-old = "SonareRingCapacityOptions"
-changed = "new exported options type for the ring helpers"
-domain = "core"
-rule = "individual"
-entry = "./worklet"
-test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ring from named options"
-
-[[entry]]
-kind = "type"
-old = "SonareScopeRingOptions"
-changed = "new exported options type for the ring helpers"
-domain = "core"
-rule = "individual"
-entry = "./worklet"
-test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ring from named options"
-
-[[entry]]
-kind = "function"
-old = "createSonare*RingBuffer / ring readers"
-changed = "a malformed ring descriptor or layout throws SonareError InvalidFormat, a protocol version skew AbiMismatch, instead of a plain Error"
-domain = "engine"
-rule = "error-class-by-cause"
-entry = "./worklet"
-test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::reports a descriptor that does not describe a ring as InvalidFormat"
-
-[[entry]]
-kind = "type"
+kind = "class"
 old = "OfflineWorkerTask"
 removed = true
 domain = "core"
@@ -358,9 +294,11 @@ rule = "progress-callback"
 [[entry]]
 kind = "method"
 old = "OfflineWorkerClient.dispose"
-new = "OfflineWorkerClient.destroy"
+to = "OfflineWorkerClient.destroy"
+changed = "a second destroy() returns the same promise"
 domain = "core"
 rule = "async-teardown"
+test = "bindings/wasm/tests/surface/core-teardown.test.ts::OfflineWorkerClient returns the same promise"
 
 [[entry]]
 kind = "field"
@@ -380,9 +318,11 @@ test = "bindings/wasm/tests/surface/core-worker.test.ts::no Worker global and no
 [[entry]]
 kind = "function"
 old = "vocalEditApiVersion"
-new = "vocalEditAbiVersion"
+to = "vocalEditAbiVersion"
+changed = "returns undefined instead of 0 when the feature is compiled out"
 domain = "core"
-rule = "abi-probes"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/core-teardown.test.ts::declare number | undefined"
 
 [[entry]]
 kind = "function"
@@ -399,21 +339,21 @@ domain = "core"
 rule = "aliases-removed"
 
 [[entry]]
-kind = "value"
+kind = "export"
 old = "EXPECTED_ABI_VERSION"
 removed = true
 domain = "core"
 rule = "abi-probes"
 
 [[entry]]
-kind = "value"
+kind = "export"
 old = "EXPECTED_ENGINE_ABI_VERSION"
 removed = true
 domain = "core"
 rule = "abi-probes"
 
 [[entry]]
-kind = "value"
+kind = "export"
 old = "EXPECTED_PROJECT_ABI_VERSION"
 removed = true
 domain = "project"
@@ -465,14 +405,6 @@ rule = "getters"
 test = "bindings/wasm/tests/surface/core-audio.test.ts::returns the same shared data array on every read"
 
 [[entry]]
-kind = "method"
-old = "Audio.destroy"
-changed = "new method, idempotent and also reached through Symbol.dispose; every read after it throws SonareError InvalidState"
-domain = "core"
-rule = "teardown"
-test = "bindings/wasm/tests/surface/core-audio.test.ts::refuses every read after destroy with InvalidState"
-
-[[entry]]
 kind = "function"
 old = "engineCapabilities"
 removed = true
@@ -502,7 +434,7 @@ rule = "type-names"
 entry = "./analysis"
 
 [[entry]]
-kind = "value"
+kind = "export"
 old = "EXPECTED_ABI_VERSION"
 removed = true
 domain = "core"
@@ -518,7 +450,7 @@ rule = "aliases-removed"
 entry = "./analysis"
 
 [[entry]]
-kind = "value"
+kind = "export"
 old = "EXPECTED_ABI_VERSION"
 removed = true
 domain = "core"
@@ -562,14 +494,6 @@ old = "SonareModule"
 removed = true
 domain = "core"
 rule = "no-internal-types"
-
-[[entry]]
-kind = "option"
-old = "init(moduleFactory)"
-changed = "moduleFactory resolves to the opaque SonareModuleHandle; pass the generated module factory through unchanged"
-domain = "core"
-rule = "no-internal-types"
-test = "bindings/wasm/tests/surface/core-types.test.ts::types moduleFactory with the opaque module handle"
 
 [[entry]]
 kind = "method"
@@ -798,14 +722,6 @@ rule = "async-teardown"
 
 [[entry]]
 kind = "function"
-old = "vocalEditAbiVersion"
-changed = "returns undefined instead of 0 when the feature is compiled out"
-domain = "core"
-rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/surface/core-teardown.test.ts::declare number | undefined"
-
-[[entry]]
-kind = "function"
 old = "projectAbiVersion"
 changed = "returns undefined instead of 0 when the feature is compiled out"
 domain = "core"
@@ -829,14 +745,6 @@ domain = "analysis"
 rule = "async-teardown"
 entry = "./worklet"
 test = "bindings/wasm/tests/surface/core-teardown.test.ts::declares destroy() as returning Promise<void>"
-
-[[entry]]
-kind = "method"
-old = "OfflineWorkerClient.destroy"
-changed = "a second destroy() returns the same promise"
-domain = "core"
-rule = "async-teardown"
-test = "bindings/wasm/tests/surface/core-teardown.test.ts::OfflineWorkerClient returns the same promise"
 
 [[entry]]
 kind = "field"
@@ -6552,6 +6460,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::declares the shap
 [[entry]]
 kind = "field"
 old = "BassChromaSpectrogramRequest.sampleRate"
+to = "BassChromaRequest.sampleRate"
 changed = "required (was optional with a 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
@@ -6560,6 +6469,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRa
 [[entry]]
 kind = "field"
 old = "BassChromaSpectrogramRequest.sampleRate"
+to = "BassChromaRequest.sampleRate"
 changed = "required (was optional with a 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
@@ -12449,21 +12359,6 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::refuses a missing sa
 
 [[entry]]
 kind = "field"
-old = "DetectKeyCandidatesRequest.tuning"
-new = "DetectKeyCandidatesRequest.tuningCents"
-domain = "analysis"
-rule = "unit-in-name"
-
-[[entry]]
-kind = "field"
-old = "DetectKeyCandidatesRequest.tuning"
-new = "DetectKeyCandidatesRequest.tuningCents"
-domain = "analysis"
-rule = "unit-in-name"
-entry = "./analysis"
-
-[[entry]]
-kind = "field"
 old = "DetectKeyRequest.genreHint"
 changed = "type GenreHint = 'auto'|'edm'|'electronic'|'dance'|'pop'|'classical'|'jazz'; unknown refused (RangeError)"
 domain = "analysis"
@@ -12741,21 +12636,6 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::closed sets refuse n
 
 [[entry]]
 kind = "field"
-old = "KeyDetectionOptions.tuning"
-new = "KeyDetectionOptions.tuningCents"
-domain = "analysis"
-rule = "unit-in-name"
-
-[[entry]]
-kind = "field"
-old = "KeyDetectionOptions.tuning"
-new = "KeyDetectionOptions.tuningCents"
-domain = "analysis"
-rule = "unit-in-name"
-entry = "./analysis"
-
-[[entry]]
-kind = "field"
 old = "LufsRequest.sampleRate"
 changed = "required (was optional with a 22050/44100 default)"
 domain = "analysis"
@@ -12925,6 +12805,7 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "MusicAnalyzeRequest.sampleRate"
+to = "AnalyzeRequest.sampleRate"
 changed = "required (was optional with a 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
@@ -12933,6 +12814,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::refuses a missing sa
 [[entry]]
 kind = "field"
 old = "MusicAnalyzeRequest.sampleRate"
+to = "AnalyzeRequest.sampleRate"
 changed = "required (was optional with a 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
@@ -12974,6 +12856,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::refuses a missing sa
 [[entry]]
 kind = "field"
 old = "OnsetEnvelopeRequest.sampleRate"
+to = "OnsetStrengthRequest.sampleRate"
 changed = "required (was optional with a 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
@@ -12982,6 +12865,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::refuses a missing sa
 [[entry]]
 kind = "field"
 old = "OnsetEnvelopeRequest.sampleRate"
+to = "OnsetStrengthRequest.sampleRate"
 changed = "required (was optional with a 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
@@ -13008,6 +12892,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::refuses a missing sa
 [[entry]]
 kind = "field"
 old = "RhythmFeatures.grooveType"
+to = "AnalysisRhythm.grooveType"
 changed = "type GrooveType = 'straight'|'shuffle'|'swing'"
 domain = "analysis"
 rule = "string-closed-sets"
@@ -13016,6 +12901,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::closed sets refuse n
 [[entry]]
 kind = "field"
 old = "RhythmFeatures.grooveType"
+to = "AnalysisRhythm.grooveType"
 changed = "type GrooveType = 'straight'|'shuffle'|'swing'"
 domain = "analysis"
 rule = "string-closed-sets"
@@ -13936,6 +13822,7 @@ rule = "seconds-suffix"
 [[entry]]
 kind = "field"
 old = "FrameBuffer.chordConfidence"
+to = "StreamFrames.chordConfidence"
 changed = "optional; absent when the feature is not computed"
 domain = "analysis"
 rule = "absent-not-sentinel"
@@ -13944,6 +13831,7 @@ test = "bindings/wasm/tests/surface/analysis-stream.test.ts::decodes frame chord
 [[entry]]
 kind = "field"
 old = "FrameBuffer.chordQuality"
+to = "StreamFrames.chordQuality"
 changed = "optional; absent when the feature is not computed"
 domain = "analysis"
 rule = "absent-not-sentinel"
@@ -13952,6 +13840,7 @@ test = "bindings/wasm/tests/surface/analysis-stream.test.ts::decodes frame chord
 [[entry]]
 kind = "field"
 old = "FrameBuffer.chordRoot"
+to = "StreamFrames.chordRoot"
 changed = "optional; absent when the feature is not computed"
 domain = "analysis"
 rule = "absent-not-sentinel"
@@ -13960,6 +13849,7 @@ test = "bindings/wasm/tests/surface/analysis-stream.test.ts::decodes frame chord
 [[entry]]
 kind = "field"
 old = "FrameBuffer.chroma"
+to = "StreamFrames.chroma"
 changed = "Float32Array frame-major -> Matrix2D band-major; optional (absent when not computed); TSDoc: rows = chroma bins, cols = frames"
 domain = "analysis"
 rule = "matrix-2d"
@@ -13975,6 +13865,7 @@ rule = "absent-not-sentinel"
 [[entry]]
 kind = "field"
 old = "FrameBuffer.mel"
+to = "StreamFrames.mel"
 changed = "Float32Array frame-major -> Matrix2D band-major; optional (absent when not computed); TSDoc: rows = mel bands, cols = frames"
 domain = "analysis"
 rule = "matrix-2d"
@@ -13997,6 +13888,7 @@ rule = "matrix-2d"
 [[entry]]
 kind = "field"
 old = "FrameBuffer.onsetStrength"
+to = "StreamFrames.onsetStrength"
 changed = "optional; absent when the feature is not computed"
 domain = "analysis"
 rule = "absent-not-sentinel"
@@ -14005,6 +13897,7 @@ test = "bindings/wasm/tests/surface/analysis-stream.test.ts::leaves a feature ar
 [[entry]]
 kind = "field"
 old = "FrameBuffer.rmsEnergy"
+to = "StreamFrames.rmsEnergy"
 changed = "optional; absent when the feature is not computed"
 domain = "analysis"
 rule = "absent-not-sentinel"
@@ -14013,6 +13906,7 @@ test = "bindings/wasm/tests/surface/analysis-stream.test.ts::leaves a feature ar
 [[entry]]
 kind = "field"
 old = "FrameBuffer.spectralCentroid"
+to = "StreamFrames.spectralCentroid"
 changed = "optional; absent when the feature is not computed"
 domain = "analysis"
 rule = "absent-not-sentinel"
@@ -14021,6 +13915,7 @@ test = "bindings/wasm/tests/surface/analysis-stream.test.ts::leaves a feature ar
 [[entry]]
 kind = "field"
 old = "FrameBuffer.spectralFlatness"
+to = "StreamFrames.spectralFlatness"
 changed = "optional; absent when the feature is not computed"
 domain = "analysis"
 rule = "absent-not-sentinel"
@@ -14050,6 +13945,7 @@ rule = "seconds-suffix"
 [[entry]]
 kind = "field"
 old = "ProgressiveEstimate.bpm"
+to = "StreamProgressiveEstimate.bpm"
 changed = "optional; absent until estimated (was 0)"
 domain = "analysis"
 rule = "absent-not-sentinel"
@@ -14058,6 +13954,7 @@ test = "bindings/wasm/tests/surface/analysis-stream.test.ts::reports a fresh ana
 [[entry]]
 kind = "field"
 old = "ProgressiveEstimate.bpmConfidence"
+to = "StreamProgressiveEstimate.bpmConfidence"
 changed = "optional; absent until estimated (was 0)"
 domain = "analysis"
 rule = "absent-not-sentinel"
@@ -14101,6 +13998,7 @@ rule = "absent-not-sentinel"
 [[entry]]
 kind = "field"
 old = "ProgressiveEstimate.currentBar"
+to = "StreamProgressiveEstimate.currentBar"
 changed = "optional; absent until a bar is detected (was -1)"
 domain = "analysis"
 rule = "absent-not-sentinel"
@@ -14109,6 +14007,7 @@ test = "bindings/wasm/tests/surface/analysis-stream.test.ts::reports a fresh ana
 [[entry]]
 kind = "field"
 old = "ProgressiveEstimate.detectedPatternName"
+to = "StreamProgressiveEstimate.detectedPatternName"
 changed = "optional; absent when no pattern (was '' / 0)"
 domain = "analysis"
 rule = "absent-not-sentinel"
@@ -14117,6 +14016,7 @@ test = "bindings/wasm/tests/surface/analysis-stream.test.ts::reports a fresh ana
 [[entry]]
 kind = "field"
 old = "ProgressiveEstimate.detectedPatternScore"
+to = "StreamProgressiveEstimate.detectedPatternScore"
 changed = "optional; absent when no pattern (was '' / 0)"
 domain = "analysis"
 rule = "absent-not-sentinel"
@@ -14125,6 +14025,7 @@ test = "bindings/wasm/tests/surface/analysis-stream.test.ts::reports a fresh ana
 [[entry]]
 kind = "field"
 old = "ProgressiveEstimate.key"
+to = "StreamProgressiveEstimate.key"
 changed = "key?: Key (root, mode, confidence, name, shortName); absent until estimated (was -1)"
 domain = "analysis"
 rule = "absent-not-sentinel"
@@ -14848,14 +14749,6 @@ rule = "seconds-suffix"
 entry = "./analysis"
 
 [[entry]]
-kind = "method"
-old = "RealtimeEngine.constructor"
-changed = "new RealtimeEngine(config: RealtimeEngineConfig) replaces the five positional optionals; sampleRate is required, an unknown key is a TypeError and an explicit 0 on a defaulted field is a RangeError"
-domain = "engine"
-rule = "construction"
-test = "bindings/wasm/tests/surface/engine.test.ts::constructs from one config object"
-
-[[entry]]
 kind = "option"
 old = "RealtimeEngine.constructor(maxChannels)"
 removed = true
@@ -15128,22 +15021,6 @@ test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for an au
 
 [[entry]]
 kind = "field"
-old = "EngineGraphNode.type"
-changed = "'passThrough' | 'gain' (was a number)"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for a graph node type and mix"
-
-[[entry]]
-kind = "field"
-old = "EngineGraphConnection.mix"
-changed = "'replace' | 'add' (was a number); absent means add"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for a graph node type and mix"
-
-[[entry]]
-kind = "field"
 old = "EngineBounceOptions.dither"
 changed = "'rpdf' | 'tpdf' | 'noiseShaped'; absent means none; a number is a TypeError"
 domain = "engine"
@@ -15381,9 +15258,11 @@ rule = "strip-ref"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setTrackStripInsertBypassed"
-new = "RealtimeEngine.setStripInsertBypassed"
+changed = "setStripInsertBypassed(ref (a track id or 'master'), insertIndex, { bypassed, resetOnBypass? }) replaces setTrackStripInsertBypassed(trackId, insertIndex, bypassed, resetOnBypass)"
+to = "RealtimeEngine.setStripInsertBypassed"
 domain = "engine"
 rule = "no-positional-bools"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes bypass state and insert parameters as objects"
 
 [[entry]]
 kind = "method"
@@ -15395,16 +15274,20 @@ rule = "no-positional-bools"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setBusStripInsertBypassed"
-new = "RealtimeEngine.setBusInsertBypassed"
+changed = "setBusInsertBypassed(busId, insertIndex, { bypassed, resetOnBypass? }) replaces setBusStripInsertBypassed(busId, insertIndex, bypassed, resetOnBypass)"
+to = "RealtimeEngine.setBusInsertBypassed"
 domain = "engine"
 rule = "no-positional-bools"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes bypass state and insert parameters as objects"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setTrackStripInsertParamByName"
-new = "RealtimeEngine.setStripInsertParam"
+changed = "setStripInsertParam(ref (a track id or 'master'), insertIndex, { name, value }) replaces setTrackStripInsertParamByName(trackId, insertIndex, paramName, value)"
+to = "RealtimeEngine.setStripInsertParam"
 domain = "engine"
 rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes bypass state and insert parameters as objects"
 
 [[entry]]
 kind = "method"
@@ -15416,9 +15299,11 @@ rule = "one-positional-form"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.applyTrackStripInsertParamByNameNow"
-new = "RealtimeEngine.applyStripInsertParamNow"
+changed = "applyStripInsertParamNow(ref (a track id or 'master'), insertIndex, { name, value }) replaces applyTrackStripInsertParamByNameNow(trackId, insertIndex, paramName, value)"
+to = "RealtimeEngine.applyStripInsertParamNow"
 domain = "engine"
 rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes bypass state and insert parameters as objects"
 
 [[entry]]
 kind = "method"
@@ -15430,9 +15315,11 @@ rule = "one-positional-form"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.restoreTrackStripInsertParamByName"
-new = "RealtimeEngine.restoreStripInsertParam"
+changed = "restoreStripInsertParam(ref (a track id or 'master'), insertIndex, { name, value }) replaces restoreTrackStripInsertParamByName(trackId, insertIndex, paramName, value)"
+to = "RealtimeEngine.restoreStripInsertParam"
 domain = "engine"
 rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes bypass state and insert parameters as objects"
 
 [[entry]]
 kind = "method"
@@ -15444,23 +15331,29 @@ rule = "one-positional-form"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setBusStripInsertParamByName"
-new = "RealtimeEngine.setBusInsertParam"
+changed = "setBusInsertParam(busId, insertIndex, { name, value }) replaces setBusStripInsertParamByName(busId, insertIndex, paramName, value)"
+to = "RealtimeEngine.setBusInsertParam"
 domain = "engine"
 rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes bypass state and insert parameters as objects"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.applyBusStripInsertParamByNameNow"
-new = "RealtimeEngine.applyBusInsertParamNow"
+changed = "applyBusInsertParamNow(busId, insertIndex, { name, value }) replaces applyBusStripInsertParamByNameNow(busId, insertIndex, paramName, value)"
+to = "RealtimeEngine.applyBusInsertParamNow"
 domain = "engine"
 rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes bypass state and insert parameters as objects"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.restoreBusStripInsertParamByName"
-new = "RealtimeEngine.restoreBusInsertParam"
+changed = "restoreBusInsertParam(busId, insertIndex, { name, value }) replaces restoreBusStripInsertParamByName(busId, insertIndex, paramName, value)"
+to = "RealtimeEngine.restoreBusInsertParam"
 domain = "engine"
 rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/engine.test.ts::takes bypass state and insert parameters as objects"
 
 [[entry]]
 kind = "method"
@@ -15507,9 +15400,11 @@ rule = "strip-ref"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setSoloMute"
-new = "RealtimeEngine.setTrackSoloMute"
+changed = "setTrackSoloMute(trackId, { solo, mute }, renderFrame?) replaces setSoloMute(laneIndex, solo, mute, renderFrame?); the first argument is a declared track id, not a lane index"
+to = "RealtimeEngine.setTrackSoloMute"
 domain = "engine"
 rule = "strip-ref"
+test = "bindings/wasm/tests/surface/engine.test.ts::keys solo and mute by track id"
 
 [[entry]]
 kind = "method"
@@ -15625,9 +15520,11 @@ test = "bindings/wasm/tests/surface/engine.test.ts::arms capture with a state ob
 [[entry]]
 kind = "type"
 old = "EngineCapturePunchRequest"
-new = "CapturePunch"
+changed = "renamed CapturePunch with startPpq/endPpq added; the enabled flag is gone, a punch window is active while CaptureOptions.punch is given"
+to = "CapturePunch"
 domain = "engine"
 rule = "seconds-suffix"
+test = "bindings/wasm/tests/surface/engine.test.ts::sets up capture in one call"
 
 [[entry]]
 kind = "method"
@@ -16109,9 +16006,11 @@ test = "bindings/wasm/tests/surface/engine-worklet.test.ts::takes the loop as on
 [[entry]]
 kind = "method"
 old = "SonareEngineTransportFacade.seekSeconds"
-new = "SonareEngineTransportFacade.seekSec"
+to = "SonareEngineTransportFacade.seekSec"
+changed = "returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory"
 domain = "engine"
-rule = "seconds-suffix"
+rule = "engine-vocabulary"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::names the render frame and the seconds suffix on the transport"
 entry = "./worklet"
 
 [[entry]]
@@ -16180,15 +16079,6 @@ domain = "engine"
 rule = "engine-vocabulary"
 entry = "./worklet"
 test = "bindings/wasm/tests/surface/engine-worklet.test.ts::throws OutOfMemory instead of returning false when the command ring is full"
-
-[[entry]]
-kind = "method"
-old = "SonareEngineTransportFacade.seekSec"
-changed = "returns void; a full command ring throws a SonareError with ErrorCode.OutOfMemory"
-domain = "engine"
-rule = "engine-vocabulary"
-entry = "./worklet"
-test = "bindings/wasm/tests/surface/engine-worklet.test.ts::names the render frame and the seconds suffix on the transport"
 
 [[entry]]
 kind = "option"
@@ -16459,26 +16349,32 @@ entry = "./worklet"
 [[entry]]
 kind = "method"
 old = "SonareEngine.setBusStripInsertBypassed"
-new = "SonareEngine.setBusInsertBypassed"
+entry = "./worklet"
+changed = "setBusInsertBypassed(busId, insertIndex, { bypassed, resetOnBypass? }) replaces setBusStripInsertBypassed(busId, insertIndex, bypassed, resetOnBypass)"
+to = "SonareEngine.setBusInsertBypassed"
 domain = "engine"
 rule = "no-positional-bools"
-entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::keeps a strip edit on the target and takes labelled objects"
 
 [[entry]]
 kind = "method"
 old = "SonareEngine.setStripInsertParamByName"
-new = "SonareEngine.setStripInsertParam"
+entry = "./worklet"
+changed = "setStripInsertParam(target, insertIndex, { name, value }) replaces setStripInsertParamByName(target, insertIndex, paramName, value)"
+to = "SonareEngine.setStripInsertParam"
 domain = "engine"
 rule = "one-positional-form"
-entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::keeps a strip edit on the target and takes labelled objects"
 
 [[entry]]
 kind = "method"
 old = "SonareEngine.setTrackStripInsertParamByName"
-new = "SonareEngine.setStripInsertParam"
+entry = "./worklet"
+changed = "setStripInsertParam(target, insertIndex, { name, value }) replaces setTrackStripInsertParamByName(target, insertIndex, paramName, value)"
+to = "SonareEngine.setStripInsertParam"
 domain = "engine"
 rule = "one-positional-form"
-entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::keeps a strip edit on the target and takes labelled objects"
 
 [[entry]]
 kind = "method"
@@ -16491,10 +16387,12 @@ entry = "./worklet"
 [[entry]]
 kind = "method"
 old = "SonareEngine.setBusStripInsertParamByName"
-new = "SonareEngine.setBusInsertParam"
+entry = "./worklet"
+changed = "setBusInsertParam(busId, insertIndex, { name, value }) replaces setBusStripInsertParamByName(busId, insertIndex, paramName, value)"
+to = "SonareEngine.setBusInsertParam"
 domain = "engine"
 rule = "one-positional-form"
-entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::keeps a strip edit on the target and takes labelled objects"
 
 [[entry]]
 kind = "method"
@@ -16620,10 +16518,12 @@ entry = "./worklet"
 [[entry]]
 kind = "method"
 old = "SonareEngine.setSoloMute"
-new = "SonareEngine.setTrackSoloMute"
+entry = "./worklet"
+changed = "setTrackSoloMute(target, { solo, mute }) returns nothing and replaces setSoloMute(target, solo, mute), which returned a boolean"
+to = "SonareEngine.setTrackSoloMute"
 domain = "engine"
 rule = "strip-ref"
-entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::keys track solo, mute and monitor by track id"
 
 [[entry]]
 kind = "method"
@@ -16906,21 +16806,7 @@ test = "bindings/wasm/tests/surface/engine-worklet.test.ts::delivers telemetry a
 [[entry]]
 kind = "method"
 old = "Mixer.fromSceneJson"
-new = "Mixer.fromJson"
-domain = "engine"
-rule = "construction"
-
-[[entry]]
-kind = "method"
-old = "Mixer.constructor"
-changed = "public new Mixer({ scene?, sampleRate, blockSize? }); sampleRate is required, an absent scene gives an empty mixer, blockSize 0 is refused"
-domain = "engine"
-rule = "construction"
-test = "bindings/wasm/tests/surface/engine-mixer.test.ts::builds an empty mixer from new Mixer"
-
-[[entry]]
-kind = "method"
-old = "Mixer.fromJson"
+to = "Mixer.fromJson"
 changed = "static fromJson(json, { sampleRate, blockSize? }) replaces fromSceneJson(json, sampleRate = 48000, blockSize = 512); sampleRate is required"
 domain = "engine"
 rule = "construction"
@@ -17520,6 +17406,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "field"
 old = "PhaseVocoderRequest.rate"
+to = "PhaseVocoderRequest.speedRatio"
 changed = "rate -> speedRatio"
 domain = "effects"
 rule = "sample-rate-name"
@@ -17528,6 +17415,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::phaseVocoder takes spee
 [[entry]]
 kind = "field"
 old = "PhaseVocoderRequest.rate"
+to = "PhaseVocoderRequest.speedRatio"
 changed = "rate -> speedRatio"
 domain = "effects"
 rule = "sample-rate-name"
@@ -17588,6 +17476,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "field"
 old = "RirSynthOptions.crossfadeMs"
+to = "SynthesizeRirRequest.crossfadeMs"
 changed = "absent = 5 ms; an explicit 0 is a 0 ms crossfade (hard switch), where 1.x read 0 as the default; TSDoc states the default"
 domain = "effects"
 rule = "absent-not-sentinel"
@@ -17596,6 +17485,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir reads an 
 [[entry]]
 kind = "field"
 old = "RirSynthOptions.crossfadeMs"
+to = "SynthesizeRirRequest.crossfadeMs"
 changed = "absent = 5 ms; an explicit 0 is a 0 ms crossfade (hard switch), where 1.x read 0 as the default; TSDoc states the default"
 domain = "effects"
 rule = "absent-not-sentinel"
@@ -17605,6 +17495,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir reads an 
 [[entry]]
 kind = "field"
 old = "RirSynthOptions.mixingTimeMs"
+to = "SynthesizeRirRequest.mixingTimeMs"
 changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
 domain = "effects"
 rule = "absent-not-sentinel"
@@ -17613,6 +17504,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir refuses a
 [[entry]]
 kind = "field"
 old = "RirSynthOptions.mixingTimeMs"
+to = "SynthesizeRirRequest.mixingTimeMs"
 changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
 domain = "effects"
 rule = "absent-not-sentinel"
@@ -17622,6 +17514,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir refuses a
 [[entry]]
 kind = "field"
 old = "RirSynthOptions.sampleRate"
+to = "SynthesizeRirRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "effects"
 rule = "sample-rate-required"
@@ -17630,6 +17523,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "field"
 old = "RirSynthOptions.sampleRate"
+to = "SynthesizeRirRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "effects"
 rule = "sample-rate-required"
@@ -17741,6 +17635,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::estimateRoom refuses an
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.airHumidityPercent"
+to = "RoomGeometry.airHumidityPercent"
 changed = "absent = 50 %RH; an explicit 0 is 0 %RH, where 1.x read 0 as the default climate; TSDoc states the default"
 domain = "effects"
 rule = "absent-not-sentinel"
@@ -17749,6 +17644,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir reads an 
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.airHumidityPercent"
+to = "RoomGeometry.airHumidityPercent"
 changed = "absent = 50 %RH; an explicit 0 is 0 %RH, where 1.x read 0 as the default climate; TSDoc states the default"
 domain = "effects"
 rule = "absent-not-sentinel"
@@ -17758,6 +17654,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir reads an 
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.airTemperatureC"
+to = "RoomGeometry.airTemperatureC"
 changed = "absent = 20 degC; an explicit 0 is 0 degC, where 1.x read 0 as the default climate; TSDoc states the default"
 domain = "effects"
 rule = "absent-not-sentinel"
@@ -17766,6 +17663,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir reads an 
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.airTemperatureC"
+to = "RoomGeometry.airTemperatureC"
 changed = "absent = 20 degC; an explicit 0 is 0 degC, where 1.x read 0 as the default climate; TSDoc states the default"
 domain = "effects"
 rule = "absent-not-sentinel"
@@ -17775,6 +17673,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir reads an 
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.listenerX"
+to = "RoomGeometry.listener"
 changed = "listenerX -> listener (RoomPlacement {x, y, z} (metres))"
 domain = "effects"
 rule = "individual"
@@ -17783,6 +17682,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes sou
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.listenerX"
+to = "RoomGeometry.listener"
 changed = "listenerX -> listener (RoomPlacement {x, y, z} (metres))"
 domain = "effects"
 rule = "individual"
@@ -17792,6 +17692,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes sou
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.listenerY"
+to = "RoomGeometry.listener"
 changed = "listenerY -> listener (RoomPlacement {x, y, z} (metres))"
 domain = "effects"
 rule = "individual"
@@ -17800,6 +17701,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes sou
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.listenerY"
+to = "RoomGeometry.listener"
 changed = "listenerY -> listener (RoomPlacement {x, y, z} (metres))"
 domain = "effects"
 rule = "individual"
@@ -17809,6 +17711,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes sou
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.listenerZ"
+to = "RoomGeometry.listener"
 changed = "listenerZ -> listener (RoomPlacement {x, y, z} (metres))"
 domain = "effects"
 rule = "individual"
@@ -17817,32 +17720,17 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes sou
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.listenerZ"
+to = "RoomGeometry.listener"
 changed = "listenerZ -> listener (RoomPlacement {x, y, z} (metres))"
 domain = "effects"
 rule = "individual"
 entry = "./analysis"
 test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
-
-[[entry]]
-kind = "field"
-old = "RoomGeometryOptions.maxSec"
-changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
-domain = "effects"
-rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir refuses an explicit 0"
-
-[[entry]]
-kind = "field"
-old = "RoomGeometryOptions.maxSec"
-changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
-domain = "effects"
-rule = "absent-not-sentinel"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir refuses an explicit 0"
 
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.maxSeconds"
+to = "RoomGeometry.maxSec"
 changed = "maxSeconds -> maxSec"
 domain = "effects"
 rule = "seconds-suffix"
@@ -17851,6 +17739,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes sou
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.maxSeconds"
+to = "RoomGeometry.maxSec"
 changed = "maxSeconds -> maxSec"
 domain = "effects"
 rule = "seconds-suffix"
@@ -17860,6 +17749,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes sou
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.seed"
+to = "RoomGeometry.seed"
 changed = "absent = seed 1; an explicit 0 is a seed of its own, where 1.x read 0 as the default seed; TSDoc states the default"
 domain = "effects"
 rule = "absent-not-sentinel"
@@ -17868,6 +17758,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir reads an 
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.seed"
+to = "RoomGeometry.seed"
 changed = "absent = seed 1; an explicit 0 is a seed of its own, where 1.x read 0 as the default seed; TSDoc states the default"
 domain = "effects"
 rule = "absent-not-sentinel"
@@ -17877,6 +17768,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir reads an 
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.sourceX"
+to = "RoomGeometry.source"
 changed = "sourceX -> source (RoomPlacement {x, y, z} (metres))"
 domain = "effects"
 rule = "individual"
@@ -17885,6 +17777,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes sou
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.sourceX"
+to = "RoomGeometry.source"
 changed = "sourceX -> source (RoomPlacement {x, y, z} (metres))"
 domain = "effects"
 rule = "individual"
@@ -17894,6 +17787,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes sou
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.sourceY"
+to = "RoomGeometry.source"
 changed = "sourceY -> source (RoomPlacement {x, y, z} (metres))"
 domain = "effects"
 rule = "individual"
@@ -17902,6 +17796,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes sou
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.sourceY"
+to = "RoomGeometry.source"
 changed = "sourceY -> source (RoomPlacement {x, y, z} (metres))"
 domain = "effects"
 rule = "individual"
@@ -17911,6 +17806,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes sou
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.sourceZ"
+to = "RoomGeometry.source"
 changed = "sourceZ -> source (RoomPlacement {x, y, z} (metres))"
 domain = "effects"
 rule = "individual"
@@ -17919,6 +17815,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes sou
 [[entry]]
 kind = "field"
 old = "RoomGeometryOptions.sourceZ"
+to = "RoomGeometry.source"
 changed = "sourceZ -> source (RoomPlacement {x, y, z} (metres))"
 domain = "effects"
 rule = "individual"
@@ -18359,19 +18256,17 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "type"
 old = "RirSynthOptions"
-changed = "renamed to SynthesizeRirRequest"
+new = "SynthesizeRirRequest"
 domain = "effects"
 rule = "type-names"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::declares the result and request types"
 
 [[entry]]
 kind = "type"
 old = "RirSynthOptions"
-changed = "renamed to SynthesizeRirRequest"
+new = "SynthesizeRirRequest"
 domain = "effects"
 rule = "type-names"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::declares the result and request types"
 
 [[entry]]
 kind = "type"
@@ -18456,23 +18351,22 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "value"
 old = "AcousticModeName='impulse_response'"
-changed = "AcousticModeName='impulseResponse'"
+new = "AcousticModeName='impulseResponse'"
 domain = "effects"
 rule = "token-case"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::names the impulse-response mode impulseResponse"
 
 [[entry]]
 kind = "value"
 old = "AcousticModeName='impulse_response'"
-changed = "AcousticModeName='impulseResponse'"
+new = "AcousticModeName='impulseResponse'"
 domain = "effects"
 rule = "token-case"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::names the impulse-response mode impulseResponse"
 
 [[entry]]
 kind = "field"
 old = "AutoTuneOptions.referenceMidi"
+to = "AutoTuneOptions.scaleReferenceMidi"
 changed = "referenceMidi -> scaleReferenceMidi"
 domain = "effects"
 rule = "individual"
@@ -18481,6 +18375,7 @@ test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed s
 [[entry]]
 kind = "field"
 old = "AutoTuneOptions.referenceMidi"
+to = "AutoTuneOptions.scaleReferenceMidi"
 changed = "referenceMidi -> scaleReferenceMidi"
 domain = "effects"
 rule = "individual"
@@ -18684,6 +18579,7 @@ test = "bindings/wasm/tests/surface/effects-notes.test.ts::requires sampleRate o
 [[entry]]
 kind = "field"
 old = "PitchCorrectOptions.mode"
+to = "PitchCorrectOptions.targetMode"
 changed = "mode -> targetMode (type PitchTargetMode = 'midi'|'scale')"
 domain = "effects"
 rule = "individual"
@@ -18692,6 +18588,7 @@ test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed s
 [[entry]]
 kind = "field"
 old = "PitchCorrectOptions.mode"
+to = "PitchCorrectOptions.targetMode"
 changed = "mode -> targetMode (type PitchTargetMode = 'midi'|'scale')"
 domain = "effects"
 rule = "individual"
@@ -18701,6 +18598,7 @@ test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed s
 [[entry]]
 kind = "field"
 old = "PitchCorrectOptions.referenceMidi"
+to = "PitchCorrectOptions.scaleReferenceMidi"
 changed = "referenceMidi -> scaleReferenceMidi"
 domain = "effects"
 rule = "individual"
@@ -18709,6 +18607,7 @@ test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed s
 [[entry]]
 kind = "field"
 old = "PitchCorrectOptions.referenceMidi"
+to = "PitchCorrectOptions.scaleReferenceMidi"
 changed = "referenceMidi -> scaleReferenceMidi"
 domain = "effects"
 rule = "individual"
@@ -18758,6 +18657,7 @@ test = "bindings/wasm/tests/surface/effects-notes.test.ts::requires sampleRate o
 [[entry]]
 kind = "field"
 old = "PitchShiftRequest.semitones"
+to = "PitchShiftRequest.pitchSemitones"
 changed = "semitones -> pitchSemitones"
 domain = "effects"
 rule = "pitch-semitones"
@@ -18782,6 +18682,7 @@ test = "bindings/wasm/tests/surface/effects-notes.test.ts::splitNote takes exact
 [[entry]]
 kind = "field"
 old = "TimeStretchRequest.rate"
+to = "TimeStretchRequest.speedRatio"
 changed = "rate -> speedRatio"
 domain = "effects"
 rule = "sample-rate-name"
@@ -19005,6 +18906,7 @@ test = "bindings/wasm/tests/surface/effects-notes.test.ts::refuses the removed p
 [[entry]]
 kind = "option"
 old = "scaleCorrectionSemitones(referenceMidi)"
+to = "scaleCorrectionSemitones(scaleReferenceMidi)"
 changed = "scaleCorrectionSemitones(scaleReferenceMidi?): absent is A4 and an explicit 0 is refused until the native entry reads it as MIDI note 0"
 domain = "effects"
 rule = "absent-not-sentinel"
@@ -19013,6 +18915,7 @@ test = "bindings/wasm/tests/surface/effects-notes.test.ts::scale helpers: an abs
 [[entry]]
 kind = "option"
 old = "scaleQuantizeMidi(referenceMidi)"
+to = "scaleQuantizeMidi(scaleReferenceMidi)"
 changed = "scaleQuantizeMidi(scaleReferenceMidi?): absent is A4 and an explicit 0 is refused until the native entry reads it as MIDI note 0"
 domain = "effects"
 rule = "absent-not-sentinel"
@@ -19209,6 +19112,7 @@ test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "field"
 old = "DeclipOptions.clipThreshold"
+to = "DeclipOptions.clipThresholdDb"
 changed = "clipThreshold -> clipThresholdDb (linear clip level -> dBFS; default 20*log10(0.98) ~ -0.175 dBFS)"
 domain = "effects"
 rule = "unit-in-name"
@@ -19249,6 +19153,7 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 [[entry]]
 kind = "field"
 old = "MasteringRepairDeclipRequest.clipThreshold"
+to = "MasteringRepairDeclipRequest.clipThresholdDb"
 changed = "clipThreshold -> clipThresholdDb"
 domain = "effects"
 rule = "unit-in-name"
@@ -19433,6 +19338,7 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 [[entry]]
 kind = "field"
 old = "MasteringRepairTrimSilenceRequest.threshold"
+to = "MasteringRepairTrimSilenceRequest.thresholdDb"
 changed = "threshold -> thresholdDb"
 domain = "effects"
 rule = "unit-in-name"
@@ -19449,6 +19355,7 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 [[entry]]
 kind = "field"
 old = "TrimSilenceOptions.threshold"
+to = "TrimSilenceOptions.thresholdDb"
 changed = "threshold -> thresholdDb (linear peak threshold -> dBFS; default -60 dBFS (was 0.001))"
 domain = "analysis"
 rule = "unit-in-name"
@@ -19689,6 +19596,7 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as
 [[entry]]
 kind = "type"
 old = "MasteringRepairDeclickStereoResult"
+to = "MasteringRepairDeclickResult"
 changed = "renamed to MasteringRepairDeclickResult; shape {channels, reports}"
 domain = "effects"
 rule = "type-names"
@@ -19697,6 +19605,7 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channel
 [[entry]]
 kind = "type"
 old = "MasteringRepairDeclickStereoResult"
+to = "MasteringRepairDeclickResult"
 changed = "renamed to MasteringRepairDeclickResult; shape {channels, reports}"
 domain = "effects"
 rule = "type-names"
@@ -19722,6 +19631,7 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as
 [[entry]]
 kind = "type"
 old = "MasteringRepairDeclipStereoResult"
+to = "MasteringRepairDeclipResult"
 changed = "renamed to MasteringRepairDeclipResult; shape {channels, reports}"
 domain = "effects"
 rule = "type-names"
@@ -19730,6 +19640,7 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channel
 [[entry]]
 kind = "type"
 old = "MasteringRepairDeclipStereoResult"
+to = "MasteringRepairDeclipResult"
 changed = "renamed to MasteringRepairDeclipResult; shape {channels, reports}"
 domain = "effects"
 rule = "type-names"
@@ -19755,6 +19666,7 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as
 [[entry]]
 kind = "type"
 old = "MasteringRepairDecrackleStereoResult"
+to = "MasteringRepairDecrackleResult"
 changed = "renamed to MasteringRepairDecrackleResult; shape {channels, reports}"
 domain = "effects"
 rule = "type-names"
@@ -19763,6 +19675,7 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channel
 [[entry]]
 kind = "type"
 old = "MasteringRepairDecrackleStereoResult"
+to = "MasteringRepairDecrackleResult"
 changed = "renamed to MasteringRepairDecrackleResult; shape {channels, reports}"
 domain = "effects"
 rule = "type-names"
@@ -19788,6 +19701,7 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as
 [[entry]]
 kind = "type"
 old = "MasteringRepairDehumStereoResult"
+to = "MasteringRepairDehumResult"
 changed = "renamed to MasteringRepairDehumResult; shape {channels, reports}"
 domain = "effects"
 rule = "type-names"
@@ -19796,6 +19710,7 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channel
 [[entry]]
 kind = "type"
 old = "MasteringRepairDehumStereoResult"
+to = "MasteringRepairDehumResult"
 changed = "renamed to MasteringRepairDehumResult; shape {channels, reports}"
 domain = "effects"
 rule = "type-names"
@@ -19844,6 +19759,7 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as
 [[entry]]
 kind = "type"
 old = "MasteringRepairDenoiseClassicalStereoResult"
+to = "MasteringRepairDenoiseClassicalResult"
 changed = "renamed to MasteringRepairDenoiseClassicalResult; shape {channels, reports}"
 domain = "effects"
 rule = "type-names"
@@ -19852,6 +19768,7 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channel
 [[entry]]
 kind = "type"
 old = "MasteringRepairDenoiseClassicalStereoResult"
+to = "MasteringRepairDenoiseClassicalResult"
 changed = "renamed to MasteringRepairDenoiseClassicalResult; shape {channels, reports}"
 domain = "effects"
 rule = "type-names"
@@ -19900,6 +19817,7 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as
 [[entry]]
 kind = "type"
 old = "MasteringRepairDereverbClassicalStereoResult"
+to = "MasteringRepairDereverbClassicalResult"
 changed = "renamed to MasteringRepairDereverbClassicalResult; shape {channels, reports}"
 domain = "effects"
 rule = "type-names"
@@ -19908,6 +19826,7 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channel
 [[entry]]
 kind = "type"
 old = "MasteringRepairDereverbClassicalStereoResult"
+to = "MasteringRepairDereverbClassicalResult"
 changed = "renamed to MasteringRepairDereverbClassicalResult; shape {channels, reports}"
 domain = "effects"
 rule = "type-names"
@@ -20013,6 +19932,7 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as
 [[entry]]
 kind = "type"
 old = "MasteringRepairTrimSilenceStereoResult"
+to = "MasteringRepairTrimSilenceResult"
 changed = "renamed to MasteringRepairTrimSilenceResult; shape {channels, reports}"
 domain = "effects"
 rule = "type-names"
@@ -20021,6 +19941,7 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channel
 [[entry]]
 kind = "type"
 old = "MasteringRepairTrimSilenceStereoResult"
+to = "MasteringRepairTrimSilenceResult"
 changed = "renamed to MasteringRepairTrimSilenceResult; shape {channels, reports}"
 domain = "effects"
 rule = "type-names"
@@ -20038,6 +19959,7 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as
 [[entry]]
 kind = "field"
 old = "RealtimeVoiceChangerInterleavedBuffer.channels"
+to = "RealtimeVoiceChangerInterleavedBuffer.numChannels"
 changed = "channels -> numChannels (readonly)"
 domain = "effects"
 rule = "num-channels"
@@ -20046,6 +19968,7 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::interleaved buffer re
 [[entry]]
 kind = "field"
 old = "RealtimeVoiceChangerPodConfig.eqHighpassHz"
+to = "RealtimeVoiceChangerConfig.eqHighPassHz"
 changed = "eqHighpassHz -> eqHighPassHz"
 domain = "effects"
 rule = "high-pass"
@@ -20054,6 +19977,7 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses th
 [[entry]]
 kind = "field"
 old = "RealtimeVoiceChangerPodConfig.eqHighpassHz"
+to = "RealtimeVoiceChangerConfig.eqHighPassHz"
 changed = "eqHighpassHz -> eqHighPassHz"
 domain = "effects"
 rule = "high-pass"
@@ -20062,52 +19986,8 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses th
 
 [[entry]]
 kind = "field"
-old = "RealtimeVoiceChangerPodConfig.harmonyStep1"
-removed = true
-domain = "effects"
-rule = "individual"
-
-[[entry]]
-kind = "field"
-old = "RealtimeVoiceChangerPodConfig.harmonyStep1"
-removed = true
-domain = "effects"
-rule = "individual"
-entry = "./analysis"
-
-[[entry]]
-kind = "field"
-old = "RealtimeVoiceChangerPodConfig.harmonyStep2"
-removed = true
-domain = "effects"
-rule = "individual"
-
-[[entry]]
-kind = "field"
-old = "RealtimeVoiceChangerPodConfig.harmonyStep2"
-removed = true
-domain = "effects"
-rule = "individual"
-entry = "./analysis"
-
-[[entry]]
-kind = "field"
-old = "RealtimeVoiceChangerPodConfig.harmonyStep3"
-removed = true
-domain = "effects"
-rule = "individual"
-
-[[entry]]
-kind = "field"
-old = "RealtimeVoiceChangerPodConfig.harmonyStep3"
-removed = true
-domain = "effects"
-rule = "individual"
-entry = "./analysis"
-
-[[entry]]
-kind = "field"
 old = "RealtimeVoiceChangerPodConfig.retuneGrainSize"
+to = "RealtimeVoiceChangerConfig.retuneGrainSizeSamples"
 changed = "retuneGrainSize -> retuneGrainSizeSamples"
 domain = "effects"
 rule = "unit-in-name"
@@ -20116,6 +19996,7 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses th
 [[entry]]
 kind = "field"
 old = "RealtimeVoiceChangerPodConfig.retuneGrainSize"
+to = "RealtimeVoiceChangerConfig.retuneGrainSizeSamples"
 changed = "retuneGrainSize -> retuneGrainSizeSamples"
 domain = "effects"
 rule = "unit-in-name"
@@ -20125,6 +20006,7 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses th
 [[entry]]
 kind = "field"
 old = "RealtimeVoiceChangerPodConfig.retuneSemitones"
+to = "RealtimeVoiceChangerConfig.retunePitchSemitones"
 changed = "retuneSemitones -> retunePitchSemitones"
 domain = "effects"
 rule = "pitch-semitones"
@@ -20133,49 +20015,17 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses th
 [[entry]]
 kind = "field"
 old = "RealtimeVoiceChangerPodConfig.retuneSemitones"
+to = "RealtimeVoiceChangerConfig.retunePitchSemitones"
 changed = "retuneSemitones -> retunePitchSemitones"
 domain = "effects"
 rule = "pitch-semitones"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
-
-[[entry]]
-kind = "field"
-old = "RealtimeVoiceChangerPodConfig.reverbVariationVariation"
-changed = "reverbVariationVariation -> reverbVariation"
-domain = "effects"
-rule = "individual"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
-
-[[entry]]
-kind = "field"
-old = "RealtimeVoiceChangerPodConfig.reverbVariationVariation"
-changed = "reverbVariationVariation -> reverbVariation"
-domain = "effects"
-rule = "individual"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
-
-[[entry]]
-kind = "field"
-old = "RealtimeVoiceChangerPodConfig.voiceEngineEngine"
-changed = "voiceEngineEngine -> voiceEngine"
-domain = "effects"
-rule = "individual"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
-
-[[entry]]
-kind = "field"
-old = "RealtimeVoiceChangerPodConfig.voiceEngineEngine"
-changed = "voiceEngineEngine -> voiceEngine"
-domain = "effects"
-rule = "individual"
 entry = "./analysis"
 test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
 
 [[entry]]
 kind = "field"
 old = "SonareRealtimeVoiceChangerWorkletProcessorOptions.blockSize"
+to = "SonareRealtimeVoiceChangerWorkletProcessorOptions.maxBlockSize"
 changed = "blockSize -> maxBlockSize"
 domain = "effects"
 rule = "num-channels"
@@ -20185,6 +20035,7 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the processor
 [[entry]]
 kind = "field"
 old = "SonareRealtimeVoiceChangerWorkletProcessorOptions.channelCount"
+to = "SonareRealtimeVoiceChangerWorkletProcessorOptions.numChannels"
 changed = "channelCount -> numChannels"
 domain = "effects"
 rule = "num-channels"
@@ -20194,6 +20045,7 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the processor
 [[entry]]
 kind = "field"
 old = "SonareRealtimeVoiceChangerWorkletProcessorOptions.preset"
+to = "SonareRealtimeVoiceChangerWorkletProcessorOptions.config"
 changed = "preset -> config"
 domain = "effects"
 rule = "num-channels"
@@ -20203,6 +20055,7 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the processor
 [[entry]]
 kind = "field"
 old = "StreamingRetuneConfig.grainSize"
+to = "StreamingRetuneConfig.grainSizeSamples"
 changed = "grainSize -> grainSizeSamples (grain size in samples; absent = derived from the sample rate; explicit 0 -> RangeError)"
 domain = "effects"
 rule = "absent-not-sentinel"
@@ -20211,6 +20064,7 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::names its controls pi
 [[entry]]
 kind = "field"
 old = "StreamingRetuneConfig.grainSize"
+to = "StreamingRetuneConfig.grainSizeSamples"
 changed = "grainSize -> grainSizeSamples (grain size in samples; absent = derived from the sample rate; explicit 0 -> RangeError)"
 domain = "effects"
 rule = "absent-not-sentinel"
@@ -20220,6 +20074,7 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::names its controls pi
 [[entry]]
 kind = "field"
 old = "StreamingRetuneConfig.semitones"
+to = "StreamingRetuneConfig.pitchSemitones"
 changed = "semitones -> pitchSemitones (renamed)"
 domain = "effects"
 rule = "pitch-semitones"
@@ -20228,6 +20083,7 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::names its controls pi
 [[entry]]
 kind = "field"
 old = "StreamingRetuneConfig.semitones"
+to = "StreamingRetuneConfig.pitchSemitones"
 changed = "semitones -> pitchSemitones (renamed)"
 domain = "effects"
 rule = "pitch-semitones"
@@ -20252,6 +20108,7 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::voiceChangeRealtime i
 [[entry]]
 kind = "field"
 old = "VoiceChangeRealtimeRequest.preset"
+to = "VoiceChangeRealtimeRequest.config"
 changed = "preset -> config (RealtimeVoiceChangerConfigInput; default 'neutralMonitor')"
 domain = "effects"
 rule = "individual"
@@ -20268,6 +20125,7 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::voiceChangeRealtime i
 [[entry]]
 kind = "field"
 old = "VoiceChangeRealtimeRequest.samples"
+to = "VoiceChangeRealtimeRequest.channels"
 changed = "samples -> channels (Float32Array[] (1 or 2 planar channels, equal lengths); was interleaved `samples` + count `channels`)"
 domain = "effects"
 rule = "num-channels"
@@ -20282,7 +20140,7 @@ rule = "sample-rate-required"
 test = "bindings/wasm/tests/surface/effects-voice.test.ts::voiceChange requires sampleRate in both forms"
 
 [[entry]]
-kind = "function"
+kind = "class"
 old = "RealtimeVoiceChanger"
 changed = "constructor(options: RealtimeVoiceChangerOptions)"
 domain = "effects"
@@ -20300,6 +20158,7 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config and pre
 [[entry]]
 kind = "function"
 old = "validateRealtimeVoiceChangerPresetJson"
+to = "realtimeVoiceChangerValidatePresetJson"
 changed = "renamed to realtimeVoiceChangerValidatePresetJson(json: string): RealtimeVoiceChangerValidatePresetJsonResult"
 domain = "effects"
 rule = "type-names"
@@ -20351,13 +20210,6 @@ changed = "createRealtimePlanarBuffer(numFrames: number, numChannels: 1 | 2)"
 domain = "effects"
 rule = "num-channels"
 test = "bindings/wasm/tests/surface/effects-voice.test.ts::refuses a channel count outside 1 or 2"
-
-[[entry]]
-kind = "method"
-old = "RealtimeVoiceChanger.getCarrierBuffer"
-removed = true
-domain = "effects"
-rule = "getters"
 
 [[entry]]
 kind = "method"
@@ -20434,29 +20286,7 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::require numChannels 1
 
 [[entry]]
 kind = "method"
-old = "RealtimeVoiceChanger.processInterleavedWithCarrier"
-removed = true
-domain = "effects"
-rule = "one-positional-form"
-
-[[entry]]
-kind = "method"
-old = "RealtimeVoiceChanger.processInterleavedWithCarrierInto"
-changed = "processInterleavedWithCarrierInto(input: Float32Array, carrier: Float32Array, numChannels: 1 | 2, output: Float32Array): void"
-domain = "effects"
-rule = "num-channels"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::require numChannels 1 or 2"
-
-[[entry]]
-kind = "method"
 old = "RealtimeVoiceChanger.processPreparedInterleaved"
-removed = true
-domain = "effects"
-rule = "one-entry-per-operation"
-
-[[entry]]
-kind = "method"
-old = "RealtimeVoiceChanger.processPreparedInterleavedWithCarrier"
 removed = true
 domain = "effects"
 rule = "one-entry-per-operation"
@@ -20470,21 +20300,7 @@ rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "method"
-old = "RealtimeVoiceChanger.processPreparedMonoWithCarrier"
-removed = true
-domain = "effects"
-rule = "one-entry-per-operation"
-
-[[entry]]
-kind = "method"
 old = "RealtimeVoiceChanger.processPreparedPlanar"
-removed = true
-domain = "effects"
-rule = "one-entry-per-operation"
-
-[[entry]]
-kind = "method"
-old = "RealtimeVoiceChanger.processPreparedPlanarWithCarrier"
 removed = true
 domain = "effects"
 rule = "one-entry-per-operation"
@@ -20507,6 +20323,7 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "method"
 old = "StreamingRetune.grainSize"
+to = "StreamingRetune.grainSizeSamples"
 changed = "readonly getter grainSizeSamples: number"
 domain = "effects"
 rule = "getters"
@@ -20539,19 +20356,17 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::declares the result and
 [[entry]]
 kind = "type"
 old = "RealtimeVoiceChangerPodConfig"
-changed = "renamed to RealtimeVoiceChangerConfig"
+new = "RealtimeVoiceChangerConfig"
 domain = "effects"
 rule = "type-names"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
 
 [[entry]]
 kind = "type"
 old = "RealtimeVoiceChangerPodConfig"
-changed = "renamed to RealtimeVoiceChangerConfig"
+new = "RealtimeVoiceChangerConfig"
 domain = "effects"
 rule = "type-names"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
 
 [[entry]]
 kind = "type"
@@ -20627,293 +20442,94 @@ rule = "sample-rate-required"
 test = "bindings/wasm/tests/surface/effects-voice.test.ts::voiceChange requires sampleRate in both forms"
 
 [[entry]]
-kind = "type"
-old = "VoiceCharacterType"
-changed = "renamed to CharacterType"
-domain = "core"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
-
-[[entry]]
-kind = "type"
-old = "VoiceCharacterType"
-changed = "renamed to CharacterType"
-domain = "core"
-rule = "type-names"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
-
-[[entry]]
-kind = "type"
-old = "VoiceMidiRelease"
-changed = "renamed to MidiRelease"
-domain = "engine"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
-
-[[entry]]
-kind = "type"
-old = "VoiceMidiRelease"
-changed = "renamed to MidiRelease"
-domain = "engine"
-rule = "type-names"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
-
-[[entry]]
-kind = "type"
-old = "VoiceNoteDivision"
-changed = "renamed to NoteDivision"
-domain = "core"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
-
-[[entry]]
-kind = "type"
-old = "VoiceNoteDivision"
-changed = "renamed to NoteDivision"
-domain = "core"
-rule = "type-names"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
-
-[[entry]]
-kind = "type"
-old = "VoicePitchEngine"
-changed = "renamed to VoiceEngine"
-domain = "engine"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
-
-[[entry]]
-kind = "type"
-old = "VoicePitchEngine"
-changed = "renamed to VoiceEngine"
-domain = "engine"
-rule = "type-names"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
-
-[[entry]]
-kind = "type"
-old = "VoiceReverbVariation"
-changed = "renamed to ReverbVariation"
-domain = "core"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
-
-[[entry]]
-kind = "type"
-old = "VoiceReverbVariation"
-changed = "renamed to ReverbVariation"
-domain = "core"
-rule = "type-names"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
-
-[[entry]]
-kind = "type"
-old = "VoiceVocoderCarrierSource"
-changed = "renamed to VocoderCarrierSource"
-domain = "core"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
-
-[[entry]]
-kind = "type"
-old = "VoiceVocoderCarrierSource"
-changed = "renamed to VocoderCarrierSource"
-domain = "core"
-rule = "type-names"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
-
-[[entry]]
-kind = "type"
-old = "VoiceVocoderCarrierWave"
-changed = "renamed to VocoderCarrierWave"
-domain = "core"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
-
-[[entry]]
-kind = "type"
-old = "VoiceVocoderCarrierWave"
-changed = "renamed to VocoderCarrierWave"
-domain = "core"
-rule = "type-names"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the enum types and lowers the tokens"
-
-[[entry]]
 kind = "value"
-old = "VoiceCharacterType='bbd_chorus'"
-changed = "CharacterType='bbdChorus'"
+old = "VoicePresetId='bright-idol'"
+new = "VoicePresetId='brightIdol'"
 domain = "core"
 rule = "token-case"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::accepts the lowerCamel tokens"
-
-[[entry]]
-kind = "value"
-old = "VoiceCharacterType='bbd_chorus'"
-changed = "CharacterType='bbdChorus'"
-domain = "core"
-rule = "token-case"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::accepts the lowerCamel tokens"
-
-[[entry]]
-kind = "value"
-old = "VoiceNoteDivision='dotted_eighth'"
-changed = "NoteDivision='dottedEighth'"
-domain = "core"
-rule = "token-case"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::accepts the lowerCamel tokens"
-
-[[entry]]
-kind = "value"
-old = "VoiceNoteDivision='dotted_eighth'"
-changed = "NoteDivision='dottedEighth'"
-domain = "core"
-rule = "token-case"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::accepts the lowerCamel tokens"
 
 [[entry]]
 kind = "value"
 old = "VoicePresetId='bright-idol'"
-changed = "VoicePresetId='brightIdol'"
-domain = "core"
-rule = "token-case"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
-
-[[entry]]
-kind = "value"
-old = "VoicePresetId='bright-idol'"
-changed = "VoicePresetId='brightIdol'"
+new = "VoicePresetId='brightIdol'"
 domain = "core"
 rule = "token-case"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
 
 [[entry]]
 kind = "value"
 old = "VoicePresetId='dark-villain'"
-changed = "VoicePresetId='darkVillain'"
+new = "VoicePresetId='darkVillain'"
 domain = "core"
 rule = "token-case"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
 
 [[entry]]
 kind = "value"
 old = "VoicePresetId='dark-villain'"
-changed = "VoicePresetId='darkVillain'"
+new = "VoicePresetId='darkVillain'"
 domain = "core"
 rule = "token-case"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
 
 [[entry]]
 kind = "value"
 old = "VoicePresetId='deep-narrator'"
-changed = "VoicePresetId='deepNarrator'"
+new = "VoicePresetId='deepNarrator'"
 domain = "core"
 rule = "token-case"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
 
 [[entry]]
 kind = "value"
 old = "VoicePresetId='deep-narrator'"
-changed = "VoicePresetId='deepNarrator'"
+new = "VoicePresetId='deepNarrator'"
 domain = "core"
 rule = "token-case"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
 
 [[entry]]
 kind = "value"
 old = "VoicePresetId='neutral-monitor'"
-changed = "VoicePresetId='neutralMonitor'"
+new = "VoicePresetId='neutralMonitor'"
 domain = "core"
 rule = "token-case"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
 
 [[entry]]
 kind = "value"
 old = "VoicePresetId='neutral-monitor'"
-changed = "VoicePresetId='neutralMonitor'"
+new = "VoicePresetId='neutralMonitor'"
 domain = "core"
 rule = "token-case"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
 
 [[entry]]
 kind = "value"
 old = "VoicePresetId='robot-mascot'"
-changed = "VoicePresetId='robotMascot'"
+new = "VoicePresetId='robotMascot'"
 domain = "core"
 rule = "token-case"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
 
 [[entry]]
 kind = "value"
 old = "VoicePresetId='robot-mascot'"
-changed = "VoicePresetId='robotMascot'"
+new = "VoicePresetId='robotMascot'"
 domain = "core"
 rule = "token-case"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
 
 [[entry]]
 kind = "value"
 old = "VoicePresetId='soft-whisper'"
-changed = "VoicePresetId='softWhisper'"
+new = "VoicePresetId='softWhisper'"
 domain = "core"
 rule = "token-case"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
 
 [[entry]]
 kind = "value"
 old = "VoicePresetId='soft-whisper'"
-changed = "VoicePresetId='softWhisper'"
+new = "VoicePresetId='softWhisper'"
 domain = "core"
 rule = "token-case"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
-
-[[entry]]
-kind = "value"
-old = "VoiceReverbVariation='dub_echo'"
-changed = "ReverbVariation='dubEcho'"
-domain = "core"
-rule = "token-case"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::accepts the lowerCamel tokens"
-
-[[entry]]
-kind = "value"
-old = "VoiceReverbVariation='dub_echo'"
-changed = "ReverbVariation='dubEcho'"
-domain = "core"
-rule = "token-case"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::accepts the lowerCamel tokens"
-
-[[entry]]
-kind = "value"
-old = "VoiceReverbVariation='tempo_delay'"
-changed = "ReverbVariation='tempoDelay'"
-domain = "core"
-rule = "token-case"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::accepts the lowerCamel tokens"
-
-[[entry]]
-kind = "value"
-old = "VoiceReverbVariation='tempo_delay'"
-changed = "ReverbVariation='tempoDelay'"
-domain = "core"
-rule = "token-case"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-voice.test.ts::accepts the lowerCamel tokens"
 
 [[entry]]
 kind = "field"
@@ -21004,14 +20620,14 @@ rule = "typed-results"
 test = "bindings/wasm/tests/surface/effects-repair.test.ts::masteringRepairTrimSilence reports the range it kept, and tolerates all silence"
 
 [[entry]]
-kind = "value"
+kind = "type"
 old = "Mode"
 removed = true
 domain = "core"
 rule = "string-closed-sets"
 
 [[entry]]
-kind = "value"
+kind = "type"
 old = "Mode"
 removed = true
 domain = "core"
@@ -21042,9 +20658,11 @@ rule = "getters"
 [[entry]]
 kind = "method"
 old = "Project.getPartRig"
-new = "Project.partRig"
+changed = "partRig({ destinationId, part }) replaces getPartRig(destinationId, part); only the key object is accepted"
+to = "Project.partRig"
 domain = "project"
 rule = "getters"
+test = "bindings/wasm/tests/surface/project.test.ts::sets a program and a part rig from request objects with no positional form"
 
 [[entry]]
 kind = "method"
@@ -21417,14 +21035,6 @@ domain = "project"
 rule = "no-internal-types"
 
 [[entry]]
-kind = "method"
-old = "ProjectTimeline.constructor"
-changed = "the constructor is module-private and throws TypeError; obtain a timeline from Project.compileTimeline()"
-domain = "project"
-rule = "no-internal-types"
-test = "bindings/wasm/tests/surface/project.test.ts::compiles a timeline that callers cannot construct"
-
-[[entry]]
 kind = "field"
 old = "ProjectSource.channelCount"
 new = "ProjectSource.numChannels"
@@ -21556,20 +21166,6 @@ old = "ProjectClipFade.curve"
 removed = true
 domain = "project"
 rule = "unit-in-name"
-
-[[entry]]
-kind = "value"
-old = "ProjectWarpMode='tempo-sync'"
-new = "ProjectWarpMode='tempoSync'"
-domain = "project"
-rule = "token-case"
-
-[[entry]]
-kind = "value"
-old = "ProjectWarpMode='time-stretch'"
-new = "ProjectWarpMode='timeStretch'"
-domain = "project"
-rule = "token-case"
 
 [[entry]]
 kind = "value"
@@ -22025,14 +21621,6 @@ test = "bindings/wasm/tests/vocal_project.test.ts::dependency and rehydrate take
 
 [[entry]]
 kind = "method"
-old = "VocalEditDraft.revision"
-changed = "now a readonly getter, read it without parentheses"
-domain = "project"
-rule = "getters"
-test = "bindings/wasm/tests/vocal_edit.test.ts::reads the session and draft token and revision as getters"
-
-[[entry]]
-kind = "method"
 old = "VocalRenderSnapshot.render"
 changed = "an aborted signal rejects or throws a Cancelled SonareError instead of a DOMException AbortError"
 domain = "project"
@@ -22062,22 +21650,6 @@ new = "SonareWorkletProcessorOptions.maxBlockSize"
 domain = "engine"
 rule = "num-channels"
 entry = "./worklet"
-
-[[entry]]
-kind = "field"
-old = "MixerConfig.blockSize"
-new = "MixerConfig.maxBlockSize"
-domain = "mastering"
-rule = "num-channels"
-
-
-[[entry]]
-kind = "field"
-old = "MixerJsonOptions.blockSize"
-new = "MixerJsonOptions.maxBlockSize"
-domain = "mastering"
-rule = "num-channels"
-
 
 [[entry]]
 kind = "type"
@@ -22134,7 +21706,7 @@ domain = "project"
 rule = "no-internal-types"
 
 [[entry]]
-kind = "function"
+kind = "export"
 old = "opfsClipPageWorkerSource"
 removed = true
 domain = "project"
@@ -22562,6 +22134,7 @@ old = "SonareEngine.setMidiFx"
 changed = "takes a MidiFxConfig object instead of a JSON string; the worklet message still carries the serialized JSON"
 domain = "engine"
 rule = "typed-results"
+entry = "./worklet"
 test = "bindings/wasm/tests/worklet_realtime_engine_node.test.ts::exposes the high-level SonareEngine facade"
 
 [[entry]]
@@ -23053,14 +22626,14 @@ rule = "worklet-scope"
 entry = "./worklet"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "JsonResult"
 removed = true
 domain = "mastering"
 rule = "typed-results"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "JsonResult"
 removed = true
 domain = "mastering"
@@ -23068,48 +22641,14 @@ rule = "typed-results"
 entry = "./analysis"
 
 [[entry]]
-kind = "export"
-old = "LufsInterleavedRequest"
-changed = "export LufsMultichannelRequest"
-domain = "mastering"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsInterleavedRequest"
-
-[[entry]]
-kind = "export"
-old = "LufsInterleavedRequest"
-changed = "export LufsMultichannelRequest"
-domain = "mastering"
-rule = "type-names"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsInterleavedRequest"
-
-[[entry]]
-kind = "export"
-old = "LufsSeriesInterleavedRequest"
-changed = "export LufsSeriesMultichannelRequest"
-domain = "mastering"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesInterleavedRequest"
-
-[[entry]]
-kind = "export"
-old = "LufsSeriesInterleavedRequest"
-changed = "export LufsSeriesMultichannelRequest"
-domain = "mastering"
-rule = "type-names"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesInterleavedRequest"
-
-[[entry]]
-kind = "export"
+kind = "type"
 old = "MasteringAssistantParams"
 removed = true
 domain = "mastering"
 rule = "options-struct"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "MasteringAssistantParams"
 removed = true
 domain = "mastering"
@@ -23117,30 +22656,14 @@ rule = "options-struct"
 entry = "./analysis"
 
 [[entry]]
-kind = "export"
-old = "MasteringAssistantParamsRequest"
-changed = "export MasteringAssistantSuggestRequest"
-domain = "mastering"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant params are flat request fields"
-
-[[entry]]
-kind = "export"
-old = "MasteringAssistantStereoParamsRequest"
-changed = "export MasteringAssistantSuggestStereoRequest"
-domain = "mastering"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant params are flat request fields"
-
-[[entry]]
-kind = "export"
+kind = "type"
 old = "MasteringChainConfigDocument"
 removed = true
 domain = "mastering"
 rule = "typed-results"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "MasteringChainConfigDocument"
 removed = true
 domain = "mastering"
@@ -23148,28 +22671,28 @@ rule = "typed-results"
 entry = "./analysis"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "MasteringChainRequest"
 removed = true
 domain = "mastering"
 rule = "one-entry-per-operation"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "MasteringChainStereoRequest"
 removed = true
 domain = "mastering"
 rule = "one-entry-per-operation"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "MasteringInsertParamValue"
 removed = true
 domain = "mastering"
 rule = "worklet-scope"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "MasteringInsertParamValue"
 removed = true
 domain = "mastering"
@@ -23177,14 +22700,14 @@ rule = "worklet-scope"
 entry = "./analysis"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "MasteringInsertParams"
 removed = true
 domain = "mastering"
 rule = "worklet-scope"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "MasteringInsertParams"
 removed = true
 domain = "mastering"
@@ -23192,87 +22715,14 @@ rule = "worklet-scope"
 entry = "./analysis"
 
 [[entry]]
-kind = "export"
-old = "MasteringOptions"
-changed = "export MasteringNormalizeLoudnessOptions"
-domain = "mastering"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::explicit 0 on a default-bearing field"
-
-[[entry]]
-kind = "export"
-old = "MasteringOptions"
-changed = "export MasteringNormalizeLoudnessOptions"
-domain = "mastering"
-rule = "type-names"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::explicit 0 on a default-bearing field"
-
-[[entry]]
-kind = "export"
-old = "MasteringPairAnalyzeRequest"
-changed = "export MasteringAnalyzePairRequest"
-domain = "mastering"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo analyses return objects"
-
-[[entry]]
-kind = "export"
-old = "MasteringPairProcessRequest"
-changed = "export MasteringApplyPairProcessorRequest"
-domain = "mastering"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
-
-[[entry]]
-kind = "export"
-old = "MasteringPairProcessStereoRequest"
-changed = "export MasteringApplyPairProcessorStereoRequest"
-domain = "mastering"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
-
-[[entry]]
-kind = "export"
-old = "MasteringProcessRequest"
-changed = "export MasteringApplyProcessorRequest"
-domain = "mastering"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
-
-[[entry]]
-kind = "export"
-old = "MasteringProcessStereoRequest"
-changed = "export MasteringApplyProcessorStereoRequest"
-domain = "mastering"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
-
-[[entry]]
-kind = "export"
-old = "MasteringRequest"
-changed = "export MasteringNormalizeLoudnessRequest"
-domain = "mastering"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::explicit 0 on a default-bearing field"
-
-[[entry]]
-kind = "export"
-old = "MasteringSamplesParamsRequest"
-changed = "export MasteringAudioProfileRequest"
-domain = "mastering"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
-
-[[entry]]
-kind = "export"
+kind = "type"
 old = "MasteringSoloProcessorParams"
 removed = true
 domain = "mastering"
 rule = "worklet-scope"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "MasteringSoloProcessorParams"
 removed = true
 domain = "mastering"
@@ -23280,22 +22730,14 @@ rule = "worklet-scope"
 entry = "./analysis"
 
 [[entry]]
-kind = "export"
-old = "MasteringStereoAnalyzeRequest"
-changed = "export MasteringAnalyzeStereoRequest"
-domain = "mastering"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo analyses return objects"
-
-[[entry]]
-kind = "export"
+kind = "type"
 old = "MasteringStereoChainResult"
 removed = true
 domain = "mastering"
 rule = "aliases-removed"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "MasteringStereoChainResult"
 removed = true
 domain = "mastering"
@@ -23303,22 +22745,14 @@ rule = "aliases-removed"
 entry = "./analysis"
 
 [[entry]]
-kind = "export"
-old = "MasteringStereoParamsRequest"
-changed = "export MasteringAudioProfileStereoRequest"
-domain = "mastering"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
-
-[[entry]]
-kind = "export"
+kind = "type"
 old = "MatchTonalBalanceLogBandsResult"
 removed = true
 domain = "mastering"
 rule = "one-entry-per-operation"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "MatchTonalBalanceLogBandsResult"
 removed = true
 domain = "mastering"
@@ -23326,14 +22760,14 @@ rule = "one-entry-per-operation"
 entry = "./analysis"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "MeteringSamplesRequest"
 removed = true
 domain = "mastering"
 rule = "type-names"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "MeteringSamplesRequest"
 removed = true
 domain = "mastering"
@@ -23341,14 +22775,14 @@ rule = "type-names"
 entry = "./analysis"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "MeteringStereoDecimatedRequest"
 removed = true
 domain = "mastering"
 rule = "type-names"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "MeteringStereoDecimatedRequest"
 removed = true
 domain = "mastering"
@@ -23356,14 +22790,14 @@ rule = "type-names"
 entry = "./analysis"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "MeteringStereoRequest"
 removed = true
 domain = "mastering"
 rule = "type-names"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "MeteringStereoRequest"
 removed = true
 domain = "mastering"
@@ -23371,31 +22805,14 @@ rule = "type-names"
 entry = "./analysis"
 
 [[entry]]
-kind = "export"
-old = "MeteringTruePeakRequest"
-changed = "export MeteringTruePeakDbRequest"
-domain = "mastering"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringTruePeakRequest"
-
-[[entry]]
-kind = "export"
-old = "MeteringTruePeakRequest"
-changed = "export MeteringTruePeakDbRequest"
-domain = "mastering"
-rule = "type-names"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringTruePeakRequest"
-
-[[entry]]
-kind = "export"
+kind = "type"
 old = "MixAssistantOptions"
 removed = true
 domain = "mastering"
 rule = "options-struct"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "MixAssistantOptions"
 removed = true
 domain = "mastering"
@@ -23403,14 +22820,14 @@ rule = "options-struct"
 entry = "./analysis"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "MixOptions"
 removed = true
 domain = "mastering"
 rule = "one-positional-form"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "MixOptions"
 removed = true
 domain = "mastering"
@@ -23418,14 +22835,14 @@ rule = "one-positional-form"
 entry = "./analysis"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "ScopeOptions"
 removed = true
 domain = "mastering"
 rule = "one-positional-form"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "ScopeOptions"
 removed = true
 domain = "mastering"
@@ -23433,22 +22850,14 @@ rule = "one-positional-form"
 entry = "./analysis"
 
 [[entry]]
-kind = "export"
-old = "SuggestMixSceneRequest"
-changed = "export MixingAssistantSuggestRequest"
-domain = "mastering"
-rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::SuggestMixSceneRequest"
-
-[[entry]]
-kind = "export"
+kind = "type"
 old = "TypedJson"
 removed = true
 domain = "mastering"
 rule = "typed-results"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "TypedJson"
 removed = true
 domain = "mastering"
@@ -23456,14 +22865,14 @@ rule = "typed-results"
 entry = "./analysis"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "WaveformPeakPyramidOptions"
 removed = true
 domain = "mastering"
 rule = "one-positional-form"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "WaveformPeakPyramidOptions"
 removed = true
 domain = "mastering"
@@ -23471,14 +22880,14 @@ rule = "one-positional-form"
 entry = "./analysis"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "WaveformPeaksOptions"
 removed = true
 domain = "mastering"
 rule = "one-positional-form"
 
 [[entry]]
-kind = "export"
+kind = "type"
 old = "WaveformPeaksOptions"
 removed = true
 domain = "mastering"
@@ -23486,146 +22895,56 @@ rule = "one-positional-form"
 entry = "./analysis"
 
 [[entry]]
-kind = "export"
-old = "lufsInterleaved"
-changed = "export lufsMultichannel"
-domain = "mastering"
-rule = "num-channels"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::lufsInterleaved"
-
-[[entry]]
-kind = "export"
-old = "lufsInterleaved"
-changed = "export lufsMultichannel"
-domain = "mastering"
-rule = "num-channels"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::lufsInterleaved"
-
-[[entry]]
-kind = "export"
-old = "lufsSeriesInterleaved"
-changed = "export lufsSeriesMultichannel"
-domain = "mastering"
-rule = "num-channels"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::lufsSeriesInterleaved"
-
-[[entry]]
-kind = "export"
-old = "lufsSeriesInterleaved"
-changed = "export lufsSeriesMultichannel"
-domain = "mastering"
-rule = "num-channels"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::lufsSeriesInterleaved"
-
-[[entry]]
-kind = "export"
+kind = "function"
 old = "masterAudioStereoWithProgress"
 removed = true
 domain = "mastering"
 rule = "progress-callback"
 
 [[entry]]
-kind = "export"
+kind = "function"
 old = "masterAudioWithProgress"
 removed = true
 domain = "mastering"
 rule = "progress-callback"
 
 [[entry]]
-kind = "export"
-old = "mastering"
-changed = "export masteringNormalizeLoudness"
-domain = "mastering"
-rule = "mastering-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::request and positional forms agree"
-
-[[entry]]
-kind = "export"
+kind = "function"
 old = "masteringChain"
 removed = true
 domain = "mastering"
 rule = "one-entry-per-operation"
 
 [[entry]]
-kind = "export"
+kind = "function"
 old = "masteringChainStereo"
 removed = true
 domain = "mastering"
 rule = "one-entry-per-operation"
 
 [[entry]]
-kind = "export"
+kind = "function"
 old = "masteringChainStereoWithProgress"
 removed = true
 domain = "mastering"
 rule = "progress-callback"
 
 [[entry]]
-kind = "export"
+kind = "function"
 old = "masteringChainWithProgress"
 removed = true
 domain = "mastering"
 rule = "progress-callback"
 
 [[entry]]
-kind = "export"
-old = "masteringPairAnalyze"
-changed = "export masteringAnalyzePair"
-domain = "mastering"
-rule = "mastering-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo analyses return objects"
-
-[[entry]]
-kind = "export"
-old = "masteringPairProcess"
-changed = "export masteringApplyPairProcessor"
-domain = "mastering"
-rule = "mastering-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
-
-[[entry]]
-kind = "export"
-old = "masteringPairProcessStereo"
-changed = "export masteringApplyPairProcessorStereo"
-domain = "mastering"
-rule = "mastering-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
-
-[[entry]]
-kind = "export"
-old = "masteringProcess"
-changed = "export masteringApplyProcessor"
-domain = "mastering"
-rule = "mastering-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
-
-[[entry]]
-kind = "export"
-old = "masteringProcessStereo"
-changed = "export masteringApplyProcessorStereo"
-domain = "mastering"
-rule = "mastering-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
-
-[[entry]]
-kind = "export"
-old = "masteringStereoAnalyze"
-changed = "export masteringAnalyzeStereo"
-domain = "mastering"
-rule = "mastering-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo analyses return objects"
-
-[[entry]]
-kind = "export"
+kind = "function"
 old = "meteringPhaseScopeDecimated"
 removed = true
 domain = "mastering"
 rule = "one-entry-per-operation"
 
 [[entry]]
-kind = "export"
+kind = "function"
 old = "meteringPhaseScopeDecimated"
 removed = true
 domain = "mastering"
@@ -23633,14 +22952,14 @@ rule = "one-entry-per-operation"
 entry = "./analysis"
 
 [[entry]]
-kind = "export"
+kind = "function"
 old = "meteringVectorscopeDecimated"
 removed = true
 domain = "mastering"
 rule = "one-entry-per-operation"
 
 [[entry]]
-kind = "export"
+kind = "function"
 old = "meteringVectorscopeDecimated"
 removed = true
 domain = "mastering"
@@ -23648,39 +22967,7 @@ rule = "one-entry-per-operation"
 entry = "./analysis"
 
 [[entry]]
-kind = "export"
-old = "mixSourceClassFromName"
-changed = "export mixingAssistantSourceClassFromName"
-domain = "mastering"
-rule = "mastering-names"
-test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::mixSourceClassFromName"
-
-[[entry]]
-kind = "export"
-old = "mixSourceClassNames"
-changed = "export mixingAssistantSourceClassNames"
-domain = "mastering"
-rule = "mastering-names"
-test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::mixSourceClassNames"
-
-[[entry]]
-kind = "export"
-old = "mixingScenePresetJson"
-changed = "export mixingScenePreset"
-domain = "mastering"
-rule = "typed-results"
-test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::mixingScenePresetJson"
-
-[[entry]]
-kind = "export"
-old = "suggestMixScene"
-changed = "export mixingAssistantSuggest"
-domain = "mastering"
-rule = "mastering-names"
-test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::suggestMixScene"
-
-[[entry]]
-kind = "export"
+kind = "function"
 old = "suggestMixSceneJson"
 removed = true
 domain = "mastering"
@@ -23689,6 +22976,7 @@ rule = "typed-results"
 [[entry]]
 kind = "field"
 old = "ClipDetection.sampleCount"
+to = "ClipDetection.clippedSamples"
 changed = "sampleCount -> clippedSamples"
 domain = "effects"
 rule = "individual"
@@ -23697,6 +22985,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::ClipDetection.sa
 [[entry]]
 kind = "field"
 old = "ClipDetection.sampleCount"
+to = "ClipDetection.clippedSamples"
 changed = "sampleCount -> clippedSamples"
 domain = "effects"
 rule = "individual"
@@ -23706,6 +22995,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::ClipDetection.sa
 [[entry]]
 kind = "field"
 old = "ClipDetection.sampleFraction"
+to = "ClipDetection.clippedRatio"
 changed = "sampleFraction -> clippedRatio"
 domain = "effects"
 rule = "individual"
@@ -23714,6 +23004,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::ClipDetection.sa
 [[entry]]
 kind = "field"
 old = "ClipDetection.sampleFraction"
+to = "ClipDetection.clippedRatio"
 changed = "sampleFraction -> clippedRatio"
 domain = "effects"
 rule = "individual"
@@ -23723,6 +23014,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::ClipDetection.sa
 [[entry]]
 kind = "field"
 old = "ClippingReport.clippingRatio"
+to = "ClippingReport.clippedRatio"
 changed = "clippingRatio -> clippedRatio"
 domain = "mastering"
 rule = "individual"
@@ -23731,6 +23023,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::ClippingReport.c
 [[entry]]
 kind = "field"
 old = "ClippingReport.clippingRatio"
+to = "ClippingReport.clippedRatio"
 changed = "clippingRatio -> clippedRatio"
 domain = "mastering"
 rule = "individual"
@@ -23748,6 +23041,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::CompressorOption
 [[entry]]
 kind = "field"
 old = "CompressorOptions.sidechainHpfEnabled"
+to = "CompressorOptions.sidechainHighPassHz"
 changed = "sidechainHpfEnabled -> sidechainHighPassHz (number (Hz, > 0); absent = sidechain high-pass off; replaces sidechainHpfEnabled + sidechainHpfHz)"
 domain = "mastering"
 rule = "high-pass"
@@ -23756,6 +23050,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::CompressorOption
 [[entry]]
 kind = "field"
 old = "CompressorOptions.sidechainHpfHz"
+to = "CompressorOptions.sidechainHighPassHz"
 changed = "sidechainHpfHz -> sidechainHighPassHz (number (Hz, > 0); absent = sidechain high-pass off; replaces sidechainHpfEnabled + sidechainHpfHz)"
 domain = "mastering"
 rule = "high-pass"
@@ -23781,6 +23076,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::Ebur128LoudnessR
 [[entry]]
 kind = "field"
 old = "GateOptions.keyHpfHz"
+to = "GateOptions.keyHighPassHz"
 changed = "keyHpfHz -> keyHighPassHz (number (Hz); absent = off; 0 Hz passes everything, the same as off, so it stays accepted)"
 domain = "mastering"
 rule = "high-pass"
@@ -23804,6 +23100,7 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "LufsInterleavedRequest.sampleRate"
+to = "LufsMultichannelRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -23812,6 +23109,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsInterleavedR
 [[entry]]
 kind = "field"
 old = "LufsInterleavedRequest.sampleRate"
+to = "LufsMultichannelRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -23821,6 +23119,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsInterleavedR
 [[entry]]
 kind = "field"
 old = "LufsInterleavedRequest.samples"
+to = "LufsMultichannelRequest.channels"
 changed = "samples -> channels (Float32Array[] (planar; was interleaved samples + count))"
 domain = "mastering"
 rule = "num-channels"
@@ -23829,6 +23128,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsInterleavedR
 [[entry]]
 kind = "field"
 old = "LufsInterleavedRequest.samples"
+to = "LufsMultichannelRequest.channels"
 changed = "samples -> channels (Float32Array[] (planar; was interleaved samples + count))"
 domain = "mastering"
 rule = "num-channels"
@@ -23853,6 +23153,7 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "LufsSeriesInterleavedRequest.sampleRate"
+to = "LufsSeriesMultichannelRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -23861,6 +23162,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesInterl
 [[entry]]
 kind = "field"
 old = "LufsSeriesInterleavedRequest.sampleRate"
+to = "LufsSeriesMultichannelRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -23870,6 +23172,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesInterl
 [[entry]]
 kind = "field"
 old = "LufsSeriesInterleavedRequest.samples"
+to = "LufsSeriesMultichannelRequest.channels"
 changed = "samples -> channels (Float32Array[] (planar))"
 domain = "mastering"
 rule = "num-channels"
@@ -23878,6 +23181,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesInterl
 [[entry]]
 kind = "field"
 old = "LufsSeriesInterleavedRequest.samples"
+to = "LufsSeriesMultichannelRequest.channels"
 changed = "samples -> channels (Float32Array[] (planar))"
 domain = "mastering"
 rule = "num-channels"
@@ -23887,6 +23191,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesInterl
 [[entry]]
 kind = "field"
 old = "LufsSeriesResult.momentary"
+to = "LufsSeriesResult.momentaryLufs"
 changed = "momentary -> momentaryLufs"
 domain = "mastering"
 rule = "loudness-names"
@@ -23895,6 +23200,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesResult
 [[entry]]
 kind = "field"
 old = "LufsSeriesResult.momentary"
+to = "LufsSeriesResult.momentaryLufs"
 changed = "momentary -> momentaryLufs"
 domain = "mastering"
 rule = "loudness-names"
@@ -23904,6 +23210,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesResult
 [[entry]]
 kind = "field"
 old = "LufsSeriesResult.shortTerm"
+to = "LufsSeriesResult.shortTermLufs"
 changed = "shortTerm -> shortTermLufs"
 domain = "mastering"
 rule = "loudness-names"
@@ -23912,6 +23219,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesResult
 [[entry]]
 kind = "field"
 old = "LufsSeriesResult.shortTerm"
+to = "LufsSeriesResult.shortTermLufs"
 changed = "shortTerm -> shortTermLufs"
 domain = "mastering"
 rule = "loudness-names"
@@ -23960,6 +23268,7 @@ rule = "options-struct"
 [[entry]]
 kind = "field"
 old = "MasteringAssistantParamsRequest.sampleRate"
+to = "MasteringAssistantSuggestRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -23968,6 +23277,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringAssistantProfile.attackDensity"
+to = "MasteringAssistantProfile.attackPerSecond"
 changed = "attackDensity -> attackPerSecond"
 domain = "mastering"
 rule = "unit-in-name"
@@ -23976,6 +23286,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant retur
 [[entry]]
 kind = "field"
 old = "MasteringAssistantProfile.attackDensity"
+to = "MasteringAssistantProfile.attackPerSecond"
 changed = "attackDensity -> attackPerSecond"
 domain = "mastering"
 rule = "unit-in-name"
@@ -23985,6 +23296,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant retur
 [[entry]]
 kind = "field"
 old = "MasteringAssistantProfile.lraLu"
+to = "MasteringAssistantProfile.loudnessRangeLu"
 changed = "lraLu -> loudnessRangeLu"
 domain = "mastering"
 rule = "loudness-names"
@@ -23993,6 +23305,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant retur
 [[entry]]
 kind = "field"
 old = "MasteringAssistantProfile.lraLu"
+to = "MasteringAssistantProfile.loudnessRangeLu"
 changed = "lraLu -> loudnessRangeLu"
 domain = "mastering"
 rule = "loudness-names"
@@ -24002,6 +23315,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant retur
 [[entry]]
 kind = "field"
 old = "MasteringAssistantProfile.truePeakDb"
+to = "MasteringAssistantProfile.truePeakDbtp"
 changed = "truePeakDb -> truePeakDbtp"
 domain = "mastering"
 rule = "loudness-names"
@@ -24010,6 +23324,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant retur
 [[entry]]
 kind = "field"
 old = "MasteringAssistantProfile.truePeakDb"
+to = "MasteringAssistantProfile.truePeakDbtp"
 changed = "truePeakDb -> truePeakDbtp"
 domain = "mastering"
 rule = "loudness-names"
@@ -24043,6 +23358,7 @@ rule = "options-struct"
 [[entry]]
 kind = "field"
 old = "MasteringAssistantStereoParamsRequest.sampleRate"
+to = "MasteringAssistantSuggestStereoRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -24082,286 +23398,8 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the audio profile i
 
 [[entry]]
 kind = "field"
-old = "MasteringAudioProfileDynamics.attackDensity"
-changed = "attackDensity -> attackPerSecond"
-domain = "mastering"
-rule = "unit-in-name"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.[flatKey]"
-removed = true
-domain = "mastering"
-rule = "aliases-removed"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.[flatKey]"
-removed = true
-domain = "mastering"
-rule = "aliases-removed"
-entry = "./analysis"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.dynamics.multibandComp.crossover.mode"
-changed = "'linkwitzRiley'|'butterworth'|'bessel'|'firLinearPhase' (numbers refused)"
-domain = "mastering"
-rule = "string-closed-sets"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.dynamics.multibandComp.crossover.mode"
-changed = "'linkwitzRiley'|'butterworth'|'bessel'|'firLinearPhase' (numbers refused)"
-domain = "mastering"
-rule = "string-closed-sets"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.dynamics.multibandComp.crossover.slope"
-changed = "'lr2'|'lr4'|'lr8' (numbers refused)"
-domain = "mastering"
-rule = "string-closed-sets"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.dynamics.multibandComp.crossover.slope"
-changed = "'lr2'|'lr4'|'lr8' (numbers refused)"
-domain = "mastering"
-rule = "string-closed-sets"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.eq.pivotHz"
-removed = true
-domain = "mastering"
-rule = "aliases-removed"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.eq.pivotHz"
-removed = true
-domain = "mastering"
-rule = "aliases-removed"
-entry = "./analysis"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.eq.tiltDb"
-removed = true
-domain = "mastering"
-rule = "aliases-removed"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.eq.tiltDb"
-removed = true
-domain = "mastering"
-rule = "aliases-removed"
-entry = "./analysis"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.ddAlpha"
-removed = true
-domain = "mastering"
-rule = "aliases-removed"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.ddAlpha"
-removed = true
-domain = "mastering"
-rule = "aliases-removed"
-entry = "./analysis"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.declip.clipThreshold"
-changed = "clipThreshold -> clipThresholdDb (dBFS, <= 0; same quantity as DeclipOptions.clipThresholdDb)"
-domain = "mastering"
-rule = "unit-in-name"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.declip.clipThreshold"
-changed = "clipThreshold -> clipThresholdDb (dBFS, <= 0; same quantity as DeclipOptions.clipThresholdDb)"
-domain = "mastering"
-rule = "unit-in-name"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.decrackle.mode"
-changed = "'median'|'waveletShrinkage' (numbers refused)"
-domain = "mastering"
-rule = "string-closed-sets"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.decrackle.mode"
-changed = "'median'|'waveletShrinkage' (numbers refused)"
-domain = "mastering"
-rule = "string-closed-sets"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.dehum.mode"
-changed = "'subtract'|'notch' (numbers refused)"
-domain = "mastering"
-rule = "string-closed-sets"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.dehum.mode"
-changed = "'subtract'|'notch' (numbers refused)"
-domain = "mastering"
-rule = "string-closed-sets"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.denoise"
-changed = "boolean shorthand removed: denoise?: {enabled?, mode?, ...}"
-domain = "mastering"
-rule = "aliases-removed"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.denoise"
-changed = "boolean shorthand removed: denoise?: {enabled?, mode?, ...}"
-domain = "mastering"
-rule = "aliases-removed"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.denoise.gainFloor"
-removed = true
-domain = "mastering"
-rule = "aliases-removed"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.denoise.gainFloor"
-removed = true
-domain = "mastering"
-rule = "aliases-removed"
-entry = "./analysis"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.denoise.mode"
-changed = "'logMmse'|'mmseStsa'|'spectralSubtraction' (numbers refused)"
-domain = "mastering"
-rule = "string-closed-sets"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.denoise.mode"
-changed = "'logMmse'|'mmseStsa'|'spectralSubtraction' (numbers refused)"
-domain = "mastering"
-rule = "string-closed-sets"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.denoise.noiseEstimator"
-changed = "'quantile'|'mcra'|'imcra'|'spp' (numbers refused)"
-domain = "mastering"
-rule = "string-closed-sets"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.denoise.noiseEstimator"
-changed = "'quantile'|'mcra'|'imcra'|'spp' (numbers refused)"
-domain = "mastering"
-rule = "string-closed-sets"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.gainFloor"
-removed = true
-domain = "mastering"
-rule = "aliases-removed"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.gainFloor"
-removed = true
-domain = "mastering"
-rule = "aliases-removed"
-entry = "./analysis"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.hopLength"
-removed = true
-domain = "mastering"
-rule = "aliases-removed"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.hopLength"
-removed = true
-domain = "mastering"
-rule = "aliases-removed"
-entry = "./analysis"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.nFft"
-removed = true
-domain = "mastering"
-rule = "aliases-removed"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.nFft"
-removed = true
-domain = "mastering"
-rule = "aliases-removed"
-entry = "./analysis"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.reductionDb"
-removed = true
-domain = "mastering"
-rule = "aliases-removed"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.repair.reductionDb"
-removed = true
-domain = "mastering"
-rule = "aliases-removed"
-entry = "./analysis"
-
-[[entry]]
-kind = "field"
 old = "MasteringChainResult.outputLra"
+to = "MasteringChainResult.outputLoudnessRangeLu"
 changed = "outputLra -> outputLoudnessRangeLu"
 domain = "mastering"
 rule = "loudness-names"
@@ -24370,6 +23408,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain results name 
 [[entry]]
 kind = "field"
 old = "MasteringChainResult.outputLra"
+to = "MasteringChainResult.outputLoudnessRangeLu"
 changed = "outputLra -> outputLoudnessRangeLu"
 domain = "mastering"
 rule = "loudness-names"
@@ -24379,6 +23418,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain results name 
 [[entry]]
 kind = "field"
 old = "MasteringChainStereoResult.outputLra"
+to = "MasteringChainStereoResult.outputLoudnessRangeLu"
 changed = "outputLra -> outputLoudnessRangeLu"
 domain = "mastering"
 rule = "loudness-names"
@@ -24387,6 +23427,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain results name 
 [[entry]]
 kind = "field"
 old = "MasteringChainStereoResult.outputLra"
+to = "MasteringChainStereoResult.outputLoudnessRangeLu"
 changed = "outputLra -> outputLoudnessRangeLu"
 domain = "mastering"
 rule = "loudness-names"
@@ -24412,6 +23453,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MasteringDynamic
 [[entry]]
 kind = "field"
 old = "MasteringDynamicsCompressorRequest.sidechainHpfEnabled"
+to = "MasteringDynamicsCompressorRequest.sidechainHighPassHz"
 changed = "sidechainHpfEnabled -> sidechainHighPassHz (number (Hz, > 0); absent = off)"
 domain = "mastering"
 rule = "high-pass"
@@ -24420,6 +23462,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MasteringDynamic
 [[entry]]
 kind = "field"
 old = "MasteringDynamicsCompressorRequest.sidechainHpfHz"
+to = "MasteringDynamicsCompressorRequest.sidechainHighPassHz"
 changed = "sidechainHpfHz -> sidechainHighPassHz (number (Hz, > 0); absent = off)"
 domain = "mastering"
 rule = "high-pass"
@@ -24428,6 +23471,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MasteringDynamic
 [[entry]]
 kind = "field"
 old = "MasteringDynamicsGateRequest.keyHpfHz"
+to = "MasteringDynamicsGateRequest.keyHighPassHz"
 changed = "keyHpfHz -> keyHighPassHz (number (Hz); absent = off)"
 domain = "mastering"
 rule = "high-pass"
@@ -24452,6 +23496,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MasteringDynamic
 [[entry]]
 kind = "field"
 old = "MasteringLoudnessSummary.loudnessRange"
+to = "MasteringLoudnessSummary.loudnessRangeLu"
 changed = "loudnessRange -> loudnessRangeLu"
 domain = "mastering"
 rule = "loudness-names"
@@ -24460,6 +23505,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain results name 
 [[entry]]
 kind = "field"
 old = "MasteringLoudnessSummary.loudnessRange"
+to = "MasteringLoudnessSummary.loudnessRangeLu"
 changed = "loudnessRange -> loudnessRangeLu"
 domain = "mastering"
 rule = "loudness-names"
@@ -24469,6 +23515,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain results name 
 [[entry]]
 kind = "field"
 old = "MasteringOptions.releaseMs"
+to = "MasteringNormalizeLoudnessOptions.releaseMs"
 changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
 domain = "mastering"
 rule = "absent-not-sentinel"
@@ -24477,6 +23524,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::explicit 0 on a def
 [[entry]]
 kind = "field"
 old = "MasteringOptions.releaseMs"
+to = "MasteringNormalizeLoudnessOptions.releaseMs"
 changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
 domain = "mastering"
 rule = "absent-not-sentinel"
@@ -24486,6 +23534,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::explicit 0 on a def
 [[entry]]
 kind = "field"
 old = "MasteringOptions.truePeakOversample"
+to = "MasteringNormalizeLoudnessOptions.truePeakOversample"
 changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
 domain = "mastering"
 rule = "absent-not-sentinel"
@@ -24494,6 +23543,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::explicit 0 on a def
 [[entry]]
 kind = "field"
 old = "MasteringOptions.truePeakOversample"
+to = "MasteringNormalizeLoudnessOptions.truePeakOversample"
 changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
 domain = "mastering"
 rule = "absent-not-sentinel"
@@ -24503,6 +23553,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::explicit 0 on a def
 [[entry]]
 kind = "field"
 old = "MasteringPairAnalyzeRequest.analysisName"
+to = "MasteringAnalyzePairRequest.analysis"
 changed = "analysisName -> analysis (PairAnalysis (generic A))"
 domain = "mastering"
 rule = "mastering-names"
@@ -24511,6 +23562,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::mastering chain: on
 [[entry]]
 kind = "field"
 old = "MasteringPairAnalyzeRequest.sampleRate"
+to = "MasteringAnalyzePairRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -24519,6 +23571,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringPairProcessRequest.processorName"
+to = "MasteringApplyPairProcessorRequest.processor"
 changed = "processorName -> processor (PairProcessor (generic P))"
 domain = "mastering"
 rule = "mastering-names"
@@ -24527,6 +23580,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::mastering chain: on
 [[entry]]
 kind = "field"
 old = "MasteringPairProcessRequest.sampleRate"
+to = "MasteringApplyPairProcessorRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -24535,6 +23589,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringPairProcessStereoRequest.processorName"
+to = "MasteringApplyPairProcessorStereoRequest.processor"
 changed = "processorName -> processor (StereoPairProcessor)"
 domain = "mastering"
 rule = "mastering-names"
@@ -24543,6 +23598,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::mastering chain: on
 [[entry]]
 kind = "field"
 old = "MasteringPairProcessStereoRequest.sampleRate"
+to = "MasteringApplyPairProcessorStereoRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -24551,6 +23607,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringProcessRequest.processorName"
+to = "MasteringApplyProcessorRequest.processor"
 changed = "processorName -> processor (SoloProcessor (generic P))"
 domain = "mastering"
 rule = "mastering-names"
@@ -24559,6 +23616,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::mastering chain: on
 [[entry]]
 kind = "field"
 old = "MasteringProcessRequest.sampleRate"
+to = "MasteringApplyProcessorRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -24567,6 +23625,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringProcessStereoRequest.processorName"
+to = "MasteringApplyProcessorStereoRequest.processor"
 changed = "processorName -> processor (SoloProcessor (generic P))"
 domain = "mastering"
 rule = "mastering-names"
@@ -24575,6 +23634,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::mastering chain: on
 [[entry]]
 kind = "field"
 old = "MasteringProcessStereoRequest.sampleRate"
+to = "MasteringApplyProcessorStereoRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -24583,6 +23643,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringRequest.sampleRate"
+to = "MasteringNormalizeLoudnessRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -24615,6 +23676,7 @@ rule = "options-struct"
 [[entry]]
 kind = "field"
 old = "MasteringSamplesParamsRequest.sampleRate"
+to = "MasteringAudioProfileRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -24623,6 +23685,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringStereoAnalyzeRequest.analysisName"
+to = "MasteringAnalyzeStereoRequest.analysis"
 changed = "analysisName -> analysis (StereoAnalysis (generic A))"
 domain = "mastering"
 rule = "mastering-names"
@@ -24631,6 +23694,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::mastering chain: on
 [[entry]]
 kind = "field"
 old = "MasteringStereoAnalyzeRequest.sampleRate"
+to = "MasteringAnalyzeStereoRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -24646,6 +23710,7 @@ rule = "options-struct"
 [[entry]]
 kind = "field"
 old = "MasteringStereoParamsRequest.sampleRate"
+to = "MasteringAudioProfileStereoRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -24654,6 +23719,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringStreamingPreviewPlatform.truePeakDb"
+to = "MasteringStreamingPreviewPlatform.truePeakDbtp"
 changed = "truePeakDb -> truePeakDbtp"
 domain = "mastering"
 rule = "loudness-names"
@@ -24662,6 +23728,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the streaming previ
 [[entry]]
 kind = "field"
 old = "MasteringStreamingPreviewPlatform.truePeakDb"
+to = "MasteringStreamingPreviewPlatform.truePeakDbtp"
 changed = "truePeakDb -> truePeakDbtp"
 domain = "mastering"
 rule = "loudness-names"
@@ -24704,6 +23771,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDetectCl
 [[entry]]
 kind = "field"
 old = "MeteringDetectClippingOptions.threshold"
+to = "MeteringDetectClippingOptions.thresholdDb"
 changed = "threshold -> thresholdDb (linear [0,1] -> dBFS (<= 0))"
 domain = "mastering"
 rule = "unit-in-name"
@@ -24712,6 +23780,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDetectCl
 [[entry]]
 kind = "field"
 old = "MeteringDetectClippingOptions.threshold"
+to = "MeteringDetectClippingOptions.thresholdDb"
 changed = "threshold -> thresholdDb (linear [0,1] -> dBFS (<= 0))"
 domain = "mastering"
 rule = "unit-in-name"
@@ -24738,6 +23807,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDetectCl
 [[entry]]
 kind = "field"
 old = "MeteringDetectClippingRequest.threshold"
+to = "MeteringDetectClippingRequest.thresholdDb"
 changed = "threshold -> thresholdDb (linear [0,1] -> dBFS (<= 0); absent = native default (0.999 linear, ~ -0.0087 dBFS); 0 dBFS is a real level)"
 domain = "mastering"
 rule = "unit-in-name"
@@ -24746,6 +23816,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDetectCl
 [[entry]]
 kind = "field"
 old = "MeteringDetectClippingRequest.threshold"
+to = "MeteringDetectClippingRequest.thresholdDb"
 changed = "threshold -> thresholdDb (linear [0,1] -> dBFS (<= 0); absent = native default (0.999 linear, ~ -0.0087 dBFS); 0 dBFS is a real level)"
 domain = "mastering"
 rule = "unit-in-name"
@@ -24823,6 +23894,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDynamicR
 [[entry]]
 kind = "field"
 old = "MeteringSpectrumFrameRequest.frameOffset"
+to = "MeteringSpectrumFrameRequest.startSample"
 changed = "frameOffset -> startSample (sample index where the analysis frame begins (0 = first frame, a real position))"
 domain = "mastering"
 rule = "unit-in-name"
@@ -24831,6 +23903,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringSpectrum
 [[entry]]
 kind = "field"
 old = "MeteringSpectrumFrameRequest.frameOffset"
+to = "MeteringSpectrumFrameRequest.startSample"
 changed = "frameOffset -> startSample (sample index where the analysis frame begins (0 = first frame, a real position))"
 domain = "mastering"
 rule = "unit-in-name"
@@ -24857,6 +23930,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringSpectrum
 [[entry]]
 kind = "field"
 old = "MeteringTruePeakRequest.oversampleFactor"
+to = "MeteringTruePeakDbRequest.oversampleFactor"
 changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
 domain = "mastering"
 rule = "absent-not-sentinel"
@@ -24865,6 +23939,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringTruePeak
 [[entry]]
 kind = "field"
 old = "MeteringTruePeakRequest.oversampleFactor"
+to = "MeteringTruePeakDbRequest.oversampleFactor"
 changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
 domain = "mastering"
 rule = "absent-not-sentinel"
@@ -24874,6 +23949,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringTruePeak
 [[entry]]
 kind = "field"
 old = "MeteringTruePeakRequest.sampleRate"
+to = "MeteringTruePeakDbRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -24882,6 +23958,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringTruePeak
 [[entry]]
 kind = "field"
 old = "MeteringTruePeakRequest.sampleRate"
+to = "MeteringTruePeakDbRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -24891,6 +23968,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringTruePeak
 [[entry]]
 kind = "field"
 old = "MixAssistantTrackProfile.attackDensity"
+to = "MixAssistantTrackProfile.attackPerSecond"
 changed = "attackDensity -> attackPerSecond"
 domain = "mastering"
 rule = "unit-in-name"
@@ -24899,6 +23977,7 @@ test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixAssistantTrackP
 [[entry]]
 kind = "field"
 old = "MixAssistantTrackProfile.attackDensity"
+to = "MixAssistantTrackProfile.attackPerSecond"
 changed = "attackDensity -> attackPerSecond"
 domain = "mastering"
 rule = "unit-in-name"
@@ -24908,6 +23987,7 @@ test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixAssistantTrackP
 [[entry]]
 kind = "field"
 old = "MixAssistantTrackProfile.channelCount"
+to = "MixAssistantTrackProfile.numChannels"
 changed = "channelCount -> numChannels"
 domain = "mastering"
 rule = "num-channels"
@@ -24916,6 +23996,7 @@ test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixAssistantTrackP
 [[entry]]
 kind = "field"
 old = "MixAssistantTrackProfile.channelCount"
+to = "MixAssistantTrackProfile.numChannels"
 changed = "channelCount -> numChannels"
 domain = "mastering"
 rule = "num-channels"
@@ -24942,6 +24023,7 @@ test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixAssistantTrackP
 [[entry]]
 kind = "field"
 old = "MixAssistantTrackProfile.truePeakDb"
+to = "MixAssistantTrackProfile.truePeakDbtp"
 changed = "truePeakDb -> truePeakDbtp"
 domain = "mastering"
 rule = "loudness-names"
@@ -24950,6 +24032,7 @@ test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixAssistantTrackP
 [[entry]]
 kind = "field"
 old = "MixAssistantTrackProfile.truePeakDb"
+to = "MixAssistantTrackProfile.truePeakDbtp"
 changed = "truePeakDb -> truePeakDbtp"
 domain = "mastering"
 rule = "loudness-names"
@@ -24959,6 +24042,7 @@ test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixAssistantTrackP
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.channelCount"
+to = "MixMeterSnapshot.numChannels"
 changed = "channelCount -> numChannels"
 domain = "mastering"
 rule = "num-channels"
@@ -24967,6 +24051,7 @@ test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.c
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.channelCount"
+to = "MixMeterSnapshot.numChannels"
 changed = "channelCount -> numChannels"
 domain = "mastering"
 rule = "num-channels"
@@ -24976,6 +24061,7 @@ test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.c
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.maxTruePeakDb"
+to = "MixMeterSnapshot.maxTruePeakDbtp"
 changed = "maxTruePeakDb -> maxTruePeakDbtp"
 domain = "mastering"
 rule = "loudness-names"
@@ -24984,6 +24070,7 @@ test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.m
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.maxTruePeakDb"
+to = "MixMeterSnapshot.maxTruePeakDbtp"
 changed = "maxTruePeakDb -> maxTruePeakDbtp"
 domain = "mastering"
 rule = "loudness-names"
@@ -24993,6 +24080,7 @@ test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.m
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.truePeakDb"
+to = "MixMeterSnapshot.truePeakDbtp"
 changed = "truePeakDb -> truePeakDbtp"
 domain = "mastering"
 rule = "loudness-names"
@@ -25001,6 +24089,7 @@ test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.t
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.truePeakDb"
+to = "MixMeterSnapshot.truePeakDbtp"
 changed = "truePeakDb -> truePeakDbtp"
 domain = "mastering"
 rule = "loudness-names"
@@ -25010,6 +24099,7 @@ test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.t
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.truePeakDbL"
+to = "MixMeterSnapshot.truePeakDbtpL"
 changed = "truePeakDbL -> truePeakDbtpL"
 domain = "mastering"
 rule = "loudness-names"
@@ -25018,6 +24108,7 @@ test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.t
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.truePeakDbL"
+to = "MixMeterSnapshot.truePeakDbtpL"
 changed = "truePeakDbL -> truePeakDbtpL"
 domain = "mastering"
 rule = "loudness-names"
@@ -25027,6 +24118,7 @@ test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.t
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.truePeakDbR"
+to = "MixMeterSnapshot.truePeakDbtpR"
 changed = "truePeakDbR -> truePeakDbtpR"
 domain = "mastering"
 rule = "loudness-names"
@@ -25035,6 +24127,7 @@ test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.t
 [[entry]]
 kind = "field"
 old = "MixMeterSnapshot.truePeakDbR"
+to = "MixMeterSnapshot.truePeakDbtpR"
 changed = "truePeakDbR -> truePeakDbtpR"
 domain = "mastering"
 rule = "loudness-names"
@@ -25228,6 +24321,7 @@ rule = "options-struct"
 [[entry]]
 kind = "field"
 old = "MixStereoRequest.leftChannels"
+to = "MixStereoRequest.strips"
 changed = "leftChannels -> strips (MixStereoStrip[] (was leftChannels/rightChannels plus per-field scalar-or-array options))"
 domain = "mastering"
 rule = "stereo-pair"
@@ -25257,6 +24351,7 @@ rule = "options-struct"
 [[entry]]
 kind = "field"
 old = "MixStereoRequest.rightChannels"
+to = "MixStereoRequest.strips"
 changed = "rightChannels -> strips (MixStereoStrip[] (was leftChannels/rightChannels plus per-field scalar-or-array options))"
 domain = "mastering"
 rule = "stereo-pair"
@@ -25297,6 +24392,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: neste
 [[entry]]
 kind = "field"
 old = "MultibandCompressorBand.sidechainHpfEnabled"
+to = "MultibandCompressorBand.sidechainHighPassHz"
 changed = "sidechainHpfEnabled -> sidechainHighPassHz (Hz, > 0; absent = off)"
 domain = "mastering"
 rule = "high-pass"
@@ -25305,6 +24401,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: neste
 [[entry]]
 kind = "field"
 old = "MultibandCompressorBand.sidechainHpfEnabled"
+to = "MultibandCompressorBand.sidechainHighPassHz"
 changed = "sidechainHpfEnabled -> sidechainHighPassHz (Hz, > 0; absent = off)"
 domain = "mastering"
 rule = "high-pass"
@@ -25314,6 +24411,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: neste
 [[entry]]
 kind = "field"
 old = "MultibandCompressorBand.sidechainHpfHz"
+to = "MultibandCompressorBand.sidechainHighPassHz"
 changed = "sidechainHpfHz -> sidechainHighPassHz (Hz, > 0; absent = off)"
 domain = "mastering"
 rule = "high-pass"
@@ -25322,6 +24420,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: neste
 [[entry]]
 kind = "field"
 old = "MultibandCompressorBand.sidechainHpfHz"
+to = "MultibandCompressorBand.sidechainHighPassHz"
 changed = "sidechainHpfHz -> sidechainHighPassHz (Hz, > 0; absent = off)"
 domain = "mastering"
 rule = "high-pass"
@@ -25330,24 +24429,8 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: neste
 
 [[entry]]
 kind = "field"
-old = "PairAnalysisResultMap.'match.tonalBalanceLogBands'"
-changed = "MatchTonalBalanceResult"
-domain = "mastering"
-rule = "one-entry-per-operation"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo analyses return objects"
-
-[[entry]]
-kind = "field"
-old = "PairAnalysisResultMap.'match.tonalBalanceLogBands'"
-changed = "MatchTonalBalanceResult"
-domain = "mastering"
-rule = "one-entry-per-operation"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo analyses return objects"
-
-[[entry]]
-kind = "field"
 old = "SonareWorkletMeterSnapshot.channelCount"
+to = "SonareWorkletMeterSnapshot.numChannels"
 changed = "channelCount -> numChannels"
 domain = "mastering"
 rule = "num-channels"
@@ -25450,6 +24533,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "StreamingLoudnessGainResult.truePeakDb"
+to = "StreamingLoudnessGainResult.truePeakDbtp"
 changed = "truePeakDb -> truePeakDbtp"
 domain = "mastering"
 rule = "loudness-names"
@@ -25458,6 +24542,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::streamingLoudnessGa
 [[entry]]
 kind = "field"
 old = "StreamingLoudnessGainResult.truePeakDb"
+to = "StreamingLoudnessGainResult.truePeakDbtp"
 changed = "truePeakDb -> truePeakDbtp"
 domain = "mastering"
 rule = "loudness-names"
@@ -25490,6 +24575,7 @@ rule = "options-struct"
 [[entry]]
 kind = "field"
 old = "WaveformPeakPyramidRequest.samples"
+to = "WaveformPeakPyramidRequest.channels"
 changed = "samples -> channels (Float32Array[] (planar))"
 domain = "mastering"
 rule = "num-channels"
@@ -25498,6 +24584,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::WaveformPeakPyra
 [[entry]]
 kind = "field"
 old = "WaveformPeakPyramidRequest.samples"
+to = "WaveformPeakPyramidRequest.channels"
 changed = "samples -> channels (Float32Array[] (planar))"
 domain = "mastering"
 rule = "num-channels"
@@ -25556,6 +24643,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::WaveformPeaksRep
 [[entry]]
 kind = "field"
 old = "WaveformPeaksRequest.samples"
+to = "WaveformPeaksRequest.channels"
 changed = "samples -> channels (Float32Array[] (planar; was interleaved samples + count))"
 domain = "mastering"
 rule = "num-channels"
@@ -25564,6 +24652,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::WaveformPeaksReq
 [[entry]]
 kind = "field"
 old = "WaveformPeaksRequest.samples"
+to = "WaveformPeaksRequest.channels"
 changed = "samples -> channels (Float32Array[] (planar; was interleaved samples + count))"
 domain = "mastering"
 rule = "num-channels"
@@ -25602,20 +24691,6 @@ changed = "request-only: masterAudioStereo(request: MasterAudioStereoRequest): M
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masterAudio: preset, overrides, progress and cancel"
-
-[[entry]]
-kind = "function"
-old = "masterAudioStereoWithProgress"
-removed = true
-domain = "mastering"
-rule = "progress-callback"
-
-[[entry]]
-kind = "function"
-old = "masterAudioWithProgress"
-removed = true
-domain = "mastering"
-rule = "progress-callback"
 
 [[entry]]
 kind = "function"
@@ -25664,34 +24739,6 @@ changed = "request-only: masteringAudioProfileStereo(request: MasteringAudioProf
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
-
-[[entry]]
-kind = "function"
-old = "masteringChain"
-removed = true
-domain = "mastering"
-rule = "one-entry-per-operation"
-
-[[entry]]
-kind = "function"
-old = "masteringChainStereo"
-removed = true
-domain = "mastering"
-rule = "one-entry-per-operation"
-
-[[entry]]
-kind = "function"
-old = "masteringChainStereoWithProgress"
-removed = true
-domain = "mastering"
-rule = "progress-callback"
-
-[[entry]]
-kind = "function"
-old = "masteringChainWithProgress"
-removed = true
-domain = "mastering"
-rule = "progress-callback"
 
 [[entry]]
 kind = "function"
@@ -25902,21 +24949,6 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringPhaseSco
 
 [[entry]]
 kind = "function"
-old = "meteringPhaseScopeDecimated"
-removed = true
-domain = "mastering"
-rule = "one-entry-per-operation"
-
-[[entry]]
-kind = "function"
-old = "meteringPhaseScopeDecimated"
-removed = true
-domain = "mastering"
-rule = "one-entry-per-operation"
-entry = "./analysis"
-
-[[entry]]
-kind = "function"
 old = "meteringRmsDb"
 changed = "one positional form (meteringRmsDb(samples, sampleRate, options?: OptionsOf<MeteringRmsDbRequest>)); request form takes MeteringRmsDbRequest; returns number"
 domain = "mastering"
@@ -25984,16 +25016,18 @@ entry = "./analysis"
 test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringSpectrumFrame"
 
 [[entry]]
-kind = "function"
+kind = "option"
 old = "meteringSpectrumFrame(frameOffset)"
+to = "meteringSpectrumFrame(options)"
 changed = "positional frameOffset removed; options.startSample"
 domain = "mastering"
 rule = "unit-in-name"
 test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringSpectrumFrame(frameOffset)"
 
 [[entry]]
-kind = "function"
+kind = "option"
 old = "meteringSpectrumFrame(frameOffset)"
+to = "meteringSpectrumFrame(options)"
 changed = "positional frameOffset removed; options.startSample"
 domain = "mastering"
 rule = "unit-in-name"
@@ -26067,21 +25101,6 @@ domain = "mastering"
 rule = "one-positional-form"
 entry = "./analysis"
 test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringVectorscope"
-
-[[entry]]
-kind = "function"
-old = "meteringVectorscopeDecimated"
-removed = true
-domain = "mastering"
-rule = "one-entry-per-operation"
-
-[[entry]]
-kind = "function"
-old = "meteringVectorscopeDecimated"
-removed = true
-domain = "mastering"
-rule = "one-entry-per-operation"
-entry = "./analysis"
 
 [[entry]]
 kind = "function"
@@ -26106,13 +25125,6 @@ changed = "one positional form (streamingLoudnessGain(samples, sampleRate, optio
 domain = "mastering"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::streamingLoudnessGain reports truePeakDbtp"
-
-[[entry]]
-kind = "function"
-old = "suggestMixSceneJson"
-removed = true
-domain = "mastering"
-rule = "typed-results"
 
 [[entry]]
 kind = "function"
@@ -26165,14 +25177,6 @@ rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "method"
-old = "StreamingEqualizer.constructor"
-changed = "constructor(config: StreamingEqualizerConfig)"
-domain = "mastering"
-rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingEqualizer.constructor"
-
-[[entry]]
-kind = "method"
 old = "StreamingEqualizer.lastAutoGainDb"
 changed = "readonly getter lastAutoGainDb: number"
 domain = "mastering"
@@ -26202,23 +25206,6 @@ changed = "setPhaseMode(mode: EqPhaseMode) with EqPhaseMode = 'zero' | 'natural'
 domain = "mastering"
 rule = "token-case"
 test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingEqualizer.setPhaseMode"
-
-[[entry]]
-kind = "method"
-old = "StreamingMasteringChain.constructor"
-changed = "constructor(config: StreamingMasteringChainConfig)"
-domain = "mastering"
-rule = "construction"
-test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingMasteringChain.constructor"
-
-[[entry]]
-kind = "method"
-old = "StreamingMasteringChain.constructor"
-changed = "constructor(config: StreamingMasteringChainConfig)"
-domain = "mastering"
-rule = "construction"
-entry = "./worklet"
-test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingMasteringChain.constructor"
 
 [[entry]]
 kind = "method"
@@ -26313,36 +25300,6 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::CompressorDetect
 
 [[entry]]
 kind = "type"
-old = "JsonResult"
-removed = true
-domain = "mastering"
-rule = "typed-results"
-
-[[entry]]
-kind = "type"
-old = "JsonResult"
-removed = true
-domain = "mastering"
-rule = "typed-results"
-entry = "./analysis"
-
-[[entry]]
-kind = "type"
-old = "MasteringAssistantParams"
-removed = true
-domain = "mastering"
-rule = "options-struct"
-
-[[entry]]
-kind = "type"
-old = "MasteringAssistantParams"
-removed = true
-domain = "mastering"
-rule = "options-struct"
-entry = "./analysis"
-
-[[entry]]
-kind = "type"
 old = "MasteringAudioProfileDefects"
 changed = "{click: ClickDetection, clip: ClipDetection, crackle: CrackleDetection, noise: MasteringAudioProfileNoise, hum: MasteringAudioProfileHum, reverb: MasteringAudioProfileReverb}"
 domain = "mastering"
@@ -26351,65 +25308,6 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the audio profile i
 
 [[entry]]
 kind = "type"
-old = "MasteringChainConfigDocument"
-removed = true
-domain = "mastering"
-rule = "typed-results"
-
-[[entry]]
-kind = "type"
-old = "MasteringChainConfigDocument"
-removed = true
-domain = "mastering"
-rule = "typed-results"
-entry = "./analysis"
-
-[[entry]]
-kind = "type"
-old = "MasteringChainRequest"
-removed = true
-domain = "mastering"
-rule = "one-entry-per-operation"
-
-[[entry]]
-kind = "type"
-old = "MasteringChainStereoRequest"
-removed = true
-domain = "mastering"
-rule = "one-entry-per-operation"
-
-[[entry]]
-kind = "type"
-old = "MasteringInsertParamValue"
-removed = true
-domain = "mastering"
-rule = "worklet-scope"
-
-[[entry]]
-kind = "type"
-old = "MasteringInsertParamValue"
-removed = true
-domain = "mastering"
-rule = "worklet-scope"
-entry = "./analysis"
-
-[[entry]]
-kind = "type"
-old = "MasteringInsertParams"
-removed = true
-domain = "mastering"
-rule = "worklet-scope"
-
-[[entry]]
-kind = "type"
-old = "MasteringInsertParams"
-removed = true
-domain = "mastering"
-rule = "worklet-scope"
-entry = "./analysis"
-
-[[entry]]
-kind = "type"
 old = "MasteringProcessorParams"
 changed = "MasteringProcessorParams<P extends keyof MasteringProcessorParamMap> = MasteringProcessorParamMap[P]"
 domain = "mastering"
@@ -26427,51 +25325,6 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor res
 
 [[entry]]
 kind = "type"
-old = "MasteringSoloProcessorParams"
-removed = true
-domain = "mastering"
-rule = "worklet-scope"
-
-[[entry]]
-kind = "type"
-old = "MasteringSoloProcessorParams"
-removed = true
-domain = "mastering"
-rule = "worklet-scope"
-entry = "./analysis"
-
-[[entry]]
-kind = "type"
-old = "MasteringStereoChainResult"
-removed = true
-domain = "mastering"
-rule = "aliases-removed"
-
-[[entry]]
-kind = "type"
-old = "MasteringStereoChainResult"
-removed = true
-domain = "mastering"
-rule = "aliases-removed"
-entry = "./analysis"
-
-[[entry]]
-kind = "type"
-old = "MatchTonalBalanceLogBandsResult"
-removed = true
-domain = "mastering"
-rule = "one-entry-per-operation"
-
-[[entry]]
-kind = "type"
-old = "MatchTonalBalanceLogBandsResult"
-removed = true
-domain = "mastering"
-rule = "one-entry-per-operation"
-entry = "./analysis"
-
-[[entry]]
-kind = "type"
 old = "MeterTap"
 changed = "'preFader' | 'postFader' (numbers refused at every reader)"
 domain = "mastering"
@@ -26486,81 +25339,6 @@ domain = "mastering"
 rule = "string-closed-sets"
 entry = "./analysis"
 test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MeterTap"
-
-[[entry]]
-kind = "type"
-old = "MeteringSamplesRequest"
-removed = true
-domain = "mastering"
-rule = "type-names"
-
-[[entry]]
-kind = "type"
-old = "MeteringSamplesRequest"
-removed = true
-domain = "mastering"
-rule = "type-names"
-entry = "./analysis"
-
-[[entry]]
-kind = "type"
-old = "MeteringStereoDecimatedRequest"
-removed = true
-domain = "mastering"
-rule = "type-names"
-
-[[entry]]
-kind = "type"
-old = "MeteringStereoDecimatedRequest"
-removed = true
-domain = "mastering"
-rule = "type-names"
-entry = "./analysis"
-
-[[entry]]
-kind = "type"
-old = "MeteringStereoRequest"
-removed = true
-domain = "mastering"
-rule = "type-names"
-
-[[entry]]
-kind = "type"
-old = "MeteringStereoRequest"
-removed = true
-domain = "mastering"
-rule = "type-names"
-entry = "./analysis"
-
-[[entry]]
-kind = "type"
-old = "MixAssistantOptions"
-removed = true
-domain = "mastering"
-rule = "options-struct"
-
-[[entry]]
-kind = "type"
-old = "MixAssistantOptions"
-removed = true
-domain = "mastering"
-rule = "options-struct"
-entry = "./analysis"
-
-[[entry]]
-kind = "type"
-old = "MixOptions"
-removed = true
-domain = "mastering"
-rule = "one-positional-form"
-
-[[entry]]
-kind = "type"
-old = "MixOptions"
-removed = true
-domain = "mastering"
-rule = "one-positional-form"
-entry = "./analysis"
 
 [[entry]]
 kind = "type"
@@ -26612,21 +25390,6 @@ domain = "mastering"
 rule = "token-case"
 entry = "./analysis"
 test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::PanMode"
-
-[[entry]]
-kind = "type"
-old = "ScopeOptions"
-removed = true
-domain = "mastering"
-rule = "one-positional-form"
-
-[[entry]]
-kind = "type"
-old = "ScopeOptions"
-removed = true
-domain = "mastering"
-rule = "one-positional-form"
-entry = "./analysis"
 
 [[entry]]
 kind = "type"
@@ -26697,70 +25460,9 @@ rule = "type-names"
 test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::StripMeteringOptions"
 
 [[entry]]
-kind = "type"
-old = "TypedJson"
-removed = true
-domain = "mastering"
-rule = "typed-results"
-
-[[entry]]
-kind = "type"
-old = "TypedJson"
-removed = true
-domain = "mastering"
-rule = "typed-results"
-entry = "./analysis"
-
-[[entry]]
-kind = "type"
-old = "WaveformPeakPyramidOptions"
-removed = true
-domain = "mastering"
-rule = "one-positional-form"
-
-[[entry]]
-kind = "type"
-old = "WaveformPeakPyramidOptions"
-removed = true
-domain = "mastering"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "type"
-old = "WaveformPeaksOptions"
-removed = true
-domain = "mastering"
-rule = "one-positional-form"
-
-[[entry]]
-kind = "type"
-old = "WaveformPeaksOptions"
-removed = true
-domain = "mastering"
-rule = "one-positional-form"
-entry = "./analysis"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.loudness.ceilingDb"
-changed = "TSDoc only: loudness.ceilingDb bounds the loudness stage; maximizer.truePeakLimiter.ceilingDb bounds the limiter; each applies to its own stage"
-domain = "mastering"
-rule = "doc-comments"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
-
-[[entry]]
-kind = "field"
-old = "MasteringChainConfig.loudness.ceilingDb"
-changed = "TSDoc only: loudness.ceilingDb bounds the loudness stage; maximizer.truePeakLimiter.ceilingDb bounds the limiter; each applies to its own stage"
-domain = "mastering"
-rule = "doc-comments"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
-
-[[entry]]
 kind = "function"
 old = "mastering"
+to = "masteringNormalizeLoudness"
 changed = "renamed to masteringNormalizeLoudness: masteringNormalizeLoudness(request: MasteringNormalizeLoudnessRequest): MasteringNormalizeLoudnessResult | (samples, sampleRate, options?: MasteringNormalizeLoudnessOptions)"
 domain = "mastering"
 rule = "mastering-names"
@@ -26769,6 +25471,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::request and positio
 [[entry]]
 kind = "function"
 old = "masteringPairAnalyze"
+to = "masteringAnalyzePair"
 changed = "renamed to masteringAnalyzePair: masteringAnalyzePair<A extends PairAnalysis>(request: MasteringAnalyzePairRequest<A>): PairAnalysisResultMap[A] (request-only; returns the object)"
 domain = "mastering"
 rule = "mastering-names"
@@ -26777,6 +25480,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo ana
 [[entry]]
 kind = "function"
 old = "masteringPairProcess"
+to = "masteringApplyPairProcessor"
 changed = "renamed to masteringApplyPairProcessor: masteringApplyPairProcessor<P extends PairProcessor>(request: MasteringApplyPairProcessorRequest<P>): MasteringResult (request-only: two inputs)"
 domain = "mastering"
 rule = "mastering-names"
@@ -26785,6 +25489,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor res
 [[entry]]
 kind = "function"
 old = "masteringPairProcessStereo"
+to = "masteringApplyPairProcessorStereo"
 changed = "renamed to masteringApplyPairProcessorStereo: masteringApplyPairProcessorStereo(request: MasteringApplyPairProcessorStereoRequest): MasteringStereoResult (request-only)"
 domain = "mastering"
 rule = "mastering-names"
@@ -26793,6 +25498,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor res
 [[entry]]
 kind = "function"
 old = "masteringProcess"
+to = "masteringApplyProcessor"
 changed = "renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult | (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>)"
 domain = "mastering"
 rule = "mastering-names"
@@ -26801,6 +25507,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor res
 [[entry]]
 kind = "function"
 old = "masteringProcessStereo"
+to = "masteringApplyProcessorStereo"
 changed = "renamed to masteringApplyProcessorStereo: masteringApplyProcessorStereo<P extends SoloProcessor>(request: MasteringApplyProcessorStereoRequest<P>): MasteringStereoResult (request-only)"
 domain = "mastering"
 rule = "mastering-names"
@@ -26809,6 +25516,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor res
 [[entry]]
 kind = "function"
 old = "masteringStereoAnalyze"
+to = "masteringAnalyzeStereo"
 changed = "renamed to masteringAnalyzeStereo: masteringAnalyzeStereo<A extends StereoAnalysis>(request: MasteringAnalyzeStereoRequest<A>): StereoAnalysisResultMap[A] (request-only; returns the object)"
 domain = "mastering"
 rule = "mastering-names"
@@ -26817,6 +25525,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo ana
 [[entry]]
 kind = "method"
 old = "Audio.mastering"
+to = "Audio.masteringNormalizeLoudness"
 changed = "renamed to masteringNormalizeLoudness(options?: MasteringNormalizeLoudnessOptions): MasteringNormalizeLoudnessResult"
 domain = "core"
 rule = "mastering-names"
@@ -26825,6 +25534,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::Audio carries the r
 [[entry]]
 kind = "method"
 old = "Audio.masteringProcess"
+to = "Audio.masteringApplyProcessor"
 changed = "renamed to masteringApplyProcessor<P extends SoloProcessor>(options: OptionsOf<MasteringApplyProcessorRequest<P>>): MasteringResult"
 domain = "core"
 rule = "mastering-names"
@@ -26865,107 +25575,94 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "type"
 old = "MasteringAssistantParamsRequest"
-changed = "renamed to MasteringAssistantSuggestRequest"
+new = "MasteringAssistantSuggestRequest"
 domain = "mastering"
 rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant params are flat request fields"
 
 [[entry]]
 kind = "type"
 old = "MasteringAssistantStereoParamsRequest"
-changed = "renamed to MasteringAssistantSuggestStereoRequest"
+new = "MasteringAssistantSuggestStereoRequest"
 domain = "mastering"
 rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant params are flat request fields"
 
 [[entry]]
 kind = "type"
 old = "MasteringOptions"
-changed = "renamed to MasteringNormalizeLoudnessOptions"
+new = "MasteringNormalizeLoudnessOptions"
 domain = "mastering"
 rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::explicit 0 on a default-bearing field"
 
 [[entry]]
 kind = "type"
 old = "MasteringOptions"
-changed = "renamed to MasteringNormalizeLoudnessOptions"
+new = "MasteringNormalizeLoudnessOptions"
 domain = "mastering"
 rule = "type-names"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::explicit 0 on a default-bearing field"
 
 [[entry]]
 kind = "type"
 old = "MasteringPairAnalyzeRequest"
-changed = "renamed to MasteringAnalyzePairRequest"
+new = "MasteringAnalyzePairRequest"
 domain = "mastering"
 rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo analyses return objects"
 
 [[entry]]
 kind = "type"
 old = "MasteringPairProcessRequest"
-changed = "renamed to MasteringApplyPairProcessorRequest"
+new = "MasteringApplyPairProcessorRequest"
 domain = "mastering"
 rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
 
 [[entry]]
 kind = "type"
 old = "MasteringPairProcessStereoRequest"
-changed = "renamed to MasteringApplyPairProcessorStereoRequest"
+new = "MasteringApplyPairProcessorStereoRequest"
 domain = "mastering"
 rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
 
 [[entry]]
 kind = "type"
 old = "MasteringProcessRequest"
-changed = "renamed to MasteringApplyProcessorRequest"
+new = "MasteringApplyProcessorRequest"
 domain = "mastering"
 rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
 
 [[entry]]
 kind = "type"
 old = "MasteringProcessStereoRequest"
-changed = "renamed to MasteringApplyProcessorStereoRequest"
+new = "MasteringApplyProcessorStereoRequest"
 domain = "mastering"
 rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
 
 [[entry]]
 kind = "type"
 old = "MasteringRequest"
-changed = "renamed to MasteringNormalizeLoudnessRequest"
+new = "MasteringNormalizeLoudnessRequest"
 domain = "mastering"
 rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::explicit 0 on a default-bearing field"
 
 [[entry]]
 kind = "type"
 old = "MasteringSamplesParamsRequest"
-changed = "renamed to MasteringAudioProfileRequest"
+new = "MasteringAudioProfileRequest"
 domain = "mastering"
 rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
 
 [[entry]]
 kind = "type"
 old = "MasteringStereoAnalyzeRequest"
-changed = "renamed to MasteringAnalyzeStereoRequest"
+new = "MasteringAnalyzeStereoRequest"
 domain = "mastering"
 rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo analyses return objects"
 
 [[entry]]
 kind = "type"
 old = "MasteringStereoParamsRequest"
-changed = "renamed to MasteringAudioProfileStereoRequest"
+new = "MasteringAudioProfileStereoRequest"
 domain = "mastering"
 rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
 
 [[entry]]
 kind = "type"
@@ -26994,6 +25691,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::streamingLoudnessGa
 [[entry]]
 kind = "function"
 old = "lufsInterleaved"
+to = "lufsMultichannel"
 changed = "renamed to lufsMultichannel: lufsMultichannel(request: LufsMultichannelRequest): LufsResult (request-only)"
 domain = "mastering"
 rule = "num-channels"
@@ -27002,6 +25700,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::lufsInterleaved"
 [[entry]]
 kind = "function"
 old = "lufsInterleaved"
+to = "lufsMultichannel"
 changed = "renamed to lufsMultichannel: lufsMultichannel(request: LufsMultichannelRequest): LufsResult (request-only)"
 domain = "mastering"
 rule = "num-channels"
@@ -27011,6 +25710,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::lufsInterleaved"
 [[entry]]
 kind = "function"
 old = "lufsSeriesInterleaved"
+to = "lufsSeriesMultichannel"
 changed = "renamed to lufsSeriesMultichannel: lufsSeriesMultichannel(request: LufsSeriesMultichannelRequest): LufsSeriesResult (request-only)"
 domain = "mastering"
 rule = "num-channels"
@@ -27019,6 +25719,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::lufsSeriesInterl
 [[entry]]
 kind = "function"
 old = "lufsSeriesInterleaved"
+to = "lufsSeriesMultichannel"
 changed = "renamed to lufsSeriesMultichannel: lufsSeriesMultichannel(request: LufsSeriesMultichannelRequest): LufsSeriesResult (request-only)"
 domain = "mastering"
 rule = "num-channels"
@@ -27061,36 +25762,32 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::GateOptions"
 [[entry]]
 kind = "type"
 old = "LufsInterleavedRequest"
-changed = "renamed to LufsMultichannelRequest"
+new = "LufsMultichannelRequest"
 domain = "mastering"
 rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsInterleavedRequest"
 
 [[entry]]
 kind = "type"
 old = "LufsInterleavedRequest"
-changed = "renamed to LufsMultichannelRequest"
+new = "LufsMultichannelRequest"
 domain = "mastering"
 rule = "type-names"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsInterleavedRequest"
 
 [[entry]]
 kind = "type"
 old = "LufsSeriesInterleavedRequest"
-changed = "renamed to LufsSeriesMultichannelRequest"
+new = "LufsSeriesMultichannelRequest"
 domain = "mastering"
 rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesInterleavedRequest"
 
 [[entry]]
 kind = "type"
 old = "LufsSeriesInterleavedRequest"
-changed = "renamed to LufsSeriesMultichannelRequest"
+new = "LufsSeriesMultichannelRequest"
 domain = "mastering"
 rule = "type-names"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesInterleavedRequest"
 
 [[entry]]
 kind = "type"
@@ -27238,19 +25935,17 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringSpectrum
 [[entry]]
 kind = "type"
 old = "MeteringTruePeakRequest"
-changed = "renamed to MeteringTruePeakDbRequest"
+new = "MeteringTruePeakDbRequest"
 domain = "mastering"
 rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringTruePeakRequest"
 
 [[entry]]
 kind = "type"
 old = "MeteringTruePeakRequest"
-changed = "renamed to MeteringTruePeakDbRequest"
+new = "MeteringTruePeakDbRequest"
 domain = "mastering"
 rule = "type-names"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringTruePeakRequest"
 
 [[entry]]
 kind = "type"
@@ -27306,6 +26001,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::WaveformPeaksReq
 [[entry]]
 kind = "function"
 old = "mixSourceClassFromName"
+to = "mixingAssistantSourceClassFromName"
 changed = "renamed to mixingAssistantSourceClassFromName: mixingAssistantSourceClassFromName(name: MixSourceClass): number"
 domain = "mastering"
 rule = "mastering-names"
@@ -27314,6 +26010,7 @@ test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::mixSourceClassFrom
 [[entry]]
 kind = "function"
 old = "mixSourceClassNames"
+to = "mixingAssistantSourceClassNames"
 changed = "renamed to mixingAssistantSourceClassNames: mixingAssistantSourceClassNames(): MixSourceClass[]"
 domain = "mastering"
 rule = "mastering-names"
@@ -27322,6 +26019,7 @@ test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::mixSourceClassName
 [[entry]]
 kind = "function"
 old = "mixingScenePresetJson"
+to = "mixingScenePreset"
 changed = "renamed to mixingScenePreset: mixingScenePreset(name: MixScenePreset): MixSceneDocument"
 domain = "mastering"
 rule = "typed-results"
@@ -27330,6 +26028,7 @@ test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::mixingScenePresetJ
 [[entry]]
 kind = "function"
 old = "suggestMixScene"
+to = "mixingAssistantSuggest"
 changed = "renamed to mixingAssistantSuggest: mixingAssistantSuggest(request: MixingAssistantSuggestRequest): MixAssistantResult"
 domain = "mastering"
 rule = "mastering-names"
@@ -27346,10 +26045,9 @@ test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixStereoRequest"
 [[entry]]
 kind = "type"
 old = "SuggestMixSceneRequest"
-changed = "renamed to MixingAssistantSuggestRequest"
+new = "MixingAssistantSuggestRequest"
 domain = "mastering"
 rule = "type-names"
-test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::SuggestMixSceneRequest"
 
 [[entry]]
 kind = "method"
@@ -27628,6 +26326,7 @@ rule = "one-positional-form"
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.truePeakDbL"
+to = "EngineMeterTelemetry.truePeakDbtpL"
 changed = "truePeakDbL -> truePeakDbtpL"
 domain = "engine"
 rule = "loudness-names"
@@ -27636,6 +26335,7 @@ test = "bindings/wasm/tests/worklet-true-peak-metering.test.ts::engineMeter.true
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.truePeakDbR"
+to = "EngineMeterTelemetry.truePeakDbtpR"
 changed = "truePeakDbR -> truePeakDbtpR"
 domain = "engine"
 rule = "loudness-names"
@@ -27644,6 +26344,7 @@ test = "bindings/wasm/tests/worklet-true-peak-metering.test.ts::engineMeter.true
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetry.maxTruePeakDb"
+to = "EngineMeterTelemetry.maxTruePeakDbtp"
 changed = "maxTruePeakDb -> maxTruePeakDbtp"
 domain = "engine"
 rule = "loudness-names"
@@ -27652,6 +26353,7 @@ test = "bindings/wasm/tests/engine-meter-telemetry.test.ts::?.maxTruePeakDbtp"
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetryWide.truePeakDb"
+to = "EngineMeterTelemetryWide.truePeakDbtp"
 changed = "truePeakDb -> truePeakDbtp"
 domain = "engine"
 rule = "loudness-names"
@@ -27660,6 +26362,7 @@ test = "bindings/wasm/tests/meter-telemetry-wide.test.ts::busMeter.truePeakDbtp"
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetryWide.maxTruePeakDb"
+to = "EngineMeterTelemetryWide.maxTruePeakDbtp"
 changed = "maxTruePeakDb -> maxTruePeakDbtp"
 domain = "engine"
 rule = "loudness-names"
@@ -27668,6 +26371,7 @@ test = "bindings/wasm/tests/meter-telemetry-wide.test.ts::busMeter.maxTruePeakDb
 [[entry]]
 kind = "field"
 old = "EngineMeterTelemetryWide.channelCount"
+to = "EngineMeterTelemetryWide.numChannels"
 changed = "channelCount -> numChannels"
 domain = "engine"
 rule = "num-channels"
@@ -27720,3 +26424,852 @@ new = "RenderPlaybackResult.numChannels"
 domain = "engine"
 rule = "num-channels"
 entry = "."
+
+[[entry]]
+kind = "value"
+old = "Articulation='mono-legato'"
+new = "Articulation='monoLegato'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "Articulation='mono-retrigger'"
+new = "Articulation='monoRetrigger'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "ControllerAxis='pitch-cents'"
+new = "ControllerAxis='pitchCents'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "ControllerAxis='vibrato-depth'"
+new = "ControllerAxis='vibratoDepth'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "ControllerInput='channel-pressure'"
+new = "ControllerInput='channelPressure'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "ControllerInput='control-change'"
+new = "ControllerInput='controlChange'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "ControllerInput='pitch-bend'"
+new = "ControllerInput='pitchBend'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "ControllerInput='poly-pressure'"
+new = "ControllerInput='polyPressure'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "EqStereoPlacement='Left'"
+new = "EqStereoPlacement='left'"
+domain = "core"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "EqStereoPlacement='Left'"
+new = "EqStereoPlacement='left'"
+domain = "core"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "EqStereoPlacement='Mid'"
+new = "EqStereoPlacement='mid'"
+domain = "core"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "EqStereoPlacement='Mid'"
+new = "EqStereoPlacement='mid'"
+domain = "core"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "EqStereoPlacement='Right'"
+new = "EqStereoPlacement='right'"
+domain = "core"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "EqStereoPlacement='Right'"
+new = "EqStereoPlacement='right'"
+domain = "core"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "EqStereoPlacement='Side'"
+new = "EqStereoPlacement='side'"
+domain = "core"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "EqStereoPlacement='Side'"
+new = "EqStereoPlacement='side'"
+domain = "core"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "EqStereoPlacement='Stereo'"
+new = "EqStereoPlacement='stereo'"
+domain = "core"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "EqStereoPlacement='Stereo'"
+new = "EqStereoPlacement='stereo'"
+domain = "core"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "RealtimeVoiceChangerConfigInput='bright-idol'"
+new = "RealtimeVoiceChangerConfigInput='brightIdol'"
+domain = "effects"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "RealtimeVoiceChangerConfigInput='bright-idol'"
+new = "RealtimeVoiceChangerConfigInput='brightIdol'"
+domain = "effects"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "RealtimeVoiceChangerConfigInput='dark-villain'"
+new = "RealtimeVoiceChangerConfigInput='darkVillain'"
+domain = "effects"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "RealtimeVoiceChangerConfigInput='dark-villain'"
+new = "RealtimeVoiceChangerConfigInput='darkVillain'"
+domain = "effects"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "RealtimeVoiceChangerConfigInput='deep-narrator'"
+new = "RealtimeVoiceChangerConfigInput='deepNarrator'"
+domain = "effects"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "RealtimeVoiceChangerConfigInput='deep-narrator'"
+new = "RealtimeVoiceChangerConfigInput='deepNarrator'"
+domain = "effects"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "RealtimeVoiceChangerConfigInput='neutral-monitor'"
+new = "RealtimeVoiceChangerConfigInput='neutralMonitor'"
+domain = "effects"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "RealtimeVoiceChangerConfigInput='neutral-monitor'"
+new = "RealtimeVoiceChangerConfigInput='neutralMonitor'"
+domain = "effects"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "RealtimeVoiceChangerConfigInput='robot-mascot'"
+new = "RealtimeVoiceChangerConfigInput='robotMascot'"
+domain = "effects"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "RealtimeVoiceChangerConfigInput='robot-mascot'"
+new = "RealtimeVoiceChangerConfigInput='robotMascot'"
+domain = "effects"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "RealtimeVoiceChangerConfigInput='soft-whisper'"
+new = "RealtimeVoiceChangerConfigInput='softWhisper'"
+domain = "effects"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "RealtimeVoiceChangerConfigInput='soft-whisper'"
+new = "RealtimeVoiceChangerConfigInput='softWhisper'"
+domain = "effects"
+rule = "token-case"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "SampleDescLoopMode='key-down'"
+new = "SampleDescLoopMode='keyDown'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SampleLoopMode='key-down'"
+new = "SampleLoopMode='keyDown'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthBodyType='brass-bell'"
+new = "SynthBodyType='brassBell'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthBodyType='wood-tube'"
+new = "SynthBodyType='woodTube'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthEngineMode='bowed-string'"
+new = "SynthEngineMode='bowedString'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthEngineMode='free-reed'"
+new = "SynthEngineMode='freeReed'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthEngineMode='karplus-strong'"
+new = "SynthEngineMode='karplusStrong'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthEngineMode='pipe-organ'"
+new = "SynthEngineMode='pipeOrgan'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthEngineMode='plucked-string'"
+new = "SynthEngineMode='pluckedString'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthFilterModel='diode-ladder'"
+new = "SynthFilterModel='diodeLadder'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthFilterModel='sallen-key'"
+new = "SynthFilterModel='sallenKey'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthFilterModel='svf-4-pole'"
+new = "SynthFilterModel='svf4Pole'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthFilterModel='transistor-ladder'"
+new = "SynthFilterModel='transistorLadder'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthModDestination='amp-gain'"
+new = "SynthModDestination='ampGain'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthModDestination='cutoff-cents'"
+new = "SynthModDestination='cutoffCents'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthModDestination='excitation-brightness'"
+new = "SynthModDestination='excitationBrightness'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthModDestination='excitation-force'"
+new = "SynthModDestination='excitationForce'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthModDestination='excitation-position'"
+new = "SynthModDestination='excitationPosition'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthModDestination='filter-env-depth'"
+new = "SynthModDestination='filterEnvDepth'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthModDestination='lfo1-rate-scale'"
+new = "SynthModDestination='lfo1RateScale'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthModDestination='pan-units'"
+new = "SynthModDestination='panUnits'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthModDestination='pitch-cents'"
+new = "SynthModDestination='pitchCents'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthModDestination='resonance-q'"
+new = "SynthModDestination='resonanceQ'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthModDestination='spectrum-morph'"
+new = "SynthModDestination='spectrumMorph'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthModDestination='vibrato-depth-cents'"
+new = "SynthModDestination='vibratoDepthCents'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthModSource='amp-env'"
+new = "SynthModSource='ampEnv'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthModSource='expression-cc'"
+new = "SynthModSource='expressionCc'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthModSource='filter-env'"
+new = "SynthModSource='filterEnv'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthModSource='key-track'"
+new = "SynthModSource='keyTrack'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthModSource='mod-wheel'"
+new = "SynthModSource='modWheel'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SynthModSource='pitch-bend'"
+new = "SynthModSource='pitchBend'"
+domain = "engine"
+rule = "token-case"
+
+[[entry]]
+kind = "field"
+old = "ProjectTranscribeRequest.fmax"
+new = "ProjectTranscribeRequest.f0MaxHz"
+domain = "project"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "ProjectTranscribeRequest.fmin"
+new = "ProjectTranscribeRequest.f0MinHz"
+domain = "project"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "TranscribeOptions.fmax"
+new = "TranscribeOptions.f0MaxHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "TranscribeOptions.fmin"
+new = "TranscribeOptions.f0MinHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "TranscribeResult.tuning"
+new = "TranscribeResult.tuningCents"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.maxSeconds"
+new = "SynthesizeRirRequest.maxSec"
+domain = "effects"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.maxSeconds"
+new = "SynthesizeRirRequest.maxSec"
+domain = "effects"
+rule = "seconds-suffix"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "CaptureOptions.channels"
+new = "CaptureOptions.numChannels"
+domain = "engine"
+rule = "num-channels"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "CaptureOptions.bufferFrames"
+new = "CaptureOptions.capacityFrames"
+domain = "engine"
+rule = "individual"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.constructor"
+changed = "new RealtimeEngine({ sampleRate, maxBlockSize?, commandCapacity?, telemetryCapacity?, maxNumChannels? }) replaces new RealtimeEngine(sampleRate, maxBlockSize, commandCapacity, telemetryCapacity, maxChannels); sampleRate is required"
+domain = "engine"
+rule = "construction"
+test = "bindings/wasm/tests/surface/engine.test.ts::constructs from one config object"
+
+[[entry]]
+kind = "method"
+old = "ProjectTimeline.constructor"
+removed = true
+domain = "project"
+rule = "construction"
+
+[[entry]]
+kind = "method"
+old = "Audio.pitchCorrectToMidi"
+changed = "pitchCorrectToMidi({ currentMidi, targetMidi }) takes one options object replacing pitchCorrectToMidi(currentMidi = 69, targetMidi = 69)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/new-apis.test.ts::exposes the editing methods on the Audio class with the same shapes"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.listenerX"
+changed = "listenerX -> listener (RoomPlacement {x, y, z} (metres))"
+to = "RoomGeometry.listener"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.listenerY"
+changed = "listenerY -> listener (RoomPlacement {x, y, z} (metres))"
+to = "RoomGeometry.listener"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.listenerZ"
+changed = "listenerZ -> listener (RoomPlacement {x, y, z} (metres))"
+to = "RoomGeometry.listener"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.sourceX"
+changed = "sourceX -> source (RoomPlacement {x, y, z} (metres))"
+to = "RoomGeometry.source"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.sourceY"
+changed = "sourceY -> source (RoomPlacement {x, y, z} (metres))"
+to = "RoomGeometry.source"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.sourceZ"
+changed = "sourceZ -> source (RoomPlacement {x, y, z} (metres))"
+to = "RoomGeometry.source"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.listenerX"
+changed = "listenerX -> listener (RoomPlacement {x, y, z} (metres))"
+to = "RoomGeometry.listener"
+entry = "./analysis"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.listenerY"
+changed = "listenerY -> listener (RoomPlacement {x, y, z} (metres))"
+to = "RoomGeometry.listener"
+entry = "./analysis"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.listenerZ"
+changed = "listenerZ -> listener (RoomPlacement {x, y, z} (metres))"
+to = "RoomGeometry.listener"
+entry = "./analysis"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.sourceX"
+changed = "sourceX -> source (RoomPlacement {x, y, z} (metres))"
+to = "RoomGeometry.source"
+entry = "./analysis"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.sourceY"
+changed = "sourceY -> source (RoomPlacement {x, y, z} (metres))"
+to = "RoomGeometry.source"
+entry = "./analysis"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.sourceZ"
+changed = "sourceZ -> source (RoomPlacement {x, y, z} (metres))"
+to = "RoomGeometry.source"
+entry = "./analysis"
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "ProjectCompileTimelineResult.hasTimeline"
+removed = true
+domain = "project"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "ProjectCompileTimelineResult.messages"
+removed = true
+domain = "project"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "ProjectCompileTimelineResult.diagnosticCount"
+removed = true
+domain = "project"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "BuiltinSynthBinding.destinationId"
+removed = true
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "ClipPageStreamerRequest.clipId"
+changed = "ClipPageStreamerRequest is the union ClipPageSampleRequest | ClipPagePageRequest; clipId is on both members"
+to = "ClipPageSampleRequest.clipId"
+domain = "project"
+rule = "individual"
+test = "bindings/wasm/tests/clip_page_streamer.test.ts::{ clipId: 1, channel: 0, sample: 12 }"
+
+[[entry]]
+kind = "field"
+old = "ClipPageStreamerRequest.sample"
+changed = 'only on ClipPageSampleRequest, which also carries channel; narrow with "sample" in request'
+to = "ClipPageSampleRequest.sample"
+domain = "project"
+rule = "individual"
+test = "bindings/wasm/tests/clip_page_streamer.test.ts::{ clipId: 1, channel: 0, sample: 12 }"
+
+[[entry]]
+kind = "field"
+old = "ClipPageStreamerRequest.pageIndex"
+changed = 'only on ClipPagePageRequest; narrow with "pageIndex" in request'
+to = "ClipPagePageRequest.pageIndex"
+domain = "project"
+rule = "individual"
+test = "bindings/wasm/tests/worklet_realtime_engine_processor.test.ts::{ clipId: 89, pageIndex: 1 }"
+
+[[entry]]
+kind = "field"
+old = "SonareEngineOptions.blockSize"
+new = "SonareEngineOptions.maxBlockSize"
+entry = "./worklet"
+domain = "engine"
+rule = "num-channels"
+
+[[entry]]
+kind = "field"
+old = "SonareEngineOptions.channelCount"
+new = "SonareEngineOptions.numChannels"
+entry = "./worklet"
+domain = "engine"
+rule = "num-channels"
+
+[[entry]]
+kind = "field"
+old = "SonareWorkletProcessor.blockSize"
+new = "SonareWorkletProcessor.maxBlockSize"
+entry = "./worklet"
+domain = "engine"
+rule = "num-channels"
+
+[[entry]]
+kind = "type"
+old = "SonareWorkletExternalMidiEvent"
+removed = true
+entry = "./worklet"
+domain = "engine"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "Timbre"
+new = "TimbreFrame"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "Timbre"
+new = "TimbreFrame"
+entry = "./analysis"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "function"
+old = "compareUint64"
+removed = true
+domain = "project"
+rule = "individual"
+
+[[entry]]
+kind = "function"
+old = "stateTokenEquals"
+removed = true
+domain = "project"
+rule = "individual"
+
+[[entry]]
+kind = "function"
+old = "tokenEquals"
+removed = true
+domain = "project"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerNativeDraft.dispose"
+new = "VocalEditWorkerNativeDraft.destroy"
+entry = "./vocal-edit-worker"
+domain = "project"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerNativeDraft.exportState"
+removed = true
+entry = "./vocal-edit-worker"
+domain = "project"
+rule = "vocal-edit-model"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerNativeDraft.token"
+changed = "now a readonly property; read it without parentheses"
+entry = "./vocal-edit-worker"
+domain = "project"
+rule = "getters"
+test = "bindings/wasm/tests/vocal_edit_worker.test.ts::token: sessionToken(),"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerNativeSession.dispose"
+new = "VocalEditWorkerNativeSession.destroy"
+entry = "./vocal-edit-worker"
+domain = "project"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerNativeSession.token"
+changed = "now a readonly property; read it without parentheses"
+entry = "./vocal-edit-worker"
+domain = "project"
+rule = "getters"
+test = "bindings/wasm/tests/vocal_edit_worker.test.ts::token: sessionToken(),"
+
+[[entry]]
+kind = "export"
+old = "MarkerKind"
+changed = "a string-union type only ('marker' | 'text' | 'lyric' | 'cuePoint' | 'keySignature'); the const object of ordinals is gone"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/engine.test.ts::refuses an ordinal for a marker kind"
+
+[[entry]]
+kind = "value"
+old = "MarkerKind.cuePoint"
+new = "MarkerKind='cuePoint'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "MarkerKind.keySignature"
+new = "MarkerKind='keySignature'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "MarkerKind.lyric"
+new = "MarkerKind='lyric'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "MarkerKind.marker"
+new = "MarkerKind='marker'"
+domain = "engine"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "MarkerKind.text"
+new = "MarkerKind='text'"
+domain = "engine"
+rule = "string-closed-sets"

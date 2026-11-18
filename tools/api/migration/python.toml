@@ -6,11 +6,14 @@
 #
 # Keys:
 #   kind     function | method | class | type | field | option | value | export | flag | command
-#   old      the 1.x public name, spelled as below
+#   old      the 1.x public name, spelled as below; it must exist in v1.10.0
 #   new      the 2.0.0 name (old must be absent, new present, same kind and entry)
 #   removed  true when the name is gone with no replacement (old must be absent)
-#   changed  one line saying what a caller must change when the name stays the same;
-#            requires test = "<file>::<case name substring>", which must exist
+#   changed  one line saying what a caller must change; requires
+#            test = "<file>::<case name substring>", which must exist. Without to,
+#            old must still be present (in any kind)
+#   to       with changed: the 2.0.0 name of a member renamed and reshaped at once
+#            (old must be absent, to present); a plain rename is new
 #   domain   core | analysis | effects | mastering | engine | project
 #   rule     a slug from tools/api/migration/rules.toml
 #   entry    WASM subpath ("./analysis", "./worklet", ...); omitted means "."
@@ -41,13 +44,7 @@
 [[entry]]
 kind = "function"
 old = "vocal_edit_api_version"
-new = "vocal_edit_abi_version"
-domain = "core"
-rule = "abi-probes"
-
-[[entry]]
-kind = "function"
-old = "vocal_edit_abi_version"
+to = "vocal_edit_abi_version"
 changed = "returns None instead of a number when vocal edit is compiled out"
 domain = "core"
 rule = "absent-not-sentinel"
@@ -576,25 +573,9 @@ domain = "core"
 rule = "abi-probes"
 
 [[entry]]
-kind = "field"
-old = "SonareError.code"
-changed = "an ErrorCode member instead of an int; a code this binding does not know reads as ErrorCode.UNKNOWN"
-domain = "core"
-rule = "error-class-by-cause"
-test = "bindings/python/tests/test_error_contract.py::test_unknown_code_reads_as_the_unknown_member"
-
-[[entry]]
 kind = "method"
 old = "SonareError.code_name"
 changed = "typed as the ErrorCodeName literal, the name every binding reports for the code"
-domain = "core"
-rule = "error-class-by-cause"
-test = "bindings/python/tests/test_error_contract.py::test_code_name_is_the_shared_spelling_of_every_member"
-
-[[entry]]
-kind = "type"
-old = "ErrorCodeName"
-changed = "new exported Literal alias of the error code names shared with the JS codeName"
 domain = "core"
 rule = "error-class-by-cause"
 test = "bindings/python/tests/test_error_contract.py::test_code_name_is_the_shared_spelling_of_every_member"
@@ -673,6 +654,7 @@ test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_
 [[entry]]
 kind = "option"
 old = "analyze_with_progress(sample_rate)"
+to = "analyze(sample_rate)"
 changed = "sample_rate is required (1.x defaulted to 22050)"
 domain = "analysis"
 rule = "sample-rate-required"
@@ -854,14 +836,6 @@ test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_
 kind = "option"
 old = "pitch_correct_to_midi(sample_rate)"
 changed = "sample_rate is required (1.x defaulted to 22050)"
-domain = "effects"
-rule = "sample-rate-required"
-test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
-
-[[entry]]
-kind = "option"
-old = "pitch_correct_to_midi_timevarying(sample_rate)"
-changed = "sample_rate is required (1.x defaulted to 22050); sample_rate moves directly after samples"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
@@ -1907,65 +1881,83 @@ test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_
 [[entry]]
 kind = "function"
 old = "cross_similarity"
-new = "segment_cross_similarity"
+to = "segment_cross_similarity"
+changed = "takes two 2-D (features, frames) arrays and returns a float32 ndarray instead of SegmentMatrix"
 domain = "analysis"
-rule = "onset-strength"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
 
 [[entry]]
 kind = "function"
 old = "recurrence_matrix"
-new = "segment_recurrence_matrix"
+to = "segment_recurrence_matrix"
+changed = "takes one 2-D (features, frames) array and returns a float32 (frames, frames) ndarray instead of SegmentMatrix"
 domain = "analysis"
-rule = "onset-strength"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
 
 [[entry]]
 kind = "function"
 old = "recurrence_to_lag"
-new = "segment_recurrence_to_lag"
+to = "segment_recurrence_to_lag"
+changed = "takes a square 2-D recurrence array and returns a float32 ndarray instead of SegmentMatrix"
 domain = "analysis"
-rule = "onset-strength"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
 
 [[entry]]
 kind = "function"
 old = "lag_to_recurrence"
-new = "segment_lag_to_recurrence"
+to = "segment_lag_to_recurrence"
+changed = "takes one 2-D (n_lags, n_rows) array and returns a float32 ndarray instead of SegmentMatrix"
 domain = "analysis"
-rule = "onset-strength"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
 
 [[entry]]
 kind = "function"
 old = "subsegment"
-new = "segment_subsegment"
+to = "segment_subsegment"
+changed = "takes one 2-D (features, frames) array and returns an int32 ndarray instead of list[int]"
 domain = "analysis"
-rule = "onset-strength"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_index_results_are_int32_arrays"
 
 [[entry]]
 kind = "function"
 old = "agglomerative"
-new = "segment_agglomerative"
+to = "segment_agglomerative"
+changed = "takes one 2-D (features, frames) array and returns an int32 ndarray instead of list[int]"
 domain = "analysis"
-rule = "onset-strength"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_index_results_are_int32_arrays"
 
 [[entry]]
 kind = "function"
 old = "path_enhance"
-new = "segment_path_enhance"
+to = "segment_path_enhance"
+changed = "takes a square 2-D recurrence array and returns a float32 ndarray instead of SegmentMatrix"
 domain = "analysis"
-rule = "onset-strength"
+rule = "matrix-2d"
+test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
 
 [[entry]]
 kind = "function"
 old = "onset_envelope"
-new = "onset_strength"
+to = "onset_strength"
+changed = "returns a float32 ndarray instead of list[float]"
 domain = "analysis"
-rule = "onset-strength"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
 
 [[entry]]
 kind = "method"
 old = "Audio.onset_envelope"
-new = "Audio.onset_strength"
+to = "Audio.onset_strength"
+changed = "returns a float32 ndarray instead of list[float]"
 domain = "core"
-rule = "onset-strength"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_audio_methods_return_arrays"
 
 [[entry]]
 kind = "option"
@@ -2260,14 +2252,6 @@ test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_res
 
 [[entry]]
 kind = "function"
-old = "onset_strength"
-changed = "returns a float32 ndarray instead of list[float]"
-domain = "analysis"
-rule = "array-results"
-test = "bindings/python/tests/test_surface_analysis.py::test_one_dimensional_results_are_float32_arrays"
-
-[[entry]]
-kind = "function"
 old = "momentary_lufs"
 changed = "returns a float32 ndarray instead of list[float]"
 domain = "analysis"
@@ -2304,22 +2288,6 @@ old = "peak_pick"
 changed = "returns an int32 ndarray instead of list[int]"
 domain = "analysis"
 rule = "array-results"
-test = "bindings/python/tests/test_surface_analysis.py::test_index_results_are_int32_arrays"
-
-[[entry]]
-kind = "function"
-old = "segment_subsegment"
-changed = "takes one 2-D (features, frames) array and returns an int32 ndarray instead of list[int]"
-domain = "analysis"
-rule = "matrix-2d"
-test = "bindings/python/tests/test_surface_analysis.py::test_index_results_are_int32_arrays"
-
-[[entry]]
-kind = "function"
-old = "segment_agglomerative"
-changed = "takes one 2-D (features, frames) array and returns an int32 ndarray instead of list[int]"
-domain = "analysis"
-rule = "matrix-2d"
 test = "bindings/python/tests/test_surface_analysis.py::test_index_results_are_int32_arrays"
 
 [[entry]]
@@ -2398,46 +2366,6 @@ test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_
 kind = "function"
 old = "tonnetz"
 changed = "takes one 2-D (n_chroma, n_frames) array and returns a float32 (6, n_frames) ndarray"
-domain = "analysis"
-rule = "matrix-2d"
-test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
-
-[[entry]]
-kind = "function"
-old = "segment_cross_similarity"
-changed = "takes two 2-D (features, frames) arrays and returns a float32 ndarray instead of SegmentMatrix"
-domain = "analysis"
-rule = "matrix-2d"
-test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
-
-[[entry]]
-kind = "function"
-old = "segment_recurrence_matrix"
-changed = "takes one 2-D (features, frames) array and returns a float32 (frames, frames) ndarray instead of SegmentMatrix"
-domain = "analysis"
-rule = "matrix-2d"
-test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
-
-[[entry]]
-kind = "function"
-old = "segment_recurrence_to_lag"
-changed = "takes a square 2-D recurrence array and returns a float32 ndarray instead of SegmentMatrix"
-domain = "analysis"
-rule = "matrix-2d"
-test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
-
-[[entry]]
-kind = "function"
-old = "segment_lag_to_recurrence"
-changed = "takes one 2-D (n_lags, n_rows) array and returns a float32 ndarray instead of SegmentMatrix"
-domain = "analysis"
-rule = "matrix-2d"
-test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
-
-[[entry]]
-kind = "function"
-old = "segment_path_enhance"
-changed = "takes a square 2-D recurrence array and returns a float32 ndarray instead of SegmentMatrix"
 domain = "analysis"
 rule = "matrix-2d"
 test = "bindings/python/tests/test_surface_analysis.py::test_matrix_inputs_take_one_two_dimensional_array"
@@ -2544,104 +2472,6 @@ rule = "matrix-2d"
 [[entry]]
 kind = "option"
 old = "tonnetz(n_frames)"
-removed = true
-domain = "analysis"
-rule = "matrix-2d"
-
-[[entry]]
-kind = "option"
-old = "segment_cross_similarity(x_rows)"
-removed = true
-domain = "analysis"
-rule = "matrix-2d"
-
-[[entry]]
-kind = "option"
-old = "segment_cross_similarity(x_cols)"
-removed = true
-domain = "analysis"
-rule = "matrix-2d"
-
-[[entry]]
-kind = "option"
-old = "segment_cross_similarity(y_rows)"
-removed = true
-domain = "analysis"
-rule = "matrix-2d"
-
-[[entry]]
-kind = "option"
-old = "segment_cross_similarity(y_cols)"
-removed = true
-domain = "analysis"
-rule = "matrix-2d"
-
-[[entry]]
-kind = "option"
-old = "segment_recurrence_matrix(rows)"
-removed = true
-domain = "analysis"
-rule = "matrix-2d"
-
-[[entry]]
-kind = "option"
-old = "segment_recurrence_matrix(cols)"
-removed = true
-domain = "analysis"
-rule = "matrix-2d"
-
-[[entry]]
-kind = "option"
-old = "segment_recurrence_to_lag(n)"
-removed = true
-domain = "analysis"
-rule = "matrix-2d"
-
-[[entry]]
-kind = "option"
-old = "segment_lag_to_recurrence(n_rows)"
-removed = true
-domain = "analysis"
-rule = "matrix-2d"
-
-[[entry]]
-kind = "option"
-old = "segment_lag_to_recurrence(n_lags)"
-removed = true
-domain = "analysis"
-rule = "matrix-2d"
-
-[[entry]]
-kind = "option"
-old = "segment_subsegment(rows)"
-removed = true
-domain = "analysis"
-rule = "matrix-2d"
-
-[[entry]]
-kind = "option"
-old = "segment_subsegment(cols)"
-removed = true
-domain = "analysis"
-rule = "matrix-2d"
-
-[[entry]]
-kind = "option"
-old = "segment_agglomerative(rows)"
-removed = true
-domain = "analysis"
-rule = "matrix-2d"
-
-[[entry]]
-kind = "option"
-old = "segment_agglomerative(cols)"
-removed = true
-domain = "analysis"
-rule = "matrix-2d"
-
-[[entry]]
-kind = "option"
-old = "segment_path_enhance(n)"
 removed = true
 domain = "analysis"
 rule = "matrix-2d"
@@ -3046,21 +2876,21 @@ rule = "matrix-2d"
 test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold_two_dimensional_arrays"
 
 [[entry]]
-kind = "class"
+kind = "type"
 old = "SegmentMatrix"
 removed = true
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
-kind = "class"
+kind = "type"
 old = "StftMagnitudeResult"
 removed = true
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
-kind = "class"
+kind = "type"
 old = "MelPowerResult"
 removed = true
 domain = "analysis"
@@ -3095,7 +2925,7 @@ domain = "analysis"
 rule = "one-entry-per-operation"
 
 [[entry]]
-kind = "class"
+kind = "type"
 old = "PiptrackResult"
 changed = "importable from libsonare"
 domain = "analysis"
@@ -3103,7 +2933,7 @@ rule = "no-internal-types"
 test = "bindings/python/tests/test_surface_analysis.py::test_result_types_are_importable"
 
 [[entry]]
-kind = "class"
+kind = "type"
 old = "ReassignedSpectrogramResult"
 changed = "importable from libsonare"
 domain = "analysis"
@@ -3129,14 +2959,6 @@ test = "bindings/python/tests/test_surface_analysis.py::test_audio_methods_retur
 [[entry]]
 kind = "method"
 old = "Audio.detect_onsets"
-changed = "returns a float32 ndarray instead of list[float]"
-domain = "core"
-rule = "array-results"
-test = "bindings/python/tests/test_surface_analysis.py::test_audio_methods_return_arrays"
-
-[[entry]]
-kind = "method"
-old = "Audio.onset_strength"
 changed = "returns a float32 ndarray instead of list[float]"
 domain = "core"
 rule = "array-results"
@@ -3239,13 +3061,6 @@ rule = "unit-in-name"
 
 [[entry]]
 kind = "option"
-old = "detect_key_candidates(tuning)"
-new = "detect_key_candidates(tuning_cents)"
-domain = "analysis"
-rule = "unit-in-name"
-
-[[entry]]
-kind = "option"
 old = "detect_chords(tuning)"
 new = "detect_chords(tuning_cents)"
 domain = "analysis"
@@ -3269,13 +3084,6 @@ rule = "unit-in-name"
 kind = "option"
 old = "Audio.detect_key(tuning)"
 new = "Audio.detect_key(tuning_cents)"
-domain = "core"
-rule = "unit-in-name"
-
-[[entry]]
-kind = "option"
-old = "Audio.detect_key_candidates(tuning)"
-new = "Audio.detect_key_candidates(tuning_cents)"
 domain = "core"
 rule = "unit-in-name"
 
@@ -3432,78 +3240,6 @@ rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_surface_analysis.py::test_reattack_ratio_none_is_no_split_and_zero_is_refused"
 
 [[entry]]
-kind = "option"
-old = "PolyphonicAnalysis.analyze(reattack_ratio)"
-changed = "None means no split; an explicit 0, a negative value or a value up to 1 raises SonareValueError"
-domain = "analysis"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_surface_analysis.py::test_reattack_ratio_none_is_no_split_and_zero_is_refused"
-
-[[entry]]
-kind = "option"
-old = "detect_bpm(bpm_min)"
-changed = "keyword-only tempo search bound, default 60-200 BPM (1.x searched 30-300); an inverted range raises SonareValueError"
-domain = "analysis"
-rule = "tempo-range"
-test = "bindings/python/tests/test_surface_analysis.py::test_tempo_search_range_is_keyword_only_and_validated"
-
-[[entry]]
-kind = "option"
-old = "detect_bpm(bpm_max)"
-changed = "keyword-only tempo search bound, default 60-200 BPM (1.x searched 30-300); an inverted range raises SonareValueError"
-domain = "analysis"
-rule = "tempo-range"
-test = "bindings/python/tests/test_surface_analysis.py::test_tempo_search_range_is_keyword_only_and_validated"
-
-[[entry]]
-kind = "option"
-old = "detect_beats(bpm_min)"
-changed = "keyword-only tempo search bound, default 60-200 BPM (1.x searched 30-300); an inverted range raises SonareValueError"
-domain = "analysis"
-rule = "tempo-range"
-test = "bindings/python/tests/test_surface_analysis.py::test_tempo_search_range_is_keyword_only_and_validated"
-
-[[entry]]
-kind = "option"
-old = "detect_beats(bpm_max)"
-changed = "keyword-only tempo search bound, default 60-200 BPM (1.x searched 30-300); an inverted range raises SonareValueError"
-domain = "analysis"
-rule = "tempo-range"
-test = "bindings/python/tests/test_surface_analysis.py::test_tempo_search_range_is_keyword_only_and_validated"
-
-[[entry]]
-kind = "option"
-old = "Audio.detect_bpm(bpm_min)"
-changed = "keyword-only tempo search bound, default 60-200 BPM (1.x searched 30-300); an inverted range raises SonareValueError"
-domain = "core"
-rule = "tempo-range"
-test = "bindings/python/tests/test_surface_analysis.py::test_audio_tempo_search_range_matches_the_free_function"
-
-[[entry]]
-kind = "option"
-old = "Audio.detect_bpm(bpm_max)"
-changed = "keyword-only tempo search bound, default 60-200 BPM (1.x searched 30-300); an inverted range raises SonareValueError"
-domain = "core"
-rule = "tempo-range"
-test = "bindings/python/tests/test_surface_analysis.py::test_audio_tempo_search_range_matches_the_free_function"
-
-[[entry]]
-kind = "option"
-old = "Audio.detect_beats(bpm_min)"
-changed = "keyword-only tempo search bound, default 60-200 BPM (1.x searched 30-300); an inverted range raises SonareValueError"
-domain = "core"
-rule = "tempo-range"
-test = "bindings/python/tests/test_surface_analysis.py::test_audio_tempo_search_range_matches_the_free_function"
-
-[[entry]]
-kind = "option"
-old = "Audio.detect_beats(bpm_max)"
-changed = "keyword-only tempo search bound, default 60-200 BPM (1.x searched 30-300); an inverted range raises SonareValueError"
-domain = "core"
-rule = "tempo-range"
-test = "bindings/python/tests/test_surface_analysis.py::test_audio_tempo_search_range_matches_the_free_function"
-
-[[entry]]
 kind = "field"
 old = "StreamConfig.tuning_ref_hz"
 new = "StreamConfig.reference_hz"
@@ -3616,7 +3352,7 @@ domain = "analysis"
 rule = "typed-results"
 
 [[entry]]
-kind = "field"
+kind = "method"
 old = "AnalysisResult.beats"
 changed = "list[Beat] with time_sec and strength (1.x: a derived property)"
 domain = "analysis"
@@ -3737,9 +3473,11 @@ rule = "type-names"
 [[entry]]
 kind = "type"
 old = "AnalysisBeatObservations"
-new = "BeatObservations"
+to = "BeatObservations"
+changed = "importable from libsonare"
 domain = "analysis"
-rule = "type-names"
+rule = "no-internal-types"
+test = "bindings/python/tests/test_surface_analysis.py::test_boundary_and_beat_types_are_importable"
 
 [[entry]]
 kind = "type"
@@ -3819,22 +3557,6 @@ old = "analyze_with_progress"
 new = "analyze"
 domain = "analysis"
 rule = "progress-callback"
-
-[[entry]]
-kind = "option"
-old = "analyze(on_progress)"
-changed = "keyword-only progress callback (progress, stage); replaces analyze_with_progress"
-domain = "analysis"
-rule = "progress-callback"
-test = "bindings/python/tests/test_surface_analysis.py::test_analyze_reports_monotone_progress_and_cancels"
-
-[[entry]]
-kind = "option"
-old = "analyze(cancel)"
-changed = "keyword-only zero-argument cancel callable; a true return raises SonareError with code CANCELLED"
-domain = "analysis"
-rule = "progress-callback"
-test = "bindings/python/tests/test_surface_analysis.py::test_analyze_reports_monotone_progress_and_cancels"
 
 [[entry]]
 kind = "option"
@@ -4444,46 +4166,6 @@ rule = "no-internal-types"
 test = "bindings/python/tests/test_surface_analysis.py::test_boundary_and_beat_types_are_importable"
 
 [[entry]]
-kind = "type"
-old = "AnalysisChord"
-changed = "importable from libsonare"
-domain = "analysis"
-rule = "no-internal-types"
-test = "bindings/python/tests/test_surface_analysis.py::test_boundary_and_beat_types_are_importable"
-
-[[entry]]
-kind = "type"
-old = "BeatObservations"
-changed = "importable from libsonare"
-domain = "analysis"
-rule = "no-internal-types"
-test = "bindings/python/tests/test_surface_analysis.py::test_boundary_and_beat_types_are_importable"
-
-[[entry]]
-kind = "export"
-old = "CHORD_QUALITIES"
-changed = "the chord quality tokens, indexed by the C ordinal"
-domain = "analysis"
-rule = "individual"
-test = "bindings/python/tests/test_surface_analysis.py::test_boundary_and_beat_types_are_importable"
-
-[[entry]]
-kind = "export"
-old = "ProgressCallback"
-changed = "importable from libsonare"
-domain = "core"
-rule = "no-internal-types"
-test = "bindings/python/tests/test_surface_analysis.py::test_boundary_and_beat_types_are_importable"
-
-[[entry]]
-kind = "export"
-old = "CancelCallback"
-changed = "importable from libsonare"
-domain = "core"
-rule = "no-internal-types"
-test = "bindings/python/tests/test_surface_analysis.py::test_boundary_and_beat_types_are_importable"
-
-[[entry]]
 kind = "option"
 old = "synthesize_rir(seed)"
 changed = "None means 1; 0 is a seed rather than the library default"
@@ -4636,15 +4318,16 @@ rule = "typed-results"
 test = "bindings/python/tests/test_repair_mono_result.py::test_a_mono_repair_returns_float32_samples_beside_its_report"
 
 [[entry]]
-kind = "class"
+kind = "type"
 old = "Mode"
+to = "KeyMode"
 changed = "replaced by KeyMode, a Literal of the lowercase mode tokens (\"major\" ... \"locrian\"); an int is refused with TypeError"
 domain = "core"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_key_tokens.py::test_a_non_string_mode_is_a_type_error"
 
 [[entry]]
-kind = "class"
+kind = "type"
 old = "KeyProfile"
 changed = "a Literal of lowerCamel tokens (\"krumhanslSchmuckler\", \"faraldoEdmt\", ...) instead of an IntEnum; ordinals raise TypeError and legacy aliases such as \"ks\" raise SonareValueError"
 domain = "analysis"
@@ -4652,7 +4335,7 @@ rule = "string-closed-sets"
 test = "bindings/python/tests/test_key_tokens.py::test_an_unknown_or_legacy_profile_names_the_accepted_tokens"
 
 [[entry]]
-kind = "class"
+kind = "type"
 old = "SectionType"
 changed = "a Literal of lowerCamel tokens (\"intro\", \"preChorus\", ...) instead of an IntEnum"
 domain = "analysis"
@@ -4702,6 +4385,7 @@ test = "bindings/python/tests/test_key_tokens.py::test_scale_mask_for_c_major_is
 [[entry]]
 kind = "option"
 old = "vector_normalize(norm_type)"
+to = "vector_normalize(norm)"
 changed = "renamed to norm and takes a NormType token (\"max\", \"l1\", \"l2\", \"power\"; default \"max\") instead of an int ordinal"
 domain = "analysis"
 rule = "string-closed-sets"
@@ -4749,119 +4433,85 @@ test = "bindings/python/tests/test_analysis_closed_set_tokens.py::test_an_unknow
 
 [[entry]]
 kind = "option"
-old = "segment_recurrence_matrix(metric)"
-changed = "\"cosine\" or \"euclidean\"; any other name is refused instead of read as euclidean"
-domain = "analysis"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_analysis_closed_set_tokens.py::test_an_unknown_name_is_refused_naming_the_tokens"
-
-[[entry]]
-kind = "option"
-old = "segment_cross_similarity(metric)"
-changed = "\"cosine\" or \"euclidean\"; any other name is refused instead of read as euclidean"
-domain = "analysis"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_analysis_closed_set_tokens.py::test_an_unknown_name_is_refused_naming_the_tokens"
-
-[[entry]]
-kind = "option"
-old = "segment_agglomerative(linkage)"
-changed = "\"average\", \"single\", \"complete\" or \"ward\", matched exactly"
-domain = "analysis"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_analysis_closed_set_tokens.py::test_an_unknown_name_is_refused_naming_the_tokens"
-
-[[entry]]
-kind = "option"
 old = "pitch_yin(fmin)"
-changed = "renamed to f0_min_hz"
+new = "pitch_yin(f0_min_hz)"
 domain = "analysis"
 rule = "frequency-bounds"
-test = "bindings/python/tests/test_frequency_bound_names.py::test_a_pitch_search_refuses_the_unitless_name"
 
 [[entry]]
 kind = "option"
 old = "pitch_yin(fmax)"
-changed = "renamed to f0_max_hz"
+new = "pitch_yin(f0_max_hz)"
 domain = "analysis"
 rule = "frequency-bounds"
-test = "bindings/python/tests/test_frequency_bound_names.py::test_a_pitch_search_refuses_the_unitless_name"
 
 [[entry]]
 kind = "option"
 old = "pitch_pyin(fmin)"
-changed = "renamed to f0_min_hz"
+new = "pitch_pyin(f0_min_hz)"
 domain = "analysis"
 rule = "frequency-bounds"
-test = "bindings/python/tests/test_frequency_bound_names.py::test_a_pitch_search_refuses_the_unitless_name"
 
 [[entry]]
 kind = "option"
 old = "pitch_pyin(fmax)"
-changed = "renamed to f0_max_hz"
+new = "pitch_pyin(f0_max_hz)"
 domain = "analysis"
 rule = "frequency-bounds"
-test = "bindings/python/tests/test_frequency_bound_names.py::test_a_pitch_search_refuses_the_unitless_name"
 
 [[entry]]
 kind = "option"
 old = "analyze_melody(fmin)"
-changed = "renamed to f0_min_hz"
+new = "analyze_melody(f0_min_hz)"
 domain = "analysis"
 rule = "frequency-bounds"
-test = "bindings/python/tests/test_frequency_bound_names.py::test_a_pitch_search_refuses_the_unitless_name"
 
 [[entry]]
 kind = "option"
 old = "analyze_melody(fmax)"
-changed = "renamed to f0_max_hz"
+new = "analyze_melody(f0_max_hz)"
 domain = "analysis"
 rule = "frequency-bounds"
-test = "bindings/python/tests/test_frequency_bound_names.py::test_a_pitch_search_refuses_the_unitless_name"
 
 [[entry]]
 kind = "option"
 old = "Audio.pitch_yin(fmin)"
-changed = "renamed to f0_min_hz"
+new = "Audio.pitch_yin(f0_min_hz)"
 domain = "core"
 rule = "frequency-bounds"
-test = "bindings/python/tests/test_frequency_bound_names.py::test_a_pitch_search_refuses_the_unitless_name"
 
 [[entry]]
 kind = "option"
 old = "Audio.pitch_yin(fmax)"
-changed = "renamed to f0_max_hz"
+new = "Audio.pitch_yin(f0_max_hz)"
 domain = "core"
 rule = "frequency-bounds"
-test = "bindings/python/tests/test_frequency_bound_names.py::test_a_pitch_search_refuses_the_unitless_name"
 
 [[entry]]
 kind = "option"
 old = "Audio.pitch_pyin(fmin)"
-changed = "renamed to f0_min_hz"
+new = "Audio.pitch_pyin(f0_min_hz)"
 domain = "core"
 rule = "frequency-bounds"
-test = "bindings/python/tests/test_frequency_bound_names.py::test_a_pitch_search_refuses_the_unitless_name"
 
 [[entry]]
 kind = "option"
 old = "Audio.pitch_pyin(fmax)"
-changed = "renamed to f0_max_hz"
+new = "Audio.pitch_pyin(f0_max_hz)"
 domain = "core"
 rule = "frequency-bounds"
-test = "bindings/python/tests/test_frequency_bound_names.py::test_a_pitch_search_refuses_the_unitless_name"
 
 [[entry]]
 kind = "option"
 old = "mel_spectrogram(fmin)"
-changed = "renamed to fmin_hz"
+new = "mel_spectrogram(fmin_hz)"
 domain = "analysis"
 rule = "frequency-bounds"
-test = "bindings/python/tests/test_frequency_bound_names.py::test_mel_spectrogram_band_edges_are_named_in_hz"
 
 [[entry]]
 kind = "option"
 old = "mel_spectrogram(fmax)"
+to = "mel_spectrogram(fmax_hz)"
 changed = "renamed to fmax_hz; None (the default) is the Nyquist and an explicit 0 is refused instead of read as the default"
 domain = "analysis"
 rule = "frequency-bounds"
@@ -4870,54 +4520,49 @@ test = "bindings/python/tests/test_optional_scalar_default_sentinel.py::test_ref
 [[entry]]
 kind = "option"
 old = "cqt_to_audio(fmin)"
-changed = "renamed to fmin_hz"
+new = "cqt_to_audio(fmin_hz)"
 domain = "analysis"
 rule = "frequency-bounds"
-test = "bindings/python/tests/test_frequency_bound_names.py::test_inverse_constant_q_takes_fmin_hz"
 
 [[entry]]
 kind = "option"
 old = "vqt_to_audio(fmin)"
-changed = "renamed to fmin_hz"
+new = "vqt_to_audio(fmin_hz)"
 domain = "analysis"
 rule = "frequency-bounds"
-test = "bindings/python/tests/test_frequency_bound_names.py::test_inverse_constant_q_takes_fmin_hz"
 
 [[entry]]
 kind = "field"
 old = "MelSpectrogramResult.fmin"
-changed = "renamed to fmin_hz"
+new = "MelSpectrogramResult.fmin_hz"
 domain = "analysis"
 rule = "frequency-bounds"
-test = "bindings/python/tests/test_frequency_bound_names.py::test_mel_spectrogram_band_edges_are_named_in_hz"
 
 [[entry]]
 kind = "field"
 old = "MfccResult.fmin"
-changed = "renamed to fmin_hz"
+new = "MfccResult.fmin_hz"
 domain = "analysis"
 rule = "frequency-bounds"
-test = "bindings/python/tests/test_frequency_bound_names.py::test_mfcc_reports_its_band_edges_in_hz"
 
 [[entry]]
 kind = "field"
 old = "MelSpectrogramResult.fmax"
-changed = "renamed to fmax_hz"
+new = "MelSpectrogramResult.fmax_hz"
 domain = "analysis"
 rule = "frequency-bounds"
-test = "bindings/python/tests/test_frequency_bound_names.py::test_mel_spectrogram_band_edges_are_named_in_hz"
 
 [[entry]]
 kind = "field"
 old = "MfccResult.fmax"
-changed = "renamed to fmax_hz"
+new = "MfccResult.fmax_hz"
 domain = "analysis"
 rule = "frequency-bounds"
-test = "bindings/python/tests/test_frequency_bound_names.py::test_mfcc_reports_its_band_edges_in_hz"
 
 [[entry]]
 kind = "option"
 old = "pitch_shift(semitones)"
+to = "pitch_shift(pitch_semitones)"
 changed = "renamed to pitch_semitones and required"
 domain = "effects"
 rule = "pitch-semitones"
@@ -4926,6 +4571,7 @@ test = "bindings/python/tests/test_pitch_parameter_names.py::test_the_old_spelli
 [[entry]]
 kind = "option"
 old = "Audio.pitch_shift(semitones)"
+to = "Audio.pitch_shift(pitch_semitones)"
 changed = "renamed to pitch_semitones and required"
 domain = "core"
 rule = "pitch-semitones"
@@ -4934,6 +4580,7 @@ test = "bindings/python/tests/test_pitch_parameter_names.py::test_the_old_spelli
 [[entry]]
 kind = "option"
 old = "time_stretch(rate)"
+to = "time_stretch(speed_ratio)"
 changed = "renamed to speed_ratio and required"
 domain = "effects"
 rule = "sample-rate-name"
@@ -4942,6 +4589,7 @@ test = "bindings/python/tests/test_pitch_parameter_names.py::test_the_defining_q
 [[entry]]
 kind = "option"
 old = "Audio.time_stretch(rate)"
+to = "Audio.time_stretch(speed_ratio)"
 changed = "renamed to speed_ratio and required"
 domain = "core"
 rule = "sample-rate-name"
@@ -4950,6 +4598,7 @@ test = "bindings/python/tests/test_pitch_parameter_names.py::test_the_defining_q
 [[entry]]
 kind = "option"
 old = "phase_vocoder(rate)"
+to = "phase_vocoder(speed_ratio)"
 changed = "renamed to speed_ratio and required"
 domain = "effects"
 rule = "sample-rate-name"
@@ -4958,6 +4607,7 @@ test = "bindings/python/tests/test_pitch_parameter_names.py::test_the_defining_q
 [[entry]]
 kind = "option"
 old = "pitch_correct_timevarying(mode)"
+to = "pitch_correct_timevarying(target_mode)"
 changed = "renamed to target_mode (PitchTargetMode = 'midi' | 'scale'); a non-string is a TypeError and an unknown name a SonareValueError"
 domain = "effects"
 rule = "individual"
@@ -4966,22 +4616,21 @@ test = "bindings/python/tests/test_pitch_parameter_names.py::test_the_removed_mo
 [[entry]]
 kind = "option"
 old = "pitch_correct_timevarying(reference_midi)"
-changed = "renamed to scale_reference_midi"
+new = "pitch_correct_timevarying(scale_reference_midi)"
 domain = "effects"
 rule = "individual"
-test = "bindings/python/tests/test_pitch_parameter_names.py::test_scale_reference_midi_moves_the_scale_grid"
 
 [[entry]]
 kind = "option"
 old = "auto_tune(reference_midi)"
-changed = "renamed to scale_reference_midi"
+new = "auto_tune(scale_reference_midi)"
 domain = "effects"
 rule = "individual"
-test = "bindings/python/tests/test_pitch_parameter_names.py::test_auto_tune_takes_scale_reference_midi"
 
 [[entry]]
 kind = "option"
 old = "scale_quantize_midi(reference_midi)"
+to = "scale_quantize_midi(scale_reference_midi)"
 changed = "renamed to scale_reference_midi; None is A4 and an explicit 0 is refused until the core reads it as MIDI note 0"
 domain = "effects"
 rule = "individual"
@@ -4990,6 +4639,7 @@ test = "bindings/python/tests/test_pitch_parameter_names.py::test_the_scale_help
 [[entry]]
 kind = "option"
 old = "scale_correction_semitones(reference_midi)"
+to = "scale_correction_semitones(scale_reference_midi)"
 changed = "renamed to scale_reference_midi; None is A4 and an explicit 0 is refused until the core reads it as MIDI note 0"
 domain = "effects"
 rule = "individual"
@@ -5033,30 +4683,6 @@ changed = "default 300 -> 200, the shared tempo range"
 domain = "core"
 rule = "tempo-range"
 test = "bindings/python/tests/test_tempo_range_defaults.py::test_the_default_range_is_60_to_200"
-
-[[entry]]
-kind = "option"
-old = "segment_recurrence_matrix(k)"
-changed = "default 0 -> None (derived from the frame count); an explicit value below 1 is refused"
-domain = "analysis"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_optional_scalar_default_sentinel.py::test_a_count_below_one_is_refused"
-
-[[entry]]
-kind = "option"
-old = "segment_cross_similarity(k)"
-changed = "default 0 -> None (derived from the frame count); an explicit value below 1 is refused"
-domain = "analysis"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_optional_scalar_default_sentinel.py::test_a_count_below_one_is_refused"
-
-[[entry]]
-kind = "option"
-old = "segment_path_enhance(min_ratio)"
-changed = "default 0 -> None (1 / max_ratio); an explicit value below 1 is refused"
-domain = "analysis"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_optional_scalar_default_sentinel.py::test_a_ratio_below_one_is_refused"
 
 [[entry]]
 kind = "field"
@@ -5466,6 +5092,7 @@ test = "bindings/python/tests/test_spectral_edit.py::test_the_result_is_a_float3
 [[entry]]
 kind = "option"
 old = "synthesize_rir(max_seconds)"
+to = "synthesize_rir(max_sec)"
 changed = "max_seconds -> max_sec; None keeps the natural length and an explicit 0 raises SonareValueError"
 domain = "effects"
 rule = "seconds-suffix"
@@ -5482,6 +5109,7 @@ test = "bindings/python/tests/test_voice_and_room_spellings.py::test_an_automati
 [[entry]]
 kind = "option"
 old = "room_morph(max_seconds)"
+to = "room_morph(max_sec)"
 changed = "max_seconds -> max_sec; None keeps the natural length and an explicit 0 raises SonareValueError"
 domain = "effects"
 rule = "seconds-suffix"
@@ -5498,6 +5126,7 @@ test = "bindings/python/tests/test_voice_and_room_spellings.py::test_an_automati
 [[entry]]
 kind = "option"
 old = "room_morph_stereo(max_seconds)"
+to = "room_morph_stereo(max_sec)"
 changed = "max_seconds -> max_sec; None keeps the natural length and an explicit 0 raises SonareValueError"
 domain = "effects"
 rule = "seconds-suffix"
@@ -5514,6 +5143,7 @@ test = "bindings/python/tests/test_voice_and_room_spellings.py::test_an_automati
 [[entry]]
 kind = "option"
 old = "mastering_repair_declip(clip_threshold)"
+to = "mastering_repair_declip(clip_threshold_db)"
 changed = "clip_threshold -> clip_threshold_db, a level in dBFS (default 20*log10(0.98)) instead of a linear amplitude"
 domain = "effects"
 rule = "unit-in-name"
@@ -5522,6 +5152,7 @@ test = "bindings/python/tests/test_voice_and_room_spellings.py::test_the_clip_th
 [[entry]]
 kind = "option"
 old = "mastering_repair_declip_stereo(clip_threshold)"
+to = "mastering_repair_declip_stereo(clip_threshold_db)"
 changed = "clip_threshold -> clip_threshold_db, a level in dBFS (default 20*log10(0.98)) instead of a linear amplitude"
 domain = "effects"
 rule = "unit-in-name"
@@ -5530,6 +5161,7 @@ test = "bindings/python/tests/test_voice_and_room_spellings.py::test_the_clip_th
 [[entry]]
 kind = "option"
 old = "mastering_repair_detect_clipping(clip_threshold)"
+to = "mastering_repair_detect_clipping(clip_threshold_db)"
 changed = "clip_threshold -> clip_threshold_db, a level in dBFS (default 20*log10(0.98)) instead of a linear amplitude"
 domain = "effects"
 rule = "unit-in-name"
@@ -5538,6 +5170,7 @@ test = "bindings/python/tests/test_voice_and_room_spellings.py::test_the_clip_th
 [[entry]]
 kind = "option"
 old = "mastering_repair_trim_silence(threshold)"
+to = "mastering_repair_trim_silence(threshold_db)"
 changed = "threshold -> threshold_db, a peak level in dBFS (default -60.0) instead of a linear amplitude (0.001)"
 domain = "effects"
 rule = "unit-in-name"
@@ -5546,6 +5179,7 @@ test = "bindings/python/tests/test_voice_and_room_spellings.py::test_the_trim_th
 [[entry]]
 kind = "option"
 old = "mastering_repair_trim_silence_stereo(threshold)"
+to = "mastering_repair_trim_silence_stereo(threshold_db)"
 changed = "threshold -> threshold_db, a peak level in dBFS (default -60.0) instead of a linear amplitude (0.001)"
 domain = "effects"
 rule = "unit-in-name"
@@ -5554,6 +5188,7 @@ test = "bindings/python/tests/test_voice_and_room_spellings.py::test_the_trim_th
 [[entry]]
 kind = "option"
 old = "mastering_repair_detect_trim_range(threshold)"
+to = "mastering_repair_detect_trim_range(threshold_db)"
 changed = "threshold -> threshold_db, a peak level in dBFS (default -60.0) instead of a linear amplitude (0.001)"
 domain = "effects"
 rule = "unit-in-name"
@@ -5562,26 +5197,11 @@ test = "bindings/python/tests/test_voice_and_room_spellings.py::test_the_trim_th
 [[entry]]
 kind = "option"
 old = "mastering_repair_detect_trim_range_stereo(threshold)"
+to = "mastering_repair_detect_trim_range_stereo(threshold_db)"
 changed = "threshold -> threshold_db, a peak level in dBFS (default -60.0) instead of a linear amplitude (0.001)"
 domain = "effects"
 rule = "unit-in-name"
 test = "bindings/python/tests/test_voice_and_room_spellings.py::test_the_trim_threshold_is_in_dbfs"
-
-[[entry]]
-kind = "option"
-old = "StreamingRetune(semitones)"
-changed = "semitones -> pitch_semitones; the old keyword raises TypeError"
-domain = "effects"
-rule = "pitch-semitones"
-test = "bindings/python/tests/test_voice_and_room_spellings.py::test_streaming_retune_names_its_quantities_with_units"
-
-[[entry]]
-kind = "option"
-old = "StreamingRetune(grain_size)"
-changed = "grain_size -> grain_size_samples; None derives the grain from the sample rate and an explicit 0 raises SonareValueError"
-domain = "effects"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_streaming_retune.py::test_streaming_retune_refuses_an_explicit_zero_grain"
 
 [[entry]]
 kind = "option"
@@ -5593,6 +5213,7 @@ rule = "pitch-semitones"
 [[entry]]
 kind = "option"
 old = "StreamingRetune.set_config(grain_size)"
+to = "StreamingRetune.set_config(grain_size_samples)"
 changed = "grain_size -> grain_size_samples; None derives the grain from the sample rate and an explicit 0 raises SonareValueError"
 domain = "effects"
 rule = "absent-not-sentinel"
@@ -5601,9 +5222,11 @@ test = "bindings/python/tests/test_streaming_retune.py::test_streaming_retune_re
 [[entry]]
 kind = "method"
 old = "StreamingRetune.grain_size"
-new = "StreamingRetune.grain_size_samples"
+to = "StreamingRetune.grain_size_samples"
+changed = "a property (was a method)"
 domain = "effects"
-rule = "unit-in-name"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
 
 [[entry]]
 kind = "method"
@@ -5635,45 +5258,6 @@ domain = "effects"
 rule = "high-pass"
 
 [[entry]]
-kind = "field"
-old = "RealtimeVoiceChangerConfig.voice_engine_engine"
-new = "RealtimeVoiceChangerConfig.voice_engine"
-domain = "effects"
-rule = "individual"
-
-[[entry]]
-kind = "field"
-old = "RealtimeVoiceChangerConfig.reverb_variation_variation"
-changed = "renamed reverb_variation; its tokens tempo_delay / dub_echo are tempoDelay / dubEcho"
-domain = "effects"
-rule = "token-case"
-test = "bindings/python/tests/test_voice_and_room_spellings.py::test_config_tokens_are_lower_camel"
-
-[[entry]]
-kind = "field"
-old = "RealtimeVoiceChangerConfig.pitch_correction_scale"
-changed = "lowerCamel tokens (natural_minor -> naturalMinor); the snake spelling raises SonareValueError"
-domain = "effects"
-rule = "token-case"
-test = "bindings/python/tests/test_voice_and_room_spellings.py::test_config_tokens_are_lower_camel"
-
-[[entry]]
-kind = "field"
-old = "RealtimeVoiceChangerConfig.character_type"
-changed = "lowerCamel tokens (bbd_chorus -> bbdChorus); the snake spelling raises SonareValueError"
-domain = "effects"
-rule = "token-case"
-test = "bindings/python/tests/test_voice_and_room_spellings.py::test_config_tokens_are_lower_camel"
-
-[[entry]]
-kind = "field"
-old = "RealtimeVoiceChangerConfig.reverb_variation_division"
-changed = "lowerCamel tokens (dotted_eighth -> dottedEighth); the snake spelling raises SonareValueError"
-domain = "effects"
-rule = "token-case"
-test = "bindings/python/tests/test_voice_and_room_spellings.py::test_config_tokens_are_lower_camel"
-
-[[entry]]
 kind = "function"
 old = "realtime_voice_changer_preset_names"
 changed = "lists the preset ids in lowerCamel (neutralMonitor, brightIdol, ...)"
@@ -5692,14 +5276,6 @@ test = "bindings/python/tests/test_voice_and_room_spellings.py::test_a_kebab_pre
 [[entry]]
 kind = "option"
 old = "realtime_voice_changer_preset_pod(preset)"
-changed = "takes the lowerCamel preset ids (default neutralMonitor); a kebab id raises"
-domain = "effects"
-rule = "token-case"
-test = "bindings/python/tests/test_voice_and_room_spellings.py::test_a_kebab_preset_id_is_refused"
-
-[[entry]]
-kind = "option"
-old = "RealtimeVoiceChanger(preset)"
 changed = "takes the lowerCamel preset ids (default neutralMonitor); a kebab id raises"
 domain = "effects"
 rule = "token-case"
@@ -6203,14 +5779,6 @@ test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_rea
 
 [[entry]]
 kind = "method"
-old = "StreamingRetune.grain_size_samples"
-changed = "a property (was a method)"
-domain = "effects"
-rule = "getters"
-test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
-
-[[entry]]
-kind = "method"
 old = "StreamingRetune.latency_samples"
 changed = "a property (was a method)"
 domain = "effects"
@@ -6378,14 +5946,6 @@ rule = "typed-results"
 test = "bindings/python/tests/test_state_reads_are_properties.py::test_process_planar_stereo_returns_a_stereo_block"
 
 [[entry]]
-kind = "method"
-old = "RealtimeVoiceChanger.process_planar_stereo_with_carrier"
-changed = "returns a StereoBlock named tuple instead of a bare tuple"
-domain = "effects"
-rule = "typed-results"
-test = "bindings/python/tests/test_state_reads_are_properties.py::test_process_planar_stereo_returns_a_stereo_block"
-
-[[entry]]
 kind = "type"
 old = "PanLaw"
 changed = "Literal['const3Db', 'const4.5Db', 'const6Db', 'linear0Db']; the IntEnum and its members are removed"
@@ -6515,14 +6075,6 @@ test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_a_voice_chan
 
 [[entry]]
 kind = "type"
-old = "PanMode"
-changed = "Literal['balance', 'stereoPan', 'dualPan']; new public type, the PAN_MODE_* constants are removed"
-domain = "mastering"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_mixer_closed_sets_are_literal_types"
-
-[[entry]]
-kind = "type"
 old = "MeterTap"
 changed = "Literal['preFader', 'postFader']; the IntEnum and its members are removed"
 domain = "mastering"
@@ -6634,30 +6186,6 @@ rule = "string-closed-sets"
 test = "bindings/python/tests/test_engine_routing.py::test_can_set_sidechain_reports_each_refusal_and_matches_the_setters"
 
 [[entry]]
-kind = "field"
-old = "EngineSend.timing"
-changed = "a SendTiming token; 'pre-fader' and ordinals are refused"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_engine_mixer.py::test_engine_track_lane_accepts_send_timing_aliases"
-
-[[entry]]
-kind = "field"
-old = "EngineTrackBus.channel_layout"
-changed = "a ChannelLayout token; an ordinal is TypeError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_engine_mixer.py::test_engine_track_buses_route_lane_sends"
-
-[[entry]]
-kind = "field"
-old = "EngineTrackLane.source_channel_layout"
-changed = "a ChannelLayout token; an ordinal is TypeError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_engine_mixer.py::test_engine_track_buses_route_lane_sends"
-
-[[entry]]
 kind = "option"
 old = "downmix(target_layout)"
 changed = "a ChannelLayout token; the ordinal form is TypeError"
@@ -6685,14 +6213,6 @@ test = "bindings/python/tests/test_synth_patch.py::test_synth_preset_patch_round
 kind = "function"
 old = "synth_enum_tables"
 changed = "every NativeSynth enum token is lowerCamel (karplusStrong, transistorLadder, keyDown, monoRetrigger, ...)"
-domain = "engine"
-rule = "token-case"
-test = "bindings/python/tests/test_synth_patch.py::test_every_python_enum_table_matches_the_c_abi_kind"
-
-[[entry]]
-kind = "export"
-old = "SYNTH_ENUM_TABLES"
-changed = "every NativeSynth enum token is lowerCamel, matching synth_enum_tables"
 domain = "engine"
 rule = "token-case"
 test = "bindings/python/tests/test_synth_patch.py::test_every_python_enum_table_matches_the_c_abi_kind"
@@ -6785,38 +6305,6 @@ domain = "engine"
 rule = "token-case"
 test = "bindings/python/tests/test_controller_profile.py::test_an_unknown_spelling_or_ordinal_is_refused_by_the_binding"
 
-
-[[entry]]
-kind = "option"
-old = "PolyphonicAnalysis.analyze(min_frame_peak_ratio)"
-changed = "0 is the value 0 and a negative is refused; a negative no longer selects 0"
-domain = "analysis"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_polyphonic_editing.py::test_a_negative_floor_is_refused"
-
-[[entry]]
-kind = "option"
-old = "PolyphonicAnalysis.analyze(min_separation_cents)"
-changed = "0 is the value 0 and a negative is refused; a negative no longer selects 0"
-domain = "analysis"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_polyphonic_editing.py::test_a_negative_floor_is_refused"
-
-[[entry]]
-kind = "option"
-old = "PolyphonicAnalysis.analyze(min_ridge_peak_ratio)"
-changed = "0 is the value 0 and a negative is refused; a negative no longer selects 0"
-domain = "analysis"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_polyphonic_editing.py::test_a_negative_floor_is_refused"
-
-[[entry]]
-kind = "option"
-old = "PolyphonicAnalysis.analyze(min_ridge_duration_ms)"
-changed = "0 is the value 0 and a negative is refused; a negative no longer selects 0"
-domain = "analysis"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_polyphonic_editing.py::test_a_negative_floor_is_refused"
 
 [[entry]]
 kind = "type"
@@ -6920,182 +6408,6 @@ old = "Mixer.meter_tap"
 removed = true
 domain = "engine"
 rule = "aliases-removed"
-
-[[entry]]
-kind = "option"
-old = "PolyphonicAnalysis.analyze(tonality_off)"
-changed = "renamed to tonality, stated positively and True by default"
-domain = "analysis"
-rule = "no-positional-bools"
-test = "bindings/python/tests/test_polyphonic_editing.py::test_tonality_reaches_the_library"
-
-[[entry]]
-kind = "option"
-old = "PolyphonicAnalysis.analyze(win_length)"
-changed = "None is n_fft; a given 0 is refused instead of selecting n_fft"
-domain = "analysis"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_polyphonic_editing.py::test_an_explicit_zero_on_a_named_default_is_refused"
-
-[[entry]]
-kind = "option"
-old = "PolyphonicAnalysis.analyze(max_refine_hz)"
-changed = "None derives the limit; a given 0 is refused instead of deriving it"
-domain = "analysis"
-rule = "absent-not-sentinel"
-test = "bindings/python/tests/test_polyphonic_editing.py::test_an_explicit_zero_on_a_named_default_is_refused"
-
-[[entry]]
-kind = "type"
-old = "SynthEngineMode"
-changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals"
-
-[[entry]]
-kind = "type"
-old = "SynthOscWaveform"
-changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals"
-
-[[entry]]
-kind = "type"
-old = "SynthFilterModel"
-changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals"
-
-[[entry]]
-kind = "type"
-old = "SynthFilterOutput"
-changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals"
-
-[[entry]]
-kind = "type"
-old = "SynthBodyType"
-changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals"
-
-[[entry]]
-kind = "type"
-old = "SynthModSource"
-changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals"
-
-[[entry]]
-kind = "type"
-old = "SynthModDestination"
-changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_enum_tables_round_trip_names_and_refuse_ordinals"
-
-[[entry]]
-kind = "type"
-old = "SynthRetrigger"
-changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_retrigger_round_trips_and_refuses_unknown_values"
-
-[[entry]]
-kind = "type"
-old = "SynthLfoShape"
-changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_lfo_shape_round_trips_and_refuses_unknown_values"
-
-[[entry]]
-kind = "type"
-old = "SampleLoopMode"
-changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_synth_closed_sets_take_exact_tokens"
-
-[[entry]]
-kind = "type"
-old = "SampleKeyTrack"
-changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_synth_closed_sets_take_exact_tokens"
-
-[[entry]]
-kind = "type"
-old = "SampleDescLoopMode"
-changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_synth_closed_sets_take_exact_tokens"
-
-[[entry]]
-kind = "type"
-old = "SynthWaveform"
-changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_synth_closed_sets_take_exact_tokens"
-
-[[entry]]
-kind = "type"
-old = "ControllerInput"
-changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_synth_closed_sets_take_exact_tokens"
-
-[[entry]]
-kind = "type"
-old = "ControllerAxis"
-changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_synth_closed_sets_take_exact_tokens"
-
-[[entry]]
-kind = "type"
-old = "Articulation"
-changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_synth_closed_sets_take_exact_tokens"
-
-[[entry]]
-kind = "type"
-old = "MpeDimension"
-changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_synth_closed_sets_take_exact_tokens"
-
-[[entry]]
-kind = "type"
-old = "NoteTracking"
-changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_synth_closed_sets_take_exact_tokens"
-
-[[entry]]
-kind = "type"
-old = "PartRigMode"
-changed = "new public Literal of the exact lowerCamel tokens; an ordinal is TypeError, another spelling SonareValueError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_synth_closed_sets_take_exact_tokens"
 
 [[entry]]
 kind = "export"
@@ -7581,15 +6893,135 @@ rule = "typed-results"
 
 [[entry]]
 kind = "option"
-old = "PlaybackLoudnessMeter(channels)"
-changed = "channels -> num_channels"
-domain = "engine"
-rule = "num-channels"
-test = "bindings/python/tests/test_playback.py::PlaybackLoudnessMeter(num_channels="
-
-[[entry]]
-kind = "option"
 old = "render_playback(channels)"
 new = "render_playback(num_channels)"
 domain = "engine"
 rule = "num-channels"
+
+[[entry]]
+kind = "method"
+old = "FunctionalChord.bassName"
+new = "FunctionalChord.bass_name"
+domain = "analysis"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "method"
+old = "FunctionalChord.rootName"
+new = "FunctionalChord.root_name"
+domain = "analysis"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "method"
+old = "KeyDetection.shortName"
+new = "KeyDetection.short_name"
+domain = "analysis"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "option"
+old = "analyze_with_progress(chroma_highpass_hz)"
+new = "analyze(chroma_high_pass_hz)"
+domain = "analysis"
+rule = "high-pass"
+
+[[entry]]
+kind = "method"
+old = "FunctionalChord.duration"
+new = "FunctionalChord.duration_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "value"
+old = "ProjectVocalReason.NONE"
+new = "VocalReason='none'"
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ProjectVocalReason.INVALID_INPUT"
+new = "VocalReason='invalidInput'"
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ProjectVocalReason.REVISION_CONFLICT"
+new = "VocalReason='revisionConflict'"
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ProjectVocalReason.SOURCE_MISMATCH"
+new = "VocalReason='sourceMismatch'"
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ProjectVocalReason.UNSUPPORTED"
+new = "VocalReason='unsupported'"
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ProjectVocalReason.CANCELLED"
+new = "VocalReason='cancelled'"
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ProjectVocalReason.COUNTER_EXHAUSTED"
+new = "VocalReason='counterExhausted'"
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ProjectVocalReason.INVALID_STATE"
+new = "VocalReason='invalidState'"
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "method"
+old = "FunctionalChord.name"
+changed = "the name field FunctionalChord inherits from Chord, filled by the analysis functions, with no fallback spelling built from root and quality"
+to = "Chord.name"
+domain = "analysis"
+rule = "individual"
+test = "bindings/python/tests/test_surface_analysis.py::test_chord_names_and_roman_numerals_are_fields"
+
+[[entry]]
+kind = "option"
+old = "StreamAnalyzer.set_tuning_ref_hz(ref_hz)"
+new = "StreamAnalyzer.set_reference_hz(reference_hz)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "analyze_with_progress(tuning)"
+new = "analyze(tuning_cents)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "master_audio(preset_name)"
+new = "master_audio(preset)"
+domain = "mastering"
+rule = "individual"
+
+[[entry]]
+kind = "option"
+old = "master_audio_stereo(preset_name)"
+new = "master_audio_stereo(preset)"
+domain = "mastering"
+rule = "individual"
