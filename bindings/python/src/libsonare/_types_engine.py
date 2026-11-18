@@ -136,8 +136,8 @@ class EngineTelemetry:
     """Timeline position in samples."""
     audible_timeline_sample: int
     """Timeline position in samples of the audio now audible."""
-    graph_latency_samples_q8: int
-    """Engine processing latency in 1/256 samples."""
+    graph_latency_samples: float
+    """Engine processing latency in samples (fractional)."""
     value: int
     """Event-specific integer payload."""
 

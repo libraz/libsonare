@@ -10234,3 +10234,21 @@ changed = "set_marker(ppq, *, marker_id=None, name=None, kind=None, key_fifths=N
 domain = "project"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_project.py::test_project_marker_refuses_an_explicit_zero_id_and_a_numeric_kind"
+
+[[entry]]
+kind = "field"
+old = "EngineTelemetry.graph_latency_samples_q8"
+changed = "read graph_latency_samples, a float in samples (fractional) instead of an int in 1/256 samples"
+to = "EngineTelemetry.graph_latency_samples"
+domain = "engine"
+rule = "engine-vocabulary"
+test = "bindings/python/tests/test_engine_offline_render.py::test_graph_latency_is_the_native_q8_reading_in_fractional_samples"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.graph_latency_samples_q8"
+changed = "read the graph_latency_samples property, a float in samples (fractional) instead of a method returning an int in 1/256 samples"
+to = "RealtimeEngine.graph_latency_samples"
+domain = "engine"
+rule = "engine-vocabulary"
+test = "bindings/python/tests/test_engine_offline_render.py::test_graph_latency_is_the_native_q8_reading_in_fractional_samples"

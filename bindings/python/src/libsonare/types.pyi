@@ -2496,7 +2496,7 @@ class EngineTelemetry:
     render_frame: int
     timeline_sample: int
     audible_timeline_sample: int
-    graph_latency_samples_q8: int
+    graph_latency_samples: float
     value: int
     def __init__(
         self,
@@ -2505,7 +2505,7 @@ class EngineTelemetry:
         render_frame: int,
         timeline_sample: int,
         audible_timeline_sample: int,
-        graph_latency_samples_q8: int,
+        graph_latency_samples: float,
         value: int,
     ) -> None: ...
 

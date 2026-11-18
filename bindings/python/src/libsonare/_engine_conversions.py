@@ -319,6 +319,10 @@ def _graph_parameter_binding_to_c(
     return raw
 
 
+# Fixed-point scale of the latency the native engine reports (1/256 sample).
+_LATENCY_Q8_SCALE = 256.0
+
+
 def _telemetry_from_c(raw: SonareEngineTelemetry) -> EngineTelemetry:
     return EngineTelemetry(
         type=cast(EngineTelemetryType, _ENGINE_TELEMETRY_TYPES[int(raw.type)]),
@@ -326,7 +330,7 @@ def _telemetry_from_c(raw: SonareEngineTelemetry) -> EngineTelemetry:
         render_frame=int(raw.render_frame),
         timeline_sample=int(raw.timeline_sample),
         audible_timeline_sample=int(raw.audible_timeline_sample),
-        graph_latency_samples_q8=int(raw.graph_latency_samples_q8),
+        graph_latency_samples=int(raw.graph_latency_samples_q8) / _LATENCY_Q8_SCALE,
         value=int(raw.value),
     )
 

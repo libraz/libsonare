@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from . import _ffi_types_core as _ffi_core
 from . import _ffi_types_mastering_project as _ffi_project
 from ._engine_conversions import (
+    _LATENCY_Q8_SCALE,
     _automation_points_to_c,
     _clips_to_c,
     _fixed_bytes,
@@ -333,10 +334,11 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         _check(lib.sonare_engine_tail_samples(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
 
-    def graph_latency_samples_q8(self) -> int:
-        """Processing latency of the engine in 1/256 samples.
+    @property
+    def graph_latency_samples(self) -> float:
+        """Processing latency of the engine in samples (fractional).
 
-        The value telemetry records carry as ``graph_latency_samples_q8``.
+        The value telemetry records carry as ``graph_latency_samples``.
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_graph_latency_samples_q8"):
@@ -345,7 +347,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         _check(
             lib.sonare_engine_graph_latency_samples_q8(self._require_handle(), ctypes.byref(out))
         )
-        return int(out.value)
+        return int(out.value) / _LATENCY_Q8_SCALE
 
     def flush_control_commands(self) -> None:
         """Apply commands queued on an offline/control-only engine immediately.
