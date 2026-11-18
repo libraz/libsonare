@@ -34,6 +34,7 @@ from cli_contract_schema import (
     _validate_payload_property_exemptions,
     _validate_payload_property_names,
     _validate_payload_schema,
+    _validate_rules,
     _validate_text_expectations,
 )
 
@@ -622,6 +623,7 @@ def validate_manifest(manifest: Any) -> list[str]:
     if not _exact(manifest, _TOP_LEVEL_KEYS, "manifest", errors):
         return errors
     exempt_properties = _validate_payload_property_exemptions(manifest, errors)
+    _validate_rules(manifest, errors)
     if manifest["schema_version"] != 2:
         errors.append("manifest.schema_version: expected 2")
     if manifest["contract"] != "cli-json-v2":

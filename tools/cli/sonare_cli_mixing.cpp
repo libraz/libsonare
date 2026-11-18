@@ -18,7 +18,8 @@ int cmd_mixing_presets(const CliArgs& args, const Audio&) {
 }
 
 int cmd_mixing_preset(const CliArgs& args, const Audio&) {
-  const std::string preset_name = args.get_string("preset", "vocalReverbSend");
+  const std::string preset_name = catalog_token(args.get_string("preset", "vocalReverbSend"),
+                                                mixing::api::scene_preset_names());
   const auto preset = mixing::api::scene_preset_from_string(preset_name);
   std::cout << mixing::api::scene_to_json(mixing::api::scene_preset(preset)) << "\n";
   return 0;

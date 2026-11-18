@@ -116,6 +116,24 @@
       "exclusiveMaximum": false
     },
     {
+      "command": "key",
+      "option": "genre-hint",
+      "rejectExit": "invalid_parameter",
+      "choices": [
+        "auto",
+        "edm",
+        "electronic",
+        "dance",
+        "pop",
+        "classical",
+        "jazz"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
       "command": "chords",
       "option": "chroma-method",
       "rejectExit": "invalid_parameter",

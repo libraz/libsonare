@@ -28,7 +28,7 @@ from ._cli_common import (
 from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
-from ._cli_inventory import _cli_domain
+from ._cli_inventory import _cli_domain, _token_of
 from ._cli_note_edit import (
     _DEFAULT_UNMATCHED_POLICY as _DEFAULT_UNMATCHED_POLICY,
 )
@@ -758,7 +758,12 @@ def register_effects_parsers(
     normalize_p = sub.add_parser(
         "normalize", parents=[common], help="Peak-normalize audio to a target dB level"
     )
-    normalize_p.add_argument("--mode", default="peak", help="Normalization mode (default: peak)")
+    normalize_p.add_argument(
+        "--mode",
+        type=_token_of(("peak", "rms")),
+        default="peak",
+        help="Normalization mode (default: peak)",
+    )
     normalize_p.add_argument(
         "--target-db", type=_finite_float, default=None, help="Target peak level in dB"
     )

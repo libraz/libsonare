@@ -7,7 +7,7 @@ import json
 import math
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from typing import Any, cast, get_args
 
 import numpy as np
@@ -783,12 +783,26 @@ def _cli_token(library_token: str) -> str:
     return "".join(out)
 
 
-def _library_token(flag: str, value: str, library_tokens: Sequence[str]) -> str:
-    """Resolve a kebab-case flag value to the library token it spells, or refuse it by name."""
-    for token in library_tokens:
-        if _cli_token(token) == value:
+def _find_cli_token(value: str, tokens: Iterable[str]) -> str | None:
+    """Return the token among ``tokens`` that ``value`` names in any letter case, or None.
+
+    Every closed-set token flag is read through this, so the library below always
+    receives its own exact spelling whatever case the caller typed.
+    """
+    folded = value.lower()
+    for token in tokens:
+        if token.lower() == folded:
             return token
-    accepted = ", ".join(_cli_token(token) for token in library_tokens)
+    return None
+
+
+def _library_token(flag: str, value: str, library_tokens: Sequence[str]) -> str:
+    """Resolve a kebab-case flag value, in any case, to the library token it spells."""
+    spellings = {_cli_token(token): token for token in library_tokens}
+    found = _find_cli_token(value, spellings)
+    if found is not None:
+        return spellings[found]
+    accepted = ", ".join(spellings)
     raise ValueError(f"{flag}: unknown value {value!r}; expected one of: {accepted}")
 
 

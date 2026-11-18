@@ -4,8 +4,10 @@
 /// @brief The parsed native CLI invocation and the parser that produces it.
 
 #include <map>
+#include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "util/constants.h"
@@ -174,6 +176,11 @@ int parse_int_strict(const std::string& option, const std::string& value);
 /// whose declared domain reaches above `INT_MAX` is parsed with this instead, so
 /// the range is the domain's rather than the parser's.
 long long parse_int64_strict(const std::string& option, const std::string& value);
+/// The token among @p tokens that @p value names. Every closed-set token flag is
+/// read in any letter case and resolves to the library's own spelling here, so the
+/// library below sees an exact token; nullopt when @p value names none of them.
+std::optional<std::string> find_cli_token(std::string_view value,
+                                          const std::vector<std::string>& tokens);
 /// The CLI's one mode-name table: `major`/`maj`, `minor`/`min`/`m` and the five
 /// church modes, case-insensitive. Every option naming a mode reads it.
 /// @throws std::invalid_argument for a name outside the table.

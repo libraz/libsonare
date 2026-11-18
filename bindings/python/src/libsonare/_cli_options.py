@@ -12,13 +12,14 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import importlib
 import math
 import sys
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable, Sequence
 from typing import Any, NoReturn, cast
 
 from ._cli_common import EXIT_USAGE, _legacy_exit_codes
-from ._cli_inventory import _cli_domain, _cli_scalar_type, _inventory_subparsers
+from ._cli_inventory import _cli_domain, _cli_scalar_type, _inventory_subparsers, _token_of
 from ._errors import SonareValueError
 from ._narrowing import _FLOAT32_MAX
 from ._runtime import _C_INT_MAX, _C_INT_MIN, _narrow_int
@@ -52,6 +53,13 @@ class _ContractArgumentParser(argparse.ArgumentParser):
     def add_argument(self, *args: Any, **kwargs: Any) -> Any:
         if kwargs.get("type") is float:
             kwargs["type"] = _finite_float
+        choices = kwargs.get("choices")
+        if (
+            choices is not None
+            and kwargs.get("type") is None
+            and all(isinstance(choice, str) for choice in choices)
+        ):
+            kwargs["type"] = _token_of(tuple(choices))
         return super().add_argument(*args, **kwargs)
 
     def error(self, message: str) -> NoReturn:
@@ -191,6 +199,16 @@ def _positive_finite_float(value: str) -> float:
 def _tempo_bpm(value: str) -> float:
     """A tempo flag's value on every command that takes one: finite and greater than 0."""
     return _positive_finite_float(value)
+
+
+def _library_catalog(name: str) -> Callable[[], Sequence[str]]:
+    """The package's catalog function ``name``, imported only when it is read."""
+
+    def read() -> Sequence[str]:
+        package = importlib.import_module(__name__.rpartition(".")[0])
+        return cast(Sequence[str], getattr(package, name)())
+
+    return read
 
 
 def _closed_unit_float(value: str) -> float:

@@ -536,12 +536,15 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(
         commands, "timbre", true,
         {global_int("n-fft", 2048), global_int("hop-length", 512), global_int("n-mels", 128)});
-    add_command(commands, "key", true,
-                {global_int("n-fft", 2048), global_int("hop-length", 512), int_value("candidates"),
-                 flag("use-hpss", false, true, {"hpss"}), flag("loudness-weighted"),
-                 number_value("high-pass-hz", 80.0), string_value("modes"), string_value("profile"),
-                 string_value("genre-hint")},
-                {}, validate_key_hpss_hop);
+    add_command(
+        commands, "key", true,
+        {global_int("n-fft", 2048), global_int("hop-length", 512), int_value("candidates"),
+         flag("use-hpss", false, true, {"hpss"}), flag("loudness-weighted"),
+         number_value("high-pass-hz", 80.0), string_value("modes"), string_value("profile"),
+         with_domain(string_value("genre-hint"),
+                     choices_of({"auto", "edm", "electronic", "dance", "pop", "classical", "jazz"},
+                                CliOptionDomainStage::Parameter))},
+        {}, validate_key_hpss_hop);
     // `smoothing-window` and `hmm-beam-width` carry the C entry point's domains;
     // `min-duration` and `threshold` are checked by ChordAnalyzer itself and so
     // need none. A zero smoothing window is the one the analyzer accepts and the

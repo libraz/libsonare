@@ -23,7 +23,7 @@ from ._cli_common import (
 from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
-from ._cli_inventory import _cli_domain
+from ._cli_inventory import _cli_domain, _token_of
 from ._cli_options import (
     SharedParsers,
     _c_int,
@@ -806,6 +806,7 @@ def register_note_edit_parsers(
     _cli_domain(
         tune_to_midi_p.add_argument(
             "--unmatched-policy",
+            type=_token_of(_UNMATCHED_POLICY_NAMES),
             default=_DEFAULT_UNMATCHED_POLICY,
             metavar="{" + ",".join(_UNMATCHED_POLICY_NAMES) + "}",
             help=(

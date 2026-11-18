@@ -251,3 +251,11 @@ changed = "a value at or below 0 is refused as a usage error (exit 2) rather tha
 domain = "analysis"
 rule = "tempo-range"
 test = "tests/conformance/cli_contract_v2.json::zero_tempo"
+
+[[entry]]
+kind = "flag"
+old = "key --genre-hint"
+changed = "a value that names no genre hint (auto, edm, electronic, dance, pop, classical, jazz) is refused as an invalid parameter (exit 3) on the native CLI too, rather than read as auto; any letter case is accepted"
+domain = "analysis"
+rule = "token-case"
+test = "tests/conformance/cli_contract_v2.json::genre_hint_unknown"

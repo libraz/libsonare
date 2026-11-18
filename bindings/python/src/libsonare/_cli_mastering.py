@@ -24,13 +24,14 @@ from ._cli_common import (
 from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
-from ._cli_inventory import _cli_domain
+from ._cli_inventory import _cli_domain, _token_of
 from ._cli_options import (
     SharedParsers,
     _add_wav_bits_argument,
     _c_int,
     _ContractArgumentParser,
     _finite_float,
+    _library_catalog,
     _option_supplied,
     _wav_bits,
 )
@@ -1036,7 +1037,9 @@ def register_mastering_parsers(
     mastering_p = sub.add_parser(
         "mastering", parents=[common], help="Loudness-normalize with a true-peak ceiling"
     )
-    mastering_p.add_argument("--preset", default="")
+    mastering_p.add_argument(
+        "--preset", type=_token_of(_library_catalog("mastering_preset_names")), default=""
+    )
     # "--chain-config" names a complete chain config in the core's own
     # ``{params, version}`` form. It is the canonical spelling because the bare
     # ``--config`` carries a second meaning on this CLI (preset overrides on
@@ -1058,7 +1061,12 @@ def register_mastering_parsers(
     mproc_p = sub.add_parser(
         "mastering-processor", parents=[common], help="Apply a named mastering processor"
     )
-    mproc_p.add_argument("--processor", required=True, help="Processor name")
+    mproc_p.add_argument(
+        "--processor",
+        type=_token_of(_library_catalog("mastering_processor_names")),
+        required=True,
+        help="Processor name",
+    )
     mproc_p.add_argument("--params", default="", help="Params as k=v,k=v (floats)")
     _add_wav_bits_argument(mproc_p)
     eq_p = sub.add_parser("eq", parents=[common], help="Apply the unified equalizer")
@@ -1161,14 +1169,24 @@ def register_mastering_parsers(
         help="Run a two-input mastering analysis (always JSON output)",
     )
     mpa_p.add_argument("--reference", required=True, help="Reference audio file")
-    mpa_p.add_argument("--analysis", required=True, help="Analysis name")
+    mpa_p.add_argument(
+        "--analysis",
+        type=_token_of(_library_catalog("mastering_pair_analysis_names")),
+        required=True,
+        help="Analysis name",
+    )
     mpa_p.add_argument("--params", default="")
     mpp_p = sub.add_parser(
         "mastering-pair-processor",
         parents=[common],
         help="Apply a two-input mastering processor",
     )
-    mpp_p.add_argument("--processor", required=True, help="Pair processor name")
+    mpp_p.add_argument(
+        "--processor",
+        type=_token_of(_library_catalog("mastering_pair_processor_names")),
+        required=True,
+        help="Pair processor name",
+    )
     mpp_p.add_argument("--reference", required=True, help="Reference audio file")
     mpp_p.add_argument("--params", default="")
     _add_wav_bits_argument(mpp_p)
@@ -1178,7 +1196,12 @@ def register_mastering_parsers(
         help="Run a stereo mastering analysis (always JSON output)",
     )
     msa_p.add_argument("--reference", required=True, help="Right-channel audio file")
-    msa_p.add_argument("--analysis", required=True, help="Analysis name")
+    msa_p.add_argument(
+        "--analysis",
+        type=_token_of(_library_catalog("mastering_stereo_analysis_names")),
+        required=True,
+        help="Analysis name",
+    )
     msa_p.add_argument("--params", default="")
     mchain_p = sub.add_parser(
         "mastering-chain", parents=[common], help="Run a configurable mastering chain"
@@ -1188,7 +1211,12 @@ def register_mastering_parsers(
     mchain_p.add_argument("--params", default="", help="Flat params as k=v,k=v (floats)")
     mchain_p.add_argument("--report", default=None, help="Write a mastering report JSON file")
     master_p = sub.add_parser("master", parents=[common], help="Apply a named mastering preset")
-    master_p.add_argument("--preset", default="pop", help="Mastering preset name")
+    master_p.add_argument(
+        "--preset",
+        type=_token_of(_library_catalog("mastering_preset_names")),
+        default="pop",
+        help="Mastering preset name",
+    )
     master_p.add_argument("--config", default=None, help="Preset overrides as a JSON object")
     master_p.add_argument("--config-file", default=None, help="Preset override JSON file")
     # A whole chain rather than a base to override: the file is a complete chain
@@ -1230,7 +1258,10 @@ def register_mastering_parsers(
         help="Assistant params as k=v,k=v; targetPlatform and preset take a name",
     )
     msuggest_p.add_argument(
-        "--preset", default="", help="Mastering preset the suggestion starts from"
+        "--preset",
+        type=_token_of(_library_catalog("mastering_preset_names")),
+        default="",
+        help="Mastering preset the suggestion starts from",
     )
     msuggest_p.add_argument("--target-lufs", type=_finite_float, default=-14.0)
     msuggest_p.add_argument("--ceiling-dbtp", type=_finite_float, default=-1.0)

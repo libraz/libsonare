@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator, Sequence
 from typing import Any, TypeVar
 
-from ._cli_common import _strict_json_dumps
+from ._cli_common import _find_cli_token, _strict_json_dumps
 
 # The argument type _cli_domain hands straight back, so an inline wrap of an
 # add_argument() result stays an argparse.Action instead of decaying to Any.
@@ -78,6 +78,15 @@ def _cli_domain(target: _TargetT, **domain: Any) -> _TargetT:
     callable type it started with rather than widening to ``Any``.
     """
     setattr(target, _DOMAIN_ATTRIBUTE, _domain_record(**domain))
+    choices = domain.get("choices")
+    # A declared token set is read in any case, the same as an argparse ``choices=``.
+    if (
+        isinstance(target, argparse.Action)
+        and target.type is None
+        and choices
+        and all(isinstance(choice, str) for choice in choices)
+    ):
+        target.type = _token_of(tuple(choices))
     return target
 
 
@@ -92,6 +101,23 @@ def _cli_scalar_type(target: _TargetT, scalar_type: str) -> _TargetT:
     """Record the contract type a type callable produces, returning @p target."""
     setattr(target, _SCALAR_TYPE_ATTRIBUTE, scalar_type)
     return target
+
+
+def _token_of(tokens: Sequence[str] | Callable[[], Sequence[str]]) -> Callable[[str], str]:
+    """``type=`` for a closed token set: any letter case in, the set's own spelling out.
+
+    A value naming no token passes through unchanged, so the refusal stays with
+    what already owns it -- argparse's ``choices=``, the handler or the library.
+    A callable is a library catalog, read only when the flag carries a value.
+    """
+
+    def parse(value: str) -> str:
+        if not value:
+            return value
+        found = _find_cli_token(value, tokens() if callable(tokens) else tokens)
+        return value if found is None else found
+
+    return _cli_scalar_type(parse, "string")
 
 
 def _action_domain(action: argparse.Action) -> dict[str, Any] | None:

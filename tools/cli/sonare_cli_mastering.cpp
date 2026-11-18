@@ -369,7 +369,7 @@ mastering::assistant::AssistantConfig assistant_config_from_cli(const CliArgs& a
                                                                 const std::string& params_text) {
   std::vector<mastering::api::Param> params;
   std::string platform = args.get_string("target-platform", "streaming");
-  std::string preset = args.get_string("preset");
+  std::string preset = catalog_token(args.get_string("preset"), mastering::api::preset_names());
   bool has_platform = args.has("target-platform");
   bool has_preset = args.has("preset");
 
@@ -480,7 +480,7 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
       }
       mode = "config";
     } else {
-      preset_name = args.get_string("preset");
+      preset_name = catalog_token(args.get_string("preset"), mastering::api::preset_names());
       chain_config = mastering::api::preset_config(mastering::api::preset_from_string(preset_name));
       mode = "preset";
     }
@@ -696,7 +696,9 @@ int run_mastering_processor_stereo(const CliArgs& args, const Audio& audio,
 }
 
 int cmd_mastering_processor(const CliArgs& args, const Audio& audio) {
-  const std::string processor = args.get_string("processor");
+  std::vector<std::string> names = mastering::api::processor_names();
+  for (auto& name : mastering::api::stereo_processor_names()) names.push_back(std::move(name));
+  const std::string processor = catalog_token(args.get_string("processor"), names);
   if (processor.empty()) {
     std::cerr << color::red << "Error: --processor is required" << color::reset << "\n";
     return 1;
@@ -927,7 +929,8 @@ int cmd_mastering_streaming(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_mastering_pair_processor(const CliArgs& args, const Audio& audio) {
-  const std::string processor = args.get_string("processor");
+  const std::string processor =
+      catalog_token(args.get_string("processor"), mastering::api::pair_processor_names());
   if (processor.empty()) {
     std::cerr << color::red << "Error: --processor is required" << color::reset << "\n";
     return 1;
@@ -969,7 +972,8 @@ int cmd_mastering_pair_processor(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_mastering_pair_analyze(const CliArgs& args, const Audio& audio) {
-  const std::string analysis = args.get_string("analysis");
+  const std::string analysis =
+      catalog_token(args.get_string("analysis"), mastering::api::pair_analysis_names());
   if (analysis.empty()) {
     std::cerr << color::red << "Error: --analysis is required" << color::reset << "\n";
     return 1;
@@ -984,7 +988,8 @@ int cmd_mastering_pair_analyze(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_mastering_stereo_analyze(const CliArgs& args, const Audio& audio) {
-  const std::string analysis = args.get_string("analysis");
+  const std::string analysis =
+      catalog_token(args.get_string("analysis"), mastering::api::stereo_analysis_names());
   if (analysis.empty()) {
     std::cerr << color::red << "Error: --analysis is required" << color::reset << "\n";
     return 1;

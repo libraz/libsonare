@@ -1,8 +1,8 @@
 """``project bounce --synth`` takes the kebab-case preset name the CLI lists.
 
 The library names its presets in lowerCamel; the command line keeps kebab-case,
-maps it to the library name before the project is loaded, and refuses any other
-spelling, the library's own included.
+reads it in any letter case, maps it to the library name before the project is
+loaded, and refuses any other spelling, the library's own included.
 """
 
 from __future__ import annotations
@@ -55,13 +55,14 @@ def test_the_preset_listing_is_kebab_case() -> None:
     assert "sawLead" not in result.stdout
 
 
-def test_a_kebab_preset_name_is_accepted(tmp_path: Path) -> None:
-    result, output = _bounce(tmp_path, "saw-lead")
+@pytest.mark.parametrize("spelling", ["saw-lead", "Saw-Lead", "SAW-LEAD"])
+def test_a_kebab_preset_name_is_accepted_in_any_case(tmp_path: Path, spelling: str) -> None:
+    result, output = _bounce(tmp_path, spelling)
     assert result.returncode == 0, result.stderr
     assert output.is_file()
 
 
-@pytest.mark.parametrize("spelling", ["sawLead", "saw_lead", "Saw-Lead"])
+@pytest.mark.parametrize("spelling", ["sawLead", "saw_lead", "SawLead"])
 def test_another_spelling_is_refused_before_rendering(tmp_path: Path, spelling: str) -> None:
     result, output = _bounce(tmp_path, spelling)
     assert result.returncode == EXIT_INVALID_PARAMETER, result.stderr

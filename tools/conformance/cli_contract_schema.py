@@ -23,6 +23,7 @@ _TOP_LEVEL_KEYS = {
     "parser_cases",
     "fixtures",
     "payload_property_exemptions",
+    "rules",
 }
 _CLASSIFICATIONS = {"shared", "native_only", "python_only", "intentional_variant"}
 _STATUSES = {"active", "pending", "native_only", "python_only", "intentional_variant"}
@@ -988,6 +989,48 @@ def _validate_payload_property_exemptions(manifest: Any, errors: list[str]) -> f
                 errors.append(f"{label}.properties: duplicate pointer {pointer!r}")
             pointers.add(pointer)
     return frozenset(pointers)
+
+
+def _validate_rules(manifest: Any, errors: list[str]) -> None:
+    """Validate the CLI-wide rule registry.
+
+    A rule is a statement every command honours, so it has no command record of
+    its own to sit in; each one names the cases that exercise it, and a case
+    name the manifest does not carry is an error, so the statement cannot
+    outlive its evidence.
+    """
+
+    registry = manifest.get("rules")
+    if not isinstance(registry, dict) or not registry:
+        errors.append("manifest.rules: expected a non-empty object")
+        return
+    active = manifest.get("active_paths")
+    known: set[str] = set()
+    if isinstance(active, list):
+        for entry in active:
+            if isinstance(entry, dict) and isinstance(entry.get("cases"), list):
+                for case in entry["cases"]:
+                    if isinstance(case, dict):
+                        known.add(f"{entry.get('path')}::{case.get('id')}")
+    for name, entry in registry.items():
+        label = f"manifest.rules.{name}"
+        if not isinstance(name, str) or not _PAYLOAD_PROPERTY_NAME_RE.match(name):
+            errors.append(f"{label}: rule name must be snake_case")
+        if not _exact(entry, {"rule", "cases"}, label, errors):
+            continue
+        rule = entry["rule"]
+        if not isinstance(rule, str) or len(rule.strip()) < _MIN_REASON_LENGTH:
+            errors.append(
+                f"{label}.rule: expected a statement of at least {_MIN_REASON_LENGTH} characters"
+            )
+        cases = entry["cases"]
+        if not _strings(cases, f"{label}.cases", errors):
+            continue
+        if not cases:
+            errors.append(f"{label}.cases: expected a non-empty array")
+        for case in cases:
+            if case not in known:
+                errors.append(f"{label}.cases: no active case {case!r}")
 
 
 _OPTION_RECORD_FIELDS = {

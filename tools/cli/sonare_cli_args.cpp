@@ -80,6 +80,21 @@ int parse_int_strict(const std::string& option, const std::string& value) {
   return parsed;
 }
 
+std::optional<std::string> find_cli_token(std::string_view value,
+                                          const std::vector<std::string>& tokens) {
+  const auto fold = [](char c) {
+    return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  };
+  for (const auto& token : tokens) {
+    if (token.size() == value.size() &&
+        std::equal(token.begin(), token.end(), value.begin(),
+                   [&](char a, char b) { return fold(a) == fold(b); })) {
+      return token;
+    }
+  }
+  return std::nullopt;
+}
+
 sonare::Mode parse_mode_option(const std::string& value) {
   std::string key = value;
   std::transform(key.begin(), key.end(), key.begin(),
@@ -281,11 +296,16 @@ void resolve_option_occurrences(CliArgs& args) {
       case CliOptionOccurrence::Kind::MissingValue:
         args.options[canonical] = "";
         break;
-      case CliOptionOccurrence::Kind::Value:
-        if (spec != nullptr && spec->repeatable)
-          args.repeated_options[canonical].push_back(occurrence.value);
-        args.options[canonical] = occurrence.value;
+      case CliOptionOccurrence::Kind::Value: {
+        std::string value = occurrence.value;
+        // A closed token set is read in any case and stored as the token it names.
+        if (spec != nullptr && spec->scalar_type == CliOptionScalarType::String) {
+          if (auto token = find_cli_token(value, spec->domain.choices)) value = std::move(*token);
+        }
+        if (spec != nullptr && spec->repeatable) args.repeated_options[canonical].push_back(value);
+        args.options[canonical] = value;
         break;
+      }
     }
   }
 }

@@ -3,7 +3,7 @@
 #include "sonare_cli.h"
 
 int cmd_normalize(const CliArgs& args, const Audio& audio) {
-  const std::string mode = args.get_string("mode", "peak");
+  const std::string mode = catalog_token(args.get_string("mode", "peak"), {"peak", "rms"});
   if (mode != "peak" && mode != "rms") {
     std::cerr << color::red << "Error: --mode must be 'peak' or 'rms'" << color::reset << "\n";
     return 1;
@@ -108,7 +108,8 @@ int cmd_fade(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_filter(const CliArgs& args, const Audio& audio) {
-  const std::string type = args.get_string("type", "");
+  const std::string type = catalog_token(
+      args.get_string("type", ""), {"hp", "highpass", "lp", "lowpass", "bp", "bandpass", "notch"});
   const bool is_hp = (type == "hp" || type == "highpass");
   const bool is_lp = (type == "lp" || type == "lowpass");
   const bool is_bp = (type == "bp" || type == "bandpass");

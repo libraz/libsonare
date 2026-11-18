@@ -30,8 +30,14 @@ from ._cli_common import (
     _write_channel_output,
     _write_wav_stereo_frames,
 )
-from ._cli_inventory import _cli_domain, _cli_scalar_type
-from ._cli_options import SharedParsers, _c_int, _ContractArgumentParser, _tempo_bpm
+from ._cli_inventory import _cli_domain, _cli_scalar_type, _token_of
+from ._cli_options import (
+    SharedParsers,
+    _c_int,
+    _ContractArgumentParser,
+    _library_catalog,
+    _tempo_bpm,
+)
 from ._result_records import _result_to_json_dict
 
 
@@ -540,7 +546,10 @@ def register_mixing_parsers(
         "mixing-preset", parents=[stdout_options], help="Print a built-in mixer scene preset"
     )
     mixing_preset_p.add_argument(
-        "--preset", default="vocalReverbSend", help="Built-in scene preset name"
+        "--preset",
+        type=_token_of(_library_catalog("mixing_scene_preset_names")),
+        default="vocalReverbSend",
+        help="Built-in scene preset name",
     )
 
     suggest_mix_p = sub.add_parser(
@@ -601,7 +610,12 @@ def register_mixing_parsers(
     )
     mix_group = mix_p.add_mutually_exclusive_group(required=True)
     mix_group.add_argument("--scene", default="", help="Path to a scene JSON file")
-    mix_group.add_argument("--preset", default="", help="Built-in scene preset name")
+    mix_group.add_argument(
+        "--preset",
+        type=_token_of(_library_catalog("mixing_scene_preset_names")),
+        default="",
+        help="Built-in scene preset name",
+    )
     mix_p.add_argument(
         "--input",
         action="append",

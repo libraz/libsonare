@@ -38,6 +38,7 @@ from ._cli_options import (
 )
 from ._errors import _unknown_error
 from ._runtime import _mode_value
+from ._types_enums import _GENRE_HINTS
 
 
 def cmd_version(args: argparse.Namespace) -> int:
@@ -680,11 +681,14 @@ def register_analysis_parsers(
         default="",
         help="Key profile: ks, temperley, shaath, edmt, edma, edmm, or bellman",
     )
-    key_p.add_argument(
-        "--genre-hint",
-        type=str,
-        default="",
-        help="Genre hint for key profile selection, e.g. auto, edm, pop, classical, jazz",
+    _cli_domain(
+        key_p.add_argument(
+            "--genre-hint",
+            default="",
+            help="Genre hint for key profile selection, e.g. auto, edm, pop, classical, jazz",
+        ),
+        choices=_GENRE_HINTS,
+        reject_exit="invalid_parameter",
     )
     sub.add_parser("beats", parents=[stdout_options], help="Detect beat times")
     sub.add_parser("downbeats", parents=[stdout_options], help="Detect downbeat times")

@@ -217,7 +217,7 @@ int cmd_repair(const CliArgs& args, const Audio& audio) {
   mastering::assistant::DefectProfile defects;
 
   if (has_preset) {
-    preset_name = args.get_string("preset");
+    preset_name = catalog_token(args.get_string("preset"), mastering::api::preset_names());
     source_config = mastering::api::preset_config(mastering::api::preset_from_string(preset_name));
     mode = "preset";
     // The report covers every mode, so a named preset pays for its own

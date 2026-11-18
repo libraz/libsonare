@@ -18,12 +18,14 @@ from ._cli_common import (
 from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
+from ._cli_inventory import _token_of
 from ._cli_options import (
     SharedParsers,
     _add_wav_bits_argument,
     _c_int,
     _ContractArgumentParser,
     _finite_float,
+    _library_catalog,
     _option_supplied,
     _wav_bits,
 )
@@ -395,7 +397,10 @@ def register_repair_parsers(
         ),
     )
     repair_p.add_argument(
-        "--preset", default="", help="Repair preset name (omitted: measure and choose)"
+        "--preset",
+        type=_token_of(_library_catalog("mastering_preset_names")),
+        default="",
+        help="Repair preset name (omitted: measure and choose)",
     )
     repair_p.add_argument(
         "--params",

@@ -66,13 +66,19 @@ std::string cli_token(std::string_view library_token) {
 std::string library_token(std::string_view flag, std::string_view value,
                           const std::vector<std::string>& library_tokens) {
   std::string accepted;
-  for (const auto& token : library_tokens) {
-    const std::string spelled = cli_token(token);
-    if (spelled == value) return token;
-    accepted += accepted.empty() ? spelled : ", " + spelled;
+  std::vector<std::string> spellings;
+  for (const auto& token : library_tokens) spellings.push_back(cli_token(token));
+  if (const auto spelled = find_cli_token(value, spellings)) {
+    return library_tokens[static_cast<size_t>(
+        std::find(spellings.begin(), spellings.end(), *spelled) - spellings.begin())];
   }
+  for (const auto& spelled : spellings) accepted += accepted.empty() ? spelled : ", " + spelled;
   throw std::invalid_argument(std::string(flag) + ": unknown value '" + std::string(value) +
                               "'; expected one of: " + accepted);
+}
+
+std::string catalog_token(const std::string& value, const std::vector<std::string>& tokens) {
+  return find_cli_token(value, tokens).value_or(value);
 }
 
 std::vector<float> parse_float_list(const std::string& text) {

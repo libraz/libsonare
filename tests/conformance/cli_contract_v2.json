@@ -1033,7 +1033,22 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [
+              "auto",
+              "edm",
+              "electronic",
+              "dance",
+              "pop",
+              "classical",
+              "jazz"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "high-pass-hz",
@@ -6920,6 +6935,27 @@
           "stdout": "json"
         },
         {
+          "id": "formant_mode_any_case",
+          "argv": [
+            "voice-change",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--pitch-semitones",
+            "5",
+            "--formant-factor",
+            "1",
+            "--formant-mode",
+            "Absolute",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "simple",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
           "id": "absolute_unreachable",
           "argv": [
             "voice-change",
@@ -8638,6 +8674,21 @@
           "stdout": "json"
         },
         {
+          "id": "processor_any_case",
+          "argv": [
+            "mastering-processor",
+            "{audio}",
+            "--processor",
+            "EQ.Equalizer",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
           "id": "stereo",
           "argv": [
             "mastering-processor",
@@ -8741,6 +8792,25 @@
             "{output}",
             "--mode",
             "rms",
+            "--target-db",
+            "-20",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "mode_any_case",
+          "argv": [
+            "normalize",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--mode",
+            "RMS",
             "--target-db",
             "-20",
             "--json"
@@ -10306,7 +10376,22 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [
+              "auto",
+              "edm",
+              "electronic",
+              "dance",
+              "pop",
+              "classical",
+              "jazz"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "high-pass-hz",
@@ -10433,6 +10518,40 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "genre_hint_any_case",
+          "argv": [
+            "key",
+            "{audio}",
+            "--genre-hint",
+            "Jazz",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "genre_hint_unknown",
+          "argv": [
+            "key",
+            "{audio}",
+            "--genre-hint",
+            "polka",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty",
+          "stderr_contains": [
+            "genre"
+          ]
         },
         {
           "id": "candidates",
@@ -13732,6 +13851,20 @@
           "stdout": "json"
         },
         {
+          "id": "preset_any_case",
+          "argv": [
+            "mixing-preset",
+            "--preset",
+            "VOCALREVERBSEND",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
           "id": "preset_drum_bus_subgroup",
           "argv": [
             "mixing-preset",
@@ -13815,6 +13948,20 @@
             "voice-preset",
             "--preset",
             "bright-idol",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "preset_any_case",
+          "argv": [
+            "voice-preset",
+            "--preset",
+            "Bright-Idol",
             "--json"
           ],
           "exit": 0,
@@ -15777,6 +15924,21 @@
           "stdout": "json"
         },
         {
+          "id": "preset_any_case",
+          "argv": [
+            "mastering-suggest",
+            "{audio}",
+            "--preset",
+            "CLASSICAL",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
           "id": "preset_param",
           "argv": [
             "mastering-suggest",
@@ -17686,6 +17848,15 @@
           "stdout": "json"
         },
         {
+          "id": "target_any_case",
+          "argv": ["playback", "{audio}", "-o", "{output}", "--target", "HeadPhones", "--json"],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
           "id": "seven_one",
           "argv": ["playback", "{audio}", "-o", "{output}", "--target", "7.1", "--json"],
           "exit": 0,
@@ -18240,6 +18411,22 @@
         "doctor.features",
         "mixing-preset",
         "voice-preset"
+      ]
+    }
+  },
+  "rules": {
+    "token_case": {
+      "rule": "A flag whose value is one of a closed set of tokens reads the value in any letter case and passes the library the token's own spelling; a value that names no token is refused as before.",
+      "cases": [
+        "voice-change::formant_mode_any_case",
+        "playback::target_any_case",
+        "normalize::mode_any_case",
+        "mastering-suggest::preset_any_case",
+        "mastering-processor::processor_any_case",
+        "mixing-preset::preset_any_case",
+        "voice-preset::preset_any_case",
+        "key::genre_hint_any_case",
+        "key::genre_hint_unknown"
       ]
     }
   }
