@@ -85,11 +85,13 @@ def test_a_retired_spelling_lists_the_tokens(
 def test_a_key_ordinal_is_never_accepted_in_place_of_its_token() -> None:
     """The key-detection resolvers take the token spelling only, never an ordinal."""
     # Positive control: both routes carry a legal token through.
-    assert _mode_values(["minor"]) == [1] and _profile_value("krumhanslSchmuckler") == 0
+    assert (
+        _mode_values("detect_key", ["minor"]) == [1] and _profile_value("krumhanslSchmuckler") == 0
+    )
     # Omitted is SONARE_KEY_PROFILE_AUTO; the same -1 given as an ordinal is refused.
     assert _profile_value(None) == -1
     with pytest.raises(TypeError, match="mode"):
-        _mode_values([1])  # type: ignore[list-item]
+        _mode_values("detect_key", [1])  # type: ignore[list-item]
     with pytest.raises(TypeError, match="key profile"):
         _profile_value(0)  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="key profile"):

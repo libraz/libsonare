@@ -140,6 +140,9 @@ def detect_key(
         use_hpss: Use harmonic-percussive separation before chroma analysis.
         loudness_weighted: Weight chroma frames by RMS loudness.
         chroma_high_pass_hz: Optional high-pass cutoff before chroma analysis.
+        modes: The modes to choose among: a list of :data:`KeyMode` tokens or
+            one of the groups ``"majorMinor"``, ``"all"`` and ``"modal"``.
+            ``None`` takes the library's default set; an empty list is refused.
         profile: Key-profile family to pin; it outranks ``genre_hint``. ``None``
             lets ``genre_hint`` choose it, or the chroma under the default
             ``"auto"`` hint.
@@ -161,7 +164,7 @@ def detect_key(
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    mode_values = _mode_values(modes)
+    mode_values = _mode_values("detect_key", modes)
     mode_array, mode_count = _to_c_int_array(mode_values, "modes") if mode_values else (None, 0)
     out_key = SonareKey()
     out_tuning = ctypes.c_float()
@@ -216,7 +219,7 @@ def detect_key_candidates(
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    mode_values = _mode_values(modes)
+    mode_values = _mode_values("detect_key_candidates", modes)
     mode_array, mode_count = _to_c_int_array(mode_values, "modes") if mode_values else (None, 0)
     out_candidates = ctypes.POINTER(SonareKeyCandidate)()
     out_count = ctypes.c_size_t()

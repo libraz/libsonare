@@ -336,7 +336,7 @@ class SynthPatch:
 
     The patch starts from a BASE — the named ``preset`` (see
     :func:`synth_preset_names`; a ``"va:"`` routing prefix is accepted) or,
-    when ``preset`` is empty, the default subtractive patch. Every numeric
+    when ``preset`` is ``None``, the default subtractive patch. Every numeric
     field defaults to ``None``, meaning "keep the base value"; any value given
     overrides it, including an explicit ``0``. A value that is non-finite or
     outside the range :func:`synth_patch_param_info` publishes for its field is
@@ -442,7 +442,8 @@ class SynthPatch:
     of the remaining distance at the set time.
     """
 
-    preset: str = ""
+    preset: str | None = None
+    """Catalog preset to start from (:func:`synth_preset_names`); ``None`` is the init patch."""
     engine_mode: SynthEngineMode = "default"
     """Engine that voices the patch, a ``SynthEngineMode`` token; ``"default"`` keeps the base."""
     waveform: SynthOscWaveform = "default"
@@ -557,8 +558,19 @@ class SynthPatch:
     """True ignores note-off, so the voice ends with its envelope's decay or the engine's end."""
 
     def _to_c(self) -> SonareSynthPatch:
-        if not isinstance(self.preset, str):
-            raise TypeError("synth patch preset must be a string")
+        preset = b""
+        if self.preset is not None:
+            if not isinstance(self.preset, str):
+                raise TypeError("synth patch preset must be a string or None")
+            preset = _utf8_arg(_strip_va_prefix(self.preset), "preset")
+            if not preset:
+                raise SonareValueError(
+                    "synth patch preset must not be empty; omit it for the init patch"
+                )
+            if len(preset) >= SONARE_SYNTH_PRESET_NAME_MAX:
+                raise SonareValueError(
+                    f"synth patch preset must be at most {SONARE_SYNTH_PRESET_NAME_MAX - 1} bytes"
+                )
         c = SonareSynthPatch()
         c.struct_version = 10
 
@@ -585,9 +597,7 @@ class SynthPatch:
             setattr(c, name, value)
             c.present_fields2 |= bit
 
-        c.preset = _utf8_arg(_strip_va_prefix(self.preset), "preset")[
-            : SONARE_SYNTH_PRESET_NAME_MAX - 1
-        ]
+        c.preset = preset
         c.engine_mode = _synth_enum_value(self.engine_mode, _SYNTH_ENGINE_MODES, "engine mode")
         c.waveform = _synth_enum_value(self.waveform, _SYNTH_OSC_WAVEFORMS, "oscillator waveform")
         _set_int("unison", SONARE_SYNTH_FIELD_UNISON, self.unison)
@@ -710,7 +720,7 @@ class SynthPatch:
             for r in c.mod_routings[: int(c.num_mod_routings)]
         )
         return cls(
-            preset=c.preset.decode("utf-8", errors="replace"),
+            preset=c.preset.decode("utf-8", errors="replace") or None,
             engine_mode=cast(
                 SynthEngineMode, _synth_enum_name(int(c.engine_mode), _SYNTH_ENGINE_MODES)
             ),

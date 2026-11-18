@@ -4333,7 +4333,7 @@ test = "bindings/python/tests/test_key_tokens.py::test_detect_key_refuses_an_ord
 [[entry]]
 kind = "option"
 old = "detect_key(modes)"
-changed = "a list of KeyMode tokens or the group \"majorMinor\" / \"all\" / \"modal\"; \"major-minor\", \"majmin\", \"diatonic\" and ordinals are refused"
+changed = "a list of KeyMode tokens or the group \"majorMinor\" / \"all\" / \"modal\"; \"major-minor\", \"majmin\", \"diatonic\" and ordinals are refused; an empty list raises SonareValueError (omit modes for the default set)"
 domain = "analysis"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_key_tokens.py::test_a_mode_list_resolves_each_entry_and_names_a_group"
@@ -11873,3 +11873,19 @@ old = "waveform_peaks(validate)"
 removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
 domain = "mastering"
 rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "SynthPatch.preset"
+changed = "None (the default) is the init patch, which an empty string used to mean; an empty name now raises SonareValueError, a name longer than 31 UTF-8 bytes raises instead of being truncated, and a patch read back with no preset has None"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_synth_patch.py::test_an_empty_preset_name_is_refused_rather_than_read_as_the_init_patch"
+
+[[entry]]
+kind = "option"
+old = "detect_key_candidates(modes)"
+changed = "an empty list raises SonareValueError instead of running the default set; omit modes for the default set"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_key_tokens.py::test_an_empty_modes_set_is_refused_rather_than_read_as_the_default"

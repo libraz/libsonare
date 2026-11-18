@@ -121,7 +121,7 @@ PROBES: dict[str, tuple[tuple[object, ...], tuple[object, ...]]] = {
     "_channel_layout_value": ((1.5,), ("5.1",)),
     "_warp_mode_value": ((1.5,), ("off",)),
     "_profile_value": (("not-a-key-profile",), ("krumhanslSchmuckler",)),
-    "_mode_values": (("not-a-mode",), ("majorMinor",)),
+    "_mode_values": (("detect_key", "not-a-mode"), ("detect_key", "majorMinor")),
     "_mode_value": (("not-a-mode",), ("dorian",)),
 }
 

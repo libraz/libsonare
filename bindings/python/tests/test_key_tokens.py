@@ -82,13 +82,13 @@ def test_an_unknown_or_legacy_profile_names_the_accepted_tokens(value: str) -> N
 
 
 def test_a_mode_list_resolves_each_entry_and_names_a_group() -> None:
-    assert _mode_values(["dorian", "locrian"]) == [2, 6]
-    assert _mode_values("majorMinor") == [0, 1]
-    assert _mode_values("all") == list(range(7))
+    assert _mode_values("detect_key", ["dorian", "locrian"]) == [2, 6]
+    assert _mode_values("detect_key", "majorMinor") == [0, 1]
+    assert _mode_values("detect_key", "all") == list(range(7))
     with pytest.raises(TypeError):
-        _mode_values([1])  # type: ignore[list-item]
+        _mode_values("detect_key", [1])  # type: ignore[list-item]
     with pytest.raises(SonareValueError):
-        _mode_values("major-minor")
+        _mode_values("detect_key", "major-minor")
 
 
 def test_the_resolver_returns_the_index_in_the_given_tokens() -> None:
@@ -134,6 +134,17 @@ def test_detect_key_refuses_an_ordinal_and_a_legacy_name() -> None:
         libsonare.detect_key(tone, SR, modes=[0])  # type: ignore[list-item]
     with pytest.raises(SonareValueError, match="locrian"):
         libsonare.detect_key(tone, SR, modes=["maj"])  # type: ignore[list-item]
+
+
+@pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not found")
+@pytest.mark.parametrize("fn_name", ["detect_key", "detect_key_candidates"])
+@pytest.mark.parametrize("empty", [[], ()], ids=["list", "tuple"])
+def test_an_empty_modes_set_is_refused_rather_than_read_as_the_default(
+    fn_name: str, empty: list[KeyMode] | tuple[KeyMode, ...]
+) -> None:
+    fn = getattr(libsonare, fn_name)
+    with pytest.raises(SonareValueError, match=f"^{fn_name}: modes must not be empty$"):
+        fn(_chord_tone(0.5), SR, modes=empty)
 
 
 @pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not found")

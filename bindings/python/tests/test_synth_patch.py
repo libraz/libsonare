@@ -373,8 +373,35 @@ def test_synth_patch_second_presence_word_fields() -> None:
 
 
 def test_synth_patch_rejects_non_string_preset() -> None:
-    with pytest.raises(TypeError, match="synth patch preset must be a string"):
+    with pytest.raises(TypeError, match="synth patch preset must be a string or None"):
         SynthPatch(preset=123)._to_c()  # type: ignore[arg-type]
+
+
+def test_an_omitted_preset_is_none_and_round_trips_as_none() -> None:
+    assert SynthPatch().preset is None
+    assert SynthPatch._from_c(SynthPatch()._to_c()).preset is None
+
+
+@pytest.mark.parametrize("preset", ["", "va:"])
+def test_an_empty_preset_name_is_refused_rather_than_read_as_the_init_patch(preset: str) -> None:
+    with pytest.raises(SonareValueError, match="^synth patch preset must not be empty"):
+        SynthPatch(preset=preset)._to_c()
+
+
+def test_bouncing_with_an_empty_preset_string_is_refused() -> None:
+    project = _build_midi_only_project()
+    try:
+        with pytest.raises(SonareValueError, match="^synth patch preset must not be empty"):
+            project.bounce_with_synth_instrument("", total_frames=4800)
+    finally:
+        project.close()
+
+
+def test_a_preset_name_past_the_struct_field_is_refused_rather_than_truncated() -> None:
+    longest = "x" * 31
+    assert SynthPatch._from_c(SynthPatch(preset=longest)._to_c()).preset == longest
+    with pytest.raises(SonareValueError, match="at most 31 bytes"):
+        SynthPatch(preset=longest + "x")._to_c()
 
 
 def test_synth_patch_retrigger_round_trips_and_refuses_unknown_values() -> None:

@@ -1281,14 +1281,18 @@ _MODE_GROUPS: dict[str, tuple[KeyMode, ...]] = {
 }
 
 
-def _mode_values(modes: Sequence[KeyMode] | str | None) -> list[int]:
+def _mode_values(fn_name: str, modes: Sequence[KeyMode] | str | None) -> list[int]:
+    """Resolve ``modes``: ``None`` is the core default set; an empty one is refused."""
     if modes is None:
         return []
     if isinstance(modes, str):
         if modes in _MODE_GROUPS:
             return [_mode_value(mode) for mode in _MODE_GROUPS[modes]]
         return [_mode_value(cast(KeyMode, modes))]
-    return [_mode_value(mode) for mode in modes]
+    values = [_mode_value(mode) for mode in modes]
+    if not values:
+        raise SonareValueError(f"{fn_name}: modes must not be empty")
+    return values
 
 
 def _mode_value(mode: KeyMode) -> int:
