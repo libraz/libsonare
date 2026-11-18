@@ -5181,7 +5181,7 @@ test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_rea
 [[entry]]
 kind = "method"
 old = "StreamingRetune.config"
-changed = "returns the keys pitch_semitones, mix and grain_size_samples (was semitones, mix, grain_size)"
+changed = "returns the keys pitch_semitones, mix and grain_size_samples (was semitones, mix, grain_size); grain_size_samples is the grain as configured, None when automatic, and the grain in use is the grain_size_samples property"
 domain = "effects"
 rule = "unit-in-name"
 test = "bindings/python/tests/test_voice_and_room_spellings.py::test_streaming_retune_names_its_quantities_with_units"
@@ -5196,9 +5196,11 @@ rule = "pitch-semitones"
 [[entry]]
 kind = "field"
 old = "RealtimeVoiceChangerConfig.retune_grain_size"
-new = "RealtimeVoiceChangerConfig.retune_grain_size_samples"
+changed = "int | None: None derives the grain from the sample rate and an explicit 0 is refused; RealtimeVoiceChanger.config reads it back as configured"
+to = "RealtimeVoiceChangerConfig.retune_grain_size_samples"
 domain = "effects"
 rule = "unit-in-name"
+test = "bindings/python/tests/test_realtime_voice_changer_pod.py::test_config_returns_the_live_normalized_record"
 
 [[entry]]
 kind = "field"

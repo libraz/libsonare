@@ -101,21 +101,21 @@ def test_config_returns_the_live_normalized_record() -> None:
         cfg = changer.config
         assert isinstance(cfg, libsonare.RealtimeVoiceChangerConfig)
         # The handle was created from the neutral preset, so its live config
-        # must agree with realtime_voice_changer_preset_config("neutralMonitor")
-        # on every field except the retune grain size. Grain size is structural
-        # and resolved at prepare() time, so config() reports the effective grain
-        # rather than the requested value (0 = "library default") in the preset.
+        # agrees with realtime_voice_changer_preset_config("neutralMonitor") on
+        # every field, the retune grain included: config reads the grain as
+        # configured, and the preset leaves it automatic.
         preset = libsonare.realtime_voice_changer_preset_config("neutralMonitor")
         for f in dataclasses.fields(libsonare.RealtimeVoiceChangerConfig):
-            if f.name == "retune_grain_size_samples":
-                continue
             assert getattr(cfg, f.name) == pytest.approx(getattr(preset, f.name), abs=1e-6), (
                 f"live config drift on {f.name}"
             )
-        # The preset requests the library default (0); the live config reports
-        # the resolved, non-zero grain that fixes latency for the session.
-        assert preset.retune_grain_size_samples == 0
-        assert cfg.retune_grain_size_samples > 0
+        assert preset.retune_grain_size_samples is None
+        assert libsonare.RealtimeVoiceChangerConfig().retune_grain_size_samples is None
+        with pytest.raises(
+            libsonare.SonareValueError,
+            match="^retune_grain_size_samples must not be 0; omit it for automatic$",
+        ):
+            changer.set_config(dataclasses.replace(cfg, retune_grain_size_samples=0))
     finally:
         changer.close()
 
@@ -177,6 +177,8 @@ def _flat(config: libsonare.RealtimeVoiceChangerConfig) -> dict[str, object]:
             part if i == 0 else part.capitalize() for i, part in enumerate(f.name.split("_"))
         )
         value = getattr(config, f.name)
+        if value is None:  # the document spells an automatic grain 0
+            value = 0
         if f.name == "harmony_steps":
             out["harmonySteps"] = list(value)
         elif camel in ("limiterEnableIspLimiter", "vocoderEnabled"):

@@ -749,6 +749,8 @@ def _neutral_monitor_defaults() -> dict[str, Any]:
             value = tuple(int(step) for step in value)
         elif name in _ENUM_FIELD_NAMES:
             value = _enum_name(name, value)
+        elif name == "retune_grain_size_samples":
+            value = value or None
         values[name] = value
     return values
 
@@ -760,6 +762,17 @@ def _neutral_default(name: str) -> Callable[[], Any]:
     fields; the concrete POD value carries the correct numeric type.
     """
     return lambda: _neutral_monitor_defaults()[name]
+
+
+def _grain_size_request(grain_size_samples: int | None, name: str) -> int:
+    """Map a grain size to the C argument; ``None`` is automatic (C ``0``)."""
+    if grain_size_samples is None:
+        return 0
+    # Narrowed rather than coerced: int() would take 0.5 as the automatic 0.
+    value = _narrow_int(grain_size_samples, name, _C_INT_MIN, _C_INT_MAX)
+    if value == 0:
+        raise SonareValueError(f"{name} must not be 0; omit it for automatic")
+    return value
 
 
 @dataclasses.dataclass(frozen=True)
@@ -807,10 +820,13 @@ class RealtimeVoiceChangerConfig:
     """Retune pitch shift in semitones."""
     retune_mix: float = dataclasses.field(default_factory=_neutral_default("retune_mix"))
     """Retune wet amount in [0, 1]."""
-    retune_grain_size_samples: int = dataclasses.field(
+    retune_grain_size_samples: int | None = dataclasses.field(
         default_factory=_neutral_default("retune_grain_size_samples")
     )
-    """Retune grain length in samples."""
+    """Retune grain length in samples as configured; ``None`` derives it from the sample rate.
+
+    An explicit ``0`` is refused; the grain in use is resolved at ``prepare``.
+    """
     formant_factor: float = dataclasses.field(default_factory=_neutral_default("formant_factor"))
     """Formant scale factor, [0.55, 1.65]; 1 leaves the formants alone. See ``formant_mode``."""
     formant_amount: float = dataclasses.field(default_factory=_neutral_default("formant_amount"))
@@ -1031,6 +1047,8 @@ class RealtimeVoiceChangerConfig:
                 value = tuple(int(step) for step in value)
             elif name in _ENUM_FIELD_NAMES:
                 value = _enum_name(name, value)
+            elif name == "retune_grain_size_samples":
+                value = value or None
             values[name] = value
         return cls(**values)
 
@@ -1056,6 +1074,8 @@ class RealtimeVoiceChangerConfig:
                     )
             elif name in _ENUM_FIELD_NAMES:
                 setattr(out, name, _enum_ordinal(name, value))
+            elif name == "retune_grain_size_samples":
+                out.retune_grain_size_samples = _grain_size_request(value, name)
             else:
                 setattr(out, name, value)
         return out
@@ -1091,17 +1111,6 @@ def realtime_voice_changer_preset_config(preset: VoicePresetId) -> RealtimeVoice
     return RealtimeVoiceChangerConfig._from_pod(pod)
 
 
-def _retune_grain_size_request(grain_size_samples: int | None) -> int:
-    """Map the caller's grain size to the C argument; ``None`` is automatic (C ``0``)."""
-    if grain_size_samples is None:
-        return 0
-    # Narrowed rather than coerced: int() would take 0.5 as the automatic 0.
-    value = _narrow_int(grain_size_samples, "grain_size_samples", _C_INT_MIN, _C_INT_MAX)
-    if value == 0:
-        raise SonareValueError("grain_size_samples must not be 0; omit it for automatic")
-    return value
-
-
 class StreamingRetune:
     """Block-by-block mono pitch shifter (grain overlap-add).
 
@@ -1132,7 +1141,7 @@ class StreamingRetune:
         # for __del__/close() instead of raising AttributeError over it.
         self._handle = ctypes.c_void_p()
         self._lib = _get_lib()
-        requested_grain_size = _retune_grain_size_request(grain_size_samples)
+        requested_grain_size = _grain_size_request(grain_size_samples, "grain_size_samples")
         handle = ctypes.c_void_p()
         rc = self._lib.sonare_streaming_retune_create(
             _to_c_float(pitch_semitones, "pitch_semitones"),
@@ -1142,13 +1151,6 @@ class StreamingRetune:
         )
         _check(rc)
         self._handle = handle
-        # The grain size the caller last ASKED for. ``config()`` reports the
-        # EFFECTIVE grain once prepared, so seeding an omitted ``grain_size_samples``
-        # from it froze the 0 "derive from the sample rate" sentinel into a
-        # literal and a re-``prepare`` at another rate kept the first rate's
-        # grain. The core draws the same distinction internally, but it is not
-        # readable across the C ABI.
-        self._requested_grain_size = requested_grain_size
 
     def close(self) -> None:
         """Release the native handle. Idempotent, so a double close is a no-op."""
@@ -1194,33 +1196,31 @@ class StreamingRetune:
     ) -> None:
         """Update the live controls; omitted keywords keep their current value.
 
-        ``grain_size_samples`` is structural: it is remembered and applied by the next
-        :meth:`prepare`, and :meth:`config` keeps reporting the effective grain
-        until then. An omitted ``grain_size_samples`` keeps the last REQUESTED
-        value, including the automatic one, so re-preparing at another sample rate
-        re-derives the grain instead of freezing the first rate's answer.
+        ``grain_size_samples`` is structural: :meth:`config` reports it at once, and
+        the grain in use (:attr:`grain_size_samples`) follows at the next
+        :meth:`prepare`. An omitted ``grain_size_samples`` keeps the configured
+        value, including automatic, so re-preparing at another sample rate
+        re-derives the grain.
         """
-        current = self.config()
+        current_pitch, current_mix, current_grain = self._read_config()
         requested_grain_size = (
-            self._requested_grain_size
+            current_grain
             if grain_size_samples is None
-            else _retune_grain_size_request(grain_size_samples)
+            else _grain_size_request(grain_size_samples, "grain_size_samples")
         )
         _check(
             self._lib.sonare_streaming_retune_set_config(
                 self._require_handle(),
                 _to_c_float(
-                    current["pitch_semitones"] if pitch_semitones is None else pitch_semitones,
+                    current_pitch if pitch_semitones is None else pitch_semitones,
                     "pitch_semitones",
                 ),
-                _to_c_float(current["mix"] if mix is None else mix, "mix"),
+                _to_c_float(current_mix if mix is None else mix, "mix"),
                 _to_c_int(requested_grain_size, "grain_size_samples"),
             )
         )
-        self._requested_grain_size = requested_grain_size
 
-    def config(self) -> dict[str, float | int]:
-        """The applied controls; ``grain_size_samples`` is the effective one."""
+    def _read_config(self) -> tuple[float, float, int]:
         pitch_semitones = ctypes.c_float()
         mix = ctypes.c_float()
         grain_size_samples = ctypes.c_int()
@@ -1232,10 +1232,18 @@ class StreamingRetune:
                 ctypes.byref(grain_size_samples),
             )
         )
+        return float(pitch_semitones.value), float(mix.value), int(grain_size_samples.value)
+
+    def config(self) -> dict[str, float | int | None]:
+        """The controls as configured; ``grain_size_samples`` is ``None`` when automatic.
+
+        The grain in use is :attr:`grain_size_samples`.
+        """
+        pitch_semitones, mix, grain_size_samples = self._read_config()
         return {
-            "pitch_semitones": float(pitch_semitones.value),
-            "mix": float(mix.value),
-            "grain_size_samples": int(grain_size_samples.value),
+            "pitch_semitones": pitch_semitones,
+            "mix": mix,
+            "grain_size_samples": grain_size_samples or None,
         }
 
     @property

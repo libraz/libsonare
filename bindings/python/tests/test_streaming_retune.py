@@ -47,13 +47,27 @@ def test_streaming_retune_applies_grain_requested_after_prepare() -> None:
     with StreamingRetune() as retune:
         retune.prepare(SR, BLOCK)
         derived = retune.grain_size_samples
+        assert retune.config()["grain_size_samples"] is None
         retune.set_config(grain_size_samples=512)
-        # Structural: the request takes effect at the next prepare, and config()
-        # keeps reporting the effective grain until then.
+        # Structural: config() reports the configured grain at once, and the
+        # grain in use follows at the next prepare.
+        assert retune.config()["grain_size_samples"] == 512
         assert retune.grain_size_samples == derived
-        assert retune.config()["grain_size_samples"] == derived
         retune.prepare(SR, BLOCK)
         assert retune.grain_size_samples == 512
+
+
+def test_streaming_retune_config_round_trips_through_set_config() -> None:
+    with StreamingRetune(pitch_semitones=3.0) as retune:
+        retune.prepare(SR, BLOCK)
+        before = retune.config()
+        assert before["grain_size_samples"] is None
+        retune.set_config(**before)  # type: ignore[arg-type]
+        assert retune.config() == before
+        with pytest.raises(
+            SonareValueError, match="^grain_size_samples must not be 0; omit it for automatic$"
+        ):
+            retune.set_config(grain_size_samples=0)
 
 
 def test_streaming_retune_rederives_grain_after_an_unrelated_set_config() -> None:
