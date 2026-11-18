@@ -19,6 +19,8 @@ export { opfsClipPageWorkerSource } from './opfs_clip_pages.js';
 export type { StreamingMasteringChainConfig } from './public_types.js';
 export type { CaptureOptions } from './public_types_engine.js';
 export type {
+  SonareEngineClipPageRequestMessage,
+  SonareEngineSyncErrorMessage,
   SonarePlaybackNodeOptions,
   SonarePlaybackWorkletDiagnostics,
   SonarePlaybackWorkletProcessorOptions,
@@ -29,6 +31,8 @@ export type {
   SonareStreamAnalyzerNodeOptions,
   SonareStreamAnalyzerWorkletProcessorOptions,
   SonareWorkletProcessorOptions,
+  WorkletPort,
+  WorkletTransport,
 } from './public_types_worklet.js';
 export { StreamingMasteringChain } from './streaming_processors.js';
 export { SonareEngine } from './worklet/engine.js';
@@ -55,8 +59,6 @@ export {
   createSonareMeterRingBuffer,
   createSonareScopeRingBuffer,
   createSonareSpectrumRingBuffer,
-  pushSonareClipPageRequestRingBuffer,
-  pushSonareExternalMidiRingBuffer,
   readSonareClipPageRequestRingBuffer,
   readSonareEngineTelemetryRingBuffer,
   readSonareExternalMidiRingBuffer,

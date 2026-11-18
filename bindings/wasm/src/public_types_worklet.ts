@@ -1,8 +1,11 @@
 /**
  * Option, capability and diagnostics types of the `./worklet` entry: what a host
- * passes to a processor or node factory and what it reads back. The wire messages
- * these processors exchange stay in `internal/worklet_messages.ts`.
+ * passes to a processor or node factory and what it reads back, and the two
+ * listener payloads a node hands to the host. The wire messages these processors
+ * exchange stay in `internal/worklet_messages.ts`.
  */
+
+import type { ClipPagePageRequest } from './clip_page_streamer.js';
 import type {
   PlaybackDiagnostics,
   PlaybackRendererConfig,
@@ -10,6 +13,10 @@ import type {
   StreamConfig,
 } from './index.js';
 import type { SonareEngineSyncMessage } from './internal/worklet_messages.js';
+import type {
+  SonareWorkletMeterSnapshot,
+  SonareWorkletSpectrumSnapshot,
+} from './worklet/meter-rings.js';
 import type { SonareEngineCommandRecord } from './worklet/protocol.js';
 
 export interface SonareWorkletProcessorOptions {
@@ -221,4 +228,60 @@ export interface SonareRealtimeEngineNodeOptions
     processorName: string,
     options: AudioWorkletNodeOptions,
   ) => AudioWorkletNode;
+}
+
+/** A control-plane sync rejection as handed to an `onSyncError` listener. */
+export interface SonareEngineSyncErrorMessage {
+  /** Always `'syncError'`. */
+  type: 'syncError';
+  /** The refusal as raised on the audio thread, rebuilt with its class and any SonareError code. */
+  failure?: Error;
+  /**
+   * Discriminant of the rejected sync. Usually a known member, but a
+   * `sync`-prefixed type this build does not recognize is reported here too
+   * rather than dropped, so the set is open. `Record<never, never>` keeps the
+   * known members as editor completions instead of collapsing to `string`.
+   */
+  syncType: SonareEngineSyncMessage['type'] | (string & Record<never, never>);
+  /** The refusal's message, as raised on the audio thread. */
+  message: string;
+}
+
+/**
+ * A bounded batch of page misses emitted by the AudioWorklet. The main thread
+ * resolves these from OPFS and responds with `syncClipPage`; a missing page is
+ * silent until that response arrives.
+ */
+export interface SonareEngineClipPageRequestMessage {
+  /** Always `'clipPageRequest'`. */
+  type: 'clipPageRequest';
+  /** The pages the audio thread missed, oldest first. */
+  requests: ClipPagePageRequest[];
+  /** Number of misses dropped because a bounded native or SAB request queue was full. */
+  dropped?: number;
+}
+
+/** The message port a processor listens and replies on; an AudioWorkletProcessor `port` satisfies it. */
+export interface WorkletPort {
+  /** Sends a reply or notification to the host. */
+  postMessage?: (message: unknown, transfer?: Transferable[]) => void;
+  /** Receives host messages when the port is driven by assignment. */
+  onmessage?: (event: { data: unknown }) => void;
+  /** Receives host messages when the port is driven by listeners. */
+  addEventListener?: (type: 'message', listener: (event: { data: unknown }) => void) => void;
+  /** Starts delivery on a port that queues until started. */
+  start?: () => void;
+}
+
+/**
+ * In-process host for a processor run outside an AudioWorkletGlobalScope: where
+ * its replies go and, for the mixer processor, its meter and spectrum snapshots.
+ */
+export interface WorkletTransport {
+  /** Receives the processor's replies. */
+  postMessage?: (message: unknown, transfer?: Transferable[]) => void;
+  /** Receives each meter snapshot the mixer processor publishes. */
+  onMeter?: (meter: SonareWorkletMeterSnapshot) => void;
+  /** Receives each spectrum snapshot the mixer processor publishes. */
+  onSpectrum?: (spectrum: SonareWorkletSpectrumSnapshot) => void;
 }

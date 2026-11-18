@@ -691,6 +691,12 @@ export function midiCcToBreakpoint(
   bindings: ReadonlyArray<ProjectMidiCcBinding>,
   event: ProjectMidiEvent,
 ): ProjectAutomationPoint | null {
+  if (!Array.isArray(bindings)) {
+    throw new TypeError('midiCcToBreakpoint: bindings must be an array');
+  }
+  if (typeof event !== 'object' || event === null || Array.isArray(event)) {
+    throw new TypeError('midiCcToBreakpoint: event must be an object');
+  }
   const native = projectModule().midiCcToBreakpoint(bindings, event);
   return native === null ? null : projectAutomationPointFromNative(native);
 }

@@ -8,8 +8,6 @@ import {
   createSonareScopeRingBuffer,
   createSonareSpectrumRingBuffer,
   init as initWorklet,
-  pushSonareClipPageRequestRingBuffer,
-  pushSonareExternalMidiRingBuffer,
   readSonareClipPageRequestRingBuffer,
   readSonareEngineTelemetryRingBuffer,
   readSonareExternalMidiRingBuffer,
@@ -56,6 +54,8 @@ import {
   SonareEngineCommandType,
   sonareEngineCommandRingBufferByteLength,
 } from '../src/internal/engine_command_ring.js';
+import { pushSonareClipPageRequestRingBuffer } from '../src/worklet/clip-page-ring.js';
+import { pushSonareExternalMidiRingBuffer } from '../src/worklet/external-midi-ring.js';
 import {
   commitOverwriteWrite,
   commitSonareEngineTelemetryRingWrite,

@@ -154,6 +154,7 @@ function workletBlockSize(maxBlockSize: number | undefined): number {
 export class SonareRealtimeEngineNode {
   readonly node: AudioWorkletNode;
   readonly capabilities: SonareRealtimeEngineNodeCapabilities;
+  /** @internal */
   readonly commandRing?: SonareEngineCommandRingBuffer;
   readonly telemetryRing?: SonareEngineTelemetryRingBuffer;
   readonly meterRing?: SonareMeterRingBuffer;
@@ -579,6 +580,8 @@ export class SonareRealtimeEngineNode {
    * Whether the node would queue `command` now: a well-formed record and room
    * for it. Queues nothing.
    * @throws SonareError `InvalidState` once the node is destroyed.
+   *
+   * @internal
    */
   canSendCommand(command: SonareEngineCommandRecord): boolean {
     this.assertOpen();
@@ -591,6 +594,8 @@ export class SonareRealtimeEngineNode {
   /**
    * Queues `command` live; false when the record is malformed or the ring is full.
    * @throws SonareError `InvalidState` once the node is destroyed.
+   *
+   * @internal
    */
   sendCommand(command: SonareEngineCommandRecord): boolean {
     this.assertOpen();
@@ -613,6 +618,8 @@ export class SonareRealtimeEngineNode {
    * is held on the audio thread until this sync has been applied, so it always
    * observes it; over the port, message order already guarantees that.
    * @throws SonareError `InvalidState` once the node is destroyed.
+   *
+   * @internal
    */
   postSync(message: SonareEngineSyncMessage, transfer?: Transferable[]): void {
     this.assertOpen();

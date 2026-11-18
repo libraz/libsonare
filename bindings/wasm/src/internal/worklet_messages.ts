@@ -1,4 +1,3 @@
-import type { ClipPagePageRequest } from '../clip_page_streamer.js';
 import type {
   EngineAutomationPoint,
   EngineBus,
@@ -17,7 +16,10 @@ import type {
 } from '../index.js';
 import type { AutomationCurve, SurroundPan } from '../public_types.js';
 import type { ExternalMidiEvent, MidiFxConfig } from '../public_types_engine.js';
-import type { SonarePlaybackWorkletDiagnostics } from '../public_types_worklet.js';
+import type {
+  SonareEngineClipPageRequestMessage,
+  SonarePlaybackWorkletDiagnostics,
+} from '../public_types_worklet.js';
 import type {
   SonareEngineTelemetryRecord,
   SonareWorkletMeterSnapshot,
@@ -25,6 +27,12 @@ import type {
   SonareWorkletSpectrumSnapshot,
 } from '../worklet/protocol.js';
 import type { SonareFailurePayload } from './failure_payload.js';
+
+export type {
+  SonareEngineClipPageRequestMessage,
+  SonareEngineSyncErrorMessage,
+  WorkletPort,
+} from '../public_types_worklet.js';
 
 export type {
   SonareStreamAnalyzerChunkMessage,
@@ -129,21 +137,6 @@ export interface SonareEngineSyncErrorWireMessage {
   message: string;
 }
 
-/** A control-plane sync rejection as handed to an `onSyncError` listener. */
-export interface SonareEngineSyncErrorMessage {
-  type: 'syncError';
-  /** The refusal as raised on the audio thread, rebuilt with its class and any SonareError code. */
-  failure?: Error;
-  /**
-   * Discriminant of the rejected sync. Usually a known member, but a
-   * `sync`-prefixed type this build does not recognize is reported here too
-   * rather than dropped, so the set is open. `Record<never, never>` keeps the
-   * known members as editor completions instead of collapsing to `string`.
-   */
-  syncType: SonareEngineSyncMessage['type'] | (string & Record<never, never>);
-  message: string;
-}
-
 export type SonareWorkletTransportMessage =
   | SonareWorkletMeterSnapshot
   | SonareWorkletScopeSnapshot
@@ -152,7 +145,8 @@ export type SonareWorkletTransportMessage =
   | SonareEngineClipPageRequestMessage
   | SonareEngineTelemetryRecord;
 
-export interface WorkletTransport {
+/** A processor's host channel as it posts through it; constructors take the public `WorkletTransport`. */
+export interface TypedWorkletTransport {
   postMessage?: (
     message:
       | SonareWorkletTransportMessage
@@ -302,18 +296,6 @@ export interface SonareEngineSyncClipPageCommitMessage {
    * provider message instead.
    */
   clip?: EngineClip;
-}
-
-/**
- * A bounded batch of page misses emitted by the AudioWorklet. The main thread
- * resolves these from OPFS and responds with `syncClipPage`; a missing page is
- * silent until that response arrives.
- */
-export interface SonareEngineClipPageRequestMessage {
-  type: 'clipPageRequest';
-  requests: ClipPagePageRequest[];
-  /** Number of misses dropped because a bounded native or SAB request queue was full. */
-  dropped?: number;
 }
 
 export interface SonareEngineSyncMidiClipsMessage {
@@ -750,13 +732,6 @@ export type SonareEngineSyncMessage =
   | SonareEngineSyncMidiInputEventMessage
   | SonareEngineSyncMidiInputUmpMessage
   | SonareEngineDestroyMessage;
-
-export interface WorkletPort {
-  postMessage?: (message: unknown, transfer?: Transferable[]) => void;
-  onmessage?: (event: { data: unknown }) => void;
-  addEventListener?: (type: 'message', listener: (event: { data: unknown }) => void) => void;
-  start?: () => void;
-}
 
 export interface SonareEngineCaptureRequestMessage {
   type: 'captureRequest';

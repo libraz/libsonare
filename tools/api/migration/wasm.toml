@@ -22816,14 +22816,6 @@ entry = "./worklet"
 
 [[entry]]
 kind = "type"
-old = "SonareEngineClipPageRequestMessage"
-removed = true
-domain = "project"
-rule = "worklet-scope"
-entry = "./worklet"
-
-[[entry]]
-kind = "type"
 old = "SonareEngineInsertGainReductionRequestMessage"
 removed = true
 domain = "engine"
@@ -22881,14 +22873,6 @@ entry = "./worklet"
 [[entry]]
 kind = "type"
 old = "SonareEngineSyncClipsMessage"
-removed = true
-domain = "engine"
-rule = "worklet-scope"
-entry = "./worklet"
-
-[[entry]]
-kind = "type"
-old = "SonareEngineSyncErrorMessage"
 removed = true
 domain = "engine"
 rule = "worklet-scope"
@@ -23143,22 +23127,6 @@ rule = "worklet-scope"
 entry = "./worklet"
 
 [[entry]]
-kind = "type"
-old = "WorkletPort"
-removed = true
-domain = "engine"
-rule = "worklet-scope"
-entry = "./worklet"
-
-[[entry]]
-kind = "type"
-old = "WorkletTransport"
-removed = true
-domain = "engine"
-rule = "worklet-scope"
-entry = "./worklet"
-
-[[entry]]
 kind = "function"
 old = "decodeFrame"
 removed = true
@@ -23217,6 +23185,22 @@ entry = "./worklet"
 [[entry]]
 kind = "function"
 old = "pushSonareEngineCommandRingBuffer"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "function"
+old = "pushSonareClipPageRequestRingBuffer"
+removed = true
+domain = "project"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "function"
+old = "pushSonareExternalMidiRingBuffer"
 removed = true
 domain = "engine"
 rule = "worklet-scope"

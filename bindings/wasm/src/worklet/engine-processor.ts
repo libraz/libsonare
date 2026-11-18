@@ -13,9 +13,12 @@ import {
   type SonareEngineSyncMessage,
   type SonareEngineTransportRequestMessage,
   type SonareEngineTransportResponseMessage,
-  type WorkletTransport,
+  type TypedWorkletTransport,
 } from '../internal/worklet_messages.js';
-import type { SonareRealtimeEngineWorkletProcessorOptions } from '../public_types_worklet.js';
+import type {
+  SonareRealtimeEngineWorkletProcessorOptions,
+  WorkletTransport,
+} from '../public_types_worklet.js';
 import { engineNativeHandle } from '../realtime_engine.js';
 import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types.js';
 import { buildCaptureConfig } from './engine-offline.js';
@@ -124,7 +127,7 @@ export class SonareRealtimeEngineWorkletProcessor {
   private scopeRing?: SharedScopeRingWriter;
   private clipPageRequestRing?: SharedClipPageRequestRingWriter;
   private externalMidiRing?: SharedExternalMidiRingWriter;
-  private transport?: WorkletTransport;
+  private transport?: TypedWorkletTransport;
   private meterIntervalFrames: number;
   // Last delivered meter frame per target slot: master, 32 lanes, 8 buses, then every other id.
   private readonly lastMeterFrameBySlot = new Float64Array(METER_TARGET_SLOTS).fill(
@@ -372,6 +375,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
   }
 
+  /** @internal */
   receiveCommand(command: SonareEngineCommandRecord): void {
     if (!this.closed) {
       this.safeApplyCommand(command);
@@ -382,6 +386,7 @@ export class SonareRealtimeEngineWorkletProcessor {
   // thread. These handlers must remain bounded: expensive clip transforms are
   // performed on the main-thread mirror, and long pre-baked PCM arrives in
   // small pages before the final lightweight clip schedule is committed.
+  /** @internal */
   receiveSync(message: SonareEngineSyncMessage): void {
     if (this.closed) {
       return;
@@ -986,6 +991,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
   }
 
+  /** @internal */
   receiveCaptureRequest(message: SonareEngineCaptureRequestMessage): void {
     if (this.closed) {
       return;
@@ -1042,6 +1048,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
   }
 
+  /** @internal */
   receiveTransportRequest(message: SonareEngineTransportRequestMessage): void {
     if (this.closed) {
       return;
@@ -1064,6 +1071,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
   }
 
+  /** @internal */
   receiveInsertGainReductionRequest(message: SonareEngineInsertGainReductionRequestMessage): void {
     if (this.closed) {
       return;
@@ -1454,7 +1462,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
   }
 
-  private postScopeScratch(transport: WorkletTransport | undefined): void {
+  private postScopeScratch(transport: TypedWorkletTransport | undefined): void {
     if (!transport?.postMessage) {
       return;
     }

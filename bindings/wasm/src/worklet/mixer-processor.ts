@@ -2,12 +2,12 @@ import { ErrorCode, SonareError } from '../errors.js';
 import type { MixerRealtimeBuffer } from '../index.js';
 import { Mixer } from '../index.js';
 import { failurePayload } from '../internal/failure_payload.js';
+import type { SonareWorkletMessage, TypedWorkletTransport } from '../internal/worklet_messages.js';
 import type {
-  SonareWorkletMessage,
+  SonareWorkletProcessorOptions,
   WorkletPort,
   WorkletTransport,
-} from '../internal/worklet_messages.js';
-import type { SonareWorkletProcessorOptions } from '../public_types_worklet.js';
+} from '../public_types_worklet.js';
 import { leadingSamples, type WorkletInput, type WorkletOutput } from './audio_types.js';
 import { initializeEmbindInWorklet, isEmbindReady } from './embind-init.js';
 import {
@@ -53,7 +53,7 @@ export class SonareWorkletProcessor {
   private meterIntervalFrames: number;
   private spectrumIntervalFrames: number;
   private lastSpectrumFrame = 0;
-  private transport?: WorkletTransport;
+  private transport?: TypedWorkletTransport;
   private meterRing?: SharedMeterRingWriter;
   /**
    * Reused meter record, so a publish writes fields instead of allocating one.
@@ -195,6 +195,7 @@ export class SonareWorkletProcessor {
     return true;
   }
 
+  /** @internal */
   receiveMessage(message: SonareWorkletMessage): void {
     if (this.closed) {
       return;

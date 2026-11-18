@@ -4,12 +4,13 @@ import type {
   SonarePlaybackDiagnosticsReplyMessage,
   SonarePlaybackErrorMessage,
   SonarePlaybackMessage,
-  WorkletPort,
 } from '../internal/worklet_messages.js';
 import type { PlaybackRendererConfig } from '../public_types_playback.js';
 import type {
   SonarePlaybackNodeOptions,
+  SonarePlaybackWorkletDiagnostics,
   SonarePlaybackWorkletProcessorOptions,
+  WorkletPort,
 } from '../public_types_worklet.js';
 import type { WasmPlaybackRenderer } from '../sonare.js';
 import {
@@ -104,6 +105,8 @@ export class SonarePlaybackWorkletProcessor {
    * Handles a control-plane message. AudioWorklet port handlers run on the
    * rendering thread between `process()` calls, which is what makes `reset`
    * safe here. A refused message is answered with an `error` message.
+   *
+   * @internal
    */
   receiveMessage(message: SonarePlaybackMessage): void {
     if (this.destroyed) {
@@ -140,7 +143,7 @@ export class SonarePlaybackWorkletProcessor {
   }
 
   /** The renderer's diagnostics plus `unsupported_input_blocks`, as a plain object. */
-  diagnostics(): SonarePlaybackDiagnosticsReplyMessage['diagnostics'] {
+  diagnostics(): SonarePlaybackWorkletDiagnostics {
     return {
       ...this.renderer.diagnostics(),
       unsupported_input_blocks: this.unsupportedInputBlocks,
