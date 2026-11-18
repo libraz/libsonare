@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, NamedTuple
 
 import numpy as np
 
@@ -411,7 +411,14 @@ class WaveformPeaksReport:
     samples_per_bucket: int
 
 
-@dataclass(frozen=True, slots=True)
+class StereoBlock(NamedTuple):
+    """One processed stereo block; unpacks as ``left, right``."""
+
+    left: NDArray[np.float32]
+    right: NDArray[np.float32]
+
+
+@dataclass(frozen=True, slots=True, eq=False)
 class EqSpectrumSnapshot:
     """Realtime equalizer snapshot.
 
@@ -424,42 +431,14 @@ class EqSpectrumSnapshot:
     falling smoothly.
     """
 
-    pre_left: list[float]
-    pre_right: list[float]
-    post_left: list[float]
-    post_right: list[float]
-    band_gain_db: list[float]
-    profile_db: list[float]
+    pre_left: NDArray[np.float32]
+    pre_right: NDArray[np.float32]
+    post_left: NDArray[np.float32]
+    post_right: NDArray[np.float32]
+    band_gain_db: NDArray[np.float32]
+    profile_db: NDArray[np.float32]
     last_auto_gain_db: float
     seq: int
-
-    @property
-    def preLeft(self) -> list[float]:  # noqa: N802
-        return self.pre_left
-
-    @property
-    def preRight(self) -> list[float]:  # noqa: N802
-        return self.pre_right
-
-    @property
-    def postLeft(self) -> list[float]:  # noqa: N802
-        return self.post_left
-
-    @property
-    def postRight(self) -> list[float]:  # noqa: N802
-        return self.post_right
-
-    @property
-    def bandGainDb(self) -> list[float]:  # noqa: N802
-        return self.band_gain_db
-
-    @property
-    def profileDb(self) -> list[float]:  # noqa: N802
-        return self.profile_db
-
-    @property
-    def lastAutoGainDb(self) -> float:  # noqa: N802
-        return self.last_auto_gain_db
 
 
 @dataclass(frozen=True, slots=True, eq=False)

@@ -149,6 +149,9 @@ from ._types_analysis import (
     SpectrumReport as SpectrumReport,
 )
 from ._types_analysis import (
+    StereoBlock as StereoBlock,
+)
+from ._types_analysis import (
     StftResult as StftResult,
 )
 from ._types_analysis import (
@@ -393,6 +396,12 @@ from ._types_enums import (
 )
 from ._types_enums import (
     EngineTelemetryType as EngineTelemetryType,
+)
+from ._types_enums import (
+    EqPhaseMode as EqPhaseMode,
+)
+from ._types_enums import (
+    EqStereoPlacement as EqStereoPlacement,
 )
 from ._types_enums import (
     GenreHint as GenreHint,

@@ -998,7 +998,13 @@ from .types import (
     EngineTrackMonitorMode as EngineTrackMonitorMode,
 )
 from .types import (
+    EqPhaseMode as EqPhaseMode,
+)
+from .types import (
     EqSpectrumSnapshot as EqSpectrumSnapshot,
+)
+from .types import (
+    EqStereoPlacement as EqStereoPlacement,
 )
 from .types import (
     ExternalMidiEvent as ExternalMidiEvent,
@@ -1259,6 +1265,9 @@ from .types import (
 )
 from .types import (
     StageGainReduction as StageGainReduction,
+)
+from .types import (
+    StereoBlock as StereoBlock,
 )
 from .types import (
     StereoMonoCompatBand as StereoMonoCompatBand,

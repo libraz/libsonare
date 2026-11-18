@@ -117,8 +117,7 @@ def test_streaming_chain_typed_matches_flat_keys() -> None:
     block = 512
     outputs = []
     for config in (TYPED, FLAT):
-        with StreamingMasteringChain(config) as chain:
-            chain.prepare(SR, block, 1)
+        with StreamingMasteringChain(config, sample_rate=SR, max_block_size=block) as chain:
             rendered: list[float] = []
             for start in range(0, len(LEFT) - block + 1, block):
                 rendered.extend(chain.process_mono(LEFT[start : start + block].tolist()))

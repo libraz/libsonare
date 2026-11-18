@@ -477,8 +477,8 @@ class TestNonFiniteInputYieldsNoPlausibleResult:
         # as a plausible dB value.
         from libsonare import StreamingEqualizer
 
-        with StreamingEqualizer(SR, max_block_size=512) as eq:
-            assert eq.magnitude_response([]) == []
+        with StreamingEqualizer(sample_rate=SR, max_block_size=512) as eq:
+            assert eq.magnitude_response([]).size == 0
             assert len(eq.magnitude_response([100.0, 1000.0])) == 2
             with pytest.raises(
                 SonareValueError, match=r"magnitude_response: frequencies_hz contains NaN"

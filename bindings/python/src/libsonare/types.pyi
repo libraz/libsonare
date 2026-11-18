@@ -4,7 +4,7 @@ import builtins
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Any, Literal, NotRequired, TypeAlias, TypedDict
+from typing import Any, Literal, NamedTuple, NotRequired, TypeAlias, TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
@@ -456,6 +456,10 @@ PitchTargetMode: TypeAlias = Literal["midi", "scale"]
 WindowType: TypeAlias = Literal["hann", "hamming", "blackman", "rectangular"]
 
 SpectralEditMode: TypeAlias = Literal["gain", "attenuate", "mute", "heal"]
+
+EqPhaseMode: TypeAlias = Literal["zero", "natural", "linear"]
+
+EqStereoPlacement: TypeAlias = Literal["stereo", "left", "right", "mid", "side"]
 
 KeyProfile: TypeAlias = Literal[
     "krumhanslSchmuckler",
@@ -943,6 +947,12 @@ class LufsResult:
         loudness_range: float,
     ) -> None: ...
 
+class StereoBlock(NamedTuple):
+    """One processed stereo block; unpacks as ``left, right``."""
+
+    left: NDArray[np.float32]
+    right: NDArray[np.float32]
+
 class EqSpectrumSnapshot:
     """Realtime equalizer snapshot.
 
@@ -955,39 +965,25 @@ class EqSpectrumSnapshot:
     falling smoothly.
     """
 
-    pre_left: list[float]
-    pre_right: list[float]
-    post_left: list[float]
-    post_right: list[float]
-    band_gain_db: list[float]
-    profile_db: list[float]
+    pre_left: NDArray[np.float32]
+    pre_right: NDArray[np.float32]
+    post_left: NDArray[np.float32]
+    post_right: NDArray[np.float32]
+    band_gain_db: NDArray[np.float32]
+    profile_db: NDArray[np.float32]
     last_auto_gain_db: float
     seq: int
     def __init__(
         self,
-        pre_left: list[float],
-        pre_right: list[float],
-        post_left: list[float],
-        post_right: list[float],
-        band_gain_db: list[float],
-        profile_db: list[float],
+        pre_left: NDArray[np.float32],
+        pre_right: NDArray[np.float32],
+        post_left: NDArray[np.float32],
+        post_right: NDArray[np.float32],
+        band_gain_db: NDArray[np.float32],
+        profile_db: NDArray[np.float32],
         last_auto_gain_db: float,
         seq: int,
     ) -> None: ...
-    @property
-    def preLeft(self) -> list[float]: ...
-    @property
-    def preRight(self) -> list[float]: ...
-    @property
-    def postLeft(self) -> list[float]: ...
-    @property
-    def postRight(self) -> list[float]: ...
-    @property
-    def bandGainDb(self) -> list[float]: ...
-    @property
-    def profileDb(self) -> list[float]: ...
-    @property
-    def lastAutoGainDb(self) -> float: ...
 
 class RhythmResult:
     bpm: float

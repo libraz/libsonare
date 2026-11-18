@@ -136,12 +136,12 @@ def test_ab_match_resamples_the_reference() -> None:
     assert stereo_match == expected_stereo
 
 
-def _eq_probe(**match_kwargs: object) -> list[float]:
+def _eq_probe(**match_kwargs: object) -> np.ndarray:
     source = sine(1000.0, 1.0, sr=SR, amp=0.1)
     probe = _noise(4096, 99, 0.5)
     with StreamingEqualizer(sample_rate=SR, max_block_size=4096) as eq:
         reference = match_kwargs.pop("reference")
-        eq.match(source, reference, 6, **match_kwargs)  # type: ignore[arg-type]
+        eq.match(source, reference, max_bands=6, **match_kwargs)  # type: ignore[arg-type]
         return eq.process_mono(probe)
 
 
@@ -149,10 +149,13 @@ def test_eq_match_resamples_the_reference_and_accepts_unequal_lengths() -> None:
     reference = _noise(20000, 31, 0.7)
     resampled = np.asarray(resample(reference, REF_SR, SR), dtype=np.float32)
     expected = _eq_probe(reference=resampled)
-    assert _eq_probe(reference=reference, reference_sample_rate=REF_SR) == expected
-    assert _eq_probe(reference=reference) != expected
-    assert _eq_probe(reference=reference, sample_rate=SR, reference_sample_rate=SR) == _eq_probe(
-        reference=reference
+    np.testing.assert_array_equal(
+        _eq_probe(reference=reference, reference_sample_rate=REF_SR), expected
+    )
+    assert not np.array_equal(_eq_probe(reference=reference), expected)
+    np.testing.assert_array_equal(
+        _eq_probe(reference=reference, sample_rate=SR, reference_sample_rate=SR),
+        _eq_probe(reference=reference),
     )
 
 

@@ -105,8 +105,9 @@ def test_eq_ceiling_follows_the_rate_the_insert_is_built_for() -> None:
 def test_streaming_denoise_prepares_at_its_default_estimator() -> None:
     import libsonare
 
-    with libsonare.StreamingMasteringChain({"repair": {"denoise": {"enabled": True}}}) as chain:
-        chain.prepare(SR, 512, 1)
+    with libsonare.StreamingMasteringChain(
+        {"repair": {"denoise": {"enabled": True}}}, sample_rate=SR, max_block_size=512
+    ) as chain:
         assert chain.stage_names() == ["repair.denoise"]
         assert len(chain.process_mono(_noise(512))) == 512
 
@@ -117,11 +118,11 @@ def test_streaming_denoise_takes_an_estimator_by_name_and_still_refuses_quantile
 
     for name in ("mcra", "imcra", "spp"):
         config = {"repair": {"denoise": {"enabled": True, "noiseEstimator": name}}}
-        with libsonare.StreamingMasteringChain(config) as chain:
-            chain.prepare(SR, 512, 1)
+        libsonare.StreamingMasteringChain(config, sample_rate=SR).close()
     with pytest.raises(SonareError, match="quantile"):
         libsonare.StreamingMasteringChain(
-            {"repair": {"denoise": {"enabled": True, "noiseEstimator": "quantile"}}}
+            {"repair": {"denoise": {"enabled": True, "noiseEstimator": "quantile"}}},
+            sample_rate=SR,
         )
 
 
@@ -176,7 +177,7 @@ def test_an_unknown_enum_name_is_refused_with_the_key_and_the_valid_names() -> N
     ):
         libsonare.master_audio(_noise(SR), SR, "pop", config)
     with pytest.raises(SonareError, match="unknown name 'nope'"):
-        libsonare.StreamingMasteringChain(config)
+        libsonare.StreamingMasteringChain(config, sample_rate=SR)
 
 
 def test_per_processor_enum_names_resolve_to_the_numbers() -> None:

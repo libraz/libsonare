@@ -5960,3 +5960,227 @@ changed = "a rank in [0, 1], low at most high; anything else raises SonareValueE
 domain = "core"
 rule = "individual"
 test = "bindings/python/tests/test_metering_absent_defaults.py::test_a_percentile_outside_the_unit_interval_is_refused"
+
+[[entry]]
+kind = "class"
+old = "StreamingMasteringChain"
+changed = "builds and prepares at construction; sample_rate is a required keyword, max_block_size defaults to 128 and num_channels to 1"
+domain = "mastering"
+rule = "construction"
+test = "bindings/python/tests/test_streaming_mastering_shape.py::test_the_chain_is_ready_once_constructed"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.prepare"
+removed = true
+domain = "mastering"
+rule = "construction"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.process_mono"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "mastering"
+rule = "array-results"
+test = "bindings/python/tests/test_streaming_mastering_shape.py::test_the_chain_is_ready_once_constructed"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.flush_mono"
+changed = "returns a float32 ndarray instead of list[float]"
+domain = "mastering"
+rule = "array-results"
+test = "bindings/python/tests/test_streaming_mastering_shape.py::test_the_chain_is_ready_once_constructed"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.process_stereo"
+changed = "returns a StereoBlock named tuple of float32 ndarrays instead of a tuple of lists"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_streaming_mastering_shape.py::test_a_stereo_block_names_its_channels_and_still_unpacks"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.flush_stereo"
+changed = "returns a StereoBlock named tuple of float32 ndarrays instead of a tuple of lists"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_streaming_mastering_shape.py::test_a_stereo_block_names_its_channels_and_still_unpacks"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.non_finite_substitution_count"
+changed = "a property (was a method)"
+domain = "mastering"
+rule = "getters"
+test = "bindings/python/tests/test_streaming_mastering_shape.py::test_counters_are_properties"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.non_finite_discard_count"
+changed = "a property (was a method)"
+domain = "mastering"
+rule = "getters"
+test = "bindings/python/tests/test_streaming_mastering_shape.py::test_counters_are_properties"
+
+[[entry]]
+kind = "class"
+old = "StreamingEqualizer"
+changed = "sample_rate is a required keyword (was 48000 by default)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_streaming_mastering_shape.py::test_the_sample_rate_is_required"
+
+[[entry]]
+kind = "method"
+old = "StreamingEqualizer.non_finite_discard_count"
+changed = "a property (was a method)"
+domain = "mastering"
+rule = "getters"
+test = "bindings/python/tests/test_streaming_mastering_shape.py::test_counters_are_properties"
+
+[[entry]]
+kind = "method"
+old = "StreamingEqualizer.process_stereo"
+changed = "returns a StereoBlock named tuple of float32 ndarrays instead of a tuple of lists"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_streaming_mastering_shape.py::test_a_stereo_block_names_its_channels_and_still_unpacks"
+
+[[entry]]
+kind = "option"
+old = "StreamingEqualizer.magnitude_response(placement)"
+changed = "one of 'stereo', 'left', 'right', 'mid', 'side' exactly; another case is refused and an ordinal is a TypeError"
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_streaming_mastering_shape.py::test_a_placement_outside_the_tokens_is_refused"
+
+[[entry]]
+kind = "method"
+old = "StreamingEqualizer.process_mono"
+changed = "returns float32 ndarrays instead of list[float]"
+domain = "mastering"
+rule = "array-results"
+test = "bindings/python/tests/test_streaming_mastering_shape.py::test_equalizer_results_are_arrays_with_snake_case_fields"
+
+[[entry]]
+kind = "method"
+old = "StreamingEqualizer.magnitude_response"
+changed = "returns float32 ndarrays instead of list[float]"
+domain = "mastering"
+rule = "array-results"
+test = "bindings/python/tests/test_streaming_mastering_shape.py::test_equalizer_results_are_arrays_with_snake_case_fields"
+
+[[entry]]
+kind = "option"
+old = "StreamingEqualizer.set_phase_mode(mode)"
+changed = "one of 'zero', 'natural', 'linear'; an ordinal is a TypeError and the hyphenated, underscored and capitalised aliases are refused"
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_streaming_mastering_shape.py::test_a_phase_mode_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "StreamingEqualizer.match(max_bands)"
+changed = "keyword-only"
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/python/tests/test_streaming_mastering_shape.py::test_the_band_count_of_a_match_is_keyword_only"
+
+[[entry]]
+kind = "field"
+old = "EqSpectrumSnapshot.pre_left"
+changed = "a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_streaming_mastering_shape.py::test_equalizer_results_are_arrays_with_snake_case_fields"
+
+[[entry]]
+kind = "field"
+old = "EqSpectrumSnapshot.pre_right"
+changed = "a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_streaming_mastering_shape.py::test_equalizer_results_are_arrays_with_snake_case_fields"
+
+[[entry]]
+kind = "field"
+old = "EqSpectrumSnapshot.post_left"
+changed = "a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_streaming_mastering_shape.py::test_equalizer_results_are_arrays_with_snake_case_fields"
+
+[[entry]]
+kind = "field"
+old = "EqSpectrumSnapshot.post_right"
+changed = "a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_streaming_mastering_shape.py::test_equalizer_results_are_arrays_with_snake_case_fields"
+
+[[entry]]
+kind = "field"
+old = "EqSpectrumSnapshot.band_gain_db"
+changed = "a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_streaming_mastering_shape.py::test_equalizer_results_are_arrays_with_snake_case_fields"
+
+[[entry]]
+kind = "field"
+old = "EqSpectrumSnapshot.profile_db"
+changed = "a float32 ndarray instead of list[float]"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_streaming_mastering_shape.py::test_equalizer_results_are_arrays_with_snake_case_fields"
+
+[[entry]]
+kind = "method"
+old = "EqSpectrumSnapshot.preLeft"
+removed = true
+domain = "analysis"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "method"
+old = "EqSpectrumSnapshot.preRight"
+removed = true
+domain = "analysis"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "method"
+old = "EqSpectrumSnapshot.postLeft"
+removed = true
+domain = "analysis"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "method"
+old = "EqSpectrumSnapshot.postRight"
+removed = true
+domain = "analysis"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "method"
+old = "EqSpectrumSnapshot.bandGainDb"
+removed = true
+domain = "analysis"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "method"
+old = "EqSpectrumSnapshot.profileDb"
+removed = true
+domain = "analysis"
+rule = "snake-case-only"
+
+[[entry]]
+kind = "method"
+old = "EqSpectrumSnapshot.lastAutoGainDb"
+removed = true
+domain = "analysis"
+rule = "snake-case-only"

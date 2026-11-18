@@ -9,7 +9,9 @@ import math
 from collections.abc import Sequence
 from typing import Any
 
-from ._errors import _invalid_state, _not_supported, _require_open
+import numpy as np
+
+from ._errors import _not_supported, _require_open
 from ._ffi import (
     SonareEqSnapshot,
     SonareStreamingLoudnessGain,
@@ -22,7 +24,7 @@ from ._runtime import (
     SonareValueError,
     _check,
     _check_realtime,
-    _float_array_result,
+    _from_c_float_array,
     _get_lib,
     _guard_buffer,
     _last_error,
@@ -34,11 +36,14 @@ from ._runtime import (
     _to_c_float_array_owned,
     _to_c_int,
     _to_c_size_t,
+    _token_ordinal,
     _utf8_arg,
     _validate_samples,
 )
+from ._types_enums import _EQ_PHASE_MODES, _EQ_STEREO_PLACEMENTS, EqPhaseMode, EqStereoPlacement
 from .types import (
     EqSpectrumSnapshot,
+    StereoBlock,
     StreamingLoudnessGain,
 )
 
@@ -166,17 +171,8 @@ class StreamingMasteringChain:
 
     Example::
 
-        chain = StreamingMasteringChain({"eq.tilt.tiltDb": 1.0})
-        chain.prepare(sample_rate=44100, max_block_size=512, num_channels=1)
-        out = chain.process_mono([0.1] * 512)
-        chain.reset()
-
-    Can also be used as a context manager to ensure the underlying handle is
-    released::
-
-        with StreamingMasteringChain({"eq.tilt.tiltDb": 1.0}) as chain:
-            chain.prepare(44100, 512, 1)
-            ...
+        with StreamingMasteringChain({"eq.tilt.tiltDb": 1.0}, sample_rate=44100) as chain:
+            out = chain.process_mono(np.zeros(128, dtype=np.float32))
     """
 
     # Declared on the class so close() reads it even when __init__ never ran.
@@ -186,13 +182,21 @@ class StreamingMasteringChain:
         self,
         config: dict[str, Any] | None = None,
         *,
+        sample_rate: int,
+        max_block_size: int = 128,
+        num_channels: int = 1,
         loudness_static_gain_db: float | None = None,
         loudness_static_gain_peak_db: float | None = None,
     ) -> None:
-        """Create a streaming mastering chain.
+        """Build and prepare a streaming mastering chain.
 
         Args:
             config: Flat chain params (see :func:`mastering_chain`).
+            sample_rate: Sample rate in Hz.
+            max_block_size: Largest block, in samples, any one
+                :meth:`process_mono` / :meth:`process_stereo` call passes.
+            num_channels: 1 (mono) or 2 (stereo). Stereo-only stages
+                (imager, monoMaker) are skipped for mono.
             loudness_static_gain_db: Precomputed loudness normalization gain in
                 dB, measured at the loudness stage's input (see
                 :func:`streaming_loudness_gain`). The streaming chain cannot
@@ -213,6 +217,10 @@ class StreamingMasteringChain:
         lib = _get_lib()
         if not hasattr(lib, "sonare_streaming_mastering_chain_create"):
             raise _not_supported("libsonare was built without streaming mastering chain support")
+        # Narrowed rather than coerced: int() takes 512.7 as 512, and the block
+        # layout remembered here would then differ from the one asked for.
+        max_block_value = _narrow_int(max_block_size, "max_block_size", _C_INT_MIN, _C_INT_MAX)
+        channels_value = _narrow_int(num_channels, "num_channels", _C_INT_MIN, _C_INT_MAX)
         param_array, param_count = _chain_params(config)
         if loudness_static_gain_db is not None:
             if not hasattr(lib, "sonare_streaming_mastering_chain_create_ex"):
@@ -243,33 +251,20 @@ class StreamingMasteringChain:
             )
         self._lib = lib
         self._handle = ctypes.c_void_p(handle)
-        self._max_block_size = 0
-
-    def prepare(self, sample_rate: int, max_block_size: int, num_channels: int) -> None:
-        """Initialize processors for the given sample rate and block layout.
-
-        Args:
-            sample_rate: Sample rate in Hz.
-            max_block_size: Maximum block size in samples per
-                :meth:`process_mono` / :meth:`process_stereo` call.
-            num_channels: 1 (mono) or 2 (stereo). Stereo-only stages
-                (imager, monoMaker) are skipped when ``num_channels`` is 1.
-        """
-        self._ensure_open()
-        # Narrowed rather than coerced: int() takes 512.7 as 512, and the block
-        # layout remembered here would then differ from the one asked for.
-        max_block_value = _narrow_int(max_block_size, "max_block_size", _C_INT_MIN, _C_INT_MAX)
-        channels_value = _narrow_int(num_channels, "num_channels", _C_INT_MIN, _C_INT_MAX)
-        rc = self._lib.sonare_streaming_mastering_chain_prepare(
-            self._handle,
-            _to_c_int(sample_rate, "sample_rate"),
-            _to_c_int(max_block_value, "max_block_size"),
-            _to_c_int(channels_value, "num_channels"),
-        )
-        _check(rc)
+        try:
+            rc = lib.sonare_streaming_mastering_chain_prepare(
+                self._handle,
+                _to_c_int(sample_rate, "sample_rate"),
+                _to_c_int(max_block_value, "max_block_size"),
+                _to_c_int(channels_value, "num_channels"),
+            )
+            _check(rc)
+        except BaseException:
+            self.close()
+            raise
         self._max_block_size = max_block_value
 
-    def process_mono(self, samples: Sequence[float] | list[float]) -> list[float]:
+    def process_mono(self, samples: Sequence[float] | np.ndarray) -> np.ndarray:
         """Process one mono block, returning the processed samples (length unchanged).
 
         The input is never modified: the C call processes in place over a private
@@ -281,13 +276,13 @@ class StreamingMasteringChain:
             self._handle, c_array, _to_c_size_t(length, "length")
         )
         _check(rc)
-        return _float_array_result(c_array, length)
+        return _from_c_float_array(c_array, length)
 
     def process_stereo(
         self,
-        left: Sequence[float] | list[float],
-        right: Sequence[float] | list[float],
-    ) -> tuple[list[float], list[float]]:
+        left: Sequence[float] | np.ndarray,
+        right: Sequence[float] | np.ndarray,
+    ) -> StereoBlock:
         """Process one stereo block, returning the processed (left, right) channels.
 
         Neither input channel is modified; the C call processes in place over
@@ -302,15 +297,15 @@ class StreamingMasteringChain:
             self._handle, left_array, right_array, _to_c_size_t(left_length, "left_length")
         )
         _check(rc)
-        return (
-            _float_array_result(left_array, left_length),
-            _float_array_result(right_array, right_length),
+        return StereoBlock(
+            _from_c_float_array(left_array, left_length),
+            _from_c_float_array(right_array, right_length),
         )
 
-    def flush_mono(self) -> list[float]:
+    def flush_mono(self) -> np.ndarray:
         """Emit delayed audio and finite processor tails after the final mono block.
 
-        Call until an empty list is returned. The initial ``latency_samples`` of
+        Call until an empty array is returned. The initial ``latency_samples`` of
         the concatenated process/flush output are delayed; discard them when a
         time-aligned result is required. When an enabled stage has an unbounded
         tail, pass a bounded number of silent blocks to :meth:`process_mono`
@@ -330,9 +325,9 @@ class StreamingMasteringChain:
             ctypes.byref(written),
         )
         _check(rc)
-        return _float_array_result(block, written.value)
+        return _from_c_float_array(block, written.value)
 
-    def flush_stereo(self) -> tuple[list[float], list[float]]:
+    def flush_stereo(self) -> StereoBlock:
         """Stereo counterpart of :meth:`flush_mono`."""
         self._ensure_flush_ready()
         left = (ctypes.c_float * self._max_block_size)()
@@ -346,9 +341,9 @@ class StreamingMasteringChain:
             ctypes.byref(written),
         )
         _check(rc)
-        return (
-            _float_array_result(left, written.value),
-            _float_array_result(right, written.value),
+        return StereoBlock(
+            _from_c_float_array(left, written.value),
+            _from_c_float_array(right, written.value),
         )
 
     def reset(self) -> None:
@@ -360,14 +355,13 @@ class StreamingMasteringChain:
     def set_parameter(self, key: str, value: float) -> None:
         """Update one realtime-safe full-chain parameter between processing calls.
 
-        The chain must be prepared first; an argument error is reported before
-        the unprepared state, as on the other bindings. ``key`` uses the same full dot
+        ``key`` uses the same full dot
         notation as the constructor, for example ``"eq.tilt.tiltDb"``. The
         native chain rejects unknown, disabled, and structural parameters
         before mutation; a failed call therefore leaves the existing chain
         state and audio history intact.
-        Serialize this control operation with processing, flush, reset and
-        prepare. Parameter changes are not automatically smoothed.
+        Serialize this control operation with processing, flush and reset.
+        Parameter changes are not automatically smoothed.
         """
         self._ensure_open()
         if not isinstance(key, str):
@@ -393,8 +387,9 @@ class StreamingMasteringChain:
             )
         )
 
+    @property
     def non_finite_substitution_count(self) -> int:
-        """Return the non-finite samples this chain's stages replaced.
+        """Non-finite samples this chain's stages replaced.
 
         Advisory telemetry, and the only thing that separates a degraded stream
         from a clean one. A substituting stage replaces a non-finite input
@@ -405,8 +400,7 @@ class StreamingMasteringChain:
 
         Aggregated over every substituting stage, so it reports that a
         substitution happened without naming the stage. Cumulative over every
-        block since the last :meth:`prepare`, which rebuilds the stages and so
-        clears it; :meth:`reset` leaves it alone.
+        block since construction; :meth:`reset` leaves it alone.
         """
         self._ensure_open()
         if not hasattr(self._lib, "sonare_streaming_mastering_chain_non_finite_substitution_count"):
@@ -420,10 +414,11 @@ class StreamingMasteringChain:
         _check_realtime(rc)
         return int(out.value)
 
+    @property
     def non_finite_discard_count(self) -> int:
-        """Return the process/flush calls in which a stage discarded its state.
+        """Process/flush calls in which a stage discarded its state.
 
-        The companion to :meth:`non_finite_substitution_count`, and not the
+        The companion to :attr:`non_finite_substitution_count`, and not the
         same measurement: that one counts samples a stage replaced and so
         sums across stages, while a discard is a whole stage returning to its
         post-reset value and is counted once per call however many stages did
@@ -437,9 +432,8 @@ class StreamingMasteringChain:
         no stage discarded rather than that none could.
 
         Both process and flush calls count, since a flush drives the same
-        stages. Cumulative over every call since the last :meth:`prepare`,
-        which rebuilds the stages and so clears it, so the two counters on
-        one handle share an epoch.
+        stages. Cumulative over every call since construction, so the two
+        counters on one handle share an epoch.
         """
         self._ensure_open()
         if not hasattr(self._lib, "sonare_streaming_mastering_chain_non_finite_discard_count"):
@@ -457,9 +451,8 @@ class StreamingMasteringChain:
         """Return the realized stage names in processing order.
 
         Reflects which stages the config actually enables (e.g. ``eq.tilt``,
-        ``dynamics.compressor``, ``maximizer.truePeakLimiter``). Stage selection
-        happens in :meth:`prepare` — stereo-only stages depend on the channel
-        count — so this returns an empty list until :meth:`prepare` is called.
+        ``dynamics.compressor``, ``maximizer.truePeakLimiter``) for the channel
+        count given at construction; stereo-only stages are absent for mono.
         """
         self._ensure_open()
         if not hasattr(self._lib, "sonare_streaming_mastering_chain_stage_names"):
@@ -489,8 +482,6 @@ class StreamingMasteringChain:
 
     def _ensure_flush_ready(self) -> None:
         self._ensure_open()
-        if self._max_block_size <= 0:
-            raise _invalid_state("StreamingMasteringChain must be prepared before flush")
         if not hasattr(self._lib, "sonare_streaming_mastering_chain_flush_mono"):
             raise _not_supported("libsonare was built without streaming mastering flush support")
 
@@ -498,30 +489,10 @@ class StreamingMasteringChain:
 class StreamingEqualizer:
     """Block-by-block unified EQ wrapper around the native ``SonareEq`` handle."""
 
-    _PHASES = {
-        "zero": 1,
-        "zero-latency": 1,
-        "zero_latency": 1,
-        "natural": 2,
-        "natural-phase": 2,
-        "natural_phase": 2,
-        "linear": 3,
-        "linear-phase": 3,
-        "linear_phase": 3,
-    }
-
-    _PLACEMENTS = {
-        "stereo": 0,
-        "left": 1,
-        "right": 2,
-        "mid": 3,
-        "side": 4,
-    }
-
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None
 
-    def __init__(self, sample_rate: int = 48000, max_block_size: int = 512) -> None:
+    def __init__(self, *, sample_rate: int, max_block_size: int = 512) -> None:
         # Set first so a failed create or a missing build leaves a valid
         # attribute for __del__/close() instead of raising AttributeError.
         self._handle = ctypes.c_void_p(0)
@@ -559,17 +530,11 @@ class StreamingEqualizer:
         self._ensure_open()
         self._lib.sonare_eq_clear(self._handle)
 
-    def set_phase_mode(self, mode: int | str) -> None:
-        """Set the global phase mode: zero/natural/linear or 1/2/3."""
+    def set_phase_mode(self, mode: EqPhaseMode) -> None:
+        """Set the global phase mode: ``"zero"``, ``"natural"`` or ``"linear"``."""
         self._ensure_open()
-        if isinstance(mode, str):
-            key = mode.lower()
-            if key not in self._PHASES:
-                raise SonareValueError(f"unknown EQ phase mode: {mode}")
-            value = self._PHASES[key]
-        else:
-            value = _narrow_int(mode, "mode", _C_INT_MIN, _C_INT_MAX)
-        _check(self._lib.sonare_eq_set_phase_mode(self._handle, _to_c_int(value, "value")))
+        value = _token_ordinal(mode, _EQ_PHASE_MODES, "EQ phase mode") + 1
+        _check(self._lib.sonare_eq_set_phase_mode(self._handle, ctypes.c_int(value)))
 
     def set_auto_gain(self, enabled: bool) -> None:
         """Enable or disable auto-gain compensation."""
@@ -650,8 +615,8 @@ class StreamingEqualizer:
         self,
         source: Sequence[float] | list[float],
         reference: Sequence[float] | list[float],
-        max_bands: int = 8,
         *,
+        max_bands: int = 8,
         sample_rate: int | None = None,
         reference_sample_rate: int | None = None,
     ) -> None:
@@ -684,7 +649,7 @@ class StreamingEqualizer:
         )
         _check(rc)
 
-    def process_mono(self, samples: Sequence[float] | list[float]) -> list[float]:
+    def process_mono(self, samples: Sequence[float] | np.ndarray) -> np.ndarray:
         """Process one mono block, returning processed samples.
 
         The input is never modified; the C call processes in place over a
@@ -700,13 +665,13 @@ class StreamingEqualizer:
             )
         )
         self._sidechain_refs = None
-        return _float_array_result(c_array, length)
+        return _from_c_float_array(c_array, length)
 
     def process_stereo(
         self,
-        left: Sequence[float] | list[float],
-        right: Sequence[float] | list[float],
-    ) -> tuple[list[float], list[float]]:
+        left: Sequence[float] | np.ndarray,
+        right: Sequence[float] | np.ndarray,
+    ) -> StereoBlock:
         """Process one stereo block, returning the processed (left, right) channels.
 
         Neither input channel is modified; the C call processes in place over
@@ -728,9 +693,9 @@ class StreamingEqualizer:
             )
         )
         self._sidechain_refs = None
-        return (
-            _float_array_result(left_array, left_length),
-            _float_array_result(right_array, right_length),
+        return StereoBlock(
+            _from_c_float_array(left_array, left_length),
+            _from_c_float_array(right_array, right_length),
         )
 
     def spectrum(self) -> EqSpectrumSnapshot:
@@ -741,16 +706,16 @@ class StreamingEqualizer:
         pre_count = int(out.pre_count)
         post_count = int(out.post_count)
         return EqSpectrumSnapshot(
-            pre_left=_float_array_result(out.pre_left, pre_count),
-            pre_right=_float_array_result(out.pre_right, pre_count),
-            post_left=_float_array_result(out.post_left, post_count),
-            post_right=_float_array_result(out.post_right, post_count),
+            pre_left=_from_c_float_array(out.pre_left, pre_count),
+            pre_right=_from_c_float_array(out.pre_right, pre_count),
+            post_left=_from_c_float_array(out.post_left, post_count),
+            post_right=_from_c_float_array(out.post_right, post_count),
             # Sized from the ctypes fields themselves, the way the meter
             # telemetry conversion reads its fixed arrays: a literal repeating
             # SONARE_EQ_MAX_BANDS / SONARE_EQ_SPECTRUM_PROFILE_BANDS would keep
             # returning the old length after the C arrays grew.
-            band_gain_db=_float_array_result(out.band_gain_db, len(out.band_gain_db)),
-            profile_db=_float_array_result(out.profile_db, len(out.profile_db)),
+            band_gain_db=_from_c_float_array(out.band_gain_db, len(out.band_gain_db)),
+            profile_db=_from_c_float_array(out.profile_db, len(out.profile_db)),
             last_auto_gain_db=float(out.last_auto_gain_db),
             seq=int(out.seq),
         )
@@ -759,8 +724,8 @@ class StreamingEqualizer:
         self,
         frequencies_hz: Sequence[float] | list[float],
         *,
-        placement: str = "stereo",
-    ) -> list[float]:
+        placement: EqStereoPlacement = "stereo",
+    ) -> np.ndarray:
         """Return the composite magnitude of the bands, in dB, at each frequency.
 
         The curve to draw over an analyzer. Built from the same coefficient
@@ -776,7 +741,7 @@ class StreamingEqualizer:
         stereo is on every path; one placed elsewhere appears only on its own.
         Each frequency is clamped to [0 Hz, Nyquist].
 
-        An empty list is a defined request and comes back as an empty curve:
+        An empty array is a defined request and comes back as an empty curve:
         the mapping is per frequency, so there is nothing to ask about.
 
         Raises:
@@ -785,10 +750,7 @@ class StreamingEqualizer:
         self._ensure_open()
         if not hasattr(self._lib, "sonare_eq_magnitude_response"):
             raise _not_supported("libsonare was built without EQ magnitude response support")
-        key = placement.lower() if isinstance(placement, str) else ""
-        ordinal = self._PLACEMENTS.get(key)
-        if ordinal is None:
-            raise SonareValueError(f"unknown EQ band placement: {placement}")
+        ordinal = _token_ordinal(placement, _EQ_STEREO_PLACEMENTS, "EQ band placement")
         # Non-finite only: an empty curve is a result, a NaN frequency is not.
         frequencies = _validate_samples(
             "magnitude_response", frequencies_hz, arg_name="frequencies_hz", allow_empty=True
@@ -804,7 +766,7 @@ class StreamingEqualizer:
                 out,
             )
         )
-        return _float_array_result(out, count)
+        return _from_c_float_array(out, count)
 
     @property
     def latency_samples(self) -> int:
@@ -816,8 +778,9 @@ class StreamingEqualizer:
         self._ensure_open()
         return float(self._lib.sonare_eq_last_auto_gain_db(self._handle))
 
+    @property
     def non_finite_discard_count(self) -> int:
-        """Return the blocks in which the equalizer discarded recursive state.
+        """Blocks in which the equalizer discarded recursive state.
 
         Advisory telemetry, and the only thing that separates a degraded EQ
         from a clean one. A discard returns the affected filter cells to

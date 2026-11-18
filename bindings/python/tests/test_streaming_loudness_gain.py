@@ -57,10 +57,11 @@ def test_silence_yields_zero_gain_and_builds_a_streaming_chain() -> None:
     assert not math.isfinite(gain.integrated_lufs)
     with libsonare.StreamingMasteringChain(
         STAGED,
+        sample_rate=SR,
+        max_block_size=512,
         loudness_static_gain_db=gain.loudness_static_gain_db,
         loudness_static_gain_peak_db=gain.true_peak_db,
     ) as chain:
-        chain.prepare(SR, 512, 1)
         assert len(chain.process_mono([0.0] * 512)) == 512
 
 
@@ -70,10 +71,11 @@ def test_streaming_chain_built_from_the_helper_tracks_the_offline_render() -> No
     offline = np.asarray(libsonare.mastering_chain(samples, SR, STAGED).samples)
     with libsonare.StreamingMasteringChain(
         STAGED,
+        sample_rate=SR,
+        max_block_size=512,
         loudness_static_gain_db=gain.loudness_static_gain_db,
         loudness_static_gain_peak_db=gain.true_peak_db,
     ) as chain:
-        chain.prepare(SR, 512, 1)
         out: list[float] = []
         for start in range(0, len(samples), 512):
             out.extend(chain.process_mono(samples[start : start + 512].tolist()))

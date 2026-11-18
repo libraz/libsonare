@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import pytest
 
 from libsonare import StreamingEqualizer
@@ -68,7 +69,7 @@ def _block(index: int) -> list[float]:
 
 def _run(bands, block_count, *, poison=None, auto_gain=False):
     """Returns every output block plus the band-0 gain and auto-gain the run ended on."""
-    with StreamingEqualizer(SR, max_block_size=BLOCK) as eq:
+    with StreamingEqualizer(sample_rate=SR, max_block_size=BLOCK) as eq:
         for index, band in enumerate(bands):
             eq.set_band(index, band)
         if auto_gain:
@@ -95,7 +96,7 @@ def _control_effect(control) -> float:
 def _first_identical_block(control, poisoned) -> int:
     """First block after the poison that is bit-identical, or the block count if none is."""
     for k in range(POISON_BLOCK + 1, len(control)):
-        if control[k] == poisoned[k]:
+        if np.array_equal(control[k], poisoned[k]):
             return k
     return len(control)
 
@@ -179,18 +180,18 @@ def test_non_finite_discard_count_reports_the_state_the_eq_discarded():
     buffer straight to the core: the poison goes in as supplied and the
     recursive cells behind the band take it.
     """
-    with StreamingEqualizer(SR, max_block_size=64) as eq:
+    with StreamingEqualizer(sample_rate=SR, max_block_size=64) as eq:
         eq.set_band(0, PEAK)
         # Without an enabled band the EQ holds no recursive state, so its
         # count would stay at zero for a reason unrelated to the entry.
-        assert eq.non_finite_discard_count() == 0
+        assert eq.non_finite_discard_count == 0
 
         left = [0.25] * 64
         right = [0.25] * 64
         # Control: an ordinary block counts nothing, so the rise below is
         # attributable to the poison rather than to processing at all.
         eq.process_stereo(left, right)
-        assert eq.non_finite_discard_count() == 0
+        assert eq.non_finite_discard_count == 0
 
         left[8] = math.nan
         right[8] = math.nan
@@ -199,4 +200,4 @@ def test_non_finite_discard_count_reports_the_state_the_eq_discarded():
         # by two would report a stereo stream as twice as degraded as a mono
         # one for the same defect, over a width the caller passed rather than
         # asked for.
-        assert eq.non_finite_discard_count() == 1
+        assert eq.non_finite_discard_count == 1

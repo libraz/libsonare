@@ -206,6 +206,12 @@ WindowType = Literal["hann", "hamming", "blackman", "rectangular"]
 SpectralEditMode = Literal["gain", "attenuate", "mute", "heal"]
 """What a :class:`SpectralRegionOp` does to its rectangle."""
 
+EqPhaseMode = Literal["zero", "natural", "linear"]
+"""Streaming equalizer phase mode: zero latency, natural phase or linear phase."""
+
+EqStereoPlacement = Literal["stereo", "left", "right", "mid", "side"]
+"""Signal path an equalizer band sits on."""
+
 # Ordinal-ordered tokens: index == the C ordinal of each type.
 _KEY_MODES: tuple[KeyMode, ...] = get_args(KeyMode)
 _KEY_PROFILES: tuple[KeyProfile, ...] = get_args(KeyProfile)
@@ -216,5 +222,8 @@ _TEMPOGRAM_MODES: tuple[TempogramMode, ...] = get_args(TempogramMode)
 _PITCH_TARGET_MODES: tuple[PitchTargetMode, ...] = get_args(PitchTargetMode)
 _WINDOW_TYPES: tuple[WindowType, ...] = get_args(WindowType)
 _SPECTRAL_EDIT_MODES: tuple[SpectralEditMode, ...] = get_args(SpectralEditMode)
+# The C ordinal is the index plus one; 0 is not a phase mode.
+_EQ_PHASE_MODES: tuple[EqPhaseMode, ...] = get_args(EqPhaseMode)
+_EQ_STEREO_PLACEMENTS: tuple[EqStereoPlacement, ...] = get_args(EqStereoPlacement)
 # Passed to the core by name, so the order carries no ordinal.
 _GENRE_HINTS: tuple[GenreHint, ...] = get_args(GenreHint)

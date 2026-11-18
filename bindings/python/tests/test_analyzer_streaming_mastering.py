@@ -60,8 +60,7 @@ def test_streaming_mastering_chain_processes_mono_block() -> None:
     """StreamingMasteringChain processes a 512-sample mono block in place."""
     from libsonare import StreamingMasteringChain
 
-    chain = StreamingMasteringChain({"eq.tilt.tiltDb": 1.0})
-    chain.prepare(sample_rate=44100, max_block_size=512, num_channels=1)
+    chain = StreamingMasteringChain({"eq.tilt.tiltDb": 1.0}, sample_rate=44100, max_block_size=512)
     block = [0.1] * 512
     out = chain.process_mono(block)
     assert len(out) == len(block)
@@ -73,18 +72,19 @@ def test_streaming_mastering_chain_flushes_delayed_output() -> None:
     """flush_mono drains latency once and then reports completion."""
     from libsonare import StreamingMasteringChain
 
-    with StreamingMasteringChain({"maximizer.truePeakLimiter.enabled": 1}) as chain:
-        chain.prepare(sample_rate=48000, max_block_size=64, num_channels=1)
+    with StreamingMasteringChain(
+        {"maximizer.truePeakLimiter.enabled": 1}, sample_rate=48000, max_block_size=64
+    ) as chain:
         assert chain.latency_samples > 0
         chain.process_mono([0.5] + [0.0] * 63)
         tail: list[float] = []
         while True:
             block = chain.flush_mono()
-            if not block:
+            if block.size == 0:
                 break
             tail.extend(block)
         assert len(tail) >= chain.latency_samples
-        assert chain.flush_mono() == []
+        assert chain.flush_mono().size == 0
 
 
 def test_streaming_mastering_chain_preserves_ndarray_input() -> None:
@@ -93,8 +93,7 @@ def test_streaming_mastering_chain_preserves_ndarray_input() -> None:
 
     from libsonare import StreamingMasteringChain
 
-    chain = StreamingMasteringChain({"eq.tilt.tiltDb": 3.0})
-    chain.prepare(sample_rate=44100, max_block_size=256, num_channels=1)
+    chain = StreamingMasteringChain({"eq.tilt.tiltDb": 3.0}, sample_rate=44100, max_block_size=256)
     block = np.full(256, 0.25, dtype=np.float32)
     original = block.copy()
     out = chain.process_mono(block)
@@ -122,13 +121,10 @@ def test_streaming_equalizer_preserves_ndarray_input() -> None:
 
 
 def test_streaming_mastering_chain_reports_stage_names() -> None:
-    """stage_names() exposes the realized stages after prepare()."""
+    """stage_names() exposes the stages the constructor realized."""
     from libsonare import StreamingMasteringChain
 
-    chain = StreamingMasteringChain({"eq.tilt.tiltDb": 1.0})
-    # No stages are realized until prepare() runs.
-    assert chain.stage_names() == []
-    chain.prepare(sample_rate=44100, max_block_size=512, num_channels=1)
+    chain = StreamingMasteringChain({"eq.tilt.tiltDb": 1.0}, sample_rate=44100, max_block_size=512)
     names = chain.stage_names()
     assert isinstance(names, list)
     assert all(isinstance(name, str) for name in names)
@@ -325,8 +321,10 @@ def test_streaming_mastering_chain_rejects_denoise_with_the_quantile_estimator()
     from libsonare import SonareError, StreamingMasteringChain
 
     with pytest.raises(SonareError, match="quantile"):
-        StreamingMasteringChain({"repair.denoise.enabled": 1, "repair.denoise.noiseEstimator": 0})
-    StreamingMasteringChain({"repair.denoise.enabled": 1}).prepare(44100, 512, 1)
+        StreamingMasteringChain(
+            {"repair.denoise.enabled": 1, "repair.denoise.noiseEstimator": 0}, sample_rate=44100
+        )
+    StreamingMasteringChain({"repair.denoise.enabled": 1}, sample_rate=44100).close()
 
 
 def test_streaming_mastering_chain_accepts_loudness_with_static_gain() -> None:
@@ -335,15 +333,16 @@ def test_streaming_mastering_chain_accepts_loudness_with_static_gain() -> None:
 
     # Without a static gain a loudness target raises (cannot measure online)...
     with raises_coded():
-        StreamingMasteringChain({"loudness.targetLufs": -14.0})
+        StreamingMasteringChain({"loudness.targetLufs": -14.0}, sample_rate=44100)
 
     # ...but supplying a precomputed static gain makes it processable.
     chain = StreamingMasteringChain(
         {"loudness.targetLufs": -14.0},
+        sample_rate=44100,
+        max_block_size=512,
         loudness_static_gain_db=3.0,
         loudness_static_gain_peak_db=-1.0,
     )
-    chain.prepare(sample_rate=44100, max_block_size=512, num_channels=1)
     out = chain.process_mono([0.1] * 512)
     assert len(out) == 512
     assert all(math.isfinite(x) for x in out)
@@ -359,15 +358,16 @@ def test_streaming_mastering_chain_reports_no_substitution_on_a_clean_stream() -
     """
     from libsonare import StreamingMasteringChain
 
-    with StreamingMasteringChain({"maximizer.truePeakLimiter.enabled": 1}) as chain:
-        chain.prepare(sample_rate=44100, max_block_size=256, num_channels=1)
-        assert chain.non_finite_substitution_count() == 0
+    with StreamingMasteringChain(
+        {"maximizer.truePeakLimiter.enabled": 1}, sample_rate=44100, max_block_size=256
+    ) as chain:
+        assert chain.non_finite_substitution_count == 0
         for _ in range(4):
             out = chain.process_mono(
                 [0.4 * math.sin(2 * math.pi * 220 * i / 44100) for i in range(256)]
             )
             assert all(math.isfinite(x) for x in out)
-        count = chain.non_finite_substitution_count()
+        count = chain.non_finite_substitution_count
         assert isinstance(count, int)
         assert count == 0
 
@@ -383,19 +383,18 @@ def test_streaming_mastering_chain_discard_count_rises_after_a_stage_overflow() 
     """
     from libsonare import StreamingMasteringChain
 
-    with StreamingMasteringChain({"eq.tilt.tiltDb": 24.0}) as chain:
-        chain.prepare(48000, 128, 1)
+    with StreamingMasteringChain({"eq.tilt.tiltDb": 24.0}, sample_rate=48000) as chain:
         # Without an enabled recursive stage the chain holds no state to lose,
         # so its count would stay at zero for a reason unrelated to the entry.
-        assert chain.non_finite_discard_count() == 0
+        assert chain.non_finite_discard_count == 0
 
         # Control: an ordinary block counts nothing, so the rise below is
         # attributable to the poison rather than to processing at all.
         chain.process_mono([0.25] * 128)
-        assert chain.non_finite_discard_count() == 0
+        assert chain.non_finite_discard_count == 0
 
         chain.process_mono([3.0e38] * 128)
-        assert chain.non_finite_discard_count() == 1
+        assert chain.non_finite_discard_count == 1
 
 
 def test_stft_result_types() -> None:
