@@ -750,6 +750,35 @@ class WorkletRenderQuantumRule(unittest.TestCase):
         )
 
 
+class Matrix2dRule(unittest.TestCase):
+    CLEAN = [
+        field("node", "StftResult", "magnitude", "Matrix2D"),
+        field("node", "StftResult", "nFft"),
+        field("node", "Matrix2D", "data", "Float32Array"),
+        field("node", "Matrix2D", "rows"),
+        field("node", "Matrix2D", "cols"),
+    ]
+
+    def test_clean_surface_passes(self) -> None:
+        verdict = run("matrix-2d", self.CLEAN)
+        self.assertEqual(verdict.read, 2)
+        self.assertFalse(verdict.failed)
+
+    def test_dimension_field_on_result_is_named(self) -> None:
+        planted = field("wasm", "MfccResult", "nMels")
+        verdict = run("matrix-2d", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["wasm:MfccResult.nMels"])
+
+    def test_ad_hoc_matrix_shape_is_named(self) -> None:
+        shape = [
+            field("wasm", "Grid", "data", "Float32Array"),
+            field("wasm", "Grid", "rows"),
+            field("wasm", "Grid", "cols"),
+        ]
+        verdict = run("matrix-2d", [*self.CLEAN, *shape])
+        self.assertEqual([f.key for f in verdict.violations], ["wasm:Grid"])
+
+
 class Framework(unittest.TestCase):
     def test_reading_nothing_fails(self) -> None:
         verdict = check.judge(rule("getters"), [])

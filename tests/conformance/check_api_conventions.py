@@ -786,6 +786,38 @@ def _worklet_quantum_sites(root: Path) -> list[dict]:
     return out
 
 
+_DIMENSION_FIELD = re.compile(
+    r"^n(Bins|Frames|Mels|Rows|Cols|Coeffs|Mfcc|Bands|Chroma)$|^num(Rows|Cols|Bins|Frames)$"
+)
+_ROW_COL_FIELD = re.compile(r"^(rows|cols|nRows|nCols|numRows|numCols)$")
+
+
+def _matrix_records(records: list[dict]) -> list[dict]:
+    members: dict[tuple[str, str], set[str]] = {}
+    out: list[dict] = []
+    for r in records:
+        if r["kind"] == "field" and _js(r):
+            members.setdefault((r["surface"], r["owner"]), set()).add(r["member"])
+            if r["owner"].endswith("Result"):
+                out.append(r)
+    for (surface, owner), names in members.items():
+        if owner != "Matrix2D" and "data" in names and any(_ROW_COL_FIELD.match(n) for n in names):
+            out.append(
+                {"surface": surface, "kind": "matrix-shape", "name": owner, "member": "data"}
+            )
+    return out
+
+
+def _matrix_violation(r: dict) -> str | None:
+    if r["kind"] == "matrix-shape":
+        return "a two-dimensional value is Matrix2D { data, rows, cols }"
+    if _DIMENSION_FIELD.match(r["member"]):
+        return (
+            "a Matrix2D carries its dimensions; a result has no per-result nBins / nFrames / nMels"
+        )
+    return None
+
+
 RULES: list[Rule] = [
     Rule(
         name="getters",
@@ -1171,6 +1203,22 @@ RULES: list[Rule] = [
         pending={
             "wasm:bindings/wasm/src/worklet/playback-processor.ts:87": "default maxBlockSize to AUDIO_WORKLET_RENDER_QUANTUM",
             "wasm:bindings/wasm/src/worklet/stream-analyzer-processor.ts:14": "define the minimum chunk from AUDIO_WORKLET_RENDER_QUANTUM",
+        },
+    ),
+    Rule(
+        name="matrix-2d",
+        summary="2-D JS results are Matrix2D; no per-result dimension fields on a *Result record",
+        population=lambda r: r["kind"] == "matrix-shape" or r["kind"] == "field",
+        violation=_matrix_violation,
+        derive=_matrix_records,
+        pending={
+            f"{s}:{o}.{f}": "drop the dimension field; a 1-D count is derived from the array, a 2-D one lives in Matrix2D"
+            for s in ("node", "wasm")
+            for o, f in (
+                ("BoundaryResult", "nFrames"),
+                ("PitchResult", "nFrames"),
+                ("MfccResult", "nMels"),
+            )
         },
     ),
 ]
