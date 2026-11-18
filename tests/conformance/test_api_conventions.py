@@ -727,6 +727,16 @@ class StripRefRule(unittest.TestCase):
         verdict = run("strip-ref", [*self.CLEAN, planted])
         self.assertEqual([f.key for f in verdict.violations], ["node:Engine.setBusWidth(busId)"])
 
+    def test_bus_id_whose_null_names_the_master_mix_passes(self) -> None:
+        planted = [
+            ref_param("node", "Engine.setTrackOutputBus", "busId", "number | null"),
+            ref_param("python", "Engine.set_track_output_bus", "bus_id", "int | None"),
+            ref_param("python", "Engine.set_bus_gain_db", "bus_id", "int"),
+        ]
+        verdict = run("strip-ref", [*self.CLEAN, *planted])
+        self.assertEqual(verdict.read, 8)
+        self.assertFalse(verdict.failed)
+
     def test_bus_kind_differing_across_surfaces_is_named(self) -> None:
         planted = ref_param("python", "Engine.set_bus_gain_db", "bus_id", "str")
         verdict = run("strip-ref", [*self.CLEAN, planted])

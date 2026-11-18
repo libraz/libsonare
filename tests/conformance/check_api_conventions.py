@@ -797,8 +797,13 @@ def _stereo_pair_violation(c: dict) -> str | None:
 _REF_PARAM = re.compile(r"^(strip|bus)(_?[Ii]d)?$")
 
 
+def _non_null(type_: str) -> str:
+    """The type with its null / undefined / None arm removed: a null bus id names the master mix."""
+    return re.sub(r"\s*\|\s*(null|undefined|None)\b", "", type_).strip()
+
+
 def _ref_kind(type_: str) -> str:
-    base = re.sub(r"\s*\|\s*(null|undefined|None)\b", "", type_).strip()
+    base = _non_null(type_)
     if base in ("number", "int", "float"):
         return "number"
     if base in ("string", "str"):
@@ -830,7 +835,7 @@ def _strip_bus_records(records: list[dict]) -> list[dict]:
     for r in params:
         group = _REF_PARAM.match(r["member"]).group(1)  # type: ignore[union-attr]
         cls, _, method = r["owner"].partition(".")
-        by_class.setdefault((r["surface"], cls + ":" + group), []).append(r["type"])
+        by_class.setdefault((r["surface"], cls + ":" + group), []).append(_non_null(r["type"]))
         by_method.setdefault((cls, _fold(method), group), {}).setdefault(r["surface"], set()).add(
             _ref_kind(r["type"])
         )
@@ -869,7 +874,7 @@ def _ref_param_violation(r: dict) -> str | None:
         if not r["type"].startswith("StripRef"):
             return "a strip parameter is a StripRef"
         return None
-    if r["type"] != r["family_type"]:
+    if _non_null(r["type"]) != r["family_type"]:
         return f"a bus parameter carries one type across its family ({r['family_type']})"
     kind = _ref_kind(r["type"])
     for surface, kinds in r["other_kinds"].items():
@@ -1546,32 +1551,6 @@ RULES: list[Rule] = [
         population=lambda r: r["kind"] == "ref-param",
         violation=_ref_param_violation,
         derive=_strip_bus_records,
-        pending={
-            **{
-                f"{s}:{c}.setBusStrip(bus)": "the definition object is not a bus reference; name the parameter for what it is"
-                for s, c in (
-                    ("node", "RealtimeEngine"),
-                    ("wasm", "RealtimeEngine"),
-                    ("wasm", "SonareEngine"),
-                )
-            },
-            **{
-                f"{s}:{c}.setStrip(strip)": "the definition object is not a strip reference; name the parameter for what it is"
-                for s, c in (
-                    ("node", "RealtimeEngine"),
-                    ("wasm", "RealtimeEngine"),
-                    ("wasm", "SonareEngine"),
-                )
-            },
-            **{
-                f"{s}:{c}.setTrackOutputBus(busId)": "busId is number | null here and number on every sibling; pick one form for 'no bus'"
-                for s, c in (
-                    ("node", "RealtimeEngine"),
-                    ("wasm", "RealtimeEngine"),
-                    ("wasm", "SonareEngine"),
-                )
-            },
-        },
     ),
     Rule(
         name="payload-channels",
