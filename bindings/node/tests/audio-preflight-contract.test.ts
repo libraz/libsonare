@@ -841,6 +841,15 @@ describe('Node and WASM validators answer one boundary corpus identically', () =
       [fn, 'x', undefined, 48000, 'start', 'startSec'],
       [fn, 12, undefined, 48000, 'start', 'startSec'],
     ],
+    requireSampleBound: [
+      [fn, 5, undefined, 48000, 'start', 'startSec'],
+      [fn, undefined, 0.5, 48000, 'start', 'startSec'],
+      [fn, undefined, undefined, 48000, 'start', 'startSec'],
+      [fn, null, null, 48000, 'start', 'startSec'],
+      [fn, 5, 0.1, 48000, 'start', 'startSec'],
+      [fn, -1, undefined, 48000, 'offset', 'offsetSec', 'signed'],
+      [fn, 'x', undefined, 48000, 'start', 'startSec'],
+    ],
     resolveOptionalNonNegative: [
       [fn, undefined, 'gamma'],
       [fn, null, 'gamma'],

@@ -57,24 +57,6 @@ export function quarterHop(nFft: number): number {
   return Math.max(1, Math.floor(nFft / 4));
 }
 
-/**
- * The same pair for a Griffin-Lim inverse: the size is resolved first and an
- * omitted hop is a quarter of it, never below one sample.
- */
-export function resolveInverseFftOptions(
-  fnName: string,
-  nFft: unknown,
-  hopLength: unknown,
-): { nFft: number; hopLength: number } {
-  assertIntegerValue(fnName, nFft, 'nFft');
-  return resolveWithMinimum(
-    fnName,
-    nFft,
-    hopLength === undefined ? quarterHop(nFft) : hopLength,
-    2,
-  );
-}
-
 function resolveWithMinimum(
   fnName: string,
   nFft: unknown,
