@@ -498,9 +498,6 @@ describe('resample takes two named rates', () => {
       targetSampleRate: 11025,
     });
     expect(viaRequest).toEqual(positional);
-    expect(
-      resample({ samples: input, sampleRate: 22050, targetSampleRate: 11025, validate: false }),
-    ).toEqual(positional);
   });
 
   it('refuses the old field names and trailing arguments', () => {

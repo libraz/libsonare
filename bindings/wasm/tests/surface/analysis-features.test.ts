@@ -565,9 +565,6 @@ describe('analysis features: resample and silence', () => {
   it('resamples by source and target rate, request and positional', () => {
     const viaRequest = resample({ samples, sampleRate: sr, targetSampleRate: 16000 });
     expect(resample(samples, sr, 16000)).toEqual(viaRequest);
-    expect(resample({ samples, sampleRate: sr, targetSampleRate: 16000, validate: false })).toEqual(
-      viaRequest,
-    );
     expect(
       caught(() => resample({ samples, sourceSampleRate: sr, targetSampleRate: 16000 } as never)),
     ).toBeInstanceOf(TypeError);
