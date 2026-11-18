@@ -545,13 +545,20 @@ class ConstructionRule(unittest.TestCase):
             "PresetOrText": "config: PresetId | str",
             "PresetOrBag": "config: PresetId | dict[str, Any]",
             "OptionsDict": "options: dict",
+            "SetterRecord": "config: PresetId | Doc | StreamConfig = 'neutral'",
         }
+        setters = {"SetterRecord": "config: PresetId | StreamConfig"}
         with tempfile.TemporaryDirectory() as tmp:
             src = Path(tmp) / "m.py"
             src.write_text(
                 "Doc = dict[str, Any]\nPresetId = Literal['neutral', 'bright']\n"
                 + "".join(
                     f"\nclass {n}:\n    def __init__(self, {p}) -> None: ...\n"
+                    + (
+                        f"    def set_config(self, {setters[n]}) -> None: ...\n"
+                        if n in setters
+                        else ""
+                    )
                     for n, p in classes.items()
                 )
             )
@@ -571,7 +578,7 @@ class ConstructionRule(unittest.TestCase):
                 mock.patch.object(check, "_PY_PACKAGE", Path(tmp)),
             ):
                 verdict = self.judge(records)
-        self.assertEqual(verdict.read, 14)
+        self.assertEqual(verdict.read, 15)
         self.assertEqual(
             sorted(f.key for f in verdict.violations),
             [

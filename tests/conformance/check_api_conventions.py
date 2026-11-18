@@ -586,18 +586,24 @@ def _is_literal(node: ast.expr) -> bool:
     }
 
 
-def _python_is_document(
-    annotation: ast.expr | None, aliases: set[str], closed_ids: frozenset[str] = frozenset()
-) -> bool:
-    """True when the annotation names a document alias or a closed id set, optionally beside None.
+_PY_UNTYPED_NAMES = frozenset(
+    {
+        "dict",
+        "Mapping",
+        "typing.Mapping",
+        "str",
+        "bytes",
+        "int",
+        "float",
+        "bool",
+        "Any",
+        "typing.Any",
+        "object",
+    }
+)
 
-    A value handed over whole (a document, or an id naming a built-in one) is not an option
-    bag. A bare dict/Mapping annotation is: it is the untyped bag the construction rule
-    refuses, so only a declared package alias exempts. JSON text is not accepted beside it;
-    text enters only through an entry named for it (``*_json``).
-    """
-    if annotation is None:
-        return False
+
+def _python_union_members(annotation: ast.expr) -> list[ast.expr]:
     members: list[ast.expr] = []
     stack = [annotation]
     while stack:
@@ -606,7 +612,44 @@ def _python_is_document(
             stack += [node.left, node.right]
         else:
             members.append(node)
-    whole = [m for m in members if ast.unparse(m) in aliases | closed_ids or _is_literal(m)]
+    return members
+
+
+def _python_setter_records(cls: ast.ClassDef) -> frozenset[str]:
+    """Record classes a ``set_*`` method of ``cls`` takes whole, by annotation spelling."""
+    found: set[str] = set()
+    for item in cls.body:
+        if isinstance(item, ast.FunctionDef) and item.name.startswith("set_"):
+            for arg in [*item.args.posonlyargs, *item.args.args, *item.args.kwonlyargs]:
+                for m in _python_union_members(arg.annotation) if arg.annotation else []:
+                    if (
+                        isinstance(m, ast.Name | ast.Attribute)
+                        and ast.unparse(m) not in _PY_UNTYPED_NAMES
+                    ):
+                        found.add(ast.unparse(m))
+    return frozenset(found)
+
+
+def _python_is_document(
+    annotation: ast.expr | None,
+    aliases: set[str],
+    closed_ids: frozenset[str] = frozenset(),
+    records: frozenset[str] = frozenset(),
+) -> bool:
+    """True when the annotation names a document alias, a closed id set or a record, optionally beside None.
+
+    A value handed over whole (a document, an id naming a built-in one, or a record class the
+    same class's setter also takes) is not an option bag. A bare dict/Mapping annotation is: it
+    is the untyped bag the construction rule refuses, so only a declared package alias exempts.
+    A record no setter takes stays an options object. JSON text is not accepted beside it;
+    text enters only through an entry named for it (``*_json``).
+    """
+    if annotation is None:
+        return False
+    members = _python_union_members(annotation)
+    whole = [
+        m for m in members if ast.unparse(m) in aliases | closed_ids | records or _is_literal(m)
+    ]
     return bool(whole) and all(m in whole or ast.unparse(m) == "None" for m in members)
 
 
@@ -629,10 +672,11 @@ def _python_init_params(path: Path, cls: str) -> tuple[list[str], list[str]] | N
                     ]
                     aliases = _python_document_aliases()
                     closed_ids = frozenset(_python_closed_id_aliases())
+                    records = _python_setter_records(node)
                     documents = [
                         x.arg
                         for x in args
-                        if _python_is_document(x.annotation, aliases, closed_ids)
+                        if _python_is_document(x.annotation, aliases, closed_ids, records)
                     ]
                     return names, documents
     return None
