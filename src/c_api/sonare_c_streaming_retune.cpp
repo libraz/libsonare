@@ -97,11 +97,6 @@ SonareError sonare_streaming_retune_prepare(SonareStreamingRetune* retune, doubl
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!retune || !retune->retune) return SONARE_ERROR_INVALID_PARAMETER;
-  // The core admits an infinite sample_rate and derives the grain size from it through a cast.
-  if (!sonare::is_valid_realtime_sample_rate(sample_rate) || max_block_size < 1 ||
-      max_block_size > sonare::kMaxRealtimeBlockSize) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
   SONARE_C_TRY
   retune->retune->prepare(sample_rate, max_block_size);
   // Size the block scratch here, where allocation is allowed, so process_mono

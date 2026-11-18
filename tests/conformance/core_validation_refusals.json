@@ -7,5 +7,22 @@
       { "id": "zero_mels", "n_mels": 0, "cause": "argument", "message": "n_mels must be >= 1" },
       { "id": "negative_mels", "n_mels": -1, "cause": "argument", "message": "n_mels must be >= 1" }
     ]
+  },
+  "streaming_retune_prepare": {
+    "accepted": [
+      { "id": "min_rate", "sample_rate": 8000, "max_block_size": 512 },
+      { "id": "max_rate", "sample_rate": 384000, "max_block_size": 512 },
+      { "id": "min_block", "sample_rate": 48000, "max_block_size": 1 },
+      { "id": "max_block", "sample_rate": 48000, "max_block_size": 1048576 }
+    ],
+    "refused": [
+      { "id": "rate_below_min", "sample_rate": 7999, "max_block_size": 512, "cause": "argument", "message": "sample_rate must be finite and within [8000, 384000]" },
+      { "id": "rate_tiny", "sample_rate": 100, "max_block_size": 512, "cause": "argument", "message": "sample_rate must be finite and within [8000, 384000]" },
+      { "id": "rate_above_max", "sample_rate": 384001, "max_block_size": 512, "cause": "argument", "message": "sample_rate must be finite and within [8000, 384000]" },
+      { "id": "rate_huge", "sample_rate": 1000000000, "max_block_size": 512, "cause": "argument", "message": "sample_rate must be finite and within [8000, 384000]" },
+      { "id": "block_zero", "sample_rate": 48000, "max_block_size": 0, "cause": "argument", "message": "max_block_size must be within [1, 1048576]" },
+      { "id": "block_above_max", "sample_rate": 48000, "max_block_size": 1048577, "cause": "argument", "message": "max_block_size must be within [1, 1048576]" },
+      { "id": "block_2_21", "sample_rate": 48000, "max_block_size": 2097152, "cause": "argument", "message": "max_block_size must be within [1, 1048576]" }
+    ]
   }
 }

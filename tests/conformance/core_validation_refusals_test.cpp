@@ -8,6 +8,9 @@
 #include <string>
 #include <vector>
 
+#if defined(SONARE_WITH_VOICE_CHANGER)
+#include "editing/voice_changer/streaming_retune.h"
+#endif
 #include "feature/inverse.h"
 #include "util/exception.h"
 #include "util/json.h"
@@ -95,3 +98,40 @@ TEST_CASE("mfcc_to_mel refusals are owned by the core function", "[conformance][
     CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
   }
 }
+
+#if defined(SONARE_WITH_VOICE_CHANGER)
+TEST_CASE("streaming retune prepare refusals are owned by the core function",
+          "[conformance][core_validation]") {
+  const Value corpus = load_refusal_corpus();
+  const Value& route = corpus["streaming_retune_prepare"];
+
+  for (const auto& item : route["accepted"].as_array()) {
+    const double rate = item["sample_rate"].as_number();
+    const int block = static_cast<int>(item["max_block_size"].as_number());
+    INFO(item["id"].as_string());
+    sonare::editing::voice_changer::StreamingRetune core;
+    CHECK_NOTHROW(core.prepare(rate, block));
+    SonareStreamingRetune* handle = nullptr;
+    REQUIRE(sonare_streaming_retune_create(0.0f, 1.0f, 0, &handle) == SONARE_OK);
+    CHECK(sonare_streaming_retune_prepare(handle, rate, block) == SONARE_OK);
+    sonare_streaming_retune_destroy(handle);
+  }
+
+  for (const auto& item : route["refused"].as_array()) {
+    const double rate = item["sample_rate"].as_number();
+    const int block = static_cast<int>(item["max_block_size"].as_number());
+    const std::string message = item["message"].as_string();
+    INFO(item["id"].as_string());
+    REQUIRE(item["cause"].as_string() == "argument");
+
+    sonare::editing::voice_changer::StreamingRetune core;
+    require_argument_refusal([&] { core.prepare(rate, block); }, message);
+
+    SonareStreamingRetune* handle = nullptr;
+    REQUIRE(sonare_streaming_retune_create(0.0f, 1.0f, 0, &handle) == SONARE_OK);
+    CHECK(sonare_streaming_retune_prepare(handle, rate, block) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
+    sonare_streaming_retune_destroy(handle);
+  }
+}
+#endif  // defined(SONARE_WITH_VOICE_CHANGER)

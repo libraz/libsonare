@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -20,6 +21,7 @@ _CORPUS = json.loads(
 _ERROR_CLASS = {"argument": SonareValueError}
 
 _MFCC = _CORPUS["mfcc_to_mel"]
+_RETUNE = _CORPUS["streaming_retune_prepare"]
 
 
 def _mfcc() -> np.ndarray:
@@ -40,3 +42,19 @@ def test_mfcc_to_mel_refuses(case: dict) -> None:
         libsonare.mfcc_to_mel(_mfcc(), n_mels=case["n_mels"])
     with pytest.raises(error_class, match=case["message"]):
         libsonare.mfcc_to_audio(_mfcc(), n_mels=case["n_mels"], n_iter=1)
+
+
+@pytest.mark.parametrize("case", _RETUNE["accepted"], ids=lambda case: case["id"])
+def test_streaming_retune_prepare_accepts(case: dict) -> None:
+    with libsonare.StreamingRetune() as retune:
+        retune.prepare(case["sample_rate"], case["max_block_size"])
+
+
+@pytest.mark.parametrize("case", _RETUNE["refused"], ids=lambda case: case["id"])
+def test_streaming_retune_prepare_refuses(case: dict) -> None:
+    error_class = _ERROR_CLASS[case["cause"]]
+    with (
+        libsonare.StreamingRetune() as retune,
+        pytest.raises(error_class, match=re.escape(case["message"])),
+    ):
+        retune.prepare(case["sample_rate"], case["max_block_size"])

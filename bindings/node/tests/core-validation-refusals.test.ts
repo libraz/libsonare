@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { mfccToAudio, mfccToMel } from '../src/index.js';
+import { mfccToAudio, mfccToMel, StreamingRetune } from '../src/index.js';
 import { addon } from '../src/native.js';
 import { expectRefusal } from './_helpers.js';
 
@@ -11,15 +11,24 @@ type Cause = 'argument';
 type MfccInput = { n_mfcc: number; n_frames: number; fill: number };
 type MfccCase = { id: string; n_mels: number; cause?: Cause; message?: string };
 type MfccRoute = { input: MfccInput; accepted: MfccCase[]; refused: MfccCase[] };
+type RetuneCase = {
+  id: string;
+  sample_rate: number;
+  max_block_size: number;
+  cause?: Cause;
+  message?: string;
+};
+type RetuneRoute = { accepted: RetuneCase[]; refused: RetuneCase[] };
 
 const corpus = JSON.parse(
   readFileSync(
     new URL('../../../tests/conformance/core_validation_refusals.json', import.meta.url),
     'utf8',
   ),
-) as { mfcc_to_mel: MfccRoute };
+) as { mfcc_to_mel: MfccRoute; streaming_retune_prepare: RetuneRoute };
 
 const errorClassFor: Record<Cause, ErrorConstructor> = { argument: RangeError };
+const literal = (text: string) => new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
 
 describe('mfcc_to_mel refusals come from the core', () => {
   const { input, accepted, refused } = corpus.mfcc_to_mel;
@@ -56,5 +65,35 @@ describe('mfcc_to_mel refusals come from the core', () => {
       kind,
       text,
     );
+  });
+});
+
+describe('streaming retune prepare refusals come from the core', () => {
+  const { accepted, refused } = corpus.streaming_retune_prepare;
+
+  it.each(accepted)('accepts $id', ({ sample_rate, max_block_size }) => {
+    const retune = new StreamingRetune();
+    const raw = new addon.StreamingRetune({});
+    try {
+      expect(() => retune.prepare(sample_rate, max_block_size)).not.toThrow();
+      expect(() => raw.prepare(sample_rate, max_block_size)).not.toThrow();
+    } finally {
+      retune.destroy();
+      raw.destroy();
+    }
+  });
+
+  it.each(refused)('refuses $id', ({ sample_rate, max_block_size, cause, message }) => {
+    const kind = errorClassFor[cause as Cause];
+    const text = literal(message as string);
+    const retune = new StreamingRetune();
+    const raw = new addon.StreamingRetune({});
+    try {
+      expectRefusal(() => retune.prepare(sample_rate, max_block_size), kind, text);
+      expectRefusal(() => raw.prepare(sample_rate, max_block_size), kind, text);
+    } finally {
+      retune.destroy();
+      raw.destroy();
+    }
   });
 });

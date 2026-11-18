@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, mfccToAudio, mfccToMel } from '../src/index';
+import { init, mfccToAudio, mfccToMel, StreamingRetune } from '../src/index';
 import { getSonareModule } from '../src/module_state';
 import { expectRefusalOf } from './_helpers';
 
@@ -11,15 +11,24 @@ type Cause = 'argument';
 type MfccInput = { n_mfcc: number; n_frames: number; fill: number };
 type MfccCase = { id: string; n_mels: number; cause?: Cause; message?: string };
 type MfccRoute = { input: MfccInput; accepted: MfccCase[]; refused: MfccCase[] };
+type RetuneCase = {
+  id: string;
+  sample_rate: number;
+  max_block_size: number;
+  cause?: Cause;
+  message?: string;
+};
+type RetuneRoute = { accepted: RetuneCase[]; refused: RetuneCase[] };
 
 const corpus = JSON.parse(
   readFileSync(
     new URL('../../../tests/conformance/core_validation_refusals.json', import.meta.url),
     'utf8',
   ),
-) as { mfcc_to_mel: MfccRoute };
+) as { mfcc_to_mel: MfccRoute; streaming_retune_prepare: RetuneRoute };
 
 const errorClassFor: Record<Cause, typeof RangeError> = { argument: RangeError };
+const literal = (text: string) => new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
 
 type RawInverse = {
   mfccToMel(
@@ -32,6 +41,10 @@ type RawInverse = {
     nMels: number;
   };
   mfccToAudio(...args: unknown[]): Float32Array;
+  createStreamingRetune(config: Record<string, unknown>): {
+    prepare(sampleRate: number, maxBlockSize: number): void;
+    delete(): void;
+  };
 };
 
 beforeAll(async () => {
@@ -74,6 +87,42 @@ describe('mfcc_to_mel refusals come from the core', () => {
     ];
     for (const call of calls) {
       expect(expectRefusalOf(call, kind).message).toMatch(text);
+    }
+  });
+});
+
+describe('streaming retune prepare refusals come from the core', () => {
+  const { accepted, refused } = corpus.streaming_retune_prepare;
+  const raw = () => getSonareModule() as unknown as RawInverse;
+
+  it.each(accepted)('accepts $id', ({ sample_rate, max_block_size }) => {
+    const retune = new StreamingRetune();
+    const handle = raw().createStreamingRetune({});
+    try {
+      expect(() => retune.prepare(sample_rate, max_block_size)).not.toThrow();
+      expect(() => handle.prepare(sample_rate, max_block_size)).not.toThrow();
+    } finally {
+      retune.destroy();
+      handle.delete();
+    }
+  });
+
+  it.each(refused)('refuses $id', ({ sample_rate, max_block_size, cause, message }) => {
+    const kind = errorClassFor[cause as Cause];
+    const text = literal(message as string);
+    const retune = new StreamingRetune();
+    const handle = raw().createStreamingRetune({});
+    try {
+      const calls: Array<() => unknown> = [
+        () => retune.prepare(sample_rate, max_block_size),
+        () => handle.prepare(sample_rate, max_block_size),
+      ];
+      for (const call of calls) {
+        expect(expectRefusalOf(call, kind).message).toMatch(text);
+      }
+    } finally {
+      retune.destroy();
+      handle.delete();
     }
   });
 });
