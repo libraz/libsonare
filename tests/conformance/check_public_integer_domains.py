@@ -427,13 +427,6 @@ EXCLUSIONS: dict[str, dict[str, tuple[str, str]]] = {
                 "into MixerStereoResult.sample_rate"
             ),
         ),
-        "block_size": (
-            "not_caller_supplied",
-            (
-                "narrowed by `from_scene_json` as above; the copy kept here is only read as "
-                "the Python-side bound on a process block's frame count"
-            ),
-        ),
     },
     # THE MASTERING PARAM BAGS.
     #
@@ -479,10 +472,10 @@ EXCLUSIONS: dict[str, dict[str, tuple[str, str]]] = {
     "analyzer.mastering_pair_process_stereo": {
         "params": _BAG,
     },
-    "analyzer.mastering_pair_analyze": {
+    "analyzer.mastering_analyze_pair": {
         "params": _BAG,
     },
-    "analyzer.mastering_stereo_analyze": {
+    "analyzer.mastering_analyze_stereo": {
         "params": _BAG,
     },
     "audio.Audio.mastering_process": {
