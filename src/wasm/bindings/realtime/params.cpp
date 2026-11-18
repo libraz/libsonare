@@ -81,7 +81,7 @@ val RealtimeEngineWasm::parameterInfoByIndex(const val& index_val) const {
 }
 
 val RealtimeEngineWasm::parameterInfo(double id) const {
-  const uint32_t param_id = static_cast<uint32_t>(id);
+  const uint32_t param_id = checkedUintFromVal(val(id), "id");
   sonare::automation::ParameterInfo info{};
   if (parameters_.parameter_info(param_id, &info)) {
     return parameterToVal(info);
@@ -95,9 +95,9 @@ val RealtimeEngineWasm::parameterInfo(double id) const {
   throw WasmRangeError("unknown parameter id");
 }
 
-void RealtimeEngineWasm::setAutomationLane(double param_id, val points) {
-  if (sonare::engine::RealtimeEngine::mixer_parameter_names_no_strip(
-          static_cast<uint32_t>(param_id))) {
+void RealtimeEngineWasm::setAutomationLane(double param_id_number, val points) {
+  const uint32_t param_id = checkedUintFromVal(val(param_id_number), "paramId");
+  if (sonare::engine::RealtimeEngine::mixer_parameter_names_no_strip(param_id)) {
     throw WasmRangeError("parameter id names no mixer strip");
   }
   // NOTE: a registered, explicitly non-RT-safe parameter surfaces
@@ -109,10 +109,10 @@ void RealtimeEngineWasm::setAutomationLane(double param_id, val points) {
   // is preferable to a deferred telemetry record. Unregistered ids — notably
   // the reserved engine fader/pan, insert and instrument targets — are
   // accepted, matching the C oracle's gating.
-  if (registeredParameterRejectsRealtime(static_cast<uint32_t>(param_id))) {
+  if (registeredParameterRejectsRealtime(param_id)) {
     throw WasmRangeError("parameter is not realtime safe");
   }
-  sonare::automation::AutomationLane lane(static_cast<uint32_t>(param_id));
+  sonare::automation::AutomationLane lane(param_id);
   std::vector<sonare::automation::Breakpoint> breakpoints;
   // The point count comes from an untrusted JS `.length`: validate it through
   // the shared safe-integer + budget guard, and cap the pre-reserve so a
@@ -136,7 +136,7 @@ void RealtimeEngineWasm::setAutomationLane(double param_id, val points) {
     automation_lanes_.erase(
         std::remove_if(automation_lanes_.begin(), automation_lanes_.end(),
                        [param_id](const sonare::automation::AutomationLane& existing) {
-                         return existing.target_param_id() == static_cast<uint32_t>(param_id);
+                         return existing.target_param_id() == param_id;
                        }),
         automation_lanes_.end());
     engine_.automation().set_lanes(automation_lanes_);
@@ -145,7 +145,7 @@ void RealtimeEngineWasm::setAutomationLane(double param_id, val points) {
   lane.set_points(std::move(breakpoints));
   bool replaced = false;
   for (auto& existing : automation_lanes_) {
-    if (existing.target_param_id() == static_cast<uint32_t>(param_id)) {
+    if (existing.target_param_id() == param_id) {
       existing = std::move(lane);
       replaced = true;
       break;
@@ -161,19 +161,19 @@ int RealtimeEngineWasm::automationLaneCount() const {
   return static_cast<int>(engine_.automation().lane_count());
 }
 
-void RealtimeEngineWasm::setParameter(double param_id, const val& value_val,
+void RealtimeEngineWasm::setParameter(double param_id_number, const val& value_val,
                                       const val& render_frame_val) {
+  const uint32_t param_id = checkedUintFromVal(val(param_id_number), "paramId");
   const float value = checkedFloatFromVal(value_val, "value");
-  if (sonare::engine::RealtimeEngine::mixer_parameter_names_no_strip(
-          static_cast<uint32_t>(param_id))) {
+  if (sonare::engine::RealtimeEngine::mixer_parameter_names_no_strip(param_id)) {
     throw WasmRangeError("parameter id names no mixer strip");
   }
-  if (registeredParameterRejectsRealtime(static_cast<uint32_t>(param_id))) {
+  if (registeredParameterRejectsRealtime(param_id)) {
     throw WasmRangeError("parameter is not realtime safe");
   }
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kSetParam;
-  command.target_id = static_cast<uint32_t>(param_id);
+  command.target_id = param_id;
   command.sample_time = renderFrameFromVal(render_frame_val);
   command.arg.f = value;
   if (!engine_.push_command(command)) {
@@ -182,19 +182,19 @@ void RealtimeEngineWasm::setParameter(double param_id, const val& value_val,
   }
 }
 
-void RealtimeEngineWasm::setParameterSmoothed(double param_id, const val& value_val,
+void RealtimeEngineWasm::setParameterSmoothed(double param_id_number, const val& value_val,
                                               const val& render_frame_val) {
+  const uint32_t param_id = checkedUintFromVal(val(param_id_number), "paramId");
   const float value = checkedFloatFromVal(value_val, "value");
-  if (sonare::engine::RealtimeEngine::mixer_parameter_names_no_strip(
-          static_cast<uint32_t>(param_id))) {
+  if (sonare::engine::RealtimeEngine::mixer_parameter_names_no_strip(param_id)) {
     throw WasmRangeError("parameter id names no mixer strip");
   }
-  if (registeredParameterRejectsRealtime(static_cast<uint32_t>(param_id))) {
+  if (registeredParameterRejectsRealtime(param_id)) {
     throw WasmRangeError("parameter is not realtime safe");
   }
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kSetParamSmoothed;
-  command.target_id = static_cast<uint32_t>(param_id);
+  command.target_id = param_id;
   command.sample_time = renderFrameFromVal(render_frame_val);
   command.arg.f = value;
   if (!engine_.push_command(command)) {
