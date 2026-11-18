@@ -37,7 +37,9 @@ entirely (but counted).
 from __future__ import annotations
 
 import re
+import tomllib
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from allowlist import AGREED, DIVERGED, Allowlist
 from core_defaults import CoreConfig
@@ -1110,6 +1112,22 @@ def _order_verdict(key: str, c_cfg: list[str], s_cfg: list[str]) -> str:
     return DIVERGED
 
 
+def _librosa_mirrors() -> frozenset[str]:
+    """Python functions that keep librosa's parameter names (tools/api/librosa_mirrors.toml)."""
+    path = Path(__file__).resolve().parents[1] / "api" / "librosa_mirrors.toml"
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    return frozenset(m["name"] for m in data.get("mirror", []))
+
+
+_LIBROSA_MIRRORS = _librosa_mirrors()
+
+
+def _mirror_order_verdict(key: str, c_cfg: list[str], s_cfg: list[str]) -> str:
+    """A librosa mirror's names are librosa's, so it is held to C's positions only."""
+    extended = len(c_cfg) + len(_EXTENDED_FIELD_TAILS.get(key, ()))
+    return AGREED if len(s_cfg) <= len(c_cfg) or len(s_cfg) == extended else DIVERGED
+
+
 def _order_drift(c_index, indexed, allow, rep: Report, selected, roles: set[str]) -> None:
     for key, csig in c_index.items():
         c_cfg = _config_names(csig, roles)
@@ -1122,7 +1140,10 @@ def _order_drift(c_index, indexed, allow, rep: Report, selected, roles: set[str]
             if declined is not None:
                 rep.decline("order", key, s, declined)
                 continue
-            verdict = _order_verdict(key, c_cfg, s_cfg)
+            if s == "python" and key in _LIBROSA_MIRRORS:
+                verdict = _mirror_order_verdict(key, c_cfg, s_cfg)
+            else:
+                verdict = _order_verdict(key, c_cfg, s_cfg)
             message = f"config param order/name mismatch vs C for '{key}': C={c_cfg} {s}={s_cfg}"
             if allow.order_ok(key, s, verdict, f"[{s}] {message}") or verdict == AGREED:
                 continue

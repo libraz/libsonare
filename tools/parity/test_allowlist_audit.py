@@ -159,6 +159,18 @@ def test_an_order_entry_whose_surfaces_agree_is_reported_as_stale() -> None:
     assert allow.expired_entries() == [("order.node", "resample", allowlist_mod.STALE)]
 
 
+def test_a_librosa_mirror_is_compared_by_position_on_python_only() -> None:
+    """A Python librosa mirror keeps librosa's names, so only its positions are held to C."""
+    none = allowlist_mod.Allowlist()
+    c = _sig("c", "tone", "frequency_hz", "duration_sec")
+    renamed = _report(c, _sig("python", "tone", "frequency", "duration"), none)
+    assert [f for f in renamed.active() if f.category == "order"] == []
+    longer = _report(c, _sig("python", "tone", "frequency", "duration", "extra"), none)
+    assert [f.key for f in longer.active() if f.category == "order"] == ["tone"]
+    node = _report(c, _sig("node", "tone", "frequency", "duration"), none)
+    assert [f.key for f in node.active() if f.category == "order"] == ["tone"]
+
+
 def test_an_order_entry_the_facade_folded_out_of_reach_is_unconsulted() -> None:
     """A request-object facade carries no param order to compare.
 
