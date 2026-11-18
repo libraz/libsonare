@@ -48,7 +48,8 @@ ROWS: tuple[Literal, ...] = (
         sites=(
             Site("node", "bindings/node/src", r"\bbeta \?\? ([-\d.]+)", 1),
             Site("wasm", "bindings/wasm/src", r"\bbeta \?\? ([-\d.]+)", 1),
-            Site("python", "bindings/python/src/libsonare", r"\bbeta: float = ([-\d.]+)", 8),
+            # Only the librosa-named decompose / decompose_with_init (runtime + stub) state it.
+            Site("python", "bindings/python/src/libsonare", r"\bbeta: float = ([-\d.]+)", 4),
         ),
     ),
     Literal(
