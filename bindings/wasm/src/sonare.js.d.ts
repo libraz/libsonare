@@ -3822,7 +3822,8 @@ export interface WasmPolyphonicAnalysis {
 }
 
 export interface WasmStreamingMasteringChain {
-  prepare: (sampleRate: number, maxBlockSize: number, numChannels: number) => void;
+  /** An undefined `maxBlockSize` selects the library default. */
+  prepare: (sampleRate: number, maxBlockSize: number | undefined, numChannels: number) => void;
   setParameter: (key: string, value: number) => void;
   processMono: (samples: Float32Array) => Float32Array;
   processStereo: (

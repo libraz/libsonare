@@ -140,6 +140,16 @@ describe('StreamingMasteringChain.constructor', () => {
     }
   });
 
+  it('takes the library default block size when maxBlockSize is omitted', () => {
+    const { maxBlockSize: _omitted, ...withoutBlock } = chainConfig;
+    const chain = new StreamingMasteringChain(withoutBlock);
+    try {
+      expect(chain.processMono(tone(64)).length).toBe(64);
+    } finally {
+      chain.destroy();
+    }
+  });
+
   it('has no prepare() on either entry point', () => {
     for (const ctor of [StreamingMasteringChain, WorkletChain]) {
       expect('prepare' in ctor.prototype).toBe(false);

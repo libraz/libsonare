@@ -8669,7 +8669,7 @@ export interface MasteringChainConfig {
 export interface StreamingMasteringChainConfig extends MasteringChainConfig {
   /** Stream sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
-  /** Largest block `process` is given, in samples per channel. Default 128. */
+  /** Largest block `process` is given, in samples per channel. Omit it for the library default; an explicit 0 is refused. */
   maxBlockSize?: number;
   /** Channel count of the stream: 1 or 2. Required. */
   numChannels: 1 | 2;

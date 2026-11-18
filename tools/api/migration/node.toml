@@ -13575,7 +13575,7 @@ rule = "aliases-removed"
 [[entry]]
 kind = "type"
 old = "StreamingMasteringChainConfig"
-changed = "StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (default 128), numChannels?: 1 | 2 (default 1), loudnessStaticGainDb?, loudnessStaticGainPeakDb?}"
+changed = "StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (omit it for the library default; an explicit 0 is refused), numChannels: 1 | 2 (required), loudnessStaticGainDb?, loudnessStaticGainPeakDb?}"
 domain = "mastering"
 rule = "construction"
 test = "bindings/node/tests/surface/mastering-streaming.test.ts::StreamingMasteringChainConfig"
@@ -15343,3 +15343,11 @@ changed = "renamed to clipThresholdDb and given in dBFS at or below 0 (was a lin
 domain = "mastering"
 rule = "unit-in-name"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::declip.clipThresholdDb is dBFS at or below 0"
+
+[[entry]]
+kind = "class"
+old = "StreamingEqualizer"
+changed = "maxBlockSize: the facade default is gone: omit it for the library default; an explicit 0 is refused"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/mastering-streaming.test.ts::builds with only a sampleRate and processes a block"

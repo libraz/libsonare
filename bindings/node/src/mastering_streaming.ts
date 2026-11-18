@@ -40,7 +40,7 @@ export interface StreamingMasteringChainConfig extends MasteringChainConfig {
   /** Sample rate in Hz (integer). Required; `TypeError` when absent. */
   sampleRate: number;
 
-  /** Largest block passed to a process call, in samples. Default 128. */
+  /** Largest block passed to a process call, in samples. Omit it for the library default; an explicit 0 is refused. */
   maxBlockSize?: number;
 
   /** Channel layout of the stream: 1 (mono) or 2 (stereo). Required. */
@@ -70,12 +70,9 @@ export interface StreamingMasteringChainConfig extends MasteringChainConfig {
 export interface StreamingEqualizerConfig {
   /** Sample rate in Hz (integer). Required; `TypeError` when absent. */
   sampleRate: number;
-  /** Largest block passed to a process call, in samples. Default 512. */
+  /** Largest block passed to a process call, in samples. Omit it for the library default; an explicit 0 is refused. */
   maxBlockSize?: number;
 }
-
-const DEFAULT_CHAIN_BLOCK_SIZE = 128;
-const DEFAULT_EQ_BLOCK_SIZE = 512;
 
 function assertConfigObject(fnName: string, config: unknown): asserts config is object {
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
@@ -83,12 +80,14 @@ function assertConfigObject(fnName: string, config: unknown): asserts config is 
   }
 }
 
-function assertOptionalBlockSize(fnName: string, value: unknown): void {
+/** A given block size as a positive integer; absent (`undefined`) leaves the library default. */
+function optionalBlockSize(fnName: string, value: unknown): number | undefined {
   if (value === undefined || value === null) {
-    return;
+    return undefined;
   }
   assertIntegerValue(fnName, value, 'maxBlockSize');
   assertPositiveInteger(fnName, value, 'maxBlockSize');
+  return value;
 }
 
 /**
@@ -137,7 +136,7 @@ export class StreamingMasteringChain {
 
   /**
    * Builds and prepares the chain in one step. `sampleRate` and `numChannels`
-   * are required; `maxBlockSize` defaults to 128. Stereo-only stages are skipped for mono.
+   * are required; an omitted `maxBlockSize` takes the library default. Stereo-only stages are skipped for mono.
    *
    * @throws TypeError for a non-object config, a wrong-typed field or a missing
    *   `sampleRate`; RangeError for an out-of-domain rate, block size or channel count.
@@ -147,7 +146,7 @@ export class StreamingMasteringChain {
     assertConfigObject(fn, config);
     const { sampleRate, maxBlockSize, numChannels, ...chainConfig } = config;
     assertSampleRate(fn, sampleRate);
-    assertOptionalBlockSize(fn, maxBlockSize);
+    const blockSize = optionalBlockSize(fn, maxBlockSize);
     assertIntegerValue(fn, numChannels, 'numChannels');
     if (numChannels !== 1 && numChannels !== 2) {
       throw new RangeError(`${fn}: numChannels must be 1 or 2`);
@@ -166,7 +165,7 @@ export class StreamingMasteringChain {
     }
     this.native = new addon.StreamingMasteringChain(native);
     try {
-      this.native.prepare(sampleRate, maxBlockSize ?? DEFAULT_CHAIN_BLOCK_SIZE, numChannels);
+      this.native.prepare(sampleRate, blockSize, numChannels);
     } catch (error) {
       this.native.destroy();
       throw error;
@@ -881,7 +880,7 @@ export class StreamingEqualizer {
   private disposed = false;
 
   /**
-   * @param config - `sampleRate` (Hz, required integer) and `maxBlockSize` (default 512).
+   * @param config - `sampleRate` (Hz, required integer) and `maxBlockSize` (omit it for the library default).
    * @throws TypeError for a non-object config, a wrong-typed field or a missing
    *   `sampleRate`; RangeError for an out-of-domain rate or block size.
    */
@@ -890,11 +889,10 @@ export class StreamingEqualizer {
     assertConfigObject(fn, config);
     const { sampleRate, maxBlockSize } = config;
     assertSampleRate(fn, sampleRate);
-    assertOptionalBlockSize(fn, maxBlockSize);
-    this.native = new addon.StreamingEqualizer({
-      sampleRate,
-      maxBlockSize: maxBlockSize ?? DEFAULT_EQ_BLOCK_SIZE,
-    });
+    const blockSize = optionalBlockSize(fn, maxBlockSize);
+    this.native = new addon.StreamingEqualizer(
+      blockSize === undefined ? { sampleRate } : { sampleRate, maxBlockSize: blockSize },
+    );
   }
 
   /** Configure one EQ band (0-based index). */

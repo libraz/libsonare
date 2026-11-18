@@ -24994,7 +24994,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masteringApplyProce
 [[entry]]
 kind = "type"
 old = "StreamingMasteringChainConfig"
-changed = "StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (default 128), numChannels?: 1 | 2 (default 1), loudnessStaticGainDb?, loudnessStaticGainPeakDb?}"
+changed = "StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (omit it for the library default; an explicit 0 is refused), numChannels: 1 | 2 (required), loudnessStaticGainDb?, loudnessStaticGainPeakDb?}"
 domain = "mastering"
 rule = "construction"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::StreamingMasteringChainConfig is one flat constructor input"
@@ -25002,7 +25002,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::StreamingMasteringC
 [[entry]]
 kind = "type"
 old = "StreamingMasteringChainConfig"
-changed = "StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (default 128), numChannels?: 1 | 2 (default 1), loudnessStaticGainDb?, loudnessStaticGainPeakDb?}"
+changed = "StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (omit it for the library default; an explicit 0 is refused), numChannels: 1 | 2 (required), loudnessStaticGainDb?, loudnessStaticGainPeakDb?}"
 domain = "mastering"
 rule = "construction"
 entry = "./analysis"
@@ -25011,7 +25011,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::StreamingMasteringC
 [[entry]]
 kind = "type"
 old = "StreamingMasteringChainConfig"
-changed = "StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (default 128), numChannels?: 1 | 2 (default 1), loudnessStaticGainDb?, loudnessStaticGainPeakDb?}"
+changed = "StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (omit it for the library default; an explicit 0 is refused), numChannels: 1 | 2 (required), loudnessStaticGainDb?, loudnessStaticGainPeakDb?}"
 domain = "mastering"
 rule = "construction"
 entry = "./worklet"
@@ -27431,3 +27431,20 @@ domain = "mastering"
 rule = "unit-in-name"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::declip.clipThresholdDb is dBFS at or below 0"
 entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "StreamingEqualizerConfig.maxBlockSize"
+changed = "the facade default is gone: omit it for the library default; an explicit 0 is refused"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::builds with only a sampleRate and processes a block"
+
+[[entry]]
+kind = "field"
+old = "StreamingEqualizerConfig.maxBlockSize"
+changed = "the facade default is gone: omit it for the library default; an explicit 0 is refused"
+domain = "analysis"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::builds with only a sampleRate and processes a block"

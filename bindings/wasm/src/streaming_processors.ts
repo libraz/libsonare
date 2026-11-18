@@ -62,21 +62,20 @@ const EQ_PHASE_MODE_ORDINALS: Record<EqPhaseMode, number> = {
 };
 const EQ_PHASE_MODES = Object.keys(EQ_PHASE_MODE_ORDINALS) as EqPhaseMode[];
 
-const DEFAULT_CHAIN_BLOCK_SIZE = 128;
-const DEFAULT_EQ_BLOCK_SIZE = 512;
-
 function assertConfigObject(fnName: string, config: unknown): asserts config is object {
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
     throw new TypeError(`${fnName}: config must be an object`);
   }
 }
 
-function assertOptionalBlockSize(fnName: string, value: unknown): void {
+/** A given block size as a positive integer; absent (`undefined`) leaves the library default. */
+function optionalBlockSize(fnName: string, value: unknown): number | undefined {
   if (value === undefined || value === null) {
-    return;
+    return undefined;
   }
   assertIntegerValue(fnName, value, 'maxBlockSize');
   assertPositiveInteger(fnName, value, 'maxBlockSize');
+  return value;
 }
 
 // ============================================================================
@@ -162,8 +161,8 @@ export class StreamingMasteringChain {
   /**
    * Builds and prepares the chain in one step.
    *
-   * `sampleRate` (Hz, integer) and `numChannels` are required; `maxBlockSize`
-   * defaults to 128 samples. Stereo-only stages are skipped for mono.
+   * `sampleRate` (Hz, integer) and `numChannels` are required; an omitted
+   * `maxBlockSize` takes the library default. Stereo-only stages are skipped for mono.
    *
    * @throws TypeError for a non-object config, a wrong-typed field or a missing
    *   `sampleRate`; RangeError for an out-of-domain rate, block size or channel count.
@@ -180,7 +179,7 @@ export class StreamingMasteringChain {
       ...chainConfig
     } = config;
     assertSampleRate(fn, sampleRate);
-    assertOptionalBlockSize(fn, maxBlockSize);
+    const blockSize = optionalBlockSize(fn, maxBlockSize);
     assertIntegerValue(fn, numChannels, 'numChannels');
     if (numChannels !== 1 && numChannels !== 2) {
       throw new RangeError(`${fn}: numChannels must be 1 or 2`);
@@ -192,7 +191,7 @@ export class StreamingMasteringChain {
       loudnessStaticGainPeakDb,
     });
     try {
-      this.chainHandle.prepare(sampleRate, maxBlockSize ?? DEFAULT_CHAIN_BLOCK_SIZE, numChannels);
+      this.chainHandle.prepare(sampleRate, blockSize, numChannels);
     } catch (error) {
       this.chainHandle.delete();
       throw error;
@@ -364,7 +363,7 @@ export class StreamingEqualizer {
   }
 
   /**
-   * @param config - `sampleRate` (Hz, required integer) and `maxBlockSize` (default 512).
+   * @param config - `sampleRate` (Hz, required integer) and `maxBlockSize` (omit it for the library default).
    * @throws TypeError for a non-object config, a wrong-typed field or a missing
    *   `sampleRate`; RangeError for an out-of-domain rate or block size.
    */
@@ -373,12 +372,11 @@ export class StreamingEqualizer {
     assertConfigObject(fn, config);
     const { sampleRate, maxBlockSize } = config;
     assertSampleRate(fn, sampleRate);
-    assertOptionalBlockSize(fn, maxBlockSize);
+    const blockSize = optionalBlockSize(fn, maxBlockSize);
     const module = getSonareModule();
-    this.eqHandle = module.createEqualizer({
-      sampleRate,
-      maxBlockSize: maxBlockSize ?? DEFAULT_EQ_BLOCK_SIZE,
-    });
+    this.eqHandle = module.createEqualizer(
+      blockSize === undefined ? { sampleRate } : { sampleRate, maxBlockSize: blockSize },
+    );
   }
 
   /**

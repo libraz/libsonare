@@ -120,7 +120,7 @@ export interface EqBand {
 export interface StreamingEqualizerConfig {
   /** Sample rate in Hz (integer). Required; `TypeError` when absent. */
   sampleRate: number;
-  /** Largest block passed to a process call, in samples. Default 512. */
+  /** Largest block passed to a process call, in samples. Omit it for the library default; an explicit 0 is refused. */
   maxBlockSize?: number;
 }
 
