@@ -237,6 +237,58 @@ class CancellationRule(unittest.TestCase):
         self.assertEqual([f.key for f in verdict.violations], ["wasm:Engine.bounce"])
 
 
+class TempoRangeRule(unittest.TestCase):
+    CLEAN = [
+        field(
+            "wasm",
+            "AnalyzeRequest",
+            "bpmMin",
+            "number | undefined",
+            doc_text="Lower bound. Default `60`.",
+        ),
+        field(
+            "node",
+            "AnalyzeRequest",
+            "bpmMax",
+            "number | undefined",
+            doc_text="Upper bound. Default 200.",
+        ),
+        field(
+            "c",
+            "SonareMusicAnalyzeOptions",
+            "bpm_min",
+            "float",
+            doc_text="Lower bound. Default 60.",
+        ),
+        {
+            **field("python", "", "bpm_max", "float | None"),
+            "kind": "option",
+            "name": "analyze(bpm_max)",
+        },
+    ]
+
+    def test_clean_surface_passes(self) -> None:
+        verdict = run("tempo-range", self.CLEAN)
+        self.assertEqual(verdict.read, 4)
+        self.assertFalse(verdict.failed)
+
+    def test_wide_default_is_named(self) -> None:
+        planted = field(
+            "wasm", "BeatRequest", "bpmMax", "number | undefined", doc_text="Default 300."
+        )
+        verdict = run("tempo-range", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["wasm:BeatRequest.bpmMax"])
+
+    def test_python_literal_default_is_named(self) -> None:
+        planted = {
+            **field("python", "", "bpm_min", "float"),
+            "kind": "option",
+            "name": "detect_bpm(bpm_min)",
+        }
+        verdict = run("tempo-range", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["python:detect_bpm(bpm_min)"])
+
+
 class Framework(unittest.TestCase):
     def test_reading_nothing_fails(self) -> None:
         verdict = check.judge(rule("getters"), [])

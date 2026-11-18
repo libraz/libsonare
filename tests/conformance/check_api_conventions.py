@@ -260,6 +260,28 @@ def _cancellation_violation(record: dict) -> str | None:
     return None
 
 
+_BPM_BOUND = re.compile(r"^bpm_?(min|max)$", re.I)
+_DEFAULT_BPM = {"min": 60.0, "max": 200.0}
+_DOC_DEFAULT = re.compile(r"Default\s+`?(-?\d+(?:\.\d+)?)", re.I)
+
+
+def _tempo_bound_violation(r: dict) -> str | None:
+    side = _BPM_BOUND.match(r["member"]).group(1).lower()  # type: ignore[union-attr]
+    if r["surface"] == "python":
+        # An omitted bound defers to the core, whose default is the documented one.
+        if r.get("type") != "float | None":
+            return "a tempo bound is omitted by default (float | None) so the core's 60-200 applies"
+        return None
+    match = _DOC_DEFAULT.search(r.get("doc_text", ""))
+    if not match:
+        return "the doc states the default tempo bound"
+    if float(match.group(1)) != _DEFAULT_BPM[side]:
+        return (
+            f"the default tempo bound is {_DEFAULT_BPM[side]:g} BPM, the doc says {match.group(1)}"
+        )
+    return None
+
+
 RULES: list[Rule] = [
     Rule(
         name="getters",
@@ -333,6 +355,20 @@ RULES: list[Rule] = [
             f"{s}:VocalRenderSnapshot.{m}": "a synchronous render request takes cancel: () => boolean, not signal"
             for s in ("node", "wasm")
             for m in ("render", "beginRenderJob")
+        },
+    ),
+    Rule(
+        name="tempo-range",
+        summary="every public tempo search defaults to 60-200 BPM, on the C struct, the JS requests and Python",
+        population=lambda r: (
+            r["surface"] in ("node", "wasm", "python", "c")
+            and r["kind"] in ("field", "option")
+            and _BPM_BOUND.match(r.get("member", "")) is not None
+            and not (r["surface"] == "c" and r["kind"] == "option")
+        ),
+        violation=_tempo_bound_violation,
+        exempt={
+            "python:cyclic_tempogram(bpm_min)": "a fold base, not a search range",
         },
     ),
 ]
