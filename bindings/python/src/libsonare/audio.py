@@ -829,8 +829,8 @@ class Audio:
 
     def detect_chords(
         self,
-        min_duration: float = 0.3,
-        smoothing_window: float = 2.0,
+        min_duration_sec: float = 0.3,
+        smoothing_window_sec: float = 2.0,
         threshold: float = 0.5,
         use_triads_only: bool = True,
         n_fft: int = 2048,
@@ -849,8 +849,8 @@ class Audio:
         return _detect_chords(
             self.data,
             self.sample_rate,
-            min_duration,
-            smoothing_window,
+            min_duration_sec,
+            smoothing_window_sec,
             threshold,
             use_triads_only,
             n_fft,

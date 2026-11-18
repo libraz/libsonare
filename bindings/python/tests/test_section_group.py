@@ -62,7 +62,7 @@ def test_alternating_material_yields_distinct_groups(abab) -> None:
     # section wholly inside a span of the same material.
     by_material: dict[int, set[int]] = {0: set(), 1: set()}
     for s in sections:
-        first, last = int(s.start // _SPAN_SEC), int((s.end - 1e-3) // _SPAN_SEC)
+        first, last = int(s.start_sec // _SPAN_SEC), int((s.end_sec - 1e-3) // _SPAN_SEC)
         if first == last:
             by_material[first % 2].add(s.group)
     assert not by_material[0] & by_material[1]

@@ -84,7 +84,7 @@ from .analyzer import (
     PercussiveEventEdit as PercussiveEventEdit,
 )
 from .analyzer import (
-    PitchDecomposition as PitchDecomposition,
+    PitchDecompositionResult as PitchDecompositionResult,
 )
 from .analyzer import (
     RealtimeVoiceChanger as RealtimeVoiceChanger,

@@ -265,7 +265,7 @@ def test_a_fractional_comp_take_id_is_refused_rather_than_read_as_the_base_take(
 
 
 def test_a_fractional_click_length_is_refused_rather_than_read_as_derived_from_seconds() -> None:
-    """0 on click_samples means "derive the click length from click_seconds"."""
+    """0 on click_samples means "derive the click length from click_sec"."""
 
     def stored(**kwargs) -> int:
         with ls.RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:

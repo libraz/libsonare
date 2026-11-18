@@ -73,8 +73,8 @@ def _chords_from_c(out: SonareChordAnalysisResult) -> list[Chord]:
             Chord(
                 root=root,
                 quality=quality,
-                start=float(out.chords[i].start),
-                end=float(out.chords[i].end),
+                start_sec=float(out.chords[i].start),
+                end_sec=float(out.chords[i].end),
                 confidence=float(out.chords[i].confidence),
                 bass=bass,
                 name=_chord_symbol(root, quality, bass),
@@ -87,8 +87,8 @@ def _chords_from_c(out: SonareChordAnalysisResult) -> list[Chord]:
 def detect_chords(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-    min_duration: float = 0.3,
-    smoothing_window: float = 2.0,
+    min_duration_sec: float = 0.3,
+    smoothing_window_sec: float = 2.0,
     threshold: float = 0.5,
     use_triads_only: bool = True,
     n_fft: int = 2048,
@@ -125,8 +125,8 @@ def detect_chords(
     tuning_value, tuning_auto = _tuning_arg("detect_chords", tuning_cents)
     options = SonareChordDetectionOptions(
         SONARE_CHORD_DETECTION_OPTIONS_VERSION,
-        min_duration,
-        smoothing_window,
+        min_duration_sec,
+        smoothing_window_sec,
         threshold,
         1 if use_triads_only else 0,
         n_fft,
@@ -162,8 +162,8 @@ def chord_functional_analysis(
     sample_rate: int,
     key_root: PitchClass,
     key_mode: KeyMode = "major",
-    min_duration: float = 0.3,
-    smoothing_window: float = 2.0,
+    min_duration_sec: float = 0.3,
+    smoothing_window_sec: float = 2.0,
     threshold: float = 0.5,
     use_triads_only: bool = True,
     n_fft: int = 2048,
@@ -194,8 +194,8 @@ def chord_functional_analysis(
     tuning_value, tuning_auto = _tuning_arg("chord_functional_analysis", tuning_cents)
     options = SonareChordDetectionOptions(
         SONARE_CHORD_DETECTION_OPTIONS_VERSION,
-        min_duration,
-        smoothing_window,
+        min_duration_sec,
+        smoothing_window_sec,
         threshold,
         1 if use_triads_only else 0,
         n_fft,
@@ -228,8 +228,8 @@ def chord_functional_analysis(
             FunctionalChord(
                 chord.root,
                 chord.quality,
-                chord.start,
-                chord.end,
+                chord.start_sec,
+                chord.end_sec,
                 chord.confidence,
                 chord.bass,
                 chord.name,
@@ -288,8 +288,8 @@ def chord_functions(
         array[i] = SonareChord(
             _to_c_int32(chord.root, f"chords[{i}].root"),
             ordinal,
-            chord.start,
-            chord.end,
+            chord.start_sec,
+            chord.end_sec,
             chord.confidence,
             _to_c_int32(chord.root if chord.bass is None else chord.bass, f"chords[{i}].bass"),
         )
@@ -309,8 +309,8 @@ def chord_functions(
             FunctionalChord(
                 chord.root,
                 chord.quality,
-                chord.start,
-                chord.end,
+                chord.start_sec,
+                chord.end_sec,
                 chord.confidence,
                 chord.bass,
                 chord.name,
@@ -364,8 +364,8 @@ def analyze_sections(
         return [
             Section(
                 type=_section_type_token(int(out.sections[i].type)),
-                start=float(out.sections[i].start),
-                end=float(out.sections[i].end),
+                start_sec=float(out.sections[i].start),
+                end_sec=float(out.sections[i].end),
                 energy_level=float(out.sections[i].energy_level),
                 confidence=float(out.sections[i].confidence),
                 group=int(out.sections[i].group),
@@ -389,8 +389,8 @@ def detect_boundaries(
     absolute_threshold: float = 0.005,
     n_mfcc: int = 13,
     n_chroma: int = 12,
-    peak_distance: float = 2.0,
-    reference_window: float = 60.0,
+    peak_distance_sec: float = 2.0,
+    reference_window_sec: float = 60.0,
     use_mfcc: bool = True,
     use_chroma: bool = True,
 ) -> BoundaryResult:
@@ -410,7 +410,7 @@ def detect_boundaries(
         hop_length: Hop length in samples.
         kernel_size: Checkerboard kernel size in frames.
         threshold: Relative novelty threshold: a peak must reach this fraction of
-            the largest raw novelty event within ``reference_window`` of it, a
+            the largest raw novelty event within ``reference_window_sec`` of it, a
             lone dominant event (one no other event in the window comes within
             30% of) set aside. Selects how prominent a peak is *among
             its neighbours*; it says nothing about how much the features actually
@@ -425,8 +425,8 @@ def detect_boundaries(
             the noise is admitted first.
         n_mfcc: Number of MFCC coefficients.
         n_chroma: Number of chroma bins.
-        peak_distance: Minimum spacing between peaks, in seconds.
-        reference_window: One-sided span in seconds (default 60) over which the
+        peak_distance_sec: Minimum spacing between peaks, in seconds.
+        reference_window_sec: One-sided span in seconds (default 60) over which the
             local novelty maximum that ``threshold`` is measured against is taken.
             Must be finite and non-negative; 0 makes each frame its own
             reference, which disables the relative threshold. A value at least
@@ -456,8 +456,8 @@ def detect_boundaries(
         absolute_threshold=_to_c_float(absolute_threshold, "absolute_threshold"),
         n_mfcc=_to_c_int(n_mfcc, "n_mfcc"),
         n_chroma=_to_c_int(n_chroma, "n_chroma"),
-        peak_distance=_to_c_float(peak_distance, "peak_distance"),
-        reference_window=_to_c_float(reference_window, "reference_window"),
+        peak_distance=_to_c_float(peak_distance_sec, "peak_distance_sec"),
+        reference_window=_to_c_float(reference_window_sec, "reference_window_sec"),
         use_mfcc=1 if use_mfcc else 0,
         use_chroma=1 if use_chroma else 0,
     )
@@ -474,7 +474,7 @@ def detect_boundaries(
         return BoundaryResult(
             boundaries=[
                 Boundary(
-                    time=float(out.boundaries[i].time),
+                    time_sec=float(out.boundaries[i].time),
                     frame=int(out.boundaries[i].frame),
                     strength=float(out.boundaries[i].strength),
                 )
@@ -551,16 +551,16 @@ def analyze_melody(
             return MelodyResult(
                 points=[
                     MelodyPoint(
-                        time=float(out.points[i].time),
-                        frequency=float(out.points[i].frequency),
+                        time_sec=float(out.points[i].time),
+                        frequency_hz=float(out.points[i].frequency),
                         confidence=float(out.points[i].confidence),
                     )
                     for i in range(out.point_count)
                 ],
                 pitch_range_octaves=float(out.pitch_range_octaves),
                 pitch_stability=float(out.pitch_stability),
-                mean_frequency=float(out.mean_frequency),
-                vibrato_rate=float(out.vibrato_rate),
+                mean_frequency_hz=float(out.mean_frequency),
+                vibrato_rate_hz=float(out.vibrato_rate),
             )
         finally:
             lib.sonare_free_melody_result(ctypes.byref(out))
@@ -586,16 +586,16 @@ def analyze_melody(
         return MelodyResult(
             points=[
                 MelodyPoint(
-                    time=float(out.points[i].time),
-                    frequency=float(out.points[i].frequency),
+                    time_sec=float(out.points[i].time),
+                    frequency_hz=float(out.points[i].frequency),
                     confidence=float(out.points[i].confidence),
                 )
                 for i in range(out.point_count)
             ],
             pitch_range_octaves=float(out.pitch_range_octaves),
             pitch_stability=float(out.pitch_stability),
-            mean_frequency=float(out.mean_frequency),
-            vibrato_rate=float(out.vibrato_rate),
+            mean_frequency_hz=float(out.mean_frequency),
+            vibrato_rate_hz=float(out.vibrato_rate),
         )
     finally:
         lib.sonare_free_melody_result(ctypes.byref(out))

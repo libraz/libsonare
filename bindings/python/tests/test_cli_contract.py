@@ -953,7 +953,7 @@ def test_analyze_json_section_type_is_lowercase_kebab(monkeypatch, capsys) -> No
     import libsonare
     from libsonare import _cli_analysis, cli
 
-    section = SimpleNamespace(type="preChorus", start=0.0, end=1.0, group=2)
+    section = SimpleNamespace(type="preChorus", start_sec=0.0, end_sec=1.0, group=2)
     monkeypatch.setattr(
         libsonare, "analyze", lambda samples, **kwargs: _minimal_analysis_result(sections=[section])
     )

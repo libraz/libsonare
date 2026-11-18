@@ -88,8 +88,8 @@ def test_lufs() -> None:
         assert math.isfinite(r.integrated_lufs)
         assert math.isfinite(r.momentary_lufs)
         assert math.isfinite(r.short_term_lufs)
-        assert math.isfinite(r.loudness_range)
-        assert r.loudness_range >= 0.0
+        assert math.isfinite(r.loudness_range_lu)
+        assert r.loudness_range_lu >= 0.0
 
     assert loud_result.integrated_lufs > quiet_result.integrated_lufs
 
@@ -140,7 +140,7 @@ def test_audio_lufs() -> None:
     assert math.isfinite(result.integrated_lufs)
     assert math.isfinite(result.momentary_lufs)
     assert math.isfinite(result.short_term_lufs)
-    assert math.isfinite(result.loudness_range)
+    assert math.isfinite(result.loudness_range_lu)
 
 
 def test_audio_momentary_and_short_term_lufs() -> None:
@@ -719,7 +719,7 @@ def test_analyze_sections_returns_a_section_list() -> None:
     for section in result:
         assert isinstance(section, Section)
         assert section.type in get_args(SectionType)
-        assert section.end >= section.start
+        assert section.end_sec >= section.start_sec
         assert isinstance(section.name, str)
 
 
@@ -730,10 +730,10 @@ def test_analyze_melody_returns_melody_result() -> None:
     result = analyze_melody(samples, sample_rate=22050)
     assert isinstance(result, MelodyResult)
     assert isinstance(result.points, list)
-    assert math.isfinite(result.mean_frequency)
+    assert math.isfinite(result.mean_frequency_hz)
     for point in result.points[:8]:
         assert isinstance(point, MelodyPoint)
-        assert math.isfinite(point.time)
+        assert math.isfinite(point.time_sec)
 
 
 def test_cqt_and_vqt_return_cqt_result() -> None:

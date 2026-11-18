@@ -93,7 +93,7 @@ def cmd_dynamics(args: argparse.Namespace) -> int:
                     "peak_db": r.peak_db,
                     "rms_db": r.rms_db,
                     "crest_factor": r.crest_factor,
-                    "loudness_range_db": r.loudness_range_db,
+                    "loudness_range_db": r.loudness_range_lu,
                     "is_compressed": r.is_compressed,
                     "loudness": _array_stats(r.loudness_rms_db.tolist()),
                 }
@@ -105,7 +105,7 @@ def cmd_dynamics(args: argparse.Namespace) -> int:
         print(f"    Peak:           {r.peak_db:.2f} dB")
         print(f"    RMS:            {r.rms_db:.2f} dB")
         print(f"    Crest factor:   {r.crest_factor:.4f}")
-        print(f"    Loudness range: {r.loudness_range_db:.2f} dB")
+        print(f"    Loudness range: {r.loudness_range_lu:.2f} dB")
         print(f"    Compressed:     {r.is_compressed}")
     return 0
 
@@ -159,7 +159,7 @@ def cmd_lufs(args: argparse.Namespace) -> int:
         "integrated_lufs": r.integrated_lufs,
         "momentary_lufs": r.momentary_lufs,
         "short_term_lufs": r.short_term_lufs,
-        "loudness_range": r.loudness_range,
+        "loudness_range": r.loudness_range_lu,
     }
     momentary_series: list[float] = []
     short_term_series: list[float] = []
@@ -178,7 +178,7 @@ def cmd_lufs(args: argparse.Namespace) -> int:
         print(f"    Integrated:     {r.integrated_lufs:.2f} LUFS")
         print(f"    Momentary:      {r.momentary_lufs:.2f} LUFS")
         print(f"    Short-term:     {r.short_term_lufs:.2f} LUFS")
-        print(f"    Loudness range: {r.loudness_range:.2f} LU")
+        print(f"    Loudness range: {r.loudness_range_lu:.2f} LU")
         if args.series:
             print(f"    Momentary samples:  {len(momentary_series)}")
             print(f"    Short-term samples: {len(short_term_series)}")

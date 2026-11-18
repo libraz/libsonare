@@ -134,7 +134,7 @@ def lufs(
         short_term_lufs=float(out.short_term_lufs),
         max_momentary_lufs=float(out.max_momentary_lufs),
         max_short_term_lufs=float(out.max_short_term_lufs),
-        loudness_range=float(out.loudness_range),
+        loudness_range_lu=float(out.loudness_range),
     )
 
 
@@ -211,7 +211,7 @@ def lufs_interleaved(
         short_term_lufs=float(out.short_term_lufs),
         max_momentary_lufs=float(out.max_momentary_lufs),
         max_short_term_lufs=float(out.max_short_term_lufs),
-        loudness_range=float(out.loudness_range),
+        loudness_range_lu=float(out.loudness_range),
     )
 
 

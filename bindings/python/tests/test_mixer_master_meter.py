@@ -32,8 +32,8 @@ _FIELDS = {
     "rmsDbL": "rms_db_l",
     "rmsDbR": "rms_db_r",
     "correlation": "correlation",
-    "truePeakDbL": "true_peak_db_l",
-    "truePeakDbR": "true_peak_db_r",
+    "truePeakDbL": "true_peak_dbtp_l",
+    "truePeakDbR": "true_peak_dbtp_r",
 }
 
 _SCENE = json.dumps(
@@ -108,5 +108,5 @@ def test_true_peak_off_leaves_the_true_peak_fields_at_their_floor(mixer) -> None
     mixer.configure_meter(measure_lufs=False)
     mixer.process_stereo([block], [block])
     on = mixer.meter_snapshot()
-    assert on.true_peak_db_l > off.true_peak_db_l
+    assert on.true_peak_dbtp_l > off.true_peak_dbtp_l
     assert on.peak_db_l == pytest.approx(off.peak_db_l, abs=1e-4)

@@ -215,8 +215,8 @@ def test_chords_forwards_smoothing_window_and_beat_sync_flag(
     assert calls == [
         {
             "sample_rate": 22050,
-            "min_duration": 0.3,
-            "smoothing_window": 1.25,
+            "min_duration_sec": 0.3,
+            "smoothing_window_sec": 1.25,
             "threshold": 0.5,
             "use_triads_only": True,
             "n_fft": 2048,

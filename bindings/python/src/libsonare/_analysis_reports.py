@@ -857,7 +857,7 @@ def analyze_dynamics(
             peak_db=float(out.peak_db),
             rms_db=float(out.rms_db),
             crest_factor=float(out.crest_factor),
-            loudness_range_db=float(out.loudness_range_db),
+            loudness_range_lu=float(out.loudness_range_db),
             is_compressed=bool(out.is_compressed),
             loudness_times_sec=_from_c_float_array(out.loudness_times_sec, out.loudness_count),
             loudness_rms_db=_from_c_float_array(out.loudness_rms_db, out.loudness_count),

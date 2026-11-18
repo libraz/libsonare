@@ -124,8 +124,8 @@ def test_strip_meter_returns_snapshots(mixer) -> None:
         snapshot.momentary_lufs,
         snapshot.short_term_lufs,
         snapshot.integrated_lufs,
-        snapshot.true_peak_db_l,
-        snapshot.max_true_peak_db,
+        snapshot.true_peak_dbtp_l,
+        snapshot.max_true_peak_dbtp,
     ):
         assert isinstance(value, float)
         assert math.isfinite(value)
@@ -140,7 +140,7 @@ def test_strip_meter_returns_snapshots(mixer) -> None:
     assert isinstance(mixer.strip_meter(0, "preFader"), MixMeterSnapshot)
     master = mixer.bus_meter("master")
     assert isinstance(master, MixMeterSnapshot)
-    assert master.channel_count == 2
+    assert master.num_channels == 2
     assert math.isfinite(master.peak_db[0])
 
 
@@ -969,11 +969,11 @@ def test_mix_stereo_true_peak_is_valid_on_a_one_shot_mix() -> None:
 
         # Not the floor sentinel, and above the -6.02 dBFS sample peak by the
         # genuine inter-sample overshoot rather than by chance.
-        assert meter.true_peak_db_l > -20.0
-        assert meter.true_peak_db_l > meter.peak_db_l
+        assert meter.true_peak_dbtp_l > -20.0
+        assert meter.true_peak_dbtp_l > meter.peak_db_l
         # One block over the whole signal leaves no internal block edge, so the
         # strip meter agrees with the offline whole-signal measurement.
-        assert meter.true_peak_db_l == pytest.approx(
+        assert meter.true_peak_dbtp_l == pytest.approx(
             metering_true_peak_db(tone, sample_rate=sr), abs=1e-4
         )
         # The integrating loudness fields genuinely have not filled their
@@ -982,7 +982,7 @@ def test_mix_stereo_true_peak_is_valid_on_a_one_shot_mix() -> None:
 
     # True peak floors only on digital silence.
     silence = [0.0] * 1024
-    assert mix_stereo([(silence, silence)], sample_rate=sr).meters[0].true_peak_db_l == (
+    assert mix_stereo([(silence, silence)], sample_rate=sr).meters[0].true_peak_dbtp_l == (
         pytest.approx(-120.0)
     )
 
@@ -993,8 +993,8 @@ def test_one_shot_true_peak_covers_a_peak_in_the_last_samples() -> None:
     left = [0.0] * 4092 + [0.9, -0.9, 0.9, -0.9]
     result = libsonare.mix_stereo([(left, list(left))], sample_rate=48000)
     expected = libsonare.metering_true_peak_db(left, 48000)
-    assert result.meters[0].true_peak_db_l == pytest.approx(expected, abs=1e-4)
-    assert result.meters[0].true_peak_db_l > -1.0
+    assert result.meters[0].true_peak_dbtp_l == pytest.approx(expected, abs=1e-4)
+    assert result.meters[0].true_peak_dbtp_l > -1.0
 
 
 def test_mixer_flush_meters_is_callable(mixer) -> None:

@@ -159,12 +159,12 @@ def _metronome_to_c(config: EngineMetronomeConfig) -> SonareEngineMetronomeConfi
     raw.beat_gain = _narrow_double(config.beat_gain, "config.beat_gain")
     raw.accent_gain = _narrow_double(config.accent_gain, "config.accent_gain")
     # Narrowed rather than coerced: int(0.5) is the 0 this field reads as "derive
-    # the length from click_seconds", so a fractional length would run at the
+    # the length from click_sec", so a fractional length would run at the
     # derived one and report success.
     raw.click_samples = _validate_c_int_field(
         "set_metronome", config.click_samples, "click_samples"
     )
-    raw.click_seconds = _narrow_double(config.click_seconds, "config.click_seconds")
+    raw.click_seconds = _narrow_double(config.click_sec, "config.click_sec")
     return raw
 
 
@@ -174,7 +174,7 @@ def _metronome_from_c(raw: SonareEngineMetronomeConfig) -> EngineMetronomeConfig
         beat_gain=float(raw.beat_gain),
         accent_gain=float(raw.accent_gain),
         click_samples=int(raw.click_samples),
-        click_seconds=float(raw.click_seconds),
+        click_sec=float(raw.click_seconds),
     )
 
 
@@ -346,7 +346,7 @@ def _meter_telemetry_wide_from_c(
         target_id=int(raw.target_id),
         render_frame=int(raw.render_frame),
         seq=int(raw.seq),
-        channel_count=planes,
+        num_channels=planes,
         peak_db=_float_array_result(raw.peak_db, planes),
         rms_db=_float_array_result(raw.rms_db, planes),
         true_peak_db=_float_array_result(raw.true_peak_db, planes),

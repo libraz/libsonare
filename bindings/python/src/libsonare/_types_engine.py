@@ -26,7 +26,7 @@ from ._types_enums import (
 class MixMeterSnapshot:
     """Realtime mixer meter snapshot for one strip.
 
-    ``true_peak_db_l``/``true_peak_db_r``/``max_true_peak_db`` are inter-sample
+    ``true_peak_dbtp_l``/``true_peak_dbtp_r``/``max_true_peak_dbtp`` are inter-sample
     peaks from the ITU-R BS.1770-4 polyphase reconstruction at 4x. They are a
     streaming measurement that runs one reconstruction-filter group delay (a
     few samples) behind the block, so the reading does not depend on the block
@@ -46,16 +46,16 @@ class MixMeterSnapshot:
     short_term_lufs: float
     integrated_lufs: float
     gain_reduction_db: float
-    true_peak_db_l: float
-    true_peak_db_r: float
-    max_true_peak_db: float
+    true_peak_dbtp_l: float
+    true_peak_dbtp_r: float
+    max_true_peak_dbtp: float
     seq: int
-    # Per-plane surround meters (5.1/7.1). Each tuple holds channel_count values;
+    # Per-plane surround meters (5.1/7.1). Each tuple holds num_channels values;
     # indices 0/1 mirror the *_l/*_r stereo fields above.
-    channel_count: int = 0
+    num_channels: int = 0
     peak_db: tuple[float, ...] = ()
     rms_db: tuple[float, ...] = ()
-    true_peak_db: tuple[float, ...] = ()
+    true_peak_dbtp: tuple[float, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -236,7 +236,7 @@ class ProjectSource:
 
     id: int
     kind: int
-    channel_count: int
+    num_channels: int
     storage_handle_id: int
     sample_rate_hint: float
     name_or_uri: str
@@ -256,7 +256,7 @@ class EngineMetronomeConfig:
     click_samples: int = 0
     # Click duration in seconds (0..1); used when click_samples is 0. 0.0 selects
     # the engine default (2 ms).
-    click_seconds: float = 0.0
+    click_sec: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -498,7 +498,7 @@ class MeterTelemetryRecord:
 class MeterTelemetryRecordWide:
     """A per-plane meter snapshot for a surround mix target.
 
-    ``peak_db``/``rms_db``/``true_peak_db`` carry ``channel_count`` valid planes
+    ``peak_db``/``rms_db``/``true_peak_db`` carry ``num_channels`` valid planes
     in canonical WAVE order (5.1 = L R C LFE Ls Rs, 7.1 = L R C LFE Ls Rs Lss
     Rss). Use this drain for a surround target; ``MeterTelemetryRecord`` stays the
     stereo fast path.
@@ -513,7 +513,7 @@ class MeterTelemetryRecordWide:
     target_id: int
     render_frame: int
     seq: int
-    channel_count: int
+    num_channels: int
     peak_db: list[float]
     rms_db: list[float]
     true_peak_db: list[float]
@@ -596,8 +596,8 @@ class Section:
     """
 
     type: SectionType
-    start: float
-    end: float
+    start_sec: float
+    end_sec: float
     energy_level: float
     confidence: float
     group: int = 0
@@ -620,13 +620,13 @@ _SECTION_NAMES: dict[SectionType, str] = {
 class Boundary:
     """A detected structural transition."""
 
-    time: float
+    time_sec: float
     """Seconds. The authoritative output."""
     frame: int
     """Index into the analysis grid, which is not the source's STFT grid: input
     above 22.05 kHz is resampled before any feature is computed, and a long input
     is additionally mean-pooled (see :attr:`BoundaryResult.frame_stride`). Use
-    :attr:`time` for any sample or second mapping."""
+    :attr:`time_sec` for any sample or second mapping."""
     strength: float
     """Novelty score at the boundary."""
 
@@ -654,8 +654,8 @@ class BoundaryResult:
 class MelodyPoint:
     """A single point on a melody contour."""
 
-    time: float
-    frequency: float
+    time_sec: float
+    frequency_hz: float
     confidence: float
 
 
@@ -666,5 +666,5 @@ class MelodyResult:
     points: list[MelodyPoint]
     pitch_range_octaves: float
     pitch_stability: float
-    mean_frequency: float
-    vibrato_rate: float
+    mean_frequency_hz: float
+    vibrato_rate_hz: float

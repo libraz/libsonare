@@ -42,8 +42,8 @@ def test_hand_built_progression_is_labelled_in_c_major() -> None:
     result = libsonare.chord_functions(chords, key=C_MAJOR)
     assert [entry.roman_numeral for entry in result] == ["I", "IV", "V", "I"]
     assert [entry.function for entry in result] == ["tonic", "subdominant", "dominant", "tonic"]
-    assert [(e.start, e.end, e.root, e.quality) for e in result] == [
-        (c.start, c.end, c.root, c.quality) for c in chords
+    assert [(e.start_sec, e.end_sec, e.root, e.quality) for e in result] == [
+        (c.start_sec, c.end_sec, c.root, c.quality) for c in chords
     ]
 
 
@@ -53,8 +53,8 @@ def test_detected_progression_keeps_its_timing_and_gains_the_labels() -> None:
     )
     result = libsonare.chord_functions(detected, key=C_MAJOR)
     assert len(result) == len(detected.chords) > 0
-    assert [(e.start, e.end, e.root, e.quality) for e in result] == [
-        (c.start, c.end, c.root, c.quality) for c in detected.chords
+    assert [(e.start_sec, e.end_sec, e.root, e.quality) for e in result] == [
+        (c.start_sec, c.end_sec, c.root, c.quality) for c in detected.chords
     ]
     # Consecutive duplicates collapse to the progression C F G C.
     collapsed = [

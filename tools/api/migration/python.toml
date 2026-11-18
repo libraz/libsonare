@@ -5435,7 +5435,7 @@ rule = "pitch-semitones"
 [[entry]]
 kind = "field"
 old = "PitchDecomposition.centre_hz"
-new = "PitchDecomposition.center_hz"
+new = "PitchDecompositionResult.center_hz"
 domain = "effects"
 rule = "individual"
 
@@ -7270,3 +7270,248 @@ changed = "a ProjectVocalRehydrateStatus token instead of a number or IntEnum"
 domain = "project"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_vocal_project.py::test_apply_roundtrip_and_rehydrate_after_project_reload"
+
+[[entry]]
+kind = "field"
+old = "Boundary.time"
+new = "Boundary.time_sec"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "Section.start"
+new = "Section.start_sec"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "Section.end"
+new = "Section.end_sec"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "Chord.start"
+new = "Chord.start_sec"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "Chord.end"
+new = "Chord.end_sec"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "method"
+old = "Chord.duration"
+new = "Chord.duration_sec"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MelodyPoint.time"
+new = "MelodyPoint.time_sec"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MelodyPoint.frequency"
+new = "MelodyPoint.frequency_hz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MelodyResult.mean_frequency"
+new = "MelodyResult.mean_frequency_hz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MelodyResult.vibrato_rate"
+new = "MelodyResult.vibrato_rate_hz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "LufsResult.loudness_range"
+new = "LufsResult.loudness_range_lu"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MasteringLoudnessSummary.loudness_range"
+new = "MasteringLoudnessSummary.loudness_range_lu"
+domain = "mastering"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "DynamicsResult.loudness_range_db"
+new = "DynamicsResult.loudness_range_lu"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainResult.output_lra"
+new = "MasteringChainResult.output_loudness_range_lu"
+domain = "mastering"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainStereoResult.output_lra"
+new = "MasteringChainStereoResult.output_loudness_range_lu"
+domain = "mastering"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.true_peak_db_l"
+new = "MixMeterSnapshot.true_peak_dbtp_l"
+domain = "mastering"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.true_peak_db_r"
+new = "MixMeterSnapshot.true_peak_dbtp_r"
+domain = "mastering"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.max_true_peak_db"
+new = "MixMeterSnapshot.max_true_peak_dbtp"
+domain = "mastering"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.true_peak_db"
+new = "MixMeterSnapshot.true_peak_dbtp"
+domain = "mastering"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.channel_count"
+new = "MixMeterSnapshot.num_channels"
+domain = "mastering"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "ProjectSource.channel_count"
+new = "ProjectSource.num_channels"
+domain = "project"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "MeterTelemetryRecordWide.channel_count"
+new = "MeterTelemetryRecordWide.num_channels"
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "type"
+old = "PitchDecomposition"
+new = "PitchDecompositionResult"
+domain = "effects"
+rule = "type-names"
+
+[[entry]]
+kind = "option"
+old = "detect_boundaries(peak_distance)"
+new = "detect_boundaries(peak_distance_sec)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "detect_boundaries(reference_window)"
+new = "detect_boundaries(reference_window_sec)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "detect_chords(min_duration)"
+new = "detect_chords(min_duration_sec)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "detect_chords(smoothing_window)"
+new = "detect_chords(smoothing_window_sec)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "chord_functional_analysis(min_duration)"
+new = "chord_functional_analysis(min_duration_sec)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "chord_functional_analysis(smoothing_window)"
+new = "chord_functional_analysis(smoothing_window_sec)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "Audio.detect_chords(min_duration)"
+new = "Audio.detect_chords(min_duration_sec)"
+domain = "core"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "Audio.detect_chords(smoothing_window)"
+new = "Audio.detect_chords(smoothing_window_sec)"
+domain = "core"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "AnalysisDynamics.loudness_range_db"
+new = "AnalysisDynamics.loudness_range_lu"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "AnalysisMelody.mean_frequency"
+new = "AnalysisMelody.mean_frequency_hz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "AnalysisMelody.vibrato_rate"
+new = "AnalysisMelody.vibrato_rate_hz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "EngineMetronomeConfig.click_seconds"
+new = "EngineMetronomeConfig.click_sec"
+domain = "engine"
+rule = "unit-in-name"

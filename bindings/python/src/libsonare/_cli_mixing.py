@@ -494,7 +494,7 @@ def cmd_mix_strip(args: argparse.Namespace) -> int:
                         "correlation": meter.correlation,
                         "mono_compat_width": meter.mono_compat_width,
                         "likely_mono_compatible": meter.likely_mono_compatible,
-                        "max_true_peak_db": meter.max_true_peak_db,
+                        "max_true_peak_db": meter.max_true_peak_dbtp,
                     },
                 }
             )

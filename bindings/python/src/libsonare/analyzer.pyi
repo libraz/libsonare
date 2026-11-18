@@ -537,8 +537,8 @@ def analyze_timbre(
 def detect_chords(
     samples: FloatSamples,
     sample_rate: int,
-    min_duration: float = 0.3,
-    smoothing_window: float = 2.0,
+    min_duration_sec: float = 0.3,
+    smoothing_window_sec: float = 2.0,
     threshold: float = 0.5,
     use_triads_only: bool = True,
     n_fft: int = 2048,
@@ -558,8 +558,8 @@ def chord_functional_analysis(
     sample_rate: int,
     key_root: PitchClass,
     key_mode: KeyMode = "major",
-    min_duration: float = 0.3,
-    smoothing_window: float = 2.0,
+    min_duration_sec: float = 0.3,
+    smoothing_window_sec: float = 2.0,
     threshold: float = 0.5,
     use_triads_only: bool = True,
     n_fft: int = 2048,
@@ -594,14 +594,14 @@ def detect_boundaries(
     absolute_threshold: float = 0.005,
     n_mfcc: int = 13,
     n_chroma: int = 12,
-    peak_distance: float = 2.0,
-    reference_window: float = 60.0,
+    peak_distance_sec: float = 2.0,
+    reference_window_sec: float = 60.0,
     use_mfcc: bool = True,
     use_chroma: bool = True,
 ) -> BoundaryResult:
     """Detect structural boundaries and return the novelty curve behind them.
 
-    ``reference_window`` is a one-sided span in seconds (default 60) for the local
+    ``reference_window_sec`` is a one-sided span in seconds (default 60) for the local
     reference the relative ``threshold`` is measured against, a lone dominant event
     set aside; 0 disables that threshold. Boundaries with ``strength`` below ``threshold``
     can still be
@@ -924,7 +924,7 @@ def render_percussive_events(
     fade_ms: float | None = None,
 ) -> np.ndarray[Any, Any]: ...
 
-class PitchDecomposition:
+class PitchDecompositionResult:
     center_hz: float
     drift_cents: np.ndarray[Any, Any]
     vibrato_cents: np.ndarray[Any, Any]
@@ -942,7 +942,7 @@ def decompose_note_pitch(
     *,
     voiced: IntSamples | None = None,
     vibrato_cutoff_hz: float | None = None,
-) -> PitchDecomposition: ...
+) -> PitchDecompositionResult: ...
 def split_note(
     samples: FloatSamples,
     sample_rate: int,

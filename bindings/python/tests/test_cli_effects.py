@@ -652,8 +652,8 @@ def test_chords_json_reports_c_bass_not_root(monkeypatch, capsys) -> None:
         root=PitchClass.F,
         quality="maj",
         bass=PitchClass.C,
-        start=0.0,
-        end=1.0,
+        start_sec=0.0,
+        end_sec=1.0,
         confidence=0.9,
     )
     fake_result = _types.SimpleNamespace(chords=[fake_chord])

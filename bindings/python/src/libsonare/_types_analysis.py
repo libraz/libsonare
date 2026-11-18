@@ -127,7 +127,7 @@ class AnalysisDynamics:
     peak_db: float
     rms_db: float
     crest_factor: float
-    loudness_range_db: float
+    loudness_range_lu: float
     is_compressed: bool
 
 
@@ -148,8 +148,8 @@ class AnalysisMelody:
 
     pitch_range_octaves: float
     pitch_stability: float
-    mean_frequency: float
-    vibrato_rate: float
+    mean_frequency_hz: float
+    vibrato_rate_hz: float
     pitches: list[MelodyPoint]
 
 
@@ -334,7 +334,7 @@ class LufsResult:
     short_term_lufs: float
     max_momentary_lufs: float
     max_short_term_lufs: float
-    loudness_range: float
+    loudness_range_lu: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -462,7 +462,7 @@ class DynamicsResult:
     peak_db: float
     rms_db: float
     crest_factor: float
-    loudness_range_db: float
+    loudness_range_lu: float
     is_compressed: bool
     loudness_times_sec: np.ndarray
     loudness_rms_db: np.ndarray
@@ -570,15 +570,15 @@ class Chord:
 
     root: PitchClass
     quality: str
-    start: float
-    end: float
+    start_sec: float
+    end_sec: float
     confidence: float
     bass: PitchClass | None = None
     name: str = ""
 
     @property
-    def duration(self) -> float:
-        return self.end - self.start
+    def duration_sec(self) -> float:
+        return self.end_sec - self.start_sec
 
     @property
     def root_name(self) -> str:

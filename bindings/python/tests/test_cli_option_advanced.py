@@ -44,7 +44,7 @@ def test_rhythm_and_dynamics_forward_analysis_options(
             peak_db=-1.0,
             rms_db=-6.0,
             crest_factor=1.2,
-            loudness_range_db=0.5,
+            loudness_range_lu=0.5,
             is_compressed=False,
             loudness_rms_db=np.zeros(0, dtype=np.float32),
         )

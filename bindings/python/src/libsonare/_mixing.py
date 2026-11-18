@@ -730,7 +730,7 @@ class Mixer:
         """
         self._require()
         snapshot = SonareMixMeterSnapshot()
-        _check(_get_lib().sonare_mixer_master_meter(self._handle, ctypes.byref(snapshot)))
+        _check_realtime(_get_lib().sonare_mixer_master_meter(self._handle, ctypes.byref(snapshot)))
         return _mix_meter_from_c(snapshot)
 
     def strip_non_finite_discard_count(self, strip: StripRef) -> int:
@@ -1067,7 +1067,7 @@ class Mixer:
 
         The true-peak reading runs one reconstruction-filter group delay behind
         the block; this reads that pending stretch against silence and folds it
-        into the snapshots, so ``true_peak_db`` covers the whole signal. Call it
+        into the snapshots, so ``true_peak_dbtp`` covers the whole signal. Call it
         after the last block of an offline render. A later process call starts
         a new signal.
         """
@@ -1140,7 +1140,7 @@ def mix_stereo(
         (``momentary_lufs``, ``short_term_lufs``, ``integrated_lufs``) whose
         windows a short one-shot mix does not fill, so they read the ``-120`` dB
         floor sentinel; drive a strip over a streaming session when a meaningful
-        loudness number is needed. ``true_peak_db`` is not an integrator — it is
+        loudness number is needed. ``true_peak_dbtp`` is not an integrator — it is
         a max-hold over the block just processed, so it is valid immediately and
         floors only on digital silence. This call mixes the whole signal in one
         block and flushes the meters after it, so the reported true peak

@@ -199,7 +199,7 @@ class NoteObject:
 
 
 @dataclasses.dataclass
-class PitchDecomposition:
+class PitchDecompositionResult:
     """One note's pitch curve split into a centre, a slow drift and a vibrato.
 
     ``drift_cents[i] + vibrato_cents[i]`` is the note's own pitch at frame ``i``,

@@ -12,7 +12,7 @@ import numpy as np
 from ._effects_note_model import (
     _NOTE_STRUCT_VERSION,
     NoteObject,
-    PitchDecomposition,
+    PitchDecompositionResult,
     TranscribeResult,
     _note_extractor_config,
     _note_set_edit,
@@ -426,7 +426,7 @@ def decompose_note_pitch(
     *,
     voiced: Sequence[int] | list[int] | np.ndarray | None = None,
     vibrato_cutoff_hz: float | None = None,
-) -> PitchDecomposition:
+) -> PitchDecompositionResult:
     """Split one note's pitch curve into a centre, a drift and a vibrato.
 
     This is what a host draws when it shows a note's pitch, and what
@@ -456,7 +456,7 @@ def decompose_note_pitch(
             default (3 Hz).
 
     Returns:
-        :class:`PitchDecomposition`. A note with no usable pitch is reported as
+        :class:`PitchDecompositionResult`. A note with no usable pitch is reported as
         a zero ``center_hz`` and two empty curves rather than as an error.
 
     Raises:
@@ -494,7 +494,7 @@ def decompose_note_pitch(
     )
     _check(rc)
     try:
-        return PitchDecomposition(
+        return PitchDecompositionResult(
             center_hz=float(out.centre_hz),
             drift_cents=_from_c_float_array(out.drift_cents, out.count),
             vibrato_cents=_from_c_float_array(out.vibrato_cents, out.count),

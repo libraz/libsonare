@@ -46,7 +46,7 @@ def stationary() -> list[float]:
 def test_boundaries_land_on_the_transitions(three_sections) -> None:
     result = libsonare.detect_boundaries(three_sections, sample_rate=_SR)
 
-    times = [b.time for b in result.boundaries]
+    times = [b.time_sec for b in result.boundaries]
     assert len(times) == 2
     # Within one analysis hop of the two joins, not merely "some boundaries".
     hop_sec = 512 / _SR
@@ -55,7 +55,7 @@ def test_boundaries_land_on_the_transitions(three_sections) -> None:
 
     # `frame` indexes the analysis grid; on an unpooled input that is time / hop.
     for boundary in result.boundaries:
-        assert boundary.frame == pytest.approx(boundary.time * _SR / 512, abs=1.0)
+        assert boundary.frame == pytest.approx(boundary.time_sec * _SR / 512, abs=1.0)
 
 
 def test_the_novelty_curve_is_returned_and_scaled_by_its_own_peak(three_sections) -> None:
@@ -171,7 +171,9 @@ def test_reference_window_default_matches_the_c_default() -> None:
     lib.sonare_boundary_options_default.restype = SonareBoundaryOptions
     lib.sonare_boundary_options_default.argtypes = []
     core = lib.sonare_boundary_options_default()
-    default = inspect.signature(libsonare.detect_boundaries).parameters["reference_window"].default
+    default = (
+        inspect.signature(libsonare.detect_boundaries).parameters["reference_window_sec"].default
+    )
     assert default == 60.0
     assert core.reference_window == default
     assert ctypes.sizeof(SonareBoundaryOptions) == 44
@@ -180,13 +182,15 @@ def test_reference_window_default_matches_the_c_default() -> None:
 @pytest.mark.parametrize("value", [-1.0, float("nan"), float("inf"), float("-inf")])
 def test_invalid_reference_window_is_refused(three_sections, value) -> None:
     with pytest.raises(libsonare.SonareError):
-        libsonare.detect_boundaries(three_sections[:_SR], sample_rate=_SR, reference_window=value)
+        libsonare.detect_boundaries(
+            three_sections[:_SR], sample_rate=_SR, reference_window_sec=value
+        )
 
 
 def test_reference_window_zero_disables_the_relative_threshold(three_sections) -> None:
     """A mirror that dropped the field would read zero for both calls and agree."""
     gated = libsonare.detect_boundaries(three_sections, sample_rate=_SR, absolute_threshold=0.0)
     ungated = libsonare.detect_boundaries(
-        three_sections, sample_rate=_SR, absolute_threshold=0.0, reference_window=0.0
+        three_sections, sample_rate=_SR, absolute_threshold=0.0, reference_window_sec=0.0
     )
     assert len(ungated.boundaries) != len(gated.boundaries)

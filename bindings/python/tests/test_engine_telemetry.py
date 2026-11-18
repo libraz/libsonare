@@ -52,7 +52,7 @@ def test_engine_drain_meter_telemetry_wide_surround_bus() -> None:
         wide = engine.drain_meter_telemetry_wide()
         bus_meter = next((r for r in wide if r.target_id == 33), None)
         assert bus_meter is not None
-        assert bus_meter.channel_count == 6
+        assert bus_meter.num_channels == 6
         assert len(bus_meter.peak_db) == 6
         # Ls (plane 4) carries the panned lane, above the silent front-left.
         assert bus_meter.peak_db[4] > bus_meter.peak_db[0] + 10.0
@@ -376,7 +376,7 @@ def test_telemetry_counts_are_clamped_to_the_mirror_arrays(reader: str) -> None:
         max_planes = len(raw_wide.peak_db)
         raw_wide.channel_count = max_planes + 7
         wide = _meter_telemetry_wide_from_c(raw_wide)
-        assert wide.channel_count == max_planes
+        assert wide.num_channels == max_planes
         assert len(wide.peak_db) == max_planes
         assert len(wide.rms_db) == max_planes
         assert len(wide.true_peak_db) == max_planes

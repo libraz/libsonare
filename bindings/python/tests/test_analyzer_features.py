@@ -173,8 +173,8 @@ def test_chord_threshold_emits_no_chord_for_ambiguous_input() -> None:
     silence = [0.0] * 4096
     common = {
         "sample_rate": 22050,
-        "min_duration": 0.0,
-        "smoothing_window": 0.01,
+        "min_duration_sec": 0.0,
+        "smoothing_window_sec": 0.01,
         "use_triads_only": True,
         "n_fft": 2048,
         "hop_length": 512,
@@ -187,8 +187,8 @@ def test_chord_threshold_emits_no_chord_for_ambiguous_input() -> None:
     assert len(high.chords) == 1
     assert high.chords[0].quality == "unknown"
     assert high.chords[0].name == "N.C."
-    assert high.chords[0].start == 0.0
-    assert high.chords[0].end > high.chords[0].start
+    assert high.chords[0].start_sec == 0.0
+    assert high.chords[0].end_sec > high.chords[0].start_sec
 
 
 ## Effects tests

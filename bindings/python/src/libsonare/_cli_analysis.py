@@ -216,8 +216,8 @@ def cmd_chords(args: argparse.Namespace) -> int:
     result = detect_chords(
         samples,
         sample_rate=sr,
-        min_duration=args.min_duration,
-        smoothing_window=args.smoothing_window,
+        min_duration_sec=args.min_duration,
+        smoothing_window_sec=args.smoothing_window,
         threshold=args.threshold,
         use_triads_only=not args.with_seventh,
         n_fft=args.n_fft,
@@ -245,8 +245,8 @@ def cmd_chords(args: argparse.Namespace) -> int:
                             # PitchClass.C == 0 is falsy, so a plain ``or`` would
                             # drop a C bass note back to the root. Guard on None.
                             "bass": (chord.root if chord.bass is None else chord.bass).value,
-                            "start": chord.start,
-                            "end": chord.end,
+                            "start": chord.start_sec,
+                            "end": chord.end_sec,
                             "confidence": chord.confidence,
                         }
                         for chord in result.chords
@@ -259,7 +259,7 @@ def cmd_chords(args: argparse.Namespace) -> int:
         for index, chord in enumerate(result.chords[:40], start=1):
             print(
                 f"    {index:2d}. {chord.name:<10s} "
-                f"({chord.start:.2f}s - {chord.end:.2f}s, "
+                f"({chord.start_sec:.2f}s - {chord.end_sec:.2f}s, "
                 f"confidence: {chord.confidence:.0%})"
             )
         if len(result.chords) > 40:
@@ -290,8 +290,8 @@ def cmd_sections(args: argparse.Namespace) -> int:
                             # matching on `type == "chorus"` need not know which
                             # command produced the document.
                             "type": _section_type_label(section.type),
-                            "start": section.start,
-                            "end": section.end,
+                            "start": section.start_sec,
+                            "end": section.end_sec,
                             "energy": section.energy_level,
                             "confidence": section.confidence,
                             "group": section.group,
@@ -306,7 +306,7 @@ def cmd_sections(args: argparse.Namespace) -> int:
         for index, section in enumerate(sections, start=1):
             print(
                 f"    {index:2d}. {_section_type_label(section.type):<12s} "
-                f"({section.start:.2f}s - {section.end:.2f}s, "
+                f"({section.start_sec:.2f}s - {section.end_sec:.2f}s, "
                 f"energy: {section.energy_level:.2f}, "
                 f"confidence: {section.confidence:.0%})"
             )
@@ -340,8 +340,8 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         chords = [
             {
                 "name": chord.name,
-                "start": chord.start,
-                "end": chord.end,
+                "start": chord.start_sec,
+                "end": chord.end_sec,
                 "confidence": chord.confidence,
             }
             for chord in r.chords
@@ -349,8 +349,8 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         sections = [
             {
                 "type": _section_type_label(section.type),
-                "start": section.start,
-                "end": section.end,
+                "start": section.start_sec,
+                "end": section.end_sec,
                 "group": section.group,
             }
             for section in r.sections
@@ -388,7 +388,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
                     },
                     "dynamics": {
                         "dynamic_range_db": dynamics.dynamic_range_db if dynamics else 0.0,
-                        "loudness_range_db": dynamics.loudness_range_db if dynamics else 0.0,
+                        "loudness_range_db": dynamics.loudness_range_lu if dynamics else 0.0,
                         "crest_factor": dynamics.crest_factor if dynamics else 0.0,
                         "is_compressed": dynamics.is_compressed if dynamics else False,
                     },

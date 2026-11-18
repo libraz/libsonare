@@ -540,8 +540,8 @@ def test_mastering_chain_reports_output_metrics() -> None:
     # Output true peak must be finite and near/under the -1 dBTP ceiling.
     assert math.isfinite(result.output_true_peak_dbtp)
     assert result.output_true_peak_dbtp <= 0.0
-    assert math.isfinite(result.output_lra)
-    assert result.output_lra >= 0.0
+    assert math.isfinite(result.output_loudness_range_lu)
+    assert result.output_loudness_range_lu >= 0.0
     assert isinstance(result.loudness_target_limited, bool)
     assert result.report is not None
     assert result.report.before.integrated_lufs == result.input_lufs
@@ -560,7 +560,7 @@ def test_mastering_chain_reports_output_metrics() -> None:
     # master_audio (preset + overrides path) exposes the same fields.
     preset_result = libsonare.master_audio(samples, sample_rate=sr, preset="pop")
     assert math.isfinite(preset_result.output_true_peak_dbtp)
-    assert math.isfinite(preset_result.output_lra)
+    assert math.isfinite(preset_result.output_loudness_range_lu)
     assert isinstance(preset_result.stage_gain_reductions, list)
     assert preset_result.report is not None
 

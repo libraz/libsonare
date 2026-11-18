@@ -237,7 +237,7 @@ def test_analyze_sub_result_types(analyze_result) -> None:
     assert isinstance(result.dynamics.is_compressed, bool)
     assert isinstance(result.rhythm.syncopation, float)
     assert isinstance(result.rhythm.groove_type, str)
-    assert isinstance(result.melody.mean_frequency, float)
+    assert isinstance(result.melody.mean_frequency_hz, float)
     assert isinstance(result.melody.pitches, list)
 
     # Chords map to Chord with enum roots; sections to Section with enum types.
@@ -258,7 +258,7 @@ def test_analyze_melody_default_runs() -> None:
     result = libsonare.analyze_melody(samples, sample_rate=22050)
     assert isinstance(result, MelodyResult)
     assert isinstance(result.points, list)
-    assert isinstance(result.mean_frequency, float)
+    assert isinstance(result.mean_frequency_hz, float)
 
 
 @requires_melody_ex

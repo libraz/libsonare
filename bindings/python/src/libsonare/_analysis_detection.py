@@ -495,8 +495,8 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
                 root=root,
                 bass=bass,
                 quality=quality_str,
-                start=float(c.get("start", 0.0)),
-                end=float(c.get("end", 0.0)),
+                start_sec=float(c.get("start", 0.0)),
+                end_sec=float(c.get("end", 0.0)),
                 confidence=float(c.get("confidence", 0.0)),
                 name=str(c.get("name", "")) or _chord_symbol(root, quality_str, bass),
                 roman_numeral=str(c.get("romanNumeral", "")),
@@ -510,8 +510,8 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
         sections.append(
             Section(
                 type=section_type,
-                start=float(s.get("start", 0.0)),
-                end=float(s.get("end", 0.0)),
+                start_sec=float(s.get("start", 0.0)),
+                end_sec=float(s.get("end", 0.0)),
                 energy_level=float(s.get("energyLevel", 0.0)),
                 confidence=float(s.get("confidence", 0.0)),
                 group=int(s["group"]),
@@ -541,7 +541,7 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
             peak_db=float(dyn_d.get("peakDb", 0.0)),
             rms_db=float(dyn_d.get("rmsDb", 0.0)),
             crest_factor=float(dyn_d.get("crestFactor", 0.0)),
-            loudness_range_db=float(dyn_d.get("loudnessRangeDb", 0.0)),
+            loudness_range_lu=float(dyn_d.get("loudnessRangeDb", 0.0)),
             is_compressed=bool(dyn_d.get("isCompressed", False)),
         )
         if dyn_d
@@ -571,8 +571,8 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
     if mel_d:
         pitches = [
             MelodyPoint(
-                time=float(p.get("time", 0.0)),
-                frequency=float(p.get("frequency", 0.0)),
+                time_sec=float(p.get("time", 0.0)),
+                frequency_hz=float(p.get("frequency", 0.0)),
                 confidence=float(p.get("confidence", 0.0)),
             )
             for p in mel_d.get("pitches", [])
@@ -580,8 +580,8 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
         melody = AnalysisMelody(
             pitch_range_octaves=float(mel_d.get("pitchRangeOctaves", 0.0)),
             pitch_stability=float(mel_d.get("pitchStability", 0.0)),
-            mean_frequency=float(mel_d.get("meanFrequency", 0.0)),
-            vibrato_rate=float(mel_d.get("vibratoRate", 0.0)),
+            mean_frequency_hz=float(mel_d.get("meanFrequency", 0.0)),
+            vibrato_rate_hz=float(mel_d.get("vibratoRate", 0.0)),
             pitches=pitches,
         )
     else:

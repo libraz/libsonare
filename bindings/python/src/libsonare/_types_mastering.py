@@ -107,7 +107,7 @@ class MasteringLoudnessSummary:
     max_momentary_lufs: float
     max_short_term_lufs: float
     true_peak_dbtp: float
-    loudness_range: float
+    loudness_range_lu: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,7 +140,7 @@ class MasteringChainResult:
     #: roughly 0.02 dB between 4x and 8x.
     output_true_peak_dbtp: float = 0.0
     #: EBU Tech 3342 Loudness Range of the output (LU).
-    output_lra: float = 0.0
+    output_loudness_range_lu: float = 0.0
     #: True when peak headroom prevented the requested LUFS target.
     loudness_target_limited: bool = False
     #: Per-stage gain reductions for the dynamics/maximizer stages (a subset of
@@ -174,7 +174,7 @@ class MasteringChainStereoResult:
     stages: list[str]
     #: See :class:`MasteringChainResult` for field semantics.
     output_true_peak_dbtp: float = 0.0
-    output_lra: float = 0.0
+    output_loudness_range_lu: float = 0.0
     loudness_target_limited: bool = False
     stage_gain_reductions: list[StageGainReduction] = field(default_factory=list)
     report: MasteringReport | None = None

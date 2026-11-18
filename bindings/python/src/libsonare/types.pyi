@@ -580,7 +580,7 @@ class AnalysisDynamics:
     peak_db: float
     rms_db: float
     crest_factor: float
-    loudness_range_db: float
+    loudness_range_lu: float
     is_compressed: bool
     def __init__(
         self,
@@ -588,7 +588,7 @@ class AnalysisDynamics:
         peak_db: float,
         rms_db: float,
         crest_factor: float,
-        loudness_range_db: float,
+        loudness_range_lu: float,
         is_compressed: bool,
     ) -> None: ...
 
@@ -610,15 +610,15 @@ class AnalysisRhythm:
 class AnalysisMelody:
     pitch_range_octaves: float
     pitch_stability: float
-    mean_frequency: float
-    vibrato_rate: float
+    mean_frequency_hz: float
+    vibrato_rate_hz: float
     pitches: list[MelodyPoint]
     def __init__(
         self,
         pitch_range_octaves: float,
         pitch_stability: float,
-        mean_frequency: float,
-        vibrato_rate: float,
+        mean_frequency_hz: float,
+        vibrato_rate_hz: float,
         pitches: list[MelodyPoint],
     ) -> None: ...
 
@@ -912,7 +912,7 @@ class LufsResult:
     short_term_lufs: float
     max_momentary_lufs: float
     max_short_term_lufs: float
-    loudness_range: float
+    loudness_range_lu: float
     def __init__(
         self,
         integrated_lufs: float,
@@ -920,7 +920,7 @@ class LufsResult:
         short_term_lufs: float,
         max_momentary_lufs: float,
         max_short_term_lufs: float,
-        loudness_range: float,
+        loudness_range_lu: float,
     ) -> None: ...
 
 class StereoBlock(NamedTuple):
@@ -985,7 +985,7 @@ class DynamicsResult:
     peak_db: float
     rms_db: float
     crest_factor: float
-    loudness_range_db: float
+    loudness_range_lu: float
     is_compressed: bool
     loudness_times_sec: NDArray[np.float32]
     loudness_rms_db: NDArray[np.float32]
@@ -995,7 +995,7 @@ class DynamicsResult:
         peak_db: float,
         rms_db: float,
         crest_factor: float,
-        loudness_range_db: float,
+        loudness_range_lu: float,
         is_compressed: bool,
         loudness_times_sec: NDArray[np.float32],
         loudness_rms_db: NDArray[np.float32],
@@ -1166,8 +1166,8 @@ class Chord:
 
     root: PitchClass
     quality: str
-    start: float
-    end: float
+    start_sec: float
+    end_sec: float
     confidence: float
     bass: PitchClass | None
     name: str
@@ -1175,14 +1175,14 @@ class Chord:
         self,
         root: PitchClass,
         quality: str,
-        start: float,
-        end: float,
+        start_sec: float,
+        end_sec: float,
         confidence: float,
         bass: PitchClass | None = None,
         name: str = "",
     ) -> None: ...
     @property
-    def duration(self) -> float: ...
+    def duration_sec(self) -> float: ...
     @property
     def root_name(self) -> str: ...
     @property
@@ -1194,8 +1194,8 @@ class AnalysisChord(Chord):
         self,
         root: PitchClass,
         quality: str,
-        start: float,
-        end: float,
+        start_sec: float,
+        end_sec: float,
         confidence: float,
         bass: PitchClass | None = None,
         name: str = "",
@@ -1216,8 +1216,8 @@ class FunctionalChord(Chord):
         self,
         root: PitchClass,
         quality: str,
-        start: float,
-        end: float,
+        start_sec: float,
+        end_sec: float,
         confidence: float,
         bass: PitchClass | None = None,
         name: str = "",
@@ -1913,14 +1913,14 @@ class MasteringLoudnessSummary:
     max_momentary_lufs: float
     max_short_term_lufs: float
     true_peak_dbtp: float
-    loudness_range: float
+    loudness_range_lu: float
     def __init__(
         self,
         integrated_lufs: float,
         max_momentary_lufs: float,
         max_short_term_lufs: float,
         true_peak_dbtp: float,
-        loudness_range: float,
+        loudness_range_lu: float,
     ) -> None: ...
 
 class MasteringReport:
@@ -1948,7 +1948,7 @@ class MasteringChainResult:
     applied_gain_db: float
     stages: list[str]
     output_true_peak_dbtp: float
-    output_lra: float
+    output_loudness_range_lu: float
     loudness_target_limited: bool
     stage_gain_reductions: list[StageGainReduction]
     report: MasteringReport | None
@@ -1962,7 +1962,7 @@ class MasteringChainResult:
         applied_gain_db: float,
         stages: list[str],
         output_true_peak_dbtp: float = ...,
-        output_lra: float = ...,
+        output_loudness_range_lu: float = ...,
         loudness_target_limited: bool = ...,
         stage_gain_reductions: list[StageGainReduction] = ...,
         report: MasteringReport | None = ...,
@@ -1978,7 +1978,7 @@ class MasteringChainStereoResult:
     applied_gain_db: float
     stages: list[str]
     output_true_peak_dbtp: float
-    output_lra: float
+    output_loudness_range_lu: float
     loudness_target_limited: bool
     stage_gain_reductions: list[StageGainReduction]
     report: MasteringReport | None
@@ -1993,7 +1993,7 @@ class MasteringChainStereoResult:
         applied_gain_db: float,
         stages: list[str],
         output_true_peak_dbtp: float = ...,
-        output_lra: float = ...,
+        output_loudness_range_lu: float = ...,
         loudness_target_limited: bool = ...,
         stage_gain_reductions: list[StageGainReduction] = ...,
         report: MasteringReport | None = ...,
@@ -2014,14 +2014,14 @@ class MixMeterSnapshot:
     short_term_lufs: float
     integrated_lufs: float
     gain_reduction_db: float
-    true_peak_db_l: float
-    true_peak_db_r: float
-    max_true_peak_db: float
+    true_peak_dbtp_l: float
+    true_peak_dbtp_r: float
+    max_true_peak_dbtp: float
     seq: int
-    channel_count: int
+    num_channels: int
     peak_db: tuple[float, ...]
     rms_db: tuple[float, ...]
-    true_peak_db: tuple[float, ...]
+    true_peak_dbtp: tuple[float, ...]
     def __init__(
         self,
         peak_db_l: float,
@@ -2037,14 +2037,14 @@ class MixMeterSnapshot:
         short_term_lufs: float,
         integrated_lufs: float,
         gain_reduction_db: float,
-        true_peak_db_l: float,
-        true_peak_db_r: float,
-        max_true_peak_db: float,
+        true_peak_dbtp_l: float,
+        true_peak_dbtp_r: float,
+        max_true_peak_dbtp: float,
         seq: int,
-        channel_count: int = ...,
+        num_channels: int = ...,
         peak_db: tuple[float, ...] = ...,
         rms_db: tuple[float, ...] = ...,
-        true_peak_db: tuple[float, ...] = ...,
+        true_peak_dbtp: tuple[float, ...] = ...,
     ) -> None: ...
 
 class GoniometerPoint:
@@ -2227,7 +2227,7 @@ class ProjectClip:
 class ProjectSource:
     id: int
     kind: int
-    channel_count: int
+    num_channels: int
     storage_handle_id: int
     sample_rate_hint: float
     name_or_uri: str
@@ -2237,7 +2237,7 @@ class ProjectSource:
         self,
         id: int,
         kind: int,
-        channel_count: int,
+        num_channels: int,
         storage_handle_id: int,
         sample_rate_hint: float,
         name_or_uri: str,
@@ -2250,14 +2250,14 @@ class EngineMetronomeConfig:
     beat_gain: float
     accent_gain: float
     click_samples: int
-    click_seconds: float
+    click_sec: float
     def __init__(
         self,
         enabled: bool = False,
         beat_gain: float = 0.35,
         accent_gain: float = 0.7,
         click_samples: int = 0,
-        click_seconds: float = 0.0,
+        click_sec: float = 0.0,
     ) -> None: ...
 
 class EngineClip:
@@ -2553,7 +2553,7 @@ class MeterTelemetryRecordWide:
     target_id: int
     render_frame: int
     seq: int
-    channel_count: int
+    num_channels: int
     peak_db: list[float]
     rms_db: list[float]
     true_peak_db: list[float]
@@ -2571,7 +2571,7 @@ class MeterTelemetryRecordWide:
         target_id: int,
         render_frame: int,
         seq: int,
-        channel_count: int,
+        num_channels: int,
         peak_db: list[float],
         rms_db: list[float],
         true_peak_db: list[float],
@@ -2657,8 +2657,8 @@ class TransportState:
 
 class Section:
     type: SectionType
-    start: float
-    end: float
+    start_sec: float
+    end_sec: float
     energy_level: float  # median frame RMS in the section over the loudest section's, [0, 1]
     confidence: float
     group: int  # sections sharing a value repeat the same material; 0, 1, ... by first appearance
@@ -2666,8 +2666,8 @@ class Section:
     def __init__(
         self,
         type: SectionType,
-        start: float,
-        end: float,
+        start_sec: float,
+        end_sec: float,
         energy_level: float,
         confidence: float,
         group: int = 0,
@@ -2675,10 +2675,10 @@ class Section:
     ) -> None: ...
 
 class Boundary:
-    time: float
+    time_sec: float
     frame: int
     strength: float
-    def __init__(self, time: float, frame: int, strength: float) -> None: ...
+    def __init__(self, time_sec: float, frame: int, strength: float) -> None: ...
 
 class BoundaryResult:
     boundaries: list[Boundary]
@@ -2698,24 +2698,24 @@ class BoundaryResult:
     ) -> None: ...
 
 class MelodyPoint:
-    time: float
-    frequency: float
+    time_sec: float
+    frequency_hz: float
     confidence: float
-    def __init__(self, time: float, frequency: float, confidence: float) -> None: ...
+    def __init__(self, time_sec: float, frequency_hz: float, confidence: float) -> None: ...
 
 class MelodyResult:
     points: list[MelodyPoint]
     pitch_range_octaves: float
     pitch_stability: float
-    mean_frequency: float
-    vibrato_rate: float
+    mean_frequency_hz: float
+    vibrato_rate_hz: float
     def __init__(
         self,
         points: list[MelodyPoint],
         pitch_range_octaves: float,
         pitch_stability: float,
-        mean_frequency: float,
-        vibrato_rate: float,
+        mean_frequency_hz: float,
+        vibrato_rate_hz: float,
     ) -> None: ...
 
 class CqtResult:
