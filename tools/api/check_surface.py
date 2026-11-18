@@ -73,6 +73,7 @@ RULE_SLUGS = (
     "unit-in-name",
     "loudness-names",
     "absent-not-sentinel",
+    "library-owned-defaults",
     "non-finite-is-absent",
     "token-case",
     "digit-tokens",

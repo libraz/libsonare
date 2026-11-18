@@ -41,6 +41,11 @@ title = "Title of absent-not-sentinel"
 summary = "Summary of absent-not-sentinel."
 
 [[rule]]
+slug = "library-owned-defaults"
+title = "Title of library-owned-defaults"
+summary = "Summary of library-owned-defaults."
+
+[[rule]]
 slug = "non-finite-is-absent"
 title = "Title of non-finite-is-absent"
 summary = "Summary of non-finite-is-absent."

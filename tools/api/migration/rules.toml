@@ -196,6 +196,27 @@ rir = synthesize_rir()  # omit for natural length; max_sec=0.0 raises SonareValu
 '''
 
 [[rule]]
+slug = "library-owned-defaults"
+title = "An option left out takes the library's default"
+summary = "A binding or front-end hands an omitted option to the library as absent instead of substituting a number of its own, so the default is the one the library documents and is the same on every surface. Where a surface used to substitute a different value, pass that value to keep the 1.x result. An explicit 0 or empty string the library would read as its default is refused by name rather than taken as \"default\"."
+[[rule.example]]
+surface = "wasm"
+before = '''
+hpss({ samples, sampleRate: 44100, nFft: 4096 }); // hop was 512
+'''
+after = '''
+hpss({ samples, sampleRate: 44100, nFft: 4096, hopLength: 512 }); // omitted, the hop is nFft / 4
+'''
+[[rule.example]]
+surface = "cli"
+before = '''
+sonare frames-to-samples --frames 10
+'''
+after = '''
+sonare frames-to-samples --frames 10 --n-fft 2048  # omitted, no centring offset is applied
+'''
+
+[[rule]]
 slug = "non-finite-is-absent"
 title = "A measurement that could not be taken is absent"
 summary = "Values the C JSON output writes as `null` (loudness or true peak of silence) are an absent optional field in JavaScript and `None` in Python. They are never restored as `-Infinity` or `NaN`."
