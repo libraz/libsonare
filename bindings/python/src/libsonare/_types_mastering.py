@@ -152,6 +152,7 @@ SoloProcessor: TypeAlias = Literal[
     "voice.changer",
 ]
 # END GENERATED SoloProcessor
+"""A processor name accepted by ``mastering_process()`` / ``mastering_process_stereo()``."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)

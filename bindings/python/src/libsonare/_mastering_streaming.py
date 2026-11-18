@@ -481,9 +481,11 @@ class StreamingMasteringChain:
             self._handle = ctypes.c_void_p(0)
 
     def __enter__(self) -> StreamingMasteringChain:
+        """Return the object itself for ``with`` use."""
         return self
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        """Close the object on leaving the ``with`` block; never suppresses exceptions."""
         self.close()
 
     def __del__(self) -> None:
@@ -794,11 +796,16 @@ class StreamingEqualizer:
 
     @property
     def latency_samples(self) -> int:
+        """Processing latency in samples. Raises SonareError (InvalidState) once closed."""
         self._ensure_open()
         return int(self._lib.sonare_eq_latency_samples(self._handle))
 
     @property
     def last_auto_gain_db(self) -> float:
+        """Automatic output gain (dB) applied by the latest process call.
+
+        Raises SonareError (InvalidState) once closed.
+        """
         self._ensure_open()
         return float(self._lib.sonare_eq_last_auto_gain_db(self._handle))
 
@@ -839,9 +846,11 @@ class StreamingEqualizer:
             self._handle = ctypes.c_void_p(0)
 
     def __enter__(self) -> StreamingEqualizer:
+        """Return the object itself for ``with`` use."""
         return self
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        """Close the object on leaving the ``with`` block; never suppresses exceptions."""
         self.close()
 
     def __del__(self) -> None:

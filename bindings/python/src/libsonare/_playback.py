@@ -119,14 +119,17 @@ class HrtfSet:
         return _require_open(self._handle, "HrtfSet")
 
     def close(self) -> None:
+        """Release the underlying C handle. Safe to call multiple times."""
         if self._handle:
             self._lib.sonare_hrtf_set_destroy(self._handle)
             self._handle = ctypes.c_void_p()
 
     def __enter__(self) -> HrtfSet:
+        """Return the object itself for ``with`` use."""
         return self
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        """Close the object on leaving the ``with`` block; never suppresses exceptions."""
         self.close()
 
     def __del__(self) -> None:
@@ -178,14 +181,17 @@ class PlaybackRenderer:
         )
 
     def close(self) -> None:
+        """Release the underlying C handle. Safe to call multiple times."""
         if self._handle:
             self._lib.sonare_playback_renderer_destroy(self._handle)
             self._handle = ctypes.c_void_p()
 
     def __enter__(self) -> PlaybackRenderer:
+        """Return the object itself for ``with`` use."""
         return self
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        """Close the object on leaving the ``with`` block; never suppresses exceptions."""
         self.close()
 
     def __del__(self) -> None:
@@ -488,14 +494,17 @@ class PlaybackLoudnessMeter:
         )
 
     def close(self) -> None:
+        """Release the underlying C handle. Safe to call multiple times."""
         if self._handle:
             self._lib.sonare_playback_loudness_meter_destroy(self._handle)
             self._handle = ctypes.c_void_p()
 
     def __enter__(self) -> PlaybackLoudnessMeter:
+        """Return the object itself for ``with`` use."""
         return self
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        """Close the object on leaving the ``with`` block; never suppresses exceptions."""
         self.close()
 
     def __del__(self) -> None:

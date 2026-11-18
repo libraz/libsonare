@@ -56,6 +56,7 @@ from .types import GoniometerPoint
 # A strip is addressed either by its index in [0, strip_count()) or by its
 # string id (as declared in the scene JSON).
 StripRef = int | str
+"""A mixer strip: its index in ``[0, strip_count())`` or its scene string id."""
 
 # Upper bound on the goniometer working buffer, mirroring the strip ring
 # (``sonare::mixing::ChannelStrip::kGoniometerCapacity``). One read can never
@@ -1104,9 +1105,11 @@ class Mixer:
             self._handle = None
 
     def __enter__(self) -> Mixer:
+        """Return the object itself for ``with`` use."""
         return self
 
     def __exit__(self, *_exc: object) -> None:
+        """Close the object on leaving the ``with`` block; never suppresses exceptions."""
         self.close()
 
     def __del__(self) -> None:

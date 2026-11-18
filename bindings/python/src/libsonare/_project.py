@@ -104,9 +104,11 @@ class ProjectTimeline:
             self._handle = None
 
     def __enter__(self) -> ProjectTimeline:
+        """Return the object itself for ``with`` use."""
         return self
 
     def __exit__(self, *_exc: object) -> None:
+        """Close the object on leaving the ``with`` block; never suppresses exceptions."""
         self.close()
 
     def __del__(self) -> None:
@@ -165,9 +167,11 @@ class Project(
             self._handle = None
 
     def __enter__(self) -> Project:
+        """Return the object itself for ``with`` use."""
         return self
 
     def __exit__(self, *_exc: object) -> None:
+        """Close the object on leaving the ``with`` block; never suppresses exceptions."""
         self.close()
 
     def __del__(self) -> None:
@@ -311,6 +315,12 @@ class Project(
         take_id: int = 0,
         rendered_start_sample: int = 0,
     ) -> ProjectVocalEditApplyResult:
+        """Commit a full-source vocal render to one clip or take.
+
+        The ``expected_*`` fields must match the clip's current source; a
+        ``rendered_mono`` length other than ``expected_source_sample_count``
+        raises ``SonareValueError``.
+        """
         from .vocal_project import apply_project_vocal_edit
 
         return apply_project_vocal_edit(
@@ -333,6 +343,7 @@ class Project(
     def vocal_edit_dependencies(
         self,
     ) -> tuple[ProjectVocalEditDependency, ...]:
+        """Return the sources the project's vocal edits depend on."""
         from .vocal_project import project_vocal_edit_dependencies
 
         return project_vocal_edit_dependencies(self)
@@ -343,6 +354,10 @@ class Project(
         *,
         cancel: Callable[[], bool] | None = None,
     ) -> tuple[ProjectVocalRehydrateItem, ...]:
+        """Rehydrate the project's vocal edits from the given original sources.
+
+        ``cancel`` is polled and returns True to stop early.
+        """
         from .vocal_project import rehydrate_project_vocal_edits
 
         return rehydrate_project_vocal_edits(

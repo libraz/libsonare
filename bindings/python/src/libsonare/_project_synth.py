@@ -104,6 +104,7 @@ _SAMPLE_DESC_LOOP_MODES = {
 _PART_RIG_MODES = {"bank": 0, "none": 1, "chain": 2}
 # SONARE_PART_RIG_ALL_PARTS: every part of a destination.
 PART_RIG_ALL_PARTS = 0xFF
+"""Part selector that addresses every part of a destination."""
 
 
 def _part_rig_mode_value(mode: PartRigMode) -> int:
@@ -368,6 +369,7 @@ NoteTracking = Literal["last", "lowest", "highest", "all"]
 PartRigMode = Literal["bank", "none", "chain"]
 """Which rig a part of a destination's instrument plays through."""
 PART_RIG_MODES: tuple[str, ...] = get_args(PartRigMode)
+"""Every accepted part-rig mode token."""
 
 
 SYNTH_ENUM_TABLES = {
@@ -565,9 +567,11 @@ class SampleBank:
             self._handle = None
 
     def __enter__(self) -> SampleBank:
+        """Return the object itself for ``with`` use."""
         return self
 
     def __exit__(self, *_exc: object) -> None:
+        """Close the object on leaving the ``with`` block; never suppresses exceptions."""
         self.close()
 
     def __del__(self) -> None:

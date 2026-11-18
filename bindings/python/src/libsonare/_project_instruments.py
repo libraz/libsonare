@@ -139,6 +139,7 @@ from ._runtime import (
 from ._types_capabilities import SynthParamInfo, _from_wire
 
 GsEfxRealization: TypeAlias = Literal["modern", "classic"]
+"""Which GS insertion-effect realisation an instrument uses."""
 
 
 @dataclass(frozen=True)
