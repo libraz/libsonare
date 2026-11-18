@@ -112,6 +112,6 @@
   "master_audio": {
     "input": { "sample_rate": 48000, "length": 12000, "frequency_hz": 440.0, "amplitude": 0.25 },
     "accepted": [{ "id": "empty_overrides", "overrides": {}, "returns": "input" }],
-    "refused": [{ "id": "neither_preset_nor_overrides", "cause": "missing_argument", "message": "give a preset or overrides" }]
+    "refused": [{ "id": "neither_preset_nor_overrides", "cause": "missing_argument", "message": "give preset or overrides" }]
   }
 }
