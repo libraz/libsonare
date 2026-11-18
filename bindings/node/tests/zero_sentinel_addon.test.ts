@@ -283,7 +283,7 @@ describe('an analysis band count whose zero keeps the library default', () => {
   });
 });
 
-describe('a clip channel count whose zero means mono', () => {
+describe('a clip channel count required beside interleaved audio', () => {
   const addClip = (channels: number | undefined, rate = 48000) => {
     const project = new native.Project();
     project.setSampleRate(48000);
@@ -305,16 +305,18 @@ describe('a clip channel count whose zero means mono', () => {
     try {
       project.addClip(desc);
       const source = project.sourceByIndex(0);
-      return { channelCount: source.channelCount, sampleRateHint: source.sampleRateHint };
+      return { channelCount: source.numChannels, sampleRateHint: source.sampleRateHint };
     } finally {
       project.destroy();
     }
   };
 
-  it('refuses a fractional audioChannels', () => {
-    expect(addClip(undefined).channelCount).toBe(1);
-    expect(addClip(0).channelCount).toBe(1);
-    expect(addClip(2).channelCount).not.toBe(addClip(undefined).channelCount); // positive control
+  it('refuses an absent, zero or fractional audioChannels', () => {
+    // The channel count is a fact about the samples, so it has no default to fall back on.
+    expect(() => addClip(undefined)).toThrow(TypeError);
+    expect(() => addClip(0)).toThrow(RangeError);
+    expect(addClip(1).channelCount).toBe(1);
+    expect(addClip(2).channelCount).toBe(2); // positive control
     for (const value of FRACTIONS) {
       expect(() => addClip(value), `audioChannels ${value}`).toThrow(RangeError);
     }

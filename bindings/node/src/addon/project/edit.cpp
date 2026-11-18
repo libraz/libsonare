@@ -278,14 +278,15 @@ Napi::Value ProjectWrap::AddClip(const Napi::CallbackInfo& info) {
   desc.length_ppq = DoubleProperty(obj, "lengthPpq", 0.0);
   desc.source_offset_ppq = DoubleProperty(obj, "sourceOffsetPpq", 0.0);
   desc.gain = FiniteFloatProperty(obj, "gain", 1.0f);
-  desc.audio_channels = IntProperty(obj, "audioChannels", kZeroIsSentinel);
   desc.audio_sample_rate = IntProperty(obj, "audioSampleRate", 0);
 
   // Keep the interleaved samples alive (as a copy) for the duration of the call.
   std::vector<float> audio;
   Napi::Value audio_value = obj.Get("audio");
   if (sonare_node::IsFloat32Array(audio_value)) {
-    if (desc.audio_channels == 0) desc.audio_channels = 1;
+    if (!sonare_node::RequiredIntProperty(env, obj, "audioChannels", &desc.audio_channels)) {
+      return env.Undefined();
+    }
     Napi::Float32Array array = audio_value.As<Napi::Float32Array>();
     if (desc.audio_channels <= 0 ||
         array.ElementLength() % static_cast<size_t>(desc.audio_channels) != 0) {

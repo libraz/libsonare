@@ -583,7 +583,7 @@ Napi::Value RealtimeEngineWrap::DrainExternalMidi(const Napi::CallbackInfo& info
   constexpr size_t kMaxLoweredMessages = 4;
   constexpr uint32_t kMaxBytes =
       static_cast<uint32_t>(std::extent<decltype(SonareExternalMidiEvent::bytes)>::value);
-  size_t max_records = 1024;
+  size_t max_records = ::sonare::engine::RealtimeEngine::kDefaultDrainRecords;
   if (info.Length() > 0 && !info[0].IsUndefined() && !info[0].IsNull()) {
     if (!NonNegativeSizeTArg(env, info, 0, "maxRecords", &max_records)) return env.Undefined();
   }

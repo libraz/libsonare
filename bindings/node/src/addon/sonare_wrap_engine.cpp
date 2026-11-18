@@ -297,14 +297,15 @@ RealtimeEngineWrap::RealtimeEngineWrap(const Napi::CallbackInfo& info)
       !ReadEngineSampleRate(env, info[0], &sample_rate)) {
     return;
   }
-  int max_block_size = 128;
-  int64_t command_capacity = 1024;
-  int64_t telemetry_capacity = 1024;
-  int max_channels = 64;
-  if (!OptionalIntArg(env, info, 1, "maxBlockSize", 128, &max_block_size) ||
-      !OptionalInt64Arg(env, info, 2, "commandCapacity", 1024, &command_capacity) ||
-      !OptionalInt64Arg(env, info, 3, "telemetryCapacity", 1024, &telemetry_capacity) ||
-      !OptionalIntArg(env, info, 4, "maxChannels", 64, &max_channels)) {
+  // Absent arguments pass 0, which the C entry resolves to the library default.
+  int max_block_size = 0;
+  int64_t command_capacity = 0;
+  int64_t telemetry_capacity = 0;
+  int max_channels = 0;
+  if (!OptionalIntArg(env, info, 1, "maxBlockSize", 0, &max_block_size) ||
+      !OptionalInt64Arg(env, info, 2, "commandCapacity", 0, &command_capacity) ||
+      !OptionalInt64Arg(env, info, 3, "telemetryCapacity", 0, &telemetry_capacity) ||
+      !OptionalIntArg(env, info, 4, "maxChannels", 0, &max_channels)) {
     return;
   }
 
@@ -340,19 +341,19 @@ Napi::Value RealtimeEngineWrap::Prepare(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  // Both leading arguments are required: an absent one reads as undefined and is
+  // The sample rate is required: an absent one reads as undefined and is
   // rejected by the reader below, so it reaches the caller as a TypeError rather
   // than as a silent no-op.
   double sample_rate = 0.0;
   if (!ReadEngineSampleRate(env, info[0], &sample_rate)) return env.Undefined();
   int max_block_size = 0;
-  int64_t command_capacity = 1024;
-  int64_t telemetry_capacity = 1024;
-  int max_channels = 64;
-  if (!RequiredIntArg(env, info, 1, "maxBlockSize", &max_block_size) ||
-      !OptionalInt64Arg(env, info, 2, "commandCapacity", 1024, &command_capacity) ||
-      !OptionalInt64Arg(env, info, 3, "telemetryCapacity", 1024, &telemetry_capacity) ||
-      !OptionalIntArg(env, info, 4, "maxChannels", 64, &max_channels)) {
+  int64_t command_capacity = 0;
+  int64_t telemetry_capacity = 0;
+  int max_channels = 0;
+  if (!OptionalIntArg(env, info, 1, "maxBlockSize", 0, &max_block_size) ||
+      !OptionalInt64Arg(env, info, 2, "commandCapacity", 0, &command_capacity) ||
+      !OptionalInt64Arg(env, info, 3, "telemetryCapacity", 0, &telemetry_capacity) ||
+      !OptionalIntArg(env, info, 4, "maxChannels", 0, &max_channels)) {
     return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_prepare_with_channels(
@@ -497,7 +498,7 @@ Napi::Value RealtimeEngineWrap::PrimeOfflineParameters(const Napi::CallbackInfo&
   int num_channels = 0;
   int block_size = 0;
   if (!RequiredIntArg(env, info, 0, "numChannels", &num_channels) ||
-      !RequiredIntArg(env, info, 1, "blockSize", &block_size)) {
+      !OptionalIntArg(env, info, 1, "blockSize", 0, &block_size)) {
     return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_prime_offline_parameters(engine_, num_channels, block_size));

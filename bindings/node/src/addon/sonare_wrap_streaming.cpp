@@ -244,18 +244,22 @@ Napi::Value StreamingMasteringChainWrap::Destroy(const Napi::CallbackInfo& info)
 Napi::Value StreamingMasteringChainWrap::Prepare(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_REQUIRE_OPEN(env, chain_, "StreamingMasteringChain");
-  if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (sampleRate, maxBlockSize, numChannels)")
+  if (info.Length() < 3 || !info[0].IsNumber() || !info[2].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (sampleRate, maxBlockSize?, numChannels)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
+  int max_block_size{};
+  if (!sonare_node::OptionalIntArg(env, info, 1, "maxBlockSize",
+                                   sonare::mastering::api::MasteringChain::kDefaultMaxBlock,
+                                   &max_block_size)) {
+    return env.Undefined();
+  }
   chain_->prepare(
-      info[0].As<Napi::Number>().DoubleValue(),
-      sonare_node::node_narrow_int(env, info[1], sonare_node::node_arg_label(1).c_str()),
+      info[0].As<Napi::Number>().DoubleValue(), max_block_size,
       sonare_node::node_narrow_int(env, info[2], sonare_node::node_arg_label(2).c_str()));
-  max_block_size_ =
-      sonare_node::node_narrow_int(env, info[1], sonare_node::node_arg_label(1).c_str());
+  max_block_size_ = max_block_size;
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -459,7 +463,7 @@ StreamingEqualizerWrap::StreamingEqualizerWrap(const Napi::CallbackInfo& info)
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   double sample_rate = 48000.0;
-  int max_block_size = 512;
+  int max_block_size = sonare::mastering::eq::EqualizerProcessor::kDefaultMaxBlock;
   if (info.Length() >= 1 && info[0].IsObject()) {
     Napi::Object config = info[0].As<Napi::Object>();
     sample_rate = DoubleProperty(config, "sampleRate", sample_rate);

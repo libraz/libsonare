@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "mixing/api/scene.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 
@@ -89,7 +90,9 @@ MixerWrap::MixerWrap(const Napi::CallbackInfo& info) : Napi::ObjectWrap<MixerWra
         .ThrowAsJavaScriptException();
     return;
   }
-  if (!OptionalIntArg(env, info, 2, "blockSize", 512, &block_size_)) return;
+  if (!OptionalIntArg(env, info, 2, "blockSize", sonare::mixing::api::kMixerDefaultMaxBlock,
+                      &block_size_))
+    return;
 
   mixer_ = sonare_mixer_from_scene_json(json.c_str(), sample_rate_, block_size_);
   if (mixer_ == nullptr) {

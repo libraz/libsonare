@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "engine/common.h"
+#include "engine/realtime_engine.h"
 #include "sonare_wrap_engine.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
@@ -17,9 +18,6 @@ namespace {
 /// lossless per chunk (every drained record is emitted), so chunking only caps
 /// the working buffer — it never drops a record.
 constexpr size_t kTelemetryDrainChunk = 256;
-
-/// Default record budget when the caller passes no maxRecords.
-constexpr size_t kTelemetryDrainDefault = 1024;
 
 /// @brief Shared body of the four telemetry drains.
 /// @details `maxRecords` is a record budget, not an allocation request: the
@@ -35,7 +33,7 @@ Napi::Value DrainTelemetryInto(const Napi::CallbackInfo& info, SonareRealtimeEng
                                                     size_t*),
                                Convert convert) {
   Napi::Env env = info.Env();
-  size_t budget = kTelemetryDrainDefault;
+  size_t budget = ::sonare::engine::RealtimeEngine::kDefaultDrainRecords;
   if (info.Length() > 0 && !info[0].IsUndefined() && !info[0].IsNull()) {
     if (!NonNegativeSizeTArg(env, info, 0, "maxRecords", &budget)) return env.Undefined();
   }
@@ -249,9 +247,9 @@ Napi::Value RealtimeEngineWrap::RenderOffline(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   ChannelBlock block = ReadChannels(info, 0);
   if (env.IsExceptionPending()) return env.Undefined();
-  int block_size = 128;
+  int block_size = 0;
   bool finalize = true;
-  if (!OptionalIntArg(env, info, 1, "blockSize", 128, &block_size) ||
+  if (!OptionalIntArg(env, info, 1, "blockSize", 0, &block_size) ||
       !OptionalBoolArg(env, info, 2, "finalize", true, &finalize)) {
     return env.Undefined();
   }
@@ -283,8 +281,10 @@ Napi::Value RealtimeEngineWrap::BounceOffline(const Napi::CallbackInfo& info) {
   Napi::Object obj = info[0].As<Napi::Object>();
   SonareEngineBounceOptions options{};
   options.total_frames = Int64Property(obj, "totalFrames", 0);
-  options.block_size = IntProperty(obj, "blockSize", 128);
-  options.num_channels = IntProperty(obj, "numChannels", 2);
+  options.block_size = IntProperty(obj, "blockSize", kZeroIsSentinel);
+  if (!RequiredIntProperty(env, obj, "numChannels", &options.num_channels)) {
+    return env.Undefined();
+  }
   options.target_sample_rate = IntProperty(obj, "targetSampleRate", kZeroIsSentinel);
   options.source_sample_rate = IntProperty(obj, "sourceSampleRate", kZeroIsSentinel);
   options.normalize_lufs = BoolProperty(obj, "normalizeLufs", false) ? 1 : 0;
@@ -328,8 +328,10 @@ Napi::Value RealtimeEngineWrap::FreezeOffline(const Napi::CallbackInfo& info) {
   Napi::Object obj = info[0].As<Napi::Object>();
   SonareEngineFreezeOptions options{};
   options.total_frames = Int64Property(obj, "totalFrames", 0);
-  options.block_size = IntProperty(obj, "blockSize", 128);
-  options.num_channels = IntProperty(obj, "numChannels", 2);
+  options.block_size = IntProperty(obj, "blockSize", kZeroIsSentinel);
+  if (!RequiredIntProperty(env, obj, "numChannels", &options.num_channels)) {
+    return env.Undefined();
+  }
   options.clip_id = Uint32Property(obj, "clipId", 1);
   options.start_ppq = sonare_node::DoubleProperty(obj, "startPpq", 0.0);
   options.gain = FloatProperty(obj, "gain", 1.0f);

@@ -953,15 +953,11 @@ export const CASES: AbortGuardCase[] = [
     missingRequired: [],
     badTransportArguments: [
       { argument: 'sampleRate', call: (e) => e.prepare('48000', BLOCK) },
-      // An absent argument used to short-circuit ahead of every reader, so the
-      // call returned undefined with nothing pending and the caller saw a
-      // silently unprepared engine.
+      // maxBlockSize defaults when omitted, so only a present wrong-typed value
+      // is refused; sampleRate stays required.
+      { argument: 'maxBlockSize', call: (e) => e.prepare(SR, 'x' as unknown as number) },
       {
-        argument: 'omitted maxBlockSize',
-        call: (e) => (e.prepare as unknown as (sampleRate: unknown) => void)(SR),
-      },
-      {
-        argument: 'omitted sampleRate and maxBlockSize',
+        argument: 'omitted sampleRate',
         call: (e) => (e.prepare as unknown as () => void)(),
       },
       // maxChannels has a documented fallback (64), so only a present
