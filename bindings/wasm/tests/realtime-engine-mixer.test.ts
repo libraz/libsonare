@@ -122,7 +122,7 @@ describe('Sonare WASM Module', () => {
       ]);
       engine.setTrackLanes([{ trackId: 10 }, { trackId: 20 }]);
       const sceneJson =
-        '{"version":1,"strips":[{"id":"track-10","faderDb":-12,"panLaw":3}],"buses":[],"connections":[]}';
+        '{"version":1,"strips":[{"id":"track-10","faderDb":-12,"panLaw":"linear0Db"}],"buses":[],"connections":[]}';
       engine.setStrip(10, JSON.parse(sceneJson).strips[0]);
       expect(() => engine.setStrip(10, '{bad json' as never)).toThrow(TypeError);
       let badProcessorError: unknown;
@@ -282,7 +282,7 @@ describe('Sonare WASM Module', () => {
         },
       ]);
       const sceneJson =
-        '{"version":1,"strips":[{"id":"master","faderDb":-12,"panLaw":3}],"buses":[],"connections":[]}';
+        '{"version":1,"strips":[{"id":"master","faderDb":-12,"panLaw":"linear0Db"}],"buses":[],"connections":[]}';
       engine.setStrip('master', JSON.parse(sceneJson).strips[0]);
       expect(() => engine.setStrip('master', '{bad json' as never)).toThrow(TypeError);
       let badParamError: unknown;

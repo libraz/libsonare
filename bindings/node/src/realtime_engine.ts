@@ -6,6 +6,7 @@ import {
 import { ErrorCode, SonareError } from './errors.js';
 import { assignMarkerIds } from './internal/marker_ids.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
+import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene.js';
 import { deinterleave } from './internal/planar.js';
 import { timelineHandle } from './internal/project_handles.js';
 import { addon } from './native.js';
@@ -45,8 +46,8 @@ import type {
   ExternalMidiEvent,
   FileClipPageProviderOptions,
   MidiFxConfig,
-  MixSceneBus,
-  MixSceneStrip,
+  MixSceneBusInput,
+  MixSceneStripInput,
   MpeDimension,
   NoteTracking,
   PanLaw,
@@ -366,18 +367,12 @@ function eqBandJsonOf(fnName: string, band: EqBandInput): string {
   return JSON.stringify(band);
 }
 
-function sceneStripJson(fnName: string, strip: MixSceneStrip): string {
-  if (typeof strip !== 'object' || strip === null || Array.isArray(strip)) {
-    throw new TypeError(`${fnName}: strip must be an object`);
-  }
-  return JSON.stringify({ strips: [strip] });
+function sceneStripJson(fnName: string, strip: MixSceneStripInput): string {
+  return JSON.stringify({ strips: [mixSceneStripToNative(fnName, strip)] });
 }
 
-function sceneBusJson(fnName: string, bus: MixSceneBus): string {
-  if (typeof bus !== 'object' || bus === null || Array.isArray(bus)) {
-    throw new TypeError(`${fnName}: bus must be an object`);
-  }
-  return JSON.stringify({ buses: [bus] });
+function sceneBusJson(fnName: string, bus: MixSceneBusInput): string {
+  return JSON.stringify({ buses: [mixSceneBusToNative(fnName, bus)] });
 }
 
 function bypassState(
@@ -1189,7 +1184,7 @@ export class RealtimeEngine {
    * Replaces a bus's strip with `bus`. The bus must already exist via
    * {@link setTrackBuses}.
    */
-  setBusStrip(busId: number, bus: MixSceneBus): void {
+  setBusStrip(busId: number, bus: MixSceneBusInput): void {
     this.native.setBusStripJson(busId, sceneBusJson('setBusStrip', bus));
   }
 
@@ -1203,7 +1198,7 @@ export class RealtimeEngine {
    * the master strip. The strip document carries its own id; the engine applies
    * it to the addressed strip.
    */
-  setStrip(ref: StripRef, strip: MixSceneStrip): void {
+  setStrip(ref: StripRef, strip: MixSceneStripInput): void {
     const target = stripTarget('setStrip', ref);
     const json = sceneStripJson('setStrip', strip);
     if (target.master) {

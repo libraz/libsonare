@@ -15,6 +15,7 @@ import { eqBandJson } from './internal/eq_band_json.js';
 import { assertHandleLive, releasedHandleError } from './internal/handle_guard.js';
 import { assignMarkerIds } from './internal/marker_ids.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
+import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene.js';
 import { deinterleavePlanes } from './internal/pod_config.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -36,8 +37,8 @@ import {
 } from './project_internal.js';
 import type {
   EqBand,
-  MixSceneBus,
-  MixSceneStrip,
+  MixSceneBusInput,
+  MixSceneStripInput,
   PanLaw,
   PanMode,
   SidechainCheck,
@@ -530,9 +531,12 @@ function programBank(
   return { bankValid: true, bankMsb: bank.msb, bankLsb: bank.lsb };
 }
 
-function stripJson(fnName: string, argName: string, document: unknown, key: string): string {
-  requireObject(fnName, argName, document);
-  return JSON.stringify({ [key]: [document] });
+function sceneStripJson(fnName: string, strip: MixSceneStripInput): string {
+  return JSON.stringify({ strips: [mixSceneStripToNative(fnName, strip)] });
+}
+
+function sceneBusJson(fnName: string, bus: MixSceneBusInput): string {
+  return JSON.stringify({ buses: [mixSceneBusToNative(fnName, bus)] });
 }
 
 function bandJson(fnName: string, band: unknown): string {
@@ -1988,17 +1992,17 @@ export class RealtimeEngine {
   }
 
   /** Replaces a bus strip with the given scene bus; the document is sent as `{ buses: [bus] }`. */
-  setBusStrip(busId: number, bus: MixSceneBus): void {
-    this.native.setBusStripJson(busId, stripJson('setBusStrip', 'bus', bus, 'buses'));
+  setBusStrip(busId: number, bus: MixSceneBusInput): void {
+    this.native.setBusStripJson(busId, sceneBusJson('setBusStrip', bus));
   }
 
   /**
    * Replaces a strip (a track's, or the master) with the given scene strip; the
    * document is sent as `{ strips: [strip] }`.
    */
-  setStrip(ref: StripRef, strip: MixSceneStrip): void {
+  setStrip(ref: StripRef, strip: MixSceneStripInput): void {
     const target = stripTarget('setStrip', ref);
-    const json = stripJson('setStrip', 'strip', strip, 'strips');
+    const json = sceneStripJson('setStrip', strip);
     if (target.master) {
       this.native.setMasterStripJson(json);
     } else {

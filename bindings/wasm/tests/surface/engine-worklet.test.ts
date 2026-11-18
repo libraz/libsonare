@@ -145,6 +145,34 @@ describe('SonareEngine shares the RealtimeEngine vocabulary', () => {
     }
   });
 
+  it('takes pan and send names in a scene strip and refuses their ordinals', async () => {
+    const { engine } = await newEngine();
+    try {
+      engine.setTrackLanes([{ trackId: 10 }]);
+      engine.setTrackBuses([{ busId: 1 }]);
+      const strip: Parameters<typeof engine.setStrip>[1] = {
+        id: 'track-10',
+        panMode: 'stereoPan',
+        panLaw: 'const6Db',
+        sends: [{ id: 'send', destinationBusId: '1', sendDb: -6, timing: 'postFader' }],
+      };
+      expect(() => engine.setStrip(10, strip)).not.toThrow();
+      expect(() => engine.setStrip('master', { id: 'master', panLaw: 'linear0Db' })).not.toThrow();
+      expect(() =>
+        engine.setBusStrip(1, { id: '1', role: 'aux', panMode: 'balance', panLaw: 'const3Db' }),
+      ).not.toThrow();
+      expect(() => engine.setStrip(10, { id: 'track-10', panMode: 2 as never })).toThrow(TypeError);
+      expect(() =>
+        engine.setStrip(10, { id: 'track-10', sends: [{ id: 's', timing: 'post' as never }] }),
+      ).toThrow(RangeError);
+      expect(() =>
+        engine.setBusStrip(1, { id: '1', role: 'aux', panLaw: 'const-6db' as never }),
+      ).toThrow(RangeError);
+    } finally {
+      engine.destroy();
+    }
+  });
+
   it('keeps a strip edit on the target and takes labelled objects', async () => {
     const { engine } = await newEngine();
     try {

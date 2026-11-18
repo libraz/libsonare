@@ -27,6 +27,9 @@ const busDocument = (json: string) => JSON.parse(json).buses[0];
 const sceneOf = (key: 'strips' | 'buses', json: string): string =>
   JSON.stringify({ [key]: [JSON.parse(json)[key][0]] });
 
+/** The worklet carries the pan law as its native ordinal; `linear0Db` is 3. */
+const nativePanLaw = (json: string): string => json.replace('"panLaw":"linear0Db"', '"panLaw":3');
+
 /** The offline mirror's read side the commit tests inspect. */
 type RealtimeEngineLike = {
   transportState(): { loopStartPpq: number; loopEndPpq: number; samplePosition: number };
@@ -1076,9 +1079,9 @@ describe('SonareRealtimeEngineNode', () => {
         expect(engine.setStripFaderDb(3, -6)).toBeUndefined();
         expect(engine.setStripPan(3, 0.25)).toBeUndefined();
         const trackStripJson =
-          '{"version":1,"strips":[{"id":"track-3","faderDb":-6,"panLaw":3,"inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":12,\\"band0.enabled\\":1}"}]}],"buses":[],"connections":[]}';
+          '{"version":1,"strips":[{"id":"track-3","faderDb":-6,"panLaw":"linear0Db","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":12,\\"band0.enabled\\":1}"}]}],"buses":[],"connections":[]}';
         const masterStripJson =
-          '{"version":1,"strips":[{"id":"master","faderDb":-3,"panLaw":3,"inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":12,\\"band0.enabled\\":1}"}]}],"buses":[],"connections":[]}';
+          '{"version":1,"strips":[{"id":"master","faderDb":-3,"panLaw":"linear0Db","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":12,\\"band0.enabled\\":1}"}]}],"buses":[],"connections":[]}';
         engine.setStrip(3, stripDocument(trackStripJson));
         engine.setStrip('master', stripDocument(masterStripJson));
         expect(engine.setStripFaderDb('master', -3)).toBeUndefined();
@@ -1250,8 +1253,10 @@ describe('SonareRealtimeEngineNode', () => {
             }),
             expect.objectContaining({
               type: 'syncMixer',
-              trackStrips: [{ trackId: 3, sceneJson: sceneOf('strips', trackStripJson) }],
-              masterStripJson: sceneOf('strips', masterStripJson),
+              trackStrips: [
+                { trackId: 3, sceneJson: sceneOf('strips', nativePanLaw(trackStripJson)) },
+              ],
+              masterStripJson: sceneOf('strips', nativePanLaw(masterStripJson)),
             }),
             expect.objectContaining({
               type: 'syncTrackStripEqBand',

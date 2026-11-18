@@ -27,8 +27,8 @@ import type {
   EngineTrackSend,
   EngineTransportState,
   EqBand,
-  MixSceneBus,
-  MixSceneStrip,
+  MixSceneBusInput,
+  MixSceneStripInput,
   PanLaw,
   PanMode,
   ProjectMidiCcBinding,
@@ -39,6 +39,7 @@ import type {
 } from '../index.js';
 import { RealtimeEngine } from '../index.js';
 import { releasedHandleError } from '../internal/handle_guard.js';
+import { mixSceneBusToNative, mixSceneStripToNative } from '../internal/mix_scene.js';
 import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
 import {
   createOpfsClipPageProvider,
@@ -77,7 +78,6 @@ import { SonareRealtimeEngineNode } from './engine-node.js';
 import {
   buildTransportFacade,
   type CaptureSyncConfig,
-  requireObject,
   type SonareEngineTransportFacade,
 } from './engine-offline.js';
 import type { SonareEngineOptions, SuspendableAudioContext } from './engine-options.js';
@@ -652,9 +652,8 @@ export class SonareEngine {
    * document is sent as `{ strips: [strip] }`. A track is declared first when it
    * has no lane yet.
    */
-  setStrip(target: string | number, strip: MixSceneStrip): void {
-    requireObject('setStrip', 'strip', strip);
-    const sceneJson = JSON.stringify({ strips: [strip] });
+  setStrip(target: string | number, strip: MixSceneStripInput): void {
+    const sceneJson = JSON.stringify({ strips: [mixSceneStripToNative('setStrip', strip)] });
     if (target === 'master') {
       mixer.setMasterStripJson(this.mixerContext, sceneJson);
       return;
@@ -674,9 +673,9 @@ export class SonareEngine {
   }
 
   /** Replaces a bus strip with the given scene bus; the document is sent as `{ buses: [bus] }`. */
-  setBusStrip(busId: number, bus: MixSceneBus): void {
-    requireObject('setBusStrip', 'bus', bus);
-    mixer.setBusStripJson(this.mixerContext, busId, JSON.stringify({ buses: [bus] }));
+  setBusStrip(busId: number, bus: MixSceneBusInput): void {
+    const sceneJson = JSON.stringify({ buses: [mixSceneBusToNative('setBusStrip', bus)] });
+    mixer.setBusStripJson(this.mixerContext, busId, sceneJson);
   }
 
   /** Sets one EQ band of a strip (a track's, or the master). */

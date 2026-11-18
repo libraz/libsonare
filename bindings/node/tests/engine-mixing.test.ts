@@ -386,7 +386,7 @@ describe('RealtimeEngine native binding', () => {
     ]);
     engine.setTrackLanes([{ trackId: 10 }, { trackId: 20 }]);
     const sceneJson =
-      '{"version":1,"strips":[{"id":"track-10","faderDb":-12,"panLaw":3}],"buses":[],"connections":[]}';
+      '{"version":1,"strips":[{"id":"track-10","faderDb":-12,"panLaw":"linear0Db"}],"buses":[],"connections":[]}';
     engine.setStrip(10, sceneStrip(sceneJson));
     let badJsonError: unknown;
     try {
@@ -460,7 +460,7 @@ describe('RealtimeEngine native binding', () => {
     engine.setStrip(
       10,
       sceneStrip(
-        '{"version":1,"strips":[{"id":"track-10","panLaw":3}],"buses":[],"connections":[]}',
+        '{"version":1,"strips":[{"id":"track-10","panLaw":"linear0Db"}],"buses":[],"connections":[]}',
       ),
     );
 
@@ -502,7 +502,7 @@ describe('RealtimeEngine native binding', () => {
         engine.setStrip(
           10,
           sceneStrip(
-            '{"version":1,"strips":[{"id":"track-10","panLaw":3}],"buses":[],"connections":[]}',
+            '{"version":1,"strips":[{"id":"track-10","panLaw":"linear0Db"}],"buses":[],"connections":[]}',
           ),
         );
         engine.setStripPanMode(10, 'dualPan');
@@ -748,7 +748,7 @@ describe('RealtimeEngine native binding', () => {
       },
     ]);
     const sceneJson =
-      '{"version":1,"strips":[{"id":"master","faderDb":-12,"panLaw":3}],"buses":[],"connections":[]}';
+      '{"version":1,"strips":[{"id":"master","faderDb":-12,"panLaw":"linear0Db"}],"buses":[],"connections":[]}';
     engine.setStrip('master', sceneStrip(sceneJson));
     let badJsonError: unknown;
     try {
