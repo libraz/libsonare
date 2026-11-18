@@ -10802,6 +10802,14 @@ rule = "getters"
 
 [[entry]]
 kind = "method"
+old = "Project.soundFontPresetCount"
+changed = "readonly getter (was a method)"
+domain = "project"
+rule = "getters"
+test = "bindings/node/tests/soundfont.test.ts::reads the preset count as a getter"
+
+[[entry]]
+kind = "method"
 old = "Project.getPartRig"
 changed = "partRig({ destinationId, part }) replaces getPartRig(destinationId, part); only the key object is accepted"
 to = "Project.partRig"

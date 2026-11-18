@@ -1555,7 +1555,7 @@ export class Project {
   }
 
   /** Number of presets in the loaded SoundFont (0 when none is loaded). */
-  soundFontPresetCount(): number {
+  get soundFontPresetCount(): number {
     return this.native.soundFontPresetCount();
   }
 

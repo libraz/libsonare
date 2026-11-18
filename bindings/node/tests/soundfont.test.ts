@@ -39,13 +39,19 @@ function peak(audio: Float32Array | Float32Array[]): number {
 }
 
 describe('Project SoundFont (SF2) binding', () => {
+  it('reads the preset count as a getter', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(Project.prototype, 'soundFontPresetCount');
+    expect(typeof descriptor?.get).toBe('function');
+    expect(descriptor?.set).toBeUndefined();
+  });
+
   it('loads, counts presets and clears a SoundFont', () => {
     const project = new Project();
-    expect(project.soundFontPresetCount()).toBe(0);
+    expect(project.soundFontPresetCount).toBe(0);
     project.loadSoundFont(sf2Bytes);
-    expect(project.soundFontPresetCount()).toBe(3);
+    expect(project.soundFontPresetCount).toBe(3);
     project.clearSoundFont();
-    expect(project.soundFontPresetCount()).toBe(0);
+    expect(project.soundFontPresetCount).toBe(0);
     project.destroy();
   });
 
@@ -53,7 +59,7 @@ describe('Project SoundFont (SF2) binding', () => {
     const project = new Project();
     project.loadSoundFont(sf2Bytes);
     expect(() => project.loadSoundFont(new Uint8Array([1, 2, 3, 4]))).toThrow();
-    expect(project.soundFontPresetCount()).toBe(3);
+    expect(project.soundFontPresetCount).toBe(3);
     project.destroy();
   });
 

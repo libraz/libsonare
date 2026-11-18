@@ -75,13 +75,19 @@ describe('Sonare WASM SoundFont (SF2)', () => {
     return project;
   }
 
+  it('reads the preset count as a getter', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(Project.prototype, 'soundFontPresetCount');
+    expect(typeof descriptor?.get).toBe('function');
+    expect(descriptor?.set).toBeUndefined();
+  });
+
   it('loads, counts presets and clears a SoundFont', () => {
     const project = new Project();
-    expect(project.soundFontPresetCount()).toBe(0);
+    expect(project.soundFontPresetCount).toBe(0);
     project.loadSoundFont(sf2Bytes);
-    expect(project.soundFontPresetCount()).toBe(3);
+    expect(project.soundFontPresetCount).toBe(3);
     project.clearSoundFont();
-    expect(project.soundFontPresetCount()).toBe(0);
+    expect(project.soundFontPresetCount).toBe(0);
     project.destroy();
   });
 
@@ -105,7 +111,7 @@ describe('Sonare WASM SoundFont (SF2)', () => {
     // parse. The two used to disagree, which meant the same failure reached a
     // caller under two different codes depending on which door it came through.
     expect(caught.code).toBe(ErrorCode.InvalidFormat);
-    expect(project.soundFontPresetCount()).toBe(3);
+    expect(project.soundFontPresetCount).toBe(3);
     project.destroy();
   });
 
