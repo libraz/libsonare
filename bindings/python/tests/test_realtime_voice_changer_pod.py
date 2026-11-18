@@ -91,7 +91,7 @@ def test_preset_config_refuses_a_number_rather_than_reading_it_as_an_ordinal(val
 
 def _build_changer() -> libsonare.RealtimeVoiceChanger:
     return libsonare.RealtimeVoiceChanger(
-        sample_rate=48000, preset="neutralMonitor", max_block_size=128, num_channels=1
+        sample_rate=48000, max_block_size=128, num_channels=1, config="neutralMonitor"
     )
 
 
@@ -206,8 +206,8 @@ def test_formant_mode_is_fixed_when_the_changer_is_created() -> None:
     )
     absolute = dataclasses.replace(base, formant_mode="absolute", formant_factor=1.1)
     with (
-        libsonare.RealtimeVoiceChanger(48000, _flat(base), num_channels=1) as relative,
-        libsonare.RealtimeVoiceChanger(48000, _flat(absolute), num_channels=1) as warped,
+        libsonare.RealtimeVoiceChanger(48000, num_channels=1, config=_flat(base)) as relative,
+        libsonare.RealtimeVoiceChanger(48000, num_channels=1, config=_flat(absolute)) as warped,
     ):
         # One analysis frame (1024 samples at 48 kHz) more than the relative chain.
         assert warped.latency_samples == relative.latency_samples + 1024
@@ -226,14 +226,14 @@ def test_unreachable_absolute_warp_is_refused_with_the_reachable_range() -> None
     )
     # The creation document is a JSON entry point: its content defect is InvalidFormat.
     with pytest.raises(SonareError, match=r"\[0\.55, 0\.9811\]") as refused:
-        libsonare.RealtimeVoiceChanger(48000, _flat(unreachable), num_channels=1)
+        libsonare.RealtimeVoiceChanger(48000, num_channels=1, config=_flat(unreachable))
     assert not isinstance(refused.value, SonareValueError)
     assert refused.value.code == int(ErrorCode.INVALID_FORMAT)
 
 
 def test_out_of_range_field_is_refused_and_the_previous_config_kept() -> None:
     base = libsonare.realtime_voice_changer_preset_config("neutralMonitor")
-    with libsonare.RealtimeVoiceChanger(48000, _flat(base), num_channels=1) as changer:
+    with libsonare.RealtimeVoiceChanger(48000, num_channels=1, config=_flat(base)) as changer:
         before = changer.config_pod()
         factor_range = r"formant\.factor out of range \[0\.55, 1\.65\]"
         with pytest.raises(SonareValueError, match=factor_range):
@@ -243,7 +243,7 @@ def test_out_of_range_field_is_refused_and_the_previous_config_kept() -> None:
         assert changer.config_pod() == before
     with pytest.raises(SonareError, match="out of range") as created:
         libsonare.RealtimeVoiceChanger(
-            48000, _flat(dataclasses.replace(base, formant_factor=3.0)), num_channels=1
+            48000, num_channels=1, config=_flat(dataclasses.replace(base, formant_factor=3.0))
         )
     assert not isinstance(created.value, SonareValueError)
     assert created.value.code == int(ErrorCode.INVALID_FORMAT)

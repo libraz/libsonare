@@ -1098,6 +1098,8 @@ ReverbVariationName: TypeAlias = Literal["reverb", "echo", "tempoDelay", "dubEch
 NoteDivisionName: TypeAlias = Literal["quarter", "eighth", "dottedEighth", "sixteenth"]
 MidiReleaseName: TypeAlias = Literal["hold", "input"]
 
+RealtimeVoiceChangerPreset = dict[str, Any]
+
 @dataclass(frozen=True)
 class RealtimeVoiceChangerConfig:
     input_gain_db: float
@@ -1175,16 +1177,16 @@ class RealtimeVoiceChanger:
     def __init__(
         self,
         sample_rate: int,
-        preset: str | Mapping[str, object] = "neutralMonitor",
         *,
         num_channels: int,
+        config: VoicePresetId | RealtimeVoiceChangerPreset = "neutralMonitor",
         max_block_size: int | None = None,
     ) -> None: ...
     def close(self) -> None: ...
     def __enter__(self) -> RealtimeVoiceChanger: ...
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None: ...
     def reset(self) -> None: ...
-    def set_config(self, preset: str | Mapping[str, object]) -> None: ...
+    def set_config(self, config: VoicePresetId | RealtimeVoiceChangerPreset) -> None: ...
     @property
     def max_block_size(self) -> int: ...
     @property
@@ -1242,8 +1244,8 @@ class StreamingRetune:
 def voice_change_realtime(
     samples: FloatSamples,
     sample_rate: int,
-    preset: str | Mapping[str, object] = "neutralMonitor",
     *,
+    config: VoicePresetId | RealtimeVoiceChangerPreset = "neutralMonitor",
     channels: int = 1,
 ) -> np.ndarray: ...
 def realtime_voice_changer_preset_names() -> list[str]: ...

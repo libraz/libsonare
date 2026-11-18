@@ -143,10 +143,25 @@ def voice_change(
         return _from_c_float_array(out, out_length.value)
 
 
-def _voice_config_to_json(preset: str | Mapping[str, object]) -> bytes:
-    if isinstance(preset, str):
-        return _utf8_arg(preset, "preset")
-    return _utf8_arg(json.dumps(preset, separators=(",", ":")), "preset")
+RealtimeVoiceChangerPreset = dict[str, Any]
+"""A voice-changer configuration document with camelCase keys.
+
+Either a preset document (metadata plus a nested ``dsp`` section or a ``macros``
+map) or a flat config. JSON text is parsed by the caller (``json.loads``) first.
+"""
+
+
+def _voice_config_to_json(fn_name: str, config: object) -> bytes:
+    """A preset id is checked against the built-in ids; a mapping is a document."""
+    if isinstance(config, str):
+        _token_ordinal(config, _VOICE_PRESET_IDS, f"{fn_name}: config preset id")
+        return _utf8_arg(config, "config")
+    if isinstance(config, Mapping):
+        return _utf8_arg(json.dumps(dict(config), separators=(",", ":")), "config")
+    raise TypeError(
+        f"{fn_name}: config must be a preset id or a mapping (parse JSON text with "
+        f"json.loads first), got {type(config).__name__}"
+    )
 
 
 class RealtimeVoiceChanger:
@@ -158,13 +173,14 @@ class RealtimeVoiceChanger:
     def __init__(
         self,
         sample_rate: int,
-        preset: str | Mapping[str, object] = "neutralMonitor",
         *,
         num_channels: int,
+        config: VoicePresetId | RealtimeVoiceChangerPreset = "neutralMonitor",
         max_block_size: int | None = None,
     ) -> None:
         """Create a voice changer for ``num_channels`` (1 or 2) at ``sample_rate``.
 
+        ``config`` is a built-in preset id or a configuration document mapping.
         ``max_block_size`` bounds each native call; omitted, the library default
         applies. The ``process_*`` methods chunk longer buffers to it.
         """
@@ -174,7 +190,7 @@ class RealtimeVoiceChanger:
         self._lib = _get_lib()
         self._channels = _narrow_int(num_channels, "num_channels", _C_INT_MIN, _C_INT_MAX)
         rc = self._lib.sonare_realtime_voice_changer_create_json(
-            _voice_config_to_json(preset),
+            _voice_config_to_json("RealtimeVoiceChanger", config),
             _to_c_int(sample_rate, "sample_rate"),
             _to_c_int(_resolve_zero_default(max_block_size, "max_block_size"), "max_block_size"),
             _to_c_int(self._channels, "num_channels"),
@@ -208,10 +224,15 @@ class RealtimeVoiceChanger:
         rc = self._lib.sonare_realtime_voice_changer_reset(self._require_handle())
         _check(rc)
 
-    def set_config(self, preset: str | Mapping[str, object]) -> None:
-        """Apply a preset name or config mapping. Raises ``SonareError`` when refused or closed."""
+    def set_config(self, config: VoicePresetId | RealtimeVoiceChangerPreset) -> None:
+        """Apply a preset id or a configuration document mapping.
+
+        Raises ``TypeError`` for any other type, ``SonareValueError`` for an unknown
+        preset id, and ``SonareError`` when the document is refused or the changer closed.
+        """
         rc = self._lib.sonare_realtime_voice_changer_set_config_json(
-            self._require_handle(), _voice_config_to_json(preset)
+            self._require_handle(),
+            _voice_config_to_json("RealtimeVoiceChanger.set_config", config),
         )
         _check(rc)
 
@@ -556,8 +577,8 @@ class RealtimeVoiceChanger:
 def voice_change_realtime(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
-    preset: str | Mapping[str, object] = "neutralMonitor",
     *,
+    config: VoicePresetId | RealtimeVoiceChangerPreset = "neutralMonitor",
     channels: int = 1,
 ) -> np.ndarray:
     """Apply the realtime voice changer to a buffer offline.
@@ -591,7 +612,7 @@ def voice_change_realtime(
                 c_array,
                 _to_c_size_t(length, "length"),
                 _to_c_int(sample_rate, "sample_rate"),
-                _voice_config_to_json(preset),
+                _voice_config_to_json("voice_change_realtime", config),
                 _to_c_int(channels, "channels"),
                 ctypes.byref(out),
                 ctypes.byref(out_length),

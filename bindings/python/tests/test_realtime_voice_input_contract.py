@@ -72,10 +72,7 @@ def _new_changer(
 ) -> libsonare.RealtimeVoiceChanger:
     channels = 1 if layout == "mono" else 2
     return libsonare.RealtimeVoiceChanger(
-        SAMPLE_RATE,
-        _flat(config),
-        max_block_size=BLOCK_SIZE,
-        num_channels=channels,
+        SAMPLE_RATE, max_block_size=BLOCK_SIZE, num_channels=channels, config=_flat(config)
     )
 
 

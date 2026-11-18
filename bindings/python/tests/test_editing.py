@@ -363,7 +363,7 @@ def test_realtime_voice_changer_function_and_class() -> None:
     sr = 22050
     samples = _tone(sr, duration=0.1)
 
-    result = libsonare.voice_change_realtime(samples, sample_rate=sr, preset="brightIdol")
+    result = libsonare.voice_change_realtime(samples, sample_rate=sr, config="brightIdol")
     # numpy fast path: results are returned as numpy arrays (Sequence-compatible).
     assert hasattr(result, "__len__")
     assert hasattr(result, "__iter__")
@@ -371,7 +371,7 @@ def test_realtime_voice_changer_function_and_class() -> None:
     assert all(math.isfinite(x) for x in result)
 
     with libsonare.RealtimeVoiceChanger(
-        sr, "softWhisper", max_block_size=128, num_channels=1
+        sr, max_block_size=128, num_channels=1, config="softWhisper"
     ) as changer:
         block = samples[:128]
         out = changer.process_mono(block)
@@ -419,7 +419,7 @@ def test_realtime_voice_changer_stereo_interleaved() -> None:
         interleaved.append(s)
 
     result = libsonare.voice_change_realtime(
-        interleaved, sample_rate=sr, preset="brightIdol", channels=2
+        interleaved, sample_rate=sr, channels=2, config="brightIdol"
     )
     assert len(result) == len(interleaved)
     assert all(math.isfinite(x) for x in result)
@@ -449,7 +449,7 @@ def test_editing_audio_methods() -> None:
         changed = audio.voice_change(pitch_semitones=5.0, formant_factor=1.1)
         assert len(changed) > 0
 
-        realtime_changed = audio.voice_change_realtime("brightIdol")
+        realtime_changed = audio.voice_change_realtime(config="brightIdol")
         assert len(realtime_changed) == len(samples)
     finally:
         audio.close()
@@ -464,34 +464,52 @@ def test_realtime_voice_changer_invalid_sample_rate() -> None:
     """Negative or zero sample_rate must be rejected at construction."""
 
     with raises_coded():
-        libsonare.RealtimeVoiceChanger(-1, "neutralMonitor", num_channels=1)
+        libsonare.RealtimeVoiceChanger(-1, num_channels=1, config="neutralMonitor")
 
     with raises_coded():
-        libsonare.RealtimeVoiceChanger(0, "neutralMonitor", num_channels=1)
+        libsonare.RealtimeVoiceChanger(0, num_channels=1, config="neutralMonitor")
 
 
 def test_realtime_voice_changer_invalid_channels() -> None:
     """channels > 2 must be rejected at construction."""
 
     with raises_coded():
-        libsonare.RealtimeVoiceChanger(48000, "neutralMonitor", num_channels=3)
+        libsonare.RealtimeVoiceChanger(48000, num_channels=3, config="neutralMonitor")
 
 
 def test_realtime_voice_changer_invalid_max_block_size() -> None:
     """max_block_size <= 0 must be rejected at construction."""
 
     with raises_coded():
-        libsonare.RealtimeVoiceChanger(48000, "neutralMonitor", max_block_size=-1, num_channels=1)
+        libsonare.RealtimeVoiceChanger(
+            48000, max_block_size=-1, num_channels=1, config="neutralMonitor"
+        )
 
     with raises_coded():
-        libsonare.RealtimeVoiceChanger(48000, "neutralMonitor", max_block_size=0, num_channels=1)
+        libsonare.RealtimeVoiceChanger(
+            48000, max_block_size=0, num_channels=1, config="neutralMonitor"
+        )
 
 
 def test_realtime_voice_changer_invalid_preset_id() -> None:
-    """An unrecognised preset string must be rejected at construction."""
+    """An unrecognised preset id is an argument refusal at construction."""
 
-    with raises_coded(ErrorCode.INVALID_FORMAT):
-        libsonare.RealtimeVoiceChanger(48000, "nonexistent-preset-id-xyz", num_channels=1)
+    with pytest.raises(libsonare.SonareValueError, match="config preset id"):
+        libsonare.RealtimeVoiceChanger(48000, num_channels=1, config="nonexistent-preset-id-xyz")
+
+
+def test_a_voice_changer_config_string_is_a_preset_id_and_a_mapping_is_a_document() -> None:
+    """JSON text is not read as a document, and a value of any other type is a TypeError."""
+    document = json.loads(libsonare.realtime_voice_changer_preset_json("deepNarrator"))
+    with libsonare.RealtimeVoiceChanger(48000, num_channels=1, config=document) as changer:
+        changer.set_config("brightIdol")
+        changer.set_config(document)
+        with pytest.raises(libsonare.SonareValueError, match="config preset id"):
+            changer.set_config(json.dumps(document))
+        with pytest.raises(TypeError, match="json.loads"):
+            changer.set_config(3)  # type: ignore[arg-type]
+    with pytest.raises(libsonare.SonareValueError, match="config preset id"):
+        libsonare.voice_change_realtime([0.0] * 64, sample_rate=48000, config=json.dumps(document))
 
 
 def test_realtime_voice_changer_invalid_json_config() -> None:
@@ -516,7 +534,7 @@ def test_realtime_voice_changer_close_then_process() -> None:
     """process_mono after close() must raise (NULL handle returns INVALID_PARAMETER)."""
 
     changer = libsonare.RealtimeVoiceChanger(
-        48000, "neutralMonitor", max_block_size=128, num_channels=1
+        48000, max_block_size=128, num_channels=1, config="neutralMonitor"
     )
     changer.close()
     with raises_coded(ErrorCode.INVALID_STATE):
@@ -540,9 +558,9 @@ def test_voice_change_realtime_default_preset_matches_every_entry_point() -> Non
         )
     )["defaults"]["voice_change_realtime.preset"]
 
-    module_default = inspect.signature(libsonare.voice_change_realtime).parameters["preset"].default
+    module_default = inspect.signature(libsonare.voice_change_realtime).parameters["config"].default
     handle_default = (
-        inspect.signature(libsonare.Audio.voice_change_realtime).parameters["preset"].default
+        inspect.signature(libsonare.Audio.voice_change_realtime).parameters["config"].default
     )
     assert module_default == expected
     assert handle_default == expected
@@ -554,5 +572,5 @@ def test_voice_change_realtime_default_preset_matches_every_entry_point() -> Non
     samples = _tone(sr, duration=0.05)
     audio = libsonare.Audio.from_buffer(samples, sr)
     assert list(audio.voice_change_realtime()) == list(
-        libsonare.voice_change_realtime(samples, sample_rate=sr, preset=expected)
+        libsonare.voice_change_realtime(samples, sample_rate=sr, config=expected)
     )

@@ -188,7 +188,8 @@ from .types import (
 )
 
 if TYPE_CHECKING:
-    pass
+    from ._effects_voice import RealtimeVoiceChangerPreset
+    from ._types_enums import VoicePresetId
 
 # Plane count of each layout, the same table as the core's channel_count().
 _LAYOUT_CHANNEL_COUNTS = {"mono": 1, "stereo": 2, "5.1": 6, "7.1": 8}
@@ -965,7 +966,9 @@ class Audio:
             self.data, self.sample_rate, pitch_semitones, formant_factor, formant_mode
         )
 
-    def voice_change_realtime(self, preset: str = "neutralMonitor") -> np.ndarray:
+    def voice_change_realtime(
+        self, *, config: VoicePresetId | RealtimeVoiceChangerPreset = "neutralMonitor"
+    ) -> np.ndarray:
         """Apply the integrated realtime voice changer chain offline.
 
         The default matches every other entry point for this operation — the
@@ -974,7 +977,7 @@ class Audio:
         a named character preset such as ``"brightIdol"`` additionally applies
         retune, a formant lift, EQ and reverb.
         """
-        return _voice_change_realtime(self.data, self.sample_rate, preset)
+        return _voice_change_realtime(self.data, self.sample_rate, config=config)
 
     def normalize(
         self, *, mode: NormalizeMode = "peak", target_db: float | None = None

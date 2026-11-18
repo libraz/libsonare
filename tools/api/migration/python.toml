@@ -5235,15 +5235,26 @@ test = "bindings/python/tests/test_realtime_voice_changer_pod.py::test_preset_co
 [[entry]]
 kind = "option"
 old = "voice_change_realtime(preset)"
-changed = "takes the lowerCamel preset ids (default neutralMonitor); a kebab id raises"
+to = "voice_change_realtime(config)"
+changed = "renamed to config and keyword-only, as the Node and WASM facades name it; a string is a lowerCamel preset id only (JSON text raises SonareValueError, parse it with json.loads), a mapping is a preset document or flat config, and any other type is TypeError; the preset ids are lowerCamel (default neutralMonitor) and a kebab id raises"
 domain = "effects"
 rule = "token-case"
 test = "bindings/python/tests/test_voice_and_room_spellings.py::test_a_kebab_preset_id_is_refused"
 
 [[entry]]
 kind = "option"
+old = "Audio.voice_change_realtime(preset)"
+to = "Audio.voice_change_realtime(config)"
+changed = "renamed to config and keyword-only, as the Node and WASM facades name it; a string is a lowerCamel preset id only (JSON text raises SonareValueError, parse it with json.loads), a mapping is a preset document or flat config, and any other type is TypeError"
+domain = "core"
+rule = "one-input-form"
+test = "bindings/python/tests/test_editing.py::test_a_voice_changer_config_string_is_a_preset_id_and_a_mapping_is_a_document"
+
+[[entry]]
+kind = "option"
 old = "RealtimeVoiceChanger.set_config(preset)"
-changed = "a flat config document carries harmonySteps (an array of three) instead of harmonyStep1..3, which are refused as unknown fields"
+to = "RealtimeVoiceChanger.set_config(config)"
+changed = "renamed to config; a string is a preset id only and JSON text raises SonareValueError, a mapping is a document. A flat config document carries harmonySteps (an array of three) instead of harmonyStep1..3, which are refused as unknown fields"
 domain = "effects"
 rule = "config-keys"
 test = "bindings/python/tests/test_voice_and_room_spellings.py::test_the_flat_config_takes_harmony_steps_as_one_array"
@@ -8843,7 +8854,7 @@ test = "bindings/python/tests/test_mapping_keys.py::test_a_helper_mapping_refuse
 [[entry]]
 kind = "class"
 old = "RealtimeVoiceChanger"
-changed = "num_channels (was channels, default 1) is a required keyword, and an omitted max_block_size takes the library default (was 128); an explicit 0 raises SonareValueError"
+changed = "num_channels (was channels, default 1) is a required keyword, and an omitted max_block_size takes the library default (was 128); an explicit 0 raises SonareValueError. The preset argument is the keyword config, as the Node and WASM facades name it: a string is a lowerCamel preset id only (JSON text raises SonareValueError, parse it with json.loads), a mapping is a preset document or flat config, and any other type is TypeError"
 domain = "effects"
 rule = "num-channels"
 test = "bindings/python/tests/test_block_size_absence.py::test_a_required_channel_count_or_sample_rate_has_no_default"

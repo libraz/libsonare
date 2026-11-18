@@ -673,7 +673,7 @@ def test_planar_rank_rejection_names_the_channels_argument(bad_side: str) -> Non
 
     with (
         libsonare.RealtimeVoiceChanger(
-            48000, "brightIdol", max_block_size=128, num_channels=2
+            48000, max_block_size=128, num_channels=2, config="brightIdol"
         ) as changer,
         pytest.raises(SonareValueError) as excinfo,
     ):

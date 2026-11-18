@@ -52,7 +52,7 @@ def test_a_kebab_preset_id_is_refused(old: str) -> None:
     with pytest.raises(SonareValueError):
         libsonare.realtime_voice_changer_preset_config(old)
     with pytest.raises(libsonare.SonareError):
-        libsonare.RealtimeVoiceChanger(SR, old, num_channels=1)
+        libsonare.RealtimeVoiceChanger(SR, num_channels=1, config=old)
 
 
 def test_the_config_fields_carry_their_unit_and_no_doubled_word() -> None:
@@ -111,12 +111,12 @@ def test_the_flat_config_takes_harmony_steps_as_one_array() -> None:
     base = libsonare.realtime_voice_changer_preset_config("choirHarmony")
     flat = _flat(dataclasses.replace(base, harmony_steps=(2, 5, -3)))
     assert "harmonySteps" in flat
-    with libsonare.RealtimeVoiceChanger(SR, flat, num_channels=1) as changer:
+    with libsonare.RealtimeVoiceChanger(SR, num_channels=1, config=flat) as changer:
         assert json.loads(changer.config_json())["dsp"]["harmony"]["steps"] == [2, 5, -3]
     split = {k: v for k, v in flat.items() if k != "harmonySteps"}
     split.update(harmonyStep1=2, harmonyStep2=5, harmonyStep3=-3)
     with pytest.raises(libsonare.SonareError, match="harmonyStep1"):
-        libsonare.RealtimeVoiceChanger(SR, split, num_channels=1)
+        libsonare.RealtimeVoiceChanger(SR, num_channels=1, config=split)
 
 
 def test_streaming_retune_names_its_quantities_with_units() -> None:

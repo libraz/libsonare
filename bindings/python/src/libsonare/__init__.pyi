@@ -125,6 +125,9 @@ from .analyzer import (
     RealtimeVoiceChangerConfig as RealtimeVoiceChangerConfig,
 )
 from .analyzer import (
+    RealtimeVoiceChangerPreset as RealtimeVoiceChangerPreset,
+)
+from .analyzer import (
     SilenceCommonReport as SilenceCommonReport,
 )
 from .analyzer import SoloProcessor as SoloProcessor

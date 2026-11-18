@@ -5,7 +5,13 @@ from typing import Any, Literal
 
 import numpy as np
 
-from .analyzer import MasteringPreset, MasteringSoloParams, NormalizeMode, SoloProcessor
+from .analyzer import (
+    MasteringPreset,
+    MasteringSoloParams,
+    NormalizeMode,
+    RealtimeVoiceChangerPreset,
+    SoloProcessor,
+)
 from .types import (
     AcousticResult,
     AnalysisResult,
@@ -35,6 +41,7 @@ from .types import (
     SpectrumReport,
     StftResult,
     TimbreResult,
+    VoicePresetId,
 )
 
 class DecodedChannels:
@@ -190,7 +197,9 @@ class Audio:
         formant_factor: float = 1.0,
         formant_mode: Literal["relative", "absolute"] = "relative",
     ) -> np.ndarray: ...
-    def voice_change_realtime(self, preset: str = "neutralMonitor") -> np.ndarray: ...
+    def voice_change_realtime(
+        self, *, config: VoicePresetId | RealtimeVoiceChangerPreset = "neutralMonitor"
+    ) -> np.ndarray: ...
     def normalize(
         self, *, mode: NormalizeMode = "peak", target_db: float | None = None
     ) -> np.ndarray: ...

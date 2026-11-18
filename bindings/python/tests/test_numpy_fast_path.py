@@ -191,7 +191,7 @@ def test_process_mono_returns_ndarray() -> None:
     sr = 48000
     samples = _sine(256, sr=sr)
     with libsonare.RealtimeVoiceChanger(
-        sr, "neutralMonitor", max_block_size=128, num_channels=1
+        sr, max_block_size=128, num_channels=1, config="neutralMonitor"
     ) as ch:
         out = ch.process_mono(samples)
     assert isinstance(out, np.ndarray)
@@ -205,7 +205,7 @@ def test_process_mono_accepts_list_input() -> None:
     sr = 48000
     samples = _sine(256, sr=sr).tolist()
     with libsonare.RealtimeVoiceChanger(
-        sr, "neutralMonitor", max_block_size=128, num_channels=1
+        sr, max_block_size=128, num_channels=1, config="neutralMonitor"
     ) as ch:
         out = ch.process_mono(samples)
     assert isinstance(out, np.ndarray)
@@ -219,11 +219,11 @@ def test_process_mono_is_deterministic_across_input_types() -> None:
     samples_list = samples_np.tolist()
 
     with libsonare.RealtimeVoiceChanger(
-        sr, "brightIdol", max_block_size=128, num_channels=1
+        sr, max_block_size=128, num_channels=1, config="brightIdol"
     ) as ch1:
         out_np = ch1.process_mono(samples_np)
     with libsonare.RealtimeVoiceChanger(
-        sr, "brightIdol", max_block_size=128, num_channels=1
+        sr, max_block_size=128, num_channels=1, config="brightIdol"
     ) as ch2:
         out_list = ch2.process_mono(samples_list)
 
@@ -241,7 +241,9 @@ def test_process_interleaved_returns_ndarray() -> None:
     interleaved[0::2] = mono
     interleaved[1::2] = mono
 
-    with libsonare.RealtimeVoiceChanger(sr, "brightIdol", max_block_size=128, num_channels=2) as ch:
+    with libsonare.RealtimeVoiceChanger(
+        sr, max_block_size=128, num_channels=2, config="brightIdol"
+    ) as ch:
         out = ch.process_interleaved(interleaved)
 
     assert isinstance(out, np.ndarray)
@@ -259,7 +261,9 @@ def test_process_planar_returns_one_ndarray_per_channel() -> None:
     left = _sine(n_frames, sr=sr)
     right = _sine(n_frames, sr=sr)
 
-    with libsonare.RealtimeVoiceChanger(sr, "brightIdol", max_block_size=128, num_channels=2) as ch:
+    with libsonare.RealtimeVoiceChanger(
+        sr, max_block_size=128, num_channels=2, config="brightIdol"
+    ) as ch:
         out_left, out_right = ch.process_planar([left, right])
 
     assert isinstance(out_left, np.ndarray)
@@ -278,7 +282,7 @@ def test_voice_change_realtime_returns_ndarray() -> None:
     """The offline convenience wrapper must surface the ndarray result."""
     sr = 48000
     samples = _sine(1024, sr=sr)
-    out = libsonare.voice_change_realtime(samples, sample_rate=sr, preset="neutralMonitor")
+    out = libsonare.voice_change_realtime(samples, sample_rate=sr, config="neutralMonitor")
     assert isinstance(out, np.ndarray)
     assert out.shape == (1024,)
     # Preserves length even via the wrapper path (existing test_editing.py
@@ -304,7 +308,7 @@ def test_large_buffer_processes_under_budget() -> None:
     n = 1_000_000
     samples = _sine(n, sr=sr)
     start = time.perf_counter()
-    out = libsonare.voice_change_realtime(samples, sample_rate=sr, preset="neutralMonitor")
+    out = libsonare.voice_change_realtime(samples, sample_rate=sr, config="neutralMonitor")
     elapsed = time.perf_counter() - start
     assert isinstance(out, np.ndarray)
     assert out.shape == (n,)
