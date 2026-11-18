@@ -612,7 +612,7 @@ def test_suggest_mix_scene_out_is_what_the_mixer_reads() -> None:
         assert (
             written
             == mixing_assistant_suggest(
-                [MixAssistantTrack("leadVox", samples, name="leadVox")], sample_rate=SR
+                [MixAssistantTrack("leadVox", [samples], name="leadVox")], sample_rate=SR
             ).scene
         )
 

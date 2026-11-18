@@ -94,11 +94,9 @@ def _mix_assistant_tracks(entries: list[str]) -> list[Any]:
         if not path:
             raise ValueError(f"--input requires a file path: {entry}")
         planes, track_rate = _load_channels_or_downmix(path)
-        left = planes[0]
-        right = planes[1] if len(planes) == 2 else None
         tracks.append(
             MixAssistantTrack(
-                id=track_id, left=left, right=right, name=track_id, sample_rate=track_rate
+                id=track_id, channels=list(planes), name=track_id, sample_rate=track_rate
             )
         )
     return tracks
@@ -135,12 +133,13 @@ def _resolve_tempo_bpm(raw: str | float, entries: list[str]) -> tuple[float, lis
         return float(raw), []
     tracks = _mix_assistant_tracks(entries[:1])
     first = tracks[0]
-    if first.right is None:
-        mono = first.left
+    if len(first.channels) == 1:
+        mono = first.channels[0]
     else:
         # The decoder's stereo-to-mono fold, 0.5 * (L + R) in float32.
+        left, right = first.channels
         mono = np.float32(0.5) * (
-            np.asarray(first.left, dtype=np.float32) + np.asarray(first.right, dtype=np.float32)
+            np.asarray(left, dtype=np.float32) + np.asarray(right, dtype=np.float32)
         )
     return float(detect_bpm(mono, sample_rate=first.sample_rate)), tracks
 

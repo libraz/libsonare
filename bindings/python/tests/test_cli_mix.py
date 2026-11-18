@@ -450,5 +450,4 @@ def test_suggest_mix_tempo_auto_decodes_each_input_once(monkeypatch) -> None:
     tracks, options = scene_calls[0]
     assert options["tempo_bpm"] == 96.0
     assert [track.id for track in tracks] == ["vox", "bass"]
-    assert tracks[0].right is not None
-    assert tracks[1].right is None
+    assert [len(track.channels) for track in tracks] == [2, 1]
