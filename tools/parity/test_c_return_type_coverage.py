@@ -35,8 +35,8 @@ _INCLUDE_DIR = _HERE.parent.parent / "include" / "sonare"
 # argument list. Deliberately looser than the extractor's own pattern, which is
 # what the extractor is being measured against. The pointer star is matched
 # explicitly rather than folded into the identifier character class -- a class
-# that cannot hold `*` silently skips every handle-constructor declaration, which
-# is eight of the twenty return types in these headers.
+# that cannot hold `*` silently skips every pointer-returning declaration, which
+# is four of the sixteen return types in these headers.
 _DECL_RE = re.compile(
     r"^(?P<ret>(?:const\s+)?[A-Za-z_][A-Za-z0-9_]*\s*\*?)\s+sonare_[A-Za-z0-9_]+\s*\(",
     re.MULTILINE,
@@ -77,7 +77,7 @@ def test_the_header_scan_reaches_declarations() -> None:
     # of the three passes the assertion above by not looking.
     for shape in ("SonareError", "const char*", "SonareMixer*"):
         assert shape in declared, f"header scan found no {shape} declaration"
-    assert len(declared) >= 18, f"header scan found only {len(declared)} return types"
+    assert len(declared) >= 16, f"header scan found only {len(declared)} return types"
 
 
 if __name__ == "__main__":

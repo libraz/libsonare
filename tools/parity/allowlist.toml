@@ -131,6 +131,10 @@ python = [
 #     forward — sonare_c_transcribe.h states that a zero field means the default
 #     in C and does not in a binding, so Python and WASM spell absence
 #     themselves and only Node reads the seeder.
+#   section_options_default: Node and Python seed SonareSectionOptions from it
+#     before overlaying the caller's fields; WASM's analyzeSections spells
+#     n_fft 2048, hop 512 and 4 s itself and leaves an omitted threshold to the
+#     core, matching the seeder.
 #   project_tempo_options_default: all three facades call it internally to seed
 #     SonareProjectTempoOptions before overlaying the caller's fields, so no
 #     facade restates a value.
@@ -211,6 +215,7 @@ node = [
   "music_analyze_options_default",
   "transcribe_config_default",
   "project_tempo_options_default",
+  "section_options_default",
   "mixer_strip_at",
   "mixer_add_strip_ex",
   # Folded into masterAudio / master_audio as its progress and cancel callbacks; the plain
@@ -334,6 +339,7 @@ wasm = [
   "music_analyze_options_default",
   "transcribe_config_default",
   "project_tempo_options_default",
+  "section_options_default",
   "mixer_strip_at",
   "mixer_add_strip_ex",
   # Folded into masterAudio / master_audio as its progress and cancel callbacks; the plain
@@ -439,6 +445,7 @@ python = [
   "music_analyze_options_default",
   "transcribe_config_default",
   "project_tempo_options_default",
+  "section_options_default",
   "mixer_strip_at",
   "mixer_add_strip_ex",
   # Folded into masterAudio / master_audio as its progress and cancel callbacks; the plain

@@ -45,21 +45,16 @@ _RETURN_TYPES = (
     "uint64_t",
     "int32_t",
     "int64_t",
-    # Handle constructors return an owning pointer to an opaque type.
-    "SonareEq*",
+    # A scene loader and the strip accessors return a pointer to an opaque type.
     "SonareMixer*",
-    "SonareSampleBank*",
-    "SonareStreamingMasteringChain*",
-    "SonareStreamingRetune*",
     "SonareStrip*",
     # Default seeders return a config struct by value.
     "SonareBoundaryOptions",
     "SonareMeterOptions",
     "SonareMusicAnalyzeOptions",
     "SonareProjectTempoOptions",
+    "SonareSectionOptions",
     "SonareTranscribeConfig",
-    # Scalar enum accessor.
-    "SonareDiagnosticSeverity",
 )
 
 _DECL_RE = re.compile(
