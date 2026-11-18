@@ -63,7 +63,7 @@ describe('a library or object-state failure reports one code on every surface', 
     const answers = {
       node: codeOf(() => NodeMixer.fromJson('{not json', { sampleRate: 48000 })),
       wasm: codeOf(() => WasmMixer.fromJson('{not json', { sampleRate: 48000 })),
-      python: pythonCode("libsonare.Mixer.from_scene_json('{not json', 48000)"),
+      python: pythonCode("libsonare.Mixer.from_json('{not json', sample_rate=48000)"),
     };
     expect(answers).toEqual({
       node: ErrorCode.InvalidFormat,
@@ -89,7 +89,7 @@ describe('a library or object-state failure reports one code on every surface', 
         mixer.stripCount;
       }),
       python: pythonCode(
-        "m = libsonare.Mixer.from_scene_json(libsonare.mixing_scene_preset_json('vocalReverbSend'), 48000); m.close(); m.strip_count()",
+        "m = libsonare.Mixer(sample_rate=48000, scene=libsonare.mixing_scene_preset('vocalReverbSend')); m.close(); m.strip_count",
       ),
     };
     expect(answers).toEqual({
@@ -115,7 +115,7 @@ describe('a library or object-state failure reports one code on every surface', 
     ).toBe('no refusal');
     expect(
       pythonCode(
-        "libsonare.Mixer.from_scene_json(libsonare.mixing_scene_preset_json('vocalReverbSend'), 48000)",
+        "libsonare.Mixer(sample_rate=48000, scene=libsonare.mixing_scene_preset('vocalReverbSend'))",
       ),
     ).toBe('no refusal');
   });

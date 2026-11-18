@@ -410,24 +410,6 @@ _ASSISTANT_BAG = (
 # entry gives is a claim about the whole route the value travels, folds
 # included, so recording the same decision twice would let the two copies part.
 EXCLUSIONS: dict[str, dict[str, tuple[str, str]]] = {
-    "analyzer.Mixer.__init__": {
-        "handle": (
-            "not_caller_supplied",
-            (
-                "an opaque native handle `from_scene_json` obtained from the core, not a "
-                "quantity; an arbitrary integer here is a bad pointer, which no integer "
-                "domain check can answer for"
-            ),
-        ),
-        "sample_rate": (
-            "not_caller_supplied",
-            (
-                "`from_scene_json` is the constructor a caller uses and narrows this with "
-                "`_to_c_int` before handing it on; the copy kept here is only read back "
-                "into MixerStereoResult.sample_rate"
-            ),
-        ),
-    },
     # THE MASTERING PARAM BAGS.
     #
     # `params: MasteringParams | None` is `dict[str, float | int | bool]`, so it
