@@ -199,7 +199,7 @@ ROWS: tuple[TokenSet, ...] = (
         ),
         sources=(
             _src("node", "bindings/node/src/types_engine.ts", "ts_union", "ChannelLayout"),
-            _src("node", "bindings/node/src/types_playback.ts", "ts_field", "PlaybackDiagnostics.active_input_layout"),
+            _src("node", "bindings/node/src/types_playback.ts", "ts_field", "PlaybackDiagnostics.activeInputLayout"),
             _src("node", "bindings/node/src/types_playback.ts", "ts_field", "PlaybackTargetConfig.layout", subset=True),
             _src("node", "bindings/node/src/types_project.ts", "ts_union", "ProjectStemLayout", subset=True),
             _src("python", "bindings/python/src/libsonare/_project_model.py", "py_literal", "ProjectStemLayout", subset=True),
@@ -207,7 +207,7 @@ ROWS: tuple[TokenSet, ...] = (
             _src("python", "bindings/python/src/libsonare/types.pyi", "py_literal", "ChannelLayout"),
             _src("wasm", "bindings/wasm/src/audio.ts", "ts_union", "ChannelLayout"),
             _src("wasm", "bindings/wasm/src/project_types.ts", "ts_union", "ProjectStemLayout", subset=True),
-            _src("wasm", "bindings/wasm/src/public_types_playback.ts", "ts_field", "PlaybackDiagnostics.active_input_layout"),
+            _src("wasm", "bindings/wasm/src/public_types_playback.ts", "ts_field", "PlaybackDiagnostics.activeInputLayout"),
             _src("wasm", "bindings/wasm/src/public_types_playback.ts", "ts_field", "PlaybackTargetConfig.layout", subset=True),
         ),
     ),
