@@ -21,14 +21,18 @@
 /// (SonareRirSynthConfig::late_model, SonareRoomMorphConfig::late_model). The
 /// `_init` functions set EYRING. Mirrors sonare::acoustic::ReverbModel, one above
 /// its ordinal. Any other value is refused with SONARE_ERROR_INVALID_PARAMETER.
+/// Sabine late-reverberation RT60 model.
 #define SONARE_REVERB_MODEL_SABINE 1
+/// Eyring late-reverberation RT60 model.
 #define SONARE_REVERB_MODEL_EYRING 2
 
 /// Atmospheric-absorption selector for the late tail
 /// (SonareRirSynthConfig::air_absorption, SonareRoomMorphConfig::air_absorption).
 /// The `_init` functions set ON. Any other value is refused with
 /// SONARE_ERROR_INVALID_PARAMETER.
+/// Atmospheric absorption applied to the late tail.
 #define SONARE_AIR_ABSORPTION_ON 1
+/// Atmospheric absorption not applied.
 #define SONARE_AIR_ABSORPTION_OFF 2
 
 /// Building-material preset selector for the uniform-room wall material
@@ -36,18 +40,27 @@
 /// Mirrors sonare::acoustic::MaterialPreset. SONARE_MATERIAL_PRESET_NONE leaves the
 /// preset unused, so the per-band array or scalar absorption applies; the `_init`
 /// functions set it. Any other value is refused with SONARE_ERROR_INVALID_PARAMETER.
+/// No preset; the per-band array or scalar absorption applies.
 #define SONARE_MATERIAL_PRESET_NONE 0
+/// Concrete walls.
 #define SONARE_MATERIAL_PRESET_CONCRETE 1
+/// Wooden walls.
 #define SONARE_MATERIAL_PRESET_WOOD 2
+/// Curtain-covered walls.
 #define SONARE_MATERIAL_PRESET_CURTAIN 3
+/// Carpeted walls.
 #define SONARE_MATERIAL_PRESET_CARPET 4
+/// Glass walls.
 #define SONARE_MATERIAL_PRESET_GLASS 5
 
 /// Blind/IR acoustic-analyzer routing mode for room estimation
 /// (SonareRoomEstimateConfig::mode). Mirrors AcousticConfig::Mode. Any other
 /// value is refused with SONARE_ERROR_INVALID_PARAMETER.
+/// Choose blind or impulse-response analysis from the input.
 #define SONARE_ACOUSTIC_MODE_AUTO 0
+/// Treat the input as a reverberant recording and estimate blindly.
 #define SONARE_ACOUSTIC_MODE_BLIND 1
+/// Treat the input as a measured impulse response.
 #define SONARE_ACOUSTIC_MODE_IMPULSE_RESPONSE 2
 
 #ifdef __cplusplus
@@ -74,59 +87,70 @@ extern "C" {
 /// public surface (C ABI / Node / Python / WASM): the shoebox model covers the
 /// supported room-acoustics use cases and keeps the ABI mesh-free.
 typedef struct {
-  /* sizeof(SonareRirSynthConfig), set by sonare_rir_synth_config_init. A smaller
-   * value is refused with SONARE_ERROR_INVALID_PARAMETER. */
+  /// sizeof(SonareRirSynthConfig), set by sonare_rir_synth_config_init. A smaller value is
+  /// refused with SONARE_ERROR_INVALID_PARAMETER.
   uint32_t struct_size;
-  float length_m;
-  float width_m;
-  float height_m;
-  float source_x;
-  float source_y;
-  float source_z;
-  float listener_x;
-  float listener_y;
-  float listener_z;
-  float absorption;     /* uniform wall absorption, clamped to [0, 0.999] */
-  float max_sec;        /* hard RIR length cap; 0 = natural length */
-  float mixing_time_ms; /* early/late crossover (ms); 0 = auto (~sqrt(V) ms) */
-  float crossfade_ms;   /* equal-power crossfade width around the mixing time (ms) */
-  int ism_order;        /* image-source reflection order (>= 0) */
-  int late_model;       /* SONARE_REVERB_MODEL_* */
-  unsigned int seed;    /* deterministic late-tail seed */
-  /* Optional per-octave-band wall absorption/scattering (125/250/500/1k/2k/4k..
-   * Hz). When absorption_bands != NULL and absorption_band_count > 0 it
-   * overrides the scalar `absorption` (unless material_preset selects a preset).
-   * scattering_bands is optional and applied band-wise when present; missing
-   * scattering bands default to 0. It is INDEPENDENT of absorption_bands and of
-   * material_preset: a scattering array supplied on its own is applied to
-   * whichever material the absorption precedence selected, so a preset or a
-   * scalar-absorption room can still be given rough walls.
-   * The late tail's decay time runs continuously between octave centres, so
-   * where absorption (a preset's included) changes steeply between octaves the
-   * octave-band RT60 measured back leans toward the slower neighbour, as it
-   * does for a real room; the design value holds at the octave centre. */
+  float length_m;    ///< Room extent along x in metres.
+  float width_m;     ///< Room extent along y in metres.
+  float height_m;    ///< Room extent along z in metres.
+  float source_x;    ///< Source x position in metres; must lie inside the room.
+  float source_y;    ///< Source y position in metres; must lie inside the room.
+  float source_z;    ///< Source z position in metres; must lie inside the room.
+  float listener_x;  ///< Listener x position in metres; must lie inside the room.
+  float listener_y;  ///< Listener y position in metres; must lie inside the room.
+  float listener_z;  ///< Listener z position in metres; must lie inside the room.
+  /// Uniform wall absorption coefficient, clamped to [0, 0.999].
+  float absorption;
+  /// Hard RIR length cap in seconds; 0 = natural length.
+  float max_sec;
+  /// Early/late crossover in milliseconds; 0 = automatic (about sqrt(V) ms).
+  float mixing_time_ms;
+  /// Equal-power crossfade width around the mixing time, in milliseconds.
+  float crossfade_ms;
+  /// Image-source reflection order (>= 0).
+  int ism_order;
+  /// A @ref SONARE_REVERB_MODEL_SABINE or @ref SONARE_REVERB_MODEL_EYRING value selecting the
+  /// late-tail RT60 model.
+  int late_model;
+  /// Seed of the deterministic late tail.
+  unsigned int seed;
+  /// Optional per-octave-band wall absorption (125, 250, 500, 1k, 2k, 4k.. Hz). When non-NULL
+  /// with absorption_band_count > 0 it overrides the scalar absorption unless material_preset
+  /// selects a preset. The late tail's decay time runs continuously between octave centres,
+  /// so where absorption changes steeply between octaves the octave-band RT60 measured back
+  /// leans toward the slower neighbour, as in a real room; the design value holds at the
+  /// octave centre.
   const float* absorption_bands;
+  /// Number of entries in absorption_bands.
   size_t absorption_band_count;
+  /// Optional per-octave-band wall scattering, applied band-wise; missing bands default to 0.
+  /// Independent of absorption_bands and material_preset: it is applied to whichever material
+  /// the absorption precedence selected, so a preset or scalar-absorption room can still be
+  /// given rough walls.
   const float* scattering_bands;
+  /// Number of entries in scattering_bands.
   size_t scattering_band_count;
-  int material_preset; /* SONARE_MATERIAL_PRESET_* ; NONE (0) = use bands/scalar */
-  /* ISO 9613-1 atmospheric absorption on the late tail, a SONARE_AIR_ABSORPTION_*
-   * selector. While on, the per-band late RT60 gains the `4 m V` air term, which
-   * mainly shortens the high bands of a large room. The climate pair defaults to
-   * the ISO reference (20 degC, 50 % relative humidity); out-of-range values are
-   * refused with SONARE_ERROR_INVALID_PARAMETER and
-   * acoustic.invalid_air_absorption in sonare_last_error_message(). */
+  /// A @ref SONARE_MATERIAL_PRESET_NONE or other SONARE_MATERIAL_PRESET_* value; non-zero wins
+  /// over the band arrays and the scalar absorption.
+  int material_preset;
+  /// A @ref SONARE_AIR_ABSORPTION_ON or @ref SONARE_AIR_ABSORPTION_OFF value switching the
+  /// ISO 9613-1 atmospheric absorption of the late tail. While on, the per-band late RT60
+  /// gains the 4 m V air term, which mainly shortens the high bands of a large room.
+  /// Out-of-range climate values are refused with SONARE_ERROR_INVALID_PARAMETER and
+  /// acoustic.invalid_air_absorption in sonare_last_error_message().
   int air_absorption;
+  /// Air temperature in degrees Celsius for the air absorption (default 20, the ISO reference).
   float air_temperature_c;
+  /// Relative humidity in percent for the air absorption (default 50, the ISO reference).
   float air_humidity_percent;
 } SonareRirSynthConfig;
 
 /// @brief Synthesized room impulse response (mono). Free with
 ///        sonare_free_rir_synth_result.
 typedef struct {
-  float* rir; /* length samples; NULL on error */
-  size_t length;
-  int sample_rate;
+  float* rir;     ///< Heap-owned mono samples; NULL on error. Freed by the result's free function.
+  size_t length;  ///< Number of samples in rir.
+  int sample_rate;  ///< Sample rate of rir in Hz, as passed to sonare_synthesize_rir.
 } SonareRirSynthResult;
 
 /// @brief Priors + analysis settings for blind room estimation.
@@ -140,40 +164,39 @@ typedef struct {
 /// by the cube of the prior, so a 0 that meant "unset" would report a room three
 /// orders of magnitude too small with full confidence.
 typedef struct {
-  float aspect_hint_lw;        /* length/width shape prior; 0 = library default */
-  float aspect_hint_lh;        /* length/height shape prior; 0 = library default */
-  float reference_absorption;  /* absorption prior anchoring the volume scale;
-                                * 0 = library default (0.15). Clamped into
-                                * [0.01, 0.99] rather than refused, so a value
-                                * outside that range returns a successful
-                                * estimate computed from the clamped prior --
-                                * and the reported volume scales with the cube
-                                * of the prior, so the substitution is worth
-                                * three orders of magnitude at the low end. */
-  float min_decay_db;          /* analyzer decay-fit span (dB); 0 = library default */
-  float noise_floor_margin_db; /* analyzer noise-floor margin (dB); 0 = library default */
-  int prefer_eyring;           /* 1 = Eyring model, 0 = Sabine */
-  int n_octave_bands;          /* analyzer band count (0 = library default) */
-  int mode;                    /* SONARE_ACOUSTIC_MODE_* analyzer routing */
+  float aspect_hint_lw;  ///< Length/width shape prior; 0 = library default.
+  float aspect_hint_lh;  ///< Length/height shape prior; 0 = library default.
+  /// Absorption prior anchoring the volume scale; 0 = library default (0.15). Clamped into
+  /// [0.01, 0.99] rather than refused, so a value outside that range returns a successful
+  /// estimate computed from the clamped prior. The reported volume scales with the cube of
+  /// the prior, so the substitution is worth three orders of magnitude at the low end.
+  float reference_absorption;
+  float min_decay_db;           ///< Analyzer decay-fit span in dB; 0 = library default.
+  float noise_floor_margin_db;  ///< Analyzer noise-floor margin in dB; 0 = library default.
+  int prefer_eyring;            ///< 1 = Eyring model, 0 = Sabine.
+  int n_octave_bands;           ///< Analyzer octave-band count; 0 = library default.
+  /// A @ref SONARE_ACOUSTIC_MODE_AUTO, @ref SONARE_ACOUSTIC_MODE_BLIND or
+  /// @ref SONARE_ACOUSTIC_MODE_IMPULSE_RESPONSE value routing the analyzer.
+  int mode;
 } SonareRoomEstimateConfig;
 
 /// @brief Equivalent-room estimate. Free with sonare_free_room_estimate.
 typedef struct {
-  float volume;   /* equivalent interior volume (m^3); NaN when no decay is measurable */
-  float length_m; /* representative dimensions (m); NaN likewise */
-  float width_m;
-  float height_m;
-  float drr_db;     /* direct-to-reverberant ratio (dB) */
-  float confidence; /* honest [0,1] support for the estimate */
-  /* Per-octave-band mean absorption and RT60 (s) are independent estimates;
-     either can fail to converge without the other failing. Both arrays are
-     always the same length (band_count): if one estimate failed while its
-     sibling succeeded, the failed side is NaN-filled out to band_count
-     rather than truncating band_count to the shorter (possibly empty) side.
-     NULL only when neither estimate produced any bands. */
+  float volume;      ///< Equivalent interior volume in m^3; NaN when no decay is measurable.
+  float length_m;    ///< Representative room length in metres; NaN likewise.
+  float width_m;     ///< Representative room width in metres; NaN likewise.
+  float height_m;    ///< Representative room height in metres; NaN likewise.
+  float drr_db;      ///< Direct-to-reverberant ratio in dB.
+  float confidence;  ///< Support for the estimate, in [0, 1].
+  /// Per-octave-band mean absorption; heap-owned. Absorption and RT60 are independent
+  /// estimates and either can fail to converge without the other: both arrays always have
+  /// band_count entries, and a failed side is NaN-filled rather than truncated. NULL only
+  /// when neither estimate produced any bands.
   float* absorption_bands;
+  /// Per-octave-band RT60 in seconds; heap-owned, same length and NaN rule as
+  /// absorption_bands.
   float* rt60_bands;
-  size_t band_count; /* length of both band arrays */
+  size_t band_count;  ///< Length of both band arrays.
 } SonareRoomEstimate;
 
 /// @brief Target room + placement + morph controls for the offline morph.
@@ -185,50 +208,58 @@ typedef struct {
 /// arrays stay the caller's and are read during the call only; the library
 /// never frees them.
 typedef struct {
-  /* sizeof(SonareRoomMorphConfig), set by sonare_room_morph_config_init. A smaller
-   * value is refused with SONARE_ERROR_INVALID_PARAMETER. */
+  /// sizeof(SonareRoomMorphConfig), set by sonare_room_morph_config_init. A smaller value is
+  /// refused with SONARE_ERROR_INVALID_PARAMETER.
   uint32_t struct_size;
-  float length_m;
-  float width_m;
-  float height_m;
-  float source_x;
-  float source_y;
-  float source_z;
-  float listener_x;
-  float listener_y;
-  float listener_z;
-  float absorption;              /* target uniform wall absorption */
-  float source_tail_suppression; /* [0,1] gentle source-reverb reduction */
-  float wet;                     /* [0,1] target-room mix */
-  float max_sec;                 /* target RIR length cap; 0 = natural */
-  float mixing_time_ms;          /* early/late crossover (ms); 0 = auto (~sqrt(V) ms) */
-  float crossfade_ms;            /* equal-power crossfade width around mixing time (ms) */
-  int ism_order;
-  int late_model;    /* SONARE_REVERB_MODEL_* */
-  unsigned int seed; /* deterministic late-tail seed */
-  /* Optional per-octave-band target-wall absorption/scattering; see
-   * SonareRirSynthConfig. */
+  float length_m;    ///< Target room extent along x in metres.
+  float width_m;     ///< Target room extent along y in metres.
+  float height_m;    ///< Target room extent along z in metres.
+  float source_x;    ///< Source x position in metres; must lie inside the target room.
+  float source_y;    ///< Source y position in metres; must lie inside the target room.
+  float source_z;    ///< Source z position in metres; must lie inside the target room.
+  float listener_x;  ///< Listener x position in metres; must lie inside the target room.
+  float listener_y;  ///< Listener y position in metres; must lie inside the target room.
+  float listener_z;  ///< Listener z position in metres; must lie inside the target room.
+  float absorption;  ///< Target uniform wall absorption coefficient.
+  /// Gentle reduction of the source's own reverb, in [0, 1].
+  float source_tail_suppression;
+  float wet;  ///< Target-room mix, in [0, 1].
+  /// Target RIR length cap in seconds; 0 = natural length.
+  float max_sec;
+  /// Early/late crossover in milliseconds; 0 = automatic (about sqrt(V) ms).
+  float mixing_time_ms;
+  /// Equal-power crossfade width around the mixing time, in milliseconds.
+  float crossfade_ms;
+  int ism_order;  ///< Image-source reflection order of the target room (>= 0).
+  /// A @ref SONARE_REVERB_MODEL_SABINE or @ref SONARE_REVERB_MODEL_EYRING value selecting the
+  /// target late-tail RT60 model.
+  int late_model;
+  unsigned int seed;  ///< Seed of the deterministic late tail.
+  /// Optional per-octave-band target-wall absorption; see SonareRirSynthConfig.
   const float* absorption_bands;
-  size_t absorption_band_count;
+  size_t absorption_band_count;  ///< Number of entries in absorption_bands.
+  /// Optional per-octave-band target-wall scattering; see SonareRirSynthConfig.
   const float* scattering_bands;
-  size_t scattering_band_count;
-  int material_preset; /* SONARE_MATERIAL_PRESET_* ; NONE (0) = use bands/scalar */
-  /* Atmospheric absorption on the target room's late tail; as documented on
-   * SonareRirSynthConfig. */
+  size_t scattering_band_count;  ///< Number of entries in scattering_bands.
+  /// A SONARE_MATERIAL_PRESET_* value; non-zero wins over the band arrays and the scalar
+  /// absorption.
+  int material_preset;
+  /// A @ref SONARE_AIR_ABSORPTION_ON or @ref SONARE_AIR_ABSORPTION_OFF value for the target
+  /// room's late tail; see SonareRirSynthConfig.
   int air_absorption;
-  float air_temperature_c;
-  float air_humidity_percent;
-  /* Receiver spacing in metres for sonare_room_morph_stereo, in (0, 4]. Ignored and not
-   * validated by sonare_room_morph. */
+  float air_temperature_c;     ///< Air temperature in degrees Celsius.
+  float air_humidity_percent;  ///< Relative humidity in percent.
+  /// Receiver spacing in metres for sonare_room_morph_stereo, in (0, 4]. Ignored and not
+  /// validated by sonare_room_morph.
   float receiver_spacing_m;
 } SonareRoomMorphConfig;
 
 /// @brief Result of sonare_room_morph_stereo; free with sonare_free_room_morph_stereo_result.
 typedef struct {
-  float* left;
-  float* right;
-  size_t length;
-  int sample_rate;
+  float* left;      ///< Heap-owned left channel with length samples.
+  float* right;     ///< Heap-owned right channel with length samples.
+  size_t length;    ///< Number of samples in each channel.
+  int sample_rate;  ///< Sample rate in Hz of the input.
 } SonareRoomMorphStereoResult;
 
 #ifdef __cplusplus
@@ -306,11 +337,13 @@ void sonare_room_morph_config_init(SonareRoomMorphConfig* config);
 ///   problems (a clamped tail) are Warning entries of sonare_last_diagnostic.
 SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample_rate,
                                   SonareRirSynthResult* out);
+/// @brief Release the buffer of a @ref SonareRirSynthResult; NULL-safe.
 void sonare_free_rir_synth_result(SonareRirSynthResult* result);
 
 /// @brief Estimate an equivalent room from a recording (or impulse response).
 SonareError sonare_estimate_room(const float* samples, size_t length, int sample_rate,
                                  const SonareRoomEstimateConfig* config, SonareRoomEstimate* out);
+/// @brief Release the band arrays of a @ref SonareRoomEstimate; NULL-safe.
 void sonare_free_room_estimate(SonareRoomEstimate* result);
 
 /// @brief Offline room-character morph toward a target room.
@@ -327,6 +360,7 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
 SonareError sonare_room_morph_stereo(const float* left, const float* right, size_t length,
                                      int sample_rate, const SonareRoomMorphConfig* config,
                                      SonareRoomMorphStereoResult* out);
+/// @brief Release both channels of a @ref SonareRoomMorphStereoResult; NULL-safe.
 void sonare_free_room_morph_stereo_result(SonareRoomMorphStereoResult* result);
 
 /// @brief Name of a SONARE_MATERIAL_PRESET_* value ("none", "concrete", "wood", "curtain",

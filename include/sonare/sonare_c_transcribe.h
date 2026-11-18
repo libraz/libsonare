@@ -77,6 +77,7 @@ typedef struct {
   /// them to its salience estimator's F0 axis; its cent-spectrum bounds remain
   /// independent.
   float f0_min_hz;
+  /// Upper end of the F0 tracker range in Hz; 0 => the source's default (see @c f0_min_hz).
   float f0_max_hz;
   /// Shortest span kept as a note, in milliseconds; 0 => @c min_note_division
   /// if set, else the source's default: 30 for the monophonic segments model,
@@ -98,6 +99,7 @@ typedef struct {
   int32_t fixed_velocity;
   /// UMP group and MIDI channel the events are emitted on; both 0..15.
   int32_t group;
+  /// MIDI channel of the emitted events, 0..15 (see @c group).
   int32_t channel;
   /* --- struct_version 2 --- */
   /// Non-zero measures the tuning reference from the audio and ignores
@@ -122,10 +124,10 @@ typedef struct {
   /// (as @ref SonarePolyphonicConfig); otherwise finite and above 1, and
   /// anything else, negative included, is refused naming the field.
   float reattack_ratio;
-  /// Shortest span kept as a note, as a note value on either path: n is a 1/n
-  /// note at the transcription tempo (32 => a thirty-second note), 1..128.
-  /// 0 => unset. Refused together with a non-zero @c min_note_ms. The tempo
-  /// is the one the events are placed on: the given or detected one for
+  /// A @ref SonareNoteDivision giving the shortest span kept as a note, on either path: n is a 1/n
+  /// note at the transcription tempo (32 => a thirty-second note), 1..128. 0 => unset. Refused
+  /// together with a non-zero @c min_note_ms. The tempo is the one the events are placed on: the
+  /// given or detected one for
   /// @ref sonare_transcribe, the project's at its start for a clip.
   int32_t min_note_division;
   /* --- struct_version 4 --- */
