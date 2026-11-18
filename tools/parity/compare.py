@@ -266,6 +266,8 @@ _ALIAS_COVERAGE = {
     "vocal_draft_capture_snapshot": ("capture_render_snapshot",),
     "vocal_snapshot_output_length": ("output_length_samples",),
     "vocal_render_job_begin": ("begin_render_job",),
+    # Handle construction: a request-object factory on JS, the class on Python. The create op
+    # is a lifecycle key, so Python's constructor needs no credit; restore is the classmethod.
     "vocal_session_create": ("create_vocal_edit_session",),
     "vocal_session_restore": ("restore", "restore_vocal_edit_session"),
     # Project helpers are free-function ergonomic wrappers around the Project
