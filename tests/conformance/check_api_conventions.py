@@ -1098,7 +1098,6 @@ RULES: list[Rule] = [
         violation=_worker_teardown_violation,
         derive=_worker_teardown_records,
         pending={
-            "wasm:VocalEditWorkerDraft": "give the worker draft an async destroy() and [Symbol.asyncDispose]()",
             "wasm:OpfsClipPageProviderOptions.terminateWorkerOnClose": "rename to terminateWorkerOnDestroy",
             "wasm:OpfsClipStreamOptions.terminateWorkerOnClose": "rename to terminateWorkerOnDestroy",
         },

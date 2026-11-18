@@ -465,6 +465,29 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
     expect(worker.disposedSessions).toBe(0);
   });
 
+  it('destroys a worker draft asynchronously, discarding it when still open', async () => {
+    const client = new VocalEditWorkerClient({ worker: new BridgeWorker() });
+    try {
+      const session = await client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
+      const open = await session.beginEdit();
+      const destroying = open.destroy();
+      expect(open.destroy()).toBe(destroying);
+      expect(open[Symbol.asyncDispose]()).toBe(destroying);
+      await expect(destroying).resolves.toBeUndefined();
+      expect(() => open.token).toThrow(expect.objectContaining({ code: ErrorCode.InvalidState }));
+
+      const committed = await session.beginEdit();
+      await committed.commit();
+      await expect(committed.destroy()).resolves.toBeUndefined();
+
+      const orphan = await session.beginEdit();
+      await session.destroy();
+      await expect(orphan.destroy()).resolves.toBeUndefined();
+    } finally {
+      client.destroy();
+    }
+  });
+
   it('keeps the session token in sync when calls are pipelined without awaiting', async () => {
     const client = new VocalEditWorkerClient({ worker: new BridgeWorker() });
     try {

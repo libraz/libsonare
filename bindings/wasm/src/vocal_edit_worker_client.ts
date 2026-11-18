@@ -684,6 +684,7 @@ export class VocalEditWorkerDraft {
   private readonly core: ClientCore;
   private readonly sessionState: SessionState;
   private readonly draftState: DraftState;
+  private destroying: Promise<void> | undefined;
 
   /** @internal Created by {@link VocalEditWorkerSession.beginEdit}. */
   protected constructor(
@@ -801,6 +802,36 @@ export class VocalEditWorkerDraft {
   ): Promise<VocalRenderResult> {
     this.requireOpen();
     return this.core.preview(this.sessionState, request, options);
+  }
+
+  /**
+   * Discards the draft if it is still open and resolves once the Worker has acknowledged it;
+   * a draft already committed, cancelled or released with its session resolves at once.
+   * A second call returns the same promise.
+   */
+  destroy(): Promise<void> {
+    if (this.destroying) {
+      return this.destroying;
+    }
+    const open = this.draftState.open && !this.sessionState.disposed;
+    this.destroying = open
+      ? (async () => {
+          try {
+            await this.cancel();
+          } catch (error) {
+            // A client destroyed meanwhile has already released the draft with its session.
+            if (!isSonareError(error) || error.code !== ErrorCode.InvalidState) {
+              throw error;
+            }
+          }
+        })()
+      : Promise.resolve();
+    return this.destroying;
+  }
+
+  /** Same as {@link destroy}, for `await using`. */
+  [Symbol.asyncDispose](): Promise<void> {
+    return this.destroy();
   }
 
   private close(): void {
