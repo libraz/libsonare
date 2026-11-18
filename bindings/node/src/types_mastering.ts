@@ -13497,7 +13497,7 @@ export interface MasteringResult {
   inputLufs: number;
   /** Integrated loudness of the output in LUFS. */
   outputLufs: number;
-  /** Gain applied, in dB. */
+  /** Sum of the static gains the stages applied, in dB; limiter gain reduction is not included. */
   appliedGainDb: number;
   /** True when peak headroom prevented the requested LUFS target. */
   loudnessTargetLimited?: boolean;
@@ -13554,7 +13554,7 @@ export interface MasteringStereoResult {
   inputLufs: number;
   /** Integrated loudness of the output in LUFS. */
   outputLufs: number;
-  /** Gain applied, in dB. */
+  /** Sum of the static gains the stages applied, in dB; limiter gain reduction is not included. */
   appliedGainDb: number;
   /**
    * The processor's own latency, already compensated in the returned audio;
@@ -14078,7 +14078,7 @@ export interface MasteringReport {
   before: MasteringLoudnessSummary;
   /** Measurements of the output. */
   after: MasteringLoudnessSummary;
-  /** Gain applied by the chain, in dB. */
+  /** Sum of the static gains the stages applied, in dB; limiter gain reduction is not included. */
   appliedGainDb: number;
   /** Most-negative final dynamics/limiter gain reduction, or zero when none ran. */
   maxGainReductionDb: number;
@@ -14098,7 +14098,7 @@ export interface MasteringChainResult {
   inputLufs: number;
   /** Integrated loudness of the output in LUFS. */
   outputLufs: number;
-  /** Gain applied by the loudness stage, in dB. */
+  /** Sum of the static gains the stages applied, in dB; limiter gain reduction is not included. */
   appliedGainDb: number;
   /** Names of the stages that ran, in order. */
   stages: string[];
@@ -14156,7 +14156,7 @@ export interface MasteringChainStereoResult {
   inputLufs: number;
   /** Integrated loudness of the output in LUFS. */
   outputLufs: number;
-  /** Gain applied by the loudness stage, in dB. */
+  /** Sum of the static gains the stages applied, in dB; limiter gain reduction is not included. */
   appliedGainDb: number;
   /** Names of the stages that ran, in order. */
   stages: string[];
