@@ -843,6 +843,42 @@ def test_scene_warnings_surface_ignored_insert_params() -> None:
         mixer.close()
 
 
+def test_scene_warnings_surface_a_send_to_an_undeclared_bus() -> None:
+    """A send to a bus the scene does not declare loads and is reported, not refused."""
+    import json
+
+    from libsonare import Mixer
+
+    def scene(destination: str) -> str:
+        return json.dumps(
+            {
+                "version": 1,
+                "buses": [{"id": "master", "role": "master"}, {"id": "aux1", "role": "aux"}],
+                "strips": [
+                    {
+                        "id": "a",
+                        "sends": [{"id": "s", "destinationBusId": destination, "sendDb": 0}],
+                    }
+                ],
+                "connections": [{"source": "a", "destination": "master"}],
+            }
+        )
+
+    mixer = Mixer.from_scene_json(scene("aux1typo"), sample_rate=48000, max_block_size=256)
+    try:
+        assert mixer.scene_warnings() == [
+            "send 'a' targets undeclared bus 'aux1typo'; created as implicit aux"
+        ]
+    finally:
+        mixer.close()
+
+    mixer = Mixer.from_scene_json(scene("aux1"), sample_rate=48000, max_block_size=256)
+    try:
+        assert mixer.scene_warnings() == []
+    finally:
+        mixer.close()
+
+
 def test_from_scene_json_refuses_an_unknown_scene_key_by_path() -> None:
     """A misspelled scene key is refused by path; ``$`` and ``x-`` keys are exempt."""
     import json
