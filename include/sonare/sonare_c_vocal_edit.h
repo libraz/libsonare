@@ -16,304 +16,331 @@ extern "C" {
 ///        every struct's @c schema_version must carry it.
 #define SONARE_VOCAL_EDIT_ABI_VERSION 1u
 
+/// @brief Opaque editing session over one mono source; destroy with sonare_vocal_session_destroy.
 typedef struct SonareVocalEditSession SonareVocalEditSession;
+/// @brief Opaque uncommitted edit draft of a session; destroy with sonare_vocal_draft_destroy.
 typedef struct SonareVocalEditDraft SonareVocalEditDraft;
+/// @brief Opaque immutable render snapshot; destroy with sonare_vocal_snapshot_destroy.
 typedef struct SonareVocalRenderSnapshot SonareVocalRenderSnapshot;
+/// @brief Opaque incremental render job; destroy with sonare_vocal_render_job_destroy.
 typedef struct SonareVocalRenderJob SonareVocalRenderJob;
 
+/// @brief How a note's target pitch is defined.
 typedef enum SONARE_ENUM_BASE {
-  SONARE_VOCAL_TARGET_NONE = 0,
-  SONARE_VOCAL_TARGET_CENTER = 1,
-  SONARE_VOCAL_TARGET_CURVE = 2
+  SONARE_VOCAL_TARGET_NONE = 0,    ///< No target; pitch is only transposed or scaled.
+  SONARE_VOCAL_TARGET_CENTER = 1,  ///< Pull the note toward the constant @c target_midi.
+  SONARE_VOCAL_TARGET_CURVE = 2    ///< Pull the note toward the @c target_points curve.
 } SonareVocalTargetMode;
 
+/// @brief How a note's formants follow its pitch edit.
 typedef enum SONARE_ENUM_BASE {
-  SONARE_VOCAL_FORMANT_PRESERVE = 0,
-  SONARE_VOCAL_FORMANT_SHIFT = 1
+  SONARE_VOCAL_FORMANT_PRESERVE = 0,  ///< Keep the original formants; the shift must be 0.
+  SONARE_VOCAL_FORMANT_SHIFT = 1      ///< Shift formants by @c formant_shift_semitones.
 } SonareVocalFormantMode;
 
+/// @brief Kind of a @ref SonareVocalOperation; selects which of its fields are read.
 typedef enum SONARE_ENUM_BASE {
-  SONARE_VOCAL_SET_EDIT = 0,
-  SONARE_VOCAL_SET_SOURCE_SPAN = 1,
-  SONARE_VOCAL_SPLIT = 2,
-  SONARE_VOCAL_MERGE = 3,
-  SONARE_VOCAL_SET_TRANSITION = 4,
-  SONARE_VOCAL_REMOVE_TRANSITION = 5,
-  SONARE_VOCAL_RESET = 6
+  SONARE_VOCAL_SET_EDIT = 0,         ///< Replace a note's edit; reads note_id and edit.
+  SONARE_VOCAL_SET_SOURCE_SPAN = 1,  ///< Move a note's source span and its destination span.
+  SONARE_VOCAL_SPLIT = 2,            ///< Split a note at cut_source_sample; reads note_id.
+  SONARE_VOCAL_MERGE = 3,            ///< Merge note_ids into one note; reads merge_policy.
+  SONARE_VOCAL_SET_TRANSITION = 4,   ///< Add or replace a pitch transition; reads transition.
+  SONARE_VOCAL_REMOVE_TRANSITION =
+      5,                  ///< Remove the transition between the two transition note ids.
+  SONARE_VOCAL_RESET = 6  ///< Restore note_ids to their unedited state.
 } SonareVocalOperationKind;
 
+/// @brief What a merge does with the merged notes' edits.
 typedef enum SONARE_ENUM_BASE {
-  SONARE_VOCAL_MERGE_PRESERVE = 0,
-  SONARE_VOCAL_MERGE_RESET = 1
+  SONARE_VOCAL_MERGE_PRESERVE = 0,  ///< Keep the notes' edits; they must be compatible.
+  SONARE_VOCAL_MERGE_RESET = 1      ///< Discard the edits of the merged notes.
 } SonareVocalMergePolicy;
 
+/// @brief Machine-readable cause of the last failed vocal-edit call.
 typedef enum SONARE_ENUM_BASE {
-  SONARE_VOCAL_REASON_NONE = 0,
-  SONARE_VOCAL_REASON_INVALID_INPUT = 1,
-  SONARE_VOCAL_REASON_REVISION_CONFLICT = 2,
-  SONARE_VOCAL_REASON_SOURCE_MISMATCH = 3,
-  SONARE_VOCAL_REASON_UNSUPPORTED = 4,
-  SONARE_VOCAL_REASON_CANCELLED = 5,
-  SONARE_VOCAL_REASON_COUNTER_EXHAUSTED = 6,
-  SONARE_VOCAL_REASON_INVALID_STATE = 7
+  SONARE_VOCAL_REASON_NONE = 0,               ///< The last call succeeded.
+  SONARE_VOCAL_REASON_INVALID_INPUT = 1,      ///< An argument or struct field was refused.
+  SONARE_VOCAL_REASON_REVISION_CONFLICT = 2,  ///< The expected revision or generation is stale.
+  SONARE_VOCAL_REASON_SOURCE_MISMATCH = 3,    ///< The source audio does not match the state.
+  SONARE_VOCAL_REASON_UNSUPPORTED = 4,        ///< The request or the feature is not supported.
+  SONARE_VOCAL_REASON_CANCELLED = 5,          ///< A cancel callback or abort stopped the call.
+  SONARE_VOCAL_REASON_COUNTER_EXHAUSTED = 6,  ///< An internal id or revision counter ran out.
+  SONARE_VOCAL_REASON_INVALID_STATE = 7       ///< The object is in a state that refuses the call.
 } SonareVocalReason;
 
+/// @brief One point of a target pitch curve.
 typedef struct {
-  double source_sample;
-  double midi;
+  double source_sample;  ///< Position in source samples.
+  double midi;           ///< Target pitch as a MIDI note number (fractional allowed).
 } SonareVocalPitchPoint;
 
+/// @brief Half-open sample interval [start_sample, end_sample).
 typedef struct {
-  int64_t start_sample;
-  int64_t end_sample;
+  int64_t start_sample;  ///< First sample of the interval.
+  int64_t end_sample;    ///< One past the last sample of the interval.
 } SonareVocalRange;
 
 /// @brief Caller-supplied pitch analysis passed to sonare_vocal_session_create.
 ///   Pointer members are borrowed from the caller and copied during the call; the library
 ///   does not retain them, so this struct does not transfer ownership.
 typedef struct {
-  uint32_t struct_size;
-  uint32_t schema_version;
-  double frame_origin_sample;
-  double samples_per_frame;
-  uint32_t frame_length_samples;
-  const float* f0_hz;
-  const uint8_t* voiced;
-  uint64_t frame_count;
-  const char* algorithm_id;
-  uint32_t algorithm_version;
-  double fmin_hz;
-  double fmax_hz;
-  double yin_threshold;
-  double voiced_threshold;
-  uint32_t centered;
-  double segmentation_threshold_cents;
-  double min_note_ms;
-  double reference_hz;
+  uint32_t struct_size;           ///< sizeof of this struct; set by the matching init function.
+  uint32_t schema_version;        ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
+  double frame_origin_sample;     ///< Source sample at which frame 0 is positioned.
+  double samples_per_frame;       ///< Hop between frames, in source samples (default 512).
+  uint32_t frame_length_samples;  ///< Analysis window length in samples (default 2048).
+  const float* f0_hz;             ///< frame_count fundamentals in Hz.
+  const uint8_t* voiced;          ///< frame_count flags; nonzero marks a voiced frame.
+  uint64_t frame_count;           ///< Number of entries in f0_hz and voiced.
+  const char*
+      algorithm_id;  ///< NUL-terminated analyzer name, fewer than 256 bytes (default "host").
+  uint32_t algorithm_version;  ///< Version of the analyzer named by algorithm_id.
+  double fmin_hz;              ///< Lowest fundamental searched, in Hz.
+  double fmax_hz;              ///< Highest fundamental searched, in Hz.
+  double yin_threshold;        ///< YIN absolute threshold used by the analyzer.
+  double voiced_threshold;  ///< Voicing probability threshold used by the analyzer (default 0.5).
+  uint32_t centered;        ///< Nonzero if frames are centered on their positions; only 0 or 1.
+  double segmentation_threshold_cents;  ///< Pitch deviation in cents that starts a new note
+                                        ///< (default 50).
+  double min_note_ms;                   ///< Shortest note, in milliseconds (default 30).
+  double reference_hz;                  ///< Frequency of MIDI note 69 in Hz (default 440).
 } SonareVocalAnalysis;
 
 /// @brief Session creation options; @c analysis is optional and may be NULL.
 ///   Pointer members are borrowed from the caller and copied during the call; the library
 ///   does not retain them, so this struct does not transfer ownership.
 typedef struct {
-  uint32_t struct_size;
-  uint32_t schema_version;
-  int64_t output_length_samples; /* 0 selects the source length. */
-  double edge_fade_ms;
-  double vibrato_cutoff_hz;
-  double segmentation_threshold_cents;
-  double min_note_ms;
-  uint32_t frame_length_samples;
-  uint32_t hop_length_samples;
-  double fmin_hz;
-  double fmax_hz;
-  uint64_t max_history_bytes;
-  uint64_t max_cache_bytes;
-  uint32_t max_undo_depth;
-  uint32_t max_render_jobs;
-  const SonareVocalAnalysis* analysis; /* NULL runs pYIN once. */
-  double yin_threshold;
-  double voiced_threshold;
-  uint32_t centered;
-  double reference_hz;
+  uint32_t struct_size;           ///< sizeof of this struct; set by the matching init function.
+  uint32_t schema_version;        ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
+  int64_t output_length_samples;  ///< Output length in samples; 0 selects the source length.
+  double edge_fade_ms;            ///< Fade applied at note edges, in milliseconds (default 5).
+  double vibrato_cutoff_hz;       ///< Cutoff separating vibrato from drift, in Hz (default 3).
+  double segmentation_threshold_cents;  ///< Pitch deviation in cents that starts a new note
+                                        ///< (default 50).
+  double min_note_ms;                   ///< Shortest note, in milliseconds (default 30).
+  uint32_t frame_length_samples;        ///< Pitch analysis window length in samples (default 2048).
+  uint32_t hop_length_samples;          ///< Pitch analysis hop in samples (default 512).
+  double fmin_hz;                       ///< Lowest fundamental searched, in Hz.
+  double fmax_hz;                       ///< Highest fundamental searched, in Hz.
+  uint64_t max_history_bytes;  ///< Memory budget of the undo history in bytes (default 64 MiB).
+  uint64_t max_cache_bytes;    ///< Memory budget of the render cache in bytes (default 128 MiB).
+  uint32_t max_undo_depth;     ///< Maximum number of undo steps kept (default 128).
+  uint32_t max_render_jobs;    ///< Maximum concurrent render jobs (default 4).
+  const SonareVocalAnalysis* analysis;  ///< Host-supplied analysis; NULL runs pYIN once.
+  double yin_threshold;                 ///< YIN absolute threshold of the built-in analysis.
+  double voiced_threshold;              ///< Voicing probability threshold (default 0.5).
+  uint32_t centered;                    ///< Nonzero if analysis frames are centered; only 0 or 1.
+  double reference_hz;                  ///< Frequency of MIDI note 69 in Hz (default 440).
 } SonareVocalCreateOptions;
 
-/* Runtime limits for a restored session; the authored state carries everything else. */
+/// @brief Runtime limits for a restored session; the authored state carries everything else.
 typedef struct {
-  uint32_t struct_size;
-  uint32_t schema_version;
-  uint64_t max_history_bytes;
-  uint64_t max_cache_bytes;
-  uint32_t max_undo_depth;
-  uint32_t max_render_jobs;
+  uint32_t struct_size;        ///< sizeof of this struct; set by the matching init function.
+  uint32_t schema_version;     ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
+  uint64_t max_history_bytes;  ///< Memory budget of the undo history in bytes (default 64 MiB).
+  uint64_t max_cache_bytes;    ///< Memory budget of the render cache in bytes (default 128 MiB).
+  uint32_t max_undo_depth;     ///< Maximum number of undo steps kept (default 128).
+  uint32_t max_render_jobs;    ///< Maximum concurrent render jobs (default 4).
 } SonareVocalRestoreOptions;
 
 /// @brief Per-note edit parameters.
 ///   Pointer members are borrowed from the caller and copied during the call; the library
 ///   does not retain them, so this struct does not transfer ownership.
 typedef struct {
-  uint32_t struct_size;
-  uint32_t schema_version;
-  uint32_t target_mode;
-  double target_midi;
-  const SonareVocalPitchPoint* target_points;
-  uint64_t target_point_count;
-  double amount;
-  double speed_ms;
-  double max_correction_semitones;
-  double transpose_semitones;
-  double drift_scale;
-  double vibrato_scale;
-  int64_t destination_start_sample;
-  int64_t destination_length_samples;
-  double gain_db;
-  uint32_t muted;
-  uint32_t formant_mode;
-  double formant_shift_semitones;
-  const float* amplitude_envelope;
-  uint64_t amplitude_envelope_count;
+  uint32_t struct_size;     ///< sizeof of this struct; set by the matching init function.
+  uint32_t schema_version;  ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
+  uint32_t target_mode;     ///< A @ref SonareVocalTargetMode choosing how the target is given.
+  double target_midi;       ///< Target pitch as a MIDI note number for CENTER mode.
+  const SonareVocalPitchPoint* target_points;  ///< target_point_count curve points for CURVE mode.
+  uint64_t target_point_count;                 ///< Number of entries in target_points.
+  double amount;                       ///< Correction strength toward the target, in [0, 1].
+  double speed_ms;                     ///< Correction smoothing time constant in ms; 0 is instant.
+  double max_correction_semitones;     ///< Largest correction applied, in semitones; at least 0.
+  double transpose_semitones;          ///< Pitch shift added to the note, in semitones.
+  double drift_scale;                  ///< Scale of the slow pitch drift (1 keeps it).
+  double vibrato_scale;                ///< Scale of the vibrato depth (1 keeps it).
+  int64_t destination_start_sample;    ///< Start of the note in the output, in samples.
+  int64_t destination_length_samples;  ///< Length of the note in the output, in samples.
+  double gain_db;                      ///< Gain applied to the note, in dB.
+  uint32_t muted;                      ///< Nonzero silences the note; only 0 or 1.
+  uint32_t formant_mode;               ///< A @ref SonareVocalFormantMode choosing formant handling.
+  double formant_shift_semitones;      ///< Formant shift in semitones; limits in capabilities.
+  const float* amplitude_envelope;     ///< amplitude_envelope_count non-negative gain factors.
+  uint64_t amplitude_envelope_count;   ///< Number of entries in amplitude_envelope; 0 means none.
 } SonareVocalNoteEdit;
 
+/// @brief A detected note with its current edit.
+///   @c amplitude and the edit's arrays are library-allocated; release them through
+///   sonare_vocal_free_notes on the owning @ref SonareVocalNotesResult.
 typedef struct {
-  uint32_t struct_size;
-  uint32_t schema_version;
-  uint32_t id;
-  int64_t source_start_sample;
-  int64_t source_end_sample;
-  uint64_t analysis_frame_start;
-  uint64_t analysis_frame_end;
-  uint32_t has_pitch;
-  double median_hz;
-  double center_midi;
-  double f0_stability;
-  const float* amplitude;
-  uint64_t amplitude_count;
-  SonareVocalNoteEdit edit;
+  uint32_t struct_size;           ///< sizeof of this struct; set by the matching init function.
+  uint32_t schema_version;        ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
+  uint32_t id;                    ///< Note id; never 0.
+  int64_t source_start_sample;    ///< First source sample of the note.
+  int64_t source_end_sample;      ///< One past the last source sample of the note.
+  uint64_t analysis_frame_start;  ///< First analysis frame of the note.
+  uint64_t analysis_frame_end;    ///< One past the last analysis frame of the note.
+  uint32_t has_pitch;        ///< Nonzero if the note is pitched; otherwise the pitch fields are 0.
+  double median_hz;          ///< Median fundamental in Hz.
+  double center_midi;        ///< Center pitch as a MIDI note number.
+  double f0_stability;       ///< Pitch steadiness in [0, 1]; 1 is steadiest.
+  const float* amplitude;    ///< amplitude_count per-frame amplitudes of the note.
+  uint64_t amplitude_count;  ///< Number of entries in amplitude.
+  SonareVocalNoteEdit edit;  ///< Current edit; its arrays are library-allocated.
 } SonareVocalNote;
 
+/// @brief Pitch blend across the boundary between two adjacent notes.
 typedef struct {
-  uint32_t struct_size;
-  uint32_t schema_version;
-  uint32_t left_note_id;
-  uint32_t right_note_id;
-  int64_t left_window_samples;
-  int64_t right_window_samples;
-  double strength;
+  uint32_t struct_size;          ///< sizeof of this struct; set by the matching init function.
+  uint32_t schema_version;       ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
+  uint32_t left_note_id;         ///< Id of the earlier note.
+  uint32_t right_note_id;        ///< Id of the later note.
+  int64_t left_window_samples;   ///< Blend length inside the left note, in samples; positive.
+  int64_t right_window_samples;  ///< Blend length inside the right note, in samples; positive.
+  double strength;               ///< Blend strength in [0, 1].
 } SonareVocalTransition;
 
 /// @brief Versioned tagged operation; only the selected kind's fields are read.
 ///   Pointer members are borrowed from the caller and copied during the call; the library
 ///   does not retain them, so this struct does not transfer ownership.
 typedef struct {
-  uint32_t struct_size;
-  uint32_t schema_version;
-  uint32_t kind;
-  uint32_t note_id;
-  SonareVocalNoteEdit edit;
-  int64_t source_start_sample;
-  int64_t source_end_sample;
-  int64_t destination_start_sample;
-  int64_t destination_length_samples;
-  int64_t cut_source_sample;
-  const uint32_t* note_ids;
-  uint64_t note_id_count;
-  uint32_t merge_policy;
-  SonareVocalTransition transition;
+  uint32_t struct_size;              ///< sizeof of this struct; set by the matching init function.
+  uint32_t schema_version;           ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
+  uint32_t kind;                     ///< A @ref SonareVocalOperationKind selecting the operation.
+  uint32_t note_id;                  ///< Target note of SET_EDIT, SET_SOURCE_SPAN and SPLIT.
+  SonareVocalNoteEdit edit;          ///< New edit for SET_EDIT.
+  int64_t source_start_sample;       ///< New source span start for SET_SOURCE_SPAN.
+  int64_t source_end_sample;         ///< New source span end for SET_SOURCE_SPAN.
+  int64_t destination_start_sample;  ///< New destination start for SET_SOURCE_SPAN.
+  int64_t destination_length_samples;  ///< New destination length for SET_SOURCE_SPAN.
+  int64_t cut_source_sample;           ///< Source sample at which SPLIT cuts the note.
+  const uint32_t* note_ids;            ///< note_id_count ids for MERGE and RESET.
+  uint64_t note_id_count;              ///< Number of entries in note_ids.
+  uint32_t merge_policy;               ///< A @ref SonareVocalMergePolicy for MERGE.
+  SonareVocalTransition
+      transition;  ///< Transition for SET_TRANSITION; REMOVE_TRANSITION reads its note ids.
 } SonareVocalOperation;
 
+/// @brief Identifies the exact session state a result was produced from.
 typedef struct {
-  uint64_t session_epoch;
-  uint64_t revision;
-  uint64_t draft_id;
-  uint64_t generation;
-  uint64_t request_id;
-  uint32_t profile_id;
+  uint64_t session_epoch;  ///< Identifies the session instance.
+  uint64_t revision;       ///< Committed revision of the session.
+  uint64_t draft_id;       ///< Draft the state belongs to; 0 outside a draft.
+  uint64_t generation;     ///< Draft generation, advanced by each apply; 0 outside a draft.
+  uint64_t request_id;     ///< Caller request id of a render; 0 for non-render results.
+  uint32_t profile_id;     ///< Render profile id; see @ref SonareVocalCapabilities.
 } SonareVocalStateToken;
 
 /// @brief Notes and transitions of a session or draft.
 ///   Library-allocated arrays; release them with sonare_vocal_free_notes, which also resets the
 ///   struct.
 typedef struct {
-  uint32_t struct_size;
-  uint32_t schema_version;
-  SonareVocalNote* notes;
-  uint64_t note_count;
-  SonareVocalTransition* transitions;
-  uint64_t transition_count;
+  uint32_t struct_size;     ///< sizeof of this struct; set by the matching init function.
+  uint32_t schema_version;  ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
+  SonareVocalNote* notes;   ///< note_count notes.
+  uint64_t note_count;      ///< Number of entries in notes.
+  SonareVocalTransition* transitions;  ///< transition_count transitions.
+  uint64_t transition_count;           ///< Number of entries in transitions.
 } SonareVocalNotesResult;
 
+/// @brief The analysis a session holds, with digests of its source and of the analysis.
+///   Library-allocated arrays; release them with sonare_vocal_free_analysis, which also resets
+///   the struct.
 typedef struct {
-  uint32_t struct_size;
-  uint32_t schema_version;
-  SonareVocalAnalysis analysis;
-  char source_sha256[65];
-  char analysis_sha256[65];
-  int64_t source_length_samples;
-  uint32_t sample_rate;
+  uint32_t struct_size;           ///< sizeof of this struct; set by the matching init function.
+  uint32_t schema_version;        ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
+  SonareVocalAnalysis analysis;   ///< Analysis grid, F0 track and settings; library-owned arrays.
+  char source_sha256[65];         ///< Lowercase hex SHA-256 of the source, NUL-terminated.
+  char analysis_sha256[65];       ///< Lowercase hex SHA-256 of the analysis, NUL-terminated.
+  int64_t source_length_samples;  ///< Source length in samples.
+  uint32_t sample_rate;           ///< Source sample rate in Hz.
 } SonareVocalAnalysisResult;
 
+/// @brief Note ids replaced by one applied operation.
 typedef struct {
-  uint32_t operation_index;
-  uint32_t retired_id;
-  uint32_t first_new_id;
-  uint32_t second_new_id;
+  uint32_t operation_index;  ///< Index of the operation in the applied array.
+  uint32_t retired_id;       ///< Id no longer in use.
+  uint32_t first_new_id;     ///< First id that replaced it; 0 if none.
+  uint32_t second_new_id;    ///< Second id that replaced it; 0 if none.
 } SonareVocalIdChange;
 
 /// @brief Outcome of an edit, undo, redo or commit.
 ///   Library-allocated arrays; release them with sonare_vocal_free_edit_result, which also resets
 ///   the struct.
 typedef struct {
-  uint32_t struct_size;
-  uint32_t schema_version;
-  SonareVocalStateToken token;
-  SonareVocalRange* dirty_ranges;
-  uint64_t dirty_range_count;
-  SonareVocalIdChange* id_changes;
-  uint64_t id_change_count;
+  uint32_t struct_size;             ///< sizeof of this struct; set by the matching init function.
+  uint32_t schema_version;          ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
+  SonareVocalStateToken token;      ///< State after the call.
+  SonareVocalRange* dirty_ranges;   ///< Ranges whose rendered audio changed.
+  uint64_t dirty_range_count;       ///< Number of entries in dirty_ranges.
+  SonareVocalIdChange* id_changes;  ///< Note ids retired and created; only set by apply.
+  uint64_t id_change_count;         ///< Number of entries in id_changes.
 } SonareVocalEditResult;
 
 /// @brief Per-frame pitch evaluation of one note.
 ///   Library-allocated arrays; release them with sonare_vocal_free_pitch_result, which also resets
 ///   the struct.
 typedef struct {
-  uint32_t struct_size;
-  uint32_t schema_version;
-  double* source_samples;
-  double* measured_midi;
-  double* target_midi;
-  double* effective_midi;
-  uint8_t* voiced;
-  uint8_t* has_target;
-  uint64_t frame_count;
+  uint32_t struct_size;     ///< sizeof of this struct; set by the matching init function.
+  uint32_t schema_version;  ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
+  double* source_samples;   ///< frame_count frame positions, in source samples.
+  double* measured_midi;    ///< frame_count measured pitches as MIDI note numbers.
+  double* target_midi;      ///< frame_count target pitches as MIDI note numbers.
+  double* effective_midi;   ///< frame_count pitches after the edit as MIDI note numbers.
+  uint8_t* voiced;          ///< frame_count flags; nonzero marks a voiced frame.
+  uint8_t* has_target;      ///< frame_count flags; nonzero where target_midi is defined.
+  uint64_t frame_count;     ///< Number of entries in each array.
 } SonareVocalPitchResult;
 
 /// @brief Rendered PCM and the ranges it covers.
 ///   Library-allocated arrays; release them with sonare_vocal_free_render_result, which also resets
 ///   the struct.
 typedef struct {
-  uint32_t struct_size;
-  uint32_t schema_version;
-  float* samples;
-  int64_t sample_count;
-  int64_t start_sample;
-  SonareVocalStateToken token;
-  SonareVocalRange* processed_ranges;
-  uint64_t processed_range_count;
-  uint64_t cache_hit_units;
-  uint64_t dry_passed_frames;
-  uint64_t limited_correction_frames;
+  uint32_t struct_size;         ///< sizeof of this struct; set by the matching init function.
+  uint32_t schema_version;      ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
+  float* samples;               ///< sample_count mono samples.
+  int64_t sample_count;         ///< Number of entries in samples.
+  int64_t start_sample;         ///< Output sample at which samples begins.
+  SonareVocalStateToken token;  ///< State rendered; request_id echoes the caller's.
+  SonareVocalRange* processed_ranges;  ///< Ranges of the output covered by this render.
+  uint64_t processed_range_count;      ///< Number of entries in processed_ranges.
+  uint64_t cache_hit_units;            ///< Render units served from the cache.
+  uint64_t dry_passed_frames;          ///< Voiced frames left unshifted: target pitch out of range.
+  uint64_t limited_correction_frames;  ///< Frames whose correction was clamped to the maximum.
 } SonareVocalRenderResult;
 
 /// @brief Serialized session state.
 ///   Library-allocated arrays; release them with sonare_vocal_free_state_bytes, which also resets
 ///   the struct.
 typedef struct {
-  uint32_t struct_size;
-  uint32_t schema_version;
-  uint8_t* data;
-  uint64_t size;
+  uint32_t struct_size;     ///< sizeof of this struct; set by the matching init function.
+  uint32_t schema_version;  ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
+  uint8_t* data;            ///< size bytes of state; pass to sonare_vocal_session_restore.
+  uint64_t size;            ///< Number of bytes in data.
 } SonareVocalStateBytes;
 
+/// @brief What the session's renderer supports.
 typedef struct {
-  uint32_t struct_size;
-  uint32_t schema_version;
-  uint32_t abi_version;
-  uint32_t profile_id;
-  uint32_t monophonic_only;
-  uint32_t analysis_cancellable;
-  double minimum_formant_shift_semitones;
-  double maximum_formant_shift_semitones;
+  uint32_t struct_size;           ///< sizeof of this struct; set by the matching init function.
+  uint32_t schema_version;        ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
+  uint32_t abi_version;           ///< Vocal-edit ABI version of the library.
+  uint32_t profile_id;            ///< Render profile id; 1 is the PSOLA vocal profile.
+  uint32_t monophonic_only;       ///< Nonzero if only monophonic sources are supported.
+  uint32_t analysis_cancellable;  ///< Nonzero if analysis can be cancelled.
+  double minimum_formant_shift_semitones;  ///< Lowest accepted formant shift, in semitones.
+  double maximum_formant_shift_semitones;  ///< Highest accepted formant shift, in semitones.
 } SonareVocalCapabilities;
 
+/// @brief Structured context of the last failed vocal-edit call on the calling thread.
 typedef struct {
-  uint32_t struct_size;
-  uint32_t schema_version;
-  uint32_t reason;
-  char field[96];
-  uint64_t expected;
-  uint64_t actual;
-  char expected_text[96];
-  char actual_text[96];
+  uint32_t struct_size;     ///< sizeof of this struct; set by the matching init function.
+  uint32_t schema_version;  ///< Must equal @ref SONARE_VOCAL_EDIT_ABI_VERSION.
+  uint32_t reason;          ///< A @ref SonareVocalReason naming the cause.
+  char field[96];           ///< Name of the offending field; empty if none.
+  uint64_t expected;        ///< Numeric form of expected_text; 0 if it is not a number.
+  uint64_t actual;          ///< Numeric form of actual_text; 0 if it is not a number.
+  char expected_text[96];   ///< Expected value as text; empty if none.
+  char actual_text[96];     ///< Offending value as text; empty if none.
 } SonareVocalErrorDetail;
 
 /// @brief Nonzero requests cancellation; user_data is used only during the call.
@@ -321,20 +348,41 @@ typedef int (*SonareVocalCancelCallback)(void* user_data);
 
 /// @brief Returns SONARE_VOCAL_EDIT_ABI_VERSION as compiled into the library.
 uint32_t sonare_vocal_edit_abi_version(void);
+/// @brief Sets @p analysis to its defaults (pitch defaults, algorithm id "host", no frames).
+/// @param analysis Struct to initialize; NULL is ignored.
 void sonare_vocal_analysis_init(SonareVocalAnalysis* analysis);
+/// @brief Sets @p options to the defaults noted on each field; NULL is ignored.
 void sonare_vocal_create_options_init(SonareVocalCreateOptions* options);
+/// @brief Sets @p options to the default runtime limits; NULL is ignored.
 void sonare_vocal_restore_options_init(SonareVocalRestoreOptions* options);
+/// @brief Sets @p edit to an identity edit (no target, no gain, 12 semitone correction limit).
 void sonare_vocal_note_edit_init(SonareVocalNoteEdit* edit);
+/// @brief Sets @p operation to defaults, including an initialized nested edit and transition.
 void sonare_vocal_operation_init(SonareVocalOperation* operation);
-/* Initialize outputs before use. Free owned data before reusing an output. */
+/// @brief Initializes an output struct before use; any owned data must be freed first.
 void sonare_vocal_notes_result_init(SonareVocalNotesResult* result);
+/// @brief Initializes an @ref SonareVocalAnalysisResult before use; any owned data must be freed
+/// first.
 void sonare_vocal_analysis_result_init(SonareVocalAnalysisResult* result);
+/// @brief Initializes an @ref SonareVocalEditResult before use; any owned data must be freed first.
 void sonare_vocal_edit_result_init(SonareVocalEditResult* result);
+/// @brief Initializes an @ref SonareVocalPitchResult before use; any owned data must be freed
+/// first.
 void sonare_vocal_pitch_result_init(SonareVocalPitchResult* result);
+/// @brief Initializes an @ref SonareVocalRenderResult before use; any owned data must be freed
+/// first.
 void sonare_vocal_render_result_init(SonareVocalRenderResult* result);
+/// @brief Initializes an @ref SonareVocalStateBytes before use; any owned data must be freed first.
 void sonare_vocal_state_bytes_init(SonareVocalStateBytes* result);
+/// @brief Initializes an @ref SonareVocalCapabilities before use; any owned data must be freed
+/// first.
 void sonare_vocal_capabilities_init(SonareVocalCapabilities* result);
+/// @brief Initializes an @ref SonareVocalErrorDetail before use; any owned data must be freed
+/// first.
 void sonare_vocal_error_detail_init(SonareVocalErrorDetail* result);
+/// @brief Copies the detail of the calling thread's last failed vocal-edit call into @p detail.
+///   @p detail must be initialized with sonare_vocal_error_detail_init; otherwise it is left
+///   unchanged.
 void sonare_vocal_last_error_detail(SonareVocalErrorDetail* detail);
 
 /// @brief Creates a session over mono source PCM; @p sample_rate must lie in [8000, 384000] Hz.
@@ -343,23 +391,38 @@ void sonare_vocal_last_error_detail(SonareVocalErrorDetail* detail);
 SonareError sonare_vocal_session_create(const float* samples, int64_t frames, int channels,
                                         int sample_rate, const SonareVocalCreateOptions* options,
                                         SonareVocalEditSession** out_session);
+/// @brief Destroys a session; NULL is ignored.
 void sonare_vocal_session_destroy(SonareVocalEditSession* session);
+/// @brief Reads the session's notes and transitions into @p result; free with
+///   sonare_vocal_free_notes.
 SonareError sonare_vocal_session_notes(const SonareVocalEditSession* session,
                                        SonareVocalNotesResult* result);
+/// @brief Reads the draft's notes and transitions into @p result; free with
+///   sonare_vocal_free_notes.
 SonareError sonare_vocal_draft_notes(const SonareVocalEditDraft* draft,
                                      SonareVocalNotesResult* result);
+/// @brief Reads the session's current state token.
 SonareError sonare_vocal_session_token(const SonareVocalEditSession* session,
                                        SonareVocalStateToken* token);
+/// @brief Reads the draft's current state token.
 SonareError sonare_vocal_draft_token(const SonareVocalEditDraft* draft,
                                      SonareVocalStateToken* token);
+/// @brief Reads the session's analysis into @p result; free with sonare_vocal_free_analysis.
 SonareError sonare_vocal_session_analysis(const SonareVocalEditSession* session,
                                           SonareVocalAnalysisResult* result);
+/// @brief Reads the renderer capabilities into @p result.
 SonareError sonare_vocal_session_capabilities(const SonareVocalEditSession* session,
                                               SonareVocalCapabilities* result);
+/// @brief Reads the committed revision number of the session.
 SonareError sonare_vocal_session_revision(const SonareVocalEditSession* session,
                                           uint64_t* revision);
+/// @brief Reads the session's output length in samples.
+/// @param samples Receives the length.
 SonareError sonare_vocal_session_output_length(const SonareVocalEditSession* session,
                                                int64_t* samples);
+/// @brief Reports whether undo and redo are available.
+/// @param can_undo Receives 1 or 0.
+/// @param can_redo Receives 1 or 0.
 SonareError sonare_vocal_session_history(const SonareVocalEditSession* session, int* can_undo,
                                          int* can_redo);
 /// @brief Opens a draft over the session at @p expected_revision.
@@ -368,6 +431,10 @@ SonareError sonare_vocal_session_history(const SonareVocalEditSession* session, 
 SonareError sonare_vocal_session_begin_edit(SonareVocalEditSession* session,
                                             uint64_t expected_revision,
                                             SonareVocalEditDraft** out_draft);
+/// @brief Applies @p count operations to the draft.
+/// @param expected_generation Draft generation the caller last saw; a stale value is refused.
+/// @param result Receives the new token, dirty ranges and id changes; free with
+///   sonare_vocal_free_edit_result.
 SonareError sonare_vocal_draft_apply(SonareVocalEditDraft* draft, uint64_t expected_generation,
                                      const SonareVocalOperation* operations, uint64_t count,
                                      SonareVocalEditResult* result);
@@ -375,25 +442,50 @@ SonareError sonare_vocal_draft_apply(SonareVocalEditDraft* draft, uint64_t expec
 ///   result carries the current revision and no dirty ranges, and redo history is kept.
 SonareError sonare_vocal_draft_commit(SonareVocalEditDraft* draft, uint64_t expected_revision,
                                       SonareVocalEditResult* result);
+/// @brief Discards the draft's changes; the draft must still be destroyed.
 SonareError sonare_vocal_draft_cancel(SonareVocalEditDraft* draft);
+/// @brief Destroys a draft; NULL is ignored.
 void sonare_vocal_draft_destroy(SonareVocalEditDraft* draft);
+/// @brief Undoes the last committed edit.
+/// @param expected_revision Revision the caller last saw; a stale value is refused.
+/// @param result Receives the new token and dirty ranges; free with
+///   sonare_vocal_free_edit_result.
 SonareError sonare_vocal_session_undo(SonareVocalEditSession* session, uint64_t expected_revision,
                                       SonareVocalEditResult* result);
+/// @brief Redoes the last undone edit.
+/// @param expected_revision Revision the caller last saw; a stale value is refused.
+/// @param result Receives the new token and dirty ranges; free with
+///   sonare_vocal_free_edit_result.
 SonareError sonare_vocal_session_redo(SonareVocalEditSession* session, uint64_t expected_revision,
                                       SonareVocalEditResult* result);
+/// @brief Evaluates the per-frame pitch of note @p note_id in the session.
+/// @param result Receives the frames; free with sonare_vocal_free_pitch_result.
 SonareError sonare_vocal_session_evaluate_pitch(const SonareVocalEditSession* session,
                                                 uint32_t note_id, SonareVocalPitchResult* result);
+/// @brief Evaluates the per-frame pitch of note @p note_id in the draft.
+/// @param result Receives the frames; free with sonare_vocal_free_pitch_result.
 SonareError sonare_vocal_draft_evaluate_pitch(const SonareVocalEditDraft* draft, uint32_t note_id,
                                               SonareVocalPitchResult* result);
+/// @brief Maps a source sample position within note @p note_id to its output position in the
+/// session.
+/// @param destination_sample Receives the output position in samples.
 SonareError sonare_vocal_session_source_to_destination(const SonareVocalEditSession* session,
                                                        uint32_t note_id, double source_sample,
                                                        double* destination_sample);
+/// @brief Maps an output sample position within note @p note_id to its source position in the
+/// session.
+/// @param source_sample Receives the source position in samples.
 SonareError sonare_vocal_session_destination_to_source(const SonareVocalEditSession* session,
                                                        uint32_t note_id, double destination_sample,
                                                        double* source_sample);
+/// @brief Maps a source sample position within note @p note_id to its output position in the draft.
+/// @param destination_sample Receives the output position in samples.
 SonareError sonare_vocal_draft_source_to_destination(const SonareVocalEditDraft* draft,
                                                      uint32_t note_id, double source_sample,
                                                      double* destination_sample);
+/// @brief Maps an output sample position within note @p note_id to its source position in the
+/// draft.
+/// @param source_sample Receives the source position in samples.
 SonareError sonare_vocal_draft_destination_to_source(const SonareVocalEditDraft* draft,
                                                      uint32_t note_id, double destination_sample,
                                                      double* source_sample);
@@ -407,10 +499,15 @@ SonareError sonare_vocal_session_capture_snapshot(const SonareVocalEditSession* 
 ///   sonare_vocal_snapshot_destroy, which accepts NULL.
 SonareError sonare_vocal_draft_capture_snapshot(const SonareVocalEditDraft* draft,
                                                 SonareVocalRenderSnapshot** snapshot);
+/// @brief Destroys a snapshot; NULL is ignored.
 void sonare_vocal_snapshot_destroy(SonareVocalRenderSnapshot* snapshot);
+/// @brief Reads the snapshot's output length in samples.
+/// @param samples Receives the length.
 SonareError sonare_vocal_snapshot_output_length(const SonareVocalRenderSnapshot* snapshot,
                                                 int64_t* samples);
 /// @brief Renders @p range in one call.
+/// @param request_id Caller-chosen id echoed in the result token.
+/// @param result Receives the audio; free with sonare_vocal_free_render_result.
 /// @param cancel Optional; @p cancel and @p user_data are used only during the call and are not
 ///   retained afterwards.
 SonareError sonare_vocal_snapshot_render(const SonareVocalRenderSnapshot* snapshot,
@@ -418,18 +515,21 @@ SonareError sonare_vocal_snapshot_render(const SonareVocalRenderSnapshot* snapsh
                                          SonareVocalCancelCallback cancel, void* user_data,
                                          SonareVocalRenderResult* result);
 /// @brief Starts an incremental render of @p range.
+/// @param request_id Caller-chosen id echoed in the result token.
 /// @param job Receives the job, or NULL on failure. Release it with
 ///   sonare_vocal_render_job_destroy, which accepts NULL.
 SonareError sonare_vocal_render_job_begin(const SonareVocalRenderSnapshot* snapshot,
                                           SonareVocalRange range, uint64_t request_id,
                                           SonareVocalRenderJob** job);
-/// @brief Advances the job.
+/// @brief Advances the job by one step.
+/// @param complete Receives 1 once the job has finished all work, otherwise 0.
 /// @param cancel Optional; @p cancel and @p user_data are used only during the call and are not
 ///   retained afterwards.
 SonareError sonare_vocal_render_job_next(SonareVocalRenderJob* job,
                                          SonareVocalCancelCallback cancel, void* user_data,
                                          int* complete);
 /// @brief Collects the finished job's output.
+/// @param result Receives the audio; free with sonare_vocal_free_render_result.
 /// @param cancel Optional; @p cancel and @p user_data are used only during the call and are not
 ///   retained afterwards.
 SonareError sonare_vocal_render_job_finalize(SonareVocalRenderJob* job,
@@ -438,7 +538,10 @@ SonareError sonare_vocal_render_job_finalize(SonareVocalRenderJob* job,
 /// @brief Releases a job's partial artifacts. Not synchronized: call it on the thread that drives
 ///   next/finalize, never concurrently with them; cancel a running call through its callback.
 void sonare_vocal_render_job_abort(SonareVocalRenderJob* job);
+/// @brief Destroys a job; NULL is ignored.
 void sonare_vocal_render_job_destroy(SonareVocalRenderJob* job);
+/// @brief Serializes the session's authored state into @p state; free with
+///   sonare_vocal_free_state_bytes.
 SonareError sonare_vocal_session_export_state(const SonareVocalEditSession* session,
                                               SonareVocalStateBytes* state);
 /// @brief Restores a session from exported state over the same source audio
@@ -452,11 +555,17 @@ SonareError sonare_vocal_session_restore(const float* samples, int64_t frames, i
                                          const SonareVocalRestoreOptions* options,
                                          SonareVocalEditSession** session);
 
+/// @brief Frees the arrays owned by @p result and resets it; NULL is ignored.
 void sonare_vocal_free_notes(SonareVocalNotesResult* result);
+/// @brief Frees the arrays owned by @p result and resets it; NULL is ignored.
 void sonare_vocal_free_analysis(SonareVocalAnalysisResult* result);
+/// @brief Frees the arrays owned by @p result and resets it; NULL is ignored.
 void sonare_vocal_free_edit_result(SonareVocalEditResult* result);
+/// @brief Frees the arrays owned by @p result and resets it; NULL is ignored.
 void sonare_vocal_free_pitch_result(SonareVocalPitchResult* result);
+/// @brief Frees the arrays owned by @p result and resets it; NULL is ignored.
 void sonare_vocal_free_render_result(SonareVocalRenderResult* result);
+/// @brief Frees the arrays owned by @p state and resets it; NULL is ignored.
 void sonare_vocal_free_state_bytes(SonareVocalStateBytes* state);
 
 #ifdef __cplusplus
