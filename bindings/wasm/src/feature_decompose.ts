@@ -38,7 +38,7 @@ export interface DecomposeRequest {
   s: Matrix2D;
   /** Number of NMF components, a positive integer. */
   nComponents: number;
-  /** Multiplicative-update iterations. Default 50. */
+  /** Multiplicative-update iterations, a positive integer. Default 50. */
   nIter?: number;
   /** Beta divergence: 2 = Frobenius (default), 1 = Kullback-Leibler. */
   beta?: number;
@@ -65,9 +65,9 @@ export interface NnFilterRequest {
   s: Matrix2D;
   /** Neighbour aggregation. Default `'mean'`. */
   aggregate?: NnFilterAggregate;
-  /** Neighbours per frame. Default 7. */
+  /** Neighbours per frame, a positive integer. Default 7. */
   k?: number;
-  /** Frames either side of a frame excluded from its neighbours. Default 1. */
+  /** Frames either side of a frame excluded from its neighbours, a non-negative integer. Default 1. */
   width?: number;
 }
 
@@ -208,7 +208,7 @@ export interface HpssWithResidualResult {
  * to converge in fewer iterations).
  *
  * @throws {TypeError} when `nComponents` is missing or `s` is not a Matrix2D
- * @throws {RangeError} on a malformed matrix, a non-positive `nComponents` or an unknown `init`
+ * @throws {RangeError} on a malformed matrix, a non-positive `nComponents` or `nIter`, or an unknown `init`
  */
 export function decompose(request: DecomposeRequest): DecomposeResult;
 export function decompose(...args: unknown[]): DecomposeResult {
@@ -222,7 +222,7 @@ export function decompose(...args: unknown[]): DecomposeResult {
     s.rows,
     s.cols,
     r.nComponents,
-    r.nIter ?? 50,
+    r.nIter,
     r.beta ?? 2.0,
     init,
   );
@@ -370,7 +370,7 @@ export function decomposeStemsLinked(
  *
  * @returns {@link Matrix2D} of the input's shape: rows are features, cols are frames.
  * @throws {TypeError} when `s` is not a Matrix2D
- * @throws {RangeError} on a malformed matrix or an `aggregate` outside {@link NnFilterAggregate}
+ * @throws {RangeError} on a malformed matrix, a non-positive `k`, a negative `width` or an `aggregate` outside {@link NnFilterAggregate}
  */
 export function nnFilter(request: NnFilterRequest): Matrix2D;
 export function nnFilter(...args: unknown[]): Matrix2D {
@@ -383,7 +383,7 @@ export function nnFilter(...args: unknown[]): Matrix2D {
     NN_FILTER_AGGREGATES,
     'mean',
   );
-  return requireModule().nnFilter(s.data, s.rows, s.cols, aggregate, r.k ?? 7, r.width ?? 1);
+  return requireModule().nnFilter(s.data, s.rows, s.cols, aggregate, r.k, r.width);
 }
 
 /**

@@ -215,6 +215,25 @@ describe('effects separation: Matrix2D results and closed sets', () => {
     expect(caught(() => decompose({ s, nComponents: 0 }))).toBeInstanceOf(RangeError);
   });
 
+  it('decompose runs the core default iteration count when nIter is omitted and refuses a non-positive one', () => {
+    const omitted = decompose({ s, nComponents: 2 });
+    const explicit = decompose({ s, nComponents: 2, nIter: 50 });
+    expect(omitted.w.data).toEqual(explicit.w.data);
+    expect(omitted.h.data).toEqual(explicit.h.data);
+    expect(caught(() => decompose({ s, nComponents: 2, nIter: 0 }))).toBeInstanceOf(RangeError);
+    expect(caught(() => decompose({ s, nComponents: 2, nIter: -1 }))).toBeInstanceOf(RangeError);
+  });
+
+  it('nnFilter takes the core neighbour count and exclusion width when they are omitted', () => {
+    expect(nnFilter({ s }).data).toEqual(nnFilter({ s, k: 7, width: 1 }).data);
+  });
+
+  it('nnFilter refuses a zero or negative k and a negative width', () => {
+    expect(caught(() => nnFilter({ s, k: 0 }))).toBeInstanceOf(RangeError);
+    expect(caught(() => nnFilter({ s, k: -1 }))).toBeInstanceOf(RangeError);
+    expect(caught(() => nnFilter({ s, width: -1 }))).toBeInstanceOf(RangeError);
+  });
+
   it('nnFilter takes and returns a Matrix2D of the input shape', () => {
     const out = nnFilter({ s });
     expect(out.rows).toBe(4);

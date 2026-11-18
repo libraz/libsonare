@@ -15050,3 +15050,11 @@ changed = "0 or a negative tempo is refused with RangeError; omit tempoBpm for t
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/mixing_assistant.test.ts::refuses a zero or negative tempo by name instead of reading it as the fallback"
+
+[[entry]]
+kind = "field"
+old = "NnFilterRequest.k"
+changed = "0 or a negative k is refused with RangeError; it used to filter with 5 neighbours (capped at the frame count). Omit k for the default 7"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/effects-sep.test.ts::nnFilter refuses a zero or negative k and a negative width"

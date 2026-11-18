@@ -1,6 +1,5 @@
 import type { HpssWithResidualResult } from './effects_separation.js';
 import { assertMatrix2D, toMatrix2D, toNativeIndexList } from './internal/feature_matrix.js';
-import { resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { addon } from './native.js';
 import type { Matrix2D } from './types.js';
@@ -116,7 +115,7 @@ export interface DecomposeRequest {
   s: Matrix2D;
   /** Number of NMF components, a positive integer. */
   nComponents: number;
-  /** Multiplicative-update iterations. Default 50. */
+  /** Multiplicative-update iterations, a positive integer. Default 50. */
   nIter?: number;
   /** Beta divergence: 2 = Frobenius (default), 1 = Kullback-Leibler. */
   beta?: number;
@@ -179,9 +178,9 @@ export interface NnFilterRequest {
   s: Matrix2D;
   /** Neighbour aggregation. Default `'mean'`. */
   aggregate?: NnFilterAggregate;
-  /** Neighbours per frame. Default 7. */
+  /** Neighbours per frame, a positive integer. Default 7. */
   k?: number;
-  /** Frames either side of a frame excluded from its neighbours. Default 1. */
+  /** Frames either side of a frame excluded from its neighbours, a non-negative integer. Default 1. */
   width?: number;
 }
 
@@ -349,15 +348,12 @@ export function decompose(...args: unknown[]): DecomposeResult {
   if (r.init !== undefined) {
     assertClosedToken('decompose', r.init, NMF_INITS, 'init');
   }
-  // Positivity only: 0 iterations returns the raw init matrices, which the C ABI
-  // refuses for that reason and bounds no further.
-  const nIter = resolvePositiveIntegerOption('decompose', 'nIter', r.nIter, 50);
   return addon.decompose(
     r.s.data,
     r.s.rows,
     r.s.cols,
     r.nComponents,
-    nIter,
+    r.nIter,
     r.beta ?? 2,
     r.init ?? 'random',
   );
@@ -486,7 +482,7 @@ export function decomposeStemsLinked(
  *
  * @returns {@link Matrix2D} of the input's shape: rows = features, cols = frames.
  * @throws {TypeError} when `s` is not a Matrix2D
- * @throws {RangeError} on a malformed matrix or an `aggregate` outside {@link NnFilterAggregate}
+ * @throws {RangeError} on a malformed matrix, a non-positive `k`, a negative `width` or an `aggregate` outside {@link NnFilterAggregate}
  */
 export function nnFilter(request: NnFilterRequest): Matrix2D;
 export function nnFilter(...args: unknown[]): Matrix2D {
@@ -495,14 +491,7 @@ export function nnFilter(...args: unknown[]): Matrix2D {
   if (r.aggregate !== undefined) {
     assertClosedToken('nnFilter', r.aggregate, NN_FILTER_AGGREGATES, 'aggregate');
   }
-  return addon.nnFilter(
-    r.s.data,
-    r.s.rows,
-    r.s.cols,
-    r.aggregate ?? 'mean',
-    r.k ?? 7,
-    r.width ?? 1,
-  );
+  return addon.nnFilter(r.s.data, r.s.rows, r.s.cols, r.aggregate ?? 'mean', r.k, r.width);
 }
 
 /** Request for {@link remix} and {@link remixAlignedIntervals}. */

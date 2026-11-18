@@ -2403,7 +2403,7 @@ export interface SonareModule {
     nFeatures: number,
     nFrames: number,
     nComponents: number,
-    nIter: number,
+    nIter: number | undefined,
     beta: number,
     init: string,
   ) => WasmDecomposeResult;
@@ -2412,8 +2412,8 @@ export interface SonareModule {
     nFeatures: number,
     nFrames: number,
     aggregate: string,
-    k: number,
-    width: number,
+    k: number | undefined,
+    width: number | undefined,
   ) => WasmMatrix2dResult;
   remix: (
     samples: Float32Array,
