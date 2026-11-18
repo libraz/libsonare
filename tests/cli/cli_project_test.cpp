@@ -89,25 +89,25 @@ TEST_CASE("CLI DAW editing commands", "[cli]") {
     REQUIRE_THAT(output, ContainsSubstring("formant factor must be in [0.55, 1.65]"));
   }
 
-  SECTION("voice presets are named in kebab-case on the command line") {
+  SECTION("voice presets are named by their library ids in any letter case") {
     auto [list_code, list] = exec_command(CLI + " voice-presets --json");
     REQUIRE(list_code == 0);
-    REQUIRE_THAT(list, ContainsSubstring("\"neutral-monitor\""));
-    REQUIRE_THAT(list, ContainsSubstring("\"hard-tune\""));
-    REQUIRE_THAT(list, !ContainsSubstring("neutralMonitor"));
+    REQUIRE_THAT(list, ContainsSubstring("\"neutralMonitor\""));
+    REQUIRE_THAT(list, ContainsSubstring("\"hardTune\""));
+    REQUIRE_THAT(list, !ContainsSubstring("neutral-monitor"));
 
-    auto [code, output] = exec_command(CLI + " voice-preset --preset hard-tune");
+    auto [code, output] = exec_command(CLI + " voice-preset --preset HARDTUNE");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"id\":\"hardTune\""));
 
-    auto [camel_code, camel] = exec_command(CLI + " voice-preset --preset hardTune");
-    REQUIRE(camel_code == 3);
-    REQUIRE_THAT(camel, ContainsSubstring("expected one of: neutral-monitor"));
+    auto [kebab_code, kebab] = exec_command(CLI + " voice-preset --preset hard-tune");
+    REQUIRE(kebab_code == 3);
+    REQUIRE_THAT(kebab, ContainsSubstring("unknown realtime voice changer preset"));
   }
 
   SECTION("voice-change preset rejects simple knob conflicts") {
     auto [code, output] = exec_command(
-        CLI + " voice-change --preset neutral-monitor --pitch-semitones 5 --formant-factor 1.1 " +
+        CLI + " voice-change --preset neutralMonitor --pitch-semitones 5 --formant-factor 1.1 " +
         TEST_WAV + " -o " + TEST_OUT + " -q");
     REQUIRE(code == 3);
     REQUIRE_THAT(output, ContainsSubstring("cannot be combined with a realtime preset"));
@@ -116,10 +116,10 @@ TEST_CASE("CLI DAW editing commands", "[cli]") {
   SECTION("voice-change resolves a preset-pack entry and applies overrides") {
     const std::string pack = "schemas/realtime-voice-changer-presets.example.json";
     auto [code, output] = exec_command(CLI + " voice-change --preset-pack " + pack +
-                                       " --preset neutral-monitor --set dsp.outputGainDb=-2 " +
+                                       " --preset neutralMonitor --set dsp.outputGainDb=-2 " +
                                        TEST_WAV + " -o " + TEST_OUT + " --json -q");
     REQUIRE(code == 0);
-    REQUIRE_THAT(output, ContainsSubstring("\"preset\": \"neutral-monitor\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"preset\": \"neutralMonitor\""));
     std::ifstream f(TEST_OUT);
     REQUIRE(f.good());
   }
@@ -137,7 +137,7 @@ TEST_CASE("CLI DAW editing commands", "[cli]") {
     const std::string pack = "schemas/realtime-voice-changer-presets.example.json";
     auto [code, output] =
         exec_command(CLI + " voice-preset-validate " + pack +
-                     " --preset neutral-monitor --set dsp.outputGainDb=-2 --json -q");
+                     " --preset neutralMonitor --set dsp.outputGainDb=-2 --json -q");
     REQUIRE(code == 0);
     const auto payload = sonare::util::json::parse_strict(output);
     REQUIRE(payload["ok"].as_bool());
@@ -185,7 +185,7 @@ TEST_CASE("CLI project command group", "[cli]") {
     auto [code, output] = exec_command(CLI + " project synth-presets --json -q");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"presets\""));
-    REQUIRE_THAT(output, ContainsSubstring("\"e-piano\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"ePiano\""));
   }
 
   SECTION("stdout-only subcommands reject an output path") {
@@ -597,21 +597,21 @@ TEST_CASE("CLI project command group", "[cli]") {
     std::remove(wav.c_str());
   }
 
-  SECTION("--synth takes the kebab preset name and refuses the library spelling") {
+  SECTION("--synth takes the library preset id in any letter case and refuses kebab-case") {
     const std::string proj = unique_temp_path("_proj.json");
     const std::string wav = unique_temp_path("_synth.wav");
     auto [nc, no] = exec_command(CLI + " project new -o " + proj);
     REQUIRE(nc == 0);
 
     auto [kc, ko] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
-                                 " --frames 256 --synth saw-lead --json");
+                                 " --frames 256 --synth SAWLEAD --json");
     REQUIRE(kc == 0);
     REQUIRE_THAT(ko, ContainsSubstring("\"synth\": true"));
 
     auto [cc, co] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
-                                 " --frames 256 --synth sawLead -q");
+                                 " --frames 256 --synth saw-lead -q");
     REQUIRE(cc == 3);
-    REQUIRE_THAT(co, ContainsSubstring("expected one of"));
+    REQUIRE_THAT(co, ContainsSubstring("unknown synth preset 'saw-lead'"));
 
     std::remove(proj.c_str());
     std::remove(wav.c_str());

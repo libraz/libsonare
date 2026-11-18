@@ -738,7 +738,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                              choices_of({"relative", "absolute"}, CliOptionDomainStage::Parameter)),
                  required_output()});
     add_command(commands, "voice-presets", false, {});
-    add_command(commands, "voice-preset", false, {string_value("preset", "neutral-monitor")});
+    add_command(commands, "voice-preset", false, {string_value("preset", "neutralMonitor")});
     // The preset document arrives as the positional rather than through an
     // option, which is the arity the trailing argument declares.
     add_command(

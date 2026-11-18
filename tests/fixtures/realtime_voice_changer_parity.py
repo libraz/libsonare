@@ -20,7 +20,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SAMPLE_RATE = 48_000
-PRESET = "bright-idol"
+PRESET = "brightIdol"
 
 
 def tone() -> list[float]:

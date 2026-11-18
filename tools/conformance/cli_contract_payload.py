@@ -838,12 +838,12 @@ def _validate_voice_case_relationships(
         preset = payloads.get(("voice-change", case_id))
         if not isinstance(preset, dict):
             continue
-        if preset.get("preset") != "bright-idol":
+        if preset.get("preset") != "brightIdol":
             report.append(
                 (
                     "fail",
                     (
-                        f"{surface}.voice-change.{case_id}.preset: expected 'bright-idol', "
+                        f"{surface}.voice-change.{case_id}.preset: expected 'brightIdol', "
                         f"got {preset.get('preset')!r}"
                     ),
                 )

@@ -4845,7 +4845,7 @@
         {
           "name": "preset",
           "type": "string",
-          "default": "neutral-monitor",
+          "default": "neutralMonitor",
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -7005,7 +7005,7 @@
             "-o",
             "{voice_change_preset_output}",
             "--preset",
-            "bright-idol",
+            "brightIdol",
             "--json"
           ],
           "exit": 0,
@@ -7021,7 +7021,7 @@
             "-o",
             "{output}",
             "--preset",
-            "bright-idol",
+            "brightIdol",
             "--set",
             "dsp.voiceEngine.engine=grain",
             "--json"
@@ -13863,7 +13863,7 @@
         {
           "name": "preset",
           "type": "string",
-          "default": "neutral-monitor",
+          "default": "neutralMonitor",
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -13899,7 +13899,7 @@
           "argv": [
             "voice-preset",
             "--preset",
-            "bright-idol",
+            "brightIdol",
             "--json"
           ],
           "exit": 0,
@@ -13925,7 +13925,7 @@
           "argv": [
             "voice-preset",
             "--preset",
-            "soft-whisper",
+            "softWhisper",
             "--json"
           ],
           "exit": 0,
@@ -13938,7 +13938,7 @@
           "argv": [
             "voice-preset",
             "--preset",
-            "deep-narrator",
+            "deepNarrator",
             "--json"
           ],
           "exit": 0,
@@ -13951,7 +13951,7 @@
           "argv": [
             "voice-preset",
             "--preset",
-            "robot-mascot",
+            "robotMascot",
             "--json"
           ],
           "exit": 0,
@@ -13964,7 +13964,7 @@
           "argv": [
             "voice-preset",
             "--preset",
-            "dark-villain",
+            "darkVillain",
             "--json"
           ],
           "exit": 0,

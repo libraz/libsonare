@@ -14,9 +14,8 @@ from ._cli_common import (
     EXIT_INVALID_PARAMETER,
     _apply_voice_sets,
     _audio_array,
-    _cli_token,
+    _catalog_token,
     _emit_effect_result,
-    _library_token,
     _load_channels_or_downmix,
     _load_voice_preset_pack,
     _mean_abs,
@@ -565,8 +564,8 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
         elif preset_pack:
             preset = _load_voice_preset_pack(preset_pack, preset_id)
         else:
-            # A built-in preset is named in kebab-case on the command line.
-            builtin = _library_token("--preset", preset_id, realtime_voice_changer_preset_names())
+            # A built-in preset is named by its library id in any letter case.
+            builtin = _catalog_token(preset_id, realtime_voice_changer_preset_names())
             preset = (
                 json.loads(realtime_voice_changer_preset_json(builtin)) if assignments else builtin
             )
@@ -613,7 +612,7 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
 def cmd_voice_presets(args: argparse.Namespace) -> int:
     from . import realtime_voice_changer_preset_names
 
-    names = [_cli_token(name) for name in realtime_voice_changer_preset_names()]
+    names = realtime_voice_changer_preset_names()
     if args.json:
         print(_strict_json_dumps({"presets": names}))
     else:
@@ -627,7 +626,7 @@ def cmd_voice_preset(args: argparse.Namespace) -> int:
 
     # The library returns a JSON preset regardless of --json; print it as-is.
     names = realtime_voice_changer_preset_names()
-    print(realtime_voice_changer_preset_json(_library_token("--preset", args.preset, names)))
+    print(realtime_voice_changer_preset_json(_catalog_token(args.preset, names)))
     return 0
 
 
@@ -875,7 +874,7 @@ def register_effects_parsers(
     voice_preset_p = sub.add_parser(
         "voice-preset", help="Print a realtime voice changer preset (always JSON)"
     )
-    voice_preset_p.add_argument("--preset", default="neutral-monitor", help="Preset id")
+    voice_preset_p.add_argument("--preset", default="neutralMonitor", help="Preset id")
     voice_preset_p.add_argument(
         "--json", action="store_true", help="No-op; a preset is always printed as JSON"
     )

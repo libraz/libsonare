@@ -143,7 +143,7 @@ def test_voice_change_absolute_mode_reports_mode_and_refuses_unreachable_factor(
         "--output",
         str(tmp_path / "y.wav"),
         "--preset",
-        "bright-idol",
+        "brightIdol",
         "--formant-mode",
         "absolute",
     )
@@ -164,7 +164,7 @@ def test_voice_change_preset_json_reports_resolved_chain_latency(tmp_path: Path)
         "--output",
         str(output),
         "--preset",
-        "bright-idol",
+        "brightIdol",
         "--json",
     )
 
@@ -183,7 +183,7 @@ def test_voice_change_preset_json_reports_resolved_chain_latency(tmp_path: Path)
     assert payload["duration"] == input_length / sample_rate
     assert payload["sample_rate"] == sample_rate
     assert payload["latency_samples"] > 0
-    assert payload["preset"] == "bright-idol"
+    assert payload["preset"] == "brightIdol"
     with wave.open(str(output), "rb") as rendered:
         assert rendered.getnframes() == input_length
         assert rendered.getframerate() == sample_rate
@@ -195,7 +195,7 @@ def test_voice_change_preset_json_reports_resolved_chain_latency(tmp_path: Path)
         "--output",
         str(overridden_output),
         "--preset",
-        "bright-idol",
+        "brightIdol",
         "--set",
         "dsp.voiceEngine.engine=grain",
         "--set",
@@ -223,13 +223,13 @@ def test_voice_change_custom_preset_json_omits_inferred_preset_id(tmp_path: Path
         "--output",
         str(baseline_output),
         "--preset",
-        "bright-idol",
+        "brightIdol",
         "--json",
     )
     assert baseline.returncode == 0, baseline.stderr
     baseline_payload = json.loads(baseline.stdout)
 
-    generated = _run_cli("voice-preset", "--preset", "bright-idol")
+    generated = _run_cli("voice-preset", "--preset", "brightIdol")
     assert generated.returncode == 0, generated.stderr
     preset = json.loads(generated.stdout)
     preset["id"] = "custom-grain"
@@ -309,8 +309,24 @@ def test_voice_change_preset_pack_entry_selector_precedes_the_set_rule(tmp_path:
     assert "--preset-pack requires --preset" in result.stderr
 
 
+def test_voice_presets_are_named_by_their_library_ids_in_any_case() -> None:
+    listing = _run_cli("voice-presets", "--json")
+    assert listing.returncode == 0, listing.stderr
+    names = json.loads(listing.stdout)["presets"]
+    assert "neutralMonitor" in names and "hardTune" in names
+    assert "neutral-monitor" not in names
+
+    accepted = _run_cli("voice-preset", "--preset", "HARDTUNE")
+    assert accepted.returncode == 0, accepted.stderr
+    assert json.loads(accepted.stdout)["id"] == "hardTune"
+
+    refused = _run_cli("voice-preset", "--preset", "hard-tune")
+    assert refused.returncode == 3
+    assert "unknown realtime voice changer preset" in refused.stderr
+
+
 def test_voice_preset_validate_malformed_set_is_preprocessing_error(tmp_path: Path) -> None:
-    preset = _run_cli("voice-preset", "--preset", "neutral-monitor")
+    preset = _run_cli("voice-preset", "--preset", "neutralMonitor")
     assert preset.returncode == 0, preset.stderr
     preset_path = tmp_path / "preset.json"
     preset_path.write_text(preset.stdout, encoding="utf-8")
@@ -370,7 +386,7 @@ def test_synthesize_rir_json_reports_sample_rate(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     "preset",
-    ["hard-tune", "robot-monotone", "choir-harmony", "vocoder-strings", "megaphone", "radio-voice"],
+    ["hardTune", "robotMonotone", "choirHarmony", "vocoderStrings", "megaphone", "radioVoice"],
 )
 def test_voice_change_renders_the_new_presets_and_voice_preset_writes_schema_v3(
     tmp_path: Path, preset: str

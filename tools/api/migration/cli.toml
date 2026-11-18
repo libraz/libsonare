@@ -722,3 +722,43 @@ changed = "a preset document the library refuses (an unknown field, an earlier s
 domain = "effects"
 rule = "error-class-by-cause"
 test = "tests/cli/cli_effects_test.cpp::CLI voice-change rejects a realtime preset document with an unknown field"
+
+[[entry]]
+kind = "flag"
+old = "voice-change --preset"
+changed = "a built-in preset is named by its library id (neutralMonitor, brightIdol, hardTune, ...) in any letter case, and the JSON preset field reports that id; the kebab-case spellings are refused as an invalid parameter (exit 3); a --preset-pack entry is matched by its id exactly as written"
+domain = "effects"
+rule = "token-case"
+test = "tests/cli/cli_project_test.cpp::CLI DAW editing commands"
+
+[[entry]]
+kind = "flag"
+old = "voice-preset --preset"
+changed = "takes the library preset id in any letter case and defaults to neutralMonitor; the kebab-case spellings are refused as an invalid parameter (exit 3)"
+domain = "effects"
+rule = "token-case"
+test = "tests/cli/cli_project_test.cpp::CLI DAW editing commands"
+
+[[entry]]
+kind = "command"
+old = "voice-presets"
+changed = "lists the library preset ids (neutralMonitor, brightIdol, ...) rather than their kebab-case spellings"
+domain = "effects"
+rule = "token-case"
+test = "tests/cli/cli_project_test.cpp::CLI DAW editing commands"
+
+[[entry]]
+kind = "flag"
+old = "project.bounce --synth"
+changed = "takes the library synth preset id (sawLead, warmPad, ...) in any letter case; the kebab-case spellings are refused as an invalid parameter (exit 3)"
+domain = "engine"
+rule = "token-case"
+test = "tests/cli/cli_project_test.cpp::CLI project command group"
+
+[[entry]]
+kind = "command"
+old = "project.synth-presets"
+changed = "lists the library synth preset ids (sawLead, warmPad, ...) rather than their kebab-case spellings"
+domain = "engine"
+rule = "token-case"
+test = "bindings/python/tests/test_cli_synth_preset_spelling.py::test_the_preset_listing_is_the_library_ids"

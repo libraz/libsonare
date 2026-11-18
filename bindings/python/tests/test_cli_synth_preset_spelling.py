@@ -1,8 +1,7 @@
-"""``project bounce --synth`` takes the kebab-case preset name the CLI lists.
+"""``project bounce --synth`` takes the library preset id the CLI lists.
 
-The library names its presets in lowerCamel; the command line keeps kebab-case,
-reads it in any letter case, maps it to the library name before the project is
-loaded, and refuses any other spelling, the library's own included.
+The command line names a preset by its lowerCamel library id in any letter case
+and leaves any other spelling, kebab-case included, for the library to refuse.
 """
 
 from __future__ import annotations
@@ -48,23 +47,23 @@ def _bounce(tmp_path: Path, synth: str) -> tuple[subprocess.CompletedProcess[str
     return result, output
 
 
-def test_the_preset_listing_is_kebab_case() -> None:
+def test_the_preset_listing_is_the_library_ids() -> None:
     result = _run_console("project", "synth-presets")
     assert result.returncode == 0, result.stderr
-    assert "saw-lead" in result.stdout
-    assert "sawLead" not in result.stdout
+    assert "sawLead" in result.stdout
+    assert "saw-lead" not in result.stdout
 
 
-@pytest.mark.parametrize("spelling", ["saw-lead", "Saw-Lead", "SAW-LEAD"])
-def test_a_kebab_preset_name_is_accepted_in_any_case(tmp_path: Path, spelling: str) -> None:
+@pytest.mark.parametrize("spelling", ["sawLead", "SawLead", "SAWLEAD"])
+def test_a_library_preset_id_is_accepted_in_any_case(tmp_path: Path, spelling: str) -> None:
     result, output = _bounce(tmp_path, spelling)
     assert result.returncode == 0, result.stderr
     assert output.is_file()
 
 
-@pytest.mark.parametrize("spelling", ["sawLead", "saw_lead", "SawLead"])
+@pytest.mark.parametrize("spelling", ["saw-lead", "saw_lead", "SAW-LEAD"])
 def test_another_spelling_is_refused_before_rendering(tmp_path: Path, spelling: str) -> None:
     result, output = _bounce(tmp_path, spelling)
     assert result.returncode == EXIT_INVALID_PARAMETER, result.stderr
-    assert "saw-lead" in result.stderr
+    assert "synth preset" in result.stderr
     assert not output.exists()

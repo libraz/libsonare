@@ -15,8 +15,7 @@ from ._cli_common import (
     _MAX_PROJECT_OR_MIDI_BYTES,
     EXIT_INVALID_STATE,
     _atomic_write_bytes,
-    _cli_token,
-    _library_token,
+    _catalog_token,
     _load_audio_channels,
     _omit_absent,
     _read_bounded,
@@ -200,12 +199,12 @@ def _resolve_bounce_audio_sources(project: object, args: argparse.Namespace) -> 
 
 
 def _synth_preset(value: str | None) -> str | None:
-    """Resolve a kebab-case ``--synth`` value to its preset name; empty means GM auto-select."""
+    """Resolve ``--synth`` to a library preset id in any letter case; empty means GM auto-select."""
     if not value:
         return None
     from . import synth_preset_names
 
-    return _library_token("--synth", value, synth_preset_names())
+    return _catalog_token(value, synth_preset_names())
 
 
 def _project_bounce(
@@ -647,7 +646,7 @@ def cmd_project(args: argparse.Namespace) -> int:
             print(f"  Imported MIDI2 Clip File: {args.output}")
         return 0
     if subcommand == "synth-presets":
-        names = [_cli_token(name) for name in synth_preset_names()]
+        names = list(synth_preset_names())
         print(_strict_json_dumps({"presets": names}) if args.json else "\n".join(names))
         return 0
     raise ValueError(f"unknown project subcommand: {subcommand}")

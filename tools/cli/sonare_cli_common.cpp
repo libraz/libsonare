@@ -356,9 +356,7 @@ std::string find_voice_preset_in_pack(const std::string& pack_json, const std::s
   for (const auto& item : presets->as_array()) {
     const auto* id = item.find("id");
     if (id == nullptr || !id->is_string()) continue;
-    // An entry id is matched as written or by its kebab spelling, so a pack holding the
-    // built-in presets is addressed the way --preset names them.
-    if (id->as_string() == preset_id || cli_token(id->as_string()) == preset_id) {
+    if (id->as_string() == preset_id) {
       if (match != nullptr)
         throw std::invalid_argument("duplicate preset id in preset pack: " + preset_id);
       match = &item;

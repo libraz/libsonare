@@ -1152,10 +1152,10 @@ def test_project_stdout_only_subcommands_reject_output(tmp_path, command) -> Non
 def test_voice_preset_json_flag_is_accepted_noop(tmp_path) -> None:
     """voice-preset always prints JSON; the --json flag is an accepted no-op and
     the output is identical with or without it."""
-    without = _run_console("voice-preset", "--preset", "neutral-monitor")
+    without = _run_console("voice-preset", "--preset", "neutralMonitor")
     assert without.returncode == 0, without.stderr
     json.loads(without.stdout)
-    with_flag = _run_console("voice-preset", "--preset", "neutral-monitor", "--json")
+    with_flag = _run_console("voice-preset", "--preset", "neutralMonitor", "--json")
     assert with_flag.returncode == 0, with_flag.stderr
     assert with_flag.stdout == without.stdout
 

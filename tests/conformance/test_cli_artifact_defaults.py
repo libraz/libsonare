@@ -35,9 +35,9 @@ class VoiceLatencyContractTest(unittest.TestCase):
                 "pitch_semitones": 5.0,
                 "formant_factor": 1.1,
             },
-            ("voice-change", "preset"): self.payload(13230, 22050, 333, "bright-idol"),
+            ("voice-change", "preset"): self.payload(13230, 22050, 333, "brightIdol"),
             ("voice-change", "custom"): self.payload(13230, 22050, 82),
-            ("voice-change", "preset_grain"): self.payload(13230, 22050, 1042, "bright-idol"),
+            ("voice-change", "preset_grain"): self.payload(13230, 22050, 1042, "brightIdol"),
         }
 
     def validate(self, payloads: dict[tuple[str, str], dict]) -> list[tuple[str, str]]:

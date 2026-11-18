@@ -800,18 +800,18 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
   float formant_factor = 1.0f;
   editing::voice_changer::FormantMode formant_mode = editing::voice_changer::FormantMode::Relative;
   if (uses_realtime_preset) {
-    // A built-in preset is named in kebab-case on the command line; a pack entry keeps the id
-    // its author gave it.
+    // A built-in preset is named by its library id in any letter case, and the library refuses
+    // an unknown one; a pack entry keeps the id its author gave it.
     const std::string requested_preset =
         has_preset && !has_preset_pack
-            ? library_token("--preset", args.get_string("preset"),
+            ? catalog_token(args.get_string("preset"),
                             editing::voice_changer::realtime_voice_changer_preset_names())
             : args.get_string("preset", "");
     // Only advertise an ID when it identifies the selected source. A
     // --preset-json document has its own identity (or may be anonymous), so
     // falling back to the neutral preset here would be misleading. A
     // --preset-pack entry remains identified by the explicit --preset value.
-    if (has_preset) preset_id = args.get_string("preset");
+    if (has_preset) preset_id = requested_preset;
     std::string config_text = requested_preset;
     if (args.has("preset-json")) {
       config_text = read_plain_text_file(args.get_string("preset-json"));
@@ -914,16 +914,13 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_voice_presets(const CliArgs& args, const Audio&) {
-  std::vector<std::string> names;
-  for (const auto& name : editing::voice_changer::realtime_voice_changer_preset_names()) {
-    names.push_back(cli_token(name));
-  }
-  return print_name_catalog(args, "presets", names);
+  return print_name_catalog(args, "presets",
+                            editing::voice_changer::realtime_voice_changer_preset_names());
 }
 
 int cmd_voice_preset(const CliArgs& args, const Audio&) {
   const std::string preset =
-      library_token("--preset", args.get_string("preset", "neutral-monitor"),
+      catalog_token(args.get_string("preset", "neutralMonitor"),
                     editing::voice_changer::realtime_voice_changer_preset_names());
   const auto id = editing::voice_changer::realtime_voice_changer_preset_from_id(preset);
   std::cout << editing::voice_changer::realtime_voice_changer_preset_json(id) << "\n";

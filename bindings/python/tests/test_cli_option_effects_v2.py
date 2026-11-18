@@ -374,8 +374,8 @@ def test_estimate_room_leaves_omitted_band_controls_to_the_library(
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {"preset": "bright-idol", "preset_json": "preset.json"},
-        {"preset": "bright-idol", "pitch_semitones": 2.0},
+        {"preset": "brightIdol", "preset_json": "preset.json"},
+        {"preset": "brightIdol", "pitch_semitones": 2.0},
         {"preset_pack": "pack.json", "pitch_semitones": 2.0},
         {"set": ["dsp.outputGainDb=-2"]},
     ],

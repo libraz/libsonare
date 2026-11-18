@@ -793,6 +793,12 @@ def _find_cli_token(value: str, tokens: Iterable[str]) -> str | None:
     return None
 
 
+def _catalog_token(value: str, library_tokens: Iterable[str]) -> str:
+    """Return the library id ``value`` names in any letter case, else ``value`` for the library."""
+    found = _find_cli_token(value, library_tokens)
+    return value if found is None else found
+
+
 def _library_token(flag: str, value: str, library_tokens: Sequence[str]) -> str:
     """Resolve a kebab-case flag value, in any case, to the library token it spells."""
     spellings = {_cli_token(token): token for token in library_tokens}
@@ -809,14 +815,8 @@ def _load_voice_preset_pack(path: str, preset_id: str) -> dict[str, Any]:
     presets = pack.get("presets")
     if not isinstance(presets, list):
         raise ValueError("preset pack must contain a presets array")
-    # An entry id is matched as written or by its kebab spelling, so a pack holding the
-    # built-in presets is addressed the way --preset names them.
     matches = [
-        preset
-        for preset in presets
-        if isinstance(preset, dict)
-        and isinstance(preset.get("id"), str)
-        and preset_id in (preset["id"], _cli_token(preset["id"]))
+        preset for preset in presets if isinstance(preset, dict) and preset.get("id") == preset_id
     ]
     if len(matches) > 1:
         raise ValueError(f"duplicate preset id in preset pack: {preset_id}")

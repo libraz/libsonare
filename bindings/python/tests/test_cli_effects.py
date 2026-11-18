@@ -65,7 +65,7 @@ def test_voice_change_preset_rejects_simple_knob_conflict() -> None:
                 "-o",
                 out_path,
                 "--preset",
-                "neutral-monitor",
+                "neutralMonitor",
                 "--pitch-semitones",
                 "5",
                 "--formant-factor",
@@ -96,7 +96,7 @@ def test_voice_change_preset_pack_applies_overrides_end_to_end() -> None:
                 "--preset-pack",
                 str(pack_path),
                 "--preset",
-                "neutral-monitor",
+                "neutralMonitor",
                 "--set",
                 "dsp.outputGainDb=-2",
                 "--set",
@@ -854,7 +854,7 @@ def test_voice_preset_validate_help_describes_a_preset_file() -> None:
 def test_voice_preset_validate_normalizes_a_preset_file() -> None:
     """The command still validates a preset JSON file end-to-end after the
     positional argument was reworked to take a preset file."""
-    preset = _run_cli(["voice-preset", "--preset", "neutral-monitor", "--json"])
+    preset = _run_cli(["voice-preset", "--preset", "neutralMonitor", "--json"])
     assert preset.returncode == 0, preset.stderr
     with tempfile.TemporaryDirectory() as tmpdir:
         preset_path = os.path.join(tmpdir, "preset.json")
@@ -868,7 +868,7 @@ def test_voice_preset_validate_normalizes_a_preset_file() -> None:
 
 def test_voice_preset_validate_refuses_an_earlier_schema_version() -> None:
     """A current preset validates; the same document at an earlier schemaVersion is refused."""
-    preset = _run_cli(["voice-preset", "--preset", "hard-tune", "--json"])
+    preset = _run_cli(["voice-preset", "--preset", "hardTune", "--json"])
     assert preset.returncode == 0, preset.stderr
     document = json.loads(preset.stdout)
     assert document["schemaVersion"] == 3
@@ -890,7 +890,7 @@ def test_voice_preset_validate_refuses_an_earlier_schema_version() -> None:
 
 def test_voice_preset_validate_accepts_native_preset_json_alias() -> None:
     """The native CLI's ``--preset-json`` spelling remains cross-CLI compatible."""
-    preset = _run_cli(["voice-preset", "--preset", "neutral-monitor", "--json"])
+    preset = _run_cli(["voice-preset", "--preset", "neutralMonitor", "--json"])
     assert preset.returncode == 0, preset.stderr
     with tempfile.TemporaryDirectory() as tmpdir:
         preset_path = os.path.join(tmpdir, "preset.json")

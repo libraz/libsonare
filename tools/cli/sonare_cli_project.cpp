@@ -170,9 +170,7 @@ int cmd_project_abi(const CliArgs& args) {
 // `project synth-presets` — expose the full NativeSynth catalog accepted by
 // `project bounce --synth`, rather than documenting a small waveform subset.
 int cmd_project_synth_presets(const CliArgs& args) {
-  std::vector<std::string> names;
-  for (const auto& name : synth_preset_name_list()) names.push_back(cli_token(name));
-  return print_name_catalog(args, "presets", names);
+  return print_name_catalog(args, "presets", synth_preset_name_list());
 }
 
 std::vector<std::string> synth_preset_name_list() {

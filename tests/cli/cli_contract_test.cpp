@@ -1595,7 +1595,7 @@ TEST_CASE("CLI global options", "[cli]") {
     auto [code, output] = exec_command(
         CLI + " project bounce --in missing.json -o ignored.wav --synth not-a-preset -q");
     REQUIRE(code == 3);
-    REQUIRE_THAT(output, ContainsSubstring("--synth: unknown value 'not-a-preset'"));
+    REQUIRE_THAT(output, ContainsSubstring("unknown synth preset 'not-a-preset'"));
   }
 #endif
 }

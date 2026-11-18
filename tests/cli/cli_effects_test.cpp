@@ -762,14 +762,14 @@ TEST_CASE("CLI voice-change compensates realtime chain latency", "[cli][voice-ch
   // process_block() output directly into an audio.size()-length buffer with no
   // pre-roll/drop compensation, so the tail of the true signal was never
   // flushed and a file shorter than the chain latency came out entirely
-  // silent. bright-idol has a nonzero retune+ISP-limiter latency (~1700
+  // silent. brightIdol has a nonzero retune+ISP-limiter latency (~1700
   // samples at 48 kHz), so a 20 ms / 960-sample clip is well inside the
   // previously-lost window.
   const std::string short_wav = unique_temp_path("_vc_short.wav");
   const std::string short_out = unique_temp_path("_vc_short_out.wav");
   create_test_wav(short_wav, 0.02f, 220.0f, 48000);
 
-  auto [code, output] = exec_command(CLI + " voice-change --preset bright-idol " + short_wav +
+  auto [code, output] = exec_command(CLI + " voice-change --preset brightIdol " + short_wav +
                                      " -o " + short_out + " --json -q");
   REQUIRE(code == 0);
   REQUIRE_THAT(output, ContainsSubstring("\"latency_samples\""));
@@ -821,7 +821,7 @@ TEST_CASE("CLI voice-change formant mode", "[cli][voice-change][argument-contrac
   REQUIRE(unknown_code == 3);
 
   auto [preset_code, preset_output] =
-      exec_command(CLI + " voice-change --preset bright-idol --formant-mode absolute " + wav +
+      exec_command(CLI + " voice-change --preset brightIdol --formant-mode absolute " + wav +
                    " -o " + out + " 2>&1");
   REQUIRE(preset_code == 3);
   REQUIRE_THAT(preset_output, ContainsSubstring("cannot be combined with a realtime preset"));
