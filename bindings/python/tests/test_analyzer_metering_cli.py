@@ -413,15 +413,17 @@ def test_mastering_chain_cli_writes_output_and_merges_params(monkeypatch, tmp_pa
         assert path == "input.wav"
         return [0.25, -0.25, 0.0], 22050
 
-    def fake_mastering_chain(
+    def fake_master_audio(
         samples: list[float],
         *,
         sample_rate: int,
-        config: dict[str, object],
+        preset: str | None,
+        overrides: dict[str, object],
     ) -> SimpleNamespace:
         calls["samples"] = samples
         calls["sample_rate"] = sample_rate
-        calls["config"] = config
+        calls["preset"] = preset
+        calls["config"] = overrides
         return SimpleNamespace(
             samples=[0.0, 0.1, -0.1],
             sample_rate=sample_rate,
@@ -432,7 +434,7 @@ def test_mastering_chain_cli_writes_output_and_merges_params(monkeypatch, tmp_pa
         )
 
     patch_mono_decode(monkeypatch, fake_load_audio)
-    monkeypatch.setattr(libsonare, "mastering_chain", fake_mastering_chain)
+    monkeypatch.setattr(libsonare, "master_audio", fake_master_audio)
 
     output = tmp_path / "chain.wav"
     args = argparse.Namespace(
@@ -447,6 +449,7 @@ def test_mastering_chain_cli_writes_output_and_merges_params(monkeypatch, tmp_pa
     assert cli.cmd_mastering_chain(args) == 0
     assert calls["samples"] == [0.25, -0.25, 0.0]
     assert calls["sample_rate"] == 22050
+    assert calls["preset"] is None
     assert calls["config"] == {"eq": {"tilt": {"tiltDb": 1.5}}, "loudness": {"enabled": 1.0}}
     assert output.exists()
     payload = json.loads(capsys.readouterr().out)
