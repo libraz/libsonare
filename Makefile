@@ -939,6 +939,8 @@ conformance-checks:
 	$(CHECK) python3 -m unittest tests/conformance/test_facade_default_literals.py
 	$(CHECK) python3 tests/conformance/check_token_tables.py
 	$(CHECK) python3 -m unittest tests/conformance/test_token_tables.py
+	$(CHECK) python3 tests/conformance/check_api_conventions.py
+	$(CHECK) python3 -m unittest tests/conformance/test_api_conventions.py
 	$(CHECK) python3 -m unittest tests/conformance/test_bank_versions.py
 	$(CHECK) python3 tests/conformance/check_bank_policy.py
 	$(CHECK) python3 -m unittest tests/conformance/test_bank_policy.py
