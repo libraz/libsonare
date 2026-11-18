@@ -1874,9 +1874,6 @@ class MatchTonalBalanceBand(TypedDict):
 class MatchTonalBalanceResult(TypedDict):
     bands: list[MatchTonalBalanceBand]
 
-class MatchTonalBalanceLogBandsResult(TypedDict):
-    bands: list[MatchTonalBalanceBand]
-
 class MatchEqCurveResult(TypedDict):
     frequencies: list[float]
     gainDb: list[float]

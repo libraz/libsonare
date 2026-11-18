@@ -187,12 +187,6 @@ class MatchTonalBalanceResult(TypedDict):
     bands: list[MatchTonalBalanceBand]
 
 
-class MatchTonalBalanceLogBandsResult(TypedDict):
-    """Result of the ``match.tonalBalanceLogBands`` pair analysis."""
-
-    bands: list[MatchTonalBalanceBand]
-
-
 class MatchEqCurveResult(TypedDict):
     """Result of the ``match.matchEqCurve`` pair analysis: ``gainDb[i]`` at ``frequencies[i]``."""
 

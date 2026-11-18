@@ -202,8 +202,8 @@ def mastering_pair_analyze(
     The document's shape depends on ``analysis_name``; parse it with
     :func:`json.loads` and read it as the matching ``TypedDict``:
     ``match.referenceLoudness`` is :class:`MatchReferenceLoudnessResult`,
-    ``match.tonalBalance`` :class:`MatchTonalBalanceResult`,
-    ``match.tonalBalanceLogBands`` :class:`MatchTonalBalanceLogBandsResult`,
+    ``match.tonalBalance`` and ``match.tonalBalanceLogBands``
+    :class:`MatchTonalBalanceResult`,
     ``match.matchEqCurve`` :class:`MatchEqCurveResult` and
     ``match.estimateReferenceDelaySamples``
     :class:`MatchEstimateReferenceDelaySamplesResult`.

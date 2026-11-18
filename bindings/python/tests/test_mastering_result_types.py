@@ -72,7 +72,7 @@ def test_audio_profile_result() -> None:
     [
         ("match.referenceLoudness", "MatchReferenceLoudnessResult"),
         ("match.tonalBalance", "MatchTonalBalanceResult"),
-        ("match.tonalBalanceLogBands", "MatchTonalBalanceLogBandsResult"),
+        ("match.tonalBalanceLogBands", "MatchTonalBalanceResult"),
         ("match.matchEqCurve", "MatchEqCurveResult"),
         ("match.estimateReferenceDelaySamples", "MatchEstimateReferenceDelaySamplesResult"),
     ],

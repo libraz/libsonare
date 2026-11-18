@@ -527,9 +527,6 @@ from ._types_mastering_results import (
     MatchTonalBalanceBand as MatchTonalBalanceBand,
 )
 from ._types_mastering_results import (
-    MatchTonalBalanceLogBandsResult as MatchTonalBalanceLogBandsResult,
-)
-from ._types_mastering_results import (
     MatchTonalBalanceResult as MatchTonalBalanceResult,
 )
 from ._types_mastering_results import (

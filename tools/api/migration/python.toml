@@ -7571,3 +7571,10 @@ old = "StreamingLoudnessGain.true_peak_db"
 new = "StreamingLoudnessGain.true_peak_dbtp"
 domain = "mastering"
 rule = "unit-in-name"
+
+[[entry]]
+kind = "type"
+old = "MatchTonalBalanceLogBandsResult"
+removed = true
+domain = "mastering"
+rule = "typed-results"

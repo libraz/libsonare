@@ -1149,9 +1149,6 @@ from .types import (
     MatchTonalBalanceBand as MatchTonalBalanceBand,
 )
 from .types import (
-    MatchTonalBalanceLogBandsResult as MatchTonalBalanceLogBandsResult,
-)
-from .types import (
     MatchTonalBalanceResult as MatchTonalBalanceResult,
 )
 from .types import (
