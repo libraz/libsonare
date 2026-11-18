@@ -421,10 +421,10 @@ def mixer():
         mixer.close()
 
 
-def _pan_mode(mixer, strip_id: str) -> int:
-    """Read a strip's current panMode ordinal from the serialized scene."""
+def _pan_mode(mixer, strip_id: str) -> str:
+    """Read a strip's current panMode token from the serialized scene."""
     by_id = {s["id"]: s for s in json.loads(mixer.to_scene_json())["strips"]}
-    return int(by_id[strip_id]["panMode"])
+    return str(by_id[strip_id]["panMode"])
 
 
 # --- Pan mode coercion and preservation -------------------------------------
@@ -433,13 +433,13 @@ def _pan_mode(mixer, strip_id: str) -> int:
 def test_set_pan_accepts_string_pan_mode(mixer) -> None:
     """set_pan accepts string pan modes ('stereoPan' / 'dualPan')."""
     mixer.set_pan("vocal", 0.5, "stereoPan")
-    assert _pan_mode(mixer, "vocal") == 1  # PAN_MODE_STEREO_PAN
+    assert _pan_mode(mixer, "vocal") == "stereoPan"
 
     mixer.set_pan("vocal", -0.2, "dualPan")
-    assert _pan_mode(mixer, "vocal") == 2  # PAN_MODE_DUAL_PAN
+    assert _pan_mode(mixer, "vocal") == "dualPan"
 
     mixer.set_pan("vocal", 0.1, "balance")
-    assert _pan_mode(mixer, "vocal") == 0  # PAN_MODE_BALANCE
+    assert _pan_mode(mixer, "vocal") == "balance"
     with pytest.raises(TypeError):
         mixer.set_pan("vocal", 0.1, 0)  # type: ignore[arg-type]
 
@@ -447,11 +447,11 @@ def test_set_pan_accepts_string_pan_mode(mixer) -> None:
 def test_set_pan_keeps_current_mode_by_default(mixer) -> None:
     """Omitting pan_mode keeps the strip's current pan mode (no reset to Balance)."""
     mixer.set_pan("vocal", 0.5, "stereoPan")
-    assert _pan_mode(mixer, "vocal") == 1
+    assert _pan_mode(mixer, "vocal") == "stereoPan"
 
     # No pan_mode -> keep current mode; only the pan position changes.
     mixer.set_pan("vocal", 0.3)
-    assert _pan_mode(mixer, "vocal") == 1
+    assert _pan_mode(mixer, "vocal") == "stereoPan"
 
     by_id = {s["id"]: s for s in json.loads(mixer.to_scene_json())["strips"]}
     assert by_id["vocal"]["pan"] == pytest.approx(0.3, abs=1e-5)
