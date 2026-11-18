@@ -492,51 +492,37 @@ describe('mastering mixing surface', () => {
   describe('native still uses the old spelling', () => {
     const module = () => addon;
 
-    const rawCases: Array<[string, () => Record<string, unknown>, string[], string[]]> = [
-      [
-        'the scene document holds pan mode and law as ints and the send timing as pre or post',
-        () => {
-          const scene = JSON.parse(module().mixingScenePresetJson('vocalReverbSend'));
-          const first = scene.strips[0];
-          expect(typeof first.panMode).toBe('number');
-          expect(typeof first.panLaw).toBe('number');
-          expect(['pre', 'post']).toContain(first.sends[0].timing);
-          return first;
-        },
-        ['panMode', 'panLaw'],
-        [],
-      ],
-    ];
-
-    it.each(rawCases)('%s', (_name, read, present, absent) => {
-      const raw = read();
-      for (const key of present) {
-        expect(raw, key).toHaveProperty(key);
-      }
-      for (const key of absent) {
-        expect(raw, key).not.toHaveProperty(key);
-      }
+    it('the scene document holds pan mode, pan law and send timing as tokens', () => {
+      const scene = JSON.parse(module().mixingScenePresetJson('vocalReverbSend'));
+      const first = scene.strips[0];
+      expect(['balance', 'stereoPan', 'dualPan']).toContain(first.panMode);
+      expect(['const3Db', 'const4.5Db', 'const6Db', 'linear0Db']).toContain(first.panLaw);
+      expect(['preFader', 'postFader']).toContain(first.sends[0].timing);
     });
 
-    it('a native mixer scene still refuses the token spellings of the pan fields and send timing', () => {
+    it('a native mixer scene takes the token spellings and refuses ints and pre/post', () => {
       const strip = { id: 'a', sends: [{ id: 's', destinationBusId: 'master', sendDb: 0 }] };
       const bus = { id: 'master', role: 'master' };
-      const cases: Array<Record<string, unknown>> = [
-        { panMode: 'balance' },
-        { panLaw: 'const3Db' },
-        { sends: [{ ...strip.sends[0], timing: 'postFader' }] },
+      const create = (patch: Record<string, unknown>) => () =>
+        new (addon as unknown as { Mixer: new (...args: unknown[]) => unknown }).Mixer(
+          JSON.stringify({ strips: [{ ...strip, ...patch }], buses: [bus] }),
+          SR,
+          BLOCK,
+        );
+      expect(
+        create({
+          panMode: 'balance',
+          panLaw: 'const3Db',
+          sends: [{ ...strip.sends[0], timing: 'postFader' }],
+        }),
+      ).not.toThrow();
+      const refused: Array<Record<string, unknown>> = [
+        { panMode: 0 },
+        { panLaw: 0 },
+        { sends: [{ ...strip.sends[0], timing: 'post' }] },
       ];
-      for (const patch of cases) {
-        const doc = JSON.stringify({ strips: [{ ...strip, ...patch }], buses: [bus] });
-        expect(
-          () =>
-            new (addon as unknown as { Mixer: new (...args: unknown[]) => unknown }).Mixer(
-              doc,
-              SR,
-              BLOCK,
-            ),
-          Object.keys(patch)[0],
-        ).toThrow();
+      for (const patch of refused) {
+        expect(create(patch), Object.keys(patch)[0]).toThrow();
       }
     });
 
