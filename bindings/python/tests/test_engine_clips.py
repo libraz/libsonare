@@ -80,10 +80,10 @@ def test_upsert_clip_and_remove_clip_change_one_clip() -> None:
 
         assert first_sample() == pytest.approx(0.75)
         engine.upsert_clip(EngineClip(id=1, channels=[[0.25] * 4], start_ppq=0.0, gain=2.0))
-        assert engine.clip_count() == 2
+        assert engine.clip_count == 2
         assert first_sample() == pytest.approx(1.0)
         engine.remove_clip(2)
-        assert engine.clip_count() == 1
+        assert engine.clip_count == 1
         assert first_sample() == pytest.approx(0.5)
         with pytest.raises(SonareError):
             engine.remove_clip(2)
@@ -396,7 +396,7 @@ def test_engine_warp_voice_capacity_default_and_round_trip() -> None:
         assert engine.warp_voice_capacity() == 0
         engine.play()
         engine.process([[0.0] * 128, [0.0] * 128])
-        assert engine.warp_stretch_overflow_count() == 0
+        assert engine.warp_stretch_overflow_count == 0
 
 
 @pytest.mark.parametrize("bad_voices", [65, -1, 1.5])

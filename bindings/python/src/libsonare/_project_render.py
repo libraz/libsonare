@@ -365,6 +365,7 @@ class _ProjectRenderMixin:
             raise _not_supported("libsonare was built without the SoundFont ABI")
         _check(lib.sonare_project_clear_soundfont(self._require_handle()))
 
+    @property
     def soundfont_preset_count(self) -> int:
         """Number of presets in the loaded SoundFont (0 when none is loaded)."""
         lib = _get_lib()

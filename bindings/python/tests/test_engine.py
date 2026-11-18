@@ -315,9 +315,9 @@ def test_engine_empty_automation_lane_removes_it() -> None:
             )
         )
         engine.set_automation_lane(7, [AutomationPoint(ppq=0.0, value=0.0)])
-        assert engine.automation_lane_count() == 1
+        assert engine.automation_lane_count == 1
         engine.set_automation_lane(7, [])
-        assert engine.automation_lane_count() == 0
+        assert engine.automation_lane_count == 0
 
 
 def test_engine_apply_restore_clear_insert_param_by_name_now() -> None:

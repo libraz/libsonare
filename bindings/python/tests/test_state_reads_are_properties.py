@@ -37,6 +37,12 @@ _STATE_READS = [
     ("RealtimeEngine", "graph_connection_count"),
     ("RealtimeEngine", "clip_page_prefetch_frames"),
     ("RealtimeEngine", "tail_samples"),
+    ("RealtimeEngine", "clip_count"),
+    ("RealtimeEngine", "automation_lane_count"),
+    ("RealtimeEngine", "external_midi_dropped_count"),
+    ("RealtimeEngine", "clip_page_request_overflow_count"),
+    ("RealtimeEngine", "warp_stretch_overflow_count"),
+    ("Project", "soundfont_preset_count"),
 ]
 
 

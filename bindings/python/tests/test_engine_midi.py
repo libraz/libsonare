@@ -265,7 +265,7 @@ def test_engine_drains_external_midi_routing_to_host() -> None:
 
         # A drained queue stays empty and overflow telemetry is observable.
         assert engine.drain_external_midi() == []
-        assert engine.external_midi_dropped_count() == 0
+        assert engine.external_midi_dropped_count == 0
 
 
 def test_engine_clip_event_group_comes_from_word0() -> None:
@@ -380,7 +380,7 @@ def test_engine_drain_external_midi_honors_max_records_cap_losslessly() -> None:
             collected.extend(batch)
 
         assert len(collected) == 2 * n_notes
-        assert engine.external_midi_dropped_count() == 0
+        assert engine.external_midi_dropped_count == 0
         # Losslessness: every queued note-on and note-off survives the capped drain.
         note_ons = {ev.bytes[1] for ev in collected if ev.bytes[0] & 0xF0 == 0x90}
         note_offs = {ev.bytes[1] for ev in collected if ev.bytes[0] & 0xF0 == 0x80}
@@ -438,7 +438,7 @@ def test_engine_drain_external_midi_refuses_a_budget_below_the_lowering_bound(
 
         # Positive control: no refused call consumed an event.
         assert len(engine.drain_external_midi()) == 2
-        assert engine.external_midi_dropped_count() == 0
+        assert engine.external_midi_dropped_count == 0
 
 
 def test_engine_forwards_midi_clock_transport_to_external_queue() -> None:

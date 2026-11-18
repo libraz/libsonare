@@ -108,7 +108,7 @@ def test_realtime_engine_offline_render_matches_process() -> None:
         assert frozen.clip_id == 77
         assert frozen.frames == 128
         assert frozen.num_channels == 2
-        assert freeze_engine.clip_count() == 1
+        assert freeze_engine.clip_count == 1
         freeze_engine.seek_sample(0)
         frozen_render = freeze_engine.render_offline([[0.0] * 128, [0.0] * 128], block_size=128)
 

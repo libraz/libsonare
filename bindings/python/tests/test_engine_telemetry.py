@@ -194,7 +194,7 @@ def test_realtime_engine_process_and_telemetry() -> None:
                 AutomationPoint(1.0, 6.0205999, "linear"),
             ],
         )
-        assert engine.automation_lane_count() == 1
+        assert engine.automation_lane_count == 1
         engine.set_graph(
             EngineGraphSpec(
                 nodes=[
@@ -226,7 +226,7 @@ def test_realtime_engine_process_and_telemetry() -> None:
                 )
             ]
         )
-        assert engine.clip_count() == 1
+        assert engine.clip_count == 1
         engine.set_capture_buffer(2, 128)
         engine.set_capture_punch(48000, 48128)
         engine.arm_capture()
@@ -414,12 +414,12 @@ def test_engine_overflow_counters_start_at_zero_and_stay_there_when_nothing_drop
     with RealtimeEngine(
         sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16
     ) as engine:
-        assert engine.clip_page_request_overflow_count() == 0
-        assert engine.warp_stretch_overflow_count() == 0
+        assert engine.clip_page_request_overflow_count == 0
+        assert engine.warp_stretch_overflow_count == 0
         engine.play()
         engine.process([[0.0] * 128, [0.0] * 128])
-        assert engine.clip_page_request_overflow_count() == 0
-        assert engine.warp_stretch_overflow_count() == 0
+        assert engine.clip_page_request_overflow_count == 0
+        assert engine.warp_stretch_overflow_count == 0
 
 
 def test_engine_telemetry_error_parameter_base_overflow_ordinal() -> None:

@@ -10281,3 +10281,51 @@ changed = "filter_group, filter_channel and remap_channel are 0..15, absent or N
 domain = "project"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_project_midi.py::test_midi_route_absent_filters_mean_any_and_a_negative_is_refused"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.clip_count"
+changed = "a property (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.automation_lane_count"
+changed = "a property (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.external_midi_dropped_count"
+changed = "a property (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.clip_page_request_overflow_count"
+changed = "a property (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.warp_stretch_overflow_count"
+changed = "a property (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "Project.soundfont_preset_count"
+changed = "a property (was a method)"
+domain = "project"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"

@@ -167,7 +167,7 @@ def test_apply_while_playing_raises_and_leaves_engine_unchanged() -> None:
         assert engine.transport_state().playing
         with _compile(project) as timeline, pytest.raises(SonareError):
             engine.apply_project_timeline(timeline)
-        assert engine.clip_count() == 0
+        assert engine.clip_count == 0
 
 
 def test_compile_failure_has_no_timeline_and_reports_diagnostics() -> None:

@@ -572,6 +572,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
+    @property
     def automation_lane_count(self) -> int:
         out = ctypes.c_size_t()
         _check(
@@ -697,6 +698,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
         self._clip_page_providers.pop(clip_id, None)
 
+    @property
     def clip_count(self) -> int:
         out = ctypes.c_size_t()
         _check(_get_lib().sonare_engine_clip_count(self._require_handle(), ctypes.byref(out)))
@@ -928,6 +930,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
+    @property
     def external_midi_dropped_count(self) -> int:
         """Number of external-MIDI events dropped because the queue was full.
 
@@ -942,6 +945,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
         return int(out.value)
 
+    @property
     def clip_page_request_overflow_count(self) -> int:
         """Number of clip-page requests dropped because the bounded queue was full.
 
@@ -961,6 +965,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
         return int(out.value)
 
+    @property
     def warp_stretch_overflow_count(self) -> int:
         """Number of blocks in which a time-stretched clip fell back to resampling.
 
@@ -984,7 +989,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
 
         Voices must be in [0, 64]. Default is 8. Capacity 0 disables
         time-stretch: every warped clip plays resampled instead, and none of
-        that counts toward :meth:`warp_stretch_overflow_count`. A change
+        that counts toward :attr:`warp_stretch_overflow_count`. A change
         applied while the engine is running rebuilds the voice pool
         immediately; any clip stretching through a voice at that moment
         restarts its WSOLA state rather than carrying it over.

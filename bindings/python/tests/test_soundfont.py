@@ -44,11 +44,11 @@ def _build_midi_only_project() -> Project:
 def test_load_soundfont_counts_presets_and_clears() -> None:
     project = Project()
     try:
-        assert project.soundfont_preset_count() == 0
+        assert project.soundfont_preset_count == 0
         project.load_soundfont(_SF2_BYTES)
-        assert project.soundfont_preset_count() == 3
+        assert project.soundfont_preset_count == 3
         project.clear_soundfont()
-        assert project.soundfont_preset_count() == 0
+        assert project.soundfont_preset_count == 0
     finally:
         project.close()
 
@@ -60,7 +60,7 @@ def test_load_soundfont_rejects_malformed_bytes() -> None:
         with pytest.raises(SonareError):
             project.load_soundfont(b"not an sf2 file")
         # The previous SoundFont is kept after a failed load.
-        assert project.soundfont_preset_count() == 3
+        assert project.soundfont_preset_count == 3
         with pytest.raises(ValueError):
             project.load_soundfont(b"")
     finally:
