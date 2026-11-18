@@ -13,7 +13,6 @@ second analysis.
 from __future__ import annotations
 
 import ctypes
-import math
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Self
 
@@ -22,6 +21,7 @@ import numpy as np
 from ._effects_note_model import (
     _NOTE_STRUCT_VERSION,
     _note_set_index,
+    _transcribe_reattack,
 )
 from ._errors import _require_open
 from ._narrowing import _narrow_double
@@ -58,35 +58,10 @@ from ._runtime import (
     _validate_samples,
 )
 
-# The polyphonic config is at layout version 2 (adds reattack_ratio).
-_POLYPHONIC_STRUCT_VERSION = 2
 
-
-def _count_field(name: str, value: int | None) -> int:
-    """0 is the C sentinel for "take the default" on every count field.
-
-    Narrowed rather than coerced for that reason: int(0.5) is the sentinel, so a
-    fractional count would run at the default and report success.
-    """
-    return 0 if value is None else _validate_c_int_field("PolyphonicAnalysis", value, name)
-
-
-def _value_field(value: float | None, name: str) -> float:
-    """Same sentinel for the float fields, which 0 never means literally."""
-    return 0.0 if value is None else _narrow_double(value, name)
-
-
-def _reattack_field(value: float | None) -> float:
-    """``None`` is off (C 0); a given value must be finite and above 1."""
-    if value is None:
-        return 0.0
-    number = _narrow_double(value, "reattack_ratio")
-    if not math.isfinite(number) or number <= 1.0:
-        raise SonareValueError(
-            "PolyphonicAnalysis: reattack_ratio must be finite and above 1 "
-            f"(use None for no split), got {value!r}"
-        )
-    return number
+def _count_field(name: str, value: int) -> int:
+    """Narrowed rather than coerced: int(0.5) would run at 0 and report success."""
+    return _validate_c_int_field("PolyphonicAnalysis", value, name)
 
 
 class PolyphonicAnalysis:
@@ -166,8 +141,9 @@ class PolyphonicAnalysis:
     ) -> None:
         """Analyse ``samples`` into editable notes.
 
-        Every keyword is optional, and ``None`` keeps the library default stated
-        for it. The window function and the centred framing are not settable:
+        Every keyword is optional: ``None`` keeps the library default stated
+        for it, and a given value is read literally and range-checked by the
+        library. The window function and the centred framing are not settable:
         every span, claim and mask offset in this chain is derived against one
         framing, so a second way to state it would be a second thing to keep in
         agreement.
@@ -196,32 +172,28 @@ class PolyphonicAnalysis:
             f0_max_hz: Highest (default 1760).
             salience_alpha_hz: Harmonic weighting offset (default 27).
             salience_beta_hz: Harmonic weighting scale (default 320).
-            salience_inharmonicity: Stretch assumed while scoring a candidate.
-                0 is both the default and a legal value, and needs no sentinel:
-                it is passed through as given.
+            salience_inharmonicity: Stretch assumed while scoring a candidate
+                (default 0).
             max_polyphony: Voices a frame is allowed (default 4, at most 64).
             min_frame_peak_ratio: Share of the frame's peak below which the
-                estimation stops iterating (default 0.20). 0 is a legal value
-                here as well as the sentinel for the default, so **pass a
-                negative number to select 0**; any other negative is rejected.
+                estimation stops iterating (default 0.20), in [0, 1].
             min_separation_cents: Closest two candidates in one frame may sit
-                (default 50). Negative selects 0, as above.
+                (default 50). 0 is the value 0; a negative is rejected.
             subtraction_factor: Share of a found voice removed before the next
                 iteration (default 1).
             max_jump_cents: A larger jump between frames breaks the ridge
                 (default 50).
             min_ridge_peak_ratio: A fade below this share of the ridge's own peak
-                breaks it (default 0.10). Negative selects 0, as above.
+                breaks it (default 0.10), in [0, 1].
             min_ridge_duration_ms: Shorter ridges are dropped (default 140).
-                Negative selects 0, as above.
+                0 is the value 0; a negative is rejected.
             mask_harmonics: Partials claimed per note (default 20, at most 128).
                 A claim is predicted from the note's F0 and harmonic number and
                 never read from the spectrum, so a note claims bins its own
                 partials never reached.
             claim_lobes: Claim half-width in Hann main lobes (default 1).
             inharmonicity: Stretch of the partial series, ``B`` in
-                ``f_h = h*f0*sqrt(1 + B*h^2)``. 0 is both the default and a legal
-                value, passed through as given. Leaving it at 0 for stretched
+                ``f_h = h*f0*sqrt(1 + B*h^2)`` (default 0). Leaving it at 0 for stretched
                 material costs more than a widened claim would: at a piano's
                 ``1e-4`` the highest partial of a twenty-harmonic claim sits
                 outside the claim entirely, and a partial outside every claim is
@@ -253,8 +225,8 @@ class PolyphonicAnalysis:
                 is identity that is inaudible, since the notes and the residual
                 still sum to the input. Lowering it trades separation for a
                 quieter residual.
-            max_refine_hz: Highest partial usable to refine an F0; 0 derives one,
-                and is passed through as given.
+            max_refine_hz: Highest partial usable to refine an F0 (default
+                ``None``, which derives one).
             f0_tolerance_cents: Worst F0 error tolerated (default 50).
             segmentation_threshold_cents: Scales each note's reported
                 ``f0_stability`` only (default 50). Every tracked ridge is one
@@ -266,8 +238,8 @@ class PolyphonicAnalysis:
                 A4 = 440).
             reattack_ratio: Splits a ridge where its salience climbs past this
                 multiple of the level just before (the same pitch struck again
-                while it sounds). ``None`` (the editing default) is
-                off; a given value must be finite and above 1.
+                while it sounds). ``None`` (the default) is off; a given value
+                must be finite and above 1.
 
         Raises:
             SonareValueError: If ``samples`` is empty, non-finite, or not a
@@ -284,54 +256,59 @@ class PolyphonicAnalysis:
         if not hasattr(lib, "sonare_polyphonic_analyze"):
             raise _unsupported_effect_symbol("sonare_polyphonic_analyze")
 
-        config = SonarePolyphonicConfig(
-            struct_version=_POLYPHONIC_STRUCT_VERSION,
-            n_fft=_count_field("n_fft", n_fft),
-            hop_length=_count_field("hop_length", hop_length),
-            win_length=_count_field("win_length", win_length),
-            cent_ref_hz=_value_field(cent_ref_hz, "cent_ref_hz"),
-            cents_per_bin=_value_field(cents_per_bin, "cents_per_bin"),
-            cent_max_hz=_value_field(cent_max_hz, "cent_max_hz"),
-            tonality_off=1 if tonality_off else 0,
-            salience_harmonics=_count_field("salience_harmonics", salience_harmonics),
-            f0_min_hz=_value_field(f0_min_hz, "f0_min_hz"),
-            f0_max_hz=_value_field(f0_max_hz, "f0_max_hz"),
-            salience_alpha_hz=_value_field(salience_alpha_hz, "salience_alpha_hz"),
-            salience_beta_hz=_value_field(salience_beta_hz, "salience_beta_hz"),
-            salience_inharmonicity=_value_field(salience_inharmonicity, "salience_inharmonicity"),
-            max_polyphony=_count_field("max_polyphony", max_polyphony),
-            min_frame_peak_ratio=_value_field(min_frame_peak_ratio, "min_frame_peak_ratio"),
-            min_separation_cents=_value_field(min_separation_cents, "min_separation_cents"),
-            subtraction_factor=_value_field(subtraction_factor, "subtraction_factor"),
-            max_jump_cents=_value_field(max_jump_cents, "max_jump_cents"),
-            min_ridge_peak_ratio=_value_field(min_ridge_peak_ratio, "min_ridge_peak_ratio"),
-            min_ridge_duration_ms=_value_field(min_ridge_duration_ms, "min_ridge_duration_ms"),
-            mask_harmonics=_count_field("mask_harmonics", mask_harmonics),
-            claim_lobes=_value_field(claim_lobes, "claim_lobes"),
-            inharmonicity=_value_field(inharmonicity, "inharmonicity"),
-            estimate_inharmonicity=1 if estimate_inharmonicity else 0,
-            inharmonicity_min_partials=_count_field(
-                "inharmonicity_min_partials", inharmonicity_min_partials
-            ),
-            inharmonicity_max_residual_bins=_value_field(
-                inharmonicity_max_residual_bins, "inharmonicity_max_residual_bins"
-            ),
-            inharmonicity_max_stretch=_value_field(
-                inharmonicity_max_stretch, "inharmonicity_max_stretch"
-            ),
-            window_frames=_count_field("window_frames", window_frames),
-            min_partial_separation=_value_field(min_partial_separation, "min_partial_separation"),
-            max_fit_residual=_value_field(max_fit_residual, "max_fit_residual"),
-            max_weight_modulus=_value_field(max_weight_modulus, "max_weight_modulus"),
-            max_refine_hz=_value_field(max_refine_hz, "max_refine_hz"),
-            f0_tolerance_cents=_value_field(f0_tolerance_cents, "f0_tolerance_cents"),
-            segmentation_threshold_cents=_value_field(
-                segmentation_threshold_cents, "segmentation_threshold_cents"
-            ),
-            min_note_ms=_value_field(min_note_ms, "min_note_ms"),
-            reference_hz=_value_field(reference_hz, "reference_hz"),
-            reattack_ratio=_reattack_field(reattack_ratio),
-        )
+        config = SonarePolyphonicConfig()
+        lib.sonare_polyphonic_config_init(ctypes.byref(config))
+        # None keeps the value sonare_polyphonic_config_init set; a given value is
+        # read literally and range-checked by the library.
+        counts = {
+            "n_fft": n_fft,
+            "hop_length": hop_length,
+            "win_length": win_length,
+            "salience_harmonics": salience_harmonics,
+            "max_polyphony": max_polyphony,
+            "mask_harmonics": mask_harmonics,
+            "inharmonicity_min_partials": inharmonicity_min_partials,
+            "window_frames": window_frames,
+        }
+        for name, count in counts.items():
+            if count is not None:
+                setattr(config, name, _count_field(name, count))
+        values = {
+            "cent_ref_hz": cent_ref_hz,
+            "cents_per_bin": cents_per_bin,
+            "cent_max_hz": cent_max_hz,
+            "f0_min_hz": f0_min_hz,
+            "f0_max_hz": f0_max_hz,
+            "salience_alpha_hz": salience_alpha_hz,
+            "salience_beta_hz": salience_beta_hz,
+            "salience_inharmonicity": salience_inharmonicity,
+            "min_frame_peak_ratio": min_frame_peak_ratio,
+            "min_separation_cents": min_separation_cents,
+            "subtraction_factor": subtraction_factor,
+            "max_jump_cents": max_jump_cents,
+            "min_ridge_peak_ratio": min_ridge_peak_ratio,
+            "min_ridge_duration_ms": min_ridge_duration_ms,
+            "claim_lobes": claim_lobes,
+            "inharmonicity": inharmonicity,
+            "inharmonicity_max_residual_bins": inharmonicity_max_residual_bins,
+            "inharmonicity_max_stretch": inharmonicity_max_stretch,
+            "min_partial_separation": min_partial_separation,
+            "max_fit_residual": max_fit_residual,
+            "max_weight_modulus": max_weight_modulus,
+            "max_refine_hz": max_refine_hz,
+            "f0_tolerance_cents": f0_tolerance_cents,
+            "segmentation_threshold_cents": segmentation_threshold_cents,
+            "min_note_ms": min_note_ms,
+            "reference_hz": reference_hz,
+        }
+        for name, value in values.items():
+            if value is not None:
+                setattr(config, name, _narrow_double(value, name))
+        # 0 is the core's "no split"; on this surface that is None, so a given 0 is refused.
+        if reattack_ratio is not None:
+            config.reattack_ratio = _transcribe_reattack("PolyphonicAnalysis", reattack_ratio)
+        config.tonality_off = 1 if tonality_off else 0
+        config.estimate_inharmonicity = 1 if estimate_inharmonicity else 0
 
         c_array, length = _to_c_float_array(buf)
         handle = ctypes.c_void_p()

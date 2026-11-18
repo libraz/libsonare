@@ -6792,3 +6792,36 @@ changed = "takes pitchCents / vibratoDepth exactly"
 domain = "engine"
 rule = "token-case"
 test = "bindings/python/tests/test_controller_profile.py::test_an_unknown_spelling_or_ordinal_is_refused_by_the_binding"
+
+
+[[entry]]
+kind = "option"
+old = "PolyphonicAnalysis.analyze(min_frame_peak_ratio)"
+changed = "0 is the value 0 and a negative is refused; a negative no longer selects 0"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_polyphonic_editing.py::test_a_negative_floor_is_refused"
+
+[[entry]]
+kind = "option"
+old = "PolyphonicAnalysis.analyze(min_separation_cents)"
+changed = "0 is the value 0 and a negative is refused; a negative no longer selects 0"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_polyphonic_editing.py::test_a_negative_floor_is_refused"
+
+[[entry]]
+kind = "option"
+old = "PolyphonicAnalysis.analyze(min_ridge_peak_ratio)"
+changed = "0 is the value 0 and a negative is refused; a negative no longer selects 0"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_polyphonic_editing.py::test_a_negative_floor_is_refused"
+
+[[entry]]
+kind = "option"
+old = "PolyphonicAnalysis.analyze(min_ridge_duration_ms)"
+changed = "0 is the value 0 and a negative is refused; a negative no longer selects 0"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_polyphonic_editing.py::test_a_negative_floor_is_refused"

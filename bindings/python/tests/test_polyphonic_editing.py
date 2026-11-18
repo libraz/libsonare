@@ -502,27 +502,38 @@ def test_the_hop_length_reaches_the_framing(chord: NDArray[np.float32]) -> None:
 
 
 @pytest.mark.slow  # one further analysis of the chord; run via `make test-python-slow`
-def test_a_negative_selects_zero_on_the_four_fields_that_accept_it(
+def test_zero_is_a_real_value_on_the_four_floor_fields(
     chord: NDArray[np.float32],
 ) -> None:
-    """The four fields where 0 is both the default and a legal value.
+    """The four floor fields read 0 as the value 0, and refuse a negative.
 
-    A negative is how the C ABI spells 0 on those, and it must cross the facade
-    unchanged: translating it to 0.0 would select the default instead, and
-    clamping it to 0 here would hide the rejection the core owes any other
-    negative. With all four at 0 nothing is dropped for being short or faint, so
-    the analysis keeps at least the notes the defaults keep.
+    With all four at 0 nothing is dropped for being short or faint, so the
+    analysis keeps at least the notes the defaults keep.
     """
     with libsonare.PolyphonicAnalysis(
         chord,
         SR,
-        min_frame_peak_ratio=-1.0,
-        min_separation_cents=-1.0,
-        min_ridge_peak_ratio=-1.0,
-        min_ridge_duration_ms=-1.0,
+        min_frame_peak_ratio=0.0,
+        min_separation_cents=0.0,
+        min_ridge_peak_ratio=0.0,
+        min_ridge_duration_ms=0.0,
     ) as floored:
         assert floored.note_count >= EXPECTED_NOTES
         assert floored.frame_count == EXPECTED_FRAMES
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "min_frame_peak_ratio",
+        "min_separation_cents",
+        "min_ridge_peak_ratio",
+        "min_ridge_duration_ms",
+    ],
+)
+def test_a_negative_floor_is_refused(chord: NDArray[np.float32], field: str) -> None:
+    with pytest.raises(SonareValueError):
+        libsonare.PolyphonicAnalysis(chord, SR, **{field: -1.0})
 
 
 # ---------------------------------------------------------------------------
