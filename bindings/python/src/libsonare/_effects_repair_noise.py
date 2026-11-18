@@ -15,15 +15,6 @@ from ._effects_repair_common import (
     _run_repair,
 )
 from ._ffi import (
-    SONARE_DEHUM_MODE_NOTCH,
-    SONARE_DEHUM_MODE_SUBTRACT,
-    SONARE_DENOISE_MODE_LOG_MMSE,
-    SONARE_DENOISE_MODE_MMSE_STSA,
-    SONARE_DENOISE_MODE_SPECTRAL_SUBTRACTION,
-    SONARE_DENOISE_NOISE_ESTIMATOR_IMCRA,
-    SONARE_DENOISE_NOISE_ESTIMATOR_MCRA,
-    SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE,
-    SONARE_DENOISE_NOISE_ESTIMATOR_SPP,
     SONARE_REPAIR_NOISE_BAND_COUNT,
     SonareDehumConfig,
     SonareDehumResult,
@@ -48,11 +39,19 @@ from ._runtime import (
     _narrow_int,
     _planar_channel_arrays,
     _require_power_of_two,
-    _resolve_enum,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
+    _token_ordinal,
     _unsupported_effect_symbol,
+)
+from ._types_enums import (
+    _DEHUM_MODES,
+    _DENOISE_CLASSICAL_MODES,
+    _DENOISE_CLASSICAL_NOISE_ESTIMATORS,
+    DehumMode,
+    DenoiseClassicalMode,
+    DenoiseClassicalNoiseEstimator,
 )
 from .types import (
     DehumReport,
@@ -66,47 +65,13 @@ from .types import (
     NoiseDetection,
 )
 
-_DENOISE_MODE_NAMES = {
-    "logmmse": SONARE_DENOISE_MODE_LOG_MMSE,  # noqa: F405
-    "log_mmse": SONARE_DENOISE_MODE_LOG_MMSE,  # noqa: F405
-    "lsa": SONARE_DENOISE_MODE_LOG_MMSE,  # noqa: F405
-    "mmsestsa": SONARE_DENOISE_MODE_MMSE_STSA,  # noqa: F405
-    "mmse_stsa": SONARE_DENOISE_MODE_MMSE_STSA,  # noqa: F405
-    "stsa": SONARE_DENOISE_MODE_MMSE_STSA,  # noqa: F405
-    "spectralsubtraction": SONARE_DENOISE_MODE_SPECTRAL_SUBTRACTION,  # noqa: F405
-    "spectral_subtraction": SONARE_DENOISE_MODE_SPECTRAL_SUBTRACTION,  # noqa: F405
-    "ss": SONARE_DENOISE_MODE_SPECTRAL_SUBTRACTION,  # noqa: F405
-}
+
+def _coerce_denoise_mode(value: DenoiseClassicalMode) -> int:
+    return _token_ordinal(value, _DENOISE_CLASSICAL_MODES, "denoise mode")
 
 
-_DENOISE_ESTIMATOR_NAMES = {
-    "quantile": SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE,  # noqa: F405
-    "mcra": SONARE_DENOISE_NOISE_ESTIMATOR_MCRA,  # noqa: F405
-    "imcra": SONARE_DENOISE_NOISE_ESTIMATOR_IMCRA,  # noqa: F405
-    "spp": SONARE_DENOISE_NOISE_ESTIMATOR_SPP,  # noqa: F405
-}
-
-
-def _coerce_denoise_mode(value: int | str) -> int:
-    return _resolve_enum(
-        value,
-        _DENOISE_MODE_NAMES,
-        "denoise mode",
-        underscore=True,
-        strip=True,
-        validate_int=True,
-    )
-
-
-def _coerce_denoise_estimator(value: int | str) -> int:
-    return _resolve_enum(
-        value,
-        _DENOISE_ESTIMATOR_NAMES,
-        "denoise noise estimator",
-        underscore=True,
-        strip=True,
-        validate_int=True,
-    )
+def _coerce_denoise_estimator(value: DenoiseClassicalNoiseEstimator) -> int:
+    return _token_ordinal(value, _DENOISE_CLASSICAL_NOISE_ESTIMATORS, "denoise noise estimator")
 
 
 @_guard_buffer("samples")
@@ -114,8 +79,8 @@ def mastering_repair_denoise_classical(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
     *,
-    mode: int | str = "logMmse",
-    noise_estimator: int | str = "quantile",
+    mode: DenoiseClassicalMode = "logMmse",
+    noise_estimator: DenoiseClassicalNoiseEstimator = "quantile",
     n_fft: int = 1024,
     hop_length: int = 256,
     dd_alpha: float = 0.98,
@@ -131,8 +96,7 @@ def mastering_repair_denoise_classical(
     Args:
         samples: Mono input buffer (any sequence convertible to float32).
         sample_rate: Sample rate in Hz.
-        mode: ``"logMmse"`` (default), ``"mmseStsa"``, or ``"spectralSubtraction"``;
-              an integer in ``SONARE_DENOISE_MODE_*`` is also accepted.
+        mode: ``"logMmse"`` (default), ``"mmseStsa"``, or ``"spectralSubtraction"``.
         noise_estimator: ``"quantile"`` (default), ``"mcra"``, ``"imcra"``, or ``"spp"``.
         n_fft: STFT size, must be a positive power of two (default 1024).
         hop_length: Hop size in samples, at most ``n_fft // 2`` (default 256).
@@ -206,8 +170,8 @@ def mastering_repair_detect_noise_floor(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
     *,
-    mode: int | str = "logMmse",
-    noise_estimator: int | str = "quantile",
+    mode: DenoiseClassicalMode = "logMmse",
+    noise_estimator: DenoiseClassicalNoiseEstimator = "quantile",
     n_fft: int = 1024,
     hop_length: int = 256,
     dd_alpha: float = 0.98,
@@ -239,8 +203,7 @@ def mastering_repair_detect_noise_floor(
     Args:
         samples: Mono input buffer (any sequence convertible to float32).
         sample_rate: Sample rate in Hz.
-        mode: ``"logMmse"`` (default), ``"mmseStsa"``, or ``"spectralSubtraction"``;
-              an integer in ``SONARE_DENOISE_MODE_*`` is also accepted.
+        mode: ``"logMmse"`` (default), ``"mmseStsa"``, or ``"spectralSubtraction"``.
         noise_estimator: ``"quantile"`` (default), ``"mcra"``, ``"imcra"``, or ``"spp"``.
         n_fft: STFT size, must be a positive power of two (default 1024).
         hop_length: Hop size in samples, at most ``n_fft // 2`` (default 256).
@@ -370,8 +333,8 @@ def mastering_repair_denoise_classical_stereo(
     right: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
     *,
-    mode: int | str = "logMmse",
-    noise_estimator: int | str = "quantile",
+    mode: DenoiseClassicalMode = "logMmse",
+    noise_estimator: DenoiseClassicalNoiseEstimator = "quantile",
     n_fft: int = 1024,
     hop_length: int = 256,
     dd_alpha: float = 0.98,
@@ -409,8 +372,7 @@ def mastering_repair_denoise_classical_stereo(
         left: Left channel input buffer (any sequence convertible to float32).
         right: Right channel input buffer, same length as ``left``.
         sample_rate: Sample rate in Hz.
-        mode: ``"logMmse"`` (default), ``"mmseStsa"``, or ``"spectralSubtraction"``;
-              an integer in ``SONARE_DENOISE_MODE_*`` is also accepted.
+        mode: ``"logMmse"`` (default), ``"mmseStsa"``, or ``"spectralSubtraction"``.
         noise_estimator: ``"quantile"`` (default), ``"mcra"``, ``"imcra"``, or ``"spp"``.
         n_fft: STFT size, must be a positive power of two (default 1024).
         hop_length: Hop size in samples, at most ``n_fft // 2`` (default 256).
@@ -492,8 +454,8 @@ def mastering_repair_denoise_classical_linked(
     channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
     sample_rate: int,
     *,
-    mode: int | str = "logMmse",
-    noise_estimator: int | str = "quantile",
+    mode: DenoiseClassicalMode = "logMmse",
+    noise_estimator: DenoiseClassicalNoiseEstimator = "quantile",
     n_fft: int = 1024,
     hop_length: int = 256,
     dd_alpha: float = 0.98,
@@ -544,8 +506,7 @@ def mastering_repair_denoise_classical_linked(
             back, or a 2-D ``(channels, frames)`` array. All channels must be
             the same length; the C form has one length for the set.
         sample_rate: Sample rate in Hz, shared by every channel.
-        mode: ``"logMmse"`` (default), ``"mmseStsa"``, or ``"spectralSubtraction"``;
-              an integer in ``SONARE_DENOISE_MODE_*`` is also accepted.
+        mode: ``"logMmse"`` (default), ``"mmseStsa"``, or ``"spectralSubtraction"``.
         noise_estimator: ``"quantile"`` (default), ``"mcra"``, ``"imcra"``, or ``"spp"``.
         n_fft: STFT size, must be a positive power of two (default 1024).
         hop_length: Hop size in samples, at most ``n_fft // 2`` (default 256).
@@ -622,21 +583,8 @@ def mastering_repair_denoise_classical_linked(
     )
 
 
-_DEHUM_MODE_NAMES = {
-    "subtract": SONARE_DEHUM_MODE_SUBTRACT,  # noqa: F405
-    "notch": SONARE_DEHUM_MODE_NOTCH,  # noqa: F405
-}
-
-
-def _coerce_dehum_mode(value: int | str) -> int:
-    return _resolve_enum(
-        value,
-        _DEHUM_MODE_NAMES,
-        "dehum mode",
-        underscore=True,
-        strip=True,
-        validate_int=True,
-    )
+def _coerce_dehum_mode(value: DehumMode) -> int:
+    return _token_ordinal(value, _DEHUM_MODES, "dehum mode")
 
 
 @_guard_buffer("samples")
@@ -652,13 +600,12 @@ def mastering_repair_dehum(
     adaptation: float = 0.25,
     frame_size: int = 2048,
     pll_bandwidth: float = 0.01,
-    mode: int | str = "subtract",
+    mode: DehumMode = "subtract",
 ) -> DehumResult:
     """Offline mains-hum remover.
 
     Args:
-        mode: ``"subtract"`` (default) or ``"notch"``; an integer in
-            ``SONARE_DEHUM_MODE_*`` is also accepted.
+        mode: ``"subtract"`` (default) or ``"notch"``.
     """
     config = SonareDehumConfig(  # noqa: F405
         fundamental_hz=_narrow_double(fundamental_hz, "fundamental_hz"),
@@ -711,7 +658,7 @@ def mastering_repair_detect_hum(
     adaptation: float = 0.25,
     frame_size: int = 2048,
     pll_bandwidth: float = 0.01,
-    mode: int | str = "subtract",
+    mode: DehumMode = "subtract",
 ) -> HumDetection:
     """Measure mains hum without filtering it.
 
@@ -746,8 +693,7 @@ def mastering_repair_detect_hum(
         adaptation: Tracking step size (default 0.25).
         frame_size: Analysis frame size, must be >= 16 (default 2048).
         pll_bandwidth: PLL bandwidth (default 0.01).
-        mode: ``"subtract"`` (default) or ``"notch"``; an integer in
-            ``SONARE_DEHUM_MODE_*`` is also accepted.
+        mode: ``"subtract"`` (default) or ``"notch"``.
 
     Returns:
         :class:`~libsonare.types.HumDetection`.
@@ -805,7 +751,7 @@ def mastering_repair_dehum_stereo(
     adaptation: float = 0.25,
     frame_size: int = 2048,
     pll_bandwidth: float = 0.01,
-    mode: int | str = "subtract",
+    mode: DehumMode = "subtract",
 ) -> DehumStereoResult:
     """Dehums a stereo pair, sharing the tracked fundamental when tracking is on.
 
@@ -832,8 +778,7 @@ def mastering_repair_dehum_stereo(
         adaptation: Tracking step size (default 0.25).
         frame_size: Analysis frame size, must be >= 16 (default 2048).
         pll_bandwidth: PLL bandwidth (default 0.01).
-        mode: ``"subtract"`` (default) or ``"notch"``; an integer in
-            ``SONARE_DEHUM_MODE_*`` is also accepted.
+        mode: ``"subtract"`` (default) or ``"notch"``.
 
     Returns:
         :class:`DehumStereoResult` with the dehummed channels and each

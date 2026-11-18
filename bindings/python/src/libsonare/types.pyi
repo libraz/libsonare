@@ -461,6 +461,18 @@ EqPhaseMode: TypeAlias = Literal["zero", "natural", "linear"]
 
 EqStereoPlacement: TypeAlias = Literal["stereo", "left", "right", "mid", "side"]
 
+TrimSilenceMode: TypeAlias = Literal["peak", "lufsGated"]
+
+DecrackleMode: TypeAlias = Literal["median", "waveletShrinkage"]
+
+DenoiseClassicalMode: TypeAlias = Literal["logMmse", "mmseStsa", "spectralSubtraction"]
+
+DenoiseClassicalNoiseEstimator: TypeAlias = Literal["quantile", "mcra", "imcra", "spp"]
+
+DehumMode: TypeAlias = Literal["subtract", "notch"]
+
+CompressorDetector: TypeAlias = Literal["peak", "rms", "logRms"]
+
 KeyProfile: TypeAlias = Literal[
     "krumhanslSchmuckler",
     "temperley",

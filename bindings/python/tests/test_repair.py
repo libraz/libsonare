@@ -80,12 +80,12 @@ class TestMasteringRepairDenoiseClassical:
         ).samples
         assert out.shape == noisy.shape
 
-    def test_mmse_stsa_with_int_enum(self) -> None:
+    def test_mmse_stsa(self) -> None:
         noisy = _with_noise(sine(440.0, 0.5, amp=0.5), 0.4)
         out = libsonare.mastering_repair_denoise_classical(
             noisy,
             SR,
-            mode=libsonare._ffi.SONARE_DENOISE_MODE_MMSE_STSA,
+            mode="mmseStsa",
             n_fft=512,
             hop_length=128,
         ).samples
@@ -103,22 +103,24 @@ class TestMasteringRepairDenoiseClassical:
 
     def test_rejects_unknown_mode_string(self) -> None:
         noisy = _with_noise(sine(440.0, 0.1, amp=0.5), 0.4)
-        with pytest.raises(ValueError, match="unknown denoise mode"):
-            libsonare.mastering_repair_denoise_classical(noisy, SR, mode="not-a-mode")
+        with pytest.raises(ValueError, match="invalid denoise mode"):
+            libsonare.mastering_repair_denoise_classical(noisy, SR, mode="not-a-mode")  # type: ignore[arg-type]
 
-    def test_rejects_unknown_mode_int(self) -> None:
+    def test_an_ordinal_mode_is_a_type_error(self) -> None:
         noisy = _with_noise(sine(440.0, 0.1, amp=0.5), 0.4)
-        with pytest.raises(ValueError, match="unknown denoise mode"):
-            libsonare.mastering_repair_denoise_classical(noisy, SR, mode=999)
+        with pytest.raises(TypeError, match="denoise mode"):
+            libsonare.mastering_repair_denoise_classical(noisy, SR, mode=1)  # type: ignore[arg-type]
 
     def test_rejects_unknown_noise_estimator_string(self) -> None:
         noisy = _with_noise(sine(440.0, 0.1, amp=0.5), 0.4)
-        with pytest.raises(ValueError, match="unknown denoise noise estimator"):
+        with pytest.raises(ValueError, match="invalid denoise noise estimator"):
             libsonare.mastering_repair_denoise_classical(
-                noisy, SR, noise_estimator="not-an-estimator"
+                noisy,
+                SR,
+                noise_estimator="not-an-estimator",  # type: ignore[arg-type]
             )
 
-    def test_rejects_unknown_noise_estimator_int(self) -> None:
+    def test_an_ordinal_noise_estimator_is_a_type_error(self) -> None:
         noisy = _with_noise(sine(440.0, 0.1, amp=0.5), 0.4)
-        with pytest.raises(ValueError, match="unknown denoise noise estimator"):
-            libsonare.mastering_repair_denoise_classical(noisy, SR, noise_estimator=999)
+        with pytest.raises(TypeError, match="denoise noise estimator"):
+            libsonare.mastering_repair_denoise_classical(noisy, SR, noise_estimator=1)  # type: ignore[arg-type]

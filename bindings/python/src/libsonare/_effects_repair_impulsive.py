@@ -14,8 +14,6 @@ from ._effects_repair_common import (
     _run_repair,
 )
 from ._ffi import (
-    SONARE_DECRACKLE_MODE_MEDIAN,
-    SONARE_DECRACKLE_MODE_WAVELET_SHRINKAGE,
     SonareClickDetection,
     SonareClipDetection,
     SonareCrackleDetection,
@@ -40,11 +38,12 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _narrow_int,
-    _resolve_enum,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
+    _token_ordinal,
 )
+from ._types_enums import _DECRACKLE_MODES, DecrackleMode
 from .types import (
     ClickDetection,
     ClipDetection,
@@ -63,23 +62,9 @@ from .types import (
 # 0.98 of full scale, in dBFS.
 _DEFAULT_CLIP_THRESHOLD_DB = 20.0 * math.log10(0.98)
 
-_DECRACKLE_MODE_NAMES = {
-    "median": SONARE_DECRACKLE_MODE_MEDIAN,  # noqa: F405
-    "waveletshrinkage": SONARE_DECRACKLE_MODE_WAVELET_SHRINKAGE,  # noqa: F405
-    "wavelet_shrinkage": SONARE_DECRACKLE_MODE_WAVELET_SHRINKAGE,  # noqa: F405
-    "wavelet": SONARE_DECRACKLE_MODE_WAVELET_SHRINKAGE,  # noqa: F405
-}
 
-
-def _coerce_decrackle_mode(value: int | str) -> int:
-    return _resolve_enum(
-        value,
-        _DECRACKLE_MODE_NAMES,
-        "decrackle mode",
-        underscore=True,
-        strip=True,
-        validate_int=True,
-    )
+def _coerce_decrackle_mode(value: DecrackleMode) -> int:
+    return _token_ordinal(value, _DECRACKLE_MODES, "decrackle mode")
 
 
 @_guard_buffer("samples")
@@ -546,7 +531,7 @@ def mastering_repair_decrackle(
     sample_rate: int,
     *,
     threshold: float = 0.4,
-    mode: int | str = "median",
+    mode: DecrackleMode = "median",
     levels: int = 4,
 ) -> DecrackleResult:
     """Offline crackle suppressor (median or wavelet-shrinkage)."""
@@ -583,7 +568,7 @@ def mastering_repair_detect_crackle(
     sample_rate: int,
     *,
     threshold: float = 0.4,
-    mode: int | str = "median",
+    mode: DecrackleMode = "median",
     levels: int = 4,
 ) -> CrackleDetection:
     """Measure crackle without repairing it.
@@ -652,7 +637,7 @@ def mastering_repair_decrackle_stereo(
     sample_rate: int,
     *,
     threshold: float = 0.4,
-    mode: int | str = "median",
+    mode: DecrackleMode = "median",
     levels: int = 4,
 ) -> DecrackleStereoResult:
     """Decrackles a stereo pair, each channel on its own.
@@ -671,8 +656,7 @@ def mastering_repair_decrackle_stereo(
             the BayesShrink threshold, which only binds when the configured
             value is below what BayesShrink computes from the signal itself
             (default 0.4).
-        mode: ``"median"`` (default) or ``"waveletShrinkage"``; an integer in
-            ``SONARE_DECRACKLE_MODE_*`` is also accepted.
+        mode: ``"median"`` (default) or ``"waveletShrinkage"``.
         levels: Wavelet mode: number of Haar decomposition levels (default 4).
 
     Returns:

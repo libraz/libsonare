@@ -263,13 +263,21 @@ class TestMasteringRepairDenoiseClassicalStereo:
     def test_rejects_unresolvable_mode(self) -> None:
         left, right = _pair()
         with pytest.raises(ValueError):
-            libsonare.mastering_repair_denoise_classical_stereo(left, right, SR, mode="not-a-mode")
+            libsonare.mastering_repair_denoise_classical_stereo(
+                left,
+                right,
+                SR,
+                mode="not-a-mode",  # type: ignore[arg-type]
+            )
 
     def test_rejects_unresolvable_noise_estimator(self) -> None:
         left, right = _pair()
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             libsonare.mastering_repair_denoise_classical_stereo(
-                left, right, SR, noise_estimator=999
+                left,
+                right,
+                SR,
+                noise_estimator=1,  # type: ignore[arg-type]
             )
 
     def test_rejects_empty_input(self) -> None:

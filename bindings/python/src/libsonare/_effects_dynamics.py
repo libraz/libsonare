@@ -9,9 +9,6 @@ from typing import Any
 import numpy as np
 
 from ._ffi import (
-    SONARE_COMPRESSOR_DETECTOR_LOG_RMS,
-    SONARE_COMPRESSOR_DETECTOR_PEAK,
-    SONARE_COMPRESSOR_DETECTOR_RMS,
     SonareCompressorConfig,
     SonareGateConfig,
     SonareTransientShaperConfig,
@@ -22,29 +19,16 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _out_float_array,
-    _resolve_enum,
     _to_c_int,
     _to_c_size_t,
+    _token_ordinal,
     _validate_samples,
 )
-
-_COMPRESSOR_DETECTOR_NAMES: dict[str, int] = {
-    "peak": SONARE_COMPRESSOR_DETECTOR_PEAK,
-    "rms": SONARE_COMPRESSOR_DETECTOR_RMS,
-    "log_rms": SONARE_COMPRESSOR_DETECTOR_LOG_RMS,
-    "logrms": SONARE_COMPRESSOR_DETECTOR_LOG_RMS,
-}
+from ._types_enums import _COMPRESSOR_DETECTORS, CompressorDetector
 
 
-def _coerce_compressor_detector(value: int | str) -> int:
-    return _resolve_enum(
-        value,
-        _COMPRESSOR_DETECTOR_NAMES,
-        "compressor detector",
-        underscore=True,
-        strip=True,
-        validate_int=True,
-    )
+def _coerce_compressor_detector(value: CompressorDetector) -> int:
+    return _token_ordinal(value, _COMPRESSOR_DETECTORS, "compressor detector")
 
 
 def _run_dynamics(
@@ -89,7 +73,7 @@ def mastering_dynamics_compressor(
     knee_db: float = 0.0,
     makeup_gain_db: float = 0.0,
     auto_makeup: bool = False,
-    detector: int | str = "rms",
+    detector: CompressorDetector = "rms",
     sidechain_hpf_enabled: bool = False,
     sidechain_hpf_hz: float = 100.0,
     pdr_time_ms: float = 0.0,
@@ -109,9 +93,7 @@ def mastering_dynamics_compressor(
         knee_db: Soft-knee width in dB (default 0).
         makeup_gain_db: Static makeup gain in dB (default 0).
         auto_makeup: Whether to enable automatic makeup gain (default False).
-        detector: Detector mode, either an alias (``"peak"``, ``"rms"``,
-            ``"log_rms"``) or an integer from
-            :data:`SONARE_COMPRESSOR_DETECTOR_PEAK` and friends (default ``"rms"``).
+        detector: Level detector, ``"peak"``, ``"rms"`` or ``"logRms"`` (default ``"rms"``).
         sidechain_hpf_enabled: Whether to high-pass-filter the sidechain
             (default False).
         sidechain_hpf_hz: Sidechain HPF cutoff in Hz (default 100).

@@ -46,27 +46,17 @@ class TestCompressor:
         y_peak = float(np.max(np.abs(y[half:])))
         assert y_peak < x_peak * 0.95
 
-    def test_detector_accepts_string_and_int(self) -> None:
+    def test_detector_is_a_token(self) -> None:
         x = sine(440.0, 1.0, sr=SR, amp=0.8)
-        ya, _ = mastering_dynamics_compressor(x, SR, detector="peak")
-        yb, _ = mastering_dynamics_compressor(x, SR, detector=0)
-        np.testing.assert_array_equal(ya, yb)
-
-    def test_detector_log_rms_alias(self) -> None:
-        x = sine(440.0, 1.0, sr=SR, amp=0.8)
-        ya, _ = mastering_dynamics_compressor(x, SR, detector="log_rms")
-        yb, _ = mastering_dynamics_compressor(x, SR, detector=2)
-        np.testing.assert_array_equal(ya, yb)
+        with pytest.raises(TypeError, match="compressor detector"):
+            mastering_dynamics_compressor(x, SR, detector=0)  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match="'logRms'"):
+            mastering_dynamics_compressor(x, SR, detector="log_rms")  # type: ignore[arg-type]
 
     def test_rejects_unknown_detector_string(self) -> None:
         x = sine(440.0, 1.0, sr=SR, amp=0.8)
-        with pytest.raises(ValueError, match="unknown compressor detector"):
-            mastering_dynamics_compressor(x, SR, detector="not-a-mode")
-
-    def test_rejects_unknown_detector_int(self) -> None:
-        x = sine(440.0, 1.0, sr=SR, amp=0.8)
-        with pytest.raises(ValueError, match="unknown compressor detector"):
-            mastering_dynamics_compressor(x, SR, detector=999)
+        with pytest.raises(ValueError, match="invalid compressor detector"):
+            mastering_dynamics_compressor(x, SR, detector="not-a-mode")  # type: ignore[arg-type]
 
     def test_empty_input_raises(self) -> None:
         with pytest.raises(ValueError, match="samples must not be empty"):

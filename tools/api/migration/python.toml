@@ -8389,3 +8389,155 @@ old = "Audio.mastering_process(processor_name)"
 new = "Audio.mastering_process(processor)"
 domain = "core"
 rule = "individual"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_trim_silence(mode)"
+changed = "takes a TrimSilenceMode token (\"peak\" or \"lufsGated\") only; an int ordinal is TypeError and \"lufs_gated\", \"lufs\" raise SonareValueError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_effect_mode_tokens.py::test_an_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_trim_silence_stereo(mode)"
+changed = "takes a TrimSilenceMode token (\"peak\" or \"lufsGated\") only; an int ordinal is TypeError and \"lufs_gated\", \"lufs\" raise SonareValueError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_effect_mode_tokens.py::test_an_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_detect_trim_range(mode)"
+changed = "takes a TrimSilenceMode token (\"peak\" or \"lufsGated\") only; an int ordinal is TypeError and \"lufs_gated\", \"lufs\" raise SonareValueError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_effect_mode_tokens.py::test_an_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_detect_trim_range_stereo(mode)"
+changed = "takes a TrimSilenceMode token (\"peak\" or \"lufsGated\") only; an int ordinal is TypeError and \"lufs_gated\", \"lufs\" raise SonareValueError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_effect_mode_tokens.py::test_an_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_decrackle(mode)"
+changed = "takes a DecrackleMode token (\"median\" or \"waveletShrinkage\") only; an int ordinal is TypeError and \"wavelet\", \"wavelet_shrinkage\" raise SonareValueError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_effect_mode_tokens.py::test_an_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_decrackle_stereo(mode)"
+changed = "takes a DecrackleMode token (\"median\" or \"waveletShrinkage\") only; an int ordinal is TypeError and \"wavelet\", \"wavelet_shrinkage\" raise SonareValueError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_effect_mode_tokens.py::test_an_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_detect_crackle(mode)"
+changed = "takes a DecrackleMode token (\"median\" or \"waveletShrinkage\") only; an int ordinal is TypeError and \"wavelet\", \"wavelet_shrinkage\" raise SonareValueError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_effect_mode_tokens.py::test_an_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_denoise_classical(mode)"
+changed = "takes a DenoiseClassicalMode token (\"logMmse\", \"mmseStsa\" or \"spectralSubtraction\") only; an int ordinal is TypeError and \"lsa\", \"log_mmse\", \"mmse_stsa\", \"spectral_subtraction\" raise SonareValueError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_effect_mode_tokens.py::test_an_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_denoise_classical(noise_estimator)"
+changed = "takes a DenoiseClassicalNoiseEstimator token (\"quantile\", \"mcra\", \"imcra\" or \"spp\") only; an int ordinal is TypeError and other letter cases and padded spellings raise SonareValueError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_effect_mode_tokens.py::test_an_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_denoise_classical_stereo(mode)"
+changed = "takes a DenoiseClassicalMode token (\"logMmse\", \"mmseStsa\" or \"spectralSubtraction\") only; an int ordinal is TypeError and \"lsa\", \"log_mmse\", \"mmse_stsa\", \"spectral_subtraction\" raise SonareValueError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_effect_mode_tokens.py::test_an_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_denoise_classical_stereo(noise_estimator)"
+changed = "takes a DenoiseClassicalNoiseEstimator token (\"quantile\", \"mcra\", \"imcra\" or \"spp\") only; an int ordinal is TypeError and other letter cases and padded spellings raise SonareValueError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_effect_mode_tokens.py::test_an_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_denoise_classical_linked(mode)"
+changed = "takes a DenoiseClassicalMode token (\"logMmse\", \"mmseStsa\" or \"spectralSubtraction\") only; an int ordinal is TypeError and \"lsa\", \"log_mmse\", \"mmse_stsa\", \"spectral_subtraction\" raise SonareValueError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_effect_mode_tokens.py::test_an_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_denoise_classical_linked(noise_estimator)"
+changed = "takes a DenoiseClassicalNoiseEstimator token (\"quantile\", \"mcra\", \"imcra\" or \"spp\") only; an int ordinal is TypeError and other letter cases and padded spellings raise SonareValueError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_effect_mode_tokens.py::test_an_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_detect_noise_floor(mode)"
+changed = "takes a DenoiseClassicalMode token (\"logMmse\", \"mmseStsa\" or \"spectralSubtraction\") only; an int ordinal is TypeError and \"lsa\", \"log_mmse\", \"mmse_stsa\", \"spectral_subtraction\" raise SonareValueError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_effect_mode_tokens.py::test_an_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_detect_noise_floor(noise_estimator)"
+changed = "takes a DenoiseClassicalNoiseEstimator token (\"quantile\", \"mcra\", \"imcra\" or \"spp\") only; an int ordinal is TypeError and other letter cases and padded spellings raise SonareValueError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_effect_mode_tokens.py::test_an_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_dehum(mode)"
+changed = "takes a DehumMode token (\"subtract\" or \"notch\") only; an int ordinal is TypeError and other letter cases and padded spellings raise SonareValueError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_effect_mode_tokens.py::test_an_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_dehum_stereo(mode)"
+changed = "takes a DehumMode token (\"subtract\" or \"notch\") only; an int ordinal is TypeError and other letter cases and padded spellings raise SonareValueError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_effect_mode_tokens.py::test_an_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_detect_hum(mode)"
+changed = "takes a DehumMode token (\"subtract\" or \"notch\") only; an int ordinal is TypeError and other letter cases and padded spellings raise SonareValueError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_effect_mode_tokens.py::test_an_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "mastering_dynamics_compressor(detector)"
+changed = "takes a CompressorDetector token (\"peak\", \"rms\" or \"logRms\") only; an int ordinal is TypeError and \"log_rms\", \"logrms\" raise SonareValueError"
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_effect_mode_tokens.py::test_an_ordinal_is_a_type_error"

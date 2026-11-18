@@ -401,6 +401,21 @@ from ._types_enums import (
     ChordChromaMethod as ChordChromaMethod,
 )
 from ._types_enums import (
+    CompressorDetector as CompressorDetector,
+)
+from ._types_enums import (
+    DecrackleMode as DecrackleMode,
+)
+from ._types_enums import (
+    DehumMode as DehumMode,
+)
+from ._types_enums import (
+    DenoiseClassicalMode as DenoiseClassicalMode,
+)
+from ._types_enums import (
+    DenoiseClassicalNoiseEstimator as DenoiseClassicalNoiseEstimator,
+)
+from ._types_enums import (
     EngineTelemetryError as EngineTelemetryError,
 )
 from ._types_enums import (
@@ -453,6 +468,9 @@ from ._types_enums import (
 )
 from ._types_enums import (
     TempogramMode as TempogramMode,
+)
+from ._types_enums import (
+    TrimSilenceMode as TrimSilenceMode,
 )
 from ._types_enums import (
     WindowType as WindowType,

@@ -13,8 +13,6 @@ from ._effects_repair_common import (
     _run_repair,
 )
 from ._ffi import (
-    SONARE_TRIM_SILENCE_MODE_LUFS_GATED,
-    SONARE_TRIM_SILENCE_MODE_PEAK,
     SonareTrimRange,
     SonareTrimSilenceConfig,
     SonareTrimSilenceResult,
@@ -28,25 +26,19 @@ from ._runtime import (
     _float_array_result,
     _get_lib,
     _guard_buffer,
-    _resolve_enum,
     _resolve_sample_bound,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
+    _token_ordinal,
 )
+from ._types_enums import _TRIM_SILENCE_MODES, TrimSilenceMode
 from .types import (
     TrimRange,
     TrimReport,
     TrimSilenceResult,
     TrimSilenceStereoResult,
 )
-
-_TRIM_SILENCE_MODE_NAMES = {
-    "peak": SONARE_TRIM_SILENCE_MODE_PEAK,  # noqa: F405
-    "lufsgated": SONARE_TRIM_SILENCE_MODE_LUFS_GATED,  # noqa: F405
-    "lufs_gated": SONARE_TRIM_SILENCE_MODE_LUFS_GATED,  # noqa: F405
-    "lufs": SONARE_TRIM_SILENCE_MODE_LUFS_GATED,  # noqa: F405
-}
 
 
 def _resolve_padding(
@@ -67,15 +59,8 @@ def _resolve_padding(
     return resolved
 
 
-def _coerce_trim_silence_mode(value: int | str) -> int:
-    return _resolve_enum(
-        value,
-        _TRIM_SILENCE_MODE_NAMES,
-        "trim_silence mode",
-        underscore=True,
-        strip=True,
-        validate_int=True,
-    )
+def _coerce_trim_silence_mode(value: TrimSilenceMode) -> int:
+    return _token_ordinal(value, _TRIM_SILENCE_MODES, "trim_silence mode")
 
 
 @_guard_buffer("samples")
@@ -86,7 +71,7 @@ def mastering_repair_trim_silence(
     threshold_db: float = -60.0,
     padding_samples: int | None = None,
     padding_sec: float | None = None,
-    mode: int | str = "peak",
+    mode: TrimSilenceMode = "peak",
     gate_lufs: float = -60.0,
     window_ms: float = 400.0,
 ) -> TrimSilenceResult:
@@ -136,7 +121,7 @@ def mastering_repair_detect_trim_range(
     threshold_db: float = -60.0,
     padding_samples: int | None = None,
     padding_sec: float | None = None,
-    mode: int | str = "peak",
+    mode: TrimSilenceMode = "peak",
     gate_lufs: float = -60.0,
     window_ms: float = 400.0,
 ) -> TrimRange:
@@ -167,7 +152,7 @@ def mastering_repair_detect_trim_range(
             padded. Not together with ``padding_sec``.
         padding_sec: The same margin in seconds, rounded to the nearest sample
             at ``sample_rate``.
-        mode: ``"peak"`` or ``"lufs_gated"`` (default ``"peak"``).
+        mode: ``"peak"`` or ``"lufsGated"`` (default ``"peak"``).
         gate_lufs: Gate in dBFS, ``"lufs_gated"`` mode only (default -60.0).
         window_ms: Analysis window, ``"lufs_gated"`` mode only (default 400.0).
 
@@ -208,7 +193,7 @@ def mastering_repair_detect_trim_range_stereo(
     threshold_db: float = -60.0,
     padding_samples: int | None = None,
     padding_sec: float | None = None,
-    mode: int | str = "peak",
+    mode: TrimSilenceMode = "peak",
     gate_lufs: float = -60.0,
     window_ms: float = 400.0,
 ) -> TrimRange:
@@ -241,7 +226,7 @@ def mastering_repair_detect_trim_range_stereo(
             clamped to the buffer (default 0). Not together with ``padding_sec``.
         padding_sec: The same margin in seconds, rounded to the nearest sample
             at ``sample_rate``.
-        mode: ``"peak"`` or ``"lufs_gated"`` (default ``"peak"``).
+        mode: ``"peak"`` or ``"lufsGated"`` (default ``"peak"``).
         gate_lufs: Gate in dBFS, ``"lufs_gated"`` mode only (default -60.0).
         window_ms: Analysis window, ``"lufs_gated"`` mode only (default 400.0).
 
@@ -290,7 +275,7 @@ def mastering_repair_trim_silence_stereo(
     threshold_db: float = -60.0,
     padding_samples: int | None = None,
     padding_sec: float | None = None,
-    mode: int | str = "peak",
+    mode: TrimSilenceMode = "peak",
     gate_lufs: float = -60.0,
     window_ms: float = 400.0,
 ) -> TrimSilenceStereoResult:
@@ -336,7 +321,7 @@ def mastering_repair_trim_silence_stereo(
             ``padding_sec``.
         padding_sec: The same margin in seconds, rounded to the nearest sample
             at ``sample_rate``.
-        mode: ``"peak"`` or ``"lufs_gated"`` (default ``"peak"``).
+        mode: ``"peak"`` or ``"lufsGated"`` (default ``"peak"``).
         gate_lufs: Gate in dBFS, ``"lufs_gated"`` mode only (default -60.0).
         window_ms: Analysis window, ``"lufs_gated"`` mode only (default 400.0).
 

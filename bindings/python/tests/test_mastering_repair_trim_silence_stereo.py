@@ -211,13 +211,13 @@ class TestMasteringRepairTrimSilenceStereo:
         assert peak_high.length == 0
 
         gated_low = libsonare.mastering_repair_trim_silence_stereo(
-            left, right, SR, mode="lufs_gated", threshold_db=-60.0, gate_lufs=-40.0, window_ms=20.0
+            left, right, SR, mode="lufsGated", threshold_db=-60.0, gate_lufs=-40.0, window_ms=20.0
         )
         gated_high = libsonare.mastering_repair_trim_silence_stereo(
             left,
             right,
             SR,
-            mode="lufs_gated",
+            mode="lufsGated",
             threshold_db=20.0 * math.log10(bursts_at * 2.0),
             gate_lufs=-40.0,
             window_ms=20.0,
@@ -238,10 +238,10 @@ class TestMasteringRepairTrimSilenceStereo:
         left, right = _offset_pair()
 
         narrow = libsonare.mastering_repair_trim_silence_stereo(
-            left, right, SR, mode="lufs_gated", gate_lufs=-40.0, window_ms=10.0
+            left, right, SR, mode="lufsGated", gate_lufs=-40.0, window_ms=10.0
         )
         wide = libsonare.mastering_repair_trim_silence_stereo(
-            left, right, SR, mode="lufs_gated", gate_lufs=-40.0, window_ms=60.0
+            left, right, SR, mode="lufsGated", gate_lufs=-40.0, window_ms=60.0
         )
         assert narrow.report.range.first > 0
         assert wide.report.range.first < narrow.report.range.first
@@ -251,10 +251,10 @@ class TestMasteringRepairTrimSilenceStereo:
         # something, so the two lengths separate by a measurement rather than by
         # one side collapsing to the empty result.
         strict = libsonare.mastering_repair_trim_silence_stereo(
-            left, right, SR, mode="lufs_gated", gate_lufs=-7.0, window_ms=20.0
+            left, right, SR, mode="lufsGated", gate_lufs=-7.0, window_ms=20.0
         )
         lenient = libsonare.mastering_repair_trim_silence_stereo(
-            left, right, SR, mode="lufs_gated", gate_lufs=-40.0, window_ms=20.0
+            left, right, SR, mode="lufsGated", gate_lufs=-40.0, window_ms=20.0
         )
         assert strict.length > 0
         assert strict.length < lenient.length

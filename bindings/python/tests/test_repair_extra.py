@@ -61,13 +61,13 @@ class TestMasteringRepairDecrackle:
 
     def test_unknown_mode_raises(self) -> None:
         samples = self._sample()
-        with pytest.raises(ValueError, match="unknown decrackle mode"):
-            libsonare.mastering_repair_decrackle(samples, SR, mode="not-a-mode")
+        with pytest.raises(ValueError, match="invalid decrackle mode"):
+            libsonare.mastering_repair_decrackle(samples, SR, mode="not-a-mode")  # type: ignore[arg-type]
 
-    def test_unknown_mode_int_raises(self) -> None:
+    def test_an_ordinal_mode_is_a_type_error(self) -> None:
         samples = self._sample()
-        with pytest.raises(ValueError, match="unknown decrackle mode"):
-            libsonare.mastering_repair_decrackle(samples, SR, mode=999)
+        with pytest.raises(TypeError, match="decrackle mode"):
+            libsonare.mastering_repair_decrackle(samples, SR, mode=1)  # type: ignore[arg-type]
 
 
 class TestMasteringRepairDehum:
@@ -263,13 +263,13 @@ class TestMasteringRepairTrimSilence:
 
     def test_unknown_mode_raises(self) -> None:
         samples = self._sample()
-        with pytest.raises(ValueError, match="unknown trim_silence mode"):
-            libsonare.mastering_repair_trim_silence(samples, SR, mode="not-a-mode")
+        with pytest.raises(ValueError, match="invalid trim_silence mode"):
+            libsonare.mastering_repair_trim_silence(samples, SR, mode="not-a-mode")  # type: ignore[arg-type]
 
-    def test_unknown_mode_int_raises(self) -> None:
+    def test_an_ordinal_mode_is_a_type_error(self) -> None:
         samples = self._sample()
-        with pytest.raises(ValueError, match="unknown trim_silence mode"):
-            libsonare.mastering_repair_trim_silence(samples, SR, mode=999)
+        with pytest.raises(TypeError, match="trim_silence mode"):
+            libsonare.mastering_repair_trim_silence(samples, SR, mode=1)  # type: ignore[arg-type]
 
     def test_negative_padding_raises(self) -> None:
         samples = self._sample()

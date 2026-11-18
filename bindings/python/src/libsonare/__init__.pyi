@@ -913,6 +913,9 @@ from .types import ClipPageRequest as ClipPageRequest
 from .types import ClippingRegion as ClippingRegion
 from .types import ClippingReport as ClippingReport
 from .types import (
+    CompressorDetector as CompressorDetector,
+)
+from .types import (
     CqtResult as CqtResult,
 )
 from .types import CrackleDetection as CrackleDetection
@@ -924,10 +927,16 @@ from .types import DeclipReport as DeclipReport
 from .types import DeclipResult as DeclipResult
 from .types import DeclipStage as DeclipStage
 from .types import DeclipStereoResult as DeclipStereoResult
+from .types import (
+    DecrackleMode as DecrackleMode,
+)
 from .types import DecrackleReport as DecrackleReport
 from .types import DecrackleResult as DecrackleResult
 from .types import DecrackleStage as DecrackleStage
 from .types import DecrackleStereoResult as DecrackleStereoResult
+from .types import (
+    DehumMode as DehumMode,
+)
 from .types import (
     DehumReport as DehumReport,
 )
@@ -937,6 +946,12 @@ from .types import (
 from .types import DehumStage as DehumStage
 from .types import (
     DehumStereoResult as DehumStereoResult,
+)
+from .types import (
+    DenoiseClassicalMode as DenoiseClassicalMode,
+)
+from .types import (
+    DenoiseClassicalNoiseEstimator as DenoiseClassicalNoiseEstimator,
 )
 from .types import (
     DenoiseLinkedResult as DenoiseLinkedResult,
@@ -1383,6 +1398,9 @@ from .types import (
 )
 from .types import (
     TrimReport as TrimReport,
+)
+from .types import (
+    TrimSilenceMode as TrimSilenceMode,
 )
 from .types import (
     TrimSilenceResult as TrimSilenceResult,

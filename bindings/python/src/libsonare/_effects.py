@@ -7,9 +7,6 @@ established public API.
 
 from ._effects_dynamics import *  # noqa: F403
 from ._effects_dynamics import (
-    _COMPRESSOR_DETECTOR_NAMES as _COMPRESSOR_DETECTOR_NAMES,
-)
-from ._effects_dynamics import (
     _coerce_compressor_detector as _coerce_compressor_detector,
 )
 from ._effects_dynamics import (
@@ -25,18 +22,9 @@ from ._effects_repair_common import (
 from ._effects_repair_dereverb import *  # noqa: F403
 from ._effects_repair_impulsive import *  # noqa: F403
 from ._effects_repair_impulsive import (
-    _DECRACKLE_MODE_NAMES as _DECRACKLE_MODE_NAMES,
-)
-from ._effects_repair_impulsive import (
     _coerce_decrackle_mode as _coerce_decrackle_mode,
 )
 from ._effects_repair_noise import *  # noqa: F403
-from ._effects_repair_noise import (
-    _DENOISE_ESTIMATOR_NAMES as _DENOISE_ESTIMATOR_NAMES,
-)
-from ._effects_repair_noise import (
-    _DENOISE_MODE_NAMES as _DENOISE_MODE_NAMES,
-)
 from ._effects_repair_noise import (
     _coerce_denoise_estimator as _coerce_denoise_estimator,
 )
@@ -45,9 +33,6 @@ from ._effects_repair_noise import (
 )
 from ._effects_repair_session import *  # noqa: F403
 from ._effects_repair_trim import *  # noqa: F403
-from ._effects_repair_trim import (
-    _TRIM_SILENCE_MODE_NAMES as _TRIM_SILENCE_MODE_NAMES,
-)
 from ._effects_repair_trim import (
     _coerce_trim_silence_mode as _coerce_trim_silence_mode,
 )
