@@ -42,7 +42,7 @@ import type {
   RirResult,
   RoomEstimateOptions,
   RoomEstimateResult,
-  RoomGeometryOptions,
+  RoomGeometry,
   RoomMorphOptions,
   RoomMorphResult,
   RoomMorphStereoResult,
@@ -935,15 +935,13 @@ export function estimateRoom(...args: unknown[]): RoomEstimateResult {
  *
  * @throws SonareError when the estimate has no measurable dimensions (NaN).
  */
-export function roomGeometryFromEstimate(
-  request: RoomGeometryFromEstimateRequest,
-): RoomGeometryOptions;
-export function roomGeometryFromEstimate(...args: unknown[]): RoomGeometryOptions {
+export function roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometry;
+export function roomGeometryFromEstimate(...args: unknown[]): RoomGeometry {
   const request = requestOnly<RoomGeometryFromEstimateRequest>('roomGeometryFromEstimate', args);
   if (typeof request.estimate !== 'object' || request.estimate === null) {
     throw new TypeError('roomGeometryFromEstimate: estimate must be an object');
   }
-  const geometry = addon.roomGeometryFromEstimate(request.estimate) as RoomGeometryOptions;
+  const geometry = addon.roomGeometryFromEstimate(request.estimate) as RoomGeometry;
   for (const name of ['source', 'listener'] as const) {
     const placement = checkedPlacement('roomGeometryFromEstimate', name, request[name]);
     if (placement !== undefined) {

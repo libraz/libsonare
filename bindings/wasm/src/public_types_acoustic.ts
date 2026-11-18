@@ -59,8 +59,8 @@ export type MaterialPresetName = 'none' | 'concrete' | 'wood' | 'curtain' | 'car
 /** Names accepted for the room-estimate `mode`. */
 export type AcousticModeName = 'auto' | 'blind' | 'impulseResponse';
 
-/** Shoebox geometry + placement shared by RIR synthesis and the room morph. */
-export interface RoomGeometryOptions {
+/** Shoebox geometry and placement: what {@link roomGeometryFromEstimate} returns, and what RIR synthesis and the room morph extend. */
+export interface RoomGeometry {
   /** Room length in metres. */
   lengthM?: number;
   /** Room width in metres. */
@@ -130,7 +130,7 @@ export interface RoomGeometryOptions {
 }
 
 /** Request for {@link synthesizeRir}. */
-export interface SynthesizeRirRequest extends RoomGeometryOptions {
+export interface SynthesizeRirRequest extends RoomGeometry {
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
   /** Use the Eyring statistical late-tail model (default true); false = Sabine. */
@@ -200,7 +200,7 @@ export interface RoomEstimateOptions extends ValidateOptions {
 export interface RoomEstimateResult {
   /**
    * Equivalent volume (m^3) and representative dimensions (m), under the names
-   * {@link RoomGeometryOptions} takes. NaN, with `confidence` 0, when the
+   * {@link RoomGeometry} takes. NaN, with `confidence` 0, when the
    * recording has no measurable broadband decay (silence, or an RT60 the
    * analyzer could not fit) — the acoustic family's "not measurable", as in
    * `rt60Bands`.
@@ -233,7 +233,7 @@ export interface RoomPlacement {
 }
 
 /** Settings of {@link roomMorph} and {@link roomMorphStereo}. */
-export interface RoomMorphOptions extends RoomGeometryOptions, ValidateOptions {
+export interface RoomMorphOptions extends RoomGeometry, ValidateOptions {
   /** Wet level of the target room. */
   wet?: number;
   /** How far the source recording's own room tail is suppressed. */

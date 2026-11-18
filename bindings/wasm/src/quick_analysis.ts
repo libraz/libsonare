@@ -42,7 +42,7 @@ import type {
   RirResult,
   RoomEstimateOptions,
   RoomEstimateResult,
-  RoomGeometryOptions,
+  RoomGeometry,
   RoomMorphOptions,
   RoomMorphResult,
   RoomMorphStereoResult,
@@ -1013,10 +1013,8 @@ export function estimateRoom(...args: unknown[]): RoomEstimateResult {
  *
  * @throws SonareError when the estimate has no measurable dimensions (NaN).
  */
-export function roomGeometryFromEstimate(
-  request: RoomGeometryFromEstimateRequest,
-): RoomGeometryOptions;
-export function roomGeometryFromEstimate(...args: unknown[]): RoomGeometryOptions {
+export function roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometry;
+export function roomGeometryFromEstimate(...args: unknown[]): RoomGeometry {
   const request = requestOnly<RoomGeometryFromEstimateRequest>('roomGeometryFromEstimate', args);
   const module = requireModule();
   if (typeof module.roomGeometryFromEstimate !== 'function') {
@@ -1034,7 +1032,7 @@ export function roomGeometryFromEstimate(...args: unknown[]): RoomGeometryOption
     widthM,
     heightM,
     ...(bandAbsorption === undefined ? {} : { bandAbsorption: Float32Array.from(bandAbsorption) }),
-  }) as RoomGeometryOptions;
+  }) as RoomGeometry;
   for (const name of ['source', 'listener'] as const) {
     const placement = checkedPlacement('roomGeometryFromEstimate', name, request[name]);
     if (placement !== undefined) {

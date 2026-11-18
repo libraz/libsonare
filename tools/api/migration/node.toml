@@ -9092,7 +9092,7 @@ test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "function"
 old = "roomGeometryFromEstimate"
-changed = "request-only: roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometryOptions"
+changed = "request-only: roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometry"
 domain = "effects"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/effects-sep.test.ts::roomGeometryFromEstimate is request-only"
@@ -9234,10 +9234,9 @@ rule = "one-positional-form"
 [[entry]]
 kind = "type"
 old = "RoomGeometryOptions"
-changed = "field list"
+new = "RoomGeometry"
 domain = "effects"
-rule = "individual"
-test = "bindings/node/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+rule = "type-names"
 
 [[entry]]
 kind = "type"

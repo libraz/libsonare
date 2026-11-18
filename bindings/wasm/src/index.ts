@@ -993,7 +993,7 @@ export type {
   RirResult,
   RoomEstimateOptions,
   RoomEstimateResult,
-  RoomGeometryOptions,
+  RoomGeometry,
   RoomMorphOptions,
   RoomMorphResult,
   RoomMorphStereoResult,
