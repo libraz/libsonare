@@ -57,7 +57,6 @@ describe('StreamAnalyzer', () => {
         computeOnset: true,
         computeSpectral: true,
         emitEveryNFrames: 1,
-        magnitudeDownsample: 1,
         maxPendingFrames: 4096,
         maxProgressionEntries: 4096,
         keyUpdateIntervalSec: 5,
@@ -97,6 +96,14 @@ describe('StreamAnalyzer', () => {
       expect(() => new StreamAnalyzer({ sampleRate: 22050, outputFormat: 1 } as never)).toThrow(
         /outputFormat/,
       );
+    });
+
+    it('rejects magnitudeDownsample as an unknown config key', () => {
+      for (const magnitudeDownsample of [1, 2]) {
+        expect(
+          () => new StreamAnalyzer({ sampleRate: 22050, magnitudeDownsample } as never),
+        ).toThrow(new TypeError("StreamAnalyzer: unknown config key 'magnitudeDownsample'"));
+      }
     });
 
     it('rejects malformed config geometry like the C ABI', () => {

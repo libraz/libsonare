@@ -115,9 +115,7 @@ const CASES: Case[] = [
   })),
 
   // StreamAnalyzer construction config.
-  ...(
-    ['nMels', 'fminHz', 'fmaxHz', 'referenceHz', 'emitEveryNFrames', 'magnitudeDownsample'] as const
-  ).map((key) => ({
+  ...(['nMels', 'fminHz', 'fmaxHz', 'referenceHz', 'emitEveryNFrames'] as const).map((key) => ({
     bag: 'StreamAnalyzer',
     key,
     wrongValue: `${key}`,

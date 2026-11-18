@@ -14010,6 +14010,13 @@ rule = "aliases-removed"
 
 [[entry]]
 kind = "field"
+old = "StreamConfig.magnitudeDownsample"
+removed = "removed; the analyzer emits no magnitude spectrum, so the factor never took effect; drop it from the config"
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
 old = "StreamConfig.fmax"
 new = "StreamConfig.fmaxHz"
 domain = "analysis"

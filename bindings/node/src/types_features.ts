@@ -17,7 +17,7 @@ export interface CqtResult {
  * Construction options for {@link StreamAnalyzer}. Mirrors `sonare::StreamConfig`.
  *
  * Every count-valued field (`sampleRate`, `nFft`, `hopLength`, `nMels`,
- * `emitEveryNFrames`, `magnitudeDownsample`, `maxPendingFrames`,
+ * `emitEveryNFrames`, `maxPendingFrames`,
  * `maxProgressionEntries`) must be an integer the native type can hold; a
  * fractional or out-of-range value is rejected (`RangeError`) rather than
  * truncated.
@@ -52,8 +52,6 @@ export interface StreamConfig {
   computeSpectral?: boolean;
   /** Emit one frame in every N, to throttle output. Default `1`. */
   emitEveryNFrames?: number;
-  /** Downsample factor of the magnitude output. Default `1`. */
-  magnitudeDownsample?: number;
   /** Maximum unread frames; overflow drops the newly produced frame. */
   maxPendingFrames?: number;
   /** Maximum retained chord and bar progression entries; overflow drops oldest. */

@@ -952,6 +952,15 @@ describe('StreamAnalyzer quantize-config override', () => {
     );
   });
 
+  it('rejects magnitudeDownsample as an unknown config key', () => {
+    // The analyzer emits no magnitude spectrum, so the factor had nothing to act on.
+    for (const magnitudeDownsample of [1, 2]) {
+      expect(() => new StreamAnalyzer({ sampleRate: SR, magnitudeDownsample } as never)).toThrow(
+        new TypeError("StreamAnalyzer: unknown config key 'magnitudeDownsample'"),
+      );
+    }
+  });
+
   it('rejects legacy outputFormat selectors', () => {
     for (const value of [1, 2, 0.5, Number.NaN, Number.POSITIVE_INFINITY, '0']) {
       expect(() => new StreamAnalyzer({ sampleRate: SR, outputFormat: value } as never)).toThrow(
@@ -1010,14 +1019,7 @@ describe('StreamAnalyzer quantize-config override', () => {
     // and on ARM64 it saturates to INT_MAX — which passes the core's `> 0`
     // checks and hands a nonsense geometry to the FFT. Every int-valued field
     // must reject the value the way maxPendingFrames already does.
-    const intFields = [
-      'sampleRate',
-      'nFft',
-      'hopLength',
-      'nMels',
-      'emitEveryNFrames',
-      'magnitudeDownsample',
-    ] as const;
+    const intFields = ['sampleRate', 'nFft', 'hopLength', 'nMels', 'emitEveryNFrames'] as const;
     const outOfDomain = [
       1e18,
       -1e18,
@@ -1041,7 +1043,6 @@ describe('StreamAnalyzer quantize-config override', () => {
       hopLength: 32,
       nMels: 8,
       emitEveryNFrames: 1,
-      magnitudeDownsample: 1,
     });
     expect(ok.sampleRate).toBe(8000);
     ok.destroy();

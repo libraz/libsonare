@@ -259,8 +259,6 @@ export interface StreamConfig {
   computeSpectral?: boolean;
   /** Emit every Nth frame, for throttling. Default `1`. */
   emitEveryNFrames?: number;
-  /** Downsample factor for magnitude. Default `1`. */
-  magnitudeDownsample?: number;
   /** Maximum unread frames; overflow drops the newly produced frame. */
   maxPendingFrames?: number;
   /** Maximum retained chord and bar progression entries; overflow drops oldest. */
