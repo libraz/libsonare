@@ -430,6 +430,10 @@ Mode modeFromVal(const val& value, const char* what);
 /// @throws WasmArgumentError naming @p key, for a wrong-typed
 ///         value and for one @ref checkedIntFromVal refuses.
 int intProperty(val object, const char* key, int default_value);
+/// @brief Integer in [@p lo, @p hi] whose absence the C ABI spells as @p absent: absent or
+///        null returns @p absent, and any other value outside the range, @p absent
+///        included, is a WasmRangeError naming @p key.
+int intInRangeOrAbsentProperty(val object, const char* key, int lo, int hi, int absent);
 /// @brief Unsigned sibling of @ref checkedIntFromVal.
 /// @details val::as<uint32_t>() saturates at the top and clamps a negative to 0,
 ///          so -1 -- the sentinel several fields here spell "none" with -- lands

@@ -268,6 +268,10 @@ const UNSCANNED_SHARED_READERS: ReadonlyMap<string, string> = new Map([
     'Reads a float array off a record and returns an empty vector when absent; there is no scalar fallback.',
   ],
   [
+    'IntInRangeOrAbsentProperty',
+    'Refuses a non-integer and any value outside its stated range, and absence maps to a marker outside that range, so nothing can truncate onto a fallback.',
+  ],
+  [
     'MidiByteProperty',
     'Refuses a non-integer outright, so no fractional value can truncate onto its zero. The exemption belongs to the READER rather than to any field, which is why it is recorded here instead of once per call site: a site moving off it onto a truncating reader must start owing a reason.',
   ],

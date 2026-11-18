@@ -28,7 +28,7 @@ Napi::Object AssistSidecarToObject(Napi::Env env, SonareProjectAssistSidecar* si
     std::memcpy(payload.Data(), sidecar->payload, sidecar->payload_len);
   }
   out.Set("payload", payload);
-  sonare_project_free_assist_sidecar(sidecar);
+  sonare_free_project_assist_sidecar(sidecar);
   return out;
 }
 
@@ -424,7 +424,8 @@ Napi::Value ProjectWrap::AnnotateKeys(const Napi::CallbackInfo& info) {
         !RequiredDoubleProperty(env, obj, "endPpq", &seg.end_ppq)) {
       return env.Undefined();
     }
-    seg.tonic_pc = Uint32Property(obj, "tonicPc", 255);
+    seg.tonic_pc =
+        static_cast<uint32_t>(sonare_node::IntInRangeOrAbsentProperty(obj, "tonicPc", 0, 11, 255));
     seg.mode = Uint32Property(obj, "mode", 0);
     keys.push_back(seg);
   }
@@ -460,7 +461,8 @@ Napi::Value ProjectWrap::AnnotateChords(const Napi::CallbackInfo& info) {
         !RequiredDoubleProperty(env, obj, "endPpq", &chord.end_ppq)) {
       return env.Undefined();
     }
-    chord.root_pc = Uint32Property(obj, "rootPc", 255);
+    chord.root_pc =
+        static_cast<uint32_t>(sonare_node::IntInRangeOrAbsentProperty(obj, "rootPc", 0, 11, 255));
     chord.quality = Uint32Property(obj, "quality", 0);
     Napi::Value ext = obj.Get("extensions");
     if (!ext.IsUndefined() && !ext.IsNull()) {
@@ -478,7 +480,8 @@ Napi::Value ProjectWrap::AnnotateChords(const Napi::CallbackInfo& info) {
     }
     chord.extensions = extensions[i].empty() ? nullptr : extensions[i].data();
     chord.extension_count = extensions[i].size();
-    chord.slash_bass_pc = Uint32Property(obj, "slashBassPc", 255);
+    chord.slash_bass_pc = static_cast<uint32_t>(
+        sonare_node::IntInRangeOrAbsentProperty(obj, "slashBassPc", 0, 11, 255));
     Napi::Value rn = obj.Get("romanNumeral");
     if (!rn.IsUndefined() && !rn.IsNull()) {
       roman[i] = StringProperty(obj, "romanNumeral", "");
@@ -579,7 +582,9 @@ namespace {
 // Owns the heap anchor array for the rest of the call, so the marshalling below
 // cannot leak it by throwing.
 struct WarpAnchorArrayDeleter {
-  void operator()(SonareProjectWarpAnchor* anchors) const { sonare_free_warp_anchors(anchors); }
+  void operator()(SonareProjectWarpAnchor* anchors) const {
+    sonare_free_project_warp_anchors(anchors);
+  }
 };
 
 // Capacity for the extension scale degrees; the library emits at most three.

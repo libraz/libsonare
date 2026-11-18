@@ -388,6 +388,23 @@ inline uint8_t MidiByteProperty(Napi::Env env, const Napi::Object& obj, const ch
   return static_cast<uint8_t>(number);
 }
 
+/// @brief Read an integer in [@p lo, @p hi] whose absence the C ABI spells as @p absent.
+/// @details undefined/null returns @p absent; any number outside the range, @p absent itself
+///   included, is a RangeError naming @p key, so the C-side marker is never typed by a caller.
+inline int IntInRangeOrAbsentProperty(const Napi::Object& obj, const char* key, int lo, int hi,
+                                      int absent) {
+  Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return absent;
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
+  const double number = value.As<Napi::Number>().DoubleValue();
+  if (!(number >= lo) || number > hi || std::floor(number) != number) {
+    throw Napi::RangeError::New(obj.Env(), std::string(key) + " must be an integer in [" +
+                                               std::to_string(lo) + ", " + std::to_string(hi) +
+                                               "], or omitted");
+  }
+  return static_cast<int>(number);
+}
+
 /// @brief Read a property destined for an int8_t C-ABI field: undefined/null
 ///        returns the fallback, a non-number is refused by name, and a value the
 ///        narrowing cast would wrap (256 -> 0, 200 -> -56) is a RangeError naming

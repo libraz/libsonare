@@ -36,8 +36,9 @@ inline bool CcBindingFromObject(Napi::Env env, Napi::Object object, SonareMidiCc
   *out = SonareMidiCcBinding{};
   // Byte-wide fields go through the MidiByte readers so 256 cannot arrive as 0.
   if (!RequiredMidiByteValue(env, cc_number, "ccNumber", &out->cc_number)) return false;
-  // `channel` keeps its "any channel" sentinel for an omitted, null, or undefined value.
-  out->channel = MidiByteProperty(env, object, "channel", 0xffu);
+  // An omitted channel matches any channel; 255, the C ABI's spelling of that, is refused.
+  out->channel = static_cast<uint8_t>(
+      IntInRangeOrAbsentProperty(object, "channel", 0, 15, SONARE_MIDI_CC_ANY_CHANNEL));
   out->kind = static_cast<uint8_t>(NamedSelectorProperty(object, "kind", CcBindingKindNames(), 0));
   out->cc_lsb_number = MidiByteProperty(env, object, "ccLsbNumber", 0u);
   out->selector_msb = MidiByteProperty(env, object, "selectorMsb", 0u);
@@ -53,7 +54,9 @@ inline bool CcBindingFromObject(Napi::Env env, Napi::Object object, SonareMidiCc
 inline Napi::Object CcBindingToObject(Napi::Env env, const SonareMidiCcBinding& binding) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("ccNumber", Napi::Number::New(env, binding.cc_number));
-  out.Set("channel", Napi::Number::New(env, binding.channel));
+  if (binding.channel != SONARE_MIDI_CC_ANY_CHANNEL) {
+    out.Set("channel", Napi::Number::New(env, binding.channel));
+  }
   out.Set("kind",
           Napi::String::New(env, sonare::midi::to_string(
                                      static_cast<sonare::midi::CcBindingKind>(binding.kind))));

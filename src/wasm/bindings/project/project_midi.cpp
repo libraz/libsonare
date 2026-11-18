@@ -351,7 +351,8 @@ val js_midi_event_to_val(const SonareMidiEventPod& event) {
 SonareMidiCcBinding js_cc_binding_from_val(val object) {
   SonareMidiCcBinding out{};
   out.cc_number = checkedByteFromVal(object["ccNumber"], "ccNumber");
-  out.channel = byteProperty(object, "channel", 0xffu);
+  out.channel = static_cast<uint8_t>(
+      intInRangeOrAbsentProperty(object, "channel", 0, 15, SONARE_MIDI_CC_ANY_CHANNEL));
   out.kind = static_cast<uint8_t>(ccBindingKindProperty(object));
   out.cc_lsb_number = byteProperty(object, "ccLsbNumber", 0u);
   out.selector_msb = byteProperty(object, "selectorMsb", 0u);
@@ -365,7 +366,9 @@ SonareMidiCcBinding js_cc_binding_from_val(val object) {
 val js_cc_binding_to_val(const SonareMidiCcBinding& binding) {
   val out = val::object();
   out.set("ccNumber", static_cast<double>(binding.cc_number));
-  out.set("channel", static_cast<double>(binding.channel));
+  if (binding.channel != SONARE_MIDI_CC_ANY_CHANNEL) {
+    out.set("channel", static_cast<double>(binding.channel));
+  }
   out.set("kind", val(ccBindingKindToken(binding.kind)));
   out.set("ccLsbNumber", static_cast<double>(binding.cc_lsb_number));
   out.set("selectorMsb", static_cast<double>(binding.selector_msb));
@@ -468,9 +471,9 @@ val js_midi_route_events(val events, val config) {
     // check has to keep it while refusing the values a bare cast turned into a
     // real filter: NaN reads as channel 0 and a fractional value truncates onto
     // a neighbouring channel, both of them silently.
-    route.filter_group = intProperty(config, "filterGroup", -1);
-    route.filter_channel = intProperty(config, "filterChannel", -1);
-    route.remap_channel = intProperty(config, "remapChannel", -1);
+    route.filter_group = intInRangeOrAbsentProperty(config, "filterGroup", 0, 15, -1);
+    route.filter_channel = intInRangeOrAbsentProperty(config, "filterChannel", 0, 15, -1);
+    route.remap_channel = intInRangeOrAbsentProperty(config, "remapChannel", 0, 15, -1);
     if (hasProperty(config, "thru")) {
       route.thru = boolProperty(config, "thru", false) ? 1 : 0;
     }

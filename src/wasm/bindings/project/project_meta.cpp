@@ -14,7 +14,7 @@ namespace {
 struct AudioSourceMetadataGuard {
   SonareProjectAudioSourceMetadata value{};
 
-  ~AudioSourceMetadataGuard() { sonare_project_free_audio_source_metadata(&value); }
+  ~AudioSourceMetadataGuard() { sonare_free_project_audio_source_metadata(&value); }
 };
 
 struct HeapStringGuard {
@@ -37,7 +37,8 @@ void ProjectWasm::annotateKeys(val keys) {
       SonareProjectKeySegment seg{};
       seg.start_ppq = doubleProperty(entry, "startPpq", 0.0);
       seg.end_ppq = doubleProperty(entry, "endPpq", 0.0);
-      seg.tonic_pc = uintProperty(entry, "tonicPc", 255u);
+      seg.tonic_pc =
+          static_cast<uint32_t>(intInRangeOrAbsentProperty(entry, "tonicPc", 0, 11, 255));
       seg.mode = uintProperty(entry, "mode", 0u);
       segments.push_back(seg);
     }
@@ -65,9 +66,10 @@ void ProjectWasm::annotateChords(val chords) {
       SonareProjectChordSymbol sym{};
       sym.start_ppq = doubleProperty(entry, "startPpq", 0.0);
       sym.end_ppq = doubleProperty(entry, "endPpq", 0.0);
-      sym.root_pc = uintProperty(entry, "rootPc", 255u);
+      sym.root_pc = static_cast<uint32_t>(intInRangeOrAbsentProperty(entry, "rootPc", 0, 11, 255));
       sym.quality = uintProperty(entry, "quality", 0u);
-      sym.slash_bass_pc = uintProperty(entry, "slashBassPc", 255u);
+      sym.slash_bass_pc =
+          static_cast<uint32_t>(intInRangeOrAbsentProperty(entry, "slashBassPc", 0, 11, 255));
       sym.modulation_boundary = boolProperty(entry, "modulationBoundary", false) ? 1 : 0;
       std::vector<uint8_t> exts;
       if (hasProperty(entry, "extensions")) {
@@ -131,7 +133,7 @@ val ProjectWasm::getAssistSidecar(double index) const {
   out.set("regionEndPpq", sidecar.region_end_ppq);
   std::vector<uint8_t> payload(sidecar.payload, sidecar.payload + sidecar.payload_len);
   out.set("payload", vectorToUint8Array(payload));
-  sonare_project_free_assist_sidecar(&sidecar);
+  sonare_free_project_assist_sidecar(&sidecar);
   return out;
 }
 
@@ -435,11 +437,11 @@ val ProjectWasm::lastBounceCompileResult() const {
   SonareProjectCompileResult result{};
   const SonareError err = sonare_project_last_bounce_compile_result(project_.get(), &result);
   if (err != SONARE_OK) {
-    sonare_project_free_compile_result(&result);
+    sonare_free_project_compile_result(&result);
     throwCError(err, "failed to read last bounce compile result");
   }
   val out = projectCompileResultToVal(result);
-  sonare_project_free_compile_result(&result);
+  sonare_free_project_compile_result(&result);
   return out;
 }
 

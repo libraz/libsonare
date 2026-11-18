@@ -375,9 +375,11 @@ Napi::Value MidiRouteEvents(const Napi::CallbackInfo& info) {
   SonareMidiRouteConfig config{-1, -1, -1, 1};
   if (info.Length() > 1 && info[1].IsObject()) {
     Napi::Object object = info[1].As<Napi::Object>();
-    config.filter_group = sonare_node::IntProperty(object, "filterGroup", -1);
-    config.filter_channel = sonare_node::IntProperty(object, "filterChannel", -1);
-    config.remap_channel = sonare_node::IntProperty(object, "remapChannel", -1);
+    config.filter_group = sonare_node::IntInRangeOrAbsentProperty(object, "filterGroup", 0, 15, -1);
+    config.filter_channel =
+        sonare_node::IntInRangeOrAbsentProperty(object, "filterChannel", 0, 15, -1);
+    config.remap_channel =
+        sonare_node::IntInRangeOrAbsentProperty(object, "remapChannel", 0, 15, -1);
     config.thru = sonare_node::BoolProperty(object, "thru", true) ? 1 : 0;
     if (env.IsExceptionPending()) return env.Undefined();
   }

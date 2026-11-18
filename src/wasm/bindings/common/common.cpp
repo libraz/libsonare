@@ -522,6 +522,17 @@ int intProperty(val object, const char* key, int default_value) {
   return value.isUndefined() ? default_value : checkedIntFromVal(value, key);
 }
 
+int intInRangeOrAbsentProperty(val object, const char* key, int lo, int hi, int absent) {
+  val value = typedPropertyValue(object, key, "number");
+  if (value.isUndefined()) return absent;
+  const double number = value.as<double>();
+  if (!(number >= lo) || number > hi || std::floor(number) != number) {
+    throw WasmRangeError(std::string(key) + " must be an integer in [" + std::to_string(lo) + ", " +
+                         std::to_string(hi) + "], or omitted");
+  }
+  return static_cast<int>(number);
+}
+
 uint32_t checkedUintFromVal(const val& value, const char* key) {
   return static_cast<uint32_t>(
       checkedUnsignedNumber(value, key, static_cast<double>(std::numeric_limits<uint32_t>::max())));

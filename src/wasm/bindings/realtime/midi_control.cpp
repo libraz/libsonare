@@ -137,10 +137,8 @@ void RealtimeEngineWasm::bindMidiCcBinding(val object) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   sonare::midi::CcBinding binding{};
   binding.cc_number = checkedByteFromVal(object["ccNumber"], "ccNumber");
-  const val channel = object["channel"];
-  binding.channel = channel.isUndefined() || channel.isNull()
-                        ? sonare::midi::kCcAnyChannel
-                        : checkedByteFromVal(channel, "channel");
+  binding.channel = static_cast<uint8_t>(
+      intInRangeOrAbsentProperty(object, "channel", 0, 15, sonare::midi::kCcAnyChannel));
   // Only ccNumber and paramId are required; every other field falls back to the
   // CcBinding default (any channel, 7-bit Control Change, unit output range),
   // matching the Node addon reader and the Project-side descriptor reader. A
