@@ -52,8 +52,10 @@ describe('wide meter telemetry (WASM)', () => {
       if (!busMeter) {
         throw new Error('expected a 5.1 bus meter');
       }
-      expect(busMeter.channelCount).toBe(6);
+      expect(busMeter.numChannels).toBe(6);
       expect(busMeter.peakDb).toHaveLength(6);
+      expect(busMeter.truePeakDbtp).toHaveLength(6);
+      expect(busMeter.maxTruePeakDbtp).toBeLessThanOrEqual(0);
       // Ls (plane 4) carries the panned lane, above the silent front-left plane.
       expect(busMeter.peakDb[4]).toBeGreaterThan(busMeter.peakDb[0] + 10);
     } finally {

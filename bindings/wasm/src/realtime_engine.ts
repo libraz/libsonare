@@ -86,6 +86,8 @@ import type {
 import type {
   WasmEngineBus,
   WasmEngineClip,
+  WasmEngineMeterTelemetry,
+  WasmEngineMeterTelemetryWide,
   WasmEngineTrackSend,
   WasmRealtimeEngine,
 } from './sonare.js';
@@ -448,6 +450,28 @@ function telemetryFromNative(record: {
     audibleTimelineSample: record.audibleTimelineSample,
     graphLatencySamples: record.graphLatencySamplesQ8 / 256,
     value: record.value,
+  };
+}
+
+function meterTelemetryFromNative(record: WasmEngineMeterTelemetry): EngineMeterTelemetry {
+  const { truePeakDbL, truePeakDbR, maxTruePeakDb, ...rest } = record;
+  return {
+    ...rest,
+    truePeakDbtpL: truePeakDbL,
+    truePeakDbtpR: truePeakDbR,
+    maxTruePeakDbtp: maxTruePeakDb,
+  };
+}
+
+function meterTelemetryWideFromNative(
+  record: WasmEngineMeterTelemetryWide,
+): EngineMeterTelemetryWide {
+  const { channelCount, truePeakDb, maxTruePeakDb, ...rest } = record;
+  return {
+    ...rest,
+    numChannels: channelCount,
+    truePeakDbtp: truePeakDb,
+    maxTruePeakDbtp: maxTruePeakDb,
   };
 }
 
@@ -2724,7 +2748,7 @@ export class RealtimeEngine {
   }
 
   drainMeterTelemetry(maxRecords = 1024): EngineMeterTelemetry[] {
-    return this.native.drainMeterTelemetry(maxRecords);
+    return this.native.drainMeterTelemetry(maxRecords).map(meterTelemetryFromNative);
   }
 
   /**
@@ -2737,7 +2761,7 @@ export class RealtimeEngine {
    * the SharedArrayBuffer meter paths.
    */
   drainMeterTelemetryWide(maxRecords = 1024): EngineMeterTelemetryWide[] {
-    return this.native.drainMeterTelemetryWide(maxRecords);
+    return this.native.drainMeterTelemetryWide(maxRecords).map(meterTelemetryWideFromNative);
   }
 
   /**

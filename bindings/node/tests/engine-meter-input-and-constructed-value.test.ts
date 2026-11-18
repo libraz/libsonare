@@ -30,6 +30,9 @@ describe('engine meter input peaks and constructed insert values', () => {
       const before = master().at(-1);
       expect(before?.inputPeakDbL).toBeCloseTo(20 * Math.log10(0.25), 1);
       expect(before?.inputPeakDbR).toBeCloseTo(20 * Math.log10(0.25), 1);
+      expect(before?.truePeakDbtpL).toBeGreaterThan(-60);
+      expect(before?.truePeakDbtpR).toBeGreaterThan(-60);
+      expect(before?.maxTruePeakDbtp).toBeGreaterThan(-60);
       expect(before?.integratedLufs).toBeGreaterThan(-60);
 
       engine.resetMasterLoudnessMeter();
@@ -76,7 +79,9 @@ describe('engine meter input peaks and constructed insert values', () => {
       const busMeter = engine.drainMeterTelemetryWide().find((record) => record.targetId === 33);
       expect(busMeter).toBeDefined();
       if (busMeter) {
-        expect(busMeter.inputPeakDb).toHaveLength(busMeter.channelCount);
+        expect(busMeter.inputPeakDb).toHaveLength(busMeter.numChannels);
+        expect(busMeter.truePeakDbtp).toHaveLength(busMeter.numChannels);
+        expect(busMeter.maxTruePeakDbtp).toBeLessThanOrEqual(0);
         expect(Math.max(...busMeter.inputPeakDb)).toBeGreaterThan(-60);
       }
     } finally {

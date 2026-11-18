@@ -475,6 +475,26 @@ function telemetryFromNative(native: Record<string, unknown>): EngineTelemetry {
   } as unknown as EngineTelemetry;
 }
 
+function meterTelemetryFromNative(native: Record<string, unknown>): EngineMeterTelemetry {
+  const { truePeakDbL, truePeakDbR, maxTruePeakDb, ...rest } = native;
+  return {
+    ...rest,
+    truePeakDbtpL: truePeakDbL,
+    truePeakDbtpR: truePeakDbR,
+    maxTruePeakDbtp: maxTruePeakDb,
+  } as unknown as EngineMeterTelemetry;
+}
+
+function meterTelemetryWideFromNative(native: Record<string, unknown>): EngineMeterTelemetryWide {
+  const { channelCount, truePeakDb, maxTruePeakDb, ...rest } = native;
+  return {
+    ...rest,
+    numChannels: channelCount,
+    truePeakDbtp: truePeakDb,
+    maxTruePeakDbtp: maxTruePeakDb,
+  } as unknown as EngineMeterTelemetryWide;
+}
+
 function graphToNative(spec: EngineGraphSpec): unknown {
   const record = requestObject('setGraph', spec, 'spec', true);
   const nodes = Array.isArray(record.nodes)
@@ -1907,7 +1927,9 @@ export class RealtimeEngine {
    * Compatibility drain over the queue {@link drainMeterTelemetryWide} reads; use that one alone.
    */
   drainMeterTelemetry(maxRecords = 1024): EngineMeterTelemetry[] {
-    return this.native.drainMeterTelemetry(maxRecords);
+    return (this.native.drainMeterTelemetry(maxRecords) as Array<Record<string, unknown>>).map(
+      meterTelemetryFromNative,
+    );
   }
 
   /**
@@ -1917,7 +1939,9 @@ export class RealtimeEngine {
    * records) and stays for compatibility.
    */
   drainMeterTelemetryWide(maxRecords = 1024): EngineMeterTelemetryWide[] {
-    return this.native.drainMeterTelemetryWide(maxRecords);
+    return (this.native.drainMeterTelemetryWide(maxRecords) as Array<Record<string, unknown>>).map(
+      meterTelemetryWideFromNative,
+    );
   }
 
   /**

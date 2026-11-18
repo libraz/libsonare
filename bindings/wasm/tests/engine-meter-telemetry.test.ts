@@ -88,7 +88,7 @@ it('resets master integrated loudness while retaining the other meter windows', 
     expect(after?.integratedLufs).toBe(-120);
     expect(after?.momentaryLufs).toBeGreaterThan(-40);
     expect(after?.shortTermLufs).toBeGreaterThan(-40);
-    expect(after?.maxTruePeakDb).toBeGreaterThan(-12);
+    expect(after?.maxTruePeakDbtp).toBeGreaterThan(-12);
     expect(after?.inputPeakDbL).toBeGreaterThan(-12);
   } finally {
     engine.destroy();

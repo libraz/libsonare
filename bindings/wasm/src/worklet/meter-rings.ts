@@ -585,8 +585,8 @@ export function meterFromEngine(meter: EngineMeterTelemetryWide): SonareWorkletM
     rmsDbL: meter.rmsDb[0] ?? SONARE_FLOOR_DB,
     rmsDbR: meter.rmsDb[1] ?? SONARE_FLOOR_DB,
     correlation: meter.correlation,
-    truePeakDbL: meter.truePeakDb[0] ?? SONARE_FLOOR_DB,
-    truePeakDbR: meter.truePeakDb[1] ?? SONARE_FLOOR_DB,
+    truePeakDbL: meter.truePeakDbtp[0] ?? SONARE_FLOOR_DB,
+    truePeakDbR: meter.truePeakDbtp[1] ?? SONARE_FLOOR_DB,
     momentaryLufs: meter.momentaryLufs,
     shortTermLufs: meter.shortTermLufs,
     integratedLufs: meter.integratedLufs,
@@ -594,11 +594,11 @@ export function meterFromEngine(meter: EngineMeterTelemetryWide): SonareWorkletM
     inputPeakDbL: meter.inputPeakDb[0] ?? SONARE_FLOOR_DB,
     inputPeakDbR: meter.inputPeakDb[1] ?? SONARE_FLOOR_DB,
   };
-  if (meter.channelCount > 2) {
-    snapshot.numChannels = meter.channelCount;
+  if (meter.numChannels > 2) {
+    snapshot.numChannels = meter.numChannels;
     snapshot.peakDb = meter.peakDb;
     snapshot.rmsDb = meter.rmsDb;
-    snapshot.truePeakDb = meter.truePeakDb;
+    snapshot.truePeakDb = meter.truePeakDbtp;
     snapshot.inputPeakDb = meter.inputPeakDb;
   }
   return snapshot;

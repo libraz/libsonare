@@ -369,9 +369,9 @@ export interface EngineMeterTelemetry {
   rmsDbL: number;
   rmsDbR: number;
   /** Inter-sample peak in dB (4x polyphase, one filter group delay behind the block). */
-  truePeakDbL: number;
-  truePeakDbR: number;
-  maxTruePeakDb: number;
+  truePeakDbtpL: number;
+  truePeakDbtpR: number;
+  maxTruePeakDbtp: number;
   correlation: number;
   monoCompatWidth: number;
   momentaryLufs: number;
@@ -389,12 +389,12 @@ export interface EngineMeterTelemetryWide {
   targetId: number;
   renderFrame: number;
   seq: number;
-  channelCount: number;
+  numChannels: number;
   peakDb: number[];
   rmsDb: number[];
-  /** Per-plane inter-sample peak in dB, as {@link EngineMeterTelemetry.truePeakDbL}. */
-  truePeakDb: number[];
-  maxTruePeakDb: number;
+  /** Per-plane inter-sample peak in dB, as {@link EngineMeterTelemetry.truePeakDbtpL}. */
+  truePeakDbtp: number[];
+  maxTruePeakDbtp: number;
   correlation: number;
   monoCompatWidth: number;
   momentaryLufs: number;

@@ -76,11 +76,11 @@ export interface EngineMeterTelemetry {
    * value has its whole stencil and the reading does not depend on the block
    * size. `meteringTruePeakDb` measures a whole signal at once.
    */
-  truePeakDbL: number;
-  /** Right-channel inter-sample (true) peak in dB. See {@link truePeakDbL}. */
-  truePeakDbR: number;
-  /** Maximum inter-sample peak across channels in dB. See {@link truePeakDbL}. */
-  maxTruePeakDb: number;
+  truePeakDbtpL: number;
+  /** Right-channel inter-sample (true) peak in dB. See {@link truePeakDbtpL}. */
+  truePeakDbtpR: number;
+  /** Maximum inter-sample peak across channels in dB. See {@link truePeakDbtpL}. */
+  maxTruePeakDbtp: number;
   /** Stereo correlation in `[-1, 1]`. */
   correlation: number;
   /** Mono-compatibility width metric. */
@@ -127,7 +127,7 @@ export interface ExternalMidiEvent {
 /**
  * Per-plane meter telemetry record drained from
  * {@link RealtimeEngine.drainMeterTelemetryWide} for a surround target. The
- * `peakDb`/`rmsDb`/`truePeakDb` arrays carry `channelCount` planes in canonical
+ * `peakDb`/`rmsDb`/`truePeakDbtp` arrays carry `numChannels` planes in canonical
  * WAVE order (5.1 = L R C LFE Ls Rs, 7.1 = L R C LFE Ls Rs Lss Rss).
  */
 export interface EngineMeterTelemetryWide {
@@ -143,21 +143,21 @@ export interface EngineMeterTelemetryWide {
   /** Monotonic sequence number. */
   seq: number;
   /** Number of valid per-plane meters (1..8). */
-  channelCount: number;
-  /** Per-plane peak level in dB (length `channelCount`). */
+  numChannels: number;
+  /** Per-plane peak level in dB (length `numChannels`). */
   peakDb: number[];
-  /** Per-plane RMS level in dB (length `channelCount`). */
+  /** Per-plane RMS level in dB (length `numChannels`). */
   rmsDb: number[];
   /**
-   * Per-plane inter-sample (true) peak in dB (length `channelCount`), from the
+   * Per-plane inter-sample (true) peak in dB (length `numChannels`), from the
    * ITU-R BS.1770-4 polyphase reconstruction at 4x. A streaming measurement that
    * runs one reconstruction-filter group delay (a few samples) behind the block,
    * so the reading does not depend on the block size. `meteringTruePeakDb`
    * measures a whole signal at once.
    */
-  truePeakDb: number[];
-  /** Maximum inter-sample peak across channels in dB. See {@link truePeakDb}. */
-  maxTruePeakDb: number;
+  truePeakDbtp: number[];
+  /** Maximum inter-sample peak across channels in dB. See {@link truePeakDbtp}. */
+  maxTruePeakDbtp: number;
   /** Stereo correlation in `[-1, 1]` (front pair). */
   correlation: number;
   /** Mono-compatibility width metric (front pair). */

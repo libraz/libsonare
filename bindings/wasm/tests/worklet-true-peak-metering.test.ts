@@ -201,8 +201,8 @@ describe('mixer worklet true-peak metering', () => {
         engineMeter.peakDbR,
         engineMeter.rmsDbL,
         engineMeter.rmsDbR,
-        engineMeter.truePeakDbL,
-        engineMeter.truePeakDbR,
+        engineMeter.truePeakDbtpL,
+        engineMeter.truePeakDbtpR,
       ]) {
         expect(value).toBe(FLOOR_DB);
       }
@@ -212,7 +212,7 @@ describe('mixer worklet true-peak metering', () => {
   });
 
   it('reads the same inter-sample peak as the engine on the same signal', () => {
-    // `truePeakDbL/R` names one quantity, so the two producers that publish it
+    // `truePeakDbtpL/R` names one quantity, so the two producers that publish it
     // have to be reading the same thing. Two ways for that to break are visible
     // here: a producer measuring the sample peak lands on peakDb, and one with
     // oversampling disabled lands on the floor. Both are ruled out by comparing
@@ -236,12 +236,12 @@ describe('mixer worklet true-peak metering', () => {
         throw new Error('expected the engine to publish meter telemetry');
       }
 
-      expect(mixerMeter.truePeakDbL).toBeCloseTo(engineMeter.truePeakDbL, 3);
-      expect(mixerMeter.truePeakDbR).toBeCloseTo(engineMeter.truePeakDbR, 3);
+      expect(mixerMeter.truePeakDbL).toBeCloseTo(engineMeter.truePeakDbtpL, 3);
+      expect(mixerMeter.truePeakDbR).toBeCloseTo(engineMeter.truePeakDbtpR, 3);
       // The construction places the inter-sample peak 3.01 dB above the sample
       // peak, so agreeing on the sample peak or on the floor cannot satisfy this.
-      expect(engineMeter.truePeakDbL).toBeGreaterThan(engineMeter.peakDbL + 1.5);
-      expect(engineMeter.truePeakDbR).toBeGreaterThan(engineMeter.peakDbR + 1.5);
+      expect(engineMeter.truePeakDbtpL).toBeGreaterThan(engineMeter.peakDbL + 1.5);
+      expect(engineMeter.truePeakDbtpR).toBeGreaterThan(engineMeter.peakDbR + 1.5);
     } finally {
       engine.destroy();
     }

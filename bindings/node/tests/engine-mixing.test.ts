@@ -255,7 +255,7 @@ describe('RealtimeEngine native binding', () => {
     if (!busMeter) {
       throw new Error('expected a 5.1 bus meter');
     }
-    expect(busMeter.channelCount).toBe(6);
+    expect(busMeter.numChannels).toBe(6);
     expect(busMeter.peakDb).toHaveLength(6);
     // Ls (plane 4) carries the panned lane, well above the silent front-left.
     expect(busMeter.peakDb[4]).toBeGreaterThan(busMeter.peakDb[0] + 10);

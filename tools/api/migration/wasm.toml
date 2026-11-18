@@ -27626,3 +27626,51 @@ old = "MidiCcLearnOptions"
 new = "MidiCcLearnRequest"
 domain = "project"
 rule = "one-positional-form"
+
+[[entry]]
+kind = "field"
+old = "EngineMeterTelemetry.truePeakDbL"
+changed = "truePeakDbL -> truePeakDbtpL"
+domain = "engine"
+rule = "loudness-names"
+test = "bindings/wasm/tests/worklet-true-peak-metering.test.ts::engineMeter.truePeakDbtpL"
+
+[[entry]]
+kind = "field"
+old = "EngineMeterTelemetry.truePeakDbR"
+changed = "truePeakDbR -> truePeakDbtpR"
+domain = "engine"
+rule = "loudness-names"
+test = "bindings/wasm/tests/worklet-true-peak-metering.test.ts::engineMeter.truePeakDbtpR"
+
+[[entry]]
+kind = "field"
+old = "EngineMeterTelemetry.maxTruePeakDb"
+changed = "maxTruePeakDb -> maxTruePeakDbtp"
+domain = "engine"
+rule = "loudness-names"
+test = "bindings/wasm/tests/engine-meter-telemetry.test.ts::?.maxTruePeakDbtp"
+
+[[entry]]
+kind = "field"
+old = "EngineMeterTelemetryWide.truePeakDb"
+changed = "truePeakDb -> truePeakDbtp"
+domain = "engine"
+rule = "loudness-names"
+test = "bindings/wasm/tests/meter-telemetry-wide.test.ts::busMeter.truePeakDbtp"
+
+[[entry]]
+kind = "field"
+old = "EngineMeterTelemetryWide.maxTruePeakDb"
+changed = "maxTruePeakDb -> maxTruePeakDbtp"
+domain = "engine"
+rule = "loudness-names"
+test = "bindings/wasm/tests/meter-telemetry-wide.test.ts::busMeter.maxTruePeakDbtp"
+
+[[entry]]
+kind = "field"
+old = "EngineMeterTelemetryWide.channelCount"
+changed = "channelCount -> numChannels"
+domain = "engine"
+rule = "num-channels"
+test = "bindings/wasm/tests/meter-telemetry-wide.test.ts::busMeter.numChannels"
