@@ -431,7 +431,6 @@ def test_a_wrapped_midi_argument_is_refused_rather_than_addressing_another_clip(
         ("clip_id", lambda v: project.set_midi_events(v, events)),
         ("clip_id", lambda v: project.set_program(v, 5)),
         ("clip_id", lambda v: project.set_program_on_channel(v, 0, 0, 5)),
-        ("clip_id", lambda v: project.set_midi_fx(v, fx)),
         ("clip_id", lambda v: project.bake_midi_fx(v, fx)),
     )
     for name, edit in ids:

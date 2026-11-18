@@ -174,15 +174,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             _get_lib().sonare_engine_destroy(self._handle)
             self._handle = None
 
-    # Cross-binding aliases: Node uses destroy(), WASM uses delete().
-    def destroy(self) -> None:
-        """Alias of :meth:`close` for cross-binding (Node ``destroy``) parity."""
-        self.close()
-
-    def delete(self) -> None:
-        """Alias of :meth:`close` for cross-binding (WASM ``delete``) parity."""
-        self.close()
-
     def __enter__(self) -> RealtimeEngine:
         return self
 

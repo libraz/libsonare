@@ -58,7 +58,7 @@ def _serial_tail_scene() -> str:
                             "id": "to-aux",
                             "destinationBusId": "aux",
                             "sendDb": 0,
-                            "timing": "post",
+                            "timing": "postFader",
                         }
                     ],
                 }
@@ -394,8 +394,8 @@ _SETTLE_SCENE = json.dumps(
                 "inputTrimDb": 0,
                 "faderDb": -3,
                 "pan": 0.3,
-                "panMode": 0,
-                "panLaw": 0,
+                "panMode": "balance",
+                "panLaw": "const3Db",
                 "width": 1.2,
                 "channelDelaySamples": 0,
                 "dualPanLeft": -1,

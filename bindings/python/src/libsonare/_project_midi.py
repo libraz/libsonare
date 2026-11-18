@@ -379,16 +379,6 @@ class _ProjectMidiMixin:
             )
         )
 
-    def set_midi_fx(self, clip_id: int, config_json: str) -> None:
-        """Backward alias that destructively bakes a clip's MIDI-FX chain."""
-        _check(
-            _get_lib().sonare_project_set_midi_fx(
-                self._require_handle(),
-                _to_c_uint32(clip_id, "clip_id"),
-                _utf8_arg(config_json, "config_json"),
-            )
-        )
-
     def bake_midi_fx(
         self,
         clip_id: int,
@@ -400,8 +390,7 @@ class _ProjectMidiMixin:
 
         Canonical name matching the Node / WASM ``bakeMidiFx`` surface. Large
         clips are drained without truncation; failure leaves the original clip
-        unchanged. :meth:`set_midi_fx` is a backward alias for this same
-        destructive operation.
+        unchanged.
 
         With ``with_source_index`` set, returns one entry per transformed event
         in canonical order: the index of the input event it derives from, or

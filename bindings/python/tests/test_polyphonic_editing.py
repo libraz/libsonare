@@ -104,11 +104,12 @@ def test_close_is_idempotent(chord: NDArray[np.float32]) -> None:
     handle.close()
 
 
-def test_destroy_and_delete_alias_close(chord: NDArray[np.float32]) -> None:
-    """The cross-binding names release the same handle."""
+def test_close_is_the_one_release_name(chord: NDArray[np.float32]) -> None:
+    """close() releases the handle; there is no destroy()/delete() alias."""
     handle = libsonare.PolyphonicAnalysis(chord, SR)
-    handle.destroy()
-    handle.delete()
+    handle.close()
+    assert not hasattr(handle, "destroy")
+    assert not hasattr(handle, "delete")
     with raises_coded(ErrorCode.INVALID_STATE, match="closed"):
         _ = handle.note_count
 

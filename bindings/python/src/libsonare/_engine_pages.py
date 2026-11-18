@@ -50,9 +50,6 @@ class ClipPageProvider:
             _get_lib().sonare_clip_page_provider_destroy(handle)
             self._handle = None
 
-    def destroy(self) -> None:
-        self.close()
-
     def __enter__(self) -> ClipPageProvider:
         return self
 

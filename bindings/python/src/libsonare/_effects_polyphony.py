@@ -358,15 +358,6 @@ class PolyphonicAnalysis:
             _get_lib().sonare_polyphonic_analysis_destroy(self._handle)
             self._handle = None
 
-    # Cross-binding aliases: Node uses destroy(), WASM uses delete().
-    def destroy(self) -> None:
-        """Alias of :meth:`close` for cross-binding (Node ``destroy``) parity."""
-        self.close()
-
-    def delete(self) -> None:
-        """Alias of :meth:`close` for cross-binding (WASM ``delete``) parity."""
-        self.close()
-
     def __enter__(self) -> PolyphonicAnalysis:
         return self
 

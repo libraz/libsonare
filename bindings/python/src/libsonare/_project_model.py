@@ -20,7 +20,7 @@ from __future__ import annotations
 import ctypes
 import math
 import numbers
-from collections.abc import Iterator, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, SupportsFloat, TypeAlias, cast, get_args
 
@@ -437,11 +437,7 @@ def _marker_name_bytes(name: str | None) -> bytes:
 
 @dataclass(frozen=True)
 class ProjectCompileResult:
-    """Structured compile result matching the C/Node/WASM project surface.
-
-    Iteration preserves the legacy ``has_timeline, messages = project.compile()``
-    pattern while exposing structured diagnostics.
-    """
+    """Structured compile result matching the C/Node/WASM project surface."""
 
     has_timeline: bool
     messages: str
@@ -451,10 +447,6 @@ class ProjectCompileResult:
     @property
     def diagnostic_count(self) -> int:
         return len(self.diagnostics)
-
-    def __iter__(self) -> Iterator[object]:
-        yield self.has_timeline
-        yield self.messages
 
 
 @dataclass(frozen=True)

@@ -286,7 +286,7 @@ def test_engine_bus_and_master_sidechain_duck_and_clear() -> None:
     reference = _make_keyed_rig()
     reference.set_bus_sidechain(2, 0, "bus", 0)
     unkeyed = _render_last(reference)
-    reference.destroy()
+    reference.close()
     assert unkeyed > 0.02
 
     engine = _make_keyed_rig()
@@ -312,7 +312,7 @@ def test_engine_bus_and_master_sidechain_duck_and_clear() -> None:
             _render_last(engine)
         assert _render_last(engine) == pytest.approx(unkeyed, rel=1e-3)
     finally:
-        engine.destroy()
+        engine.close()
 
 
 def test_engine_bus_and_master_sidechain_reject_invalid_source_kind() -> None:
@@ -330,7 +330,7 @@ def test_engine_bus_and_master_sidechain_reject_invalid_source_kind() -> None:
             with pytest.raises(TypeError):
                 engine.set_master_sidechain(0, bad_kind, 30)  # type: ignore[arg-type]
     finally:
-        engine.destroy()
+        engine.close()
 
 
 def test_sidechain_source_kind_value_takes_exact_tokens() -> None:
@@ -448,7 +448,7 @@ def test_lane_sidechain_refuses_self_key_and_cycles_but_keeps_valid_bindings() -
         with pytest.raises(SonareError):
             engine.set_lane_sidechain(10, 0, 20)
     finally:
-        engine.destroy()
+        engine.close()
 
 
 _PASS_LIMITER = ("dynamics.limiter", {"thresholdDb": 24.0, "releaseMs": 50.0})
@@ -517,7 +517,7 @@ def test_can_set_sidechain_reports_each_refusal_and_matches_the_setters() -> Non
         # Queries leave the bindings alone: the refused reverse bus key stays refused.
         check(engine.can_set_bus_sidechain(1, 0, "bus", 2), "cycle")
     finally:
-        engine.destroy()
+        engine.close()
 
     # Table full: every slot of the binding table taken by lane 10, then a new key.
     with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as full:

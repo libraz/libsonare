@@ -105,15 +105,6 @@ class ProjectTimeline:
             _get_lib().sonare_project_timeline_destroy(self._handle)
             self._handle = None
 
-    # Cross-binding aliases: Node uses destroy(), WASM uses delete().
-    def destroy(self) -> None:
-        """Alias of :meth:`close` for cross-binding (Node ``destroy``) parity."""
-        self.close()
-
-    def delete(self) -> None:
-        """Alias of :meth:`close` for cross-binding (WASM ``delete``) parity."""
-        self.close()
-
     def __enter__(self) -> ProjectTimeline:
         return self
 
@@ -174,15 +165,6 @@ class Project(
         if self._handle is not None:
             _get_lib().sonare_project_destroy(self._handle)
             self._handle = None
-
-    # Cross-binding aliases: Node uses destroy(), WASM uses delete().
-    def destroy(self) -> None:
-        """Alias of :meth:`close` for cross-binding (Node ``destroy``) parity."""
-        self.close()
-
-    def delete(self) -> None:
-        """Alias of :meth:`close` for cross-binding (WASM ``delete``) parity."""
-        self.close()
 
     def __enter__(self) -> Project:
         return self

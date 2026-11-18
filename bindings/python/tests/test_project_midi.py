@@ -150,7 +150,7 @@ def test_midi_helpers_program_midi_fx_and_sysex_smf_round_trip() -> None:
                 Project.midi_note_off(1.1, 0, 0, 60, 0),
             ],
         )
-        project.set_midi_fx(
+        project.bake_midi_fx(
             midi_clip,
             '{"transpose_semitones":12,"quantize_ppq":0.25,'
             '"quantize_strength":1.0,"velocity_scale":0.5}',

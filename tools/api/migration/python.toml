@@ -9156,3 +9156,59 @@ changed = "returns the ProjectKeyMode token that Project.annotate_keys takes as 
 domain = "project"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_chord_annotation.py::test_key_modes_keep_their_name_and_are_accepted_by_annotate_keys"
+
+[[entry]]
+kind = "method"
+old = "Project.destroy"
+removed = "call close(), or use the object as a context manager"
+domain = "project"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "Project.delete"
+removed = "call close(), or use the object as a context manager"
+domain = "project"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "ProjectTimeline.destroy"
+removed = "call close(), or use the object as a context manager"
+domain = "project"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "ProjectTimeline.delete"
+removed = "call close(), or use the object as a context manager"
+domain = "project"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "PolyphonicAnalysis.destroy"
+removed = "call close(), or use the object as a context manager"
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "PolyphonicAnalysis.delete"
+removed = "call close(), or use the object as a context manager"
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "FileClipPageProvider.destroy"
+removed = "call close(), or use the provider as a context manager"
+domain = "project"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "Project.set_midi_fx"
+removed = "call bake_midi_fx, the same destructive bake"
+domain = "project"
+rule = "aliases-removed"

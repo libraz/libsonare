@@ -250,7 +250,7 @@ def test_engine_track_strip_json_routes_lane_strip() -> None:
         )
         engine.set_track_lanes([{"track_id": 10}, {"track_id": 20}])
         scene_json = (
-            '{"version":1,"strips":[{"id":"track-10","faderDb":-12,"panLaw":3}],'
+            '{"version":1,"strips":[{"id":"track-10","faderDb":-12,"panLaw":"linear0Db"}],'
             '"buses":[],"connections":[]}'
         )
         engine.set_track_strip_json(10, scene_json)
@@ -404,7 +404,7 @@ def test_engine_master_strip_json_routes_master_strip() -> None:
             ]
         )
         scene_json = (
-            '{"version":1,"strips":[{"id":"master","faderDb":-12,"panLaw":3}],'
+            '{"version":1,"strips":[{"id":"master","faderDb":-12,"panLaw":"linear0Db"}],'
             '"buses":[],"connections":[]}'
         )
         engine.set_master_strip_json(scene_json)

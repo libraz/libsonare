@@ -365,10 +365,10 @@ def test_from_json_with_diagnostics_returns_success_warnings() -> None:
 def test_compile_surfaces_renderable_timeline() -> None:
     project, *_ = _build_project()
     try:
-        has_timeline, messages = project.compile()
-        assert has_timeline is True
-        assert isinstance(messages, str)
         result = project.compile()
+        assert isinstance(result.messages, str)
+        with pytest.raises(TypeError):
+            iter(result)  # type: ignore[call-overload]
         assert result.has_timeline is True
         # The project carries a MIDI clip, so the compiler emits a single
         # best-effort warning (code 10 = kMidiClipNoInstrument) that the bounce is
@@ -853,13 +853,12 @@ def test_auto_tempo_returns_positive_bpm() -> None:
 # --- lifecycle -------------------------------------------------------------
 
 
-def test_context_manager_and_aliases_close_handle() -> None:
+def test_context_manager_closes_handle_and_has_no_close_aliases() -> None:
     with Project() as project:
         project.set_sample_rate(44100.0)
-    # Cross-binding close aliases are all safe no-ops after close.
-    project.destroy()
-    project.delete()
-    project.close()
+    project.close()  # a second close is a no-op
+    assert not hasattr(project, "destroy")
+    assert not hasattr(project, "delete")
     with raises_coded(ErrorCode.INVALID_STATE):
         project.add_track("audio")
 

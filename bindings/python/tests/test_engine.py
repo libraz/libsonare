@@ -164,11 +164,12 @@ def test_engine_rejects_out_of_range_automation_curve() -> None:
             )
 
 
-def test_engine_destroy_and_delete_aliases() -> None:
+def test_engine_close_is_the_one_release_name() -> None:
     engine = RealtimeEngine(sample_rate=48000.0, max_block_size=128)
-    engine.destroy()
-    # delete() is the second cross-binding alias and is safe to call again.
-    engine.delete()
+    engine.close()
+    engine.close()  # a second close is a no-op
+    assert not hasattr(engine, "destroy")
+    assert not hasattr(engine, "delete")
     with raises_coded(ErrorCode.INVALID_STATE):
         engine.play()
 

@@ -92,9 +92,8 @@ class _ProjectRenderMixin:
         """Compile the project into an RT-readable timeline.
 
         Returns a :class:`ProjectCompileResult` with ``has_timeline``,
-        ``messages``, and structured ``diagnostics``. The result remains
-        iterable as ``(has_timeline, messages)`` for legacy callers. Never
-        throws on bad project content; it surfaces error diagnostics.
+        ``messages``, and structured ``diagnostics``. Never throws on bad
+        project content; it surfaces error diagnostics.
         """
         lib = _get_lib()
         result = SonareProjectCompileResult()
