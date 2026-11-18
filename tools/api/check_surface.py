@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import collections
 import fnmatch
+import importlib.util
 import json
 import re
 import sys
@@ -38,6 +39,14 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import domains
+
+# The facade-to-C name mapping is parity's; load it under its own name rather than putting
+# tools/parity on the import path, where its module names would shadow nothing but could.
+_spec = importlib.util.spec_from_file_location(
+    "parity_normalize", HERE.parent / "parity" / "normalize.py"
+)
+parity_normalize = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(parity_normalize)
 
 ROOT = HERE.parents[1]
 SURFACES = ("wasm", "node", "python", "c", "cli-python", "cli-native")
@@ -773,6 +782,8 @@ class Ctx:
     dimensionless: set = field(default_factory=set)
     catalog: dict = field(default_factory=dict)
     documents: set = field(default_factory=set)
+    # check id -> what it could not compare, one line each
+    not_compared: dict = field(default_factory=lambda: collections.defaultdict(list))
 
     def __post_init__(self):
         idx = collections.defaultdict(list)
@@ -1205,8 +1216,46 @@ def _py_rate_scoped(r) -> bool:
     )
 
 
+def _c_rate_entries(ctx) -> dict[str, tuple[str, bool]]:
+    """Parity key -> (C function, whether it takes a sample rate as a parameter or a struct field).
+
+    A ``_ex`` variant folds into its base key, as parity folds it; the rate counts if either has it.
+    """
+    rated_structs = {
+        r["owner"]
+        for r in ctx.all_records
+        if r["surface"] == "c" and r["kind"] == "field" and r["member"] == "sample_rate"
+    }
+    out: dict[str, tuple[str, bool]] = {}
+    for r in ctx.all_records:
+        if r["surface"] != "c" or r["kind"] != "function":
+            continue
+        key = parity_normalize.canonical_key(r["name"], "c")
+        key = key.removesuffix("_ex")
+        rated = any(
+            p["name"] == "sample_rate"
+            or re.sub(r"\bconst\b|\*", "", p["type"]).strip() in rated_structs
+            for s in r.get("sigs", [])
+            for p in s["params"]
+        )
+        base, had = out.get(key, (r["name"], False))
+        if not r["name"].endswith("_ex"):
+            base = r["name"]
+        out[key] = (base, had or rated)
+    return out
+
+
+def _rate_free_c_entry(entries, surface, name) -> str | None:
+    """The C entry an operation maps to when that entry takes no sample rate; None otherwise."""
+    hit = entries.get(parity_normalize.canonical_key(name, surface))
+    return hit[0] if hit and not hit[1] else None
+
+
 def chk_sample_rate_required(ctx):
+    """Audio in, sample rate required, wherever the C entry the operation maps to takes one."""
     cands, bad = 0, []
+    entries = _c_rate_entries(ctx)
+    skipped = ctx.not_compared["sample-rate-required"]
     handle_types = _js_handle_method_types(ctx)
     for r in recs(ctx, JS, ("type",)):
         if not re.search(r"(Request|Options)$", r["name"]):
@@ -1215,6 +1264,13 @@ def chk_sample_rate_required(ctx):
             continue
         fields = {m["member"]: m for m in ctx.members(r) if m["kind"] == "field"}
         if "samples" not in fields and "channels" not in fields:
+            continue
+        op = re.sub(r"(Request|Options)$", "", r["name"])
+        c_name = _rate_free_c_entry(entries, r["surface"], op)
+        if c_name:
+            skipped.append(
+                f"{r['surface']} {r['kind']} {r['name']} ({c_name} takes no sample rate)"
+            )
             continue
         cands += 1
         sr = fields.get("sampleRate")
@@ -1229,6 +1285,12 @@ def chk_sample_rate_required(ctx):
         audio = bool(set(params) & _PY_AUDIO_PARAMS)
         sr = params.get("sample_rate")
         if not audio and sr is None:
+            continue
+        c_name = r["kind"] == "function" and _rate_free_c_entry(entries, "python", r["name"])
+        if c_name:
+            skipped.append(
+                f"{r['surface']} {r['kind']} {r['name']} ({c_name} takes no sample rate)"
+            )
             continue
         cands += 1
         if sr is not None and sr["optional"]:
@@ -2431,6 +2493,7 @@ def run(args) -> tuple[int, list[str], dict]:
             )
             failed = True
         out += [f"    {line_of(v)}" for v in viol]
+        out += [f"    not compared: {x}" for x in sorted(ctx.not_compared.get(chk.id, []))]
         if chk.id in UNREAD and UNREAD[chk.id][0] in selected:
             out.append(f"    not compared: {UNREAD[chk.id][1]}")
         if chk.id == "unit-in-name" and "c" in selected:
@@ -2442,7 +2505,13 @@ def run(args) -> tuple[int, list[str], dict]:
         for v in viol:
             table[(v["domain"], v["surface"])] += 1
         report["checks"].append(
-            {"id": chk.id, "checked": n, "violations": viol, "excused": excused}
+            {
+                "id": chk.id,
+                "checked": n,
+                "violations": viol,
+                "excused": excused,
+                "not_compared": sorted(ctx.not_compared.get(chk.id, [])),
+            }
         )
 
     if args.audit_allowlist:

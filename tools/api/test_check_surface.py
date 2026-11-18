@@ -1963,6 +1963,54 @@ class UpgradeNotes(unittest.TestCase):
             self.assertEqual(first, upgrade_notes.render(d, TD / "rules.toml"))
 
 
+class RateFromCEntry(CheckerCase):
+    """A sample rate is required where the C entry the operation maps to takes one."""
+
+    def c_fn(self, name, *params):
+        self.add(_fn("c", name, "SonareError", *(_c_param(n, t) for n, t in params)))
+
+    def rate(self):
+        _, lines = self.run_check("--check", "sample-rate-required")
+        return sorted(x.strip() for x in lines if x.startswith("    ") and " trim" in x.lower())
+
+    def test_an_operation_whose_c_entry_takes_no_rate_is_not_compared(self):
+        self.c_fn("sonare_trim", ("samples", "const float*"), ("length", "size_t"))
+        self.add(_py_fn("trim", ("samples", None)))
+        self.add(_rec("node", "type", "TrimRequest"))
+        self.add(_field("node", "TrimRequest", "samples", "Float32Array"))
+        self.assertEqual(
+            self.rate(),
+            [
+                "not compared: node type TrimRequest (sonare_trim takes no sample rate)",
+                "not compared: python function trim (sonare_trim takes no sample rate)",
+            ],
+        )
+
+    def test_an_operation_whose_c_entry_takes_a_rate_must_require_one(self):
+        self.c_fn("sonare_trim", ("samples", "const float*"), ("sample_rate", "int"))
+        self.add(_py_fn("trim", ("samples", None), ("sample_rate", "22050")))
+        self.assertEqual(
+            self.rate(), ["python function trim: sample_rate has a default; make it required"]
+        )
+
+    def test_a_rate_in_the_c_options_struct_counts(self):
+        self.c_fn(
+            "sonare_trim", ("samples", "const float*"), ("options", "const SonareBpmOptions*")
+        )
+        self.add(_py_fn("trim", ("samples", None)))
+        self.assertEqual(
+            self.rate(), ["python function trim: takes audio but has no sample_rate parameter"]
+        )
+
+    def test_a_rate_on_the_ex_variant_counts(self):
+        self.c_fn("sonare_trim", ("samples", "const float*"))
+        self.c_fn("sonare_trim_ex", ("samples", "const float*"), ("sample_rate", "int"))
+        self.add(_py_fn("trim", ("samples", None)))
+        self.assertEqual(
+            self.rate(), ["python function trim: takes audio but has no sample_rate parameter"]
+        )
+
+
 def _field(surface, owner, member, type="number", **kw):
     return _rec(surface, "field", f"{owner}.{member}", owner=owner, member=member, type=type, **kw)
 
