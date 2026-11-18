@@ -257,23 +257,8 @@ def test_an_init_suffix_alone_is_not_a_seeder() -> None:
     assert ("decompose_with_init", "python") in _active(genuine), _active(genuine)
 
 
-def test_vocal_project_helpers_use_explicit_aliases() -> None:
-    """Project vocal helpers keep their public ergonomic names."""
-    cases = (
-        ("project_apply_vocal_edit", "apply_project_vocal_edit", False),
-        (
-            "project_get_vocal_edit_dependencies",
-            "project_vocal_edit_dependencies",
-            False,
-        ),
-        ("project_rehydrate_vocal_edits", "rehydrate_project_vocal_edits", False),
-    )
-    for c_key, facade_key, is_method in cases:
-        methods = {facade_key: "UnrelatedHandle"} if is_method else {}
-        frees = [] if is_method else [facade_key]
-        rep = _report(_c(c_key), _py(methods=methods, frees=frees))
-        assert (c_key, "python") not in _active(rep), (c_key, _active(rep))
-
+def test_vocal_session_factory_alias_credits_only_its_own_key() -> None:
+    """The session factory alias credits the create op and nothing else."""
     missing = _report(_c("project_apply_vocal_edit"), _py())
     assert ("project_apply_vocal_edit", "python") in _active(missing), _active(missing)
 

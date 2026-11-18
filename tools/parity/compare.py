@@ -270,12 +270,6 @@ _ALIAS_COVERAGE = {
     # is a lifecycle key, so Python's constructor needs no credit; restore is the classmethod.
     "vocal_session_create": ("create_vocal_edit_session",),
     "vocal_session_restore": ("restore", "restore_vocal_edit_session"),
-    # Project helpers are free-function ergonomic wrappers around the Project
-    # methods. The aliases also keep the Python helper names out of
-    # surface-only findings without weakening the Project handle check.
-    "project_apply_vocal_edit": ("apply_project_vocal_edit",),
-    "project_get_vocal_edit_dependencies": ("project_vocal_edit_dependencies",),
-    "project_rehydrate_vocal_edits": ("rehydrate_project_vocal_edits",),
     # C ABI returns a JSON document; facades parse it into the public descriptor.
     "capabilities_json": ("capabilities",),
     "capability_catalog_json": ("capability_catalog",),
