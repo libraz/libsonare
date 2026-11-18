@@ -808,6 +808,36 @@ class TypeNamesRule(unittest.TestCase):
         )
 
 
+class EngineCounterpartsRule(unittest.TestCase):
+    CLEAN: ClassVar[list[dict]] = [
+        method("python", "RealtimeEngine", "set_strip_pan"),
+        method("node", "RealtimeEngine", "setStripPan"),
+        method("python", "RealtimeEngine", "set_bus_eq_band"),
+        method("node", "RealtimeEngine", "setBusEqBand"),
+        method("python", "RealtimeEngine", "_native"),
+        method("python", "Mixer", "set_track_strip_pan"),
+    ]
+
+    def test_matching_names_pass(self) -> None:
+        verdict = run("engine-counterparts", self.CLEAN)
+        self.assertEqual(verdict.read, 4)
+        self.assertFalse(verdict.failed)
+
+    def test_a_name_without_its_counterpart_is_named_on_both_sides(self) -> None:
+        planted = [
+            method("python", "RealtimeEngine", "set_track_strip_pan_law"),
+            method("node", "RealtimeEngine", "setStripPanLaw"),
+        ]
+        verdict = run("engine-counterparts", [*self.CLEAN, *planted])
+        self.assertEqual(
+            sorted(f.key for f in verdict.violations),
+            [
+                "node:RealtimeEngine.setStripPanLaw",
+                "python:RealtimeEngine.set_track_strip_pan_law",
+            ],
+        )
+
+
 class EngineVocabularyRule(unittest.TestCase):
     CLEAN: ClassVar[list[dict]] = [
         field("wasm", "EngineTelemetryRecord", "graphLatencySamples"),

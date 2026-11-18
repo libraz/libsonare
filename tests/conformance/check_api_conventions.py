@@ -149,6 +149,55 @@ _TEARDOWN_SPELLINGS = ("destroy", "close", "dispose", "release", "free")
 _FUNCTION_TYPE = re.compile(r"^\(.*\)\s*=>")
 
 
+_PAIRED_CLASSES = ("RealtimeEngine",)
+_SNAKE_PART = re.compile(r"_([a-z0-9])")
+
+
+def _camel(name: str) -> str:
+    return _SNAKE_PART.sub(lambda m: m.group(1).upper(), name)
+
+
+def _counterpart_records(records: list[dict]) -> list[dict]:
+    """One record per public method of a paired Python/Node class, marking a name the other lacks."""
+    out: list[dict] = []
+    for cls in _PAIRED_CLASSES:
+        members = {
+            surface: {
+                r["member"]
+                for r in records
+                if r["surface"] == surface
+                and r["kind"] == "method"
+                and r.get("owner") == cls
+                and not r["member"].startswith("_")
+            }
+            for surface in ("python", "node")
+        }
+        python_as_js = {_camel(m) for m in members["python"]}
+        for m in sorted(members["python"]):
+            out.append(
+                {
+                    "surface": "python",
+                    "kind": "counterpart",
+                    "name": f"{cls}.{m}",
+                    "missing": f"node {cls}.{_camel(m)}"
+                    if _camel(m) not in members["node"]
+                    else None,
+                }
+            )
+        for m in sorted(members["node"]):
+            out.append(
+                {
+                    "surface": "node",
+                    "kind": "counterpart",
+                    "name": f"{cls}.{m}",
+                    "missing": f"python {cls} method whose camelCase is {m}"
+                    if m not in python_as_js
+                    else None,
+                }
+            )
+    return out
+
+
 def _interface_teardown_records(records: list[dict]) -> list[dict]:
     """One record per JS interface or object type that carries destroy() or another teardown member."""
     callable_members: dict[tuple[str, str], set[str]] = {}
@@ -1428,6 +1477,115 @@ RULES: list[Rule] = [
             "python:SonareError": _ERROR_CLASS_REASON,
             "python:SonareValueError": _ERROR_CLASS_REASON,
             **{key: _REGISTERED_CLASS_REASON for key in _REGISTERED_CLASSES},
+        },
+    ),
+    Rule(
+        name="engine-counterparts",
+        summary=(
+            "every public method of a paired Python/Node class has a counterpart of the same name "
+            "after snake/camel mapping; it cannot see a pair whose names agree but whose arguments "
+            "or behaviour differ, a class outside the paired list, or WASM, which parity holds to Node"
+        ),
+        population=lambda r: r["kind"] == "counterpart",
+        violation=lambda r: f"no counterpart: {r['missing']}" if r["missing"] else None,
+        derive=_counterpart_records,
+        exempt={
+            "python:RealtimeEngine.close": "Python releases a handle through close()",
+            "node:RealtimeEngine.destroy": "JS releases a handle through destroy()",
+            "node:RealtimeEngine.[Symbol.dispose]": "the JS explicit-resource-management protocol",
+        },
+        pending={
+            **{
+                f"python:RealtimeEngine.{m}": "the Python engine moves onto the Node method names"
+                for m in (
+                    "apply_bus_strip_insert_param_by_name_now",
+                    "apply_master_strip_insert_param_by_name_now",
+                    "apply_track_strip_insert_param_by_name_now",
+                    "bind_midi_cc_binding",
+                    "can_set_lane_sidechain",
+                    "can_set_master_sidechain",
+                    "clear_master_insert_parameter_bases",
+                    "clear_track_insert_parameter_bases",
+                    "load_soundfont",
+                    "resolve_master_automation_id",
+                    "resolve_master_insert_automation_id",
+                    "resolve_track_insert_automation_id",
+                    "resolve_track_lane_automation_id",
+                    "restore_bus_strip_insert_param_by_name",
+                    "restore_master_strip_insert_param_by_name",
+                    "restore_track_strip_insert_param_by_name",
+                    "set_bus_strip_dual_pan",
+                    "set_bus_strip_eq_band",
+                    "set_bus_strip_eq_band_json",
+                    "set_bus_strip_insert_bypassed",
+                    "set_bus_strip_insert_param_by_name",
+                    "set_bus_strip_json",
+                    "set_bus_strip_pan",
+                    "set_bus_strip_pan_law",
+                    "set_bus_strip_pan_mode",
+                    "set_capture_buffer",
+                    "set_capture_punch",
+                    "set_capture_source",
+                    "set_input_monitor",
+                    "set_lane_sidechain",
+                    "set_master_sidechain",
+                    "set_master_strip_eq_band",
+                    "set_master_strip_eq_band_json",
+                    "set_master_strip_insert_bypassed",
+                    "set_master_strip_insert_param_by_name",
+                    "set_master_strip_json",
+                    "set_record_offset_samples",
+                    "set_solo_mute",
+                    "set_track_strip_channel_delay_samples",
+                    "set_track_strip_dual_pan",
+                    "set_track_strip_eq_band",
+                    "set_track_strip_eq_band_json",
+                    "set_track_strip_insert_bypassed",
+                    "set_track_strip_insert_param_by_name",
+                    "set_track_strip_json",
+                    "set_track_strip_pan",
+                    "set_track_strip_pan_law",
+                    "set_track_strip_pan_mode",
+                    "set_track_strip_surround_pan",
+                )
+            },
+            **{
+                f"node:RealtimeEngine.{m}": "the Python engine moves onto the Node method names"
+                for m in (
+                    "applyBusInsertParamNow",
+                    "applyStripInsertParamNow",
+                    "canSetStripSidechain",
+                    "clearStripInsertParameterBases",
+                    "configureCapture",
+                    "loadSoundFont",
+                    "resolveStripAutomationId",
+                    "resolveStripInsertAutomationId",
+                    "restoreBusInsertParam",
+                    "restoreStripInsertParam",
+                    "setBusDualPan",
+                    "setBusEqBand",
+                    "setBusGainDb",
+                    "setBusInsertBypassed",
+                    "setBusInsertParam",
+                    "setBusPan",
+                    "setBusPanLaw",
+                    "setBusPanMode",
+                    "setBusStrip",
+                    "setStrip",
+                    "setStripChannelDelaySamples",
+                    "setStripDualPan",
+                    "setStripEqBand",
+                    "setStripFaderDb",
+                    "setStripInsertBypassed",
+                    "setStripInsertParam",
+                    "setStripPan",
+                    "setStripPanLaw",
+                    "setStripPanMode",
+                    "setStripSidechain",
+                    "setStripSurroundPan",
+                    "setTrackSoloMute",
+                )
+            },
         },
     ),
     Rule(
