@@ -440,9 +440,46 @@ SonareError sonare_mixer_process_stereo(SonareMixer* mixer, const float* const* 
 // with input_count=0 and NULL input arrays, but explicit for offline renderers.
 SonareError sonare_mixer_drain_tail_stereo(SonareMixer* mixer, float* output_left,
                                            float* output_right, size_t num_samples);
-// Marks the end of the signal for every strip and bus meter: the true-peak
-// reading, which runs one reconstruction-filter group delay behind the block,
-// reads that pending group delay against silence and folds it into the
+/// @brief Configuration of the mixer's master-output meter.
+///
+/// Prepare one with sonare_mixer_master_meter_config_init, which sets struct_size and every
+/// field's library default; every field is then read literally. The measurement switches and
+/// the oversample factor mean what they mean on sonare_mixer_add_strip_ex.
+typedef struct {
+  /* sizeof(SonareMixerMasterMeterConfig), set by sonare_mixer_master_meter_config_init. A
+   * smaller value is refused with SONARE_ERROR_INVALID_PARAMETER. */
+  uint32_t struct_size;
+  int32_t enabled;              /* meter the master output; default 1, non-zero is on */
+  int32_t measure_lufs;         /* default 1, non-zero is on */
+  int32_t measure_true_peak;    /* default 1, non-zero is on */
+  int32_t true_peak_oversample; /* default 4; 4 or 8 */
+} SonareMixerMasterMeterConfig;
+
+/// @brief Sets struct_size and every SonareMixerMasterMeterConfig default. NULL is a no-op.
+void sonare_mixer_master_meter_config_init(SonareMixerMasterMeterConfig* config);
+
+/// @brief Turns the master-output meter on or off and sets what it measures.
+/// @details While enabled, every sonare_mixer_process_stereo / sonare_mixer_drain_tail_stereo
+///   call meters the master output it writes, so every block reaches the meter unbroken. Enabling
+///   resets the meter, so a reading never mixes audio from before a period with it off; enabling
+///   again with the same measurement settings reuses the meter without allocating. Disabling keeps
+///   the last reading readable. NULL @p config selects the defaults (enabled). Not to be called
+///   concurrently with a process call or a read.
+/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL mixer, a struct_size below sizeof, or
+///   true_peak_oversample outside {4, 8} while enabled; the meter is then unchanged.
+SonareError sonare_mixer_configure_master_meter(SonareMixer* mixer,
+                                                const SonareMixerMasterMeterConfig* config);
+
+/// @brief Reads the master-output meter, describing the most recently metered block.
+/// @details Same snapshot as sonare_mixer_bus_meter; a measurement switched off stays at the dB
+///   floor. Realtime-safe: a lock-free read that records no error message.
+/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL argument, SONARE_ERROR_INVALID_STATE when
+///   the master meter has never been enabled.
+SonareError sonare_mixer_master_meter(SonareMixer* mixer, SonareMixMeterSnapshot* out);
+
+// Marks the end of the signal for every strip, bus and master-output meter: the
+// true-peak reading, which runs one reconstruction-filter group delay behind the
+// block, reads that pending group delay against silence and folds it into the
 // published snapshot. An offline or one-shot caller calls it after its last
 // block so true_peak_db covers the whole signal. A later process call starts a
 // new signal. Returns INVALID_PARAMETER for a NULL mixer.

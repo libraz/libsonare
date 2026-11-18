@@ -59,6 +59,18 @@ class SonareMixMeterSnapshot(CStruct):
     ]
 
 
+class SonareMixerMasterMeterConfig(CStruct):
+    """Maps to SonareMixerMasterMeterConfig in sonare_c_mixing.h."""
+
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("enabled", ctypes.c_int32),
+        ("measure_lufs", ctypes.c_int32),
+        ("measure_true_peak", ctypes.c_int32),
+        ("true_peak_oversample", ctypes.c_int32),
+    ]
+
+
 class SonareMixGoniometerPoint(CStruct):
     """Maps to SonareMixGoniometerPoint in sonare_c.h."""
 

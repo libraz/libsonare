@@ -104,6 +104,23 @@ def configure_mixing_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.c_char_p,
                 ctypes.POINTER(SonareMixMeterSnapshot),
             ]
+        if hasattr(lib, "sonare_mixer_master_meter_config_init"):
+            lib.sonare_mixer_master_meter_config_init.restype = None
+            lib.sonare_mixer_master_meter_config_init.argtypes = [
+                ctypes.POINTER(SonareMixerMasterMeterConfig),
+            ]
+        if hasattr(lib, "sonare_mixer_configure_master_meter"):
+            lib.sonare_mixer_configure_master_meter.restype = ctypes.c_int32
+            lib.sonare_mixer_configure_master_meter.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(SonareMixerMasterMeterConfig),
+            ]
+        if hasattr(lib, "sonare_mixer_master_meter"):
+            lib.sonare_mixer_master_meter.restype = ctypes.c_int32
+            lib.sonare_mixer_master_meter.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(SonareMixMeterSnapshot),
+            ]
         if hasattr(lib, "sonare_strip_non_finite_discard_count"):
             lib.sonare_strip_non_finite_discard_count.restype = ctypes.c_int32
             lib.sonare_strip_non_finite_discard_count.argtypes = [

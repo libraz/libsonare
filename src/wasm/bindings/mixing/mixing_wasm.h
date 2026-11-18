@@ -13,9 +13,6 @@
 
 #ifdef __EMSCRIPTEN__
 
-#include <optional>
-
-#include "mixing/meter.h"
 #include "wasm/bindings/common/common.h"
 
 // The offline mixing assistant is registered from its own TU. It needs neither
@@ -229,26 +226,14 @@ class MixerWasm {
 
   void processPreparedStereo(const val& num_samples);
 
-  // Turns the master-output meter on or off. While on, processPreparedStereo
-  // meters the stereo master it just produced, so the caller neither copies the
-  // output nor re-implements the measurement.
-  //
-  // The measurement is sonare::mixing::MeterProcessor, the same processor the
-  // engine's meter telemetry publishes from: its true peak is an inter-sample
-  // peak taken after oversampling (ITU-R BS.1770-4 Annex 2 requires at least
-  // 4x), which is a different quantity from the sample peak and the one a
-  // ceiling decision depends on. @p true_peak_oversample must be 4 or 8 (the
-  // realtime meter's set, sonare::mixing::is_realtime_true_peak_oversample);
-  // anything else throws a RangeError.
-  //
-  // Enabling resets the meter, so a reading never mixes audio from before a
-  // period when metering was off. Re-enabling at the same factor does not
-  // reallocate, which keeps it usable from an audio-thread message handler.
+  // Turns the mixer's master-output meter on or off through
+  // sonare_mixer_configure_master_meter, which meters every block a process
+  // call writes. Loudness is not measured; @p true_peak_oversample must be 4 or
+  // 8, anything else throws a RangeError.
   void configureMeter(bool enabled, const val& true_peak_oversample);
 
-  // Latest meter reading, describing the most recently metered block. All dB
-  // fields are finite and floored at kFloorDb (-120). Throws when the meter has
-  // never been enabled.
+  // Latest master-meter reading (sonare_mixer_master_meter), describing the
+  // most recently metered block. Throws when the meter has never been enabled.
   val meterSnapshot() const;
 
   // Copies the latest meter reading into a member so meterScratchValue can read
@@ -305,13 +290,8 @@ class MixerWasm {
   std::vector<const float*> right_ptrs_;
   std::vector<float> out_scratch_left_;
   std::vector<float> out_scratch_right_;
-  // Master-output meter. Absent until configureMeter() first enables it, and
-  // kept prepared afterwards so toggling costs no allocation.
-  std::optional<sonare::mixing::MeterProcessor> meter_;
-  bool meter_active_ = false;
-  int meter_oversample_ = 0;
   // Destination of latchMeterSnapshot(), read back field by field.
-  sonare::mixing::MeterSnapshot meter_scratch_{};
+  SonareMixMeterSnapshot meter_scratch_{};
 };
 
 MixerWasm* createMixerFromSceneJson(std::string json, const val& sample_rate,

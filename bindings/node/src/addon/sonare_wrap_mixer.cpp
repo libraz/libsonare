@@ -45,6 +45,8 @@ Napi::Object MixerWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&MixerWrap::RemoveSend>("removeSend"),
           InstanceMethod<&MixerWrap::StripMeter>("stripMeter"),
           InstanceMethod<&MixerWrap::BusMeter>("busMeter"),
+          InstanceMethod<&MixerWrap::ConfigureMeter>("configureMeter"),
+          InstanceMethod<&MixerWrap::MeterSnapshot>("meterSnapshot"),
           InstanceMethod<&MixerWrap::MeterTap>("meterTap"),
           InstanceMethod<&MixerWrap::ReadGoniometerLatest>("readGoniometerLatest"),
           InstanceMethod<&MixerWrap::StripNonFiniteDiscardCount>("stripNonFiniteDiscardCount"),

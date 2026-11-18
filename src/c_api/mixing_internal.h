@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -97,6 +98,11 @@ struct SonareMixer {
   bool compiled_dirty = true;
   int latency_samples = 0;
   int64_t timeline_sample_pos = 0;
+  // Master-output meter. Absent until first enabled, then kept prepared so
+  // toggling it costs no allocation.
+  std::optional<sonare::mixing::MeterProcessor> master_meter;
+  sonare::mixing::MeterConfig master_meter_config{};
+  bool master_meter_active = false;
 };
 
 namespace sonare_c_mixing_detail {

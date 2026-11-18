@@ -5093,6 +5093,42 @@
     ],
     "size": 176
   },
+  "SonareMixerMasterMeterConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "struct_size",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "enabled",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "measure_lufs",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "measure_true_peak",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "true_peak_oversample",
+        "offset": 16,
+        "size": 4
+      }
+    ],
+    "size": 20
+  },
   "SonareMusicAnalyzeOptions": {
     "align": 4,
     "fields": [

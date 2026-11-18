@@ -809,6 +809,72 @@ SonareError sonare_mixer_flush_meters(SonareMixer* mixer) {
   }
   for (auto& strip : mixer->strips) strip->strip.flush_meters();
   for (auto& bus : mixer->bus_dsp) bus->fx.flush_meters();
+  if (mixer->master_meter.has_value()) mixer->master_meter->flush_true_peak();
+  return SONARE_OK;
+}
+
+void sonare_mixer_master_meter_config_init(SonareMixerMasterMeterConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+  config->enabled = 1;
+  config->measure_lufs = sonare::mixing::kPublishedMeterConfig.measure_lufs ? 1 : 0;
+  config->measure_true_peak = sonare::mixing::kPublishedMeterConfig.measure_true_peak ? 1 : 0;
+  config->true_peak_oversample = sonare::mixing::kPublishedMeterConfig.true_peak_oversample;
+}
+
+SonareError sonare_mixer_configure_master_meter(SonareMixer* mixer,
+                                                const SonareMixerMasterMeterConfig* config) {
+  SONARE_C_API_ENTRY;
+  if (!mixer) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareMixerMasterMeterConfig resolved{};
+  if (config == nullptr) {
+    sonare_mixer_master_meter_config_init(&resolved);
+  } else {
+    if (!sonare_c_detail::struct_size_accepted(config->struct_size, sizeof(*config),
+                                               "SonareMixerMasterMeterConfig")) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    resolved = *config;
+  }
+  SONARE_C_TRY
+  if (resolved.enabled == 0) {
+    mixer->master_meter_active = false;
+    return SONARE_OK;
+  }
+  sonare::mixing::MeterConfig meter = sonare::mixing::kPublishedMeterConfig;
+  meter.measure_lufs = resolved.measure_lufs != 0;
+  meter.measure_true_peak = resolved.measure_true_peak != 0;
+  meter.true_peak_oversample = resolved.true_peak_oversample;
+  sonare::mixing::validate_realtime_meter_config(meter);
+  const sonare::mixing::MeterConfig& held = mixer->master_meter_config;
+  const bool same = mixer->master_meter.has_value() && held.measure_lufs == meter.measure_lufs &&
+                    held.measure_true_peak == meter.measure_true_peak &&
+                    held.true_peak_oversample == meter.true_peak_oversample;
+  if (same) {
+    mixer->master_meter->reset();
+  } else {
+    mixer->master_meter_active = false;
+    mixer->master_meter.reset();
+    try {
+      mixer->master_meter.emplace(meter);
+      mixer->master_meter->prepare(static_cast<double>(mixer->sample_rate), mixer->max_block_size);
+    } catch (...) {
+      mixer->master_meter.reset();
+      throw;
+    }
+    mixer->master_meter_config = meter;
+  }
+  mixer->master_meter_active = true;
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mixer_master_meter(SonareMixer* mixer, SonareMixMeterSnapshot* out) {
+  SONARE_C_RT_API_ENTRY;
+  if (!mixer || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!mixer->master_meter.has_value()) return SONARE_ERROR_INVALID_STATE;
+  copy_meter_snapshot(mixer->master_meter->snapshot(), out);
   return SONARE_OK;
 }
 
@@ -936,6 +1002,8 @@ SonareError process_planar(SonareMixer* mixer, const float* const* input_left,
       std::copy(master, master + num_samples, output[ch]);
     }
   }
+  // Every block reaches the meter: the true-peak filter carries cross-block history.
+  if (mixer->master_meter_active) mixer->master_meter->process(output, planes, n);
   return SONARE_OK;
   SONARE_C_CATCH
 }

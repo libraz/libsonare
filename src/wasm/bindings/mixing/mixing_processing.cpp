@@ -175,65 +175,41 @@ void MixerWasm::processPreparedStereo(const val& num_samples_val) {
       mixer_, count > 0 ? left_ptrs_.data() : nullptr, count > 0 ? right_ptrs_.data() : nullptr,
       count, out_scratch_left_.data(), out_scratch_right_.data(), num_samples);
   if (err != SONARE_OK) throwMixerProcessError(err);
-  if (meter_active_ && meter_.has_value()) {
-    // Metered here rather than by the caller so every block reaches the meter.
-    // The true-peak filter carries cross-block history, and an inter-sample peak
-    // straddling a block boundary is only measured when the blocks arrive
-    // unbroken — skipping blocks would reintroduce the under-reporting the
-    // oversampling exists to remove.
-    float* channels[2] = {out_scratch_left_.data(), out_scratch_right_.data()};
-    meter_->process(channels, 2, static_cast<int>(num_samples));
-  }
 }
 
 void MixerWasm::configureMeter(bool enabled, const val& true_peak_oversample) {
-  if (!enabled) {
-    meter_active_ = false;
-    return;
+  SonareMixerMasterMeterConfig config{};
+  sonare_mixer_master_meter_config_init(&config);
+  config.enabled = enabled ? 1 : 0;
+  config.measure_lufs = 0;
+  if (enabled) {
+    config.true_peak_oversample = checkedIntFromVal(true_peak_oversample, "truePeakOversample");
   }
-  // The realtime meter's rule, shared with scene metering and the strip config.
-  const int factor = checkedIntFromVal(true_peak_oversample, "truePeakOversample");
-  if (!sonare::mixing::is_realtime_true_peak_oversample(factor)) {
-    throw WasmRangeError("meter truePeakOversample must be in {4, 8}");
-  }
-  if (!meter_.has_value() || meter_oversample_ != factor) {
-    sonare::mixing::MeterConfig config = sonare::mixing::kPublishedMeterConfig;
-    config.true_peak_oversample = factor;
-    // LUFS stays off: the caller reports it as unavailable rather than paying
-    // for the K-weighting filters, and a floor value would read as silence.
-    config.measure_lufs = false;
-    meter_.emplace(config);
-    meter_->prepare(static_cast<double>(sample_rate_), block_size_);
-    meter_oversample_ = factor;
-  } else {
-    meter_->reset();
-  }
-  meter_active_ = true;
+  checkStripError(sonare_mixer_configure_master_meter(mixer_, &config),
+                  "failed to configure the master meter");
 }
 
 val MixerWasm::meterSnapshot() const {
-  if (!meter_.has_value()) {
+  SonareMixMeterSnapshot meter{};
+  const SonareError err = sonare_mixer_master_meter(mixer_, &meter);
+  if (err == SONARE_ERROR_INVALID_STATE) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
                                   "mixer meter has not been enabled");
   }
-  const sonare::mixing::MeterSnapshot meter = meter_->snapshot();
+  checkStripError(err, "failed to read the master meter");
   val out = val::object();
-  out.set("peakDbL", meter.peak_db[0]);
-  out.set("peakDbR", meter.peak_db[1]);
-  out.set("rmsDbL", meter.rms_db[0]);
-  out.set("rmsDbR", meter.rms_db[1]);
+  out.set("peakDbL", meter.peak_db_l);
+  out.set("peakDbR", meter.peak_db_r);
+  out.set("rmsDbL", meter.rms_db_l);
+  out.set("rmsDbR", meter.rms_db_r);
   out.set("correlation", meter.correlation);
-  out.set("truePeakDbL", meter.true_peak_db[0]);
-  out.set("truePeakDbR", meter.true_peak_db[1]);
+  out.set("truePeakDbL", meter.true_peak_db_l);
+  out.set("truePeakDbR", meter.true_peak_db_r);
   return out;
 }
 
 bool MixerWasm::latchMeterSnapshot() {
-  if (!meter_.has_value()) {
-    return false;
-  }
-  meter_scratch_ = meter_->snapshot();
-  return true;
+  return sonare_mixer_master_meter(mixer_, &meter_scratch_) == SONARE_OK;
 }
 
 float MixerWasm::meterScratchValue(const val& field) const {
@@ -241,19 +217,19 @@ float MixerWasm::meterScratchValue(const val& field) const {
   requireOrdinalInRange(index, 0, 6, "field");
   switch (index) {
     case 0:
-      return meter_scratch_.peak_db[0];
+      return meter_scratch_.peak_db_l;
     case 1:
-      return meter_scratch_.peak_db[1];
+      return meter_scratch_.peak_db_r;
     case 2:
-      return meter_scratch_.rms_db[0];
+      return meter_scratch_.rms_db_l;
     case 3:
-      return meter_scratch_.rms_db[1];
+      return meter_scratch_.rms_db_r;
     case 4:
       return meter_scratch_.correlation;
     case 5:
-      return meter_scratch_.true_peak_db[0];
+      return meter_scratch_.true_peak_db_l;
     default:
-      return meter_scratch_.true_peak_db[1];
+      return meter_scratch_.true_peak_db_r;
   }
 }
 
@@ -316,7 +292,6 @@ void MixerWasm::flushMeters() {
         sonare::ErrorCode::InvalidState,
         std::string("mixer meter flush failed: ") + sonare_error_message(err));
   }
-  if (meter_.has_value()) meter_->flush_true_peak();
 }
 
 void registerMixerProcessing(class_<MixerWasm>& cls) {

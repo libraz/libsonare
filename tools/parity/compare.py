@@ -231,6 +231,10 @@ _ALIAS_COVERAGE = {
     # conversion and snapshot accessors. The render-job begin operation is a
     # factory on VocalRenderSnapshot, while the remaining render-job methods
     # belong to VocalRenderJob and are matched by the prefix above.
+    # The mixer's master-output meter keeps the facade names the WASM Mixer
+    # shipped before the C ABI carried it.
+    "mixer_configure_master_meter": ("configure_meter",),
+    "mixer_master_meter": ("meter_snapshot",),
     "vocal_session_output_length": ("output_length_samples",),
     "vocal_session_source_to_destination": ("source_sample_to_destination_sample",),
     "vocal_session_destination_to_source": ("destination_sample_to_source_sample",),

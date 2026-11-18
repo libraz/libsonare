@@ -4,6 +4,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <cstdint>
+#include <cstring>
 
 #include "c_api/mixing_internal.h"
 #include "mixing_test_helpers.h"
@@ -618,6 +619,172 @@ TEST_CASE("Mixing C API builds strips with a configurable meter", "[mixing][capi
   CHECK(silent_snap.seq == 0);
 
   sonare_mixer_destroy(mixer);
+}
+
+namespace {
+
+// One stereo strip at unity carrying a 997 Hz tone at -6 dBFS, so the master
+// output is a known signal.
+struct MasterMeterRig {
+  static constexpr int kBlock = 512;
+  SonareMixer* mixer = sonare_mixer_create(48000, kBlock);
+  std::array<float, kBlock> tone{};
+  std::array<float, kBlock> out_l{};
+  std::array<float, kBlock> out_r{};
+  int64_t frame = 0;
+
+  MasterMeterRig() {
+    REQUIRE(mixer != nullptr);
+    REQUIRE(sonare_mixer_add_strip(mixer, "a") != nullptr);
+  }
+  ~MasterMeterRig() { sonare_mixer_destroy(mixer); }
+
+  void process(float amplitude) {
+    for (int i = 0; i < kBlock; ++i) {
+      tone[static_cast<std::size_t>(i)] =
+          amplitude * std::sin(kTwoPi * 997.0f * static_cast<float>(frame + i) / 48000.0f);
+    }
+    frame += kBlock;
+    const float* inputs[] = {tone.data()};
+    REQUIRE(sonare_mixer_process_stereo(mixer, inputs, inputs, 1, out_l.data(), out_r.data(),
+                                        kBlock) == SONARE_OK);
+  }
+};
+
+void require_same_meter(const SonareMixMeterSnapshot& a, const sonare::mixing::MeterSnapshot& b) {
+  SonareMixMeterSnapshot expected{};
+  sonare_c_mixing_detail::copy_meter_snapshot(b, &expected);
+  CHECK(a.channel_count == expected.channel_count);
+  for (int ch = 0; ch < 2; ++ch) {
+    CHECK_THAT(a.peak_db[ch], WithinAbs(expected.peak_db[ch], 1e-4f));
+    CHECK_THAT(a.rms_db[ch], WithinAbs(expected.rms_db[ch], 1e-4f));
+    CHECK_THAT(a.true_peak_db[ch], WithinAbs(expected.true_peak_db[ch], 1e-4f));
+  }
+  CHECK_THAT(a.correlation, WithinAbs(expected.correlation, 1e-5f));
+  CHECK_THAT(a.momentary_lufs, WithinAbs(expected.momentary_lufs, 1e-4f));
+  CHECK_THAT(a.short_term_lufs, WithinAbs(expected.short_term_lufs, 1e-4f));
+  CHECK_THAT(a.integrated_lufs, WithinAbs(expected.integrated_lufs, 1e-4f));
+  CHECK_THAT(a.max_true_peak_db, WithinAbs(expected.max_true_peak_db, 1e-4f));
+}
+
+}  // namespace
+
+TEST_CASE("sonare_mixer_master_meter_config_init sets every documented default", "[mixing][capi]") {
+  SonareMixerMasterMeterConfig config;
+  std::memset(&config, 0x7f, sizeof(config));
+  sonare_mixer_master_meter_config_init(&config);
+  CHECK(config.struct_size == sizeof(SonareMixerMasterMeterConfig));
+  CHECK(config.enabled == 1);
+  CHECK(config.measure_lufs == 1);
+  CHECK(config.measure_true_peak == 1);
+  CHECK(config.true_peak_oversample == 4);
+  sonare_mixer_master_meter_config_init(nullptr);
+}
+
+TEST_CASE("The master meter is read only once enabled and refuses a config it cannot run",
+          "[mixing][capi]") {
+  MasterMeterRig rig;
+  SonareMixMeterSnapshot snap{};
+  CHECK(sonare_mixer_master_meter(rig.mixer, &snap) == SONARE_ERROR_INVALID_STATE);
+  CHECK(sonare_mixer_master_meter(nullptr, &snap) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_mixer_master_meter(rig.mixer, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_mixer_configure_master_meter(nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+
+  SonareMixerMasterMeterConfig config{};
+  CHECK(sonare_mixer_configure_master_meter(rig.mixer, &config) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK_THAT(std::string(sonare_last_error_message()),
+             Catch::Matchers::ContainsSubstring(
+                 "SonareMixerMasterMeterConfig.struct_size is below sizeof"));
+  sonare_mixer_master_meter_config_init(&config);
+  config.struct_size = sizeof(config) - 1;
+  CHECK(sonare_mixer_configure_master_meter(rig.mixer, &config) == SONARE_ERROR_INVALID_PARAMETER);
+
+  // A 0 is a factor like any other, not a request for the default.
+  for (int factor : {0, 1, 2, 16}) {
+    INFO("factor " << factor);
+    sonare_mixer_master_meter_config_init(&config);
+    config.true_peak_oversample = factor;
+    CHECK(sonare_mixer_configure_master_meter(rig.mixer, &config) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  }
+  // Nothing was enabled by the refused calls.
+  rig.process(0.5f);
+  CHECK(sonare_mixer_master_meter(rig.mixer, &snap) == SONARE_ERROR_INVALID_STATE);
+}
+
+TEST_CASE("The master meter reads what a meter over the master output reads", "[mixing][capi]") {
+  for (int factor : {4, 8}) {
+    INFO("factor " << factor);
+    MasterMeterRig rig;
+    SonareMixerMasterMeterConfig config{};
+    sonare_mixer_master_meter_config_init(&config);
+    config.true_peak_oversample = factor;
+    REQUIRE(sonare_mixer_configure_master_meter(rig.mixer, &config) == SONARE_OK);
+
+    sonare::mixing::MeterConfig reference_config = sonare::mixing::kPublishedMeterConfig;
+    reference_config.true_peak_oversample = factor;
+    sonare::mixing::MeterProcessor reference(reference_config);
+    reference.prepare(48000.0, MasterMeterRig::kBlock);
+    // Past the momentary LUFS window, so loudness is a real reading.
+    for (int pass = 0; pass < 48; ++pass) {
+      rig.process(0.5f);
+      float* planes[] = {rig.out_l.data(), rig.out_r.data()};
+      reference.process(planes, 2, MasterMeterRig::kBlock);
+    }
+    SonareMixMeterSnapshot snap{};
+    REQUIRE(sonare_mixer_master_meter(rig.mixer, &snap) == SONARE_OK);
+    CHECK(snap.peak_db_l > -7.0f);
+    CHECK(snap.momentary_lufs > -70.0f);
+    require_same_meter(snap, reference.snapshot());
+
+    REQUIRE(sonare_mixer_flush_meters(rig.mixer) == SONARE_OK);
+    reference.flush_true_peak();
+    REQUIRE(sonare_mixer_master_meter(rig.mixer, &snap) == SONARE_OK);
+    require_same_meter(snap, reference.snapshot());
+  }
+}
+
+TEST_CASE("Disabling the master meter freezes its reading and enabling resets it",
+          "[mixing][capi]") {
+  MasterMeterRig rig;
+  REQUIRE(sonare_mixer_configure_master_meter(rig.mixer, nullptr) == SONARE_OK);
+  rig.process(0.25f);
+  SonareMixMeterSnapshot quiet{};
+  REQUIRE(sonare_mixer_master_meter(rig.mixer, &quiet) == SONARE_OK);
+  REQUIRE(quiet.seq > 0);
+
+  SonareMixerMasterMeterConfig config{};
+  sonare_mixer_master_meter_config_init(&config);
+  config.enabled = 0;
+  REQUIRE(sonare_mixer_configure_master_meter(rig.mixer, &config) == SONARE_OK);
+  rig.process(1.0f);
+  SonareMixMeterSnapshot frozen{};
+  REQUIRE(sonare_mixer_master_meter(rig.mixer, &frozen) == SONARE_OK);
+  CHECK(frozen.seq == quiet.seq);
+  CHECK(frozen.peak_db_l == quiet.peak_db_l);
+
+  // Enabling again starts a new reading: the loud block before it is not in it.
+  REQUIRE(sonare_mixer_configure_master_meter(rig.mixer, nullptr) == SONARE_OK);
+  rig.process(0.25f);
+  SonareMixMeterSnapshot again{};
+  REQUIRE(sonare_mixer_master_meter(rig.mixer, &again) == SONARE_OK);
+  CHECK_THAT(again.peak_db_l, WithinAbs(quiet.peak_db_l, 0.5f));
+  CHECK(again.max_true_peak_db < -6.0f);
+}
+
+TEST_CASE("Master meter switches leave their measurements at the floor", "[mixing][capi]") {
+  MasterMeterRig rig;
+  SonareMixerMasterMeterConfig config{};
+  sonare_mixer_master_meter_config_init(&config);
+  config.measure_lufs = 0;
+  config.measure_true_peak = 0;
+  REQUIRE(sonare_mixer_configure_master_meter(rig.mixer, &config) == SONARE_OK);
+  for (int pass = 0; pass < 48; ++pass) rig.process(0.5f);
+  SonareMixMeterSnapshot snap{};
+  REQUIRE(sonare_mixer_master_meter(rig.mixer, &snap) == SONARE_OK);
+  CHECK(snap.peak_db_l > -7.0f);
+  CHECK(snap.momentary_lufs == sonare::constants::kFloorDb);
+  CHECK(snap.true_peak_db_l == sonare::constants::kFloorDb);
 }
 
 TEST_CASE("Mixing C API exposes scene preset JSON", "[mixing][capi]") {

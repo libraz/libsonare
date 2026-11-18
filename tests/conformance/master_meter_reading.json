@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "description": "Master-output meter readings every surface must reproduce on one input. Each case builds a mixer from `scene` at `sampleRate` with blocks of `blockSize` frames, turns the master meter on with loudness off and `truePeakOversample`, and processes `blocks` blocks on the one strip. Sample n of the strip's left input is amplitude*sin(2*pi*frequencyHz*n/sampleRate + phaseRad), computed in double and rounded to float; the right input is that double value times rightGain, rounded to float. `expected` is the meter read after the last block, `expectedAfterFlush` after flushing the meters. Readings are in dBFS except correlation; compare within `toleranceDb` (dB fields) and `toleranceCorrelation`.",
+  "toleranceDb": 0.001,
+  "toleranceCorrelation": 0.0001,
+  "cases": [
+    {
+      "name": "a 997 Hz tone with the right channel 6 dB down, 4x",
+      "scene": "{\"version\":1,\"strips\":[{\"id\":\"a\"}],\"buses\":[{\"id\":\"master\",\"role\":\"master\"}],\"connections\":[]}",
+      "sampleRate": 48000,
+      "blockSize": 256,
+      "blocks": 40,
+      "frequencyHz": 997.0,
+      "amplitude": 0.5,
+      "phaseRad": 0.0,
+      "rightGain": 0.5,
+      "truePeakOversample": 4,
+      "expected": {
+        "peakDbL": -6.0206,
+        "peakDbR": -12.0412,
+        "rmsDbL": -9.1458,
+        "rmsDbR": -15.1664,
+        "correlation": 1.0,
+        "truePeakDbL": -6.0206,
+        "truePeakDbR": -12.0412
+      },
+      "expectedAfterFlush": {
+        "peakDbL": -6.0206,
+        "peakDbR": -12.0412,
+        "rmsDbL": -9.1458,
+        "rmsDbR": -15.1664,
+        "correlation": 1.0,
+        "truePeakDbL": -6.0206,
+        "truePeakDbR": -12.0412
+      }
+    },
+    {
+      "name": "a quarter-rate tone whose true peak sits between samples, 8x",
+      "scene": "{\"version\":1,\"strips\":[{\"id\":\"a\"}],\"buses\":[{\"id\":\"master\",\"role\":\"master\"}],\"connections\":[]}",
+      "sampleRate": 48000,
+      "blockSize": 256,
+      "blocks": 40,
+      "frequencyHz": 12000.0,
+      "amplitude": 0.5,
+      "phaseRad": 0.7853981633974483,
+      "rightGain": 1.0,
+      "truePeakOversample": 8,
+      "expected": {
+        "peakDbL": -9.0309,
+        "peakDbR": -9.0309,
+        "rmsDbL": -9.0309,
+        "rmsDbR": -9.0309,
+        "correlation": 1.0,
+        "truePeakDbL": -6.0638,
+        "truePeakDbR": -6.0638
+      },
+      "expectedAfterFlush": {
+        "peakDbL": -9.0309,
+        "peakDbR": -9.0309,
+        "rmsDbL": -9.0309,
+        "rmsDbR": -9.0309,
+        "correlation": 1.0,
+        "truePeakDbL": -5.9804,
+        "truePeakDbR": -5.9804
+      }
+    }
+  ]
+}

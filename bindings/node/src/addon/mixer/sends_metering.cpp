@@ -177,6 +177,40 @@ Napi::Value MixerWrap::BusMeter(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value MixerWrap::ConfigureMeter(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
+  bool enabled = false;
+  if (!sonare_node::RequiredBoolValue(env, info[0], "enabled", &enabled)) return env.Undefined();
+  SonareMixerMasterMeterConfig config{};
+  sonare_mixer_master_meter_config_init(&config);
+  config.enabled = enabled ? 1 : 0;
+  config.measure_lufs = 0;
+  if (enabled && !sonare_node::RequiredIntValue(env, info[1], "truePeakOversample",
+                                                &config.true_peak_oversample)) {
+    return env.Undefined();
+  }
+  const SonareError err = sonare_mixer_configure_master_meter(mixer_, &config);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err, "failed to configure the master meter: ");
+  }
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value MixerWrap::MeterSnapshot(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
+  SonareMixMeterSnapshot snapshot{};
+  // The read carries SONARE_C_RT_API_ENTRY and records no message of its own.
+  sonare_node::ThrowIfRealtimeError(env, sonare_mixer_master_meter(mixer_, &snapshot));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return MeterSnapshotToObject(env, snapshot);
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value MixerWrap::BusNonFiniteDiscardCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
