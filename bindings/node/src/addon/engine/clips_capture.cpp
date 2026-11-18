@@ -172,7 +172,7 @@ bool ReadClip(Napi::Env env, const Napi::Value& entry, ClipStorage* out_storage,
   }
   if (!RequiredDoubleProperty(env, obj, "startPpq", &clip.start_ppq)) return false;
   clip.clip_offset_samples = Int64Property(obj, "clipOffsetSamples", 0);
-  clip.length_samples = Int64Property(obj, "lengthSamples", static_cast<int64_t>(num_samples));
+  clip.length_samples = Int64Property(obj, "lengthSamples", kZeroIsSentinel);
   clip.loop = BoolProperty(obj, "loop", false) ? 1 : 0;
   clip.gain = FloatProperty(obj, "gain", 1.0f);
   clip.fade_in_samples = Int64Property(obj, "fadeInSamples", 0);
