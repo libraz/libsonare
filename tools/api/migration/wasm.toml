@@ -331,6 +331,41 @@ changed = "constructor without a Worker throws SonareError NotSupported instead 
 domain = "project"
 rule = "error-class-by-cause"
 test = "bindings/wasm/tests/vocal_edit_worker_client_node.test.ts::has no global Worker"
+[[entry]]
+kind = "method"
+old = "VocalEditSession.constructor"
+removed = "the constructor is protected; open a session with createVocalEditSession or restoreVocalEditSession"
+domain = "project"
+rule = "construction"
+
+[[entry]]
+kind = "method"
+old = "VocalEditDraft.constructor"
+removed = "the constructor is protected; open a draft with VocalEditSession.beginEdit"
+domain = "project"
+rule = "construction"
+
+[[entry]]
+kind = "method"
+old = "VocalRenderSnapshot.constructor"
+removed = "the constructor is protected; take a snapshot with captureRenderSnapshot on a VocalEditSession or VocalEditDraft"
+domain = "project"
+rule = "construction"
+
+[[entry]]
+kind = "method"
+old = "VocalRenderJob.constructor"
+removed = "the constructor is protected; start a job with VocalRenderSnapshot.beginRenderJob"
+domain = "project"
+rule = "construction"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerSession.constructor"
+removed = "the constructor is protected; open a session with VocalEditWorkerClient.create or VocalEditWorkerClient.restore"
+domain = "project"
+rule = "construction"
+
 
 [[entry]]
 kind = "function"
