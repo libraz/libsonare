@@ -77,6 +77,7 @@ from ._runtime import (
     _narrow_double,
     _narrow_float,
     _narrow_int,
+    _optional_positive_int,
     _require_export,
     _to_c_float_array,
     _to_c_int,
@@ -98,16 +99,6 @@ if TYPE_CHECKING:
 _LOOP_RECORDING_DROP_PARTIAL_TAIL = 1
 _TAKE_KEYS = ("id", "source_id", "source_offset_ppq", "name")
 _COMP_SEGMENT_KEYS = ("start_ppq", "end_ppq", "take_id", "crossfade_ppq")
-
-
-def _optional_id(value: object, name: str) -> int:
-    """Map an optional take or source id to the C field; ``None`` is the C ``0`` (none).
-
-    Neither id space allocates 0, so an explicit 0 is refused rather than read as none.
-    """
-    if value is None:
-        return 0
-    return _narrow_int(value, name, 1, _UINT32_MAX)
 
 
 _STEM_KEYS = ("name", "layout", "planar_samples", "role", "start_frame")
@@ -547,14 +538,23 @@ class _ProjectEditMixin:
             )
         )
 
-    def move_clip(self, clip_id: int, new_start_ppq: float, new_track_id: int = 0) -> None:
-        """Move a clip to ``new_start_ppq`` (and optionally ``new_track_id``)."""
+    def move_clip(
+        self, clip_id: int, new_start_ppq: float, new_track_id: int | None = None
+    ) -> None:
+        """Move a clip to ``new_start_ppq``, onto ``new_track_id`` when given.
+
+        ``None`` keeps the clip on its track; an explicit 0 is refused, since no
+        track takes that id.
+        """
         _check(
             _get_lib().sonare_project_move_clip(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
                 _narrow_double(new_start_ppq, "new_start_ppq"),
-                _to_c_uint32(new_track_id, "new_track_id"),
+                _to_c_uint32(
+                    _optional_positive_int(new_track_id, "new_track_id", _UINT32_MAX),
+                    "new_track_id",
+                ),
             )
         )
 
@@ -610,8 +610,10 @@ class _ProjectEditMixin:
             take = _mapping_keys(item, _TAKE_KEYS, where)
             if take.get("id") is None:
                 raise SonareValueError(f"{where}.id is required")
-            c_takes[i].id = _optional_id(take["id"], f"{where}.id")
-            c_takes[i].source_id = _optional_id(take.get("source_id"), f"{where}.source_id")
+            c_takes[i].id = _optional_positive_int(take["id"], f"{where}.id", _UINT32_MAX)
+            c_takes[i].source_id = _optional_positive_int(
+                take.get("source_id"), f"{where}.source_id", _UINT32_MAX
+            )
             c_takes[i].source_offset_ppq = _narrow_double(
                 take.get("source_offset_ppq", 0.0), f"{where}.source_offset_ppq"
             )
@@ -633,7 +635,9 @@ class _ProjectEditMixin:
                 c_takes if take_items else None,
                 len(take_items),
                 _to_c_uint32(
-                    _optional_id(active_take_id, "set_clip_takes: active_take_id"),
+                    _optional_positive_int(
+                        active_take_id, "set_clip_takes: active_take_id", _UINT32_MAX
+                    ),
                     "set_clip_takes: active_take_id",
                 ),
             )
@@ -669,8 +673,10 @@ class _ProjectEditMixin:
                 end_ppq, f"set_clip_comp_segments: segments[{i}].end_ppq"
             )
             # Absent or None falls back to the base/active take.
-            c_segments[i].take_id = _optional_id(
-                segment.get("take_id"), f"set_clip_comp_segments: segments[{i}].take_id"
+            c_segments[i].take_id = _optional_positive_int(
+                segment.get("take_id"),
+                f"set_clip_comp_segments: segments[{i}].take_id",
+                _UINT32_MAX,
             )
             c_segments[i].crossfade_ppq = _narrow_double(
                 crossfade_ppq, f"set_clip_comp_segments: segments[{i}].crossfade_ppq"

@@ -425,12 +425,8 @@ class EngineMetronomeConfig:
     """Linear gain of the other beat clicks."""
     accent_gain: float = 0.7
     """Linear gain of the downbeat click."""
-    # Explicit click length in samples (0..384000). Zero selects the
-    # sample-rate-derived duration below.
-    click_samples: int = 0
-    """Click length in samples, 0..384000; 0 uses :attr:`click_sec`."""
-    # Click duration in seconds (0..1); used when click_samples is 0. 0.0 selects
-    # the engine default (2 ms).
+    click_samples: int | None = None
+    """Click length in samples, 1..384000; None uses :attr:`click_sec`."""
     click_sec: float = 0.0
     """Click length in seconds, 0..1; 0 selects the engine default (2 ms)."""
 
@@ -445,8 +441,8 @@ class EngineClip:
     """Per-channel sample data; None when the clip is read through :attr:`page_provider`."""
     start_ppq: float
     """Clip start position in PPQ."""
-    track_id: int = 0
-    """Id of the track the clip plays on."""
+    track_id: int | None = None
+    """Id of the track the clip plays on; None plays it on no track lane."""
     length_samples: int | None = None
     """Playback length in frames; None plays to the end of the source."""
     clip_offset_samples: int = 0
@@ -507,10 +503,10 @@ class EngineMidiClipSchedule:
 
     events: list[EngineMidiEvent]
     """Events of the clip, with absolute render frames."""
-    id: int = 0
-    """Clip id."""
-    track_id: int = 0
-    """Id of the track the clip belongs to."""
+    id: int | None = None
+    """Clip id; None leaves the clip unidentified."""
+    track_id: int | None = None
+    """Id of the track the clip belongs to; None is no track."""
     # MIDI destination to route to. None (the default) falls back to track_id;
     # an explicit value, including 0, is forwarded unchanged.
     destination_id: int | None = None
@@ -519,18 +515,18 @@ class EngineMidiClipSchedule:
     """Clip start position in samples."""
     start_ppq: float = 0.0
     """Clip start position in PPQ."""
-    length_samples: int = 0
-    """Clip length in samples; zero or negative is open-ended."""
+    length_samples: int | None = None
+    """Clip length in samples; None is open-ended."""
     loop: bool = False
     """Whether the clip loops."""
-    loop_length_samples: int = 0
-    """Loop length in samples."""
+    loop_length_samples: int | None = None
+    """Loop length in samples, read only when :attr:`loop` is set; None is no loop length."""
     # Linear gain applied to the destination instrument's rendered audio while
     # this clip is the most recently started active clip on it.
     gain: float = 1.0
     """Linear gain applied to the destination instrument's audio while the clip is active."""
     # Linear fade lengths over the clip's full length (not per internal loop);
-    # fade_out_samples must be 0 for an open-ended clip (length_samples <= 0).
+    # fade_out_samples must be 0 for an open-ended clip (length_samples None).
     fade_in_samples: int = 0
     """Linear fade-in length in samples over the clip's full length."""
     fade_out_samples: int = 0
@@ -574,9 +570,9 @@ class EngineBounceOptions:
     ``num_channels`` is required. An omitted ``block_size`` is the default
     offline block, capped at the engine's prepared maximum; an explicit 0 is
     refused. ``source_sample_rate`` and ``target_sample_rate`` both default to
-    ``0``: the source is the engine's prepared rate, and the target is the
-    source (no resampling). A non-zero ``source_sample_rate`` must equal the
-    prepared rate.
+    ``None``: the source is the engine's prepared rate, and the target is the
+    source (no resampling). A given ``source_sample_rate`` must equal the
+    prepared rate, and an explicit 0 is refused for either.
     """
 
     total_frames: int
@@ -585,10 +581,10 @@ class EngineBounceOptions:
     """Number of channels rendered."""
     block_size: int | None = None
     """Offline render block in frames; None selects the default block."""
-    target_sample_rate: int = 0
-    """Output sample rate in Hz; 0 keeps the source rate (no resampling)."""
-    source_sample_rate: int = 0
-    """Rate the engine renders at, in Hz; 0 is the engine's prepared rate."""
+    target_sample_rate: int | None = None
+    """Output sample rate in Hz; None keeps the source rate (no resampling)."""
+    source_sample_rate: int | None = None
+    """Rate the engine renders at, in Hz; None is the engine's prepared rate."""
     normalize_lufs: bool = False
     """Whether to normalize the result to :attr:`target_lufs`."""
     target_lufs: float = -14.0
@@ -677,8 +673,8 @@ class EngineGraphNode:
     """Builtin processor type (:data:`EngineGraphNodeType`)."""
     gain_db: float = 0.0
     """Gain in dB, applied by the ``"gain"`` node type."""
-    num_ports: int = 0
-    """Port count of the node; 0 uses the spec's ``num_channels``."""
+    num_ports: int | None = None
+    """Port count of the node; None uses the spec's ``num_channels``."""
 
 
 @dataclass(frozen=True, slots=True)

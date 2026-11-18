@@ -12083,3 +12083,99 @@ changed = "an explicit 0 (or any value below 1) raises SonareValueError instead 
 domain = "project"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_take_alignment.py::test_omission_is_the_library_value_and_zero_is_refused"
+
+[[entry]]
+kind = "option"
+old = "Project.move_clip(new_track_id)"
+changed = "int | None, default None: None keeps the clip on its track and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_move_clip_keeps_the_track_when_none_and_refuses_zero"
+
+[[entry]]
+kind = "field"
+old = "BuiltinSynthConfig.polyphony"
+changed = "int | None, default None: None selects 16 voices and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_zero_sentinel_narrowing.py::test_a_fractional_voice_count_is_refused_rather_than_read_as_the_default"
+
+[[entry]]
+kind = "field"
+old = "Sf2InstrumentConfig.polyphony"
+changed = "int | None, default None: None selects 48 voices and an explicit 0 raises SonareValueError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_zero_sentinel_narrowing.py::test_a_fractional_voice_count_is_refused_rather_than_read_as_the_default"
+
+[[entry]]
+kind = "field"
+old = "EngineMetronomeConfig.click_samples"
+changed = "int | None, default None: None derives the length from click_sec, an explicit 0 raises SonareValueError, and metronome() reads an unset length back as None"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_metronome_click_length_reads_back_none_when_omitted"
+
+[[entry]]
+kind = "field"
+old = "EngineGraphNode.num_ports"
+changed = "int | None, default None: None takes the spec's num_channels and an explicit 0 raises SonareValueError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_zero_sentinel_narrowing.py::test_a_fractional_port_count_is_refused_rather_than_read_as_the_specs_channels"
+
+[[entry]]
+kind = "field"
+old = "EngineClip.track_id"
+changed = "int | None, default None: None plays the clip on no track lane and an explicit 0 raises SonareValueError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_engine_clip_track_is_none_when_unset_and_zero_is_refused"
+
+[[entry]]
+kind = "field"
+old = "EngineMidiClipSchedule.id"
+changed = "int | None, default None: None leaves the clip unidentified and an explicit 0 raises SonareValueError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_midi_schedule_refuses_zero_where_none_is_absence"
+
+[[entry]]
+kind = "field"
+old = "EngineMidiClipSchedule.track_id"
+changed = "int | None, default None: None is no track and an explicit 0 raises SonareValueError; an omitted destination_id still falls back to it"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_midi_schedule_refuses_zero_where_none_is_absence"
+
+[[entry]]
+kind = "field"
+old = "EngineMidiClipSchedule.length_samples"
+changed = "int | None, default None: None is open-ended, and 0 or a negative length raises SonareValueError instead of reading as open-ended"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_midi_schedule_refuses_zero_where_none_is_absence"
+
+[[entry]]
+kind = "field"
+old = "EngineMidiClipSchedule.loop_length_samples"
+changed = "int | None, default None: None is no loop length, a given length is read only with loop=True, and 0 or a negative length raises SonareValueError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_midi_schedule_refuses_zero_where_none_is_absence"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceOptions.target_sample_rate"
+changed = "int | None, default None: None keeps the source rate and an explicit 0 raises SonareValueError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_bounce_rates_are_none_when_omitted_and_zero_is_refused"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceOptions.source_sample_rate"
+changed = "int | None, default None: None is the engine's prepared rate and an explicit 0 raises SonareValueError"
+domain = "engine"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_absent_counts_and_ids.py::test_bounce_rates_are_none_when_omitted_and_zero_is_refused"

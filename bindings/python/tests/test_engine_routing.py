@@ -434,7 +434,6 @@ def test_engine_midi_clip_fade_out_on_open_ended_clip_is_refused() -> None:
             id=1,
             track_id=_MIDI_DESTINATION,
             destination_id=_MIDI_DESTINATION,
-            length_samples=0,
             events=events,
             fade_out_samples=256,
         )
@@ -449,7 +448,6 @@ def test_engine_midi_clip_fade_out_on_open_ended_clip_is_refused() -> None:
                     id=1,
                     track_id=_MIDI_DESTINATION,
                     destination_id=_MIDI_DESTINATION,
-                    length_samples=0,
                     events=events,
                     fade_in_samples=256,
                 )

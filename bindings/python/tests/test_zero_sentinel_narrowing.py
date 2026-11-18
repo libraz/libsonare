@@ -286,9 +286,9 @@ def test_a_fractional_comp_take_id_is_refused_rather_than_read_as_the_base_take(
 
 
 def test_a_fractional_click_length_is_refused_rather_than_read_as_derived_from_seconds() -> None:
-    """0 on click_samples means "derive the click length from click_sec"."""
+    """None on click_samples derives the click length from click_sec; 0 is refused."""
 
-    def stored(**kwargs) -> int:
+    def stored(**kwargs) -> int | None:
         with ls.RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
             engine.set_metronome(
                 ls.EngineMetronomeConfig(enabled=True, beat_gain=0.5, accent_gain=0.8, **kwargs)
@@ -296,9 +296,9 @@ def test_a_fractional_click_length_is_refused_rather_than_read_as_derived_from_s
             return engine.metronome().click_samples
 
     omitted = stored()
-    assert stored(click_samples=0) == omitted
-    assert stored(click_samples=64) != omitted  # positive control
-    for value in (0.5, 64.5):
+    assert omitted is None
+    assert stored(click_samples=64) == 64  # positive control
+    for value in (0, 0.5, 64.5):
         with pytest.raises(SonareValueError, match="click_samples"):
             stored(click_samples=value)
     assert stored() == omitted
@@ -343,7 +343,7 @@ def test_a_fractional_output_bus_is_refused_rather_than_read_as_the_master_mix()
 
 
 def test_a_fractional_port_count_is_refused_rather_than_read_as_the_specs_channels() -> None:
-    """0 on a graph node's num_ports takes the spec's channel count."""
+    """None on a graph node's num_ports takes the spec's channel count; 0 is refused."""
 
     def build(num_ports) -> tuple[float, float]:
         node_kwargs = {} if num_ports is None else {"num_ports": num_ports}
@@ -371,12 +371,12 @@ def test_a_fractional_port_count_is_refused_rather_than_read_as_the_specs_channe
             return round(out[0][0], 4), round(out[1][0], 4)
 
     omitted = build(None)
-    assert build(0) == omitted
-    # Positive control: one port cannot carry the second connection, so a value
-    # that is not the sentinel changes the outcome rather than being ignored.
+    assert build(2) == omitted  # the spec's channel count, given explicitly
+    # Positive control: one port cannot carry the second connection, so a given
+    # value changes the outcome rather than being ignored.
     with pytest.raises(ls.SonareError):
         build(1)
-    for value in (0.5, 1.5):
+    for value in (0, 0.5, 1.5):
         with pytest.raises(SonareValueError, match="num_ports"):
             build(value)
     assert build(None) == omitted
@@ -392,7 +392,7 @@ def test_a_fractional_port_count_is_refused_rather_than_read_as_the_specs_channe
 def test_a_fractional_voice_count_is_refused_rather_than_read_as_the_default(
     binder, config, extra, default_voices
 ) -> None:
-    """Both instrument configs read 0 on polyphony as "keep the default voice cap"."""
+    """Both instrument configs read None on polyphony as the default voice cap; 0 is refused."""
     frames = 256
     chord = (60, 64, 67, 71, 74, 77, 81)  # seven at once, so a lower cap is audible
 
@@ -422,10 +422,9 @@ def test_a_fractional_voice_count_is_refused_rather_than_read_as_the_default(
             return _digest(block)
 
     omitted = rendered(None)
-    assert rendered(0) == omitted
     assert rendered(default_voices) == omitted  # the field's documented default
     assert rendered(1) != omitted  # positive control: the cap steals voices
-    for value in (0.5, 1.5):
+    for value in (0, 0.5, 1.5):
         with pytest.raises(SonareValueError, match=f"{config}: polyphony must be an integer"):
             rendered(value)
     assert rendered(None) == omitted

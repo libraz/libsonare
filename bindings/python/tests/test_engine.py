@@ -45,17 +45,13 @@ def test_engine_rejects_hostile_tempo_and_metronome_lengths() -> None:
         with pytest.raises(SonareError):
             engine.set_metronome(EngineMetronomeConfig(enabled=True, click_samples=2_000_000_000))
         with pytest.raises(SonareError):
-            engine.set_metronome(
-                EngineMetronomeConfig(enabled=True, click_samples=0, click_sec=2.0)
-            )
+            engine.set_metronome(EngineMetronomeConfig(enabled=True, click_sec=2.0))
         with pytest.raises(SonareError):
-            engine.set_metronome(
-                EngineMetronomeConfig(enabled=True, click_samples=0, click_sec=math.nan)
-            )
+            engine.set_metronome(EngineMetronomeConfig(enabled=True, click_sec=math.nan))
 
 
-def test_metronome_default_click_uses_sample_rate_sentinel() -> None:
-    assert EngineMetronomeConfig(enabled=True).click_samples == 0
+def test_metronome_default_click_length_is_absent() -> None:
+    assert EngineMetronomeConfig(enabled=True).click_samples is None
 
 
 def test_engine_transport_state_and_live_parameters() -> None:

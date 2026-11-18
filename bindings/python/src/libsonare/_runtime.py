@@ -863,6 +863,17 @@ def _to_c_uint32(value: object, name: str) -> ctypes.c_uint32:
     return ctypes.c_uint32(_narrow_int(value, name, 0, _UINT32_MAX))
 
 
+def _optional_positive_int(value: object, name: str, hi: int) -> int:
+    """Map an optional count or id onto a C field whose ``0`` means "not given".
+
+    ``None`` is that ``0``. An explicit 0 is refused rather than read as absent,
+    because 0 is not a value the field can hold for itself.
+    """
+    if value is None:
+        return 0
+    return _narrow_int(value, name, 1, hi)
+
+
 def _to_c_uint16(value: object, name: str) -> ctypes.c_uint16:
     """Narrow a caller-supplied integer onto ``uint16_t``; see :func:`_narrow_int`."""
     return ctypes.c_uint16(_narrow_int(value, name, 0, _UINT16_MAX))

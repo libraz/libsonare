@@ -62,6 +62,7 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _narrow_int,
+    _optional_positive_int,
     _planar_channel_arrays,
     _require_instance,
     _resolve_render_frame,
@@ -391,10 +392,11 @@ class _EngineIoMixin:
         ``target_sample_rate`` differ both the source and the resampled length
         are checked, so the longer of the two is what binds.
 
-        ``source_sample_rate`` defaults to ``0``, the engine's prepared rate, and
-        a non-zero value must equal it or the call raises :class:`SonareValueError`.
-        ``target_sample_rate`` defaults to ``0``, the source rate (no
+        ``source_sample_rate`` defaults to ``None``, the engine's prepared rate,
+        and a given value must equal it or the call raises :class:`SonareValueError`.
+        ``target_sample_rate`` defaults to ``None``, the source rate (no
         resampling); the result's ``sample_rate`` is the rate of the output.
+        An explicit 0 is refused for either.
 
         Render longer material in chunks through
         ``render_offline(..., finalize=False)``.
@@ -415,8 +417,12 @@ class _EngineIoMixin:
         raw_options.total_frames = options.total_frames
         raw_options.block_size = _resolve_zero_default(options.block_size, "options.block_size")
         raw_options.num_channels = options.num_channels
-        raw_options.target_sample_rate = options.target_sample_rate
-        raw_options.source_sample_rate = options.source_sample_rate
+        raw_options.target_sample_rate = _optional_positive_int(
+            options.target_sample_rate, "options.target_sample_rate", _C_INT_MAX
+        )
+        raw_options.source_sample_rate = _optional_positive_int(
+            options.source_sample_rate, "options.source_sample_rate", _C_INT_MAX
+        )
         raw_options.normalize_lufs = 1 if options.normalize_lufs else 0
         raw_options.target_lufs = _narrow_double(options.target_lufs, "options.target_lufs")
         raw_options.dither = options.dither

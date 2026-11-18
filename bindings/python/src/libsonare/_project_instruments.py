@@ -118,6 +118,7 @@ from ._project_synth import (
     synth_enum_tables as synth_enum_tables,
 )
 from ._runtime import (
+    _C_INT_MAX,
     SonareBuiltinSynthConfig,
     SonareInstrumentCallbacks,
     SonareInstrumentOnEventCallback,
@@ -132,9 +133,9 @@ from ._runtime import (
     _check,
     _get_lib,
     _joined_names,
+    _optional_positive_int,
     _to_c_int,
     _utf8_arg,
-    _validate_c_int_field,
 )
 from ._types_capabilities import SynthParamInfo, _from_wire
 
@@ -147,8 +148,8 @@ class BuiltinSynthConfig:
     """Patch for the built-in polyphonic oscillator synth (see
     :meth:`Project.bounce_with_builtin_instrument`).
 
-    Every numeric field uses "0 (or non-positive) => sensible default", so a
-    default-constructed config is the default sine patch; override only what you
+    Every float field uses "0 => sensible default" and ``polyphony`` uses
+    ``None``, so a default-constructed config is the default sine patch; override only what you
     need. ``waveform`` is ``"sine"``, ``"saw"`` (also spelled ``"sawtooth"``),
     ``"square"`` or ``"triangle"``. It is the one field with no "nearest
     sensible value": another string raises :class:`SonareValueError` and a
@@ -171,8 +172,8 @@ class BuiltinSynthConfig:
     """ADSR sustain level in [0, 1]; 0 selects 0.7."""
     release_ms: float = 0.0
     """ADSR release in ms; 0 selects 120."""
-    polyphony: int = 0
-    """Maximum simultaneous voices; 0 selects 16, clamped to [1, 64]."""
+    polyphony: int | None = None
+    """Maximum simultaneous voices, clamped to [1, 64]; None selects 16."""
 
     def _to_c(self) -> SonareBuiltinSynthConfig:
         return SonareBuiltinSynthConfig(
@@ -182,10 +183,9 @@ class BuiltinSynthConfig:
             decay_ms=float(self.decay_ms),
             sustain=float(self.sustain),
             release_ms=float(self.release_ms),
-            # Narrowed rather than coerced: int(0.5) is the 0 this field reads as
-            # "keep the default 16", so a fractional voice count would run at the
-            # default and report success.
-            polyphony=_validate_c_int_field("BuiltinSynthConfig", self.polyphony, "polyphony"),
+            polyphony=_optional_positive_int(
+                self.polyphony, "BuiltinSynthConfig: polyphony", _C_INT_MAX
+            ),
         )
 
 
@@ -199,9 +199,9 @@ class Sf2InstrumentConfig:
     """Patch for the SoundFont (SF2) player (see
     :meth:`Project.bounce_with_sf2_instrument`).
 
-    Every field uses "0 (or non-positive) => sensible default" (gain 0.5,
-    polyphony 48). ``prefer_model_for_modeled_families`` defaults to false,
-    retaining the established SoundFont-first behavior.
+    ``gain`` 0 selects the default 0.5 and ``polyphony`` None selects 48.
+    ``prefer_model_for_modeled_families`` defaults to false, retaining the
+    established SoundFont-first behavior.
 
     ``clear_bank_rig`` removes the stage the bank binds after a voice — the
     amplifier and cabinet an electric guitar is never heard without. It defaults
@@ -216,8 +216,8 @@ class Sf2InstrumentConfig:
 
     gain: float = 0.0
     """Master output gain (linear); 0 selects the default 0.5."""
-    polyphony: int = 0
-    """Maximum simultaneous voices; 0 selects 48, clamped to [1, 64]."""
+    polyphony: int | None = None
+    """Maximum simultaneous voices, clamped to [1, 64]; None selects 48."""
     prefer_model_for_modeled_families: bool = False
     """True selects the dedicated melodic models; drums stay SF2-first."""
     clear_bank_rig: bool = False
@@ -229,8 +229,9 @@ class Sf2InstrumentConfig:
         return SonareSf2InstrumentConfig(
             struct_version=4,
             gain=float(self.gain),
-            # Same sentinel as BuiltinSynthConfig.polyphony, at a different default (48).
-            polyphony=_validate_c_int_field("Sf2InstrumentConfig", self.polyphony, "polyphony"),
+            polyphony=_optional_positive_int(
+                self.polyphony, "Sf2InstrumentConfig: polyphony", _C_INT_MAX
+            ),
             prefer_model_for_modeled_families=int(self.prefer_model_for_modeled_families),
             clear_bank_rig=int(self.clear_bank_rig),
             gs_efx_realization=_gs_efx_realization_value(self.gs_efx_realization),

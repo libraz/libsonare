@@ -12,6 +12,7 @@ from ._ffi_types_core import SonareAutomationPoint
 from ._narrowing import _narrow_double
 from ._runtime import (
     _AUTOMATION_CURVES,
+    _C_INT_MAX,
     _UINT32_MAX,
     AutomationCurve,
     EngineClip,
@@ -42,11 +43,11 @@ from ._runtime import (
     SonareValueError,
     _curve_value,
     _from_c_float_array,
+    _optional_positive_int,
     _planar_channel_arrays,
     _require_instance,
     _token_ordinal,
     _utf8_arg,
-    _validate_c_int_field,
     _warp_mode_value,
 )
 from ._types_engine import (
@@ -186,11 +187,8 @@ def _metronome_to_c(config: EngineMetronomeConfig) -> SonareEngineMetronomeConfi
     raw.enabled = int(config.enabled)
     raw.beat_gain = _narrow_double(config.beat_gain, "config.beat_gain")
     raw.accent_gain = _narrow_double(config.accent_gain, "config.accent_gain")
-    # Narrowed rather than coerced: int(0.5) is the 0 this field reads as "derive
-    # the length from click_sec", so a fractional length would run at the
-    # derived one and report success.
-    raw.click_samples = _validate_c_int_field(
-        "set_metronome", config.click_samples, "click_samples"
+    raw.click_samples = _optional_positive_int(
+        config.click_samples, "set_metronome: click_samples", _C_INT_MAX
     )
     raw.click_sec = _narrow_double(config.click_sec, "config.click_sec")
     return raw
@@ -201,7 +199,7 @@ def _metronome_from_c(raw: SonareEngineMetronomeConfig) -> EngineMetronomeConfig
         enabled=bool(raw.enabled),
         beat_gain=float(raw.beat_gain),
         accent_gain=float(raw.accent_gain),
-        click_samples=int(raw.click_samples),
+        click_samples=int(raw.click_samples) or None,
         click_sec=float(raw.click_sec),
     )
 
@@ -233,7 +231,7 @@ def _clips_to_c(
             # caller value; int() would truncate a fraction past it. loop is the
             # one exception -- it is a documented bool, spelled 0/1 here.
             raw.id = clip.id
-            raw.track_id = clip.track_id
+            raw.track_id = _optional_positive_int(clip.track_id, "clip.track_id", _UINT32_MAX)
             raw.channels = None
             raw.num_channels = 0
             raw.num_samples = 0
@@ -261,7 +259,7 @@ def _clips_to_c(
         raw = SonareEngineClip()
         # As above: unconverted so the struct narrows, loop spelled 0/1.
         raw.id = clip.id
-        raw.track_id = clip.track_id
+        raw.track_id = _optional_positive_int(clip.track_id, "clip.track_id", _UINT32_MAX)
         raw.channels = ctypes.cast(ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float)))
         raw.num_channels = len(arrays)
         raw.num_samples = num_samples
@@ -299,10 +297,7 @@ def _graph_node_to_c(node: EngineGraphNode) -> SonareEngineGraphNode:
     raw.id = _fixed_bytes(node.id, 64, "id")
     raw.type = _token_ordinal(node.type, _GRAPH_NODE_TYPES, "graph node type")
     raw.gain_db = _narrow_double(node.gain_db, "node.gain_db")
-    # Narrowed rather than coerced: int(0.5) is the 0 this field reads as "take
-    # the spec's channel count", so a fractional port count would build the node
-    # at that count and report success.
-    raw.num_ports = _validate_c_int_field("set_graph", node.num_ports, "num_ports")
+    raw.num_ports = _optional_positive_int(node.num_ports, "set_graph: num_ports", _C_INT_MAX)
     return raw
 
 

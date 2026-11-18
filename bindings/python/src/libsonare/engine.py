@@ -67,6 +67,7 @@ from ._narrowing import _narrow_double, _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
+    _INT64_MAX,
     _METER_SEGMENT_KEYS,
     _TEMPO_SEGMENT_KEYS,
     _UINT8_MAX,
@@ -79,6 +80,7 @@ from ._runtime import (
     _mapping_keys,
     _max_block_size,
     _narrow_int,
+    _optional_positive_int,
     _require_instance,
     _resolve_render_frame,
     _to_c_float,
@@ -910,15 +912,18 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                     event.sysex_handle,
                 )
             event_arrays.append(raw_events)
+            track_id = _optional_positive_int(clip.track_id, "clip.track_id", _UINT32_MAX)
             raw_clips[index] = _ffi_project.SonareEngineMidiClipSchedule(
-                clip.id,
-                clip.track_id,
+                _optional_positive_int(clip.id, "clip.id", _UINT32_MAX),
+                track_id,
                 clip.start_sample,
                 _narrow_double(clip.start_ppq, "clip.start_ppq"),
-                clip.length_samples,
+                _optional_positive_int(clip.length_samples, "clip.length_samples", _INT64_MAX),
                 1 if clip.loop else 0,
-                clip.loop_length_samples,
-                clip.track_id if clip.destination_id is None else clip.destination_id,
+                _optional_positive_int(
+                    clip.loop_length_samples, "clip.loop_length_samples", _INT64_MAX
+                ),
+                track_id if clip.destination_id is None else clip.destination_id,
                 raw_events,
                 len(clip.events),
                 _narrow_double(clip.gain, "clip.gain"),
