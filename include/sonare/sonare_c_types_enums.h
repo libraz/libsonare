@@ -214,8 +214,6 @@ typedef enum SONARE_ENUM_BASE {
 // Opaque types
 /// Decoded mono audio and its sample rate; released with sonare_audio_destroy.
 typedef struct SonareAudio SonareAudio;
-/// Opaque handle that no function of this ABI creates or accepts.
-typedef struct SonareAnalyzer SonareAnalyzer;
 /// Mixer of channel strips and buses; released with sonare_mixer_destroy.
 typedef struct SonareMixer SonareMixer;
 /// One mixer channel strip, borrowed from its SonareMixer.

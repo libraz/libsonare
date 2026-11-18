@@ -1306,3 +1306,19 @@ old = "SonareMidiEventPod.data1"
 new = "SonareMidiEventPod.word1"
 domain = "project"
 rule = "aliases-removed"
+
+[[entry]]
+kind = "type"
+old = "SonareAnalyzer"
+removed = true
+no_replacement = "no function created or accepted this handle; drop any declaration that names it"
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "function"
+old = "sonare_pitch_yin"
+changed = "drops the unread fill_na argument: sonare_pitch_yin(samples, length, sample_rate, frame_length, hop_length, f0_min_hz, f0_max_hz, threshold, out); sonare_pitch_pyin keeps its fill_na"
+domain = "analysis"
+rule = "individual"
+test = "tests/api/sonare_c_features_extra_test.cpp::sonare_pitch_yin keeps a finite fallback on unvoiced frames"

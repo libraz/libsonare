@@ -466,7 +466,7 @@ SonareError run_pitch_track(const float* samples, size_t length, int sample_rate
 
 SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rate, int frame_length,
                              int hop_length, float f0_min_hz, float f0_max_hz, float threshold,
-                             int fill_na, SonarePitchResult* out) {
+                             SonarePitchResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -476,7 +476,7 @@ SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rat
 
   return run_pitch_track(
       samples, length, sample_rate, frame_length, hop_length, f0_min_hz, f0_max_hz, threshold,
-      fill_na, out,
+      /*fill_na=*/0, out,
       [](const Audio& audio, const PitchConfig& config) { return yin_track(audio, config); });
 }
 

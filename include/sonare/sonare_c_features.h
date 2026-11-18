@@ -807,8 +807,7 @@ void sonare_free_segment_indices(SonareSegmentIndices* result);
 
 /// @brief Estimate f0 with YIN.
 /// @details Like librosa.yin, every complete frame receives a finite frequency estimate;
-/// voiced_flag reports whether the threshold was crossed. fill_na is retained for ABI
-/// compatibility and has no effect on YIN output. Periods are searched from
+/// voiced_flag reports whether the threshold was crossed. Periods are searched from
 /// floor(sample_rate / fmax) to min(ceil(sample_rate / fmin), frame_length - 1), and
 /// the librosa ParameterError cases are rejected with @c SONARE_ERROR_INVALID_PARAMETER:
 /// @p f0_max_hz above Nyquist, and an @p f0_min_hz whose period does not fit the frame
@@ -823,7 +822,7 @@ void sonare_free_segment_indices(SonareSegmentIndices* result);
 /// @param out Receives heap-owned arrays; free with sonare_free_pitch_result.
 SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rate, int frame_length,
                              int hop_length, float f0_min_hz, float f0_max_hz, float threshold,
-                             int fill_na, SonarePitchResult* out);
+                             SonarePitchResult* out);
 /// @brief Estimate f0 with probabilistic YIN (librosa.pyin).
 /// @param threshold UPPER BOUND of pYIN's swept threshold distribution, not a
 ///   single cutoff: the tracker sweeps a ladder of CMNDF thresholds from 0 to

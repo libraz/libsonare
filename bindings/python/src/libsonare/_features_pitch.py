@@ -268,8 +268,6 @@ def pitch_yin(
         _to_c_float(f0_min_hz, "f0_min_hz"),
         _to_c_float(f0_max_hz, "f0_max_hz"),
         _to_c_float(threshold, "threshold"),
-        # The C slot is unread on the YIN path.
-        ctypes.c_int(0),
         ctypes.byref(out),
     )
     _check(rc)

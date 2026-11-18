@@ -625,8 +625,7 @@ Napi::Value SonareWrap::PitchYin(const Napi::CallbackInfo& info) {
   config.hop_length = args.hop_length;
   if (!OptionalFloatArg(env, info, 4, "fmin", config.fmin, &config.fmin) ||
       !OptionalFloatArg(env, info, 5, "fmax", config.fmax, &config.fmax) ||
-      !OptionalFloatArg(env, info, 6, "threshold", config.threshold, &config.threshold) ||
-      !OptionalBoolArg(env, info, 7, "fillNa", config.fill_na, &config.fill_na)) {
+      !OptionalFloatArg(env, info, 6, "threshold", config.threshold, &config.threshold)) {
     return env.Undefined();
   }
 

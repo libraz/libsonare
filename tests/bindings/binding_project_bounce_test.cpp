@@ -2293,11 +2293,11 @@ TEST_CASE("bounce delivers the end-of-render note release to a callback instrume
 namespace {
 
 // Median f0 (Hz) of a mono window via the C-ABI YIN tracker, over voiced frames
-// only (fill_na = 0). Returns 0 when no frame is voiced.
+// only. Returns 0 when no frame is voiced.
 float window_median_hz(const float* samples, size_t length, float fmin, float fmax) {
   SonarePitchResult pitch{};
-  REQUIRE(sonare_pitch_yin(samples, length, 48000, 2048, 512, fmin, fmax, 0.1f,
-                           /*fill_na=*/0, &pitch) == SONARE_OK);
+  REQUIRE(sonare_pitch_yin(samples, length, 48000, 2048, 512, fmin, fmax, 0.1f, &pitch) ==
+          SONARE_OK);
   const float median = pitch.median_f0;
   sonare_free_pitch_result(&pitch);
   return median;

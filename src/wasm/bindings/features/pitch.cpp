@@ -58,10 +58,10 @@ val run_pitch_track(val samples, const val& sample_rate_val, const val& frame_le
 
 val js_pitch_yin(val samples, const val& sample_rate_val, const val& frame_length_val,
                  const val& hop_length_val, const val& fmin_val, const val& fmax_val,
-                 const val& threshold_val, bool fill_na) {
+                 const val& threshold_val) {
   return run_pitch_track(
       samples, sample_rate_val, frame_length_val, hop_length_val, fmin_val, fmax_val, threshold_val,
-      fill_na,
+      /*fill_na=*/false,
       [](const Audio& audio, const PitchConfig& config) { return yin_track(audio, config); });
 }
 

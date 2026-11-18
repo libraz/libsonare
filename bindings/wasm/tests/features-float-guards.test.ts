@@ -178,7 +178,7 @@ const FLOAT_FIELDS: FloatField[] = [
   {
     entry: 'pitchYin',
     key: 'fmax',
-    run: (v) => m().pitchYin(pureTone300, SR, 1024, 256, 65, v, 0.1, false),
+    run: (v) => m().pitchYin(pureTone300, SR, 1024, 256, 65, v, 0.1),
   },
   {
     entry: 'pitchPyin',
@@ -392,8 +392,8 @@ describe('mfccToMel and mfccToAudio consume the lifter they accept', () => {
 
 describe('pitchYin and pitchPyin consume the fmax they accept', () => {
   it('reads a fmax excluding vs including a 300 Hz tone as two different median f0', () => {
-    const included = m().pitchYin(pureTone300, SR, 1024, 256, 65, 1000, 0.1, false);
-    const excluded = m().pitchYin(pureTone300, SR, 1024, 256, 65, 200, 0.1, false);
+    const included = m().pitchYin(pureTone300, SR, 1024, 256, 65, 1000, 0.1);
+    const excluded = m().pitchYin(pureTone300, SR, 1024, 256, 65, 200, 0.1);
     expect(Math.abs(included.medianF0 - 300)).toBeLessThan(30);
     expect(Math.abs(excluded.medianF0 - 300)).toBeGreaterThan(30);
   });

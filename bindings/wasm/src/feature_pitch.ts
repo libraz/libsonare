@@ -130,8 +130,6 @@ export function pitchYin(...args: unknown[]): PitchResult {
     f0MinHz,
     f0MaxHz,
     r.threshold ?? 0.1,
-    // YIN reads no fill flag; its request refuses fillNa as an unknown key.
-    false,
   );
 }
 

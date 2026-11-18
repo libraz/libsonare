@@ -595,7 +595,7 @@ function pitchTrack(fnName: 'pitchYin' | 'pitchPyin', args: unknown[]): PitchRes
   const f0MinHz = request.f0MinHz ?? 65;
   const f0MaxHz = request.f0MaxHz ?? 2093;
   assertFrequencyBounds(fnName, f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
-  return addon[fnName](
+  const positional = [
     request.samples,
     request.sampleRate,
     request.frameLength ?? 2048,
@@ -603,9 +603,11 @@ function pitchTrack(fnName: 'pitchYin' | 'pitchPyin', args: unknown[]): PitchRes
     f0MinHz,
     f0MaxHz,
     request.threshold ?? 0.1,
-    // YIN reads no fill flag; its request refuses fillNa as an unknown key.
-    fnName === 'pitchPyin' ? (request.fillNa ?? false) : false,
-  );
+  ] as const;
+  // Only pYIN takes a fill flag; the YIN request refuses fillNa as an unknown key.
+  return fnName === 'pitchPyin'
+    ? addon.pitchPyin(...positional, request.fillNa ?? false)
+    : addon.pitchYin(...positional);
 }
 
 /** YIN fundamental-frequency track. */

@@ -385,7 +385,6 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_float,
         ctypes.c_float,
         ctypes.c_float,
-        ctypes.c_int,
         ctypes.POINTER(SonarePitchResult),
     ]
 
