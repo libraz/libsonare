@@ -5,12 +5,18 @@ from __future__ import annotations
 import ctypes
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import cast
 
 import numpy as np
 
 from ._analysis_music import _CHORD_QUALITY_ORDINALS
 from ._errors import _not_supported
-from ._project_model import _NO_PITCH_CLASS
+from ._project_model import (
+    _NO_PITCH_CLASS,
+    _PROJECT_CHORD_QUALITIES,
+    _PROJECT_KEY_MODES,
+    ProjectKeyMode,
+)
 from ._runtime import (
     SonareProjectWarpAnchor,
     SonareTakeAlignConfig,
@@ -215,7 +221,8 @@ def chord_symbol_from_analysis(chord: Chord) -> dict[str, object]:
         ``{"root_pc", "quality", "extensions"}``, plus ``"slash_bass_pc"`` only for
         a slash chord: the key is absent when ``chord.bass`` is ``None`` or equals
         the root. The root is kept as given, including for an unknown chord.
-        ``extensions`` is a list of scale degrees.
+        ``quality`` is a :data:`ProjectChordQuality` token and ``extensions`` a
+        list of scale degrees.
 
     Raises:
         TypeError: If ``chord`` is not a :class:`Chord`.
@@ -255,7 +262,7 @@ def chord_symbol_from_analysis(chord: Chord) -> dict[str, object]:
     )
     fields: dict[str, object] = {
         "root_pc": int(out_root.value),
-        "quality": int(out_quality.value),
+        "quality": _PROJECT_CHORD_QUALITIES[int(out_quality.value)],
         "extensions": [int(extensions[i]) for i in range(out_count.value)],
     }
     if int(out_slash.value) != _NO_PITCH_CLASS:
@@ -263,12 +270,11 @@ def chord_symbol_from_analysis(chord: Chord) -> dict[str, object]:
     return fields
 
 
-def key_mode_from_analysis(mode: KeyMode) -> int:
+def key_mode_from_analysis(mode: KeyMode) -> ProjectKeyMode:
     """Convert an analysis key :data:`KeyMode` token into the ``mode`` of a key annotation.
 
-    The annotation numbering reserves 0 for an unknown mode, so every analysis
-    mode lands one ordinal higher. The result is the fourth element of a
-    :meth:`Project.annotate_keys` tuple.
+    The result is the :data:`ProjectKeyMode` token a :meth:`Project.annotate_keys`
+    entry takes as ``mode``.
 
     Raises:
         TypeError: If ``mode`` is not a string.
@@ -283,4 +289,4 @@ def key_mode_from_analysis(mode: KeyMode) -> int:
         )
     out_mode = ctypes.c_uint32()
     _check(lib.sonare_key_mode_from_analysis(_to_c_int32(ordinal, "mode"), ctypes.byref(out_mode)))
-    return int(out_mode.value)
+    return cast(ProjectKeyMode, _PROJECT_KEY_MODES[int(out_mode.value)])

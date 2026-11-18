@@ -7180,7 +7180,7 @@ test = "bindings/python/tests/test_note_objects.py::test_a_note_pitch_is_none_wh
 [[entry]]
 kind = "function"
 old = "chord_symbol_from_analysis"
-changed = "omits slash_bass_pc when the chord has no slash bass (was 255)"
+changed = "omits slash_bass_pc when the chord has no slash bass (was 255), and quality is a ProjectChordQuality token ('unknown', 'major', 'minor', 'diminished', 'augmented', 'dominant', 'halfDiminished', 'suspended') instead of an ordinal"
 domain = "project"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_chord_annotation.py::test_an_unknown_root_or_tonic_and_no_slash_bass_are_absent"
@@ -8698,7 +8698,7 @@ test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_o
 [[entry]]
 kind = "option"
 old = "Project.annotate_chords(chords)"
-changed = "a chord mapping takes start_ppq, end_ppq, root_pc, quality, extensions, slash_bass_pc, roman_numeral and modulation_boundary only; any other key raises SonareValueError naming it instead of being ignored"
+changed = "a chord mapping takes start_ppq, end_ppq, root_pc, quality, extensions, slash_bass_pc, roman_numeral and modulation_boundary only; any other key raises SonareValueError naming it instead of being ignored. quality is a ProjectChordQuality token (absent or None is 'unknown'); an ordinal is TypeError"
 domain = "project"
 rule = "snake-case-only"
 test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
@@ -9108,3 +9108,51 @@ old = "SonareAutomationPoint"
 removed = "pass AutomationPoint records; the ctypes mirror that libsonare.engine re-exported is internal"
 domain = "engine"
 rule = "python-public-names"
+
+[[entry]]
+kind = "field"
+old = "MidiCcBinding.kind"
+changed = "a ProjectMidiCcBindingKind token ('controlChange7', 'controlChange14', 'rpn', 'nrpn') instead of an ordinal; a number is TypeError and another spelling raises SonareValueError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_project_midi.py::test_a_cc_binding_is_taken_only_as_a_record_with_a_kind_token"
+
+[[entry]]
+kind = "option"
+old = "Project.midi_cc_to_breakpoint(bindings)"
+changed = "each binding is a MidiCcBinding record; a mapping is TypeError"
+domain = "project"
+rule = "one-input-form"
+test = "bindings/python/tests/test_project_midi.py::test_a_cc_binding_is_taken_only_as_a_record_with_a_kind_token"
+
+[[entry]]
+kind = "option"
+old = "Project.midi_param_to_cc(bindings)"
+changed = "each binding is a MidiCcBinding record; a mapping is TypeError"
+domain = "project"
+rule = "one-input-form"
+test = "bindings/python/tests/test_project_midi.py::test_a_cc_binding_is_taken_only_as_a_record_with_a_kind_token"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.bind_midi_cc_binding(binding)"
+changed = "binding is a MidiCcBinding record; a mapping is TypeError"
+domain = "engine"
+rule = "one-input-form"
+test = "bindings/python/tests/test_engine_midi.py::test_a_cc_binding_mapping_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "Project.annotate_keys(keys)"
+changed = "each key is a mapping with start_ppq, end_ppq, optional tonic_pc and optional mode (a tuple is TypeError); mode is a ProjectKeyMode token ('unknown', 'major', 'minor', 'dorian', 'phrygian', 'lydian', 'mixolydian', 'locrian') instead of an ordinal, and absent or None is 'unknown'"
+domain = "project"
+rule = "one-input-form"
+test = "bindings/python/tests/test_chord_annotation.py::test_a_key_segment_tuple_is_a_type_error"
+
+[[entry]]
+kind = "function"
+old = "key_mode_from_analysis"
+changed = "returns the ProjectKeyMode token that Project.annotate_keys takes as mode (was the annotation ordinal)"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_chord_annotation.py::test_key_modes_keep_their_name_and_are_accepted_by_annotate_keys"

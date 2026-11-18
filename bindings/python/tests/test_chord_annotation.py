@@ -37,16 +37,16 @@ def chord(quality: str, root: int = 0, bass: int | None = None) -> Chord:
 @pytest.mark.parametrize(
     ("quality", "annotation_quality", "extensions"),
     [
-        ("minor", 2, []),
-        ("dominant7", 5, [7]),
-        ("halfDim7", 6, [7]),
-        ("sus4", 7, [4]),
-        ("dominant13", 5, [7, 9, 13]),
-        ("unknown", 0, []),
+        ("minor", "minor", []),
+        ("dominant7", "dominant", [7]),
+        ("halfDim7", "halfDiminished", [7]),
+        ("sus4", "suspended", [4]),
+        ("dominant13", "dominant", [7, 9, 13]),
+        ("unknown", "unknown", []),
     ],
 )
 def test_named_qualities_map_to_their_family_and_degrees(
-    quality: str, annotation_quality: int, extensions: list[int]
+    quality: str, annotation_quality: str, extensions: list[int]
 ) -> None:
     result = chord_symbol_from_analysis(chord(quality, root=7))
     assert result == {
@@ -82,11 +82,11 @@ def test_every_quality_is_accepted_by_annotate_chords_and_survives_serialization
 
 
 @pytest.mark.parametrize("mode", get_args(KeyMode))
-def test_key_modes_are_offset_by_one_and_accepted_by_annotate_keys(mode: KeyMode) -> None:
+def test_key_modes_keep_their_name_and_are_accepted_by_annotate_keys(mode: KeyMode) -> None:
     converted = key_mode_from_analysis(mode)
-    assert converted == get_args(KeyMode).index(mode) + 1
+    assert converted == mode
     project = Project()
-    project.annotate_keys([(0.0, 480.0, 0, converted)])
+    project.annotate_keys([{"start_ppq": 0.0, "end_ppq": 480.0, "tonic_pc": 0, "mode": converted}])
     serialized = project.to_json()
     assert Project.from_json(serialized).to_json() == serialized
 
@@ -126,11 +126,16 @@ def test_an_unknown_root_or_tonic_and_no_slash_bass_are_absent() -> None:
     project = Project()
     project.annotate_chords(
         [
-            {"start_ppq": 0.0, "end_ppq": 480.0, "quality": 0},
+            {"start_ppq": 0.0, "end_ppq": 480.0, "quality": "unknown"},
             {"start_ppq": 480.0, "end_ppq": 960.0, "root_pc": None, "slash_bass_pc": None},
         ]
     )
-    project.annotate_keys([(0.0, 480.0, None, 0)])
+    project.annotate_keys(
+        [
+            {"start_ppq": 0.0, "end_ppq": 480.0, "tonic_pc": None, "mode": "unknown"},
+            {"start_ppq": 480.0, "end_ppq": 960.0},
+        ]
+    )
 
 
 @pytest.mark.parametrize("field", ["root_pc", "slash_bass_pc"])
@@ -138,11 +143,34 @@ def test_an_unknown_root_or_tonic_and_no_slash_bass_are_absent() -> None:
 def test_a_chord_pitch_class_outside_0_to_11_is_refused_by_name(field: str, value: int) -> None:
     with pytest.raises(SonareValueError, match=f"chords\\[0\\].{field}"):
         Project().annotate_chords(
-            [{"start_ppq": 0.0, "end_ppq": 480.0, "root_pc": 0, "quality": 0, field: value}]
+            [{"start_ppq": 0.0, "end_ppq": 480.0, "root_pc": 0, "quality": "major", field: value}]
         )
 
 
 @pytest.mark.parametrize("value", [255, 12, -1])
 def test_a_key_tonic_outside_0_to_11_is_refused_by_name(value: int) -> None:
     with pytest.raises(SonareValueError, match="keys\\[0\\].tonic_pc"):
-        Project().annotate_keys([(0.0, 480.0, value, 1)])
+        Project().annotate_keys(
+            [{"start_ppq": 0.0, "end_ppq": 480.0, "tonic_pc": value, "mode": "major"}]
+        )
+
+
+@pytest.mark.parametrize("value", [0, 1, True])
+def test_an_ordinal_quality_or_mode_is_a_type_error(value: object) -> None:
+    with pytest.raises(TypeError, match=r"chords\[0\]\.quality"):
+        Project().annotate_chords([{"start_ppq": 0.0, "end_ppq": 480.0, "quality": value}])
+    with pytest.raises(TypeError, match=r"keys\[0\]\.mode"):
+        Project().annotate_keys([{"start_ppq": 0.0, "end_ppq": 480.0, "mode": value}])
+
+
+@pytest.mark.parametrize("value", ["half_diminished", "Major", "dim"])
+def test_an_unknown_quality_or_mode_token_is_refused_by_name(value: str) -> None:
+    with pytest.raises(SonareValueError, match=r"chords\[0\]\.quality"):
+        Project().annotate_chords([{"start_ppq": 0.0, "end_ppq": 480.0, "quality": value}])
+    with pytest.raises(SonareValueError, match=r"keys\[0\]\.mode"):
+        Project().annotate_keys([{"start_ppq": 0.0, "end_ppq": 480.0, "mode": value}])
+
+
+def test_a_key_segment_tuple_is_a_type_error() -> None:
+    with pytest.raises(TypeError, match=r"keys\[0\] must be a mapping"):
+        Project().annotate_keys([(0.0, 480.0, 0, "major")])  # type: ignore[list-item]

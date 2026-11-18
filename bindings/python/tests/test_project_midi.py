@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 
 import pytest
@@ -317,7 +318,7 @@ def test_a_cc_binding_channel_is_absent_for_any_and_0xff_is_refused() -> None:
     any_channel = MidiCcBinding(
         cc_number=1,
         channel=None,
-        kind=0,
+        kind="controlChange7",
         cc_lsb_number=0,
         selector_msb=0,
         selector_lsb=0,
@@ -326,9 +327,31 @@ def test_a_cc_binding_channel_is_absent_for_any_and_0xff_is_refused() -> None:
         max_value=1.0,
     )
     assert Project.midi_cc_to_breakpoint([any_channel], event) is not None
-    assert Project.midi_cc_to_breakpoint([{"cc_number": 1, "param_id": 5}], event) is not None
     with pytest.raises(SonareValueError, match="channel"):
-        Project.midi_cc_to_breakpoint([{"cc_number": 1, "channel": 0xFF, "param_id": 5}], event)
+        Project.midi_cc_to_breakpoint([dataclasses.replace(any_channel, channel=0xFF)], event)
+
+
+def test_a_cc_binding_is_taken_only_as_a_record_with_a_kind_token() -> None:
+    event = Project.midi_cc(0.0, 0, 9, 1, 100)
+    binding = MidiCcBinding(
+        cc_number=1,
+        channel=None,
+        kind="controlChange7",
+        cc_lsb_number=0,
+        selector_msb=0,
+        selector_lsb=0,
+        param_id=5,
+        min_value=0.0,
+        max_value=1.0,
+    )
+    with pytest.raises(TypeError, match=r"MidiCcBinding"):
+        Project.midi_cc_to_breakpoint([{"cc_number": 1, "param_id": 5}], event)  # type: ignore[list-item]
+    with pytest.raises(TypeError, match=r"MidiCcBinding"):
+        Project.midi_param_to_cc([{"cc_number": 1, "param_id": 5}], 5, 0.5, 0)  # type: ignore[list-item]
+    with pytest.raises(TypeError, match="kind"):
+        Project.midi_param_to_cc([dataclasses.replace(binding, kind=0)], 5, 0.5, 0)  # type: ignore[arg-type]
+    with pytest.raises(SonareValueError, match="kind"):
+        Project.midi_param_to_cc([dataclasses.replace(binding, kind="cc7")], 5, 0.5, 0)  # type: ignore[arg-type]
 
 
 def test_midi_cc_learn_and_conversion_helpers() -> None:
@@ -336,7 +359,7 @@ def test_midi_cc_learn_and_conversion_helpers() -> None:
     events = [Project.midi_cc(0.0, 0, 2, 1, 64), Project.midi_cc(0.1, 0, 2, 33, 12)]
     binding = Project.midi_cc_learn(events, 77, min_value=-1.0, max_value=1.0)
     assert binding is not None
-    assert binding.kind == 1
+    assert binding.kind == "controlChange14"
     assert binding.param_id == 77
     assert binding.min_value == -1.0
 
@@ -348,7 +371,7 @@ def test_midi_cc_learn_and_conversion_helpers() -> None:
     ]
     rpn_binding = Project.midi_cc_learn(rpn, 78)
     assert rpn_binding is not None
-    assert rpn_binding.kind == 2
+    assert rpn_binding.kind == "rpn"
 
     # No learnable CC stream -> None sentinel (INVALID_STATE), not an exception.
     assert Project.midi_cc_learn([], 99) is None

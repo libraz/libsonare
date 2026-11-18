@@ -1043,7 +1043,7 @@ class _ProjectMidiMixin:
 
     @staticmethod
     def midi_cc_to_breakpoint(
-        bindings: Sequence[MidiCcBinding | Mapping[str, object]],
+        bindings: Sequence[MidiCcBinding],
         event: tuple[float, int, int] | Sequence[float],
     ) -> tuple[float, float, AutomationCurve] | None:
         """Convert one CC ``event`` to an automation breakpoint via a binding table.
@@ -1078,7 +1078,7 @@ class _ProjectMidiMixin:
 
     @staticmethod
     def midi_param_to_cc(
-        bindings: Sequence[MidiCcBinding | Mapping[str, object]],
+        bindings: Sequence[MidiCcBinding],
         param_id: int,
         unit_value: float,
         group: int,

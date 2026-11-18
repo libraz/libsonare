@@ -14,7 +14,6 @@ import pytest
 
 from libsonare import SonareValueError
 from libsonare._analysis_music import _key_pair
-from libsonare._project_model import _cc_binding_to_c
 from libsonare._project_synth import _part_rig_inserts_arg
 from libsonare._runtime import _mapping_keys
 
@@ -35,12 +34,10 @@ def _refuses(
     ("call", "good", "key"),
     [
         (_key_pair, {"root": 0, "mode": "major"}, "tonic"),
-        (_cc_binding_to_c, {"cc_number": 7, "param_id": 3}, "ccNumber"),
         (lambda m: _part_rig_inserts_arg(2, [m]), {"processor": "eq", "params": {}}, "parameters"),
     ],
     ids=[
         "key",
-        "midi_cc_binding",
         "part_rig_insert",
     ],
 )
@@ -51,8 +48,8 @@ def test_a_helper_mapping_refuses_an_unknown_key(
 
 
 def test_a_non_mapping_descriptor_is_a_type_error() -> None:
-    with pytest.raises(TypeError, match="MIDI CC binding must be a mapping"):
-        _mapping_keys([("cc_number", 7)], ("cc_number",), "MIDI CC binding")
+    with pytest.raises(TypeError, match="segment must be a mapping"):
+        _mapping_keys([("start_ppq", 0.0)], ("start_ppq",), "segment")
 
 
 @needs_lib
@@ -101,8 +98,10 @@ def test_project_mappings_take_one_spelling() -> None:
         segment = {"start_ppq": 0.0, "end_ppq": 1.0, "take_id": 1, "crossfade_ppq": 0.0}
         _refuses(lambda m: project.set_clip_comp_segments(clip, [m]), segment, "takeId")
 
-        chord = {"start_ppq": 0.0, "end_ppq": 480.0, "root_pc": 0, "quality": 0}
+        chord = {"start_ppq": 0.0, "end_ppq": 480.0, "root_pc": 0, "quality": "major"}
         _refuses(lambda m: project.annotate_chords([m]), chord, "rootPc")
+        key = {"start_ppq": 0.0, "end_ppq": 480.0, "tonic_pc": 0, "mode": "major"}
+        _refuses(lambda m: project.annotate_keys([m]), key, "tonicPc")
         tempo = {"start_ppq": 0.0, "bpm": 120.0}
         _refuses(lambda m: project.set_tempo_segments([m]), tempo, "start_sample")
         meter = {"start_ppq": 0.0, "numerator": 3, "denominator": 4}

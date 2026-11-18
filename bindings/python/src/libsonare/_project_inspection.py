@@ -12,7 +12,13 @@ import numpy as np
 from ._engine_conversions import _marker_kind_name, _marker_kind_value
 from ._narrowing import _narrow_double
 from ._project_model import *  # noqa: F403
-from ._project_model import _NO_PITCH_CLASS, _OVERLAP_POLICIES, _absent_or_in_range
+from ._project_model import (
+    _NO_PITCH_CLASS,
+    _OVERLAP_POLICIES,
+    _PROJECT_CHORD_QUALITIES,
+    _PROJECT_KEY_MODES,
+    _absent_or_in_range,
+)
 from ._project_synth import (
     SYNTH_ENUM_TABLES as SYNTH_ENUM_TABLES,
 )
@@ -54,6 +60,7 @@ from ._runtime import (
 )
 from .types import ProjectClip, ProjectMarker, ProjectSource, ProjectTrack
 
+_KEY_SEGMENT_KEYS = ("start_ppq", "end_ppq", "tonic_pc", "mode")
 _CHORD_KEYS = (
     "start_ppq",
     "end_ppq",
@@ -235,35 +242,27 @@ class _ProjectInspectionMixin:
         )
         return float(out_ppq.value)
 
-    def annotate_keys(
-        self,
-        keys: Sequence[tuple[float, float, int | None, int]] | Sequence[Sequence[float | None]],
-    ) -> None:
+    def annotate_keys(self, keys: Sequence[Mapping[str, object]]) -> None:
         """Replace the project's key annotation stream via an undoable command.
 
-        Each key is ``(start_ppq, end_ppq, tonic_pc, mode)`` where ``tonic_pc``
-        is 0..11 (C=0) or ``None`` when the tonic is unknown and ``mode`` is the KeyMode ordinal
-        (0 unknown, 1 major, 2 minor, 3 dorian, 4 phrygian, 5 lydian,
-        6 mixolydian, 7 locrian). Pass an empty sequence to clear.
+        Each key is a mapping with ``start_ppq``, ``end_ppq``, an optional
+        ``tonic_pc`` (0..11, C=0; absent or ``None`` when the tonic is unknown)
+        and an optional ``mode`` (a :data:`ProjectKeyMode` token; absent or
+        ``None`` is ``"unknown"``). Pass an empty sequence to clear.
         """
         rows = list(keys)
         count = len(rows)
         c_keys = (SonareProjectKeySegment * count)()
-        if c_keys is not None:
-            for i, k in enumerate(rows):
-                seq = tuple(k)
-                if len(seq) < 4:
-                    raise SonareValueError(
-                        f"keys[{i}] must contain (start_ppq, end_ppq, tonic_pc, mode)"
-                    )
-                c_keys[i].start_ppq = _narrow_double(seq[0], "seq[0]")
-                c_keys[i].end_ppq = _narrow_double(seq[1], "seq[1]")
-                # Assigned unconverted so the struct's own narrowing sees each
-                # caller value; int() would truncate a fraction past it.
-                c_keys[i].tonic_pc = _absent_or_in_range(
-                    seq[2], f"keys[{i}].tonic_pc", 11, _NO_PITCH_CLASS
-                )
-                c_keys[i].mode = seq[3]
+        for i, key in enumerate(rows):
+            k = _mapping_keys(key, _KEY_SEGMENT_KEYS, f"keys[{i}]")
+            c_keys[i].start_ppq = _narrow_double(k["start_ppq"], f"keys[{i}].start_ppq")
+            c_keys[i].end_ppq = _narrow_double(k["end_ppq"], f"keys[{i}].end_ppq")
+            c_keys[i].tonic_pc = _absent_or_in_range(
+                k.get("tonic_pc"), f"keys[{i}].tonic_pc", 11, _NO_PITCH_CLASS
+            )
+            mode = k.get("mode")
+            if mode is not None:
+                c_keys[i].mode = _token_ordinal(mode, _PROJECT_KEY_MODES, f"keys[{i}].mode")
         _check(
             _get_lib().sonare_project_annotate_keys(
                 self._require_handle(), c_keys, _to_c_size_t(count, "count")
@@ -275,7 +274,8 @@ class _ProjectInspectionMixin:
 
         Each chord is a mapping with keys ``start_ppq``, ``end_ppq``, ``root_pc``
         (0..11, absent or ``None`` when the root is unknown), ``quality``
-        (ChordQuality ordinal), optional ``extensions`` (iterable of scale degrees
+        (a :data:`ProjectChordQuality` token; absent or ``None`` is
+        ``"unknown"``), optional ``extensions`` (iterable of scale degrees
         such as 7, 9, 13, up to 32), ``slash_bass_pc`` (0..11, absent or ``None``
         for a chord that is not a slash chord), ``roman_numeral`` (optional str) and
         ``modulation_boundary`` (bool). Pass an empty sequence to clear.
@@ -318,7 +318,11 @@ class _ProjectInspectionMixin:
                 c_chords[i].root_pc = _absent_or_in_range(
                     c.get("root_pc"), f"chords[{i}].root_pc", 11, _NO_PITCH_CLASS
                 )
-                c_chords[i].quality = c.get("quality", 0)
+                quality = c.get("quality")
+                if quality is not None:
+                    c_chords[i].quality = _token_ordinal(
+                        quality, _PROJECT_CHORD_QUALITIES, f"chords[{i}].quality"
+                    )
                 c_chords[i].extensions = c_ext
                 c_chords[i].extension_count = _to_c_size_t(ext_count, "ext_count")
                 c_chords[i].slash_bass_pc = _absent_or_in_range(

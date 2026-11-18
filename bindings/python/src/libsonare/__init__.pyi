@@ -21,9 +21,12 @@ from ._project import NoteTracking as NoteTracking
 from ._project import PartRigMode as PartRigMode
 from ._project import Project as Project
 from ._project import ProjectAutomationTargetKind as ProjectAutomationTargetKind
+from ._project import ProjectChordQuality as ProjectChordQuality
 from ._project import ProjectDeserializeResult as ProjectDeserializeResult
 from ._project import ProjectFadeCurve as ProjectFadeCurve
+from ._project import ProjectKeyMode as ProjectKeyMode
 from ._project import ProjectLoopMode as ProjectLoopMode
+from ._project import ProjectMidiCcBindingKind as ProjectMidiCcBindingKind
 from ._project import ProjectOverlapPolicy as ProjectOverlapPolicy
 from ._project import ProjectStemLayout as ProjectStemLayout
 from ._project import ProjectTimeline as ProjectTimeline

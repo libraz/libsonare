@@ -43,7 +43,7 @@ def test_engine_midi_cc_bindings() -> None:
                 cc_number=2,
                 cc_lsb_number=34,
                 channel=0,
-                kind=1,
+                kind="controlChange14",
                 selector_msb=0,
                 selector_lsb=0,
                 param_id=43,
@@ -53,6 +53,13 @@ def test_engine_midi_cc_bindings() -> None:
         )
         assert engine.midi_cc_binding_count == 2
         engine.clear_midi_cc_bindings()
+        assert engine.midi_cc_binding_count == 0
+
+
+def test_a_cc_binding_mapping_is_a_type_error() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        with pytest.raises(TypeError, match="MidiCcBinding"):
+            engine.bind_midi_cc_binding({"cc_number": 2, "param_id": 43})  # type: ignore[arg-type]
         assert engine.midi_cc_binding_count == 0
 
 

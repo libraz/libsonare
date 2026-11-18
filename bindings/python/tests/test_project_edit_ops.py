@@ -374,9 +374,9 @@ def test_move_clip_rejects_cross_kind_track() -> None:
 def test_annotate_keys_and_chords_round_trip() -> None:
     p, _track, _clip = _audio_project()
     before = p.to_json()
-    p.annotate_keys([(0.0, 480.0, 0, 1)])  # C major over the first bar
+    p.annotate_keys([{"start_ppq": 0.0, "end_ppq": 480.0, "tonic_pc": 0, "mode": "major"}])
     assert p.to_json() != before
-    p.annotate_chords([{"start_ppq": 0.0, "end_ppq": 480.0, "root_pc": 0, "quality": 0}])
+    p.annotate_chords([{"start_ppq": 0.0, "end_ppq": 480.0, "root_pc": 0, "quality": "major"}])
     p.undo()  # undo chords
     p.undo()  # undo keys
     assert p.to_json() == before

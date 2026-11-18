@@ -20,9 +20,8 @@ from __future__ import annotations
 import ctypes
 import math
 import numbers
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
-from dataclasses import fields as dataclass_fields
 from typing import TYPE_CHECKING, Any, Literal, SupportsFloat, TypeAlias, cast, get_args
 
 if TYPE_CHECKING:
@@ -176,8 +175,8 @@ from ._runtime import (
     SonareValueError,
     _check,
     _get_lib,
-    _mapping_keys,
     _require_export,
+    _require_instance,
     _to_c_size_t,
     _token_ordinal,
     _utf8_arg,
@@ -221,6 +220,33 @@ _OVERLAP_POLICIES: tuple[str, ...] = get_args(ProjectOverlapPolicy)
 ProjectAutomationTargetKind: TypeAlias = Literal["opaque", "trackFaderDb", "trackPan"]
 """What an automation lane drives: an opaque parameter, a track fader or a track pan."""
 _AUTOMATION_TARGET_KINDS: tuple[str, ...] = get_args(ProjectAutomationTargetKind)
+
+
+# MIDI CC binding kind; a token's index is its SonareMidiCcBindingKind ordinal.
+ProjectMidiCcBindingKind: TypeAlias = Literal["controlChange7", "controlChange14", "rpn", "nrpn"]
+"""Controller shape of a :class:`MidiCcBinding`: 7-bit CC, 14-bit CC, RPN or NRPN."""
+_MIDI_CC_BINDING_KINDS: tuple[str, ...] = get_args(ProjectMidiCcBindingKind)
+
+# Key-annotation mode; a token's index is its project KeyMode ordinal.
+ProjectKeyMode: TypeAlias = Literal[
+    "unknown", "major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian"
+]
+"""Mode of a key annotation segment (:meth:`Project.annotate_keys`)."""
+_PROJECT_KEY_MODES: tuple[str, ...] = get_args(ProjectKeyMode)
+
+# Chord-annotation quality; a token's index is its project ChordQuality ordinal.
+ProjectChordQuality: TypeAlias = Literal[
+    "unknown",
+    "major",
+    "minor",
+    "diminished",
+    "augmented",
+    "dominant",
+    "halfDiminished",
+    "suspended",
+]
+"""Quality family of a chord annotation (:meth:`Project.annotate_chords`)."""
+_PROJECT_CHORD_QUALITIES: tuple[str, ...] = get_args(ProjectChordQuality)
 
 
 def _automation_target_kind_value(value: object) -> int:
@@ -315,17 +341,17 @@ class NotePairValidation:
 class MidiCcBinding:
     """A MIDI CC <-> automation-parameter binding (see :meth:`Project.midi_cc_learn`).
 
-    ``kind`` is a :data:`MIDI_CC_*` ordinal (0=7-bit CC, 1=14-bit CC,
-    2=RPN, 3=NRPN). For a 14-bit binding ``cc_lsb_number`` carries the LSB
-    controller; for RPN/NRPN ``selector_msb`` / ``selector_lsb`` carry the
-    parameter selector. ``param_id`` is the bound automation parameter; the
-    unit-interval automation range maps onto ``[min_value, max_value]``.
+    ``kind`` is a :data:`ProjectMidiCcBindingKind` token. For a 14-bit
+    binding ``cc_lsb_number`` carries the LSB controller; for RPN/NRPN
+    ``selector_msb`` / ``selector_lsb`` carry the parameter selector.
+    ``param_id`` is the bound automation parameter; the unit-interval
+    automation range maps onto ``[min_value, max_value]``.
     ``channel`` is 0..15, or ``None`` for a binding that answers any channel.
     """
 
     cc_number: int
     channel: int | None
-    kind: int
+    kind: ProjectMidiCcBindingKind
     cc_lsb_number: int
     selector_msb: int
     selector_lsb: int
@@ -348,13 +374,6 @@ class MidiRouteResult:
     overflow_count: int
 
 
-# MIDI CC binding kind ordinals (mirror SonareMidiCcBindingKind).
-MIDI_CC_CONTROL_CHANGE_7 = 0
-MIDI_CC_CONTROL_CHANGE_14 = 1
-MIDI_CC_RPN = 2
-MIDI_CC_NRPN = 3
-
-
 # The C ABI's "no pitch class" code; absence on the Python side.
 _NO_PITCH_CLASS = 255
 
@@ -368,38 +387,26 @@ def _absent_or_in_range(value: object, name: str, upper: int, absent: int) -> in
     return value
 
 
-_MIDI_CC_BINDING_KEYS = tuple(field.name for field in dataclass_fields(MidiCcBinding))
+def _cc_binding_to_c(binding: MidiCcBinding) -> SonareMidiCcBinding:
+    """Marshal a :class:`MidiCcBinding` into C; any other value is a ``TypeError``.
 
-
-def _cc_binding_to_c(binding: MidiCcBinding | Mapping[str, object]) -> SonareMidiCcBinding:
-    """Marshal a :class:`MidiCcBinding` (or a Mapping with the same keys) into C.
-
-    An absent or ``None`` ``channel`` is the any-channel binding; the C
-    ABI's ``0xFF`` spelling of it is refused as a value.
+    A ``None`` ``channel`` is the any-channel binding; the C ABI's ``0xFF``
+    spelling of it is refused as a value.
     """
-    if isinstance(binding, Mapping):
-        fields = _mapping_keys(binding, _MIDI_CC_BINDING_KEYS, "MIDI CC binding")
-
-        def _get(key: str, default: object) -> object:
-            return fields.get(key, default)
-    else:
-
-        def _get(key: str, default: object) -> object:
-            return getattr(binding, key, default)
-
+    _require_instance(binding, MidiCcBinding, "binding")
     # Passed unconverted so the struct's own narrowing sees each caller value;
     # int() would truncate a fraction past it and land on a neighbouring CC.
     return SonareMidiCcBinding(
-        cc_number=_get("cc_number", 0),
-        channel=_absent_or_in_range(_get("channel", None), "channel", 15, 0xFF),
-        kind=_get("kind", MIDI_CC_CONTROL_CHANGE_7),
-        cc_lsb_number=_get("cc_lsb_number", 0),
-        selector_msb=_get("selector_msb", 0),
-        selector_lsb=_get("selector_lsb", 0),
+        cc_number=binding.cc_number,
+        channel=_absent_or_in_range(binding.channel, "channel", 15, 0xFF),
+        kind=_token_ordinal(binding.kind, _MIDI_CC_BINDING_KINDS, "MIDI CC binding kind"),
+        cc_lsb_number=binding.cc_lsb_number,
+        selector_msb=binding.selector_msb,
+        selector_lsb=binding.selector_lsb,
         reserved=0,
-        param_id=_get("param_id", 0),
-        min_value=float(cast(float, _get("min_value", 0.0))),
-        max_value=float(cast(float, _get("max_value", 1.0))),
+        param_id=binding.param_id,
+        min_value=float(binding.min_value),
+        max_value=float(binding.max_value),
     )
 
 
@@ -407,7 +414,7 @@ def _cc_binding_from_c(b: SonareMidiCcBinding) -> MidiCcBinding:
     return MidiCcBinding(
         cc_number=int(b.cc_number),
         channel=None if int(b.channel) == 0xFF else int(b.channel),
-        kind=int(b.kind),
+        kind=cast(ProjectMidiCcBindingKind, _MIDI_CC_BINDING_KINDS[int(b.kind)]),
         cc_lsb_number=int(b.cc_lsb_number),
         selector_msb=int(b.selector_msb),
         selector_lsb=int(b.selector_lsb),
