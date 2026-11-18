@@ -19,14 +19,21 @@ export interface Capabilities {
   readonly version: string;
   /** ABI versions used by project and realtime-engine data structures. */
   readonly abi: {
+    /** Version of the project document's flat record layout. */
     readonly project: number;
+    /** Version of the realtime engine's command-queue record layout. */
     readonly engine: number;
   };
   /** Native target identifier, such as `darwin-arm64` or `wasm32`. */
   readonly platform: string;
-  /** Optional feature families compiled into this library. */
+  /**
+   * Optional feature families compiled into this library. A false flag means the family was
+   * never built, which a caller cannot otherwise tell from a capability that is missing.
+   */
   readonly features: {
+    /** True when the mastering chain, its processors and presets are compiled in. */
     readonly mastering: boolean;
+    /** True when the mixing library is compiled in. */
     readonly mixing: boolean;
     /**
      * True when the offline mixing assistant is compiled in. Separate from
@@ -37,6 +44,7 @@ export interface Capabilities {
     readonly mixingAssistant: boolean;
     /** True when the routing graph library is compiled in. */
     readonly graph: boolean;
+    /** True when the creative realtime FX processors are compiled in. */
     readonly fx: boolean;
     /** True when the decoder reads the formats FFmpeg handles (M4A, AAC, FLAC, OGG, Opus); false means WAV and MP3 only. */
     readonly ffmpeg: boolean;
@@ -45,27 +53,28 @@ export interface Capabilities {
      * parameters (`RealtimeEngine.resolveInstrumentAutomationId`).
      */
     readonly instrumentParamAutomation: boolean;
-    /**
-     * The flags below name the remaining build options that change which
-     * commands and entry points a binary answers. Without them a caller can
-     * observe that a capability is missing but not that it was never built.
-     */
+    /** True when the headless arrangement subsystem is compiled in. */
     readonly arrangement: boolean;
     /** True when `Project` documents can be built, edited and rendered in this build. */
     readonly project: boolean;
+    /** True when the geometric room-acoustics reverb engine is compiled in. */
     readonly acousticSim: boolean;
     /** True when the playback renderer (upmix, binaural, speaker output) is compiled in. */
     readonly playback: boolean;
+    /** True when the monophonic pitch editor is compiled in. */
     readonly pitchEditor: boolean;
     /** True when vocal editing sessions can be opened in this build. */
     readonly vocalEdit: boolean;
+    /** True when the realtime voice changer is compiled in. */
     readonly voiceChanger: boolean;
     /** True when the composition-assist injection seam (control and offline only) is compiled in. */
     readonly assist: boolean;
   };
   /** Audio decoding available without, and through, FFmpeg. */
   readonly decode: {
+    /** Formats the built-in decoder reads: `'wav'` and `'mp3'`. */
     readonly builtin: readonly string[];
+    /** Formats read through FFmpeg; empty when `features.ffmpeg` is false. */
     readonly ffmpeg: readonly string[];
   };
   /** SIMD implementation selected for the target. */
@@ -350,18 +359,25 @@ export interface MasteringPresetCatalogEntry {
 
 /** Built-in preset names grouped by feature family. */
 export interface CapabilityCatalogPresets {
+  /** Mastering chain presets. */
   readonly mastering: readonly string[];
+  /** Synth presets. */
   readonly synth: readonly string[];
+  /** Mixing scene presets. */
   readonly mixingScene: readonly string[];
+  /** Realtime voice changer presets. */
   readonly voiceChanger: readonly string[];
+  /** Playback room presets. */
   readonly playbackRoom: readonly string[];
 }
 
 /** One flat mastering chain stage: `<prefix>.<leaf>` keys are `processor`'s parameters. */
 export interface CapabilityCatalogChainStage {
+  /** Prefix shared by the stage's keys, such as `'repair.declick'`. */
   readonly prefix: string;
   /** Catalog processor id; absent when every key of the stage is chain-only. */
   readonly processor?: string;
+  /** Boolean key that switches the stage on, such as `'repair.declick.enabled'`. */
   readonly enabledKey: string;
 }
 
@@ -370,34 +386,49 @@ export interface CapabilityCatalogChainStage {
  * `processor` is absent; otherwise `<key>.<i>.<field>` is that processor's `field`.
  */
 export interface CapabilityCatalogChainList {
+  /** Key the item index is appended to. */
   readonly key: string;
+  /** Catalog processor id whose parameters each item carries; absent for a list of numbers. */
   readonly processor?: string;
+  /** Fewest items the chain accepts. */
   readonly minItems: number;
+  /** Most items the chain accepts. */
   readonly maxItems: number;
 }
 
 /** The other spellings of a canonical chain key; `<i>` stands for a list index. */
 export interface CapabilityCatalogChainAlias {
+  /** Canonical chain key. */
   readonly key: string;
+  /** Other spellings accepted for `key`. */
   readonly aliases: readonly string[];
 }
 
 /** How each flat mastering chain key is described. */
 export interface CapabilityCatalogChain {
+  /** One entry per chain stage. */
   readonly stages: readonly CapabilityCatalogChainStage[];
+  /** Chain keys that take an item index. */
   readonly lists: readonly CapabilityCatalogChainList[];
   /** Keys no processor describes, with bounds measured through the chain's own validator. */
   readonly params: readonly MasteringInsertParamInfo[];
+  /** Other spellings of chain keys. */
   readonly aliases: readonly CapabilityCatalogChainAlias[];
 }
 
 /** Complete runtime catalog exposed by {@link capabilityCatalog}. */
 export interface CapabilityCatalog {
+  /** libsonare semantic version, as {@link Capabilities} reports it. */
   readonly version: string;
+  /** ABI versions, as {@link Capabilities} reports them. */
   readonly abi: Capabilities['abi'];
+  /** Every mastering processor in this build, realtime inserts and offline stages alike. */
   readonly processors: readonly MasteringProcessorCatalogEntry[];
+  /** How the flat mastering chain keys map onto processors. */
   readonly chain: CapabilityCatalogChain;
+  /** Built-in preset names by feature family. */
   readonly presets: CapabilityCatalogPresets;
+  /** Loudness identity of each built-in mastering preset. */
   readonly masteringPresets: readonly MasteringPresetCatalogEntry[];
 }
 
