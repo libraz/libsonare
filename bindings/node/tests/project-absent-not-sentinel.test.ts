@@ -15,8 +15,8 @@ import { expectRefusal } from './_helpers.js';
 // rather than read as the absence it used to stand for.
 
 function annotation(fill: (project: Project) => void): {
-  keys: Array<{ tonic_pc: number }>;
-  chords: Array<{ root_pc: number; slash_bass_pc: number }>;
+  keys: Array<{ tonicPc: number }>;
+  chords: Array<{ rootPc: number; slashBassPc: number }>;
 } {
   const project = new Project();
   try {
@@ -50,9 +50,9 @@ describe('project annotation pitch classes are absent, never 255', () => {
       project.annotateKeys([key({})]);
       project.annotateChords([chord({})]);
     });
-    expect(stored.keys[0].tonic_pc).toBe(255);
-    expect(stored.chords[0].root_pc).toBe(255);
-    expect(stored.chords[0].slash_bass_pc).toBe(255);
+    expect(stored.keys[0].tonicPc).toBe(255);
+    expect(stored.chords[0].rootPc).toBe(255);
+    expect(stored.chords[0].slashBassPc).toBe(255);
   });
 
   it('stores a given pitch class as given', () => {
@@ -60,9 +60,9 @@ describe('project annotation pitch classes are absent, never 255', () => {
       project.annotateKeys([key({ tonicPc: 9 })]);
       project.annotateChords([chord({ rootPc: 0, slashBassPc: 4 })]);
     });
-    expect(stored.keys[0].tonic_pc).toBe(9);
-    expect(stored.chords[0].root_pc).toBe(0);
-    expect(stored.chords[0].slash_bass_pc).toBe(4);
+    expect(stored.keys[0].tonicPc).toBe(9);
+    expect(stored.chords[0].rootPc).toBe(0);
+    expect(stored.chords[0].slashBassPc).toBe(4);
   });
 
   it('refuses an explicit 255 or any value past 11, naming the field', () => {

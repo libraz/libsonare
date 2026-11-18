@@ -29,7 +29,7 @@ function danglingSourceJson(): string {
     const trackId = project.addTrack({ kind: 'audio', name: 'audio' });
     project.addClip({ trackId, startPpq: 0, lengthPpq: 1, sourceUri: 'asset://dangling.wav' });
     const document = JSON.parse(project.toJson());
-    document.clips[0].source_id = 99;
+    document.clips[0].sourceId = 99;
     return JSON.stringify(document);
   } finally {
     project.destroy();

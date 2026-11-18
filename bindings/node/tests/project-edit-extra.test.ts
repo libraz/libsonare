@@ -88,8 +88,8 @@ describe('Project edit ops (new bindings)', () => {
       fadeOutCurve: 'equalPower',
     });
     const json = project.toJson();
-    expect(json).toContain('"fade_in":{"curve":2,"length_ppq":0.5}');
-    expect(json).toContain('"fade_out":{"curve":1,"length_ppq":0}');
+    expect(json).toContain('"fadeIn":{"curve":2,"lengthPpq":0.5}');
+    expect(json).toContain('"fadeOut":{"curve":1,"lengthPpq":0}');
     // Aliases and ordinals are refused rather than resolved.
     expect(() => project.setClipFade(clip, { fadeInCurve: 'EXP' as never })).toThrow(RangeError);
     expect(() => project.setClipFade(clip, { fadeOutCurve: 'equal_power' as never })).toThrow(
@@ -106,13 +106,13 @@ describe('Project edit ops (new bindings)', () => {
 
     expect(() => project.setClipFade(clip, { fadeInCurve: 'equalPower' })).not.toThrow();
     let json = project.toJson();
-    expect(json).toContain('"fade_in":{"curve":1,"length_ppq":0}');
-    expect(json).toContain('"fade_out":{"curve":0,"length_ppq":0}');
+    expect(json).toContain('"fadeIn":{"curve":1,"lengthPpq":0}');
+    expect(json).toContain('"fadeOut":{"curve":0,"lengthPpq":0}');
 
     expect(() => project.setClipFade(clip, { fadeOutCurve: 'equalPower' })).not.toThrow();
     json = project.toJson();
-    expect(json).toContain('"fade_in":{"curve":0,"length_ppq":0}');
-    expect(json).toContain('"fade_out":{"curve":1,"length_ppq":0}');
+    expect(json).toContain('"fadeIn":{"curve":0,"lengthPpq":0}');
+    expect(json).toContain('"fadeOut":{"curve":1,"lengthPpq":0}');
 
     expect(() =>
       project.setClipFade(clip, {
@@ -123,8 +123,8 @@ describe('Project edit ops (new bindings)', () => {
       }),
     ).not.toThrow();
     json = project.toJson();
-    expect(json).toContain('"fade_in":{"curve":0,"length_ppq":0}');
-    expect(json).toContain('"fade_out":{"curve":0,"length_ppq":0}');
+    expect(json).toContain('"fadeIn":{"curve":0,"lengthPpq":0}');
+    expect(json).toContain('"fadeOut":{"curve":0,"lengthPpq":0}');
     project.destroy();
   });
 
@@ -142,15 +142,15 @@ describe('Project edit ops (new bindings)', () => {
     const withTakes = project.toJson();
     expect(withTakes).not.toBe(before);
     expect(withTakes).toContain('"takes"');
-    expect(withTakes).toContain('"active_take_id":1');
+    expect(withTakes).toContain('"activeTakeId":1');
 
     project.setClipCompSegments(clip, [
       { startPpq: 0, endPpq: 2, takeId: 1 },
       { startPpq: 2, endPpq: 4, takeId: 2, crossfadePpq: 0.25 },
     ]);
     const withComp = project.toJson();
-    expect(withComp).toContain('"comp_segments"');
-    expect(withComp).toContain('"crossfade_ppq":0.25');
+    expect(withComp).toContain('"compSegments"');
+    expect(withComp).toContain('"crossfadePpq":0.25');
 
     project.undo();
     expect(project.toJson()).toBe(withTakes);
@@ -235,7 +235,7 @@ describe('Project edit ops (new bindings)', () => {
     expect(result.clipId).toBeGreaterThan(0);
     expect(result.takeCount).toBe(2);
     expect(project.toJson()).not.toContain('"partial"');
-    expect(project.toJson()).toContain('"active_take_id":2');
+    expect(project.toJson()).toContain('"activeTakeId":2');
     expect(project.sources().length).toBe(2);
     const added = project.toJson();
     project.undo();
@@ -265,7 +265,7 @@ describe('Project edit ops (new bindings)', () => {
     });
     expect(kept.takeCount).toBe(2);
     expect(partialTakeIds(project)).toEqual([[2]]);
-    expect(project.toJson()).toContain('"active_take_id":1');
+    expect(project.toJson()).toContain('"activeTakeId":1');
     const dropped = project.addLoopRecordingTakes({
       ...base,
       startPpq: 4,
@@ -424,9 +424,9 @@ describe('Project edit ops (new bindings)', () => {
     const track = project.addTrack({ kind: 'audio' });
     const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4 });
     project.setClipLoop(clip, { loopMode: 'loop', loopLengthPpq: 2 });
-    expect(project.toJson()).toContain('"loop_mode":1');
+    expect(project.toJson()).toContain('"loopMode":1');
     project.setClipLoop(clip, { loopMode: 'off' });
-    expect(project.toJson()).toContain('"loop_mode":0');
+    expect(project.toJson()).toContain('"loopMode":0');
     project.destroy();
   });
 
@@ -435,7 +435,7 @@ describe('Project edit ops (new bindings)', () => {
     const track = project.addTrack({ kind: 'audio' });
     const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4 });
     project.setClipLoop(clip, { loopMode: 'loop', loopLengthPpq: 2, loopCrossfadePpq: 0.5 });
-    expect(project.toJson()).toContain('loop_crossfade_ppq');
+    expect(project.toJson()).toContain('loopCrossfadePpq');
     expect(() =>
       project.setClipLoop(clip, { loopMode: 'loop', loopLengthPpq: 2, loopCrossfadePpq: -1 }),
     ).toThrow();
@@ -502,7 +502,7 @@ describe('Project edit ops (new bindings)', () => {
     expect(targetParamId).toBe(1);
 
     const afterAdd = project.toJson();
-    expect(afterAdd).not.toContain('"target_kind"');
+    expect(afterAdd).not.toContain('"targetKind"');
     project.editAutomationLane(track, targetParamId, {
       targetParamId: 1,
       points: [{ ppq: 0, value: 0.5 }],
@@ -534,8 +534,8 @@ describe('Project edit ops (new bindings)', () => {
     });
 
     const json = project.toJson();
-    expect(json).toContain('"target_kind":1');
-    expect(json).toContain('"target_kind":2');
+    expect(json).toContain('"targetKind":1');
+    expect(json).toContain('"targetKind":2');
 
     const restored = Project.fromJson(json);
     expect(restored.toJson()).toBe(json);
@@ -587,9 +587,9 @@ describe('Project edit ops (new bindings)', () => {
         points: [{ ppq: 0, value: 1, curveToNext: 'sCurve' }],
       });
       const lane = JSON.parse(project.toJson()) as {
-        tracks: Array<{ automation_lanes: Array<{ points: Array<{ curve_to_next: number }> }> }>;
+        tracks: Array<{ automationLanes: Array<{ points: Array<{ curveToNext: number }> }> }>;
       };
-      expect(lane.tracks[0].automation_lanes[0].points[0].curve_to_next).toBe(3);
+      expect(lane.tracks[0].automationLanes[0].points[0].curveToNext).toBe(3);
       const before = project.toJson();
       expect(() =>
         project.addAutomationLane(track, {
@@ -632,7 +632,7 @@ describe('Project edit ops (new bindings)', () => {
       points: [{ ppq: 0, value: -6 }],
     });
     const json = project.toJson();
-    expect(json).toContain('"target_kind":1');
+    expect(json).toContain('"targetKind":1');
     project.destroy();
   });
 

@@ -323,7 +323,7 @@ function danglingSourceJson(): string {
     const trackId = project.addTrack({ kind: 'audio', name: 'audio' });
     project.addClip({ trackId, startPpq: 0, lengthPpq: 1, sourceUri: 'asset://dangling.wav' });
     const document = JSON.parse(project.toJson());
-    document.clips[0].source_id = 99;
+    document.clips[0].sourceId = 99;
     return JSON.stringify(document);
   } finally {
     project.destroy();
@@ -391,7 +391,7 @@ describe('Project native binding', () => {
     const current = new Project();
     const parsed = JSON.parse(current.toJson());
     current.destroy();
-    const document = JSON.stringify({ ...parsed, sample_rate: 44100.5 });
+    const document = JSON.stringify({ ...parsed, sampleRate: 44100.5 });
     expect(() => Project.fromJson(document)).toThrow(
       expect.objectContaining({ code: ErrorCode.InvalidFormat }),
     );
@@ -615,7 +615,7 @@ describe('Project native binding', () => {
     project.setTrackMidiDestination(trackId, 7);
     const after = project.toJson();
     expect(after).not.toBe(before);
-    expect(after).toContain('"midi_destination_id":7');
+    expect(after).toContain('"midiDestinationId":7');
 
     project.undo();
     expect(project.toJson()).toBe(before);
@@ -669,21 +669,21 @@ describe('Project native binding', () => {
     project.setClipWarpMode(clipId, 'repitch');
     const after = project.toJson();
     expect(after).not.toBe(before);
-    expect(after).toContain('"warp_ref_id":123');
-    expect(after).toContain('"warp_mode":1');
+    expect(after).toContain('"warpRefId":123');
+    expect(after).toContain('"warpMode":1');
     const restored = Project.fromJson(after);
     expect(restored.toJson()).toBe(after);
     restored.destroy();
 
     project.undo();
-    expect(project.toJson()).toContain('"warp_mode":0');
+    expect(project.toJson()).toContain('"warpMode":0');
     project.undo();
-    expect(project.toJson()).toContain('"warp_ref_id":0');
+    expect(project.toJson()).toContain('"warpRefId":0');
     project.undo();
     expect(project.toJson()).toBe(before);
 
     project.setClipWarpMode(clipId, 'tempoSync');
-    expect(project.toJson()).toContain('"warp_mode":2');
+    expect(project.toJson()).toContain('"warpMode":2');
 
     project.destroy();
   });
@@ -703,7 +703,7 @@ describe('Project native binding', () => {
     const mapped = project.toJson();
 
     project.removeWarpMap(123);
-    expect(project.toJson()).toContain('"warp_ref_id":0');
+    expect(project.toJson()).toContain('"warpRefId":0');
     project.undo();
     expect(project.toJson()).toBe(mapped);
     expect(() =>
@@ -857,7 +857,7 @@ describe('Project native binding', () => {
     const firstClip = sysexProject.importSmf(makeSysexSmf());
     expect(firstClip).toBeGreaterThan(0);
     const json = sysexProject.toJson();
-    expect(json).toContain('__sysex_payloads');
+    expect(json).toContain('__sysexPayloads');
     const restored = Project.fromJson(json);
     const restoredSmf = restored.exportSmf();
     expect(
@@ -877,17 +877,17 @@ describe('Project native binding', () => {
     project.bakeMidiFx({ clipId, config: {} });
 
     const payload = JSON.parse(project.toJson()) as {
-      midi_content: Record<string, Array<{ ppq: number; word0: number; word1: number }>>;
+      midiContent: Record<string, Array<{ ppq: number; word0: number; word1: number }>>;
     };
-    expect(payload.midi_content[String(clipId)]).toEqual(events);
+    expect(payload.midiContent[String(clipId)]).toEqual(events);
 
     const round = new Project();
     const roundClip = round.importSmf(project.exportSmf());
     round.bakeMidiFx({ clipId: roundClip, config: {} });
     const roundPayload = JSON.parse(round.toJson()) as {
-      midi_content: Record<string, Array<{ ppq: number; word0: number; word1: number }>>;
+      midiContent: Record<string, Array<{ ppq: number; word0: number; word1: number }>>;
     };
-    expect(roundPayload.midi_content[String(roundClip)]).toHaveLength(600);
+    expect(roundPayload.midiContent[String(roundClip)]).toHaveLength(600);
     round.destroy();
     project.destroy();
   });

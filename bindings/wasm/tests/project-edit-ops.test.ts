@@ -280,7 +280,7 @@ describe('Sonare WASM Project edit ops', () => {
       expect(() =>
         project.setClipLoop(clipId, { loopMode: 'loop', loopLengthPpq: 2, loopCrossfadePpq: 0.5 }),
       ).not.toThrow();
-      expect(project.toJson()).toContain('loop_crossfade_ppq');
+      expect(project.toJson()).toContain('loopCrossfadePpq');
       expect(() =>
         project.setClipLoop(clipId, { loopMode: 'loop', loopLengthPpq: 2, loopCrossfadePpq: -1 }),
       ).toThrow();
@@ -312,7 +312,7 @@ describe('Sonare WASM Project edit ops', () => {
       const withTakes = project.toJson();
       expect(withTakes).not.toBe(before);
       expect(withTakes).toContain('"takes"');
-      expect(withTakes).toContain('"active_take_id":1');
+      expect(withTakes).toContain('"activeTakeId":1');
 
       expect(() =>
         project.setClipCompSegments(clipId, [
@@ -320,7 +320,7 @@ describe('Sonare WASM Project edit ops', () => {
           { startPpq: 2, endPpq: 4, takeId: 2 },
         ]),
       ).not.toThrow();
-      expect(project.toJson()).toContain('"comp_segments"');
+      expect(project.toJson()).toContain('"compSegments"');
 
       project.undo();
       expect(project.toJson()).toBe(withTakes);
@@ -367,7 +367,7 @@ describe('Sonare WASM Project edit ops', () => {
           { startPpq: 2, endPpq: 4, takeId: 2, crossfadePpq: 0.25 },
         ]),
       ).not.toThrow();
-      expect(project.toJson()).toContain('"crossfade_ppq":0.25');
+      expect(project.toJson()).toContain('"crossfadePpq":0.25');
 
       let caught: unknown;
       try {
@@ -404,7 +404,7 @@ describe('Sonare WASM Project edit ops', () => {
       expect(result.clipId).toBeGreaterThan(0);
       expect(result.takeCount).toBe(2);
       expect(project.toJson()).not.toContain('"partial"');
-      expect(project.toJson()).toContain('"active_take_id":2');
+      expect(project.toJson()).toContain('"activeTakeId":2');
       project.undo();
       expect(project.toJson()).toContain('"clips":[]');
     } finally {
@@ -431,7 +431,7 @@ describe('Sonare WASM Project edit ops', () => {
       });
       expect(kept.takeCount).toBe(2);
       expect(partialTakeIds(project)).toEqual([[2]]);
-      expect(project.toJson()).toContain('"active_take_id":1');
+      expect(project.toJson()).toContain('"activeTakeId":1');
       const dropped = project.addLoopRecordingTakes({
         ...base,
         startPpq: 4,
@@ -722,9 +722,9 @@ describe('Sonare WASM Project edit ops', () => {
           points: [{ ppq: 0, value: 1, curveToNext: curve as ProjectAutomationCurve }],
         });
         const doc = JSON.parse(project.toJson()) as {
-          tracks: Array<{ automation_lanes: Array<{ points: Array<{ curve_to_next: number }> }> }>;
+          tracks: Array<{ automationLanes: Array<{ points: Array<{ curveToNext: number }> }> }>;
         };
-        return doc.tracks[0].automation_lanes[0].points[0].curve_to_next;
+        return doc.tracks[0].automationLanes[0].points[0].curveToNext;
       } finally {
         project.destroy();
       }
@@ -766,9 +766,9 @@ describe('Sonare WASM Project edit ops', () => {
         points: [{ ppq: 0, value: 0 }],
       });
       const serialized = JSON.parse(project.toJson()) as {
-        tracks: Array<{ automation_lanes: Array<Record<string, unknown>> }>;
+        tracks: Array<{ automationLanes: Array<Record<string, unknown>> }>;
       };
-      expect(serialized.tracks[0].automation_lanes[0]).not.toHaveProperty('target_kind');
+      expect(serialized.tracks[0].automationLanes[0]).not.toHaveProperty('targetKind');
     } finally {
       project.destroy();
     }
@@ -789,12 +789,12 @@ describe('Sonare WASM Project edit ops', () => {
       });
       const json = project.toJson();
       const serialized = JSON.parse(json) as {
-        tracks: Array<{ automation_lanes: Array<Record<string, unknown>> }>;
+        tracks: Array<{ automationLanes: Array<Record<string, unknown>> }>;
       };
-      expect(serialized.tracks[0].automation_lanes).toEqual(
+      expect(serialized.tracks[0].automationLanes).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ target_param_id: 20, target_kind: 1 }),
-          expect.objectContaining({ target_param_id: 21, target_kind: 2 }),
+          expect.objectContaining({ targetParamId: 20, targetKind: 1 }),
+          expect.objectContaining({ targetParamId: 21, targetKind: 2 }),
         ]),
       );
 
@@ -847,10 +847,10 @@ describe('Sonare WASM Project edit ops', () => {
         points: [{ ppq: 0, value: -6 }],
       });
       const edited = JSON.parse(project.toJson()) as {
-        tracks: Array<{ automation_lanes: Array<Record<string, unknown>> }>;
+        tracks: Array<{ automationLanes: Array<Record<string, unknown>> }>;
       };
-      expect(edited.tracks[0].automation_lanes).toEqual(
-        expect.arrayContaining([expect.objectContaining({ target_param_id: 30, target_kind: 1 })]),
+      expect(edited.tracks[0].automationLanes).toEqual(
+        expect.arrayContaining([expect.objectContaining({ targetParamId: 30, targetKind: 1 })]),
       );
     } finally {
       project.destroy();
