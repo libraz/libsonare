@@ -166,6 +166,40 @@ class LoudnessNamesRule(unittest.TestCase):
         self.assertEqual([f.key for f in verdict.violations], ["python:Profile.true_peak_db"])
 
 
+class StringClosedSetsRule(unittest.TestCase):
+    CLEAN = [
+        field("wasm", "PanOptions", "law", "'stereoPan' | 'balance' | undefined"),
+        field("wasm", "ChangerOptions", "numChannels", "1 | 2"),
+        {"surface": "python", "kind": "class", "name": "Frame", "owner": "", "bases": []},
+    ]
+    COUNT = {"wasm:ChangerOptions.numChannels": "a count"}
+
+    def judge(self, records):
+        base = dataclasses.replace(rule("string-closed-sets"), pending={}, exempt=self.COUNT)
+        return check.judge(base, records)
+
+    def test_clean_surface_passes(self) -> None:
+        verdict = self.judge(self.CLEAN)
+        self.assertEqual(verdict.read, 1)
+        self.assertFalse(verdict.failed)
+
+    def test_numeric_union_is_named(self) -> None:
+        planted = field("node", "Mixer", "law", "0 | 1 | 2")
+        verdict = self.judge([*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["node:Mixer.law"])
+
+    def test_int_enum_is_named(self) -> None:
+        planted = {
+            "surface": "python",
+            "kind": "class",
+            "name": "Mode",
+            "owner": "",
+            "bases": ["IntEnum"],
+        }
+        verdict = self.judge([*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["python:Mode"])
+
+
 class Framework(unittest.TestCase):
     def test_reading_nothing_fails(self) -> None:
         verdict = check.judge(rule("getters"), [])

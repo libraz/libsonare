@@ -183,6 +183,30 @@ def _loudness_name_violation(record: dict) -> str | None:
     return None
 
 
+_NUMERIC_UNION = re.compile(r"(\s*-?\d+\s*\|)+\s*-?\d+(\s*\|\s*undefined)?")
+_ENUM_BASES = ("IntEnum", "IntFlag", "Enum", "Flag")
+_COUNT_NOT_A_SET = "a channel count that admits one or two, not a closed set of choices"
+
+
+def _closed_set_population(r: dict) -> bool:
+    if r["surface"] in ("node", "wasm"):
+        return (
+            r["kind"] in ("field", "option")
+            and _NUMERIC_UNION.fullmatch(r.get("type", "")) is not None
+        )
+    return (
+        r["surface"] == "python"
+        and r["kind"] in ("class", "type")
+        and any(b in _ENUM_BASES for b in r.get("bases") or [])
+    )
+
+
+def _closed_set_violation(r: dict) -> str | None:
+    if r["surface"] == "python":
+        return "a Python enum other than ErrorCode and PitchClass is a Literal of string tokens"
+    return "a closed set is a string union, not a numeric union"
+
+
 RULES: list[Rule] = [
     Rule(
         name="getters",
@@ -218,6 +242,33 @@ RULES: list[Rule] = [
             and _loudness_unit(r.get("member", "")) is not None
         ),
         violation=_loudness_name_violation,
+    ),
+    Rule(
+        name="string-closed-sets",
+        summary="closed sets are string unions; only ErrorCode and PitchClass stay Python enums",
+        population=_closed_set_population,
+        violation=_closed_set_violation,
+        exempt={
+            "python:ErrorCode": "the rule keeps ErrorCode as an IntEnum",
+            "python:PitchClass": "the rule keeps PitchClass as an IntEnum",
+            **{
+                key: _COUNT_NOT_A_SET
+                for key in (
+                    "node:RealtimeVoiceChangerOptions.numChannels",
+                    "node:StreamingMasteringChainConfig.numChannels",
+                    "node:RealtimeVoiceChanger.processInterleavedInto(numChannels)",
+                    "node:RealtimeVoiceChanger.processInterleavedWithCarrierInto(numChannels)",
+                    "wasm:RealtimeVoiceChangerInterleavedBuffer.numChannels",
+                    "wasm:RealtimeVoiceChangerOptions.numChannels",
+                    "wasm:SonareRealtimeVoiceChangerWorkletProcessorOptions.numChannels",
+                    "wasm:StreamingMasteringChainConfig.numChannels",
+                    "wasm:RealtimeVoiceChanger.createRealtimeInterleavedBuffer(numChannels)",
+                    "wasm:RealtimeVoiceChanger.createRealtimePlanarBuffer(numChannels)",
+                    "wasm:RealtimeVoiceChanger.processInterleavedInto(numChannels)",
+                    "wasm:RealtimeVoiceChanger.processInterleavedWithCarrierInto(numChannels)",
+                )
+            },
+        },
     ),
 ]
 
