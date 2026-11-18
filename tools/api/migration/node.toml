@@ -15058,3 +15058,19 @@ changed = "0 or a negative k is refused with RangeError; it used to filter with 
 domain = "effects"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/surface/effects-sep.test.ts::nnFilter refuses a zero or negative k and a negative width"
+
+[[entry]]
+kind = "field"
+old = "ProjectLoopRecordingDesc.audioChannels"
+changed = "required with interleaved audio: the channel count of the caller's capture has no default (was 1); planar audio takes its count from the channel arrays, and its type has no audioChannels"
+domain = "project"
+rule = "num-channels"
+test = "bindings/node/tests/project-edit-extra.test.ts::addLoopRecordingTakes refuses interleaved audio without its channel count or sample rate"
+
+[[entry]]
+kind = "field"
+old = "ProjectLoopRecordingDesc.audioSampleRate"
+changed = "required: the rate of the caller's capture has no default (was 48000)"
+domain = "project"
+rule = "sample-rate-required"
+test = "bindings/node/tests/project-edit-extra.test.ts::addLoopRecordingTakes refuses interleaved audio without its channel count or sample rate"
