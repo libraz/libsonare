@@ -585,7 +585,7 @@ try { new OfflineWorkerClient(); } catch (e) {
 [[rule]]
 slug = "getters"
 title = "Cheap scalar state reads are getters and properties"
-summary = "A read with no arguments that is O(1) and allocation-free and returns a scalar or enum is a readonly getter in JavaScript and a `@property` in Python. Reads that compute, allocate, take arguments or return a record stay methods without a `get` prefix."
+summary = "A read with no arguments that is O(1) and allocation-free and returns a scalar or enum is a readonly getter in JavaScript and a `@property` in Python. Counts are such reads: `engine.clip_count`, `mixer.strip_count`, never `clip_count()`. Reads that compute, allocate, take arguments or return a record stay methods without a `get` prefix, so a count that takes an argument (`engine.controller_binding_count(destination_id)`) is a method."
 [[rule.example]]
 surface = "wasm"
 before = '''
@@ -601,6 +601,14 @@ latency = changer.latency_samples()
 '''
 after = '''
 latency = changer.latency_samples
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+n = engine.clip_count()
+'''
+after = '''
+n = engine.clip_count
 '''
 
 [[rule]]
