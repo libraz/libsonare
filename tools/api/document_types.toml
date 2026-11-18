@@ -5,7 +5,7 @@
 # project, the playback renderer config). Everything else is a record, a result the library returns
 # or a per-call input bag. A Python record has snake_case attributes whatever its wire form looks
 # like, and a JS record spells a value it does not carry as an omitted field, never null; a document
-# keeps the core's camelCase keys in Python and the null its schema gives a meaning on every surface.
+# keeps the core's camelCase keys in Python and spells an unset value as its reader does on every surface.
 # A record member holding a document is covered by declaring the document's own type, not the record.
 #
 # One [[document]] per root type; every type its fields name is covered with it, per surface.
@@ -15,7 +15,7 @@
 
 [[document]]
 type = "PlaybackRendererConfig"
-evidence = "schemas/playback-renderer-config.schema.json:5: the published schema, which gives null a meaning for distanceM, channelMap and programLufs"
+evidence = "src/playback/config.cpp:291: parse_sections reads the renderer config and refuses an unknown key or a value of the wrong kind, null included; an unset value is an absent key"
 
 [[document]]
 type = "MasteringChainConfig"

@@ -28883,31 +28883,39 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "PlaybackInputConfig.channel_map"
-new = "PlaybackInputConfig.channelMap"
+to = "PlaybackInputConfig.channelMap"
+changed = "takes an array or is absent; null is refused naming the key, and config() omits an unset map"
 domain = "engine"
 rule = "config-keys"
+test = "bindings/wasm/tests/document-null-refusal.test.ts::refuses null on input.channelMap"
 
 [[entry]]
 kind = "field"
 old = "PlaybackInputConfig.channel_map"
-new = "PlaybackInputConfig.channelMap"
+to = "PlaybackInputConfig.channelMap"
+changed = "takes an array or is absent; null is refused naming the key, and config() omits an unset map"
 domain = "engine"
 rule = "config-keys"
+test = "bindings/wasm/tests/document-null-refusal.test.ts::refuses null on input.channelMap"
 entry = "./analysis"
 
 [[entry]]
 kind = "field"
 old = "PlaybackLoudnessConfig.program_lufs"
-new = "PlaybackLoudnessConfig.programLufs"
+to = "PlaybackLoudnessConfig.programLufs"
+changed = "takes a number or is absent; null is refused naming the key, and config() omits an unset value"
 domain = "engine"
 rule = "config-keys"
+test = "bindings/wasm/tests/document-null-refusal.test.ts::refuses %s on loudness.programLufs"
 
 [[entry]]
 kind = "field"
 old = "PlaybackLoudnessConfig.program_lufs"
-new = "PlaybackLoudnessConfig.programLufs"
+to = "PlaybackLoudnessConfig.programLufs"
+changed = "takes a number or is absent; null is refused naming the key, and config() omits an unset value"
 domain = "engine"
 rule = "config-keys"
+test = "bindings/wasm/tests/document-null-refusal.test.ts::refuses %s on loudness.programLufs"
 entry = "./analysis"
 
 [[entry]]
@@ -28928,14 +28936,14 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "PlaybackOutputLimiterConfig.ceiling_db"
-new = "PlaybackOutputLimiterConfig.ceilingDbtp"
+new = "PlaybackOutputLimiterConfig.ceilingDb"
 domain = "engine"
 rule = "config-keys"
 
 [[entry]]
 kind = "field"
 old = "PlaybackOutputLimiterConfig.ceiling_db"
-new = "PlaybackOutputLimiterConfig.ceilingDbtp"
+new = "PlaybackOutputLimiterConfig.ceilingDb"
 domain = "engine"
 rule = "config-keys"
 entry = "./analysis"
@@ -29033,16 +29041,20 @@ entry = "./analysis"
 [[entry]]
 kind = "field"
 old = "PlaybackSpeakerConfig.distance_m"
-new = "PlaybackSpeakerConfig.distanceM"
+to = "PlaybackSpeakerConfig.distanceM"
+changed = "takes a number or is absent; null is refused naming the key, and config() omits an unset value"
 domain = "engine"
 rule = "config-keys"
+test = "bindings/wasm/tests/document-null-refusal.test.ts::refuses %s on a speaker distanceM"
 
 [[entry]]
 kind = "field"
 old = "PlaybackSpeakerConfig.distance_m"
-new = "PlaybackSpeakerConfig.distanceM"
+to = "PlaybackSpeakerConfig.distanceM"
+changed = "takes a number or is absent; null is refused naming the key, and config() omits an unset value"
 domain = "engine"
 rule = "config-keys"
+test = "bindings/wasm/tests/document-null-refusal.test.ts::refuses %s on a speaker distanceM"
 entry = "./analysis"
 
 [[entry]]

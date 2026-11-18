@@ -56,16 +56,16 @@ export interface PlaybackInputConfig {
   layout?: 'auto' | 'mono' | 'stereo' | '5.1' | '7.1';
   /**
    * Prepare. Role of each input channel, covering the fixed layout's roles
-   * exactly once; requires a fixed `layout`. `null` means canonical order, and
-   * `config()` returns the key as `null` when no map is set.
+   * exactly once; requires a fixed `layout`. Absent means canonical order, and
+   * `config()` omits the key while no map is set.
    */
-  channelMap?: PlaybackChannelRole[] | null;
+  channelMap?: PlaybackChannelRole[];
 }
 
 /** Calibration of one speaker of the output layout; all keys are optional. */
 export interface PlaybackSpeakerConfig {
-  /** Prepare. Listener distance in metres, [0.1, 30]; `null` disables distance compensation. Default `null`; `config()` returns the key for each speaker of the layout, `null` when unset. */
-  distanceM?: number | null;
+  /** Prepare. Listener distance in metres, [0.1, 30]; absent disables distance compensation, and `config()` omits the key while it is unset. */
+  distanceM?: number;
   /** Realtime. Level trim in dB, [-20, 20]. Default 0. */
   trimDb?: number;
   /** Prepare. A `"small"` speaker is high-passed at the crossover when bass management is enabled. Default `"large"`. */
@@ -110,8 +110,8 @@ export interface PlaybackUpmixConfig {
 
 /** Loudness alignment settings; all keys are optional and realtime. */
 export interface PlaybackLoudnessConfig {
-  /** Realtime. Measured program loudness, [-70, 0]; `null` means no alignment gain. Default `null`; `config()` always returns the key, `null` when unset. */
-  programLufs?: number | null;
+  /** Realtime. Measured program loudness, [-70, 0]; absent means no alignment gain, and `config()` omits the key while it is unset. */
+  programLufs?: number;
   /** Realtime. [-40, -5]. Default -24. */
   targetLufs?: number;
 }
@@ -142,8 +142,8 @@ export interface PlaybackHeadTrackingConfig {
 export interface PlaybackOutputLimiterConfig {
   /** Realtime. The latency does not change. Default true. */
   enabled?: boolean;
-  /** Realtime. [-12, 0]. Default -1. */
-  ceilingDbtp?: number;
+  /** Realtime. Sample-peak ceiling in dBFS, [-12, 0]. Default -1. */
+  ceilingDb?: number;
 }
 
 /** A stage name used in {@link PlaybackDiagnostics.inactiveStages} and `.latency.stages`. */
