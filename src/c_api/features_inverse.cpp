@@ -197,8 +197,6 @@ SonareError sonare_mfcc_to_mel_ex(const float* coefficients, int n_mfcc, int n_f
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
   if (!coefficients) return SONARE_ERROR_INVALID_PARAMETER;
-  if (n_mfcc <= 0 || n_frames <= 0 || n_mels <= 0 || !std::isfinite(lifter) || lifter < 0.0f)
-    return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   std::vector<float> mel = mfcc_to_mel(coefficients, n_mfcc, n_frames, n_mels, lifter);
@@ -219,8 +217,7 @@ SonareError sonare_mfcc_to_audio_ex2(const float* coefficients, int n_mfcc, int 
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   if (!coefficients) return SONARE_ERROR_INVALID_PARAMETER;
-  if (n_mfcc <= 0 || n_frames <= 0 || n_mels <= 0 || n_fft <= 0 || hop_length <= 0 ||
-      sample_rate <= 0 || n_iter <= 0 || !std::isfinite(lifter) || lifter < 0.0f) {
+  if (n_fft <= 0 || hop_length <= 0 || sample_rate <= 0 || n_iter <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 

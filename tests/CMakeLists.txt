@@ -220,6 +220,7 @@ add_executable(sonare_tests
   api/sonare_c_percussive_events_test.cpp
   api/sonare_c_transcribe_test.cpp
   api/sonare_c_metering_extra_test.cpp
+  conformance/core_validation_refusals_test.cpp
   conformance/master_meter_conformance_test.cpp
   conformance/public_input_conformance_test.cpp
   conformance/wasm_float_saturation_test.cpp

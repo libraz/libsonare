@@ -332,7 +332,6 @@ val js_mfcc_to_mel(val mfcc, const val& n_mfcc_val, const val& n_frames_val, con
   const float lifter = checkedFloatFromVal(lifter_val, "lifter");
   std::vector<float> data =
       load_validated_matrix("mfccToMel", mfcc, n_mfcc, n_frames, "coefficients", "n_mfcc");
-  validate_positive("mfccToMel", n_mels, "n_mels");
 
   std::vector<float> mel = mfcc_to_mel(data.data(), n_mfcc, n_frames, n_mels, lifter);
 
@@ -361,7 +360,6 @@ val js_mfcc_to_audio(val mfcc, const val& n_mfcc_val, const val& n_frames_val,
   validate_sample_rate("mfccToAudio", sample_rate);
   std::vector<float> data =
       load_validated_matrix("mfccToAudio", mfcc, n_mfcc, n_frames, "coefficients", "n_mfcc");
-  validate_positive("mfccToAudio", n_mels, "n_mels");
   validate_positive("mfccToAudio", n_fft, "n_fft");
   validate_positive("mfccToAudio", hop_length, "hop_length");
   validate_positive("mfccToAudio", n_iter, "n_iter");

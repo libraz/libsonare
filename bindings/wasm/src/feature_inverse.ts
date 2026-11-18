@@ -13,6 +13,7 @@ import {
   assertAudioInput,
   assertFiniteScalar,
   assertFloatFields,
+  assertInt32,
   assertMatrix2D,
   assertNumber,
   assertPositiveFloatValue,
@@ -223,7 +224,7 @@ export function mfccToMel(...args: unknown[]): Matrix2D {
     r.validate !== false,
   );
   const nMels = r.nMels ?? 128;
-  validatePositiveIntegers('mfccToMel', { nMels });
+  assertInt32('mfccToMel', nMels, 'nMels');
   const native = requireModule().mfccToMel(
     coefficients.data,
     coefficients.rows,
@@ -254,7 +255,8 @@ export function mfccToAudio(...args: unknown[]): Float32Array {
   const fft = resolveFftOptions('mfccToAudio', r.nFft, r.hopLength);
   const nMels = r.nMels ?? 128;
   const nIter = r.nIter ?? 32;
-  validatePositiveIntegers('mfccToAudio', { nMels, nIter });
+  assertInt32('mfccToAudio', nMels, 'nMels');
+  validatePositiveIntegers('mfccToAudio', { nIter });
   const fminHz = r.fminHz ?? 0;
   const fmaxHz = r.fmaxHz ?? 0;
   assertFloatFields('mfccToAudio', { fminHz, fmaxHz });

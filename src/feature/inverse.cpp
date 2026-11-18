@@ -93,7 +93,12 @@ std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int 
                                float lifter) {
   if (mfcc == nullptr)
     throw SonareException(ErrorCode::InvalidParameter, "mfcc_to_mel: mfcc is null");
-  if (n_mfcc <= 0 || n_frames <= 0 || n_mels <= 0) return {};
+  if (n_mfcc <= 0)
+    throw SonareException(ErrorCode::InvalidParameter, "mfcc_to_mel: n_mfcc must be >= 1");
+  if (n_frames <= 0)
+    throw SonareException(ErrorCode::InvalidParameter, "mfcc_to_mel: n_frames must be >= 1");
+  if (n_mels <= 0)
+    throw SonareException(ErrorCode::InvalidParameter, "mfcc_to_mel: n_mels must be >= 1");
   if (!std::isfinite(lifter) || lifter < 0.0f)
     throw SonareException(ErrorCode::InvalidParameter,
                           "mfcc_to_mel: lifter must be a finite value >= 0");

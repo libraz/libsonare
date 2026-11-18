@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "mfcc_to_mel": {
+    "input": { "n_mfcc": 4, "n_frames": 3, "fill": 0.1 },
+    "accepted": [{ "id": "one_mel", "n_mels": 1 }],
+    "refused": [
+      { "id": "zero_mels", "n_mels": 0, "cause": "argument", "message": "n_mels must be >= 1" },
+      { "id": "negative_mels", "n_mels": -1, "cause": "argument", "message": "n_mels must be >= 1" }
+    ]
+  }
+}
