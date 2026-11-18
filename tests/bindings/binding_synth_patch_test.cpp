@@ -37,11 +37,11 @@ SonareProject* make_synth_project(uint32_t dest, uint8_t note = 60) {
   REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
   SonareMidiEventPod events[2];
   events[0].ppq = 0.0;
-  events[0].data0 = 0x20900040u | (static_cast<uint32_t>(note) << 8);  // note-on, vel 64
-  events[0].data1 = 0u;
+  events[0].word0 = 0x20900040u | (static_cast<uint32_t>(note) << 8);  // note-on, vel 64
+  events[0].word1 = 0u;
   events[1].ppq = 2.0;
-  events[1].data0 = 0x20800000u | (static_cast<uint32_t>(note) << 8);  // note-off
-  events[1].data1 = 0u;
+  events[1].word0 = 0x20800000u | (static_cast<uint32_t>(note) << 8);  // note-off
+  events[1].word1 = 0u;
   REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
   REQUIRE(sonare_project_set_track_midi_destination(project, track, dest) == SONARE_OK);
   return project;
@@ -1368,11 +1368,11 @@ SonareProject* make_census_project(uint8_t note) {
   REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
   SonareMidiEventPod events[2];
   events[0].ppq = 0.0;
-  events[0].data0 = 0x20900064u | (static_cast<uint32_t>(note) << 8);  // note-on, vel 100
-  events[0].data1 = 0u;
+  events[0].word0 = 0x20900064u | (static_cast<uint32_t>(note) << 8);  // note-on, vel 100
+  events[0].word1 = 0u;
   events[1].ppq = 0.2;
-  events[1].data0 = 0x20800000u | (static_cast<uint32_t>(note) << 8);  // note-off
-  events[1].data1 = 0u;
+  events[1].word0 = 0x20800000u | (static_cast<uint32_t>(note) << 8);  // note-off
+  events[1].word1 = 0u;
   REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
   REQUIRE(sonare_project_set_track_midi_destination(project, track, 3) == SONARE_OK);
   return project;

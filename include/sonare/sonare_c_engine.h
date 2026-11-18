@@ -1286,7 +1286,7 @@ SonareError sonare_engine_set_track_monitor_mode(SonareRealtimeEngine* engine, u
 ///          `group` is REDUNDANT: a UMP already carries its group in `word0`
 ///          bits 24..27, and that is the copy the engine uses, because it is the
 ///          form that reaches a device or a file. Packing the group into `word0`
-///          (as this header's `data0` packing describes) is sufficient and is
+///          (as this header's `word0` packing describes) is sufficient and is
 ///          the recommended form; a `group` that contradicts `word0` is ignored
 ///          rather than honoured, so the two can never be read as different
 ///          groups by different parts of the engine. The field is still

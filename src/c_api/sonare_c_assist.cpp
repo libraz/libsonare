@@ -203,8 +203,8 @@ void describe_commands(const assist::AssistResult& result, json::Object* documen
     for (const sonare::arrangement::MidiClipEvent& event : patch.add) {
       json::Object pod;
       pod["ppq"] = json::Value(event.ppq);
-      pod["data0"] = json::Value(static_cast<double>(event.data0));
-      pod["data1"] = json::Value(static_cast<double>(event.data1));
+      pod["word0"] = json::Value(static_cast<double>(event.word0));
+      pod["word1"] = json::Value(static_cast<double>(event.word1));
       added.push_back(json::Value(std::move(pod)));
     }
     json::Object entry;

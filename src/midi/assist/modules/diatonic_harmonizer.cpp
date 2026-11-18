@@ -44,10 +44,10 @@ bool source_note_less(const SourceNote& left, const SourceNote& right) noexcept 
 
 sonare::midi::Ump ump_from_event(const arrangement::MidiClipEvent& event) noexcept {
   sonare::midi::Ump ump;
-  ump.words[0] = event.data0;
-  ump.words[1] = event.data1;
-  ump.word_count = sonare::midi::ump_word_count_for_word0(event.data0);
-  ump.group = sonare::midi::ump_group_from_word0(event.data0);
+  ump.words[0] = event.word0;
+  ump.words[1] = event.word1;
+  ump.word_count = sonare::midi::ump_word_count_for_word0(event.word0);
+  ump.group = sonare::midi::ump_group_from_word0(event.word0);
   return ump;
 }
 

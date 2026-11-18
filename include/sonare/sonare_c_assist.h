@@ -120,7 +120,7 @@ const char* sonare_assist_module_ids(void);
 ///     contain partial @c patches and @c payloads; those partial results are
 ///     descriptive and are never committed by the apply entry point.
 ///   - @c patches: one entry per proposed clip edit, @c { "clipId": n, "add":
-///     [ { "ppq": n, "data0": n, "data1": n } ] }. The event triples are exactly
+///     [ { "ppq": n, "word0": n, "word1": n } ] }. The event triples are exactly
 ///     @ref SonareMidiEventPod, so a caller applies a suggestion by merging them
 ///     into the clip's event list and calling
 ///     @ref sonare_project_set_midi_events.

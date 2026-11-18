@@ -143,7 +143,7 @@ struct HpssArguments {
 ///         must return before any further N-API call.
 bool ReadHpssArguments(Napi::Env env, const Napi::CallbackInfo& info, HpssArguments* out);
 
-/// @brief Marshal one C-ABI MIDI event into the `{ ppq, data0, data1 }` object
+/// @brief Marshal one C-ABI MIDI event into the `{ ppq, word0, word1 }` object
 ///        every JS-facing event list on this surface is made of.
 ///
 /// Shared rather than per-file: the flat event is the one shape the project,

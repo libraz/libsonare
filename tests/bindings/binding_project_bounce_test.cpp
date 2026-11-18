@@ -156,11 +156,11 @@ TEST_CASE("bounce_with_instruments drives a callback instrument for routed MIDI"
   // A held note: on at ppq 0, off at ppq 2.0 (still sounding through the bounce).
   SonareMidiEventPod events[2];
   events[0].ppq = 0.0;
-  events[0].data0 = 0x20903C40u;  // note-on, note 60, vel 64
-  events[0].data1 = 0u;
+  events[0].word0 = 0x20903C40u;  // note-on, note 60, vel 64
+  events[0].word1 = 0u;
   events[1].ppq = 2.0;
-  events[1].data0 = 0x20803C00u;  // note-off, note 60
-  events[1].data1 = 0u;
+  events[1].word0 = 0x20803C00u;  // note-off, note 60
+  events[1].word1 = 0u;
   REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
 
   // Route the track to destination 5 and bind a callback instrument there.
@@ -782,11 +782,11 @@ TEST_CASE("bounce_with_instruments auto length includes callback instrument tail
   REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track, &clip) == SONARE_OK);
   SonareMidiEventPod events[2];
   events[0].ppq = 0.0;
-  events[0].data0 = 0x20903C40u;
-  events[0].data1 = 0u;
+  events[0].word0 = 0x20903C40u;
+  events[0].word1 = 0u;
   events[1].ppq = 0.5;
-  events[1].data0 = 0x20803C00u;
-  events[1].data1 = 0u;
+  events[1].word0 = 0x20803C00u;
+  events[1].word1 = 0u;
   REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
   REQUIRE(sonare_project_set_track_midi_destination(project, track, 5) == SONARE_OK);
 
@@ -834,11 +834,11 @@ TEST_CASE("bounce_with_builtin_instruments renders the built-in synth for routed
 
   SonareMidiEventPod events[2];
   events[0].ppq = 0.0;
-  events[0].data0 = 0x20903C40u;  // note-on, note 60, vel 64
-  events[0].data1 = 0u;
+  events[0].word0 = 0x20903C40u;  // note-on, note 60, vel 64
+  events[0].word1 = 0u;
   events[1].ppq = 2.0;
-  events[1].data0 = 0x20803C00u;  // note-off, note 60
-  events[1].data1 = 0u;
+  events[1].word0 = 0x20803C00u;  // note-off, note 60
+  events[1].word1 = 0u;
   REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
   REQUIRE(sonare_project_set_track_midi_destination(project, track, 5) == SONARE_OK);
 
@@ -1081,11 +1081,11 @@ TEST_CASE("bounce auto-derives total_frames from the arrangement", "[project]") 
   REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
   SonareMidiEventPod events[2];
   events[0].ppq = 0.0;
-  events[0].data0 = 0x20903C40u;
-  events[0].data1 = 0u;
+  events[0].word0 = 0x20903C40u;
+  events[0].word1 = 0u;
   events[1].ppq = 2.0;
-  events[1].data0 = 0x20803C00u;
-  events[1].data1 = 0u;
+  events[1].word0 = 0x20803C00u;
+  events[1].word1 = 0u;
   REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
   REQUIRE(sonare_project_set_track_midi_destination(project, track, 0) == SONARE_OK);
 
@@ -1473,11 +1473,11 @@ TEST_CASE("bounce renders per-track channel-strip effects", "[project]") {
   REQUIRE(sonare_project_add_midi_clip(base, 0.0, 4.0, &track, &clip) == SONARE_OK);
   SonareMidiEventPod events[2];
   events[0].ppq = 0.0;
-  events[0].data0 = 0x20903C40u;  // note-on, note 60, vel 64
-  events[0].data1 = 0u;
+  events[0].word0 = 0x20903C40u;  // note-on, note 60, vel 64
+  events[0].word1 = 0u;
   events[1].ppq = 3.0;
-  events[1].data0 = 0x20803C00u;  // note-off, note 60
-  events[1].data1 = 0u;
+  events[1].word0 = 0x20803C00u;  // note-off, note 60
+  events[1].word1 = 0u;
   REQUIRE(sonare_project_set_midi_events(base, clip, events, 2) == SONARE_OK);
   REQUIRE(sonare_project_set_track_midi_destination(base, track, 0) == SONARE_OK);
   SonareAutomationPoint fader_point{};
@@ -1946,8 +1946,8 @@ TEST_CASE("bounce_with_instruments PDC-compensates a latency-bearing instrument"
   // A single note-on at ppq 0 (render frame 0).
   SonareMidiEventPod ev{};
   ev.ppq = 0.0;
-  ev.data0 = 0x20903C40u;  // note-on, note 60
-  ev.data1 = 0u;
+  ev.word0 = 0x20903C40u;  // note-on, note 60
+  ev.word1 = 0u;
   REQUIRE(sonare_project_set_midi_events(project, clip, &ev, 1) == SONARE_OK);
   REQUIRE(sonare_project_set_track_midi_destination(project, track, 5) == SONARE_OK);
 
@@ -2044,11 +2044,11 @@ TEST_CASE("bounce dispatches every note of a sequential melody, not just the fir
   for (int i = 0; i < 3; ++i) {
     const double on_ppq = static_cast<double>(i);  // 0, 1, 2 quarters
     events[i * 2].ppq = on_ppq;
-    events[i * 2].data0 = 0x20900040u | (static_cast<uint32_t>(notes[i]) << 8) | 0x40u;
-    events[i * 2].data1 = 0u;
+    events[i * 2].word0 = 0x20900040u | (static_cast<uint32_t>(notes[i]) << 8) | 0x40u;
+    events[i * 2].word1 = 0u;
     events[i * 2 + 1].ppq = on_ppq + 0.5;  // note-off half a beat later
-    events[i * 2 + 1].data0 = 0x20800000u | (static_cast<uint32_t>(notes[i]) << 8);
-    events[i * 2 + 1].data1 = 0u;
+    events[i * 2 + 1].word0 = 0x20800000u | (static_cast<uint32_t>(notes[i]) << 8);
+    events[i * 2 + 1].word1 = 0u;
   }
   REQUIRE(sonare_project_set_midi_events(project, clip, events, 6) == SONARE_OK);
   REQUIRE(sonare_project_set_track_midi_destination(project, track, 5) == SONARE_OK);
@@ -2140,9 +2140,9 @@ TEST_CASE("a tick denser than the per-block event hold loses no events", "[proje
     const auto controller = static_cast<uint32_t>(i % 120);  // below the mode-message range
     const auto channel = static_cast<uint32_t>((i / 120) % 16);
     events[static_cast<size_t>(i)].ppq = 0.0;
-    events[static_cast<size_t>(i)].data0 =
+    events[static_cast<size_t>(i)].word0 =
         0x20B00000u | (channel << 16) | (controller << 8) | 0x40u;
-    events[static_cast<size_t>(i)].data1 = 0u;
+    events[static_cast<size_t>(i)].word1 = 0u;
   }
   REQUIRE(sonare_project_set_midi_events(project, clip, events.data(), events.size()) == SONARE_OK);
   REQUIRE(sonare_project_set_track_midi_destination(project, track, 5) == SONARE_OK);
@@ -2174,14 +2174,14 @@ TEST_CASE("a tick denser than the per-block event hold loses no events", "[proje
   std::vector<uint32_t> expected_controls;
   for (const uint32_t bank_controller : {0u, 32u}) {
     for (const auto& event : events) {
-      if (((event.data0 >> 8) & 0x7Fu) == bank_controller) {
-        expected_controls.push_back(event.data0);
+      if (((event.word0 >> 8) & 0x7Fu) == bank_controller) {
+        expected_controls.push_back(event.word0);
       }
     }
   }
   for (const auto& event : events) {
-    const uint32_t controller = (event.data0 >> 8) & 0x7Fu;
-    if (controller != 0 && controller != 32) expected_controls.push_back(event.data0);
+    const uint32_t controller = (event.word0 >> 8) & 0x7Fu;
+    if (controller != 0 && controller != 32) expected_controls.push_back(event.word0);
   }
   REQUIRE(state.authored_controls.size() == kEvents);
   REQUIRE(state.authored_controls == expected_controls);
@@ -2239,11 +2239,11 @@ TEST_CASE("bounce delivers the end-of-render note release to a callback instrume
   // way this note is ever let go.
   SonareMidiEventPod events[2];
   events[0].ppq = 0.0;
-  events[0].data0 = 0x20903C64u;  // note-on, note 60, velocity 100
-  events[0].data1 = 0u;
+  events[0].word0 = 0x20903C64u;  // note-on, note 60, velocity 100
+  events[0].word1 = 0u;
   events[1].ppq = 2.0;
-  events[1].data0 = 0x20803C00u;  // note-off, note 60
-  events[1].data1 = 0u;
+  events[1].word0 = 0x20803C00u;  // note-off, note 60
+  events[1].word1 = 0u;
   REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
   REQUIRE(sonare_project_set_track_midi_destination(project, track, 5) == SONARE_OK);
 
@@ -2331,17 +2331,17 @@ TEST_CASE("bounce retunes sequential synth notes to each note's pitch, not the f
   // silence, G5 sounds over [2, 3) quarters (frames 48000..72000).
   SonareMidiEventPod events[4];
   events[0].ppq = 0.0;
-  events[0].data0 = 0x20900040u | (static_cast<uint32_t>(kC5) << 8);  // C5 on, vel 64
-  events[0].data1 = 0u;
+  events[0].word0 = 0x20900040u | (static_cast<uint32_t>(kC5) << 8);  // C5 on, vel 64
+  events[0].word1 = 0u;
   events[1].ppq = 1.0;
-  events[1].data0 = 0x20800000u | (static_cast<uint32_t>(kC5) << 8);  // C5 off
-  events[1].data1 = 0u;
+  events[1].word0 = 0x20800000u | (static_cast<uint32_t>(kC5) << 8);  // C5 off
+  events[1].word1 = 0u;
   events[2].ppq = 2.0;
-  events[2].data0 = 0x20900040u | (static_cast<uint32_t>(kG5) << 8);  // G5 on, vel 64
-  events[2].data1 = 0u;
+  events[2].word0 = 0x20900040u | (static_cast<uint32_t>(kG5) << 8);  // G5 on, vel 64
+  events[2].word1 = 0u;
   events[3].ppq = 3.0;
-  events[3].data0 = 0x20800000u | (static_cast<uint32_t>(kG5) << 8);  // G5 off
-  events[3].data1 = 0u;
+  events[3].word0 = 0x20800000u | (static_cast<uint32_t>(kG5) << 8);  // G5 off
+  events[3].word1 = 0u;
   REQUIRE(sonare_project_set_midi_events(project, clip, events, 4) == SONARE_OK);
   REQUIRE(sonare_project_set_track_midi_destination(project, track, 5) == SONARE_OK);
 

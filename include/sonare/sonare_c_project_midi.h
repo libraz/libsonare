@@ -18,10 +18,10 @@ extern "C" {
 /// @brief A flat MIDI event POD bridging to sonare::arrangement::MidiClipEvent.
 ///
 /// Layout rationale: this C POD is the stable public channel-voice event shape.
-/// @p data0 and @p data1 are the first two UMP words of a channel-voice
+/// @p word0 and @p word1 are the first two UMP words of a channel-voice
 /// message: callers building a MIDI 1.0 note-on may pack
-///   data0 = (0x2u << 28) | (group << 24) | (status << 20) | (channel << 16) |
-///           (note << 8) | velocity, data1 = 0
+///   word0 = (0x2u << 28) | (group << 24) | (status << 20) | (channel << 16) |
+///           (note << 8) | velocity, word1 = 0
 /// (matching @ref make_midi1_note_on word[0], where status is the 0x9 note-on
 /// nibble). The core stores these words in
 /// the project and the compiler / SMF exporter interpret valid UMP channel-voice
@@ -32,16 +32,16 @@ extern "C" {
 /// sonare_midi_* helpers below over hand-packing words.
 typedef struct {
   double ppq;      ///< Position in quarter notes within the clip source timeline.
-  uint32_t data0;  ///< First UMP word of the channel-voice message.
-  uint32_t data1;  ///< Second UMP word; 0 for a MIDI 1.0 channel-voice message.
+  uint32_t word0;  ///< First UMP word of the channel-voice message.
+  uint32_t word1;  ///< Second UMP word; 0 for a MIDI 1.0 channel-voice message.
 } SonareMidiEventPod;
 
 #ifdef __cplusplus
 static_assert(sizeof(SonareMidiEventPod) == sizeof(double) + 2u * sizeof(uint32_t),
               "SonareMidiEventPod layout drift");
 static_assert(offsetof(SonareMidiEventPod, ppq) == 0, "MidiEventPod.ppq offset");
-static_assert(offsetof(SonareMidiEventPod, data0) == 8, "MidiEventPod.data0 offset");
-static_assert(offsetof(SonareMidiEventPod, data1) == 12, "MidiEventPod.data1 offset");
+static_assert(offsetof(SonareMidiEventPod, word0) == 8, "MidiEventPod.word0 offset");
+static_assert(offsetof(SonareMidiEventPod, word1) == 12, "MidiEventPod.word1 offset");
 #endif
 
 /// @brief MIDI route config for @ref sonare_midi_route_events.
@@ -160,8 +160,8 @@ SonareError sonare_midi_poly_pressure(double ppq, uint8_t group, uint8_t channel
 SonareError sonare_midi_program(double ppq, uint8_t group, uint8_t channel, uint8_t program,
                                 SonareMidiEventPod* out);
 
-// MIDI 2.0 channel-voice builders (UMP message type 0x4, two words in data0 /
-// data1). Each returns SONARE_ERROR_INVALID_PARAMETER for a NULL @p out, a
+// MIDI 2.0 channel-voice builders (UMP message type 0x4, two words in word0 /
+// word1). Each returns SONARE_ERROR_INVALID_PARAMETER for a NULL @p out, a
 // non-finite or out-of-range @p ppq, a group or channel above 15, or a 7-bit
 // field above 127.
 

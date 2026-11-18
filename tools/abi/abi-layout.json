@@ -4900,13 +4900,13 @@
       },
       {
         "kind": "unsigned",
-        "name": "data0",
+        "name": "word0",
         "offset": 8,
         "size": 4
       },
       {
         "kind": "unsigned",
-        "name": "data1",
+        "name": "word1",
         "offset": 12,
         "size": 4
       }

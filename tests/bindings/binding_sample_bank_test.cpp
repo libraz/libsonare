@@ -41,8 +41,8 @@ std::string one_note_project() {
     "tracks":[{"id":1,"name":"midi","kind":1,"midi_destination_id":0}],
     "clips":[{"id":1,"track_id":1,"source_id":1,"start_ppq":0,"length_ppq":960}],
     "sources":[{"id":1,"kind":1,"name":""}],
-    "midi_content":{"1":[{"data0":546323556,"data1":0,"ppq":0},
-                     {"data0":545274880,"data1":0,"ppq":480}]}})";
+    "midi_content":{"1":[{"word0":546323556,"word1":0,"ppq":0},
+                     {"word0":545274880,"word1":0,"ppq":480}]}})";
 }
 
 }  // namespace

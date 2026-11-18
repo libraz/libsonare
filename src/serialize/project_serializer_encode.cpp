@@ -327,8 +327,8 @@ Value midi_content_to_json(const arrangement::MidiContentStore& midi) {
     for (const auto& e : events) {
       Object eo;
       eo["ppq"] = e.ppq;
-      eo["data0"] = static_cast<double>(e.data0);
-      eo["data1"] = static_cast<double>(e.data1);
+      eo["word0"] = static_cast<double>(e.word0);
+      eo["word1"] = static_cast<double>(e.word1);
       if (e.sysex_handle != 0) {
         eo["sysex_handle"] = static_cast<double>(e.sysex_handle);
       }

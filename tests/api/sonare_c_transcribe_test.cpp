@@ -116,17 +116,17 @@ struct Decoded {
 Decoded decode(const SonareMidiEventPod& pod) {
   Decoded out;
   out.ppq = pod.ppq;
-  out.type = (pod.data0 >> 28) & 0xFu;
-  out.group = (pod.data0 >> 24) & 0xFu;
-  out.status = (pod.data0 >> 20) & 0xFu;
-  out.channel = (pod.data0 >> 16) & 0xFu;
-  out.note = static_cast<uint8_t>((pod.data0 >> 8) & 0x7Fu);
-  out.velocity = static_cast<uint8_t>(pod.data0 & 0x7Fu);
+  out.type = (pod.word0 >> 28) & 0xFu;
+  out.group = (pod.word0 >> 24) & 0xFu;
+  out.status = (pod.word0 >> 20) & 0xFu;
+  out.channel = (pod.word0 >> 16) & 0xFu;
+  out.note = static_cast<uint8_t>((pod.word0 >> 8) & 0x7Fu);
+  out.velocity = static_cast<uint8_t>(pod.word0 & 0x7Fu);
   return out;
 }
 
 bool same_event(const SonareMidiEventPod& a, const SonareMidiEventPod& b) {
-  return a.ppq == b.ppq && a.data0 == b.data0 && a.data1 == b.data1;
+  return a.ppq == b.ppq && a.word0 == b.word0 && a.word1 == b.word1;
 }
 
 void require_same_events(const std::vector<SonareMidiEventPod>& actual,
@@ -184,7 +184,7 @@ std::vector<SonareMidiEventPod> clip_events_of(const MidiFixture& fixture) {
   std::vector<SonareMidiEventPod> events;
   if (it == store.end()) return events;
   for (const auto& event : it->second) {
-    events.push_back(SonareMidiEventPod{event.ppq, event.data0, event.data1});
+    events.push_back(SonareMidiEventPod{event.ppq, event.word0, event.word1});
   }
   return events;
 }
@@ -493,7 +493,7 @@ TEST_CASE("the tempo places the notes on the grid rather than being carried alon
                   << " at 240");
     // The same instant in seconds is twice as many quarter notes at twice the
     // tempo. The events themselves are the same notes, so only the grid moved.
-    CHECK(fast_events[i].data0 == slow_events[i].data0);
+    CHECK(fast_events[i].word0 == slow_events[i].word0);
     CHECK_THAT(fast_events[i].ppq, WithinRel(2.0 * slow_events[i].ppq, 1.0e-6));
   }
   // A fixture whose first event sits at ppq 0 would satisfy the ratio for free.
@@ -550,8 +550,8 @@ TEST_CASE("sonare_project_transcribe_to_clip writes the project's own grid",
   REQUIRE(written.size() == 2u * note_count);
   for (size_t i = 0; i < expected.size(); ++i) {
     INFO("event " << i);
-    CHECK(written[i].data0 == expected[i].data0);
-    CHECK(written[i].data1 == expected[i].data1);
+    CHECK(written[i].word0 == expected[i].word0);
+    CHECK(written[i].word1 == expected[i].word1);
     // The two grids are built from the same seconds through tempo maps prepared
     // at different sample rates, so the tick can differ by the project rate's
     // own rounding and no more.

@@ -445,11 +445,11 @@ TEST_CASE("project C surface round-trips a MIDI 2.0 Clip File losslessly", "[pro
   const sonare::midi::Ump note_off = sonare::midi::make_midi2_note_off(0, 0, 60, 0);
   SonareMidiEventPod events[2]{};
   events[0].ppq = 0.0;
-  events[0].data0 = note_on.words[0];
-  events[0].data1 = note_on.words[1];
+  events[0].word0 = note_on.words[0];
+  events[0].word1 = note_on.words[1];
   events[1].ppq = 1.0;
-  events[1].data0 = note_off.words[0];
-  events[1].data1 = note_off.words[1];
+  events[1].word0 = note_off.words[0];
+  events[1].word1 = note_off.words[1];
   REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
 
   uint8_t* bytes = nullptr;
@@ -486,7 +486,7 @@ TEST_CASE("project C surface validates MIDI event helpers and input", "[project]
   SonareMidiEventPod event{};
   REQUIRE(sonare_midi_cc(0.5, 0, 0, 74, 127, &event) == SONARE_OK);
   REQUIRE(event.ppq == 0.5);
-  REQUIRE(event.data0 != 0);
+  REQUIRE(event.word0 != 0);
   REQUIRE(sonare_midi_poly_pressure(0.5, 0, 0, 60, 127, &event) == SONARE_OK);
   REQUIRE(sonare_midi_channel_pressure(0.5, 0, 0, 127, &event) == SONARE_OK);
   REQUIRE(sonare_midi_pitch_bend(0.5, 0, 0, 8192, &event) == SONARE_OK);
@@ -517,9 +517,9 @@ TEST_CASE("project C surface validates MIDI event helpers and input", "[project]
   REQUIRE(program_event_count == 3);
   sonare::midi::Ump program_umps[3]{};
   for (size_t i = 0; i < program_event_count; ++i) {
-    program_umps[i].words[0] = program_events[i].data0;
-    program_umps[i].words[1] = program_events[i].data1;
-    program_umps[i].word_count = program_events[i].data1 != 0 ? 2 : 1;
+    program_umps[i].words[0] = program_events[i].word0;
+    program_umps[i].words[1] = program_events[i].word1;
+    program_umps[i].word_count = program_events[i].word1 != 0 ? 2 : 1;
   }
   REQUIRE(program_umps[0].status_nibble() ==
           static_cast<uint8_t>(sonare::midi::UmpStatus::kControlChange));
@@ -546,9 +546,9 @@ TEST_CASE("project C surface validates MIDI event helpers and input", "[project]
   REQUIRE(route_overflow_count == 0);
   sonare::midi::Ump routed_umps[2]{};
   for (size_t i = 0; i < routed_count; ++i) {
-    routed_umps[i].words[0] = routed[i].data0;
-    routed_umps[i].words[1] = routed[i].data1;
-    routed_umps[i].word_count = routed[i].data1 != 0 ? 2 : 1;
+    routed_umps[i].words[0] = routed[i].word0;
+    routed_umps[i].words[1] = routed[i].word1;
+    routed_umps[i].word_count = routed[i].word1 != 0 ? 2 : 1;
   }
   REQUIRE(routed[0].ppq == 0.0);
   REQUIRE(routed[1].ppq == 0.5);
@@ -608,9 +608,9 @@ TEST_CASE("project C surface validates MIDI event helpers and input", "[project]
   SonareMidiEventPod back_cc{};
   REQUIRE(sonare_midi_param_to_cc(&cc_binding, 1, 88, -60.0f, 0, 3.0, &back_cc) == SONARE_OK);
   sonare::midi::Ump back_ump{};
-  back_ump.words[0] = back_cc.data0;
-  back_ump.words[1] = back_cc.data1;
-  back_ump.word_count = back_cc.data1 != 0 ? 2 : 1;
+  back_ump.words[0] = back_cc.word0;
+  back_ump.words[1] = back_cc.word1;
+  back_ump.word_count = back_cc.word1 != 0 ? 2 : 1;
   REQUIRE(back_cc.ppq == 3.0);
   REQUIRE(back_ump.channel() == 4);
   REQUIRE(back_ump.note_number() == 74);
@@ -633,8 +633,8 @@ TEST_CASE("project C surface validates MIDI event helpers and input", "[project]
   REQUIRE(sonare_midi_param_to_cc(&rpn_binding, 1, 78, 0.5f, 0, 4.0, &back_cc) == SONARE_OK);
   REQUIRE(back_cc.ppq == 4.0);
   sonare::midi::Ump rpn_ump{};
-  rpn_ump.words[0] = back_cc.data0;
-  rpn_ump.words[1] = back_cc.data1;
+  rpn_ump.words[0] = back_cc.word0;
+  rpn_ump.words[1] = back_cc.word1;
   rpn_ump.word_count = 2;
   REQUIRE(rpn_ump.channel() == 3);
   REQUIRE(rpn_ump.status_nibble() ==
@@ -657,11 +657,11 @@ TEST_CASE("project C surface validates MIDI event helpers and input", "[project]
 
   SonareMidiEventPod invalid{};
   invalid.ppq = 0.0;
-  invalid.data0 = 0xFFFFFFFFu;  // Not a supported MIDI 1.0/2.0 channel-voice UMP.
+  invalid.word0 = 0xFFFFFFFFu;  // Not a supported MIDI 1.0/2.0 channel-voice UMP.
   REQUIRE(sonare_project_set_midi_events(project, clip, &invalid, 1) ==
           SONARE_ERROR_INVALID_PARAMETER);
   invalid.ppq = 1.0e300;
-  invalid.data0 = 0x20903C40u;
+  invalid.word0 = 0x20903C40u;
   REQUIRE(sonare_project_set_midi_events(project, clip, &invalid, 1) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(serialize(project) == before);
@@ -677,7 +677,7 @@ TEST_CASE("project C surface routes MIDI events by UMP group", "[project]") {
   // The group nibble lives in word[0] bits 24..27 of every channel-voice UMP, so
   // routing must derive it from the pod rather than leaving it at zero.
   auto group_of = [](const SonareMidiEventPod& pod) {
-    return static_cast<uint8_t>((pod.data0 >> 24u) & 0x0Fu);
+    return static_cast<uint8_t>((pod.word0 >> 24u) & 0x0Fu);
   };
 
   SonareMidiEventPod events[4]{};
@@ -719,7 +719,7 @@ TEST_CASE("project C surface routes MIDI events by UMP group", "[project]") {
   REQUIRE(group_of(routed[0]) == 3);
   REQUIRE(group_of(routed[1]) == 3);
   sonare::midi::Ump remapped{};
-  remapped.words[0] = routed[0].data0;
+  remapped.words[0] = routed[0].word0;
   REQUIRE(remapped.channel() == 7);
 }
 
@@ -1144,7 +1144,7 @@ TEST_CASE("project C surface set_midi_fx transforms stored MIDI events", "[proje
   // keeps its own check for the same range as defence in depth, since a host
   // can also build events through paths that do not deserialize.)
   std::string huge_ppq_json = serialize(project);
-  const size_t data_pos = huge_ppq_json.find("\"data0\":");
+  const size_t data_pos = huge_ppq_json.find("\"word0\":");
   REQUIRE(data_pos != std::string::npos);
   const size_t ppq_pos = huge_ppq_json.find("\"ppq\":", data_pos);
   REQUIRE(ppq_pos != std::string::npos);
@@ -1338,8 +1338,8 @@ TEST_CASE("project C surface MIDI-FX bake preserves large clips and canonical ev
   REQUIRE(baked.size() == events.size());
   for (size_t i = 0; i < baked.size(); ++i) {
     REQUIRE(baked[i].ppq == Catch::Approx(events[i].ppq));
-    REQUIRE(baked[i].data0 == events[i].data0);
-    REQUIRE(baked[i].data1 == events[i].data1);
+    REQUIRE(baked[i].word0 == events[i].word0);
+    REQUIRE(baked[i].word1 == events[i].word1);
   }
 
   uint8_t* smf_bytes = nullptr;
@@ -1372,10 +1372,10 @@ TEST_CASE("project C surface MIDI-FX bake preserves large clips and canonical ev
   const std::array<int, 4> expected_ranks = {1, 2, 3, 5};
   for (size_t i = 0; i < ordered.size(); ++i) {
     sonare::midi::Ump ump{};
-    ump.words[0] = ordered[i].data0;
-    ump.words[1] = ordered[i].data1;
-    ump.word_count = sonare::midi::ump_word_count_for_word0(ordered[i].data0);
-    ump.group = static_cast<uint8_t>((ordered[i].data0 >> 24u) & 0x0Fu);
+    ump.words[0] = ordered[i].word0;
+    ump.words[1] = ordered[i].word1;
+    ump.word_count = sonare::midi::ump_word_count_for_word0(ordered[i].word0);
+    ump.group = static_cast<uint8_t>((ordered[i].word0 >> 24u) & 0x0Fu);
     REQUIRE(sonare::midi::same_time_rank(ump) == expected_ranks[i]);
   }
 
@@ -1965,9 +1965,9 @@ TEST_CASE("project C surface MIDI 2.0 builders pack the core UMP words", "[proje
 #if defined(SONARE_WITH_ARRANGEMENT)
     REQUIRE(c.err == SONARE_OK);
     CHECK(c.pod.ppq == 1.5);
-    CHECK(c.pod.data0 == c.expected.words[0]);
-    CHECK(c.pod.data1 == c.expected.words[1]);
-    CHECK((c.pod.data0 >> 28) == 0x4u);
+    CHECK(c.pod.word0 == c.expected.words[0]);
+    CHECK(c.pod.word1 == c.expected.words[1]);
+    CHECK((c.pod.word0 >> 28) == 0x4u);
 #else
     REQUIRE(c.err == SONARE_ERROR_NOT_SUPPORTED);
 #endif
@@ -2024,18 +2024,18 @@ TEST_CASE("project C surface MIDI builders define the event on a rejected call",
   std::memset(&pod, 0xA5, sizeof(pod));
   REQUIRE(sonare_midi_note_on(0.0, 16, 0, 60, 100, &pod) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(pod.ppq == 0.0);
-  CHECK(pod.data0 == 0u);
-  CHECK(pod.data1 == 0u);
+  CHECK(pod.word0 == 0u);
+  CHECK(pod.word1 == 0u);
 
   std::memset(&pod, 0xA5, sizeof(pod));
   REQUIRE(sonare_midi_pitch_bend(0.0, 0, 0, 16384, &pod) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(pod.ppq == 0.0);
-  CHECK(pod.data0 == 0u);
+  CHECK(pod.word0 == 0u);
 
   std::memset(&pod, 0xA5, sizeof(pod));
   REQUIRE(sonare_midi2_note_on(0.0, 0, 0, 128, 0, 0, 0, &pod) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(pod.ppq == 0.0);
-  CHECK(pod.data0 == 0u);
+  CHECK(pod.word0 == 0u);
 
   REQUIRE(sonare_midi_note_on(0.0, 0, 0, 60, 100, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 #endif

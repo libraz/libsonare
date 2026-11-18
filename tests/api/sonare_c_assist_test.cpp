@@ -137,11 +137,11 @@ std::vector<int> patch_note_ons(const json::Value& patch) {
   REQUIRE(add != nullptr);
   REQUIRE(add->is_array());
   for (const json::Value& event : add->as_array()) {
-    const json::Value* data0 = event.find("data0");
-    REQUIRE(data0 != nullptr);
+    const json::Value* word0 = event.find("word0");
+    REQUIRE(word0 != nullptr);
     REQUIRE(event.find("ppq") != nullptr);
-    REQUIRE(event.find("data1") != nullptr);
-    const auto word = static_cast<uint32_t>(data0->as_number());
+    REQUIRE(event.find("word1") != nullptr);
+    const auto word = static_cast<uint32_t>(word0->as_number());
     const uint32_t status = (word >> 20) & 0x0Fu;
     const int note = static_cast<int>((word >> 8) & 0x7Fu);
     const int velocity = static_cast<int>(word & 0x7Fu);
@@ -165,7 +165,7 @@ std::vector<PatchNoteEvent> patch_note_events(const json::Value& patch) {
   REQUIRE(add != nullptr);
   REQUIRE(add->is_array());
   for (const json::Value& event : add->as_array()) {
-    const uint32_t word = static_cast<uint32_t>(event["data0"].as_number());
+    const uint32_t word = static_cast<uint32_t>(event["word0"].as_number());
     const uint32_t status = (word >> 20) & 0x0Fu;
     if (status != 0x8u && status != 0x9u) continue;
     events.push_back(PatchNoteEvent{
@@ -199,11 +199,11 @@ bool text_contains(const std::string& text, const std::string& fragment) {
   return text.find(fragment) != std::string::npos;
 }
 
-/// MIDI events in a serialized project: the serializer writes one "data0" key
+/// MIDI events in a serialized project: the serializer writes one "word0" key
 /// per event, so counting them counts the clip content without a getter.
 size_t count_midi_events(const std::string& serialized) {
   size_t count = 0;
-  const std::string key = "\"data0\"";
+  const std::string key = "\"word0\"";
   for (size_t at = serialized.find(key); at != std::string::npos;
        at = serialized.find(key, at + key.size())) {
     ++count;

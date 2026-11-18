@@ -271,10 +271,10 @@ std::vector<EmittedNote> emitted_notes(const PatchMidiClip& patch) {
   std::vector<EmittedNote> notes;
   for (const MidiClipEvent& event : patch.patch().add) {
     sonare::midi::Ump ump;
-    ump.words[0] = event.data0;
-    ump.words[1] = event.data1;
-    ump.word_count = sonare::midi::ump_word_count_for_word0(event.data0);
-    ump.group = sonare::midi::ump_group_from_word0(event.data0);
+    ump.words[0] = event.word0;
+    ump.words[1] = event.word1;
+    ump.word_count = sonare::midi::ump_word_count_for_word0(event.word0);
+    ump.group = sonare::midi::ump_group_from_word0(event.word0);
     if (ump.is_note_off()) {
       const NoteKey key{ump.group, ump.channel(), ump.note_number()};
       const auto it = open.find(key);

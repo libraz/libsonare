@@ -31,24 +31,24 @@ _NOTE_ON = 0x9
 _NOTE_OFF = 0x8
 
 
-def _status(data0: int) -> int:
-    return (data0 >> 20) & 0xF
+def _status(word0: int) -> int:
+    return (word0 >> 20) & 0xF
 
 
-def _note_number(data0: int) -> int:
-    return (data0 >> 8) & 0x7F
+def _note_number(word0: int) -> int:
+    return (word0 >> 8) & 0x7F
 
 
-def _velocity(data0: int) -> int:
-    return data0 & 0x7F
+def _velocity(word0: int) -> int:
+    return word0 & 0x7F
 
 
-def _group(data0: int) -> int:
-    return (data0 >> 24) & 0xF
+def _group(word0: int) -> int:
+    return (word0 >> 24) & 0xF
 
 
-def _channel(data0: int) -> int:
-    return (data0 >> 16) & 0xF
+def _channel(word0: int) -> int:
+    return (word0 >> 16) & 0xF
 
 
 def _tone(freq: float, duration: float = 0.35, amp: float = 0.4) -> np.ndarray:
@@ -80,14 +80,14 @@ def test_transcribes_the_played_notes_in_order(
 ) -> None:
     """The notes that were played come back, as note-on / note-off pairs."""
     starts = [
-        _note_number(data0)
-        for _ppq, data0, _d1 in transcription.events
-        if _status(data0) == _NOTE_ON
+        _note_number(word0)
+        for _ppq, word0, _d1 in transcription.events
+        if _status(word0) == _NOTE_ON
     ]
     ends = [
-        _note_number(data0)
-        for _ppq, data0, _d1 in transcription.events
-        if _status(data0) == _NOTE_OFF
+        _note_number(word0)
+        for _ppq, word0, _d1 in transcription.events
+        if _status(word0) == _NOTE_OFF
     ]
     assert starts == list(_EXPECTED_NOTES)
     assert ends == list(_EXPECTED_NOTES)
@@ -103,7 +103,7 @@ def test_polyphonic_default_range_retains_low_notes(frequency: float, midi_note:
     explicit = libsonare.transcribe(
         audio, SR, polyphonic=True, tempo_bpm=120.0, f0_min_hz=55.0, f0_max_hz=1760.0
     )
-    assert any(_note_number(data0) == midi_note for _, data0, _ in explicit.events)
+    assert any(_note_number(word0) == midi_note for _, word0, _ in explicit.events)
     assert omitted.events == explicit.events
 
 
@@ -124,11 +124,11 @@ def test_events_are_in_canonical_ppq_order(transcription: libsonare.TranscribeRe
     ppqs = [ppq for ppq, _d0, _d1 in transcription.events]
     assert ppqs == sorted(ppqs)
     assert all(math.isfinite(ppq) and ppq >= 0.0 for ppq in ppqs)
-    for (ppq, data0, _d1), (next_ppq, next_data0, _next_d1) in zip(
+    for (ppq, word0, _d1), (next_ppq, next_data0, _next_d1) in zip(
         transcription.events, transcription.events[1:], strict=False
     ):
-        if ppq == next_ppq and _status(data0) != _status(next_data0):
-            assert (_status(data0), _status(next_data0)) == (_NOTE_OFF, _NOTE_ON)
+        if ppq == next_ppq and _status(word0) != _status(next_data0):
+            assert (_status(word0), _status(next_data0)) == (_NOTE_OFF, _NOTE_ON)
 
 
 def test_a_detected_tempo_is_reported(melody: np.ndarray) -> None:
@@ -151,8 +151,8 @@ def test_doubling_the_tempo_doubles_the_ppq_coordinates(melody: np.ndarray) -> N
     # Only the time axis may move: identical payloads mean the same notes at the
     # same velocities, and a last coordinate above zero keeps the ratio from
     # being satisfied by 0 == 2 * 0 on a fixture that transcribed to nothing.
-    assert [(data0, data1) for _ppq, data0, data1 in fast.events] == [
-        (data0, data1) for _ppq, data0, data1 in slow.events
+    assert [(word0, word1) for _ppq, word0, word1 in fast.events] == [
+        (word0, word1) for _ppq, word0, word1 in slow.events
     ]
     assert slow.events[-1][0] > 0.0
 
@@ -164,16 +164,16 @@ def test_fixed_velocity_sets_every_note_on(melody: np.ndarray) -> None:
     """Every note-on carries the requested velocity; a note-off stays at 0."""
     result = libsonare.transcribe(melody, SR, tempo_bpm=120.0, fixed_velocity=77)
     assert result.note_count == len(_EXPECTED_NOTES)
-    for _ppq, data0, _d1 in result.events:
-        expected = 77 if _status(data0) == _NOTE_ON else 0
-        assert _velocity(data0) == expected
+    for _ppq, word0, _d1 in result.events:
+        expected = 77 if _status(word0) == _NOTE_ON else 0
+        assert _velocity(word0) == expected
 
 
 def test_measured_velocity_is_in_domain(transcription: libsonare.TranscribeResult) -> None:
     """Measured velocities land in 1..127, never the 0 that means note-off."""
-    for _ppq, data0, _d1 in transcription.events:
-        if _status(data0) == _NOTE_ON:
-            assert 1 <= _velocity(data0) <= 127
+    for _ppq, word0, _d1 in transcription.events:
+        if _status(word0) == _NOTE_ON:
+            assert 1 <= _velocity(word0) <= 127
 
 
 def test_a_lower_reference_shifts_every_note_up_a_semitone(melody: np.ndarray) -> None:
@@ -185,7 +185,7 @@ def test_a_lower_reference_shifts_every_note_up_a_semitone(melody: np.ndarray) -
     shifted = libsonare.transcribe(
         melody, SR, tempo_bpm=120.0, reference_hz=440.0 / 2.0 ** (1.0 / 12.0)
     )
-    assert [_note_number(data0) for _ppq, data0, _d1 in shifted.events] == [
+    assert [_note_number(word0) for _ppq, word0, _d1 in shifted.events] == [
         note + 1 for note in _EXPECTED_NOTES for _ in range(2)
     ]
 
@@ -193,8 +193,8 @@ def test_a_lower_reference_shifts_every_note_up_a_semitone(melody: np.ndarray) -
 def test_group_and_channel_reach_the_events(melody: np.ndarray) -> None:
     result = libsonare.transcribe(melody, SR, tempo_bpm=120.0, group=3, channel=5)
     assert result.events
-    for _ppq, data0, _d1 in result.events:
-        assert (_group(data0), _channel(data0)) == (3, 5)
+    for _ppq, word0, _d1 in result.events:
+        assert (_group(word0), _channel(word0)) == (3, 5)
 
 
 def test_the_polyphonic_chain_transcribes_the_same_pitches(melody: np.ndarray) -> None:
@@ -207,7 +207,7 @@ def test_the_polyphonic_chain_transcribes_the_same_pitches(melody: np.ndarray) -
     result = libsonare.transcribe(melody, SR, tempo_bpm=120.0, polyphonic=True)
     assert result.note_count > 0
     assert len(result.events) == 2 * result.note_count
-    assert {_note_number(data0) for _ppq, data0, _d1 in result.events} <= set(_EXPECTED_NOTES)
+    assert {_note_number(word0) for _ppq, word0, _d1 in result.events} <= set(_EXPECTED_NOTES)
 
 
 def test_silence_transcribes_to_nothing_and_still_reports_the_tempo() -> None:
@@ -355,7 +355,7 @@ def _clip_events(project: libsonare.Project, clip_id: int) -> list[tuple[float, 
     """The clip's stored events, read back through the project's own serializer."""
     content = json.loads(project.to_json())["midi_content"]
     return [
-        (float(event["ppq"]), int(event["data0"]), int(event["data1"]))
+        (float(event["ppq"]), int(event["word0"]), int(event["word1"]))
         for event in content.get(str(clip_id), [])
     ]
 
@@ -370,7 +370,7 @@ def test_transcribe_to_clip_writes_events_that_read_back(melody: np.ndarray) -> 
         events = _clip_events(project, clip_id)
         assert len(events) == 2 * note_count
         assert [
-            _note_number(data0) for _ppq, data0, _d1 in events if _status(data0) == _NOTE_ON
+            _note_number(word0) for _ppq, word0, _d1 in events if _status(word0) == _NOTE_ON
         ] == list(_EXPECTED_NOTES)
     finally:
         project.close()
@@ -393,7 +393,7 @@ def test_transcribe_to_clip_replaces_rather_than_appends(melody: np.ndarray) -> 
         project.transcribe_to_clip(clip_id, melody, SR)
         events = _clip_events(project, clip_id)
         assert len(events) == 2 * len(_EXPECTED_NOTES)
-        assert 40 not in {_note_number(data0) for _ppq, data0, _d1 in events}
+        assert 40 not in {_note_number(word0) for _ppq, word0, _d1 in events}
 
         # And again over its own output, so a second pass cannot accumulate.
         project.transcribe_to_clip(clip_id, melody, SR)
@@ -417,8 +417,8 @@ def test_transcribe_to_clip_reads_the_project_tempo_map(melody: np.ndarray) -> N
 
     # As in the free function's test: identical payloads, and a last coordinate
     # above zero, so the ratio cannot be met by a clip that stayed empty.
-    assert [(data0, data1) for _ppq, data0, data1 in written[1]] == [
-        (data0, data1) for _ppq, data0, data1 in written[0]
+    assert [(word0, word1) for _ppq, word0, word1 in written[1]] == [
+        (word0, word1) for _ppq, word0, word1 in written[0]
     ]
     slow = [ppq for ppq, _d0, _d1 in written[0]]
     fast = [ppq for ppq, _d0, _d1 in written[1]]
@@ -504,7 +504,7 @@ def _poly_sine(freq: float, seconds: float, amp: float) -> np.ndarray:
 
 
 def _note_ons(events: list[tuple[float, int, int]]) -> int:
-    return sum(1 for _ppq, data0, _d1 in events if _status(data0) == _NOTE_ON)
+    return sum(1 for _ppq, word0, _d1 in events if _status(word0) == _NOTE_ON)
 
 
 def _max_simultaneous(events: list[tuple[float, int, int]]) -> int:

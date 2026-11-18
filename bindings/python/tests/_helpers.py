@@ -74,8 +74,8 @@ def is_lib_available() -> bool:
 LIB_AVAILABLE: bool = is_lib_available()
 
 
-def _midi1_word(status: int, channel: int, data0: int, data1: int) -> int:
-    return (0x2 << 28) | ((status & 0xF) << 20) | ((channel & 0xF) << 16) | (data0 << 8) | data1
+def _midi1_word(status: int, channel: int, word0: int, word1: int) -> int:
+    return (0x2 << 28) | ((status & 0xF) << 20) | ((channel & 0xF) << 16) | (word0 << 8) | word1
 
 
 def patch_mono_decode(monkeypatch, loader) -> None:

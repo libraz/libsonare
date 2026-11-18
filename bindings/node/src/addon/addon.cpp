@@ -201,8 +201,8 @@ Napi::Value MidiBankProgram(const Napi::CallbackInfo& info) {
   for (size_t i = 0; i < count; ++i) {
     Napi::Object event = Napi::Object::New(env);
     event.Set("ppq", Napi::Number::New(env, events[i].ppq));
-    event.Set("data0", Napi::Number::New(env, events[i].data0));
-    event.Set("data1", Napi::Number::New(env, events[i].data1));
+    event.Set("word0", Napi::Number::New(env, events[i].word0));
+    event.Set("word1", Napi::Number::New(env, events[i].word1));
     out.Set(i, event);
   }
   return out;
@@ -214,16 +214,16 @@ Napi::Value MidiBankProgram(const Napi::CallbackInfo& info) {
 // shared *Property readers so an explicit `undefined` reads as an omitted field.
 bool MidiEventFromObject(Napi::Env env, Napi::Object event, SonareMidiEventPod* out) {
   const Napi::Value ppq = event.Get("ppq");
-  const Napi::Value data0 = event.Get("data0");
-  if (!ppq.IsNumber() || !data0.IsNumber()) {
-    Napi::TypeError::New(env, "MIDI event requires numeric ppq and data0")
+  const Napi::Value word0 = event.Get("word0");
+  if (!ppq.IsNumber() || !word0.IsNumber()) {
+    Napi::TypeError::New(env, "MIDI event requires numeric ppq and word0")
         .ThrowAsJavaScriptException();
     return false;
   }
   *out = SonareMidiEventPod{};
   out->ppq = ppq.As<Napi::Number>().DoubleValue();
-  out->data0 = sonare_node::node_narrow_word(env, data0, "data0");
-  out->data1 = sonare_node::WordProperty(event, "data1", 0);
+  out->word0 = sonare_node::node_narrow_word(env, word0, "word0");
+  out->word1 = sonare_node::WordProperty(event, "word1", 0);
   return !env.IsExceptionPending();
 }
 

@@ -276,7 +276,7 @@ class TranscribeResult:
     """What one transcription found, ready to hand to a MIDI clip.
 
     Attributes:
-        events: Note-on / note-off pairs as ``(ppq, data0, data1)``, the shape
+        events: Note-on / note-off pairs as ``(ppq, word0, word1)``, the shape
             :meth:`Project.set_midi_events` takes, in canonical PPQ order with a
             note-off before a note-on that shares its tick. Two events per note,
             so ``len(events)`` is ``2 * note_count``.
@@ -460,7 +460,7 @@ def _transcribe_result_from_c(out: SonareTranscribeResult) -> TranscribeResult:
     ctypes NULL raises on dereference rather than reading zeros.
     """
     events = [
-        (float(out.events[i].ppq), int(out.events[i].data0), int(out.events[i].data1))
+        (float(out.events[i].ppq), int(out.events[i].word0), int(out.events[i].word1))
         for i in range(int(out.count))
     ]
     return TranscribeResult(

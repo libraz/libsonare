@@ -54,8 +54,8 @@ SonareProject* make_project(const std::vector<SonareMidiEventPod>& events) {
 SonareMidiEventPod pod(double ppq, uint32_t word) {
   SonareMidiEventPod e{};
   e.ppq = ppq;
-  e.data0 = word;
-  e.data1 = 0u;
+  e.word0 = word;
+  e.word1 = 0u;
   return e;
 }
 

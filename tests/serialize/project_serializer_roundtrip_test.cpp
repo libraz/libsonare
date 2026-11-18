@@ -1277,7 +1277,7 @@ TEST_CASE("present invalid project integer and enum fields report invalid_format
       R"({"version":7,"tracks":[{"id":1,"kind":3}]})",
       R"({"version":7,"scene":{"version":1,"strips":[{"id":"s","panMode":1.5}]}})",
       R"({"version":7,"annotation":{"chords":[{"extensions":[7.5]}]}})",
-      R"({"version":7,"midi_content":{"1":[{"data0":1.5}]}})",
+      R"({"version":7,"midi_content":{"1":[{"word0":1.5}]}})",
       R"({"version":7,"overlap_policy":2})",
   };
 
@@ -1632,19 +1632,19 @@ TEST_CASE("wrong-typed scene enum fields are refused by name", "[serialize]") {
 
 TEST_CASE("out-of-range MIDI data word is clamped with a warning, not silently zeroed",
           "[serialize]") {
-  // data0 below zero clamps to 0; data1 above uint32 max clamps to 0xFFFFFFFF.
+  // word0 below zero clamps to 0; word1 above uint32 max clamps to 0xFFFFFFFF.
   const std::string in =
       "{\"version\": 7, \"sources\": [{\"id\": 1, \"kind\": 0}], \"tracks\": [{\"id\": 1}], "
       "\"clips\": [{\"id\": 3, \"track_id\": 1, \"source_id\": 1, \"length_ppq\": 1}], "
-      "\"midi_content\": {\"3\": [{\"ppq\": 0.0, \"data0\": -1.0, "
-      "\"data1\": 5000000000.0}]}}";
+      "\"midi_content\": {\"3\": [{\"ppq\": 0.0, \"word0\": -1.0, "
+      "\"word1\": 5000000000.0}]}}";
   auto result = project_from_json(in);
   REQUIRE(result.ok());
   REQUIRE(result.midi.events.count(3) == 1);
   const auto& events = result.midi.events.at(3);
   REQUIRE(events.size() == 1);
-  CHECK(events[0].data0 == 0u);
-  CHECK(events[0].data1 == 0xFFFFFFFFu);
+  CHECK(events[0].word0 == 0u);
+  CHECK(events[0].word1 == 0xFFFFFFFFu);
   int warnings = 0;
   for (const auto& d : result.diagnostics) {
     if (d.code == "midi_word_out_of_range") ++warnings;
@@ -1656,7 +1656,7 @@ TEST_CASE("out-of-range MIDI content keys are ignored instead of truncating to u
           "[serialize]") {
   const std::string in =
       "{\"version\": 7, \"midi_content\": {"
-      "\"4294967296\": [{\"ppq\": 0.0, \"data0\": 1.0, \"data1\": 2.0}],"
+      "\"4294967296\": [{\"ppq\": 0.0, \"word0\": 1.0, \"word1\": 2.0}],"
       "\"__sysex_payloads\": {\"4294967296\": \"AQI=\"}}}";
   auto result = project_from_json(in);
   REQUIRE(result.ok());
@@ -2208,7 +2208,7 @@ TEST_CASE("a present-but-wrong-typed scalar is rejected whatever its type", "[se
       {"boolean", R"({"version":7,"tracks":[{"id":1,"mute":"true"}]})"},
       {"float", R"({"version":7,"tracks":[{"id":1,"gain":"0.5"}]})"},
       {"MIDI data word",
-       R"({"version":7,"midi_content":{"1":[{"ppq":0.0,"data0":"0x20903c40"}]}})"},
+       R"({"version":7,"midi_content":{"1":[{"ppq":0.0,"word0":"0x20903c40"}]}})"},
   };
   for (const Case& c : cases) {
     INFO(c.what);
@@ -2460,12 +2460,12 @@ TEST_CASE("a loaded position is never one the C ABI setters would reject", "[ser
       // MIDI clip events live in the content store beside the project, so they
       // are reached only because the invariant pass is handed that store too.
       {"MIDI event position",
-       R"({"version":7,"midi_content":{"1":[{"ppq":-1.0,"data0":546323556,"data1":0}]}})",
+       R"({"version":7,"midi_content":{"1":[{"ppq":-1.0,"word0":546323556,"word1":0}]}})",
        "invalid_midi_event_ppq"},
       // The same setter caps the position at kMaxPublicPpq (1e12); a finite
       // value past it loads and then computes nonsense sample positions.
       {"MIDI event beyond the public ppq ceiling",
-       R"({"version":7,"midi_content":{"1":[{"ppq":1e30,"data0":546323556,"data1":0}]}})",
+       R"({"version":7,"midi_content":{"1":[{"ppq":1e30,"word0":546323556,"word1":0}]}})",
        "invalid_midi_event_ppq"},
       // The tempo and time-signature setters bound more than the position's
       // sign: sonare_project_set_tempo_segments runs valid_public_tempo_segment
@@ -2587,7 +2587,7 @@ TEST_CASE("a loaded position is never one the C ABI setters would reject", "[ser
                         R"("tracks":[{"id":1,"automation_lanes":[)"
                         R"({"target_param_id":7,"points":[{"ppq":0.0,"value":0.5}]}]}],)"
                         R"("clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":1}],)"
-                        R"("midi_content":{"1":[{"ppq":0.0,"data0":546323556,"data1":0}]}})");
+                        R"("midi_content":{"1":[{"ppq":0.0,"word0":546323556,"word1":0}]}})");
   REQUIRE(ok.ok());
   REQUIRE_FALSE(ok.has_error());
   REQUIRE(ok.midi.events.at(1).size() == 1);
@@ -2981,10 +2981,10 @@ TEST_CASE("orphan MIDI event lists and dangling SysEx handles are dropped on loa
       project_from_json(R"({"version":7,"sources":[{"id":1,"kind":1,"name":""}],)"
                         R"("tracks":[{"id":1,"kind":1}],)"
                         R"("clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":4}],)"
-                        R"("midi_content":{"1":[{"ppq":0.0,"data0":546323556,"data1":0},)"
-                        R"({"ppq":0.5,"data0":0,"data1":0,"sysex_handle":7},)"
-                        R"({"ppq":1.0,"data0":0,"data1":0,"sysex_handle":9}],)"
-                        R"("2":[{"ppq":0.0,"data0":546323556,"data1":0}],)"
+                        R"("midi_content":{"1":[{"ppq":0.0,"word0":546323556,"word1":0},)"
+                        R"({"ppq":0.5,"word0":0,"word1":0,"sysex_handle":7},)"
+                        R"({"ppq":1.0,"word0":0,"word1":0,"sysex_handle":9}],)"
+                        R"("2":[{"ppq":0.0,"word0":546323556,"word1":0}],)"
                         R"("__sysex_payloads":{"7":"AQI="}}})");
   REQUIRE(result.ok());
   int orphan_warnings = 0;
@@ -3075,5 +3075,36 @@ TEST_CASE("a built-in assist module id in its earlier spelling is refused naming
     CHECK_FALSE(refused.project.has_value());
     REQUIRE_FALSE(refused.diagnostics.empty());
     CHECK(refused.diagnostics.back().message.find(r.new_id) != std::string::npos);
+  }
+}
+
+TEST_CASE("a MIDI event word in its earlier spelling is refused naming the current one",
+          "[serialize]") {
+  const auto document = [](const std::string& event) {
+    return R"({"version":7,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],)"
+           R"("clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":1}],)"
+           R"("midi_content":{"1":[)" +
+           event + "]}}";
+  };
+  const auto current = project_from_json(document(R"({"ppq":0.0,"word0":546323556,"word1":0})"));
+  REQUIRE(current.ok());
+  REQUIRE(current.midi.events.at(1).size() == 1);
+  CHECK(current.midi.events.at(1)[0].word0 == 546323556u);
+
+  const struct {
+    const char* event;
+    const char* current_key;
+  } kEarlier[] = {
+      {R"({"ppq":0.0,"data0":546323556,"data1":0})", "word0"},
+      {R"({"ppq":0.0,"word0":546323556,"data1":0})", "word1"},
+  };
+  for (const auto& e : kEarlier) {
+    CAPTURE(e.event);
+    const auto refused = project_from_json(document(e.event));
+    CHECK_FALSE(refused.ok());
+    CHECK_FALSE(refused.project.has_value());
+    REQUIRE_FALSE(refused.diagnostics.empty());
+    CHECK(refused.diagnostics.back().message.find(std::string("write \"") + e.current_key) !=
+          std::string::npos);
   }
 }

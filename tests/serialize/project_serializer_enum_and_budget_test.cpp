@@ -380,8 +380,8 @@ TEST_CASE("MIDI events installed through the edit API are counted against the pe
   for (size_t i = 0; i < kEvents; ++i) {
     events[i].ppq = static_cast<double>(i) / 16.0;
     // Alternating note on / note off on middle C, as a UMP MIDI 1.0 word.
-    events[i].data0 = (i % 2 == 0) ? 0x20903C40u : 0x20803C00u;
-    events[i].data1 = 0u;
+    events[i].word0 = (i % 2 == 0) ? 0x20903C40u : 0x20803C00u;
+    events[i].word1 = 0u;
   }
   REQUIRE(sonare_project_set_midi_events(built.project, built.midi_clip, events.data(),
                                          events.size()) == SONARE_OK);

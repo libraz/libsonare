@@ -122,8 +122,8 @@ def _read_fixture() -> tuple[str, bytes]:
             or not math.isclose(
                 float(event.get("ppq", -1.0)), expected_ppq, abs_tol=0.0
             )
-            or int(event.get("data0", -1)) != expected_word
-            or int(event.get("data1", -1)) != 0
+            or int(event.get("word0", -1)) != expected_word
+            or int(event.get("word1", -1)) != 0
         ):
             raise HarnessFailure(
                 f"fixture MIDI event {index} is not the canonical GM/C4 event"

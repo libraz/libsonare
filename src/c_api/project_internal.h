@@ -155,8 +155,8 @@ void rollback_to_depth(SonareProject* project, size_t undo_depth) {
 SonareMidiEventPod pod_from_ump(double ppq, const sonare::midi::Ump& ump) {
   SonareMidiEventPod out{};
   out.ppq = ppq;
-  out.data0 = ump.words[0];
-  out.data1 = ump.words[1];
+  out.word0 = ump.words[0];
+  out.word1 = ump.words[1];
   return out;
 }
 
@@ -189,7 +189,7 @@ void fill_compile_result_from_diagnostics(const std::vector<arr::Diagnostic>& di
 
 bool valid_midi_event_pod(const SonareMidiEventPod& event) noexcept {
   if (!sonare::transport::valid_public_ppq(event.ppq)) return false;
-  const uint8_t mt = static_cast<uint8_t>((event.data0 >> 28u) & 0x0Fu);
+  const uint8_t mt = static_cast<uint8_t>((event.word0 >> 28u) & 0x0Fu);
   if (mt != static_cast<uint8_t>(sonare::midi::UmpMessageType::kMidi1ChannelVoice) &&
       mt != static_cast<uint8_t>(sonare::midi::UmpMessageType::kMidi2ChannelVoice)) {
     return false;
@@ -209,8 +209,8 @@ const arr::EditClip* find_midi_clip(const SonareProject* project, uint32_t clip_
 arr::MidiClipEvent event_from_ump(double ppq, const sonare::midi::Ump& ump) {
   arr::MidiClipEvent event;
   event.ppq = ppq;
-  event.data0 = ump.words[0];
-  event.data1 = ump.words[1];
+  event.word0 = ump.words[0];
+  event.word1 = ump.words[1];
   event.sysex_handle = ump.sysex_handle;
   return event;
 }
@@ -219,10 +219,10 @@ bool is_bank_or_program_event_for(const arr::MidiClipEvent& event, uint8_t group
                                   uint8_t channel) noexcept {
   if (event.ppq != 0.0) return false;
   sonare::midi::Ump ump;
-  ump.words[0] = event.data0;
-  ump.words[1] = event.data1;
-  ump.word_count = sonare::midi::ump_word_count_for_word0(event.data0);
-  ump.group = static_cast<uint8_t>((event.data0 >> 24u) & 0x0Fu);
+  ump.words[0] = event.word0;
+  ump.words[1] = event.word1;
+  ump.word_count = sonare::midi::ump_word_count_for_word0(event.word0);
+  ump.group = static_cast<uint8_t>((event.word0 >> 24u) & 0x0Fu);
   if (ump.group != group || ump.channel() != channel) return false;
   if (ump.message_type() != sonare::midi::UmpMessageType::kMidi1ChannelVoice) return false;
   const uint8_t status = ump.status_nibble();
@@ -255,10 +255,10 @@ bool apply_midi_fx_to_events(const arr::MidiClipEventList& events, sonare::midi:
             &midi_event.render_frame)) {
       return false;
     }
-    midi_event.ump.words[0] = event.data0;
-    midi_event.ump.words[1] = event.data1;
-    midi_event.ump.word_count = sonare::midi::ump_word_count_for_word0(event.data0);
-    midi_event.ump.group = static_cast<uint8_t>((event.data0 >> 24u) & 0x0Fu);
+    midi_event.ump.words[0] = event.word0;
+    midi_event.ump.words[1] = event.word1;
+    midi_event.ump.word_count = sonare::midi::ump_word_count_for_word0(event.word0);
+    midi_event.ump.group = static_cast<uint8_t>((event.word0 >> 24u) & 0x0Fu);
     midi_event.ump.sysex_handle = event.sysex_handle;
     in.push_back(midi_event);
   }
@@ -320,8 +320,8 @@ bool apply_midi_fx_to_events(const arr::MidiClipEventList& events, sonare::midi:
     arr::MidiClipEvent event;
     event.ppq = static_cast<double>(midi_event.render_frame) /
                 static_cast<double>(sonare::midi::kMidiFxPpqScale);
-    event.data0 = midi_event.ump.words[0];
-    event.data1 = midi_event.ump.words[1];
+    event.word0 = midi_event.ump.words[0];
+    event.word1 = midi_event.ump.words[1];
     event.sysex_handle = midi_event.ump.sysex_handle;
     transformed->push_back(event);
   }
@@ -346,10 +346,10 @@ void fill_ump_from_arr_event(const arr::MidiClipEvent& event, const arr::MidiCon
                              sonare::midi::SysExStore* export_store,
                              std::map<uint32_t, sonare::midi::SysExHandle>* exported_handles,
                              sonare::midi::Ump* out) {
-  out->words[0] = event.data0;
-  out->words[1] = event.data1;
-  out->word_count = sonare::midi::ump_word_count_for_word0(event.data0);
-  out->group = static_cast<uint8_t>((event.data0 >> 24u) & 0x0Fu);
+  out->words[0] = event.word0;
+  out->words[1] = event.word1;
+  out->word_count = sonare::midi::ump_word_count_for_word0(event.word0);
+  out->group = static_cast<uint8_t>((event.word0 >> 24u) & 0x0Fu);
   const sonare::midi::SysExHandle sysex =
       remap_sysex_handle(midi, event.sysex_handle, export_store, exported_handles);
   out->sysex_handle = sysex;
@@ -371,9 +371,9 @@ uint32_t note_identity_key(const sonare::midi::Ump& ump) {
 // Identity of the note a source event releases, or false when it is not a note-off.
 bool source_note_off_key(const arr::MidiClipEvent& event, uint32_t* key) {
   sonare::midi::Ump ump;
-  ump.words[0] = event.data0;
-  ump.word_count = sonare::midi::ump_word_count_for_word0(event.data0);
-  ump.group = static_cast<uint8_t>((event.data0 >> 24u) & 0x0Fu);
+  ump.words[0] = event.word0;
+  ump.word_count = sonare::midi::ump_word_count_for_word0(event.word0);
+  ump.group = static_cast<uint8_t>((event.word0 >> 24u) & 0x0Fu);
   if (!ump.is_note_off() || ump.note_number() >= 128) return false;
   *key = note_identity_key(ump);
   return true;
@@ -709,8 +709,8 @@ SonareError install_imported_midi(
     for (const auto& event : src.events()) {
       arr::MidiClipEvent out_event;
       out_event.ppq = event.ppq;
-      out_event.data0 = event.ump.words[0];
-      out_event.data1 = event.ump.words[1];
+      out_event.word0 = event.ump.words[0];
+      out_event.word1 = event.ump.words[1];
       if (event.ump.sysex_handle != 0) {
         if (next_sysex_handle == std::numeric_limits<uint32_t>::max() &&
             imported_sysex_handles.find(event.ump.sysex_handle) == imported_sysex_handles.end()) {

@@ -80,7 +80,7 @@ class _ProjectMidiMixin:
     ) -> None:
         """Replace a MIDI clip's entire event list.
 
-        Each event is ``(ppq, data0, data1)`` (the first two UMP-1.0 words of a
+        Each event is ``(ppq, word0, word1)`` (the first two UMP-1.0 words of a
         channel-voice message; stored opaquely). Pass an empty sequence to clear.
 
         Drops the clip's SysEx, which :meth:`import_smf` and :meth:`export_smf`
@@ -101,11 +101,11 @@ class _ProjectMidiMixin:
         c_events = (SonareMidiEventPod * count)()
         for i, ev in enumerate(rows):
             if len(ev) < 3:
-                raise SonareValueError(f"events[{i}] must contain (ppq, data0, data1)")
-            ppq, data0, data1 = ev[0], ev[1], ev[2]
+                raise SonareValueError(f"events[{i}] must contain (ppq, word0, word1)")
+            ppq, word0, word1 = ev[0], ev[1], ev[2]
             c_events[i].ppq = _validate_midi_event_ppq(ppq, f"events[{i}].ppq")
-            c_events[i].data0 = _validate_midi_event_word(data0, f"events[{i}].data0")
-            c_events[i].data1 = _validate_midi_event_word(data1, f"events[{i}].data1")
+            c_events[i].word0 = _validate_midi_event_word(word0, f"events[{i}].word0")
+            c_events[i].word1 = _validate_midi_event_word(word1, f"events[{i}].word1")
         _check(
             _get_lib().sonare_project_set_midi_events(
                 self._require_handle(),
@@ -909,7 +909,7 @@ class _ProjectMidiMixin:
     ) -> list[tuple[float, int, int]]:
         """Lower a bank/program selection to MIDI 1.0 bank-select + program events.
 
-        Returns the emitted ``(ppq, data0, data1)`` events (Bank MSB CC, Bank LSB
+        Returns the emitted ``(ppq, word0, word1)`` events (Bank MSB CC, Bank LSB
         CC, then Program Change) at ``ppq``.
         """
         lib = _get_lib()
@@ -929,7 +929,7 @@ class _ProjectMidiMixin:
             )
         )
         return [
-            (float(events[i].ppq), int(events[i].data0), int(events[i].data1))
+            (float(events[i].ppq), int(events[i].word0), int(events[i].word1))
             for i in range(int(out_count.value))
         ]
 
@@ -953,10 +953,10 @@ class _ProjectMidiMixin:
         for i, ev in enumerate(rows):
             seq = tuple(ev)
             if len(seq) < 3:
-                raise SonareValueError(f"events[{i}] must contain (ppq, data0, data1)")
+                raise SonareValueError(f"events[{i}] must contain (ppq, word0, word1)")
             c_in[i].ppq = _validate_midi_event_ppq(seq[0], f"events[{i}].ppq")
-            c_in[i].data0 = _validate_midi_event_word(seq[1], f"events[{i}].data0")
-            c_in[i].data1 = _validate_midi_event_word(seq[2], f"events[{i}].data1")
+            c_in[i].word0 = _validate_midi_event_word(seq[1], f"events[{i}].word0")
+            c_in[i].word1 = _validate_midi_event_word(seq[2], f"events[{i}].word1")
         cfg_map: Mapping[str, int | None] = config or {}
         # The C ABI spells "any" / "no remap" as -1; only absence reaches it.
         cfg = SonareMidiRouteConfig(
@@ -986,7 +986,7 @@ class _ProjectMidiMixin:
             )
         )
         routed = [
-            (float(out[i].ppq), int(out[i].data0), int(out[i].data1))
+            (float(out[i].ppq), int(out[i].word0), int(out[i].word1))
             for i in range(int(out_count.value))
         ]
         return MidiRouteResult(
@@ -1016,10 +1016,10 @@ class _ProjectMidiMixin:
         for i, ev in enumerate(rows):
             seq = tuple(ev)
             if len(seq) < 3:
-                raise SonareValueError(f"events[{i}] must contain (ppq, data0, data1)")
+                raise SonareValueError(f"events[{i}] must contain (ppq, word0, word1)")
             c_in[i].ppq = _validate_midi_event_ppq(seq[0], f"events[{i}].ppq")
-            c_in[i].data0 = _validate_midi_event_word(seq[1], f"events[{i}].data0")
-            c_in[i].data1 = _validate_midi_event_word(seq[2], f"events[{i}].data1")
+            c_in[i].word0 = _validate_midi_event_word(seq[1], f"events[{i}].word0")
+            c_in[i].word1 = _validate_midi_event_word(seq[2], f"events[{i}].word1")
         out_binding = SonareMidiCcBinding()
         rc = lib.sonare_midi_cc_learn(
             c_in if n else None,
@@ -1051,11 +1051,11 @@ class _ProjectMidiMixin:
         c_bindings = (SonareMidiCcBinding * m)(*[_cc_binding_to_c(b) for b in rows])
         seq = tuple(event)
         if len(seq) < 3:
-            raise SonareValueError("event must contain (ppq, data0, data1)")
+            raise SonareValueError("event must contain (ppq, word0, word1)")
         ev = SonareMidiEventPod(
             ppq=_validate_midi_event_ppq(seq[0], "event.ppq"),
-            data0=_validate_midi_event_word(seq[1], "event.data0"),
-            data1=_validate_midi_event_word(seq[2], "event.data1"),
+            word0=_validate_midi_event_word(seq[1], "event.word0"),
+            word1=_validate_midi_event_word(seq[2], "event.word1"),
         )
         pt = SonareAutomationPoint()
         rc = lib.sonare_midi_cc_to_breakpoint(
@@ -1080,7 +1080,7 @@ class _ProjectMidiMixin:
     ) -> tuple[float, int, int] | None:
         """Convert an automation parameter value back to a CC event.
 
-        Returns ``(ppq, data0, data1)`` or ``None`` when ``param_id`` is not
+        Returns ``(ppq, word0, word1)`` or ``None`` when ``param_id`` is not
         bound (native ``SONARE_ERROR_INVALID_STATE``).
         """
         lib = _get_lib()
@@ -1100,6 +1100,6 @@ class _ProjectMidiMixin:
         if rc == SONARE_ERROR_INVALID_STATE:
             return None
         _check(rc)
-        return (float(out_event.ppq), int(out_event.data0), int(out_event.data1))
+        return (float(out_event.ppq), int(out_event.word0), int(out_event.word1))
 
     # -- MIR ----------------------------------------------------------------

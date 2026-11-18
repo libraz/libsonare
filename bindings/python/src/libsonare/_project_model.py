@@ -420,13 +420,13 @@ class MidiCcBinding:
 class MidiRouteResult:
     """Result of :meth:`Project.midi_route_events`.
 
-    ``events`` is the filtered / remapped event stream (``(ppq, data0, data1)``
+    ``events`` is the filtered / remapped event stream (``(ppq, word0, word1)``
     tuples). ``overflowed`` is True when the router or caller capacity dropped
     events; ``overflow_count`` is how many were dropped.
     """
 
     events: list[tuple[float, int, int]]
-    """Events that passed the filter, remapped as configured, as ``(ppq, data0, data1)``."""
+    """Events that passed the filter, remapped as configured, as ``(ppq, word0, word1)``."""
     overflowed: bool
     """True when events were dropped for lack of router or caller capacity."""
     overflow_count: int
@@ -606,7 +606,7 @@ def _midi_event_tuple(name: str, *args: float | ctypes._SimpleCData[int]) -> tup
     event = SonareMidiEventPod()
     fn = getattr(lib, name)
     _check(fn(*args, ctypes.byref(event)))
-    return (float(event.ppq), int(event.data0), int(event.data1))
+    return (float(event.ppq), int(event.word0), int(event.word1))
 
 
 def _validate_midi_event_word(value: object, label: str) -> int:

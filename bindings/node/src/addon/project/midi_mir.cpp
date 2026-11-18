@@ -52,20 +52,20 @@ Napi::Value ProjectWrap::SetMidiEvents(const Napi::CallbackInfo& info) {
         if (!RequiredDoubleValue(env, tuple.Get(0u), "MIDI event ppq", &ev.ppq)) {
           return env.Undefined();
         }
-        if (!RequiredWordValue(env, tuple.Get(1u), "MIDI event data0", &ev.data0)) {
+        if (!RequiredWordValue(env, tuple.Get(1u), "MIDI event word0", &ev.word0)) {
           return env.Undefined();
         }
-        if (!RequiredWordValue(env, tuple.Get(2u), "MIDI event data1", &ev.data1)) {
+        if (!RequiredWordValue(env, tuple.Get(2u), "MIDI event word1", &ev.word1)) {
           return env.Undefined();
         }
       } else if (entry.IsObject()) {
         Napi::Object obj = entry.As<Napi::Object>();
         if (!RequiredDoubleProperty(env, obj, "ppq", &ev.ppq)) return env.Undefined();
-        if (!RequiredWordValue(env, obj.Get("data0"), "data0", &ev.data0)) return env.Undefined();
-        ev.data1 = WordProperty(obj, "data1", 0u);
+        if (!RequiredWordValue(env, obj.Get("word0"), "word0", &ev.word0)) return env.Undefined();
+        ev.word1 = WordProperty(obj, "word1", 0u);
         if (env.IsExceptionPending()) return env.Undefined();
       } else {
-        Napi::TypeError::New(env, "MIDI event must be a [ppq, data0, data1] tuple or object")
+        Napi::TypeError::New(env, "MIDI event must be a [ppq, word0, word1] tuple or object")
             .ThrowAsJavaScriptException();
         return env.Undefined();
       }

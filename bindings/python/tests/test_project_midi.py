@@ -241,9 +241,9 @@ def test_set_midi_events_validates_event_shape_and_words() -> None:
         clip_id = project.add_midi_clip(0.0, 1.0).clip_id
         with pytest.raises(ValueError, match="ppq"):
             project.set_midi_events(clip_id, [(float("nan"), 0, 0)])
-        with pytest.raises(ValueError, match="data0"):
+        with pytest.raises(ValueError, match="word0"):
             project.set_midi_events(clip_id, [(0.0, -1, 0)])
-        with pytest.raises(ValueError, match="ppq, data0, data1"):
+        with pytest.raises(ValueError, match="ppq, word0, word1"):
             project.set_midi_events(clip_id, [(0.0, 0)])
     finally:
         project.close()
@@ -291,7 +291,7 @@ def test_midi_bank_program_lowers_to_events() -> None:
     assert isinstance(events, list)
     assert 1 <= len(events) <= 3
     for ev in events:
-        assert len(ev) == 3  # (ppq, data0, data1)
+        assert len(ev) == 3  # (ppq, word0, word1)
 
 
 def test_midi_route_events_filters_and_reports_overflow() -> None:
@@ -477,7 +477,7 @@ def test_bake_midi_fx_preserves_more_than_512_events() -> None:
         payload = json.loads(project.to_json())
         baked = payload["midi_content"][str(clip)]
         assert baked == [
-            {"data0": data0, "data1": data1, "ppq": ppq} for ppq, data0, data1 in events
+            {"word0": word0, "word1": word1, "ppq": ppq} for ppq, word0, word1 in events
         ]
 
         roundtrip = Project()

@@ -3141,8 +3141,8 @@ std::vector<MaskedCase> masked_cases() {
        [](const Fixture& f) {
          MidiClipEventList events(1);
          events[0].ppq = 10.0;
-         events[0].data0 = 0x40903C00;
-         events[0].data1 = 0x80000000;
+         events[0].word0 = 0x40903C00;
+         events[0].word1 = 0x80000000;
          return std::make_unique<ReplaceMidiClipEvents>(f.midi_clip, std::move(events));
        },
        0},
@@ -3219,8 +3219,8 @@ std::vector<EditCommandPtr> mixed_import_commands(const Project& project, int co
     MidiClipEventList events(50);
     for (size_t e = 0; e < events.size(); ++e) {
       events[e].ppq = static_cast<double>(e);
-      events[e].data0 = 0x40903C00;
-      events[e].data1 = 0x80000000;
+      events[e].word0 = 0x40903C00;
+      events[e].word1 = 0x80000000;
     }
     // One SysEx event per clip, each with its own handle and payload.
     const uint32_t handle = 1000 + static_cast<uint32_t>(i);
@@ -3411,10 +3411,10 @@ TEST_CASE("an inverse built before apply equals the inverse built from the snaps
   const auto replace_events = [](const Fixture& f) {
     MidiClipEventList events(2);
     events[0].ppq = 10.0;
-    events[0].data0 = 0x40903C00;
-    events[0].data1 = 0x80000000;
+    events[0].word0 = 0x40903C00;
+    events[0].word1 = 0x80000000;
     events[1].ppq = 20.0;
-    events[1].data0 = 0x40803C00;
+    events[1].word0 = 0x40803C00;
     return std::make_unique<ReplaceMidiClipEvents>(f.midi_clip, std::move(events));
   };
   const std::vector<Case> cases = {
@@ -3448,8 +3448,8 @@ TEST_CASE("an inverse built before apply equals the inverse built from the snaps
       if (test_case.seed_events) {
         MidiClipEventList seeded(1);
         seeded[0].ppq = 5.0;
-        seeded[0].data0 = 0x40903E00;
-        seeded[0].data1 = 0x80000000;
+        seeded[0].word0 = 0x40903E00;
+        seeded[0].word1 = 0x80000000;
         before_store.events[f.midi_clip] = seeded;
       }
       const Project before = f.project;
@@ -3576,8 +3576,8 @@ TEST_CASE("SysEx pruning keeps exactly the referenced payloads over a random edi
     MidiClipEventList events(1 + next(6));
     for (size_t e = 0; e < events.size(); ++e) {
       events[e].ppq = static_cast<double>(e);
-      events[e].data0 = 0x40903C00;
-      events[e].data1 = 0x80000000;
+      events[e].word0 = 0x40903C00;
+      events[e].word1 = 0x80000000;
       if (next(2) == 0) {
         const uint32_t handle = 1 + next(6);
         events[e].sysex_handle = handle;
@@ -3605,8 +3605,8 @@ TEST_CASE("SysEx pruning keeps exactly the referenced payloads over a random edi
       }
       MidiClipEvent added;
       added.ppq = 99.0;
-      added.data0 = 0x40903C00;
-      added.data1 = 0x80000000;
+      added.word0 = 0x40903C00;
+      added.word1 = 0x80000000;
       const auto present = payload_handles(history.midi_content());
       if (!present.empty() && next(2) == 0) {
         auto pick = present.begin();
@@ -3640,10 +3640,10 @@ TEST_CASE("loading a project drops SysEx payloads no event references",
   MidiContentStore store;
   MidiClipEventList events(2);
   events[0].ppq = 0.0;
-  events[0].data0 = 0x40903C00;
-  events[0].data1 = 0x80000000;
+  events[0].word0 = 0x40903C00;
+  events[0].word1 = 0x80000000;
   events[1].ppq = 10.0;
-  events[1].data0 = 0x40803C00;
+  events[1].word0 = 0x40803C00;
   events[1].sysex_handle = 3;
   store.events[f.midi_clip] = events;
   store.sysex_payloads[3] = {0xF0, 0x01, 0xF7};
@@ -3692,8 +3692,8 @@ TEST_CASE("undoing an event replacement restores the absence of a store entry",
 
   MidiClipEventList events(1);
   events[0].ppq = 3.0;
-  events[0].data0 = 0x40903C00;
-  events[0].data1 = 0x80000000;
+  events[0].word0 = 0x40903C00;
+  events[0].word1 = 0x80000000;
   REQUIRE(history.apply(std::make_unique<ReplaceMidiClipEvents>(clip, std::move(events))));
   const std::string after = persisted_state(history);
   CHECK(after != before);

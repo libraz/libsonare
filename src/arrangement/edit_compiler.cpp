@@ -1249,7 +1249,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
   uint32_t first_midi_clip_id = 0;
   // Bake each MIDI clip's PPQ-timed events (from the MidiContentStore) into a
   // midi::MidiClipSchedule with absolute render-frame UMP events. The store's
-  // MidiClipEvent maps data0/data1 onto the first two UMP words and carries a
+  // MidiClipEvent maps word0/word1 onto the first two UMP words and carries a
   // SysEx handle sidecar when needed. PPQ to frame conversion uses the same
   // deterministic TempoMap as audio.
   for (const auto& clip : project.clips()) {
@@ -1293,10 +1293,10 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
         if (ev.ppq < clip.source_offset_ppq) continue;
         midi::MidiClipEvent out;
         out.ppq = ev.ppq - clip.source_offset_ppq;
-        out.ump.words[0] = ev.data0;
-        out.ump.words[1] = ev.data1;
-        out.ump.word_count = midi::ump_word_count_for_word0(ev.data0);
-        out.ump.group = static_cast<uint8_t>((ev.data0 >> 24u) & 0x0Fu);
+        out.ump.words[0] = ev.word0;
+        out.ump.words[1] = ev.word1;
+        out.ump.word_count = midi::ump_word_count_for_word0(ev.word0);
+        out.ump.group = static_cast<uint8_t>((ev.word0 >> 24u) & 0x0Fu);
         out.ump.sysex_handle = ev.sysex_handle;
         if (ev.sysex_handle != 0) {
           const auto payload_it = midi.sysex_payloads.find(ev.sysex_handle);

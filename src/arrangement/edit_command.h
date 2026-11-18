@@ -57,16 +57,16 @@ namespace sonare::arrangement {
 struct MidiClipEvent {
   /// Event position within the clip's source timeline (PPQ).
   double ppq = 0.0;
-  /// First two UMP words. MIDI 1.0 channel-voice events use data0 and keep
-  /// data1 at zero; MIDI 2.0 channel-voice events use both words.
-  uint32_t data0 = 0;
-  uint32_t data1 = 0;
+  /// First two UMP words. MIDI 1.0 channel-voice events use word0 and keep
+  /// word1 at zero; MIDI 2.0 channel-voice events use both words.
+  uint32_t word0 = 0;
+  uint32_t word1 = 0;
   /// Non-zero for data/SysEx-handle events. Payload bytes live in
   /// MidiContentStore::sysex_payloads so command/event lists stay fixed-size.
   uint32_t sysex_handle = 0;
 
   bool operator==(const MidiClipEvent& o) const noexcept {
-    return ppq == o.ppq && data0 == o.data0 && data1 == o.data1 && sysex_handle == o.sysex_handle;
+    return ppq == o.ppq && word0 == o.word0 && word1 == o.word1 && sysex_handle == o.sysex_handle;
   }
   bool operator!=(const MidiClipEvent& o) const noexcept { return !(*this == o); }
 };

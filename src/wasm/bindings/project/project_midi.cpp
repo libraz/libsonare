@@ -18,12 +18,12 @@ void ProjectWasm::setMidiEvents(const val& clip_id_val, val events) {
     val entry = events[i];
     if (val::global("Array").call<bool>("isArray", entry)) {
       pods[i].ppq = numberFromVal(entry[0], "ppq");
-      pods[i].data0 = checkedWordFromVal(entry[1], "data0");
-      pods[i].data1 = checkedWordFromVal(entry[2], "data1");
+      pods[i].word0 = checkedWordFromVal(entry[1], "word0");
+      pods[i].word1 = checkedWordFromVal(entry[2], "word1");
     } else {
       pods[i].ppq = numberFromVal(entry["ppq"], "ppq");
-      pods[i].data0 = checkedWordFromVal(entry["data0"], "data0");
-      pods[i].data1 = wordProperty(entry, "data1", 0);
+      pods[i].word0 = checkedWordFromVal(entry["word0"], "word0");
+      pods[i].word1 = wordProperty(entry, "word1", 0);
     }
   }
   const SonareError err = sonare_project_set_midi_events(
@@ -324,8 +324,8 @@ val js_midi_bank_program(double ppq, const val& group_val, const val& channel_va
   for (size_t i = 0; i < count; ++i) {
     val event = val::object();
     event.set("ppq", events[i].ppq);
-    event.set("data0", static_cast<double>(events[i].data0));
-    event.set("data1", static_cast<double>(events[i].data1));
+    event.set("word0", static_cast<double>(events[i].word0));
+    event.set("word1", static_cast<double>(events[i].word1));
     out.set(static_cast<unsigned>(i), event);
   }
   return out;
@@ -334,16 +334,16 @@ val js_midi_bank_program(double ppq, const val& group_val, const val& channel_va
 SonareMidiEventPod js_midi_event_from_val(val event) {
   SonareMidiEventPod out{};
   out.ppq = numberFromVal(event["ppq"], "ppq");
-  out.data0 = checkedWordFromVal(event["data0"], "data0");
-  out.data1 = wordProperty(event, "data1", 0);
+  out.word0 = checkedWordFromVal(event["word0"], "word0");
+  out.word1 = wordProperty(event, "word1", 0);
   return out;
 }
 
 val js_midi_event_to_val(const SonareMidiEventPod& event) {
   val out = val::object();
   out.set("ppq", event.ppq);
-  out.set("data0", static_cast<double>(event.data0));
-  out.set("data1", static_cast<double>(event.data1));
+  out.set("word0", static_cast<double>(event.word0));
+  out.set("word1", static_cast<double>(event.word1));
   return out;
 }
 
@@ -457,8 +457,8 @@ val js_midi_route_events(val events, val config) {
   for (size_t i = 0; i < count; ++i) {
     val entry = events[i];
     input[i].ppq = numberFromVal(entry["ppq"], "ppq");
-    input[i].data0 = checkedWordFromVal(entry["data0"], "data0");
-    input[i].data1 = wordProperty(entry, "data1", 0);
+    input[i].word0 = checkedWordFromVal(entry["word0"], "word0");
+    input[i].word1 = wordProperty(entry, "word1", 0);
   }
 
   SonareMidiRouteConfig route{-1, -1, -1, 1};
@@ -492,8 +492,8 @@ val js_midi_route_events(val events, val config) {
   for (size_t i = 0; i < output_count; ++i) {
     val event = val::object();
     event.set("ppq", output[i].ppq);
-    event.set("data0", static_cast<double>(output[i].data0));
-    event.set("data1", static_cast<double>(output[i].data1));
+    event.set("word0", static_cast<double>(output[i].word0));
+    event.set("word1", static_cast<double>(output[i].word1));
     routed.set(static_cast<unsigned>(i), event);
   }
   out.set("events", routed);

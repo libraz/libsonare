@@ -261,9 +261,9 @@ def test_transcribe_writes_an_smf_whose_notes_read_back(melody_wav: str) -> None
             project.close()
 
     starts = [
-        (int(event["data0"]) >> 8) & 0x7F
+        (int(event["word0"]) >> 8) & 0x7F
         for event in events
-        if ((int(event["data0"]) >> 20) & 0xF) == _NOTE_ON
+        if ((int(event["word0"]) >> 20) & 0xF) == _NOTE_ON
     ]
     assert starts == list(_EXPECTED_NOTES)
     assert len(events) == 2 * payload["note_count"]
@@ -310,9 +310,9 @@ def test_transcribe_applies_a_fixed_velocity(melody_wav: str) -> None:
             project.close()
 
     velocities = {
-        int(event["data0"]) & 0x7F
+        int(event["word0"]) & 0x7F
         for event in events
-        if ((int(event["data0"]) >> 20) & 0xF) == _NOTE_ON
+        if ((int(event["word0"]) >> 20) & 0xF) == _NOTE_ON
     }
     assert velocities == {77}
 

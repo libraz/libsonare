@@ -118,9 +118,9 @@ BUILDER_CASES = [
 
 @pytest.mark.parametrize(("builder", "kwargs", "words"), BUILDER_CASES)
 def test_midi2_builder_packs_expected_words(builder, kwargs, words) -> None:
-    ppq, data0, data1 = builder(ppq=1.5, **kwargs)
+    ppq, word0, word1 = builder(ppq=1.5, **kwargs)
     assert ppq == 1.5
-    assert (data0, data1) == words
+    assert (word0, word1) == words
 
 
 @pytest.mark.parametrize(

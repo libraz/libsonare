@@ -181,6 +181,7 @@ const NON_OPTION_SHARED_READERS: ReadonlySet<string> = new Set([
   // Refuses keys outside a declared list; it reads no value, so it makes no caller an options reader.
   'RefuseUnknownKeys',
   'RequiredIntProperty',
+  'RequiredInt64Property',
   'RequiredUint32Property',
   'RequiredFloatProperty',
   'RequiredDoubleProperty',
@@ -525,7 +526,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) =>
       midiRouteEvents({
         ...requestFields('midiRouteEvents', o),
-        events: [{ ppq: 0, data0: (0x2 << 28) | (0x9 << 20) | (60 << 8) | 100 }],
+        events: [{ ppq: 0, word0: (0x2 << 28) | (0x9 << 20) | (60 << 8) | 100 }],
       }),
   },
   {
@@ -917,7 +918,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
       withEngine((engine) => {
         // The call returns nothing, so the observable is the audio the binding
         // shapes: lo / hi / curve only surface once the bound CC moves.
-        engine.setSynthInstrument(0, 'clarinet');
+        engine.setSynthInstrument(0, { preset: 'clarinet' });
         engine.clearControllerBindings(0);
         engine.bindController(0, {
           ...o,
@@ -1071,7 +1072,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
           {
             ...o,
             ppq: 0,
-            data0: midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }).data0,
+            word0: midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }).word0,
           },
         ]);
         return p.clips().length;
@@ -1286,7 +1287,6 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
   (
     [
       ['_synthPatchRoundTrip', 'Internal round-trip probe, covered by synth-patch.test.ts.'],
-      ['addAutomationLane', 'Needs a project with a parameterised track.'],
       ['addClip', 'Needs a project with a registered audio source.'],
       ['addLoopRecordingTakes', 'Needs a capture session with recorded takes.'],
       [
@@ -1316,7 +1316,6 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
         'restoreVocalEditSession',
         'Vocal session restore combines required samples/sampleRate/state with optional limits; limit defaults and rejection cases are covered by vocal_edit.test.ts.',
       ],
-      ['editAutomationLane', 'Needs a project with an existing automation lane.'],
       ['estimateRoom', 'Needs a measured impulse response.'],
       [
         'roomGeometryFromEstimate',

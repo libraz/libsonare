@@ -274,8 +274,8 @@ bool ReadHpssArguments(Napi::Env env, const Napi::CallbackInfo& info, HpssArgume
 Napi::Object MidiEventToObject(Napi::Env env, const SonareMidiEventPod& event) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("ppq", Napi::Number::New(env, event.ppq));
-  out.Set("data0", Napi::Number::New(env, event.data0));
-  out.Set("data1", Napi::Number::New(env, event.data1));
+  out.Set("word0", Napi::Number::New(env, event.word0));
+  out.Set("word1", Napi::Number::New(env, event.word1));
   return out;
 }
 

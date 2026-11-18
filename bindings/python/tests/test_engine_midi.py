@@ -176,8 +176,8 @@ def test_engine_push_midi_sysex_accepts_frame_and_rejects_oversized() -> None:
 
 
 def test_engine_scheduled_midi_clips_render_builtin_instrument() -> None:
-    def midi1_word(status: int, channel: int, data0: int, data1: int) -> int:
-        return (0x2 << 28) | ((status & 0xF) << 20) | ((channel & 0xF) << 16) | (data0 << 8) | data1
+    def midi1_word(status: int, channel: int, word0: int, word1: int) -> int:
+        return (0x2 << 28) | ((status & 0xF) << 20) | ((channel & 0xF) << 16) | (word0 << 8) | word1
 
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_builtin_instrument(BuiltinSynthConfig(gain=0.5), 6)

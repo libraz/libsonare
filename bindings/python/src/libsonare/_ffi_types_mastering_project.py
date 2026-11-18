@@ -343,8 +343,8 @@ class SonareMidiEventPod(CStruct):
 
     _fields_ = [
         ("ppq", ctypes.c_double),
-        ("data0", ctypes.c_uint32),
-        ("data1", ctypes.c_uint32),
+        ("word0", ctypes.c_uint32),
+        ("word1", ctypes.c_uint32),
     ]
 
 

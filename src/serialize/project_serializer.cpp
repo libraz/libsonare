@@ -12,6 +12,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "arrangement/edit_command_internal.h"
@@ -783,9 +784,17 @@ DeserializeResult project_from_json(const std::string& json_text) {
         for (const auto& element : value.as_array()) {
           const Value& ev = object_element(element, "midi_content");
           arrangement::MidiClipEvent e;
+          for (const auto& [earlier, current] :
+               {std::pair<const char*, const char*>{"data0", "word0"}, {"data1", "word1"}}) {
+            if (ev.find(earlier) != nullptr) {
+              throw SonareException(ErrorCode::InvalidFormat,
+                                    std::string("midi_content event key \"") + earlier +
+                                        "\" is an earlier spelling; write \"" + current + "\"");
+            }
+          }
           e.ppq = num_or(ev, "ppq", 0.0);
-          e.data0 = midi_word_or_warn(ev, "data0", clip_id, &decode_diagnostics);
-          e.data1 = midi_word_or_warn(ev, "data1", clip_id, &decode_diagnostics);
+          e.word0 = midi_word_or_warn(ev, "word0", clip_id, &decode_diagnostics);
+          e.word1 = midi_word_or_warn(ev, "word1", clip_id, &decode_diagnostics);
           e.sysex_handle = uint_or(ev, "sysex_handle", 0);
           events.push_back(e);
         }

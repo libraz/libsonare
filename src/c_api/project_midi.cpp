@@ -22,8 +22,8 @@ SonareError sonare_project_set_midi_events(SonareProject* project, uint32_t clip
     if (!valid_midi_event_pod(events[i])) return SONARE_ERROR_INVALID_PARAMETER;
     arr::MidiClipEvent event;
     event.ppq = events[i].ppq;
-    event.data0 = events[i].data0;
-    event.data1 = events[i].data1;
+    event.word0 = events[i].word0;
+    event.word1 = events[i].word1;
     list.push_back(event);
   }
   auto command = std::make_unique<arr::ReplaceMidiClipEvents>(clip_id, std::move(list));
@@ -332,10 +332,10 @@ const char* view_to_cstr(std::string_view value) { return value.empty() ? nullpt
 
 sonare::midi::Ump ump_from_pod(const SonareMidiEventPod& pod) noexcept {
   sonare::midi::Ump out{};
-  out.words[0] = pod.data0;
-  out.words[1] = pod.data1;
-  out.word_count = sonare::midi::ump_word_count_for_word0(pod.data0);
-  out.group = static_cast<uint8_t>((pod.data0 >> 24u) & 0x0Fu);
+  out.words[0] = pod.word0;
+  out.words[1] = pod.word1;
+  out.word_count = sonare::midi::ump_word_count_for_word0(pod.word0);
+  out.group = static_cast<uint8_t>((pod.word0 >> 24u) & 0x0Fu);
   return out;
 }
 

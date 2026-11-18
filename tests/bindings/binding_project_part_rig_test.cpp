@@ -26,11 +26,11 @@ SonareProject* make_guitar_project() {
   REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
   SonareMidiEventPod events[3] = {};
   events[0].ppq = 0.0;
-  events[0].data0 = 0x20C01E00u;  // program change, channel 0, program 30
+  events[0].word0 = 0x20C01E00u;  // program change, channel 0, program 30
   events[1].ppq = 0.0;
-  events[1].data0 = 0x20900000u | (52u << 8) | 0x60u;  // note-on 52, velocity 96
+  events[1].word0 = 0x20900000u | (52u << 8) | 0x60u;  // note-on 52, velocity 96
   events[2].ppq = 2.0;
-  events[2].data0 = 0x20800000u | (52u << 8);  // note-off 52
+  events[2].word0 = 0x20800000u | (52u << 8);  // note-off 52
   REQUIRE(sonare_project_set_midi_events(project, clip, events, 3) == SONARE_OK);
   REQUIRE(sonare_project_set_track_midi_destination(project, track, kDestination) == SONARE_OK);
   return project;

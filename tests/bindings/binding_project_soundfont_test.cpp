@@ -92,8 +92,8 @@ SonareMidiEventPod midi2_program_change_pod(double ppq, uint8_t channel, uint8_t
                                             uint8_t bank_msb, uint8_t bank_lsb) {
   SonareMidiEventPod e{};
   e.ppq = ppq;
-  e.data0 = (0x4u << 28) | (0xCu << 20) | (static_cast<uint32_t>(channel & 0x0Fu) << 16) | 0x01u;
-  e.data1 = (static_cast<uint32_t>(program & 0x7Fu) << 24) |
+  e.word0 = (0x4u << 28) | (0xCu << 20) | (static_cast<uint32_t>(channel & 0x0Fu) << 16) | 0x01u;
+  e.word1 = (static_cast<uint32_t>(program & 0x7Fu) << 24) |
             (static_cast<uint32_t>(bank_msb & 0x7Fu) << 8) |
             static_cast<uint32_t>(bank_lsb & 0x7Fu);
   return e;
@@ -102,16 +102,16 @@ SonareMidiEventPod midi2_program_change_pod(double ppq, uint8_t channel, uint8_t
 SonareMidiEventPod pod(double ppq, uint32_t word) {
   SonareMidiEventPod e{};
   e.ppq = ppq;
-  e.data0 = word;
-  e.data1 = 0;
+  e.word0 = word;
+  e.word1 = 0;
   return e;
 }
 
 SonareMidiEventPod pod(double ppq, const sonare::midi::Ump& ump) {
   SonareMidiEventPod e{};
   e.ppq = ppq;
-  e.data0 = ump.words[0];
-  e.data1 = ump.words[1];
+  e.word0 = ump.words[0];
+  e.word1 = ump.words[1];
   return e;
 }
 

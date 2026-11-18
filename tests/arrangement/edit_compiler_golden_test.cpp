@@ -1051,7 +1051,7 @@ TEST_CASE("A looped MIDI clip under a tempo ramp repeats where its written-out t
     const double base = 1.5 * k;
     for (const arr::MidiClipEvent& e :
          std::vector<arr::MidiClipEvent>{{0.0, on, 0}, {0.75, off, 0}, {1.0, on, 0}}) {
-      if (base + e.ppq < 5.0) written_out.push_back({base + e.ppq, e.data0, e.data1});
+      if (base + e.ppq < 5.0) written_out.push_back({base + e.ppq, e.word0, e.word1});
     }
   }
   const auto one_shot = compile_clip(0.0, written_out);

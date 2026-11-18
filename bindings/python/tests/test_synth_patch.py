@@ -755,8 +755,8 @@ def test_engine_set_synth_instrument_renders_live_midi() -> None:
         engine.close()
 
 
-def _engine_midi1_word(status: int, channel: int, data0: int, data1: int) -> int:
-    return (0x2 << 28) | ((status & 0xF) << 20) | ((channel & 0xF) << 16) | (data0 << 8) | data1
+def _engine_midi1_word(status: int, channel: int, word0: int, word1: int) -> int:
+    return (0x2 << 28) | ((status & 0xF) << 20) | ((channel & 0xF) << 16) | (word0 << 8) | word1
 
 
 def test_engine_set_synth_instrument_follows_gm_programs_only_when_enabled() -> None:

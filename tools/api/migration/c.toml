@@ -1292,3 +1292,17 @@ changed = "only 0 selects a default for block_size, num_channels and sample_rate
 domain = "project"
 rule = "absent-not-sentinel"
 test = "tests/bindings/project_bounce_tail_channel_test.cpp::project bounce reads only zero as the default for block size, width and rate"
+
+[[entry]]
+kind = "field"
+old = "SonareMidiEventPod.data0"
+new = "SonareMidiEventPod.word0"
+domain = "project"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "SonareMidiEventPod.data1"
+new = "SonareMidiEventPod.word1"
+domain = "project"
+rule = "aliases-removed"
