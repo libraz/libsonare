@@ -123,8 +123,6 @@ OPERATIONS = (
     "momentary_lufs",
     "nnls_chroma",
     "normalize",
-    "normalize_rms",
-    "normalize_rms_stereo",
     "normalize_stereo",
     "note_move",
     "note_stretch",

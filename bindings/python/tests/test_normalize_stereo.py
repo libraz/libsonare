@@ -1,8 +1,8 @@
-"""Tests for the two stereo normalizers.
+"""Tests for the stereo normalizer in its two modes.
 
-``normalize_stereo`` / ``normalize_rms_stereo`` are ctypes pass-throughs over
-``sonare::normalize_stereo`` / ``sonare::normalize_rms_stereo``. What defines
-them over calling the mono normalizer on each channel is that the level is
+``normalize_stereo`` passes through to ``sonare::normalize_stereo`` in peak
+mode and ``sonare::normalize_rms_stereo`` in rms mode. What defines it over
+calling the mono normalizer on each channel is that the level is
 measured across the PAIR and one gain goes to both, so the stereo balance
 survives. Every fixture here therefore holds two channels at deliberately
 different levels: a per-channel implementation would satisfy any assertion that
@@ -16,6 +16,7 @@ arithmetic rather than as a measurement of the fixture.
 
 from __future__ import annotations
 
+import functools
 import inspect
 import json
 from pathlib import Path
@@ -61,6 +62,9 @@ def _rms_db(samples: object) -> float:
     return float(20.0 * np.log10(np.sqrt(np.mean(np.asarray(samples, dtype=np.float64) ** 2))))
 
 
+_RMS_STEREO = functools.partial(libsonare.normalize_stereo, mode="rms")
+
+
 class TestNormalizeStereoBalance:
     def test_one_gain_for_the_pair_keeps_the_channels_12_db_apart(self) -> None:
         left, right = _pair()
@@ -99,8 +103,8 @@ class TestNormalizeStereoBalance:
 
     def test_rms_variant_shares_its_gain_the_same_way(self) -> None:
         left, right = _pair()
-        result = libsonare.normalize_rms_stereo(left, right, SR, target_db=-20.0)
-        mono = libsonare.normalize_rms(left, SR, target_db=-20.0)
+        result = _RMS_STEREO(left, right, SR, target_db=-20.0)
+        mono = libsonare.normalize(left, SR, mode="rms", target_db=-20.0)
 
         assert _rms_db(result.right) - _rms_db(result.left) == pytest.approx(_GAP_DB, abs=0.01)
         assert _rms_db(mono) == pytest.approx(-20.0, abs=0.01)
@@ -117,7 +121,7 @@ class TestNormalizeRmsStereoLevel:
         this cannot pass by landing near any of the three.
         """
         left, right = _pair()
-        result = libsonare.normalize_rms_stereo(left, right, SR, target_db=-20.0)
+        result = _RMS_STEREO(left, right, SR, target_db=-20.0)
 
         left64 = left.astype(np.float64)
         right64 = right.astype(np.float64)
@@ -139,7 +143,7 @@ class TestNormalizeRmsStereoLevel:
         unclipped figure; the achieved RMS is therefore below the target.
         """
         tone = sine(440.0, 0.1, sr=SR, amp=0.5)
-        result = libsonare.normalize_rms_stereo(tone, tone, SR, target_db=0.0)
+        result = _RMS_STEREO(tone, tone, SR, target_db=0.0)
 
         unclipped_peak = 0.5 * 10.0 ** (result.applied_gain_db / 20.0)
         assert unclipped_peak > 1.0
@@ -153,7 +157,7 @@ class TestNormalizeStereoSilence:
         ("call", "target_db"),
         [
             (libsonare.normalize_stereo, -3.0),
-            (libsonare.normalize_rms_stereo, -20.0),
+            (_RMS_STEREO, -20.0),
         ],
     )
     def test_a_silent_pair_comes_back_untouched_at_zero_gain(
@@ -171,7 +175,7 @@ class TestNormalizeStereoSilence:
         ("call", "target_db"),
         [
             (libsonare.normalize_stereo, -3.0),
-            (libsonare.normalize_rms_stereo, -20.0),
+            (_RMS_STEREO, -20.0),
         ],
     )
     def test_a_quiet_but_not_silent_pair_does_move(self, call: object, target_db: float) -> None:
@@ -193,13 +197,13 @@ class TestNormalizeStereoPairRefusals:
     shape is otherwise accepted -- so a refusal cannot be read as the entry
     point being unreachable."""
 
-    @pytest.mark.parametrize("call", [libsonare.normalize_stereo, libsonare.normalize_rms_stereo])
+    @pytest.mark.parametrize("call", [libsonare.normalize_stereo, _RMS_STEREO])
     def test_a_valid_pair_is_accepted(self, call: object) -> None:
         left, right = _pair()
         result = call(left, right, SR)  # type: ignore[operator]
         assert result.length == len(left)
 
-    @pytest.mark.parametrize("call", [libsonare.normalize_stereo, libsonare.normalize_rms_stereo])
+    @pytest.mark.parametrize("call", [libsonare.normalize_stereo, _RMS_STEREO])
     def test_unequal_lengths_are_refused(self, call: object) -> None:
         left, right = _pair()
         with pytest.raises(SonareValueError, match="lengths must match"):
@@ -207,7 +211,7 @@ class TestNormalizeStereoPairRefusals:
         with pytest.raises(SonareValueError, match="lengths must match"):
             call(left, right[:-1], SR)  # type: ignore[operator]
 
-    @pytest.mark.parametrize("call", [libsonare.normalize_stereo, libsonare.normalize_rms_stereo])
+    @pytest.mark.parametrize("call", [libsonare.normalize_stereo, _RMS_STEREO])
     def test_an_empty_channel_is_refused_by_name(self, call: object) -> None:
         left, right = _pair()
         empty = np.zeros(0, dtype=np.float32)
@@ -216,7 +220,7 @@ class TestNormalizeStereoPairRefusals:
         with pytest.raises(SonareValueError, match="right must not be empty"):
             call(left, empty, SR)  # type: ignore[operator]
 
-    @pytest.mark.parametrize("call", [libsonare.normalize_stereo, libsonare.normalize_rms_stereo])
+    @pytest.mark.parametrize("call", [libsonare.normalize_stereo, _RMS_STEREO])
     def test_the_two_channels_cannot_disagree_on_the_sample_rate(self, call: object) -> None:
         """The pair shares one rate by construction, so there is nothing to refuse.
 
@@ -230,7 +234,7 @@ class TestNormalizeStereoPairRefusals:
         rate_parameters = [name for name in parameters if "sample_rate" in name]
         assert rate_parameters == ["sample_rate"]
 
-    @pytest.mark.parametrize("call", [libsonare.normalize_stereo, libsonare.normalize_rms_stereo])
+    @pytest.mark.parametrize("call", [libsonare.normalize_stereo, _RMS_STEREO])
     def test_a_non_positive_sample_rate_is_refused_by_the_c_layer(self, call: object) -> None:
         """And it is the C layer refusing it, not a Python-side guard.
 
@@ -244,13 +248,13 @@ class TestNormalizeStereoPairRefusals:
         # A facade refusal names the argument ("sample_rate must be ...").
         assert str(caught.value) == "Invalid parameter"
 
-    @pytest.mark.parametrize("call", [libsonare.normalize_stereo, libsonare.normalize_rms_stereo])
+    @pytest.mark.parametrize("call", [libsonare.normalize_stereo, _RMS_STEREO])
     def test_a_positive_target_is_refused_by_name(self, call: object) -> None:
         left, right = _pair()
         with pytest.raises(SonareValueError, match="at or below 0 dBFS"):
             call(left, right, SR, target_db=3.0)  # type: ignore[operator]
 
-    @pytest.mark.parametrize("call", [libsonare.normalize_stereo, libsonare.normalize_rms_stereo])
+    @pytest.mark.parametrize("call", [libsonare.normalize_stereo, _RMS_STEREO])
     def test_a_non_finite_sample_is_refused_naming_its_channel(self, call: object) -> None:
         left, right = _pair()
         spoiled = left.copy()
@@ -258,7 +262,7 @@ class TestNormalizeStereoPairRefusals:
         with pytest.raises(SonareValueError, match="left contains NaN or Inf at index 7"):
             call(spoiled, right, SR)  # type: ignore[operator]
 
-    @pytest.mark.parametrize("call", [libsonare.normalize_stereo, libsonare.normalize_rms_stereo])
+    @pytest.mark.parametrize("call", [libsonare.normalize_stereo, _RMS_STEREO])
     def test_validate_false_skips_the_scan_but_not_the_refusal(self, call: object) -> None:
         """``validate=False`` drops the facade's scan onto the C layer's own.
 

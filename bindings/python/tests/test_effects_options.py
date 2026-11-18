@@ -156,7 +156,7 @@ def test_trim_and_rms_normalization_symbols(monkeypatch: pytest.MonkeyPatch) -> 
     rms_call = _Call()
     rms_lib = SimpleNamespace(sonare_normalize_rms=rms_call)
     monkeypatch.setattr(level, "_get_lib", lambda: rms_lib)
-    assert level.normalize_rms(_samples(), target_db=-12.0, sample_rate=22050).size == 0
+    assert level.normalize(_samples(), sample_rate=22050, mode="rms", target_db=-12.0).size == 0
     assert float(rms_call.calls[0][3].value) == pytest.approx(-12.0)
 
 
@@ -172,7 +172,7 @@ def test_legacy_trim_fallback_and_rms_normalization_is_explicitly_unsupported(
         level.trim(_samples(), frame_length=64, sample_rate=22050)
 
     with pytest.raises(SonareError, match="sonare_normalize_rms") as error:
-        level.normalize_rms(_samples(), sample_rate=22050)
+        level.normalize(_samples(), sample_rate=22050, mode="rms")
     assert error.value.code == ErrorCode.NOT_SUPPORTED
 
 
@@ -210,7 +210,7 @@ def test_invalid_options_are_rejected_before_library_lookup(
     with pytest.raises(ValueError, match="hop_length"):
         level.trim(_samples(), hop_length=2**32, sample_rate=22050)
     with pytest.raises(ValueError, match="float32"):
-        level.normalize_rms(_samples(), target_db=-1e100, sample_rate=22050)
+        level.normalize(_samples(), sample_rate=22050, mode="rms", target_db=-1e100)
 
 
 def _has_extended_effects() -> bool:
@@ -245,7 +245,7 @@ def test_extended_effects_work_with_fresh_library() -> None:
     separated_residual = separation.hpss_with_residual(
         samples, n_fft=1024, hop_length=256, hard_mask=True, sample_rate=22050
     )
-    normalized = level.normalize_rms(samples, target_db=-12.0, sample_rate=22050)
+    normalized = level.normalize(samples, sample_rate=22050, mode="rms", target_db=-12.0)
     trimmed = level.trim(
         samples, threshold_db=-40.0, frame_length=1024, hop_length=256, sample_rate=22050
     )

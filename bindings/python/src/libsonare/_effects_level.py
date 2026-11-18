@@ -186,47 +186,6 @@ def normalize(
         return _from_c_float_array(out, out_length.value)
 
 
-def normalize_rms(
-    samples: Sequence[float] | list[float],
-    sample_rate: int,
-    target_db: float = -20.0,
-    *,
-    validate: bool = True,
-) -> np.ndarray:
-    """Normalize audio by RMS level to a target dBFS value.
-
-    This is the RMS counterpart to :func:`normalize`, using the native
-    ``sonare_normalize_rms`` entry point and hard-clipping the result to
-    ``[-1, 1]``.  A legacy library that lacks this symbol cannot provide the
-    same operation, so it raises ``SonareError(NotSupported)``.
-
-    Args:
-        samples: Audio samples.
-        sample_rate: Sample rate in Hz.
-        target_db: Finite RMS target at or below 0 dBFS (default -20.0).
-        validate: Reject empty / NaN / Inf input (default True). Pass
-            ``validate=False`` to skip the scan on hot paths.
-    """
-    _validate_samples("normalize_rms", samples, validate=validate)
-    target_db_c = _normalize_target("normalize_rms", target_db)
-    lib = _get_lib()
-    if not hasattr(lib, "sonare_normalize_rms"):
-        raise _unsupported_effect_symbol("sonare_normalize_rms")
-    c_array, length = _to_c_float_array(samples)
-    with _out_float_array(lib) as (out, out_length):
-        _check(
-            lib.sonare_normalize_rms(
-                c_array,
-                _to_c_size_t(length, "length"),
-                _to_c_int(sample_rate, "sample_rate"),
-                ctypes.c_float(target_db_c),
-                ctypes.byref(out),
-                ctypes.byref(out_length),
-            )
-        )
-        return _from_c_float_array(out, out_length.value)
-
-
 @_guard_buffer("left", "right")
 def normalize_stereo(
     left: Sequence[float] | list[float] | np.ndarray,
@@ -287,57 +246,6 @@ def normalize_stereo(
         right,
         sample_rate,
         _DEFAULT_NORMALIZE_TARGET_DB[resolved] if target_db is None else target_db,
-    )
-
-
-@_guard_buffer("left", "right")
-def normalize_rms_stereo(
-    left: Sequence[float] | list[float] | np.ndarray,
-    right: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int,
-    target_db: float = -20.0,
-    *,
-    validate: bool = True,
-) -> NormalizeStereoResult:
-    """RMS-normalize a stereo pair on a gain measured across both channels.
-
-    This is the two-channel counterpart to :func:`normalize_rms`. The level
-    driven to ``target_db`` is the root mean square over the two channels'
-    samples together -- the quadratic mean of the per-channel figures, not their
-    average -- and the resulting gain goes to both channels, so the stereo
-    balance is preserved for the same reason :func:`normalize_stereo` shares its
-    gain. As in the mono case the result is hard-clipped to ``[-1, 1]``, which an
-    RMS target loud enough to drive peaks past full scale will reach.
-
-    Shares :func:`normalize_stereo`'s pair policy: either channel empty or the
-    two lengths unequal is refused, and a silent pair comes back untouched with
-    ``applied_gain_db`` at 0.0.
-
-    A legacy library that lacks the native ``sonare_normalize_rms_stereo`` entry
-    point cannot provide the operation, so it raises ``SonareError(NotSupported)``.
-
-    Args:
-        left: Left channel samples.
-        right: Right channel samples, same length as ``left``.
-        sample_rate: Sample rate in Hz, shared by both channels.
-        target_db: Finite RMS target at or below 0 dBFS (default -20.0).
-        validate: Reject empty / NaN / Inf input (default True). Pass
-            ``validate=False`` to skip the scan on hot paths.
-
-    Returns:
-        :class:`NormalizeStereoResult` with the two normalized channels, their
-        shared length, and the one gain that was applied to both.
-
-    Example:
-        >>> import libsonare
-        >>> quiet = [0.05, -0.05] * 512
-        >>> loud = [0.2, -0.2] * 512
-        >>> result = libsonare.normalize_rms_stereo(quiet, loud, 22050, target_db=-20.0)
-        >>> round(result.applied_gain_db, 2)  # joint RMS 0.1458 (-16.73 dBFS) -> -20
-        -3.27
-    """
-    return _run_normalize_stereo(
-        "normalize_rms_stereo", "sonare_normalize_rms_stereo", left, right, sample_rate, target_db
     )
 
 

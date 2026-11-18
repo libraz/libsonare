@@ -1260,13 +1260,6 @@ def normalize(
     target_db: float | None = None,
     validate: bool = True,
 ) -> np.ndarray[Any, Any]: ...
-def normalize_rms(
-    samples: FloatSamples,
-    sample_rate: int,
-    target_db: float = -20.0,
-    *,
-    validate: bool = True,
-) -> np.ndarray[Any, Any]: ...
 def normalize_stereo(
     left: FloatSamples,
     right: FloatSamples,
@@ -1274,14 +1267,6 @@ def normalize_stereo(
     *,
     mode: NormalizeMode = "peak",
     target_db: float | None = None,
-    validate: bool = True,
-) -> NormalizeStereoResult: ...
-def normalize_rms_stereo(
-    left: FloatSamples,
-    right: FloatSamples,
-    sample_rate: int,
-    target_db: float = -20.0,
-    *,
     validate: bool = True,
 ) -> NormalizeStereoResult: ...
 def mastering(

@@ -591,12 +591,6 @@ from .analyzer import (
     normalize as normalize,
 )
 from .analyzer import (
-    normalize_rms as normalize_rms,
-)
-from .analyzer import (
-    normalize_rms_stereo as normalize_rms_stereo,
-)
-from .analyzer import (
     normalize_stereo as normalize_stereo,
 )
 from .analyzer import (

@@ -37,7 +37,7 @@ def test_one_shot_transforms_return_float32_arrays(tone: np.ndarray) -> None:
         libsonare.note_move(tone, _SR, 0, len(tone) // 2, 100),
         libsonare.voice_change(tone, _SR, 3.0),
         libsonare.normalize(tone, _SR, target_db=-3.0),
-        libsonare.normalize_rms(tone, _SR, -20.0),
+        libsonare.normalize(tone, _SR, mode="rms", target_db=-20.0),
         libsonare.trim(tone, _SR),
     ]
     for result in results:
