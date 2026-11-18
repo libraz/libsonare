@@ -11,11 +11,6 @@
 
 namespace {
 
-// An omitted (undefined or null) positional integer takes the core default.
-int intOrDefault(const val& value, const char* key, int fallback) {
-  return value.isUndefined() || value.isNull() ? fallback : checkedIntFromVal(value, key);
-}
-
 // Shared option reader for decomposeStems / decomposeStemsLinked: 0 is the
 // "use the built-in default" sentinel the C ABI documents on
 // SonareDecomposeStemsConfig, so an explicit 0 must land on the same
@@ -64,7 +59,10 @@ val js_decompose(val s, const val& n_features_val, const val& n_frames_val,
   const int n_features = checkedIntFromVal(n_features_val, "nFeatures");
   const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
   const int n_components = checkedIntFromVal(n_components_val, "nComponents");
-  const int n_iter = intOrDefault(n_iter_val, "nIter", kDecomposeDefaultIter);
+  // An omitted (undefined or null) iteration count takes the core default.
+  const int n_iter = n_iter_val.isUndefined() || n_iter_val.isNull()
+                         ? kDecomposeDefaultIter
+                         : checkedIntFromVal(n_iter_val, "nIter");
   const float beta = checkedFloatFromVal(beta_val, "beta");
   std::vector<float> data = float32ArrayToVector(s);
   if (n_components <= 0) {
@@ -98,7 +96,10 @@ val js_decompose_with_init(val s, const val& n_features_val, const val& n_frames
   const int n_features = checkedIntFromVal(n_features_val, "nFeatures");
   const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
   const int n_components = checkedIntFromVal(n_components_val, "nComponents");
-  const int n_iter = intOrDefault(n_iter_val, "nIter", kDecomposeDefaultIter);
+  // An omitted (undefined or null) iteration count takes the core default.
+  const int n_iter = n_iter_val.isUndefined() || n_iter_val.isNull()
+                         ? kDecomposeDefaultIter
+                         : checkedIntFromVal(n_iter_val, "nIter");
   const float beta = checkedFloatFromVal(beta_val, "beta");
   std::vector<float> data = float32ArrayToVector(s);
   if (n_components <= 0) {
@@ -190,8 +191,11 @@ val js_nn_filter(val s, const val& n_features_val, const val& n_frames_val, std:
                  const val& k_val, const val& width_val) {
   const int n_features = checkedIntFromVal(n_features_val, "nFeatures");
   const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
-  const int k = intOrDefault(k_val, "k", kNnFilterDefaultK);
-  const int width = intOrDefault(width_val, "width", kNnFilterDefaultWidth);
+  const int k =
+      k_val.isUndefined() || k_val.isNull() ? kNnFilterDefaultK : checkedIntFromVal(k_val, "k");
+  const int width = width_val.isUndefined() || width_val.isNull()
+                        ? kNnFilterDefaultWidth
+                        : checkedIntFromVal(width_val, "width");
   std::vector<float> data = float32ArrayToVector(s);
   if (n_features <= 0 || n_frames <= 0 ||
       static_cast<size_t>(n_features) >

@@ -15,11 +15,6 @@
   "narrowings": [],
   "readers": [
     {
-      "file": "bindings/analysis/room_acoustics.cpp",
-      "symbol": "seedFromVal",
-      "reason": "A default seeder rather than an options-bag reader: it rejects a non-number, turns a non-positive value into a deterministic seed, and refuses anything past the type's maximum by name. Every value in the type's range is a legal seed, so truncating a fractional one cannot land outside the domain -- driving it, a seed moves the synthesized response, 4294967296 and Infinity are refused, and 0 / -1 / NaN all fall back to the documented default."
-    },
-    {
       "file": "bindings/mixing/mixing.cpp",
       "symbol": "panModeOrdinalFromVal",
       "reason": "An enum resolver for the pan-law ordinal, taking the string and numeric spellings together. The numeric path requires a finite, integral value inside the enum's bounds before the cast, so a saturated, negative, fractional or non-finite ordinal is refused by name; the two legal ordinals pan differently, which is what makes those refusals a measurement rather than an unread field."

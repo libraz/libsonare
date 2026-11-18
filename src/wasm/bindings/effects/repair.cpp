@@ -27,11 +27,8 @@ bool repairEnumOption(const val& options, const char* key, std::string* name) {
   return true;
 }
 
-// Reads a dBFS threshold into the linear amplitude the core config holds. An absent key leaves
-// @p linear_fallback untouched, so the library default is not round-tripped through decibels.
-float linearFromDbfsProperty(const val& options, const char* key, float linear_fallback) {
-  if (!hasProperty(options, key)) return linear_fallback;
-  const float db = floatProperty(options, key, 0.0f);
+// Converts a dBFS threshold read from @p key into the linear amplitude the core config holds.
+float linearFromDbfs(float db, const char* key) {
   if (db > 0.0f) throw WasmRangeError(std::string(key) + " must be at most 0 dBFS");
   return db_to_linear(db);
 }
@@ -126,7 +123,11 @@ mastering::repair::DeclipConfig readMasteringRepairDeclip(const val& options, co
   mastering::repair::DeclipConfig cfg;
   if (options.isUndefined() || options.isNull()) return cfg;
   refuseUnknownKeys(options, entry, {"clipThresholdDb", "lpcOrder", "iterations", "lpcBlend"});
-  cfg.clip_threshold = linearFromDbfsProperty(options, "clipThresholdDb", cfg.clip_threshold);
+  // An absent key leaves the library default untouched rather than round-tripping it through dB.
+  if (hasProperty(options, "clipThresholdDb")) {
+    cfg.clip_threshold =
+        linearFromDbfs(floatProperty(options, "clipThresholdDb", 0.0f), "clipThresholdDb");
+  }
   cfg.lpc_order = intProperty(options, "lpcOrder", cfg.lpc_order);
   cfg.iterations = intProperty(options, "iterations", cfg.iterations);
   cfg.lpc_blend = floatProperty(options, "lpcBlend", cfg.lpc_blend);
@@ -544,7 +545,9 @@ mastering::repair::TrimSilenceConfig readTrimSilenceConfig(
   if (options.isUndefined() || options.isNull()) return config;
   refuseUnknownKeys(options, entry,
                     {"thresholdDb", "paddingSamples", "mode", "gateLufs", "windowMs"});
-  config.threshold = linearFromDbfsProperty(options, "thresholdDb", config.threshold);
+  if (hasProperty(options, "thresholdDb")) {
+    config.threshold = linearFromDbfs(floatProperty(options, "thresholdDb", 0.0f), "thresholdDb");
+  }
   if (hasProperty(options, "paddingSamples")) {
     const int v = intProperty(options, "paddingSamples", static_cast<int>(config.padding_samples));
     if (v < 0) {
