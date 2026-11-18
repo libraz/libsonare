@@ -75,8 +75,8 @@ FAMILIES = {
         "surfaces": {
             "node": NODE / "mastering_chain.ts",
             "wasm": WASM / "mastering_core.ts",
-            # The Python result types are TypedDicts: the runtime module and the
-            # stub that mypy reads each declare the same shape.
+            # The Python result types are dataclasses: the runtime module and
+            # the stub that mypy reads each declare the same shape.
             "python": REPO_ROOT / "bindings/python/src/libsonare/_types_capabilities.py",
             "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
         },
@@ -87,8 +87,8 @@ FAMILIES = {
         "surfaces": {
             "node": NODE / "mastering_chain.ts",
             "wasm": WASM / "mastering_core.ts",
-            # The Python result types are TypedDicts: the runtime module and the
-            # stub that mypy reads each declare the same shape.
+            # The Python result types are dataclasses: the runtime module and
+            # the stub that mypy reads each declare the same shape.
             "python": REPO_ROOT / "bindings/python/src/libsonare/_types_capabilities.py",
             "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
         },
@@ -118,7 +118,7 @@ FAMILIES = {
         "surfaces": {
             "node": NODE / "mastering_chain.ts",
             "wasm": WASM / "mastering_core.ts",
-            # TypedDicts, held to the list the way the capability results are.
+            # TypedDicts over the parsed JSON, so their keys are the wire's own.
             "python": REPO_ROOT / "bindings/python/src/libsonare/_types_mastering_results.py",
             "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
         },
@@ -228,8 +228,8 @@ FAMILIES = {
         "surfaces": {
             "node": NODE / "types_capabilities.ts",
             "wasm": WASM / "public_types.ts",
-            # The Python result types are TypedDicts: the runtime module and the
-            # stub that mypy reads each declare the same shape.
+            # The Python result types are dataclasses: the runtime module and
+            # the stub that mypy reads each declare the same shape.
             "python": REPO_ROOT / "bindings/python/src/libsonare/_types_capabilities.py",
             "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
         },
@@ -332,12 +332,16 @@ def scan_json_schema(paths: list[str], text: str, root: str) -> tuple[list, list
     return missing, unreached, comparisons
 
 
-def _typed_dict_fields(tree: ast.Module) -> dict[str, dict[str, set[str]]]:
-    """Each class's annotated fields, with the class names its annotation mentions."""
+def _class_fields(tree: ast.Module) -> tuple[dict[str, dict[str, set[str]]], set[str]]:
+    """Each class's annotated fields with the class names each annotation mentions,
+    and the names of the classes that are dataclasses."""
     classes: dict[str, dict[str, set[str]]] = {}
+    dataclasses: set[str] = set()
     for node in tree.body:
         if not isinstance(node, ast.ClassDef):
             continue
+        if any(_names_dataclass(decorator) for decorator in node.decorator_list):
+            dataclasses.add(node.name)
         fields: dict[str, set[str]] = {}
         for item in node.body:
             if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
@@ -345,17 +349,40 @@ def _typed_dict_fields(tree: ast.Module) -> dict[str, dict[str, set[str]]]:
                     n.id for n in ast.walk(item.annotation) if isinstance(n, ast.Name)
                 }
         classes[node.name] = fields
-    return classes
+    return classes, dataclasses
+
+
+def _names_dataclass(decorator: ast.expr) -> bool:
+    """True for `@dataclass`, `@dataclass(...)` and `@dataclasses.dataclass(...)`."""
+    target = decorator.func if isinstance(decorator, ast.Call) else decorator
+    name = (
+        target.attr
+        if isinstance(target, ast.Attribute)
+        else getattr(target, "id", None)
+    )
+    return name == "dataclass"
+
+
+def _snake_case(segment: str) -> str:
+    """`truePeakDbtp` -> `true_peak_dbtp`."""
+    return re.sub(r"(?<=[a-z0-9])([A-Z])", r"_\1", segment).lower()
 
 
 def scan_python(paths: list[str], text: str, root: str) -> tuple[list, list, int]:
-    """scan() for a Python module of TypedDicts, with the same three return meanings.
+    """scan() for a Python module of result classes, with the same three return meanings.
 
     Anchored on the root class like the TypeScript walk. A segment is followed
     through every class its field's annotation names, so `list[Element]` and
-    `Element | None` both reach `Element`.
+    `Element | None` both reach `Element`. A dataclass's attribute is the
+    snake_case spelling of the published camelCase segment, so the segment is
+    converted before it is looked up there; a TypedDict carries the wire key
+    itself and is matched verbatim.
     """
-    classes = _typed_dict_fields(ast.parse(text))
+    classes, dataclasses = _class_fields(ast.parse(text))
+
+    def field(body: str, segment: str) -> str:
+        return _snake_case(segment) if body in dataclasses else segment
+
     if root not in classes:
         return [], list(paths), 0
     missing: list[str] = []
@@ -373,7 +400,7 @@ def scan_python(paths: list[str], text: str, root: str) -> tuple[list, list, int
             bodies = [
                 target
                 for body in bodies
-                for target in classes[body].get(segment, set())
+                for target in classes[body].get(field(body, segment), set())
                 if target in classes
             ]
             if not bodies:
@@ -382,7 +409,7 @@ def scan_python(paths: list[str], text: str, root: str) -> tuple[list, list, int
             unreached.append(path)
             continue
         comparisons += 1
-        if not any(segments[-1] in classes[body] for body in bodies):
+        if not any(field(body, segments[-1]) in classes[body] for body in bodies):
             missing.append(path)
     return missing, unreached, comparisons
 

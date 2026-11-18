@@ -334,5 +334,47 @@ class PythonSurface(unittest.TestCase):
         self.assertEqual(unreached, ["[].name"])
 
 
+DATACLASS_SURFACE = """
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Dependency:
+    key: str
+
+@dataclass(frozen=True)
+class Entry:
+    true_peak_dbtp: float
+    depends_on: tuple[Dependency, ...]
+    dependsOn: str
+"""
+
+
+class DataclassSurface(unittest.TestCase):
+    def test_a_dataclass_root_reads_each_segment_in_snake_case(self):
+        missing, unreached, comparisons = check.scan_python(
+            ["[].truePeakDbtp", "[].dependsOn[].key", "[].lraLu"],
+            DATACLASS_SURFACE,
+            "Entry",
+        )
+        self.assertEqual(unreached, [])
+        self.assertEqual(comparisons, 3)
+        self.assertEqual(missing, ["[].lraLu"])
+
+    def test_a_camel_case_field_on_a_dataclass_does_not_answer_for_the_path(self):
+        missing, _, _ = check.scan_python(
+            ["[].dependsOn"],
+            DATACLASS_SURFACE.replace("depends_on", "unrelated"),
+            "Entry",
+        )
+        self.assertEqual(missing, ["[].dependsOn"])
+
+    def test_a_typed_dict_root_still_compares_verbatim(self):
+        missing, unreached, comparisons = check.scan_python(
+            ["[].dependsOn[].key", "[].depends_on"], PYTHON_SURFACE, "Entry"
+        )
+        self.assertEqual((unreached, comparisons), ([], 2))
+        self.assertEqual(missing, ["[].depends_on"])
+
+
 if __name__ == "__main__":
     unittest.main()
