@@ -16,7 +16,7 @@ import {
   meteringDynamicRange,
   meteringPeakDb,
   meteringRmsDb,
-  meteringTruePeakDb,
+  meteringTruePeakDbtp,
   scaleCorrectionSemitones,
   scalePitchClassEnabled,
   scaleQuantizeMidi,
@@ -62,18 +62,18 @@ describe('Offline metering wrappers (WASM)', () => {
 
   it('true peak >= sample peak', () => {
     const samples = sine(440, 1);
-    const tp = meteringTruePeakDb(samples, SR);
+    const tp = meteringTruePeakDbtp(samples, SR);
     expect(tp).toBeGreaterThanOrEqual(meteringPeakDb(samples, SR) - 0.1);
   });
 
   it('true peak validates oversampling factors like the C API', () => {
     const samples = sine(440, 1);
-    expect(Number.isFinite(meteringTruePeakDb(samples, SR, { oversampleFactor: 2 }))).toBe(true);
+    expect(Number.isFinite(meteringTruePeakDbtp(samples, SR, { oversampleFactor: 2 }))).toBe(true);
     // An explicit 0 is refused rather than read as the default.
-    expect(() => meteringTruePeakDb(samples, SR, { oversampleFactor: 0 })).toThrow(RangeError);
-    expect(() => meteringTruePeakDb(samples, SR, { oversampleFactor: -1 })).toThrow();
-    expect(() => meteringTruePeakDb(samples, SR, { oversampleFactor: 3 })).toThrow();
-    expect(() => meteringTruePeakDb(samples, SR, { oversampleFactor: 32 })).toThrow();
+    expect(() => meteringTruePeakDbtp(samples, SR, { oversampleFactor: 0 })).toThrow(RangeError);
+    expect(() => meteringTruePeakDbtp(samples, SR, { oversampleFactor: -1 })).toThrow();
+    expect(() => meteringTruePeakDbtp(samples, SR, { oversampleFactor: 3 })).toThrow();
+    expect(() => meteringTruePeakDbtp(samples, SR, { oversampleFactor: 32 })).toThrow();
   });
 
   it('detect clipping reports runs', () => {

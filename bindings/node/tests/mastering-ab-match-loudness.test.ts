@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { lufs, masteringAbMatchLoudness, meteringTruePeakDb } from '../src/index.js';
+import { lufs, masteringAbMatchLoudness, meteringTruePeakDbtp } from '../src/index.js';
 
 const SR = 44100;
 
@@ -60,8 +60,8 @@ describe('masteringAbMatchLoudness', () => {
       2,
     );
     // The gain is not clamped, so the reported peak is the only headroom signal.
-    expect(matched.matchedTruePeakDbtp).toBeCloseTo(meteringTruePeakDb(matched.samples, SR), 2);
-    expect(matched.matchedTruePeakDbtp).toBeGreaterThan(meteringTruePeakDb(source, SR));
+    expect(matched.matchedTruePeakDbtp).toBeCloseTo(meteringTruePeakDbtp(matched.samples, SR), 2);
+    expect(matched.matchedTruePeakDbtp).toBeGreaterThan(meteringTruePeakDbtp(source, SR));
   });
 
   it('refuses a request that omits sampleRate', () => {

@@ -5,7 +5,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, Mixer, meteringTruePeakDb, mixingScenePreset, mixStereo } from '../dist/index.js';
+import { init, Mixer, meteringTruePeakDbtp, mixingScenePreset, mixStereo } from '../dist/index.js';
 import { assertStripIndex, expectRefusalOf, sine } from './_helpers';
 
 const SR = 48000;
@@ -779,7 +779,7 @@ describe('Mixer runtime controls (WASM)', () => {
     left.set([0.9, -0.9, 0.9, -0.9], left.length - 4);
     const right = new Float32Array(left);
     const result = mixStereo({ strips: [{ left, right }], sampleRate: 48000 });
-    expect(result.meters[0].truePeakDbtpL).toBeCloseTo(meteringTruePeakDb(left, 48000), 4);
+    expect(result.meters[0].truePeakDbtpL).toBeCloseTo(meteringTruePeakDbtp(left, 48000), 4);
     expect(result.meters[0].truePeakDbtpL).toBeGreaterThan(-1);
   });
 
@@ -810,16 +810,16 @@ describe('Mixer runtime controls (WASM)', () => {
       realtime.leftInputs[0].set([0.9, 0.9, -0.9], block - 3);
       realtime.rightInputs[0].set([0.9, 0.9, -0.9], block - 3);
       realtime.process();
-      const offlineDb = meteringTruePeakDb(new Float32Array(realtime.outLeft), 48000);
+      const offlineDb = meteringTruePeakDbtp(new Float32Array(realtime.outLeft), 48000);
       expect(offlineDb).toBeGreaterThan(-1);
 
       const before = mixer.meterSnapshot();
-      expect(before.truePeakDbL).toBeLessThan(offlineDb - 0.01);
+      expect(before.truePeakDbtpL).toBeLessThan(offlineDb - 0.01);
 
       mixer.flushMeters();
       const after = mixer.meterSnapshot();
-      expect(Math.abs(after.truePeakDbL - offlineDb)).toBeLessThan(1e-3);
-      expect(after.truePeakDbL).toBeGreaterThanOrEqual(after.peakDbL);
+      expect(Math.abs(after.truePeakDbtpL - offlineDb)).toBeLessThan(1e-3);
+      expect(after.truePeakDbtpL).toBeGreaterThanOrEqual(after.peakDbL);
     } finally {
       mixer.destroy();
     }

@@ -9,7 +9,7 @@ import {
   meteringPeakDb,
   meteringRmsDb,
   meteringStereoCorrelation,
-  meteringTruePeakDb,
+  meteringTruePeakDbtp,
   pitchPyin,
   pitchYin,
   StreamAnalyzer,
@@ -63,9 +63,9 @@ describe('empty-sample guards (Node)', () => {
       /meteringRmsDb: samples must not be empty/,
     );
   });
-  it('meteringTruePeakDb rejects empty', () => {
-    expect(() => meteringTruePeakDb(new Float32Array(0), SR)).toThrow(
-      /meteringTruePeakDb: samples must not be empty/,
+  it('meteringTruePeakDbtp rejects empty', () => {
+    expect(() => meteringTruePeakDbtp(new Float32Array(0), SR)).toThrow(
+      /meteringTruePeakDbtp: samples must not be empty/,
     );
   });
   it('meteringStereoCorrelation rejects empty left', () => {

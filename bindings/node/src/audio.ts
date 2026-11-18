@@ -182,7 +182,7 @@ export class Audio {
    * An {@link Audio} carries a single channel, so {@link fromFile} downmixes a
    * multi-channel source into it. This loads the requested channel instead,
    * which is what rendering a stereo result needs: pair it with
-   * {@link fileChannelCount} and load each channel in turn.
+   * {@link fileNumChannels} and load each channel in turn.
    *
    * The file is decoded once per call, so a stereo load costs two decodes. The
    * format set and the decoded-buffer contract are {@link fromFile}'s.
@@ -195,7 +195,7 @@ export class Audio {
    *
    * @example
    * ```ts
-   * const planes = Array.from({ length: Audio.fileChannelCount(path) }, (_, i) =>
+   * const planes = Array.from({ length: Audio.fileNumChannels(path) }, (_, i) =>
    *   Audio.fromFileChannel(path, i),
    * );
    * ```
@@ -204,7 +204,7 @@ export class Audio {
     return new Audio(addon.Audio.fromFileChannel(path, channelIndex));
   }
 
-  static fileChannelCount(path: string): number {
+  static fileNumChannels(path: string): number {
     return addon.Audio.fileChannelCount(path);
   }
 
@@ -384,10 +384,10 @@ export class Audio {
   }
 
   /**
-   * Inter-sample (true) peak in dBFS. `oversampleFactor` must be a power of two
+   * Inter-sample (true) peak in dBTP. `oversampleFactor` must be a power of two
    * in [1, 16]; pass 0 to use the library default (4).
    */
-  truePeakDb(oversampleFactor = 4): number {
+  truePeakDbtp(oversampleFactor = 4): number {
     this.requireAlive();
     return this.native.truePeakDb(oversampleFactor);
   }
@@ -426,7 +426,7 @@ export class Audio {
   }
 
   /** EBU R128 loudness range in LU. */
-  ebur128LoudnessRange(): number {
+  ebur128LoudnessRangeLu(): number {
     this.requireAlive();
     return this.native.ebur128LoudnessRange();
   }

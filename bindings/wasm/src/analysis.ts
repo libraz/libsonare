@@ -45,7 +45,7 @@ export type * from './feature_inverse.js';
 export { griffinLim, melToAudio, melToStft, mfccToAudio, mfccToMel } from './feature_inverse.js';
 export type * from './feature_loudness.js';
 export {
-  ebur128LoudnessRange,
+  ebur128LoudnessRangeLu,
   lufsMultichannel,
   lufsSeriesMultichannel,
 } from './feature_loudness.js';

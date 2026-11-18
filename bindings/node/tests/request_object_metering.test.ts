@@ -11,7 +11,7 @@ import {
   meteringSpectrumFrame,
   meteringStereoCorrelation,
   meteringStereoWidth,
-  meteringTruePeakDb,
+  meteringTruePeakDbtp,
   meteringVectorscope,
   waveformPeakPyramid,
   waveformPeaks,
@@ -35,8 +35,8 @@ describe('metering request-object compatibility', () => {
     expect(meteringDcOffset({ samples, sampleRate })).toEqual(
       meteringDcOffset(samples, sampleRate),
     );
-    expect(meteringTruePeakDb({ samples, sampleRate, oversampleFactor: 2 })).toEqual(
-      meteringTruePeakDb(samples, sampleRate, { oversampleFactor: 2 }),
+    expect(meteringTruePeakDbtp({ samples, sampleRate, oversampleFactor: 2 })).toEqual(
+      meteringTruePeakDbtp(samples, sampleRate, { oversampleFactor: 2 }),
     );
   });
 
@@ -103,10 +103,10 @@ describe('metering request-object compatibility', () => {
     expect(reqEmpty.message).toBe(posEmpty.message);
 
     const posFactor = captureThrow(() =>
-      meteringTruePeakDb(samples, sampleRate, { oversampleFactor: 3 }),
+      meteringTruePeakDbtp(samples, sampleRate, { oversampleFactor: 3 }),
     );
     const reqFactor = captureThrow(() =>
-      meteringTruePeakDb({ samples, sampleRate, oversampleFactor: 3 }),
+      meteringTruePeakDbtp({ samples, sampleRate, oversampleFactor: 3 }),
     );
     expect(posFactor.threw).toBe(true);
     expect(reqFactor.threw).toBe(true);

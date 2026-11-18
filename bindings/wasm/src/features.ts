@@ -60,7 +60,7 @@ export {
   phaseVocoder,
 } from './feature_inverse.js';
 export {
-  ebur128LoudnessRange,
+  ebur128LoudnessRangeLu,
   lufsMultichannel,
   lufsSeriesMultichannel,
 } from './feature_loudness.js';

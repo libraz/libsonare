@@ -44,7 +44,7 @@ describe('decodeChannels', () => {
       try {
         const file = path.join(dir, 'in.wav');
         fs.writeFileSync(file, bytes);
-        expect(Audio.fileChannelCount(file)).toBe(channelCount);
+        expect(Audio.fileNumChannels(file)).toBe(channelCount);
         for (let channel = 0; channel < channelCount; channel++) {
           const plane = decoded.channels[channel];
           expect(plane).toBeInstanceOf(Float32Array);

@@ -1306,7 +1306,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the reque
 [[entry]]
 kind = "function"
 old = "plp"
-changed = "tempo search default 60-200 BPM via bpmMin/bpmMax"
+changed = "tempo search default 60-200 BPM via bpmMin/bpmMax (was 30-300)"
 domain = "analysis"
 rule = "tempo-range"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::defaults to 60-200 BPM"
@@ -1314,7 +1314,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::defaults to 60-20
 [[entry]]
 kind = "function"
 old = "plp"
-changed = "tempo search default 60-200 BPM via bpmMin/bpmMax"
+changed = "tempo search default 60-200 BPM via bpmMin/bpmMax (was 30-300)"
 domain = "analysis"
 rule = "tempo-range"
 entry = "./analysis"
@@ -8976,7 +8976,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and reque
 [[entry]]
 kind = "function"
 old = "detectDownbeats"
-changed = "one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'|'sampleRate'>)); request form takes DetectDownbeatsRequest"
+changed = "one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300)"
 domain = "analysis"
 rule = "one-positional-form"
 test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and request forms are one call"
@@ -8984,7 +8984,7 @@ test = "bindings/wasm/tests/surface/analysis-music.test.ts::positional and reque
 [[entry]]
 kind = "function"
 old = "detectDownbeats"
-changed = "one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'|'sampleRate'>)); request form takes DetectDownbeatsRequest"
+changed = "one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'|'sampleRate'>)); request form takes DetectDownbeatsRequest; the beat grid under it searches 60-200 BPM (was 30-300)"
 domain = "analysis"
 rule = "one-positional-form"
 entry = "./analysis"
@@ -22315,14 +22315,14 @@ entry = "./analysis"
 [[entry]]
 kind = "type"
 old = "MeteringSamplesRequest"
-removed = "Use the request type of the function, such as MeteringPeakDbRequest, MeteringRmsDbRequest or MeteringTruePeakDbRequest."
+removed = "Use the request type of the function, such as MeteringPeakDbRequest, MeteringRmsDbRequest or MeteringTruePeakDbtpRequest."
 domain = "mastering"
 rule = "type-names"
 
 [[entry]]
 kind = "type"
 old = "MeteringSamplesRequest"
-removed = "Use the request type of the function, such as MeteringPeakDbRequest, MeteringRmsDbRequest or MeteringTruePeakDbRequest."
+removed = "Use the request type of the function, such as MeteringPeakDbRequest, MeteringRmsDbRequest or MeteringTruePeakDbtpRequest."
 domain = "mastering"
 rule = "type-names"
 entry = "./analysis"
@@ -22612,19 +22612,21 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::CompressorOption
 [[entry]]
 kind = "field"
 old = "Ebur128LoudnessRangeRequest.sampleRate"
+to = "Ebur128LoudnessRangeLuRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::Ebur128LoudnessRangeRequest.sampleRate"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::Ebur128LoudnessRangeLuRequest.sampleRate"
 
 [[entry]]
 kind = "field"
 old = "Ebur128LoudnessRangeRequest.sampleRate"
+to = "Ebur128LoudnessRangeLuRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::Ebur128LoudnessRangeRequest.sampleRate"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::Ebur128LoudnessRangeLuRequest.sampleRate"
 
 [[entry]]
 kind = "field"
@@ -23483,7 +23485,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringSpectrum
 [[entry]]
 kind = "field"
 old = "MeteringTruePeakRequest.oversampleFactor"
-to = "MeteringTruePeakDbRequest.oversampleFactor"
+to = "MeteringTruePeakDbtpRequest.oversampleFactor"
 changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
 domain = "mastering"
 rule = "absent-not-sentinel"
@@ -23492,7 +23494,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringTruePeak
 [[entry]]
 kind = "field"
 old = "MeteringTruePeakRequest.oversampleFactor"
-to = "MeteringTruePeakDbRequest.oversampleFactor"
+to = "MeteringTruePeakDbtpRequest.oversampleFactor"
 changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
 domain = "mastering"
 rule = "absent-not-sentinel"
@@ -23502,7 +23504,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringTruePeak
 [[entry]]
 kind = "field"
 old = "MeteringTruePeakRequest.sampleRate"
-to = "MeteringTruePeakDbRequest.sampleRate"
+to = "MeteringTruePeakDbtpRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -23511,7 +23513,7 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringTruePeak
 [[entry]]
 kind = "field"
 old = "MeteringTruePeakRequest.sampleRate"
-to = "MeteringTruePeakDbRequest.sampleRate"
+to = "MeteringTruePeakDbtpRequest.sampleRate"
 changed = "optional -> required (no default)"
 domain = "mastering"
 rule = "sample-rate-required"
@@ -24215,19 +24217,21 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::WaveformPeaksReq
 [[entry]]
 kind = "function"
 old = "ebur128LoudnessRange"
-changed = "one positional form (ebur128LoudnessRange(samples, sampleRate, options?: OptionsOf<Ebur128LoudnessRangeRequest>)); request form takes Ebur128LoudnessRangeRequest; returns number"
+changed = "renamed to ebur128LoudnessRangeLu, since the value is LU; one positional form (ebur128LoudnessRangeLu(samples, sampleRate, options?: OptionsOf<Ebur128LoudnessRangeLuRequest>)); request form takes Ebur128LoudnessRangeLuRequest; returns number"
+to = "ebur128LoudnessRangeLu"
 domain = "mastering"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::ebur128LoudnessRange"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::ebur128LoudnessRangeLu"
 
 [[entry]]
 kind = "function"
 old = "ebur128LoudnessRange"
-changed = "one positional form (ebur128LoudnessRange(samples, sampleRate, options?: OptionsOf<Ebur128LoudnessRangeRequest>)); request form takes Ebur128LoudnessRangeRequest; returns number"
+changed = "renamed to ebur128LoudnessRangeLu, since the value is LU; one positional form (ebur128LoudnessRangeLu(samples, sampleRate, options?: OptionsOf<Ebur128LoudnessRangeLuRequest>)); request form takes Ebur128LoudnessRangeLuRequest; returns number"
+to = "ebur128LoudnessRangeLu"
 domain = "mastering"
 rule = "one-positional-form"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::ebur128LoudnessRange"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::ebur128LoudnessRangeLu"
 
 [[entry]]
 kind = "function"
@@ -24624,19 +24628,21 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringStereoWi
 [[entry]]
 kind = "function"
 old = "meteringTruePeakDb"
-changed = "one positional form (meteringTruePeakDb(samples, sampleRate, options?: OptionsOf<MeteringTruePeakDbRequest>)); request form takes MeteringTruePeakDbRequest; returns number"
+changed = "renamed to meteringTruePeakDbtp, since the value is dBTP; one positional form (meteringTruePeakDbtp(samples, sampleRate, options?: OptionsOf<MeteringTruePeakDbtpRequest>)); request form takes MeteringTruePeakDbtpRequest; returns number"
+to = "meteringTruePeakDbtp"
 domain = "mastering"
 rule = "one-positional-form"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringTruePeakDb"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringTruePeakDbtp"
 
 [[entry]]
 kind = "function"
 old = "meteringTruePeakDb"
-changed = "one positional form (meteringTruePeakDb(samples, sampleRate, options?: OptionsOf<MeteringTruePeakDbRequest>)); request form takes MeteringTruePeakDbRequest; returns number"
+changed = "renamed to meteringTruePeakDbtp, since the value is dBTP; one positional form (meteringTruePeakDbtp(samples, sampleRate, options?: OptionsOf<MeteringTruePeakDbtpRequest>)); request form takes MeteringTruePeakDbtpRequest; returns number"
+to = "meteringTruePeakDbtp"
 domain = "mastering"
 rule = "one-positional-form"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringTruePeakDb"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringTruePeakDbtp"
 
 [[entry]]
 kind = "function"
@@ -25290,19 +25296,21 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::CompressorOption
 [[entry]]
 kind = "type"
 old = "Ebur128LoudnessRangeRequest"
-changed = "field list"
+changed = "renamed to Ebur128LoudnessRangeLuRequest; field list"
+to = "Ebur128LoudnessRangeLuRequest"
 domain = "mastering"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::Ebur128LoudnessRangeRequest"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::Ebur128LoudnessRangeLuRequest"
 
 [[entry]]
 kind = "type"
 old = "Ebur128LoudnessRangeRequest"
-changed = "field list"
+changed = "renamed to Ebur128LoudnessRangeLuRequest; field list"
+to = "Ebur128LoudnessRangeLuRequest"
 domain = "mastering"
 rule = "sample-rate-required"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::Ebur128LoudnessRangeRequest"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::Ebur128LoudnessRangeLuRequest"
 
 [[entry]]
 kind = "type"
@@ -25488,14 +25496,14 @@ test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringSpectrum
 [[entry]]
 kind = "type"
 old = "MeteringTruePeakRequest"
-new = "MeteringTruePeakDbRequest"
+new = "MeteringTruePeakDbtpRequest"
 domain = "mastering"
 rule = "type-names"
 
 [[entry]]
 kind = "type"
 old = "MeteringTruePeakRequest"
-new = "MeteringTruePeakDbRequest"
+new = "MeteringTruePeakDbtpRequest"
 domain = "mastering"
 rule = "type-names"
 entry = "./analysis"
@@ -25951,9 +25959,9 @@ entry = "./worklet"
 [[entry]]
 kind = "option"
 old = "PlaybackLoudnessMeter.constructor(channels)"
-new = "PlaybackLoudnessMeter.constructor(numChannels)"
+removed = "pass numChannels in the options object: new PlaybackLoudnessMeter({ numChannels, sampleRate })"
 domain = "engine"
-rule = "num-channels"
+rule = "construction"
 entry = "."
 
 [[entry]]
@@ -26826,3 +26834,107 @@ changed = "absent when the bass is the root, instead of 255; read it with ?? to 
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "bindings/wasm/tests/chord-annotation.test.ts::maps %s to annotation quality %s with extensions"
+
+[[entry]]
+kind = "method"
+old = "Audio.truePeakDb"
+new = "Audio.truePeakDbtp"
+domain = "core"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "Audio.truePeakDb(oversampleFactor)"
+new = "Audio.truePeakDbtp(oversampleFactor)"
+domain = "core"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MixerMeterSnapshot.truePeakDbL"
+new = "MixerMeterSnapshot.truePeakDbtpL"
+domain = "mastering"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MixerMeterSnapshot.truePeakDbR"
+new = "MixerMeterSnapshot.truePeakDbtpR"
+domain = "mastering"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "method"
+old = "Audio.detectBpm"
+changed = "searches 60-200 BPM by default (was 30-300); bpmMin/bpmMax narrow it"
+domain = "core"
+rule = "tempo-range"
+test = "bindings/wasm/tests/surface/analysis-music.test.ts::Audio tempo methods search 60-200 BPM by default"
+
+[[entry]]
+kind = "method"
+old = "Audio.detectBeats"
+changed = "searches 60-200 BPM by default (was 30-300); bpmMin/bpmMax narrow it"
+domain = "core"
+rule = "tempo-range"
+test = "bindings/wasm/tests/surface/analysis-music.test.ts::Audio tempo methods search 60-200 BPM by default"
+
+[[entry]]
+kind = "method"
+old = "Audio.detectDownbeats"
+changed = "the beat grid under it searches 60-200 BPM (was 30-300)"
+domain = "core"
+rule = "tempo-range"
+test = "bindings/wasm/tests/surface/analysis-music.test.ts::Audio tempo methods search 60-200 BPM by default"
+
+[[entry]]
+kind = "method"
+old = "Audio.ebur128LoudnessRange"
+new = "Audio.ebur128LoudnessRangeLu"
+domain = "core"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "EngineTransportState.timeSignature.numerator"
+new = "TimeSignature.numerator"
+domain = "engine"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "EngineTransportState.timeSignature.denominator"
+new = "TimeSignature.denominator"
+domain = "engine"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "EngineTransportState.timeSignature.confidence"
+new = "TimeSignature.confidence"
+domain = "engine"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "SonareEngineClipPageRequestMessage.requests.clipId"
+new = "ClipPagePageRequest.clipId"
+domain = "project"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "SonareEngineClipPageRequestMessage.requests.pageIndex"
+new = "ClipPagePageRequest.pageIndex"
+domain = "project"
+rule = "type-names"
+entry = "./worklet"
+
+[[entry]]
+kind = "option"
+old = "PlaybackLoudnessMeter.constructor(sampleRate)"
+removed = "pass sampleRate in the options object: new PlaybackLoudnessMeter({ numChannels, sampleRate })"
+domain = "engine"
+rule = "construction"
+entry = "."

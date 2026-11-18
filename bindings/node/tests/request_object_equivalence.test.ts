@@ -967,8 +967,8 @@ const ROWS: Row[] = [
   },
   // feature_loudness.ts
   {
-    name: 'ebur128LoudnessRange',
-    fn: sonare.ebur128LoudnessRange,
+    name: 'ebur128LoudnessRangeLu',
+    fn: sonare.ebur128LoudnessRangeLu,
     params: 'samples sampleRate ...options?',
     values: { samples: LONG, sampleRate: ALT_SR, options: { validate: false } },
     invalid: { sampleRate: 0 },
@@ -1959,8 +1959,8 @@ const ROWS: Row[] = [
     inert: { sampleRate: 'frames are counted in samples' },
   },
   {
-    name: 'meteringTruePeakDb',
-    fn: sonare.meteringTruePeakDb,
+    name: 'meteringTruePeakDbtp',
+    fn: sonare.meteringTruePeakDbtp,
     params: 'samples sampleRate ...options?',
     values: {
       samples: SIG,

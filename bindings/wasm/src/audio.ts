@@ -38,7 +38,7 @@ import type {
 } from './feature_spectrogram.js';
 import {
   chroma,
-  ebur128LoudnessRange,
+  ebur128LoudnessRangeLu,
   lufs,
   melSpectrogram,
   mfcc,
@@ -85,7 +85,7 @@ import {
   meteringSilenceRatio,
   meteringSpectrum,
   meteringSpectrumFrame,
-  meteringTruePeakDb,
+  meteringTruePeakDbtp,
 } from './metering.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -822,11 +822,11 @@ export class Audio {
   }
 
   /**
-   * Inter-sample (true) peak in dBFS. `oversampleFactor` must be a power of two
+   * Inter-sample (true) peak in dBTP. `oversampleFactor` must be a power of two
    * in [1, 16].
    */
-  truePeakDb(oversampleFactor = 4): number {
-    return meteringTruePeakDb(this.samples, this.sampleRate, { oversampleFactor });
+  truePeakDbtp(oversampleFactor = 4): number {
+    return meteringTruePeakDbtp(this.samples, this.sampleRate, { oversampleFactor });
   }
 
   /** Clipping report: clipped-sample count and runs at or above the threshold. */
@@ -853,8 +853,8 @@ export class Audio {
   }
 
   /** EBU R128 loudness range in LU. */
-  ebur128LoudnessRange(): number {
-    return ebur128LoudnessRange(this.samples, this.sampleRate);
+  ebur128LoudnessRangeLu(): number {
+    return ebur128LoudnessRangeLu(this.samples, this.sampleRate);
   }
 
   /** Same as {@link destroy}; lets `using` release the samples. */

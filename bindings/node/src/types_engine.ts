@@ -74,7 +74,7 @@ export interface EngineMeterTelemetry {
    * polyphase reconstruction at 4x. A streaming measurement that runs one
    * reconstruction-filter group delay (a few samples) behind the block, so every
    * value has its whole stencil and the reading does not depend on the block
-   * size. `meteringTruePeakDb` measures a whole signal at once.
+   * size. `meteringTruePeakDbtp` measures a whole signal at once.
    */
   truePeakDbtpL: number;
   /** Right-channel inter-sample (true) peak in dB. See {@link truePeakDbtpL}. */
@@ -151,7 +151,7 @@ export interface EngineMeterTelemetryWide {
    * Per-plane inter-sample (true) peak in dB (length `numChannels`), from the
    * ITU-R BS.1770-4 polyphase reconstruction at 4x. A streaming measurement that
    * runs one reconstruction-filter group delay (a few samples) behind the block,
-   * so the reading does not depend on the block size. `meteringTruePeakDb`
+   * so the reading does not depend on the block size. `meteringTruePeakDbtp`
    * measures a whole signal at once.
    */
   truePeakDbtp: number[];

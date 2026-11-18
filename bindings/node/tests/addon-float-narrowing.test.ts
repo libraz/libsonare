@@ -545,14 +545,14 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     call: (v) => native.cyclicTempogram(PULSED, SAMPLE_RATE, 512, 384, v, 20).data[5],
   },
   {
-    name: 'plp tempoMin',
-    site: 'features/rhythm.cpp Plp tempoMin',
+    name: 'plp bpmMin',
+    site: 'features/rhythm.cpp Plp bpmMin',
     control: [30, 120],
     call: (v) => magnitudeSum(native.plp(PULSED, SAMPLE_RATE, 512, v, 300, 384)),
   },
   {
-    name: 'plp tempoMax',
-    site: 'features/rhythm.cpp Plp tempoMax',
+    name: 'plp bpmMax',
+    site: 'features/rhythm.cpp Plp bpmMax',
     control: [300, 150],
     call: (v) => magnitudeSum(native.plp(PULSED, SAMPLE_RATE, 512, 30, v, 384)),
   },

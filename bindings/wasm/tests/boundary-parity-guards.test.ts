@@ -10,7 +10,7 @@ import {
   init,
   masterAudio,
   masterAudioStereo,
-  meteringTruePeakDb,
+  meteringTruePeakDbtp,
   phaseVocoder,
   RealtimeEngine,
   remix,
@@ -151,22 +151,26 @@ describe('masterAudio without a preset validates input on every entry (mono + st
   });
 });
 
-describe('meteringTruePeakDb oversample-factor guard', () => {
+describe('meteringTruePeakDbtp oversample-factor guard', () => {
   it('takes the default when omitted and accepts valid powers of two', () => {
-    expect(Number.isFinite(meteringTruePeakDb(sine(), SR))).toBe(true);
-    expect(Number.isFinite(meteringTruePeakDb(sine(), SR, { oversampleFactor: 8 }))).toBe(true);
+    expect(Number.isFinite(meteringTruePeakDbtp(sine(), SR))).toBe(true);
+    expect(Number.isFinite(meteringTruePeakDbtp(sine(), SR, { oversampleFactor: 8 }))).toBe(true);
   });
   it('rejects an explicit 0 instead of reading it as the default', () => {
-    expect(() => meteringTruePeakDb(sine(), SR, { oversampleFactor: 0 })).toThrow(RangeError);
+    expect(() => meteringTruePeakDbtp(sine(), SR, { oversampleFactor: 0 })).toThrow(RangeError);
   });
   it('rejects a non-power-of-two factor', () => {
-    expect(() => meteringTruePeakDb(sine(), SR, { oversampleFactor: 3 })).toThrow(/power of two/);
+    expect(() => meteringTruePeakDbtp(sine(), SR, { oversampleFactor: 3 })).toThrow(/power of two/);
   });
   it('rejects a fractional factor', () => {
-    expect(() => meteringTruePeakDb(sine(), SR, { oversampleFactor: 2.5 })).toThrow(/power of two/);
+    expect(() => meteringTruePeakDbtp(sine(), SR, { oversampleFactor: 2.5 })).toThrow(
+      /power of two/,
+    );
   });
   it('rejects a factor above 16', () => {
-    expect(() => meteringTruePeakDb(sine(), SR, { oversampleFactor: 32 })).toThrow(/power of two/);
+    expect(() => meteringTruePeakDbtp(sine(), SR, { oversampleFactor: 32 })).toThrow(
+      /power of two/,
+    );
   });
 });
 

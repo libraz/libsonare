@@ -78,7 +78,7 @@ import type {
   PhaseVocoderRequest,
 } from './feature_inverse.js';
 import type {
-  Ebur128LoudnessRangeRequest,
+  Ebur128LoudnessRangeLuRequest,
   LufsMultichannelRequest,
   LufsSeriesMultichannelRequest,
 } from './feature_loudness.js';
@@ -182,7 +182,7 @@ import type {
   MeteringSpectrumRequest,
   MeteringStereoCorrelationRequest,
   MeteringStereoWidthRequest,
-  MeteringTruePeakDbRequest,
+  MeteringTruePeakDbtpRequest,
   MeteringVectorscopeRequest,
   WaveformPeakPyramidRequest,
   WaveformPeaksRequest,
@@ -942,7 +942,7 @@ const DetectOnsetsRequestKeys = keysOf<DetectOnsetsRequest>()([
   'backtrack',
   'backtrackRange',
 ]);
-const Ebur128LoudnessRangeRequestKeys = keysOf<Ebur128LoudnessRangeRequest>()([
+const Ebur128LoudnessRangeLuRequestKeys = keysOf<Ebur128LoudnessRangeLuRequest>()([
   'samples',
   'sampleRate',
   'validate',
@@ -1794,7 +1794,7 @@ const MeteringSpectrumFrameRequestKeys = keysOf<MeteringSpectrumFrameRequest>()(
   'dbAmin',
   'validate',
 ]);
-const MeteringTruePeakDbRequestKeys = keysOf<MeteringTruePeakDbRequest>()([
+const MeteringTruePeakDbtpRequestKeys = keysOf<MeteringTruePeakDbtpRequest>()([
   'samples',
   'sampleRate',
   'oversampleFactor',
@@ -3000,7 +3000,7 @@ export const REQUEST_SHAPES = {
   detectKey: { keys: DetectKeyRequestKeys },
   detectKeyCandidates: { keys: DetectKeyCandidatesRequestKeys },
   detectOnsets: { keys: DetectOnsetsRequestKeys },
-  ebur128LoudnessRange: { keys: Ebur128LoudnessRangeRequestKeys },
+  ebur128LoudnessRangeLu: { keys: Ebur128LoudnessRangeLuRequestKeys },
   estimateMeter: { keys: EstimateMeterRequestKeys },
   estimateRoom: { keys: EstimateRoomRequestKeys },
   estimateTuning: { keys: EstimateTuningRequestKeys },
@@ -3097,7 +3097,7 @@ export const REQUEST_SHAPES = {
   meteringSpectrumFrame: { keys: MeteringSpectrumFrameRequestKeys },
   meteringStereoCorrelation: { keys: MeteringStereoCorrelationRequestKeys },
   meteringStereoWidth: { keys: MeteringStereoWidthRequestKeys },
-  meteringTruePeakDb: { keys: MeteringTruePeakDbRequestKeys },
+  meteringTruePeakDbtp: { keys: MeteringTruePeakDbtpRequestKeys },
   meteringVectorscope: { keys: MeteringVectorscopeRequestKeys },
   mfcc: { keys: MfccRequestKeys },
   mfccToAudio: { keys: MfccToAudioRequestKeys },

@@ -45,7 +45,7 @@ describe('Audio.fromFileChannel', () => {
   it('loads each plane of a stereo file unfolded', () => {
     withStereoFixture(({ stereo }) => {
       writePcm16Wav(stereo, [left, right], SR);
-      expect(Audio.fileChannelCount(stereo)).toBe(2);
+      expect(Audio.fileNumChannels(stereo)).toBe(2);
 
       const planes = [0, 1].map((index) => Audio.fromFileChannel(stereo, index));
       const downmixed = Audio.fromFile(stereo);

@@ -4,7 +4,7 @@ import {
   analyzeSections,
   cyclicTempogram,
   deemphasis,
-  ebur128LoudnessRange,
+  ebur128LoudnessRangeLu,
   estimateTuning,
   fixFrames,
   fixLength,
@@ -159,8 +159,8 @@ describe('remaining feature request-object compatibility', () => {
 
   it('preserves request forms for NNLS chroma and EBU loudness range', () => {
     expect(nnlsChroma({ samples, sampleRate })).toEqual(nnlsChroma(samples, sampleRate));
-    expect(ebur128LoudnessRange({ samples, sampleRate })).toBe(
-      ebur128LoudnessRange(samples, sampleRate),
+    expect(ebur128LoudnessRangeLu({ samples, sampleRate })).toBe(
+      ebur128LoudnessRangeLu(samples, sampleRate),
     );
   });
 

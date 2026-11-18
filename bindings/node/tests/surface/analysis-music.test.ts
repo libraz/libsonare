@@ -20,6 +20,7 @@ import type {
 } from '../../dist/index.js';
 import * as sonare from '../../dist/index.js';
 import {
+  Audio,
   analyze,
   analyzeAsync,
   analyzeBpm,
@@ -709,6 +710,16 @@ describe('tempo range on detectBpm and detectBeats', () => {
 
   it('refuses an inverted range with a coded error', () => {
     expect(() => detectBpm({ samples, sampleRate, bpmMin: 200, bpmMax: 60 })).toThrow();
+  });
+
+  it('Audio tempo methods search 60-200 BPM by default', () => {
+    const audio = Audio.fromBuffer(samples, sampleRate);
+    const range = { bpmMin: 60, bpmMax: 200 };
+    expect(audio.detectBpm()).toBe(detectBpm(samples, sampleRate, range));
+    expect(audio.detectBpm()).not.toBe(detectBpm(samples, sampleRate, { bpmMin: 30, bpmMax: 300 }));
+    expect(audio.detectBeats()).toEqual(detectBeats({ samples, sampleRate, ...range }));
+    expect(audio.analyzeBpm().bpm).toBe(analyzeBpm({ samples, sampleRate, ...range }).bpm);
+    expect(audio.detectDownbeats()).toEqual(detectDownbeats(samples, sampleRate));
   });
 });
 

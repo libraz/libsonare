@@ -337,7 +337,7 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
   ['addon.midiPerNoteControllerName', 'index', () => addon.midiPerNoteControllerName('x')],
   ['Project.setMixerSceneJson', 'sceneJson', () => withProject((p) => p.setMixerSceneJson(5))],
   ['Audio.silenceRatio', 'thresholdDb', () => readerAudio().silenceRatio('x')],
-  ['Audio.truePeakDb', 'oversample', () => readerAudio().truePeakDb('x')],
+  ['Audio.truePeakDbtp', 'oversample', () => readerAudio().truePeakDbtp('x')],
   [
     'addon.masteringInsertParamInfo',
     'sampleRate',

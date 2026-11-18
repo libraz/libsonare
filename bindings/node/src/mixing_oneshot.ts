@@ -89,7 +89,7 @@ const STRIP_NUMBER_KEYS = ['inputTrimDb', 'faderDb', 'pan', 'width'] as const;
  * The true-peak fields are not integrators and need no streaming: each is a
  * max-hold over the block just processed and is valid from the first one,
  * flooring only on silence. This facade mixes the whole input as a single block
- * and flushes the meters after it, so the reading matches `meteringTruePeakDb`
+ * and flushes the meters after it, so the reading matches `meteringTruePeakDbtp`
  * over the same signal exactly.
  *
  * @param request - Strips (each a stereo pair and its settings) and the sample rate

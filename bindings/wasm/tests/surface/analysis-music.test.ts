@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
 import * as sonare from '../../dist/index.js';
 import {
+  Audio,
   analyze,
   analyzeBpm,
   analyzeDynamics,
@@ -15,6 +16,7 @@ import {
   detectBoundaries,
   detectBpm,
   detectChords,
+  detectDownbeats,
   detectKey,
   estimateMeter,
   fourierTempogram,
@@ -680,5 +682,22 @@ describe('tempo range bounds on the one-shot detectors', () => {
     expect(detectBeats({ samples, sampleRate })).toEqual(
       detectBeats({ samples, sampleRate, bpmMin: 60, bpmMax: 200 }),
     );
+  });
+  it('Audio tempo methods search 60-200 BPM by default', () => {
+    // One pulse every 1.5 s: 40 BPM, inside 30-300 and outside 60-200.
+    const samples = new Float32Array(sampleRate * 12);
+    for (let t = 0; t < 12; t += 1.5) {
+      const start = Math.round(t * sampleRate);
+      for (let i = 0; i < 300 && start + i < samples.length; i++) {
+        samples[start + i] = Math.exp(-i / 50) * Math.sin(i * 0.9);
+      }
+    }
+    const audio = Audio.fromBuffer(samples, sampleRate);
+    const range = { bpmMin: 60, bpmMax: 200 };
+    expect(audio.detectBpm()).toBe(detectBpm({ samples, sampleRate, ...range }));
+    expect(audio.detectBpm()).not.toBe(detectBpm({ samples, sampleRate, bpmMin: 30, bpmMax: 300 }));
+    expect(audio.detectBeats()).toEqual(detectBeats({ samples, sampleRate, ...range }));
+    expect(audio.analyzeBpm().bpm).toBe(analyzeBpm({ samples, sampleRate, ...range }).bpm);
+    expect(audio.detectDownbeats()).toEqual(detectDownbeats({ samples, sampleRate }));
   });
 });

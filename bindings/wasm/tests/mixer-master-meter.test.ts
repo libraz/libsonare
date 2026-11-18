@@ -49,8 +49,8 @@ function expectReading(actual: MixerMeterSnapshot, expected: Reading): void {
     peakDbR: actual.peakDbR,
     rmsDbL: actual.rmsDbL,
     rmsDbR: actual.rmsDbR,
-    truePeakDbL: actual.truePeakDbL,
-    truePeakDbR: actual.truePeakDbR,
+    truePeakDbL: actual.truePeakDbtpL,
+    truePeakDbR: actual.truePeakDbtpR,
   };
   for (const [field, value] of Object.entries(dB)) {
     expect(

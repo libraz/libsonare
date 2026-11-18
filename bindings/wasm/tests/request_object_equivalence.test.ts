@@ -880,8 +880,8 @@ const ROWS: Row[] = [
     invalid: { sampleRate: 0 },
   },
   {
-    name: 'ebur128LoudnessRange',
-    fn: sonare.ebur128LoudnessRange,
+    name: 'ebur128LoudnessRangeLu',
+    fn: sonare.ebur128LoudnessRangeLu,
     form: 'sampleOptions',
     params: 'samples sampleRate ...options?',
     values: { samples: LONG, sampleRate: ALT_SR, options: { validate: false } },
@@ -1722,8 +1722,8 @@ const ROWS: Row[] = [
     inert: { sampleRate: 'a mean reads no rate' },
   },
   {
-    name: 'meteringTruePeakDb',
-    fn: sonare.meteringTruePeakDb,
+    name: 'meteringTruePeakDbtp',
+    fn: sonare.meteringTruePeakDbtp,
     form: 'sampleOptions',
     params: 'samples sampleRate ...options?',
     values: {

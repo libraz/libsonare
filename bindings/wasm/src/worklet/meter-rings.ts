@@ -44,7 +44,7 @@ export interface SonareWorkletMeterSnapshot {
    * Left-channel inter-sample (true) peak in dBTP, from the ITU-R BS.1770-4 polyphase reconstruction
    * at 4x. A streaming measurement that runs one reconstruction-filter group delay (a few samples)
    * behind the block, so every value has its whole stencil and the reading does not depend on the
-   * block size. Use `meteringTruePeakDb` over the whole signal for an exact dBTP number.
+   * block size. Use `meteringTruePeakDbtp` over the whole signal for an exact dBTP number.
    */
   truePeakDbtpL: number;
   /** Right-channel inter-sample (true) peak in dBTP. See {@link truePeakDbtpL}. */

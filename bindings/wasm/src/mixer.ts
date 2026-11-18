@@ -60,8 +60,8 @@ export const MeterScratchField = {
   rmsDbL: 2,
   rmsDbR: 3,
   correlation: 4,
-  truePeakDbL: 5,
-  truePeakDbR: 6,
+  truePeakDbtpL: 5,
+  truePeakDbtpR: 6,
 } as const;
 
 /** A value of {@link MeterScratchField}. */
@@ -218,11 +218,11 @@ let adoptedSceneJson: string | undefined;
 
 /**
  * One master-output meter reading. All dB fields are finite and floored at
- * -120; `truePeakDb*` is an inter-sample peak from the ITU-R BS.1770-4
+ * -120; `truePeakDbtp*` is an inter-sample peak from the ITU-R BS.1770-4
  * polyphase reconstruction at 4x, not a sample peak. That reconstruction is a
  * streaming measurement that runs one reconstruction-filter group delay (a few
  * samples) behind the block, so every value has its whole stencil and the
- * reading does not depend on the block size. Use `meteringTruePeakDb` over the
+ * reading does not depend on the block size. Use `meteringTruePeakDbtp` over the
  * whole signal for an exact dBTP number.
  */
 export interface MixerMeterSnapshot {
@@ -236,10 +236,10 @@ export interface MixerMeterSnapshot {
   rmsDbR: number;
   /** Inter-channel correlation in `[-1, 1]`. */
   correlation: number;
-  /** Left-channel inter-sample (true) peak in dB. */
-  truePeakDbL: number;
-  /** Right-channel inter-sample (true) peak in dB. */
-  truePeakDbR: number;
+  /** Left-channel inter-sample (true) peak in dBTP. */
+  truePeakDbtpL: number;
+  /** Right-channel inter-sample (true) peak in dBTP. */
+  truePeakDbtpR: number;
 }
 
 /** Reusable WASM-heap input and output views for realtime-style mixing; see {@link Mixer.createRealtimeBuffer}. */
@@ -506,7 +506,7 @@ export class Mixer {
    *
    * While on, every process and drain call meters the stereo master it just
    * produced, so a caller reads {@link meterSnapshot} instead of copying the
-   * output and measuring it again. `truePeakDb*` is an inter-sample
+   * output and measuring it again. `truePeakDbtp*` is an inter-sample
    * peak taken after oversampling (ITU-R BS.1770-4 Annex 2 requires at least
    * 4x), which is a different and higher quantity than the sample peak.
    *
@@ -532,7 +532,8 @@ export class Mixer {
    * @throws When the meter has never been enabled.
    */
   meterSnapshot(): MixerMeterSnapshot {
-    return this.mixer.meterSnapshot();
+    const { truePeakDbL, truePeakDbR, ...rest } = this.mixer.meterSnapshot();
+    return { ...rest, truePeakDbtpL: truePeakDbL, truePeakDbtpR: truePeakDbR };
   }
 
   /**
@@ -1109,7 +1110,7 @@ export class Mixer {
    * Marks the end of the signal for every strip, bus and master-output meter
    * (see {@link configureMeter}). The true-peak reading runs one
    * reconstruction-filter group delay behind the block; this reads that pending
-   * stretch against silence and folds it into the snapshots, so `truePeakDb`
+   * stretch against silence and folds it into the snapshots, so `truePeakDbtp`
    * covers the whole signal. Call it after the last
    * block of an offline render; a later process call starts a new signal.
    */

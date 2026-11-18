@@ -29,8 +29,8 @@ export interface LufsSeriesMultichannelRequest extends ValidateOptions {
   sampleRate: number;
 }
 
-/** Request form of {@link ebur128LoudnessRange}. */
-export interface Ebur128LoudnessRangeRequest extends ValidateOptions {
+/** Request form of {@link ebur128LoudnessRangeLu}. */
+export interface Ebur128LoudnessRangeLuRequest extends ValidateOptions {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
@@ -101,14 +101,14 @@ export function lufsSeriesMultichannel(...args: unknown[]): LufsSeriesResult {
  * Standards-compliant EBU R128 loudness range (LRA) in LU. Pass the buffer's
  * actual `sampleRate`: K-weighting is sample-rate dependent.
  */
-export function ebur128LoudnessRange(request: Ebur128LoudnessRangeRequest): number;
-export function ebur128LoudnessRange(
+export function ebur128LoudnessRangeLu(request: Ebur128LoudnessRangeLuRequest): number;
+export function ebur128LoudnessRangeLu(
   samples: Float32Array,
   sampleRate: number,
-  options?: OptionsOf<Ebur128LoudnessRangeRequest>,
+  options?: OptionsOf<Ebur128LoudnessRangeLuRequest>,
 ): number;
-export function ebur128LoudnessRange(...args: unknown[]): number {
-  const r = sampleOneShot<Ebur128LoudnessRangeRequest>('ebur128LoudnessRange', args);
-  assertAudioInput('ebur128LoudnessRange', r.samples, r.sampleRate, r);
+export function ebur128LoudnessRangeLu(...args: unknown[]): number {
+  const r = sampleOneShot<Ebur128LoudnessRangeLuRequest>('ebur128LoudnessRangeLu', args);
+  assertAudioInput('ebur128LoudnessRangeLu', r.samples, r.sampleRate, r);
   return requireModule().ebur128LoudnessRange(r.samples, r.sampleRate);
 }

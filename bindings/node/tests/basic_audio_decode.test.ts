@@ -216,7 +216,7 @@ describe('Audio class methods', () => {
   });
 });
 
-describe('Audio.fileChannelCount', () => {
+describe('Audio.fileNumChannels', () => {
   it('reports mono and stereo WAV source channels without changing Audio mono semantics', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sonare-channel-count-wav-'));
     const monoPath = path.join(tmpDir, 'mono.wav');
@@ -224,8 +224,8 @@ describe('Audio.fileChannelCount', () => {
     const frameCount = writePcm16Wav(monoPath, 1);
     writePcm16Wav(stereoPath, 2);
     try {
-      expect(Audio.fileChannelCount(monoPath)).toBe(1);
-      expect(Audio.fileChannelCount(stereoPath)).toBe(2);
+      expect(Audio.fileNumChannels(monoPath)).toBe(1);
+      expect(Audio.fileNumChannels(stereoPath)).toBe(2);
 
       const audio = Audio.fromFile(stereoPath);
       try {
@@ -240,8 +240,8 @@ describe('Audio.fileChannelCount', () => {
   });
 
   it('requires a string path like Audio.fromFile', () => {
-    expect(() => Audio.fileChannelCount(123 as unknown as string)).toThrow(TypeError);
-    expect(() => Audio.fileChannelCount(Buffer.from('mono.wav') as unknown as string)).toThrow(
+    expect(() => Audio.fileNumChannels(123 as unknown as string)).toThrow(TypeError);
+    expect(() => Audio.fileNumChannels(Buffer.from('mono.wav') as unknown as string)).toThrow(
       TypeError,
     );
   });
@@ -252,10 +252,10 @@ describe('Audio.fileChannelCount', () => {
     const malformedPath = path.join(tmpDir, 'malformed.wav');
     fs.writeFileSync(malformedPath, Buffer.from('not a WAV file'));
     try {
-      expect(() => Audio.fileChannelCount(missingPath)).toThrow(
+      expect(() => Audio.fileNumChannels(missingPath)).toThrow(
         expect.objectContaining({ name: 'SonareError', codeName: 'FileNotFound' }),
       );
-      expect(() => Audio.fileChannelCount(malformedPath)).toThrow(
+      expect(() => Audio.fileNumChannels(malformedPath)).toThrow(
         expect.objectContaining({
           name: 'SonareError',
           codeName: capabilities().features.ffmpeg ? 'DecodeFailed' : 'InvalidFormat',
@@ -340,7 +340,7 @@ describe('FFmpeg decode (skipped without build support or ffmpeg CLI)', () => {
       );
 
       const audio = Audio.fromFile(m4aPath);
-      expect(Audio.fileChannelCount(m4aPath)).toBe(1);
+      expect(Audio.fileNumChannels(m4aPath)).toBe(1);
       const retained = audio.data;
       expect(audio.data).toBe(retained);
       expect(retained.some((sample) => sample !== 0)).toBe(true);
@@ -361,7 +361,7 @@ describe('FFmpeg decode (skipped without build support or ffmpeg CLI)', () => {
     }
   });
 
-  it.skipIf(!canRun)('Audio.fileChannelCount probes real M4A and FLAC source channels', () => {
+  it.skipIf(!canRun)('Audio.fileNumChannels probes real M4A and FLAC source channels', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sonare-channel-count-ffmpeg-'));
     const wavPath = path.join(tmpDir, 'stereo.wav');
     const m4aPath = path.join(tmpDir, 'stereo.m4a');
@@ -390,8 +390,8 @@ describe('FFmpeg decode (skipped without build support or ffmpeg CLI)', () => {
         stdio: 'pipe',
       });
 
-      expect(Audio.fileChannelCount(m4aPath)).toBe(2);
-      expect(Audio.fileChannelCount(flacPath)).toBe(2);
+      expect(Audio.fileNumChannels(m4aPath)).toBe(2);
+      expect(Audio.fileNumChannels(flacPath)).toBe(2);
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

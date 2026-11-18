@@ -2,7 +2,7 @@
  * Smoke tests for the 12 functions newly exposed to the WASM binding
  * (spectralContrast / polyFeatures / zeroCrossings / pitchTuning /
  * estimateTuning / decompose / nnFilter / remix / phaseVocoder /
- * hpssWithResidual / lufsMultichannel / ebur128LoudnessRange). These guard the
+ * hpssWithResidual / lufsMultichannel / ebur128LoudnessRangeLu). These guard the
  * TS facade wiring; the DSP itself is validated at the C ABI / C++ layer.
  */
 
@@ -10,7 +10,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   decompose,
   decomposeStems,
-  ebur128LoudnessRange,
+  ebur128LoudnessRangeLu,
   estimateTuning,
   hpssWithResidual,
   init,
@@ -485,8 +485,8 @@ describe('newly exposed WASM functions', () => {
     expect(() => lufsSeriesMultichannel({ channels: [], sampleRate: SR })).toThrow(RangeError);
   });
 
-  it('ebur128LoudnessRange is finite and non-negative', () => {
-    const lra = ebur128LoudnessRange(makeSine(1, 440), SR);
+  it('ebur128LoudnessRangeLu is finite and non-negative', () => {
+    const lra = ebur128LoudnessRangeLu(makeSine(1, 440), SR);
     expect(Number.isFinite(lra)).toBe(true);
     expect(lra).toBeGreaterThanOrEqual(0);
   });

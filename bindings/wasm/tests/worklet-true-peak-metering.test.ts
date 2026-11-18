@@ -11,7 +11,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, meteringTruePeakDb, mixingScenePreset, RealtimeEngine } from '../dist/index.js';
+import { init, meteringTruePeakDbtp, mixingScenePreset, RealtimeEngine } from '../dist/index.js';
 import {
   init as initWorklet,
   type SonareWorkletMeterSnapshot,
@@ -152,12 +152,12 @@ describe('mixer worklet true-peak metering', () => {
       throw new Error('expected the worklet to publish a meter');
     }
     // The published snapshot describes the most recent block, so compare against
-    // that block. meteringTruePeakDb is an independent implementation of the
+    // that block. meteringTruePeakDbtp is an independent implementation of the
     // same standard, which is what makes this a cross-check rather than a
     // restatement of the worklet's own arithmetic.
     const lastBlock = output.subarray((blocks - 1) * BLOCK, blocks * BLOCK);
     expect(meter.truePeakDbtpL).toBeCloseTo(
-      meteringTruePeakDb(lastBlock, SR, { oversampleFactor: 4 }),
+      meteringTruePeakDbtp(lastBlock, SR, { oversampleFactor: 4 }),
       0,
     );
   });

@@ -14,7 +14,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   meteringSpectrumFrame,
-  meteringTruePeakDb,
+  meteringTruePeakDbtp,
   meteringVectorscope,
   pcen,
   waveformPeakPyramid,
@@ -107,15 +107,15 @@ describe('a sentinel-bearing count', () => {
   })();
   const right = tone.map((v) => v * 0.8);
 
-  it('meteringTruePeakDb honours its oversample factor', () => {
+  it('meteringTruePeakDbtp honours its oversample factor', () => {
     // Without this the refusal below could be of an argument nothing reads.
-    expect(meteringTruePeakDb(tone, 22050, { oversampleFactor: 4 })).not.toBe(
-      meteringTruePeakDb(tone, 22050, { oversampleFactor: 16 }),
+    expect(meteringTruePeakDbtp(tone, 22050, { oversampleFactor: 4 })).not.toBe(
+      meteringTruePeakDbtp(tone, 22050, { oversampleFactor: 16 }),
     );
   });
 
-  it('meteringTruePeakDb refuses a factor that would truncate onto its 0 default', () => {
-    expect(() => meteringTruePeakDb(tone, 22050, { oversampleFactor: 0.5 })).toThrow(
+  it('meteringTruePeakDbtp refuses a factor that would truncate onto its 0 default', () => {
+    expect(() => meteringTruePeakDbtp(tone, 22050, { oversampleFactor: 0.5 })).toThrow(
       /oversampleFactor must be a non-negative integer/,
     );
   });

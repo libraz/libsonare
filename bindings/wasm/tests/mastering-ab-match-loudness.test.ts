@@ -9,7 +9,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, lufs, masteringAbMatchLoudness, meteringTruePeakDb } from '../dist/index.js';
+import { init, lufs, masteringAbMatchLoudness, meteringTruePeakDbtp } from '../dist/index.js';
 
 const SR = 48000;
 
@@ -60,7 +60,7 @@ describe('masteringAbMatchLoudness (WASM)', () => {
 
     expect(result.referenceLufs).toBeCloseTo(referenceLufs, 2);
     expect(result.sourceLufs).toBeCloseTo(sourceLufs, 2);
-    expect(result.matchedTruePeakDbtp).toBeCloseTo(meteringTruePeakDb(result.samples, SR), 2);
+    expect(result.matchedTruePeakDbtp).toBeCloseTo(meteringTruePeakDbtp(result.samples, SR), 2);
   });
 
   it('reports a non-finite loudness and no gain for a silent take', () => {

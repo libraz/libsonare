@@ -17,7 +17,7 @@ import {
   voiceChange,
   voiceChangeRealtime,
 } from '../src/index';
-import { meteringTruePeakDb } from '../src/metering';
+import { meteringTruePeakDbtp } from '../src/metering';
 import {
   projectLoopModeValue,
   projectTrackKindValue,
@@ -258,10 +258,10 @@ describe('enum-code helpers reject unknown strings instead of silently defaultin
 describe('metering true peak validation', () => {
   it('rejects an invalid oversample factor as RangeError', () => {
     const error = expectRefusalOf(() =>
-      meteringTruePeakDb(new Float32Array([0.5]), 22050, { oversampleFactor: 3 }),
+      meteringTruePeakDbtp(new Float32Array([0.5]), 22050, { oversampleFactor: 3 }),
     );
     expect(error.message).toBe(
-      'meteringTruePeakDb: oversampleFactor must be a power of two from 1 to 16',
+      'meteringTruePeakDbtp: oversampleFactor must be a power of two from 1 to 16',
     );
   });
 });

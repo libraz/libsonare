@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   Mixer,
   masteringInsertParamNames,
-  meteringTruePeakDb,
+  meteringTruePeakDbtp,
   mixingScenePreset,
   mixingScenePresetNames,
   mixStereo,
@@ -180,7 +180,7 @@ describe('insert param validation', () => {
     left.set([0.9, -0.9, 0.9, -0.9], left.length - 4);
     const right = new Float32Array(left);
     const result = mixStereo({ strips: [{ left, right }], sampleRate: 48000 });
-    expect(result.meters[0].truePeakDbtpL).toBeCloseTo(meteringTruePeakDb(left, 48000), 4);
+    expect(result.meters[0].truePeakDbtpL).toBeCloseTo(meteringTruePeakDbtp(left, 48000), 4);
     expect(result.meters[0].truePeakDbtpL).toBeGreaterThan(-1);
   });
 

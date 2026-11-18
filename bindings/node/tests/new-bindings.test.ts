@@ -7,7 +7,7 @@ import {
   decompose,
   decomposeStems,
   detectAcoustic,
-  ebur128LoudnessRange,
+  ebur128LoudnessRangeLu,
   estimateTuning,
   hpssWithResidual,
   lufsMultichannel,
@@ -383,8 +383,8 @@ describe('newly exposed Node functions', () => {
     expect(() => lufsSeriesMultichannel({ channels: [], sampleRate: SR })).toThrow(RangeError);
   });
 
-  it('ebur128LoudnessRange is finite and non-negative', () => {
-    const lra = ebur128LoudnessRange(sine(1, 440), SR);
+  it('ebur128LoudnessRangeLu is finite and non-negative', () => {
+    const lra = ebur128LoudnessRangeLu(sine(1, 440), SR);
     expect(Number.isFinite(lra)).toBe(true);
     expect(lra).toBeGreaterThanOrEqual(0);
   });

@@ -15,7 +15,7 @@ import {
   meteringDynamicRange,
   meteringPeakDb,
   meteringRmsDb,
-  meteringTruePeakDb,
+  meteringTruePeakDbtp,
   scaleCorrectionSemitones,
   scalePitchClassEnabled,
   scaleQuantizeMidi,
@@ -53,14 +53,14 @@ describe('Offline metering wrappers', () => {
 
   it('true peak >= sample peak with default oversample factor', () => {
     const samples = sine(440, 1);
-    const tp = meteringTruePeakDb(samples, SR);
+    const tp = meteringTruePeakDbtp(samples, SR);
     expect(tp).toBeGreaterThanOrEqual(meteringPeakDb(samples, SR) - 0.1);
   });
 
   it('true peak rejects non-power-of-two oversample factor', () => {
     const samples = sine(440, 0.1);
-    expect(() => meteringTruePeakDb(samples, SR, { oversampleFactor: 3 })).toThrow();
-    expect(() => meteringTruePeakDb(samples, SR, { oversampleFactor: 0 })).toThrow(RangeError);
+    expect(() => meteringTruePeakDbtp(samples, SR, { oversampleFactor: 3 })).toThrow();
+    expect(() => meteringTruePeakDbtp(samples, SR, { oversampleFactor: 0 })).toThrow(RangeError);
   });
 
   it('detect clipping reports runs and returns plain JS arrays', () => {

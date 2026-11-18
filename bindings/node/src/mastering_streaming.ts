@@ -57,7 +57,7 @@ export interface StreamingMasteringChainConfig extends MasteringChainConfig {
 
   /**
    * True peak (dBFS) of the loudness stage's input the static gain was computed
-   * for (`truePeakDb` of {@link streamingLoudnessGain}). When provided, the static gain is clamped to
+   * for (`truePeakDbtp` of {@link streamingLoudnessGain}). When provided, the static gain is clamped to
    * `(loudness.ceilingDb - loudnessStaticGainPeakDb) +
    * max(loudness.maxLimiterGainReductionDb, 0)` so the streaming preview
    * does not drive the loudness limiter harder than the offline chain. When

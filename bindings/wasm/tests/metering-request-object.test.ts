@@ -12,7 +12,7 @@ import {
   meteringSpectrumFrame,
   meteringStereoCorrelation,
   meteringStereoWidth,
-  meteringTruePeakDb,
+  meteringTruePeakDbtp,
   meteringVectorscope,
   waveformPeakPyramid,
   waveformPeaks,
@@ -56,8 +56,11 @@ describe('metering request object compatibility (WASM)', () => {
       6,
     );
     expect(
-      meteringTruePeakDb({ samples, sampleRate, oversampleFactor: 4, ...options }),
-    ).toBeCloseTo(meteringTruePeakDb(samples, sampleRate, { oversampleFactor: 4, ...options }), 6);
+      meteringTruePeakDbtp({ samples, sampleRate, oversampleFactor: 4, ...options }),
+    ).toBeCloseTo(
+      meteringTruePeakDbtp(samples, sampleRate, { oversampleFactor: 4, ...options }),
+      6,
+    );
   });
 
   it('matches positional clipping and dynamic-range calls', () => {
@@ -157,10 +160,10 @@ describe('metering request object compatibility (WASM)', () => {
     expect(reqEmpty.message).toBe(posEmpty.message);
 
     const posFactor = captureThrow(() =>
-      meteringTruePeakDb(samples, sampleRate, { oversampleFactor: 3 }),
+      meteringTruePeakDbtp(samples, sampleRate, { oversampleFactor: 3 }),
     );
     const reqFactor = captureThrow(() =>
-      meteringTruePeakDb({ samples, sampleRate, oversampleFactor: 3 }),
+      meteringTruePeakDbtp({ samples, sampleRate, oversampleFactor: 3 }),
     );
     expect(posFactor.threw).toBe(true);
     expect(reqFactor.threw).toBe(true);

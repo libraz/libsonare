@@ -4,7 +4,7 @@ import {
   deemphasis,
   detectKey,
   ErrorCode,
-  ebur128LoudnessRange,
+  ebur128LoudnessRangeLu,
   fourierTempogram,
   lufs,
   masterAudio,
@@ -165,8 +165,8 @@ describe('feature request-object compatibility', () => {
     expect(Array.from(shortTermLufs({ samples: loudnessInput, sampleRate: 48000 }))).toEqual(
       Array.from(shortTermLufs(loudnessInput, 48000)),
     );
-    expect(ebur128LoudnessRange({ samples: loudnessInput, sampleRate: 48000 })).toBeCloseTo(
-      ebur128LoudnessRange(loudnessInput, 48000),
+    expect(ebur128LoudnessRangeLu({ samples: loudnessInput, sampleRate: 48000 })).toBeCloseTo(
+      ebur128LoudnessRangeLu(loudnessInput, 48000),
       10,
     );
   });

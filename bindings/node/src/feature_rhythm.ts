@@ -67,7 +67,7 @@ export interface CyclicTempogramRequest {
   hopLength?: number;
   /** Autocorrelation window in frames. Default `384`. */
   winLength?: number;
-  /** Lowest tempo folded in, in BPM. Default 60. */
+  /** Base of the folded tempo octave, in BPM; not a search range. Default `60`. */
   bpmMin?: number;
   /** Tempo bins per octave. Default 60. */
   nBins?: number;

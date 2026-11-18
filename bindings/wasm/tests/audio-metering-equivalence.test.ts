@@ -11,7 +11,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   Audio,
-  ebur128LoudnessRange,
+  ebur128LoudnessRangeLu,
   init,
   meteringCrestFactorDb,
   meteringDcOffset,
@@ -22,7 +22,7 @@ import {
   meteringSilenceRatio,
   meteringSpectrum,
   meteringSpectrumFrame,
-  meteringTruePeakDb,
+  meteringTruePeakDbtp,
 } from '../src/index';
 
 const SR = 22050;
@@ -79,9 +79,9 @@ describe('Audio metering methods (WASM)', () => {
     const samples = sine(440, 1);
     const audio = Audio.fromBuffer(samples, SR);
 
-    expect(audio.truePeakDb()).toBe(meteringTruePeakDb(samples, SR, { oversampleFactor: 4 }));
-    expect(() => audio.truePeakDb(0)).toThrow(RangeError);
-    expect(audio.truePeakDb(8)).toBe(meteringTruePeakDb(samples, SR, { oversampleFactor: 8 }));
+    expect(audio.truePeakDbtp()).toBe(meteringTruePeakDbtp(samples, SR, { oversampleFactor: 4 }));
+    expect(() => audio.truePeakDbtp(0)).toThrow(RangeError);
+    expect(audio.truePeakDbtp(8)).toBe(meteringTruePeakDbtp(samples, SR, { oversampleFactor: 8 }));
   });
 
   it('detectClipping matches on a genuinely clipped signal, and a level above 0 dBFS is refused', () => {
@@ -148,7 +148,7 @@ describe('Audio metering methods (WASM)', () => {
     expect(Array.from(frameB.db)).not.toEqual(Array.from(frameA.db));
   });
 
-  it('ebur128LoudnessRange matches the standalone function', () => {
+  it('ebur128LoudnessRangeLu matches the standalone function', () => {
     const loud = sine(440, 4);
     const quiet = sine(440, 4, 0.05);
     const combined = new Float32Array(loud.length + quiet.length);
@@ -156,9 +156,9 @@ describe('Audio metering methods (WASM)', () => {
     combined.set(quiet, loud.length);
     const audio = Audio.fromBuffer(combined, SR);
 
-    const lra = audio.ebur128LoudnessRange();
+    const lra = audio.ebur128LoudnessRangeLu();
     expect(lra).toBeGreaterThan(0);
-    expect(lra).toBe(ebur128LoudnessRange(combined, SR));
+    expect(lra).toBe(ebur128LoudnessRangeLu(combined, SR));
   });
 
   it('the handle-copy contract: mutating the source buffer after construction does not change results', () => {

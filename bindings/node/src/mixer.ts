@@ -313,7 +313,7 @@ export class Mixer {
    * (see {@link configureMeter}). The true-peak
    * reading runs one reconstruction-filter group delay behind the block; this
    * reads that pending stretch against silence and folds it into the
-   * snapshots, so `truePeakDb` covers the whole signal. Call it after the last
+   * snapshots, so `truePeakDbtp` covers the whole signal. Call it after the last
    * block of an offline render; a later process call starts a new signal.
    */
   flushMeters(): void {

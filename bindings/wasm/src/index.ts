@@ -318,7 +318,7 @@ export type {
   PhaseVocoderRequest,
 } from './feature_inverse.js';
 export type {
-  Ebur128LoudnessRangeRequest,
+  Ebur128LoudnessRangeLuRequest,
   LufsMultichannelRequest,
   LufsSeriesMultichannelRequest,
 } from './feature_loudness.js';
@@ -397,7 +397,7 @@ export {
   decomposeStemsLinked,
   deemphasis,
   detectBoundaries,
-  ebur128LoudnessRange,
+  ebur128LoudnessRangeLu,
   estimateTuning,
   fixFrames,
   fixLength,
@@ -516,7 +516,7 @@ export type {
   MeteringSpectrumRequest,
   MeteringStereoCorrelationRequest,
   MeteringStereoWidthRequest,
-  MeteringTruePeakDbRequest,
+  MeteringTruePeakDbtpRequest,
   MeteringVectorscopeRequest,
   PhaseScopeReport,
   SpectrumOptions,
@@ -540,7 +540,7 @@ export {
   meteringSpectrumFrame,
   meteringStereoCorrelation,
   meteringStereoWidth,
-  meteringTruePeakDb,
+  meteringTruePeakDbtp,
   meteringVectorscope,
   waveformPeakPyramid,
   waveformPeaks,

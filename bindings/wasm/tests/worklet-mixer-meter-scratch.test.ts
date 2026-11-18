@@ -158,8 +158,8 @@ describe('SonareWorkletProcessor meter scratch', () => {
         rmsDbL: measured.rmsDbL,
         rmsDbR: measured.rmsDbR,
         correlation: measured.correlation,
-        truePeakDbtpL: measured.truePeakDbL,
-        truePeakDbtpR: measured.truePeakDbR,
+        truePeakDbtpL: measured.truePeakDbtpL,
+        truePeakDbtpR: measured.truePeakDbtpR,
       });
     } finally {
       calls.restore();

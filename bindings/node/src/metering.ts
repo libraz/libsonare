@@ -135,8 +135,8 @@ export interface MeteringDcOffsetRequest extends ValidateOptions {
   sampleRate: number;
 }
 
-/** Request form of {@link meteringTruePeakDb}. */
-export interface MeteringTruePeakDbRequest extends ValidateOptions {
+/** Request form of {@link meteringTruePeakDbtp}. */
+export interface MeteringTruePeakDbtpRequest extends ValidateOptions {
   /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
@@ -274,20 +274,20 @@ export function meteringDcOffset(...args: unknown[]): number {
   return monoMeter('meteringDcOffset', args);
 }
 
-/** Inter-sample (true) peak in dBFS. `oversampleFactor` is a power of two in [1, 16]; omit it for 4. */
-export function meteringTruePeakDb(request: MeteringTruePeakDbRequest): number;
-export function meteringTruePeakDb(
+/** Inter-sample (true) peak in dBTP. `oversampleFactor` is a power of two in [1, 16]; omit it for 4. */
+export function meteringTruePeakDbtp(request: MeteringTruePeakDbtpRequest): number;
+export function meteringTruePeakDbtp(
   samples: Float32Array,
   sampleRate: number,
-  options?: OptionsOf<MeteringTruePeakDbRequest>,
+  options?: OptionsOf<MeteringTruePeakDbtpRequest>,
 ): number;
-export function meteringTruePeakDb(...args: unknown[]): number {
-  const r = sampleOneShot<MeteringTruePeakDbRequest>('meteringTruePeakDb', args);
-  assertAudioInput('meteringTruePeakDb', r.samples, r.sampleRate, r);
-  refuseZeroSentinel('meteringTruePeakDb', r, ['oversampleFactor']);
+export function meteringTruePeakDbtp(...args: unknown[]): number {
+  const r = sampleOneShot<MeteringTruePeakDbtpRequest>('meteringTruePeakDbtp', args);
+  assertAudioInput('meteringTruePeakDbtp', r.samples, r.sampleRate, r);
+  refuseZeroSentinel('meteringTruePeakDbtp', r, ['oversampleFactor']);
   const factor = r.oversampleFactor ?? 4;
   // The power-of-two rule stays the core's, which names the field.
-  assertNonNegativeSafeInteger('meteringTruePeakDb', factor, 'oversampleFactor');
+  assertNonNegativeSafeInteger('meteringTruePeakDbtp', factor, 'oversampleFactor');
   return addon.meteringTruePeakDb(r.samples, r.sampleRate, factor);
 }
 

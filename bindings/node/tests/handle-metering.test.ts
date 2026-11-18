@@ -3,7 +3,7 @@
  *
  * Each method reads the native `SonareAudio*` handle directly instead of a
  * caller `Float32Array`, so the claim under test is that it agrees
- * bit-for-bit with its standalone `metering*` / `ebur128LoudnessRange`
+ * bit-for-bit with its standalone `metering*` / `ebur128LoudnessRangeLu`
  * counterpart over the same samples, plus the two contract-only behaviors a
  * handle adds: the result is fixed at construction time (mutating the source
  * buffer afterwards changes nothing), and a destroyed handle throws rather
@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
 import {
   Audio,
   ErrorCode,
-  ebur128LoudnessRange,
+  ebur128LoudnessRangeLu,
   meteringCrestFactorDb,
   meteringDcOffset,
   meteringDetectClipping,
@@ -24,7 +24,7 @@ import {
   meteringSilenceRatio,
   meteringSpectrum,
   meteringSpectrumFrame,
-  meteringTruePeakDb,
+  meteringTruePeakDbtp,
 } from '../src/index.js';
 import { expectRefusal, sine } from './_helpers.js';
 
@@ -77,13 +77,13 @@ describe('Audio handle-form metering', () => {
     }
   });
 
-  it('truePeakDb agrees with the buffer form and exceeds sample peak', () => {
+  it('truePeakDbtp agrees with the buffer form and exceeds sample peak', () => {
     const samples = makeSine(440, 1);
     const audio = Audio.fromBuffer(samples, SR);
     try {
-      const tp = audio.truePeakDb();
+      const tp = audio.truePeakDbtp();
       expect(tp).toBeGreaterThanOrEqual(audio.peakDb() - 0.1);
-      expect(tp).toBe(meteringTruePeakDb(samples, SR, { oversampleFactor: 4 }));
+      expect(tp).toBe(meteringTruePeakDbtp(samples, SR, { oversampleFactor: 4 }));
     } finally {
       audio.destroy();
     }
@@ -164,12 +164,12 @@ describe('Audio handle-form metering', () => {
     }
   });
 
-  it('ebur128LoudnessRange agrees with the buffer form', () => {
+  it('ebur128LoudnessRangeLu agrees with the buffer form', () => {
     const samples = makeSine(440, 3);
     const audio = Audio.fromBuffer(samples, SR);
     try {
-      const lra = audio.ebur128LoudnessRange();
-      expect(lra).toBe(ebur128LoudnessRange(samples, SR));
+      const lra = audio.ebur128LoudnessRangeLu();
+      expect(lra).toBe(ebur128LoudnessRangeLu(samples, SR));
     } finally {
       audio.destroy();
     }
