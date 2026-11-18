@@ -912,6 +912,12 @@ from .types import CapabilityCatalogChainList as CapabilityCatalogChainList
 from .types import CapabilityCatalogChainStage as CapabilityCatalogChainStage
 from .types import CapabilityCatalogPresets as CapabilityCatalogPresets
 from .types import (
+    CaptureInputMonitor as CaptureInputMonitor,
+)
+from .types import (
+    CapturePunch as CapturePunch,
+)
+from .types import (
     ChannelLayout as ChannelLayout,
 )
 from .types import (

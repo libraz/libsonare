@@ -20,7 +20,7 @@ _STRIP_JSON = (
 
 def test_meter_input_peaks_and_reset_command() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
-        engine.set_input_monitor(True)
+        engine.configure_capture(capacity_frames=128)
         engine.play()
         engine.process([[0.25] * 128, [-0.25] * 128])
         records = engine.drain_meter_telemetry()

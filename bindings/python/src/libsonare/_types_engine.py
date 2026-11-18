@@ -232,6 +232,39 @@ _CAPTURE_SOURCES: tuple[str, ...] = get_args(EngineCaptureSource)
 
 
 @dataclass(frozen=True, slots=True)
+class CaptureInputMonitor:
+    """Input monitoring for :meth:`RealtimeEngine.configure_capture`."""
+
+    enabled: bool
+    """Whether the live input is monitored through the engine output."""
+    gain: float = 1.0
+    """Linear monitor gain."""
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CapturePunch:
+    """A half-open punch-in window ``[start, end)`` for :meth:`RealtimeEngine.configure_capture`.
+
+    Each bound is given exactly once, in quarter notes (``*_ppq``, resolved through the
+    engine tempo map), timeline samples (``*_sample``) or timeline seconds (``*_sec``,
+    rounded to the nearest sample). A negative bound is refused.
+    """
+
+    start_ppq: float | None = None
+    """Start in quarter notes."""
+    start_sample: int | None = None
+    """Start in timeline samples."""
+    start_sec: float | None = None
+    """Start in timeline seconds."""
+    end_ppq: float | None = None
+    """End in quarter notes."""
+    end_sample: int | None = None
+    """End in timeline samples."""
+    end_sec: float | None = None
+    """End in timeline seconds."""
+
+
+@dataclass(frozen=True, slots=True)
 class SidechainSource:
     """A sidechain key source: a track lane or a bus, by id.
 

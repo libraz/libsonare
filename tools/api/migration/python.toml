@@ -6343,7 +6343,8 @@ test = "bindings/python/tests/test_engine_telemetry.py::test_realtime_engine_pro
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.set_capture_source"
-changed = "source takes 'output' or 'input' exactly; an ordinal is TypeError"
+to = "RealtimeEngine.configure_capture"
+changed = "configure_capture(capacity_frames=..., source=...) sets the whole capture setup; source takes 'output' or 'input' exactly and an ordinal is TypeError"
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_engine_telemetry.py::test_capture_source_is_an_exact_token"
@@ -11198,3 +11199,39 @@ changed = "a track id declared through set_track_lanes instead of a lane index; 
 domain = "engine"
 rule = "strip-ref"
 test = "bindings/python/tests/test_engine_mixer.py::test_track_solo_mute_and_monitor_mode_address_a_declared_track_id"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_capture_buffer"
+to = "RealtimeEngine.configure_capture"
+changed = "configure_capture(capacity_frames=..., num_channels=...) sets the whole capture setup; the buffer is reallocated only when its shape changes, and reallocating while armed raises SonareError (INVALID_STATE)"
+domain = "engine"
+rule = "one-entry-per-operation"
+test = "bindings/python/tests/test_engine_telemetry.py::test_configure_capture_applies_the_whole_setup_and_resizes_only_when_disarmed"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_capture_punch"
+to = "RealtimeEngine.configure_capture"
+changed = "configure_capture(..., punch=CapturePunch(...)) sets the whole capture setup; each bound is exactly one of *_ppq, *_sample or *_sec, and an omitted punch (not enabled=False) leaves capture ungated"
+domain = "engine"
+rule = "one-entry-per-operation"
+test = "bindings/python/tests/test_engine_telemetry.py::test_configure_capture_applies_the_whole_setup_and_resizes_only_when_disarmed"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_record_offset_samples"
+to = "RealtimeEngine.configure_capture"
+changed = "configure_capture(..., record_offset_samples=...) sets the whole capture setup; an omitted offset is 0"
+domain = "engine"
+rule = "one-entry-per-operation"
+test = "bindings/python/tests/test_engine_telemetry.py::test_configure_capture_applies_the_whole_setup_and_resizes_only_when_disarmed"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_input_monitor"
+to = "RealtimeEngine.configure_capture"
+changed = "configure_capture(..., input_monitor=CaptureInputMonitor(enabled, gain)) sets the whole capture setup; an omitted monitor is enabled at gain 1"
+domain = "engine"
+rule = "one-entry-per-operation"
+test = "bindings/python/tests/test_engine_telemetry.py::test_configure_capture_applies_the_whole_setup_and_resizes_only_when_disarmed"

@@ -275,6 +275,12 @@ from ._types_engine import (
     BoundaryResult as BoundaryResult,
 )
 from ._types_engine import (
+    CaptureInputMonitor as CaptureInputMonitor,
+)
+from ._types_engine import (
+    CapturePunch as CapturePunch,
+)
+from ._types_engine import (
     ClipPageRequest as ClipPageRequest,
 )
 from ._types_engine import (

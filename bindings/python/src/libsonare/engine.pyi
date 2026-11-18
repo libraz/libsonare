@@ -23,6 +23,8 @@ from ._project import (
 from .analyzer import FloatSamples, StripRef
 from .types import (
     AutomationPoint,
+    CaptureInputMonitor,
+    CapturePunch,
     ClipPageRequest,
     EngineBounceOptions,
     EngineBounceResult,
@@ -365,33 +367,20 @@ class RealtimeEngine:
     def clip_count(self) -> int:
         """Number of audio clips currently installed."""
         ...
-    def set_capture_buffer(self, num_channels: int, capacity_frames: int) -> None:
-        """Allocate the capture buffer: ``num_channels`` channels of ``capacity_frames`` frames."""
+    def configure_capture(
+        self,
+        *,
+        capacity_frames: int,
+        num_channels: int = 2,
+        source: EngineCaptureSource = "output",
+        record_offset_samples: int = 0,
+        input_monitor: CaptureInputMonitor | None = None,
+        punch: CapturePunch | None = None,
+    ) -> None:
+        """Configure capture as a whole; an omitted setting takes its default."""
         ...
     def arm_capture(self, armed: bool = True) -> None:
         """Arm (or disarm) recording into the capture buffer."""
-        ...
-    def set_capture_punch(
-        self,
-        start_sample: int | None = None,
-        end_sample: int | None = None,
-        enabled: bool = True,
-        *,
-        start_sec: float | None = None,
-        end_sec: float | None = None,
-    ) -> None:
-        """Set the punch window ``[start, end)`` in timeline samples or seconds (one spelling per
-        bound); both bounds are required and a negative one is refused."""
-        ...
-    def set_capture_source(self, source: EngineCaptureSource) -> None:
-        """Choose what the recording sink captures: ``"output"`` or ``"input"``."""
-        ...
-    def set_record_offset_samples(self, offset_samples: int) -> None:
-        """Shift capture on the timeline by ``offset_samples``; positive values delay the punch
-        window."""
-        ...
-    def set_input_monitor(self, enabled: bool, gain: float = 1.0) -> None:
-        """Enable or disable the input monitor with the given ``gain``."""
         ...
     def reset_capture(self) -> None:
         """Reset the capture state."""

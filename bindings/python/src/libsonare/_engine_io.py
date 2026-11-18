@@ -20,7 +20,7 @@ from ._engine_conversions import (
     _scope_telemetry_from_c,
     _telemetry_from_c,
 )
-from ._errors import _not_supported
+from ._errors import _invalid_state, _not_supported
 from ._ffi_types_core import (
     SONARE_METER_MAX_INSERTS,
     SonareClipPageRequest,
@@ -73,7 +73,12 @@ from ._runtime import (
     _to_c_uint,
     _validate_c_int_field,
 )
-from ._types_engine import EngineCaptureSource, EngineProcessWithMonitorResult
+from ._types_engine import (
+    CaptureInputMonitor,
+    CapturePunch,
+    EngineCaptureSource,
+    EngineProcessWithMonitorResult,
+)
 
 
 def _plane_arrays(arrays: Sequence[Any], frame_count: int) -> list[np.ndarray]:
@@ -90,7 +95,66 @@ class _EngineIoMixin:
 
         def _require_handle(self) -> ctypes.c_void_p: ...
 
-    def set_capture_buffer(self, num_channels: int, capacity_frames: int) -> None:
+        def sample_at_ppq(self, ppq: float) -> int: ...
+
+    def _capture_shape(self) -> tuple[int, int] | None:
+        if not self._capture_arrays:
+            return None
+        return len(self._capture_arrays), len(self._capture_arrays[0])
+
+    def _install_capture_buffer(self, channel_count: int, frame_capacity: int) -> None:
+        arrays = [(ctypes.c_float * frame_capacity)() for _ in range(channel_count)]
+        ptr_type = ctypes.POINTER(ctypes.c_float) * len(arrays)
+        ptrs = ptr_type(*[ctypes.cast(array, ctypes.POINTER(ctypes.c_float)) for array in arrays])
+        raw = SonareEngineCaptureBuffer()
+        raw.channels = ctypes.cast(ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float)))
+        raw.num_channels = channel_count
+        raw.capacity_frames = frame_capacity
+        _check(
+            _get_lib().sonare_engine_set_capture_buffer(self._require_handle(), ctypes.byref(raw))
+        )
+        self._capture_arrays = arrays
+        self._capture_ptrs = ptrs
+
+    def _punch_bound(self, punch: CapturePunch, edge: str) -> int:
+        ppq = getattr(punch, f"{edge}_ppq")
+        sample = getattr(punch, f"{edge}_sample")
+        sec = getattr(punch, f"{edge}_sec")
+        names = (f"{edge}_ppq", f"{edge}_sample", f"{edge}_sec")
+        if sum(value is not None for value in (ppq, sample, sec)) != 1:
+            raise SonareValueError(
+                f"configure_capture: punch needs exactly one of {', '.join(names)}"
+            )
+        if ppq is not None:
+            beats = _narrow_double(ppq, f"punch.{edge}_ppq")
+            if not beats >= 0.0:
+                raise SonareValueError(f"configure_capture: punch.{edge}_ppq must be non-negative")
+            return self.sample_at_ppq(beats)
+        bound = _resolve_sample_bound(
+            sample, sec, self._sample_rate, f"punch.{edge}_sample", f"punch.{edge}_sec"
+        )
+        assert bound is not None
+        return bound
+
+    def configure_capture(
+        self,
+        *,
+        capacity_frames: int,
+        num_channels: int = 2,
+        source: EngineCaptureSource = "output",
+        record_offset_samples: int = 0,
+        input_monitor: CaptureInputMonitor | None = None,
+        punch: CapturePunch | None = None,
+    ) -> None:
+        """Configure capture as a whole; an omitted setting takes its default, not its last value.
+
+        ``source`` is ``"output"`` or ``"input"``. A positive ``record_offset_samples`` delays
+        capture relative to the punch window; input arriving within the offset after a loop wrap
+        belongs to the end of the pass played before it, so every pass captures the whole loop
+        range. An omitted ``input_monitor`` is enabled at gain 1 and an omitted ``punch`` leaves
+        capture ungated. The buffer is reallocated only when ``num_channels`` or
+        ``capacity_frames`` changes, and reallocating while armed raises ``INVALID_STATE``.
+        """
         # Narrowed before the positivity checks: int(0.5) is a 0 they then refuse
         # while naming positivity, and int(1024.5) is a buffer one frame short.
         channel_count = _narrow_int(num_channels, "num_channels", _C_INT_MIN, _C_INT_MAX)
@@ -99,84 +163,51 @@ class _EngineIoMixin:
             raise SonareValueError("num_channels must be positive")
         if frame_capacity <= 0:
             raise SonareValueError("capacity_frames must be positive")
-        self._capture_arrays = [(ctypes.c_float * frame_capacity)() for _ in range(channel_count)]
-        ptr_type = ctypes.POINTER(ctypes.c_float) * len(self._capture_arrays)
-        self._capture_ptrs = ptr_type(
-            *[ctypes.cast(array, ctypes.POINTER(ctypes.c_float)) for array in self._capture_arrays]
+        source_value = _capture_source_value(source)
+        offset = _narrow_int(record_offset_samples, "record_offset_samples", _INT64_MIN, _INT64_MAX)
+        monitor = (
+            CaptureInputMonitor(enabled=True)
+            if input_monitor is None
+            else _require_instance(input_monitor, CaptureInputMonitor, "input_monitor")
         )
-        raw = SonareEngineCaptureBuffer()
-        raw.channels = ctypes.cast(
-            self._capture_ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float))
-        )
-        raw.num_channels = channel_count
-        raw.capacity_frames = frame_capacity
+        bounds = None
+        if punch is not None:
+            punch = _require_instance(punch, CapturePunch, "punch")
+            bounds = (self._punch_bound(punch, "start"), self._punch_bound(punch, "end"))
+
+        if self._capture_shape() != (channel_count, frame_capacity):
+            if self.capture_status().armed:
+                raise _invalid_state(
+                    "configure_capture: the capture buffer cannot be resized while armed"
+                )
+            self._install_capture_buffer(channel_count, frame_capacity)
+        handle = self._require_handle()
+        lib = _get_lib()
+        _check(lib.sonare_engine_set_capture_source(handle, _to_c_int(source_value, "source")))
         _check(
-            _get_lib().sonare_engine_set_capture_buffer(self._require_handle(), ctypes.byref(raw))
+            lib.sonare_engine_set_record_offset_samples(
+                handle, _to_c_int64(offset, "record_offset_samples")
+            )
+        )
+        _check(
+            lib.sonare_engine_set_input_monitor(
+                handle,
+                1 if monitor.enabled else 0,
+                _to_c_float(monitor.gain, "input_monitor.gain"),
+            )
+        )
+        start, end = bounds if bounds is not None else (0, 0)
+        _check(
+            lib.sonare_engine_set_capture_punch(
+                handle,
+                _to_c_int64(start, "punch.start"),
+                _to_c_int64(end, "punch.end"),
+                0 if bounds is None else 1,
+            )
         )
 
     def arm_capture(self, armed: bool = True) -> None:
         _check(_get_lib().sonare_engine_arm_capture(self._require_handle(), 1 if armed else 0))
-
-    def set_capture_punch(
-        self,
-        start_sample: int | None = None,
-        end_sample: int | None = None,
-        enabled: bool = True,
-        *,
-        start_sec: float | None = None,
-        end_sec: float | None = None,
-    ) -> None:
-        """Set the punch-in window, half-open ``[start, end)`` in timeline samples.
-
-        Each bound is samples (``start_sample`` / ``end_sample``) or seconds
-        (``start_sec`` / ``end_sec``, rounded to the nearest sample at the
-        engine's sample rate), one spelling per bound. Both bounds are required
-        and a negative one is refused.
-        """
-        start = _resolve_sample_bound(
-            start_sample, start_sec, self._sample_rate, "start_sample", "start_sec"
-        )
-        end = _resolve_sample_bound(end_sample, end_sec, self._sample_rate, "end_sample", "end_sec")
-        if start is None or end is None:
-            raise SonareValueError(
-                "set_capture_punch needs both bounds (start_sample or start_sec, "
-                "end_sample or end_sec)"
-            )
-        _check(
-            _get_lib().sonare_engine_set_capture_punch(
-                self._require_handle(),
-                _to_c_int64(start, "start_sample"),
-                _to_c_int64(end, "end_sample"),
-                1 if enabled else 0,
-            )
-        )
-
-    def set_capture_source(self, source: EngineCaptureSource) -> None:
-        """Choose what the recording sink captures: ``\"output\"`` or ``\"input\"``."""
-        _check(
-            _get_lib().sonare_engine_set_capture_source(
-                self._require_handle(), _to_c_int(_capture_source_value(source), "source")
-            )
-        )
-
-    def set_record_offset_samples(self, offset_samples: int) -> None:
-        """Shift capture on the timeline; positive values delay the punch window.
-
-        Input arriving within the offset after a loop wrap belongs to the end of
-        the pass played before it, so every pass captures the whole loop range.
-        """
-        _check(
-            _get_lib().sonare_engine_set_record_offset_samples(
-                self._require_handle(), _to_c_int64(offset_samples, "offset_samples")
-            )
-        )
-
-    def set_input_monitor(self, enabled: bool, gain: float = 1.0) -> None:
-        _check(
-            _get_lib().sonare_engine_set_input_monitor(
-                self._require_handle(), 1 if enabled else 0, _to_c_float(gain, "gain")
-            )
-        )
 
     def reset_capture(self) -> None:
         _check(_get_lib().sonare_engine_reset_capture(self._require_handle()))

@@ -209,16 +209,25 @@ class TestTrimPadding:
 class TestEngine:
     def test_punch_in_window_seconds_and_required_bounds(self) -> None:
         with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
-            engine.set_capture_punch(start_sec=1.0, end_sample=48128)
+            punch = libsonare.CapturePunch(start_sec=1.0, end_sample=48128)
+            engine.configure_capture(capacity_frames=128, punch=punch)
             assert engine.capture_status().punch_enabled
-            engine.set_capture_punch(48000, 48128, enabled=False)
+            engine.configure_capture(capacity_frames=128)
             assert not engine.capture_status().punch_enabled
             with pytest.raises(SonareValueError, match=r"start_sample.*start_sec"):
-                engine.set_capture_punch(1, 2, start_sec=1.0)
+                engine.configure_capture(
+                    capacity_frames=128,
+                    punch=libsonare.CapturePunch(start_sample=1, start_sec=1.0, end_sample=2),
+                )
             with pytest.raises(SonareValueError, match="start_sample"):
-                engine.set_capture_punch(-1, 2)
-            with pytest.raises(SonareValueError, match="both bounds"):
-                engine.set_capture_punch(1)
+                engine.configure_capture(
+                    capacity_frames=128,
+                    punch=libsonare.CapturePunch(start_sample=-1, end_sample=2),
+                )
+            with pytest.raises(SonareValueError, match="end_sample"):
+                engine.configure_capture(
+                    capacity_frames=128, punch=libsonare.CapturePunch(start_sample=1)
+                )
 
     def test_render_frame_none_is_immediate_and_negative_is_refused(self) -> None:
         with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:

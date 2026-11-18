@@ -10,6 +10,8 @@ import pytest
 
 from libsonare import (
     AutomationPoint,
+    CaptureInputMonitor,
+    CapturePunch,
     EngineClip,
     EngineGraphConnection,
     EngineGraphNode,
@@ -234,8 +236,8 @@ def test_realtime_engine_process_and_telemetry() -> None:
             ]
         )
         assert engine.clip_count == 1
-        engine.set_capture_buffer(2, 128)
-        engine.set_capture_punch(48000, 48128)
+        punch = CapturePunch(start_sample=48000, end_sample=48128)
+        engine.configure_capture(capacity_frames=128, punch=punch)
         engine.arm_capture()
         engine.seek_marker(11)
         engine.play()
@@ -269,8 +271,9 @@ def test_realtime_engine_process_and_telemetry() -> None:
         assert last.timeline_sample == 48000 + 128
         assert last.audible_timeline_sample == 48000 + 128
 
-        engine.set_capture_source("input")
-        engine.set_record_offset_samples(-37)
+        engine.configure_capture(
+            capacity_frames=128, source="input", record_offset_samples=-37, punch=punch
+        )
         engine.arm_capture()
         engine.seek_marker(11)
         engine.process([left, right])
@@ -282,7 +285,13 @@ def test_realtime_engine_process_and_telemetry() -> None:
         assert all(math.isclose(sample, -0.25, abs_tol=0.0001) for sample in captured[1])
         assert any(record.target_id == 0xFFFF for record in engine.drain_meter_telemetry())
 
-        engine.set_input_monitor(False)
+        engine.configure_capture(
+            capacity_frames=128,
+            source="input",
+            record_offset_samples=-37,
+            input_monitor=CaptureInputMonitor(enabled=False),
+            punch=punch,
+        )
         engine.reset_capture()
         engine.arm_capture()
         engine.seek_marker(11)
@@ -292,13 +301,21 @@ def test_realtime_engine_process_and_telemetry() -> None:
         captured = engine.captured_audio()
         assert all(math.isclose(sample, 0.25, abs_tol=0.0001) for sample in captured[0])
 
-        engine.set_input_monitor(True, 0.5)
+        engine.configure_capture(
+            capacity_frames=128,
+            source="input",
+            record_offset_samples=-37,
+            input_monitor=CaptureInputMonitor(enabled=True, gain=0.5),
+            punch=punch,
+        )
         engine.seek_marker(11)
         monitored = engine.process([[0.25] * 128, [-0.25] * 128])
         assert all(math.isclose(sample, 0.5, abs_tol=0.0001) for sample in monitored[0])
         assert all(math.isclose(sample, -0.5, abs_tol=0.0001) for sample in monitored[1])
         with pytest.raises(SonareValueError) as bad_monitor_gain_error:
-            engine.set_input_monitor(True, math.nan)
+            engine.configure_capture(
+                capacity_frames=128, input_monitor=CaptureInputMonitor(enabled=True, gain=math.nan)
+            )
         assert bad_monitor_gain_error.value.code == 4
 
 
@@ -452,10 +469,46 @@ def test_graph_connection_mix_is_replace_or_add_only() -> None:
 
 def test_capture_source_is_an_exact_token() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
-        engine.set_capture_source("input")
-        engine.set_capture_source("output")
+        engine.configure_capture(capacity_frames=128, source="input")
+        engine.configure_capture(capacity_frames=128, source="output")
         with pytest.raises(SonareValueError, match="input"):
-            engine.set_capture_source("Input")  # type: ignore[arg-type]
+            engine.configure_capture(capacity_frames=128, source="Input")  # type: ignore[arg-type]
         for number in (1, True):
             with pytest.raises(TypeError):
-                engine.set_capture_source(number)  # type: ignore[arg-type]
+                engine.configure_capture(capacity_frames=128, source=number)  # type: ignore[arg-type]
+
+
+def test_configure_capture_applies_the_whole_setup_and_resizes_only_when_disarmed() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        engine.configure_capture(
+            capacity_frames=128, source="input", punch=CapturePunch(start_ppq=1.0, end_ppq=2.0)
+        )
+        status = engine.capture_status()
+        assert status.source == "input"
+        assert status.punch_enabled
+        # An omitted setting is its default, not the previous call's value.
+        engine.configure_capture(capacity_frames=128)
+        status = engine.capture_status()
+        assert status.source == "output"
+        assert not status.punch_enabled
+
+        engine.arm_capture()
+        engine.configure_capture(capacity_frames=128, record_offset_samples=5)
+        assert engine.capture_status().record_offset_samples == 5
+        with pytest.raises(SonareError) as resized:
+            engine.configure_capture(capacity_frames=256)
+        assert not isinstance(resized.value, SonareValueError)
+        assert resized.value.code == 7
+        engine.arm_capture(False)
+        engine.configure_capture(capacity_frames=256, num_channels=1)
+        assert len(engine.captured_audio()) == 1
+
+        with pytest.raises(SonareValueError, match="start_ppq"):
+            engine.configure_capture(
+                capacity_frames=256, punch=CapturePunch(start_ppq=-1.0, end_ppq=2.0)
+            )
+        for bad in (0, -1):
+            with pytest.raises(SonareValueError, match="capacity_frames"):
+                engine.configure_capture(capacity_frames=bad)
+        with pytest.raises(TypeError, match="CapturePunch"):
+            engine.configure_capture(capacity_frames=128, punch={"start_sample": 0})  # type: ignore[arg-type]

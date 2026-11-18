@@ -2566,6 +2566,29 @@ class SidechainSource:
     id: int
     def __init__(self, kind: SidechainSourceKind, id: int) -> None: ...
 
+class CaptureInputMonitor:
+    enabled: bool
+    gain: float
+    def __init__(self, enabled: bool, gain: float = 1.0) -> None: ...
+
+class CapturePunch:
+    start_ppq: float | None
+    start_sample: int | None
+    start_sec: float | None
+    end_ppq: float | None
+    end_sample: int | None
+    end_sec: float | None
+    def __init__(
+        self,
+        *,
+        start_ppq: float | None = None,
+        start_sample: int | None = None,
+        start_sec: float | None = None,
+        end_ppq: float | None = None,
+        end_sample: int | None = None,
+        end_sec: float | None = None,
+    ) -> None: ...
+
 class SidechainCheck:
     ok: bool
     reason: SidechainRefusal | None
