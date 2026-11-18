@@ -4,6 +4,7 @@ import type {
   EngineTrackLane,
   RealtimeEngine,
 } from '../index.js';
+import { assignMarkerIds } from '../internal/marker_ids.js';
 import type { SonareEngineSyncCaptureMessage } from '../internal/worklet_messages.js';
 import type { CaptureOptions, EngineLoop } from '../public_types_engine.js';
 import {
@@ -284,9 +285,7 @@ export function resolveMarkerSet(
   markers: ReadonlyArray<Omit<EngineMarker, 'id'> & { id?: number }>,
   nextMarkerId: number,
 ): { resolved: EngineMarker[]; nextMarkerId: number } {
-  const resolved: EngineMarker[] = [];
   const seen = new Set<number>();
-  let counter = nextMarkerId;
   for (const marker of markers) {
     // Non-negative as well as finite, which is the domain the native setter
     // enforces; checking only finiteness here hands a negative ppq on to be
@@ -301,13 +300,12 @@ export function resolveMarkerSet(
       if (seen.has(marker.id)) {
         throw new RangeError(`Duplicate marker id: ${marker.id}`);
       }
+      seen.add(marker.id);
     }
-    const id = marker.id ?? counter++;
-    seen.add(id);
-    if (id >= counter) {
-      counter = id + 1;
-    }
-    resolved.push({ ...marker, id, name: marker.name ?? '' });
   }
-  return { resolved, nextMarkerId: counter };
+  const assigned = assignMarkerIds(markers, nextMarkerId);
+  return {
+    resolved: assigned.markers.map((marker) => ({ ...marker, name: marker.name ?? '' })),
+    nextMarkerId: assigned.nextId,
+  };
 }

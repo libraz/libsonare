@@ -13,6 +13,7 @@ import { ErrorCode, SonareError } from './errors.js';
 import { CHANNEL_LAYOUT_VALUES } from './internal/channel_layout.js';
 import { eqBandJson } from './internal/eq_band_json.js';
 import { assertHandleLive, releasedHandleError } from './internal/handle_guard.js';
+import { assignMarkerIds } from './internal/marker_ids.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { deinterleavePlanes } from './internal/pod_config.js';
 import { getSonareModule } from './module_state.js';
@@ -571,6 +572,8 @@ export function engineNativeHandle(engine: RealtimeEngine): WasmRealtimeEngine {
 export class RealtimeEngine {
   private nativeHandle: WasmRealtimeEngine;
   private released = false;
+  /** Lowest id `setMarkers` may assign; never moves back, so an id is not reused. */
+  private nextMarkerId = 1;
 
   private get native(): WasmRealtimeEngine {
     assertHandleLive(this.released, 'RealtimeEngine');
@@ -1631,10 +1634,25 @@ export class RealtimeEngine {
     return this.native.automationLaneCount();
   }
 
-  /** Replaces the markers and returns the stored ones with their ids. */
-  setMarkers(markers: EngineMarker[]): EngineMarker[] {
-    this.native.setMarkers((Array.isArray(markers) ? markers.map(nativeMarker) : markers) as never);
-    return this.markers();
+  /**
+   * Replaces the whole marker set. Entries without an `id` are assigned the
+   * lowest id above every id this engine has stored or assigned that the list
+   * does not carry; entries carrying an `id` keep it (positive, unique within
+   * the list). Returns the stored markers in the order given.
+   */
+  setMarkers(markers: ReadonlyArray<Omit<EngineMarker, 'id'> & { id?: number }>): EngineMarker[] {
+    if (!Array.isArray(markers)) {
+      this.native.setMarkers(markers as never);
+      return [];
+    }
+    let floor = this.nextMarkerId;
+    for (const stored of this.markers()) {
+      floor = Math.max(floor, stored.id + 1);
+    }
+    const assigned = assignMarkerIds(markers, floor);
+    this.native.setMarkers(assigned.markers.map(nativeMarker) as never);
+    this.nextMarkerId = assigned.nextId;
+    return assigned.markers.map((marker) => this.marker(marker.id));
   }
 
   /** Every stored marker, in timeline order. */

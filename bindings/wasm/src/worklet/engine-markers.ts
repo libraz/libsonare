@@ -31,9 +31,11 @@ export function addMarker(ctx: EngineMarkerContext, ppq: number, name = ''): num
  * Replaces the whole marker set in one call.
  *
  * Entries without an `id` are assigned fresh ids; entries carrying an `id`
- * keep it (ids must be positive and unique within the list). Returns the
- * resolved markers in the order given, so a caller can map its own marker
- * identities to the engine ids used by `seekMarker`/`setLoopFromMarkers`.
+ * keep it (ids must be positive and unique within the list); an assigned id
+ * is the lowest one at or above the engine's counter that the list does not
+ * carry. Returns the stored markers in the order given, so a caller can map
+ * its own marker identities to the engine ids used by `seekMarker` /
+ * `setLoopFromMarkers`.
  *
  * @param markers The full marker list (an empty list clears all markers).
  * @returns The markers with their resolved engine ids.
@@ -45,7 +47,7 @@ export function setMarkers(
   const { resolved, nextMarkerId } = resolveMarkerSet(markers, ctx.getNextMarkerId());
   commitMarkers(ctx, new Map(resolved.map((marker) => [marker.id, marker])));
   ctx.setNextMarkerId(nextMarkerId);
-  return resolved.map((marker) => ({ ...marker }));
+  return resolved.map((marker) => ctx.offlineEngine.marker(marker.id));
 }
 
 export function markers(ctx: EngineMarkerContext): EngineMarker[] {

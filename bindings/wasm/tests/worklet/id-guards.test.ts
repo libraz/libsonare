@@ -73,4 +73,10 @@ describe('marker ppq and id carry the domain the native setter enforces', () => 
     expect(() => resolveMarkerSet([{ ppq: 480, id: 2.5 }], 1)).toThrow(/Invalid marker id/);
     expect(() => resolveMarkerSet([{ ppq: 480, id: 0 }], 1)).toThrow(RangeError);
   });
+
+  it('assigns an id-less marker an id the list does not already carry', () => {
+    const { resolved, nextMarkerId } = resolveMarkerSet([{ ppq: 0 }, { ppq: 480, id: 1 }], 1);
+    expect(resolved.map((marker) => marker.id)).toEqual([2, 1]);
+    expect(nextMarkerId).toBe(3);
+  });
 });

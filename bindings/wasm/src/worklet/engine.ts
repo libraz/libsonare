@@ -1410,7 +1410,7 @@ export class SonareEngine {
 
   /**
    * Replaces the whole marker set in one call. Entries without an `id` are
-   * assigned fresh ids; entries carrying an `id` keep it. Returns the resolved
+   * assigned fresh ids; entries carrying an `id` keep it. Returns the stored
    * markers in the order given.
    */
   setMarkers(entries: ReadonlyArray<Omit<EngineMarker, 'id'> & { id?: number }>): EngineMarker[] {

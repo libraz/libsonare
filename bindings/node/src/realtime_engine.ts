@@ -4,6 +4,7 @@ import {
   FileClipPageProvider,
 } from './clip_page_provider.js';
 import { ErrorCode, SonareError } from './errors.js';
+import { assignMarkerIds } from './internal/marker_ids.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { deinterleave } from './internal/planar.js';
 import { timelineHandle } from './internal/project_handles.js';
@@ -631,6 +632,8 @@ function requireName(fnName: string, value: unknown, argName: string): string {
 export class RealtimeEngine {
   private native: InstanceType<typeof addon.RealtimeEngine>;
   private disposed = false;
+  /** Lowest id `setMarkers` may assign; never moves back, so an id is not reused. */
+  private nextMarkerId = 1;
   private sampleRate: number;
   /** Track ids in lane order as last declared; `'timeline'` once a timeline installed the lanes. */
   private laneOrder: number[] | 'timeline' = [];
@@ -880,10 +883,25 @@ export class RealtimeEngine {
     return this.native.automationLaneCount();
   }
 
-  /** Replaces the marker set and returns the stored markers with their ids. */
-  setMarkers(markers: EngineMarker[]): EngineMarker[] {
-    this.native.setMarkers(markers.map(markerToNative));
-    return this.markers();
+  /**
+   * Replaces the whole marker set. Entries without an `id` are assigned the
+   * lowest id above every id this engine has stored or assigned that the list
+   * does not carry; entries carrying an `id` keep it (positive, unique within
+   * the list). Returns the stored markers in the order given.
+   */
+  setMarkers(markers: ReadonlyArray<Omit<EngineMarker, 'id'> & { id?: number }>): EngineMarker[] {
+    if (!Array.isArray(markers)) {
+      this.native.setMarkers(markers as never);
+      return [];
+    }
+    let floor = this.nextMarkerId;
+    for (const stored of this.markers()) {
+      floor = Math.max(floor, stored.id + 1);
+    }
+    const assigned = assignMarkerIds(markers, floor);
+    this.native.setMarkers(assigned.markers.map(markerToNative) as never);
+    this.nextMarkerId = assigned.nextId;
+    return assigned.markers.map((marker) => this.marker(marker.id));
   }
 
   /** Every stored marker, in position order. */

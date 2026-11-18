@@ -167,6 +167,29 @@ describe('RealtimeEngine transport and state reads', () => {
     });
   });
 
+  it('assigns an id-less marker the lowest free id and never reuses one', () => {
+    withEngine((engine) => {
+      const first = engine.setMarkers([
+        { ppq: 960, name: 'b' },
+        { id: 1, ppq: 0, name: 'a' },
+      ]);
+      expect(first.map((m) => [m.id, m.name])).toEqual([
+        [2, 'b'],
+        [1, 'a'],
+      ]);
+      expect(first[0]).toEqual(engine.marker(2));
+      expect(engine.setMarkers([{ ppq: 0, name: 'c' }]).map((m) => m.id)).toEqual([3]);
+      expect(() =>
+        engine.setMarkers([
+          { id: 5, ppq: 0 },
+          { id: 5, ppq: 1 },
+        ]),
+      ).toThrow(RangeError);
+      expect(engine.markers().map((m) => m.id)).toEqual([3]);
+      expect(engine.setMarkers([{ ppq: 0 }]).map((m) => m.id)).toEqual([4]);
+    });
+  });
+
   it('names a marker kind and refuses an ordinal', () => {
     withEngine((engine) => {
       expect(caught(() => engine.setMarkers([{ id: 1, ppq: 0, kind: 4 as never }]))).toBeInstanceOf(
