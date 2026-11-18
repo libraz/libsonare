@@ -200,7 +200,7 @@ class DecodedChannels:
     sample_rate: int
     """Sample rate of the decoded audio in Hz."""
     channels: np.ndarray
-    """Channel-planar float32 array of shape ``(channel_count, frames)``."""
+    """Channel-planar float32 array of shape ``(num_channels, frames)``."""
 
 
 def decode_channels(data: bytes) -> DecodedChannels:
@@ -217,7 +217,7 @@ def decode_channels(data: bytes) -> DecodedChannels:
 
     Returns:
         A :class:`DecodedChannels`. ``channels`` is a channel-planar 2-D
-        ``float32`` array of shape ``(channel_count, frames)`` in the source's
+        ``float32`` array of shape ``(num_channels, frames)`` in the source's
         own channel order (5.1 is L R C LFE Ls Rs), the shape the N-channel
         entry points take.
 

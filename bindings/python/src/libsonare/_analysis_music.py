@@ -186,7 +186,7 @@ def chord_functional_analysis(
 
     Detects chords with the same algorithm as :func:`detect_chords`, then
     returns the timed entries as :func:`chord_functions` does: every
-    :class:`Chord` field plus ``roman`` and ``function``. ``tuning_cents`` is as for
+    :class:`Chord` field plus ``roman_numeral`` and ``function``. ``tuning_cents`` is as for
     :func:`detect_chords`.
     """
     chroma_method_value = _token_ordinal(chroma_method, _CHORD_CHROMA_METHODS, "chroma_method")
@@ -276,7 +276,7 @@ def chord_functions(
     (e.g. from :func:`detect_key`), a ``{"root": ..., "mode": ...}`` mapping or a
     ``(root, mode)`` pair.
 
-    Returns the same timed entries as :class:`FunctionalChord`, with ``roman``
+    Returns the same timed entries as :class:`FunctionalChord`, with ``roman_numeral``
     (``"I"``, ``"V7"``, ``"vi"``; ``"N.C."`` for an unknown chord) and
     ``function`` (``"tonic"``, ``"subdominant"``, ``"dominant"``, ``"chromatic"``
     for a root outside the key's scale, ``"none"`` for an unknown chord) added.

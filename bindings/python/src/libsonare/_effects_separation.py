@@ -318,7 +318,7 @@ def decompose_stems_linked(
     Returns:
         Dict with the same keys as :func:`decompose_stems` -- ``components``,
         ``w``, ``h`` and ``sample_rate`` -- but each ``components`` element is
-        channel-planar: a 2-D float32 array of shape ``(channel_count, n)``
+        channel-planar: a 2-D float32 array of shape ``(num_channels, n)``
         rather than :func:`decompose_stems`'s 1-D array, component c channel
         ch at row ch.
 
