@@ -37,21 +37,17 @@ if TYPE_CHECKING:
     from .types import AudioDefects
 
 
-def _amplitude_to_db(amplitude: float) -> float:
-    """Linear amplitude to dBFS; a non-positive amplitude maps to -inf and is refused downstream."""
-    return 20.0 * math.log10(amplitude) if amplitude > 0.0 else float("-inf")
-
-
 def cmd_declip(args: argparse.Namespace) -> int:
     from . import mastering_repair_declip, mastering_repair_declip_stereo
 
     planes, sr = _load_channels_or_downmix(args.file)
-    knobs = {
-        "clip_threshold_db": _amplitude_to_db(args.clip_threshold),
+    knobs: dict[str, Any] = {
         "lpc_order": args.lpc_order,
         "iterations": args.iterations,
         "lpc_blend": args.lpc_blend,
     }
+    if args.clip_threshold_db is not None:
+        knobs["clip_threshold_db"] = args.clip_threshold_db
     if len(planes) == 2:
         # The stereo entry repairs the union of both channels' clipped runs, so
         # a plateau one channel alone reaches is still reconstructed against the
@@ -71,11 +67,12 @@ def cmd_declip(args: argparse.Namespace) -> int:
         payload: dict[str, object] = {
             "sample_rate": sr,
             "samples": len(repaired),
-            "clip_threshold": args.clip_threshold,
             "lpc_order": args.lpc_order,
             "iterations": args.iterations,
             "lpc_blend": args.lpc_blend,
         }
+        if args.clip_threshold_db is not None:
+            payload["clip_threshold_db"] = args.clip_threshold_db
         if args.output:
             payload["output"] = args.output
         print(_strict_json_dumps(payload))
@@ -418,7 +415,13 @@ def register_repair_parsers(
     )
     _add_wav_bits_argument(repair_p)
     declip_p = sub.add_parser("declip", parents=[common], help="Repair clipped audio")
-    declip_p.add_argument("--clip-threshold", type=_finite_float, default=0.98)
+    declip_p.add_argument(
+        "--clip-threshold-db",
+        type=_finite_float,
+        default=None,
+        help="Level in dBFS at or above which a sample counts as clipped "
+        "(default: the library's, 0.98 of full scale, about -0.18 dBFS)",
+    )
     declip_p.add_argument("--lpc-order", type=_c_int, default=36)
     declip_p.add_argument("--iterations", type=_c_int, default=2)
     declip_p.add_argument("--lpc-blend", type=_finite_float, default=0.65)

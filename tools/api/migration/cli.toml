@@ -81,6 +81,16 @@ test = "bindings/python/tests/test_cli_option_analysis.py::test_chords_option_fl
 
 [[entry]]
 kind = "flag"
+old = "declip --clip-threshold"
+changed = "the threshold is given in dBFS rather than as a linear amplitude; left out, the library default (0.98 of full scale) applies"
+to = "declip --clip-threshold-db"
+domain = "effects"
+frontend = "python"
+rule = "unit-in-name"
+test = "bindings/python/tests/test_cli_declip.py::test_declip_threshold_is_given_in_dbfs"
+
+[[entry]]
+kind = "flag"
 old = "note-move --onset"
 new = "note-move --onset-sample"
 domain = "effects"

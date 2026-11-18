@@ -332,9 +332,18 @@ def test_declip_cli_repairs_a_stereo_pair_as_a_pair(tmp_path) -> None:
     output = tmp_path / "declipped.wav"
     _write_stereo_wav(str(source), left, right, sample_rate)
 
+    detect_at_db = 20.0 * math.log10(detect_at)
     result = _run_cli(
         # fmt: off
-        ["declip", str(source), "-o", str(output), "--clip-threshold", str(detect_at), "--json"],
+        [
+            "declip",
+            str(source),
+            "-o",
+            str(output),
+            "--clip-threshold-db",
+            str(detect_at_db),
+            "--json",
+        ],
         # fmt: on
     )
     assert result.returncode == 0, result.stderr
@@ -351,7 +360,7 @@ def test_declip_cli_repairs_a_stereo_pair_as_a_pair(tmp_path) -> None:
             mastering_repair_declip(
                 channel.data,
                 sample_rate=sample_rate,
-                clip_threshold_db=20.0 * math.log10(detect_at),
+                clip_threshold_db=detect_at_db,
             ).samples
         )
     with wave.open(str(output), "rb") as wav:
