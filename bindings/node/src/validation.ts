@@ -1,9 +1,4 @@
-import {
-  NESTED_KEY_HINTS,
-  NESTED_REQUEST_KEYS,
-  REQUEST_KEYS,
-  type RequestFn,
-} from './request_keys.js';
+import { NESTED_REQUEST_KEYS, REQUEST_KEYS, type RequestFn } from './request_keys.js';
 import type { ProjectMidiEvent } from './types.js';
 
 /**
@@ -741,12 +736,11 @@ export function assertKnownRequestKeys(fnName: RequestFn, value: Record<string, 
   const keys: object = REQUEST_KEYS[fnName];
   const nested: Record<string, object> =
     NESTED_REQUEST_KEYS[fnName as keyof typeof NESTED_REQUEST_KEYS] ?? {};
-  const hints: Record<string, object> = NESTED_KEY_HINTS[fnName] ?? {};
   for (const key of Object.keys(value)) {
     if (ownKey(keys, key)) {
       continue;
     }
-    const owner = Object.entries({ ...nested, ...hints }).find(([, set]) => ownKey(set, key));
+    const owner = Object.entries(nested).find(([, set]) => ownKey(set, key));
     const hint = owner ? ` ('${key}' belongs under '${owner[0]}')` : '';
     throw new TypeError(`${fnName}: unknown request key '${key}'${hint}`);
   }

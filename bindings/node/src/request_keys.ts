@@ -1287,16 +1287,6 @@ const VOCAL_SESSION_LIMITS_KEYS = keySet(
   'maxUndoDepth',
   'maxRenderJobs',
 );
-const CHAIN_CONFIG_SECTIONS = keySet(
-  'repair',
-  'eq',
-  'dynamics',
-  'saturation',
-  'spectral',
-  'stereo',
-  'maximizer',
-  'loudness',
-);
 
 const MASTERING_ASSISTANT_SUGGEST_STEREO_REQUEST_KEYS = keySet(
   'left',
@@ -2084,15 +2074,6 @@ export const NESTED_REQUEST_KEYS = {
   restoreVocalEditSession: { limits: VOCAL_SESSION_LIMITS_KEYS },
   createVocalEditSession: { limits: VOCAL_SESSION_LIMITS_KEYS },
 } as const;
-
-export const NESTED_KEY_HINTS: Partial<Record<RequestFn, Record<string, KeySet<string>>>> = {
-  streamingLoudnessGain: { config: CHAIN_CONFIG_SECTIONS },
-  streamingLoudnessGainStereo: { config: CHAIN_CONFIG_SECTIONS },
-  masterAudio: { overrides: CHAIN_CONFIG_SECTIONS },
-  masterAudioAsync: { overrides: CHAIN_CONFIG_SECTIONS },
-  masterAudioStereo: { overrides: CHAIN_CONFIG_SECTIONS },
-  masterAudioStereoAsync: { overrides: CHAIN_CONFIG_SECTIONS },
-};
 
 /** Entry points that take a request object. */
 export type RequestFn = keyof typeof REQUEST_KEYS;

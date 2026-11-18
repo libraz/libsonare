@@ -236,7 +236,6 @@ import type {
   RenderOfflineRequest,
   SidechainSource,
 } from './public_types_engine.js';
-import type { MasteringChainConfig } from './public_types_mastering.js';
 import type {
   Gm2DrumNameRequest,
   Gm2InstrumentNameRequest,
@@ -1077,16 +1076,6 @@ const MasterAudioRequestKeys = keysOf<MasterAudioRequest>()([
   'onProgress',
   'cancel',
   'validate',
-]);
-const MasteringChainConfigKeys = keysOf<MasteringChainConfig>()([
-  'repair',
-  'eq',
-  'dynamics',
-  'saturation',
-  'spectral',
-  'stereo',
-  'maximizer',
-  'loudness',
 ]);
 const MasterAudioStereoRequestKeys = keysOf<MasterAudioStereoRequest>()([
   'left',
@@ -3027,11 +3016,8 @@ export const REQUEST_SHAPES = {
   lufs: { keys: LufsRequestKeys },
   lufsMultichannel: { keys: LufsMultichannelRequestKeys },
   lufsSeriesMultichannel: { keys: LufsSeriesMultichannelRequestKeys },
-  masterAudio: { keys: MasterAudioRequestKeys, hints: { overrides: MasteringChainConfigKeys } },
-  masterAudioStereo: {
-    keys: MasterAudioStereoRequestKeys,
-    hints: { overrides: MasteringChainConfigKeys },
-  },
+  masterAudio: { keys: MasterAudioRequestKeys },
+  masterAudioStereo: { keys: MasterAudioStereoRequestKeys },
   masteringAbMatchLoudness: { keys: MasteringAbMatchLoudnessRequestKeys },
   masteringAbMatchLoudnessStereo: { keys: MasteringAbMatchLoudnessStereoRequestKeys },
   masteringNormalizeLoudness: { keys: MasteringNormalizeLoudnessRequestKeys },
@@ -3181,14 +3167,8 @@ export const REQUEST_SHAPES = {
   splitSilenceCommonWithReport: { keys: SplitSilenceCommonWithReportRequestKeys },
   stft: { keys: StftRequestKeys },
   stftDb: { keys: StftDbRequestKeys },
-  streamingLoudnessGain: {
-    keys: StreamingLoudnessGainRequestKeys,
-    hints: { config: MasteringChainConfigKeys },
-  },
-  streamingLoudnessGainStereo: {
-    keys: StreamingLoudnessGainStereoRequestKeys,
-    hints: { config: MasteringChainConfigKeys },
-  },
+  streamingLoudnessGain: { keys: StreamingLoudnessGainRequestKeys },
+  streamingLoudnessGainStereo: { keys: StreamingLoudnessGainStereoRequestKeys },
   synthesizeRir: { keys: SynthesizeRirRequestKeys },
   tempogram: { keys: TempogramRequestKeys },
   tempogramRatio: { keys: TempogramRatioRequestKeys },

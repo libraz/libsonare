@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { Audio, init, masterAudio, masterAudioStereo } from '../src/index';
+import { Audio, ErrorCode, init, masterAudio, masterAudioStereo } from '../src/index';
 
 const sampleRate = 22_050;
 const samples = Float32Array.from(
@@ -10,7 +10,7 @@ const samples = Float32Array.from(
 beforeAll(async () => init());
 
 describe('WASM masterAudio nested overrides', () => {
-  it('rejects non-numeric and non-boolean overrides instead of silently dropping them', () => {
+  it('refuses a string on a number override by path instead of dropping it', () => {
     expect(() =>
       masterAudio({
         samples,
@@ -18,7 +18,12 @@ describe('WASM masterAudio nested overrides', () => {
         preset: 'pop',
         overrides: { loudness: { targetLufs: 'not-a-number' } } as never,
       }),
-    ).toThrow(TypeError);
+    ).toThrow(
+      expect.objectContaining({
+        code: ErrorCode.InvalidFormat,
+        message: expect.stringContaining('loudness.targetLufs is a string, but takes no token'),
+      }),
+    );
   });
 
   it('applies nested MasteringChainConfig overrides instead of silently dropping them', () => {

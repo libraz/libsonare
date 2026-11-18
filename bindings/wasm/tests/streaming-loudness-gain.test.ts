@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  ErrorCode,
   init,
   masterAudio,
   masterAudioStereo,
@@ -99,6 +100,11 @@ describe('streamingLoudnessGain (WASM)', () => {
         sampleRate: SR,
         config: { 'no.such.key': 1 } as never,
       }),
-    ).toThrow(TypeError);
+    ).toThrow(
+      expect.objectContaining({
+        code: ErrorCode.InvalidFormat,
+        message: expect.stringContaining('unknown chain config key: no.such.key'),
+      }),
+    );
   });
 });

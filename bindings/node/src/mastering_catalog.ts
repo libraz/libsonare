@@ -1,4 +1,4 @@
-import { nestChainConfig } from './internal/chain_config.js';
+import { chainConfigFromJson } from './internal/chain_config.js';
 import { resolveInsertParams } from './internal/processor_params.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { addon } from './native.js';
@@ -31,7 +31,7 @@ export function masteringPresetNames(): MasteringPreset[] {
  * @throws {RangeError} for an unknown `preset`
  */
 export function masteringPresetParams(preset: MasteringPreset): MasteringChainConfig {
-  return nestChainConfig(addon.masteringPresetParams(preset));
+  return chainConfigFromJson(addon.masteringPresetParams(preset));
 }
 
 /**
@@ -44,9 +44,9 @@ export function masteringPresetParams(preset: MasteringPreset): MasteringChainCo
  * takes a chain configuration as JSON; every other call takes the object.
  *
  * @param document - Chain configuration document as JSON:
- *   `{ "version": 1 | 2, "params": { "<stage>.<param>": value } }`, the form the
- *   native CLI's `--chain-config` reads. Version 2 also takes
- *   `dynamics.multibandComp` as a structured object.
+ *   `{ "version": 2, "params": { "<stage>.<param>": value } }`, the form the
+ *   native CLI's `--chain-config` reads. `version` may be left out; dotted keys
+ *   and nested objects name the same path, and giving one path twice is refused.
  * @returns The validated configuration in its canonical nested form.
  * @throws {TypeError} when `document` is not a string
  * @throws {SonareError} with code `InvalidFormat` when the document is not
@@ -63,7 +63,7 @@ export function masteringPresetParams(preset: MasteringPreset): MasteringChainCo
  * ```
  */
 export function masteringChainConfigFromJson(document: string): MasteringChainConfig {
-  return nestChainConfig(addon.masteringChainConfigParams(document));
+  return chainConfigFromJson(addon.masteringChainConfigParams(document));
 }
 
 /**

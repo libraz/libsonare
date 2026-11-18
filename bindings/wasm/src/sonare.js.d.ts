@@ -2794,7 +2794,7 @@ export interface SonareModule {
     samples: Float32Array,
     sampleRate: number,
     params: Record<string, number | boolean | string>,
-  ) => Record<string, number | boolean>;
+  ) => string;
   masteringAudioProfile: (
     samples: Float32Array,
     sampleRate: number,
@@ -2816,7 +2816,7 @@ export interface SonareModule {
     right: Float32Array,
     sampleRate: number,
     params: Record<string, number | boolean | string>,
-  ) => Record<string, number | boolean>;
+  ) => string;
   masteringAudioProfileStereo: (
     left: Float32Array,
     right: Float32Array,
@@ -2992,29 +2992,29 @@ export interface SonareModule {
   masteringChain: (
     samples: Float32Array,
     sampleRate: number,
-    config: Record<string, unknown>,
+    configJson: string | null,
   ) => WasmMasteringChainResult;
   masteringChainStereo: (
     left: Float32Array,
     right: Float32Array,
     sampleRate: number,
-    config: Record<string, unknown>,
+    configJson: string | null,
   ) => WasmMasteringStereoChainResult;
   masteringStreamingLoudnessGain: (
     samples: Float32Array,
     sampleRate: number,
-    config: Record<string, unknown>,
+    configJson: string | null,
   ) => WasmStreamingLoudnessGainResult;
   masteringStreamingLoudnessGainStereo: (
     left: Float32Array,
     right: Float32Array,
     sampleRate: number,
-    config: Record<string, unknown>,
+    configJson: string | null,
   ) => WasmStreamingLoudnessGainResult;
   masteringChainWithProgress: (
     samples: Float32Array,
     sampleRate: number,
-    config: Record<string, unknown>,
+    configJson: string | null,
     progressCallback: ProgressCallback | null,
     cancelCallback: (() => boolean) | null,
   ) => WasmMasteringChainResult;
@@ -3022,41 +3022,41 @@ export interface SonareModule {
     left: Float32Array,
     right: Float32Array,
     sampleRate: number,
-    config: Record<string, unknown>,
+    configJson: string | null,
     progressCallback: ProgressCallback | null,
     cancelCallback: (() => boolean) | null,
   ) => WasmMasteringStereoChainResult;
   masteringPresetNames: () => string[];
-  masteringPresetParams: (preset: string) => Record<string, number | boolean>;
-  masteringChainConfigParams: (document: string) => Record<string, number | boolean>;
+  masteringPresetParams: (preset: string) => string;
+  masteringChainConfigParams: (document: string) => string;
   masteringPlatformNames: () => string[];
   masterAudio: (
-    presetName: string,
+    preset: string | null,
     samples: Float32Array,
     sampleRate: number,
-    overrides: Record<string, number | boolean> | null,
+    overridesJson: string | null,
   ) => WasmMasteringChainResult;
   masterAudioStereo: (
-    presetName: string,
+    preset: string | null,
     left: Float32Array,
     right: Float32Array,
     sampleRate: number,
-    overrides: Record<string, number | boolean> | null,
+    overridesJson: string | null,
   ) => WasmMasteringStereoChainResult;
   masterAudioWithProgress: (
-    presetName: string,
+    preset: string | null,
     samples: Float32Array,
     sampleRate: number,
-    overrides: Record<string, number | boolean> | null,
+    overridesJson: string | null,
     progressCallback: ProgressCallback | null,
     cancelCallback: (() => boolean) | null,
   ) => WasmMasteringChainResult;
   masterAudioStereoWithProgress: (
-    presetName: string,
+    preset: string | null,
     left: Float32Array,
     right: Float32Array,
     sampleRate: number,
-    overrides: Record<string, number | boolean> | null,
+    overridesJson: string | null,
     progressCallback: ProgressCallback | null,
     cancelCallback: (() => boolean) | null,
   ) => WasmMasteringStereoChainResult;
@@ -3761,7 +3761,10 @@ export interface SonareModule {
   ) => WasmRealtimeEngine;
 
   // Streaming - StreamingMasteringChain
-  createStreamingMasteringChain: (config: Record<string, unknown>) => WasmStreamingMasteringChain;
+  createStreamingMasteringChain: (
+    configJson: string | null,
+    options?: { loudnessStaticGainDb?: number; loudnessStaticGainPeakDb?: number },
+  ) => WasmStreamingMasteringChain;
 
   // Streaming - StreamingEqualizer
   createEqualizer: (config: Record<string, unknown>) => WasmStreamingEqualizer;

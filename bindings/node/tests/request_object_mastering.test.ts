@@ -108,7 +108,7 @@ describe('mastering request-object compatibility', () => {
     expect(request).toEqual(positional);
   });
 
-  it('masterAudio takes the nested override spelling only', () => {
+  it('masterAudio takes a dotted override path as its nested spelling', () => {
     const samples = signal();
     const nested = masterAudio({
       samples,
@@ -117,14 +117,13 @@ describe('mastering request-object compatibility', () => {
       overrides: { loudness: { targetLufs: -20 } },
     });
     expect(nested.outputLufs).toBeCloseTo(-20, 1);
-    expect(() =>
-      masterAudio({
-        samples,
-        sampleRate,
-        preset: 'pop',
-        overrides: { 'loudness.targetLufs': -20 } as never,
-      }),
-    ).toThrow(TypeError);
+    const dotted = masterAudio({
+      samples,
+      sampleRate,
+      preset: 'pop',
+      overrides: { 'loudness.targetLufs': -20 } as never,
+    });
+    expect(dotted).toEqual(nested);
   });
 
   it('rejects an unknown override key', () => {

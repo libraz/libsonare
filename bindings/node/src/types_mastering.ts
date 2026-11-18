@@ -13957,12 +13957,11 @@ export interface MasteringChainConfig {
       /** Balance of harmonic content from 0 (even harmonics) to 1 (odd harmonics). Default 0.5. */
       evenOddMix?: number;
       /**
-       * Antialiasing mode ordinal: 0 = none, 3 = 4x oversampling, which adds
-       * 48 samples of latency at any host rate. The ADAA modes (1, 2) name a
-       * member the exciter does not implement and are rejected; an ordinal
-       * outside 0-3 is rejected as out of range.
+       * Antialiasing mode: `'none'`, or `'oversample4x'`, which adds 48 samples
+       * of latency at any host rate. `'adaa1'` and `'adaa2'` name modes the
+       * exciter does not implement and are refused. Default `'none'`.
        */
-      aliasing?: number;
+      aliasing?: 'none' | 'oversample4x';
     };
   };
   /** Spectral modules (airBand). */

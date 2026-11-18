@@ -239,7 +239,7 @@ describe('embedded NUL refusal, mastering names', () => {
   };
 
   it('a chain configuration document is refused by name', () => {
-    const document = '{"version":1,"params":{}}';
+    const document = '{"version":2,"params":{}}';
     expect(() => masteringChainConfigFromJson(document)).not.toThrow();
     expectNulRefusal(() => masteringChainConfigFromJson(`${document}${NUL}x`), 'document');
   });

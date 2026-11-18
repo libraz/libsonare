@@ -29351,3 +29351,20 @@ changed = "left/right -> channels (Float32Array[] holding one plane for mono or 
 domain = "mastering"
 rule = "stereo-pair"
 test = "bindings/wasm/tests/mixing-assistant.test.ts::takes one or two channels of equal length and refuses any other track shape"
+
+[[entry]]
+kind = "type"
+old = "MasteringChainConfig"
+changed = "sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice as InvalidFormat naming the path (was a TypeError or RangeError from the facade); a non-object config stays a TypeError"
+domain = "mastering"
+rule = "config-keys"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the core refuses %s as InvalidFormat"
+
+[[entry]]
+kind = "type"
+old = "MasteringChainConfig"
+changed = "sent to the core as a version 2 chain document: a dotted key names the same path as its nesting, and the core refuses an unknown or retired key, a wrong-kind leaf, a number on a token path, an unknown token or one path given twice as InvalidFormat naming the path (was a TypeError or RangeError from the facade); a non-object config stays a TypeError"
+domain = "mastering"
+rule = "config-keys"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the core refuses %s as InvalidFormat"

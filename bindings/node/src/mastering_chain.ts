@@ -1,4 +1,4 @@
-import { flattenChainConfig } from './internal/chain_config.js';
+import { chainConfigJson } from './internal/chain_config.js';
 import { addon } from './native.js';
 import type {
   MasteringChainConfig,
@@ -105,7 +105,7 @@ export function streamingLoudnessGain(...args: unknown[]): StreamingLoudnessGain
     addon.masteringStreamingLoudnessGain(
       r.samples,
       r.sampleRate,
-      flattenChainConfig(r.config ?? {}),
+      chainConfigJson('streamingLoudnessGain', 'config', r.config),
     ),
   );
 }
@@ -127,7 +127,7 @@ export function streamingLoudnessGainStereo(
       r.left,
       r.right,
       r.sampleRate,
-      flattenChainConfig(r.config ?? {}),
+      chainConfigJson('streamingLoudnessGainStereo', 'config', r.config),
     ),
   );
 }
@@ -207,33 +207,21 @@ export function masterAudio(...args: unknown[]): MasteringChainResult {
   ) {
     throw new TypeError('masterAudio: give a preset or overrides');
   }
-  const flat = flattenChainConfig(r.overrides ?? {});
+  const overrides = chainConfigJson('masterAudio', 'overrides', r.overrides);
+  const preset = r.preset ?? null;
   const progress = r.onProgress ?? undefined;
   const cancel = r.cancel ?? undefined;
-  if (r.preset === undefined || r.preset === null) {
-    return chainResultFromNative(
-      progress || cancel
-        ? addon.masteringChainWithProgress(
-            r.samples,
-            r.sampleRate,
-            flat,
-            progress ?? (() => {}),
-            cancel ?? (() => false),
-          )
-        : addon.masteringChain(r.samples, r.sampleRate, flat),
-    );
-  }
   return chainResultFromNative(
     progress || cancel
       ? addon.masterAudioWithProgress(
-          r.preset,
+          preset,
           r.samples,
           r.sampleRate,
-          flat,
+          overrides,
           progress ?? (() => {}),
           cancel ?? (() => false),
         )
-      : addon.masterAudio(r.preset, r.samples, r.sampleRate, flat),
+      : addon.masterAudio(preset, r.samples, r.sampleRate, overrides),
   );
 }
 
@@ -260,35 +248,22 @@ export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringC
   ) {
     throw new TypeError('masterAudioStereo: give a preset or overrides');
   }
-  const flat = flattenChainConfig(r.overrides ?? {});
+  const overrides = chainConfigJson('masterAudioStereo', 'overrides', r.overrides);
+  const preset = r.preset ?? null;
   const progress = r.onProgress ?? undefined;
   const cancel = r.cancel ?? undefined;
-  if (r.preset === undefined || r.preset === null) {
-    return chainResultFromNative(
-      progress || cancel
-        ? addon.masteringChainStereoWithProgress(
-            r.left,
-            r.right,
-            r.sampleRate,
-            flat,
-            progress ?? (() => {}),
-            cancel ?? (() => false),
-          )
-        : addon.masteringChainStereo(r.left, r.right, r.sampleRate, flat),
-    );
-  }
   return chainResultFromNative(
     progress || cancel
       ? addon.masterAudioStereoWithProgress(
-          r.preset,
+          preset,
           r.left,
           r.right,
           r.sampleRate,
-          flat,
+          overrides,
           progress ?? (() => {}),
           cancel ?? (() => false),
         )
-      : addon.masterAudioStereo(r.preset, r.left, r.right, r.sampleRate, flat),
+      : addon.masterAudioStereo(preset, r.left, r.right, r.sampleRate, overrides),
   );
 }
 
@@ -361,7 +336,7 @@ export function masterAudioAsync(...args: unknown[]): Promise<MasteringChainResu
         r.preset ?? null,
         r.samples,
         r.sampleRate,
-        flattenChainConfig(r.overrides ?? {}),
+        chainConfigJson('masterAudioAsync', 'overrides', r.overrides),
       )
       .then((result: object) => chainResultFromNative<MasteringChainResult>(result));
   } catch (error) {
@@ -392,7 +367,7 @@ export function masterAudioStereoAsync(
         r.left,
         r.right,
         r.sampleRate,
-        flattenChainConfig(r.overrides ?? {}),
+        chainConfigJson('masterAudioStereoAsync', 'overrides', r.overrides),
       )
       .then((result: object) => chainResultFromNative<MasteringChainStereoResult>(result));
   } catch (error) {

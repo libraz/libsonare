@@ -51,6 +51,13 @@ function expectThrows(fn: () => unknown, cls: ErrorConstructor): void {
   expect(errorOf(fn)).toBeInstanceOf(cls);
 }
 
+function expectInvalidFormat(fn: () => unknown, message: string): void {
+  const error = errorOf(fn);
+  expect(error).toBeInstanceOf(SonareError);
+  expect((error as SonareError).codeName).toBe('InvalidFormat');
+  expect((error as Error).message).toContain(message);
+}
+
 function expectClose(a: ArrayLike<number>, b: ArrayLike<number>, tol = 1e-4): void {
   expect(a.length).toBe(b.length);
   for (let i = 0; i < a.length; i++) {
@@ -333,73 +340,162 @@ describe('chain config: nested form only, tokens only', () => {
   });
 
   it.each([
-    ['denoise.mode number', { repair: { denoise: { enabled: true, mode: 1 } } }, TypeError],
+    [
+      'denoise.mode number',
+      { repair: { denoise: { enabled: true, mode: 1 } } },
+      'repair.denoise.mode takes a token, not a number',
+    ],
     [
       'denoise.mode synonym',
       { repair: { denoise: { enabled: true, mode: 'log_mmse' } } },
-      RangeError,
+      "repair.denoise.mode: unknown name 'log_mmse'",
     ],
-    ['noiseEstimator number', { repair: { denoise: { noiseEstimator: 2 } } }, TypeError],
-    ['decrackle.mode number', { repair: { decrackle: { mode: 1 } } }, TypeError],
-    ['dehum.mode number', { repair: { dehum: { mode: 0 } } }, TypeError],
+    [
+      'noiseEstimator number',
+      { repair: { denoise: { noiseEstimator: 2 } } },
+      'repair.denoise.noiseEstimator takes a token, not a number',
+    ],
+    [
+      'decrackle.mode number',
+      { repair: { decrackle: { mode: 1 } } },
+      'repair.decrackle.mode takes a token, not a number',
+    ],
+    [
+      'dehum.mode number',
+      { repair: { dehum: { mode: 0 } } },
+      'repair.dehum.mode takes a token, not a number',
+    ],
     [
       'crossover.slope number',
       { dynamics: { multibandComp: { crossover: { slope: 1 } } } },
-      TypeError,
+      'dynamics.multibandComp.crossover.slope takes a token, not a number',
     ],
     [
       'crossover.mode number',
       { dynamics: { multibandComp: { crossover: { mode: 2 } } } },
-      TypeError,
+      'dynamics.multibandComp.crossover.mode takes a token, not a number',
     ],
     [
       'band detector old spelling',
       { dynamics: { multibandComp: { bands: [{ detector: 'log_rms' }] } } },
-      RangeError,
+      "dynamics.multibandComp.bands.0.detector: unknown name 'log_rms'",
     ],
     [
       'band detector number',
       { dynamics: { multibandComp: { bands: [{ detector: 1 }] } } },
-      TypeError,
+      'dynamics.multibandComp.bands.0.detector takes a token, not a number',
     ],
-  ])('refuses %s', (_name, overrides, cls) => {
-    expectThrows(
+  ])('the core refuses %s as InvalidFormat, naming the path', (_name, overrides, message) => {
+    expectInvalidFormat(
       () =>
         sonare.masterAudio({
           samples: left,
           sampleRate,
           overrides: overrides as MasteringChainConfig,
         }),
-      cls as ErrorConstructor,
+      message,
     );
   });
 
   it.each([
-    ['boolean denoise shorthand', { repair: { denoise: true } }],
-    ['flat repair.nFft', { repair: { nFft: 1024 } }],
-    ['flat repair.hopLength', { repair: { hopLength: 256 } }],
-    ['flat repair.ddAlpha', { repair: { ddAlpha: 0.9 } }],
-    ['flat repair.reductionDb', { repair: { reductionDb: 12 } }],
-    ['flat repair.gainFloor', { repair: { gainFloor: 0.2 } }],
-    ['denoise.gainFloor', { repair: { denoise: { gainFloor: 0.2 } } }],
-    ['eq.tiltDb', { eq: { tiltDb: 1 } }],
-    ['eq.pivotHz', { eq: { pivotHz: 1000 } }],
-    ['declip.clipThreshold', { repair: { declip: { clipThreshold: 0.9 } } }],
-    ['dotted key', { 'loudness.targetLufs': -20 }],
-    ['band sidechainHpfHz', { dynamics: { multibandComp: { bands: [{ sidechainHpfHz: 100 }] } } }],
+    [
+      'boolean denoise shorthand',
+      { repair: { denoise: true } },
+      'unknown chain config key: repair.denoise',
+    ],
+    ['flat repair.nFft', { repair: { nFft: 1024 } }, '(renamed to repair.denoise.nFft)'],
+    [
+      'flat repair.hopLength',
+      { repair: { hopLength: 256 } },
+      '(renamed to repair.denoise.hopLength)',
+    ],
+    ['flat repair.ddAlpha', { repair: { ddAlpha: 0.9 } }, '(renamed to repair.denoise.ddAlpha)'],
+    [
+      'flat repair.reductionDb',
+      { repair: { reductionDb: 12 } },
+      '(renamed to repair.denoise.reductionDb)',
+    ],
+    [
+      'flat repair.gainFloor',
+      { repair: { gainFloor: 0.2 } },
+      '(renamed to repair.denoise.reductionDb)',
+    ],
+    [
+      'denoise.gainFloor',
+      { repair: { denoise: { gainFloor: 0.2 } } },
+      '(renamed to repair.denoise.reductionDb)',
+    ],
+    ['eq.tiltDb', { eq: { tiltDb: 1 } }, '(renamed to eq.tilt.tiltDb)'],
+    ['eq.pivotHz', { eq: { pivotHz: 1000 } }, '(renamed to eq.tilt.pivotHz)'],
+    [
+      'declip.clipThreshold',
+      { repair: { declip: { clipThreshold: 0.9 } } },
+      '(renamed to repair.declip.clipThresholdDb)',
+    ],
+    [
+      'band sidechainHpfHz',
+      { dynamics: { multibandComp: { bands: [{ sidechainHpfHz: 100 }] } } },
+      '(renamed to dynamics.multibandComp.bands.0.sidechainHighPassHz)',
+    ],
     [
       'band sidechainHpfEnabled',
       { dynamics: { multibandComp: { bands: [{ sidechainHpfEnabled: true }] } } },
+      '(renamed to dynamics.multibandComp.bands.0.sidechainHighPassHz)',
     ],
-  ])('refuses the removed spelling: %s', (_name, overrides) => {
-    expectThrows(
+  ])(
+    'the core refuses the removed spelling %s, naming its successor',
+    (_name, overrides, message) => {
+      expectInvalidFormat(
+        () =>
+          sonare.masterAudio({
+            samples: left,
+            sampleRate,
+            overrides: overrides as MasteringChainConfig,
+          }),
+        message,
+      );
+    },
+  );
+
+  it('takes a dotted path as the same chain as its nested spelling', () => {
+    const nested = sonare.masterAudio({
+      samples: left,
+      sampleRate,
+      overrides: { loudness: { targetLufs: -20 }, eq: { tilt: { tiltDb: 1 } } },
+    });
+    const dotted = sonare.masterAudio({
+      samples: left,
+      sampleRate,
+      overrides: { 'loudness.targetLufs': -20, eq: { 'tilt.tiltDb': 1 } } as MasteringChainConfig,
+    });
+    expect(Array.from(dotted.samples)).toEqual(Array.from(nested.samples));
+  });
+
+  it('refuses one path given twice, once nested and once dotted', () => {
+    expectInvalidFormat(
       () =>
         sonare.masterAudio({
           samples: left,
           sampleRate,
-          overrides: overrides as MasteringChainConfig,
+          overrides: {
+            loudness: { targetLufs: -14 },
+            'loudness.targetLufs': -14,
+          } as MasteringChainConfig,
         }),
-      TypeError,
+      'loudness.targetLufs is given twice',
+    );
+  });
+
+  it('refuses a string on a number leaf the same way offline and streaming', () => {
+    const bad = { maximizer: { truePeakLimiter: { ceilingDb: '-1.0' } } } as never;
+    const message = 'maximizer.truePeakLimiter.ceilingDb is a string, but takes no token';
+    expectInvalidFormat(
+      () => sonare.masterAudio({ samples: left, sampleRate, overrides: bad }),
+      message,
+    );
+    expectInvalidFormat(
+      () => new sonare.StreamingMasteringChain({ sampleRate, numChannels: 1, ...(bad as object) }),
+      message,
     );
   });
 
@@ -413,9 +509,15 @@ describe('chain config: nested form only, tokens only', () => {
         } as MasteringChainConfig,
       });
     expect(() => run(-1)).not.toThrow();
-    expectThrows(() => run(0.5), RangeError);
-    expectThrows(() => run(Number.NaN), RangeError);
-    expectThrows(() => run('-1'), TypeError);
+    expectInvalidFormat(() => run(0.5), 'repair.declip.clipThresholdDb must be at or below 0 dBFS');
+    expectInvalidFormat(
+      () => run(Number.NaN),
+      'repair.declip.clipThresholdDb is null, not a number, boolean or token',
+    );
+    expectInvalidFormat(
+      () => run('-1'),
+      'repair.declip.clipThresholdDb is a string, but takes no token',
+    );
   });
 
   it('band sidechainHighPassHz is a positive frequency; absent is off', () => {
@@ -429,9 +531,12 @@ describe('chain config: nested form only, tokens only', () => {
       });
     expect(() => run(100)).not.toThrow();
     expect(() => run(undefined)).not.toThrow();
-    expectThrows(() => run(0), RangeError);
-    expectThrows(() => run(-5), RangeError);
-    expectThrows(() => run('100'), TypeError);
+    expectInvalidFormat(() => run(0), 'sidechainHighPassHz');
+    expectInvalidFormat(() => run(-5), 'sidechainHighPassHz');
+    expectInvalidFormat(
+      () => run('100'),
+      'dynamics.multibandComp.bands.0.sidechainHighPassHz is a string, but takes no token',
+    );
   });
 
   it('the assistant chain nests, with tokens and dBFS, and passes straight back', () => {
@@ -748,13 +853,13 @@ describe('native still uses the old spelling', () => {
   });
 
   const raw = () => getSonareModule() as unknown as Record<string, Fn>;
-  const pop = () => raw().masteringPresetParams('pop') as Record<string, unknown>;
+  const pop = () => raw().masteringPresetParams('pop') as string;
 
   it.each([
     [
       'the chain result names the loudness range outputLra and loudnessRange',
       () => {
-        const result = raw().masterAudio('pop', left, sampleRate, {}) as Record<string, unknown>;
+        const result = raw().masterAudio('pop', left, sampleRate, null) as Record<string, unknown>;
         const report = result.report as Record<string, Record<string, unknown>>;
         return [
           'outputLra' in result && !('outputLoudnessRangeLu' in result),
@@ -765,15 +870,20 @@ describe('native still uses the old spelling', () => {
     [
       'streaming loudness gain names the true peak truePeakDb',
       () => {
-        const result = raw().masteringStreamingLoudnessGain(left, sampleRate, {
-          __flatParams: {},
-        }) as Record<string, unknown>;
+        const result = raw().masteringStreamingLoudnessGain(left, sampleRate, null) as Record<
+          string,
+          unknown
+        >;
         return ['truePeakDb' in result && !('truePeakDbtp' in result)];
       },
     ],
     [
-      'a preset comes back as flat dotted keys',
-      () => [Object.keys(pop()).every((key) => key.includes('.')), Object.keys(pop()).length > 0],
+      'a preset comes back as version 2 document text with dotted params',
+      () => {
+        const document = JSON.parse(pop()) as { version: number; params: object };
+        const keys = Object.keys(document.params);
+        return [document.version === 2, keys.every((key) => key.includes('.')), keys.length > 0];
+      },
     ],
   ])('%s', (_name, probe) => {
     for (const holds of probe() as boolean[]) {

@@ -1,4 +1,4 @@
-import { nestChainConfig } from './internal/chain_config.js';
+import { chainConfigFromDocument, chainConfigFromJson } from './internal/chain_config.js';
 import { parseRecordJson } from './internal/record_json.js';
 import { audioDefectsFromNative } from './internal/repair_common.js';
 import { masteringPlatformNames, masteringPresetNames } from './mastering_catalog.js';
@@ -127,7 +127,7 @@ function assistantResultFromNative(json: string): MasteringAssistantResult {
     profile: MasteringAssistantResult['profile'];
   };
   return {
-    chainConfig: nestChainConfig(native.chainConfig.params),
+    chainConfig: chainConfigFromDocument(native.chainConfig),
     explanation: native.explanation,
     profile: native.profile,
   };
@@ -247,7 +247,7 @@ export function masteringAssistantSuggestChain(
 export function masteringAssistantSuggestChain(...args: unknown[]): MasteringChainConfig {
   const r = sampleOneShot<MasteringAssistantSuggestRequest>('masteringAssistantSuggestChain', args);
   assertAudioInput('masteringAssistantSuggestChain', r.samples, r.sampleRate, r);
-  return nestChainConfig(
+  return chainConfigFromJson(
     addon.masteringAssistantSuggestChain(
       r.samples,
       r.sampleRate,
@@ -343,7 +343,7 @@ export function masteringAssistantSuggestChainStereo(
   );
   assertAudioInput('masteringAssistantSuggestChainStereo', r.left, r.sampleRate, r, 'left');
   assertAudioInput('masteringAssistantSuggestChainStereo', r.right, r.sampleRate, r, 'right');
-  return nestChainConfig(
+  return chainConfigFromJson(
     addon.masteringAssistantSuggestChainStereo(
       r.left,
       r.right,

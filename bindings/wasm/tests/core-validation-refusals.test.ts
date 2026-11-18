@@ -138,7 +138,7 @@ type RawInverse = {
   melToAudio(...args: unknown[]): Float32Array;
   timeStretchEx(...args: unknown[]): Float32Array;
   pitchShiftEx(...args: unknown[]): Float32Array;
-  createStreamingMasteringChain(config: Record<string, unknown>): {
+  createStreamingMasteringChain(configJson: string | null): {
     prepare(sampleRate: number, maxBlockSize: number, numChannels: number): void;
     delete(): void;
   };
@@ -340,7 +340,7 @@ describe('streaming mastering chain prepare refusals come from the core', () => 
       numChannels: channels,
       maxBlockSize: max_block_size,
     });
-    const handle = raw().createStreamingMasteringChain({ __flatParams: {} });
+    const handle = raw().createStreamingMasteringChain(null);
     try {
       expect(() => handle.prepare(sample_rate, max_block_size, channels)).not.toThrow();
     } finally {
@@ -352,7 +352,7 @@ describe('streaming mastering chain prepare refusals come from the core', () => 
   it.each(refused)('refuses $id', ({ sample_rate, max_block_size, cause, message }) => {
     const kind = errorClassFor[cause as Cause];
     const text = literal(message as string);
-    const handle = raw().createStreamingMasteringChain({ __flatParams: {} });
+    const handle = raw().createStreamingMasteringChain(null);
     try {
       const calls: Array<() => unknown> = [
         () =>

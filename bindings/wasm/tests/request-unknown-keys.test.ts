@@ -361,20 +361,18 @@ describe('reported mistakes', () => {
     await api.init();
   });
 
-  it('streamingLoudnessGain points a chain section at config', () => {
+  it('streamingLoudnessGain refuses a chain section left at the top level', () => {
     expect(
       message(() =>
         api.streamingLoudnessGain({ samples, sampleRate: 22050, loudness: {} } as never),
       ),
-    ).toBe(
-      "streamingLoudnessGain: unknown request key 'loudness' ('loudness' belongs under 'config')",
-    );
+    ).toBe("streamingLoudnessGain: unknown request key 'loudness'");
   });
 
-  it('masterAudio points a chain section at overrides', () => {
+  it('masterAudio refuses a chain section left at the top level', () => {
     expect(
       message(() => api.masterAudio({ samples, sampleRate: 22050, loudness: {} } as never)),
-    ).toBe("masterAudio: unknown request key 'loudness' ('loudness' belongs under 'overrides')");
+    ).toBe("masterAudio: unknown request key 'loudness'");
   });
 
   it('analyze takes analysis options and progress callbacks flat', () => {

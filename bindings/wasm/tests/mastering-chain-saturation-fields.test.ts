@@ -1,13 +1,12 @@
 /**
- * The object-shaped mastering-chain reader describes the tape and exciter
- * stages field by field, so a field it does not read is silently dropped. These
- * cover the two that were missing, and — because this reader builds the config
- * directly rather than through the C ABI — that an antialiasing ordinal naming
- * no mode is rejected here instead of being cast into the config.
+ * The tape oversampling factor and the exciter antialiasing mode are declared
+ * on the chain config type, so these pin that the core reads both: a valid value
+ * runs, a mode given as a number or an unknown name is refused by path, and a
+ * mode the exciter does not implement is refused by the processor.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, masterAudio } from '../src/index';
+import { ErrorCode, init, masterAudio } from '../src/index';
 
 const sampleRate = 22_050;
 const samples = Float32Array.from({ length: 4096 }, (_, i) =>
@@ -62,10 +61,10 @@ describe('WASM mastering chain saturation fields', () => {
   });
 
   it('reads the exciter antialiasing mode', () => {
-    // 0 = none, 3 = 4x oversampling: the two modes the exciter implements.
+    // none and oversample4x: the two modes the exciter implements.
     // Measured difference between them on this signal: 0.0028, against a
     // repeat-render floor of exactly 0.
-    const render = (aliasing: number) =>
+    const render = (aliasing: 'none' | 'oversample4x') =>
       masterAudio({
         samples,
         sampleRate,
@@ -73,32 +72,37 @@ describe('WASM mastering chain saturation fields', () => {
           saturation: { exciter: { enabled: true, amount: 1.0, driveDb: 12, aliasing } },
         },
       }).samples;
-    const none = render(0);
+    const none = render('none');
     expect(none).toHaveLength(samples.length);
-    expect(maxDifference(none, render(0))).toBe(0);
-    expect(maxDifference(none, render(3))).toBeGreaterThan(1e-4);
+    expect(maxDifference(none, render('none'))).toBe(0);
+    expect(maxDifference(none, render('oversample4x'))).toBeGreaterThan(1e-4);
   });
 
-  it('rejects an antialiasing ordinal that names no mode', () => {
-    // The reader bypasses the C-ABI enum guard, so an ordinal outside the
-    // declared set must be rejected here rather than cast into the config.
-    for (const aliasing of [-1, 4, 99]) {
+  it('refuses a mode given as a number or an unknown name, naming the path', () => {
+    const cases: [unknown, string][] = [
+      [3, 'saturation.exciter.aliasing takes a token, not a number'],
+      ['bogus', "saturation.exciter.aliasing: unknown name 'bogus'"],
+    ];
+    for (const [aliasing, message] of cases) {
       expect(() =>
         masterAudio({
           samples,
           sampleRate,
-          overrides: {
-            saturation: { exciter: { enabled: true, amount: 0.5, aliasing } },
-          },
+          overrides: { saturation: { exciter: { enabled: true, amount: 0.5, aliasing } } } as never,
         }),
-      ).toThrow();
+      ).toThrow(
+        expect.objectContaining({
+          code: ErrorCode.InvalidFormat,
+          message: expect.stringContaining(message),
+        }),
+      );
     }
   });
 
   it('rejects the antialiasing modes the exciter does not implement', () => {
-    // 1 and 2 name real modes (ADAA), so they pass the ordinal range check and
-    // are refused by the processor's own validation instead.
-    for (const aliasing of [1, 2]) {
+    // adaa1 and adaa2 name real modes, so the document reader takes them and
+    // the processor's own validation refuses them.
+    for (const aliasing of ['adaa1', 'adaa2'] as never[]) {
       expect(() =>
         masterAudio({
           samples,

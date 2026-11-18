@@ -1,4 +1,4 @@
-import { flattenChainConfig, nestChainConfig } from './internal/chain_config.js';
+import { chainConfigFromJson, chainConfigJson } from './internal/chain_config.js';
 import { getSonareModule } from './module_state.js';
 import type {
   MasteringChainConfig,
@@ -165,11 +165,6 @@ export function normalizeStereo(request: NormalizeStereoRequest): NormalizeStere
   );
 }
 
-/** Internal envelope selecting the core dotted-param parser in the embind layer. */
-function canonicalChainConfig(config: MasteringChainConfig): Record<string, unknown> {
-  return { __flatParams: flattenChainConfig(config) };
-}
-
 type NativeResult = Record<string, unknown>;
 
 // Native still names the loudness range `loudnessRange` / `outputLra`.
@@ -264,7 +259,7 @@ export function streamingLoudnessGain(...args: unknown[]): StreamingLoudnessGain
     requireModule().masteringStreamingLoudnessGain(
       r.samples,
       r.sampleRate,
-      canonicalChainConfig(r.config ?? {}),
+      chainConfigJson('streamingLoudnessGain', 'config', r.config),
     ),
   );
 }
@@ -284,7 +279,7 @@ export function streamingLoudnessGainStereo(
       r.left,
       r.right,
       r.sampleRate,
-      canonicalChainConfig(r.config ?? {}),
+      chainConfigJson('streamingLoudnessGainStereo', 'config', r.config),
     ),
   );
 }
@@ -354,7 +349,7 @@ export function masteringPresetNames(): MasteringPreset[] {
  */
 export function masteringPresetParams(preset: MasteringPreset): MasteringChainConfig {
   assertString('masteringPresetParams', preset, 'preset');
-  return nestChainConfig(requireModule().masteringPresetParams(preset));
+  return chainConfigFromJson(requireModule().masteringPresetParams(preset));
 }
 
 /**
@@ -367,9 +362,9 @@ export function masteringPresetParams(preset: MasteringPreset): MasteringChainCo
  * takes a chain configuration as JSON; every other call takes the object.
  *
  * @param document - Chain configuration document as JSON:
- *   `{ "version": 1 | 2, "params": { "<stage>.<param>": value } }`, the form the
- *   native CLI's `--chain-config` reads. Version 2 also takes
- *   `dynamics.multibandComp` as a structured object.
+ *   `{ "version": 2, "params": { "<stage>.<param>": value } }`, the form the
+ *   native CLI's `--chain-config` reads. `version` may be left out; dotted keys
+ *   and nested objects name the same path, and giving one path twice is refused.
  * @returns The validated configuration in its canonical nested form.
  * @throws {TypeError} when `document` is not a string
  * @throws {SonareError} with code `InvalidFormat` when the document is not
@@ -387,7 +382,7 @@ export function masteringPresetParams(preset: MasteringPreset): MasteringChainCo
  */
 export function masteringChainConfigFromJson(document: string): MasteringChainConfig {
   assertString('masteringChainConfigFromJson', document, 'document');
-  return nestChainConfig(requireModule().masteringChainConfigParams(document));
+  return chainConfigFromJson(requireModule().masteringChainConfigParams(document));
 }
 
 /**
@@ -434,35 +429,22 @@ export function masterAudio(...args: unknown[]): MasteringChainResult {
   ) {
     throw new TypeError('masterAudio: give a preset or overrides');
   }
-  const flat = flattenChainConfig(r.overrides ?? {});
+  const overrides = chainConfigJson('masterAudio', 'overrides', r.overrides);
+  const preset = r.preset ?? null;
   const progress = r.onProgress ?? undefined;
   const cancel = r.cancel ?? undefined;
   const module = requireModule();
-  if (r.preset === undefined || r.preset === null) {
-    const config = { __flatParams: flat };
-    return chainResultFromNative(
-      progress || cancel
-        ? module.masteringChainWithProgress(
-            r.samples,
-            r.sampleRate,
-            config,
-            progress ?? (() => {}),
-            cancel ?? (() => false),
-          )
-        : module.masteringChain(r.samples, r.sampleRate, config),
-    );
-  }
   return chainResultFromNative(
     progress || cancel
       ? module.masterAudioWithProgress(
-          r.preset,
+          preset,
           r.samples,
           r.sampleRate,
-          flat,
+          overrides,
           progress ?? (() => {}),
           cancel ?? (() => false),
         )
-      : module.masterAudio(r.preset, r.samples, r.sampleRate, flat),
+      : module.masterAudio(preset, r.samples, r.sampleRate, overrides),
   );
 }
 
@@ -495,36 +477,22 @@ export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringC
   ) {
     throw new TypeError('masterAudioStereo: give a preset or overrides');
   }
-  const flat = flattenChainConfig(r.overrides ?? {});
+  const overrides = chainConfigJson('masterAudioStereo', 'overrides', r.overrides);
+  const preset = r.preset ?? null;
   const progress = r.onProgress ?? undefined;
   const cancel = r.cancel ?? undefined;
   const module = requireModule();
-  if (r.preset === undefined || r.preset === null) {
-    const config = { __flatParams: flat };
-    return chainResultFromNative(
-      progress || cancel
-        ? module.masteringChainStereoWithProgress(
-            r.left,
-            r.right,
-            r.sampleRate,
-            config,
-            progress ?? (() => {}),
-            cancel ?? (() => false),
-          )
-        : module.masteringChainStereo(r.left, r.right, r.sampleRate, config),
-    );
-  }
   return chainResultFromNative(
     progress || cancel
       ? module.masterAudioStereoWithProgress(
-          r.preset,
+          preset,
           r.left,
           r.right,
           r.sampleRate,
-          flat,
+          overrides,
           progress ?? (() => {}),
           cancel ?? (() => false),
         )
-      : module.masterAudioStereo(r.preset, r.left, r.right, r.sampleRate, flat),
+      : module.masterAudioStereo(preset, r.left, r.right, r.sampleRate, overrides),
   );
 }

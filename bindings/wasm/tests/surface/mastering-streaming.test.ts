@@ -456,9 +456,9 @@ describe('native still uses the old spelling', () => {
   });
 
   it('chain construction and prepare are two native steps', () => {
-    const raw = getSonareModule().createStreamingMasteringChain({
-      __flatParams: { 'eq.tilt.tiltDb': 1 },
-    });
+    const raw = getSonareModule().createStreamingMasteringChain(
+      JSON.stringify({ params: { 'eq.tilt.tiltDb': 1 } }),
+    );
     try {
       expect(typeof raw.prepare).toBe('function');
       raw.prepare(sampleRate, 128, 1);

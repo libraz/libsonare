@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as sonare from '../src/index.js';
-import { NESTED_KEY_HINTS, NESTED_REQUEST_KEYS, REQUEST_KEYS } from '../src/request_keys.js';
+import { NESTED_REQUEST_KEYS, REQUEST_KEYS } from '../src/request_keys.js';
 
 type Entry = (request: unknown) => unknown;
 
@@ -165,14 +165,11 @@ describe('nested options objects refuse keys outside their declared set', () => 
 });
 
 describe('a misplaced key points at the object it belongs under', () => {
-  const hinted = [
-    ...Object.entries(NESTED_REQUEST_KEYS).flatMap(([name, fields]) =>
+  const hinted = Object.entries(NESTED_REQUEST_KEYS)
+    .flatMap(([name, fields]) =>
       Object.entries(fields).map(([field, keys]) => ({ name, field, keys: keys as object })),
-    ),
-    ...Object.entries(NESTED_KEY_HINTS).flatMap(([name, fields]) =>
-      Object.entries(fields ?? {}).map(([field, keys]) => ({ name, field, keys: keys as object })),
-    ),
-  ].filter(({ name }) => !methodShapes.includes(name));
+    )
+    .filter(({ name }) => !methodShapes.includes(name));
 
   it.each(hinted)('$name suggests $field', async ({ name, field, keys }) => {
     const own = REQUEST_KEYS[name as keyof typeof REQUEST_KEYS];
@@ -210,7 +207,7 @@ describe('reported repros', () => {
   it('masterAudio refuses a loudness section left at the top level', () => {
     expect(() =>
       sonare.masterAudio({ samples, sampleRate: 22050, loudness: { targetLufs: -14 } } as never),
-    ).toThrow("masterAudio: unknown request key 'loudness' ('loudness' belongs under 'overrides')");
+    ).toThrow(/^masterAudio: unknown request key 'loudness'$/);
   });
 
   it('analyze with onProgress refuses an unknown request key and a nested options object', () => {

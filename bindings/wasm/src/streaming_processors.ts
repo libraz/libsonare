@@ -1,4 +1,4 @@
-import { flattenChainConfig } from './internal/chain_config.js';
+import { chainConfigJson } from './internal/chain_config.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -178,12 +178,18 @@ export class StreamingMasteringChain {
     if (numChannels !== 1 && numChannels !== 2) {
       throw new RangeError(`${fn}: numChannels must be 1 or 2`);
     }
+    const options: Record<string, number> = {};
+    if (loudnessStaticGainDb !== undefined) {
+      options.loudnessStaticGainDb = loudnessStaticGainDb;
+    }
+    if (loudnessStaticGainPeakDb !== undefined) {
+      options.loudnessStaticGainPeakDb = loudnessStaticGainPeakDb;
+    }
     const module = getSonareModule();
-    this.chainHandle = module.createStreamingMasteringChain({
-      __flatParams: flattenChainConfig(chainConfig),
-      loudnessStaticGainDb,
-      loudnessStaticGainPeakDb,
-    });
+    this.chainHandle = module.createStreamingMasteringChain(
+      chainConfigJson(fn, 'config', chainConfig),
+      options,
+    );
     try {
       this.chainHandle.prepare(sampleRate, blockSize, numChannels);
     } catch (error) {

@@ -1,4 +1,4 @@
-import { flattenChainConfig, STREAMING_ONLY_CONFIG_KEYS } from './internal/chain_config.js';
+import { chainConfigJson } from './internal/chain_config.js';
 import { WINDOW_TYPES } from './internal/window_type.js';
 import { addon } from './native.js';
 import type {
@@ -142,26 +142,31 @@ export class StreamingMasteringChain {
   constructor(config: StreamingMasteringChainConfig) {
     const fn = 'StreamingMasteringChain';
     assertConfigObject(fn, config);
-    const { sampleRate, maxBlockSize, numChannels, ...chainConfig } = config;
+    const {
+      sampleRate,
+      maxBlockSize,
+      numChannels,
+      loudnessStaticGainDb,
+      loudnessStaticGainPeakDb,
+      ...chainConfig
+    } = config;
     assertIntegerValue(fn, sampleRate, 'sampleRate');
     const blockSize = optionalIntegerBlockSize(fn, maxBlockSize);
     assertIntegerValue(fn, numChannels, 'numChannels');
     if (numChannels !== 1 && numChannels !== 2) {
       throw new RangeError(`${fn}: numChannels must be 1 or 2`);
     }
-    // The addon keeps only the number and boolean leaves of what it is given;
-    // anything else is skipped with no error. The canonical flattener runs
-    // first so a value that arrived as a string from a JSON preset or a UI
-    // field is rejected by dotted path, as on the offline path, and an enum
-    // given by name reaches the addon as its number.
-    const loose = chainConfig as Record<string, unknown>;
-    const native: Record<string, unknown> = flattenChainConfig(loose, STREAMING_ONLY_CONFIG_KEYS);
-    for (const key of STREAMING_ONLY_CONFIG_KEYS) {
-      if (loose[key] !== undefined) {
-        native[key] = loose[key];
-      }
+    const options: Record<string, number> = {};
+    if (loudnessStaticGainDb !== undefined) {
+      options.loudnessStaticGainDb = loudnessStaticGainDb;
     }
-    this.native = new addon.StreamingMasteringChain(native);
+    if (loudnessStaticGainPeakDb !== undefined) {
+      options.loudnessStaticGainPeakDb = loudnessStaticGainPeakDb;
+    }
+    this.native = new addon.StreamingMasteringChain(
+      chainConfigJson(fn, 'config', chainConfig),
+      options,
+    );
     try {
       this.native.prepare(sampleRate, blockSize, numChannels);
     } catch (error) {

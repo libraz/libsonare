@@ -311,7 +311,7 @@ describe('streaming mastering chain prepare refusals come from the core', () => 
       numChannels: channels,
       maxBlockSize: max_block_size,
     });
-    const raw = new addon.StreamingMasteringChain({});
+    const raw = new addon.StreamingMasteringChain(null);
     try {
       expect(() => raw.prepare(sample_rate, max_block_size, channels)).not.toThrow();
     } finally {
@@ -333,7 +333,7 @@ describe('streaming mastering chain prepare refusals come from the core', () => 
       kind,
       text,
     );
-    const raw = new addon.StreamingMasteringChain({});
+    const raw = new addon.StreamingMasteringChain(null);
     try {
       expectRefusal(() => raw.prepare(sample_rate, max_block_size, channels), kind, text);
     } finally {
