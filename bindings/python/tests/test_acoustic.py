@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 import math
+from collections.abc import Callable
 
 import numpy as np
 import pytest
@@ -499,6 +500,44 @@ def test_a_seed_the_c_field_cannot_express_is_rejected_rather_than_folded() -> N
     # The whole uint32 range stays reachable, and 0 is a seed of its own.
     assert len(libsonare.synthesize_rir(seed=0xFFFF_FFFF, **room).rir) > 0
     assert libsonare.synthesize_rir(seed=0, **room).rir != libsonare.synthesize_rir(**room).rir
+
+
+_ROOM = dict(sample_rate=22050, length_m=7.0, width_m=5.0, height_m=3.0, max_sec=0.2)
+
+
+def _room_calls(**kwargs: object) -> list[Callable[[], object]]:
+    mono = [0.0] * 2205
+    return [
+        lambda: libsonare.synthesize_rir(**_ROOM, **kwargs),
+        lambda: libsonare.room_morph(mono, **_ROOM, **kwargs),
+        lambda: libsonare.room_morph_stereo(mono, mono, **_ROOM, **kwargs),
+    ]
+
+
+@acoustic
+@pytest.mark.parametrize(
+    ("name", "invalid"),
+    [
+        (name, invalid)
+        for name in ("ism_order", "seed")
+        for invalid in (2.5, True, 2**31 if name == "ism_order" else 2**32, -1)
+    ],
+)
+def test_a_room_integer_the_c_field_cannot_hold_is_refused_by_name(
+    name: str, invalid: object
+) -> None:
+    # A bool is the wrong type; every other value is out of the field's domain.
+    expected = TypeError if isinstance(invalid, bool) else libsonare.SonareValueError
+    for call in _room_calls(**{name: invalid}):
+        with pytest.raises(expected, match=name):
+            call()
+
+
+@acoustic
+def test_every_room_integer_in_range_is_accepted() -> None:
+    for kwargs in ({"ism_order": 0}, {"ism_order": 2}, {"seed": 0}, {"seed": 2**32 - 1}):
+        for call in _room_calls(**kwargs):
+            call()
 
 
 @acoustic

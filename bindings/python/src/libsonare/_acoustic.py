@@ -19,6 +19,7 @@ from typing import TypeVar
 from ._errors import SonareValueError, _not_supported
 from ._narrowing import _narrow_double
 from ._runtime import (
+    _C_INT_MAX,
     SonareRirSynthConfig,
     SonareRirSynthResult,
     SonareRoomEstimate,
@@ -30,10 +31,12 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _last_diagnostics,
+    _narrow_int,
     _optional_float_array_result,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
+    _to_c_uint,
 )
 from .types import (
     AcousticModeName,
@@ -136,19 +139,6 @@ def _band_array_args(
     return ctypes.cast(buf, ctypes.POINTER(ctypes.c_float)), count, buf
 
 
-def _checked_seed(seed: int) -> int:
-    """Refuse a seed the C field cannot express.
-
-    The C ``seed`` is a ``uint32``, and Node and WASM both reject a value outside
-    its range rather than folding one in. Folding here instead made ``-1`` and the
-    library default indistinguishable under a successful call, so two different
-    requests returned the same tail with nothing to tell them apart.
-    """
-    if not 0 <= seed <= 0xFFFFFFFF:
-        raise SonareValueError("seed must be within [0, 4294967295]")
-    return seed
-
-
 _RoomConfig = TypeVar("_RoomConfig", SonareRirSynthConfig, SonareRoomMorphConfig)
 
 
@@ -165,6 +155,7 @@ def _fill_room_config(
     prefer_eyring: bool,
     air_absorption_enabled: bool,
     seed: int | None,
+    ism_order: int,
     **fields: float | None,
 ) -> _RoomConfig:
     """Overwrite an ``_init``-filled config with every field the caller gave.
@@ -181,8 +172,9 @@ def _fill_room_config(
     config.material_preset = _material_preset(material_preset)
     config.late_model = _late_model(prefer_eyring)
     config.air_absorption = _AIR_ABSORPTION_ON if air_absorption_enabled else _AIR_ABSORPTION_OFF
+    config.ism_order = _narrow_int(ism_order, "ism_order", 0, _C_INT_MAX)
     if seed is not None:
-        config.seed = _checked_seed(seed)
+        config.seed = _to_c_uint(seed, "seed").value
     for name in ("max_sec", "mixing_time_ms"):
         if fields.get(name) == 0:
             raise SonareValueError(f"{name} must not be 0; omit it for the automatic value")
