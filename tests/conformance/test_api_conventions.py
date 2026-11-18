@@ -620,6 +620,25 @@ class TypeNamesRule(unittest.TestCase):
         self.assertEqual([f.key for f in verdict.violations], ["wasm:SonareCapabilities"])
 
 
+class EngineVocabularyRule(unittest.TestCase):
+    CLEAN = [
+        field("wasm", "EngineTelemetryRecord", "graphLatencySamples"),
+        field("python", "Telemetry", "graph_latency_samples"),
+    ]
+
+    def test_clean_surface_passes(self) -> None:
+        verdict = run("engine-vocabulary", self.CLEAN)
+        self.assertEqual(verdict.read, 2)
+        self.assertFalse(verdict.failed)
+
+    def test_q8_name_is_named(self) -> None:
+        planted = field("python", "Telemetry", "graph_latency_samples_q8", "int")
+        verdict = run("engine-vocabulary", [*self.CLEAN, planted])
+        self.assertEqual(
+            [f.key for f in verdict.violations], ["python:Telemetry.graph_latency_samples_q8"]
+        )
+
+
 class Framework(unittest.TestCase):
     def test_reading_nothing_fails(self) -> None:
         verdict = check.judge(rule("getters"), [])

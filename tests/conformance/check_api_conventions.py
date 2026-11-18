@@ -627,6 +627,9 @@ def _payload_channel_violation(r: dict) -> str | None:
 _ERROR_CLASS_REASON = "the error class keeps its Sonare prefix"
 
 
+_Q8 = re.compile(r"q8", re.I)
+
+
 RULES: list[Rule] = [
     Rule(
         name="getters",
@@ -933,6 +936,24 @@ RULES: list[Rule] = [
                 "wasm:SonareWorkletScopeSnapshot",
                 "wasm:SonareWorkletSpectrumSnapshot",
             )
+        },
+    ),
+    Rule(
+        name="engine-vocabulary",
+        summary="Q8 fixed-point stays in C: no q8 name on the JS or Python surface",
+        population=lambda r: (
+            r["surface"] in ("node", "wasm", "python")
+            and r["kind"] in ("field", "option", "method", "function", "type", "class")
+        ),
+        violation=lambda r: (
+            "a Q8 fixed-point value is a plain fractional number outside C"
+            if _Q8.search(r["name"])
+            else None
+        ),
+        pending={
+            "node:PlaybackStageLatency.q8": "remove the field; state its unit before renaming it",
+            "wasm:PlaybackStageLatency.q8": "remove the field; state its unit before renaming it",
+            "wasm:SonareEngineTelemetryRecord.graphLatencySamplesQ8": "expose graph latency in samples as a plain number",
         },
     ),
 ]
