@@ -276,6 +276,11 @@ TARGETS = (
         "#",
         (Block("SoloProcessor", render_solo_pyi),),
     ),
+    Target(
+        REPO_ROOT / "bindings/python/src/libsonare/_types_mastering.py",
+        "#",
+        (Block("SoloProcessor", render_solo_pyi),),
+    ),
 )
 
 
