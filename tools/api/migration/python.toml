@@ -8352,3 +8352,40 @@ old = "MixTrackInput.track_id"
 new = "MixAssistantTrack.id"
 domain = "mastering"
 rule = "type-names"
+
+# The mastering processor family names its processor argument as C and JS do.
+
+[[entry]]
+kind = "option"
+old = "mastering_process(processor_name)"
+new = "mastering_process(processor)"
+domain = "mastering"
+rule = "individual"
+
+[[entry]]
+kind = "option"
+old = "mastering_process_stereo(processor_name)"
+new = "mastering_process_stereo(processor)"
+domain = "mastering"
+rule = "individual"
+
+[[entry]]
+kind = "option"
+old = "mastering_pair_process(processor_name)"
+new = "mastering_pair_process(processor)"
+domain = "mastering"
+rule = "individual"
+
+[[entry]]
+kind = "option"
+old = "mastering_pair_process_stereo(processor_name)"
+new = "mastering_pair_process_stereo(processor)"
+domain = "mastering"
+rule = "individual"
+
+[[entry]]
+kind = "option"
+old = "Audio.mastering_process(processor_name)"
+new = "Audio.mastering_process(processor)"
+domain = "core"
+rule = "individual"

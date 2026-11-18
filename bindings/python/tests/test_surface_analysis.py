@@ -172,7 +172,7 @@ PRIMARY_ARGS = {
     "notes",
     "name",
     "params",
-    "processor_name",
+    "processor",
     "analysis",
     "n_fft",
 }

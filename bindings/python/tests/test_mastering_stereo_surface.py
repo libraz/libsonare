@@ -28,7 +28,7 @@ def test_public_stereo_pair_and_loudness_functions_exist() -> None:
 def test_stereo_pair_rejects_nul_c_strings_before_library_dispatch() -> None:
     import libsonare
 
-    with pytest.raises(SonareValueError, match="processor_name must not contain NUL"):
+    with pytest.raises(SonareValueError, match="processor must not contain NUL"):
         libsonare.mastering_pair_process_stereo(
             "match.abCrossfade\x00junk",
             [0.1],

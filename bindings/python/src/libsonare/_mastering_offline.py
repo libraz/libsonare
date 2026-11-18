@@ -455,7 +455,7 @@ def capability_catalog() -> CapabilityCatalog:
 
 @_guard_buffer("samples")
 def mastering_process(
-    processor_name: str,
+    processor: str,
     samples: Sequence[float] | list[float],
     sample_rate: int,
     params: dict[str, float | int | bool | str] | None = None,
@@ -469,10 +469,10 @@ def mastering_process(
     if not hasattr(lib, "sonare_mastering_apply_processor"):
         raise _not_supported("libsonare was built without mastering support")
     c_array, length = _to_c_float_array(samples)
-    param_array, param_count = _mastering_params(_processor_params(processor_name, params))
+    param_array, param_count = _mastering_params(_processor_params(processor, params))
     out = SonareMasteringResult()
     rc = lib.sonare_mastering_apply_processor(
-        _utf8_arg(processor_name, "processor_name"),
+        _utf8_arg(processor, "processor"),
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
@@ -498,7 +498,7 @@ def mastering_process(
 
 @_guard_buffer("left", "right")
 def mastering_process_stereo(
-    processor_name: str,
+    processor: str,
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
     sample_rate: int,
@@ -515,10 +515,10 @@ def mastering_process_stereo(
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
         raise SonareValueError("left and right channel lengths must match")
-    param_array, param_count = _mastering_params(_processor_params(processor_name, params))
+    param_array, param_count = _mastering_params(_processor_params(processor, params))
     out = SonareMasteringStereoResult()
     rc = lib.sonare_mastering_apply_processor_stereo(
-        _utf8_arg(processor_name, "processor_name"),
+        _utf8_arg(processor, "processor"),
         left_array,
         right_array,
         _to_c_size_t(left_length, "left_length"),

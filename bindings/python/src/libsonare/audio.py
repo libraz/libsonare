@@ -986,10 +986,10 @@ class Audio:
         )
 
     def mastering_process(
-        self, processor_name: str, params: dict[str, float | int | bool | str] | None = None
+        self, processor: str, params: dict[str, float | int | bool | str] | None = None
     ) -> MasteringResult:
         """Apply a named mastering processor."""
-        return _mastering_process(processor_name, self.data, self.sample_rate, params)
+        return _mastering_process(processor, self.data, self.sample_rate, params)
 
     def mastering_chain(
         self,

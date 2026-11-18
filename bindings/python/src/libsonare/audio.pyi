@@ -195,7 +195,7 @@ class Audio:
         apply_gain_at_input_rate: bool = False,
     ) -> MasteringResult: ...
     def mastering_process(
-        self, processor_name: SoloProcessor, params: MasteringSoloParams | None = None
+        self, processor: SoloProcessor, params: MasteringSoloParams | None = None
     ) -> MasteringResult: ...
     def mastering_chain(
         self,

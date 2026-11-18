@@ -1292,13 +1292,13 @@ def mastering_pair_processor_names() -> list[PairProcessor]: ...
 def mastering_pair_analysis_names() -> list[PairAnalysis]: ...
 def mastering_stereo_analysis_names() -> list[StereoAnalysis]: ...
 def mastering_process(
-    processor_name: SoloProcessor,
+    processor: SoloProcessor,
     samples: FloatSamples,
     sample_rate: int,
     params: MasteringSoloParams | None = None,
 ) -> MasteringResult: ...
 def mastering_process_stereo(
-    processor_name: SoloProcessor,
+    processor: SoloProcessor,
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int,
@@ -1610,7 +1610,7 @@ class StreamingEqualizer:
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None: ...
 
 def mastering_pair_process(
-    processor_name: PairProcessor,
+    processor: PairProcessor,
     source: FloatSamples,
     reference: FloatSamples,
     sample_rate: int,
@@ -1619,7 +1619,7 @@ def mastering_pair_process(
     reference_sample_rate: int | None = None,
 ) -> MasteringResult: ...
 def mastering_pair_process_stereo(
-    processor_name: StereoPairProcessor,
+    processor: StereoPairProcessor,
     source_left: FloatSamples,
     source_right: FloatSamples,
     reference_left: FloatSamples,

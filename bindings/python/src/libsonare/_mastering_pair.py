@@ -79,7 +79,7 @@ def _stereo_pair_params(params: dict[str, float | int | bool] | None) -> tuple[A
 
 @_guard_buffer("source", "reference")
 def mastering_pair_process(
-    processor_name: str,
+    processor: str,
     source: Sequence[float] | list[float],
     reference: Sequence[float] | list[float],
     sample_rate: int,
@@ -104,7 +104,7 @@ def mastering_pair_process(
     # variant takes independent source/reference lengths (the pair primitives
     # consume each buffer at its own length).
     rc = lib.sonare_mastering_apply_pair_processor_ex(
-        _utf8_arg(processor_name, "processor_name"),
+        _utf8_arg(processor, "processor"),
         source_array,
         _to_c_size_t(source_length, "source_length"),
         reference_array,
@@ -135,7 +135,7 @@ def mastering_pair_process(
 
 @_guard_buffer("source_left", "source_right", "reference_left", "reference_right")
 def mastering_pair_process_stereo(
-    processor_name: str,
+    processor: str,
     source_left: Sequence[float] | list[float],
     source_right: Sequence[float] | list[float],
     reference_left: Sequence[float] | list[float],
@@ -153,9 +153,9 @@ def mastering_pair_process_stereo(
     ``sample_rate`` first. The native processor returns the shorter pair length
     and applies one mix to both channels.
     """
-    if not isinstance(processor_name, str):
-        raise TypeError("processor_name must be a string")
-    _reject_nul(processor_name, "processor_name")
+    if not isinstance(processor, str):
+        raise TypeError("processor must be a string")
+    _reject_nul(processor, "processor")
     param_array, param_count = _stereo_pair_params(params)
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_apply_pair_processor_stereo_ex"):
@@ -177,7 +177,7 @@ def mastering_pair_process_stereo(
     out = SonareMasteringStereoResult()
     try:
         rc = lib.sonare_mastering_apply_pair_processor_stereo_ex(
-            _utf8_arg(processor_name, "processor_name"),
+            _utf8_arg(processor, "processor"),
             source_left_array,
             source_right_array,
             _to_c_size_t(source_left_length, "source_length"),
