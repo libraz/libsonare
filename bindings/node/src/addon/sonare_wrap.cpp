@@ -369,6 +369,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
                                   "masteringAssistantSuggestChain"));
   exports.Set("masteringPresetParams", Napi::Function::New(env, &SonareWrap::MasteringPresetParams,
                                                            "masteringPresetParams"));
+  exports.Set("masteringChainConfigParams",
+              Napi::Function::New(env, &SonareWrap::MasteringChainConfigParams,
+                                  "masteringChainConfigParams"));
   exports.Set("masteringAudioProfile", Napi::Function::New(env, &SonareWrap::MasteringAudioProfile,
                                                            "masteringAudioProfile"));
   exports.Set("masteringStreamingPreview",

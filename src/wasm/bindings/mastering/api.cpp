@@ -644,6 +644,13 @@ val js_mastering_preset_params(std::string preset_name) {
   return chainConfigParamsToVal(mastering::api::preset_config(preset));
 }
 
+// Flat params of a caller's chain configuration document, validated by the parser the
+// native CLI applies to --chain-config; a refused document is a coded InvalidFormat.
+val js_mastering_chain_config_params(std::string document) {
+  wasmRefuseEmbeddedNul(document, "document");
+  return chainConfigParamsToVal(mastering::api::chain_config_from_json(document));
+}
+
 val js_mastering_assistant_suggest_chain(val samples, const val& sample_rate_val, val params_obj) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
@@ -778,6 +785,7 @@ void registerMasteringApiBindings() {
   function("masteringStreamingPreviewStereo", &js_mastering_streaming_preview_stereo);
   function("masteringPresetNames", &js_mastering_preset_names);
   function("masteringPresetParams", &js_mastering_preset_params);
+  function("masteringChainConfigParams", &js_mastering_chain_config_params);
   function("masteringPlatformNames", &js_mastering_platform_names);
   function("masterAudio", &js_master_audio);
   function("masterAudioStereo", &js_master_audio_stereo);

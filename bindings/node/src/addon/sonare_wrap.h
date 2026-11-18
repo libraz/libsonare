@@ -199,6 +199,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MasteringAssistantSuggest(const Napi::CallbackInfo& info);
   static Napi::Value MasteringAssistantSuggestChain(const Napi::CallbackInfo& info);
   static Napi::Value MasteringPresetParams(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringChainConfigParams(const Napi::CallbackInfo& info);
   static Napi::Value MasteringAudioProfile(const Napi::CallbackInfo& info);
   static Napi::Value MasteringStreamingPreview(const Napi::CallbackInfo& info);
   static Napi::Value MasteringAssistantSuggestStereo(const Napi::CallbackInfo& info);
