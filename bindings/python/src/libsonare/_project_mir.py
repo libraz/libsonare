@@ -50,8 +50,11 @@ class TakeAlignment:
     """
 
     mean_residual_frames: float
+    """Mean absolute frame residual of the alignment path around its diagonal trend."""
     reference_frames: int
+    """Chroma frames the reference produced, at the reference sample rate."""
     take_frames: int
+    """Chroma frames the take produced, at the reference sample rate."""
 
 
 @_guard_buffer("reference", "take")

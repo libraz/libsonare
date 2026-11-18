@@ -28,9 +28,13 @@ class ClickDetection:
     """
 
     count: int
+    """Number of click runs meeting the repair criteria; a run is counted once, not per sample."""
     rejected: int
+    """Number of runs the criteria excluded as outliers."""
     longest_run_samples: int
+    """Length of the longest counted run, in samples."""
     per_second: float
+    """Counted runs per second of input."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,10 +49,18 @@ class DeclickReport:
     """
 
     detected: ClickDetection
+    """This channel's own click detection on the input, before repair."""
     repaired_runs: int
+    """Number of runs interpolated, including runs inside a transient that ``detected.count``
+    leaves out."""
     repaired_samples: int
+    """Number of samples overwritten by interpolation."""
     linked_runs: int
+    """Repaired runs this channel's own detection did not produce; always 0 from the mono entry
+    point."""
     lpc_model_used: bool
+    """False when the input was too short for ``lpc_order`` and every fill used linear
+    interpolation."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -56,7 +68,9 @@ class DeclickResult:
     """A declicked mono buffer and what the pass did to it."""
 
     samples: NDArray[np.float32]
+    """The declicked mono buffer, same length as the input."""
     report: DeclickReport
+    """What the declick pass found and did."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,10 +84,15 @@ class DeclickStereoResult:
     """
 
     left: list[float]
+    """The declicked left channel."""
     right: list[float]
+    """The declicked right channel."""
     length: int
+    """Length of each output channel, in samples."""
     left_report: DeclickReport
+    """What the declick pass found and did on the left channel."""
     right_report: DeclickReport
+    """What the declick pass found and did on the right channel."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,13 +126,21 @@ class ClipDetection:
     """
 
     clipped_samples: int
+    """Number of samples at or past ``clip_threshold_db``."""
     clipped_ratio: float
+    """``clipped_samples`` divided by the input length, in 0..1."""
     run_count: int
+    """Number of runs of consecutive clipped samples."""
     longest_run_samples: int
+    """Length of the longest run of clipped samples, in samples."""
     flat_run_count: int
+    """Number of flat-top runs (consecutive bit-identical samples)."""
     longest_flat_run_samples: int
+    """Length of the longest flat-top run, in samples."""
     flat_sample_count: int
+    """Number of samples inside the flat-top runs."""
     flat_level: float | None
+    """Magnitude the counted flat-top runs sit at (linear); None when there are none."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,10 +156,16 @@ class DeclipReport:
     """
 
     detected: ClipDetection
+    """This channel's own clip detection on the input, before repair."""
     lpc_reconstructed_runs: int
+    """Number of runs the LPC solver filled."""
     interpolated_runs: int
+    """Number of runs past the 512-sample cap, filled by interpolation instead of the LPC solver."""
     repaired_samples: int
+    """Number of samples overwritten by either fill."""
     linked_runs: int
+    """Repaired runs reaching past this channel's own clipped samples; always 0 from the mono entry
+    point."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -140,7 +173,9 @@ class DeclipResult:
     """A declipped mono buffer and what the pass did to it."""
 
     samples: NDArray[np.float32]
+    """The declipped mono buffer, same length as the input."""
     report: DeclipReport
+    """What the declip pass found and did."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,10 +189,15 @@ class DeclipStereoResult:
     """
 
     left: list[float]
+    """The declipped left channel."""
     right: list[float]
+    """The declipped right channel."""
     length: int
+    """Length of each output channel, in samples."""
     left_report: DeclipReport
+    """What the declip pass found and did on the left channel."""
     right_report: DeclipReport
+    """What the declip pass found and did on the right channel."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,8 +212,11 @@ class CrackleDetection:
     """
 
     sample_count: int
+    """Number of samples deviating from the local median by more than the threshold."""
     sample_fraction: float
+    """``sample_count`` divided by the input length, in 0..1."""
     per_second: float
+    """Crackle samples counted per second of input."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,10 +232,16 @@ class DecrackleReport:
     """
 
     detected: CrackleDetection
+    """This channel's own crackle detection on the input, before repair."""
     replaced_samples: int
+    """Median mode only: samples the filter overwrote; 0 in wavelet mode."""
     detail_coefficients: int
+    """Wavelet mode only: detail coefficients examined by the unshifted pass; 0 in median mode."""
     shrunk_coefficients: int
+    """Wavelet mode only: of the examined coefficients, those driven to zero; 0 in median mode."""
     noise_sigma: float
+    """Wavelet mode only: the MAD noise estimate that set every level's threshold; 0 in median
+    mode."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -200,7 +249,9 @@ class DecrackleResult:
     """A decrackled mono buffer and what the pass did to it."""
 
     samples: NDArray[np.float32]
+    """The decrackled mono buffer, same length as the input."""
     report: DecrackleReport
+    """What the decrackle pass found and did."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -214,10 +265,15 @@ class DecrackleStereoResult:
     """
 
     left: list[float]
+    """The decrackled left channel."""
     right: list[float]
+    """The decrackled right channel."""
     length: int
+    """Length of each output channel, in samples."""
     left_report: DecrackleReport
+    """What the decrackle pass found and did on the left channel."""
     right_report: DecrackleReport
+    """What the decrackle pass found and did on the right channel."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -235,9 +291,14 @@ class HumDetection:
     """
 
     fundamental_hz: float
+    """Tracked fundamental in Hz; the configured value when adaptive tracking is off."""
     fundamental_prominence: float
+    """Linear energy ratio (not dB) of the winning candidate over the median candidate; 1.0 means
+    no peak."""
     harmonics: int
+    """Number of harmonics above the floor; 0 when ``fundamental_prominence`` is 1.0."""
     harmonic_dbfs: list[float]
+    """Input level in dBFS at each k times the fundamental, k ascending; at most 16 entries."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -249,9 +310,15 @@ class DehumReport:
     """
 
     detected: HumDetection
+    """This channel's own hum detection on the input, before filtering."""
     notched_harmonics: int
+    """Number of harmonics the filter cascade reached; fewer than ``harmonics`` once a harmonic
+    hits Nyquist."""
     applied_fundamental_hz: float
+    """Frequency in Hz the last notch refresh used."""
     fundamental_drift_hz: float
+    """Largest excursion in Hz of the tracked frequency from the configured one; 0 without adaptive
+    tracking."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -259,7 +326,9 @@ class DehumResult:
     """A dehummed mono buffer and what the pass did to it."""
 
     samples: NDArray[np.float32]
+    """The dehummed mono buffer, same length as the input."""
     report: DehumReport
+    """What the dehum pass found and did."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -277,10 +346,15 @@ class DehumStereoResult:
     """
 
     left: list[float]
+    """The dehummed left channel."""
     right: list[float]
+    """The dehummed right channel."""
     length: int
+    """Length of each output channel, in samples."""
     left_report: DehumReport
+    """What the dehum pass found and did on the left channel."""
     right_report: DehumReport
+    """What the dehum pass found and did on the right channel."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -297,7 +371,10 @@ class NoiseDetection:
     """
 
     floor_dbfs: float
+    """Broadband estimated noise floor in dBFS."""
     band_floor_dbfs: list[float]
+    """Noise floor in dBFS per band: 32 entries on a geometric grid from 20 Hz to Nyquist, low to
+    high."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -311,9 +388,14 @@ class DenoiseReport:
     """
 
     detected: NoiseDetection
+    """Noise-floor estimate of the input, before the mask."""
     mean_reduction_db: float
+    """Mean attenuation in dB the gain mask applied; 0 also when no mask ran."""
     max_reduction_db: float
+    """Deepest attenuation in dB any cell received."""
     floor_limited_fraction: float
+    """Fraction of cells sitting on the ``reduction_db`` floor; always 0 in
+    ``"spectralSubtraction"`` mode."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -321,7 +403,9 @@ class DenoiseResult:
     """A denoised mono buffer and what the pass did to it."""
 
     samples: NDArray[np.float32]
+    """The denoised mono buffer, same length as the input."""
     report: DenoiseReport
+    """What the denoise pass found and removed."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -336,9 +420,13 @@ class DenoiseStereoResult:
     """
 
     left: list[float]
+    """The denoised left channel."""
     right: list[float]
+    """The denoised right channel."""
     length: int
+    """Length of each output channel, in samples."""
     report: DenoiseReport
+    """What the single shared denoise mask found and removed."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -358,7 +446,9 @@ class DenoiseLinkedResult:
     """
 
     channels: list[NDArray[np.float32]]
+    """One denoised output buffer per input channel, in input order."""
     report: DenoiseReport
+    """What the single shared denoise mask found and removed."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -377,7 +467,10 @@ class ReverbDetection:
     """
 
     late_decay_ratio_db: float
+    """Decay in dB across the module's own late lag; higher (less negative) means more sustained
+    reverberation."""
     late_predictability: float | None
+    """Mean WPE predictor norm before the clamp; None when ``wpe_enabled`` is clear."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -392,9 +485,13 @@ class DereverbReport:
     """
 
     detected: ReverbDetection
+    """Reverberation measurements of the input."""
     mean_reduction_db: float
+    """Mean attenuation in dB the subtraction applied."""
     suppressed_fraction: float
+    """Fraction of cells the ``threshold`` gate admitted as late reverberation."""
     wpe_predictor_norm: float
+    """Mean WPE predictor norm actually applied, after the clamp; 0 when WPE did not run."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -402,7 +499,9 @@ class DereverbResult:
     """A dereverberated mono buffer and what the pass did to it."""
 
     samples: NDArray[np.float32]
+    """The dereverberated mono buffer, same length as the input."""
     report: DereverbReport
+    """What the dereverb pass found and removed."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -420,9 +519,13 @@ class DereverbStereoResult:
     """
 
     left: list[float]
+    """The dereverberated left channel."""
     right: list[float]
+    """The dereverberated right channel."""
     length: int
+    """Length of each output channel, in samples."""
     report: DereverbReport
+    """What the single shared dereverb mask found and removed."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -441,7 +544,9 @@ class DereverbLinkedResult:
     """
 
     channels: list[NDArray[np.float32]]
+    """One dereverberated output buffer per input channel, in input order."""
     report: DereverbReport
+    """What the single shared dereverb mask found and removed."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -454,7 +559,9 @@ class RepairStageReports:
     """
 
     stage: str
+    """Name of the stage that ran; a :data:`RepairStageName` token."""
     scope: str
+    """``"channel"`` for one report per channel, ``"linked"`` for one report for the whole set."""
     reports: list[
         DeclipReport
         | DeclickReport
@@ -463,6 +570,8 @@ class RepairStageReports:
         | DenoiseReport
         | DereverbReport
     ]
+    """Per-channel reports in input order for ``"channel"`` scope, or exactly one report for
+    ``"linked"`` scope."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -470,7 +579,9 @@ class RepairApplyResult:
     """Repaired channels, in input order, and one entry per applied stage, in application order."""
 
     channels: list[NDArray[np.float32]]
+    """The repaired channels, in input order."""
     reports: list[RepairStageReports]
+    """One entry per applied stage, in application order."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -482,11 +593,17 @@ class AudioDefects:
     """
 
     click: ClickDetection
+    """Click detection for the channel or channel set."""
     clip: ClipDetection
+    """Clipping detection, including the flat-top measurements."""
     crackle: CrackleDetection
+    """Crackle detection, measured by the median criterion."""
     noise: NoiseDetection
+    """Noise-floor estimate, in dBFS."""
     hum: HumDetection
+    """Mains-hum detection."""
     reverb: ReverbDetection
+    """Reverberation measurements taken while deciding how much a dereverb would subtract."""
 
 
 RepairStageName: TypeAlias = Literal[
@@ -500,10 +617,15 @@ class DeclipStage:
     """Declip settings as :func:`mastering_repair_declip` takes them; None is its default."""
 
     stage: Literal["declip"] = field(default="declip", init=False)
+    """Stage discriminator; always ``"declip"``."""
     clip_threshold_db: float | None = None
+    """Level in dBFS at or above which a sample counts as clipped."""
     lpc_order: int | None = None
+    """LPC order used for prediction."""
     iterations: int | None = None
+    """Number of LPC reconstruction iterations."""
     lpc_blend: float | None = None
+    """Blend between the LPC reconstruction and interpolation."""
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -511,11 +633,17 @@ class DeclickStage:
     """Declick settings as :func:`mastering_repair_declick` takes them; None is its default."""
 
     stage: Literal["declick"] = field(default="declick", init=False)
+    """Stage discriminator; always ``"declick"``."""
     threshold: float | None = None
+    """Amplitude threshold against the LPC prediction."""
     neighbor_ratio: float | None = None
+    """Click amplitude ratio against the neighbouring samples."""
     max_click_samples: int | None = None
+    """Maximum click run length, in samples."""
     lpc_order: int | None = None
+    """LPC order used for prediction."""
     residual_ratio: float | None = None
+    """Residual-to-signal ratio threshold."""
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -523,9 +651,14 @@ class DecrackleStage:
     """Decrackle settings as :func:`mastering_repair_decrackle` takes them; None is its default."""
 
     stage: Literal["decrackle"] = field(default="decrackle", init=False)
+    """Stage discriminator; always ``"decrackle"``."""
     threshold: float | None = None
+    """Median mode: deviation threshold. Wavelet mode: a cap on the BayesShrink threshold."""
     mode: str | None = None
+    """Algorithm: median filter or wavelet shrinkage, as :func:`mastering_repair_decrackle` takes
+    it."""
     levels: int | None = None
+    """Number of Haar wavelet decomposition levels (wavelet mode)."""
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -533,15 +666,25 @@ class DehumStage:
     """Dehum settings as :func:`mastering_repair_dehum` takes them; None is its default."""
 
     stage: Literal["dehum"] = field(default="dehum", init=False)
+    """Stage discriminator; always ``"dehum"``."""
     fundamental_hz: float | None = None
+    """Mains-hum fundamental in Hz."""
     harmonics: int | None = None
+    """Number of notches, counting the fundamental."""
     q: float | None = None
+    """Notch Q."""
     adaptive: bool | None = None
+    """Whether adaptive frequency tracking is enabled."""
     search_range_hz: float | None = None
+    """Tracking search range in Hz."""
     adaptation: float | None = None
+    """Tracking step size."""
     frame_size: int | None = None
+    """Analysis frame size in samples; at least 16."""
     pll_bandwidth: float | None = None
+    """PLL bandwidth used by the tracker."""
     mode: str | None = None
+    """Algorithm: ``"subtract"`` or ``"notch"``."""
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -552,17 +695,29 @@ class DenoiseStage:
     """
 
     stage: Literal["denoise"] = field(default="denoise", init=False)
+    """Stage discriminator; always ``"denoise"``."""
     mode: str | None = None
+    """Algorithm: ``"logMmse"``, ``"mmseStsa"`` or ``"spectralSubtraction"``."""
     noise_estimator: str | None = None
+    """Noise estimator: ``"quantile"``, ``"mcra"``, ``"imcra"`` or ``"spp"``."""
     n_fft: int | None = None
+    """STFT size in samples; a power of two."""
     hop_length: int | None = None
+    """Hop in samples; positive and at most ``n_fft // 2``."""
     dd_alpha: float | None = None
+    """Decision-directed a priori SNR smoothing."""
     reduction_db: float | None = None
+    """Deepest attenuation the mask may apply, in dB; at least 0."""
     over_subtraction: float | None = None
+    """Berouti alpha; read only by ``"spectralSubtraction"``."""
     spectral_floor: float | None = None
+    """Berouti beta; read only by ``"spectralSubtraction"``."""
     noise_estimation_quantile: float | None = None
+    """Fraction of frames assumed noise-only."""
     speech_presence_gain: bool | None = None
+    """Whether speech-presence probability gating is applied."""
     gain_smoothing: bool | None = None
+    """Whether gains are smoothed across time."""
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -573,18 +728,31 @@ class DereverbStage:
     """
 
     stage: Literal["dereverb"] = field(default="dereverb", init=False)
+    """Stage discriminator; always ``"dereverb"``."""
     threshold: float | None = None
+    """Late-reverberation detection threshold; 0 applies no gate."""
     attenuation: float | None = None
+    """Linear suppression amount; 1 is full."""
     n_fft: int | None = None
+    """STFT size in samples; a power of two."""
     hop_length: int | None = None
+    """Hop in samples; positive and at most ``n_fft // 2``."""
     t60_sec: float | None = None
+    """Estimated reverberation time T60, in seconds."""
     late_delay_ms: float | None = None
+    """Onset of the late reverberation relative to the direct sound, in ms."""
     over_subtraction: float | None = None
+    """Berouti alpha."""
     spectral_floor: float | None = None
+    """Berouti beta."""
     wpe_enabled: bool | None = None
+    """Whether the WPE pre-stage runs."""
     wpe_iterations: int | None = None
+    """Number of WPE EM iterations."""
     wpe_taps: int | None = None
+    """Number of WPE filter taps."""
     wpe_strength: float | None = None
+    """WPE blend weight."""
 
 
 RepairStage: TypeAlias = (
@@ -605,8 +773,15 @@ class MasteringRepairAnalysis:
     """
 
     defects: AudioDefects | None
+    """Defects aggregated over the channels; None when the input was too short for the detectors."""
     channels: list[AudioDefects] | None
+    """Each channel's own defects, in input order; None exactly when ``defects`` is."""
     declip_threshold_safe: bool
+    """Whether a declip at the flat level leaves louder audio alone; when False, declip is withheld
+    from ``recommended``."""
     integrated_lufs: float
+    """Integrated loudness in LUFS the noise floor is compared against."""
     recommended: list[RepairStage]
+    """Stages the measurement supports, in application order, each with every setting given."""
     explanation: list[str]
+    """Why each stage was or was not chosen."""

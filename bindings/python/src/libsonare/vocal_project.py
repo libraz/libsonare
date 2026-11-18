@@ -61,47 +61,78 @@ class ProjectVocalOriginalSource:
     """Original mono PCM supplied to project rehydration."""
 
     source_id: int
+    """Id of the project source this audio is the original of."""
     mono: Sequence[float] | np.ndarray[Any, Any]
+    """Mono original audio samples."""
     sample_rate: int
+    """Sample rate of ``mono`` in Hz."""
 
 
 @dataclass(frozen=True, slots=True)
 class ProjectVocalEditApplyResult:
     clip_id: int
+    """Id of the clip that was edited."""
     take_id: int
+    """Id of the take that was edited; 0 when the clip's base source was."""
     original_source_id: int
+    """Id of the source the edit was made from."""
     derived_source_id: int
+    """Id of the source that now carries the edited audio."""
     committed_revision: int
+    """Revision of the committed edit."""
     profile_id: int
+    """Engine profile the edit was produced under."""
     derived_source_sha256: bytes
+    """SHA-256 digest of the derived source, as 32 raw bytes."""
     sidecar_key: str
+    """Key under which the vocal state is stored in the project."""
 
 
 @dataclass(frozen=True, slots=True)
 class ProjectVocalEditDependency:
     clip_id: int
+    """Id of the clip the edit belongs to."""
     take_id: int
+    """Id of the take the edit belongs to; 0 for the clip's base source."""
     original_source_id: int
+    """Id of the source the edit was made from."""
     derived_source_id: int
+    """Id of the source carrying the edited audio."""
     source_sample_rate: int
+    """Sample rate of the sources in Hz."""
     profile_id: int
+    """Engine profile the edit was produced under."""
     source_sample_count: int
+    """Length of the sources in samples."""
     committed_revision: int
+    """Revision of the committed edit."""
     original_source_sha256: bytes
+    """SHA-256 digest of the original source, as 32 raw bytes."""
     derived_source_sha256: bytes
+    """SHA-256 digest of the derived source, as 32 raw bytes."""
     original_pcm_available: bool
+    """True when the original audio is present in the project."""
     derived_pcm_available: bool
+    """True when the derived audio is present in the project."""
     reason: VocalReason
+    """Why the dependency cannot be used as recorded; ``"none"`` when it is structurally
+    valid."""
     sidecar_key: str
+    """Key under which the vocal state is stored in the project."""
 
 
 @dataclass(frozen=True, slots=True)
 class ProjectVocalRehydrateItem:
     clip_id: int
+    """Id of the clip the edit belongs to."""
     take_id: int
+    """Id of the take the edit belongs to; 0 for the clip's base source."""
     derived_source_id: int
+    """Id of the source carrying the edited audio."""
     status: ProjectVocalRehydrateStatus
+    """What rehydration did with this edit (``ProjectVocalRehydrateStatus``)."""
     reason: VocalReason
+    """Why the edit could not be resolved; ``"none"`` otherwise."""
 
 
 def _reason_token(value: int) -> VocalReason:

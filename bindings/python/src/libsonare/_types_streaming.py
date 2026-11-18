@@ -26,9 +26,13 @@ class CqtResult:
     """
 
     hop_length: int
+    """Hop between frames, in samples."""
     sample_rate: int
+    """Sample rate of the analyzed signal in Hz."""
     magnitude: NDArray[np.float32]
+    """Magnitude per bin and frame, shape ``(n_bins, n_frames)``."""
     frequencies: NDArray[np.float32]
+    """Center frequency of each bin in Hz."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,10 +46,15 @@ class StreamQuantizeConfig:
     """
 
     mel_db_min: float = -80.0
+    """Mel floor in dB for quantization."""
     mel_db_max: float = 0.0
+    """Mel ceiling in dB for quantization."""
     onset_max: float = 50.0
+    """Largest expected onset strength."""
     rms_max: float = 1.0
+    """Largest expected RMS energy."""
     centroid_max: float = 11025.0
+    """Largest expected spectral centroid in Hz."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,23 +75,41 @@ class StreamConfig:
     """
 
     sample_rate: int
+    """Input sample rate in Hz."""
     n_fft: int = 2048
+    """Analysis window in samples at 44100 Hz; rescaled below that rate."""
     hop_length: int = 512
+    """Hop between frames, in samples at the analysis rate."""
     n_mels: int = 128
+    """Number of mel bands."""
     fmin_hz: float = 0.0
+    """Minimum mel frequency in Hz."""
     fmax_hz: float | None = None
+    """Maximum mel frequency in Hz; None for Nyquist."""
     reference_hz: float = 440.0
+    """A4 tuning reference in Hz, within 220..880."""
     compute_mel: bool = True
+    """Compute mel spectra."""
     compute_chroma: bool = True
+    """Compute chroma and the per-frame chord arrays."""
     compute_onset: bool = True
+    """Compute onset strength."""
     compute_spectral: bool = True
+    """Compute the spectral scalar features (centroid, flatness)."""
     emit_every_n_frames: int = 1
+    """Emit every Nth frame, for throttling; at least 1."""
     magnitude_downsample: int = 1
+    """Downsample factor for the magnitude output."""
     max_pending_frames: int = 4096  # Overflow drops the newly produced frame.
+    """Cap on unread frames retained."""
     max_progression_entries: int = 4096  # Overflow drops the oldest entry.
+    """Cap on entries in each chord and bar progression."""
     key_update_interval_sec: float = 5.0
+    """Interval between key re-estimates, in seconds."""
     bpm_update_interval_sec: float = 10.0
+    """Interval between BPM re-estimates, in seconds."""
     window: WindowType = "hann"
+    """Window function applied before the FFT (:data:`WindowType` token)."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -102,16 +129,27 @@ class StreamFrames:
     """
 
     n_frames: int
+    """Number of frames in the batch."""
     timestamps_sec: NDArray[np.float32]
+    """Frame timestamps in seconds, shape ``(n_frames,)``."""
     mel: NDArray[np.float32] | None
+    """Linear mel power, shape ``(n_mels, n_frames)``; None when not computed."""
     chroma: NDArray[np.float32] | None
+    """Chroma per frame, shape ``(n_chroma, n_frames)``; None when not computed."""
     onset_strength: NDArray[np.float32] | None
+    """Onset strength per frame; None when not computed."""
     rms_energy: NDArray[np.float32]
+    """RMS energy per frame."""
     spectral_centroid: NDArray[np.float32] | None
+    """Spectral centroid per frame in Hz; None when not computed."""
     spectral_flatness: NDArray[np.float32] | None
+    """Spectral flatness per frame; None when not computed."""
     chord_root: NDArray[np.int32] | None
+    """Per-frame chord root pitch class, -1 where none; None when chroma is not computed."""
     chord_quality: NDArray[np.int32] | None
+    """Per-frame chord quality ordinal; None when chroma is not computed."""
     chord_confidence: NDArray[np.float32] | None
+    """Per-frame chord confidence; None when chroma is not computed."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -123,13 +161,21 @@ class StreamFramesU8:
     """
 
     n_frames: int
+    """Number of frames in the batch."""
     timestamps_sec: NDArray[np.float32]
+    """Frame timestamps in seconds, shape ``(n_frames,)``."""
     mel: NDArray[np.uint8] | None
+    """Mel in dB over ``[mel_db_min, mel_db_max]``; None when not computed."""
     chroma: NDArray[np.uint8] | None
+    """Quantized chroma per frame, shape ``(n_chroma, n_frames)``; None when not computed."""
     onset_strength: NDArray[np.uint8] | None
+    """Quantized onset strength per frame; None when not computed."""
     rms_energy: NDArray[np.uint8]
+    """Quantized RMS energy per frame."""
     spectral_centroid: NDArray[np.uint8] | None
+    """Quantized spectral centroid per frame; None when not computed."""
     spectral_flatness: NDArray[np.uint8] | None
+    """Quantized spectral flatness per frame; None when not computed."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -141,13 +187,21 @@ class StreamFramesI16:
     """
 
     n_frames: int
+    """Number of frames in the batch."""
     timestamps_sec: NDArray[np.float32]
+    """Frame timestamps in seconds, shape ``(n_frames,)``."""
     mel: NDArray[np.int16] | None
+    """Mel in dB over ``[mel_db_min, mel_db_max]``; None when not computed."""
     chroma: NDArray[np.int16] | None
+    """Quantized chroma per frame, shape ``(n_chroma, n_frames)``; None when not computed."""
     onset_strength: NDArray[np.int16] | None
+    """Quantized onset strength per frame; None when not computed."""
     rms_energy: NDArray[np.int16]
+    """Quantized RMS energy per frame."""
     spectral_centroid: NDArray[np.int16] | None
+    """Quantized spectral centroid per frame; None when not computed."""
     spectral_flatness: NDArray[np.int16] | None
+    """Quantized spectral flatness per frame; None when not computed."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,10 +210,15 @@ class StreamChordChange:
     analysis spells a chord, and ``quality`` is a :data:`CHORD_QUALITIES` token."""
 
     root: PitchClass
+    """Pitch class of the chord root."""
     quality: str
+    """Chord quality token from :data:`CHORD_QUALITIES`."""
     name: str
+    """Chord name, spelled as the batch analysis spells a chord."""
     start_sec: float
+    """Time the chord starts, in seconds."""
     confidence: float
+    """Chord confidence in ``[0, 1]``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,17 +240,25 @@ class StreamBarChord:
     """
 
     bar_index: int
+    """Bar number; in ``voted_pattern`` the pattern position."""
     root: PitchClass
+    """Pitch class of the chord root."""
     quality: str
+    """Chord quality token from :data:`CHORD_QUALITIES`."""
     name: str
+    """Chord name, spelled as the batch analysis spells a chord."""
     start_sec: float
+    """Bar start in seconds; unused in ``voted_pattern``."""
     confidence: float
+    """Chord confidence in ``[0, 1]``."""
 
 
 @dataclass(frozen=True, slots=True)
 class StreamPatternScore:
     name: str
+    """Chord pattern name."""
     score: float
+    """Match score of the pattern."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,22 +276,39 @@ class StreamProgressiveEstimate:
     """
 
     bpm: float | None
+    """Estimated tempo in BPM."""
     bpm_confidence: float | None
+    """Confidence of the BPM estimate in ``[0, 1]``."""
     bpm_candidate_count: int
+    """Tempo candidates the latest BPM estimate chose from."""
     key: Key | None
+    """Estimated key."""
     chord: StreamChordChange | None
+    """Current chord."""
     chord_progression: list[StreamChordChange]
+    """Chord changes recorded so far."""
     bar_chord_progression: list[StreamBarChord]
+    """Beat-synchronized chord progression, one entry per recorded bar."""
     current_bar: int | None
+    """Current bar index; None until the BPM is stable."""
     bar_duration_sec: float | None
+    """Duration of one bar in seconds; None until the BPM is stable."""
     voted_pattern: list[StreamBarChord | None]
+    """Voted chord at each pattern position; None where no chord was voted."""
     pattern_length: int
+    """Length of the voted chord pattern."""
     detected_pattern_name: str | None
+    """Name of the detected chord pattern."""
     detected_pattern_score: float | None
+    """Match score of the detected chord pattern."""
     all_pattern_scores: list[StreamPatternScore]
+    """Score of every candidate chord pattern."""
     accumulated_sec: float
+    """Total audio processed for estimation, in seconds."""
     used_frames: int
+    """Number of frames used for estimation."""
     updated: bool
+    """True when the key or BPM was re-estimated since the previous snapshot."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -232,12 +316,19 @@ class StreamStats:
     """Counters and the progressive estimate snapshot from :class:`StreamAnalyzer`."""
 
     total_frames: int
+    """Total frames processed."""
     total_samples: int
+    """Total samples processed."""
     duration_sec: float
+    """Total audio processed, in seconds."""
     pending_frames: int
+    """Unread frames currently retained."""
     dropped_output_frames: int
+    """New output frames dropped at the pending-frame cap."""
     dropped_chord_progression_entries: int
+    """Oldest chord changes dropped at the progression cap."""
     dropped_bar_progression_entries: int
+    """Oldest bar chords dropped at the progression cap."""
     non_finite_discard_blocks: int
     """Blocks in which a non-finite input sample was replaced before it could
     reach the analyzer's recursive state.
@@ -252,3 +343,4 @@ class StreamStats:
     """
 
     estimate: StreamProgressiveEstimate
+    """Progressive estimate snapshot."""

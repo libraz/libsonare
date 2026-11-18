@@ -140,7 +140,9 @@ class MasteringInsertParamChoice:
     """
 
     name: str
+    """Display label in lowerCamelCase; not accepted as input."""
     value: int
+    """Number construction accepts for this choice."""
 
 
 @dataclass(frozen=True)
@@ -158,9 +160,13 @@ class MasteringInsertSlot:
     """
 
     name: str
+    """Key prefix without the trailing dot, such as ``"midBand3"``."""
     parent: str | None
+    """Name of the enclosing slot, which must exist for this one to; None for a top-level slot."""
     activation: Literal["anyKey", "always"]
+    """``"anyKey"``: exists once any of its keys is supplied; ``"always"``: exists without."""
     min_crossover_cutoffs: int
+    """Crossover ``cutoff<i>Hz`` keys needed in effect for the slot to exist; 0 for none."""
 
 
 @dataclass(frozen=True)
@@ -173,8 +179,11 @@ class MasteringInsertParamDependency:
     """
 
     key: str
+    """Key of the sibling parameter that bounds this one."""
     relation: MasteringInsertParamRelation
+    """How this value is ordered against ``factor`` times the sibling: lt, le, gt or ge."""
     factor: float
+    """Positive multiplier on the sibling's value; 1 for a plain ordering."""
 
 
 @dataclass(frozen=True)
@@ -189,9 +198,13 @@ class SynthParamCondition:
     """
 
     key: str
+    """Name of the field the condition reads."""
     scope: Literal["engine", "patch"]
+    """``"engine"`` for a key of the same engine table, ``"patch"`` for a ``SynthPatch`` field."""
     relation: Literal["eq", "ne", "gt", "ge", "lt", "le"]
+    """Comparison of the field against ``value``: eq, ne, gt, ge, lt or le."""
     value: float | bool | str
+    """Value compared against: a number, a bool for a switch, or a vocabulary name."""
 
 
 @dataclass(frozen=True)
@@ -218,13 +231,21 @@ class SynthParamInfo:
     """
 
     name: str
+    """Key ``SynthPatch.engine_params`` takes, or the ``SynthPatch`` field name."""
     type: Literal["number", "boolean"]
+    """``"boolean"`` is a switch given as 0 or 1; ``"number"`` is any other value."""
     default: float | bool
+    """Engine base preset's value for an engine field, the keep-base default for a patch field."""
     unit: MasteringInsertParamUnit
+    """Unit of the value, a ``MasteringInsertParamUnit`` token."""
     integer: bool = False
+    """True for a field taking whole numbers only."""
     min: float | None = None
+    """Smallest accepted value; None for a field with no closed range."""
     max: float | None = None
+    """Largest accepted value; None for a field with no closed range."""
     active_when: tuple[tuple[SynthParamCondition, ...], ...] | None = None
+    """Alternatives of conditions under which the field reaches the voice; None if unconditional."""
 
 
 @dataclass(frozen=True)
@@ -255,23 +276,44 @@ class MasteringInsertParamInfo:
     """
 
     name: str
+    """JSON-key parameter name, as used in scene insert params."""
     id: int | None
+    """Integer id for realtime automation lanes and MIDI-CC binding; None for a construction-only
+    key."""
     rt_safe: bool
+    """Whether it can be changed live from the audio thread; false when ``id`` is None."""
     type: Literal["boolean", "number", "enum", "string", "array"]
+    """Type construction reads the key as; ``"enum"`` is sent as the number in ``choices``."""
     min: float | None
+    """Smallest value construction accepts; None when no limit is stated or ``choices`` is set."""
     max: float | None
+    """Largest value construction accepts; None when no limit is stated or ``choices`` is set."""
     min_exclusive: bool
+    """Whether ``min`` itself is rejected; false when ``min`` is None."""
     max_exclusive: bool
+    """Whether ``max`` itself is rejected; false when ``max`` is None."""
     max_relative_to: Literal["nyquist"] | None
+    """``"nyquist"`` when the ceiling follows the processing rate; None otherwise."""
     default: float | bool | None
+    """Value the processor uses when the key is absent; None when there is no fallback."""
     unit: MasteringInsertParamUnit | None
+    """Declared unit of a numeric key, a ``MasteringInsertParamUnit`` token; None otherwise."""
     ui_min: float | None
+    """Lowest value a control should draw, inside [``min``, ``max``]; None means ``min``."""
     ui_max: float | None
+    """Highest value a control should draw, inside [``min``, ``max``]; None means ``max``."""
     scale: MasteringInsertParamScale
+    """Axis a control draws the value on, ``"linear"`` or ``"log"``."""
     depends_on: tuple[MasteringInsertParamDependency, ...]
+    """Siblings whose live values bound this key; empty for an independent key."""
     coupled_with: tuple[str, ...]
+    """Other siblings that move this key's accepted range in a way ``depends_on`` cannot state."""
     choices: tuple[MasteringInsertParamChoice, ...] | None
+    """Closed set of accepted values in value order; None when the accepted values are not a closed
+    set."""
     slot: str | None
+    """Name of the :class:`MasteringInsertSlot` this key belongs to; None for a key that always
+    exists."""
 
 
 MasteringProcessorCategory = Literal[
@@ -310,17 +352,30 @@ class MasteringProcessorCatalogEntry:
     """Capabilities exposed by :func:`mastering_processor_catalog`."""
 
     id: str
+    """Processor id, the name used for scene inserts and named processors."""
     kind: MasteringProcessorKind
+    """``"realtime"`` builds as a scene insert, ``"offline"`` is whole-file only, ``"pair"`` takes
+    two inputs."""
     realtime_insertable: bool
+    """True exactly for ids that always succeed as a realtime scene insert."""
     stereo_only: bool
+    """True for a processor with no mono implementation."""
     latency_samples: int
+    """Latency in samples for the default 48 kHz / 512-sample probe; 0 for offline processors."""
     tail_samples: int
+    """Audible decay length in samples for the same probe; 0 for offline or no-tail processors."""
     realtime_cost: Literal["low", "moderate", "high"] | None
+    """Coarse realtime work estimate; None when the processor is not an insert."""
     channel_policy: MasteringChannelPolicy
+    """How the mixer wraps the processor on a bus with more than two channels."""
     category: MasteringProcessorCategory
+    """Grouping for a processor picker, derived from the id's prefix."""
     causal: bool
+    """Whether the output at a sample depends only on input up to it, plus the reported latency."""
     params: tuple[MasteringInsertParamInfo, ...]
+    """Construction parameters of the processor; empty for an offline entry with none."""
     slots: tuple[MasteringInsertSlot, ...]
+    """Conditional key groups of an insert in declaration order; empty if not an insert."""
 
 
 @dataclass(frozen=True)
@@ -335,8 +390,11 @@ class MasteringAmpPresetCatalogEntry:
     """
 
     index: int
+    """Stable rig index used by the amp-sim ``presetIndex`` parameter."""
     name: str
+    """Canonical preset identifier accepted by the amp-sim insert."""
     params: dict[str, float | int | bool]
+    """Resolved starting values under the insert's camelCase keys; enum keys as integer ordinals."""
 
 
 @dataclass(frozen=True)
@@ -365,10 +423,15 @@ class MasteringPresetCatalogEntry:
     """
 
     name: str
+    """Preset name."""
     kind: MasteringPresetKind
+    """Preset family, ``"mastering"`` or ``"restoration"``."""
     target_lufs: float | None
+    """Integrated loudness target in LUFS; None for a restoration preset."""
     true_peak_ceiling_dbtp: float | None
+    """True-peak ceiling in dBTP; None for a restoration preset."""
     max_limiter_gain_reduction_db: float | None
+    """Largest gain reduction the limiter may apply, in dB; None for a restoration preset."""
 
 
 @dataclass(frozen=True)

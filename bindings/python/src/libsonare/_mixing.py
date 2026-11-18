@@ -68,8 +68,11 @@ class MixerStereoResult(typing.NamedTuple):
     """
 
     left: list[float]
+    """Left channel of the master output."""
     right: list[float]
+    """Right channel of the master output."""
     sample_rate: int
+    """Sample rate of the output in Hz."""
 
 
 _MIN_SAMPLE_RATE = 8000

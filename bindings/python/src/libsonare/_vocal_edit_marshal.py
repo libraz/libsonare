@@ -160,7 +160,16 @@ def _state_token(raw: SonareVocalStateToken) -> VocalStateToken:
 
 
 class VocalEditError(SonareError):
-    """A native vocal-edit failure with the C ABI's structured reason detail."""
+    """A native vocal-edit failure with the C ABI's structured reason detail.
+
+    Attributes:
+        reason: Why the call was refused; ``"none"`` when no reason was recorded.
+        field: Name of the offending field; empty when none.
+        expected: Expected numeric value, when the detail carries one.
+        actual: Actual numeric value, when the detail carries one.
+        expected_text: Text spelling of the expected value; empty when it is numeric.
+        actual_text: Text spelling of the actual value; empty when it is numeric.
+    """
 
     def __init__(
         self,

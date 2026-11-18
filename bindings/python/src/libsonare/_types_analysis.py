@@ -85,7 +85,9 @@ class KeyCandidate:
     """Key candidate with raw profile correlation."""
 
     key: Key
+    """The candidate key."""
     correlation: float
+    """Correlation of the chroma with this key's profile."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,7 +118,9 @@ class Beat:
     """
 
     time_sec: float
+    """Beat time, in seconds."""
     strength: float
+    """Raw onset-envelope value at the beat's frame; unnormalized (see above)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,11 +128,17 @@ class AnalysisDynamics:
     """Dynamics summary embedded in :class:`AnalysisResult`."""
 
     dynamic_range_db: float
+    """Dynamic range, in dB."""
     peak_db: float
+    """Peak level, in dB."""
     rms_db: float
+    """RMS level, in dB."""
     crest_factor: float
+    """Peak-to-RMS ratio of the signal."""
     loudness_range_lu: float
+    """Loudness range, in LU."""
     is_compressed: bool
+    """True when the signal is flagged as compressed."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,10 +146,15 @@ class AnalysisRhythm:
     """Rhythm summary embedded in :class:`AnalysisResult`."""
 
     time_signature: TimeSignature
+    """Estimated time signature."""
     syncopation: float
+    """Syncopation level, in ``[0, 1]``."""
     groove_type: str
+    """Rhythmic feel of the track, as a groove token."""
     pattern_regularity: float
+    """Regularity of the beat intervals, in ``[0, 1]``; 0 with no beat interval."""
     tempo_stability: float
+    """Tempo stability over time, in ``[0, 1]``; 0 below two beat intervals."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -161,8 +176,11 @@ class BeatObservations:
     """
 
     onset_strength: np.ndarray = dataclasses.field(default_factory=_empty_float32)
+    """Windowed onset aggregate around each beat; the accent value the downbeat pass scores."""
     low_frequency_energy: np.ndarray = dataclasses.field(default_factory=_empty_float32)
+    """Low-frequency energy at each beat; empty when the analysis ran without audio."""
     chord_change: np.ndarray = dataclasses.field(default_factory=_empty_float32)
+    """Chord-change evidence at each beat; empty until chords are analyzed."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,25 +205,41 @@ class AnalysisResult:
     """
 
     bpm: float
+    """Global tempo, in beats per minute."""
     bpm_confidence: float
+    """Winning tempo cluster's vote share, in ``[0, 1]`` (see the class note)."""
     key: Key
+    """Detected musical key."""
     time_signature: TimeSignature
+    """Estimated time signature."""
     timbre: TimbreFrame
+    """Aggregate timbre summary."""
     dynamics: AnalysisDynamics
+    """Aggregate dynamics summary."""
     rhythm: AnalysisRhythm
+    """Aggregate rhythm summary."""
     melody: MelodyResult
+    """Melody-contour summary."""
     beats: list[Beat] = dataclasses.field(default_factory=list)
+    """Detected beats, in time order."""
     # The bar starts, drawn from ``beats``: each is the beat that opens a bar.
     downbeats: list[Beat] = dataclasses.field(default_factory=list)
+    """The beats that open a bar; not the same length as ``beats``."""
     # Which beat of the first bar the analysis starts on. The meter estimator's
     # own phase, so it can disagree with the first downbeat once downbeats are
     # refined from chord and low-frequency evidence.
     downbeat_phase: int = 0
+    """Beat index the first bar starts on."""
     bpm_candidates: list[AnalysisBpmCandidate] = dataclasses.field(default_factory=list)
+    """Tempo hypotheses, the chosen tempo first."""
     time_signature_candidates: list[TimeSignature] = dataclasses.field(default_factory=list)
+    """Time-signature hypotheses ordered by descending support."""
     chords: list[AnalysisChord] = dataclasses.field(default_factory=list)
+    """Detected chord progression, each labelled with its Roman numeral in ``key``."""
     sections: list[Section] = dataclasses.field(default_factory=list)
+    """Detected song-structure sections."""
     beat_observations: BeatObservations | None = None
+    """Per-beat evidence behind the downbeat and meter decisions; ``None`` when not produced."""
     # Smoothed local tempo at each beat, in BPM, parallel to ``beats``.
     # Empty unless ``compute_tempo_curve`` was set, and empty regardless when
     # fewer than two beats were detected, since a tempo is a property of the
@@ -216,10 +250,13 @@ class AnalysisResult:
     # tempo rather than ``bpm`` resampled: on material whose tempo moves it
     # departs from ``bpm``.
     beat_local_bpm: np.ndarray = dataclasses.field(default_factory=_empty_float32)
+    """Smoothed local tempo at each beat, in BPM, parallel to ``beats``; may be empty."""
     form: str = ""
+    """Musical form label, e.g. ``"AABA"``; empty when none was derived."""
     # Tuning the chromagrams were built with, in cents: the
     # given value, or the measured one under ``tuning_cents="auto"``.
     tuning_cents: float = 0.0
+    """Tuning the chromagrams were built with, in cents."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -265,11 +302,17 @@ class MeterEstimate:
     """
 
     time_signature: TimeSignature
+    """Best-supported meter over the scored beat series."""
     downbeat_phase: int
+    """Beat index the first bar starts on, in ``[0, time_signature.numerator)``."""
     searched: bool
+    """False when the beats were too few to score; every other field is then the fallback."""
     grouping: np.ndarray = dataclasses.field(default_factory=_empty_int32)
+    """How the bar divides, in beats per accent group; sums to ``time_signature.numerator``."""
     candidate_scores: np.ndarray = dataclasses.field(default_factory=_empty_float32)
+    """Standardized support per requested numerator, in request order (see above)."""
     candidates: list[TimeSignature] = dataclasses.field(default_factory=list)
+    """Scored meters by descending support; each ``confidence`` is its share of the total."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -277,7 +320,9 @@ class BpmCandidate:
     """A tempo candidate with its confidence."""
 
     bpm: float
+    """Tempo, in beats per minute."""
     confidence: float
+    """Winning tempo cluster's vote share, in ``[0, 1]``."""
 
 
 BpmCandidateRelation = Literal["primary", "half", "double", "other"]
@@ -288,6 +333,7 @@ class AnalysisBpmCandidate(BpmCandidate):
     """A tempo candidate of :func:`analyze`, with its relation to the chosen tempo."""
 
     relation: BpmCandidateRelation
+    """Relation to the chosen tempo: ``primary``, ``half``, ``double`` or ``other``."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -303,10 +349,15 @@ class BpmAnalysisResult:
     """
 
     bpm: float
+    """Chosen tempo, in beats per minute."""
     confidence: float
+    """Winning tempo cluster's vote share, in ``[0, 1]`` (see the class note)."""
     candidates: list[BpmCandidate]
+    """Tempo candidates: the chosen tempo first, then the other bins by descending vote share."""
     autocorrelation: np.ndarray
+    """Autocorrelation of the onset envelope over tempo lags."""
     tempogram: np.ndarray
+    """Tempogram of the onset envelope, flattened."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -318,11 +369,17 @@ class LufsResult:
     """
 
     integrated_lufs: float
+    """Integrated loudness over the whole signal, in LUFS."""
     momentary_lufs: float
+    """Loudness of the final complete 400 ms window, in LUFS; not Max-M."""
     short_term_lufs: float
+    """Loudness of the final complete 3 s window, in LUFS; not Max-S."""
     max_momentary_lufs: float
+    """Maximum 400 ms window loudness (EBU R128 Max-M), in LUFS."""
     max_short_term_lufs: float
+    """Maximum 3 s window loudness (EBU R128 Max-S), in LUFS."""
     loudness_range_lu: float
+    """Loudness range, in LU."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -330,9 +387,13 @@ class ClippingRegion:
     """One contiguous run of clipped samples reported by detect_clipping."""
 
     start_sample: int
+    """Index of the first clipped sample."""
     end_sample: int
+    """Index one past the last clipped sample."""
     length: int
+    """Run length, in samples."""
     peak: float
+    """Largest absolute sample value in the run (linear)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -340,9 +401,13 @@ class ClippingReport:
     """Aggregated clipping detection result (mirrors SonareClippingResult)."""
 
     clipped_samples: int
+    """Number of samples at or past the threshold."""
     clipping_ratio: float
+    """``clipped_samples`` divided by the input length."""
     max_clipped_peak: float
+    """Largest absolute sample value over all reported regions (linear)."""
     regions: list[ClippingRegion]
+    """The clipped runs, in order."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -350,9 +415,13 @@ class DynamicRangeReport:
     """Sliding-window dynamic range report (mirrors SonareDynamicRangeResult)."""
 
     dynamic_range_db: float
+    """High percentile minus low percentile of the window levels, in dB."""
     low_percentile_db: float
+    """Window RMS level at the low percentile, in dBFS."""
     high_percentile_db: float
+    """Window RMS level at the high percentile, in dBFS."""
     window_rms_db: list[float]
+    """RMS level of each analysis window, in dBFS."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -360,7 +429,9 @@ class VectorscopeReport:
     """Mid/side vectorscope point series for a (left, right) stereo pair."""
 
     mid: NDArray[np.float32]
+    """Mid component of each point."""
     side: NDArray[np.float32]
+    """Side component of each point."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -368,12 +439,19 @@ class PhaseScopeReport:
     """Phase-scope (Lissajous) point series plus summary stats."""
 
     mid: NDArray[np.float32]
+    """Mid component of each point."""
     side: NDArray[np.float32]
+    """Side component of each point."""
     radius: NDArray[np.float32]
+    """Distance of each point from the origin."""
     angle_rad: NDArray[np.float32]
+    """Angle of each point, ``atan2(side, mid)``, in radians."""
     correlation: float
+    """Stereo correlation over the full-resolution signal."""
     average_abs_angle_rad: float
+    """Mean absolute point angle over the full-resolution signal, in radians."""
     max_radius: float
+    """Largest point radius over the full-resolution signal."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -381,11 +459,17 @@ class SpectrumReport:
     """Single-frame magnitude / power / dB spectrum (mirrors SonareSpectrumResult)."""
 
     frequencies: NDArray[np.float32]
+    """Center frequency of each bin, in Hz."""
     magnitude: NDArray[np.float32]
+    """Linear magnitude of each bin."""
     power: NDArray[np.float32]
+    """Power of each bin."""
     db: NDArray[np.float32]
+    """Level of each bin, in dB."""
     n_fft: int
+    """FFT size the spectrum was computed with."""
     sample_rate: int
+    """Sample rate of the analyzed audio, in Hz."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -393,17 +477,24 @@ class WaveformPeaksReport:
     """Per-channel min/max waveform buckets. Arrays are channel-major."""
 
     min: NDArray[np.float32]
+    """Per-bucket minima, channel-major: index ``channel * bucket_count + bucket``."""
     max: NDArray[np.float32]
+    """Per-bucket maxima, channel-major: index ``channel * bucket_count + bucket``."""
     channels: int
+    """Number of channels."""
     bucket_count: int
+    """Number of buckets per channel."""
     samples_per_bucket: int
+    """Bucket width, in samples."""
 
 
 class StereoBlock(NamedTuple):
     """One processed stereo block; unpacks as ``left, right``."""
 
     left: NDArray[np.float32]
+    """Processed left channel of the block."""
     right: NDArray[np.float32]
+    """Processed right channel of the block."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -420,13 +511,21 @@ class EqSpectrumSnapshot:
     """
 
     pre_left: NDArray[np.float32]
+    """Pre-EQ left waveform scope feed."""
     pre_right: NDArray[np.float32]
+    """Pre-EQ right waveform scope feed."""
     post_left: NDArray[np.float32]
+    """Post-EQ left waveform scope feed."""
     post_right: NDArray[np.float32]
+    """Post-EQ right waveform scope feed."""
     band_gain_db: NDArray[np.float32]
+    """Current gain of each band, in dB."""
     profile_db: NDArray[np.float32]
+    """Post-EQ level of the 16 bands from 20 Hz to 20 kHz, in dB relative to full scale."""
     last_auto_gain_db: float
+    """Most recent automatic gain, in dB."""
     seq: int
+    """Snapshot sequence number."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -434,12 +533,19 @@ class RhythmResult:
     """Rhythm analysis primitives."""
 
     bpm: float
+    """The beat tracker's own tempo, in beats per minute."""
     time_signature: TimeSignature
+    """Estimated time signature."""
     groove_type: str
+    """Rhythmic feel of the track, as a groove token."""
     syncopation: float
+    """Syncopation level, in ``[0, 1]``."""
     pattern_regularity: float
+    """Regularity of the beat intervals, in ``[0, 1]``; 0 with no beat interval."""
     tempo_stability: float
+    """Tempo stability over time, in ``[0, 1]``; 0 below two beat intervals."""
     beat_intervals: np.ndarray
+    """Intervals between consecutive beats, in seconds."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -447,13 +553,21 @@ class DynamicsResult:
     """Dynamics and loudness analysis primitives."""
 
     dynamic_range_db: float
+    """Dynamic range, in dB."""
     peak_db: float
+    """Peak level, in dB."""
     rms_db: float
+    """RMS level, in dB."""
     crest_factor: float
+    """Peak-to-RMS ratio of the signal."""
     loudness_range_lu: float
+    """Loudness range, in LU."""
     is_compressed: bool
+    """True when the signal is flagged as compressed."""
     loudness_times_sec: np.ndarray
+    """Loudness curve timestamps, in seconds, parallel to ``loudness_rms_db``."""
     loudness_rms_db: np.ndarray
+    """Loudness curve RMS values, in dB, parallel to ``loudness_times_sec``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -461,10 +575,15 @@ class TimbreFrame:
     """Timbre metrics for one analysis window in TimbreResult.timbre_over_time."""
 
     brightness: float
+    """Spectral brightness, in ``[0, 1]``; high is bright."""
     warmth: float
+    """Spectral warmth, in ``[0, 1]``; high is warm."""
     density: float
+    """Spectral density, in ``[0, 1]``; high is rich."""
     roughness: float
+    """Spectral roughness, in ``[0, 1]``; high is rough."""
     complexity: float
+    """Harmonic complexity, in ``[0, 1]``; high is complex."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -472,14 +591,23 @@ class TimbreResult:
     """Timbre and spectral-shape analysis primitives."""
 
     brightness: float
+    """Spectral brightness, in ``[0, 1]``; high is bright."""
     warmth: float
+    """Spectral warmth, in ``[0, 1]``; high is warm."""
     density: float
+    """Spectral density, in ``[0, 1]``; high is rich."""
     roughness: float
+    """Spectral roughness, in ``[0, 1]``; high is rough."""
     complexity: float
+    """Harmonic complexity, in ``[0, 1]``; high is complex."""
     spectral_centroid: np.ndarray
+    """Spectral centroid per frame."""
     spectral_flatness: np.ndarray
+    """Spectral flatness per frame."""
     spectral_rolloff: np.ndarray
+    """Spectral rolloff per frame."""
     timbre_over_time: list[TimbreFrame]
+    """Time-varying timbre metrics, one entry per analysis window."""
 
 
 #: Chord quality tokens, indexed by the C ``SonareChordQuality`` ordinal.
@@ -557,12 +685,19 @@ class Chord:
     """
 
     root: PitchClass
+    """Root pitch class."""
     quality: str
+    """Chord quality token from :data:`CHORD_QUALITIES`; ``"unknown"`` if not named."""
     start_sec: float
+    """Chord start time, in seconds."""
     end_sec: float
+    """Chord end time, in seconds."""
     confidence: float
+    """Correlation of the chroma with the chosen chord template, in ``[0, 1]``."""
     bass: PitchClass | None = None
+    """Bass pitch class; ``None`` when no bass was estimated."""
     name: str = ""
+    """Chord symbol, e.g. ``"Am7"``, ``"C/E"``, ``"N.C."``."""
 
     @property
     def duration_sec(self) -> float:
@@ -587,6 +722,7 @@ class AnalysisChord(Chord):
     """
 
     roman_numeral: str = ""
+    """Roman numeral of the chord relative to the analysis key, e.g. ``"V7"``; empty for N.C."""
 
 
 ChordFunctionName = Literal["tonic", "subdominant", "dominant", "chromatic", "none"]
@@ -604,6 +740,7 @@ class FunctionalChord(Chord):
     """
 
     roman_numeral: str = ""
+    """Roman numeral relative to the key, e.g. ``"V7"``; ``"N.C."`` for an unknown chord."""
     function: ChordFunctionName = "none"
 
 
@@ -629,10 +766,15 @@ class StftResult:
     """
 
     n_fft: int
+    """FFT size, in samples."""
     hop_length: int
+    """Hop length between frames, in samples."""
     sample_rate: int
+    """Sample rate of the analyzed audio, in Hz."""
     magnitude: NDArray[np.float32]
+    """Magnitude spectrogram."""
     power: NDArray[np.float32]
+    """Power spectrogram."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -652,9 +794,13 @@ class MelSpectrogramResult:
     """
 
     sample_rate: int
+    """Sample rate of the analyzed audio, in Hz."""
     hop_length: int
+    """Hop length between frames, in samples."""
     power: NDArray[np.float32]
+    """Linear-power Mel spectrogram, shape ``(n_mels, n_frames)``."""
     db: NDArray[np.float32]
+    """Mel spectrogram in dB, shape ``(n_mels, n_frames)``."""
     n_fft: int
     fmin_hz: float
     fmax_hz: float
@@ -676,13 +822,19 @@ class MfccResult:
     """
 
     coefficients: NDArray[np.float32]
+    """MFCC matrix, shape ``(n_mfcc, n_frames)``."""
     sample_rate: int
+    """Sample rate of the analyzed audio, in Hz."""
     hop_length: int
+    """Hop length between frames, in samples."""
     n_fft: int
+    """FFT size of the source STFT."""
     n_mels: int
     fmin_hz: float
+    """Lower Mel band edge, in Hz."""
     fmax_hz: float
     htk: bool
+    """``True`` for the HTK Mel formula, ``False`` for Slaney."""
     lifter: float
 
 
@@ -695,9 +847,13 @@ class ChromaResult:
     """
 
     sample_rate: int
+    """Sample rate of the analyzed audio, in Hz."""
     hop_length: int
+    """Hop length between frames, in samples."""
     features: NDArray[np.float32]
+    """Chroma matrix, shape ``(n_chroma, n_frames)``."""
     mean_energy: NDArray[np.float32]
+    """Mean energy of each chroma class, length ``n_chroma``."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -718,10 +874,15 @@ class PitchResult:
     """
 
     f0: NDArray[np.float32]
+    """Per-frame fundamental frequency, in Hz; unvoiced frames are NaN."""
     voiced_prob: NDArray[np.float32]
+    """Per-frame voiced observation mass (see above)."""
     voiced_flag: NDArray[np.bool_]
+    """Per-frame voicing decision."""
     median_f0: float
+    """Median fundamental frequency over the track, in Hz."""
     mean_f0: float
+    """Mean fundamental frequency over the track, in Hz."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -732,7 +893,9 @@ class PiptrackResult:
     """
 
     pitches: NDArray[np.float32]
+    """Pitch candidate per bin and frame."""
     magnitudes: NDArray[np.float32]
+    """Peak magnitude per bin and frame."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -743,8 +906,11 @@ class ReassignedSpectrogramResult:
     """
 
     magnitude: NDArray[np.float32]
+    """STFT magnitude per bin and frame."""
     times: NDArray[np.float32]
+    """Reassigned time of each bin and frame, in seconds."""
     frequencies: NDArray[np.float32]
+    """Reassigned frequency of each bin and frame, in Hz."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -752,10 +918,15 @@ class NoteSegment:
     """One stable monophonic note region segmented from an F0 track."""
 
     frame_start: int
+    """First F0 frame of the note."""
     frame_end: int
+    """End of the note in F0 frames (exclusive)."""
     start_sec: float
+    """Note start, in seconds."""
     end_sec: float
+    """Note end, in seconds."""
     median_cents: float
+    """Median pitch of the note, in cents."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -763,9 +934,13 @@ class HpssResult:
     """Harmonic-percussive source separation result."""
 
     harmonic: list[float]
+    """Harmonic component, ``length`` samples."""
     percussive: list[float]
+    """Percussive component, ``length`` samples."""
     length: int
+    """Length of each component, in samples."""
     sample_rate: int
+    """Sample rate of both components, in Hz."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -777,7 +952,9 @@ class TrimRange:
     """
 
     first: int
+    """First kept sample."""
     last_exclusive: int
+    """One past the last kept sample."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -792,8 +969,11 @@ class TrimReport:
     """
 
     range: TrimRange
+    """The kept range, padding included."""
     removed_head_samples: int
+    """Samples dropped before ``range.first``."""
     removed_tail_samples: int
+    """Samples dropped after ``range.last_exclusive``."""
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -804,7 +984,9 @@ class TrimSilenceResult:
     refusal; ``report`` says where the cut fell."""
 
     samples: NDArray[np.float32]
+    """The kept audio, ``report.range.last_exclusive - report.range.first`` samples long."""
     report: TrimReport
+    """What the pass kept and dropped."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -823,11 +1005,17 @@ class TrimSilenceStereoResult:
     """
 
     left: list[float]
+    """Left channel, cut to the shared range."""
     right: list[float]
+    """Right channel, cut to the shared range."""
     length: int
+    """Output length of each channel, in samples."""
     report: TrimReport
+    """What the pass kept and dropped; its range is the union applied to both channels."""
     left_range: TrimRange
+    """Range the left channel's own scan found."""
     right_range: TrimRange
+    """Range the right channel's own scan found."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -841,6 +1029,10 @@ class NormalizeStereoResult:
     """
 
     left: list[float]
+    """Normalized left channel."""
     right: list[float]
+    """Normalized right channel."""
     length: int
+    """Length of each channel, in samples."""
     applied_gain_db: float
+    """The single gain given to both channels, in dB; 0 for a silent pair."""

@@ -329,8 +329,11 @@ class TrimResult:
     """
 
     audio: npt.NDArray[np.float32]
+    """The kept audio."""
     start_sample: int
+    """Start of the kept span in the input, in samples."""
     end_sample: int
+    """End of the kept span in the input, exclusive, in samples."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -359,8 +362,11 @@ class SilenceCommonReport:
     """
 
     silence_ceiling_db: float
+    """Largest ``top_db`` at which every signal still shows silence."""
     max_signal_intervals: int
+    """Interval count of the most fragmented signal on its own, before the union."""
     min_signal_intervals: int
+    """Interval count of the least fragmented signal on its own, before the union."""
 
 
 def _common_silence_signals(
@@ -432,7 +438,9 @@ class SplitSilenceCommonWithReportResult:
     """
 
     intervals: npt.NDArray[np.int64]
+    """Shared non-silent ``[start_sample, end_sample)`` rows, shape ``(n_intervals, 2)``."""
     report: SilenceCommonReport
+    """Why the intervals came out as they did."""
 
 
 def split_silence_common_with_report(

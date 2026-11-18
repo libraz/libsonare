@@ -721,151 +721,224 @@ class RealtimeVoiceChangerConfig:
     """
 
     input_gain_db: float = dataclasses.field(default_factory=_neutral_default("input_gain_db"))
+    """Input gain in dB, [-24, 24]."""
     output_gain_db: float = dataclasses.field(default_factory=_neutral_default("output_gain_db"))
+    """Output gain in dB, [-36, 12]."""
     wet_mix: float = dataclasses.field(default_factory=_neutral_default("wet_mix"))
+    """Dry/wet mix in [0, 1]; 1 is fully processed."""
     retune_pitch_semitones: float = dataclasses.field(
         default_factory=_neutral_default("retune_pitch_semitones")
     )
+    """Retune pitch shift in semitones."""
     retune_mix: float = dataclasses.field(default_factory=_neutral_default("retune_mix"))
+    """Retune wet amount in [0, 1]."""
     retune_grain_size_samples: int = dataclasses.field(
         default_factory=_neutral_default("retune_grain_size_samples")
     )
+    """Retune grain length in samples."""
     formant_factor: float = dataclasses.field(default_factory=_neutral_default("formant_factor"))
+    """Formant scale factor, [0.55, 1.65]; 1 leaves the formants alone. See ``formant_mode``."""
     formant_amount: float = dataclasses.field(default_factory=_neutral_default("formant_amount"))
+    """Strength of the formant displacement in [0, 1]; ignored in absolute mode."""
     formant_body: float = dataclasses.field(default_factory=_neutral_default("formant_body"))
+    """Formant body amount in [-1, 1]."""
     formant_brightness: float = dataclasses.field(
         default_factory=_neutral_default("formant_brightness")
     )
+    """Formant brightness amount in [-1, 1]."""
     formant_nasal: float = dataclasses.field(default_factory=_neutral_default("formant_nasal"))
+    """Formant nasal amount in [-1, 1]."""
     formant_mode: str = dataclasses.field(default_factory=_neutral_default("formant_mode"))
+    """How ``formant_factor`` acts: ``"relative"`` or ``"absolute"``; fixed at creation."""
     eq_high_pass_hz: float = dataclasses.field(default_factory=_neutral_default("eq_high_pass_hz"))
+    """High-pass corner in Hz, [20, 300]."""
     eq_body_db: float = dataclasses.field(default_factory=_neutral_default("eq_body_db"))
+    """Body band gain in dB, [-12, 12]."""
     eq_presence_db: float = dataclasses.field(default_factory=_neutral_default("eq_presence_db"))
+    """Presence band gain in dB, [-12, 12]."""
     eq_air_db: float = dataclasses.field(default_factory=_neutral_default("eq_air_db"))
+    """Air band gain in dB, [-12, 12]."""
     gate_threshold_db: float = dataclasses.field(
         default_factory=_neutral_default("gate_threshold_db")
     )
+    """Gate threshold in dB, [-90, -12]."""
     gate_attack_ms: float = dataclasses.field(default_factory=_neutral_default("gate_attack_ms"))
+    """Gate attack in ms, one time constant."""
     gate_release_ms: float = dataclasses.field(default_factory=_neutral_default("gate_release_ms"))
+    """Gate release in ms, one time constant."""
     gate_range_db: float = dataclasses.field(default_factory=_neutral_default("gate_range_db"))
+    """Gate attenuation depth in dB, [0, 80]."""
     compressor_threshold_db: float = dataclasses.field(
         default_factory=_neutral_default("compressor_threshold_db")
     )
+    """Compressor threshold in dB, [-60, 0]."""
     compressor_ratio: float = dataclasses.field(
         default_factory=_neutral_default("compressor_ratio")
     )
+    """Compression ratio, [1, 20]."""
     compressor_attack_ms: float = dataclasses.field(
         default_factory=_neutral_default("compressor_attack_ms")
     )
+    """Compressor attack in ms, one time constant."""
     compressor_release_ms: float = dataclasses.field(
         default_factory=_neutral_default("compressor_release_ms")
     )
+    """Compressor release in ms, one time constant."""
     compressor_makeup_gain_db: float = dataclasses.field(
         default_factory=_neutral_default("compressor_makeup_gain_db")
     )
+    """Compressor makeup gain in dB, [-12, 12]."""
     deesser_frequency_hz: float = dataclasses.field(
         default_factory=_neutral_default("deesser_frequency_hz")
     )
+    """De-esser centre frequency in Hz, [3000, 12000]."""
     deesser_threshold_db: float = dataclasses.field(
         default_factory=_neutral_default("deesser_threshold_db")
     )
+    """De-esser threshold in dB, [-60, -6]."""
     deesser_ratio: float = dataclasses.field(default_factory=_neutral_default("deesser_ratio"))
+    """De-esser ratio, [1, 20]."""
     deesser_range_db: float = dataclasses.field(
         default_factory=_neutral_default("deesser_range_db")
     )
+    """Maximum de-esser attenuation in dB, [0, 24]."""
     reverb_mix: float = dataclasses.field(default_factory=_neutral_default("reverb_mix"))
+    """Space-stage wet level in [0, 0.45]; shared by every ``reverb_variation``."""
     reverb_time_ms: float = dataclasses.field(default_factory=_neutral_default("reverb_time_ms"))
+    """Reverb decay time in ms, [40, 1800]."""
     reverb_damping: float = dataclasses.field(default_factory=_neutral_default("reverb_damping"))
+    """Reverb high-frequency damping in [0, 1]."""
     reverb_seed: int = dataclasses.field(default_factory=_neutral_default("reverb_seed"))
+    """Integer seed of the reverb's random generator (32-bit signed)."""
     limiter_ceiling_db: float = dataclasses.field(
         default_factory=_neutral_default("limiter_ceiling_db")
     )
+    """Limiter ceiling in dB, [-12, -1]."""
     limiter_release_ms: float = dataclasses.field(
         default_factory=_neutral_default("limiter_release_ms")
     )
+    """Limiter release in ms, one time constant."""
     # Appended in ABI version 2 (kept at the END to match the C POD layout).
     limiter_enable_isp_limiter: int = dataclasses.field(
         default_factory=_neutral_default("limiter_enable_isp_limiter")
     )
+    """Non-zero enables the 4x-oversampled inter-sample-peak (true-peak) limiter."""
     limiter_isp_ceiling_dbtp: float = dataclasses.field(
         default_factory=_neutral_default("limiter_isp_ceiling_dbtp")
     )
+    """True-peak ceiling in dBTP of the inter-sample-peak limiter."""
     voice_engine: str = dataclasses.field(default_factory=_neutral_default("voice_engine"))
+    """Pitch engine, ``"grain"`` (f0-less SOLA retune) or ``"psola"`` (tracks f0); fixed at
+    creation."""
     voice_engine_f0_min_hz: float = dataclasses.field(
         default_factory=_neutral_default("voice_engine_f0_min_hz")
     )
+    """Lowest tracked f0 in Hz, [50, 200]; sets the psola latency. Fixed at creation."""
     pitch_correction_mode: str = dataclasses.field(
         default_factory=_neutral_default("pitch_correction_mode")
     )
+    """Pitch correction: ``"off"``, ``"auto"`` (scale snap) or ``"robot"`` (one pitch class)."""
     pitch_correction_amount: float = dataclasses.field(
         default_factory=_neutral_default("pitch_correction_amount")
     )
+    """Correction strength in [0, 1]."""
     pitch_correction_speed_ms: float = dataclasses.field(
         default_factory=_neutral_default("pitch_correction_speed_ms")
     )
+    """Correction speed in ms, [0, 400]."""
     pitch_correction_key_root: int = dataclasses.field(
         default_factory=_neutral_default("pitch_correction_key_root")
     )
+    """Scale root, 0 = C to 11 = B; unused for a chromatic scale."""
     pitch_correction_scale: str = dataclasses.field(
         default_factory=_neutral_default("pitch_correction_scale")
     )
+    """Scale the correction snaps to: ``"major"``, ``"naturalMinor"`` or ``"chromatic"``."""
     pitch_correction_robot_octave: int = dataclasses.field(
         default_factory=_neutral_default("pitch_correction_robot_octave")
     )
+    """Octave offset of the robot mode, [-1, 1]."""
     harmony_voices: int = dataclasses.field(default_factory=_neutral_default("harmony_voices"))
+    """Harmony voices beside the lead, [0, 3]."""
     harmony_steps: tuple[int, int, int] = dataclasses.field(
         default_factory=_neutral_default("harmony_steps")
     )
+    """Scale degrees of the three harmony voices from the lead, each in [-7, 7]; 0 is unison."""
     harmony_level: float = dataclasses.field(default_factory=_neutral_default("harmony_level"))
+    """Level of the harmony voices in [0, 1]."""
     harmony_lead_level: float = dataclasses.field(
         default_factory=_neutral_default("harmony_lead_level")
     )
+    """Level of the lead voice in [0, 1]."""
     harmony_detune_cents: float = dataclasses.field(
         default_factory=_neutral_default("harmony_detune_cents")
     )
+    """Detune of the harmony voices in cents, [0, 30]."""
     harmony_delay_ms: float = dataclasses.field(
         default_factory=_neutral_default("harmony_delay_ms")
     )
+    """Harmony delay in ms, [0, 40]."""
     vocoder_enabled: int = dataclasses.field(default_factory=_neutral_default("vocoder_enabled"))
+    """Non-zero enables the channel vocoder."""
     vocoder_bands: int = dataclasses.field(default_factory=_neutral_default("vocoder_bands"))
+    """Vocoder band count, [8, 32]. Fixed at creation."""
     vocoder_attack_ms: float = dataclasses.field(
         default_factory=_neutral_default("vocoder_attack_ms")
     )
+    """Vocoder envelope attack in ms, [0.5, 50]."""
     vocoder_release_ms: float = dataclasses.field(
         default_factory=_neutral_default("vocoder_release_ms")
     )
+    """Vocoder envelope release in ms, [2, 300]."""
     vocoder_sibilance: float = dataclasses.field(
         default_factory=_neutral_default("vocoder_sibilance")
     )
+    """Vocoder sibilance amount in [0, 1]."""
     vocoder_carrier_source: str = dataclasses.field(
         default_factory=_neutral_default("vocoder_carrier_source")
     )
+    """Carrier source, ``"internal"`` or ``"external"``."""
     vocoder_carrier_wave: str = dataclasses.field(
         default_factory=_neutral_default("vocoder_carrier_wave")
     )
+    """Internal carrier waveform: ``"saw"``, ``"pulse"`` or ``"ensemble"``."""
     vocoder_ensemble_detune_cents: float = dataclasses.field(
         default_factory=_neutral_default("vocoder_ensemble_detune_cents")
     )
+    """Detune of the ensemble carrier in cents, [0, 30]."""
     vocoder_level: float = dataclasses.field(default_factory=_neutral_default("vocoder_level"))
+    """Vocoder output level in [0, 1]."""
     character_type: str = dataclasses.field(default_factory=_neutral_default("character_type"))
+    """Character stage type: ``"none"``, ``"megaphone"``, ``"radio"``, ``"bbdChorus"`` or
+    ``"strobo"``."""
     character_amount: float = dataclasses.field(
         default_factory=_neutral_default("character_amount")
     )
+    """Character stage amount in [0, 1]."""
     character_tone: float = dataclasses.field(default_factory=_neutral_default("character_tone"))
+    """Character stage tone in [-1, 1]."""
     reverb_variation: str = dataclasses.field(default_factory=_neutral_default("reverb_variation"))
+    """Space stage variation: ``"reverb"``, ``"echo"``, ``"tempoDelay"`` or ``"dubEcho"``."""
     reverb_variation_delay_ms: float = dataclasses.field(
         default_factory=_neutral_default("reverb_variation_delay_ms")
     )
+    """Echo delay in ms, [1, 3000]."""
     reverb_variation_feedback: float = dataclasses.field(
         default_factory=_neutral_default("reverb_variation_feedback")
     )
+    """Echo feedback in [0, 0.95]."""
     reverb_variation_tempo_bpm: float = dataclasses.field(
         default_factory=_neutral_default("reverb_variation_tempo_bpm")
     )
+    """Tempo of the tempo delay in BPM, [30, 300]."""
     reverb_variation_division: str = dataclasses.field(
         default_factory=_neutral_default("reverb_variation_division")
     )
+    """Note length of the tempo delay: ``"quarter"``, ``"eighth"``, ``"dottedEighth"`` or
+    ``"sixteenth"``."""
     midi_release: str = dataclasses.field(default_factory=_neutral_default("midi_release"))
+    """After every held note is released: ``"hold"`` keeps the last note, ``"input"`` follows the
+    input."""
 
     @classmethod
     def from_pod(cls, pod: SonareRealtimeVoiceChangerConfig) -> RealtimeVoiceChangerConfig:

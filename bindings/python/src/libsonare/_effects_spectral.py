@@ -51,13 +51,25 @@ class SpectralRegionOp:
     """
 
     start_sample: int | None = None
+    """Region start in input samples, clamped to ``[0, length]``; None is 0. Not with
+    ``start_sec``."""
     end_sample: int | None = None
+    """Region end (exclusive) in input samples, clamped to ``[0, length]``; None spans to the end.
+    Not with ``end_sec``."""
     low_hz: float = 0.0
+    """Region low frequency edge in Hz, clamped to ``[0, nyquist]``."""
     high_hz: float = 0.0
+    """Region high frequency edge in Hz; ``<= 0`` or ``>= nyquist`` means Nyquist."""
     gain_db: float = 0.0
+    """Gain in dB for ``"gain"`` / ``"attenuate"``; ignored by ``"mute"`` and ``"heal"``."""
     mode: SpectralEditMode = "gain"
+    """How the op modifies the masked bins, a :data:`SpectralEditMode` token."""
     start_sec: float | None = None
+    """Region start in seconds, rounded to the nearest sample; None is unset. Not with
+    ``start_sample``."""
     end_sec: float | None = None
+    """Region end in seconds, rounded to the nearest sample; None is unset. Not with
+    ``end_sample``."""
 
 
 @_guard_buffer("samples")

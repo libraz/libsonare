@@ -46,6 +46,7 @@ class MixAssistantTrackProfile:
     name: str | None
     """Display name the track was given; None when it was given none."""
     source: MixSourceClass
+    """Source class the track was resolved to (:data:`MixSourceClass`)."""
     source_confidence: float
     """Classifier confidence in ``[0, 1]``."""
     usable: bool
@@ -53,16 +54,23 @@ class MixAssistantTrackProfile:
     exclusion_reason: str | None
     """Why the track was excluded; None when it is usable."""
     num_channels: int
+    """Channel count of the track: 1 for mono, 2 for stereo."""
     duration_sec: float
+    """Track duration in seconds."""
     integrated_lufs: float | None
     """BS.1770 integrated loudness in LUFS; None for a track with no gated block to measure."""
     true_peak_dbtp: float
+    """True peak in dBTP."""
     crest_factor_db: float
+    """Crest factor (peak over RMS) in dB."""
     spectral_centroid_hz: float
+    """Spectral centroid in Hz."""
     spectral_flatness: float
     """Near 0 is tonal, near 1 is noise-like."""
     attack_per_second: float
+    """Onsets per second."""
     sustain_ratio: float
+    """Sustain ratio of the track's envelope."""
     band_occupancy: dict[MixAnalysisBand, float]
     """Share of the track's energy in each analysis band."""
 
@@ -72,8 +80,11 @@ class MixBandDominance:
     """One informative masker/maskee band pair."""
 
     masker: str
+    """Strip id of the masking track."""
     maskee: str
+    """Strip id of the masked track."""
     band: MixAnalysisBand
+    """Analysis band the pair is measured in (:data:`MixAnalysisBand`)."""
     ratio: float
     """Masker's mean energy share in ``[0, 1]``; 0.5 means equal band energy."""
     valid_frames: int
@@ -85,12 +96,15 @@ class MixTrackAlignment:
     """A related track pair and the time/polarity relationship measured between them."""
 
     reference: str
+    """Strip id of the reference track."""
     target: str
+    """Strip id of the track measured against the reference."""
     lag_samples: int
     """Lag that aligns the target onto the reference; positive means the target arrives later."""
     correlation: float
     """Signed normalized correlation at ``lag_samples``, in ``[-1, 1]``."""
     polarity_opposed: bool
+    """True when the best correlation peak is negative."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +112,7 @@ class MixCrowdedBand:
     """A band carrying more simultaneous sources than the image comfortably holds."""
 
     band: MixAnalysisBand
+    """The crowded analysis band (:data:`MixAnalysisBand`)."""
     crowding: float
     """In ``[0, 1]``: 1 when all of the band's energy sits in one pan position."""
 
@@ -107,11 +122,13 @@ class MixMonoRisk:
     """A track whose stereo image is likely to collapse in mono."""
 
     strip_id: str
+    """Id of the strip at risk."""
     correlation: float
     """Inter-channel correlation in ``[-1, 1]``."""
     width: float
     """Side-to-mid level ratio, clamped finite so an anti-phase pair reads a large value."""
     wide_low_end: bool
+    """True when the track carries meaningful low-frequency stereo width."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,10 +136,15 @@ class MixAssistantMixProfile:
     """Cross-track measurements the decisions were made from."""
 
     track_count: int
+    """Number of tracks the profile covers."""
     band_dominance: list[MixBandDominance]
+    """Informative masker/maskee band pairs."""
     alignment: list[MixTrackAlignment]
+    """Time and polarity relationships between related track pairs."""
     crowded_bands: list[MixCrowdedBand]
+    """Bands carrying more simultaneous sources than the image comfortably holds."""
     mono_risks: list[MixMonoRisk]
+    """Tracks whose stereo image is likely to collapse in mono."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,5 +156,6 @@ class MixAssistantResult:
     tracks: list[MixAssistantTrackProfile]
     """One entry per input track, in input order."""
     mix: MixAssistantMixProfile
+    """Cross-track measurements the decisions were made from."""
     explanation: list[str]
     """Reasons in the order the changes were applied; empty when nothing was suggested."""

@@ -302,11 +302,17 @@ class AssistSidecar:
     """
 
     module_id: str
+    """Id of the module that produced the sidecar; the key it is stored under."""
     schema_version: int
+    """Module-defined schema version of ``payload``."""
     target_track_id: int
+    """Id of the track the sidecar targets; 0 means project scope."""
     region_start_ppq: float
+    """Start of the scoped region in PPQ."""
     region_end_ppq: float
+    """End of the scoped region in PPQ."""
     payload: bytes
+    """Opaque module-owned payload bytes."""
 
 
 @dataclass(frozen=True)
@@ -333,8 +339,11 @@ class NotePairValidation:
     """
 
     ok: bool
+    """True when every note-on has a matching note-off."""
     unmatched_note_ons: int
+    """Note-ons with no matching note-off."""
     unmatched_note_offs: int
+    """Note-offs with no matching note-on."""
 
 
 @dataclass(frozen=True)
@@ -350,14 +359,23 @@ class MidiCcBinding:
     """
 
     cc_number: int
+    """Controller number (the MSB controller for a 14-bit CC)."""
     channel: int | None
+    """MIDI channel 0..15; None matches any channel."""
     kind: ProjectMidiCcBindingKind
+    """Controller shape, a ``ProjectMidiCcBindingKind`` token."""
     cc_lsb_number: int
+    """LSB controller number of a 14-bit CC."""
     selector_msb: int
+    """Selector MSB of an RPN/NRPN binding."""
     selector_lsb: int
+    """Selector LSB of an RPN/NRPN binding."""
     param_id: int
+    """Automation parameter id the controller drives."""
     min_value: float
+    """Lower end of the mapped parameter range."""
     max_value: float
+    """Upper end of the mapped parameter range."""
 
 
 @dataclass(frozen=True)
@@ -370,8 +388,11 @@ class MidiRouteResult:
     """
 
     events: list[tuple[float, int, int]]
+    """Events that passed the filter, remapped as configured, as ``(ppq, data0, data1)``."""
     overflowed: bool
+    """True when events were dropped for lack of router or caller capacity."""
     overflow_count: int
+    """Number of events dropped."""
 
 
 # The C ABI's "no pitch class" code; absence on the Python side.
@@ -454,7 +475,9 @@ class ProjectDeserializeResult:
     """Project plus warning diagnostics emitted by a successful JSON load."""
 
     project: Project
+    """The loaded :class:`Project`."""
     diagnostics: str
+    """Warning text from the load; empty when there were none."""
 
 
 def project_abi_version() -> int | None:

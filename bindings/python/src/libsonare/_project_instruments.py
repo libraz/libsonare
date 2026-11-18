@@ -159,12 +159,19 @@ class BuiltinSynthConfig:
     """
 
     waveform: SynthWaveform = "sine"
+    """Oscillator waveform, a ``SynthWaveform`` token."""
     gain: float = 0.0
+    """Master output gain (linear); 0 selects the default 0.2."""
     attack_ms: float = 0.0
+    """ADSR attack in ms; 0 selects 5."""
     decay_ms: float = 0.0
+    """ADSR decay in ms; 0 selects 60."""
     sustain: float = 0.0
+    """ADSR sustain level in [0, 1]; 0 selects 0.7."""
     release_ms: float = 0.0
+    """ADSR release in ms; 0 selects 120."""
     polyphony: int = 0
+    """Maximum simultaneous voices; 0 selects 16, clamped to [1, 64]."""
 
     def _to_c(self) -> SonareBuiltinSynthConfig:
         return SonareBuiltinSynthConfig(
@@ -207,10 +214,15 @@ class Sf2InstrumentConfig:
     """
 
     gain: float = 0.0
+    """Master output gain (linear); 0 selects the default 0.5."""
     polyphony: int = 0
+    """Maximum simultaneous voices; 0 selects 48, clamped to [1, 64]."""
     prefer_model_for_modeled_families: bool = False
+    """True selects the dedicated melodic models; drums stay SF2-first."""
     clear_bank_rig: bool = False
+    """True renders the instrument without the rig the bank binds after its voice."""
     gs_efx_realization: GsEfxRealization = "modern"
+    """How GS insertion effects are realised, a ``GsEfxRealization`` token."""
 
     def _to_c(self) -> SonareSf2InstrumentConfig:
         return SonareSf2InstrumentConfig(
@@ -242,10 +254,15 @@ class Sf2ProgramStatus:
     fallback)."""
 
     channel: int
+    """MIDI channel, 0-15."""
     bank: int
+    """Effective SF2 bank; 128 for a drum channel."""
     program: int
+    """Program number, 0-127."""
     backend: int
+    """Backend the program resolves to, ``SOURCE_BACKEND_SF2`` or ``SOURCE_BACKEND_SYNTH``."""
     preset_name: str
+    """Resolved SF2 preset name; empty for the synth fallback."""
 
 
 def _synth_waveform_value(waveform: SynthWaveform) -> int:
@@ -304,8 +321,10 @@ class SynthModRouting:
     """
 
     source: SynthModSource
+    """Modulation source, a ``SynthModSource`` name or ordinal; ``"none"`` is refused."""
     destination: SynthModDestination
     depth: float
+    """Destination units at full source deflection; its per-destination handling is above."""
 
 
 @dataclass(frozen=True)
@@ -424,66 +443,117 @@ class SynthPatch:
 
     preset: str = ""
     engine_mode: SynthEngineMode = "default"
+    """Engine that voices the patch, a ``SynthEngineMode`` token; ``"default"`` keeps the base."""
     waveform: SynthOscWaveform = "default"
     unison: int | None = None
+    """Detuned-stack width in [1, 7]; subtractive engine only."""
     detune_cents: float | None = None
+    """Unison spread in cents; subtractive engine only."""
     drift_cents: float | None = None
+    """Per-voice slow pitch drift depth in cents."""
     drive: float | None = None
+    """Pre-filter drive in [0, 1]."""
     filter_model: SynthFilterModel = "default"
+    """Filter model, a ``SynthFilterModel`` token; ``"default"`` keeps the base."""
     filter_output: SynthFilterOutput = "default"
+    """Filter output tap, a ``SynthFilterOutput`` token; ``"default"`` keeps the base."""
     cutoff_hz: float | None = None
+    """Filter cutoff in Hz."""
     hp_cutoff_hz: float | None = None
+    """Corner in Hz of the series 12 dB/oct highpass after the main filter; 0 switches it off."""
     sample_hold_hz: float | None = None
+    """Rate in Hz the voice output is held at; 0 switches the stage off."""
     bit_depth: float | None = None
+    """Word length in bits the held value is quantized to, [1, 24]; 0 switches it off."""
     pitch_offset_cents: float | None = None
+    """Constant transposition of the voice's pitch in cents, [-4800, 4800]."""
     resonance_q: float | None = None
+    """Main filter resonance Q."""
     key_track: float | None = None
+    """Cutoff keyboard tracking in [0, 1]."""
     env_to_cutoff_cents: float | None = None
+    """Filter envelope's cutoff depth in cents at full envelope; 0 leaves it off."""
     vel_to_cutoff_cents: float | None = None
+    """Velocity's cutoff depth in cents; velocity 127 is the anchor where it is zero."""
     amp_attack_ms: float | None = None
+    """Amplitude envelope attack in ms; full level is reached at the set time."""
     amp_decay_ms: float | None = None
+    """Amplitude envelope decay in ms, three time constants."""
     amp_sustain: float | None = None
+    """Amplitude envelope sustain level in [0, 1]."""
     amp_release_ms: float | None = None
+    """Amplitude envelope release in ms, three time constants."""
     filter_attack_ms: float | None = None
+    """Filter envelope attack in ms; full level is reached at the set time."""
     filter_decay_ms: float | None = None
+    """Filter envelope decay in ms, three time constants."""
     filter_sustain: float | None = None
+    """Filter envelope sustain level in [0, 1]."""
     filter_release_ms: float | None = None
+    """Filter envelope release in ms, three time constants."""
     lfo_rate_hz: float | None = None
+    """Vibrato LFO rate in Hz."""
     lfo_to_pitch_cents: float | None = None
+    """Hardwired vibrato depth in cents."""
     lfo_shape: SynthLfoShape = "default"
+    """LFO waveform, a ``SynthLfoShape`` token; ``"default"`` keeps the base."""
     lfo2_rate_hz: float | None = None
+    """Matrix-routed LFO2 rate in Hz."""
     glide_ms: float | None = None
+    """Portamento time in ms."""
     body: SynthBodyType = "default"
+    """Body resonance type, a ``SynthBodyType`` token; ``"default"`` keeps the base."""
     body_mix: float | None = None
+    """Body resonance mix in [0, 1]."""
     stereo_spread: float | None = None
+    """Seeded per-voice pan scatter in [0, 1]."""
     retrigger: SynthRetrigger = "default"
+    """What seeds each voice's start state, a ``SynthRetrigger`` token."""
     mod_routings: tuple[SynthModRouting, ...] | None = None
+    """Mod matrix, at most 8 routings; replaces the base matrix, empty clears it."""
     gain: float | None = None
+    """Master output gain (linear)."""
     polyphony: int | None = None
+    """Maximum simultaneous voices, [1, 64]."""
     bus_drive: float | None = None
+    """Gain-neutral bus saturation in [0, 1]."""
     sample_set: int | None = None
+    """Keymap set in the bound sample bank; negative selects none. Sample engine only."""
     sample_level: float | None = None
+    """Linear gain on the sample. Sample engine only."""
     sample_loop: SampleLoopMode = "default"
+    """Loop mode override, a ``SampleLoopMode`` token; ``"default"`` keeps the bank's."""
     sample_start_offset: float | None = None
+    """Attack skip as a fraction of the sampled region, [0, 1]. Sample engine only."""
     sample_key_track: SampleKeyTrack = "default"
+    """Whether the sample follows the played key, a ``SampleKeyTrack`` token."""
     # A BINDING option rather than a NativeSynth patch field: it travels on
     # SonareSynthInstrumentBinding, not SonareSynthPatch, so _to_c() does not
     # carry it and _from_c() never fills it. It lives here because the C ABI
     # gives every binding its own bank, which a per-call argument cannot.
     sample_bank: SampleBank | None = None
+    """PCM bank the ``sample_*`` fields address; a binding option, not a patch field."""
     # The same kind of BINDING option, spelled `useGmPrograms` by Node and
     # WASM: it travels on SonareSynthInstrumentBinding, so _to_c() does not
     # carry it and _from_c() never fills it. None means "not stated", which is
     # what leaves Project.bounce_with_synth_instrument's per-call
     # `auto_select_gm` reachable as the fallback.
     use_gm_programs: bool | None = None
+    """Resolve each MIDI channel from GM bank/program messages; a binding option."""
     engine_params: Mapping[str, float] | None = None
+    """Fields of the selected engine's own section by public key; write-only."""
     drift_rate_hz: float | None = None
+    """Per-voice drift rate in Hz, [0.01, 20]."""
     amp_delay_ms: float | None = None
+    """Amplitude envelope delay before the attack in ms, [0, 5000]."""
     amp_hold_ms: float | None = None
+    """Amplitude envelope hold at the peak in ms, [0, 5000]."""
     filter_delay_ms: float | None = None
+    """Filter envelope delay before the attack in ms, [0, 5000]."""
     filter_hold_ms: float | None = None
+    """Filter envelope hold at the peak in ms, [0, 5000]."""
     one_shot: bool | None = None
+    """True ignores note-off, so the voice ends with its envelope's decay or the engine's end."""
 
     def _to_c(self) -> SonareSynthPatch:
         if not isinstance(self.preset, str):

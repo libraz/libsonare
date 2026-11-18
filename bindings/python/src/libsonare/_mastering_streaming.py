@@ -504,7 +504,11 @@ class StreamingMasteringChain:
 
 
 class StreamingEqualizer:
-    """Block-by-block unified EQ wrapper around the native ``SonareEq`` handle."""
+    """Block-by-block unified EQ wrapper around the native ``SonareEq`` handle.
+
+    Attributes:
+        sample_rate: Sample rate in Hz the equalizer was created with.
+    """
 
     # Declared on the class so close() reads it even when __init__ never ran.
     _handle: ctypes.c_void_p | None = None

@@ -88,6 +88,15 @@ class FileClipPageProvider(ClipPageProvider):
     The file format is raw little-endian interleaved float32 PCM.
     """
 
+    data_offset_bytes: int
+    """Byte offset of the first sample in the file."""
+    num_channels: int
+    """Channel count of the interleaved file."""
+    num_samples: int
+    """Length of the audio in frames (samples per channel)."""
+    page_frames: int
+    """Frames per page."""
+
     def __init__(
         self,
         path: str | os.PathLike[str],
