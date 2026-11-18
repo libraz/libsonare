@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
 import {
-  type EqBand,
+  type EqBandInput,
   type EqBandPhase,
   type EqBandType,
   type EqCoeffMode,
@@ -350,12 +350,12 @@ describe('StereoBlock', () => {
 
 describe('StreamingEqualizer band tokens', () => {
   it('declares the band tokens in lowerCamel and no lookaheadMs', () => {
-    expectTypeOf<EqBand['type']>().toEqualTypeOf<EqBandType | undefined>();
+    expectTypeOf<EqBandInput['type']>().toEqualTypeOf<EqBandType | undefined>();
     expectTypeOf<'lowShelf'>().toExtend<EqBandType>();
     expectTypeOf<'vicanek'>().toExtend<EqCoeffMode>();
     expectTypeOf<'naturalPhase'>().toExtend<EqBandPhase>();
     // @ts-expect-error retired spelling of detectorDelayMs
-    type NoLookahead = EqBand['lookaheadMs'];
+    type NoLookahead = EqBandInput['lookaheadMs'];
     expectTypeOf<NoLookahead>().not.toBeNever();
   });
 

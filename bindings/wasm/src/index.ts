@@ -831,7 +831,7 @@ export type {
   DereverbReport,
   DereverbResult,
   DynamicsResult,
-  EqBand,
+  EqBandInput,
   EqBandPhase,
   EqBandType,
   EqCoeffMode,

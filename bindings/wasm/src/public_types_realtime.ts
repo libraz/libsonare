@@ -64,7 +64,7 @@ export type EqBandPhase = 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPh
  * All fields are optional; omitted values fall back to the C++ band defaults
  * (`'peak'`, 1000 Hz, 0 dB gain, Butterworth Q, disabled).
  */
-export interface EqBand {
+export interface EqBandInput {
   /** Band shape. Default `'peak'`. */
   type?: EqBandType;
   /** Centre or corner frequency in Hz. Default `1000`. */

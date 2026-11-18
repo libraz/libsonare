@@ -1,7 +1,7 @@
 import type { ChannelLayout } from './audio.js';
 import type { MixBusRole } from './mixer.js';
 import type { MasteringInsertName, MasteringProcessorParams } from './public_types_mastering.js';
-import type { EqBand } from './public_types_realtime.js';
+import type { EqBandInput } from './public_types_realtime.js';
 
 /**
  * How a strip's pan position is applied to a stereo pair.
@@ -319,7 +319,7 @@ export interface MixSceneStrip {
     /** False bypasses the equalizer and keeps its bands. Default `true`. */
     enabled?: boolean;
     /** The equalizer's bands. */
-    bands: EqBand[];
+    bands: EqBandInput[];
   };
 }
 
@@ -380,7 +380,7 @@ export interface MixSceneBus {
     /** False bypasses the equalizer and keeps its bands. Default `true`. */
     enabled?: boolean;
     /** The equalizer's bands. */
-    bands: EqBand[];
+    bands: EqBandInput[];
   };
 }
 

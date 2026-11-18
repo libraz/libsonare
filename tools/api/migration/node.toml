@@ -7941,21 +7941,21 @@ rule = "typed-results"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setTrackStripEqBandJson"
-removed = "Call setStripEqBand(ref, bandIndex, band) with a track id as ref and an EqBand object; no JSON string."
+removed = "Call setStripEqBand(ref, bandIndex, band) with a track id as ref and an EqBandInput object; no JSON string."
 domain = "engine"
 rule = "typed-results"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMasterStripEqBandJson"
-removed = "Call setStripEqBand('master', bandIndex, band) with an EqBand object; no JSON string."
+removed = "Call setStripEqBand('master', bandIndex, band) with an EqBandInput object; no JSON string."
 domain = "engine"
 rule = "typed-results"
 
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setBusStripEqBandJson"
-removed = "Call setBusEqBand(busId, bandIndex, band) with an EqBand object; no JSON string."
+removed = "Call setBusEqBand(busId, bandIndex, band) with an EqBandInput object; no JSON string."
 domain = "engine"
 rule = "typed-results"
 

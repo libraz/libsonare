@@ -2,7 +2,7 @@ import { panLawCode, panModeCode } from '../codes.js';
 import { ErrorCode, SonareError } from '../errors.js';
 import type {
   BuiltinSynthConfig,
-  EqBand,
+  EqBandInput,
   PanLaw,
   PanMode,
   RealtimeEngine,
@@ -122,7 +122,7 @@ function trackTarget(ctx: EngineStripContext, method: string, target: string | n
   return trackIdFor(ctx, target);
 }
 
-function requireBand(method: string, band: unknown): asserts band is EqBand {
+function requireBand(method: string, band: unknown): asserts band is EqBandInput {
   if (typeof band !== 'object' || band === null) {
     throw new TypeError(`${method}: band must be an object`);
   }
@@ -150,7 +150,7 @@ export function setStripEqBand(
   ctx: EngineStripContext,
   target: string | number,
   bandIndex: number,
-  band: EqBand,
+  band: EqBandInput,
 ): void {
   requireBand('setStripEqBand', band);
   if (target === 'master') {
@@ -181,7 +181,7 @@ export function setBusEqBand(
   ctx: EngineStripContext,
   busId: number,
   bandIndex: number,
-  band: EqBand,
+  band: EqBandInput,
 ): void {
   requireBand('setBusEqBand', band);
   commitSync(

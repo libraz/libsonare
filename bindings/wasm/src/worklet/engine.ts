@@ -26,7 +26,7 @@ import type {
   EngineTrackMonitorMode,
   EngineTrackSend,
   EngineTransportState,
-  EqBand,
+  EqBandInput,
   MixSceneBusInput,
   MixSceneStripInput,
   PanLaw,
@@ -716,12 +716,12 @@ export class SonareEngine {
   }
 
   /** Sets one EQ band of a strip (a track's, or the master). */
-  setStripEqBand(target: string | number, bandIndex: number, band: EqBand): void {
+  setStripEqBand(target: string | number, bandIndex: number, band: EqBandInput): void {
     strips.setStripEqBand(this.stripContext, target, bandIndex, band);
   }
 
   /** Sets one EQ band of a bus strip. */
-  setBusEqBand(busId: number, bandIndex: number, band: EqBand): void {
+  setBusEqBand(busId: number, bandIndex: number, band: EqBandInput): void {
     this.ensureBus(busId);
     strips.setBusEqBand(this.stripContext, busId, bandIndex, band);
   }

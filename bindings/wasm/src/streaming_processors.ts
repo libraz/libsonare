@@ -2,7 +2,7 @@ import { flattenChainConfig } from './internal/chain_config.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { getSonareModule } from './module_state.js';
 import type {
-  EqBand,
+  EqBandInput,
   EqMatchOptions,
   EqSpectrumSnapshot,
   EqStereoPlacement,
@@ -383,7 +383,7 @@ export class StreamingEqualizer {
   /**
    * Configure the band at `index` (0..23). Omitted fields use C++ defaults.
    */
-  setBand(index: number, band: EqBand): void {
+  setBand(index: number, band: EqBandInput): void {
     if (band.placement !== undefined) {
       eqPlacementOrdinal('StreamingEqualizer.setBand', band.placement);
     }

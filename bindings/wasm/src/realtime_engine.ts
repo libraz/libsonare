@@ -42,7 +42,7 @@ import {
   projectTimelineNativeId,
 } from './project_internal.js';
 import type {
-  EqBand,
+  EqBandInput,
   MixSceneBusInput,
   MixSceneStripInput,
   PanLaw,
@@ -2131,7 +2131,7 @@ export class RealtimeEngine {
   }
 
   /** Sets one EQ band of a strip (a track's, or the master). */
-  setStripEqBand(ref: StripRef, bandIndex: number, band: EqBand): void {
+  setStripEqBand(ref: StripRef, bandIndex: number, band: EqBandInput): void {
     const target = stripTarget('setStripEqBand', ref);
     const json = bandJson('setStripEqBand', band);
     if (target.master) {
@@ -2142,7 +2142,7 @@ export class RealtimeEngine {
   }
 
   /** Sets one EQ band of a bus strip. */
-  setBusEqBand(busId: number, bandIndex: number, band: EqBand): void {
+  setBusEqBand(busId: number, bandIndex: number, band: EqBandInput): void {
     this.native.setBusStripEqBandJson(busId, bandIndex, bandJson('setBusEqBand', band));
   }
 
