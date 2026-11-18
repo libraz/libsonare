@@ -4,8 +4,10 @@
 # without its Sonare / sonare_ prefix and with each identifier in snake_case, so
 # "SonareBoundaryOptions.threshold", "BoundaryOptions.threshold" and
 # "boundary_options.threshold" are one name.
+# A JS field reached through a second type (a union alias, a projected parameter map) shares the
+# declaration of the field it projects, and the row naming that field covers it.
 #   names     qualified names as the inventory spells them (Type.field, fn(param), "cmd --flag")
-#   class     ratio | probability | correlation | normalized | magnitude
+#   class     ratio | probability | correlation | normalized | magnitude | index
 #   range     [low, high]; inf for no upper bound
 #   evidence  the header line that states what the number is measured against
 # A name that matches nothing unit-in-name would flag is a validation problem, so a renamed or
@@ -30,6 +32,8 @@ names = [
   "detect_chords(threshold)",
   "Audio.detect_chords(threshold)",
   "chords --threshold",
+  "ChordFunctionalAnalysisRequest.threshold",
+  "chord_functional_analysis(threshold)",
 ]
 class = "correlation"
 range = [0, 1]
@@ -155,10 +159,14 @@ names = [
   "MasteringRepairDereverbConfigForRoomRequest.threshold",
   "mastering_repair_detect_reverb(threshold)",
   "MasteringRepairDetectReverbRequest.threshold",
+  "DereverbStage.threshold",
+  "MasteringChainConfig.repair.dereverb.threshold",
+  "StreamingMasteringChainConfig.repair.dereverb.threshold",
+  "MasteringProcessorParamMap.repair.dereverbClassical.threshold",
 ]
 class = "ratio"
-range = [0, inf]
-evidence = "src/mastering/repair/dereverb_classical.h:34-35 (the type sonare_c_mastering.h:1885 mirrors): late PSD compared against threshold * the bin's own power"
+range = [0, 1]
+evidence = "src/mastering/repair/dereverb_classical.h:34-35 (the type sonare_c_mastering.h:1885 mirrors): late PSD compared against threshold * the bin's own power; dereverb_classical.cpp:272 refuses it outside [0, 1]"
 
 [[name]]
 names = [
@@ -195,3 +203,98 @@ names = [
 class = "probability"
 range = [0, 1]
 evidence = "src/editing/vocal_edit/analysis.cpp:432: the voicing probability a frame must reach, refused outside [0, 1]"
+
+[[name]]
+names = [
+  "SonareDeclickConfig.threshold",
+  "DeclickOptions.threshold",
+  "DeclickStage.threshold",
+  "mastering_repair_declick(threshold)",
+  "mastering_repair_declick_stereo(threshold)",
+  "mastering_repair_detect_clicks(threshold)",
+  "MasteringChainConfig.repair.declick.threshold",
+  "StreamingMasteringChainConfig.repair.declick.threshold",
+  "MasteringProcessorParamMap.repair.declick.threshold",
+]
+class = "magnitude"
+range = [0, 10]
+evidence = "src/mastering/repair/declick.h:15: a sample magnitude, full scale 1; declick.cpp:36 compares |sample| against it"
+
+[[name]]
+names = [
+  "SonareDecrackleConfig.threshold",
+  "DecrackleOptions.threshold",
+  "DecrackleStage.threshold",
+  "mastering_repair_decrackle(threshold)",
+  "mastering_repair_decrackle_stereo(threshold)",
+  "mastering_repair_detect_crackle(threshold)",
+  "MasteringChainConfig.repair.decrackle.threshold",
+  "StreamingMasteringChainConfig.repair.decrackle.threshold",
+  "MasteringProcessorParamMap.repair.decrackle.threshold",
+]
+class = "magnitude"
+range = [0, 1000]
+evidence = "src/mastering/repair/decrackle.h:16: a sample's deviation from its local median (decrackle.cpp:221), and the wavelet shrinkage cap, both in sample units"
+
+[[name]]
+names = [
+  "SonareBoundaryOptions.absolute_threshold",
+  "DetectBoundariesRequest.absoluteThreshold",
+  "detect_boundaries(absolute_threshold)",
+  "boundaries --absolute-threshold",
+]
+class = "magnitude"
+range = [0, inf]
+evidence = "include/sonare/sonare_c_types_analysis.h:358: applied to the raw novelty response, before scaling (boundary_detector.cpp:469)"
+
+[[name]]
+names = [
+  "SonareMeterOptions.compound_subdivision_threshold",
+  "EstimateMeterRequest.compoundSubdivisionThreshold",
+  "estimate_meter(compound_subdivision_threshold)",
+]
+class = "ratio"
+range = [0, inf]
+evidence = "src/analysis/meter_analyzer.cpp:183: the score it is compared against is the between-beat onset strength divided by the on-beat onset strength"
+
+[[name]]
+names = [
+  "sonare_piptrack(threshold)",
+  "PiptrackRequest.threshold",
+]
+class = "ratio"
+range = [0, inf]
+evidence = "src/feature/pitch.cpp:766: a bin is kept above threshold * that frame's maximum magnitude"
+
+[[name]]
+names = [
+  "MasteringProcessorParamMap.spectral.spectralShaper.threshold",
+]
+class = "magnitude"
+range = [0, inf]
+evidence = "src/mastering/spectral/spectral_shaper.cpp:85: compared against the band envelope, a linear sample level"
+
+[[name]]
+names = [
+  "MasteringProcessorParamMap.saturation.hardClipper.ceiling",
+  "MasteringProcessorParamMap.saturation.softClipper.ceiling",
+]
+class = "magnitude"
+range = [0, inf]
+evidence = "src/mastering/saturation/hard_clipper.cpp:25: the linear sample bound each output is clamped to, full scale 1 (soft_clipper.cpp:36 scales its curve by it)"
+
+[[name]]
+names = [
+  "SonareNoteEdit.envelope_offset",
+]
+class = "index"
+range = [0, inf]
+evidence = "include/sonare/sonare_c_effects.h:410: the note's first entry in the envelopes array, [envelope_offset, envelope_offset + envelope_count)"
+
+[[name]]
+names = [
+  "SonareNoteObject.amplitude_offset",
+]
+class = "index"
+range = [0, inf]
+evidence = "include/sonare/sonare_c_effects.h:325: index of the note's first RMS value in the owning result's amplitude array"

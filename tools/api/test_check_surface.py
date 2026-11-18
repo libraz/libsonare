@@ -923,6 +923,29 @@ class Dimensionless(CheckerCase):
                 self.assertEqual((flagged, problems), ([], []))
                 self.assertFalse(any("SonareProbe.threshold:" in x for x in lines), lines)
 
+    def test_a_field_projected_from_a_listed_declaration_shares_its_row(self):
+        decl = {"file": "bindings/node/src/repair.ts", "line": 30}
+        self.add(
+            _rec("node", "field", "Union.threshold", owner="Union", member="threshold", **decl),
+            _rec(
+                "node",
+                "field",
+                "Elsewhere.threshold",
+                owner="Elsewhere",
+                member="threshold",
+                file="bindings/node/src/other.ts",
+                line=7,
+            ),
+        )
+        self.add(
+            _rec("node", "field", "Probe.threshold", owner="Probe", member="threshold", **decl)
+        )
+        dim = self.write("d.toml", self.ROW.format(name="Probe.threshold", cls="magnitude"))
+        _, lines = self.run_check("--surface", "node", "--check", "unit-in-name", dimensionless=dim)
+        flagged = {x.strip().split(":")[0] for x in lines if x.strip().startswith("node field ")}
+        self.assertNotIn("node field Union.threshold", flagged)
+        self.assertIn("node field Elsewhere.threshold", flagged)
+
     def test_a_row_must_be_well_formed_and_name_a_candidate(self):
         _, problems = self.run_dim(self.ROW.format(name="{name}", cls="percent"))
         self.assertEqual(len(problems), 1, problems)

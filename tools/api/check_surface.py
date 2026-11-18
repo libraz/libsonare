@@ -128,7 +128,7 @@ DEFAULT_ALLOWLIST = HERE / "surface_allowlist.toml"
 DEFAULT_DIMENSIONLESS = HERE / "dimensionless_names.toml"
 DEFAULT_CATALOG = ROOT / "tools" / "capability-catalog.json"
 DEFAULT_DOCUMENT_TYPES = HERE / "document_types.toml"
-DIMENSIONLESS_CLASSES = ("ratio", "probability", "correlation", "normalized", "magnitude")
+DIMENSIONLESS_CLASSES = ("ratio", "probability", "correlation", "normalized", "magnitude", "index")
 DEFAULT_DOMAINS = HERE / "domains.json"
 
 
@@ -959,8 +959,20 @@ def dimensionless_key(name: str) -> str:
     )
 
 
+def _js_declaration(r: dict):
+    """A JS field's declaration; a type alias projecting another type's field shares it."""
+    if r["surface"] not in JS or r["kind"] != "field" or not r.get("line"):
+        return None
+    return (r["surface"], r["file"], r["line"], r["member"])
+
+
 def chk_unit_in_name(ctx):
     cands, bad = 0, []
+    listed = {
+        d
+        for r in ctx.all_records
+        if dimensionless_key(r["name"]) in ctx.dimensionless and (d := _js_declaration(r))
+    }
     for r in recs(ctx, ALL, ("option", "field", "flag")):
         if ctx.mirror(r):
             continue
@@ -969,6 +981,8 @@ def chk_unit_in_name(ctx):
             continue
         cands += 1
         if hit[1] is None and dimensionless_key(r["name"]) not in ctx.dimensionless:
+            if _js_declaration(r) in listed:
+                continue
             bad.append((r, f"'{hit[0]}' names a physical quantity; add its unit suffix"))
     return cands, bad
 
