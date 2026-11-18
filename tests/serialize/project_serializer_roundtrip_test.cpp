@@ -1644,8 +1644,7 @@ TEST_CASE("wrong-typed scene enum fields are refused by name", "[serialize]") {
   // A present field of the wrong type is refused like a wrong-typed container,
   // never loaded as its default.
   const std::vector<std::pair<std::string, std::string>> documents = {
-      {R"({"version":1,"scene":{"version":1,"strips":[{"id":"s","panMode":"stereo"}]}})",
-       "panMode"},
+      {R"({"version":1,"scene":{"version":1,"strips":[{"id":"s","panMode":[]}]}})", "panMode"},
       {R"({"version":1,"scene":{"version":1,"strips":[{"id":"s","panLaw":true}]}})", "panLaw"},
       {R"({"version":1,"scene":{"version":1,"strips":[{"id":"s","channelDelaySamples":"none"}]}})",
        "channelDelaySamples"},

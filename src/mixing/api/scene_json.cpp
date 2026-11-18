@@ -26,7 +26,35 @@ using JsonValue = sonare::util::json::Value;
 
 const char* to_string(InsertSlot slot) { return slot == InsertSlot::PreFader ? "pre" : "post"; }
 
-const char* to_string(SendTiming timing) { return timing == SendTiming::PreFader ? "pre" : "post"; }
+const char* to_string(SendTiming timing) {
+  return timing == SendTiming::PreFader ? "preFader" : "postFader";
+}
+
+const char* to_string(PanLaw law) {
+  switch (law) {
+    case PanLaw::Const3dB:
+      return "const3Db";
+    case PanLaw::Const4p5dB:
+      return "const4.5Db";
+    case PanLaw::Const6dB:
+      return "const6Db";
+    case PanLaw::Linear0dB:
+      return "linear0Db";
+  }
+  return "const3Db";
+}
+
+const char* to_string(PanMode mode) {
+  switch (mode) {
+    case PanMode::Balance:
+      return "balance";
+    case PanMode::StereoPan:
+      return "stereoPan";
+    case PanMode::DualPan:
+      return "dualPan";
+  }
+  return "balance";
+}
 
 InsertSlot insert_slot_from_string(const std::string& value) {
   if (value == "pre") return InsertSlot::PreFader;
@@ -34,10 +62,26 @@ InsertSlot insert_slot_from_string(const std::string& value) {
   throw SonareException(ErrorCode::InvalidFormat, "unknown insert slot: " + value);
 }
 
+// "pre" and "post" are the earlier file form: still read, never written.
 SendTiming send_timing_from_string(const std::string& value) {
-  if (value == "pre") return SendTiming::PreFader;
-  if (value == "post") return SendTiming::PostFader;
+  if (value == "preFader" || value == "pre") return SendTiming::PreFader;
+  if (value == "postFader" || value == "post") return SendTiming::PostFader;
   throw SonareException(ErrorCode::InvalidFormat, "unknown send timing: " + value);
+}
+
+PanLaw pan_law_from_string(const std::string& value) {
+  if (value == "const3Db") return PanLaw::Const3dB;
+  if (value == "const4.5Db") return PanLaw::Const4p5dB;
+  if (value == "const6Db") return PanLaw::Const6dB;
+  if (value == "linear0Db") return PanLaw::Linear0dB;
+  throw SonareException(ErrorCode::InvalidFormat, "unknown pan law: " + value);
+}
+
+PanMode pan_mode_from_string(const std::string& value) {
+  if (value == "balance") return PanMode::Balance;
+  if (value == "stereoPan") return PanMode::StereoPan;
+  if (value == "dualPan") return PanMode::DualPan;
+  throw SonareException(ErrorCode::InvalidFormat, "unknown pan mode: " + value);
 }
 
 // Reads an optional channel-layout string field. Absent -> fallback (so old
@@ -194,6 +238,32 @@ int int_or_legacy(const JsonValue& object, const std::string& path, const char* 
   return int_from(*value, key);
 }
 
+// A closed set written as its token. An integer ordinal is the earlier file form, still read.
+template <typename Enum>
+int token_or_legacy(const JsonValue& object, const std::string& path, const char* key,
+                    const char* legacy_key, int fallback, int count,
+                    Enum (*from_string)(const std::string&)) {
+  const auto* value = value_or_legacy(object, key, legacy_key);
+  if (!value) return fallback;
+  const char* spelling = spelling_of(object, key, legacy_key);
+  if (value->is_string()) {
+    try {
+      return static_cast<int>(from_string(value->as_string()));
+    } catch (const SonareException&) {
+      throw SonareException(
+          ErrorCode::InvalidFormat,
+          child_path(path, spelling) + " is not a known token: " + value->as_string());
+    }
+  }
+  if (!value->is_number()) refuse_type(path, spelling, "a string token");
+  const int ordinal = int_from(*value, key);
+  if (ordinal < 0 || ordinal >= count) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          child_path(path, spelling) + " enum is out of range");
+  }
+  return ordinal;
+}
+
 bool bool_or_legacy(const JsonValue& object, const std::string& path, const char* key,
                     const char* legacy_key, bool fallback) {
   const auto* value = value_or_legacy(object, key, legacy_key);
@@ -309,7 +379,7 @@ Send send_from_value(const JsonValue& object, const std::string& path,
   if (const auto* timing = object.find("timing")) {
     if (!timing->is_string()) {
       throw SonareException(ErrorCode::InvalidFormat,
-                            "send timing must be a string (\"pre\" or \"post\")");
+                            "send timing must be a string (\"preFader\" or \"postFader\")");
     }
     send.timing = send_timing_from_string(timing->as_string());
   }
@@ -395,12 +465,10 @@ Strip strip_from_value(const JsonValue& object, const std::string& path,
   strip.muted = bool_or(object, path, "muted", strip.muted);
   strip.soloed = bool_or(object, path, "soloed", strip.soloed);
   strip.solo_safe = bool_or_legacy(object, path, "soloSafe", "solo_safe", strip.solo_safe);
-  strip.pan_mode = int_or_legacy(object, path, "panMode", "pan_mode", strip.pan_mode);
-  // Reject out-of-range enum/count values in the one canonical scene walker,
-  // so standalone mixer JSON and project-embedded scene JSON stay identical.
-  if (strip.pan_mode < 0 || strip.pan_mode > 2) {
-    throw SonareException(ErrorCode::InvalidFormat, "panMode enum is out of range");
-  }
+  // Out-of-range values are refused in the one canonical scene walker, so standalone mixer JSON
+  // and project-embedded scene JSON stay identical.
+  strip.pan_mode = token_or_legacy(object, path, "panMode", "pan_mode", strip.pan_mode,
+                                   kPanModeCount, &pan_mode_from_string);
   strip.dual_pan_left =
       checked_pan(number_or_legacy(object, path, "dualPanLeft", "dual_pan_left",
                                    strip.dual_pan_left, "scene.strips[].dualPanLeft"),
@@ -413,10 +481,8 @@ Strip strip_from_value(const JsonValue& object, const std::string& path,
                                               "polarity_invert_left", strip.polarity_invert_left);
   strip.polarity_invert_right = bool_or_legacy(
       object, path, "polarityInvertRight", "polarity_invert_right", strip.polarity_invert_right);
-  strip.pan_law = int_or_legacy(object, path, "panLaw", "pan_law", strip.pan_law);
-  if (strip.pan_law < 0 || strip.pan_law >= kPanLawCount) {
-    throw SonareException(ErrorCode::InvalidFormat, "panLaw enum is out of range");
-  }
+  strip.pan_law = token_or_legacy(object, path, "panLaw", "pan_law", strip.pan_law, kPanLawCount,
+                                  &pan_law_from_string);
   strip.channel_delay_samples = int_or_legacy(object, path, "channelDelaySamples",
                                               "channel_delay_samples", strip.channel_delay_samples);
   if (strip.channel_delay_samples < 0 || strip.channel_delay_samples > kMaxAlignmentDelaySamples) {
@@ -508,10 +574,8 @@ Bus bus_from_value(const JsonValue& object, const std::string& path,
   // Pan: same field names and ranges as Strip's above.
   bus.pan = checked_pan(number_or(object, path, "pan", bus.pan, "scene.buses[].pan"),
                         "scene.buses[].pan");
-  bus.pan_mode = int_or_legacy(object, path, "panMode", "pan_mode", bus.pan_mode);
-  if (bus.pan_mode < 0 || bus.pan_mode > 2) {
-    throw SonareException(ErrorCode::InvalidFormat, "panMode enum is out of range");
-  }
+  bus.pan_mode = token_or_legacy(object, path, "panMode", "pan_mode", bus.pan_mode, kPanModeCount,
+                                 &pan_mode_from_string);
   bus.dual_pan_left = checked_pan(number_or_legacy(object, path, "dualPanLeft", "dual_pan_left",
                                                    bus.dual_pan_left, "scene.buses[].dualPanLeft"),
                                   "scene.buses[].dualPanLeft");
@@ -519,10 +583,8 @@ Bus bus_from_value(const JsonValue& object, const std::string& path,
       checked_pan(number_or_legacy(object, path, "dualPanRight", "dual_pan_right",
                                    bus.dual_pan_right, "scene.buses[].dualPanRight"),
                   "scene.buses[].dualPanRight");
-  bus.pan_law = int_or_legacy(object, path, "panLaw", "pan_law", bus.pan_law);
-  if (bus.pan_law < 0 || bus.pan_law >= kPanLawCount) {
-    throw SonareException(ErrorCode::InvalidFormat, "panLaw enum is out of range");
-  }
+  bus.pan_law = token_or_legacy(object, path, "panLaw", "pan_law", bus.pan_law, kPanLawCount,
+                                &pan_law_from_string);
   // A surround bus has no pan or stereo-width stage, so a non-default value there is
   // refused rather than dropped.
   if (channel_count(bus.layout) > 2) {
@@ -707,12 +769,12 @@ JsonValue strip_to_value(const Strip& strip) {
   util::json::put(object, "muted", strip.muted);
   util::json::put(object, "soloed", strip.soloed);
   util::json::put(object, "soloSafe", strip.solo_safe);
-  util::json::put(object, "panMode", strip.pan_mode);
+  util::json::put(object, "panMode", to_string(static_cast<PanMode>(strip.pan_mode)));
   util::json::put(object, "dualPanLeft", strip.dual_pan_left);
   util::json::put(object, "dualPanRight", strip.dual_pan_right);
   util::json::put(object, "polarityInvertLeft", strip.polarity_invert_left);
   util::json::put(object, "polarityInvertRight", strip.polarity_invert_right);
-  util::json::put(object, "panLaw", strip.pan_law);
+  util::json::put(object, "panLaw", to_string(static_cast<PanLaw>(strip.pan_law)));
   util::json::put(object, "channelDelaySamples", strip.channel_delay_samples);
   // Omit when stereo (the default) so existing stereo scenes serialize
   // byte-identically; only surround sources carry the field.
@@ -776,10 +838,14 @@ JsonValue bus_to_value(const Bus& bus) {
   }
   // Pan is likewise omitted at the default, for the same byte-identity reason.
   if (bus.pan != 0.0f) util::json::put(object, "pan", bus.pan);
-  if (bus.pan_mode != 0) util::json::put(object, "panMode", bus.pan_mode);
+  if (bus.pan_mode != 0) {
+    util::json::put(object, "panMode", to_string(static_cast<PanMode>(bus.pan_mode)));
+  }
   if (bus.dual_pan_left != -1.0f) util::json::put(object, "dualPanLeft", bus.dual_pan_left);
   if (bus.dual_pan_right != 1.0f) util::json::put(object, "dualPanRight", bus.dual_pan_right);
-  if (bus.pan_law != 0) util::json::put(object, "panLaw", bus.pan_law);
+  if (bus.pan_law != 0) {
+    util::json::put(object, "panLaw", to_string(static_cast<PanLaw>(bus.pan_law)));
+  }
   util::json::put(object, "inserts", inserts_to_value(bus.inserts));
   JsonValue eq_value;
   if (eq_to_value(bus.eq, &eq_value)) util::json::put(object, "eq", std::move(eq_value));

@@ -917,7 +917,7 @@ TEST_CASE("Mixing C API preserves dual pan in scene JSON", "[mixing][capi]") {
   REQUIRE(sonare_mixer_to_scene_json(mixer, &json) == SONARE_OK);
   REQUIRE(json != nullptr);
   const std::string scene_json(json);
-  REQUIRE(scene_json.find("\"panMode\":2") != std::string::npos);
+  REQUIRE(scene_json.find("\"panMode\":\"dualPan\"") != std::string::npos);
   REQUIRE(scene_json.find("\"dualPanLeft\":1") != std::string::npos);
   REQUIRE(scene_json.find("\"dualPanRight\":-0.5") != std::string::npos);
   // The exported nominal pan must reflect the computed 0.5*(L+R) = 0.25 that
@@ -933,7 +933,7 @@ TEST_CASE("Mixing C API preserves dual pan in scene JSON", "[mixing][capi]") {
   REQUIRE(sonare_mixer_to_scene_json(restored, &restored_json) == SONARE_OK);
   REQUIRE(restored_json != nullptr);
   const std::string restored_scene_json(restored_json);
-  REQUIRE(restored_scene_json.find("\"panMode\":2") != std::string::npos);
+  REQUIRE(restored_scene_json.find("\"panMode\":\"dualPan\"") != std::string::npos);
   REQUIRE(restored_scene_json.find("\"dualPanLeft\":1") != std::string::npos);
   REQUIRE(restored_scene_json.find("\"dualPanRight\":-0.5") != std::string::npos);
   REQUIRE(restored_scene_json.find("\"pan\":0.25") != std::string::npos);
@@ -1068,14 +1068,14 @@ TEST_CASE("Mixing C API preserves pan mode set via set_pan in scene JSON", "[mix
   REQUIRE(strip != nullptr);
   // sonare_strip_set_pan must mirror the pan mode into the scene strip so it
   // survives scene serialization (regression: previously only the pan position
-  // was written, leaving panMode at the default 0).
+  // was written, leaving panMode at the default balance).
   REQUIRE(sonare_strip_set_pan(strip, 0.25f, SONARE_PAN_MODE_STEREO_PAN) == SONARE_OK);
 
   char* json = nullptr;
   REQUIRE(sonare_mixer_to_scene_json(mixer, &json) == SONARE_OK);
   REQUIRE(json != nullptr);
   const std::string scene_json(json);
-  REQUIRE(scene_json.find("\"panMode\":1") != std::string::npos);
+  REQUIRE(scene_json.find("\"panMode\":\"stereoPan\"") != std::string::npos);
   sonare_free_string(json);
 
   // Round-trips through from_scene_json with the mode intact.
@@ -1084,7 +1084,7 @@ TEST_CASE("Mixing C API preserves pan mode set via set_pan in scene JSON", "[mix
   char* restored_json = nullptr;
   REQUIRE(sonare_mixer_to_scene_json(restored, &restored_json) == SONARE_OK);
   REQUIRE(restored_json != nullptr);
-  REQUIRE(std::string(restored_json).find("\"panMode\":1") != std::string::npos);
+  REQUIRE(std::string(restored_json).find("\"panMode\":\"stereoPan\"") != std::string::npos);
   sonare_free_string(restored_json);
   sonare_mixer_destroy(restored);
 
@@ -1110,8 +1110,8 @@ TEST_CASE("Mixing C API set_pan keep-mode sentinel preserves current pan mode", 
   REQUIRE(sonare_mixer_to_scene_json(mixer, &json) == SONARE_OK);
   REQUIRE(json != nullptr);
   const std::string scene_json(json);
-  // Mode stays StereoPan (panMode:1), not reset to Balance (panMode:0).
-  REQUIRE(scene_json.find("\"panMode\":1") != std::string::npos);
+  // Mode stays stereoPan, not reset to balance.
+  REQUIRE(scene_json.find("\"panMode\":\"stereoPan\"") != std::string::npos);
   sonare_free_string(json);
 
   sonare_mixer_destroy(mixer);

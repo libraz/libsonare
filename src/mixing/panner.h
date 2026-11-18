@@ -28,6 +28,9 @@ enum class PanMode {
   DualPan,
 };
 
+/// @brief Number of pan modes, the exclusive bound of the wire encoding.
+inline constexpr int kPanModeCount = 3;
+
 struct PannerConfig {
   float pan = 0.0f;
   PanLaw pan_law = PanLaw::Const3dB;

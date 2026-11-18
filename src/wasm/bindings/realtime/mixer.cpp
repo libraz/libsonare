@@ -883,7 +883,7 @@ void RealtimeEngineWasm::setTrackStripPanMode(const val& track_id_val, const val
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
   const int pan_mode = checkedIntFromVal(pan_mode_val, "panMode");
 #if defined(SONARE_WITH_MIXING)
-  if (pan_mode < 0 || pan_mode > 2) {
+  if (pan_mode < 0 || pan_mode >= sonare::mixing::kPanModeCount) {
     throw WasmRangeError("unknown mixing pan mode");
   }
   requireMixingTarget(
@@ -982,7 +982,7 @@ void RealtimeEngineWasm::setBusStripPanMode(const val& bus_id_val, const val& pa
   const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
   const int pan_mode = checkedIntFromVal(pan_mode_val, "panMode");
 #if defined(SONARE_WITH_MIXING)
-  if (pan_mode < 0 || pan_mode > 2) {
+  if (pan_mode < 0 || pan_mode >= sonare::mixing::kPanModeCount) {
     throw WasmRangeError("unknown mixing pan mode");
   }
   requireMixingTarget(

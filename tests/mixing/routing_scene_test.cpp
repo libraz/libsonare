@@ -57,7 +57,7 @@ TEST_CASE("Routed mixer scene round-trip preserves topology", "[mixing][routing]
 
   // Send survives with its destination bus and timing.
   REQUIRE(scene.find("\"destinationBusId\":\"vocal-verb\"") != std::string::npos);
-  REQUIRE(scene.find("\"timing\":\"post\"") != std::string::npos);
+  REQUIRE(scene.find("\"timing\":\"postFader\"") != std::string::npos);
 
   // Connections survive, including the bus -> return edge that routes the send.
   // Key order follows the alphabetic ordering of util::json::Object (std::map),
@@ -452,11 +452,22 @@ TEST_CASE("scene_from_json rejects out-of-range strip enums like the project wal
   REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(
                           R"({"version":1,"strips":[{"id":"a","channelDelaySamples":-3}]})"),
                       ContainsSubstring("channelDelaySamples"));
-  // A valid strip still loads.
+  REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(
+                          R"({"version":1,"strips":[{"id":"a","panMode":"stereo"}]})"),
+                      ContainsSubstring("strips[0].panMode"));
+  REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(
+                          R"({"version":1,"strips":[{"id":"a","panLaw":"equal"}]})"),
+                      ContainsSubstring("strips[0].panLaw"));
+  // A valid strip still loads, from its tokens and from the earlier ordinal form alike.
   const auto ok = sonare::mixing::api::scene_from_json(
       R"({"version":1,"strips":[{"id":"a","panMode":2,"panLaw":3,"channelDelaySamples":0}]})");
   REQUIRE(ok.strips.size() == 1);
   REQUIRE(ok.strips[0].pan_mode == 2);
+  REQUIRE(ok.strips[0].pan_law == 3);
+  const auto tokens = sonare::mixing::api::scene_from_json(
+      R"({"version":1,"strips":[{"id":"a","panMode":"dualPan","panLaw":"linear0Db"}]})");
+  REQUIRE(tokens.strips[0].pan_mode == 2);
+  REQUIRE(tokens.strips[0].pan_law == 3);
 }
 
 TEST_CASE("scene_from_json refuses a document exceeding the JSON byte budget",
@@ -725,7 +736,7 @@ TEST_CASE("Scene scalar and nested-object fields refuse a wrong type, naming the
       {R"({"version":1,"strips":[{"id":"a","pan":null}]})", "strips[0].pan"},
       {R"({"version":1,"strips":[{"id":"a"},{"id":"b","muted":1}]})", "strips[1].muted"},
       {R"({"version":1,"strips":[{"id":"a","soloSafe":"yes"}]})", "strips[0].soloSafe"},
-      {R"({"version":1,"strips":[{"id":"a","panLaw":"equal"}]})", "strips[0].panLaw"},
+      {R"({"version":1,"strips":[{"id":"a","panLaw":[]}]})", "strips[0].panLaw"},
       {R"({"version":1,"strips":[{"id":7}]})", "strips[0].id"},
       {R"({"version":1,"strips":[{"id":"a","metering":{"truePeakOversample":"8"}}]})",
        "strips[0].metering.truePeakOversample"},
@@ -1492,8 +1503,8 @@ TEST_CASE("Scene bus pan round-trips and omits at the default", "[mixing][routin
 
   const std::string json = sonare::mixing::api::scene_to_json(scene);
   REQUIRE(json.find("\"pan\":0.5") != std::string::npos);
-  REQUIRE(json.find("\"panMode\":2") != std::string::npos);
-  REQUIRE(json.find("\"panLaw\":3") != std::string::npos);
+  REQUIRE(json.find("\"panMode\":\"dualPan\"") != std::string::npos);
+  REQUIRE(json.find("\"panLaw\":\"linear0Db\"") != std::string::npos);
   REQUIRE(json.find("\"dualPanLeft\":-0.75") != std::string::npos);
   REQUIRE(json.find("\"dualPanRight\":0.75") != std::string::npos);
 
