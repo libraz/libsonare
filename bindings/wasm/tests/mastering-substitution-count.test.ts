@@ -1,6 +1,6 @@
 /**
  * `nonFiniteSubstitutionCount` reaches the TypeScript facade on every mastering
- * result the WASM module builds, and on the streaming chain as a method.
+ * result the WASM module builds, and on the streaming chain as a getter.
  *
  * A facade that rebuilds a result object field by field drops a newly added
  * property without any error, and the property is a `number` either way — so
@@ -15,16 +15,10 @@ import {
   init,
   masterAudio,
   masterAudioStereo,
-  masterAudioStereoWithProgress,
-  masterAudioWithProgress,
-  mastering,
-  masteringChain,
-  masteringChainStereo,
-  masteringChainStereoWithProgress,
-  masteringChainWithProgress,
-  masteringPairProcess,
-  masteringProcess,
-  masteringProcessStereo,
+  masteringApplyPairProcessor,
+  masteringApplyProcessor,
+  masteringApplyProcessorStereo,
+  masteringNormalizeLoudness,
   StreamingMasteringChain,
 } from '../src/index';
 
@@ -54,68 +48,85 @@ describe('mastering nonFiniteSubstitutionCount (WASM)', () => {
   });
 
   it('reports 0 on the mono one-shot results', () => {
-    expectCleanCount(mastering(left, sampleRate, { targetLufs: -14 }).nonFiniteSubstitutionCount);
     expectCleanCount(
-      masteringProcess('maximizer.truePeakLimiter', left, sampleRate).nonFiniteSubstitutionCount,
+      masteringNormalizeLoudness({ samples: left, sampleRate, targetLufs: -14 })
+        .nonFiniteSubstitutionCount,
     );
     expectCleanCount(
-      masteringPairProcess('match.abCrossfade', left, reference, sampleRate, { mix: 0.25 })
-        .nonFiniteSubstitutionCount,
+      masteringApplyProcessor({
+        processor: 'maximizer.truePeakLimiter',
+        samples: left,
+        sampleRate,
+      }).nonFiniteSubstitutionCount,
+    );
+    expectCleanCount(
+      masteringApplyPairProcessor({
+        processor: 'match.abCrossfade',
+        source: left,
+        reference,
+        sampleRate,
+        params: { mix: 0.25 },
+      }).nonFiniteSubstitutionCount,
     );
   });
 
   it('reports 0 on the stereo one-shot result', () => {
     expectCleanCount(
-      masteringProcessStereo('maximizer.truePeakLimiter', left, right, sampleRate)
-        .nonFiniteSubstitutionCount,
+      masteringApplyProcessorStereo({
+        processor: 'maximizer.truePeakLimiter',
+        left,
+        right,
+        sampleRate,
+      }).nonFiniteSubstitutionCount,
     );
   });
 
   it('reports 0 on the chain results', () => {
-    const config = { maximizer: { truePeakLimiter: { enabled: true } } };
-    expectCleanCount(masteringChain(left, sampleRate, config).nonFiniteSubstitutionCount);
+    const overrides = { maximizer: { truePeakLimiter: { enabled: true } } };
     expectCleanCount(
-      masteringChainStereo(left, right, sampleRate, config).nonFiniteSubstitutionCount,
+      masterAudio({ samples: left, sampleRate, overrides }).nonFiniteSubstitutionCount,
     );
     expectCleanCount(
-      masteringChainWithProgress(left, sampleRate, config, () => {}).nonFiniteSubstitutionCount,
+      masterAudioStereo({ left, right, sampleRate, overrides }).nonFiniteSubstitutionCount,
     );
     expectCleanCount(
-      masteringChainStereoWithProgress(left, right, sampleRate, config, () => {})
+      masterAudio({ samples: left, sampleRate, overrides, onProgress: () => {} })
+        .nonFiniteSubstitutionCount,
+    );
+    expectCleanCount(
+      masterAudioStereo({ left, right, sampleRate, overrides, onProgress: () => {} })
         .nonFiniteSubstitutionCount,
     );
   });
 
   it('reports 0 on the preset results', () => {
-    expectCleanCount(masterAudio(left, sampleRate, 'speech').nonFiniteSubstitutionCount);
+    const preset = 'speech';
+    expectCleanCount(masterAudio({ samples: left, sampleRate, preset }).nonFiniteSubstitutionCount);
     expectCleanCount(
-      masterAudioStereo(left, right, sampleRate, 'speech').nonFiniteSubstitutionCount,
+      masterAudioStereo({ left, right, sampleRate, preset }).nonFiniteSubstitutionCount,
     );
     expectCleanCount(
-      masterAudioWithProgress(left, sampleRate, 'speech', null, () => {})
+      masterAudio({ samples: left, sampleRate, preset, onProgress: () => {} })
         .nonFiniteSubstitutionCount,
     );
     expectCleanCount(
-      masterAudioStereoWithProgress(left, right, sampleRate, 'speech', null, () => {})
+      masterAudioStereo({ left, right, sampleRate, preset, onProgress: () => {} })
         .nonFiniteSubstitutionCount,
     );
   });
 
-  it('reports 0 across a clean stream and stays reachable after prepare', () => {
+  it('reports 0 across a clean stream', () => {
     const chain = new StreamingMasteringChain({
+      sampleRate,
+      maxBlockSize: 512,
       maximizer: { truePeakLimiter: { enabled: true } },
     });
     try {
-      chain.prepare(sampleRate, 512, 1);
-      expectCleanCount(chain.nonFiniteSubstitutionCount());
+      expectCleanCount(chain.nonFiniteSubstitutionCount);
       const block = new Float32Array(512).fill(0.1);
       chain.processMono(block);
       chain.processMono(block);
-      expectCleanCount(chain.nonFiniteSubstitutionCount());
-      // prepare() rebuilds the stages, so the counter is readable and still
-      // clean on the rebuilt chain rather than throwing on a stale stage list.
-      chain.prepare(sampleRate, 512, 1);
-      expectCleanCount(chain.nonFiniteSubstitutionCount());
+      expectCleanCount(chain.nonFiniteSubstitutionCount);
     } finally {
       chain.destroy();
     }

@@ -34,7 +34,7 @@ export type {
   WorkletPort,
   WorkletTransport,
 } from './public_types_worklet.js';
-export { StreamingMasteringChain } from './streaming_processors.js';
+export { type StereoBlock, StreamingMasteringChain } from './streaming_processors.js';
 export { SonareEngine } from './worklet/engine.js';
 export type { SonareRenderOfflineRequest } from './worklet/engine-export.js';
 export { SonareRealtimeEngineNode } from './worklet/engine-node.js';

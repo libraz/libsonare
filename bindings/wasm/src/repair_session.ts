@@ -2,6 +2,7 @@
  * One repair analysis and one repair application over any number of channels.
  */
 
+import { declipReportFromNative } from './internal/metering_native.js';
 import { dbFromLinear, linearFromDb } from './internal/repair_common.js';
 import type { MasteringAudioProfileDefects } from './mastering_core.js';
 import { getSonareModule } from './module_state.js';
@@ -144,7 +145,7 @@ export interface MasteringRepairApplyRequest extends ValidateOptions {
 /** The JSON form of a stage's reports, before the per-band arrays become Float32Arrays. */
 type StageReportsJson = { stage: string; scope: string; reports: Record<string, unknown>[] };
 
-/** Gives the band and harmonic arrays the Float32Array type the per-stage entries return. */
+/** Gives the band and harmonic arrays the Float32Array type, and declip its public detection names. */
 function toStageReports(entry: StageReportsJson): MasteringRepairStageReports {
   if (entry.stage === 'denoise' || entry.stage === 'dehum') {
     const key = entry.stage === 'denoise' ? 'bandFloorDbfs' : 'harmonicDbfs';
@@ -152,6 +153,10 @@ function toStageReports(entry: StageReportsJson): MasteringRepairStageReports {
       const detected = report.detected as Record<string, unknown>;
       detected[key] = Float32Array.from(detected[key] as number[]);
     }
+  }
+  if (entry.stage === 'declip') {
+    const reports = entry.reports.map((r) => declipReportFromNative(r as never));
+    return { ...entry, reports } as unknown as MasteringRepairStageReports;
   }
   return entry as unknown as MasteringRepairStageReports;
 }

@@ -88,7 +88,7 @@ const CASES: readonly FieldCase[] = [
   {
     entry: 'meteringSpectrumFrame',
     field: 'nFft',
-    run: (options) => meteringSpectrumFrame(tone, sampleRate, 0, options),
+    run: (options) => meteringSpectrumFrame(tone, sampleRate, options),
   },
   {
     entry: 'detectOnsets',
@@ -209,9 +209,16 @@ describe('the facade and the reader refuse the same inputs', () => {
     why: string;
     /** Who refuses on the facade layer: its own check (prefixed with the entry name), or the reader behind it (range). */
     facade?: 'range';
+    /** The reader-only entry point refuses an explicit 0 where the facade-checked one keeps it as the default. */
+    readerRefuses?: boolean;
   }> = [
     { value: 1024, refused: false, why: 'an ordinary legal size' },
-    { value: 0, refused: false, why: 'the documented keep-the-default sentinel' },
+    {
+      value: 0,
+      refused: false,
+      readerRefuses: true,
+      why: 'the default sentinel on the analyzer, a RangeError on the spectrum meter',
+    },
     { value: 1024.5, refused: true, why: 'fractional, in range' },
     { value: -0.5, refused: true, why: 'fractional, truncates onto the default' },
     { value: Number.NaN, refused: true, why: 'not finite' },
@@ -229,13 +236,17 @@ describe('the facade and the reader refuse the same inputs', () => {
     i % 2205 < 200 ? Math.sin((2 * Math.PI * 900 * i) / sampleRate) : 0,
   );
 
-  for (const { value, refused, why, facade } of PROBES) {
+  for (const { value, refused, why, facade, readerRefuses } of PROBES) {
     it(`${refused ? 'refuses' : 'accepts'} nFft = ${value} on both layers (${why})`, () => {
       const facadeChecked = capture(() =>
         extractPercussiveEvents({ samples: hits, sampleRate, nFft: value }),
       );
       const readerOnly = capture(() => meteringSpectrum(tone, sampleRate, { nFft: value }));
       expect(facadeChecked === undefined).toBe(!refused);
+      if (readerRefuses) {
+        expect(expectParameterRefusal(readerOnly)).toBeInstanceOf(RangeError);
+        return;
+      }
       expect(readerOnly === undefined).toBe(!refused);
       if (refused) {
         const facadeError = expectParameterRefusal(facadeChecked);

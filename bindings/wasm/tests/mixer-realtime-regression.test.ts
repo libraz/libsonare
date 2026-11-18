@@ -7,7 +7,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, Mixer, mixingScenePresetJson } from '../dist/index.js';
+import { init, Mixer, mixingScenePreset } from '../dist/index.js';
 
 const SR = 48000;
 const BLOCK = 128;
@@ -26,7 +26,7 @@ describe('Mixer realtime topology and heap views (WASM)', () => {
   });
 
   it('refreshes an existing realtime buffer after adding a strip and processes its audio', () => {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('commentaryDucking')), {
       sampleRate: SR,
       maxBlockSize: BLOCK,
     });
@@ -66,7 +66,7 @@ describe('Mixer realtime topology and heap views (WASM)', () => {
   });
 
   it('grows native scratch pointer arrays before processStereoInto uses the new strip count', () => {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('commentaryDucking')), {
       sampleRate: SR,
       maxBlockSize: BLOCK,
     });
@@ -91,7 +91,7 @@ describe('Mixer realtime topology and heap views (WASM)', () => {
   });
 
   it('reacquires detached views before resolving the implicit prepared block length', () => {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('commentaryDucking')), {
       sampleRate: SR,
       maxBlockSize: BLOCK,
     });

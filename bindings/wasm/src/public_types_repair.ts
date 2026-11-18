@@ -78,10 +78,13 @@ export interface MasteringRepairDeclickResult {
  * {@link MasteringRepairDeclipResult}.
  */
 export interface ClipDetection {
-  /** Samples at or past `clipThreshold`. */
-  sampleCount: number;
-  /** `sampleCount` divided by the input length. */
-  sampleFraction: number;
+  /**
+   * Samples at or past `clipThresholdDb`. The metering family's region report,
+   * `ClippingReport`, counts the same two quantities under the same names.
+   */
+  clippedSamples: number;
+  /** `clippedSamples` divided by the input length. */
+  clippedRatio: number;
   /** Runs of consecutive clipped samples. */
   runCount: number;
   /** A run past the 512-sample cap takes the interpolation fallback instead of the solver. */
@@ -89,7 +92,7 @@ export interface ClipDetection {
   /**
    * Runs of at least 3 bit-identical samples (at least -40 dBFS) sitting within 1 dB of the
    * channel's flat level, which a louder unclipped passage does not move. Reads
-   * clipping that survived a later gain change and so no longer reaches `clipThreshold` — the
+   * clipping that survived a later gain change and so no longer reaches `clipThresholdDb` — the
    * fields above see none of it. A genuinely flat-topped waveform (a square or pulse train, a
    * fully limited master) counts here too and cannot be told apart from clipping in the time
    * domain.

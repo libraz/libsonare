@@ -23,7 +23,7 @@ import {
   projectTrackKindValue,
   projectWarpModeValue,
 } from '../src/project_internal';
-import type { PanLawInput, VoicePresetId } from '../src/public_types';
+import type { VoicePresetId } from '../src/public_types';
 import { expectRefusalOf } from './_helpers';
 
 const sampleRate = 22050;
@@ -121,18 +121,20 @@ describe('effects request-object compatibility (WASM)', () => {
     ).toThrow(TypeError);
   });
 
-  it('preserves positional results for one-shot stereo mix requests', () => {
+  it('takes one-shot stereo mix as a request over per-strip settings', () => {
     const left = sine(1024);
     const right = sine(1024);
-    expect(
-      mixStereo({
-        leftChannels: [left],
-        rightChannels: [right],
-        sampleRate,
-        inputTrimDb: 1.5,
-        faderDb: -2,
-      }),
-    ).toEqual(mixStereo([left], [right], sampleRate, { inputTrimDb: 1.5, faderDb: -2 }));
+    const trimmed = mixStereo({
+      strips: [{ left, right, inputTrimDb: 1.5, faderDb: -2 }],
+      sampleRate,
+    });
+    const plain = mixStereo({ strips: [{ left, right }], sampleRate });
+    expect(trimmed.left).toHaveLength(left.length);
+    // The control: the settings reach the mix, so the two results differ.
+    expect(Array.from(trimmed.left)).not.toEqual(Array.from(plain.left));
+    expect(() =>
+      (mixStereo as (...args: unknown[]) => unknown)([left], [right], sampleRate),
+    ).toThrow(TypeError);
   });
 
   // Both call shapes funnel through one private normalizer, so an invalid input
@@ -210,13 +212,13 @@ describe('enum-code helpers reject unknown strings instead of silently defaultin
 
   it('resolves every shared pan-law spelling and conservative normalization', () => {
     for (const { value, ordinal } of [...panLawCorpus.accepted, ...panLawCorpus.normalization]) {
-      expect(panLawCode(value as PanLawInput)).toBe(ordinal);
+      expect(panLawCode(value as never)).toBe(ordinal);
     }
     for (const value of panLawCorpus.numeric) {
       expect(panLawCode(value)).toBe(value);
     }
     for (const value of panLawCorpus.rejected) {
-      expect(() => panLawCode(value as PanLawInput)).toThrow(RangeError);
+      expect(() => panLawCode(value as never)).toThrow(RangeError);
     }
   });
 
@@ -255,9 +257,11 @@ describe('enum-code helpers reject unknown strings instead of silently defaultin
 
 describe('metering true peak validation', () => {
   it('rejects an invalid oversample factor as RangeError', () => {
-    const error = expectRefusalOf(() => meteringTruePeakDb(new Float32Array([0.5]), 22050, 3));
+    const error = expectRefusalOf(() =>
+      meteringTruePeakDb(new Float32Array([0.5]), 22050, { oversampleFactor: 3 }),
+    );
     expect(error.message).toBe(
-      'meteringTruePeakDb: oversampleFactor must be 0 or a power of two from 1 to 16',
+      'meteringTruePeakDb: oversampleFactor must be a power of two from 1 to 16',
     );
   });
 });

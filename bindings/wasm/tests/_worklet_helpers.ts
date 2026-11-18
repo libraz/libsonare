@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, Mixer, mixingScenePresetJson } from '../dist/index.js';
+import { init, Mixer, mixingScenePreset } from '../dist/index.js';
 import {
   createSonareClipPageRequestRingBuffer,
   createSonareEngineTelemetryRingBuffer,
@@ -86,7 +86,7 @@ export {
   it,
   Mixer,
   meterRingFromSharedBuffer,
-  mixingScenePresetJson,
+  mixingScenePreset,
   popSonareEngineCommandRingBuffer,
   pushSonareClipPageRequestRingBuffer,
   pushSonareEngineCommandRingBuffer,

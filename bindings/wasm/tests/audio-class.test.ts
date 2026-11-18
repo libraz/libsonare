@@ -333,7 +333,11 @@ describe('Audio class', () => {
 
     it('should master to target loudness', () => {
       const audio = Audio.fromBuffer(sine(), SR);
-      const result = audio.mastering({ targetLufs: -18.0, ceilingDb: -1.0, truePeakOversample: 4 });
+      const result = audio.masteringNormalizeLoudness({
+        targetLufs: -18.0,
+        ceilingDb: -1.0,
+        truePeakOversample: 4,
+      });
       expect(result.samples).toBeInstanceOf(Float32Array);
       expect(result.samples.length).toBe(audio.length);
       expect(result.sampleRate).toBe(SR);
@@ -344,11 +348,13 @@ describe('Audio class', () => {
 
     it('should run a mastering chain', () => {
       const audio = Audio.fromBuffer(sine(), SR);
-      const result = audio.masteringChain({
-        eq: { tiltDb: 1.0 },
-        dynamics: { compressor: { thresholdDb: -24.0, ratio: 1.5 } },
-        saturation: { tape: { driveDb: 1.0, saturation: 0.2 } },
-        loudness: { targetLufs: -18.0, ceilingDb: -1.0, truePeakOversample: 4 },
+      const result = audio.masterAudio({
+        overrides: {
+          eq: { tilt: { tiltDb: 1.0 } },
+          dynamics: { compressor: { thresholdDb: -24.0, ratio: 1.5 } },
+          saturation: { tape: { driveDb: 1.0, saturation: 0.2 } },
+          loudness: { targetLufs: -18.0, ceilingDb: -1.0, truePeakOversample: 4 },
+        },
       });
       expect(result.samples).toBeInstanceOf(Float32Array);
       expect(result.samples.length).toBe(audio.length);

@@ -178,35 +178,6 @@ describe('a class-method request refuses its keys through an instance', () => {
   });
 });
 
-/** Positional overloads still read by `optionsBag`, and the index of their options bag. */
-const POSITIONAL_OPTIONS: ReadonlyArray<readonly [string, number]> = [
-  ['lufsInterleaved', 3],
-  ['lufsSeriesInterleaved', 3],
-  ['mastering', 2],
-  ['masteringDynamicsCompressor', 2],
-  ['masteringDynamicsGate', 2],
-  ['masteringDynamicsTransientShaper', 2],
-  ['meteringCrestFactorDb', 2],
-  ['meteringDcOffset', 2],
-  ['meteringDetectClipping', 2],
-  ['meteringDynamicRange', 2],
-  ['meteringPeakDb', 2],
-  ['meteringPhaseScope', 3],
-  ['meteringPhaseScopeDecimated', 4],
-  ['meteringRmsDb', 2],
-  ['meteringSilenceRatio', 5],
-  ['meteringSpectrum', 2],
-  ['meteringSpectrumFrame', 3],
-  ['meteringStereoCorrelation', 3],
-  ['meteringStereoWidth', 3],
-  ['meteringTruePeakDb', 3],
-  ['meteringVectorscope', 3],
-  ['meteringVectorscopeDecimated', 4],
-  ['mixStereo', 3],
-  ['waveformPeakPyramid', 2],
-  ['waveformPeaks', 2],
-];
-
 /** Sample-taking entry points whose options bag is read by the shared `(samples, sampleRate, options)` normalizer, which refuses an unknown key before any defining field. */
 const SAMPLE_OPTIONS = [
   'analyze',
@@ -230,10 +201,14 @@ const SAMPLE_OPTIONS = [
   'detectKey',
   'detectKeyCandidates',
   'detectOnsets',
+  'ebur128LoudnessRange',
   'estimateRoom',
   'harmonic',
   'hybridCqt',
   'lufs',
+  'masteringDynamicsCompressor',
+  'masteringDynamicsGate',
+  'masteringDynamicsTransientShaper',
   'masteringRepairDeclick',
   'masteringRepairDeclip',
   'masteringRepairDecrackle',
@@ -249,6 +224,16 @@ const SAMPLE_OPTIONS = [
   'masteringRepairDetectTrimRange',
   'masteringRepairTrimSilence',
   'melSpectrogram',
+  'meteringCrestFactorDb',
+  'meteringDcOffset',
+  'meteringDetectClipping',
+  'meteringDynamicRange',
+  'meteringPeakDb',
+  'meteringRmsDb',
+  'meteringSilenceRatio',
+  'meteringSpectrum',
+  'meteringSpectrumFrame',
+  'meteringTruePeakDb',
   'mfcc',
   'momentaryLufs',
   'normalize',
@@ -285,21 +270,7 @@ describe('sample-taking options bags refuse unknown keys', () => {
 });
 
 describe('positional options bags refuse unknown keys', () => {
-  beforeAll(async () => {
-    await api.init();
-  });
-
-  it.each(POSITIONAL_OPTIONS)('%s refuses an undeclared option by name', (name, index) => {
-    const first = name === 'mixStereo' ? [] : new Float32Array(2205);
-    const args: unknown[] = Array.from({ length: index + 1 }, () => undefined);
-    args[0] = first;
-    args[index] = { bogus: 1 };
-    const call = () => (entry(name) as (...a: unknown[]) => unknown)(...args);
-    expect(call).toThrow(TypeError);
-    expect(message(call)).toBe(`${name}: unknown option 'bogus'`);
-  });
-
-  it('every optionsBag call site is listed', () => {
+  it('no positional options bag is read outside the shared normalizers', () => {
     const dir = join(import.meta.dirname, '..', 'src');
     const used = new Set<string>();
     for (const file of readdirSync(dir).filter((f) => f.endsWith('.ts'))) {
@@ -308,8 +279,14 @@ describe('positional options bags refuse unknown keys', () => {
         used.add(m[1]);
       }
     }
-    expect([...used].sort()).toEqual(POSITIONAL_OPTIONS.map(([name]) => name).sort());
+    expect([...used]).toEqual([]);
   });
+});
+
+const stereoBody = () => ({
+  left: new Float32Array(2205),
+  right: new Float32Array(2205),
+  sampleRate: 22050,
 });
 
 /** Entry points that take only a request object, with a valid request body to add the bogus key to. */
@@ -317,6 +294,15 @@ const REQUEST_ONLY: ReadonlyArray<readonly [string, () => Record<string, unknown
   ['masteringRepairDereverbConfigForRoom', () => ({ estimate: {} })],
   ['roomGeometryFromEstimate', () => ({ estimate: {} })],
   ['voiceChangeRealtime', () => ({ channels: [new Float32Array(2205)], sampleRate: 22050 })],
+  ['lufsMultichannel', () => ({ channels: [new Float32Array(2205)], sampleRate: 22050 })],
+  ['lufsSeriesMultichannel', () => ({ channels: [new Float32Array(2205)], sampleRate: 22050 })],
+  ['meteringCrestFactorDbStereo', () => stereoBody()],
+  ['meteringPhaseScope', () => stereoBody()],
+  ['meteringStereoCorrelation', () => stereoBody()],
+  ['meteringStereoWidth', () => stereoBody()],
+  ['meteringVectorscope', () => stereoBody()],
+  ['waveformPeakPyramid', () => ({ channels: [new Float32Array(2205)] })],
+  ['waveformPeaks', () => ({ channels: [new Float32Array(2205)] })],
 ];
 
 describe('request-only entry points refuse unknown keys', () => {
@@ -363,10 +349,14 @@ describe('reported mistakes', () => {
     await api.init();
   });
 
-  it('masteringChain points a chain section at config', () => {
+  it('streamingLoudnessGain points a chain section at config', () => {
     expect(
-      message(() => api.masteringChain({ samples, sampleRate: 22050, loudness: {} } as never)),
-    ).toBe("masteringChain: unknown request key 'loudness' ('loudness' belongs under 'config')");
+      message(() =>
+        api.streamingLoudnessGain({ samples, sampleRate: 22050, loudness: {} } as never),
+      ),
+    ).toBe(
+      "streamingLoudnessGain: unknown request key 'loudness' ('loudness' belongs under 'config')",
+    );
   });
 
   it('masterAudio points a chain section at overrides', () => {

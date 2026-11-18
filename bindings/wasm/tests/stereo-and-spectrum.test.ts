@@ -44,21 +44,24 @@ describe('Stereo meter wrappers (WASM)', () => {
   it('correlation is +1 for in-phase and -1 for inverted', () => {
     const left = sine(440, 0.5);
     const right = left.slice();
-    expect(meteringStereoCorrelation(left, right, SR)).toBeCloseTo(1.0, 3);
-    expect(meteringStereoCorrelation(left, inverted(left), SR)).toBeCloseTo(-1.0, 3);
+    expect(meteringStereoCorrelation({ left, right, sampleRate: SR })).toBeCloseTo(1.0, 3);
+    expect(meteringStereoCorrelation({ left, right: inverted(left), sampleRate: SR })).toBeCloseTo(
+      -1.0,
+      3,
+    );
   });
 
   it('stereo_width is ~0 for mono and > 0 when polarity flips', () => {
     const left = sine(440, 0.5);
-    const width_mono = meteringStereoWidth(left, left, SR);
-    const width_inv = meteringStereoWidth(left, inverted(left), SR);
+    const width_mono = meteringStereoWidth({ left, right: left, sampleRate: SR });
+    const width_inv = meteringStereoWidth({ left, right: inverted(left), sampleRate: SR });
     expect(Math.abs(width_mono)).toBeLessThan(1e-3);
     expect(width_inv).toBeGreaterThan(width_mono);
   });
 
   it('vectorscope returns one point per sample as Float32Array pair', () => {
     const left = sine(440, 0.1);
-    const result = meteringVectorscope(left, left, SR);
+    const result = meteringVectorscope({ left, right: left, sampleRate: SR });
     expect(result.mid).toBeInstanceOf(Float32Array);
     expect(result.side).toBeInstanceOf(Float32Array);
     expect(result.mid.length).toBe(left.length);
@@ -72,7 +75,7 @@ describe('Stereo meter wrappers (WASM)', () => {
 
   it('phase_scope populates summary stats', () => {
     const left = sine(440, 0.1);
-    const result = meteringPhaseScope(left, left, SR);
+    const result = meteringPhaseScope({ left, right: left, sampleRate: SR });
     expect(result.mid.length).toBe(left.length);
     expect(result.side.length).toBe(left.length);
     expect(result.radius.length).toBe(left.length);
@@ -84,14 +87,14 @@ describe('Stereo meter wrappers (WASM)', () => {
   it('rejects mismatched left/right lengths', () => {
     const left = sine(440, 0.1);
     const right = sine(440, 0.05);
-    expect(() => meteringStereoCorrelation(left, right, SR)).toThrow();
-    expect(() => meteringVectorscope(left, right, SR)).toThrow();
+    expect(() => meteringStereoCorrelation({ left, right, sampleRate: SR })).toThrow();
+    expect(() => meteringVectorscope({ left, right, sampleRate: SR })).toThrow();
   });
 
   it('rejects invalid sample rates', () => {
     const left = sine(440, 0.1);
-    expect(() => meteringStereoCorrelation(left, left, 0)).toThrow();
-    expect(() => meteringPhaseScope(left, left, -1)).toThrow();
+    expect(() => meteringStereoCorrelation({ left, right: left, sampleRate: 0 })).toThrow();
+    expect(() => meteringPhaseScope({ left, right: left, sampleRate: -1 })).toThrow();
   });
 });
 
@@ -142,7 +145,7 @@ describe('Spectrum meter wrapper (WASM)', () => {
     const samples = sine(440, 0.1);
     for (const options of [{ nFft: -1 }, { octaveFraction: -1 }, { dbRef: -1 }, { dbAmin: -1 }]) {
       expect(() => meteringSpectrum(samples, SR, options)).toThrow();
-      expect(() => meteringSpectrumFrame(samples, SR, 0, options)).toThrow();
+      expect(() => meteringSpectrumFrame(samples, SR, { startSample: 0, ...options })).toThrow();
     }
   });
 
@@ -151,7 +154,10 @@ describe('Spectrum meter wrapper (WASM)', () => {
   // driven separately.
   const entryPoints: ReadonlyArray<[string, (options: object) => { nFft: number }]> = [
     ['meteringSpectrum', (options) => meteringSpectrum(sine(440, 0.1), SR, options)],
-    ['meteringSpectrumFrame', (options) => meteringSpectrumFrame(sine(440, 0.1), SR, 0, options)],
+    [
+      'meteringSpectrumFrame',
+      (options) => meteringSpectrumFrame(sine(440, 0.1), SR, { startSample: 0, ...options }),
+    ],
   ];
 
   for (const [name, run] of entryPoints) {

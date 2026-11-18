@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
+import type { MixStereoStrip } from '../dist/index.js';
 import { init, midiCc, midiCcLearn, mixStereo, RealtimeEngine } from '../dist/index.js';
-import type { MixOptions } from '../src/public_types_mixing';
 import { expectArgumentRefusal } from './_helpers';
 
 type CorpusMarker = { id: number | 'uint32_max'; ppq: number | 'nan' | 'inf'; name: string };
@@ -47,7 +47,9 @@ const mixOptionValue = (value: MixOptionCase['value']): number | string => {
   return value;
 };
 
-const mixOptions = (testCase: MixOptionCase): MixOptions => {
+type StripOptions = Partial<Omit<MixStereoStrip, 'left' | 'right'>>;
+
+const mixOptions = (testCase: MixOptionCase): StripOptions => {
   const value = mixOptionValue(testCase.value);
   switch (testCase.field) {
     case 'input_trim_db':
@@ -57,7 +59,7 @@ const mixOptions = (testCase: MixOptionCase): MixOptions => {
     case 'pan':
       return { pan: value as number };
     case 'pan_mode':
-      return { pan: 0, panMode: value as MixOptions['panMode'] };
+      return { pan: 0, panMode: value as StripOptions['panMode'] };
     case 'width':
       return { width: value as number };
   }
@@ -113,19 +115,13 @@ describe('shared public-input conformance corpus (WASM)', () => {
     it(`keeps mix option rejection conformant: ${testCase.id}`, () => {
       const channel = new Float32Array([0.25, -0.25]);
       const options = mixOptions(testCase);
-      expect(() => mixStereo([channel], [channel], 48000, options)).toThrow();
       expect(() =>
-        mixStereo({
-          leftChannels: [channel],
-          rightChannels: [channel],
-          sampleRate: 48000,
-          ...options,
-        }),
+        mixStereo({ strips: [{ left: channel, right: channel, ...options }], sampleRate: 48000 }),
       ).toThrow();
-      const positional = mixStereo([channel], [channel], 48000);
-      const request = mixStereo({ leftChannels: [channel], rightChannels: [channel] });
-      expect(Array.from(request.left)).toEqual(Array.from(positional.left));
-      expect(Array.from(request.right)).toEqual(Array.from(positional.right));
+      // The control: the same strip without the refused field mixes, so the refusal is the field's.
+      expect(() =>
+        mixStereo({ strips: [{ left: channel, right: channel }], sampleRate: 48000 }),
+      ).not.toThrow();
     });
   }
 });

@@ -840,9 +840,9 @@ export interface LufsResult {
  */
 export interface LufsSeriesResult {
   /** 400 ms momentary series. */
-  momentary: Float32Array;
+  momentaryLufs: Float32Array;
   /** 3 s short-term series. */
-  shortTerm: Float32Array;
+  shortTermLufs: Float32Array;
 }
 
 /**

@@ -1,8 +1,8 @@
 /**
  * The mastering preset catalog: `capabilityCatalog().masteringPresets`
  * against the tracked `tools/capability-catalog.json`, and
- * `masteringPresetParams` against `masteringAssistantSuggestChain`'s key
- * space.
+ * `masteringPresetParams` against `masteringAssistantSuggestChain`'s nested
+ * key space.
  */
 
 import { readFileSync } from 'node:fs';
@@ -18,6 +18,16 @@ import {
 const TRACKED_CATALOG = JSON.parse(
   readFileSync(new URL('../../../tools/capability-catalog.json', import.meta.url).pathname, 'utf8'),
 );
+
+/** Dotted paths of every leaf of a nested chain config. */
+function leafPaths(node: unknown, prefix = ''): string[] {
+  if (typeof node !== 'object' || node === null) {
+    return [prefix];
+  }
+  return Object.entries(node).flatMap(([key, value]) =>
+    leafPaths(value, prefix ? `${prefix}.${key}` : key),
+  );
+}
 
 describe('mastering preset catalog', () => {
   beforeAll(async () => {
@@ -54,7 +64,7 @@ describe('mastering preset catalog', () => {
     beforeAll(() => {
       // Deferred to beforeAll: init() has not necessarily run when this
       // describe body itself executes.
-      suggestedKeys = Object.keys(masteringAssistantSuggestChain({ samples, sampleRate })).sort();
+      suggestedKeys = leafPaths(masteringAssistantSuggestChain({ samples, sampleRate })).sort();
     });
 
     it('does not throw for any built-in preset', () => {
@@ -66,7 +76,7 @@ describe('mastering preset catalog', () => {
     it("matches masteringAssistantSuggestChain's key set for every preset", () => {
       expect(suggestedKeys.length).toBeGreaterThan(0);
       for (const preset of masteringPresetNames()) {
-        const keys = Object.keys(masteringPresetParams(preset)).sort();
+        const keys = leafPaths(masteringPresetParams(preset)).sort();
         expect(keys).toEqual(suggestedKeys);
       }
     });

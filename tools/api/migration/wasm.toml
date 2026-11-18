@@ -14987,10 +14987,10 @@ rule = "collections"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMarkers"
-changed = "returns the stored EngineMarker[] with their ids"
+changed = "an entry's id is optional and an absent one is assigned, as SonareEngine.setMarkers does; returns the stored EngineMarker[] in the order given"
 domain = "engine"
 rule = "engine-vocabulary"
-test = "bindings/wasm/tests/surface/engine.test.ts::lists markers as an array"
+test = "bindings/wasm/tests/surface/engine.test.ts::assigns an id-less marker the lowest free id and never reuses one"
 
 [[entry]]
 kind = "method"
@@ -16375,7 +16375,7 @@ entry = "./worklet"
 [[entry]]
 kind = "method"
 old = "SonareEngine.setMarkers"
-changed = "entries may carry kind, keyFifths and keyMinor; returns the stored EngineMarker[]"
+changed = "entries may carry kind, keyFifths and keyMinor; an id-less entry takes an id the list does not carry instead of colliding with a later explicit one; returns the stored EngineMarker[]"
 domain = "engine"
 rule = "engine-vocabulary"
 entry = "./worklet"
@@ -23261,3 +23261,4344 @@ removed = true
 domain = "engine"
 rule = "worklet-scope"
 entry = "./worklet"
+
+[[entry]]
+kind = "export"
+old = "JsonResult"
+removed = true
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "export"
+old = "JsonResult"
+removed = true
+domain = "mastering"
+rule = "typed-results"
+entry = "./analysis"
+
+[[entry]]
+kind = "export"
+old = "LufsInterleavedRequest"
+changed = "export LufsMultichannelRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsInterleavedRequest"
+
+[[entry]]
+kind = "export"
+old = "LufsInterleavedRequest"
+changed = "export LufsMultichannelRequest"
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsInterleavedRequest"
+
+[[entry]]
+kind = "export"
+old = "LufsSeriesInterleavedRequest"
+changed = "export LufsSeriesMultichannelRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesInterleavedRequest"
+
+[[entry]]
+kind = "export"
+old = "LufsSeriesInterleavedRequest"
+changed = "export LufsSeriesMultichannelRequest"
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesInterleavedRequest"
+
+[[entry]]
+kind = "export"
+old = "MasteringAssistantParams"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+
+[[entry]]
+kind = "export"
+old = "MasteringAssistantParams"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+entry = "./analysis"
+
+[[entry]]
+kind = "export"
+old = "MasteringAssistantParamsRequest"
+changed = "export MasteringAssistantSuggestRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant params are flat request fields"
+
+[[entry]]
+kind = "export"
+old = "MasteringAssistantStereoParamsRequest"
+changed = "export MasteringAssistantSuggestStereoRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant params are flat request fields"
+
+[[entry]]
+kind = "export"
+old = "MasteringChainConfigDocument"
+removed = true
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "export"
+old = "MasteringChainConfigDocument"
+removed = true
+domain = "mastering"
+rule = "typed-results"
+entry = "./analysis"
+
+[[entry]]
+kind = "export"
+old = "MasteringChainRequest"
+removed = true
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "export"
+old = "MasteringChainStereoRequest"
+removed = true
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "export"
+old = "MasteringInsertParamValue"
+removed = true
+domain = "mastering"
+rule = "worklet-scope"
+
+[[entry]]
+kind = "export"
+old = "MasteringInsertParamValue"
+removed = true
+domain = "mastering"
+rule = "worklet-scope"
+entry = "./analysis"
+
+[[entry]]
+kind = "export"
+old = "MasteringInsertParams"
+removed = true
+domain = "mastering"
+rule = "worklet-scope"
+
+[[entry]]
+kind = "export"
+old = "MasteringInsertParams"
+removed = true
+domain = "mastering"
+rule = "worklet-scope"
+entry = "./analysis"
+
+[[entry]]
+kind = "export"
+old = "MasteringOptions"
+changed = "export MasteringNormalizeLoudnessOptions"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::explicit 0 on a default-bearing field"
+
+[[entry]]
+kind = "export"
+old = "MasteringOptions"
+changed = "export MasteringNormalizeLoudnessOptions"
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::explicit 0 on a default-bearing field"
+
+[[entry]]
+kind = "export"
+old = "MasteringPairAnalyzeRequest"
+changed = "export MasteringAnalyzePairRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo analyses return objects"
+
+[[entry]]
+kind = "export"
+old = "MasteringPairProcessRequest"
+changed = "export MasteringApplyPairProcessorRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+
+[[entry]]
+kind = "export"
+old = "MasteringPairProcessStereoRequest"
+changed = "export MasteringApplyPairProcessorStereoRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+
+[[entry]]
+kind = "export"
+old = "MasteringProcessRequest"
+changed = "export MasteringApplyProcessorRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+
+[[entry]]
+kind = "export"
+old = "MasteringProcessStereoRequest"
+changed = "export MasteringApplyProcessorStereoRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+
+[[entry]]
+kind = "export"
+old = "MasteringRequest"
+changed = "export MasteringNormalizeLoudnessRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::explicit 0 on a default-bearing field"
+
+[[entry]]
+kind = "export"
+old = "MasteringSamplesParamsRequest"
+changed = "export MasteringAudioProfileRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
+
+[[entry]]
+kind = "export"
+old = "MasteringSoloProcessorParams"
+removed = true
+domain = "mastering"
+rule = "worklet-scope"
+
+[[entry]]
+kind = "export"
+old = "MasteringSoloProcessorParams"
+removed = true
+domain = "mastering"
+rule = "worklet-scope"
+entry = "./analysis"
+
+[[entry]]
+kind = "export"
+old = "MasteringStereoAnalyzeRequest"
+changed = "export MasteringAnalyzeStereoRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo analyses return objects"
+
+[[entry]]
+kind = "export"
+old = "MasteringStereoChainResult"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "export"
+old = "MasteringStereoChainResult"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "export"
+old = "MasteringStereoParamsRequest"
+changed = "export MasteringAudioProfileStereoRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
+
+[[entry]]
+kind = "export"
+old = "MatchTonalBalanceLogBandsResult"
+removed = true
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "export"
+old = "MatchTonalBalanceLogBandsResult"
+removed = true
+domain = "mastering"
+rule = "one-entry-per-operation"
+entry = "./analysis"
+
+[[entry]]
+kind = "export"
+old = "MeteringSamplesRequest"
+removed = true
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "export"
+old = "MeteringSamplesRequest"
+removed = true
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "export"
+old = "MeteringStereoDecimatedRequest"
+removed = true
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "export"
+old = "MeteringStereoDecimatedRequest"
+removed = true
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "export"
+old = "MeteringStereoRequest"
+removed = true
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "export"
+old = "MeteringStereoRequest"
+removed = true
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "export"
+old = "MeteringTruePeakRequest"
+changed = "export MeteringTruePeakDbRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringTruePeakRequest"
+
+[[entry]]
+kind = "export"
+old = "MeteringTruePeakRequest"
+changed = "export MeteringTruePeakDbRequest"
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringTruePeakRequest"
+
+[[entry]]
+kind = "export"
+old = "MixAssistantOptions"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+
+[[entry]]
+kind = "export"
+old = "MixAssistantOptions"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+entry = "./analysis"
+
+[[entry]]
+kind = "export"
+old = "MixOptions"
+removed = true
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "export"
+old = "MixOptions"
+removed = true
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "export"
+old = "ScopeOptions"
+removed = true
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "export"
+old = "ScopeOptions"
+removed = true
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "export"
+old = "SuggestMixSceneRequest"
+changed = "export MixingAssistantSuggestRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::SuggestMixSceneRequest"
+
+[[entry]]
+kind = "export"
+old = "TypedJson"
+removed = true
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "export"
+old = "TypedJson"
+removed = true
+domain = "mastering"
+rule = "typed-results"
+entry = "./analysis"
+
+[[entry]]
+kind = "export"
+old = "WaveformPeakPyramidOptions"
+removed = true
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "export"
+old = "WaveformPeakPyramidOptions"
+removed = true
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "export"
+old = "WaveformPeaksOptions"
+removed = true
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "export"
+old = "WaveformPeaksOptions"
+removed = true
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "export"
+old = "lufsInterleaved"
+changed = "export lufsMultichannel"
+domain = "mastering"
+rule = "num-channels"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::lufsInterleaved"
+
+[[entry]]
+kind = "export"
+old = "lufsInterleaved"
+changed = "export lufsMultichannel"
+domain = "mastering"
+rule = "num-channels"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::lufsInterleaved"
+
+[[entry]]
+kind = "export"
+old = "lufsSeriesInterleaved"
+changed = "export lufsSeriesMultichannel"
+domain = "mastering"
+rule = "num-channels"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::lufsSeriesInterleaved"
+
+[[entry]]
+kind = "export"
+old = "lufsSeriesInterleaved"
+changed = "export lufsSeriesMultichannel"
+domain = "mastering"
+rule = "num-channels"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::lufsSeriesInterleaved"
+
+[[entry]]
+kind = "export"
+old = "masterAudioStereoWithProgress"
+removed = true
+domain = "mastering"
+rule = "progress-callback"
+
+[[entry]]
+kind = "export"
+old = "masterAudioWithProgress"
+removed = true
+domain = "mastering"
+rule = "progress-callback"
+
+[[entry]]
+kind = "export"
+old = "mastering"
+changed = "export masteringNormalizeLoudness"
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::request and positional forms agree"
+
+[[entry]]
+kind = "export"
+old = "masteringChain"
+removed = true
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "export"
+old = "masteringChainStereo"
+removed = true
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "export"
+old = "masteringChainStereoWithProgress"
+removed = true
+domain = "mastering"
+rule = "progress-callback"
+
+[[entry]]
+kind = "export"
+old = "masteringChainWithProgress"
+removed = true
+domain = "mastering"
+rule = "progress-callback"
+
+[[entry]]
+kind = "export"
+old = "masteringPairAnalyze"
+changed = "export masteringAnalyzePair"
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo analyses return objects"
+
+[[entry]]
+kind = "export"
+old = "masteringPairProcess"
+changed = "export masteringApplyPairProcessor"
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+
+[[entry]]
+kind = "export"
+old = "masteringPairProcessStereo"
+changed = "export masteringApplyPairProcessorStereo"
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+
+[[entry]]
+kind = "export"
+old = "masteringProcess"
+changed = "export masteringApplyProcessor"
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+
+[[entry]]
+kind = "export"
+old = "masteringProcessStereo"
+changed = "export masteringApplyProcessorStereo"
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+
+[[entry]]
+kind = "export"
+old = "masteringStereoAnalyze"
+changed = "export masteringAnalyzeStereo"
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo analyses return objects"
+
+[[entry]]
+kind = "export"
+old = "meteringPhaseScopeDecimated"
+removed = true
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "export"
+old = "meteringPhaseScopeDecimated"
+removed = true
+domain = "mastering"
+rule = "one-entry-per-operation"
+entry = "./analysis"
+
+[[entry]]
+kind = "export"
+old = "meteringVectorscopeDecimated"
+removed = true
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "export"
+old = "meteringVectorscopeDecimated"
+removed = true
+domain = "mastering"
+rule = "one-entry-per-operation"
+entry = "./analysis"
+
+[[entry]]
+kind = "export"
+old = "mixSourceClassFromName"
+changed = "export mixingAssistantSourceClassFromName"
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::mixSourceClassFromName"
+
+[[entry]]
+kind = "export"
+old = "mixSourceClassNames"
+changed = "export mixingAssistantSourceClassNames"
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::mixSourceClassNames"
+
+[[entry]]
+kind = "export"
+old = "mixingScenePresetJson"
+changed = "export mixingScenePreset"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::mixingScenePresetJson"
+
+[[entry]]
+kind = "export"
+old = "suggestMixScene"
+changed = "export mixingAssistantSuggest"
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::suggestMixScene"
+
+[[entry]]
+kind = "export"
+old = "suggestMixSceneJson"
+removed = true
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "ClipDetection.sampleCount"
+changed = "changed = \"sampleCount -> clippedSamples\""
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::ClipDetection.sampleCount"
+
+[[entry]]
+kind = "field"
+old = "ClipDetection.sampleCount"
+changed = "changed = \"sampleCount -> clippedSamples\""
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::ClipDetection.sampleCount"
+
+[[entry]]
+kind = "field"
+old = "ClipDetection.sampleFraction"
+changed = "changed = \"sampleFraction -> clippedRatio\""
+domain = "effects"
+rule = "individual"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::ClipDetection.sampleFraction"
+
+[[entry]]
+kind = "field"
+old = "ClipDetection.sampleFraction"
+changed = "changed = \"sampleFraction -> clippedRatio\""
+domain = "effects"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::ClipDetection.sampleFraction"
+
+[[entry]]
+kind = "field"
+old = "ClippingReport.clippingRatio"
+changed = "changed = \"clippingRatio -> clippedRatio\""
+domain = "mastering"
+rule = "individual"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::ClippingReport.clippingRatio"
+
+[[entry]]
+kind = "field"
+old = "ClippingReport.clippingRatio"
+changed = "changed = \"clippingRatio -> clippedRatio\""
+domain = "mastering"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::ClippingReport.clippingRatio"
+
+[[entry]]
+kind = "field"
+old = "CompressorOptions.detector"
+changed = "changed = \"CompressorDetector ('peak'|'rms'|'logRms'); numbers refused\""
+domain = "mastering"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::CompressorOptions.detector"
+
+[[entry]]
+kind = "field"
+old = "CompressorOptions.sidechainHpfEnabled"
+changed = "changed = \"sidechainHpfEnabled -> sidechainHighPassHz (number (Hz, > 0); absent = sidechain high-pass off; replaces sidechainHpfEnabled + sidechainHpfHz)\""
+domain = "mastering"
+rule = "high-pass"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::CompressorOptions.sidechainHpfEnabled"
+
+[[entry]]
+kind = "field"
+old = "CompressorOptions.sidechainHpfHz"
+changed = "changed = \"sidechainHpfHz -> sidechainHighPassHz (number (Hz, > 0); absent = sidechain high-pass off; replaces sidechainHpfEnabled + sidechainHpfHz)\""
+domain = "mastering"
+rule = "high-pass"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::CompressorOptions.sidechainHpfHz"
+
+[[entry]]
+kind = "field"
+old = "Ebur128LoudnessRangeRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::Ebur128LoudnessRangeRequest.sampleRate"
+
+[[entry]]
+kind = "field"
+old = "Ebur128LoudnessRangeRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::Ebur128LoudnessRangeRequest.sampleRate"
+
+[[entry]]
+kind = "field"
+old = "GateOptions.keyHpfHz"
+changed = "changed = \"keyHpfHz -> keyHighPassHz (number (Hz); absent = off; 0 Hz passes everything, the same as off, so it stays accepted)\""
+domain = "mastering"
+rule = "high-pass"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::GateOptions.keyHpfHz"
+
+[[entry]]
+kind = "field"
+old = "LufsInterleavedRequest.channels"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "LufsInterleavedRequest.channels"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "LufsInterleavedRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsInterleavedRequest.sampleRate"
+
+[[entry]]
+kind = "field"
+old = "LufsInterleavedRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsInterleavedRequest.sampleRate"
+
+[[entry]]
+kind = "field"
+old = "LufsInterleavedRequest.samples"
+changed = "changed = \"samples -> channels (Float32Array[] (planar; was interleaved samples + count))\""
+domain = "mastering"
+rule = "num-channels"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsInterleavedRequest.samples"
+
+[[entry]]
+kind = "field"
+old = "LufsInterleavedRequest.samples"
+changed = "changed = \"samples -> channels (Float32Array[] (planar; was interleaved samples + count))\""
+domain = "mastering"
+rule = "num-channels"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsInterleavedRequest.samples"
+
+[[entry]]
+kind = "field"
+old = "LufsSeriesInterleavedRequest.channels"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "LufsSeriesInterleavedRequest.channels"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "LufsSeriesInterleavedRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesInterleavedRequest.sampleRate"
+
+[[entry]]
+kind = "field"
+old = "LufsSeriesInterleavedRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesInterleavedRequest.sampleRate"
+
+[[entry]]
+kind = "field"
+old = "LufsSeriesInterleavedRequest.samples"
+changed = "changed = \"samples -> channels (Float32Array[] (planar))\""
+domain = "mastering"
+rule = "num-channels"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesInterleavedRequest.samples"
+
+[[entry]]
+kind = "field"
+old = "LufsSeriesInterleavedRequest.samples"
+changed = "changed = \"samples -> channels (Float32Array[] (planar))\""
+domain = "mastering"
+rule = "num-channels"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesInterleavedRequest.samples"
+
+[[entry]]
+kind = "field"
+old = "LufsSeriesResult.momentary"
+changed = "changed = \"momentary -> momentaryLufs\""
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesResult.momentary"
+
+[[entry]]
+kind = "field"
+old = "LufsSeriesResult.momentary"
+changed = "changed = \"momentary -> momentaryLufs\""
+domain = "mastering"
+rule = "loudness-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesResult.momentary"
+
+[[entry]]
+kind = "field"
+old = "LufsSeriesResult.shortTerm"
+changed = "changed = \"shortTerm -> shortTermLufs\""
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesResult.shortTerm"
+
+[[entry]]
+kind = "field"
+old = "LufsSeriesResult.shortTerm"
+changed = "changed = \"shortTerm -> shortTermLufs\""
+domain = "mastering"
+rule = "loudness-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesResult.shortTerm"
+
+[[entry]]
+kind = "field"
+old = "MasterAudioRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasterAudioStereoRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringAbMatchLoudnessRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringAbMatchLoudnessStereoRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantParamsRequest.params"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantParamsRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.attackDensity"
+changed = "changed = \"attackDensity -> attackPerSecond\""
+domain = "mastering"
+rule = "unit-in-name"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant returns objects"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.attackDensity"
+changed = "changed = \"attackDensity -> attackPerSecond\""
+domain = "mastering"
+rule = "unit-in-name"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant returns objects"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.lraLu"
+changed = "changed = \"lraLu -> loudnessRangeLu\""
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant returns objects"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.lraLu"
+changed = "changed = \"lraLu -> loudnessRangeLu\""
+domain = "mastering"
+rule = "loudness-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant returns objects"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.truePeakDb"
+changed = "changed = \"truePeakDb -> truePeakDbtp\""
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant returns objects"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.truePeakDb"
+changed = "changed = \"truePeakDb -> truePeakDbtp\""
+domain = "mastering"
+rule = "loudness-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant returns objects"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantResult.chainConfig"
+changed = "changed = \"MasteringChainConfig (was MasteringChainConfigDocument {version, params})\""
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant chain nests"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantResult.chainConfig"
+changed = "changed = \"MasteringChainConfig (was MasteringChainConfigDocument {version, params})\""
+domain = "mastering"
+rule = "typed-results"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant chain nests"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantStereoParamsRequest.params"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantStereoParamsRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.defects"
+changed = "changed = \"defects?: MasteringAudioProfileDefects; absent when detectDefects is false (the measured:false sentinel goes)\""
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.dynamics"
+changed = "changed = \"MasteringAudioProfileDynamics (named; attackDensity -> attackPerSecond, other fields unchanged)\""
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.loudness"
+changed = "changed = \"MasteringAudioProfileLoudness {integratedLufs, loudnessRangeLu, truePeakDbtp, crestFactorDb}\""
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.spectral"
+changed = "changed = \"MasteringAudioProfileSpectral (named; fields unchanged)\""
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDynamics.attackDensity"
+changed = "changed = \"attackDensity -> attackPerSecond\""
+domain = "mastering"
+rule = "unit-in-name"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.[flatKey]"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.[flatKey]"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.crossover.mode"
+changed = "changed = \"'linkwitzRiley'|'butterworth'|'bessel'|'firLinearPhase' (numbers refused)\""
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.crossover.mode"
+changed = "changed = \"'linkwitzRiley'|'butterworth'|'bessel'|'firLinearPhase' (numbers refused)\""
+domain = "mastering"
+rule = "string-closed-sets"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.crossover.slope"
+changed = "changed = \"'lr2'|'lr4'|'lr8' (numbers refused)\""
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.dynamics.multibandComp.crossover.slope"
+changed = "changed = \"'lr2'|'lr4'|'lr8' (numbers refused)\""
+domain = "mastering"
+rule = "string-closed-sets"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.eq.pivotHz"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.eq.pivotHz"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.eq.tiltDb"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.eq.tiltDb"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.ddAlpha"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.ddAlpha"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.declip.clipThreshold"
+changed = "changed = \"clipThreshold -> clipThresholdDb (dBFS, <= 0; same quantity as DeclipOptions.clipThresholdDb)\""
+domain = "mastering"
+rule = "unit-in-name"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.declip.clipThreshold"
+changed = "changed = \"clipThreshold -> clipThresholdDb (dBFS, <= 0; same quantity as DeclipOptions.clipThresholdDb)\""
+domain = "mastering"
+rule = "unit-in-name"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.decrackle.mode"
+changed = "changed = \"'median'|'waveletShrinkage' (numbers refused)\""
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.decrackle.mode"
+changed = "changed = \"'median'|'waveletShrinkage' (numbers refused)\""
+domain = "mastering"
+rule = "string-closed-sets"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.dehum.mode"
+changed = "changed = \"'subtract'|'notch' (numbers refused)\""
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.dehum.mode"
+changed = "changed = \"'subtract'|'notch' (numbers refused)\""
+domain = "mastering"
+rule = "string-closed-sets"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.denoise"
+changed = "changed = \"boolean shorthand removed: denoise?: {enabled?, mode?, ...}\""
+domain = "mastering"
+rule = "aliases-removed"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.denoise"
+changed = "changed = \"boolean shorthand removed: denoise?: {enabled?, mode?, ...}\""
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.denoise.gainFloor"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.denoise.gainFloor"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.denoise.mode"
+changed = "changed = \"'logMmse'|'mmseStsa'|'spectralSubtraction' (numbers refused)\""
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.denoise.mode"
+changed = "changed = \"'logMmse'|'mmseStsa'|'spectralSubtraction' (numbers refused)\""
+domain = "mastering"
+rule = "string-closed-sets"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.denoise.noiseEstimator"
+changed = "changed = \"'quantile'|'mcra'|'imcra'|'spp' (numbers refused)\""
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.denoise.noiseEstimator"
+changed = "changed = \"'quantile'|'mcra'|'imcra'|'spp' (numbers refused)\""
+domain = "mastering"
+rule = "string-closed-sets"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.gainFloor"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.gainFloor"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.hopLength"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.hopLength"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.nFft"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.nFft"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.reductionDb"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.repair.reductionDb"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainResult.outputLra"
+changed = "changed = \"outputLra -> outputLoudnessRangeLu\""
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain results name the loudness range"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainResult.outputLra"
+changed = "changed = \"outputLra -> outputLoudnessRangeLu\""
+domain = "mastering"
+rule = "loudness-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain results name the loudness range"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainStereoResult.outputLra"
+changed = "changed = \"outputLra -> outputLoudnessRangeLu\""
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain results name the loudness range"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainStereoResult.outputLra"
+changed = "changed = \"outputLra -> outputLoudnessRangeLu\""
+domain = "mastering"
+rule = "loudness-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain results name the loudness range"
+
+[[entry]]
+kind = "field"
+old = "MasteringDynamicsCompressorRequest.detector"
+changed = "changed = \"CompressorDetector; numbers refused\""
+domain = "mastering"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MasteringDynamicsCompressorRequest.detector"
+
+[[entry]]
+kind = "field"
+old = "MasteringDynamicsCompressorRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MasteringDynamicsCompressorRequest.sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringDynamicsCompressorRequest.sidechainHpfEnabled"
+changed = "changed = \"sidechainHpfEnabled -> sidechainHighPassHz (number (Hz, > 0); absent = off)\""
+domain = "mastering"
+rule = "high-pass"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MasteringDynamicsCompressorRequest.sidechainHpfEnabled"
+
+[[entry]]
+kind = "field"
+old = "MasteringDynamicsCompressorRequest.sidechainHpfHz"
+changed = "changed = \"sidechainHpfHz -> sidechainHighPassHz (number (Hz, > 0); absent = off)\""
+domain = "mastering"
+rule = "high-pass"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MasteringDynamicsCompressorRequest.sidechainHpfHz"
+
+[[entry]]
+kind = "field"
+old = "MasteringDynamicsGateRequest.keyHpfHz"
+changed = "changed = \"keyHpfHz -> keyHighPassHz (number (Hz); absent = off)\""
+domain = "mastering"
+rule = "high-pass"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MasteringDynamicsGateRequest.keyHpfHz"
+
+[[entry]]
+kind = "field"
+old = "MasteringDynamicsGateRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MasteringDynamicsGateRequest.sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringDynamicsTransientShaperRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MasteringDynamicsTransientShaperRequest.sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringLoudnessSummary.loudnessRange"
+changed = "changed = \"loudnessRange -> loudnessRangeLu\""
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain results name the loudness range"
+
+[[entry]]
+kind = "field"
+old = "MasteringLoudnessSummary.loudnessRange"
+changed = "changed = \"loudnessRange -> loudnessRangeLu\""
+domain = "mastering"
+rule = "loudness-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain results name the loudness range"
+
+[[entry]]
+kind = "field"
+old = "MasteringOptions.releaseMs"
+changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::explicit 0 on a default-bearing field"
+
+[[entry]]
+kind = "field"
+old = "MasteringOptions.releaseMs"
+changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+domain = "mastering"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::explicit 0 on a default-bearing field"
+
+[[entry]]
+kind = "field"
+old = "MasteringOptions.truePeakOversample"
+changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::explicit 0 on a default-bearing field"
+
+[[entry]]
+kind = "field"
+old = "MasteringOptions.truePeakOversample"
+changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+domain = "mastering"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::explicit 0 on a default-bearing field"
+
+[[entry]]
+kind = "field"
+old = "MasteringPairAnalyzeRequest.analysisName"
+changed = "changed = \"analysisName -> analysis (PairAnalysis (generic A))\""
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::mastering chain: one name per operation"
+
+[[entry]]
+kind = "field"
+old = "MasteringPairAnalyzeRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringPairProcessRequest.processorName"
+changed = "changed = \"processorName -> processor (PairProcessor (generic P))\""
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::mastering chain: one name per operation"
+
+[[entry]]
+kind = "field"
+old = "MasteringPairProcessRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringPairProcessStereoRequest.processorName"
+changed = "changed = \"processorName -> processor (StereoPairProcessor)\""
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::mastering chain: one name per operation"
+
+[[entry]]
+kind = "field"
+old = "MasteringPairProcessStereoRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringProcessRequest.processorName"
+changed = "changed = \"processorName -> processor (SoloProcessor (generic P))\""
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::mastering chain: one name per operation"
+
+[[entry]]
+kind = "field"
+old = "MasteringProcessRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringProcessStereoRequest.processorName"
+changed = "changed = \"processorName -> processor (SoloProcessor (generic P))\""
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::mastering chain: one name per operation"
+
+[[entry]]
+kind = "field"
+old = "MasteringProcessStereoRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringResult.latencySamples"
+changed = "changed = \"optional -> required\""
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+
+[[entry]]
+kind = "field"
+old = "MasteringResult.latencySamples"
+changed = "changed = \"optional -> required\""
+domain = "mastering"
+rule = "typed-results"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+
+[[entry]]
+kind = "field"
+old = "MasteringSamplesParamsRequest.params"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "MasteringSamplesParamsRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringStereoAnalyzeRequest.analysisName"
+changed = "changed = \"analysisName -> analysis (StereoAnalysis (generic A))\""
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::mastering chain: one name per operation"
+
+[[entry]]
+kind = "field"
+old = "MasteringStereoAnalyzeRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringStereoParamsRequest.params"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "MasteringStereoParamsRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringStreamingPreviewPlatform.truePeakDb"
+changed = "changed = \"truePeakDb -> truePeakDbtp\""
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the streaming preview reports truePeakDbtp"
+
+[[entry]]
+kind = "field"
+old = "MasteringStreamingPreviewPlatform.truePeakDb"
+changed = "changed = \"truePeakDb -> truePeakDbtp\""
+domain = "mastering"
+rule = "loudness-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the streaming preview reports truePeakDbtp"
+
+[[entry]]
+kind = "field"
+old = "MasteringStreamingPreviewRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringStreamingPreviewStereoRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MeteringDetectClippingOptions.minRegionSamples"
+changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDetectClippingOptions.minRegionSamples"
+
+[[entry]]
+kind = "field"
+old = "MeteringDetectClippingOptions.minRegionSamples"
+changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+domain = "mastering"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDetectClippingOptions.minRegionSamples"
+
+[[entry]]
+kind = "field"
+old = "MeteringDetectClippingOptions.threshold"
+changed = "changed = \"threshold -> thresholdDb (linear [0,1] -> dBFS (<= 0))\""
+domain = "mastering"
+rule = "unit-in-name"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDetectClippingOptions.threshold"
+
+[[entry]]
+kind = "field"
+old = "MeteringDetectClippingOptions.threshold"
+changed = "changed = \"threshold -> thresholdDb (linear [0,1] -> dBFS (<= 0))\""
+domain = "mastering"
+rule = "unit-in-name"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDetectClippingOptions.threshold"
+
+[[entry]]
+kind = "field"
+old = "MeteringDetectClippingRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDetectClippingRequest.sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MeteringDetectClippingRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDetectClippingRequest.sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MeteringDetectClippingRequest.threshold"
+changed = "changed = \"threshold -> thresholdDb (linear [0,1] -> dBFS (<= 0); absent = native default (0.999 linear, ~ -0.0087 dBFS); 0 dBFS is a real level)\""
+domain = "mastering"
+rule = "unit-in-name"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDetectClippingRequest.threshold"
+
+[[entry]]
+kind = "field"
+old = "MeteringDetectClippingRequest.threshold"
+changed = "changed = \"threshold -> thresholdDb (linear [0,1] -> dBFS (<= 0); absent = native default (0.999 linear, ~ -0.0087 dBFS); 0 dBFS is a real level)\""
+domain = "mastering"
+rule = "unit-in-name"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDetectClippingRequest.threshold"
+
+[[entry]]
+kind = "field"
+old = "MeteringDynamicRangeOptions.hopSec"
+changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDynamicRangeOptions.hopSec"
+
+[[entry]]
+kind = "field"
+old = "MeteringDynamicRangeOptions.hopSec"
+changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+domain = "mastering"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDynamicRangeOptions.hopSec"
+
+[[entry]]
+kind = "field"
+old = "MeteringDynamicRangeOptions.lowPercentile"
+changed = "changed = \"checked in [0, 1] by the facade, and lowPercentile <= highPercentile\""
+domain = "mastering"
+rule = "individual"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDynamicRangeOptions.lowPercentile"
+
+[[entry]]
+kind = "field"
+old = "MeteringDynamicRangeOptions.lowPercentile"
+changed = "changed = \"checked in [0, 1] by the facade, and lowPercentile <= highPercentile\""
+domain = "mastering"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDynamicRangeOptions.lowPercentile"
+
+[[entry]]
+kind = "field"
+old = "MeteringDynamicRangeOptions.windowSec"
+changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDynamicRangeOptions.windowSec"
+
+[[entry]]
+kind = "field"
+old = "MeteringDynamicRangeOptions.windowSec"
+changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+domain = "mastering"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDynamicRangeOptions.windowSec"
+
+[[entry]]
+kind = "field"
+old = "MeteringDynamicRangeRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDynamicRangeRequest.sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MeteringDynamicRangeRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDynamicRangeRequest.sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MeteringSpectrumFrameRequest.frameOffset"
+changed = "changed = \"frameOffset -> startSample (sample index where the analysis frame begins (0 = first frame, a real position))\""
+domain = "mastering"
+rule = "unit-in-name"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringSpectrumFrameRequest.frameOffset"
+
+[[entry]]
+kind = "field"
+old = "MeteringSpectrumFrameRequest.frameOffset"
+changed = "changed = \"frameOffset -> startSample (sample index where the analysis frame begins (0 = first frame, a real position))\""
+domain = "mastering"
+rule = "unit-in-name"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringSpectrumFrameRequest.frameOffset"
+
+[[entry]]
+kind = "field"
+old = "MeteringSpectrumRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringSpectrumRequest.sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MeteringSpectrumRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringSpectrumRequest.sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MeteringTruePeakRequest.oversampleFactor"
+changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringTruePeakRequest.oversampleFactor"
+
+[[entry]]
+kind = "field"
+old = "MeteringTruePeakRequest.oversampleFactor"
+changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+domain = "mastering"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringTruePeakRequest.oversampleFactor"
+
+[[entry]]
+kind = "field"
+old = "MeteringTruePeakRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringTruePeakRequest.sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MeteringTruePeakRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringTruePeakRequest.sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantTrackProfile.attackDensity"
+changed = "changed = \"attackDensity -> attackPerSecond\""
+domain = "mastering"
+rule = "unit-in-name"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixAssistantTrackProfile.attackDensity"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantTrackProfile.attackDensity"
+changed = "changed = \"attackDensity -> attackPerSecond\""
+domain = "mastering"
+rule = "unit-in-name"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixAssistantTrackProfile.attackDensity"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantTrackProfile.channelCount"
+changed = "changed = \"channelCount -> numChannels\""
+domain = "mastering"
+rule = "num-channels"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixAssistantTrackProfile.channelCount"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantTrackProfile.channelCount"
+changed = "changed = \"channelCount -> numChannels\""
+domain = "mastering"
+rule = "num-channels"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixAssistantTrackProfile.channelCount"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantTrackProfile.source"
+changed = "changed = \"string -> MixSourceClass\""
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixAssistantTrackProfile.source"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantTrackProfile.source"
+changed = "changed = \"string -> MixSourceClass\""
+domain = "mastering"
+rule = "string-closed-sets"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixAssistantTrackProfile.source"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantTrackProfile.truePeakDb"
+changed = "changed = \"truePeakDb -> truePeakDbtp\""
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixAssistantTrackProfile.truePeakDb"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantTrackProfile.truePeakDb"
+changed = "changed = \"truePeakDb -> truePeakDbtp\""
+domain = "mastering"
+rule = "loudness-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixAssistantTrackProfile.truePeakDb"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.channelCount"
+changed = "changed = \"channelCount -> numChannels\""
+domain = "mastering"
+rule = "num-channels"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.channelCount"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.channelCount"
+changed = "changed = \"channelCount -> numChannels\""
+domain = "mastering"
+rule = "num-channels"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.channelCount"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.maxTruePeakDb"
+changed = "changed = \"maxTruePeakDb -> maxTruePeakDbtp\""
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.maxTruePeakDb"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.maxTruePeakDb"
+changed = "changed = \"maxTruePeakDb -> maxTruePeakDbtp\""
+domain = "mastering"
+rule = "loudness-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.maxTruePeakDb"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.truePeakDb"
+changed = "changed = \"truePeakDb -> truePeakDbtp\""
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.truePeakDb"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.truePeakDb"
+changed = "changed = \"truePeakDb -> truePeakDbtp\""
+domain = "mastering"
+rule = "loudness-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.truePeakDb"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.truePeakDbL"
+changed = "changed = \"truePeakDbL -> truePeakDbtpL\""
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.truePeakDbL"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.truePeakDbL"
+changed = "changed = \"truePeakDbL -> truePeakDbtpL\""
+domain = "mastering"
+rule = "loudness-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.truePeakDbL"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.truePeakDbR"
+changed = "changed = \"truePeakDbR -> truePeakDbtpR\""
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.truePeakDbR"
+
+[[entry]]
+kind = "field"
+old = "MixMeterSnapshot.truePeakDbR"
+changed = "changed = \"truePeakDbR -> truePeakDbtpR\""
+domain = "mastering"
+rule = "loudness-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixMeterSnapshot.truePeakDbR"
+
+[[entry]]
+kind = "field"
+old = "MixSceneBus.layout"
+changed = "changed = \"string -> ChannelLayout\""
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixSceneBus.layout"
+
+[[entry]]
+kind = "field"
+old = "MixSceneBus.layout"
+changed = "changed = \"string -> ChannelLayout\""
+domain = "mastering"
+rule = "string-closed-sets"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixSceneBus.layout"
+
+[[entry]]
+kind = "field"
+old = "MixSceneBus.panLaw"
+changed = "changed = \"number -> PanLaw\""
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixSceneBus.panLaw"
+
+[[entry]]
+kind = "field"
+old = "MixSceneBus.panLaw"
+changed = "changed = \"number -> PanLaw\""
+domain = "mastering"
+rule = "string-closed-sets"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixSceneBus.panLaw"
+
+[[entry]]
+kind = "field"
+old = "MixSceneBus.panMode"
+changed = "changed = \"number -> PanMode\""
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixSceneBus.panMode"
+
+[[entry]]
+kind = "field"
+old = "MixSceneBus.panMode"
+changed = "changed = \"number -> PanMode\""
+domain = "mastering"
+rule = "string-closed-sets"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixSceneBus.panMode"
+
+[[entry]]
+kind = "field"
+old = "MixSceneBus.role"
+changed = "changed = \"string -> MixBusRole\""
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixSceneBus.role"
+
+[[entry]]
+kind = "field"
+old = "MixSceneBus.role"
+changed = "changed = \"string -> MixBusRole\""
+domain = "mastering"
+rule = "string-closed-sets"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixSceneBus.role"
+
+[[entry]]
+kind = "field"
+old = "MixSceneSend.timing"
+changed = "changed = \"string -> SendTiming ('preFader'|'postFader')\""
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixSceneSend.timing"
+
+[[entry]]
+kind = "field"
+old = "MixSceneSend.timing"
+changed = "changed = \"string -> SendTiming ('preFader'|'postFader')\""
+domain = "mastering"
+rule = "string-closed-sets"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixSceneSend.timing"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.metering"
+changed = "changed = \"inline object -> Required<StripMeteringOptions>\""
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixSceneStrip.metering"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.metering"
+changed = "changed = \"inline object -> Required<StripMeteringOptions>\""
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixSceneStrip.metering"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.panLaw"
+changed = "changed = \"number -> PanLaw\""
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixSceneStrip.panLaw"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.panLaw"
+changed = "changed = \"number -> PanLaw\""
+domain = "mastering"
+rule = "string-closed-sets"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixSceneStrip.panLaw"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.panMode"
+changed = "changed = \"number -> PanMode\""
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixSceneStrip.panMode"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.panMode"
+changed = "changed = \"number -> PanMode\""
+domain = "mastering"
+rule = "string-closed-sets"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixSceneStrip.panMode"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.sourceLayout"
+changed = "changed = \"string -> ChannelLayout\""
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixSceneStrip.sourceLayout"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.sourceLayout"
+changed = "changed = \"string -> ChannelLayout\""
+domain = "mastering"
+rule = "string-closed-sets"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixSceneStrip.sourceLayout"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.surroundPan"
+changed = "changed = \"inline object -> Required<SurroundPan>\""
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixSceneStrip.surroundPan"
+
+[[entry]]
+kind = "field"
+old = "MixSceneStrip.surroundPan"
+changed = "changed = \"inline object -> Required<SurroundPan>\""
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixSceneStrip.surroundPan"
+
+[[entry]]
+kind = "field"
+old = "MixStereoRequest.faderDb"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "MixStereoRequest.inputTrimDb"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "MixStereoRequest.leftChannels"
+changed = "changed = \"leftChannels -> strips (MixStereoStrip[] (was leftChannels/rightChannels plus per-field scalar-or-array options))\""
+domain = "mastering"
+rule = "stereo-pair"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixStereoRequest.leftChannels"
+
+[[entry]]
+kind = "field"
+old = "MixStereoRequest.muted"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "MixStereoRequest.pan"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "MixStereoRequest.panMode"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "MixStereoRequest.rightChannels"
+changed = "changed = \"rightChannels -> strips (MixStereoStrip[] (was leftChannels/rightChannels plus per-field scalar-or-array options))\""
+domain = "mastering"
+rule = "stereo-pair"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixStereoRequest.rightChannels"
+
+[[entry]]
+kind = "field"
+old = "MixStereoRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixStereoRequest.sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MixStereoRequest.width"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "MultibandCompressorBand.detector"
+changed = "changed = \"CompressorDetector ('peak'|'rms'|'logRms'); numbers refused\""
+domain = "mastering"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "MultibandCompressorBand.detector"
+changed = "changed = \"CompressorDetector ('peak'|'rms'|'logRms'); numbers refused\""
+domain = "mastering"
+rule = "token-case"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "MultibandCompressorBand.sidechainHpfEnabled"
+changed = "changed = \"sidechainHpfEnabled -> sidechainHighPassHz (Hz, > 0; absent = off)\""
+domain = "mastering"
+rule = "high-pass"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "MultibandCompressorBand.sidechainHpfEnabled"
+changed = "changed = \"sidechainHpfEnabled -> sidechainHighPassHz (Hz, > 0; absent = off)\""
+domain = "mastering"
+rule = "high-pass"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "MultibandCompressorBand.sidechainHpfHz"
+changed = "changed = \"sidechainHpfHz -> sidechainHighPassHz (Hz, > 0; absent = off)\""
+domain = "mastering"
+rule = "high-pass"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "MultibandCompressorBand.sidechainHpfHz"
+changed = "changed = \"sidechainHpfHz -> sidechainHighPassHz (Hz, > 0; absent = off)\""
+domain = "mastering"
+rule = "high-pass"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "PairAnalysisResultMap.'match.tonalBalanceLogBands'"
+changed = "changed = \"MatchTonalBalanceResult\""
+domain = "mastering"
+rule = "one-entry-per-operation"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo analyses return objects"
+
+[[entry]]
+kind = "field"
+old = "PairAnalysisResultMap.'match.tonalBalanceLogBands'"
+changed = "changed = \"MatchTonalBalanceResult\""
+domain = "mastering"
+rule = "one-entry-per-operation"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo analyses return objects"
+
+[[entry]]
+kind = "field"
+old = "SonareWorkletMeterSnapshot.channelCount"
+changed = "changed = \"channelCount -> numChannels\""
+domain = "mastering"
+rule = "num-channels"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::SonareWorkletMeterSnapshot.channelCount"
+
+[[entry]]
+kind = "field"
+old = "SpectrumOptions.dbAmin"
+changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::SpectrumOptions.dbAmin"
+
+[[entry]]
+kind = "field"
+old = "SpectrumOptions.dbAmin"
+changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+domain = "mastering"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::SpectrumOptions.dbAmin"
+
+[[entry]]
+kind = "field"
+old = "SpectrumOptions.dbRef"
+changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::SpectrumOptions.dbRef"
+
+[[entry]]
+kind = "field"
+old = "SpectrumOptions.dbRef"
+changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+domain = "mastering"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::SpectrumOptions.dbRef"
+
+[[entry]]
+kind = "field"
+old = "SpectrumOptions.nFft"
+changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::SpectrumOptions.nFft"
+
+[[entry]]
+kind = "field"
+old = "SpectrumOptions.nFft"
+changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+domain = "mastering"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::SpectrumOptions.nFft"
+
+[[entry]]
+kind = "field"
+old = "SpectrumOptions.octaveFraction"
+changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::SpectrumOptions.octaveFraction"
+
+[[entry]]
+kind = "field"
+old = "SpectrumOptions.octaveFraction"
+changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+domain = "mastering"
+rule = "absent-not-sentinel"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::SpectrumOptions.octaveFraction"
+
+[[entry]]
+kind = "field"
+old = "StreamingEqualizerConfig.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingEqualizerConfig.sampleRate"
+
+[[entry]]
+kind = "field"
+old = "StreamingEqualizerConfig.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "analysis"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingEqualizerConfig.sampleRate"
+
+[[entry]]
+kind = "field"
+old = "StreamingLoudnessGainRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "StreamingLoudnessGainResult.truePeakDb"
+changed = "changed = \"truePeakDb -> truePeakDbtp\""
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::streamingLoudnessGain reports truePeakDbtp"
+
+[[entry]]
+kind = "field"
+old = "StreamingLoudnessGainResult.truePeakDb"
+changed = "changed = \"truePeakDb -> truePeakDbtp\""
+domain = "mastering"
+rule = "loudness-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::streamingLoudnessGain reports truePeakDbtp"
+
+[[entry]]
+kind = "field"
+old = "StreamingLoudnessGainStereoRequest.sampleRate"
+changed = "changed = \"optional -> required (no default)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "StripMeteringOptions.truePeakOversample"
+changed = "changed = \"absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording\""
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::StripMeteringOptions.truePeakOversample"
+
+[[entry]]
+kind = "field"
+old = "SuggestMixSceneRequest.options"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "WaveformPeakPyramidRequest.samples"
+changed = "changed = \"samples -> channels (Float32Array[] (planar))\""
+domain = "mastering"
+rule = "num-channels"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::WaveformPeakPyramidRequest.samples"
+
+[[entry]]
+kind = "field"
+old = "WaveformPeakPyramidRequest.samples"
+changed = "changed = \"samples -> channels (Float32Array[] (planar))\""
+domain = "mastering"
+rule = "num-channels"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::WaveformPeakPyramidRequest.samples"
+
+[[entry]]
+kind = "field"
+old = "WaveformPeaksReport.channels"
+removed = true
+domain = "mastering"
+rule = "num-channels"
+
+[[entry]]
+kind = "field"
+old = "WaveformPeaksReport.channels"
+removed = true
+domain = "mastering"
+rule = "num-channels"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "WaveformPeaksReport.max"
+changed = "changed = \"Float32Array[] (one per channel)\""
+domain = "mastering"
+rule = "planar-channels"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::WaveformPeaksReport.max"
+
+[[entry]]
+kind = "field"
+old = "WaveformPeaksReport.max"
+changed = "changed = \"Float32Array[] (one per channel)\""
+domain = "mastering"
+rule = "planar-channels"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::WaveformPeaksReport.max"
+
+[[entry]]
+kind = "field"
+old = "WaveformPeaksReport.min"
+changed = "changed = \"Float32Array[] (one per channel; was channel-major flat)\""
+domain = "mastering"
+rule = "planar-channels"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::WaveformPeaksReport.min"
+
+[[entry]]
+kind = "field"
+old = "WaveformPeaksReport.min"
+changed = "changed = \"Float32Array[] (one per channel; was channel-major flat)\""
+domain = "mastering"
+rule = "planar-channels"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::WaveformPeaksReport.min"
+
+[[entry]]
+kind = "field"
+old = "WaveformPeaksRequest.samples"
+changed = "changed = \"samples -> channels (Float32Array[] (planar; was interleaved samples + count))\""
+domain = "mastering"
+rule = "num-channels"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::WaveformPeaksRequest.samples"
+
+[[entry]]
+kind = "field"
+old = "WaveformPeaksRequest.samples"
+changed = "changed = \"samples -> channels (Float32Array[] (planar; was interleaved samples + count))\""
+domain = "mastering"
+rule = "num-channels"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::WaveformPeaksRequest.samples"
+
+[[entry]]
+kind = "function"
+old = "ebur128LoudnessRange"
+changed = "changed = \"one positional form (ebur128LoudnessRange(samples, sampleRate, options?: OptionsOf<Ebur128LoudnessRangeRequest>)); request form takes Ebur128LoudnessRangeRequest; returns number\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::ebur128LoudnessRange"
+
+[[entry]]
+kind = "function"
+old = "ebur128LoudnessRange"
+changed = "changed = \"one positional form (ebur128LoudnessRange(samples, sampleRate, options?: OptionsOf<Ebur128LoudnessRangeRequest>)); request form takes Ebur128LoudnessRangeRequest; returns number\""
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::ebur128LoudnessRange"
+
+[[entry]]
+kind = "function"
+old = "masterAudio"
+changed = "changed = \"one positional form (masterAudio(samples, sampleRate, options?: OptionsOf<MasterAudioRequest>)); request form takes MasterAudioRequest; returns MasteringChainResult\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masterAudio takes (samples, sampleRate, options)"
+
+[[entry]]
+kind = "function"
+old = "masterAudioStereo"
+changed = "changed = \"request-only: masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masterAudio: preset, overrides, progress and cancel"
+
+[[entry]]
+kind = "function"
+old = "masterAudioStereoWithProgress"
+removed = true
+domain = "mastering"
+rule = "progress-callback"
+
+[[entry]]
+kind = "function"
+old = "masterAudioWithProgress"
+removed = true
+domain = "mastering"
+rule = "progress-callback"
+
+[[entry]]
+kind = "function"
+old = "masteringAssistantSuggest"
+changed = "changed = \"one positional form (masteringAssistantSuggest(samples, sampleRate, options?: OptionsOf<MasteringAssistantSuggestRequest>)); request form takes MasteringAssistantSuggestRequest; returns MasteringAssistantResult\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant returns objects"
+
+[[entry]]
+kind = "function"
+old = "masteringAssistantSuggestChain"
+changed = "changed = \"one positional form (masteringAssistantSuggestChain(samples, sampleRate, options?: OptionsOf<MasteringAssistantSuggestRequest>)); request form takes MasteringAssistantSuggestRequest; returns MasteringChainConfig\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant chain nests"
+
+[[entry]]
+kind = "function"
+old = "masteringAssistantSuggestChainStereo"
+changed = "changed = \"request-only: masteringAssistantSuggestChainStereo(request: MasteringAssistantSuggestStereoRequest): MasteringChainConfig\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant chain nests"
+
+[[entry]]
+kind = "function"
+old = "masteringAssistantSuggestStereo"
+changed = "changed = \"request-only: masteringAssistantSuggestStereo(request: MasteringAssistantSuggestStereoRequest): MasteringAssistantResult\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant returns objects"
+
+[[entry]]
+kind = "function"
+old = "masteringAudioProfile"
+changed = "changed = \"one positional form (masteringAudioProfile(samples, sampleRate, options?: OptionsOf<MasteringAudioProfileRequest>)); request form takes MasteringAudioProfileRequest; returns MasteringAudioProfile\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
+
+[[entry]]
+kind = "function"
+old = "masteringAudioProfileStereo"
+changed = "changed = \"request-only: masteringAudioProfileStereo(request: MasteringAudioProfileStereoRequest): MasteringAudioProfile\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
+
+[[entry]]
+kind = "function"
+old = "masteringChain"
+removed = true
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "masteringChainStereo"
+removed = true
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "masteringChainStereoWithProgress"
+removed = true
+domain = "mastering"
+rule = "progress-callback"
+
+[[entry]]
+kind = "function"
+old = "masteringChainWithProgress"
+removed = true
+domain = "mastering"
+rule = "progress-callback"
+
+[[entry]]
+kind = "function"
+old = "masteringDynamicsCompressor"
+changed = "changed = \"one positional form (masteringDynamicsCompressor(samples, sampleRate, options?: CompressorOptions)); request form takes MasteringDynamicsCompressorRequest; returns DynamicsProcessorResult\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::masteringDynamicsCompressor"
+
+[[entry]]
+kind = "function"
+old = "masteringDynamicsGate"
+changed = "changed = \"one positional form (masteringDynamicsGate(samples, sampleRate, options?: GateOptions)); request form takes MasteringDynamicsGateRequest; returns DynamicsProcessorResult\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::masteringDynamicsGate"
+
+[[entry]]
+kind = "function"
+old = "masteringDynamicsTransientShaper"
+changed = "changed = \"one positional form (masteringDynamicsTransientShaper(samples, sampleRate, options?: TransientShaperOptions)); request form takes MasteringDynamicsTransientShaperRequest; returns DynamicsProcessorResult\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::masteringDynamicsTransientShaper"
+
+[[entry]]
+kind = "function"
+old = "masteringInsertNames"
+changed = "changed = \"masteringInsertNames(): MasteringInsertName[]\""
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masteringInsertNames is the typed insert set"
+
+[[entry]]
+kind = "function"
+old = "masteringInsertParamInfo"
+changed = "changed = \"request-only: masteringInsertParamInfo(request: MasteringInsertParamInfoRequest): MasteringInsertParamInfo[]\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masteringInsertParamInfo and masteringInsertTiming"
+
+[[entry]]
+kind = "function"
+old = "masteringInsertParamNames"
+changed = "changed = \"masteringInsertParamNames<N extends MasteringInsertName>(insert: N): (keyof MasteringProcessorParamMap[N] & string)[]\""
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masteringInsertParamNames refuses an unknown insert"
+
+[[entry]]
+kind = "function"
+old = "masteringInsertTiming"
+changed = "changed = \"request-only: masteringInsertTiming<N extends MasteringInsertName>(request: MasteringInsertTimingRequest<N>): MasteringInsertTiming\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masteringInsertParamInfo and masteringInsertTiming"
+
+[[entry]]
+kind = "function"
+old = "masteringPlatformNames"
+changed = "changed = \"masteringPlatformNames(): MasteringPlatform[]\""
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::platform names are the typed set"
+
+[[entry]]
+kind = "function"
+old = "masteringPresetParams"
+changed = "changed = \"masteringPresetParams(preset: MasteringPreset): MasteringChainConfig\""
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "function"
+old = "masteringStreamingPreview"
+changed = "changed = \"one positional form (masteringStreamingPreview(samples, sampleRate, options?: OptionsOf<MasteringStreamingPreviewRequest>)); request form takes MasteringStreamingPreviewRequest; returns MasteringStreamingPreviewResult\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the streaming preview reports truePeakDbtp"
+
+[[entry]]
+kind = "function"
+old = "masteringStreamingPreviewStereo"
+changed = "changed = \"request-only: masteringStreamingPreviewStereo(request: MasteringStreamingPreviewStereoRequest): MasteringStreamingPreviewResult\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the streaming preview reports truePeakDbtp"
+
+[[entry]]
+kind = "function"
+old = "meteringCrestFactorDb"
+changed = "changed = \"one positional form (meteringCrestFactorDb(samples, sampleRate, options?: OptionsOf<MeteringCrestFactorDbRequest>)); request form takes MeteringCrestFactorDbRequest; returns number\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringCrestFactorDb"
+
+[[entry]]
+kind = "function"
+old = "meteringCrestFactorDb"
+changed = "changed = \"one positional form (meteringCrestFactorDb(samples, sampleRate, options?: OptionsOf<MeteringCrestFactorDbRequest>)); request form takes MeteringCrestFactorDbRequest; returns number\""
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringCrestFactorDb"
+
+[[entry]]
+kind = "function"
+old = "meteringCrestFactorDbStereo"
+changed = "changed = \"request-only: meteringCrestFactorDbStereo(request: MeteringCrestFactorDbStereoRequest): number\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringCrestFactorDbStereo"
+
+[[entry]]
+kind = "function"
+old = "meteringCrestFactorDbStereo"
+changed = "changed = \"request-only: meteringCrestFactorDbStereo(request: MeteringCrestFactorDbStereoRequest): number\""
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringCrestFactorDbStereo"
+
+[[entry]]
+kind = "function"
+old = "meteringDcOffset"
+changed = "changed = \"one positional form (meteringDcOffset(samples, sampleRate, options?: OptionsOf<MeteringDcOffsetRequest>)); request form takes MeteringDcOffsetRequest; returns number\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringDcOffset"
+
+[[entry]]
+kind = "function"
+old = "meteringDcOffset"
+changed = "changed = \"one positional form (meteringDcOffset(samples, sampleRate, options?: OptionsOf<MeteringDcOffsetRequest>)); request form takes MeteringDcOffsetRequest; returns number\""
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringDcOffset"
+
+[[entry]]
+kind = "function"
+old = "meteringDetectClipping"
+changed = "changed = \"one positional form (meteringDetectClipping(samples, sampleRate, options?: MeteringDetectClippingOptions)); request form takes MeteringDetectClippingRequest; returns ClippingReport\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringDetectClipping"
+
+[[entry]]
+kind = "function"
+old = "meteringDetectClipping"
+changed = "changed = \"one positional form (meteringDetectClipping(samples, sampleRate, options?: MeteringDetectClippingOptions)); request form takes MeteringDetectClippingRequest; returns ClippingReport\""
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringDetectClipping"
+
+[[entry]]
+kind = "function"
+old = "meteringDynamicRange"
+changed = "changed = \"one positional form (meteringDynamicRange(samples, sampleRate, options?: MeteringDynamicRangeOptions)); request form takes MeteringDynamicRangeRequest; returns DynamicRangeReport\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringDynamicRange"
+
+[[entry]]
+kind = "function"
+old = "meteringDynamicRange"
+changed = "changed = \"one positional form (meteringDynamicRange(samples, sampleRate, options?: MeteringDynamicRangeOptions)); request form takes MeteringDynamicRangeRequest; returns DynamicRangeReport\""
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringDynamicRange"
+
+[[entry]]
+kind = "function"
+old = "meteringPeakDb"
+changed = "changed = \"one positional form (meteringPeakDb(samples, sampleRate, options?: OptionsOf<MeteringPeakDbRequest>)); request form takes MeteringPeakDbRequest; returns number\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringPeakDb"
+
+[[entry]]
+kind = "function"
+old = "meteringPeakDb"
+changed = "changed = \"one positional form (meteringPeakDb(samples, sampleRate, options?: OptionsOf<MeteringPeakDbRequest>)); request form takes MeteringPeakDbRequest; returns number\""
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringPeakDb"
+
+[[entry]]
+kind = "function"
+old = "meteringPhaseScope"
+changed = "changed = \"request-only: meteringPhaseScope(request: MeteringPhaseScopeRequest): PhaseScopeReport\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringPhaseScope"
+
+[[entry]]
+kind = "function"
+old = "meteringPhaseScope"
+changed = "changed = \"request-only: meteringPhaseScope(request: MeteringPhaseScopeRequest): PhaseScopeReport\""
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringPhaseScope"
+
+[[entry]]
+kind = "function"
+old = "meteringPhaseScopeDecimated"
+removed = true
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "meteringPhaseScopeDecimated"
+removed = true
+domain = "mastering"
+rule = "one-entry-per-operation"
+entry = "./analysis"
+
+[[entry]]
+kind = "function"
+old = "meteringRmsDb"
+changed = "changed = \"one positional form (meteringRmsDb(samples, sampleRate, options?: OptionsOf<MeteringRmsDbRequest>)); request form takes MeteringRmsDbRequest; returns number\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringRmsDb"
+
+[[entry]]
+kind = "function"
+old = "meteringRmsDb"
+changed = "changed = \"one positional form (meteringRmsDb(samples, sampleRate, options?: OptionsOf<MeteringRmsDbRequest>)); request form takes MeteringRmsDbRequest; returns number\""
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringRmsDb"
+
+[[entry]]
+kind = "function"
+old = "meteringSilenceRatio"
+changed = "changed = \"one positional form (meteringSilenceRatio(samples, sampleRate, options?: OptionsOf<MeteringSilenceRatioRequest>)); request form takes MeteringSilenceRatioRequest; returns number\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringSilenceRatio"
+
+[[entry]]
+kind = "function"
+old = "meteringSilenceRatio"
+changed = "changed = \"one positional form (meteringSilenceRatio(samples, sampleRate, options?: OptionsOf<MeteringSilenceRatioRequest>)); request form takes MeteringSilenceRatioRequest; returns number\""
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringSilenceRatio"
+
+[[entry]]
+kind = "function"
+old = "meteringSpectrum"
+changed = "changed = \"one positional form (meteringSpectrum(samples, sampleRate, options?: SpectrumOptions)); request form takes MeteringSpectrumRequest; returns SpectrumReport\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringSpectrum"
+
+[[entry]]
+kind = "function"
+old = "meteringSpectrum"
+changed = "changed = \"one positional form (meteringSpectrum(samples, sampleRate, options?: SpectrumOptions)); request form takes MeteringSpectrumRequest; returns SpectrumReport\""
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringSpectrum"
+
+[[entry]]
+kind = "function"
+old = "meteringSpectrumFrame"
+changed = "changed = \"one positional form (meteringSpectrumFrame(samples, sampleRate, options?: OptionsOf<MeteringSpectrumFrameRequest>)); request form takes MeteringSpectrumFrameRequest; returns SpectrumReport\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringSpectrumFrame"
+
+[[entry]]
+kind = "function"
+old = "meteringSpectrumFrame"
+changed = "changed = \"one positional form (meteringSpectrumFrame(samples, sampleRate, options?: OptionsOf<MeteringSpectrumFrameRequest>)); request form takes MeteringSpectrumFrameRequest; returns SpectrumReport\""
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringSpectrumFrame"
+
+[[entry]]
+kind = "function"
+old = "meteringSpectrumFrame(frameOffset)"
+changed = "changed = \"positional frameOffset removed; options.startSample\""
+domain = "mastering"
+rule = "unit-in-name"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringSpectrumFrame(frameOffset)"
+
+[[entry]]
+kind = "function"
+old = "meteringSpectrumFrame(frameOffset)"
+changed = "changed = \"positional frameOffset removed; options.startSample\""
+domain = "mastering"
+rule = "unit-in-name"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringSpectrumFrame(frameOffset)"
+
+[[entry]]
+kind = "function"
+old = "meteringStereoCorrelation"
+changed = "changed = \"request-only: meteringStereoCorrelation(request: MeteringStereoCorrelationRequest): number\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringStereoCorrelation"
+
+[[entry]]
+kind = "function"
+old = "meteringStereoCorrelation"
+changed = "changed = \"request-only: meteringStereoCorrelation(request: MeteringStereoCorrelationRequest): number\""
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringStereoCorrelation"
+
+[[entry]]
+kind = "function"
+old = "meteringStereoWidth"
+changed = "changed = \"request-only: meteringStereoWidth(request: MeteringStereoWidthRequest): number\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringStereoWidth"
+
+[[entry]]
+kind = "function"
+old = "meteringStereoWidth"
+changed = "changed = \"request-only: meteringStereoWidth(request: MeteringStereoWidthRequest): number\""
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringStereoWidth"
+
+[[entry]]
+kind = "function"
+old = "meteringTruePeakDb"
+changed = "changed = \"one positional form (meteringTruePeakDb(samples, sampleRate, options?: OptionsOf<MeteringTruePeakDbRequest>)); request form takes MeteringTruePeakDbRequest; returns number\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringTruePeakDb"
+
+[[entry]]
+kind = "function"
+old = "meteringTruePeakDb"
+changed = "changed = \"one positional form (meteringTruePeakDb(samples, sampleRate, options?: OptionsOf<MeteringTruePeakDbRequest>)); request form takes MeteringTruePeakDbRequest; returns number\""
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringTruePeakDb"
+
+[[entry]]
+kind = "function"
+old = "meteringVectorscope"
+changed = "changed = \"request-only: meteringVectorscope(request: MeteringVectorscopeRequest): VectorscopeReport\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringVectorscope"
+
+[[entry]]
+kind = "function"
+old = "meteringVectorscope"
+changed = "changed = \"request-only: meteringVectorscope(request: MeteringVectorscopeRequest): VectorscopeReport\""
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::meteringVectorscope"
+
+[[entry]]
+kind = "function"
+old = "meteringVectorscopeDecimated"
+removed = true
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "meteringVectorscopeDecimated"
+removed = true
+domain = "mastering"
+rule = "one-entry-per-operation"
+entry = "./analysis"
+
+[[entry]]
+kind = "function"
+old = "mixStereo"
+changed = "changed = \"request-only: mixStereo(request: MixStereoRequest): MixResult\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::mixStereo"
+
+[[entry]]
+kind = "function"
+old = "mixingScenePresetNames"
+changed = "changed = \"mixingScenePresetNames(): MixScenePreset[]\""
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::mixingScenePresetNames"
+
+[[entry]]
+kind = "function"
+old = "streamingLoudnessGain"
+changed = "changed = \"one positional form (streamingLoudnessGain(samples, sampleRate, options?: OptionsOf<StreamingLoudnessGainRequest>)); request form takes StreamingLoudnessGainRequest; returns StreamingLoudnessGainResult\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::streamingLoudnessGain reports truePeakDbtp"
+
+[[entry]]
+kind = "function"
+old = "suggestMixSceneJson"
+removed = true
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "function"
+old = "waveformPeakPyramid"
+changed = "changed = \"request-only: waveformPeakPyramid(request: WaveformPeakPyramidRequest): WaveformPeaksReport[]\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::waveformPeakPyramid"
+
+[[entry]]
+kind = "function"
+old = "waveformPeakPyramid"
+changed = "changed = \"request-only: waveformPeakPyramid(request: WaveformPeakPyramidRequest): WaveformPeaksReport[]\""
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::waveformPeakPyramid"
+
+[[entry]]
+kind = "function"
+old = "waveformPeaks"
+changed = "changed = \"request-only: waveformPeaks(request: WaveformPeaksRequest): WaveformPeaksReport\""
+domain = "mastering"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::waveformPeaks"
+
+[[entry]]
+kind = "function"
+old = "waveformPeaks"
+changed = "changed = \"request-only: waveformPeaks(request: WaveformPeaksRequest): WaveformPeaksReport\""
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::waveformPeaks"
+
+[[entry]]
+kind = "method"
+old = "Audio.masterAudio"
+changed = "changed = \"masterAudio(options?: OptionsOf<MasterAudioRequest>): MasteringChainResult\""
+domain = "core"
+rule = "no-positional-bools"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::Audio carries the renamed methods only"
+
+[[entry]]
+kind = "method"
+old = "Audio.masteringChain"
+removed = true
+domain = "core"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "StreamingEqualizer.constructor"
+changed = "changed = \"constructor(config: StreamingEqualizerConfig)\""
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingEqualizer.constructor"
+
+[[entry]]
+kind = "method"
+old = "StreamingEqualizer.lastAutoGainDb"
+changed = "changed = \"readonly getter lastAutoGainDb: number\""
+domain = "mastering"
+rule = "getters"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingEqualizer.lastAutoGainDb"
+
+[[entry]]
+kind = "method"
+old = "StreamingEqualizer.latencySamples"
+changed = "changed = \"readonly getter latencySamples: number\""
+domain = "mastering"
+rule = "getters"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingEqualizer.latencySamples"
+
+[[entry]]
+kind = "method"
+old = "StreamingEqualizer.nonFiniteDiscardCount"
+changed = "changed = \"readonly getter nonFiniteDiscardCount: number\""
+domain = "mastering"
+rule = "getters"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingEqualizer.nonFiniteDiscardCount"
+
+[[entry]]
+kind = "method"
+old = "StreamingEqualizer.setPhaseMode"
+changed = "changed = \"setPhaseMode(mode: EqPhaseMode) with EqPhaseMode = 'zero' | 'natural' | 'linear'; synonyms and numbers refused\""
+domain = "mastering"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingEqualizer.setPhaseMode"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.constructor"
+changed = "changed = \"constructor(config: StreamingMasteringChainConfig)\""
+domain = "mastering"
+rule = "construction"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingMasteringChain.constructor"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.constructor"
+changed = "changed = \"constructor(config: StreamingMasteringChainConfig)\""
+domain = "mastering"
+rule = "construction"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingMasteringChain.constructor"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.latencySamples"
+changed = "changed = \"readonly getter latencySamples: number\""
+domain = "mastering"
+rule = "getters"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingMasteringChain.latencySamples"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.latencySamples"
+changed = "changed = \"readonly getter latencySamples: number\""
+domain = "mastering"
+rule = "getters"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingMasteringChain.latencySamples"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.nonFiniteDiscardCount"
+changed = "changed = \"readonly getter nonFiniteDiscardCount: number\""
+domain = "mastering"
+rule = "getters"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingMasteringChain.nonFiniteDiscardCount"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.nonFiniteDiscardCount"
+changed = "changed = \"readonly getter nonFiniteDiscardCount: number\""
+domain = "mastering"
+rule = "getters"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingMasteringChain.nonFiniteDiscardCount"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.nonFiniteSubstitutionCount"
+changed = "changed = \"readonly getter nonFiniteSubstitutionCount: number\""
+domain = "mastering"
+rule = "getters"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingMasteringChain.nonFiniteSubstitutionCount"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.nonFiniteSubstitutionCount"
+changed = "changed = \"readonly getter nonFiniteSubstitutionCount: number\""
+domain = "mastering"
+rule = "getters"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingMasteringChain.nonFiniteSubstitutionCount"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.prepare"
+removed = true
+domain = "mastering"
+rule = "construction"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.prepare"
+removed = true
+domain = "mastering"
+rule = "construction"
+entry = "./worklet"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.stageNames"
+changed = "changed = \"readonly getter stageNames: string[]\""
+domain = "mastering"
+rule = "getters"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingMasteringChain.stageNames"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.stageNames"
+changed = "changed = \"readonly getter stageNames: string[]\""
+domain = "mastering"
+rule = "getters"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingMasteringChain.stageNames"
+
+[[entry]]
+kind = "type"
+old = "AutomationCurve"
+changed = "changed = \"'linear' | 'exponential' | 'hold' | 'sCurve'\""
+domain = "mastering"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::AutomationCurve"
+
+[[entry]]
+kind = "type"
+old = "AutomationCurve"
+changed = "changed = \"'linear' | 'exponential' | 'hold' | 'sCurve'\""
+domain = "mastering"
+rule = "token-case"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::AutomationCurve"
+
+[[entry]]
+kind = "type"
+old = "CompressorDetector"
+changed = "changed = \"'peak' | 'rms' | 'logRms' (log_rms and the ordinals 0|1|2 removed)\""
+domain = "mastering"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::CompressorDetector"
+
+[[entry]]
+kind = "type"
+old = "JsonResult"
+removed = true
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "type"
+old = "JsonResult"
+removed = true
+domain = "mastering"
+rule = "typed-results"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "MasteringAssistantParams"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+
+[[entry]]
+kind = "type"
+old = "MasteringAssistantParams"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "MasteringAudioProfileDefects"
+changed = "changed = \"{click: ClickDetection, clip: ClipDetection, crackle: CrackleDetection, noise: MasteringAudioProfileNoise, hum: MasteringAudioProfileHum, reverb: MasteringAudioProfileReverb}\""
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
+
+[[entry]]
+kind = "type"
+old = "MasteringChainConfigDocument"
+removed = true
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "type"
+old = "MasteringChainConfigDocument"
+removed = true
+domain = "mastering"
+rule = "typed-results"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "MasteringChainRequest"
+removed = true
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "type"
+old = "MasteringChainStereoRequest"
+removed = true
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "type"
+old = "MasteringInsertParamValue"
+removed = true
+domain = "mastering"
+rule = "worklet-scope"
+
+[[entry]]
+kind = "type"
+old = "MasteringInsertParamValue"
+removed = true
+domain = "mastering"
+rule = "worklet-scope"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "MasteringInsertParams"
+removed = true
+domain = "mastering"
+rule = "worklet-scope"
+
+[[entry]]
+kind = "type"
+old = "MasteringInsertParams"
+removed = true
+domain = "mastering"
+rule = "worklet-scope"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "MasteringProcessorParams"
+changed = "changed = \"MasteringProcessorParams<P extends keyof MasteringProcessorParamMap> = MasteringProcessorParamMap[P]\""
+domain = "mastering"
+rule = "individual"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+
+[[entry]]
+kind = "type"
+old = "MasteringProcessorParams"
+changed = "changed = \"MasteringProcessorParams<P extends keyof MasteringProcessorParamMap> = MasteringProcessorParamMap[P]\""
+domain = "mastering"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+
+[[entry]]
+kind = "type"
+old = "MasteringSoloProcessorParams"
+removed = true
+domain = "mastering"
+rule = "worklet-scope"
+
+[[entry]]
+kind = "type"
+old = "MasteringSoloProcessorParams"
+removed = true
+domain = "mastering"
+rule = "worklet-scope"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "MasteringStereoChainResult"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "type"
+old = "MasteringStereoChainResult"
+removed = true
+domain = "mastering"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "MatchTonalBalanceLogBandsResult"
+removed = true
+domain = "mastering"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "type"
+old = "MatchTonalBalanceLogBandsResult"
+removed = true
+domain = "mastering"
+rule = "one-entry-per-operation"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "MeterTap"
+changed = "changed = \"'preFader' | 'postFader' (numbers refused at every reader)\""
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MeterTap"
+
+[[entry]]
+kind = "type"
+old = "MeterTap"
+changed = "changed = \"'preFader' | 'postFader' (numbers refused at every reader)\""
+domain = "mastering"
+rule = "string-closed-sets"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MeterTap"
+
+[[entry]]
+kind = "type"
+old = "MeteringSamplesRequest"
+removed = true
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "MeteringSamplesRequest"
+removed = true
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "MeteringStereoDecimatedRequest"
+removed = true
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "MeteringStereoDecimatedRequest"
+removed = true
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "MeteringStereoRequest"
+removed = true
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "MeteringStereoRequest"
+removed = true
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "MixAssistantOptions"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+
+[[entry]]
+kind = "type"
+old = "MixAssistantOptions"
+removed = true
+domain = "mastering"
+rule = "options-struct"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "MixOptions"
+removed = true
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "type"
+old = "MixOptions"
+removed = true
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "MixSceneInsert"
+changed = "changed = \"discriminated union over MasteringInsertName: {slot, processor: P, params: MasteringProcessorParams<P>, sidechainKey?}\""
+domain = "mastering"
+rule = "individual"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixSceneInsert"
+
+[[entry]]
+kind = "type"
+old = "MixSceneInsert"
+changed = "changed = \"discriminated union over MasteringInsertName: {slot, processor: P, params: MasteringProcessorParams<P>, sidechainKey?}\""
+domain = "mastering"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixSceneInsert"
+
+[[entry]]
+kind = "type"
+old = "PanLaw"
+changed = "changed = \"'const3Db' | 'const4.5Db' | 'const6Db' | 'linear0Db'\""
+domain = "mastering"
+rule = "digit-tokens"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::PanLaw"
+
+[[entry]]
+kind = "type"
+old = "PanLaw"
+changed = "changed = \"'const3Db' | 'const4.5Db' | 'const6Db' | 'linear0Db'\""
+domain = "mastering"
+rule = "digit-tokens"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::PanLaw"
+
+[[entry]]
+kind = "type"
+old = "PanMode"
+changed = "changed = \"'balance' | 'stereoPan' | 'dualPan'\""
+domain = "mastering"
+rule = "token-case"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::PanMode"
+
+[[entry]]
+kind = "type"
+old = "PanMode"
+changed = "changed = \"'balance' | 'stereoPan' | 'dualPan'\""
+domain = "mastering"
+rule = "token-case"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::PanMode"
+
+[[entry]]
+kind = "type"
+old = "ScopeOptions"
+removed = true
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "type"
+old = "ScopeOptions"
+removed = true
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "SendTiming"
+changed = "changed = \"'preFader' | 'postFader' (numbers refused at every reader)\""
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::SendTiming"
+
+[[entry]]
+kind = "type"
+old = "SendTiming"
+changed = "changed = \"'preFader' | 'postFader' (numbers refused at every reader)\""
+domain = "mastering"
+rule = "string-closed-sets"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::SendTiming"
+
+[[entry]]
+kind = "type"
+old = "SoloProcessor"
+changed = "changed = \"generator also emits MasteringInsertName, MasteringProcessorParamMap and MixScenePreset\""
+domain = "mastering"
+rule = "individual"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masteringApplyProcessor params are typed by processor"
+
+[[entry]]
+kind = "type"
+old = "SoloProcessor"
+changed = "changed = \"generator also emits MasteringInsertName, MasteringProcessorParamMap and MixScenePreset\""
+domain = "mastering"
+rule = "individual"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masteringApplyProcessor params are typed by processor"
+
+[[entry]]
+kind = "type"
+old = "StreamingMasteringChainConfig"
+changed = "changed = \"StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (default 128), numChannels?: 1 | 2 (default 1), loudnessStaticGainDb?, loudnessStaticGainPeakDb?}\""
+domain = "mastering"
+rule = "construction"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::StreamingMasteringChainConfig is one flat constructor input"
+
+[[entry]]
+kind = "type"
+old = "StreamingMasteringChainConfig"
+changed = "changed = \"StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (default 128), numChannels?: 1 | 2 (default 1), loudnessStaticGainDb?, loudnessStaticGainPeakDb?}\""
+domain = "mastering"
+rule = "construction"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::StreamingMasteringChainConfig is one flat constructor input"
+
+[[entry]]
+kind = "type"
+old = "StreamingMasteringChainConfig"
+changed = "changed = \"StreamingMasteringChainConfig extends MasteringChainConfig {sampleRate, maxBlockSize? (default 128), numChannels?: 1 | 2 (default 1), loudnessStaticGainDb?, loudnessStaticGainPeakDb?}\""
+domain = "mastering"
+rule = "construction"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::StreamingMasteringChainConfig is one flat constructor input"
+
+[[entry]]
+kind = "type"
+old = "StripMeteringOptions"
+changed = "changed = \"moves to public_types_mixing.ts (scene document type); fields unchanged\""
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::StripMeteringOptions"
+
+[[entry]]
+kind = "type"
+old = "TypedJson"
+removed = true
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "type"
+old = "TypedJson"
+removed = true
+domain = "mastering"
+rule = "typed-results"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "WaveformPeakPyramidOptions"
+removed = true
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "type"
+old = "WaveformPeakPyramidOptions"
+removed = true
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "WaveformPeaksOptions"
+removed = true
+domain = "mastering"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "type"
+old = "WaveformPeaksOptions"
+removed = true
+domain = "mastering"
+rule = "one-positional-form"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.loudness.ceilingDb"
+changed = "TSDoc only: loudness.ceilingDb bounds the loudness stage; maximizer.truePeakLimiter.ceilingDb bounds the limiter; each applies to its own stage"
+domain = "mastering"
+rule = "doc-comments"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "field"
+old = "MasteringChainConfig.loudness.ceilingDb"
+changed = "TSDoc only: loudness.ceilingDb bounds the loudness stage; maximizer.truePeakLimiter.ceilingDb bounds the limiter; each applies to its own stage"
+domain = "mastering"
+rule = "doc-comments"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain config: nested form only, tokens only"
+
+[[entry]]
+kind = "function"
+old = "mastering"
+changed = "renamed to masteringNormalizeLoudness: masteringNormalizeLoudness(request: MasteringNormalizeLoudnessRequest): MasteringNormalizeLoudnessResult | (samples, sampleRate, options?: MasteringNormalizeLoudnessOptions)"
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::request and positional forms agree"
+
+[[entry]]
+kind = "function"
+old = "masteringPairAnalyze"
+changed = "renamed to masteringAnalyzePair: masteringAnalyzePair<A extends PairAnalysis>(request: MasteringAnalyzePairRequest<A>): PairAnalysisResultMap[A] (request-only; returns the object)"
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo analyses return objects"
+
+[[entry]]
+kind = "function"
+old = "masteringPairProcess"
+changed = "renamed to masteringApplyPairProcessor: masteringApplyPairProcessor<P extends PairProcessor>(request: MasteringApplyPairProcessorRequest<P>): MasteringResult (request-only: two inputs)"
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+
+[[entry]]
+kind = "function"
+old = "masteringPairProcessStereo"
+changed = "renamed to masteringApplyPairProcessorStereo: masteringApplyPairProcessorStereo(request: MasteringApplyPairProcessorStereoRequest): MasteringStereoResult (request-only)"
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+
+[[entry]]
+kind = "function"
+old = "masteringProcess"
+changed = "renamed to masteringApplyProcessor: masteringApplyProcessor<P extends SoloProcessor>(request: MasteringApplyProcessorRequest<P>): MasteringResult | (samples, sampleRate, options: OptionsOf<MasteringApplyProcessorRequest<P>>)"
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+
+[[entry]]
+kind = "function"
+old = "masteringProcessStereo"
+changed = "renamed to masteringApplyProcessorStereo: masteringApplyProcessorStereo<P extends SoloProcessor>(request: MasteringApplyProcessorStereoRequest<P>): MasteringStereoResult (request-only)"
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+
+[[entry]]
+kind = "function"
+old = "masteringStereoAnalyze"
+changed = "renamed to masteringAnalyzeStereo: masteringAnalyzeStereo<A extends StereoAnalysis>(request: MasteringAnalyzeStereoRequest<A>): StereoAnalysisResultMap[A] (request-only; returns the object)"
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo analyses return objects"
+
+[[entry]]
+kind = "method"
+old = "Audio.mastering"
+changed = "renamed to masteringNormalizeLoudness(options?: MasteringNormalizeLoudnessOptions): MasteringNormalizeLoudnessResult"
+domain = "core"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::Audio carries the renamed methods only"
+
+[[entry]]
+kind = "method"
+old = "Audio.masteringProcess"
+changed = "renamed to masteringApplyProcessor<P extends SoloProcessor>(options: OptionsOf<MasteringApplyProcessorRequest<P>>): MasteringResult"
+domain = "core"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::Audio carries the renamed methods only"
+
+[[entry]]
+kind = "type"
+old = "MasterAudioRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masterAudio takes (samples, sampleRate, options)"
+
+[[entry]]
+kind = "type"
+old = "MasterAudioStereoRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masterAudio takes (samples, sampleRate, options)"
+
+[[entry]]
+kind = "type"
+old = "MasteringAbMatchLoudnessRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "type"
+old = "MasteringAbMatchLoudnessStereoRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "type"
+old = "MasteringAssistantParamsRequest"
+changed = "renamed to MasteringAssistantSuggestRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant params are flat request fields"
+
+[[entry]]
+kind = "type"
+old = "MasteringAssistantStereoParamsRequest"
+changed = "renamed to MasteringAssistantSuggestStereoRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant params are flat request fields"
+
+[[entry]]
+kind = "type"
+old = "MasteringOptions"
+changed = "renamed to MasteringNormalizeLoudnessOptions"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::explicit 0 on a default-bearing field"
+
+[[entry]]
+kind = "type"
+old = "MasteringOptions"
+changed = "renamed to MasteringNormalizeLoudnessOptions"
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::explicit 0 on a default-bearing field"
+
+[[entry]]
+kind = "type"
+old = "MasteringPairAnalyzeRequest"
+changed = "renamed to MasteringAnalyzePairRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo analyses return objects"
+
+[[entry]]
+kind = "type"
+old = "MasteringPairProcessRequest"
+changed = "renamed to MasteringApplyPairProcessorRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+
+[[entry]]
+kind = "type"
+old = "MasteringPairProcessStereoRequest"
+changed = "renamed to MasteringApplyPairProcessorStereoRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+
+[[entry]]
+kind = "type"
+old = "MasteringProcessRequest"
+changed = "renamed to MasteringApplyProcessorRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+
+[[entry]]
+kind = "type"
+old = "MasteringProcessStereoRequest"
+changed = "renamed to MasteringApplyProcessorStereoRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::every processor result reports its latency"
+
+[[entry]]
+kind = "type"
+old = "MasteringRequest"
+changed = "renamed to MasteringNormalizeLoudnessRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::explicit 0 on a default-bearing field"
+
+[[entry]]
+kind = "type"
+old = "MasteringSamplesParamsRequest"
+changed = "renamed to MasteringAudioProfileRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
+
+[[entry]]
+kind = "type"
+old = "MasteringStereoAnalyzeRequest"
+changed = "renamed to MasteringAnalyzeStereoRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::pair and stereo analyses return objects"
+
+[[entry]]
+kind = "type"
+old = "MasteringStereoParamsRequest"
+changed = "renamed to MasteringAudioProfileStereoRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
+
+[[entry]]
+kind = "type"
+old = "MasteringStreamingPreviewStereoRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the streaming preview reports truePeakDbtp"
+
+[[entry]]
+kind = "type"
+old = "StreamingLoudnessGainRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::streamingLoudnessGain reports truePeakDbtp"
+
+[[entry]]
+kind = "type"
+old = "StreamingLoudnessGainStereoRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-chain.test.ts::streamingLoudnessGain reports truePeakDbtp"
+
+[[entry]]
+kind = "function"
+old = "lufsInterleaved"
+changed = "renamed to lufsMultichannel: lufsMultichannel(request: LufsMultichannelRequest): LufsResult (request-only)"
+domain = "mastering"
+rule = "num-channels"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::lufsInterleaved"
+
+[[entry]]
+kind = "function"
+old = "lufsInterleaved"
+changed = "renamed to lufsMultichannel: lufsMultichannel(request: LufsMultichannelRequest): LufsResult (request-only)"
+domain = "mastering"
+rule = "num-channels"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::lufsInterleaved"
+
+[[entry]]
+kind = "function"
+old = "lufsSeriesInterleaved"
+changed = "renamed to lufsSeriesMultichannel: lufsSeriesMultichannel(request: LufsSeriesMultichannelRequest): LufsSeriesResult (request-only)"
+domain = "mastering"
+rule = "num-channels"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::lufsSeriesInterleaved"
+
+[[entry]]
+kind = "function"
+old = "lufsSeriesInterleaved"
+changed = "renamed to lufsSeriesMultichannel: lufsSeriesMultichannel(request: LufsSeriesMultichannelRequest): LufsSeriesResult (request-only)"
+domain = "mastering"
+rule = "num-channels"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::lufsSeriesInterleaved"
+
+[[entry]]
+kind = "type"
+old = "CompressorOptions"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::CompressorOptions"
+
+[[entry]]
+kind = "type"
+old = "Ebur128LoudnessRangeRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::Ebur128LoudnessRangeRequest"
+
+[[entry]]
+kind = "type"
+old = "Ebur128LoudnessRangeRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::Ebur128LoudnessRangeRequest"
+
+[[entry]]
+kind = "type"
+old = "GateOptions"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::GateOptions"
+
+[[entry]]
+kind = "type"
+old = "LufsInterleavedRequest"
+changed = "renamed to LufsMultichannelRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsInterleavedRequest"
+
+[[entry]]
+kind = "type"
+old = "LufsInterleavedRequest"
+changed = "renamed to LufsMultichannelRequest"
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsInterleavedRequest"
+
+[[entry]]
+kind = "type"
+old = "LufsSeriesInterleavedRequest"
+changed = "renamed to LufsSeriesMultichannelRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesInterleavedRequest"
+
+[[entry]]
+kind = "type"
+old = "LufsSeriesInterleavedRequest"
+changed = "renamed to LufsSeriesMultichannelRequest"
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::LufsSeriesInterleavedRequest"
+
+[[entry]]
+kind = "type"
+old = "MasteringDynamicsCompressorRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MasteringDynamicsCompressorRequest"
+
+[[entry]]
+kind = "type"
+old = "MasteringDynamicsGateRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MasteringDynamicsGateRequest"
+
+[[entry]]
+kind = "type"
+old = "MasteringDynamicsTransientShaperRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MasteringDynamicsTransientShaperRequest"
+
+[[entry]]
+kind = "type"
+old = "MeteringDetectClippingOptions"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDetectClippingOptions"
+
+[[entry]]
+kind = "type"
+old = "MeteringDetectClippingOptions"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDetectClippingOptions"
+
+[[entry]]
+kind = "type"
+old = "MeteringDetectClippingRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDetectClippingRequest"
+
+[[entry]]
+kind = "type"
+old = "MeteringDetectClippingRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDetectClippingRequest"
+
+[[entry]]
+kind = "type"
+old = "MeteringDynamicRangeOptions"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDynamicRangeOptions"
+
+[[entry]]
+kind = "type"
+old = "MeteringDynamicRangeOptions"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDynamicRangeOptions"
+
+[[entry]]
+kind = "type"
+old = "MeteringDynamicRangeRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDynamicRangeRequest"
+
+[[entry]]
+kind = "type"
+old = "MeteringDynamicRangeRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringDynamicRangeRequest"
+
+[[entry]]
+kind = "type"
+old = "MeteringSilenceRatioRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringSilenceRatioRequest"
+
+[[entry]]
+kind = "type"
+old = "MeteringSilenceRatioRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringSilenceRatioRequest"
+
+[[entry]]
+kind = "type"
+old = "MeteringSpectrumFrameRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringSpectrumFrameRequest"
+
+[[entry]]
+kind = "type"
+old = "MeteringSpectrumFrameRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringSpectrumFrameRequest"
+
+[[entry]]
+kind = "type"
+old = "MeteringSpectrumRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringSpectrumRequest"
+
+[[entry]]
+kind = "type"
+old = "MeteringSpectrumRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringSpectrumRequest"
+
+[[entry]]
+kind = "type"
+old = "MeteringTruePeakRequest"
+changed = "renamed to MeteringTruePeakDbRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringTruePeakRequest"
+
+[[entry]]
+kind = "type"
+old = "MeteringTruePeakRequest"
+changed = "renamed to MeteringTruePeakDbRequest"
+domain = "mastering"
+rule = "type-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::MeteringTruePeakRequest"
+
+[[entry]]
+kind = "type"
+old = "SpectrumOptions"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::SpectrumOptions"
+
+[[entry]]
+kind = "type"
+old = "SpectrumOptions"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::SpectrumOptions"
+
+[[entry]]
+kind = "type"
+old = "WaveformPeakPyramidRequest"
+changed = "field list"
+domain = "mastering"
+rule = "num-channels"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::WaveformPeakPyramidRequest"
+
+[[entry]]
+kind = "type"
+old = "WaveformPeakPyramidRequest"
+changed = "field list"
+domain = "mastering"
+rule = "num-channels"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::WaveformPeakPyramidRequest"
+
+[[entry]]
+kind = "type"
+old = "WaveformPeaksRequest"
+changed = "field list"
+domain = "mastering"
+rule = "num-channels"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::WaveformPeaksRequest"
+
+[[entry]]
+kind = "type"
+old = "WaveformPeaksRequest"
+changed = "field list"
+domain = "mastering"
+rule = "num-channels"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-metering.test.ts::WaveformPeaksRequest"
+
+[[entry]]
+kind = "function"
+old = "mixSourceClassFromName"
+changed = "renamed to mixingAssistantSourceClassFromName: mixingAssistantSourceClassFromName(name: MixSourceClass): number"
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::mixSourceClassFromName"
+
+[[entry]]
+kind = "function"
+old = "mixSourceClassNames"
+changed = "renamed to mixingAssistantSourceClassNames: mixingAssistantSourceClassNames(): MixSourceClass[]"
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::mixSourceClassNames"
+
+[[entry]]
+kind = "function"
+old = "mixingScenePresetJson"
+changed = "renamed to mixingScenePreset: mixingScenePreset(name: MixScenePreset): MixSceneDocument"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::mixingScenePresetJson"
+
+[[entry]]
+kind = "function"
+old = "suggestMixScene"
+changed = "renamed to mixingAssistantSuggest: mixingAssistantSuggest(request: MixingAssistantSuggestRequest): MixAssistantResult"
+domain = "mastering"
+rule = "mastering-names"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::suggestMixScene"
+
+[[entry]]
+kind = "type"
+old = "MixStereoRequest"
+changed = "field list"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixStereoRequest"
+
+[[entry]]
+kind = "type"
+old = "SuggestMixSceneRequest"
+changed = "renamed to MixingAssistantSuggestRequest"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::SuggestMixSceneRequest"
+
+[[entry]]
+kind = "method"
+old = "StreamingEqualizer.setAutoGain"
+changed = "TSDoc only: the single boolean is the property the name states (settled setter ruling)"
+domain = "mastering"
+rule = "no-positional-bools"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingEqualizer.setPhaseMode"
+
+[[entry]]
+kind = "type"
+old = "StreamingEqualizerConfig"
+changed = "field list"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingEqualizerConfig"
+
+[[entry]]
+kind = "type"
+old = "StreamingEqualizerConfig"
+changed = "field list"
+domain = "analysis"
+rule = "sample-rate-required"
+entry = "./analysis"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::StreamingEqualizerConfig"

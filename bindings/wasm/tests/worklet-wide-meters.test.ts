@@ -103,7 +103,7 @@ describe('wide meters on the live worklet engine', () => {
       seedBus(engineOf(processor), '5.1', SURROUND_STRIP);
       processor.process([[]], [silent(6)]);
       const bus = meters.find((m) => m.targetId === BUS_TARGET);
-      expect(bus?.channelCount).toBe(6);
+      expect(bus?.numChannels).toBe(6);
       expectPlanes(bus?.peakDb, reference.peakDb);
       expectPlanes(bus?.rmsDb, reference.rmsDb);
       expectPlanes(bus?.truePeakDb, reference.truePeakDb);
@@ -135,7 +135,7 @@ describe('wide meters on the live worklet engine', () => {
       processor.process([[]], [silent(6)]);
       expect(ring.header[3]).toBe(SONARE_METER_RING_PROTOCOL_VERSION);
       const bus = readSonareMeterRingBuffer(ring).meters.find((m) => m.targetId === BUS_TARGET);
-      expect(bus?.channelCount).toBe(6);
+      expect(bus?.numChannels).toBe(6);
       expectPlanes(bus?.peakDb, reference.peakDb);
       expectPlanes(bus?.rmsDb, reference.rmsDb);
       expectPlanes(bus?.truePeakDb, reference.truePeakDb);
@@ -173,7 +173,7 @@ describe('wide meters on the live worklet engine', () => {
       const shared = readSonareMeterRingBuffer(ring).meters.find((m) => m.targetId === BUS_TARGET);
       for (const meter of [message, shared]) {
         expect(meter).toBeDefined();
-        expect(meter?.channelCount).toBeUndefined();
+        expect(meter?.numChannels).toBeUndefined();
         expect(meter?.peakDb).toBeUndefined();
         expect(meter?.peakDbL).toBeCloseTo(reference.peakDb[0], 4);
         expect(meter?.peakDbR).toBeCloseTo(reference.peakDb[1], 4);

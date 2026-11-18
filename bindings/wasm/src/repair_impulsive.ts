@@ -2,6 +2,7 @@
  * Impulsive-defect repair: declick, declip and decrackle, with their detectors.
  */
 
+import { clipDetectionFromNative, declipReportFromNative } from './internal/metering_native.js';
 import { pairedResult, repairNativeOptions } from './internal/repair_common.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -151,7 +152,12 @@ export function masteringRepairDeclip(
 export function masteringRepairDeclip(...args: unknown[]): DeclipResult {
   const r = sampleOneShot<MasteringRepairDeclipRequest>('masteringRepairDeclip', args);
   assertAudioInput('masteringRepairDeclip', r.samples, r.sampleRate, r);
-  return requireModule().masteringRepairDeclip(r.samples, r.sampleRate, repairNativeOptions(r));
+  const native = requireModule().masteringRepairDeclip(
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions(r),
+  );
+  return { samples: native.samples, report: declipReportFromNative(native.report) };
 }
 
 /**
@@ -172,7 +178,7 @@ export function masteringRepairDeclipStereo(...args: unknown[]): MasteringRepair
   const r = requestOnly<MasteringRepairDeclipStereoRequest>('masteringRepairDeclipStereo', args);
   assertAudioInput('masteringRepairDeclipStereo', r.left, r.sampleRate, r, 'left');
   assertAudioInput('masteringRepairDeclipStereo', r.right, r.sampleRate, r, 'right');
-  return pairedResult(
+  const paired = pairedResult(
     requireModule().masteringRepairDeclipStereo(
       r.left,
       r.right,
@@ -180,6 +186,7 @@ export function masteringRepairDeclipStereo(...args: unknown[]): MasteringRepair
       repairNativeOptions(r),
     ),
   );
+  return { channels: paired.channels, reports: paired.reports.map(declipReportFromNative) };
 }
 
 /** Offline crackle suppressor (median or wavelet-shrinkage). */
@@ -293,7 +300,7 @@ export function masteringRepairDetectClicks(...args: unknown[]): ClickDetection 
  * next, which leaves nothing at the threshold. The flat-top fields instead count runs of at least
  * 3 consecutive bit-identical samples (at or above -40 dBFS) whose level sits within 1 dB of the
  * flat level — the largest run level once the two highest runs are set aside, so louder unclipped
- * audio cannot move it — so they catch a clipped-then-attenuated waveform that `sampleCount`
+ * audio cannot move it — so they catch a clipped-then-attenuated waveform that `clippedSamples`
  * reports as clean.
  *
  * Two opposite errors follow from what a flat top actually is. A genuinely flat-topped waveform —
@@ -319,10 +326,8 @@ export function masteringRepairDetectClipping(...args: unknown[]): ClipDetection
     args,
   );
   assertAudioInput('masteringRepairDetectClipping', r.samples, r.sampleRate, r);
-  return requireModule().masteringRepairDetectClipping(
-    r.samples,
-    r.sampleRate,
-    repairNativeOptions(r),
+  return clipDetectionFromNative(
+    requireModule().masteringRepairDetectClipping(r.samples, r.sampleRate, repairNativeOptions(r)),
   );
 }
 

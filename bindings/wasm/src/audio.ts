@@ -2,10 +2,6 @@ import type { VoiceChangeOptions } from './effects_mastering.js';
 import {
   harmonic,
   hpss,
-  masterAudio,
-  mastering,
-  masteringChain,
-  masteringProcess,
   normalize,
   noteMove,
   noteStretch,
@@ -64,7 +60,13 @@ import {
   zeroCrossingRate,
 } from './features.js';
 import { CHANNEL_LAYOUT_VALUES, CHANNEL_LAYOUTS } from './internal/channel_layout.js';
-import type { NormalizeRequest } from './mastering_chain.js';
+import type { MasterAudioRequest, NormalizeRequest } from './mastering_chain.js';
+import { masterAudio } from './mastering_chain.js';
+import type {
+  MasteringApplyProcessorRequest,
+  MasteringNormalizeLoudnessRequest,
+} from './mastering_core.js';
+import { masteringApplyProcessor, masteringNormalizeLoudness } from './mastering_core.js';
 import type {
   ClippingReport,
   DynamicRangeReport,
@@ -99,12 +101,9 @@ import type {
   KeyDetection,
   KeyDetectionOptions,
   LufsResult,
-  MasteringChainConfig,
   MasteringChainResult,
-  MasteringOptions,
-  MasteringPreset,
+  MasteringNormalizeLoudnessResult,
   MasteringResult,
-  MasteringSoloProcessorParams,
   Matrix2D,
   MelSpectrogramResult,
   MfccResult,
@@ -143,7 +142,6 @@ import {
   detectKeyCandidates,
   detectOnsets,
 } from './quick_analysis.js';
-import type { ProgressCallback } from './sonare.js';
 import type { OptionsOf, ValidateOptions } from './validation.js';
 import { requireToken, validateAudioBuffer } from './validation.js';
 
@@ -625,41 +623,29 @@ export class Audio {
     return normalize(audioRequest('normalize', this.samples, this.sampleRate, options));
   }
 
-  mastering(options: MasteringOptions = {}): MasteringResult {
-    return mastering(this.samples, this.sampleRate, options);
+  masteringNormalizeLoudness(
+    options?: OptionsOf<MasteringNormalizeLoudnessRequest>,
+  ): MasteringNormalizeLoudnessResult {
+    return masteringNormalizeLoudness(
+      audioRequest('masteringNormalizeLoudness', this.samples, this.sampleRate, options),
+    );
   }
 
-  masteringChain(
-    config: MasteringChainConfig = {},
-    onProgress?: ProgressCallback,
-  ): MasteringChainResult {
-    return masteringChain({
-      samples: this.samples,
-      sampleRate: this.sampleRate,
-      config,
-      onProgress,
-    });
+  masterAudio(options?: OptionsOf<MasterAudioRequest>): MasteringChainResult {
+    return masterAudio(audioRequest('masterAudio', this.samples, this.sampleRate, options));
   }
 
-  masterAudio(
-    presetName: MasteringPreset = 'pop',
-    overrides: MasteringChainConfig | null = null,
-    onProgress?: ProgressCallback,
-  ): MasteringChainResult {
-    return masterAudio({
-      samples: this.samples,
-      sampleRate: this.sampleRate,
-      preset: presetName,
-      overrides: overrides ?? {},
-      onProgress,
-    });
-  }
-
-  masteringProcess(
-    processorName: SoloProcessor,
-    params: MasteringSoloProcessorParams = {},
+  masteringApplyProcessor<P extends SoloProcessor>(
+    options: OptionsOf<MasteringApplyProcessorRequest<P>>,
   ): MasteringResult {
-    return masteringProcess(processorName, this.samples, this.sampleRate, params);
+    return masteringApplyProcessor(
+      audioRequest<MasteringApplyProcessorRequest<P>>(
+        'masteringApplyProcessor',
+        this.samples,
+        this.sampleRate,
+        options,
+      ),
+    );
   }
 
   trim(options?: OptionsOf<TrimRequest>): Float32Array {
@@ -779,15 +765,19 @@ export class Audio {
   }
 
   silenceRatio(thresholdDb = -45, frameLength = 1024, hopLength = 256): number {
-    return meteringSilenceRatio(this.samples, this.sampleRate, thresholdDb, frameLength, hopLength);
+    return meteringSilenceRatio(this.samples, this.sampleRate, {
+      thresholdDb,
+      frameLength,
+      hopLength,
+    });
   }
 
   /**
    * Inter-sample (true) peak in dBFS. `oversampleFactor` must be a power of two
-   * in [1, 16]; pass 0 to use the library default (4).
+   * in [1, 16].
    */
   truePeakDb(oversampleFactor = 4): number {
-    return meteringTruePeakDb(this.samples, this.sampleRate, oversampleFactor);
+    return meteringTruePeakDb(this.samples, this.sampleRate, { oversampleFactor });
   }
 
   detectClipping(options: MeteringDetectClippingOptions = {}): ClippingReport {
@@ -807,7 +797,7 @@ export class Audio {
    * `startSample`. See {@link meteringSpectrumFrame} for the frame-validation contract.
    */
   spectrumFrame(startSample = 0, options: SpectrumOptions & ValidateOptions = {}): SpectrumReport {
-    return meteringSpectrumFrame(this.samples, this.sampleRate, startSample, options);
+    return meteringSpectrumFrame(this.samples, this.sampleRate, { ...options, startSample });
   }
 
   ebur128LoudnessRange(): number {

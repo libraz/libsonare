@@ -61,8 +61,8 @@ export {
 } from './feature_inverse.js';
 export {
   ebur128LoudnessRange,
-  lufsInterleaved,
-  lufsSeriesInterleaved,
+  lufsMultichannel,
+  lufsSeriesMultichannel,
 } from './feature_loudness.js';
 export {
   analyzeMelody,

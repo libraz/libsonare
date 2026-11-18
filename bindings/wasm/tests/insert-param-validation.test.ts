@@ -28,19 +28,19 @@ describe('insert param validation (WASM)', () => {
     expect(comp).toContain('ratio');
     // Band-indexed processors expose their band{i}.<field> keys.
     expect(masteringInsertParamNames('eq.parametric')).toContain('band0.frequencyHz');
-    // Unknown name -> empty list (no throw).
-    expect(masteringInsertParamNames('not.a.real.processor')).toEqual([]);
+    // An unknown name is a RangeError, never an empty list.
+    expect(() => masteringInsertParamNames('not.a.real.processor' as never)).toThrow(RangeError);
   });
 
   it('flags a bound the processor itself rejects as exclusive', () => {
-    const hpf = masteringInsertParamInfo('dynamics.compressor').find(
+    const hpf = masteringInsertParamInfo({ insert: 'dynamics.compressor' }).find(
       (d) => d.name === 'sidechainHpfHz',
     );
     expect(hpf?.min).toBe(0);
     expect(typeof hpf?.minExclusive).toBe('boolean');
     expect(hpf?.minExclusive).toBe(true);
     expect(hpf?.maxRelativeTo).toBeNull();
-    const frequency = masteringInsertParamInfo('eq.parametric').find(
+    const frequency = masteringInsertParamInfo({ insert: 'eq.parametric' }).find(
       (d) => d.name === 'band0.frequencyHz',
     );
     expect(frequency?.maxRelativeTo).toBe('nyquist');
@@ -48,20 +48,24 @@ describe('insert param validation (WASM)', () => {
 
   it('resolves a Nyquist-following ceiling for the host rate and leaves other keys alone', () => {
     const frequency = (rate?: number) =>
-      masteringInsertParamInfo('eq.parametric', rate).find((d) => d.name === 'band0.frequencyHz');
+      masteringInsertParamInfo({ insert: 'eq.parametric', sampleRate: rate }).find(
+        (d) => d.name === 'band0.frequencyHz',
+      );
     expect(frequency()?.max).toBe(24000);
     expect(frequency(44100)?.max).toBe(22050);
     expect(frequency(44100)?.maxExclusive).toBe(true);
     // An insert built for a known rate reaches that rate's Nyquist frequency.
     expect(frequency(96000)?.max).toBe(48000);
     const ratio = (rate?: number) =>
-      masteringInsertParamInfo('dynamics.compressor', rate).find((d) => d.name === 'ratio');
+      masteringInsertParamInfo({ insert: 'dynamics.compressor', sampleRate: rate }).find(
+        (d) => d.name === 'ratio',
+      );
     expect(ratio(44100)).toEqual(ratio());
-    expect(() => masteringInsertParamInfo('eq.parametric', 0)).toThrow();
+    expect(() => masteringInsertParamInfo({ insert: 'eq.parametric', sampleRate: 0 })).toThrow();
   });
 
   it('reports realtime-automatable insert param descriptors', () => {
-    const info = masteringInsertParamInfo('effects.reverb.fdn');
+    const info = masteringInsertParamInfo({ insert: 'effects.reverb.fdn' });
     if (info.length === 0) {
       return; // FX not built in this configuration.
     }
@@ -70,10 +74,10 @@ describe('insert param validation (WASM)', () => {
     expect(dryWet?.rtSafe).toBe(true);
     expect(typeof dryWet?.id).toBe('number');
     // Dattorro publishes a non-realtime-safe param (modDepthSamples).
-    const dat = masteringInsertParamInfo('effects.reverb.dattorro');
+    const dat = masteringInsertParamInfo({ insert: 'effects.reverb.dattorro' });
     expect(dat.find((d) => d.name === 'modDepthSamples')?.rtSafe).toBe(false);
     // Unknown name -> empty list.
-    expect(masteringInsertParamInfo('not.a.real.processor')).toEqual([]);
+    expect(masteringInsertParamInfo({ insert: 'not.a.real.processor' as never })).toEqual([]);
   });
 
   it('classifies processors in the realtime/offline/pair catalog', () => {
@@ -178,7 +182,7 @@ describe('insert param validation (WASM)', () => {
     // The catalog's params for an insertable id are the same list the
     // per-processor query returns.
     expect(compressor?.params.map((param) => param.name).sort()).toEqual(
-      masteringInsertParamInfo('dynamics.compressor')
+      masteringInsertParamInfo({ insert: 'dynamics.compressor' })
         .map((param) => param.name)
         .sort(),
     );

@@ -9,14 +9,14 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   init,
+  masteringAnalyzePair,
+  masteringAnalyzeStereo,
+  masteringApplyPairProcessor,
+  masteringApplyProcessor,
   masteringPairAnalysisNames,
-  masteringPairAnalyze,
-  masteringPairProcess,
   masteringPairProcessorNames,
-  masteringProcess,
   masteringProcessorNames,
   masteringStereoAnalysisNames,
-  masteringStereoAnalyze,
   masteringStreamingPreview,
   RealtimeEngine,
   type StreamingPlatform,
@@ -32,21 +32,29 @@ function nanBuffer(n: number): Float32Array {
   return buf;
 }
 
-describe('masteringProcess offline-audio input guards', () => {
+/** `masteringApplyProcessor` with the old positional order, for the guard cases. */
+const applySolo = (
+  processor: ReturnType<typeof masteringProcessorNames>[number],
+  samples: Float32Array,
+  sampleRate: number,
+  params: object,
+) => masteringApplyProcessor({ processor, samples, sampleRate, params: params as never });
+
+describe('masteringApplyProcessor offline-audio input guards', () => {
   it('rejects a non-positive sample rate', () => {
     const name = masteringProcessorNames()[0];
     expect(name).toBeTruthy();
-    expect(() => masteringProcess(name, new Float32Array(1024), 0, {})).toThrow();
+    expect(() => applySolo(name, new Float32Array(1024), 0, {})).toThrow();
   });
 
   it('rejects a NaN-containing buffer', () => {
     const name = masteringProcessorNames()[0];
-    expect(() => masteringProcess(name, nanBuffer(1024), 22050, {})).toThrow();
+    expect(() => applySolo(name, nanBuffer(1024), 22050, {})).toThrow();
   });
 
   it('rejects an empty buffer', () => {
     const name = masteringProcessorNames()[0];
-    expect(() => masteringProcess(name, new Float32Array(0), 22050, {})).toThrow();
+    expect(() => applySolo(name, new Float32Array(0), 22050, {})).toThrow();
   });
 
   it('accepts a valid buffer and sample rate', () => {
@@ -55,26 +63,26 @@ describe('masteringProcess offline-audio input guards', () => {
     for (let i = 0; i < buf.length; i++) {
       buf[i] = Math.sin((i / buf.length) * Math.PI * 2) * 0.25;
     }
-    expect(() => masteringProcess(name, buf, 22050, {})).not.toThrow();
+    expect(() => applySolo(name, buf, 22050, {})).not.toThrow();
   });
 
   it('rejects non-finite named parameters', () => {
     const name = masteringProcessorNames()[0];
     const buf = new Float32Array(1024);
-    expect(() => masteringProcess(name, buf, 22050, { gainDb: Number.NaN })).toThrow();
-    expect(() =>
-      masteringProcess(name, buf, 22050, { gainDb: Number.POSITIVE_INFINITY }),
-    ).toThrow();
+    expect(() => applySolo(name, buf, 22050, { gainDb: Number.NaN })).toThrow();
+    expect(() => applySolo(name, buf, 22050, { gainDb: Number.POSITIVE_INFINITY })).toThrow();
   });
 });
 
-describe('masteringStereoAnalyze channel-length guard', () => {
+describe('masteringAnalyzeStereo channel-length guard', () => {
   it('rejects mismatched left/right lengths', () => {
     const name = masteringStereoAnalysisNames()[0];
     expect(name).toBeTruthy();
     const left = new Float32Array(1024);
     const right = new Float32Array(512);
-    expect(() => masteringStereoAnalyze(name, left, right, 22050, {})).toThrow();
+    expect(() =>
+      masteringAnalyzeStereo({ analysis: name, left, right, sampleRate: 22050 }),
+    ).toThrow();
   });
 
   it('does not throw the length guard for equal valid lengths', () => {
@@ -89,7 +97,9 @@ describe('masteringStereoAnalyze channel-length guard', () => {
     // Equal lengths + a valid sample rate must not trip the length-mismatch or
     // input-validation guard. The analysis itself may still succeed or fail for
     // unrelated reasons; only the length-mismatch case is asserted to throw.
-    expect(() => masteringStereoAnalyze(name, left, right, 22050, {})).not.toThrow();
+    expect(() =>
+      masteringAnalyzeStereo({ analysis: name, left, right, sampleRate: 22050 }),
+    ).not.toThrow();
   });
 });
 
@@ -99,7 +109,9 @@ describe('mastering pair input guards', () => {
     expect(name).toBeTruthy();
     const source = nanBuffer(1024);
     const reference = new Float32Array(1024);
-    expect(() => masteringPairProcess(name, source, reference, 22050, {})).toThrow();
+    expect(() =>
+      masteringApplyPairProcessor({ processor: name, source, reference, sampleRate: 22050 }),
+    ).toThrow();
   });
 
   it('rejects a NaN buffer in a pair analysis', () => {
@@ -107,7 +119,9 @@ describe('mastering pair input guards', () => {
     expect(name).toBeTruthy();
     const source = nanBuffer(1024);
     const reference = new Float32Array(1024);
-    expect(() => masteringPairAnalyze(name, source, reference, 22050, {})).toThrow();
+    expect(() =>
+      masteringAnalyzePair({ analysis: name, source, reference, sampleRate: 22050 }),
+    ).toThrow();
   });
 });
 
@@ -131,13 +145,16 @@ describe('masteringStreamingPreview platform-field guards', () => {
   // this covers does not throw, it answers "no limiting needed" with a report
   // in which no field is out of the ordinary.
   function ceilingVerdict(platform: StreamingPlatform): Record<string, unknown> {
-    let json: string;
     try {
-      json = masteringStreamingPreview(clippingMaterial, previewRate, [platform]);
+      const preview = masteringStreamingPreview({
+        samples: clippingMaterial,
+        sampleRate: previewRate,
+        platforms: [platform],
+      });
+      return { ceilingRisk: preview.platforms[0].ceilingRisk };
     } catch {
       return { rejected: true };
     }
-    return { ceilingRisk: JSON.parse(json).platforms[0].ceilingRisk };
   }
 
   it('reports a ceiling risk for material that will clip at a real ceiling', () => {

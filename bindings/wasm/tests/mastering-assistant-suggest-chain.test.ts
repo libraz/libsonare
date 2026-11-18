@@ -23,12 +23,12 @@ const right = Float32Array.from(samples, (value) => value * 0.9);
 beforeAll(async () => init());
 
 describe('masteringAssistantSuggestChain', () => {
-  it('matches the chainConfig.params the full assistant document carries', () => {
-    const params = { targetLufs: -13, ceilingDb: -0.8, enableRepair: true };
-    const document = JSON.parse(masteringAssistantSuggest(samples, sampleRate, params));
-    const chain = masteringAssistantSuggestChain({ samples, sampleRate, params });
+  it('matches the chainConfig the full assistant result carries', () => {
+    const settings = { targetLufs: -13, ceilingDb: -0.8, enableRepair: true };
+    const document = masteringAssistantSuggest({ samples, sampleRate, ...settings });
+    const chain = masteringAssistantSuggestChain({ samples, sampleRate, ...settings });
 
-    expect(chain).toEqual(document.chainConfig.params);
+    expect(chain).toEqual(document.chainConfig);
   });
 
   it('is usable directly as masterAudio overrides', () => {
@@ -42,14 +42,12 @@ describe('masteringAssistantSuggestChain', () => {
 });
 
 describe('masteringAssistantSuggestChainStereo', () => {
-  it('matches the chainConfig.params the full stereo assistant document carries', () => {
-    const params = { targetLufs: -14, enableRepair: true };
-    const document = JSON.parse(
-      masteringAssistantSuggestStereo({ left, right, sampleRate, params }),
-    );
-    const chain = masteringAssistantSuggestChainStereo({ left, right, sampleRate, params });
+  it('matches the chainConfig the full stereo assistant result carries', () => {
+    const settings = { targetLufs: -14, enableRepair: true };
+    const document = masteringAssistantSuggestStereo({ left, right, sampleRate, ...settings });
+    const chain = masteringAssistantSuggestChainStereo({ left, right, sampleRate, ...settings });
 
-    expect(chain).toEqual(document.chainConfig.params);
+    expect(chain).toEqual(document.chainConfig);
   });
 
   it('is usable directly as masterAudioStereo overrides', () => {

@@ -1,12 +1,12 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   init,
+  masteringApplyPairProcessor,
   masteringAssistantSuggest,
   masteringAudioProfile,
   masteringDynamicsCompressor,
   masteringDynamicsGate,
   masteringDynamicsTransientShaper,
-  masteringPairProcess,
   masteringRepairDeclick,
   masteringRepairDeclip,
   masteringRepairDecrackle,
@@ -84,20 +84,20 @@ describe('remaining WASM mastering request objects', () => {
   it('preserves core helper results', () => {
     const reference = Float32Array.from(samples, (value) => value * 0.8);
     expect(
-      masteringPairProcess({
-        processorName: 'match.abCrossfade',
+      masteringApplyPairProcessor({
+        processor: 'match.abCrossfade',
         source: samples,
         reference,
         sampleRate,
-      }),
-    ).toEqual(masteringPairProcess('match.abCrossfade', samples, reference, sampleRate));
-    expect(masteringAssistantSuggest({ samples, sampleRate })).toBe(
+      }).samples,
+    ).toHaveLength(samples.length);
+    expect(masteringAssistantSuggest({ samples, sampleRate })).toEqual(
       masteringAssistantSuggest(samples, sampleRate),
     );
-    expect(masteringAudioProfile({ samples, sampleRate })).toBe(
+    expect(masteringAudioProfile({ samples, sampleRate })).toEqual(
       masteringAudioProfile(samples, sampleRate),
     );
-    expect(masteringStreamingPreview({ samples, sampleRate })).toBe(
+    expect(masteringStreamingPreview({ samples, sampleRate })).toEqual(
       masteringStreamingPreview(samples, sampleRate),
     );
   });
@@ -116,19 +116,23 @@ describe('WASM mastering request/positional error-path equivalence', () => {
     }
   }
 
-  it('throws identically on an unknown processor name', () => {
+  it('refuses an unknown pair processor name with a RangeError', () => {
     const reference = Float32Array.from(samples, (value) => value * 0.8);
-    const positional = captureThrow(() =>
-      masteringPairProcess('does.not.exist' as never, samples, reference, sampleRate),
-    );
-    const request = captureThrow(() =>
-      masteringPairProcess({
-        processorName: 'does.not.exist' as never,
+    expect(() =>
+      masteringApplyPairProcessor({
+        processor: 'does.not.exist' as never,
         source: samples,
         reference,
         sampleRate,
       }),
-    );
+    ).toThrow(RangeError);
+  });
+
+  it('throws identically on non-finite samples in the assistant', () => {
+    const bad = Float32Array.from(samples);
+    bad[64] = Number.NaN;
+    const positional = captureThrow(() => masteringAssistantSuggest(bad, sampleRate));
+    const request = captureThrow(() => masteringAssistantSuggest({ samples: bad, sampleRate }));
     expect(positional.threw).toBe(true);
     expect(request.threw).toBe(true);
     expect(request.message).toBe(positional.message);

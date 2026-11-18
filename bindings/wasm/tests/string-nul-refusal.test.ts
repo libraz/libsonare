@@ -18,10 +18,10 @@ import {
   Mixer,
   masterAudio,
   masterAudioStereo,
+  masteringApplyProcessor,
   masteringAssistantSuggest,
   masteringPresetParams,
-  masteringProcess,
-  mixingScenePresetJson,
+  mixingScenePreset,
   noteToHz,
   Project,
   RealtimeEngine,
@@ -63,7 +63,9 @@ function withEngine<T>(body: (engine: RealtimeEngine) => T): T {
 }
 
 function withMixer<T>(body: (mixer: Mixer) => T): T {
-  const mixer = Mixer.fromJson(mixingScenePresetJson('drumBusSubgroup'), { sampleRate: 48000 });
+  const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('drumBusSubgroup')), {
+    sampleRate: 48000,
+  });
   try {
     return body(mixer);
   } finally {
@@ -73,7 +75,7 @@ function withMixer<T>(body: (mixer: Mixer) => T): T {
 
 /** The first strip id of the scene the mixer cases use; read after `init()`. */
 function stripId(): string {
-  return JSON.parse(mixingScenePresetJson('drumBusSubgroup')).strips[0].id;
+  return mixingScenePreset('drumBusSubgroup').strips[0].id;
 }
 
 /**
@@ -231,38 +233,34 @@ describe('embedded NUL refusal, mastering names', () => {
     await init();
   });
 
-  it('a preset name is refused by name in every spelling', () => {
+  const expectRangeRefusal = (call: () => unknown) => {
+    expect(refusal(call)).toBeInstanceOf(RangeError);
+  };
+
+  it('a preset name is refused in every spelling', () => {
     expect(() => masteringPresetParams('pop')).not.toThrow();
     expectNulRefusal(() => masteringPresetParams(`pop${NUL}x` as MasteringPreset), 'preset');
-    expectNulRefusal(
-      () => masterAudio({ ...base, preset: `pop${NUL}x` as MasteringPreset }),
-      'preset',
+    expectRangeRefusal(() => masterAudio({ ...base, preset: `pop${NUL}x` as MasteringPreset }));
+    expectRangeRefusal(() =>
+      masterAudio(samples, 44100, { preset: `pop${NUL}x` as MasteringPreset }),
     );
-    expectNulRefusal(() => masterAudio(samples, 44100, `pop${NUL}x` as MasteringPreset), 'preset');
-    expectNulRefusal(
-      () =>
-        masterAudioStereo({
-          left: samples,
-          right: samples,
-          sampleRate: 44100,
-          preset: `pop${NUL}x` as MasteringPreset,
-        }),
-      'preset',
+    expectRangeRefusal(() =>
+      masterAudioStereo({
+        left: samples,
+        right: samples,
+        sampleRate: 44100,
+        preset: `pop${NUL}x` as MasteringPreset,
+      }),
     );
-    expectNulRefusal(
-      () => masteringAssistantSuggest({ ...base, params: { preset: `pop${NUL}x` } }),
-      'preset',
-    );
+    expectRangeRefusal(() => masteringAssistantSuggest({ ...base, preset: `pop${NUL}x` as never }));
   });
 
-  it('a processor, analysis or platform name is refused by name', () => {
-    expectNulRefusal(
-      () => masteringProcess({ ...base, processorName: `dynamics.compressor${NUL}x` as never }),
-      'processorName',
+  it('a processor, analysis or platform name is refused', () => {
+    expectRangeRefusal(() =>
+      masteringApplyProcessor({ ...base, processor: `dynamics.compressor${NUL}x` as never }),
     );
-    expectNulRefusal(
-      () => masteringAssistantSuggest({ ...base, params: { targetPlatform: `spotify${NUL}x` } }),
-      'targetPlatform',
+    expectRangeRefusal(() =>
+      masteringAssistantSuggest({ ...base, targetPlatform: `spotify${NUL}x` as never }),
     );
   });
 });
@@ -276,8 +274,13 @@ describe('embedded NUL refusal, std::string entry points', () => {
     const [id] = realtimeVoiceChangerPresetNames();
     expect(noteToHz('A4')).toBeCloseTo(440, 3);
     expectNulRefusal(() => noteToHz(`A4${NUL}junk`), 'note');
-    expect(mixingScenePresetJson('vocalReverbSend').length).toBeGreaterThan(0);
-    expectNulRefusal(() => mixingScenePresetJson(`vocalReverbSend${NUL}junk`), 'preset');
+    // The facade resolves the closed preset set first; the native reader is driven directly.
+    const presetJson = (name: string): string => getSonareModule().mixingScenePresetJson(name);
+    expect(presetJson('vocalReverbSend').length).toBeGreaterThan(0);
+    expectNulRefusal(() => presetJson(`vocalReverbSend${NUL}junk`), 'preset');
+    expect(refusal(() => mixingScenePreset(`vocalReverbSend${NUL}junk` as never))).toBeInstanceOf(
+      RangeError,
+    );
     expect(realtimeVoiceChangerPresetJson(id).length).toBeGreaterThan(0);
     // A preset id is a closed token, so the facade refuses the NUL form as an unknown id.
     expect(
@@ -444,6 +447,18 @@ describe('embedded NUL refusal, scan', () => {
       text: '("strip" + std::to_string(index)).c_str()',
       count: 1,
       reason: 'strip id generated internally',
+    },
+    {
+      file: 'analysis/room_acoustics.cpp',
+      text: 'label.c_str()',
+      count: 1,
+      reason: 'error-subject label built from a literal key and an axis name',
+    },
+    {
+      file: 'effects/realtime_voice_changer.cpp',
+      text: '(path + "[" + std::to_string(i) + "]").c_str()',
+      count: 1,
+      reason: 'error-subject label built from a literal path and an index',
     },
   ];
 

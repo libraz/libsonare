@@ -544,9 +544,12 @@ describe('a positional offset refuses what the positional path used to wrap', ()
     Math.sin((2 * Math.PI * (i < length / 2 ? 440 : 1760) * i) / sampleRate),
   );
 
-  /** The frequency of the loudest bin of the window starting at `frameOffset`. */
+  /** The frequency of the loudest bin of the window starting at `startSample`. */
   const peakHz = (frameOffset: number): number => {
-    const result = meteringSpectrumFrame(samples, sampleRate, frameOffset, { nFft: 1024 });
+    const result = meteringSpectrumFrame(samples, sampleRate, {
+      startSample: frameOffset,
+      nFft: 1024,
+    });
     let best = 0;
     let bin = 0;
     for (let i = 0; i < result.magnitude.length; i += 1) {

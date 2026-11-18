@@ -46,8 +46,8 @@ export { griffinLim, melToAudio, melToStft, mfccToAudio, mfccToMel } from './fea
 export type * from './feature_loudness.js';
 export {
   ebur128LoudnessRange,
-  lufsInterleaved,
-  lufsSeriesInterleaved,
+  lufsMultichannel,
+  lufsSeriesMultichannel,
 } from './feature_loudness.js';
 export * from './feature_music.js';
 export * from './feature_pitch.js';

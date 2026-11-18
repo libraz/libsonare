@@ -1,13 +1,31 @@
+import { mixSceneFromNative } from './internal/mix_scene.js';
 import { getSonareModule } from './module_state.js';
-import type { MixAssistantOptions, MixAssistantResult, MixAssistantTrack } from './public_types.js';
-import { assertSampleRate, assertString, requestObject } from './validation.js';
+import type {
+  MixAssistantResult,
+  MixAssistantTrack,
+  MixAssistantTrackProfile,
+  MixSourceClass,
+} from './public_types.js';
+import {
+  assertSampleRate,
+  assertString,
+  requestOnly,
+  requireBoolean,
+  type ValidateOptions,
+} from './validation.js';
 
 function requireModule() {
   return getSonareModule();
 }
 
-/** Inputs for the {@link suggestMixScene} / {@link suggestMixSceneJson} facades. */
-export interface SuggestMixSceneRequest {
+/**
+ * Inputs for {@link mixingAssistantSuggest}. Every tunable is optional and falls back to the core
+ * default noted on it; the same field names and defaults are used by the Node and Python surfaces.
+ *
+ * `validate` is accepted for symmetry with the other one-shots; the assistant never throws on a
+ * non-finite track but reports it as an excluded track.
+ */
+export interface MixingAssistantSuggestRequest extends ValidateOptions {
   /** Tracks to mix, in the order their profiles are reported. */
   tracks: MixAssistantTrack[];
   /**
@@ -18,8 +36,63 @@ export interface SuggestMixSceneRequest {
    * `channelDelaySamples` and `durationSec` wrong with it.
    */
   sampleRate: number;
-  /** Assistant tunables; every field falls back to the core default. */
-  options?: MixAssistantOptions;
+  /** Absolute integrated-loudness target each track is staged towards, in LUFS. Defaults to -18. */
+  targetTrackLufs?: number;
+  /**
+   * Overall strength of the suggestion in `[0, 1]`, scaling every level-like
+   * decision: trims, fader offsets, send levels, EQ cut depths, compression
+   * ratios and ranges, and how far a track is spread from the centre. Defaults
+   * to 1.
+   *
+   * `0` is not an empty suggestion. It is every one of those taken and set to
+   * zero, plus the decisions that are not levels and so do not scale: the bus
+   * topology and routing, and the physical corrections for a measured
+   * cancellation (polarity, alignment delay, low-end mono fold). To suggest
+   * nothing, switch the domains off instead — that also skips the work.
+   */
+  suggestionStrength?: number;
+  /** Largest cut a single suggested EQ band may apply, in dB. Defaults to 4. */
+  eqMaxCutDb?: number;
+  /** Headroom the summed mix is left with on the master bus, in dBTP. Defaults to -6. */
+  mixBusHeadroomDbtp?: number;
+  /**
+   * Tempo the suggested delay times are voiced against, in BPM.
+   *
+   * Defaults to 0, which selects the transport's own fallback tempo: the
+   * assistant is handed bare stems and cannot measure a tempo the set as a
+   * whole agrees on. Pass the song's tempo and the delay lands on the beat.
+   *
+   * A positive value outside 20–400 BPM is rejected rather than clamped.
+   */
+  tempoBpm?: number;
+  /** Evaluate the structure domain. Defaults to true. */
+  enableStructure?: boolean;
+  /** Evaluate the gain-staging domain. Defaults to true. */
+  enableGain?: boolean;
+  /** Evaluate the balance domain. Defaults to true. */
+  enableBalance?: boolean;
+  /** Evaluate the EQ domain. Defaults to true. */
+  enableEq?: boolean;
+  /** Evaluate the dynamics domain. Defaults to true. */
+  enableDynamics?: boolean;
+  /** Evaluate the stereo-image domain. Defaults to true. */
+  enableImage?: boolean;
+  /**
+   * Suggest a high-pass filter on tracks carrying residue below their register.
+   * Defaults to false.
+   *
+   * Off by default: a survey of mixing best practices found the rule that every
+   * track without low-frequency content should be high-passed to be seldom used
+   * in studio mixing and unsupported by subjective testing. Switched on, the
+   * filter is proposed from the track's measured low-frequency content rather
+   * than from its source class, so a part playing below its class's usual
+   * register keeps what it plays.
+   */
+  enableHighPass?: boolean;
+  /** Shared STFT size for every track. Defaults to 2048. */
+  nFft?: number;
+  /** Shared STFT hop for every track. Defaults to 512. */
+  hopLength?: number;
 }
 
 /** The four parallel arrays the embind entry points take. */
@@ -84,30 +157,32 @@ function planarTracks(
   return { left, right, ids, names, sampleRates: anySampleRate ? sampleRates : null };
 }
 
-function suggestJson(fnName: string, request: SuggestMixSceneRequest, sceneOnly: boolean): string {
-  // Required, not defaulted: this surface used to invent 48000, which read
-  // 44.1 kHz material 8.8% off across every band edge and every lag without
-  // saying so. Node and Python both demand it, and a request ported from either
-  // must not change behaviour by arriving here.
-  const sampleRate = request.sampleRate;
-  if (typeof sampleRate !== 'number') {
-    throw new TypeError(`${fnName}: sampleRate must be a number`);
-  }
-  assertSampleRate(fnName, sampleRate);
-  const { left, right, ids, names, sampleRates } = planarTracks(fnName, request.tracks, sampleRate);
-  const params = (request.options ?? {}) as Record<string, number | boolean>;
-  const module = requireModule();
-  return sceneOnly
-    ? module.mixingAssistantSuggestSceneJson(
-        left,
-        right,
-        ids,
-        names,
-        sampleRates,
-        sampleRate,
-        params,
-      )
-    : module.mixingAssistantSuggest(left, right, ids, names, sampleRates, sampleRate, params);
+const OPTION_KEYS = [
+  'targetTrackLufs',
+  'suggestionStrength',
+  'eqMaxCutDb',
+  'mixBusHeadroomDbtp',
+  'tempoBpm',
+  'enableStructure',
+  'enableGain',
+  'enableBalance',
+  'enableEq',
+  'enableDynamics',
+  'enableImage',
+  'enableHighPass',
+  'nFft',
+  'hopLength',
+] as const;
+
+/** The native profile still spells these without the unit and the `PerSecond` / `num` forms. */
+function profileFromNative(native: Record<string, unknown>): MixAssistantTrackProfile {
+  const { channelCount, truePeakDb, attackDensity, ...rest } = native;
+  return {
+    ...rest,
+    numChannels: channelCount,
+    truePeakDbtp: truePeakDb,
+    attackPerSecond: attackDensity,
+  } as unknown as MixAssistantTrackProfile;
 }
 
 /**
@@ -118,55 +193,74 @@ function suggestJson(fnName: string, request: SuggestMixSceneRequest, sceneOnly:
  * from an audio callback.
  *
  * The assistant suggests, it does not apply. Nothing is processed and no audio
- * is returned; realizing the suggestion means handing the scene to
- * {@link Mixer.fromJson} as an explicit second step, for which
- * {@link suggestMixSceneJson} returns the scene already serialized.
+ * is returned; realizing the suggestion means handing `result.scene` to
+ * {@link Mixer.fromJson} as an explicit second step.
  *
  * Degenerate input is not an error: no tracks, all-silent tracks or tracks too
  * short to measure yield an empty scene and an empty `explanation`.
  *
- * @param request - Tracks, analysis sample rate and assistant options
+ * @param request - Tracks, analysis sample rate and assistant tunables
  * @returns The suggested scene, per-track profiles, cross-track measurements
  *   and the explanation behind each change
+ * @throws TypeError for a wrong-typed or missing field or an unknown key; RangeError for an
+ *   out-of-domain rate or tunable
  */
-export function suggestMixScene(request: SuggestMixSceneRequest): MixAssistantResult {
-  requestObject('suggestMixScene', request, 'request', true);
-  return JSON.parse(suggestJson('suggestMixScene', request, false)) as MixAssistantResult;
-}
-
-/**
- * Suggest a mixer scene and return only the scene, as JSON.
- *
- * The same analysis as {@link suggestMixScene}, serialized in the schema
- * {@link Mixer.fromJson} reads, so a caller that only wants to apply the
- * suggestion neither digs the scene out of the fuller result nor re-serializes
- * it.
- *
- * @param request - Tracks, analysis sample rate and assistant options
- * @returns Scene JSON string
- */
-export function suggestMixSceneJson(request: SuggestMixSceneRequest): string {
-  requestObject('suggestMixSceneJson', request, 'request', true);
-  return suggestJson('suggestMixSceneJson', request, true);
+export function mixingAssistantSuggest(request: MixingAssistantSuggestRequest): MixAssistantResult;
+export function mixingAssistantSuggest(...args: unknown[]): MixAssistantResult {
+  const fnName = 'mixingAssistantSuggest';
+  const req = requestOnly<MixingAssistantSuggestRequest>(fnName, args);
+  // Required, not defaulted: a guessed rate would misread every band edge and lag.
+  assertSampleRate(fnName, req.sampleRate);
+  if (req.validate !== undefined && req.validate !== null) {
+    requireBoolean(fnName, req.validate, 'validate');
+  }
+  const { left, right, ids, names, sampleRates } = planarTracks(fnName, req.tracks, req.sampleRate);
+  const params: Record<string, number | boolean> = {};
+  for (const key of OPTION_KEYS) {
+    if (req[key] !== undefined && req[key] !== null) {
+      params[key] = req[key] as number | boolean;
+    }
+  }
+  const json = requireModule().mixingAssistantSuggest(
+    left,
+    right,
+    ids,
+    names,
+    sampleRates,
+    req.sampleRate,
+    params,
+  );
+  const native = JSON.parse(json) as Record<string, unknown>;
+  return {
+    ...native,
+    scene: mixSceneFromNative(native.scene),
+    tracks: (native.tracks as Record<string, unknown>[]).map(profileFromNative),
+  } as unknown as MixAssistantResult;
 }
 
 /**
  * Source-class identifiers the assistant can report, in enum order.
  *
  * The index of a name in this list is the value
- * {@link mixSourceClassFromName} resolves it to.
+ * {@link mixingAssistantSourceClassFromName} resolves it to.
  */
-export function mixSourceClassNames(): string[] {
-  return Array.from(requireModule().mixingAssistantSourceClassNames());
+export function mixingAssistantSourceClassNames(): MixSourceClass[] {
+  return Array.from(requireModule().mixingAssistantSourceClassNames()) as MixSourceClass[];
 }
 
 /**
- * Resolve a source-class identifier to its index in {@link mixSourceClassNames}.
+ * Resolve a source-class identifier to its index in {@link mixingAssistantSourceClassNames}.
  *
  * @param name - Source-class identifier, e.g. `"kick"`
- * @returns The index, or -1 when the name is unknown
+ * @returns The index
+ * @throws TypeError when `name` is not a string; RangeError for an unknown name
  */
-export function mixSourceClassFromName(name: string): number {
-  assertString('mixSourceClassFromName', name, 'name');
-  return requireModule().mixingAssistantSourceClassFromName(name);
+export function mixingAssistantSourceClassFromName(name: MixSourceClass): number {
+  const fnName = 'mixingAssistantSourceClassFromName';
+  assertString(fnName, name, 'name');
+  const index = requireModule().mixingAssistantSourceClassFromName(name);
+  if (index < 0) {
+    throw new RangeError(`${fnName}: unknown source class '${name}'`);
+  }
+  return index;
 }

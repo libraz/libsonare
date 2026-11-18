@@ -25,8 +25,8 @@ import {
   init,
   isSonareError,
   Mixer,
+  masteringApplyProcessor,
   masteringInsertTiming,
-  masteringProcess,
   masteringRepairDereverbConfigForRoom,
   masteringRepairNoiseBandBins,
   melToAudio,
@@ -35,7 +35,7 @@ import {
   mfccToAudio,
   mfccToMel,
   midiToHz,
-  mixingScenePresetJson,
+  mixingScenePreset,
   mixStereo,
   RealtimeEngine,
   renderPlayback,
@@ -119,7 +119,9 @@ describe('argument refusal error class', () => {
   });
 
   it('keeps an object-state failure a coded SonareError, and an unknown bus a refusal', () => {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('drumBusSubgroup'), { sampleRate: 48000 });
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('drumBusSubgroup')), {
+      sampleRate: 48000,
+    });
     try {
       // The library reports INVALID_PARAMETER for an unknown bus: refused by cause.
       const refusal = thrown(() => mixer.busMeter('no-such-bus'));
@@ -190,7 +192,7 @@ describe('argument refusal classes shared with the Node surface', () => {
   });
 
   it('refuses an unknown EQ phase mode and band placement with a RangeError', () => {
-    const eq = new StreamingEqualizer();
+    const eq = new StreamingEqualizer({ sampleRate: 48000 });
     try {
       expect(thrown(() => eq.setPhaseMode('bogus' as never))).toBeInstanceOf(RangeError);
       expect(
@@ -221,31 +223,45 @@ describe('argument refusal classes shared with the Node surface', () => {
   });
 
   it('refuses the removed pan-mode alias with a RangeError', () => {
-    const left = [new Float32Array(2205).fill(0.1)];
-    const right = [new Float32Array(2205).fill(0.1)];
+    const left = new Float32Array(2205).fill(0.1);
+    const right = new Float32Array(2205).fill(0.1);
     for (const panMode of ['pan', 'bogus']) {
-      const error = thrown(() => mixStereo(left, right, 22050, { pan: 0.5, panMode } as never));
+      const error = thrown(() =>
+        mixStereo({
+          strips: [{ left, right, pan: 0.5, panMode } as never],
+          sampleRate: 22050,
+        }),
+      );
       expect(error).toBeInstanceOf(RangeError);
     }
   });
 
   it('refuses an unread key of a solo mastering processor with a RangeError', () => {
     const error = thrown(() =>
-      masteringProcess('utility.gain', new Float32Array(2205), 48000, { gainDb: 3 } as never),
+      masteringApplyProcessor({
+        processor: 'utility.gain',
+        samples: new Float32Array(2205),
+        sampleRate: 48000,
+        params: { gainDb: 3 } as never,
+      }),
     );
     expect(error).toBeInstanceOf(RangeError);
     expect(isSonareError(error)).toBe(false);
   });
 
   it('refuses an out-of-range mixStereo pan with a RangeError', () => {
-    const channel = [new Float32Array(2205).fill(0.1)];
-    const error = thrown(() => mixStereo(channel, channel, 48000, { pan: [2] }));
+    const channel = new Float32Array(2205).fill(0.1);
+    const error = thrown(() =>
+      mixStereo({ strips: [{ left: channel, right: channel, pan: 2 }], sampleRate: 48000 }),
+    );
     expect(error).toBeInstanceOf(RangeError);
     expect(isSonareError(error)).toBe(false);
   });
 
   it('refuses a bad truePeakOversample with the same class on addStrip and configureMeter', () => {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('drumBusSubgroup'), { sampleRate: 48000 });
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('drumBusSubgroup')), {
+      sampleRate: 48000,
+    });
     try {
       const strip = thrown(() => mixer.addStrip('extra', { truePeakOversample: 3 }));
       const meter = thrown(() => mixer.configureMeter({ enabled: true, truePeakOversample: 3 }));
@@ -257,7 +273,13 @@ describe('argument refusal classes shared with the Node surface', () => {
   });
 
   it('refuses an unknown masteringInsertTiming parameter key with a RangeError', () => {
-    const error = thrown(() => masteringInsertTiming('utility.gain', { bogus: 1 } as never, 48000));
+    const error = thrown(() =>
+      masteringInsertTiming({
+        insert: 'utility.gain',
+        params: { bogus: 1 } as never,
+        sampleRate: 48000,
+      }),
+    );
     expect(error).toBeInstanceOf(RangeError);
     expect(isSonareError(error)).toBe(false);
   });

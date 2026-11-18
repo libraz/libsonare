@@ -16,7 +16,7 @@ import {
   init,
   Mixer,
   masteringRepairDenoiseClassical,
-  mixingScenePresetJson,
+  mixingScenePreset,
   Project,
   RealtimeEngine,
   remix,
@@ -69,7 +69,7 @@ describe('boolean options', () => {
     const project = new Project();
     expect(() => project.setTrackMute(1, 'false' as never)).toThrow(TypeError);
     expect(() => project.setTrackSolo(1, 1 as never)).toThrow(TypeError);
-    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
       sampleRate: SR,
       maxBlockSize: 512,
     });
@@ -195,7 +195,7 @@ describe('createVocalEditSession limits', () => {
 
 describe('surround pan', () => {
   it('refuses an out-of-range field instead of clamping it', () => {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
       sampleRate: SR,
       maxBlockSize: 512,
     });

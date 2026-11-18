@@ -14,13 +14,17 @@ import {
   masteringInsertTiming,
 } from '../dist/index.js';
 
+/** Positional shorthand over the request-only `masteringInsertTiming`. */
+const timingOf = (insert: string, params: object, sampleRate: number) =>
+  masteringInsertTiming({ insert: insert as never, params: params as never, sampleRate });
+
 describe('insert timing and construction-key catalog (WASM)', () => {
   beforeAll(async () => {
     await init();
   });
 
   it('reports softClipper construction keys, including the aliasing enum', () => {
-    const info = masteringInsertParamInfo('saturation.softClipper');
+    const info = masteringInsertParamInfo({ insert: 'saturation.softClipper' });
     expect(info.length).toBeGreaterThan(0);
 
     const aliasing = info.find((param) => param.name === 'aliasing');
@@ -37,12 +41,12 @@ describe('insert timing and construction-key catalog (WASM)', () => {
   });
 
   it('reports latency > 0 for the 4x-oversampled configuration', () => {
-    const timing = masteringInsertTiming('saturation.softClipper', { aliasing: 3 }, 48000);
+    const timing = timingOf('saturation.softClipper', { aliasing: 'oversample4x' }, 48000);
     expect(timing.latencySamples).toBeGreaterThan(0);
   });
 
   it('matches the capability catalog default at {} / 48 kHz', () => {
-    const timing = masteringInsertTiming('saturation.softClipper', {}, 48000);
+    const timing = timingOf('saturation.softClipper', {}, 48000);
     const catalog = capabilityCatalog();
     const entry = catalog.processors.find((p) => p.id === 'saturation.softClipper');
     expect(entry).toBeDefined();
@@ -51,27 +55,21 @@ describe('insert timing and construction-key catalog (WASM)', () => {
   });
 
   it('rejects an unknown insert name', () => {
-    expect(() => masteringInsertTiming('not.a.real.processor', {}, 48000)).toThrow(
-      /unknown insert processor/,
-    );
+    expect(() => timingOf('not.a.real.processor', {}, 48000)).toThrow(RangeError);
   });
 
   it('rejects a key the insert does not read, naming it', () => {
-    expect(() =>
-      masteringInsertTiming('saturation.softClipper', { notARealKey: 1 }, 48000),
-    ).toThrow(/does not read parameter\(s\).*notARealKey/);
+    expect(() => timingOf('saturation.softClipper', { notARealKey: 1 }, 48000)).toThrow(
+      /does not read parameter\(s\).*notARealKey/,
+    );
   });
 
   it('rejects a non-finite or non-numeric param value, naming the key', () => {
+    expect(() => timingOf('saturation.softClipper', { aliasing: Number.NaN }, 48000)).toThrow(
+      /aliasing/,
+    );
     expect(() =>
-      masteringInsertTiming('saturation.softClipper', { aliasing: Number.NaN }, 48000),
-    ).toThrow(/aliasing/);
-    expect(() =>
-      masteringInsertTiming(
-        'saturation.softClipper',
-        { ceiling: 'loud' as unknown as number },
-        48000,
-      ),
+      timingOf('saturation.softClipper', { ceiling: 'loud' as unknown as number }, 48000),
     ).toThrow(/ceiling/);
   });
 });
@@ -82,32 +80,29 @@ describe('the causal repair stages reach the generic insert path (WASM)', () => 
   });
 
   it('reports each repair insert latency from its configuration', () => {
-    expect(masteringInsertTiming('repair.decrackle', {}, 48000).latencySamples).toBe(1);
-    expect(masteringInsertTiming('repair.dehum', {}, 48000).latencySamples).toBe(0);
+    expect(timingOf('repair.decrackle', {}, 48000).latencySamples).toBe(1);
+    expect(timingOf('repair.dehum', {}, 48000).latencySamples).toBe(0);
     expect(
-      masteringInsertTiming('repair.dehum', { adaptive: true, frameSize: 1024 }, 48000)
-        .latencySamples,
+      timingOf('repair.dehum', { adaptive: true, frameSize: 1024 }, 48000).latencySamples,
     ).toBe(1024);
-    expect(
-      masteringInsertTiming('repair.dereverbClassical', { nFft: 512 }, 48000).latencySamples,
-    ).toBe(511);
+    expect(timingOf('repair.dereverbClassical', { nFft: 512 }, 48000).latencySamples).toBe(511);
     // n_fft - 1 plus the hop the gain smoothing lags by.
-    expect(masteringInsertTiming('repair.denoiseClassical', {}, 48000).latencySamples).toBe(1279);
+    expect(timingOf('repair.denoiseClassical', {}, 48000).latencySamples).toBe(1279);
   });
 
   it('publishes only the causal choices and refuses an offline-only setting', () => {
-    const mode = masteringInsertParamInfo('repair.decrackle').find(
+    const mode = masteringInsertParamInfo({ insert: 'repair.decrackle' }).find(
       (param) => param.name === 'mode',
     );
     expect(mode?.choices?.map((choice) => choice.name)).toEqual(['median']);
-    expect(() =>
-      masteringInsertTiming('repair.dereverbClassical', { wpeEnabled: true }, 48000),
-    ).toThrow(/wpe_enabled must be false/);
+    expect(() => timingOf('repair.dereverbClassical', { wpeEnabled: true }, 48000)).toThrow(
+      /wpe_enabled must be false/,
+    );
     // The quantile estimator (0) ranks a whole signal; the insert defaults to spp.
     expect(() =>
-      masteringInsertTiming('repair.denoiseClassical', { noiseEstimator: 0 }, 48000),
+      timingOf('repair.denoiseClassical', { noiseEstimator: 'quantile' }, 48000),
     ).toThrow(/noise_estimator must not be Quantile/);
-    const estimator = masteringInsertParamInfo('repair.denoiseClassical').find(
+    const estimator = masteringInsertParamInfo({ insert: 'repair.denoiseClassical' }).find(
       (param) => param.name === 'noiseEstimator',
     );
     expect(estimator?.choices?.map((choice) => choice.name)).not.toContain('quantile');
@@ -141,32 +136,28 @@ describe('insert timing takes the document an insert is built from (WASM)', () =
 
   it('matches the constructed insert for an array-typed key', () => {
     const params = { bandAbsorption: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1] };
-    const timing = masteringInsertTiming('effects.acoustic.roomMorph', params, 48000);
+    const timing = timingOf('effects.acoustic.roomMorph', params, 48000);
     expect(timing).toEqual(sceneTiming('effects.acoustic.roomMorph', params));
     expect(timing.tailSamples).not.toBe(
-      masteringInsertTiming('effects.acoustic.roomMorph', {}, 48000).tailSamples,
+      timingOf('effects.acoustic.roomMorph', {}, 48000).tailSamples,
     );
   });
 
   it('matches the constructed insert for a string-typed key', () => {
     const params = { cabIrF32Base64: cabIr, cabIrSampleRate: 48000 };
-    const timing = masteringInsertTiming('saturation.ampSim', params, 48000);
+    const timing = timingOf('saturation.ampSim', params, 48000);
     expect(timing).toEqual(sceneTiming('saturation.ampSim', params));
-    expect(timing.tailSamples).not.toBe(
-      masteringInsertTiming('saturation.ampSim', {}, 48000).tailSamples,
-    );
+    expect(timing.tailSamples).not.toBe(timingOf('saturation.ampSim', {}, 48000).tailSamples);
     const named = { preset: 'crunchStack' };
-    expect(masteringInsertTiming('saturation.ampSim', named, 48000)).toEqual(
+    expect(timingOf('saturation.ampSim', named, 48000)).toEqual(
       sceneTiming('saturation.ampSim', named),
     );
   });
 
   it('refuses a value that does not match the key type as a TypeError', () => {
     const timing = (name: string, params: Record<string, unknown>) =>
-      masteringInsertTiming(name, params as never, 48000);
-    expect(() => timing('effects.acoustic.roomMorph', { bandAbsorption: 0.1 })).toThrow(
-      new TypeError('masteringInsertTiming: params.bandAbsorption must be an array of numbers'),
-    );
+      timingOf(name, params as never, 48000);
+    expect(() => timing('effects.acoustic.roomMorph', { bandAbsorption: 0.1 })).toThrow(TypeError);
     expect(() => timing('effects.acoustic.roomMorph', { bandAbsorption: ['a'] })).toThrow(
       TypeError,
     );
@@ -177,11 +168,11 @@ describe('insert timing takes the document an insert is built from (WASM)', () =
 
   it('refuses a non-finite number as a RangeError and an unknown name by the core', () => {
     expect(() =>
-      masteringInsertTiming('effects.acoustic.roomMorph', { bandAbsorption: [Number.NaN] }, 48000),
+      timingOf('effects.acoustic.roomMorph', { bandAbsorption: [Number.NaN] }, 48000),
     ).toThrow(RangeError);
-    expect(() =>
-      masteringInsertTiming('saturation.softClipper', { aliasing: Number.NaN }, 48000),
-    ).toThrow(RangeError);
-    expect(() => masteringInsertTiming('saturation.ampSim', { preset: 'nope' }, 48000)).toThrow();
+    expect(() => timingOf('saturation.softClipper', { aliasing: Number.NaN }, 48000)).toThrow(
+      RangeError,
+    );
+    expect(() => timingOf('saturation.ampSim', { preset: 'nope' }, 48000)).toThrow();
   });
 });

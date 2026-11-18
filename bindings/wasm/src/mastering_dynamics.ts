@@ -1,6 +1,12 @@
 import { getSonareModule } from './module_state.js';
 import type { ValidateOptions } from './validation.js';
-import { assertAudioInput, optionsBag, requestObject } from './validation.js';
+import {
+  assertAudioInput,
+  assertNonNegativeFloatValue,
+  assertPositiveFloatValue,
+  requireToken,
+  sampleOneShot,
+} from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -11,7 +17,7 @@ function requireModule() {
 // ============================================================================
 
 /** Compressor sidechain detector mode. */
-export type CompressorDetector = 'peak' | 'rms' | 'log_rms';
+export type CompressorDetector = 'peak' | 'rms' | 'logRms';
 
 /** Options for `masteringDynamicsCompressor`. */
 export interface CompressorOptions extends ValidateOptions {
@@ -22,9 +28,9 @@ export interface CompressorOptions extends ValidateOptions {
   kneeDb?: number;
   makeupGainDb?: number;
   autoMakeup?: boolean;
-  detector?: CompressorDetector | number;
-  sidechainHpfEnabled?: boolean;
-  sidechainHpfHz?: number;
+  detector?: CompressorDetector;
+  /** Sidechain high-pass corner in Hz, above 0. Absent = no sidechain high-pass. */
+  sidechainHighPassHz?: number;
   pdrTimeMs?: number;
   pdrReleaseScale?: number;
 }
@@ -32,7 +38,8 @@ export interface CompressorOptions extends ValidateOptions {
 /** Canonical request form for the offline compressor. */
 export interface MasteringDynamicsCompressorRequest extends CompressorOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  /** Sample rate of `samples` in Hz. Required. */
+  sampleRate: number;
 }
 
 /** Options for `masteringDynamicsGate`. */
@@ -43,13 +50,15 @@ export interface GateOptions extends ValidateOptions {
   rangeDb?: number;
   holdMs?: number;
   closeThresholdDb?: number;
-  keyHpfHz?: number;
+  /** Key high-pass corner in Hz. Absent = off; 0 Hz passes everything and is accepted. */
+  keyHighPassHz?: number;
 }
 
 /** Canonical request form for the offline gate. */
 export interface MasteringDynamicsGateRequest extends GateOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  /** Sample rate of `samples` in Hz. Required. */
+  sampleRate: number;
 }
 
 /** Options for `masteringDynamicsTransientShaper`. */
@@ -69,7 +78,8 @@ export interface TransientShaperOptions extends ValidateOptions {
 /** Canonical request form for the offline transient shaper. */
 export interface MasteringDynamicsTransientShaperRequest extends TransientShaperOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  /** Sample rate of `samples` in Hz. Required. */
+  sampleRate: number;
 }
 
 /**
@@ -91,81 +101,84 @@ export interface DynamicsProcessorResult {
   latencySamples: number;
 }
 
-const COMPRESSOR_DETECTOR_MAP: Record<CompressorDetector, number> = {
+const COMPRESSOR_DETECTOR_TOKENS = ['peak', 'rms', 'logRms'] as const;
+
+// Native reads the detector as an ordinal.
+const COMPRESSOR_DETECTOR_ORDINAL: Record<CompressorDetector, number> = {
   peak: 0,
   rms: 1,
-  log_rms: 2,
+  logRms: 2,
 };
 
-/** Offline feed-forward compressor (soft knee, optional auto-makeup / sidechain HPF). */
+/**
+ * The options object a native dynamics call reads. Inherited option values are preserved
+ * as well as own properties: the embind boundary's hasProperty() intentionally follows the
+ * prototype chain, so a spread copy would erase values before C++ can read them.
+ */
+function nativeOptions(request: object): Record<string, unknown> {
+  return Object.assign(
+    Object.create(Object.getPrototypeOf(request)) as Record<string, unknown>,
+    request,
+  );
+}
+
+/** Offline feed-forward compressor (soft knee, optional auto-makeup / sidechain high-pass). */
 export function masteringDynamicsCompressor(
   request: MasteringDynamicsCompressorRequest,
 ): DynamicsProcessorResult;
 export function masteringDynamicsCompressor(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: CompressorOptions,
 ): DynamicsProcessorResult;
-export function masteringDynamicsCompressor(
-  samples: Float32Array | MasteringDynamicsCompressorRequest,
-  sampleRate?: number,
-  options: CompressorOptions = {},
-): DynamicsProcessorResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('masteringDynamicsCompressor', options) }
-      : requestObject('masteringDynamicsCompressor', samples);
-  assertAudioInput(
-    'masteringDynamicsCompressor',
-    request.samples,
-    request.sampleRate ?? 22050,
-    request,
-  );
-  const detector =
-    typeof request.detector === 'string'
-      ? COMPRESSOR_DETECTOR_MAP[request.detector]
-      : request.detector;
-  // Preserve inherited option values as well as own properties. The embind
-  // boundary's hasProperty() intentionally follows the prototype chain, so a
-  // spread copy here would otherwise erase values before C++ can read them.
-  const opts: Record<string, unknown> = Object.assign(
-    Object.create(Object.getPrototypeOf(request)) as Record<string, unknown>,
-    request,
-  );
-  if (detector !== undefined) {
-    opts.detector = detector;
+export function masteringDynamicsCompressor(...args: unknown[]): DynamicsProcessorResult {
+  const r = sampleOneShot<MasteringDynamicsCompressorRequest>('masteringDynamicsCompressor', args);
+  assertAudioInput('masteringDynamicsCompressor', r.samples, r.sampleRate, r);
+  const opts = nativeOptions(r);
+  if (r.detector !== undefined && r.detector !== null) {
+    const token = requireToken(
+      'masteringDynamicsCompressor',
+      r.detector,
+      'detector',
+      COMPRESSOR_DETECTOR_TOKENS,
+      'peak',
+    );
+    opts.detector = COMPRESSOR_DETECTOR_ORDINAL[token];
   }
-  return requireModule().masteringDynamicsCompressor(
-    request.samples,
-    request.sampleRate ?? 22050,
-    opts,
-  );
+  // Native still reads an enable flag plus a corner for the sidechain high-pass.
+  delete opts.sidechainHighPassHz;
+  if (r.sidechainHighPassHz !== undefined && r.sidechainHighPassHz !== null) {
+    assertPositiveFloatValue(
+      'masteringDynamicsCompressor',
+      r.sidechainHighPassHz,
+      'sidechainHighPassHz',
+    );
+    opts.sidechainHpfEnabled = true;
+    opts.sidechainHpfHz = r.sidechainHighPassHz;
+  }
+  return requireModule().masteringDynamicsCompressor(r.samples, r.sampleRate, opts);
 }
 
-/** Offline noise gate (hysteresis, hold, optional key HPF). */
+/** Offline noise gate (hysteresis, hold, optional key high-pass). */
 export function masteringDynamicsGate(
   request: MasteringDynamicsGateRequest,
 ): DynamicsProcessorResult;
 export function masteringDynamicsGate(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: GateOptions,
 ): DynamicsProcessorResult;
-export function masteringDynamicsGate(
-  samples: Float32Array | MasteringDynamicsGateRequest,
-  sampleRate?: number,
-  options: GateOptions = {},
-): DynamicsProcessorResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('masteringDynamicsGate', options) }
-      : requestObject('masteringDynamicsGate', samples);
-  assertAudioInput('masteringDynamicsGate', request.samples, request.sampleRate ?? 22050, request);
-  return requireModule().masteringDynamicsGate(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request,
-  );
+export function masteringDynamicsGate(...args: unknown[]): DynamicsProcessorResult {
+  const r = sampleOneShot<MasteringDynamicsGateRequest>('masteringDynamicsGate', args);
+  assertAudioInput('masteringDynamicsGate', r.samples, r.sampleRate, r);
+  const opts = nativeOptions(r);
+  // Native still spells the key high-pass `keyHpfHz`.
+  delete opts.keyHighPassHz;
+  if (r.keyHighPassHz !== undefined && r.keyHighPassHz !== null) {
+    assertNonNegativeFloatValue('masteringDynamicsGate', r.keyHighPassHz, 'keyHighPassHz');
+    opts.keyHpfHz = r.keyHighPassHz;
+  }
+  return requireModule().masteringDynamicsGate(r.samples, r.sampleRate, opts);
 }
 
 /** Offline transient shaper (envelope-difference attack/sustain control). */
@@ -174,27 +187,14 @@ export function masteringDynamicsTransientShaper(
 ): DynamicsProcessorResult;
 export function masteringDynamicsTransientShaper(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: TransientShaperOptions,
 ): DynamicsProcessorResult;
-export function masteringDynamicsTransientShaper(
-  samples: Float32Array | MasteringDynamicsTransientShaperRequest,
-  sampleRate?: number,
-  options: TransientShaperOptions = {},
-): DynamicsProcessorResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('masteringDynamicsTransientShaper', options) }
-      : requestObject('masteringDynamicsTransientShaper', samples);
-  assertAudioInput(
+export function masteringDynamicsTransientShaper(...args: unknown[]): DynamicsProcessorResult {
+  const r = sampleOneShot<MasteringDynamicsTransientShaperRequest>(
     'masteringDynamicsTransientShaper',
-    request.samples,
-    request.sampleRate ?? 22050,
-    request,
+    args,
   );
-  return requireModule().masteringDynamicsTransientShaper(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request,
-  );
+  assertAudioInput('masteringDynamicsTransientShaper', r.samples, r.sampleRate, r);
+  return requireModule().masteringDynamicsTransientShaper(r.samples, r.sampleRate, r);
 }

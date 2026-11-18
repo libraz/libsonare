@@ -3,8 +3,7 @@ import {
   init,
   type MasteringChainConfig,
   masterAudio,
-  masteringChain,
-  masteringChainStereo,
+  masterAudioStereo,
   StreamingMasteringChain,
 } from '../src/index';
 import { getSonareModule } from '../src/module_state';
@@ -47,107 +46,97 @@ const typed: MasteringChainConfig = {
   },
 };
 
-const flat = (): MasteringChainConfig =>
-  ({
-    [`${MB}.enabled`]: true,
-    [`${MB}.crossover.cutoffsHz.0`]: 200,
-    [`${MB}.crossover.cutoffsHz.1`]: 1000,
-    [`${MB}.crossover.cutoffsHz.2`]: 4000,
-    [`${MB}.crossover.slope`]: enumValue(`${MB}.crossover.slope`, 'lr8'),
-    [`${MB}.bands.0.thresholdDb`]: -24,
-    [`${MB}.bands.0.ratio`]: 3,
-    [`${MB}.bands.1.thresholdDb`]: -20,
-    [`${MB}.bands.1.ratio`]: 2.5,
-    [`${MB}.bands.1.detector`]: enumValue(`${MB}.bands.1.detector`, 'logRms'),
-    [`${MB}.bands.2.thresholdDb`]: -18,
-    [`${MB}.bands.2.ratio`]: 2,
-    [`${MB}.bands.3.thresholdDb`]: -16,
-    [`${MB}.bands.3.ratio`]: 4,
-    [`${MB}.bands.3.makeupGainDb`]: 1,
-  }) as unknown as MasteringChainConfig;
+/** The flat map the native layer reads for `typed`, enum names already resolved. */
+const flat = (): Record<string, unknown> => ({
+  [`${MB}.enabled`]: true,
+  [`${MB}.crossover.cutoffsHz.0`]: 200,
+  [`${MB}.crossover.cutoffsHz.1`]: 1000,
+  [`${MB}.crossover.cutoffsHz.2`]: 4000,
+  [`${MB}.crossover.slope`]: enumValue(`${MB}.crossover.slope`, 'lr8'),
+  [`${MB}.bands.0.thresholdDb`]: -24,
+  [`${MB}.bands.0.ratio`]: 3,
+  [`${MB}.bands.1.thresholdDb`]: -20,
+  [`${MB}.bands.1.ratio`]: 2.5,
+  [`${MB}.bands.1.detector`]: enumValue(`${MB}.bands.1.detector`, 'logRms'),
+  [`${MB}.bands.2.thresholdDb`]: -18,
+  [`${MB}.bands.2.ratio`]: 2,
+  [`${MB}.bands.3.thresholdDb`]: -16,
+  [`${MB}.bands.3.ratio`]: 4,
+  [`${MB}.bands.3.makeupGainDb`]: 1,
+});
 
 describe('typed multiband crossover + bands', () => {
-  it('masteringChain mono: nested equals flat keys bit-for-bit', () => {
-    const a = masteringChain({ samples: left, sampleRate, config: typed });
-    const b = masteringChain({ samples: left, sampleRate, config: flat() });
+  it('masterAudio mono: nested equals the native flat keys bit-for-bit', () => {
+    const a = masterAudio({ samples: left, sampleRate, overrides: typed });
+    const b = getSonareModule().masteringChain(left, sampleRate, { __flatParams: flat() });
     expect(a.stages).toContain(MB);
     expect(Array.from(a.samples)).toEqual(Array.from(b.samples));
   });
 
-  it('masteringChainStereo: nested equals flat keys bit-for-bit', () => {
-    const a = masteringChainStereo({ left, right, sampleRate, config: typed });
-    const b = masteringChainStereo({ left, right, sampleRate, config: flat() });
+  it('masterAudioStereo: nested equals the native flat keys bit-for-bit', () => {
+    const a = masterAudioStereo({ left, right, sampleRate, overrides: typed });
+    const b = getSonareModule().masteringChainStereo(left, right, sampleRate, {
+      __flatParams: flat(),
+    });
     expect(Array.from(a.left)).toEqual(Array.from(b.left));
     expect(Array.from(a.right)).toEqual(Array.from(b.right));
   });
 
-  it('masterAudio overrides: nested equals flat keys, and differs from the preset', () => {
+  it('masterAudio overrides differ from the preset alone', () => {
     const a = masterAudio({ samples: left, sampleRate, preset: 'pop', overrides: typed });
-    const b = masterAudio({ samples: left, sampleRate, preset: 'pop', overrides: flat() });
     const base = masterAudio({ samples: left, sampleRate, preset: 'pop' });
-    expect(Array.from(a.samples)).toEqual(Array.from(b.samples));
     expect(Array.from(a.samples)).not.toEqual(Array.from(base.samples));
   });
 
-  it('StreamingMasteringChain: nested equals flat keys bit-for-bit', () => {
-    const run = (config: MasteringChainConfig): Float32Array => {
-      const chain = new StreamingMasteringChain(config);
-      try {
-        chain.prepare(sampleRate, 512, 1);
-        const out: number[] = [];
-        for (let at = 0; at < left.length; at += 512) {
-          out.push(...chain.processMono(left.subarray(at, Math.min(at + 512, left.length))));
-        }
-        return Float32Array.from(out);
-      } finally {
-        chain.destroy();
-      }
-    };
-    expect(Array.from(run(typed))).toEqual(Array.from(run(flat())));
+  it('refuses the dotted spelling on every entry point', () => {
+    const dotted = { [`${MB}.enabled`]: true } as unknown as MasteringChainConfig;
+    expect(() => masterAudio({ samples: left, sampleRate, overrides: dotted })).toThrow(TypeError);
+    expect(() => new StreamingMasteringChain({ sampleRate, ...dotted })).toThrow(TypeError);
   });
 
-  it('resolves enum names on nested paths, including a band detector', () => {
-    const named = masteringChain({ samples: left, sampleRate, config: typed });
-    const numeric = masteringChain({
-      samples: left,
-      sampleRate,
-      config: {
-        dynamics: {
-          multibandComp: {
-            ...typed.dynamics?.multibandComp,
-            crossover: {
-              cutoffsHz: [200, 1000, 4000],
-              slope: enumValue(`${MB}.crossover.slope`, 'lr8'),
-            },
-            bands: typed.dynamics?.multibandComp?.bands?.map((band) =>
-              band.detector === undefined
-                ? band
-                : { ...band, detector: enumValue(`${MB}.bands.1.detector`, 'logRms') },
-            ),
-          },
+  it('StreamingMasteringChain: runs the nested config like the offline chain stage list', () => {
+    const chain = new StreamingMasteringChain({ sampleRate, maxBlockSize: 512, ...typed });
+    try {
+      expect(chain.stageNames()).toContain(MB);
+      const out: number[] = [];
+      for (let at = 0; at < left.length; at += 512) {
+        out.push(...chain.processMono(left.subarray(at, Math.min(at + 512, left.length))));
+      }
+      expect(out.length).toBe(left.length);
+    } finally {
+      chain.destroy();
+    }
+  });
+
+  it('takes enum tokens on nested paths, including a band detector, and refuses numbers', () => {
+    const numeric = {
+      dynamics: {
+        multibandComp: {
+          crossover: { cutoffsHz: [200, 1000, 4000], slope: 3 },
+          bands: [{ detector: 1 }],
         },
       },
-    });
-    expect(Array.from(named.samples)).toEqual(Array.from(numeric.samples));
+    } as unknown as MasteringChainConfig;
+    expect(() => masterAudio({ samples: left, sampleRate, overrides: numeric })).toThrow(TypeError);
   });
 
   it('a typed crossover alone enables the stage like a lone shorthand cutoff', () => {
-    const alone = masteringChain({
+    const alone = masterAudio({
       samples: left,
       sampleRate,
-      config: { dynamics: { multibandComp: { crossover: { cutoffsHz: [200, 2000, 8000] } } } },
+      overrides: { dynamics: { multibandComp: { crossover: { cutoffsHz: [200, 2000, 8000] } } } },
     });
-    const explicit = masteringChain({
+    const explicit = masterAudio({
       samples: left,
       sampleRate,
-      config: {
+      overrides: {
         dynamics: { multibandComp: { enabled: true, crossover: { cutoffsHz: [200, 2000, 8000] } } },
       },
     });
-    const shorthand = masteringChain({
+    const shorthand = masterAudio({
       samples: left,
       sampleRate,
-      config: { dynamics: { multibandComp: { lowCutoffHz: 200 } } },
+      overrides: { dynamics: { multibandComp: { lowCutoffHz: 200 } } },
     });
     expect(alone.stages).toContain(MB);
     expect(shorthand.stages).toContain(MB);
@@ -159,14 +148,13 @@ describe('typed multiband crossover + bands', () => {
       dynamics: { multibandComp: { crossover: { cutoffsHz: [] } } },
     };
     const message = `Mastering override '${MB}.crossover.cutoffsHz' is an empty list, which has no flat spelling.`;
-    expect(() => masteringChain({ samples: left, sampleRate, config: empty })).toThrow(message);
     expect(() => masterAudio({ samples: left, sampleRate, overrides: empty })).toThrow(message);
-    expect(() => new StreamingMasteringChain(empty)).toThrow(message);
+    expect(() => new StreamingMasteringChain({ sampleRate, ...empty })).toThrow(message);
     expect(() =>
-      masteringChain({
+      masterAudio({
         samples: left,
         sampleRate,
-        config: { dynamics: { multibandComp: { bands: [] } } },
+        overrides: { dynamics: { multibandComp: { bands: [] } } },
       }),
     ).toThrow(`'${MB}.bands' is an empty list`);
   });

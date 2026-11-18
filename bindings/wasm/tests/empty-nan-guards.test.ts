@@ -8,7 +8,7 @@ import {
   detectBpm,
   init,
   lufs,
-  lufsInterleaved,
+  lufsMultichannel,
   masteringDynamicsCompressor,
   masteringDynamicsGate,
   masteringDynamicsTransientShaper,
@@ -72,12 +72,12 @@ describe('empty-sample guards (WASM)', () => {
     expect(() => lufs(new Float32Array(0), SR)).toThrow(/lufs: samples must not be empty/);
   });
   it('meteringPeakDb rejects empty', () => {
-    expect(() => meteringPeakDb(new Float32Array(0))).toThrow(
+    expect(() => meteringPeakDb(new Float32Array(0), SR)).toThrow(
       /meteringPeakDb: samples must not be empty/,
     );
   });
   it('meteringRmsDb rejects empty', () => {
-    expect(() => meteringRmsDb(new Float32Array(0))).toThrow(
+    expect(() => meteringRmsDb(new Float32Array(0), SR)).toThrow(
       /meteringRmsDb: samples must not be empty/,
     );
   });
@@ -87,9 +87,9 @@ describe('empty-sample guards (WASM)', () => {
     );
   });
   it('meteringStereoCorrelation rejects empty left', () => {
-    expect(() => meteringStereoCorrelation(new Float32Array(0), sine())).toThrow(
-      /meteringStereoCorrelation: left must not be empty/,
-    );
+    expect(() =>
+      meteringStereoCorrelation({ left: new Float32Array(0), right: sine(), sampleRate: SR }),
+    ).toThrow(/meteringStereoCorrelation: left must not be empty/);
   });
   it('masteringDynamicsCompressor rejects empty', () => {
     expect(() => masteringDynamicsCompressor(new Float32Array(0), SR)).toThrow(
@@ -165,7 +165,7 @@ describe('NaN/Inf guards (WASM)', () => {
     );
   });
   it('meteringPeakDb rejects NaN', () => {
-    expect(() => meteringPeakDb(withNaN())).toThrow(
+    expect(() => meteringPeakDb(withNaN(), SR)).toThrow(
       /meteringPeakDb: samples contains NaN or Inf at index 100/,
     );
   });
@@ -179,10 +179,10 @@ describe('NaN/Inf guards (WASM)', () => {
       /analyzeBpm: maxCandidates must be a non-negative integer/,
     );
   });
-  it('lufsInterleaved rejects buffers whose length is not a multiple of channels', () => {
-    expect(() => lufsInterleaved(new Float32Array([0.1, 0.2, 0.3]), 2, SR)).toThrow(
-      /lufsInterleaved: samples length must be a multiple of channels/,
-    );
+  it('lufsMultichannel rejects planes of unequal length', () => {
+    expect(() =>
+      lufsMultichannel({ channels: [new Float32Array(3), new Float32Array(2)], sampleRate: SR }),
+    ).toThrow(/lufsMultichannel: channels must all have the same length/);
   });
 });
 
@@ -208,17 +208,24 @@ describe('validate=false skips the JS index scan but the native core still rejec
     // These bindings call the C++ core directly rather than the C ABI, so the
     // guard they inherit is the bucket kernel's own. The pair is what matters:
     // a silent buffer answers 0/0 and a non-finite one is refused.
-    const quiet = waveformPeaks(new Float32Array(1024), 1, {
+    const quiet = waveformPeaks({
+      channels: [new Float32Array(1024)],
       samplesPerBucket: 256,
       validate: false,
     });
-    expect(quiet.min[0]).toBe(0);
-    expect(quiet.max[0]).toBe(0);
-    expect(() => waveformPeaks(withNaN(), 1, { samplesPerBucket: 256, validate: false })).toThrow();
+    expect(quiet.min[0]?.[0]).toBe(0);
+    expect(quiet.max[0]?.[0]).toBe(0);
+    expect(() =>
+      waveformPeaks({ channels: [withNaN()], samplesPerBucket: 256, validate: false }),
+    ).toThrow();
   });
   it('waveformPeakPyramid with validate=false still throws natively on NaN', () => {
     expect(() =>
-      waveformPeakPyramid(withNaN(), 1, { samplesPerBucketLevels: [256, 512], validate: false }),
+      waveformPeakPyramid({
+        channels: [withNaN()],
+        samplesPerBucketLevels: [256, 512],
+        validate: false,
+      }),
     ).toThrow();
   });
 });
@@ -369,7 +376,7 @@ describe('plain embind float configs refuse a non-finite value (WASM)', () => {
 
 describe('positive smoke (WASM)', () => {
   it('meteringRmsDb returns finite number for short sine', () => {
-    const v = meteringRmsDb(sine(1024));
+    const v = meteringRmsDb(sine(1024), SR);
     expect(Number.isFinite(v)).toBe(true);
   });
   it('masteringDynamicsCompressor returns Float32Array with same length', () => {

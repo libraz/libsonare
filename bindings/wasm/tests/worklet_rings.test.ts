@@ -14,7 +14,7 @@ import {
   it,
   Mixer,
   meterRingFromSharedBuffer,
-  mixingScenePresetJson,
+  mixingScenePreset,
   popSonareEngineCommandRingBuffer,
   pushSonareClipPageRequestRingBuffer,
   pushSonareEngineCommandRingBuffer,
@@ -453,7 +453,7 @@ describe('Sonare worklet ring buffers', () => {
         const ring = createSonareMeterRingBuffer({ capacity: 3 });
         ring.header[0] = seed;
         ring.header[3] = SONARE_METER_RING_PROTOCOL_VERSION;
-        const sceneJson = mixingScenePresetJson('vocalReverbSend');
+        const sceneJson = JSON.stringify(mixingScenePreset('vocalReverbSend'));
         const reference = Mixer.fromJson(sceneJson, { sampleRate: 48000, maxBlockSize: 128 });
         const stripCount = reference.stripCount;
         reference.destroy();
@@ -491,7 +491,7 @@ describe('Sonare worklet ring buffers', () => {
         ring.header[0] = seed;
         ring.header[4] = SONARE_SPECTRUM_RING_PROTOCOL_VERSION;
         const processor = new SonareWorkletProcessor({
-          sceneJson: mixingScenePresetJson('vocalReverbSend'),
+          sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
           sampleRate: 48000,
           maxBlockSize: 128,
           spectrumIntervalFrames: 128,
@@ -547,7 +547,7 @@ describe('Sonare worklet ring buffers', () => {
       processor: SonareWorkletProcessor;
       stripCount: number;
     } {
-      const sceneJson = mixingScenePresetJson('vocalReverbSend');
+      const sceneJson = JSON.stringify(mixingScenePreset('vocalReverbSend'));
       // A transport must be present for the processor to compute and publish
       // meters; with a meterSharedBuffer the records go to the ring (not postMessage).
       const processor = new SonareWorkletProcessor(

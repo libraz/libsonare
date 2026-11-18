@@ -4,7 +4,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, Mixer, mixingScenePresetJson } from '../dist/index.js';
+import { init, Mixer, mixingScenePreset } from '../dist/index.js';
 
 const SR = 48000;
 const BLOCK = 128;
@@ -23,7 +23,7 @@ describe('Mixer input count (WASM)', () => {
 
   beforeAll(async () => {
     await init();
-    mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+    mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('commentaryDucking')), {
       sampleRate: SR,
       maxBlockSize: BLOCK,
     });
@@ -52,7 +52,7 @@ describe('Mixer input count (WASM)', () => {
 
   it('a missing strip is silent: fewer inputs match explicit silence on the rest', () => {
     const fresh = () =>
-      Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+      Mixer.fromJson(JSON.stringify(mixingScenePreset('commentaryDucking')), {
         sampleRate: SR,
         maxBlockSize: BLOCK,
       });

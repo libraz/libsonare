@@ -8,8 +8,8 @@
  *  - stripMeter accepts an optional tap argument;
  *  - one-shot mixStereo routes through the real graph (master output);
  *  - the four functions that round out WASM parity with Node/Python:
- *    decompose with init, meteringVectorscopeDecimated,
- *    meteringPhaseScopeDecimated, meteringSpectrumFrame.
+ *    decompose with init, the maxPoints form of meteringVectorscope and
+ *    meteringPhaseScope, meteringSpectrumFrame.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -18,12 +18,12 @@ import {
   decompose,
   init,
   Mixer,
-  meteringPhaseScopeDecimated,
+  meteringPhaseScope,
   meteringSpectrumFrame,
-  meteringVectorscopeDecimated,
+  meteringVectorscope,
   midiNoteOff,
   midiNoteOn,
-  mixingScenePresetJson,
+  mixingScenePreset,
   mixStereo,
   Project,
 } from '../dist/index.js';
@@ -187,7 +187,7 @@ describe('WASM cross-binding consistency', () => {
 
   describe('mixer setPan keep-mode and stripMeter tap', () => {
     it('keeps the current pan mode when panMode is omitted', () => {
-      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
         sampleRate: SR,
         maxBlockSize: BLOCK,
       });
@@ -198,24 +198,24 @@ describe('WASM cross-binding consistency', () => {
         mixer.setPan(vocal, 0, 'stereoPan');
         mixer.setPan(vocal, 0.3);
         const scene = JSON.parse(mixer.toJson()) as {
-          strips: Array<{ id: string; panMode?: number }>;
+          strips: Array<{ id: string; panMode?: string }>;
         };
         const strip = scene.strips.find((s) => s.id === 'vocal');
-        expect(strip?.panMode).toBe(1); // 1 = StereoPan, not reset to 0 (Balance)
+        expect(strip?.panMode).toBe('stereoPan'); // not reset to balance
 
         // An explicit mode still switches it.
         mixer.setPan(vocal, 0.3, 'balance');
         const scene2 = JSON.parse(mixer.toJson()) as {
-          strips: Array<{ id: string; panMode?: number }>;
+          strips: Array<{ id: string; panMode?: string }>;
         };
-        expect(scene2.strips.find((s) => s.id === 'vocal')?.panMode).toBe(0);
+        expect(scene2.strips.find((s) => s.id === 'vocal')?.panMode).toBe('balance');
       } finally {
         mixer.destroy();
       }
     });
 
     it('stripMeter accepts an optional tap argument', () => {
-      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
         sampleRate: SR,
         maxBlockSize: BLOCK,
       });
@@ -248,7 +248,13 @@ describe('WASM cross-binding consistency', () => {
         a[i] = 0.4 * Math.sin((2 * Math.PI * 220 * i) / SR);
         b[i] = 0.4 * Math.sin((2 * Math.PI * 330 * i) / SR);
       }
-      const result = mixStereo([a, b], [a, b], SR);
+      const result = mixStereo({
+        strips: [
+          { left: a, right: a },
+          { left: b, right: b },
+        ],
+        sampleRate: SR,
+      });
       expect(result.left).toBeInstanceOf(Float32Array);
       expect(result.right).toBeInstanceOf(Float32Array);
       expect(result.left.length).toBe(BLOCK);
@@ -277,7 +283,7 @@ describe('WASM cross-binding consistency', () => {
       expect(h.data.length).toBe(2 * nFrames);
     });
 
-    it('meteringVectorscopeDecimated decimates the point series to maxPoints', () => {
+    it('meteringVectorscope with maxPoints decimates the point series to maxPoints', () => {
       const n = 4096;
       const left = new Float32Array(n);
       const right = new Float32Array(n);
@@ -285,14 +291,14 @@ describe('WASM cross-binding consistency', () => {
         left[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / SR);
         right[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / SR + 0.3);
       }
-      const report = meteringVectorscopeDecimated(left, right, SR, 64);
+      const report = meteringVectorscope({ left, right, sampleRate: SR, maxPoints: 64 });
       expect(report.mid).toBeInstanceOf(Float32Array);
       expect(report.side).toBeInstanceOf(Float32Array);
       expect(report.mid.length).toBeLessThanOrEqual(64);
       expect(report.mid.length).toBe(report.side.length);
     });
 
-    it('meteringPhaseScopeDecimated decimates points but keeps full-res stats', () => {
+    it('meteringPhaseScope with maxPoints decimates points but keeps full-res stats', () => {
       const n = 4096;
       const left = new Float32Array(n);
       const right = new Float32Array(n);
@@ -300,7 +306,7 @@ describe('WASM cross-binding consistency', () => {
         left[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / SR);
         right[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / SR + 0.3);
       }
-      const report = meteringPhaseScopeDecimated(left, right, SR, 32);
+      const report = meteringPhaseScope({ left, right, sampleRate: SR, maxPoints: 32 });
       expect(report.mid.length).toBeLessThanOrEqual(32);
       expect(Number.isFinite(report.correlation)).toBe(true);
       expect(Number.isFinite(report.maxRadius)).toBe(true);
@@ -312,7 +318,7 @@ describe('WASM cross-binding consistency', () => {
       for (let i = 0; i < n; i++) {
         samples[i] = 0.5 * Math.sin((2 * Math.PI * 1000 * i) / SR);
       }
-      const report = meteringSpectrumFrame(samples, SR, 0, { nFft: 2048 });
+      const report = meteringSpectrumFrame(samples, SR, { startSample: 0, nFft: 2048 });
       expect(report.frequencies).toBeInstanceOf(Float32Array);
       expect(report.magnitude).toBeInstanceOf(Float32Array);
       expect(report.db).toBeInstanceOf(Float32Array);

@@ -63,14 +63,14 @@ export interface SonareWorkletMeterSnapshot {
    * arrays below only when it exceeds 2 (a 5.1 or 7.1 bus). The stereo fields
    * above always hold planes 0 and 1.
    */
-  channelCount?: number;
-  /** Per-plane peak in dBFS (length `channelCount`), canonical WAVE order. */
+  numChannels?: number;
+  /** Per-plane peak in dBFS (length `numChannels`), canonical WAVE order. */
   peakDb?: number[];
-  /** Per-plane RMS in dBFS (length `channelCount`). */
+  /** Per-plane RMS in dBFS (length `numChannels`). */
   rmsDb?: number[];
-  /** Per-plane inter-sample (true) peak in dB (length `channelCount`). See {@link truePeakDbL}. */
+  /** Per-plane inter-sample (true) peak in dB (length `numChannels`). See {@link truePeakDbL}. */
   truePeakDb?: number[];
-  /** Per-plane pre-trim input peak in dBFS (length `channelCount`). */
+  /** Per-plane pre-trim input peak in dBFS (length `numChannels`). */
   inputPeakDb?: number[];
 }
 
@@ -273,7 +273,7 @@ export function readSonareMeterRingBuffer(
                 planes,
             ),
           );
-        meter.channelCount = planes;
+        meter.numChannels = planes;
         meter.peakDb = plane(0);
         meter.rmsDb = plane(1);
         meter.truePeakDb = plane(2);
@@ -552,7 +552,7 @@ export function meterFromEngine(meter: EngineMeterTelemetryWide): SonareWorkletM
     inputPeakDbR: meter.inputPeakDb[1] ?? SONARE_FLOOR_DB,
   };
   if (meter.channelCount > 2) {
-    snapshot.channelCount = meter.channelCount;
+    snapshot.numChannels = meter.channelCount;
     snapshot.peakDb = meter.peakDb;
     snapshot.rmsDb = meter.rmsDb;
     snapshot.truePeakDb = meter.truePeakDb;

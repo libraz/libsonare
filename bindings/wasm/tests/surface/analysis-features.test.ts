@@ -20,7 +20,7 @@ import {
   framesToTime,
   griffinLim,
   init,
-  lufsInterleaved,
+  lufsMultichannel,
   melDelta,
   melSpectrogram,
   melToAudio,
@@ -267,8 +267,8 @@ describe('analysis features: renamed unit fields', () => {
   });
 
   it('names the loudness range in LU', () => {
-    const interleaved = new Float32Array(sr * 2).map((_, i) => 0.2 * Math.sin(i * 0.05));
-    const result = lufsInterleaved({ samples: interleaved, channels: 2, sampleRate: sr });
+    const plane = new Float32Array(sr).map((_, i) => 0.2 * Math.sin(i * 0.05));
+    const result = lufsMultichannel({ channels: [plane, plane], sampleRate: sr });
     expect(typeof result.loudnessRangeLu).toBe('number');
     expect(result).not.toHaveProperty('loudnessRange');
   });

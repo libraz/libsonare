@@ -12,6 +12,7 @@ import type {
 } from './instrument_types.js';
 import { assertHandleLive } from './internal/handle_guard.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
+import { mixSceneJsonToNative } from './internal/mix_scene.js';
 import { nativeTranscribeOptions } from './internal/transcribe_request.js';
 import {
   assertProjectMidiEvents,
@@ -1380,7 +1381,9 @@ export class Project {
    *   The scene is still applied; empty when every key was consumed.
    */
   setMixerSceneJson(sceneJson: string): string[] {
-    return this.native.setMixerSceneJson(sceneJson);
+    return this.native.setMixerSceneJson(
+      mixSceneJsonToNative('Project.setMixerSceneJson', sceneJson),
+    );
   }
 
   /**

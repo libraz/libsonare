@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { Mixer, PlaybackRenderer, RealtimeEngine, RealtimeVoiceChanger } from '../dist/index.js';
 import { SonarePlaybackWorkletProcessor } from '../dist/worklet.js';
 import {
-  mixingScenePresetJson,
+  mixingScenePreset,
   SonareRealtimeEngineWorkletProcessor,
   SonareRealtimeVoiceChangerWorkletProcessor,
   SonareWorkletProcessor,
@@ -74,7 +74,7 @@ function maxDifference(a: Float32Array, b: Float32Array): number {
 }
 
 /** Read after setupWorklet() has initialized the module. */
-const mixerScene = (): string => mixingScenePresetJson('vocalReverbSend');
+const mixerScene = (): string => JSON.stringify(mixingScenePreset('vocalReverbSend'));
 
 /** What the mixer processor renders, read through its own process(). */
 function mixerProcessorOutput(processor: SonareWorkletProcessor): Float32Array {
@@ -148,7 +148,7 @@ const cases = [
     name: 'SonareWorkletProcessor',
     make: (sampleRate?: number) =>
       new SonareWorkletProcessor({
-        sceneJson: mixingScenePresetJson('vocalReverbSend'),
+        sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
         sampleRate,
         maxBlockSize: BLOCK,
       }),

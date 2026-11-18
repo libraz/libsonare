@@ -8,8 +8,8 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   init,
-  masteringChain,
-  masteringChainStereo,
+  masterAudio,
+  masterAudioStereo,
   meteringTruePeakDb,
   phaseVocoder,
   RealtimeEngine,
@@ -135,37 +135,38 @@ describe('remix validates its input like the C ABI run_offline path', () => {
   });
 });
 
-describe('masteringChain validates input on every entry (mono + stereo)', () => {
+describe('masterAudio without a preset validates input on every entry (mono + stereo)', () => {
   it('mono chain rejects non-finite samples', () => {
-    expect(() => masteringChain({ samples: withNaN(), sampleRate: SR })).toThrow();
+    expect(() => masterAudio({ samples: withNaN(), sampleRate: SR })).toThrow();
   });
   it('mono chain rejects an empty buffer', () => {
-    expect(() => masteringChain({ samples: new Float32Array(0), sampleRate: SR })).toThrow();
+    expect(() => masterAudio({ samples: new Float32Array(0), sampleRate: SR })).toThrow();
   });
   it('stereo chain rejects non-finite samples', () => {
-    expect(() =>
-      masteringChainStereo({ left: withNaN(), right: sine(), sampleRate: SR }),
-    ).toThrow();
+    expect(() => masterAudioStereo({ left: withNaN(), right: sine(), sampleRate: SR })).toThrow();
   });
   it('mono chain accepts valid input', () => {
-    const r = masteringChain({ samples: sine(SR), sampleRate: SR });
+    const r = masterAudio({ samples: sine(SR), sampleRate: SR });
     expect(r.samples.length).toBe(SR);
   });
 });
 
 describe('meteringTruePeakDb oversample-factor guard', () => {
-  it('accepts 0 (meaning the default 4) and valid powers of two', () => {
-    expect(Number.isFinite(meteringTruePeakDb(sine(), SR, 0))).toBe(true);
-    expect(Number.isFinite(meteringTruePeakDb(sine(), SR, 8))).toBe(true);
+  it('takes the default when omitted and accepts valid powers of two', () => {
+    expect(Number.isFinite(meteringTruePeakDb(sine(), SR))).toBe(true);
+    expect(Number.isFinite(meteringTruePeakDb(sine(), SR, { oversampleFactor: 8 }))).toBe(true);
+  });
+  it('rejects an explicit 0 instead of reading it as the default', () => {
+    expect(() => meteringTruePeakDb(sine(), SR, { oversampleFactor: 0 })).toThrow(RangeError);
   });
   it('rejects a non-power-of-two factor', () => {
-    expect(() => meteringTruePeakDb(sine(), SR, 3)).toThrow(/power of two/);
+    expect(() => meteringTruePeakDb(sine(), SR, { oversampleFactor: 3 })).toThrow(/power of two/);
   });
   it('rejects a fractional factor', () => {
-    expect(() => meteringTruePeakDb(sine(), SR, 2.5)).toThrow(/power of two/);
+    expect(() => meteringTruePeakDb(sine(), SR, { oversampleFactor: 2.5 })).toThrow(/power of two/);
   });
   it('rejects a factor above 16', () => {
-    expect(() => meteringTruePeakDb(sine(), SR, 32)).toThrow(/power of two/);
+    expect(() => meteringTruePeakDb(sine(), SR, { oversampleFactor: 32 })).toThrow(/power of two/);
   });
 });
 

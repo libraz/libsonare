@@ -5,13 +5,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import {
-  init,
-  Mixer,
-  meteringTruePeakDb,
-  mixingScenePresetJson,
-  mixStereo,
-} from '../dist/index.js';
+import { init, Mixer, meteringTruePeakDb, mixingScenePreset, mixStereo } from '../dist/index.js';
 import { assertStripIndex, expectRefusalOf, sine } from './_helpers';
 
 const SR = 48000;
@@ -50,7 +44,7 @@ function serialTailScene(): string {
       {
         id: 'source',
         inserts: [delay(10)],
-        sends: [{ id: 'to-aux', destinationBusId: 'aux', sendDb: 0, timing: 'post' }],
+        sends: [{ id: 'to-aux', destinationBusId: 'aux', sendDb: 0, timing: 'postFader' }],
       },
     ],
     buses: [
@@ -74,7 +68,7 @@ describe('Mixer runtime controls (WASM)', () => {
           strips: [
             {
               id: 'asymmetric',
-              panMode: 2,
+              panMode: 'dualPan',
               dualPanLeft: -0.25,
               dualPanRight: 0.75,
               polarityInvertLeft: true,
@@ -90,7 +84,7 @@ describe('Mixer runtime controls (WASM)', () => {
         const scene = JSON.parse(mixer.toJson()) as {
           strips: Array<{
             id: string;
-            panMode: number;
+            panMode: string;
             dualPanLeft: number;
             dualPanRight: number;
             polarityInvertLeft: boolean;
@@ -100,7 +94,7 @@ describe('Mixer runtime controls (WASM)', () => {
         expect(scene.strips).toHaveLength(1);
         expect(scene.strips[0]).toMatchObject({
           id: 'asymmetric',
-          panMode: 2,
+          panMode: 'dualPan',
           dualPanLeft: -0.25,
           dualPanRight: 0.75,
           polarityInvertLeft: true,
@@ -121,7 +115,7 @@ describe('Mixer runtime controls (WASM)', () => {
     });
 
     it('exposes setters, meter readers, and goniometer with the documented shapes', () => {
-      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
         sampleRate: SR,
         maxBlockSize: BLOCK,
       });
@@ -274,7 +268,7 @@ describe('Mixer runtime controls (WASM)', () => {
     });
 
     it('accepts every pan-law, meter-tap, and send-timing string union value', () => {
-      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
         sampleRate: SR,
         maxBlockSize: BLOCK,
       });
@@ -310,7 +304,7 @@ describe('Mixer runtime controls (WASM)', () => {
     });
 
     it('removeSend drops a previously-added send and shifts higher indices down', () => {
-      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
         sampleRate: SR,
         maxBlockSize: BLOCK,
       });
@@ -496,7 +490,7 @@ describe('Mixer runtime controls (WASM)', () => {
 
   describe('imperative strip topology', () => {
     it('adds a strip to a live mixer', () => {
-      const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+      const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('commentaryDucking')), {
         sampleRate: SR,
         maxBlockSize: BLOCK,
       });
@@ -524,7 +518,7 @@ describe('Mixer runtime controls (WASM)', () => {
     });
 
     it('refuses a metering argument that is not a plain object', () => {
-      const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+      const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('commentaryDucking')), {
         sampleRate: SR,
         maxBlockSize: BLOCK,
       });
@@ -534,9 +528,9 @@ describe('Mixer runtime controls (WASM)', () => {
         // caller on the full default metering, the field readers' failure mode
         // one level up.
         // @ts-expect-error a non-object metering bag is rejected at runtime
-        expect(() => mixer.addStrip('number-bag', 5)).toThrow(/metering must be a plain object/);
+        expect(() => mixer.addStrip('number-bag', 5)).toThrow(TypeError);
         // @ts-expect-error an array is not a plain object, though `typeof []` is 'object'
-        expect(() => mixer.addStrip('array-bag', [])).toThrow(/metering must be a plain object/);
+        expect(() => mixer.addStrip('array-bag', [])).toThrow(TypeError);
         expect(mixer.stripCount).toBe(before);
 
         // Absent and explicit undefined are the omitted default, which the scene
@@ -557,7 +551,7 @@ describe('Mixer runtime controls (WASM)', () => {
     });
 
     it('round-trips an added strip metering configuration through the scene', () => {
-      const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
+      const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('commentaryDucking')), {
         sampleRate: SR,
         maxBlockSize: BLOCK,
       });
@@ -662,7 +656,7 @@ describe('Mixer runtime controls (WASM)', () => {
     // input strips without cross-contamination, each measurement uses a fresh
     // mixer with kick soloed and the bus return marked solo-safe.
     function measureWithSoloedKick(feedStripId: string): number {
-      const mixer = Mixer.fromJson(mixingScenePresetJson('drumBusSubgroup'), {
+      const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('drumBusSubgroup')), {
         sampleRate: SR,
         maxBlockSize: BLOCK,
       });
@@ -727,52 +721,70 @@ describe('Mixer runtime controls (WASM)', () => {
       // panMode used to be read only when pan was supplied too, so a caller who
       // changed nothing but the mode was mixed in the default one with nothing
       // to show for it. Either option alone has to reach the strip.
-      const modeOnly = mixStereo([leftOnly()], [silence()], SR, { panMode: 'stereoPan' });
+      const modeOnly = mixStereo({
+        strips: [{ left: leftOnly(), right: silence(), panMode: 'stereoPan' }],
+        sampleRate: SR,
+      });
       expect(modeOnly.right[BLOCK - 1]).toBeGreaterThan(0.1);
 
-      const balance = mixStereo([leftOnly()], [silence()], SR);
+      const balance = mixStereo({
+        strips: [{ left: leftOnly(), right: silence() }],
+        sampleRate: SR,
+      });
       expect(balance.right[BLOCK - 1]).toBe(0);
 
       // A position-only call is unchanged by the mode now being read outside
       // it: an absent mode keeps what the strip already carries, and a fresh
       // strip already carries Balance.
-      const panOnly = mixStereo([leftOnly()], [silence()], SR, { pan: 0.3 });
-      const panWithExplicitMode = mixStereo([leftOnly()], [silence()], SR, {
-        pan: 0.3,
-        panMode: 'balance',
+      const panOnly = mixStereo({
+        strips: [{ left: leftOnly(), right: silence(), pan: 0.3 }],
+        sampleRate: SR,
+      });
+      const panWithExplicitMode = mixStereo({
+        strips: [{ left: leftOnly(), right: silence(), pan: 0.3, panMode: 'balance' }],
+        sampleRate: SR,
       });
       expect(Array.from(panOnly.left)).toEqual(Array.from(panWithExplicitMode.left));
       expect(Array.from(panOnly.right)).toEqual(Array.from(panWithExplicitMode.right));
     });
 
     it('applies a mode-only request per strip', () => {
-      const perStrip = mixStereo([leftOnly(), leftOnly()], [silence(), silence()], SR, {
-        panMode: ['stereoPan', 'stereoPan'],
+      const perStrip = mixStereo({
+        strips: [
+          { left: leftOnly(), right: silence(), panMode: 'stereoPan' },
+          { left: leftOnly(), right: silence(), panMode: 'stereoPan' },
+        ],
+        sampleRate: SR,
       });
       expect(perStrip.right[BLOCK - 1]).toBeGreaterThan(0.1);
     });
 
-    it('still rejects an unknown mode supplied without a position', () => {
-      // Reading the mode outside the pan guard must not turn a bad value into a
-      // silently ignored one.
-      expect(() =>
-        mixStereo([leftOnly()], [silence()], SR, { panMode: 'unknown' as never }),
-      ).toThrow();
-      expect(() => mixStereo([leftOnly()], [silence()], SR, { panMode: 99 })).toThrow();
-    });
+    it.each(['unknown', 'stereo-pan', 'dual-pan', 99, 1])(
+      'refuses the pan mode %s supplied without a position',
+      (panMode) => {
+        // Reading the mode outside the pan guard must not turn a bad value into a
+        // silently ignored one; a number is refused too.
+        expect(() =>
+          mixStereo({
+            strips: [{ left: leftOnly(), right: silence(), panMode: panMode as never }],
+            sampleRate: SR,
+          }),
+        ).toThrow(typeof panMode === 'number' ? TypeError : RangeError);
+      },
+    );
   });
 
   it('reports the one-shot true peak of a signal whose peak is in its last samples', () => {
     const left = new Float32Array(4096);
     left.set([0.9, -0.9, 0.9, -0.9], left.length - 4);
     const right = new Float32Array(left);
-    const result = mixStereo([left], [right], 48000, {});
-    expect(result.meters[0].truePeakDbL).toBeCloseTo(meteringTruePeakDb(left, 48000), 4);
-    expect(result.meters[0].truePeakDbL).toBeGreaterThan(-1);
+    const result = mixStereo({ strips: [{ left, right }], sampleRate: 48000 });
+    expect(result.meters[0].truePeakDbtpL).toBeCloseTo(meteringTruePeakDb(left, 48000), 4);
+    expect(result.meters[0].truePeakDbtpL).toBeGreaterThan(-1);
   });
 
   it("flushes a streaming mixer's meters on request", () => {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
       sampleRate: 48000,
       maxBlockSize: 256,
     });

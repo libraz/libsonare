@@ -20,7 +20,7 @@ import {
   frameSignal,
   init,
   Mixer,
-  masteringChain,
+  masterAudio,
   meteringDetectClipping,
   mixStereo,
   padCenter,
@@ -277,8 +277,8 @@ describe('RealtimeEngine track monitor mode guard', () => {
 });
 
 describe('WASM mixStereo input guards', () => {
-  it('rejects an empty channel list with a specific validation error', () => {
-    expect(() => mixStereo([], [], 48000)).toThrow(/non-zero length/);
+  it('rejects an empty strip list with a RangeError', () => {
+    expect(() => mixStereo({ strips: [], sampleRate: 48000 })).toThrow(RangeError);
   });
 });
 
@@ -801,8 +801,10 @@ describe('offline boundary validation is enforced by the native WASM layer', () 
       meteringDetectClipping({ samples, sampleRate: 22050, minRegionSamples: -1 }),
     ).toThrow();
     expect(() =>
-      masteringChain(samples, 22050, {
-        loudness: { enabled: false, truePeakOversample: 3 },
+      masterAudio({
+        samples,
+        sampleRate: 22050,
+        overrides: { loudness: { enabled: false, truePeakOversample: 3 } },
       }),
     ).toThrow();
   });

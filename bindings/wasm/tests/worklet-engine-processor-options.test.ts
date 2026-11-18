@@ -13,7 +13,7 @@ import {
   SonareRealtimeEngineWorkletProcessor,
   SonareWorkletProcessor,
 } from '../dist/worklet.js';
-import { mixingScenePresetJson } from './_worklet_helpers';
+import { mixingScenePreset } from './_worklet_helpers';
 
 type Ctor = new (options: unknown) => object;
 
@@ -97,7 +97,10 @@ describe('engine and mixer processorOptions refuse undeclared keys', () => {
   });
 
   describe('mixer processor', () => {
-    const base = () => ({ sceneJson: mixingScenePresetJson('vocalReverbSend'), sampleRate: 48000 });
+    const base = () => ({
+      sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
+      sampleRate: 48000,
+    });
 
     it('the processor constructor refuses an undeclared key by name', () => {
       const Processor = registered(registerSonareWorkletProcessor, 'mixer-test');

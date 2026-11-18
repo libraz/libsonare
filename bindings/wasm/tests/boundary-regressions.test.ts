@@ -1,11 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import {
-  init,
-  Mixer,
-  meteringStereoCorrelation,
-  mixingScenePresetJson,
-  mixStereo,
-} from '../src/index';
+import { init, Mixer, meteringStereoCorrelation, mixingScenePreset, mixStereo } from '../src/index';
 import { getSonareModule } from '../src/module_state';
 import {
   BLOCK,
@@ -147,27 +141,55 @@ describe('boundary regressions (WASM)', () => {
   it('revalidates stereo meters natively when validate is false', () => {
     const invalid = sine(0.5);
     invalid[17] = Number.NaN;
-    expect(() => meteringStereoCorrelation(invalid, sine(0.5), SR)).toThrow();
-    expect(() => meteringStereoCorrelation(invalid, sine(0.5), SR, { validate: false })).toThrow();
+    expect(() =>
+      meteringStereoCorrelation({ left: invalid, right: sine(0.5), sampleRate: SR }),
+    ).toThrow();
+    expect(() =>
+      meteringStereoCorrelation({
+        left: invalid,
+        right: sine(0.5),
+        sampleRate: SR,
+        validate: false,
+      }),
+    ).toThrow();
     const invalidRight = sine(0.5);
     invalidRight[23] = Number.POSITIVE_INFINITY;
     expect(() =>
-      meteringStereoCorrelation(sine(0.5), invalidRight, SR, { validate: false }),
+      meteringStereoCorrelation({
+        left: sine(0.5),
+        right: invalidRight,
+        sampleRate: SR,
+        validate: false,
+      }),
     ).toThrow();
     expect(() =>
-      meteringStereoCorrelation(sine(0.5), sine(0.5), 7999, { validate: false }),
+      meteringStereoCorrelation({
+        left: sine(0.5),
+        right: sine(0.5),
+        sampleRate: 7999,
+        validate: false,
+      }),
     ).toThrow();
     expect(() =>
-      meteringStereoCorrelation(sine(0.5), sine(0.5), 384001, { validate: false }),
+      meteringStereoCorrelation({
+        left: sine(0.5),
+        right: sine(0.5),
+        sampleRate: 384001,
+        validate: false,
+      }),
     ).toThrow();
-    expect(meteringStereoCorrelation(sine(0.5), sine(0.5), SR, { validate: false })).toBeCloseTo(
-      1,
-      5,
-    );
+    expect(
+      meteringStereoCorrelation({
+        left: sine(0.5),
+        right: sine(0.5),
+        sampleRate: SR,
+        validate: false,
+      }),
+    ).toBeCloseTo(1, 5);
   });
 
   it('validates drainTailStereo before allocation at both facade and raw boundaries', () => {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
       sampleRate: SR,
       maxBlockSize: BLOCK,
     });
@@ -182,7 +204,7 @@ describe('boundary regressions (WASM)', () => {
     }
 
     const raw = getSonareModule().createMixerFromSceneJson(
-      mixingScenePresetJson('vocalReverbSend'),
+      getSonareModule().mixingScenePresetJson('vocalReverbSend'),
       SR,
       BLOCK,
     );
@@ -199,17 +221,13 @@ describe('boundary regressions (WASM)', () => {
 
   it('propagates invalid one-shot strip settings and recovers on the next call', () => {
     const channel = sine(0.25);
-    expect(() => mixStereo([channel], [channel], SR, { faderDb: Number.NaN })).toThrow();
-    expect(() =>
-      mixStereo([channel], [channel], SR, { inputTrimDb: Number.POSITIVE_INFINITY }),
-    ).toThrow();
-    expect(() =>
-      mixStereo([channel], [channel], SR, { width: Number.NEGATIVE_INFINITY }),
-    ).toThrow();
-    expect(() =>
-      mixStereo([channel], [channel], SR, { pan: 0, panMode: 'unknown' as never }),
-    ).toThrow(/unknown mixing pan mode/);
-    expect(() => mixStereo([channel], [channel], SR, { pan: 0, panMode: 99 })).toThrow();
-    expect(mixStereo([channel], [channel], SR).left.length).toBe(BLOCK);
+    const one = (strip: Record<string, unknown>) =>
+      mixStereo({ strips: [{ left: channel, right: channel, ...strip }], sampleRate: SR });
+    expect(() => one({ faderDb: Number.NaN })).toThrow();
+    expect(() => one({ inputTrimDb: Number.POSITIVE_INFINITY })).toThrow();
+    expect(() => one({ width: Number.NEGATIVE_INFINITY })).toThrow();
+    expect(() => one({ pan: 0, panMode: 'unknown' })).toThrow(/panMode must be one of/);
+    expect(() => one({ pan: 0, panMode: 99 })).toThrow();
+    expect(one({}).left.length).toBe(BLOCK);
   });
 });

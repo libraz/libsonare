@@ -1,3 +1,6 @@
+import type { ChannelLayout } from './audio.js';
+import type { MixBusRole } from './mixer.js';
+import type { MasteringInsertName, MasteringProcessorParams } from './public_types_mastering.js';
 import type { EqBand } from './public_types_realtime.js';
 
 /**
@@ -34,15 +37,6 @@ export interface SurroundPan {
   distance?: number;
 }
 
-export interface MixOptions {
-  inputTrimDb?: number | number[];
-  faderDb?: number | number[];
-  pan?: number | number[];
-  panMode?: PanMode | PanMode[];
-  width?: number | number[];
-  muted?: boolean | boolean[];
-}
-
 export interface MixMeterSnapshot {
   peakDbL: number;
   peakDbR: number;
@@ -58,29 +52,29 @@ export interface MixMeterSnapshot {
   integratedLufs: number;
   gainReductionDb: number;
   /**
-   * Left-channel inter-sample (true) peak in dB, from the ITU-R BS.1770-4
+   * Left-channel inter-sample (true) peak in dBTP, from the ITU-R BS.1770-4
    * polyphase reconstruction at 4x. A streaming measurement that runs one
    * reconstruction-filter group delay (a few samples) behind the block, so every
    * value has its whole stencil and the reading does not depend on the block
    * size. Use `meteringTruePeakDb` over the whole signal for an exact dBTP number.
    */
-  truePeakDbL: number;
-  /** Right-channel inter-sample (true) peak in dB. See {@link truePeakDbL}. */
-  truePeakDbR: number;
-  /** Maximum inter-sample peak across channels in dB. See {@link truePeakDbL}. */
-  maxTruePeakDb: number;
+  truePeakDbtpL: number;
+  /** Right-channel inter-sample (true) peak in dBTP. See {@link truePeakDbtpL}. */
+  truePeakDbtpR: number;
+  /** Maximum inter-sample peak across channels in dBTP. See {@link truePeakDbtpL}. */
+  maxTruePeakDbtp: number;
   seq: number;
   /** Number of valid surround planes (5.1/7.1); 0 before the meter sees audio. */
-  channelCount: number;
-  /** Per-plane peak dB, length channelCount; [0]/[1] mirror peakDbL/peakDbR. */
+  numChannels: number;
+  /** Per-plane peak dB, length numChannels; [0]/[1] mirror peakDbL/peakDbR. */
   peakDb: number[];
-  /** Per-plane RMS dB, length channelCount; [0]/[1] mirror rmsDbL/rmsDbR. */
+  /** Per-plane RMS dB, length numChannels; [0]/[1] mirror rmsDbL/rmsDbR. */
   rmsDb: number[];
   /**
-   * Per-plane true-peak dB, length channelCount; [0]/[1] mirror
-   * {@link truePeakDbL}/R and carry the same streaming caveat.
+   * Per-plane true-peak dBTP, length numChannels; [0]/[1] mirror
+   * {@link truePeakDbtpL}/R and carry the same streaming caveat.
    */
-  truePeakDb: number[];
+  truePeakDbtp: number[];
 }
 
 export interface MixResult {
@@ -161,6 +155,25 @@ export interface GoniometerPoint {
   right: number;
 }
 
+/** Source taxonomy the assistant's classifier resolves to, in native ordinal order. */
+export type MixSourceClass =
+  | 'unknown'
+  | 'kick'
+  | 'snare'
+  | 'hiHat'
+  | 'tom'
+  | 'cymbal'
+  | 'bass'
+  | 'guitar'
+  | 'keys'
+  | 'strings'
+  | 'lead'
+  | 'vocal'
+  | 'backing'
+  | 'percussion'
+  | 'fx'
+  | 'drumKit';
+
 /** One analysis band of the mixing assistant's shared 7-band split. */
 export type MixAnalysisBand = 'sub' | 'low' | 'lowMid' | 'mid' | 'highMid' | 'high' | 'air';
 
@@ -168,7 +181,7 @@ export type MixAnalysisBand = 'sub' | 'low' | 'lowMid' | 'mid' | 'highMid' | 'hi
 export type MixBandOccupancy = Record<MixAnalysisBand, number>;
 
 /**
- * One track handed to {@link suggestMixScene}.
+ * One track handed to `mixingAssistantSuggest`.
  *
  * Planar and per-track: tracks in one call may differ in length, and each is
  * mono (`right` omitted) or stereo independently of the others. A stereo
@@ -205,92 +218,37 @@ export interface MixAssistantTrack {
 }
 
 /**
- * Tunables for {@link suggestMixScene}. Every field is optional and falls back
- * to the core default noted on it; the same field names and defaults are used
- * by the Node and Python surfaces.
+ * One processor slot on a scene strip or bus. Discriminated by `processor`, which selects the
+ * parameter names and their types from the processor catalog.
  */
-export interface MixAssistantOptions {
-  /** Absolute integrated-loudness target each track is staged towards, in LUFS. Defaults to -18. */
-  targetTrackLufs?: number;
-  /**
-   * Overall strength of the suggestion in `[0, 1]`, scaling every level-like
-   * decision: trims, fader offsets, send levels, EQ cut depths, compression
-   * ratios and ranges, and how far a track is spread from the centre. Defaults
-   * to 1.
-   *
-   * `0` is not an empty suggestion. It is every one of those taken and set to
-   * zero, plus the decisions that are not levels and so do not scale: the bus
-   * topology and routing, and the physical corrections for a measured
-   * cancellation (polarity, alignment delay, low-end mono fold). To suggest
-   * nothing, switch the domains off instead — that also skips the work.
-   */
-  suggestionStrength?: number;
-  /** Largest cut a single suggested EQ band may apply, in dB. Defaults to 4. */
-  eqMaxCutDb?: number;
-  /** Headroom the summed mix is left with on the master bus, in dBTP. Defaults to -6. */
-  mixBusHeadroomDbtp?: number;
-  /**
-   * Tempo the suggested delay times are voiced against, in BPM.
-   *
-   * Defaults to 0, which selects the transport's own fallback tempo: the
-   * assistant is handed bare stems and cannot measure a tempo the set as a
-   * whole agrees on. Pass the song's tempo and the delay lands on the beat.
-   *
-   * A positive value outside 20–400 BPM is rejected rather than clamped.
-   */
-  tempoBpm?: number;
-  /** Evaluate the structure domain. Defaults to true. */
-  enableStructure?: boolean;
-  /** Evaluate the gain-staging domain. Defaults to true. */
-  enableGain?: boolean;
-  /** Evaluate the balance domain. Defaults to true. */
-  enableBalance?: boolean;
-  /** Evaluate the EQ domain. Defaults to true. */
-  enableEq?: boolean;
-  /** Evaluate the dynamics domain. Defaults to true. */
-  enableDynamics?: boolean;
-  /** Evaluate the stereo-image domain. Defaults to true. */
-  enableImage?: boolean;
-  /**
-   * Suggest a high-pass filter on tracks carrying residue below their register.
-   * Defaults to false.
-   *
-   * Off by default: a survey of mixing best practices found the rule that every
-   * track without low-frequency content should be high-passed to be seldom used
-   * in studio mixing and unsupported by subjective testing. Switched on, the
-   * filter is proposed from the track's measured low-frequency content rather
-   * than from its source class, so a part playing below its class's usual
-   * register keeps what it plays.
-   */
-  enableHighPass?: boolean;
-  /** Shared STFT size for every track. Defaults to 2048. */
-  nFft?: number;
-  /** Shared STFT hop for every track. Defaults to 512. */
-  hopLength?: number;
-}
-
-/** One processor slot on a scene strip or bus. */
-export interface MixSceneInsert {
-  slot: string;
-  processor: string;
-  /**
-   * Processor parameters, keyed by the parameter name the processor's catalog
-   * entry declares. Numbers and booleans throughout, except for the two keys a
-   * processor reads itself: a string for a named rig or an embedded impulse
-   * response, and a per-band array for the acoustic room morph.
-   */
-  params: Record<string, number | boolean | string | number[]>;
-  /** Present only when the insert is keyed off another strip. */
-  sidechainKey?: string;
-}
+export type MixSceneInsert = {
+  [P in MasteringInsertName]: {
+    slot: string;
+    processor: P;
+    /** Parameters keyed by the names the processor's catalog entry declares. */
+    params: MasteringProcessorParams<P>;
+    /** Present only when the insert is keyed off another strip. */
+    sidechainKey?: string;
+  };
+}[MasteringInsertName];
 
 /** A strip send to a destination bus. */
 export interface MixSceneSend {
   id: string;
   destinationBusId: string;
   sendDb: number;
-  /** Send tap point; one of {@link SendTiming}. */
-  timing: string;
+  /** Send tap point. */
+  timing: SendTiming;
+}
+
+/** A strip send as given to a scene document; omitted fields take the scene parser's defaults. */
+export interface MixSceneSendInput {
+  id: string;
+  destinationBusId: string;
+  /** Send level in dB. */
+  sendDb?: number;
+  /** Send tap point. */
+  timing?: SendTiming;
 }
 
 /** A channel strip in a mixer scene. */
@@ -304,25 +262,17 @@ export interface MixSceneStrip {
   muted: boolean;
   soloed: boolean;
   soloSafe: boolean;
-  /** Pan mode as its raw ordinal; the named forms are {@link PanMode}. */
-  panMode: number;
+  panMode: PanMode;
   dualPanLeft: number;
   dualPanRight: number;
   polarityInvertLeft: boolean;
   polarityInvertRight: boolean;
-  /** Pan law as its raw ordinal; the named forms are {@link PanLaw}. */
-  panLaw: number;
+  panLaw: PanLaw;
   channelDelaySamples: number;
   /** Present only for a non-stereo source. */
-  sourceLayout?: string;
+  sourceLayout?: ChannelLayout;
   /** Present only when the surround pan has moved off its centered default. */
-  surroundPan?: {
-    azimuth: number;
-    elevation: number;
-    divergence: number;
-    lfe: number;
-    distance: number;
-  };
+  surroundPan?: Required<SurroundPan>;
   /**
    * Meter configuration for this strip's pre/post taps. Present only when the
    * strip has opted out of some of its metering; absent means the full default
@@ -334,13 +284,7 @@ export interface MixSceneStrip {
    * meter) or `enabled: false` (about 145 KB for the whole strip instead of
    * 1.4 MB) is worth setting for strips whose meters are never read.
    */
-  metering?: {
-    enabled: boolean;
-    lufs: boolean;
-    truePeak: boolean;
-    /** Oversampling factor: 4 or 8; any other value is refused. */
-    truePeakOversample: number;
-  };
+  metering?: Required<StripMeteringOptions>;
   inserts: MixSceneInsert[];
   sends: MixSceneSend[];
   /**
@@ -354,11 +298,31 @@ export interface MixSceneStrip {
   };
 }
 
+/**
+ * Meter configuration of a strip, in the scene document's `strips[].metering` object and as the
+ * argument of `Mixer.addStrip`. A strip's meters size their buffers when the strip is built, so
+ * this is the only place the configuration can be chosen: there is no setter. A full meter costs
+ * about 646 KB at 48 kHz and a strip carries two of them.
+ */
+export interface StripMeteringOptions {
+  /** Both meters; `false` drops them (about 145 KB for the strip instead of 1.4 MB). Default `true`. */
+  enabled?: boolean;
+  /** LUFS measurement; `false` takes one meter to about 83 KB. Default `true`. */
+  lufs?: boolean;
+  /** Inter-sample (true) peak measurement. Default `true`. */
+  truePeak?: boolean;
+  /**
+   * True-peak oversampling factor: `4` (the ITU-R BS.1770-4 minimum) or `8`. Omit for the library
+   * default (4x); any other value, `0` included, is a `RangeError`.
+   */
+  truePeakOversample?: number;
+}
+
 /** A bus in a mixer scene. Defaulted fields are omitted from the document. */
 export interface MixSceneBus {
   id: string;
-  role: string;
-  layout?: string;
+  role: MixBusRole;
+  layout?: ChannelLayout;
   inputTrimDb?: number;
   width?: number;
   polarityInvertLeft?: boolean;
@@ -369,10 +333,10 @@ export interface MixSceneBus {
    * bus has no pan of its own.
    */
   pan?: number;
-  panMode?: number;
+  panMode?: PanMode;
   dualPanLeft?: number;
   dualPanRight?: number;
-  panLaw?: number;
+  panLaw?: PanLaw;
   inserts: MixSceneInsert[];
   /** This bus's dedicated equalizer, applied before its inserts. See {@link MixSceneStrip.eq}. */
   eq?: {
@@ -381,11 +345,38 @@ export interface MixSceneBus {
   };
 }
 
+/**
+ * A strip as given to a scene document (`Mixer.fromJson`, engine strip setters): every field but
+ * `id` is optional and the scene parser fills the defaults.
+ */
+export type MixSceneStripInput = Partial<
+  Omit<MixSceneStrip, 'id' | 'sends' | 'surroundPan' | 'metering'>
+> & {
+  id: string;
+  sends?: MixSceneSendInput[];
+  surroundPan?: SurroundPan;
+  metering?: StripMeteringOptions;
+};
+
+/** A bus as given to a scene document: every field but `id` and `role` is optional. */
+export type MixSceneBusInput = Partial<Omit<MixSceneBus, 'id' | 'role'>> & {
+  id: string;
+  role: MixBusRole;
+};
+
 /** A VCA group in a mixer scene. */
 export interface MixSceneVcaGroup {
   id: string;
   gainDb: number;
   members: string[];
+}
+
+/** A VCA group as given to a scene document; omitted fields take the scene parser's defaults. */
+export interface MixSceneVcaGroupInput {
+  id: string;
+  /** Group gain in dB. */
+  gainDb?: number;
+  members?: string[];
 }
 
 /** A routing edge in a mixer scene. */
@@ -394,10 +385,7 @@ export interface MixSceneConnection {
   destination: string;
 }
 
-/**
- * A mixer scene document, in the schema {@link Mixer.fromJson} reads.
- * {@link suggestMixSceneJson} returns the same document as its JSON text.
- */
+/** A mixer scene document as returned by `mixingScenePreset` and `mixingAssistantSuggest`. */
 export interface MixSceneDocument {
   version: number;
   strips: MixSceneStrip[];
@@ -406,12 +394,24 @@ export interface MixSceneDocument {
   connections: MixSceneConnection[];
 }
 
+/**
+ * A mixer scene document as given to `Mixer.fromJson` and the engine; omitted fields take the
+ * scene parser's defaults. A {@link MixSceneDocument} is accepted as is.
+ */
+export interface MixSceneDocumentInput {
+  version?: number;
+  strips?: MixSceneStripInput[];
+  buses?: MixSceneBusInput[];
+  vcaGroups?: MixSceneVcaGroupInput[];
+  connections?: MixSceneConnection[];
+}
+
 /** What the assistant measured about one input track. */
 export interface MixAssistantTrackProfile {
   stripId: string;
   name: string;
-  /** Source class identifier; one of {@link mixSourceClassNames}. */
-  source: string;
+  /** Source class identifier; one of {@link MixSourceClass}. */
+  source: MixSourceClass;
   /** Classifier confidence in `[0, 1]`. */
   sourceConfidence: number;
   /**
@@ -426,7 +426,7 @@ export interface MixAssistantTrackProfile {
   usable: boolean;
   /** Why the track was excluded; empty when {@link usable} is true. */
   exclusionReason: string;
-  channelCount: number;
+  numChannels: number;
   durationSec: number;
   /**
    * BS.1770 integrated loudness in LUFS, or `null` for a track with no gated
@@ -436,11 +436,12 @@ export interface MixAssistantTrackProfile {
    * real level. Such a track always carries an `exclusionReason` as well.
    */
   integratedLufs: number | null;
-  truePeakDb: number;
+  truePeakDbtp: number;
   crestFactorDb: number;
   spectralCentroidHz: number;
   spectralFlatness: number;
-  attackDensity: number;
+  /** Onsets per second. */
+  attackPerSecond: number;
   sustainRatio: number;
   bandOccupancy: MixBandOccupancy;
 }
@@ -489,9 +490,8 @@ export interface MixAssistantMixProfile {
 }
 
 /**
- * What {@link suggestMixScene} produces. Nothing has been applied: feeding
- * `scene` to {@link Mixer.fromJson} is the caller's separate step, and
- * {@link suggestMixSceneJson} returns it already serialized for that.
+ * What `mixingAssistantSuggest` produces. Nothing has been applied: feeding `scene` to
+ * {@link Mixer.fromJson} is the caller's separate step.
  */
 export interface MixAssistantResult {
   /** The suggested scene, in the schema {@link Mixer.fromJson} reads. */

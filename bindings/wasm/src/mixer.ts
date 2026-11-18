@@ -6,6 +6,12 @@ import {
   sendTimingCode,
 } from './codes.js';
 import { assertHandleLive } from './internal/handle_guard.js';
+import {
+  assertStripMetering,
+  mixMeterSnapshotFromNative,
+  mixSceneJsonFromNative,
+  mixSceneJsonToNative,
+} from './internal/mix_scene.js';
 import { getSonareModule } from './module_state.js';
 import type {
   AutomationCurve,
@@ -19,6 +25,7 @@ import type {
   SendTiming,
   SurroundPan,
 } from './public_types.js';
+import type { StripMeteringOptions } from './public_types_mixing.js';
 import {
   assertFloatValue,
   assertIntegerValue,
@@ -29,6 +36,8 @@ import {
   requireBoolean,
   requireToken,
 } from './validation.js';
+
+export type { StripMeteringOptions } from './public_types_mixing.js';
 
 /** A strip addressed by 0-based index or by its scene id (a digit-only id is still an id). */
 export type StripRef = number | string;
@@ -226,29 +235,6 @@ export interface MixerMeterSnapshot {
   truePeakDbR: number;
 }
 
-/**
- * Meter configuration for a strip added with {@link Mixer.addStrip}.
- *
- * The field names and defaults are the scene document's `strips[].metering`
- * object, so a strip added imperatively and one declared in a scene describe the
- * same thing. A strip's meters size their buffers when the strip is built, so
- * this is the only place the configuration can be chosen — there is no setter.
- * A full meter costs about 646 KB at 48 kHz and a strip carries two of them.
- */
-export interface StripMeteringOptions {
-  /** Both meters; `false` drops them (about 145 KB for the strip instead of 1.4 MB). Default `true`. */
-  enabled?: boolean;
-  /** LUFS measurement; `false` takes one meter to about 83 KB. Default `true`. */
-  lufs?: boolean;
-  /** Inter-sample (true) peak measurement. Default `true`. */
-  truePeak?: boolean;
-  /**
-   * True-peak oversampling factor: `4` (the ITU-R BS.1770-4 minimum) or `8`.
-   * Omitted selects 4x; any other value is refused.
-   */
-  truePeakOversample?: number;
-}
-
 export interface MixerRealtimeBuffer {
   leftInputs: Float32Array[];
   rightInputs: Float32Array[];
@@ -321,6 +307,7 @@ export class Mixer {
       }
       sceneJson = JSON.stringify(bag.scene ?? { strips: [], buses: [] });
     }
+    sceneJson = mixSceneJsonToNative('Mixer', sceneJson);
     const module = getSonareModule();
     this.mixerHandle = module.createMixerFromSceneJson(
       sceneJson,
@@ -620,9 +607,10 @@ export class Mixer {
    * {@link compile} (or {@link processStereo}) to rebuild.
    *
    * @returns The new strip's index
-   * @throws If the id is already taken, or `truePeakOversample` is not 0 (default), 4 or 8
+   * @throws If the id is already taken; RangeError if `truePeakOversample` is not 4 or 8 (omit for the default)
    */
   addStrip(id: string, metering: StripMeteringOptions = {}): number {
+    assertStripMetering('addStrip', metering);
     this.mixer.addStrip(id, metering);
     return this.mixer.stripById(id);
   }
@@ -901,17 +889,19 @@ export class Mixer {
   stripMeter(strip: StripRef, tap?: MeterTap): MixMeterSnapshot {
     const index = this.stripIndex('stripMeter', strip);
     if (isAbsent(tap)) {
-      return this.mixer.stripMeter(index);
+      return mixMeterSnapshotFromNative(this.mixer.stripMeter(index));
     }
-    return this.mixer.meterTap(
-      index,
-      tokenArg('stripMeter', tap, 'tap', (token) => meterTapCode(token as MeterTap)),
+    return mixMeterSnapshotFromNative(
+      this.mixer.meterTap(
+        index,
+        tokenArg('stripMeter', tap, 'tap', (token) => meterTapCode(token as MeterTap)),
+      ),
     );
   }
 
   /** Read the post-insert meter for a compiled bus, including master. */
   busMeter(busId: string): MixMeterSnapshot {
-    return this.mixer.busMeter(busId);
+    return mixMeterSnapshotFromNative(this.mixer.busMeter(busId));
   }
 
   /**
@@ -1067,7 +1057,7 @@ export class Mixer {
 
   /** Serialize the current scene (strips, buses, sends, connections) to JSON. */
   toJson(): string {
-    return this.mixer.toSceneJson();
+    return mixSceneJsonFromNative(this.mixer.toSceneJson());
   }
 
   /**

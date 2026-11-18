@@ -1,16 +1,22 @@
-import { flattenChainConfig } from './internal/chain_config.js';
+import { flattenChainConfig, nestChainConfig } from './internal/chain_config.js';
 import { getSonareModule } from './module_state.js';
 import type {
   MasteringChainConfig,
   MasteringChainResult,
   MasteringChainStereoResult,
+  MasteringPlatform,
   MasteringPreset,
   StreamingLoudnessGainResult,
 } from './public_types.js';
-import type { RequestFn } from './request_keys.js';
 import type { ProgressCallback } from './sonare.js';
 import type { OptionsOf, ValidateOptions } from './validation.js';
-import { assertAudioInput, assertString, requestObject, sampleOneShot } from './validation.js';
+import {
+  assertAudioInput,
+  assertString,
+  requestObject,
+  requestOnly,
+  sampleOneShot,
+} from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -158,65 +164,97 @@ function canonicalChainConfig(config: MasteringChainConfig): Record<string, unkn
   return { __flatParams: flattenChainConfig(config) };
 }
 
-export interface MasteringChainRequest {
-  samples: Float32Array;
-  sampleRate?: number;
-  config?: MasteringChainConfig;
-  onProgress?: ProgressCallback;
-  cancel?: () => boolean;
+type NativeResult = Record<string, unknown>;
+
+// Native still names the loudness range `loudnessRange` / `outputLra`.
+function chainResultFromNative<R>(raw: object): R {
+  const { outputLra, report, ...rest } = raw as NativeResult & {
+    outputLra: number;
+    report: { before: NativeResult; after: NativeResult } & NativeResult;
+  };
+  const summary = (native: NativeResult): NativeResult => {
+    const { loudnessRange, ...others } = native as NativeResult & { loudnessRange: number };
+    return { ...others, loudnessRangeLu: loudnessRange };
+  };
+  return {
+    ...rest,
+    outputLoudnessRangeLu: outputLra,
+    report: { ...report, before: summary(report.before), after: summary(report.after) },
+  } as R;
 }
 
-export interface MasteringChainStereoRequest {
-  left: Float32Array;
-  right: Float32Array;
-  sampleRate?: number;
-  config?: MasteringChainConfig;
-  onProgress?: ProgressCallback;
-  cancel?: () => boolean;
+/** Throws `TypeError` unless `onProgress` and `cancel` are each absent or a function. */
+function assertChainCallbacks(fnName: string, request: object): void {
+  for (const name of ['onProgress', 'cancel'] as const) {
+    const callback = (request as Record<string, unknown>)[name];
+    if (callback !== undefined && callback !== null && typeof callback !== 'function') {
+      throw new TypeError(`${fnName}: ${name} must be a function`);
+    }
+  }
 }
 
 /** Request for {@link streamingLoudnessGain}. */
-export interface StreamingLoudnessGainRequest {
+export interface StreamingLoudnessGainRequest extends ValidateOptions {
   samples: Float32Array;
-  sampleRate?: number;
-  /** The chain config the streaming chain will run; read like {@link masteringChain}'s. */
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
+  /** The chain config the streaming chain will run; read like {@link masterAudio}'s `overrides`. */
   config?: MasteringChainConfig;
 }
 
 /** Request for {@link streamingLoudnessGainStereo}. */
-export interface StreamingLoudnessGainStereoRequest {
+export interface StreamingLoudnessGainStereoRequest extends ValidateOptions {
   left: Float32Array;
   right: Float32Array;
-  sampleRate?: number;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
   config?: MasteringChainConfig;
+}
+
+// Native still names the input true peak `truePeakDb`.
+function streamingGainFromNative(raw: object): StreamingLoudnessGainResult {
+  const { truePeakDb, ...rest } = raw as NativeResult & { truePeakDb: number };
+  return { ...rest, truePeakDbtp: truePeakDb } as unknown as StreamingLoudnessGainResult;
 }
 
 /**
  * Measures the loudness numbers a {@link StreamingMasteringChain} needs.
  *
  * Runs the offline chain described by `config` up to its loudness stage and
- * measures there, so `loudnessStaticGainDb` equals the gain
- * {@link masteringChain} applies (ceiling clamp included) and `truePeakDb` is
- * the peak that clamp used. The gain is computed from `config.loudness` whether
- * or not the stage is enabled; a silent or below-gate stage input yields 0 dB.
+ * measures there, so `loudnessStaticGainDb` equals the gain {@link masterAudio}
+ * applies (ceiling clamp included) and `truePeakDbtp` is the peak that clamp
+ * used. The gain is computed from `config.loudness` whether or not the stage is
+ * enabled; a silent or below-gate stage input yields 0 dB.
+ *
+ * @throws {TypeError} when `sampleRate` is missing
+ * @throws {RangeError} on audio out of domain or an out-of-range `sampleRate`
  *
  * @example
- * const { loudnessStaticGainDb, truePeakDb } = streamingLoudnessGain({ samples, sampleRate, config });
+ * const { loudnessStaticGainDb, truePeakDbtp } = streamingLoudnessGain(samples, 48000, { config });
  * const chain = new StreamingMasteringChain({
  *   ...config,
+ *   sampleRate: 48000,
  *   loudnessStaticGainDb,
- *   loudnessStaticGainPeakDb: truePeakDb,
+ *   loudnessStaticGainPeakDb: truePeakDbtp,
  * });
  */
 export function streamingLoudnessGain(
   request: StreamingLoudnessGainRequest,
-): StreamingLoudnessGainResult {
-  requestObject('streamingLoudnessGain', request, 'request', true);
-  assertAudioInput('streamingLoudnessGain', request.samples, request.sampleRate ?? 22050);
-  return requireModule().masteringStreamingLoudnessGain(
-    request.samples,
-    request.sampleRate ?? 22050,
-    canonicalChainConfig(request.config ?? {}),
+): StreamingLoudnessGainResult;
+export function streamingLoudnessGain(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: OptionsOf<StreamingLoudnessGainRequest>,
+): StreamingLoudnessGainResult;
+export function streamingLoudnessGain(...args: unknown[]): StreamingLoudnessGainResult {
+  const r = sampleOneShot<StreamingLoudnessGainRequest>('streamingLoudnessGain', args);
+  assertAudioInput('streamingLoudnessGain', r.samples, r.sampleRate, r);
+  return streamingGainFromNative(
+    requireModule().masteringStreamingLoudnessGain(
+      r.samples,
+      r.sampleRate,
+      canonicalChainConfig(r.config ?? {}),
+    ),
   );
 }
 
@@ -224,290 +262,51 @@ export function streamingLoudnessGain(
 export function streamingLoudnessGainStereo(
   request: StreamingLoudnessGainStereoRequest,
 ): StreamingLoudnessGainResult {
-  requestObject('streamingLoudnessGainStereo', request, 'request', true);
-  assertAudioInput(
-    'streamingLoudnessGainStereo',
-    request.left,
-    request.sampleRate ?? 22050,
-    {},
-    'left',
-  );
-  assertAudioInput(
-    'streamingLoudnessGainStereo',
-    request.right,
-    request.sampleRate ?? 22050,
-    {},
-    'right',
-  );
-  if (request.left.length !== request.right.length) {
+  const r = requestObject('streamingLoudnessGainStereo', request, 'request', true);
+  assertAudioInput('streamingLoudnessGainStereo', r.left, r.sampleRate, r, 'left');
+  assertAudioInput('streamingLoudnessGainStereo', r.right, r.sampleRate, r, 'right');
+  if (r.left.length !== r.right.length) {
     throw new RangeError('Stereo channel lengths must match.');
   }
-  return requireModule().masteringStreamingLoudnessGainStereo(
-    request.left,
-    request.right,
-    request.sampleRate ?? 22050,
-    canonicalChainConfig(request.config ?? {}),
+  return streamingGainFromNative(
+    requireModule().masteringStreamingLoudnessGainStereo(
+      r.left,
+      r.right,
+      r.sampleRate,
+      canonicalChainConfig(r.config ?? {}),
+    ),
   );
 }
 
-/** Canonical request form for one-shot preset mastering. */
-export interface MasterAudioRequest {
+/** Request form of {@link masterAudio}. */
+export interface MasterAudioRequest extends ValidateOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
+  /** Built-in preset to start from. Absent: the chain runs `overrides` alone. */
   preset?: MasteringPreset;
+  /** Chain config applied over the preset, or run alone when `preset` is absent. */
   overrides?: MasteringChainConfig;
+  /** Called between chain stages with `progress` in `[0, 1]` and the stage name. */
   onProgress?: ProgressCallback;
+  /** Polled between chain stages; return `true` to stop with a `Cancelled` error. */
   cancel?: () => boolean;
 }
 
-/** Canonical request form for one-shot stereo preset mastering. */
-export interface MasterAudioStereoRequest {
+/** Request form of {@link masterAudioStereo}. */
+export interface MasterAudioStereoRequest extends ValidateOptions {
   left: Float32Array;
   right: Float32Array;
-  sampleRate?: number;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
+  /** Built-in preset to start from. Absent: the chain runs `overrides` alone. */
   preset?: MasteringPreset;
+  /** Chain config applied over the preset, or run alone when `preset` is absent. */
   overrides?: MasteringChainConfig;
+  /** Called between chain stages with `progress` in `[0, 1]` and the stage name. */
   onProgress?: ProgressCallback;
+  /** Polled between chain stages; return `true` to stop with a `Cancelled` error. */
   cancel?: () => boolean;
-}
-
-function masterAudioRequest(
-  fnName: RequestFn,
-  requestOrSamples: MasterAudioRequest | Float32Array,
-  sampleRate: number,
-  preset: MasteringPreset,
-  overrides: MasteringChainConfig | null,
-  onProgress?: ProgressCallback,
-): MasterAudioRequest {
-  if (requestOrSamples instanceof Float32Array) {
-    return {
-      samples: requestOrSamples,
-      sampleRate,
-      preset,
-      overrides: overrides ?? {},
-      onProgress,
-    };
-  }
-  return requestObject(fnName, requestOrSamples);
-}
-
-function masterAudioStereoRequest(
-  fnName: RequestFn,
-  requestOrLeft: MasterAudioStereoRequest | Float32Array,
-  right: Float32Array | undefined,
-  sampleRate: number,
-  preset: MasteringPreset,
-  overrides: MasteringChainConfig | null,
-  onProgress?: ProgressCallback,
-): MasterAudioStereoRequest {
-  if (requestOrLeft instanceof Float32Array) {
-    return {
-      left: requestOrLeft,
-      right: right as Float32Array,
-      sampleRate,
-      preset,
-      overrides: overrides ?? {},
-      onProgress,
-    };
-  }
-  return requestObject(fnName, requestOrLeft, 'left');
-}
-
-/**
- * Apply a configurable mastering chain in WASM.
- *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param config - Chain stage configuration
- * @returns Processed audio, loudness metadata, and applied stage names
- */
-export function masteringChain(request: MasteringChainRequest): MasteringChainResult;
-export function masteringChain(
-  samples: Float32Array,
-  sampleRate?: number,
-  config?: MasteringChainConfig,
-  onProgress?: ProgressCallback,
-): MasteringChainResult;
-export function masteringChain(
-  samples: Float32Array | MasteringChainRequest,
-  sampleRate = 22050,
-  config: MasteringChainConfig = {},
-  onProgress?: ProgressCallback,
-): MasteringChainResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, config, onProgress }
-      : requestObject('masteringChain', samples);
-  assertAudioInput('masteringChain', request.samples, request.sampleRate ?? 22050);
-  if (request.onProgress || request.cancel) {
-    return requireModule().masteringChainWithProgress(
-      request.samples,
-      request.sampleRate ?? 22050,
-      canonicalChainConfig(request.config ?? {}),
-      request.onProgress ?? (() => {}),
-      request.cancel ?? (() => false),
-    );
-  }
-  return requireModule().masteringChain(
-    request.samples,
-    request.sampleRate ?? 22050,
-    canonicalChainConfig(request.config ?? {}),
-  );
-}
-
-/**
- * Apply a configurable stereo mastering chain in WASM.
- *
- * @param left - Left channel samples
- * @param right - Right channel samples
- * @param sampleRate - Sample rate in Hz
- * @param config - Chain stage configuration
- * @returns Processed stereo audio, loudness metadata, and applied stage names
- */
-export function masteringChainStereo(
-  request: MasteringChainStereoRequest,
-): MasteringChainStereoResult;
-export function masteringChainStereo(
-  left: Float32Array,
-  right: Float32Array,
-  sampleRate?: number,
-  config?: MasteringChainConfig,
-  onProgress?: ProgressCallback,
-): MasteringChainStereoResult;
-export function masteringChainStereo(
-  left: Float32Array | MasteringChainStereoRequest,
-  right?: Float32Array,
-  sampleRate = 22050,
-  config: MasteringChainConfig = {},
-  onProgress?: ProgressCallback,
-): MasteringChainStereoResult {
-  const request =
-    left instanceof Float32Array
-      ? { left, right: right as Float32Array, sampleRate, config, onProgress }
-      : requestObject('masteringChainStereo', left, 'left');
-  assertAudioInput('masteringChainStereo', request.left, request.sampleRate ?? 22050, {}, 'left');
-  assertAudioInput('masteringChainStereo', request.right, request.sampleRate ?? 22050, {}, 'right');
-  if (request.left.length !== request.right.length) {
-    throw new RangeError('Stereo channel lengths must match.');
-  }
-  if (request.onProgress || request.cancel) {
-    return requireModule().masteringChainStereoWithProgress(
-      request.left,
-      request.right,
-      request.sampleRate ?? 22050,
-      canonicalChainConfig(request.config ?? {}),
-      request.onProgress ?? (() => {}),
-      request.cancel ?? (() => false),
-    );
-  }
-  return requireModule().masteringChainStereo(
-    request.left,
-    request.right,
-    request.sampleRate ?? 22050,
-    canonicalChainConfig(request.config ?? {}),
-  );
-}
-
-/**
- * Apply a configurable mastering chain in WASM with progress reporting.
- *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param config - Chain stage configuration
- * @param onProgress - Progress callback (progress: 0-1, stage: string)
- * @returns Processed audio, loudness metadata, and applied stage names
- */
-export function masteringChainWithProgress(
-  request: MasteringChainRequest & Required<Pick<MasteringChainRequest, 'onProgress'>>,
-): MasteringChainResult;
-export function masteringChainWithProgress(
-  samples: Float32Array,
-  sampleRate?: number,
-  config?: MasteringChainConfig,
-  onProgress?: ProgressCallback,
-): MasteringChainResult;
-export function masteringChainWithProgress(
-  samples: Float32Array | MasteringChainRequest,
-  sampleRate = 22050,
-  config: MasteringChainConfig = {},
-  onProgress?: ProgressCallback,
-): MasteringChainResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, config, onProgress }
-      : requestObject('masteringChainWithProgress', samples);
-  assertAudioInput('masteringChainWithProgress', request.samples, request.sampleRate ?? 22050);
-  if (!request.onProgress) {
-    throw new TypeError('masteringChainWithProgress: onProgress is required');
-  }
-  return requireModule().masteringChainWithProgress(
-    request.samples,
-    request.sampleRate ?? 22050,
-    canonicalChainConfig(request.config ?? {}),
-    request.onProgress,
-    request.cancel ?? (() => false),
-  );
-}
-
-/**
- * Apply a configurable stereo mastering chain in WASM with progress reporting.
- *
- * @param left - Left channel samples
- * @param right - Right channel samples
- * @param sampleRate - Sample rate in Hz
- * @param config - Chain stage configuration
- * @param onProgress - Progress callback (progress: 0-1, stage: string)
- * @returns Processed stereo audio, loudness metadata, and applied stage names
- */
-export function masteringChainStereoWithProgress(
-  request: MasteringChainStereoRequest & Required<Pick<MasteringChainStereoRequest, 'onProgress'>>,
-): MasteringChainStereoResult;
-export function masteringChainStereoWithProgress(
-  left: Float32Array,
-  right: Float32Array,
-  sampleRate?: number,
-  config?: MasteringChainConfig,
-  onProgress?: ProgressCallback,
-): MasteringChainStereoResult;
-export function masteringChainStereoWithProgress(
-  left: Float32Array | MasteringChainStereoRequest,
-  right?: Float32Array,
-  sampleRate = 22050,
-  config: MasteringChainConfig = {},
-  onProgress?: ProgressCallback,
-): MasteringChainStereoResult {
-  const request =
-    left instanceof Float32Array
-      ? { left, right: right as Float32Array, sampleRate, config, onProgress }
-      : requestObject('masteringChainStereoWithProgress', left, 'left');
-  assertAudioInput(
-    'masteringChainStereoWithProgress',
-    request.left,
-    request.sampleRate ?? 22050,
-    {},
-    'left',
-  );
-  assertAudioInput(
-    'masteringChainStereoWithProgress',
-    request.right,
-    request.sampleRate ?? 22050,
-    {},
-    'right',
-  );
-  if (!request.onProgress) {
-    throw new TypeError('masteringChainStereoWithProgress: onProgress is required');
-  }
-  if (request.left.length !== request.right.length) {
-    throw new RangeError('Stereo channel lengths must match.');
-  }
-  return requireModule().masteringChainStereoWithProgress(
-    request.left,
-    request.right,
-    request.sampleRate ?? 22050,
-    canonicalChainConfig(request.config ?? {}),
-    request.onProgress,
-    request.cancel ?? (() => false),
-  );
 }
 
 /**
@@ -520,17 +319,16 @@ export function masteringPresetNames(): MasteringPreset[] {
 }
 
 /**
- * The flat `{key: number|boolean}` params of preset `preset`'s built-in chain
- * configuration, in the same key space {@link masteringAssistantSuggestChain}
- * returns. Passing this straight through as `overrides` to {@link masterAudio}
- * reproduces the preset unchanged, bit for bit in the C++ core.
+ * The nested {@link MasteringChainConfig} of preset `preset`'s built-in chain.
+ * Passing it as `overrides` to {@link masterAudio} reproduces the preset.
  *
  * @param preset - Preset identifier from {@link masteringPresetNames}.
- * @throws For an unknown `preset`.
+ * @throws {TypeError} when `preset` is not a string
+ * @throws {RangeError} for an unknown `preset`
  */
-export function masteringPresetParams(preset: MasteringPreset): Record<string, number | boolean> {
+export function masteringPresetParams(preset: MasteringPreset): MasteringChainConfig {
   assertString('masteringPresetParams', preset, 'preset');
-  return requireModule().masteringPresetParams(preset);
+  return nestChainConfig(requireModule().masteringPresetParams(preset));
 }
 
 /**
@@ -541,231 +339,118 @@ export function masteringPresetParams(preset: MasteringPreset): Record<string, n
  *
  * @returns Target names in index order (e.g. "streaming", "broadcast", "club")
  */
-export function masteringPlatformNames(): string[] {
-  return Array.from(requireModule().masteringPlatformNames());
+export function masteringPlatformNames(): MasteringPlatform[] {
+  return Array.from(requireModule().masteringPlatformNames()) as MasteringPlatform[];
 }
 
 /**
- * Apply a named mastering preset chain to mono audio.
+ * Master mono audio. With a `preset` the chain starts from that preset and
+ * `overrides` is applied on top; without one the chain runs `overrides` alone.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param presetName - Preset identifier from {@link masteringPresetNames}
- * @param overrides - Optional nested {@link MasteringChainConfig} applied on top of the preset (e.g. `{ loudness: { targetLufs: -14 } }`). Pass `null` for preset defaults.
- * @param onProgress - Optional per-stage progress callback (progress: 0-1, stage: string).
+ * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
+ * @param options - `preset`, `overrides`, `onProgress`, `cancel`, `validate`
  * @returns Processed audio, loudness metadata, and applied stage names
+ * @throws {TypeError} when `sampleRate` is missing or a request field has the wrong type
+ * @throws {RangeError} on audio out of domain, an unknown `preset` or an invalid override
  */
 export function masterAudio(request: MasterAudioRequest): MasteringChainResult;
 export function masterAudio(
   samples: Float32Array,
-  sampleRate?: number,
-  presetName?: MasteringPreset,
-  overrides?: MasteringChainConfig,
-  onProgress?: ProgressCallback,
+  sampleRate: number,
+  options?: OptionsOf<MasterAudioRequest>,
 ): MasteringChainResult;
-export function masterAudio(
-  samples: MasterAudioRequest | Float32Array,
-  sampleRate = 22050,
-  presetName: MasteringPreset = 'pop',
-  overrides: MasteringChainConfig = {},
-  onProgress?: ProgressCallback,
-): MasteringChainResult {
-  const request = masterAudioRequest(
-    'masterAudio',
-    samples,
-    sampleRate,
-    presetName,
-    overrides,
-    onProgress,
-  );
-  assertString('masterAudio', request.preset ?? 'pop', 'preset');
-  assertAudioInput('masterAudio', request.samples, request.sampleRate ?? 22050);
-  const flat = flattenChainConfig(request.overrides ?? {});
-  if (request.onProgress || request.cancel) {
-    return requireModule().masterAudioWithProgress(
-      request.preset ?? 'pop',
-      request.samples,
-      request.sampleRate ?? 22050,
-      flat,
-      request.onProgress ?? (() => {}),
-      request.cancel ?? (() => false),
+export function masterAudio(...args: unknown[]): MasteringChainResult {
+  const r = sampleOneShot<MasterAudioRequest>('masterAudio', args);
+  assertChainCallbacks('masterAudio', r);
+  if (r.preset !== undefined && r.preset !== null) {
+    assertString('masterAudio', r.preset, 'preset');
+  }
+  assertAudioInput('masterAudio', r.samples, r.sampleRate, r);
+  const flat = flattenChainConfig(r.overrides ?? {});
+  const progress = r.onProgress ?? undefined;
+  const cancel = r.cancel ?? undefined;
+  const module = requireModule();
+  if (r.preset === undefined || r.preset === null) {
+    const config = { __flatParams: flat };
+    return chainResultFromNative(
+      progress || cancel
+        ? module.masteringChainWithProgress(
+            r.samples,
+            r.sampleRate,
+            config,
+            progress ?? (() => {}),
+            cancel ?? (() => false),
+          )
+        : module.masteringChain(r.samples, r.sampleRate, config),
     );
   }
-  return requireModule().masterAudio(
-    request.preset ?? 'pop',
-    request.samples,
-    request.sampleRate ?? 22050,
-    flat,
+  return chainResultFromNative(
+    progress || cancel
+      ? module.masterAudioWithProgress(
+          r.preset,
+          r.samples,
+          r.sampleRate,
+          flat,
+          progress ?? (() => {}),
+          cancel ?? (() => false),
+        )
+      : module.masterAudio(r.preset, r.samples, r.sampleRate, flat),
   );
 }
 
 /**
- * Apply a named mastering preset chain to stereo audio.
+ * Stereo counterpart of {@link masterAudio}; takes a request object only.
  *
- * @param left - Left channel samples
- * @param right - Right channel samples
- * @param sampleRate - Sample rate in Hz
- * @param presetName - Preset identifier from {@link masteringPresetNames}
- * @param overrides - Optional nested {@link MasteringChainConfig} applied on top of the preset (e.g. `{ loudness: { targetLufs: -14 } }`). Pass `null` for preset defaults.
- * @param onProgress - Optional per-stage progress callback (progress: 0-1, stage: string).
  * @returns Processed stereo audio, loudness metadata, and applied stage names
+ * @throws {TypeError} when `sampleRate` is missing or a request field has the wrong type
+ * @throws {RangeError} on audio out of domain, unequal channel lengths, an unknown `preset`
+ *   or an invalid override
  */
-export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult;
-export function masterAudioStereo(
-  left: Float32Array,
-  right: Float32Array,
-  sampleRate?: number,
-  presetName?: MasteringPreset,
-  overrides?: MasteringChainConfig,
-  onProgress?: ProgressCallback,
-): MasteringChainStereoResult;
-export function masterAudioStereo(
-  left: MasterAudioStereoRequest | Float32Array,
-  right: Float32Array | undefined = undefined,
-  sampleRate = 22050,
-  presetName: MasteringPreset = 'pop',
-  overrides: MasteringChainConfig = {},
-  onProgress?: ProgressCallback,
-): MasteringChainStereoResult {
-  const request = masterAudioStereoRequest(
-    'masterAudioStereo',
-    left,
-    right,
-    sampleRate,
-    presetName,
-    overrides,
-    onProgress,
-  );
-  assertString('masterAudioStereo', request.preset ?? 'pop', 'preset');
-  assertAudioInput('masterAudioStereo', request.left, request.sampleRate ?? 22050, {}, 'left');
-  assertAudioInput('masterAudioStereo', request.right, request.sampleRate ?? 22050, {}, 'right');
-  const flat = flattenChainConfig(request.overrides ?? {});
-  if (request.left.length !== request.right.length) {
+export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult {
+  const r = requestOnly<MasterAudioStereoRequest>('masterAudioStereo', [request]);
+  assertChainCallbacks('masterAudioStereo', r);
+  if (r.preset !== undefined && r.preset !== null) {
+    assertString('masterAudioStereo', r.preset, 'preset');
+  }
+  if (r.sampleRate === undefined || r.sampleRate === null) {
+    throw new TypeError('masterAudioStereo: sampleRate is required');
+  }
+  assertAudioInput('masterAudioStereo', r.left, r.sampleRate, r, 'left');
+  assertAudioInput('masterAudioStereo', r.right, r.sampleRate, r, 'right');
+  if (r.left.length !== r.right.length) {
     throw new RangeError('Stereo channel lengths must match.');
   }
-  if (request.onProgress || request.cancel) {
-    return requireModule().masterAudioStereoWithProgress(
-      request.preset ?? 'pop',
-      request.left,
-      request.right,
-      request.sampleRate ?? 22050,
-      flat,
-      request.onProgress ?? (() => {}),
-      request.cancel ?? (() => false),
+  const flat = flattenChainConfig(r.overrides ?? {});
+  const progress = r.onProgress ?? undefined;
+  const cancel = r.cancel ?? undefined;
+  const module = requireModule();
+  if (r.preset === undefined || r.preset === null) {
+    const config = { __flatParams: flat };
+    return chainResultFromNative(
+      progress || cancel
+        ? module.masteringChainStereoWithProgress(
+            r.left,
+            r.right,
+            r.sampleRate,
+            config,
+            progress ?? (() => {}),
+            cancel ?? (() => false),
+          )
+        : module.masteringChainStereo(r.left, r.right, r.sampleRate, config),
     );
   }
-  return requireModule().masterAudioStereo(
-    request.preset ?? 'pop',
-    request.left,
-    request.right,
-    request.sampleRate ?? 22050,
-    flat,
-  );
-}
-
-/**
- * Mono `masterAudio` with per-stage progress reporting. `onProgress` is invoked
- * with `(progress, stage)` between each chain stage (progress is in [0,1]).
- */
-export function masterAudioWithProgress(
-  request: MasterAudioRequest & Required<Pick<MasterAudioRequest, 'onProgress'>>,
-): MasteringChainResult;
-export function masterAudioWithProgress(
-  samples: Float32Array,
-  sampleRate?: number,
-  presetName?: MasteringPreset,
-  overrides?: MasteringChainConfig | null,
-  onProgress?: ProgressCallback,
-): MasteringChainResult;
-export function masterAudioWithProgress(
-  samples: MasterAudioRequest | Float32Array,
-  sampleRate = 22050,
-  presetName: MasteringPreset = 'pop',
-  overrides: MasteringChainConfig | null = null,
-  onProgress?: ProgressCallback,
-): MasteringChainResult {
-  const request = masterAudioRequest(
-    'masterAudioWithProgress',
-    samples,
-    sampleRate,
-    presetName,
-    overrides,
-    onProgress,
-  );
-  assertString('masterAudioWithProgress', request.preset ?? 'pop', 'preset');
-  assertAudioInput('masterAudioWithProgress', request.samples, request.sampleRate ?? 22050);
-  if (!request.onProgress) {
-    throw new TypeError('masterAudioWithProgress: onProgress is required');
-  }
-  return requireModule().masterAudioWithProgress(
-    request.preset ?? 'pop',
-    request.samples,
-    request.sampleRate ?? 22050,
-    flattenChainConfig(request.overrides ?? {}),
-    request.onProgress,
-    request.cancel ?? (() => false),
-  );
-}
-
-/**
- * Stereo `masterAudio` with per-stage progress reporting.
- */
-export function masterAudioStereoWithProgress(
-  request: MasterAudioStereoRequest & Required<Pick<MasterAudioStereoRequest, 'onProgress'>>,
-): MasteringChainStereoResult;
-export function masterAudioStereoWithProgress(
-  left: Float32Array,
-  right: Float32Array,
-  sampleRate?: number,
-  presetName?: MasteringPreset,
-  overrides?: MasteringChainConfig | null,
-  onProgress?: ProgressCallback,
-): MasteringChainStereoResult;
-export function masterAudioStereoWithProgress(
-  left: MasterAudioStereoRequest | Float32Array,
-  right: Float32Array | undefined = undefined,
-  sampleRate = 22050,
-  presetName: MasteringPreset = 'pop',
-  overrides: MasteringChainConfig | null = null,
-  onProgress?: ProgressCallback,
-): MasteringChainStereoResult {
-  const request = masterAudioStereoRequest(
-    'masterAudioStereoWithProgress',
-    left,
-    right,
-    sampleRate,
-    presetName,
-    overrides,
-    onProgress,
-  );
-  assertString('masterAudioStereoWithProgress', request.preset ?? 'pop', 'preset');
-  assertAudioInput(
-    'masterAudioStereoWithProgress',
-    request.left,
-    request.sampleRate ?? 22050,
-    {},
-    'left',
-  );
-  assertAudioInput(
-    'masterAudioStereoWithProgress',
-    request.right,
-    request.sampleRate ?? 22050,
-    {},
-    'right',
-  );
-  if (!request.onProgress) {
-    throw new TypeError('masterAudioStereoWithProgress: onProgress is required');
-  }
-  if (request.left.length !== request.right.length) {
-    throw new RangeError('Stereo channel lengths must match.');
-  }
-  return requireModule().masterAudioStereoWithProgress(
-    request.preset ?? 'pop',
-    request.left,
-    request.right,
-    request.sampleRate ?? 22050,
-    flattenChainConfig(request.overrides ?? {}),
-    request.onProgress,
-    request.cancel ?? (() => false),
+  return chainResultFromNative(
+    progress || cancel
+      ? module.masterAudioStereoWithProgress(
+          r.preset,
+          r.left,
+          r.right,
+          r.sampleRate,
+          flat,
+          progress ?? (() => {}),
+          cancel ?? (() => false),
+        )
+      : module.masterAudioStereo(r.preset, r.left, r.right, r.sampleRate, flat),
   );
 }

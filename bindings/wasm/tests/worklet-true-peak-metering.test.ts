@@ -11,7 +11,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, meteringTruePeakDb, mixingScenePresetJson, RealtimeEngine } from '../dist/index.js';
+import { init, meteringTruePeakDb, mixingScenePreset, RealtimeEngine } from '../dist/index.js';
 import {
   init as initWorklet,
   type SonareWorkletMeterSnapshot,
@@ -63,8 +63,8 @@ const UNITY_SCENE_JSON = JSON.stringify({
       faderDb: 0,
       inputTrimDb: 0,
       pan: 0,
-      panLaw: 0,
-      panMode: 0,
+      panLaw: 'const3Db',
+      panMode: 'balance',
       width: 1,
       channelDelaySamples: 0,
       dualPanLeft: -1,
@@ -90,7 +90,7 @@ interface MixerRun {
 function runMixerWorklet(
   input: Float32Array,
   blocks: number,
-  sceneJson: string = mixingScenePresetJson('vocalReverbSend'),
+  sceneJson: string = JSON.stringify(mixingScenePreset('vocalReverbSend')),
 ): MixerRun {
   const meters: SonareWorkletMeterSnapshot[] = [];
   const output = new Float32Array(blocks * BLOCK);
@@ -156,7 +156,10 @@ describe('mixer worklet true-peak metering', () => {
     // same standard, which is what makes this a cross-check rather than a
     // restatement of the worklet's own arithmetic.
     const lastBlock = output.subarray((blocks - 1) * BLOCK, blocks * BLOCK);
-    expect(meter.truePeakDbL).toBeCloseTo(meteringTruePeakDb(lastBlock, SR, 4), 0);
+    expect(meter.truePeakDbL).toBeCloseTo(
+      meteringTruePeakDb(lastBlock, SR, { oversampleFactor: 4 }),
+      0,
+    );
   });
 
   it('keeps every dB field finite on a signal', () => {
@@ -250,7 +253,7 @@ describe('mixer worklet true-peak metering', () => {
     const loud = interSamplePeakSine(BLOCK, 0.9);
     const processor = new SonareWorkletProcessor(
       {
-        sceneJson: mixingScenePresetJson('vocalReverbSend'),
+        sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
         sampleRate: SR,
         maxBlockSize: BLOCK,
         meterIntervalFrames: 0,
@@ -274,7 +277,7 @@ describe('mixer worklet true-peak metering', () => {
     const meters: unknown[] = [];
     const processor = new SonareWorkletProcessor(
       {
-        sceneJson: mixingScenePresetJson('vocalReverbSend'),
+        sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
         sampleRate: SR,
         maxBlockSize: BLOCK,
         meterIntervalFrames: 0,

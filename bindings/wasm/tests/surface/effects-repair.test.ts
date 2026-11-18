@@ -445,11 +445,11 @@ describe('repair: mono results are {samples, report}', () => {
     const options = { clipThresholdDb: -0.9151 };
     const hit = sonare.masteringRepairDeclip({ samples: clipped, sampleRate: rate, ...options });
     expect(hit.samples.length).toBe(clipped.length);
-    expect(hit.report.detected.sampleCount).toBeGreaterThan(0);
+    expect(hit.report.detected.clippedSamples).toBeGreaterThan(0);
     expect(hit.report.lpcReconstructedRuns + hit.report.interpolatedRuns).toBeGreaterThan(0);
     expect(hit.report.repairedSamples).toBeGreaterThan(0);
     const clean = sonare.masteringRepairDeclip({ samples: bed, sampleRate: rate, ...options });
-    expect(clean.report.detected.sampleCount).toBe(0);
+    expect(clean.report.detected.clippedSamples).toBe(0);
     expect(clean.report.repairedSamples).toBe(0);
   });
 

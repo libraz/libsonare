@@ -136,8 +136,8 @@ const TABLE: Entry[] = [
     'harmonic',
     'percussive',
   ].map((name) => mono(name, name === 'phaseVocoder' ? { speedRatio: 1.1 } : {})),
-  mono('lufsInterleaved', { channels: 1 }),
-  mono('lufsSeriesInterleaved', { channels: 1 }),
+  linked('lufsMultichannel'),
+  linked('lufsSeriesMultichannel'),
   mono('remix', { intervals: [0, 4096] }),
   mono('remixAlignedIntervals', { intervals: [0, 4096] }),
   linked('decomposeStemsLinked'),
@@ -155,8 +155,9 @@ const TABLE: Entry[] = [
   ...['waveformPeaks', 'waveformPeakPyramid'].map(
     (name): Entry => ({
       name,
+      buffers: 2,
       noRate: true,
-      call: (samples) => fn(name)({ samples, channels: 1 }),
+      call: (s, _sr, w) => fn(name)({ channels: [slot(w, 0, s), slot(w, 1, s)] }),
     }),
   ),
   // Effects
@@ -194,32 +195,22 @@ const TABLE: Entry[] = [
     }),
   ),
   // Mastering chain and processors
-  ...['masterAudio', 'masterAudioWithProgress'].map((name) =>
-    mono(name, { preset: 'pop', onProgress: () => {} }),
-  ),
-  ...['masterAudioStereo', 'masterAudioStereoWithProgress'].map((name) =>
-    stereo(name, { preset: 'pop', onProgress: () => {} }),
-  ),
-  ...['masteringChain', 'masteringChainWithProgress'].map((name) =>
-    mono(name, { onProgress: () => {} }),
-  ),
-  ...['masteringChainStereo', 'masteringChainStereoWithProgress'].map((name) =>
-    stereo(name, { onProgress: () => {} }),
-  ),
+  mono('masterAudio', { preset: 'pop', onProgress: () => {} }),
+  stereo('masterAudioStereo', { preset: 'pop', onProgress: () => {} }),
   mono('streamingLoudnessGain'),
   stereo('streamingLoudnessGainStereo'),
   mono('normalize'),
   stereo('normalizeStereo'),
-  mono('mastering'),
-  mono('masteringProcess', { processorName: 'dynamics.compressor' }),
-  stereo('masteringProcessStereo', { processorName: 'dynamics.compressor' }),
-  pair('masteringPairProcess', { processorName: 'match.abSwitch' }),
+  mono('masteringNormalizeLoudness'),
+  mono('masteringApplyProcessor', { processor: 'dynamics.compressor' }),
+  stereo('masteringApplyProcessorStereo', { processor: 'dynamics.compressor' }),
+  pair('masteringApplyPairProcessor', { processor: 'match.abSwitch' }),
   {
-    name: 'masteringPairProcessStereo',
+    name: 'masteringApplyPairProcessorStereo',
     buffers: 4,
     call: (s, sampleRate, w) =>
-      fn('masteringPairProcessStereo')({
-        processorName: 'match.abCrossfade',
+      fn('masteringApplyPairProcessorStereo')({
+        processor: 'match.abCrossfade',
         sourceLeft: slot(w, 0, s),
         sourceRight: slot(w, 1, s),
         referenceLeft: slot(w, 2, s),
@@ -227,7 +218,7 @@ const TABLE: Entry[] = [
         sampleRate,
       }),
   },
-  pair('masteringPairAnalyze', { analysisName: 'match.referenceLoudness' }),
+  pair('masteringAnalyzePair', { analysis: 'match.referenceLoudness' }),
   pair('masteringAbMatchLoudness'),
   {
     name: 'masteringAbMatchLoudnessStereo',
@@ -241,7 +232,7 @@ const TABLE: Entry[] = [
         sampleRate,
       }),
   },
-  stereo('masteringStereoAnalyze', { analysisName: 'stereo.monoCompatCheck' }),
+  stereo('masteringAnalyzeStereo', { analysis: 'stereo.monoCompatCheck' }),
   ...[
     'masteringAssistantSuggest',
     'masteringAssistantSuggestChain',
@@ -306,9 +297,7 @@ const TABLE: Entry[] = [
     'meteringStereoCorrelation',
     'meteringStereoWidth',
     'meteringVectorscope',
-    'meteringVectorscopeDecimated',
     'meteringPhaseScope',
-    'meteringPhaseScopeDecimated',
   ].map((name) => stereo(name)),
   // Mixing, playback, alignment, transcription, sessions
   {
@@ -316,18 +305,16 @@ const TABLE: Entry[] = [
     buffers: 2,
     call: (s, sampleRate, w) =>
       fn('mixStereo')({
-        leftChannels: [slot(w, 0, s)],
-        rightChannels: [slot(w, 1, s)],
+        strips: [{ left: slot(w, 0, s), right: slot(w, 1, s) }],
         sampleRate,
       }),
   },
-  ...['suggestMixScene', 'suggestMixSceneJson'].map(
-    (name): Entry => ({
-      name,
-      reportsDegenerate: true,
-      call: (samples, sampleRate) => fn(name)({ tracks: [{ id: 'a', left: samples }], sampleRate }),
-    }),
-  ),
+  {
+    name: 'mixingAssistantSuggest',
+    reportsDegenerate: true,
+    call: (samples, sampleRate) =>
+      fn('mixingAssistantSuggest')({ tracks: [{ id: 'a', left: samples }], sampleRate }),
+  },
   mono('renderPlayback', {
     channels: 1,
     config: { input: { layout: 'mono' }, target: { kind: 'speakers', layout: 'stereo' } },
@@ -388,9 +375,9 @@ const NOT_AUDIO: string[] = [
     'masteringProcessorCatalog',
     'masteringProcessorNames',
     'masteringStereoAnalysisNames',
-    'mixSourceClassFromName',
-    'mixSourceClassNames',
-    'mixingScenePresetJson',
+    'mixingAssistantSourceClassFromName',
+    'mixingAssistantSourceClassNames',
+    'mixingScenePreset',
     'mixingScenePresetNames',
     'realtimeVoiceChangerPresetConfig',
     'realtimeVoiceChangerPresetJson',
@@ -405,6 +392,48 @@ const NOT_AUDIO: string[] = [
     'voiceCharacterPresetId',
     'masteringRepairDereverbConfigForRoom',
     'masteringRepairNoiseBandBins',
+  ],
+  // MIDI message builders, General MIDI name lookups and controller routing over events.
+  ...[
+    'midiNoteOn',
+    'midiNoteOff',
+    'midiCc',
+    'midiPolyPressure',
+    'midiProgram',
+    'midiChannelPressure',
+    'midiPitchBend',
+    'midi2NoteOn',
+    'midi2NoteOff',
+    'midi2Cc',
+    'midi2PolyPressure',
+    'midi2ChannelPressure',
+    'midi2PitchBend',
+    'midi2Program',
+    'midi2RegisteredController',
+    'midi2AssignableController',
+    'midi2RelativeRegisteredController',
+    'midi2RelativeAssignableController',
+    'midi2RegisteredPerNoteController',
+    'midi2AssignablePerNoteController',
+    'midi2PerNotePitchBend',
+    'midi2PerNoteManagement',
+    'midiBankProgram',
+    'midiParamToCc',
+    'gmInstrumentName',
+    'gmProgramForName',
+    'gmFamilyName',
+    'gmFamilyFirstProgram',
+    'gm2InstrumentName',
+    'gmDrumName',
+    'gmDrumNoteForName',
+    'gm2DrumSetName',
+    'gm2DrumName',
+    'midiCcName',
+    'midiCcIndexForName',
+    'perNoteControllerName',
+    'midiRouteEvents',
+    'midiCcLearn',
+    'midiCcToBreakpoint',
   ],
   // Generators, conversions and scalar helpers over numbers or note names.
   ...[
@@ -615,10 +644,10 @@ describe('wrong-typed arguments are TypeErrors that name the argument', () => {
     ).toThrow(new TypeError('voiceChange: formantMode must be a string'));
   });
 
-  it('suggestMixScene refuses an empty or missing track id as a TypeError', () => {
+  it('mixingAssistantSuggest refuses an empty or missing track id as a TypeError', () => {
     for (const id of ['', undefined]) {
       expect(() =>
-        sonare.suggestMixScene({ tracks: [{ id: id as never, left: x }], sampleRate: SR }),
+        sonare.mixingAssistantSuggest({ tracks: [{ id: id as never, left: x }], sampleRate: SR }),
       ).toThrow(TypeError);
     }
   });

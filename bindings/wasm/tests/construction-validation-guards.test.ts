@@ -23,7 +23,7 @@ import {
   masteringStreamingPreview,
   midiNoteOff,
   midiNoteOn,
-  mixingScenePresetJson,
+  mixingScenePreset,
   Project,
   RealtimeEngine,
   RealtimeVoiceChanger,
@@ -345,7 +345,9 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
       },
     });
     const samples = new Float32Array(2048);
-    expectRangeRefusal(() => waveformPeakPyramid(samples, 1, { samplesPerBucketLevels: levels }));
+    expectRangeRefusal(() =>
+      waveformPeakPyramid({ channels: [samples], samplesPerBucketLevels: levels }),
+    );
   });
 
   it('sizes RealtimeVoiceChanger.processMono from the real sample count', () => {
@@ -547,8 +549,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
     const samples = makeSine(1, 220);
     const platform = (name: string) => ({ name, targetLufs: -14, ceilingDb: -1 });
     const platformCount = (platforms: unknown): number =>
-      JSON.parse(masteringStreamingPreview({ samples, sampleRate: SR, platforms } as never))
-        .platforms.length;
+      masteringStreamingPreview({ samples, sampleRate: SR, platforms } as never).platforms.length;
     // The control: two legal platform lists preview that many platforms.
     expect(platformCount([platform('a')])).toBe(1);
     expect(platformCount([platform('a'), platform('b')])).toBe(2);
@@ -558,7 +559,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
   });
 
   it('reads addVcaGroup/setVcaGroupMembers members from the real array length', () => {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
       sampleRate: SR,
       maxBlockSize: 512,
     });

@@ -19,10 +19,11 @@ describe('Sonare WASM Module', () => {
   describe('streaming processors', () => {
     it('should stream a mono block through StreamingMasteringChain', () => {
       const chain = new StreamingMasteringChain({
-        eq: { tiltDb: 1.0 },
+        sampleRate: 44100,
+        maxBlockSize: 512,
+        eq: { tilt: { tiltDb: 1.0 } },
       });
       try {
-        chain.prepare(44100, 512, 1);
         const block = new Float32Array(512);
         for (let i = 0; i < block.length; i += 1) {
           block[i] = 0.1;
@@ -40,11 +41,12 @@ describe('Sonare WASM Module', () => {
 
     it('flushes delayed StreamingMasteringChain output once', () => {
       const chain = new StreamingMasteringChain({
+        sampleRate: 48000,
+        maxBlockSize: 64,
         maximizer: { truePeakLimiter: { enabled: true } },
       });
       try {
-        chain.prepare(48000, 64, 1);
-        expect(chain.latencySamples()).toBeGreaterThan(0);
+        expect(chain.latencySamples).toBeGreaterThan(0);
         chain.processMono(new Float32Array(64).fill(0.5));
         const tail: number[] = [];
         for (;;) {
@@ -54,7 +56,7 @@ describe('Sonare WASM Module', () => {
           }
           tail.push(...block);
         }
-        expect(tail.length).toBeGreaterThanOrEqual(chain.latencySamples());
+        expect(tail.length).toBeGreaterThanOrEqual(chain.latencySamples);
         expect(chain.flushMono()).toHaveLength(0);
       } finally {
         chain.destroy();
@@ -63,11 +65,12 @@ describe('Sonare WASM Module', () => {
 
     it('uses the canonical flat parser for nested streaming-chain configuration', () => {
       const chain = new StreamingMasteringChain({
+        sampleRate: 44100,
+        maxBlockSize: 512,
         repair: { denoise: { enabled: false } },
         eq: { tilt: { enabled: true, tiltDb: 2.0, pivotHz: 1500 } },
       });
       try {
-        chain.prepare(44100, 512, 1);
         expect(chain.stageNames()).toEqual(['eq.tilt']);
       } finally {
         chain.destroy();
@@ -79,13 +82,14 @@ describe('Sonare WASM Module', () => {
       // LUFS is unavailable while streaming). Supplying a precomputed
       // loudnessStaticGainDb must let it construct, prepare, and process.
       const chain = new StreamingMasteringChain({
-        eq: { tiltDb: 1.0 },
+        sampleRate: 44100,
+        maxBlockSize: 512,
+        eq: { tilt: { tiltDb: 1.0 } },
         loudness: { targetLufs: -18, ceilingDb: -1, truePeakOversample: 4 },
         loudnessStaticGainDb: 3.0,
         loudnessStaticGainPeakDb: -6.0,
       });
       try {
-        chain.prepare(44100, 512, 1);
         const block = new Float32Array(512);
         for (let i = 0; i < block.length; i += 1) {
           block[i] = 0.1;
@@ -104,6 +108,7 @@ describe('Sonare WASM Module', () => {
       expect(
         () =>
           new StreamingMasteringChain({
+            sampleRate: 44100,
             loudness: { targetLufs: -18, ceilingDb: -1, truePeakOversample: 4 },
           }),
       ).toThrow();
@@ -145,7 +150,7 @@ describe('Sonare WASM Module', () => {
         expect(snapshot.bandGainDb[0]).toBeLessThan(3.5);
         expect(snapshot.profileDb.length).toBe(16);
         expect(snapshot.preLeft.length).toBe(snapshot.postLeft.length);
-        expect(eq.latencySamples()).toBeGreaterThanOrEqual(0);
+        expect(eq.latencySamples).toBeGreaterThanOrEqual(0);
       } finally {
         eq.destroy();
       }
@@ -174,7 +179,7 @@ describe('Sonare WASM Module', () => {
         // discard count read below is not vacuous.
         const cleanOut = eq.processStereo(left, right);
         expect(cleanOut.left.some((v, i) => v !== left[i])).toBe(true);
-        expect(eq.nonFiniteDiscardCount()).toBe(0);
+        expect(eq.nonFiniteDiscardCount).toBe(0);
 
         // This EQ does not scrub its input at all (unlike the mixer's
         // process_stereo boundary), so a NaN sample reaches the band's IIR
@@ -186,11 +191,11 @@ describe('Sonare WASM Module', () => {
         eq.processStereo(poisonedLeft, poisonedRight);
         // Exactly one: the unit is one processed block, never a channel --
         // both channels carried the poison in this same block.
-        expect(eq.nonFiniteDiscardCount()).toBe(1);
+        expect(eq.nonFiniteDiscardCount).toBe(1);
 
         // A further clean block adds nothing more: the EQ has recovered.
         eq.processStereo(left, right);
-        expect(eq.nonFiniteDiscardCount()).toBe(1);
+        expect(eq.nonFiniteDiscardCount).toBe(1);
       } finally {
         eq.destroy();
       }
@@ -227,12 +232,12 @@ describe('Sonare WASM Module', () => {
           gainDb: 9,
           q: 1.5,
           enabled: true,
-          placement: 'Mid',
+          placement: 'mid',
         });
         const freqs = new Float32Array([1000]);
-        expect(eq.magnitudeResponse(freqs, 'Mid')[0]).toBeGreaterThan(6);
-        expect(Math.abs(eq.magnitudeResponse(freqs, 'Left')[0])).toBeLessThan(0.5);
-        expect(() => eq.magnitudeResponse(freqs, 'Bogus' as unknown as 'Mid')).toThrow();
+        expect(eq.magnitudeResponse(freqs, 'mid')[0]).toBeGreaterThan(6);
+        expect(Math.abs(eq.magnitudeResponse(freqs, 'left')[0])).toBeLessThan(0.5);
+        expect(() => eq.magnitudeResponse(freqs, 'Bogus' as unknown as 'mid')).toThrow();
       } finally {
         eq.destroy();
       }
@@ -251,7 +256,7 @@ describe('Sonare WASM Module', () => {
       }
     });
 
-    it('should accept string phase modes for StreamingEqualizer', () => {
+    it('should accept the phase-mode tokens for StreamingEqualizer', () => {
       const linearEq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
       const aliasEq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
       try {
@@ -263,16 +268,16 @@ describe('Sonare WASM Module', () => {
           q: 1,
           enabled: true,
         });
-        expect(linearEq.latencySamples()).toBeGreaterThan(0);
+        expect(linearEq.latencySamples).toBeGreaterThan(0);
 
-        expect(() => aliasEq.setPhaseMode('zero-latency')).not.toThrow();
+        expect(() => aliasEq.setPhaseMode('zero')).not.toThrow();
         aliasEq.setBand(0, {
           type: 'HighShelf',
           frequencyHz: 8000,
           gainDb: 2,
           enabled: true,
         });
-        expect(aliasEq.latencySamples()).toBeGreaterThanOrEqual(0);
+        expect(aliasEq.latencySamples).toBeGreaterThanOrEqual(0);
       } finally {
         linearEq.destroy();
         aliasEq.destroy();

@@ -150,7 +150,7 @@ describe('exported signatures', () => {
     type Named = [
       import('../src/index').MeterEstimate,
       import('../src/index').PiptrackResult,
-      import('../src/index').ScopeOptions,
+      import('../src/index').MeteringVectorscopeRequest,
       import('../src/index').OnsetDetectOptions,
       import('../src/index').MusicAnalyzeOptions,
     ];

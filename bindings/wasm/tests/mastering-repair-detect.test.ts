@@ -100,10 +100,10 @@ function clippedSignal(): Float32Array {
 
 // ---------------------------------------------------------------------------
 // Flat-top fixture: a tone clipped hard against +/-1, then turned down so
-// nothing reaches clipThreshold anymore. sampleCount alone would read this as
+// nothing reaches clipThresholdDb anymore. clippedSamples alone would read this as
 // clean; only the flat runs are still evidence of the clipping. The paired
 // full-scale sine below never clips against a fixed threshold in the time
-// domain -- it only reads that way at clipThreshold -- and its apex never
+// domain -- it only reads that way at clipThresholdDb -- and its apex never
 // repeats a sample, so no flat run forms there.
 // ---------------------------------------------------------------------------
 const FLAT_RATE = 48000;
@@ -305,10 +305,10 @@ describe('repair detection (WASM)', () => {
         clipThresholdDb: CLIP_THRESHOLD_DB,
       });
 
-      expect(detected.sampleCount).toBe(CLIP_LEN);
+      expect(detected.clippedSamples).toBe(CLIP_LEN);
       expect(detected.runCount).toBe(1);
       expect(detected.longestRunSamples).toBe(CLIP_LEN);
-      expect(detected.sampleFraction).toBeCloseTo(CLIP_LEN / CLIP_FRAMES, 8);
+      expect(detected.clippedRatio).toBeCloseTo(CLIP_LEN / CLIP_FRAMES, 8);
     });
 
     it('reads clipThresholdDb and nothing else from the config', () => {
@@ -321,7 +321,7 @@ describe('repair detection (WASM)', () => {
       const above = masteringRepairDetectClipping(samples, SR, {
         clipThresholdDb: 20 * Math.log10(0.99),
       });
-      expect(above.sampleCount).toBe(0);
+      expect(above.clippedSamples).toBe(0);
       expect(above.runCount).toBe(0);
 
       // The reconstruction knobs never reach the result. Exact equality, because
@@ -333,7 +333,7 @@ describe('repair detection (WASM)', () => {
         iterations: 7,
         lpcBlend: 0.1,
       });
-      expect(base.sampleCount).toBe(CLIP_LEN);
+      expect(base.clippedSamples).toBe(CLIP_LEN);
       expect(reshaped).toEqual(base);
     });
 
@@ -342,18 +342,18 @@ describe('repair detection (WASM)', () => {
       // the default path is exercised by its answer of zero rather than by the
       // fixture's count.
       const detected = masteringRepairDetectClipping({ samples: clippedSignal(), sampleRate: SR });
-      expect(detected.sampleCount).toBe(0);
-      expect(detected.sampleFraction).toBe(0);
+      expect(detected.clippedSamples).toBe(0);
+      expect(detected.clippedRatio).toBe(0);
     });
 
-    it('reads a flat top that survived a gain change hiding it from sampleCount', () => {
+    it('reads a flat top that survived a gain change hiding it from clippedSamples', () => {
       // Both directions on real signals, so neither reading is free: a tone
       // clipped hard, and turned down enough that nothing reaches
       // clipThreshold anymore, reports zero the old way and non-zero the
       // flat-top way -- the reverse of the full-scale sine below.
       const quiet = masteringRepairDetectClipping(attenuatedTone(), FLAT_RATE);
 
-      expect(quiet.sampleCount).toBe(0);
+      expect(quiet.clippedSamples).toBe(0);
       expect(quiet.runCount).toBe(0);
       expect(quiet.flatRunCount).toBeGreaterThan(0);
       expect(quiet.flatSampleCount).toBeGreaterThan(0);
@@ -363,11 +363,11 @@ describe('repair detection (WASM)', () => {
 
     it('does not read an unclipped sine peak as a flat top', () => {
       // A full-scale sine reaches the default threshold every cycle without
-      // ever having been clipped -- sampleCount alone reads it as clipped.
+      // ever having been clipped -- clippedSamples alone reads it as clipped.
       // The apex of a sine never repeats a sample, so no flat run forms.
       const detected = masteringRepairDetectClipping(fullScaleSine(), FLAT_RATE);
 
-      expect(detected.sampleCount).toBeGreaterThan(0);
+      expect(detected.clippedSamples).toBeGreaterThan(0);
       expect(detected.flatRunCount).toBe(0);
       expect(detected.flatSampleCount).toBe(0);
       expect(detected.longestFlatRunSamples).toBe(0);

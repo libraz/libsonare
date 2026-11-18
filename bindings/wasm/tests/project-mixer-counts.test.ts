@@ -6,7 +6,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, Mixer, mixingScenePresetJson, Project } from '../dist/index.js';
+import { init, Mixer, mixingScenePreset, Project } from '../dist/index.js';
 
 function accelerando(sampleRate = 22050, startBpm = 100, endBpm = 160, seconds = 24): Float32Array {
   const audio = new Float32Array(Math.round(sampleRate * seconds));
@@ -221,7 +221,7 @@ describe('Project counts and timeline metadata (WASM)', () => {
   it('accepts a mixer scene JSON without throwing', () => {
     const project = new Project();
     try {
-      const sceneJson = mixingScenePresetJson('vocalReverbSend');
+      const sceneJson = JSON.stringify(mixingScenePreset('vocalReverbSend'));
       expect(() => project.setMixerSceneJson(sceneJson)).not.toThrow();
     } finally {
       project.destroy();
@@ -249,7 +249,7 @@ describe('Mixer tail draining (WASM)', () => {
   });
 
   it('reports tailSamples as a number', () => {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
       sampleRate: 48000,
       maxBlockSize: 512,
     });
@@ -264,7 +264,7 @@ describe('Mixer tail draining (WASM)', () => {
   });
 
   it('reports latencySamples as a number', () => {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
       sampleRate: 48000,
       maxBlockSize: 512,
     });
@@ -279,7 +279,7 @@ describe('Mixer tail draining (WASM)', () => {
   });
 
   it('drainTailStereo returns stereo buffers of the requested length', () => {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
       sampleRate: 48000,
       maxBlockSize: 512,
     });

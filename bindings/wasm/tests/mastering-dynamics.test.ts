@@ -91,14 +91,20 @@ describe('masteringDynamicsCompressor (WASM)', () => {
     expect(peakAbs(result.samples, half)).toBeLessThan(peakAbs(x, half) * 0.95);
   });
 
-  it('detector accepts both string and number forms', () => {
-    const x = sine(440, 0.2, 0.5);
-    const a = masteringDynamicsCompressor(x, SR, { detector: 'peak' }).samples;
-    const b = masteringDynamicsCompressor(x, SR, { detector: 0 }).samples;
-    expect(a.length).toBe(b.length);
-    for (let i = 0; i < a.length; i++) {
-      expect(a[i]).toBeCloseTo(b[i] ?? 0, 6);
-    }
+  it('detector accepts the tokens, refuses a number, and the three tokens differ', () => {
+    const x = sine(440, 0.2, 0.9);
+    const opts = { thresholdDb: -30, ratio: 10, attackMs: 0.1, releaseMs: 10 };
+    const peak = masteringDynamicsCompressor(x, SR, { ...opts, detector: 'peak' }).samples;
+    const rms = masteringDynamicsCompressor(x, SR, { ...opts, detector: 'rms' }).samples;
+    const logRms = masteringDynamicsCompressor(x, SR, { ...opts, detector: 'logRms' }).samples;
+    expect(Array.from(peak)).not.toEqual(Array.from(rms));
+    expect(logRms.length).toBe(x.length);
+    expect(() => masteringDynamicsCompressor(x, SR, { detector: 0 as unknown as 'peak' })).toThrow(
+      TypeError,
+    );
+    expect(() =>
+      masteringDynamicsCompressor(x, SR, { detector: 'log_rms' as unknown as 'peak' }),
+    ).toThrow(RangeError);
   });
 
   it('rejects empty input with a clear RangeError', () => {
@@ -145,7 +151,7 @@ describe('masteringDynamicsGate (WASM)', () => {
       rangeDb: -60,
       holdMs: 5,
       closeThresholdDb: -55,
-      keyHpfHz: 100,
+      keyHighPassHz: 100,
     });
     expect(r.samples.length).toBe(x.length);
     expect(allFinite(r.samples)).toBe(true);

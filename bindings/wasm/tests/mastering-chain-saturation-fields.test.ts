@@ -7,7 +7,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, masteringChain } from '../src/index';
+import { init, masterAudio } from '../src/index';
 
 const sampleRate = 22_050;
 const samples = Float32Array.from({ length: 4096 }, (_, i) =>
@@ -32,9 +32,13 @@ describe('WASM mastering chain saturation fields', () => {
     // on this signal: 0.12 between factors 1 and 4, against a repeat-render
     // floor of exactly 0, so the threshold sits well clear of both ends.
     const render = (oversampleFactor: number) =>
-      masteringChain(samples, sampleRate, {
-        saturation: {
-          tape: { enabled: true, driveDb: 12, saturation: 0.9, oversampleFactor },
+      masterAudio({
+        samples,
+        sampleRate,
+        overrides: {
+          saturation: {
+            tape: { enabled: true, driveDb: 12, saturation: 0.9, oversampleFactor },
+          },
         },
       }).samples;
     const plain = render(1);
@@ -47,8 +51,12 @@ describe('WASM mastering chain saturation fields', () => {
 
   it('rejects a tape oversampling factor the processor does not implement', () => {
     expect(() =>
-      masteringChain(samples, sampleRate, {
-        saturation: { tape: { enabled: true, driveDb: 6, oversampleFactor: 3 } },
+      masterAudio({
+        samples,
+        sampleRate,
+        overrides: {
+          saturation: { tape: { enabled: true, driveDb: 6, oversampleFactor: 3 } },
+        },
       }),
     ).toThrow();
   });
@@ -58,8 +66,12 @@ describe('WASM mastering chain saturation fields', () => {
     // Measured difference between them on this signal: 0.0028, against a
     // repeat-render floor of exactly 0.
     const render = (aliasing: number) =>
-      masteringChain(samples, sampleRate, {
-        saturation: { exciter: { enabled: true, amount: 1.0, driveDb: 12, aliasing } },
+      masterAudio({
+        samples,
+        sampleRate,
+        overrides: {
+          saturation: { exciter: { enabled: true, amount: 1.0, driveDb: 12, aliasing } },
+        },
       }).samples;
     const none = render(0);
     expect(none).toHaveLength(samples.length);
@@ -72,8 +84,12 @@ describe('WASM mastering chain saturation fields', () => {
     // declared set must be rejected here rather than cast into the config.
     for (const aliasing of [-1, 4, 99]) {
       expect(() =>
-        masteringChain(samples, sampleRate, {
-          saturation: { exciter: { enabled: true, amount: 0.5, aliasing } },
+        masterAudio({
+          samples,
+          sampleRate,
+          overrides: {
+            saturation: { exciter: { enabled: true, amount: 0.5, aliasing } },
+          },
         }),
       ).toThrow();
     }
@@ -84,8 +100,12 @@ describe('WASM mastering chain saturation fields', () => {
     // are refused by the processor's own validation instead.
     for (const aliasing of [1, 2]) {
       expect(() =>
-        masteringChain(samples, sampleRate, {
-          saturation: { exciter: { enabled: true, amount: 0.5, aliasing } },
+        masterAudio({
+          samples,
+          sampleRate,
+          overrides: {
+            saturation: { exciter: { enabled: true, amount: 0.5, aliasing } },
+          },
         }),
       ).toThrow();
     }

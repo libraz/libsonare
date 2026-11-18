@@ -67,22 +67,24 @@ describe('Audio metering methods (WASM)', () => {
     const samples = sine(440, 1);
     const audio = Audio.fromBuffer(samples, SR);
 
-    expect(audio.silenceRatio()).toBe(meteringSilenceRatio(samples, SR, -45, 1024, 256));
+    expect(audio.silenceRatio()).toBe(
+      meteringSilenceRatio(samples, SR, { thresholdDb: -45, frameLength: 1024, hopLength: 256 }),
+    );
     expect(audio.silenceRatio(-30, 512, 128)).toBe(
-      meteringSilenceRatio(samples, SR, -30, 512, 128),
+      meteringSilenceRatio(samples, SR, { thresholdDb: -30, frameLength: 512, hopLength: 128 }),
     );
   });
 
-  it('truePeakDb matches, including the 0 -> default-oversample normalization', () => {
+  it('truePeakDb matches, and an explicit 0 factor is refused rather than read as the default', () => {
     const samples = sine(440, 1);
     const audio = Audio.fromBuffer(samples, SR);
 
-    expect(audio.truePeakDb()).toBe(meteringTruePeakDb(samples, SR, 4));
-    expect(audio.truePeakDb(0)).toBe(meteringTruePeakDb(samples, SR, 0));
-    expect(audio.truePeakDb(8)).toBe(meteringTruePeakDb(samples, SR, 8));
+    expect(audio.truePeakDb()).toBe(meteringTruePeakDb(samples, SR, { oversampleFactor: 4 }));
+    expect(() => audio.truePeakDb(0)).toThrow(RangeError);
+    expect(audio.truePeakDb(8)).toBe(meteringTruePeakDb(samples, SR, { oversampleFactor: 8 }));
   });
 
-  it('detectClipping matches on a genuinely clipped signal, and threshold 0 selects the library default', () => {
+  it('detectClipping matches on a genuinely clipped signal, and a level above 0 dBFS is refused', () => {
     const samples = new Float32Array(8000).fill(0.1);
     for (let i = 1000; i < 1064; i++) {
       samples[i] = 1.0;
@@ -96,12 +98,9 @@ describe('Audio metering methods (WASM)', () => {
     expect(report.clippedSamples).toBeGreaterThanOrEqual(1);
     expect(report).toEqual(meteringDetectClipping(samples, SR));
 
-    // threshold: 0 is the sentinel for "library default" (0.999), not a
-    // literal zero threshold - it must match the omitted-threshold call.
-    expect(audio.detectClipping({ threshold: 0 })).toEqual(audio.detectClipping());
-    // A genuinely out-of-range threshold, including negative, is rejected
-    // rather than promoted to the default.
-    expect(() => audio.detectClipping({ threshold: -1 })).toThrow();
+    // 0 dBFS is a real level, not a sentinel; a level above it is out of domain.
+    expect(() => audio.detectClipping({ thresholdDb: 0 })).not.toThrow();
+    expect(() => audio.detectClipping({ thresholdDb: 1 })).toThrow(RangeError);
   });
 
   it('dynamicRange matches, and lowPercentile 0 is a real 0th-percentile request distinct from the default', () => {
@@ -117,7 +116,7 @@ describe('Audio metering methods (WASM)', () => {
     expect(report.windowRmsDb.length).toBeGreaterThanOrEqual(2);
     expect(report).toEqual(meteringDynamicRange(combined, SR));
 
-    // Positive control for the ZeroIsSentinel pitfall: lowPercentile 0 must
+    // Positive control: lowPercentile 0 must
     // differ from the default (-1 -> 0.10), proving 0 was not silently
     // promoted to the default.
     const zeroPercentile = audio.dynamicRange({ lowPercentile: 0 });
@@ -140,11 +139,11 @@ describe('Audio metering methods (WASM)', () => {
 
     const frameA = audio.spectrumFrame(0);
     const frameB = audio.spectrumFrame(8192);
-    expect(frameA).toEqual(meteringSpectrumFrame(samples, SR, 0));
-    expect(frameB).toEqual(meteringSpectrumFrame(samples, SR, 8192));
+    expect(frameA).toEqual(meteringSpectrumFrame(samples, SR, { startSample: 0 }));
+    expect(frameB).toEqual(meteringSpectrumFrame(samples, SR, { startSample: 8192 }));
 
     // Non-vacuity: moving the offset over a non-stationary window must
-    // actually change the frame, or a delegate that ignores frameOffset
+    // actually change the frame, or a delegate that ignores startSample
     // would pass unnoticed.
     expect(Array.from(frameB.db)).not.toEqual(Array.from(frameA.db));
   });

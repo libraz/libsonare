@@ -1,5 +1,8 @@
 import { getSonareModule } from '../module_state.js';
-import type { MasteringInsertParams, MasteringSoloProcessorParams } from '../public_types.js';
+
+/** Params as the caller wrote them: values are checked against the processor's declared types here. */
+type LooseParams = Record<string, number | boolean | string | readonly number[]>;
+
 import { assertFiniteScalar } from '../validation.js';
 
 /**
@@ -11,10 +14,10 @@ import { assertFiniteScalar } from '../validation.js';
  */
 export function resolveProcessorParams(
   processor: string,
-  params: MasteringSoloProcessorParams,
+  params: object,
 ): Record<string, number | boolean> {
   let resolved: Record<string, number | boolean> | undefined;
-  for (const [key, value] of Object.entries(params)) {
+  for (const [key, value] of Object.entries(params as LooseParams)) {
     if (typeof value !== 'string') {
       continue;
     }
@@ -40,16 +43,16 @@ export function resolveProcessorParams(
 export function resolveInsertParams(
   fnName: string,
   processor: string,
-  params: MasteringInsertParams,
+  params: object,
 ): Record<string, number | boolean | string | number[]> {
   const info = JSON.parse(getSonareModule().masteringInsertParamInfo(processor)) as {
     name: string;
     type: string;
   }[];
   const kinds = new Map(info.map((param) => [param.name, param.type]));
-  const scalars: MasteringSoloProcessorParams = {};
+  const scalars: Record<string, number | boolean | string> = {};
   const out: Record<string, number | boolean | string | number[]> = {};
-  for (const [key, value] of Object.entries(params)) {
+  for (const [key, value] of Object.entries(params as LooseParams)) {
     const kind = kinds.get(key);
     if (kind === 'string') {
       if (typeof value !== 'string') {

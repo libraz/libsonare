@@ -3,7 +3,7 @@
  *
  * These mirror the Node / Python `analyzeBpm` / `analyzeRhythm` /
  * `analyzeDynamics` / `analyzeTimbre` / `detectKeyCandidates` /
- * `capabilities().features.ffmpeg` / `masterAudioWithProgress` surfaces. The intent is
+ * `capabilities().features.ffmpeg` / `masterAudio` progress surfaces. The intent is
  * to keep feature parity across all three bindings — if any of these is
  * missing from a new WASM build, this file fails.
  */
@@ -20,15 +20,9 @@ import {
   init,
   masterAudio,
   masterAudioStereo,
-  masterAudioStereoWithProgress,
-  masterAudioWithProgress,
-  mastering,
-  masteringChain,
-  masteringChainStereo,
-  masteringChainStereoWithProgress,
-  masteringChainWithProgress,
-  masteringProcess,
-  masteringProcessStereo,
+  masteringApplyProcessor,
+  masteringApplyProcessorStereo,
+  masteringNormalizeLoudness,
   PitchClass,
 } from '../src/index';
 import { sine as genSine } from './_helpers';
@@ -158,53 +152,55 @@ describe('WASM analyzer coverage parity', () => {
     });
   });
 
-  describe('masterAudioWithProgress', () => {
+  describe('masterAudio', () => {
     it('accepts the canonical loudness-mastering request object', () => {
       const samples = makeSine(2, 440);
-      const positional = mastering(samples, SR, { targetLufs: -18 });
-      const request = mastering({ samples, sampleRate: SR, targetLufs: -18 });
+      const positional = masteringNormalizeLoudness(samples, SR, { targetLufs: -18 });
+      const request = masteringNormalizeLoudness({ samples, sampleRate: SR, targetLufs: -18 });
 
       expect(request).toEqual(positional);
     });
 
     it('accepts canonical named-processor request objects', () => {
       const samples = makeSine(2, 440);
+      const mono = masteringApplyProcessor({
+        processor: 'dynamics.compressor',
+        samples,
+        sampleRate: SR,
+        params: { ratio: 2 },
+      });
       expect(
-        masteringProcess({
-          processorName: 'dynamics.compressor',
-          samples,
-          sampleRate: SR,
+        masteringApplyProcessor(samples, SR, {
+          processor: 'dynamics.compressor',
           params: { ratio: 2 },
         }),
-      ).toEqual(masteringProcess('dynamics.compressor', samples, SR, { ratio: 2 }));
+      ).toEqual(mono);
 
       const left = makeSine(2, 440);
       const right = makeSine(2, 660);
       expect(
-        masteringProcessStereo({
-          processorName: 'stereo.imager',
+        masteringApplyProcessorStereo({
+          processor: 'stereo.imager',
           left,
           right,
           sampleRate: SR,
           params: { width: 1 },
-        }),
-      ).toEqual(masteringProcessStereo('stereo.imager', left, right, SR, { width: 1 }));
+        }).left,
+      ).toHaveLength(left.length);
     });
 
-    it('accepts canonical mastering-chain request objects', () => {
+    it('runs a chain without a preset from the request and the positional form', () => {
       const samples = makeSine(2, 440);
-      expect(masteringChain({ samples, sampleRate: SR })).toEqual(masteringChain(samples, SR));
+      expect(masterAudio(samples, SR)).toEqual(masterAudio({ samples, sampleRate: SR }));
 
       const left = makeSine(2, 440);
       const right = makeSine(2, 660);
-      expect(masteringChainStereo({ left, right, sampleRate: SR })).toEqual(
-        masteringChainStereo(left, right, SR),
-      );
+      expect(masterAudioStereo({ left, right, sampleRate: SR }).left).toHaveLength(left.length);
     });
 
     it('accepts the canonical mono request object', () => {
       const samples = makeSine(2, 440);
-      const positional = masterAudio(samples, SR, 'pop');
+      const positional = masterAudio(samples, SR, { preset: 'pop' });
       const request = masterAudio({ samples, sampleRate: SR, preset: 'pop' });
 
       expect(request).toEqual(positional);
@@ -213,142 +209,73 @@ describe('WASM analyzer coverage parity', () => {
     it('accepts the canonical stereo request object', () => {
       const left = makeSine(2, 440);
       const right = makeSine(2, 660);
-      const positional = masterAudioStereo(left, right, SR, 'pop');
       const request = masterAudioStereo({ left, right, sampleRate: SR, preset: 'pop' });
 
-      expect(request).toEqual(positional);
+      expect(request.left).toHaveLength(left.length);
+      expect(request.right).toHaveLength(right.length);
     });
 
     it('invokes the progress callback at least once and returns mastered samples', () => {
       const samples = makeSine(2, 440);
       let calls = 0;
       let lastProgress = -1;
-      const result = masterAudioWithProgress(
+      const result = masterAudio({
         samples,
-        SR,
-        'pop',
-        { eq: { tilt: { tiltDb: 1 } } },
-        (p, stage) => {
+        sampleRate: SR,
+        preset: 'pop',
+        overrides: { eq: { tilt: { tiltDb: 1 } } },
+        onProgress: (p, stage) => {
           calls++;
           expect(typeof stage).toBe('string');
           expect(p).toBeGreaterThanOrEqual(lastProgress); // monotonic
           lastProgress = p;
         },
-      );
+      });
       expect(calls).toBeGreaterThan(0);
       expect(result.samples.length).toBeGreaterThan(0);
       expect(Number.isFinite(result.outputLufs)).toBe(true);
     });
 
-    it('cancels through the canonical request callback', () => {
+    // Mono and stereo, with and without a preset, forward `cancel` through their own
+    // native call, so each variant is driven: a forwarding regression on any one of
+    // them would otherwise run to completion instead of aborting.
+    it.each([
+      ['mono without a preset', {}],
+      ['mono with a preset', { preset: 'pop' }],
+      ['mono with progress', { preset: 'pop', onProgress: () => {} }],
+      ['mono chain with progress', { onProgress: () => {} }],
+    ] as const)('masterAudio cancels through the request callback: %s', (_name, extra) => {
       const samples = makeSine(2, 440);
-      expect(() => masterAudio({ samples, sampleRate: SR, cancel: () => true })).toThrow(
+      expect(() => masterAudio({ samples, sampleRate: SR, ...extra, cancel: () => true })).toThrow(
         expect.objectContaining({ code: ErrorCode.Cancelled }),
       );
     });
 
-    // The remaining mono/stereo x chain/preset x with/without-progress
-    // combinations, mirroring masterAudio's own case above: each forwards
-    // `cancel` through its own C-ABI call, and a forwarding regression on any
-    // one of them would ship green everywhere else while that one variant ran
-    // to completion instead of aborting -- see tests-017.
-    it('masteringChain cancels through the canonical request callback', () => {
-      const samples = makeSine(2, 440);
-      expect(() => masteringChain({ samples, sampleRate: SR, cancel: () => true })).toThrow(
-        expect.objectContaining({ code: ErrorCode.Cancelled }),
-      );
-    });
-
-    it('masteringChainStereo cancels through the canonical request callback', () => {
+    it.each([
+      ['without a preset', {}],
+      ['with a preset', { preset: 'pop' }],
+      ['with progress', { preset: 'pop', onProgress: () => {} }],
+      ['chain with progress', { onProgress: () => {} }],
+    ] as const)('masterAudioStereo cancels through the request callback: %s', (_name, extra) => {
       const left = makeSine(2, 440);
       const right = makeSine(2, 660);
       expect(() =>
-        masteringChainStereo({ left, right, sampleRate: SR, cancel: () => true }),
+        masterAudioStereo({ left, right, sampleRate: SR, ...extra, cancel: () => true }),
       ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled }));
-    });
-
-    it('masterAudioStereo cancels through the canonical request callback', () => {
-      const left = makeSine(2, 440);
-      const right = makeSine(2, 660);
-      expect(() => masterAudioStereo({ left, right, sampleRate: SR, cancel: () => true })).toThrow(
-        expect.objectContaining({ code: ErrorCode.Cancelled }),
-      );
-    });
-
-    it('masteringChainWithProgress cancels through the canonical request callback', () => {
-      const samples = makeSine(2, 440);
-      expect(() =>
-        masteringChainWithProgress({
-          samples,
-          sampleRate: SR,
-          onProgress: () => {},
-          cancel: () => true,
-        }),
-      ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled }));
-    });
-
-    it('masteringChainStereoWithProgress cancels through the canonical request callback', () => {
-      const left = makeSine(2, 440);
-      const right = makeSine(2, 660);
-      expect(() =>
-        masteringChainStereoWithProgress({
-          left,
-          right,
-          sampleRate: SR,
-          onProgress: () => {},
-          cancel: () => true,
-        }),
-      ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled }));
-    });
-
-    it('masterAudioWithProgress cancels through the canonical request callback', () => {
-      const samples = makeSine(2, 440);
-      expect(() =>
-        masterAudioWithProgress({
-          samples,
-          sampleRate: SR,
-          onProgress: () => {},
-          cancel: () => true,
-        }),
-      ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled }));
-    });
-
-    it('masterAudioStereoWithProgress cancels through the canonical request callback', () => {
-      const left = makeSine(2, 440);
-      const right = makeSine(2, 660);
-      expect(() =>
-        masterAudioStereoWithProgress({
-          left,
-          right,
-          sampleRate: SR,
-          onProgress: () => {},
-          cancel: () => true,
-        }),
-      ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled }));
-    });
-
-    it('uses onProgress from a canonical request object', () => {
-      const samples = makeSine(2, 440);
-      let calls = 0;
-      const result = masterAudio({
-        samples,
-        sampleRate: SR,
-        preset: 'pop',
-        onProgress: () => {
-          calls++;
-        },
-      });
-
-      expect(calls).toBeGreaterThan(0);
-      expect(result.samples.length).toBeGreaterThan(0);
     });
 
     it('stereo variant accepts two channels and reports stages', () => {
       const left = makeSine(2, 440);
       const right = makeSine(2, 660);
       let calls = 0;
-      const result = masterAudioStereoWithProgress(left, right, SR, 'pop', {}, () => {
-        calls++;
+      const result = masterAudioStereo({
+        left,
+        right,
+        sampleRate: SR,
+        preset: 'pop',
+        onProgress: () => {
+          calls++;
+        },
       });
       expect(calls).toBeGreaterThan(0);
       expect(result.left.length).toBe(left.length);

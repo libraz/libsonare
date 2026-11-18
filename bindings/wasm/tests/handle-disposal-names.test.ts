@@ -12,7 +12,7 @@ import {
   HrtfSet,
   init,
   Mixer,
-  mixingScenePresetJson,
+  mixingScenePreset,
   PlaybackLoudnessMeter,
   PlaybackRenderer,
   Project,
@@ -49,7 +49,10 @@ describe('WASM handle teardown names', () => {
   });
 
   const handles: ReadonlyArray<[string, () => Disposable]> = [
-    ['StreamingMasteringChain', () => new StreamingMasteringChain({ 'eq.tilt.tiltDb': 0.5 })],
+    [
+      'StreamingMasteringChain',
+      () => new StreamingMasteringChain({ sampleRate: 48000, eq: { tilt: { tiltDb: 0.5 } } }),
+    ],
     ['StreamingEqualizer', () => new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 })],
     [
       'StreamingRetune',
@@ -66,7 +69,7 @@ describe('WASM handle teardown names', () => {
     [
       'Mixer',
       () =>
-        Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+        Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
           sampleRate: 48000,
           maxBlockSize: 512,
         }),

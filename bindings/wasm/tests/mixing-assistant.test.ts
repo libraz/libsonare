@@ -10,13 +10,17 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { MixAssistantTrack, MixSceneDocument, SuggestMixSceneRequest } from '../dist/index.js';
+import type {
+  MixAssistantTrack,
+  MixingAssistantSuggestRequest,
+  MixSceneDocument,
+  MixSourceClass,
+} from '../dist/index.js';
 import {
   init,
-  mixSourceClassFromName,
-  mixSourceClassNames,
-  suggestMixScene,
-  suggestMixSceneJson,
+  mixingAssistantSourceClassFromName,
+  mixingAssistantSourceClassNames,
+  mixingAssistantSuggest,
 } from '../dist/index.js';
 import { sine } from './_helpers';
 
@@ -88,12 +92,12 @@ describe('mixing assistant (WASM)', () => {
     await init();
   });
 
-  describe('suggestMixScene', () => {
+  describe('mixingAssistantSuggest', () => {
     it('profiles a mono-only track set and explains the suggested scene', () => {
-      const result = suggestMixScene({ tracks: musicalTracks(), sampleRate: SR });
+      const result = mixingAssistantSuggest({ tracks: musicalTracks(), sampleRate: SR });
 
       expect(result.tracks.map((track) => track.stripId)).toEqual(['bass', 'keys', 'hat']);
-      expect(result.tracks.every((track) => track.channelCount === 1)).toBe(true);
+      expect(result.tracks.every((track) => track.numChannels === 1)).toBe(true);
       expect(result.mix.trackCount).toBe(3);
       expect(Array.isArray(result.explanation)).toBe(true);
       expect(result.explanation.length).toBeGreaterThan(0);
@@ -102,7 +106,7 @@ describe('mixing assistant (WASM)', () => {
 
     it('accepts a set mixing mono and stereo tracks', () => {
       const right = pulsedTone(441, DURATION, 2);
-      const result = suggestMixScene({
+      const result = mixingAssistantSuggest({
         tracks: [
           { id: 'bass', left: pulsedTone(70, DURATION, 4) },
           { id: 'keys', left: pulsedTone(440, DURATION, 2), right },
@@ -110,11 +114,11 @@ describe('mixing assistant (WASM)', () => {
         sampleRate: SR,
       });
 
-      expect(result.tracks.map((track) => track.channelCount)).toEqual([1, 2]);
+      expect(result.tracks.map((track) => track.numChannels)).toEqual([1, 2]);
     });
 
     it('keeps each track at its own length instead of truncating to the shortest', () => {
-      const result = suggestMixScene({
+      const result = mixingAssistantSuggest({
         tracks: [
           { id: 'long', left: pulsedTone(220, 1.0, 2) },
           { id: 'short', left: pulsedTone(660, 0.5, 4) },
@@ -128,7 +132,7 @@ describe('mixing assistant (WASM)', () => {
     });
 
     it('returns an empty suggestion for no tracks', () => {
-      const result = suggestMixScene({ tracks: [], sampleRate: SR });
+      const result = mixingAssistantSuggest({ tracks: [], sampleRate: SR });
 
       expect(result.tracks).toEqual([]);
       expect(result.explanation).toEqual([]);
@@ -136,7 +140,7 @@ describe('mixing assistant (WASM)', () => {
     });
 
     it('marks a silent track unusable without excluding the rest', () => {
-      const result = suggestMixScene({
+      const result = mixingAssistantSuggest({
         tracks: [
           { id: 'silent', left: new Float32Array(Math.floor(SR * DURATION)) },
           { id: 'keys', left: pulsedTone(440, DURATION, 2) },
@@ -152,17 +156,15 @@ describe('mixing assistant (WASM)', () => {
     });
 
     it('suggests nothing when every decision domain is off', () => {
-      const result = suggestMixScene({
+      const result = mixingAssistantSuggest({
         tracks: musicalTracks(),
         sampleRate: SR,
-        options: {
-          enableStructure: false,
-          enableGain: false,
-          enableBalance: false,
-          enableEq: false,
-          enableDynamics: false,
-          enableImage: false,
-        },
+        enableStructure: false,
+        enableGain: false,
+        enableBalance: false,
+        enableEq: false,
+        enableDynamics: false,
+        enableImage: false,
       });
 
       expect(result.explanation).toEqual([]);
@@ -170,24 +172,22 @@ describe('mixing assistant (WASM)', () => {
     });
 
     it('accepts every assistant option and keeps the result shape', () => {
-      const result = suggestMixScene({
+      const result = mixingAssistantSuggest({
         tracks: musicalTracks(),
         sampleRate: SR,
-        options: {
-          targetTrackLufs: -20,
-          suggestionStrength: 0.5,
-          eqMaxCutDb: 3,
-          mixBusHeadroomDbtp: -8,
-          enableStructure: true,
-          enableGain: true,
-          enableBalance: true,
-          enableEq: true,
-          enableDynamics: true,
-          enableImage: true,
-          enableHighPass: true,
-          nFft: 1024,
-          hopLength: 256,
-        },
+        targetTrackLufs: -20,
+        suggestionStrength: 0.5,
+        eqMaxCutDb: 3,
+        mixBusHeadroomDbtp: -8,
+        enableStructure: true,
+        enableGain: true,
+        enableBalance: true,
+        enableEq: true,
+        enableDynamics: true,
+        enableImage: true,
+        enableHighPass: true,
+        nFft: 1024,
+        hopLength: 256,
       });
 
       expect(result.tracks.map((track) => track.stripId)).toEqual(['bass', 'keys', 'hat']);
@@ -196,11 +196,11 @@ describe('mixing assistant (WASM)', () => {
     });
 
     it('proposes a high-pass only once the switch is on', () => {
-      const off = suggestMixScene({ tracks: rumblingVoiceTracks(), sampleRate: SR });
-      const on = suggestMixScene({
+      const off = mixingAssistantSuggest({ tracks: rumblingVoiceTracks(), sampleRate: SR });
+      const on = mixingAssistantSuggest({
         tracks: rumblingVoiceTracks(),
         sampleRate: SR,
-        options: { enableHighPass: true },
+        enableHighPass: true,
       });
 
       // Off by default: the measurement is not taken at all, so no filter and
@@ -214,14 +214,9 @@ describe('mixing assistant (WASM)', () => {
     });
   });
 
-  describe('suggestMixSceneJson', () => {
-    it('returns only the scene, carrying one strip per track', () => {
-      const json = suggestMixSceneJson({ tracks: musicalTracks(), sampleRate: SR });
-      const scene = JSON.parse(json) as {
-        strips: { id: string }[];
-        buses: { id: string }[];
-        connections: { source: string; destination: string }[];
-      };
+  describe('mixingAssistantSuggest scene', () => {
+    it('carries one strip per track', () => {
+      const scene = mixingAssistantSuggest({ tracks: musicalTracks(), sampleRate: SR }).scene;
 
       // A scene carries one strip per track, and one more for each effect bus
       // the structure stage proposes: an effect return is a strip too. Those are
@@ -241,17 +236,16 @@ describe('mixing assistant (WASM)', () => {
         .filter((id) => !returnStrips.has(id));
 
       expect(trackStrips).toEqual(['bass', 'keys', 'hat']);
-      expect(scene).not.toHaveProperty('explanation');
     });
 
     it('acts on a source class only a track name can supply', () => {
       // `keys` is one of the classes no measurement separates from its
       // neighbours, so the classifier takes it from the track's name unless the
       // measurement contradicts it. Before that path existed the
-      // class was advertised by mixSourceClassNames() and reachable from no
+      // class was advertised by mixingAssistantSourceClassNames() and reachable from no
       // entry point, and this track came back unclassified — which every
       // decision stage skips, so it was routed to master and left alone.
-      const result = suggestMixScene({ tracks: musicalTracks(), sampleRate: SR });
+      const result = mixingAssistantSuggest({ tracks: musicalTracks(), sampleRate: SR });
       const keys = result.tracks.find((track) => track.stripId === 'keys');
 
       expect(keys?.source).toBe('keys');
@@ -272,55 +266,52 @@ describe('mixing assistant (WASM)', () => {
       expect(strip?.inserts.length ?? 0).toBeGreaterThan(0);
       expect(strip?.sends.length ?? 0).toBeGreaterThan(0);
     });
-
-    it('agrees with the scene nested in the full result', () => {
-      const request: SuggestMixSceneRequest = { tracks: musicalTracks(), sampleRate: SR };
-
-      expect(JSON.parse(suggestMixSceneJson(request))).toEqual(suggestMixScene(request).scene);
-    });
   });
 
   describe('source classes', () => {
     it('reports a non-empty name table each of whose entries resolves', () => {
-      const names = mixSourceClassNames();
+      const names = mixingAssistantSourceClassNames();
 
       expect(names.length).toBeGreaterThan(0);
       for (const name of names) {
-        expect(mixSourceClassFromName(name)).toBeGreaterThanOrEqual(0);
+        expect(mixingAssistantSourceClassFromName(name)).toBeGreaterThanOrEqual(0);
       }
     });
 
     it('resolves a name to its index in the table', () => {
-      const names = mixSourceClassNames();
+      const names = mixingAssistantSourceClassNames();
 
-      expect(mixSourceClassFromName(names[0])).toBe(0);
-      expect(mixSourceClassFromName(names[names.length - 1])).toBe(names.length - 1);
+      expect(mixingAssistantSourceClassFromName(names[0])).toBe(0);
+      expect(mixingAssistantSourceClassFromName(names[names.length - 1])).toBe(names.length - 1);
     });
 
-    it('reports -1 for an unknown name', () => {
-      expect(mixSourceClassFromName('definitely-not-a-source-class')).toBe(-1);
-      expect(mixSourceClassFromName('')).toBe(-1);
+    it('refuses an unknown name with a RangeError', () => {
+      expect(() =>
+        mixingAssistantSourceClassFromName('definitely-not-a-source-class' as MixSourceClass),
+      ).toThrow(RangeError);
+      expect(() => mixingAssistantSourceClassFromName('' as MixSourceClass)).toThrow(RangeError);
     });
   });
 
   describe('input validation', () => {
     it('rejects a non-positive sample rate', () => {
-      expect(() => suggestMixScene({ tracks: musicalTracks(), sampleRate: 0 })).toThrow();
-      expect(() => suggestMixScene({ tracks: musicalTracks(), sampleRate: -48000 })).toThrow();
+      expect(() => mixingAssistantSuggest({ tracks: musicalTracks(), sampleRate: 0 })).toThrow();
+      expect(() =>
+        mixingAssistantSuggest({ tracks: musicalTracks(), sampleRate: -48000 }),
+      ).toThrow();
     });
 
     it('requires a sample rate rather than inventing one', () => {
       // This surface used to default to 48000, which read 44.1 kHz material
       // 8.8% off across every band edge, every filter corner and every
       // alignment lag without saying so. Node and Python both demand it.
-      const request = { tracks: musicalTracks() } as unknown as SuggestMixSceneRequest;
-      expect(() => suggestMixScene(request)).toThrow();
-      expect(() => suggestMixSceneJson(request)).toThrow();
+      const request = { tracks: musicalTracks() } as unknown as MixingAssistantSuggestRequest;
+      expect(() => mixingAssistantSuggest(request)).toThrow();
     });
 
     it('accepts exactly the integer sample rates within [8000, 384000]', () => {
       const at = (sampleRate: number) => () =>
-        suggestMixScene({ tracks: musicalTracks(), sampleRate });
+        mixingAssistantSuggest({ tracks: musicalTracks(), sampleRate });
       expect(at(8000)).not.toThrow();
       expect(at(384000)).not.toThrow();
       expect(at(7999)).toThrow(RangeError);
@@ -335,7 +326,7 @@ describe('mixing assistant (WASM)', () => {
       // than the two tracks that collided.
       const left = pulsedTone(440, DURATION, 2);
       expect(() =>
-        suggestMixScene({
+        mixingAssistantSuggest({
           tracks: [
             { id: 'same', left },
             { id: 'same', left },
@@ -351,7 +342,7 @@ describe('mixing assistant (WASM)', () => {
       // about the material rather than about the buffer.
       const left = pulsedTone(440, DURATION, 2);
       left[100] = Number.NaN;
-      const result = suggestMixScene({
+      const result = mixingAssistantSuggest({
         tracks: [{ id: 'poisoned', left }],
         sampleRate: SR,
       });
@@ -362,23 +353,25 @@ describe('mixing assistant (WASM)', () => {
     it('rejects a missing or empty track id', () => {
       const left = pulsedTone(440, DURATION, 2);
       expect(() =>
-        suggestMixScene({
+        mixingAssistantSuggest({
           tracks: [{ left } as unknown as MixAssistantTrack],
           sampleRate: SR,
         }),
       ).toThrow();
-      expect(() => suggestMixScene({ tracks: [{ id: '', left }], sampleRate: SR })).toThrow();
+      expect(() =>
+        mixingAssistantSuggest({ tracks: [{ id: '', left }], sampleRate: SR }),
+      ).toThrow();
     });
 
     it('rejects a missing or wrongly typed sample buffer', () => {
       expect(() =>
-        suggestMixScene({
+        mixingAssistantSuggest({
           tracks: [{ id: 'keys' } as unknown as MixAssistantTrack],
           sampleRate: SR,
         }),
       ).toThrow();
       expect(() =>
-        suggestMixScene({
+        mixingAssistantSuggest({
           tracks: [{ id: 'keys', left: [0, 1, 0] as unknown as Float32Array }],
           sampleRate: SR,
         }),
@@ -387,7 +380,7 @@ describe('mixing assistant (WASM)', () => {
 
     it('rejects a right plane whose length differs from its left', () => {
       expect(() =>
-        suggestMixScene({
+        mixingAssistantSuggest({
           tracks: [
             {
               id: 'keys',
@@ -402,16 +395,16 @@ describe('mixing assistant (WASM)', () => {
 
     it('rejects a tracks value that is not an array', () => {
       expect(() =>
-        suggestMixScene({ tracks: null as unknown as MixAssistantTrack[], sampleRate: SR }),
+        mixingAssistantSuggest({ tracks: null as unknown as MixAssistantTrack[], sampleRate: SR }),
       ).toThrow();
     });
 
     it('rejects an option value that is neither a number nor a boolean', () => {
       expect(() =>
-        suggestMixScene({
+        mixingAssistantSuggest({
           tracks: musicalTracks(),
           sampleRate: SR,
-          options: { nFft: '2048' as unknown as number },
+          nFft: '2048' as unknown as number,
         }),
       ).toThrow();
     });

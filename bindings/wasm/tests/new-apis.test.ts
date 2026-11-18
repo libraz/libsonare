@@ -29,7 +29,7 @@ import {
   mfcc,
   mfccToAudio,
   mfccToMel,
-  mixingScenePresetJson,
+  mixingScenePreset,
   momentaryLufs,
   nnlsChroma,
   noteMove,
@@ -655,7 +655,7 @@ describe('v1.2 feature additions (WASM)', () => {
     }
 
     it('routes a send through reverb and back to master', () => {
-      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
         sampleRate: 48000,
         maxBlockSize: BLOCK,
       });
@@ -682,14 +682,14 @@ describe('v1.2 feature additions (WASM)', () => {
       const tail = energies.slice(4).reduce((a, b) => a + b, 0);
       expect(tail).toBeGreaterThan(1e-6);
       const master = mixer.busMeter('master');
-      expect(master.channelCount).toBe(2);
+      expect(master.numChannels).toBe(2);
       expect(Number.isFinite(master.peakDb[0])).toBe(true);
 
       mixer.destroy();
     });
 
     it('schedules insert-parameter automation without throwing', () => {
-      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
         sampleRate: 48000,
         maxBlockSize: BLOCK,
       });
@@ -735,7 +735,7 @@ describe('v1.2 feature additions (WASM)', () => {
     });
 
     it('round-trips the scene topology to JSON', () => {
-      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
         sampleRate: 48000,
         maxBlockSize: BLOCK,
       });
@@ -752,7 +752,7 @@ describe('v1.2 feature additions (WASM)', () => {
 
     it('processes 128-sample render quanta through the single WASM module', () => {
       const quantum = 128;
-      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
         sampleRate: 48000,
         maxBlockSize: quantum,
       });
@@ -775,7 +775,7 @@ describe('v1.2 feature additions (WASM)', () => {
 
     it('can render a block into caller-owned output arrays', () => {
       const quantum = 128;
-      const scene = mixingScenePresetJson('vocalReverbSend');
+      const scene = JSON.stringify(mixingScenePreset('vocalReverbSend'));
       const offline = Mixer.fromJson(scene, { sampleRate: 48000, maxBlockSize: quantum });
       const inplace = Mixer.fromJson(scene, { sampleRate: 48000, maxBlockSize: quantum });
       offline.compile();
@@ -802,7 +802,7 @@ describe('v1.2 feature additions (WASM)', () => {
 
     it('bulk-copies processStereoInto with frame-independent boundary calls', () => {
       const quantum = 128;
-      const scene = mixingScenePresetJson('vocalReverbSend');
+      const scene = JSON.stringify(mixingScenePreset('vocalReverbSend'));
       const reference = Mixer.fromJson(scene, { sampleRate: 48000, maxBlockSize: quantum });
       const inplace = Mixer.fromJson(scene, { sampleRate: 48000, maxBlockSize: quantum });
       reference.compile();
@@ -864,7 +864,7 @@ describe('v1.2 feature additions (WASM)', () => {
 
     it('can render through reusable WASM-heap realtime buffers', () => {
       const quantum = 128;
-      const scene = mixingScenePresetJson('vocalReverbSend');
+      const scene = JSON.stringify(mixingScenePreset('vocalReverbSend'));
       const offline = Mixer.fromJson(scene, { sampleRate: 48000, maxBlockSize: quantum });
       const realtime = Mixer.fromJson(scene, { sampleRate: 48000, maxBlockSize: quantum });
       offline.compile();
@@ -893,7 +893,7 @@ describe('v1.2 feature additions (WASM)', () => {
     });
 
     it('exposes live mixer controls and meter readers', () => {
-      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
         sampleRate: 48000,
         maxBlockSize: BLOCK,
       });
@@ -1378,7 +1378,7 @@ describe('v1.2 feature additions (WASM)', () => {
 
   describe('Mixer imperative topology', () => {
     it('adds/removes buses and VCA groups and reports counts', () => {
-      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
         sampleRate: 48000,
         maxBlockSize: 128,
       });
@@ -1744,14 +1744,22 @@ describe('v1.2 feature additions (WASM)', () => {
   it('exposes silence ratio metering and optional NNLS STFT blending', () => {
     const samples = new Float32Array(2048);
     samples.fill(1, 1024);
-    expect(meteringSilenceRatio(samples, SR, -45, 1024, 1024)).toBeCloseTo(0.5, 6);
+    expect(
+      meteringSilenceRatio(samples, SR, { thresholdDb: -45, frameLength: 1024, hopLength: 1024 }),
+    ).toBeCloseTo(0.5, 6);
     // A non-finite threshold is a question the meter cannot evaluate: every
     // frame comparison is false against NaN, so it used to answer "0 % silence"
     // here while the C ABI and Python refused. The `?? -45` default cannot
     // catch it (NaN is not nullish); the guard is in the core meter, which this
     // surface calls directly.
     for (const invalid of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
-      expect(() => meteringSilenceRatio(samples, SR, invalid, 1024, 1024)).toThrow();
+      expect(() =>
+        meteringSilenceRatio(samples, SR, {
+          thresholdDb: invalid,
+          frameLength: 1024,
+          hopLength: 1024,
+        }),
+      ).toThrow();
     }
     const chroma = nnlsChroma(generateSine(440, SR, 0.5), SR, {
       enableStftBlend: false,

@@ -24,7 +24,10 @@ describe('analysis-only WASM entry', () => {
       voiceChanger: false,
       playback: false,
     });
-    expect(analysis.meteringPeakDb(new Float32Array([0, 0.5, -0.25]))).toBeCloseTo(-6.0206, 3);
+    expect(analysis.meteringPeakDb(new Float32Array([0, 0.5, -0.25]), 48000)).toBeCloseTo(
+      -6.0206,
+      3,
+    );
   });
 
   it('does not expose non-analysis APIs', () => {
@@ -74,7 +77,11 @@ describe('the analysis entry exports only what its binary registers', () => {
   ]);
 
   /** Exported names that are a JS-side rename over a differently named native registration. */
-  const NATIVE_NAME: Readonly<Record<string, string>> = { onsetStrength: 'onsetEnvelope' };
+  const NATIVE_NAME: Readonly<Record<string, string>> = {
+    onsetStrength: 'onsetEnvelope',
+    lufsMultichannel: 'lufsInterleaved',
+    lufsSeriesMultichannel: 'lufsSeriesInterleaved',
+  };
 
   const entryFunctions = (): string[] =>
     Object.entries(analysis as Record<string, unknown>)

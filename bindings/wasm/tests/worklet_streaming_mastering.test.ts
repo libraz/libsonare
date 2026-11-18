@@ -16,16 +16,19 @@ describe('StreamingMasteringChain from the worklet entry', () => {
   };
 
   it('prepares and processes inside the worklet realm', () => {
-    const chain = new StreamingMasteringChain({ eq: { tiltDb: 1.5 } });
+    const chain = new StreamingMasteringChain({
+      sampleRate: 48000,
+      maxBlockSize: 256,
+      eq: { tilt: { tiltDb: 1.5 } },
+    });
     try {
-      chain.prepare(48000, 256, 1);
       expect(chain.stageNames()).toContain('eq.tilt');
       const input = block(256);
       const processed = chain.processMono(input);
       expect(processed).toHaveLength(256);
       expect(processed.some((value, i) => value !== input[i])).toBe(true);
       expect(processed.every((value) => Number.isFinite(value))).toBe(true);
-      expect(chain.latencySamples()).toBeGreaterThanOrEqual(0);
+      expect(chain.latencySamples).toBeGreaterThanOrEqual(0);
       const flushed = chain.flushMono();
       expect(flushed.every((value) => Number.isFinite(value))).toBe(true);
     } finally {
@@ -36,14 +39,18 @@ describe('StreamingMasteringChain from the worklet entry', () => {
   it('rejects a loudness stage without a precomputed static gain', () => {
     // Whole-signal integrated LUFS cannot be measured block by block, so the
     // host must supply the offline-measured gain or the chain refuses to build.
-    expect(() => new StreamingMasteringChain({ loudness: { targetLufs: -14 } })).toThrow();
+    expect(
+      () => new StreamingMasteringChain({ sampleRate: 48000, loudness: { targetLufs: -14 } }),
+    ).toThrow();
     const chain = new StreamingMasteringChain({
+      sampleRate: 48000,
+      maxBlockSize: 256,
+      numChannels: 2,
       loudness: { targetLufs: -14 },
       loudnessStaticGainDb: -3,
       loudnessStaticGainPeakDb: -1,
     });
     try {
-      chain.prepare(48000, 256, 2);
       const left = block(256);
       const right = block(256);
       const processed = chain.processStereo(left, right);

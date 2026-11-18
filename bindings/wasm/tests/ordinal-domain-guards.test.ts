@@ -37,7 +37,7 @@ import {
   type MeterScratchField,
   Mixer,
   masteringDynamicsCompressor,
-  mixingScenePresetJson,
+  mixingScenePreset,
   RealtimeEngine,
   type SynthModRouting,
   tempogram,
@@ -280,7 +280,7 @@ describe('a synth patch mod routing refuses an ordinal outside its enum', () => 
 // Ordinal domain: compressor detector
 // ---------------------------------------------------------------------------
 
-describe('the compressor detector refuses an ordinal that is not whole', () => {
+describe('the compressor detector is a closed token set that refuses every number', () => {
   const burst = new Float32Array(4800).map(
     (_, i) => 0.6 * Math.sin((2 * Math.PI * 440 * i) / 48000) * (i < 2400 ? 1 : 0.2),
   );
@@ -300,27 +300,28 @@ describe('the compressor detector refuses an ordinal that is not whole', () => {
   };
 
   it('separates its three detectors', () => {
-    const rendered = [0, 1, 2].map(compress);
+    const rendered = ['peak', 'rms', 'logRms'].map(compress);
     expect(new Set(rendered).size).toBe(3);
   });
 
-  it('renders each ordinal bit-identically to its name', () => {
-    expect(compress(0)).toBe(compress('peak'));
-    expect(compress(1)).toBe(compress('rms'));
-    expect(compress(2)).toBe(compress('log_rms'));
+  it('refuses the ordinals and the old snake_case spelling', () => {
+    for (const value of [0, 1, 2]) {
+      expectRefusalNaming('detector', () => compress(value), TypeError);
+    }
+    expectRefusalNaming('detector', () => compress('log_rms'));
   });
 
   it('refuses a fractional or non-finite detector instead of truncating onto a member', () => {
     // 1.5 selected Rms, 0.5 and NaN selected Peak, 2.5 selected LogRms -- four
     // successful calls, each running a detector the caller did not ask for.
     for (const value of [0.5, 1.5, 2.5, Number.NaN, Number.POSITIVE_INFINITY]) {
-      expectRefusalNaming('detector', () => compress(value));
+      expectRefusalNaming('detector', () => compress(value), TypeError);
     }
   });
 
-  it('still refuses an ordinal outside the set', () => {
+  it('refuses a number outside the set', () => {
     for (const value of [99, -1, ...SATURATING]) {
-      expectRefusalNaming('detector', () => compress(value));
+      expectRefusalNaming('detector', () => compress(value), TypeError);
     }
   });
 });
@@ -539,7 +540,7 @@ describe('telemetry scratch readers refuse an index past their record instead of
   });
 
   it('Mixer meter scratch', () => {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
       sampleRate: 48000,
       maxBlockSize: 128,
     });

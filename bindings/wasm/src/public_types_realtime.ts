@@ -45,7 +45,7 @@ export type EqBandType =
 export type EqCoeffMode = 'Rbj' | 'Vicanek';
 
 /** Stereo placement for an EQ band. */
-export type EqStereoPlacement = 'Stereo' | 'Left' | 'Right' | 'Mid' | 'Side';
+export type EqStereoPlacement = 'stereo' | 'left' | 'right' | 'mid' | 'side';
 
 /** Per-band phase behaviour. */
 export type EqBandPhase = 'Inherit' | 'ZeroLatency' | 'NaturalPhase' | 'LinearPhase';
@@ -110,7 +110,9 @@ export interface EqBand {
 
 /** Construction options for {@link StreamingEqualizer}. */
 export interface StreamingEqualizerConfig {
-  sampleRate?: number;
+  /** Sample rate in Hz (integer). Required; `TypeError` when absent. */
+  sampleRate: number;
+  /** Largest block passed to a process call, in samples. Default 512. */
   maxBlockSize?: number;
 }
 

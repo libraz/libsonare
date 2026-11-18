@@ -15,43 +15,38 @@ beforeAll(async () => init());
 
 describe('WASM mastering assistant preset', () => {
   it('starts from the streaming preset when none is named', () => {
-    const result = JSON.parse(masteringAssistantSuggest({ samples, sampleRate }));
-    expect(result.explanation).toContain('base preset: streaming');
+    const result = masteringAssistantSuggest({ samples, sampleRate });
+    expect(result.explanation.join('\n')).toContain('base preset: streaming');
     expect(result).not.toHaveProperty('genreCandidates');
   });
 
   it('starts from the named preset', () => {
-    const result = JSON.parse(
-      masteringAssistantSuggest({ samples, sampleRate, params: { preset: 'classical' } }),
-    );
-    expect(result.explanation).toContain('base preset: classical');
+    const result = masteringAssistantSuggest({ samples, sampleRate, preset: 'classical' });
+    expect(result.explanation.join('\n')).toContain('base preset: classical');
   });
 
   it('applies the preset through the stereo entry point too', () => {
-    const result = JSON.parse(
-      masteringAssistantSuggestStereo({
-        left: samples,
-        right: samples,
-        sampleRate,
-        params: { preset: 'jazz' },
-      }),
-    );
-    expect(result.explanation).toContain('base preset: jazz');
+    const result = masteringAssistantSuggestStereo({
+      left: samples,
+      right: samples,
+      sampleRate,
+      preset: 'jazz',
+    });
+    expect(result.explanation.join('\n')).toContain('base preset: jazz');
   });
 
-  it('rejects an unknown preset and a restoration preset', () => {
+  it('rejects an unknown preset and a restoration preset with a RangeError', () => {
     expect(() =>
-      masteringAssistantSuggest({ samples, sampleRate, params: { preset: 'notAPreset' } }),
-    ).toThrow(/notAPreset/);
+      masteringAssistantSuggest({ samples, sampleRate, preset: 'notAPreset' as never }),
+    ).toThrow(RangeError);
     expect(() =>
-      masteringAssistantSuggest({ samples, sampleRate, params: { preset: 'vinyl' } }),
-    ).toThrow(/vinyl/);
+      masteringAssistantSuggest({ samples, sampleRate, preset: 'vinyl' as never }),
+    ).toThrow(RangeError);
   });
 
   it('rejects a numeric preset: the index is a C-ABI transport detail', () => {
-    expect(() =>
-      // biome-ignore lint/suspicious/noExplicitAny: deliberately passing the wrong type.
-      masteringAssistantSuggest({ samples, sampleRate, params: { preset: 3 as any } }),
-    ).toThrow(/preset/);
+    expect(() => masteringAssistantSuggest({ samples, sampleRate, preset: 3 as never })).toThrow(
+      TypeError,
+    );
   });
 });

@@ -1,16 +1,16 @@
 /**
  * Window-scoped validation and dB-parameter domain for the spectrum meters.
  *
- * `meteringSpectrumFrame` reads exactly `[frameOffset, frameOffset + nFft)` and
+ * `meteringSpectrumFrame` reads exactly `[startSample, startSample + nFft)` and
  * that frame is the only span it validates: a non-finite sample inside the frame
  * is refused, one outside it neither reaches the FFT nor refuses the call. The
  * emptiness and `sampleRate` checks still cover the whole buffer, and the index
  * a refusal quotes is absolute -- an index into the caller's buffer, not into
  * the frame.
  *
- * `dbRef` and `dbAmin` take exactly `0` as "use the library default"; every
- * other value outside `[0, inf)` is refused rather than promoted to the default
- * or applied as a real level.
+ * `dbRef` and `dbAmin` take their library default when omitted; an explicit `0` and
+ * every other value outside `(0, inf)` is refused rather than promoted to the
+ * default or applied as a real level.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -24,7 +24,7 @@ const FRAME_OFFSET = 1024;
 const N_FFT = 512;
 const FRAME_END = FRAME_OFFSET + N_FFT;
 // The library's own fallback FFT size, which the facade mirrors to size the scan
-// for `nFft: 0`. Pinned below against the `nFft` the library reports back.
+// for an omitted `nFft`. Pinned below against the `nFft` the library reports back.
 const DEFAULT_N_FFT = 2048;
 
 function tone(length = LENGTH): Float32Array {
@@ -56,8 +56,14 @@ describe('meteringSpectrumFrame validates only the analysis frame', () => {
   it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
     'accepts %p outside the frame and returns the clean spectrum',
     (bad) => {
-      const expected = meteringSpectrumFrame(tone(), SR, FRAME_OFFSET, { nFft: N_FFT });
-      const actual = meteringSpectrumFrame(toneWith(4000, bad), SR, FRAME_OFFSET, { nFft: N_FFT });
+      const expected = meteringSpectrumFrame(tone(), SR, {
+        startSample: FRAME_OFFSET,
+        nFft: N_FFT,
+      });
+      const actual = meteringSpectrumFrame(toneWith(4000, bad), SR, {
+        startSample: FRAME_OFFSET,
+        nFft: N_FFT,
+      });
       expectSameSpectrum(actual, expected);
       expect(Math.max(...actual.magnitude)).toBeGreaterThan(0);
     },
@@ -71,7 +77,10 @@ describe('meteringSpectrumFrame validates only the analysis frame', () => {
       // one -- and this is the assertion a deleted scan cannot survive.
       const badIndex = FRAME_OFFSET + 176;
       expect(() =>
-        meteringSpectrumFrame(toneWith(badIndex, bad), SR, FRAME_OFFSET, { nFft: N_FFT }),
+        meteringSpectrumFrame(toneWith(badIndex, bad), SR, {
+          startSample: FRAME_OFFSET,
+          nFft: N_FFT,
+        }),
       ).toThrow(`meteringSpectrumFrame: samples contains NaN or Inf at index ${badIndex}`);
     },
   );
@@ -81,24 +90,28 @@ describe('meteringSpectrumFrame validates only the analysis frame', () => {
     // widens back to the whole buffer, so neither edge can drift silently.
     for (const inside of [FRAME_OFFSET, FRAME_END - 1]) {
       expect(() =>
-        meteringSpectrumFrame(toneWith(inside, Number.NaN), SR, FRAME_OFFSET, { nFft: N_FFT }),
+        meteringSpectrumFrame(toneWith(inside, Number.NaN), SR, {
+          startSample: FRAME_OFFSET,
+          nFft: N_FFT,
+        }),
       ).toThrow(`at index ${inside}`);
     }
     for (const outside of [FRAME_OFFSET - 1, FRAME_END]) {
-      const report = meteringSpectrumFrame(toneWith(outside, Number.NaN), SR, FRAME_OFFSET, {
+      const report = meteringSpectrumFrame(toneWith(outside, Number.NaN), SR, {
+        startSample: FRAME_OFFSET,
         nFft: N_FFT,
       });
       expect(Array.from(report.magnitude).every(Number.isFinite)).toBe(true);
     }
   });
 
-  it('refuses a fractional frameOffset as an offset, not as a bad sample', () => {
+  it('refuses a fractional startSample as an offset, not as a bad sample', () => {
     // A fractional index reads `undefined` out of the buffer, which a scan that
     // used the offset unfloored reported as a non-finite sample that is not
     // there -- refusing the call for the wrong reason, at the wrong layer.
     let caught: unknown;
     try {
-      meteringSpectrumFrame(tone(), SR, 100.5, { nFft: N_FFT });
+      meteringSpectrumFrame(tone(), SR, { startSample: 100.5, nFft: N_FFT });
     } catch (error) {
       caught = error;
     }
@@ -125,7 +138,8 @@ describe('meteringSpectrumFrame validates only the analysis frame', () => {
     for (let i = 0; i < LENGTH; i++) {
       samples[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / SR);
     }
-    meteringSpectrumFrame(samples as Float32Array, SR, FRAME_OFFSET, {
+    meteringSpectrumFrame(samples as Float32Array, SR, {
+      startSample: FRAME_OFFSET,
       nFft: N_FFT,
       validate: false,
     });
@@ -137,9 +151,9 @@ describe('meteringSpectrumFrame validates only the analysis frame', () => {
   });
 
   it('still refuses an empty buffer whatever the frame asks for', () => {
-    expect(() => meteringSpectrumFrame(new Float32Array(0), SR, 99999, { nFft: N_FFT })).toThrow(
-      /must not be empty/,
-    );
+    expect(() =>
+      meteringSpectrumFrame(new Float32Array(0), SR, { startSample: 99999, nFft: N_FFT }),
+    ).toThrow(/must not be empty/);
   });
 
   it('scans the span the library actually reads when nFft is omitted', () => {
@@ -147,15 +161,19 @@ describe('meteringSpectrumFrame validates only the analysis frame', () => {
     // library; the index probes pin the scan against the same value. A drifted
     // mirror would scan a span the call does not read, which neither half alone
     // can see.
-    expect(meteringSpectrumFrame(tone(), SR, FRAME_OFFSET, {}).nFft).toBe(DEFAULT_N_FFT);
+    expect(meteringSpectrumFrame(tone(), SR, { startSample: FRAME_OFFSET }).nFft).toBe(
+      DEFAULT_N_FFT,
+    );
 
     const lastInside = FRAME_OFFSET + DEFAULT_N_FFT - 1;
     const firstOutside = FRAME_OFFSET + DEFAULT_N_FFT;
     expect(firstOutside).toBeLessThan(LENGTH);
     expect(() =>
-      meteringSpectrumFrame(toneWith(lastInside, Number.NaN), SR, FRAME_OFFSET, {}),
+      meteringSpectrumFrame(toneWith(lastInside, Number.NaN), SR, { startSample: FRAME_OFFSET }),
     ).toThrow(`at index ${lastInside}`);
-    const report = meteringSpectrumFrame(toneWith(firstOutside, Number.NaN), SR, FRAME_OFFSET, {});
+    const report = meteringSpectrumFrame(toneWith(firstOutside, Number.NaN), SR, {
+      startSample: FRAME_OFFSET,
+    });
     expect(report.nFft).toBe(DEFAULT_N_FFT);
     expect(Array.from(report.magnitude).every(Number.isFinite)).toBe(true);
   });
@@ -165,23 +183,29 @@ describe('meteringSpectrumFrame validates only the analysis frame', () => {
     // The two refusals are distinguishable: the facade names the index, the core
     // does not.
     expect(() =>
-      meteringSpectrumFrame(toneWith(inside, Number.NaN), SR, FRAME_OFFSET, {
+      meteringSpectrumFrame(toneWith(inside, Number.NaN), SR, {
+        startSample: FRAME_OFFSET,
         nFft: N_FFT,
         validate: false,
       }),
     ).toThrow();
     expect(() =>
-      meteringSpectrumFrame(toneWith(inside, Number.NaN), SR, FRAME_OFFSET, {
+      meteringSpectrumFrame(toneWith(inside, Number.NaN), SR, {
+        startSample: FRAME_OFFSET,
         nFft: N_FFT,
         validate: false,
       }),
     ).not.toThrow(`at index ${inside}`);
 
-    const unchecked = meteringSpectrumFrame(toneWith(4000, Number.NaN), SR, FRAME_OFFSET, {
+    const unchecked = meteringSpectrumFrame(toneWith(4000, Number.NaN), SR, {
+      startSample: FRAME_OFFSET,
       nFft: N_FFT,
       validate: false,
     });
-    expectSameSpectrum(unchecked, meteringSpectrumFrame(tone(), SR, FRAME_OFFSET, { nFft: N_FFT }));
+    expectSameSpectrum(
+      unchecked,
+      meteringSpectrumFrame(tone(), SR, { startSample: FRAME_OFFSET, nFft: N_FFT }),
+    );
   });
 });
 
@@ -190,7 +214,8 @@ describe('the spectrum dB parameters refuse everything outside their domain', ()
     ['meteringSpectrum', (options: object) => meteringSpectrum(tone(), SR, options)],
     [
       'meteringSpectrumFrame',
-      (options: object) => meteringSpectrumFrame(tone(), SR, FRAME_OFFSET, options),
+      (options: object) =>
+        meteringSpectrumFrame(tone(), SR, { startSample: FRAME_OFFSET, ...options }),
     ],
   ] as const;
 

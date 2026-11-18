@@ -6,7 +6,7 @@ import {
   HrtfSet,
   init,
   Mixer,
-  mixingScenePresetJson,
+  mixingScenePreset,
   PlaybackLoudnessMeter,
   PlaybackRenderer,
   Project,
@@ -59,7 +59,7 @@ describe('Symbol.dispose / using', () => {
   });
 
   it('Mixer, SampleBank and StreamAnalyzer release through Symbol.dispose', () => {
-    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
       sampleRate: SR,
       maxBlockSize: BLOCK,
     });
@@ -126,12 +126,12 @@ describe('Symbol.dispose / using', () => {
     },
     {
       name: 'StreamingMasteringChain',
-      make: () => new StreamingMasteringChain({}),
+      make: () => new StreamingMasteringChain({ sampleRate: 48000 }),
       call: (h: StreamingMasteringChain) => h.reset(),
     },
     {
       name: 'StreamingEqualizer',
-      make: () => new StreamingEqualizer(),
+      make: () => new StreamingEqualizer({ sampleRate: 48000 }),
       call: (h: StreamingEqualizer) => h.clear(),
     },
     {
@@ -142,7 +142,7 @@ describe('Symbol.dispose / using', () => {
     {
       name: 'Mixer',
       make: () =>
-        Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+        Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
           sampleRate: SR,
           maxBlockSize: BLOCK,
         }),

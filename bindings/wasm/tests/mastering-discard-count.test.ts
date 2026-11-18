@@ -22,13 +22,15 @@ describe('mastering nonFiniteDiscardCount (WASM)', () => {
     // module enables it) and gives it recursive filter cells; the default
     // chain has no stage that keeps state, so its count would sit at zero
     // for a reason unrelated to the method under test.
-    const chain = new StreamingMasteringChain({ 'eq.tilt.tiltDb': 24 });
+    const chain = new StreamingMasteringChain({
+      sampleRate,
+      maxBlockSize: blockSize,
+      eq: { tilt: { tiltDb: 24 } },
+    });
     try {
-      chain.prepare(sampleRate, blockSize, 1);
-
       const clean = new Float32Array(blockSize).fill(0.25);
       chain.processMono(clean);
-      expect(chain.nonFiniteDiscardCount()).toBe(0);
+      expect(chain.nonFiniteDiscardCount).toBe(0);
 
       // The chain rejects non-finite input outright, so the poison has to be
       // a finite value a stage overflows internally: 3.0e38 through a 24 dB
@@ -37,11 +39,11 @@ describe('mastering nonFiniteDiscardCount (WASM)', () => {
       chain.processMono(poisoned);
       // Exactly 1: the unit is one processing call, however many cells or
       // stages moved, never a sum across them.
-      expect(chain.nonFiniteDiscardCount()).toBe(1);
+      expect(chain.nonFiniteDiscardCount).toBe(1);
 
       // A further clean block adds nothing more: the stage has recovered.
       chain.processMono(clean);
-      expect(chain.nonFiniteDiscardCount()).toBe(1);
+      expect(chain.nonFiniteDiscardCount).toBe(1);
     } finally {
       chain.destroy();
     }

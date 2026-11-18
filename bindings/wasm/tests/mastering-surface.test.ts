@@ -1,36 +1,34 @@
 /**
  * The one-shot mastering entry points the WASM module exposes: the chain and
- * its stereo and progress forms, the named processors, the pair APIs, the
+ * its stereo form, the named processors, the pair APIs, the
  * assistant, the profiles and the metering beside them.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   init,
-  lufsInterleaved,
-  mastering,
+  lufsMultichannel,
+  masterAudio,
+  masterAudioStereo,
+  masteringAnalyzePair,
+  masteringAnalyzeStereo,
+  masteringApplyPairProcessor,
+  masteringApplyProcessor,
+  masteringApplyProcessorStereo,
   masteringAssistantSuggest,
   masteringAssistantSuggestStereo,
   masteringAudioProfile,
   masteringAudioProfileStereo,
-  masteringChain,
-  masteringChainStereo,
-  masteringChainStereoWithProgress,
-  masteringChainWithProgress,
+  masteringNormalizeLoudness,
   masteringPairAnalysisNames,
-  masteringPairAnalyze,
-  masteringPairProcess,
   masteringPairProcessorNames,
-  masteringProcess,
   masteringProcessorNames,
-  masteringProcessStereo,
   masteringStereoAnalysisNames,
-  masteringStereoAnalyze,
   masteringStreamingPreview,
   masteringStreamingPreviewStereo,
   meteringCrestFactorDb,
   meteringCrestFactorDbStereo,
-  mixingScenePresetJson,
+  mixingScenePreset,
   mixingScenePresetNames,
   mixStereo,
 } from '../dist/index.js';
@@ -48,7 +46,7 @@ describe('Sonare WASM Module', () => {
         samples[i] = 0.2 * Math.sin((2 * Math.PI * 440 * i) / sampleRate);
       }
 
-      const result = mastering(samples, sampleRate, {
+      const result = masteringNormalizeLoudness(samples, sampleRate, {
         targetLufs: -18.0,
         ceilingDb: -1.0,
         truePeakOversample: 4,
@@ -62,7 +60,7 @@ describe('Sonare WASM Module', () => {
       expect(typeof result.loudnessTargetLimited).toBe('boolean');
       expect(result.outputLufs).toBeCloseTo(-18.0, 1);
 
-      const ceilingLimited = mastering(samples, sampleRate, {
+      const ceilingLimited = masteringNormalizeLoudness(samples, sampleRate, {
         targetLufs: -2.0,
         ceilingDb: -1.0,
         truePeakOversample: 4,
@@ -70,19 +68,17 @@ describe('Sonare WASM Module', () => {
       expect(ceilingLimited.loudnessTargetLimited).toBe(true);
     });
 
-    it('treats truePeakOversample: 0 as the library default', () => {
-      const sampleRate = 22050;
-      const input = new Float32Array(4096);
-      for (let i = 0; i < input.length; i++) {
-        input[i] = 0.3 * Math.sin((2 * Math.PI * 440 * i) / sampleRate);
-      }
-      const implicit = mastering(input, sampleRate, { targetLufs: -18, ceilingDb: -1 });
-      const sentinel = mastering(input, sampleRate, {
-        targetLufs: -18,
-        ceilingDb: -1,
-        truePeakOversample: 0,
-      });
-      expect(sentinel.samples).toEqual(implicit.samples);
+    it('refuses an explicit truePeakOversample of 0', () => {
+      const input = new Float32Array(4096).fill(0.1);
+      expect(() =>
+        masteringNormalizeLoudness({
+          samples: input,
+          sampleRate: 22050,
+          targetLufs: -18,
+          ceilingDb: -1,
+          truePeakOversample: 0,
+        }),
+      ).toThrow(RangeError);
     });
 
     it('should run a configurable mastering chain in WASM', () => {
@@ -94,30 +90,34 @@ describe('Sonare WASM Module', () => {
         samples[i] = 0.18 * (tone + overtone);
       }
 
-      const result = masteringChain(samples, sampleRate, {
-        eq: { tiltDb: 1.5, pivotHz: 1200 },
-        dynamics: {
-          compressor: {
-            thresholdDb: -22,
-            ratio: 1.6,
-            attackMs: 15,
-            releaseMs: 120,
-            kneeDb: 3,
+      const result = masterAudio({
+        samples,
+        sampleRate,
+        overrides: {
+          eq: { tilt: { tiltDb: 1.5, pivotHz: 1200 } },
+          dynamics: {
+            compressor: {
+              thresholdDb: -22,
+              ratio: 1.6,
+              attackMs: 15,
+              releaseMs: 120,
+              kneeDb: 3,
+            },
           },
-        },
-        saturation: {
-          tape: { driveDb: 1.5, saturation: 0.25, hysteresis: 0.1 },
-          exciter: { amount: 0.05, driveDb: 2 },
-        },
-        spectral: { airBand: { amount: 0.08 } },
-        maximizer: {
-          truePeakLimiter: {
-            ceilingDb: -1,
-            oversampleFactor: 4,
-            applyGainAtInputRate: true,
+          saturation: {
+            tape: { driveDb: 1.5, saturation: 0.25, hysteresis: 0.1 },
+            exciter: { amount: 0.05, driveDb: 2 },
           },
+          spectral: { airBand: { amount: 0.08 } },
+          maximizer: {
+            truePeakLimiter: {
+              ceilingDb: -1,
+              oversampleFactor: 4,
+              applyGainAtInputRate: true,
+            },
+          },
+          loudness: { targetLufs: -18, ceilingDb: -1, truePeakOversample: 4 },
         },
-        loudness: { targetLufs: -18, ceilingDb: -1, truePeakOversample: 4 },
       });
 
       expect(result.samples).toBeInstanceOf(Float32Array);
@@ -147,7 +147,7 @@ describe('Sonare WASM Module', () => {
         return samples;
       };
       const stagesFor = (saturation: Record<string, unknown>): string[] =>
-        masteringChain(tone(), sampleRate, { saturation }).stages;
+        masterAudio({ samples: tone(), sampleRate, overrides: { saturation } }).stages;
 
       it('does not engage the exciter when amount is zero', () => {
         expect(stagesFor({ exciter: { amount: 0 } })).not.toContain('saturation.exciter');
@@ -187,19 +187,24 @@ describe('Sonare WASM Module', () => {
         right[i] = 0.16 * Math.sin((2 * Math.PI * 330 * i) / sampleRate);
       }
 
-      const result = masteringChainStereo(left, right, sampleRate, {
-        eq: { tiltDb: 1.0 },
-        dynamics: { compressor: { thresholdDb: -24, ratio: 1.5 } },
-        saturation: { tape: { driveDb: 1.0, saturation: 0.2 } },
-        stereo: {
-          imager: { width: 1.15, decorrelationAmount: 0.05 },
-          monoMaker: { amount: 0.2 },
-        },
-        loudness: {
-          targetLufs: -18,
-          ceilingDb: -1,
-          truePeakOversample: 4,
-          applyGainAtInputRate: true,
+      const result = masterAudioStereo({
+        left,
+        right,
+        sampleRate,
+        overrides: {
+          eq: { tilt: { tiltDb: 1.0 } },
+          dynamics: { compressor: { thresholdDb: -24, ratio: 1.5 } },
+          saturation: { tape: { driveDb: 1.0, saturation: 0.2 } },
+          stereo: {
+            imager: { width: 1.15, decorrelationAmount: 0.05 },
+            monoMaker: { amount: 0.2 },
+          },
+          loudness: {
+            targetLufs: -18,
+            ceilingDb: -1,
+            truePeakOversample: 4,
+            applyGainAtInputRate: true,
+          },
         },
       });
 
@@ -216,7 +221,7 @@ describe('Sonare WASM Module', () => {
       expect(Number.isFinite(result.outputLufs)).toBe(true);
     });
 
-    it('should invoke progress callback for masteringChainWithProgress', () => {
+    it('should invoke the progress callback on a chain without a preset', () => {
       const sampleRate = 22050;
       const samples = new Float32Array(sampleRate);
       for (let i = 0; i < samples.length; i++) {
@@ -225,18 +230,18 @@ describe('Sonare WASM Module', () => {
 
       const stages: string[] = [];
       const progresses: number[] = [];
-      const result = masteringChainWithProgress(
+      const result = masterAudio({
         samples,
         sampleRate,
-        {
-          eq: { tiltDb: 1.0 },
+        overrides: {
+          eq: { tilt: { tiltDb: 1.0 } },
           dynamics: { compressor: { thresholdDb: -24, ratio: 1.5 } },
         },
-        (progress, stage) => {
+        onProgress: (progress, stage) => {
           progresses.push(progress);
           stages.push(stage);
         },
-      );
+      });
 
       expect(stages).toEqual(['eq.tilt', 'dynamics.compressor']);
       expect(progresses.length).toBe(2);
@@ -246,19 +251,22 @@ describe('Sonare WASM Module', () => {
       expect(result.samples.length).toBe(samples.length);
     });
 
-    it('should invoke progress callback for positional masteringChain', () => {
+    it('should invoke the progress callback from the positional masterAudio', () => {
       const samples = new Float32Array(22050).fill(0.1);
       const stages: string[] = [];
 
-      const result = masteringChain(samples, 22050, { eq: { tiltDb: 1 } }, (_, stage) => {
-        stages.push(stage);
+      const result = masterAudio(samples, 22050, {
+        overrides: { eq: { tilt: { tiltDb: 1 } } },
+        onProgress: (_, stage) => {
+          stages.push(stage);
+        },
       });
 
       expect(result.stages).toEqual(['eq.tilt']);
       expect(stages).toEqual(['eq.tilt']);
     });
 
-    it('should invoke progress callback for masteringChainStereoWithProgress', () => {
+    it('should invoke the progress callback on a stereo chain', () => {
       const sampleRate = 22050;
       const left = new Float32Array(sampleRate);
       const right = new Float32Array(sampleRate);
@@ -269,19 +277,19 @@ describe('Sonare WASM Module', () => {
 
       const stages: string[] = [];
       const progresses: number[] = [];
-      const result = masteringChainStereoWithProgress(
+      const result = masterAudioStereo({
         left,
         right,
         sampleRate,
-        {
-          eq: { tiltDb: 1.0 },
+        overrides: {
+          eq: { tilt: { tiltDb: 1.0 } },
           stereo: { imager: { width: 1.1 } },
         },
-        (progress, stage) => {
+        onProgress: (progress, stage) => {
           progresses.push(progress);
           stages.push(stage);
         },
-      );
+      });
 
       expect(stages).toEqual(['eq.tilt', 'stereo.imager']);
       expect(progresses.length).toBe(2);
@@ -291,19 +299,6 @@ describe('Sonare WASM Module', () => {
       expect(result.right).toBeInstanceOf(Float32Array);
       expect(result.left.length).toBe(left.length);
       expect(result.right.length).toBe(right.length);
-    });
-
-    it('should invoke progress callback for positional masteringChainStereo', () => {
-      const left = new Float32Array(22050).fill(0.1);
-      const right = new Float32Array(22050).fill(0.08);
-      const stages: string[] = [];
-
-      const result = masteringChainStereo(left, right, 22050, { eq: { tiltDb: 1 } }, (_, stage) => {
-        stages.push(stage);
-      });
-
-      expect(result.stages).toEqual(['eq.tilt']);
-      expect(stages).toEqual(['eq.tilt']);
     });
 
     it('should expose named mastering processors in WASM', () => {
@@ -320,33 +315,45 @@ describe('Sonare WASM Module', () => {
       expect(names).toContain('saturation.tape');
       expect(names).toContain('stereo.imager');
 
-      const mono = masteringProcess('dynamics.compressor', samples, sampleRate, {
-        thresholdDb: -24,
-        ratio: 1.5,
+      const mono = masteringApplyProcessor({
+        processor: 'dynamics.compressor',
+        samples,
+        sampleRate,
+        params: { thresholdDb: -24, ratio: 1.5 },
       });
       expect(mono.samples).toBeInstanceOf(Float32Array);
       expect(mono.samples.length).toBe(samples.length);
       expect(Number.isFinite(mono.outputLufs)).toBe(true);
 
-      const eq = masteringProcess('eq.equalizer', samples, sampleRate, {
-        'band0.enabled': 1,
-        'band0.frequencyHz': 440,
-        'band0.gainDb': 6,
-        'band0.q': 1,
-        autoGain: 1,
+      const eq = masteringApplyProcessor({
+        processor: 'eq.equalizer',
+        samples,
+        sampleRate,
+        params: {
+          'band0.enabled': true,
+          'band0.frequencyHz': 440,
+          'band0.gainDb': 6,
+          'band0.q': 1,
+          autoGain: true,
+        },
       });
       expect(eq.samples).toBeInstanceOf(Float32Array);
       expect(eq.samples.length).toBe(samples.length);
       expect(Number.isFinite(eq.outputLufs)).toBe(true);
 
-      const amp = masteringProcess('saturation.ampSim', samples, sampleRate, {
-        drive: 0.8,
-        bassDb: 2,
-        midDb: -3,
-        trebleDb: 1.5,
-        presenceDb: 3,
-        cab: 1,
-        levelDb: -6,
+      const amp = masteringApplyProcessor({
+        processor: 'saturation.ampSim',
+        samples,
+        sampleRate,
+        params: {
+          drive: 0.8,
+          bassDb: 2,
+          midDb: -3,
+          trebleDb: 1.5,
+          presenceDb: 3,
+          cab: true,
+          levelDb: -6,
+        },
       });
       expect(amp.samples).toBeInstanceOf(Float32Array);
       expect(amp.samples.length).toBe(samples.length);
@@ -362,8 +369,12 @@ describe('Sonare WASM Module', () => {
         right[i] = 0.2 * Math.sin((2 * Math.PI * 330 * i) / sampleRate);
       }
 
-      const result = masteringProcessStereo('stereo.imager', left, right, sampleRate, {
-        width: 1.1,
+      const result = masteringApplyProcessorStereo({
+        processor: 'stereo.imager',
+        left,
+        right,
+        sampleRate,
+        params: { width: 1.1 },
       });
       expect(result.left).toBeInstanceOf(Float32Array);
       expect(result.right).toBeInstanceOf(Float32Array);
@@ -371,23 +382,35 @@ describe('Sonare WASM Module', () => {
       expect(result.right.length).toBe(right.length);
       expect(Number.isFinite(result.outputLufs)).toBe(true);
 
-      const leftEq = masteringProcessStereo('eq.equalizer', left, left, sampleRate, {
-        'band0.enabled': 1,
-        'band0.frequencyHz': 220,
-        'band0.gainDb': 12,
-        'band0.q': 1,
-        'band0.placement': 1,
+      const leftEq = masteringApplyProcessorStereo({
+        processor: 'eq.equalizer',
+        left,
+        right: left,
+        sampleRate,
+        params: {
+          'band0.enabled': true,
+          'band0.frequencyHz': 220,
+          'band0.gainDb': 12,
+          'band0.q': 1,
+          'band0.placement': 'left',
+        },
       });
       const leftPeak = Math.max(...Array.from(leftEq.left, Math.abs));
       const rightPeak = Math.max(...Array.from(leftEq.right, Math.abs));
       expect(leftPeak).toBeGreaterThan(rightPeak * 1.5);
 
-      const linearEq = masteringProcessStereo('eq.equalizer', left, left, sampleRate, {
-        phaseMode: 3,
-        'band0.enabled': 1,
-        'band0.frequencyHz': 220,
-        'band0.gainDb': 3,
-        'band0.q': 1,
+      const linearEq = masteringApplyProcessorStereo({
+        processor: 'eq.equalizer',
+        left,
+        right: left,
+        sampleRate,
+        params: {
+          phaseMode: 'linearPhase',
+          'band0.enabled': true,
+          'band0.frequencyHz': 220,
+          'band0.gainDb': 3,
+          'band0.q': 1,
+        },
       });
       expect(linearEq.latencySamples).toBeGreaterThan(0);
     });
@@ -403,19 +426,25 @@ describe('Sonare WASM Module', () => {
         peaky[i] = 0.05 * Math.sin((2 * Math.PI * 440 * i) / sampleRate);
       }
       peaky[peaky.length >> 1] = 1;
-      const params = { targetLufs: -6, ceilingDb: -3, truePeakOversample: 4 };
+      // The catalog lists no parameters for this processor, so its typed params are empty.
+      const params = { targetLufs: -6, ceilingDb: -3, truePeakOversample: 4 } as never;
 
-      const mono = masteringProcess('maximizer.loudnessOptimize', peaky, sampleRate, params);
-      const stereo = masteringProcessStereo(
-        'maximizer.loudnessOptimize',
-        peaky,
-        peaky,
+      const mono = masteringApplyProcessor({
+        processor: 'maximizer.loudnessOptimize',
+        samples: peaky,
         sampleRate,
         params,
-      );
+      });
+      const stereo = masteringApplyProcessorStereo({
+        processor: 'maximizer.loudnessOptimize',
+        left: peaky,
+        right: peaky,
+        sampleRate,
+        params,
+      });
       expect(mono.loudnessTargetLimited).toBe(true);
       expect(stereo.loudnessTargetLimited).toBe(mono.loudnessTargetLimited);
-      expect(stereo.outputLufs).toBeLessThan(params.targetLufs);
+      expect(stereo.outputLufs).toBeLessThan(-6);
     });
 
     it('should expose pair and stereo mastering APIs in WASM', () => {
@@ -431,28 +460,32 @@ describe('Sonare WASM Module', () => {
       expect(masteringPairAnalysisNames()).toContain('match.referenceLoudness');
       expect(masteringStereoAnalysisNames()).toContain('stereo.monoCompatCheck');
 
-      const paired = masteringPairProcess('match.abCrossfade', source, reference, sampleRate, {
-        mix: 0.25,
+      const paired = masteringApplyPairProcessor({
+        processor: 'match.abCrossfade',
+        source,
+        reference,
+        sampleRate,
+        params: { mix: 0.25 },
       });
       expect(paired.samples).toBeInstanceOf(Float32Array);
       expect(paired.samples.length).toBe(source.length);
 
-      const pairJson = masteringPairAnalyze(
-        'match.referenceLoudness',
+      const pairResult = masteringAnalyzePair({
+        analysis: 'match.referenceLoudness',
         source,
         reference,
         sampleRate,
-      );
-      expect(pairJson).toContain('"sourceLufs"');
-      expect(pairJson).toContain('"referenceLufs"');
+      });
+      expect(pairResult.sourceLufs).toBeTypeOf('number');
+      expect(pairResult.referenceLufs).toBeTypeOf('number');
 
-      const stereoJson = masteringStereoAnalyze(
-        'stereo.monoCompatCheck',
-        source,
-        reference,
+      const stereoResult = masteringAnalyzeStereo({
+        analysis: 'stereo.monoCompatCheck',
+        left: source,
+        right: reference,
         sampleRate,
-      );
-      expect(stereoJson).toContain('"correlation"');
+      });
+      expect(stereoResult.correlation).toBeTypeOf('number');
     });
 
     it('should accept independent source/reference lengths for pair mastering', () => {
@@ -466,20 +499,24 @@ describe('Sonare WASM Module', () => {
         reference[i] = 0.12 * Math.sin((2 * Math.PI * 880 * i) / sampleRate);
       }
 
-      const paired = masteringPairProcess('match.abCrossfade', source, reference, sampleRate, {
-        mix: 0.25,
+      const paired = masteringApplyPairProcessor({
+        processor: 'match.abCrossfade',
+        source,
+        reference,
+        sampleRate,
+        params: { mix: 0.25 },
       });
       expect(paired.samples).toBeInstanceOf(Float32Array);
       expect(paired.samples.length).toBe(source.length);
 
-      const pairJson = masteringPairAnalyze(
-        'match.referenceLoudness',
+      const pairResult = masteringAnalyzePair({
+        analysis: 'match.referenceLoudness',
         source,
         reference,
         sampleRate,
-      );
-      expect(pairJson).toContain('"sourceLufs"');
-      expect(pairJson).toContain('"referenceLufs"');
+      });
+      expect(pairResult.sourceLufs).toBeTypeOf('number');
+      expect(pairResult.referenceLufs).toBeTypeOf('number');
     });
 
     it('should expose mastering assistant suggestions in WASM', () => {
@@ -494,27 +531,25 @@ describe('Sonare WASM Module', () => {
         clicked[k * step] = 0.9;
       }
       const suggest = (samples: Float32Array) =>
-        JSON.parse(
-          masteringAssistantSuggest(samples, sampleRate, {
-            targetLufs: -13,
-            ceilingDb: -0.8,
-            enableRepair: true,
-          }),
-        );
+        masteringAssistantSuggest(samples, sampleRate, {
+          targetLufs: -13,
+          ceilingDb: -0.8,
+          enableRepair: true,
+        });
       const result = suggest(clean);
 
       expect(result).toHaveProperty('chainConfig');
       expect(result).toHaveProperty('profile');
       expect(Array.isArray(result.explanation)).toBe(true);
       expect(result).not.toHaveProperty('genreCandidates');
-      expect(result.chainConfig.params['loudness.targetLufs']).toBe(-13);
-      expect(result.chainConfig.params['loudness.ceilingDb']).toBeCloseTo(-0.8, 6);
+      expect(result.chainConfig.loudness?.targetLufs).toBe(-13);
+      expect(result.chainConfig.loudness?.ceilingDb).toBeCloseTo(-0.8, 6);
 
       // enableRepair asks for repair; the measured defect profile picks which stages
       // run. Only the clean side would still pass with enableRepair ignored outright,
-      // so both are driven. Booleans serialize as JSON true/false (RFC 8259).
-      expect(result.chainConfig.params['repair.declick.enabled']).toBe(false);
-      expect(suggest(clicked).chainConfig.params['repair.declick.enabled']).toBe(true);
+      // so both are driven.
+      expect(result.chainConfig.repair?.declick?.enabled).toBe(false);
+      expect(suggest(clicked).chainConfig.repair?.declick?.enabled).toBe(true);
     });
 
     it('should expose mastering audio profiles in WASM', () => {
@@ -523,17 +558,16 @@ describe('Sonare WASM Module', () => {
       for (let i = 0; i < samples.length; i++) {
         samples[i] = 0.2 * Math.sin((2 * Math.PI * 330 * i) / sampleRate);
       }
-      const json = masteringAudioProfile(samples, sampleRate, {
+      const result = masteringAudioProfile(samples, sampleRate, {
         nFft: 1024,
         hopLength: 256,
       });
-      const result = JSON.parse(json);
 
       expect(typeof result.durationSec).toBe('number');
       expect(result.durationSec).toBeGreaterThan(1.9);
       expect(result).toHaveProperty('loudness.integratedLufs');
       expect(result).toHaveProperty('spectral.centroidHz');
-      expect(result).toHaveProperty('dynamics.attackDensity');
+      expect(result).toHaveProperty('dynamics.attackPerSecond');
       expect(result).not.toHaveProperty('genreCandidates');
     });
 
@@ -543,15 +577,14 @@ describe('Sonare WASM Module', () => {
       for (let i = 0; i < samples.length; i++) {
         samples[i] = 0.2 * Math.sin((2 * Math.PI * 440 * i) / sampleRate);
       }
-      const json = masteringStreamingPreview(samples, sampleRate, [
-        { name: 'Unit Test', targetLufs: -12, ceilingDb: -1 },
-      ]);
-      const result = JSON.parse(json);
+      const result = masteringStreamingPreview(samples, sampleRate, {
+        platforms: [{ name: 'Unit Test', targetLufs: -12, ceilingDb: -1 }],
+      });
 
       expect(result.platforms).toHaveLength(1);
       expect(result.platforms[0].name).toBe('Unit Test');
       expect(typeof result.platforms[0].integratedLufs).toBe('number');
-      expect(typeof result.platforms[0].truePeakDb).toBe('number');
+      expect(typeof result.platforms[0].truePeakDbtp).toBe('number');
       expect(typeof result.platforms[0].normalizationGainDb).toBe('number');
       expect(typeof result.platforms[0].ceilingRisk).toBe('boolean');
     });
@@ -568,29 +601,26 @@ describe('Sonare WASM Module', () => {
         downmix[i] = 0.5 * (left[i] + right[i]);
       }
 
-      const interleaved = new Float32Array(n * 2);
-      for (let i = 0; i < n; i++) {
-        interleaved[2 * i] = left[i];
-        interleaved[2 * i + 1] = right[i];
-      }
-
-      const stereo = JSON.parse(masteringStreamingPreviewStereo({ left, right, sampleRate }));
-      const mono = JSON.parse(masteringStreamingPreview(downmix, sampleRate));
-      const stereoLufs = stereo.platforms[0].integratedLufs;
+      const stereo = masteringStreamingPreviewStereo({ left, right, sampleRate });
+      const mono = masteringStreamingPreview(downmix, sampleRate);
+      const stereoLufs = stereo.platforms[0].integratedLufs as number;
 
       expect(stereo.platforms[0].name).toBe('Spotify');
       // BS.1770 sums the channel powers while the 0.5*(L+R) downmix quarters
       // them, so a decorrelated pair reads 6.02 dB above what a mono caller can
       // measure, and the normalization gain built on it is off by the same.
-      expect(stereoLufs - mono.platforms[0].integratedLufs).toBeCloseTo(6.02, 1);
-      expect(stereoLufs).toBeCloseTo(lufsInterleaved(interleaved, 2, sampleRate).integratedLufs, 2);
+      expect(stereoLufs - (mono.platforms[0].integratedLufs as number)).toBeCloseTo(6.02, 1);
+      expect(stereoLufs).toBeCloseTo(
+        lufsMultichannel({ channels: [left, right], sampleRate }).integratedLufs,
+        2,
+      );
       expect(stereo.platforms[0].normalizationGainDb).toBeCloseTo(-14 - stereoLufs, 3);
 
-      const profile = JSON.parse(masteringAudioProfileStereo({ left, right, sampleRate }));
+      const profile = masteringAudioProfileStereo({ left, right, sampleRate });
       expect(profile.loudness.integratedLufs).toBeCloseTo(stereoLufs, 2);
       expect(profile).toHaveProperty('spectral.centroidHz');
 
-      const suggestion = JSON.parse(masteringAssistantSuggestStereo({ left, right, sampleRate }));
+      const suggestion = masteringAssistantSuggestStereo({ left, right, sampleRate });
       expect(suggestion).toHaveProperty('chainConfig');
       expect(Array.isArray(suggestion.explanation)).toBe(true);
     });
@@ -624,11 +654,14 @@ describe('Sonare WASM Module', () => {
 
     it('should expose mixing presets and stereo mix in WASM', () => {
       expect(mixingScenePresetNames()).toContain('vocalReverbSend');
-      expect(mixingScenePresetJson('vocalReverbSend')).toContain('"vocal"');
+      expect(JSON.stringify(mixingScenePreset('vocalReverbSend'))).toContain('"vocal"');
 
       const left = new Float32Array([1, 1]);
       const right = new Float32Array([0, 0]);
-      const result = mixStereo([left], [right], 48000, { inputTrimDb: 6.0206, faderDb: -6.0206 });
+      const result = mixStereo({
+        strips: [{ left, right, inputTrimDb: 6.0206, faderDb: -6.0206 }],
+        sampleRate: 48000,
+      });
       expect(result.left).toBeInstanceOf(Float32Array);
       expect(result.right).toBeInstanceOf(Float32Array);
       // +6.02 dB trim and -6.02 dB fader cancel to unity. With the Balance pan

@@ -10,7 +10,7 @@ import {
   expect,
   it,
   Mixer,
-  mixingScenePresetJson,
+  mixingScenePreset,
   readSonareMeterRingBuffer,
   readSonareSpectrumRingBuffer,
   registerSonareWorkletProcessor,
@@ -26,7 +26,7 @@ describe('SonareWorkletProcessor', () => {
     expect(
       () =>
         new SonareWorkletProcessor({
-          sceneJson: mixingScenePresetJson('vocalReverbSend'),
+          sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
           sampleRate: 48000,
           stripCount: 999,
         }),
@@ -36,7 +36,7 @@ describe('SonareWorkletProcessor', () => {
   it('matches the offline mixer for one 128-sample render quantum', () => {
     const sampleRate = 48000;
     const blockSize = 128;
-    const sceneJson = mixingScenePresetJson('vocalReverbSend');
+    const sceneJson = JSON.stringify(mixingScenePreset('vocalReverbSend'));
 
     const offline = Mixer.fromJson(sceneJson, { sampleRate: sampleRate, maxBlockSize: blockSize });
     const processor = new SonareWorkletProcessor({
@@ -76,7 +76,7 @@ describe('SonareWorkletProcessor', () => {
     const sampleRate = 48000;
     const blockSize = 128;
     const processor = new SonareWorkletProcessor({
-      sceneJson: mixingScenePresetJson('vocalReverbSend'),
+      sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
       sampleRate,
       maxBlockSize: blockSize,
     });
@@ -100,7 +100,7 @@ describe('SonareWorkletProcessor', () => {
     const blockSize = 128;
     const checksPerCallback = (preset: string, strips: number): number => {
       const processor = new SonareWorkletProcessor({
-        sceneJson: mixingScenePresetJson(preset),
+        sceneJson: JSON.stringify(mixingScenePreset(preset)),
         sampleRate,
         maxBlockSize: blockSize,
       });
@@ -137,7 +137,7 @@ describe('SonareWorkletProcessor', () => {
     const sampleRate = 48000;
     const blockSize = 128;
     const processor = new SonareWorkletProcessor({
-      sceneJson: mixingScenePresetJson('vocalReverbSend'),
+      sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
       sampleRate,
       maxBlockSize: blockSize,
     });
@@ -171,7 +171,7 @@ describe('SonareWorkletProcessor', () => {
     const meters: unknown[] = [];
     const processor = new SonareWorkletProcessor(
       {
-        sceneJson: mixingScenePresetJson('vocalReverbSend'),
+        sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
         sampleRate,
         maxBlockSize: blockSize,
         meterIntervalFrames: blockSize,
@@ -228,7 +228,7 @@ describe('SonareWorkletProcessor', () => {
     const posted: unknown[] = [];
     const processor = new SonareWorkletProcessor(
       {
-        sceneJson: mixingScenePresetJson('vocalReverbSend'),
+        sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
         sampleRate,
         maxBlockSize: blockSize,
         meterIntervalFrames: blockSize,
@@ -283,7 +283,7 @@ describe('SonareWorkletProcessor', () => {
     const posted: unknown[] = [];
     const processor = new SonareWorkletProcessor(
       {
-        sceneJson: mixingScenePresetJson('vocalReverbSend'),
+        sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
         sampleRate,
         maxBlockSize: blockSize,
         meterIntervalFrames: blockSize,
@@ -329,7 +329,7 @@ describe('SonareWorkletProcessor', () => {
     expect(readSonareMeterRingBuffer(ring)).toEqual({ nextReadIndex: 0, meters: [] });
 
     const processor = new SonareWorkletProcessor({
-      sceneJson: mixingScenePresetJson('vocalReverbSend'),
+      sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
       sampleRate: 48000,
       maxBlockSize: 128,
       meterSharedBuffer: ring.sharedBuffer,
@@ -393,7 +393,7 @@ describe('SonareWorkletProcessor', () => {
   it('materializes mixer meter properties before claiming and preserves the old record on throw', () => {
     const ring = createSonareMeterRingBuffer({ capacity: 1 });
     const processor = new SonareWorkletProcessor({
-      sceneJson: mixingScenePresetJson('vocalReverbSend'),
+      sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
       sampleRate: 48000,
       maxBlockSize: 128,
       meterSharedBuffer: ring.sharedBuffer,
@@ -499,7 +499,7 @@ describe('SonareWorkletProcessor', () => {
       const spectra: unknown[] = [];
       const processor = new SonareWorkletProcessor(
         {
-          sceneJson: mixingScenePresetJson('vocalReverbSend'),
+          sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
           sampleRate,
           maxBlockSize: blockSize,
           spectrumBands: 8,
@@ -557,7 +557,7 @@ describe('SonareWorkletProcessor', () => {
     const spectra: unknown[] = [];
     const processor = new SonareWorkletProcessor(
       {
-        sceneJson: mixingScenePresetJson('vocalReverbSend'),
+        sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
         sampleRate,
         maxBlockSize: blockSize,
         spectrumIntervalFrames: blockSize,
@@ -582,7 +582,7 @@ describe('SonareWorkletProcessor', () => {
 
     const ring = createSonareSpectrumRingBuffer({ capacity: 4, bands: 8 });
     const ringProcessor = new SonareWorkletProcessor({
-      sceneJson: mixingScenePresetJson('vocalReverbSend'),
+      sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
       sampleRate,
       maxBlockSize: blockSize,
       spectrumIntervalFrames: blockSize,
@@ -608,7 +608,7 @@ describe('SonareWorkletProcessor', () => {
     expect(ring.header[4]).toBe(0);
     expect(readSonareSpectrumRingBuffer(ring)).toEqual({ nextReadIndex: 0, spectra: [] });
     const processor = new SonareWorkletProcessor({
-      sceneJson: mixingScenePresetJson('vocalReverbSend'),
+      sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
       sampleRate: 48000,
       maxBlockSize: 128,
       spectrumSharedBuffer: ring.sharedBuffer,
@@ -659,7 +659,7 @@ describe('SonareWorkletProcessor', () => {
     const spectra: { bands: Float32Array }[] = [];
     const processor = new SonareWorkletProcessor(
       {
-        sceneJson: mixingScenePresetJson('vocalReverbSend'),
+        sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
         sampleRate,
         maxBlockSize: blockSize,
         spectrumIntervalFrames: blockSize,
@@ -726,7 +726,7 @@ describe('SonareWorkletProcessor', () => {
       const blockSize = 128;
       const instance = new Ctor({
         processorOptions: {
-          sceneJson: mixingScenePresetJson('vocalReverbSend'),
+          sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
           sampleRate: 48000,
           maxBlockSize: blockSize,
           meterIntervalFrames: blockSize,

@@ -7,7 +7,6 @@ import {
   meteringDynamicRange,
   meteringPeakDb,
   meteringPhaseScope,
-  meteringPhaseScopeDecimated,
   meteringRmsDb,
   meteringSpectrum,
   meteringSpectrumFrame,
@@ -15,7 +14,6 @@ import {
   meteringStereoWidth,
   meteringTruePeakDb,
   meteringVectorscope,
-  meteringVectorscopeDecimated,
   waveformPeakPyramid,
   waveformPeaks,
 } from '../src/index';
@@ -26,11 +24,6 @@ for (let i = 0; i < samples.length; i++) {
   samples[i] = 0.6 * Math.sin((2 * Math.PI * 440 * i) / sampleRate);
 }
 const right = samples.map((value, index) => value * (index % 3 === 0 ? -0.75 : 0.75));
-const interleaved = new Float32Array(samples.length * 2);
-for (let i = 0; i < samples.length; i++) {
-  interleaved[i * 2] = samples[i] ?? 0;
-  interleaved[i * 2 + 1] = right[i] ?? 0;
-}
 
 function expectFloatArraysEqual(actual: Float32Array, expected: Float32Array): void {
   expect(actual).toHaveLength(expected.length);
@@ -64,11 +57,11 @@ describe('metering request object compatibility (WASM)', () => {
     );
     expect(
       meteringTruePeakDb({ samples, sampleRate, oversampleFactor: 4, ...options }),
-    ).toBeCloseTo(meteringTruePeakDb(samples, sampleRate, 4, options), 6);
+    ).toBeCloseTo(meteringTruePeakDb(samples, sampleRate, { oversampleFactor: 4, ...options }), 6);
   });
 
   it('matches positional clipping and dynamic-range calls', () => {
-    const clippingOptions = { threshold: 0.5, minRegionSamples: 2, validate: true };
+    const clippingOptions = { thresholdDb: -6, minRegionSamples: 2, validate: true };
     expect(meteringDetectClipping({ samples, sampleRate, ...clippingOptions })).toEqual(
       meteringDetectClipping(samples, sampleRate, clippingOptions),
     );
@@ -87,70 +80,35 @@ describe('metering request object compatibility (WASM)', () => {
     expectFloatArraysEqual(requested.windowRmsDb, positional.windowRmsDb);
   });
 
-  it('matches positional stereo meter and scope calls', () => {
+  it('runs the stereo meter and scope calls from a request', () => {
     const options = { validate: true };
     expect(meteringStereoCorrelation({ left: samples, right, sampleRate, ...options })).toBeCloseTo(
-      meteringStereoCorrelation(samples, right, sampleRate, options),
+      meteringStereoCorrelation({ left: samples, right, sampleRate }),
       6,
     );
-    expect(meteringStereoWidth({ left: samples, right, sampleRate, ...options })).toBeCloseTo(
-      meteringStereoWidth(samples, right, sampleRate, options),
-      6,
-    );
+    expect(Number.isFinite(meteringStereoWidth({ left: samples, right, sampleRate }))).toBe(true);
     const vectorscope = meteringVectorscope({ left: samples, right, sampleRate, ...options });
-    const vectorscopePositional = meteringVectorscope(samples, right, sampleRate, options);
-    expectFloatArraysEqual(vectorscope.mid, vectorscopePositional.mid);
-    expectFloatArraysEqual(vectorscope.side, vectorscopePositional.side);
+    expect(vectorscope.mid).toHaveLength(samples.length);
     const phaseScope = meteringPhaseScope({ left: samples, right, sampleRate, ...options });
-    const phaseScopePositional = meteringPhaseScope(samples, right, sampleRate, options);
-    expectFloatArraysEqual(phaseScope.mid, phaseScopePositional.mid);
-    expect(phaseScope.correlation).toBeCloseTo(phaseScopePositional.correlation, 6);
+    expect(phaseScope.mid).toHaveLength(samples.length);
+    expect(Number.isFinite(phaseScope.correlation)).toBe(true);
   });
 
-  it('matches positional decimated scopes', () => {
-    const request = { left: samples, right, sampleRate, maxPoints: 64, validate: true };
-    const vectorscope = meteringVectorscopeDecimated(request);
-    const vectorscopePositional = meteringVectorscopeDecimated(samples, right, sampleRate, 64, {
-      validate: true,
-    });
-    expectFloatArraysEqual(vectorscope.mid, vectorscopePositional.mid);
-    expectFloatArraysEqual(vectorscope.side, vectorscopePositional.side);
-    const phaseScope = meteringPhaseScopeDecimated(request);
-    const phaseScopePositional = meteringPhaseScopeDecimated(samples, right, sampleRate, 64, {
-      validate: true,
-    });
-    expectFloatArraysEqual(phaseScope.radius, phaseScopePositional.radius);
-    expect(phaseScope.correlation).toBeCloseTo(phaseScopePositional.correlation, 6);
-  });
-
-  it('folds maxPoints into the primary scope functions (Node-shape parity)', () => {
+  it('bounds the scope point count through maxPoints and keeps full-resolution stats', () => {
     const maxPoints = 64;
-    // The primary function with maxPoints must bound the point count and match
-    // the decimated variant exactly.
     const vectorscope = meteringVectorscope({ left: samples, right, sampleRate, maxPoints });
     expect(vectorscope.mid.length).toBeLessThanOrEqual(maxPoints);
-    const vectorscopeDecimated = meteringVectorscopeDecimated({
-      left: samples,
-      right,
-      sampleRate,
-      maxPoints,
-    });
-    expectFloatArraysEqual(vectorscope.mid, vectorscopeDecimated.mid);
-    expectFloatArraysEqual(vectorscope.side, vectorscopeDecimated.side);
-
-    const phaseScope = meteringPhaseScope(samples, right, sampleRate, { maxPoints });
+    const phaseScope = meteringPhaseScope({ left: samples, right, sampleRate, maxPoints });
     expect(phaseScope.radius.length).toBeLessThanOrEqual(maxPoints);
-    const phaseScopeDecimated = meteringPhaseScopeDecimated({
-      left: samples,
-      right,
-      sampleRate,
-      maxPoints,
-    });
-    expectFloatArraysEqual(phaseScope.radius, phaseScopeDecimated.radius);
-
-    // Omitting maxPoints stays full resolution (one point per input sample).
-    const full = meteringVectorscope({ left: samples, right, sampleRate });
-    expect(full.mid.length).toBe(samples.length);
+    const full = meteringPhaseScope({ left: samples, right, sampleRate });
+    expect(phaseScope.correlation).toBeCloseTo(full.correlation, 6);
+    // Omitting maxPoints and passing 0 both stay full resolution (one point per input sample).
+    expect(meteringVectorscope({ left: samples, right, sampleRate }).mid.length).toBe(
+      samples.length,
+    );
+    expect(meteringVectorscope({ left: samples, right, sampleRate, maxPoints: 0 }).mid.length).toBe(
+      samples.length,
+    );
   });
 
   it('matches positional spectrum calls', () => {
@@ -159,30 +117,32 @@ describe('metering request object compatibility (WASM)', () => {
     const spectrumPositional = meteringSpectrum(samples, sampleRate, options);
     expectFloatArraysEqual(spectrum.magnitude, spectrumPositional.magnitude);
     expectFloatArraysEqual(spectrum.db, spectrumPositional.db);
-    const frame = meteringSpectrumFrame({ samples, sampleRate, frameOffset: 128, ...options });
-    const framePositional = meteringSpectrumFrame(samples, sampleRate, 128, options);
+    const frame = meteringSpectrumFrame({ samples, sampleRate, startSample: 128, ...options });
+    const framePositional = meteringSpectrumFrame(samples, sampleRate, {
+      startSample: 128,
+      ...options,
+    });
     expectFloatArraysEqual(frame.power, framePositional.power);
   });
 
-  it('matches positional waveform bucket calls', () => {
-    const peaksOptions = { samplesPerBucket: 128, validate: true };
-    const peaks = waveformPeaks({ samples: interleaved, channels: 2, ...peaksOptions });
-    const peaksPositional = waveformPeaks(interleaved, 2, peaksOptions);
-    expectFloatArraysEqual(peaks.min, peaksPositional.min);
-    expectFloatArraysEqual(peaks.max, peaksPositional.max);
-    const pyramidOptions = { samplesPerBucketLevels: [128, 256], validate: true };
-    const pyramid = waveformPeakPyramid({ samples: interleaved, channels: 2, ...pyramidOptions });
-    const pyramidPositional = waveformPeakPyramid(interleaved, 2, pyramidOptions);
-    expect(pyramid).toHaveLength(pyramidPositional.length);
-    for (let i = 0; i < pyramid.length; i++) {
-      const level = pyramid[i];
-      const positionalLevel = pyramidPositional[i];
-      if (!level || !positionalLevel) {
-        throw new Error('expected matching waveform peak pyramid level');
-      }
-      expectFloatArraysEqual(level.min, positionalLevel.min);
-      expectFloatArraysEqual(level.max, positionalLevel.max);
-    }
+  it('runs waveform bucket calls from planar requests', () => {
+    const channels = [samples, right];
+    const peaks = waveformPeaks({ channels, samplesPerBucket: 128, validate: true });
+    expect(peaks.min).toHaveLength(2);
+    expect(peaks.bucketCount).toBe(samples.length / 128);
+    // Channel 0 carries the larger level.
+    expect(Math.max(...(peaks.max[0] as Float32Array))).toBeGreaterThan(
+      Math.max(...(peaks.max[1] as Float32Array)),
+    );
+    const pyramid = waveformPeakPyramid({
+      channels,
+      samplesPerBucketLevels: [128, 256],
+      validate: true,
+    });
+    expect(pyramid).toHaveLength(2);
+    expect(pyramid[0]?.bucketCount).toBe(samples.length / 128);
+    expect(pyramid[1]?.bucketCount).toBe(samples.length / 256);
+    expectFloatArraysEqual(pyramid[0]?.min[0] as Float32Array, peaks.min[0] as Float32Array);
   });
 
   // Both call shapes funnel through one private normalizer, so an invalid input
@@ -196,7 +156,9 @@ describe('metering request object compatibility (WASM)', () => {
     expect(reqEmpty.threw).toBe(true);
     expect(reqEmpty.message).toBe(posEmpty.message);
 
-    const posFactor = captureThrow(() => meteringTruePeakDb(samples, sampleRate, 3));
+    const posFactor = captureThrow(() =>
+      meteringTruePeakDb(samples, sampleRate, { oversampleFactor: 3 }),
+    );
     const reqFactor = captureThrow(() =>
       meteringTruePeakDb({ samples, sampleRate, oversampleFactor: 3 }),
     );
@@ -204,15 +166,10 @@ describe('metering request object compatibility (WASM)', () => {
     expect(reqFactor.threw).toBe(true);
     expect(reqFactor.message).toBe(posFactor.message);
 
-    const posPair = captureThrow(() =>
-      meteringStereoCorrelation(samples, right.subarray(1), sampleRate),
-    );
     const reqPair = captureThrow(() =>
       meteringStereoCorrelation({ left: samples, right: right.subarray(1), sampleRate }),
     );
-    expect(posPair.threw).toBe(true);
     expect(reqPair.threw).toBe(true);
-    expect(reqPair.message).toBe(posPair.message);
   });
 });
 

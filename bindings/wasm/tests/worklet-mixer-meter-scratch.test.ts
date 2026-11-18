@@ -5,7 +5,7 @@ import {
   expect,
   it,
   type Mixer,
-  mixingScenePresetJson,
+  mixingScenePreset,
   readSonareMeterRingBuffer,
   SONARE_METER_RING_PROTOCOL_VERSION,
   SonareWorkletProcessor,
@@ -83,7 +83,7 @@ describe('SonareWorkletProcessor meter scratch', () => {
     const posted: unknown[] = [];
     const processor = new SonareWorkletProcessor(
       {
-        sceneJson: mixingScenePresetJson('vocalReverbSend'),
+        sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
         sampleRate,
         maxBlockSize: blockSize,
         meterIntervalFrames: blockSize,
@@ -171,7 +171,7 @@ describe('SonareWorkletProcessor meter scratch', () => {
     const meters: { peakDbL: number }[] = [];
     const processor = new SonareWorkletProcessor(
       {
-        sceneJson: mixingScenePresetJson('vocalReverbSend'),
+        sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
         sampleRate,
         maxBlockSize: blockSize,
         meterIntervalFrames: blockSize,
@@ -204,7 +204,7 @@ describe('SonareWorkletProcessor meter scratch', () => {
     expect(ring.header[3]).toBe(0);
     const processor = new SonareWorkletProcessor(
       {
-        sceneJson: mixingScenePresetJson('vocalReverbSend'),
+        sceneJson: JSON.stringify(mixingScenePreset('vocalReverbSend')),
         sampleRate,
         maxBlockSize: blockSize,
         meterIntervalFrames: blockSize,

@@ -104,7 +104,10 @@ function capture(run: () => unknown): unknown {
 /** Asserts the caught value is the float-range refusal naming `key`. */
 function expectRangeRefusal(caught: unknown, key: string, context: string): void {
   const error = expectArgumentRefusal(caught, RangeError, context);
-  expect(error.message, context).toBe(`${key} ${RANGE_MESSAGE}`);
+  // The two high-pass corners are refused by the facade, which prefixes the entry point.
+  expect(error.message, context).toMatch(
+    new RegExp(`^(masteringDynamics\\w+: )?${key} ${RANGE_MESSAGE}$`),
+  );
 }
 
 const compressorWith = (options: CompressorOptions, samples = tone): Float32Array =>
@@ -133,7 +136,7 @@ const COMPRESSOR_KEYS = [
   'releaseMs',
   'kneeDb',
   'makeupGainDb',
-  'sidechainHpfHz',
+  'sidechainHighPassHz',
   'pdrTimeMs',
   'pdrReleaseScale',
 ];
@@ -145,7 +148,7 @@ const GATE_KEYS = [
   'rangeDb',
   'holdMs',
   'closeThresholdDb',
-  'keyHpfHz',
+  'keyHighPassHz',
 ];
 
 const SHAPER_KEYS = [

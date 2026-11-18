@@ -71,9 +71,9 @@ describe('masteringRepairDeclipStereo (WASM)', () => {
     // Each channel's own detection sees only its own plateau -- both
     // non-zero, so neither report is witnessing an empty run.
     expect(result.reports[0].detected.runCount).toBe(1);
-    expect(result.reports[0].detected.sampleCount).toBe(SHORT_LEN);
+    expect(result.reports[0].detected.clippedSamples).toBe(SHORT_LEN);
     expect(result.reports[1].detected.runCount).toBe(1);
-    expect(result.reports[1].detected.sampleCount).toBe(LONG_LEN);
+    expect(result.reports[1].detected.clippedSamples).toBe(LONG_LEN);
 
     // The union run is right's own extent (LONG_LEN): left reconstructs the
     // whole of it, reaching past its own SHORT_LEN clip, so only left links.

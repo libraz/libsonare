@@ -79,8 +79,8 @@ import type {
 } from './feature_inverse.js';
 import type {
   Ebur128LoudnessRangeRequest,
-  LufsInterleavedRequest,
-  LufsSeriesInterleavedRequest,
+  LufsMultichannelRequest,
+  LufsSeriesMultichannelRequest,
 } from './feature_loudness.js';
 import type {
   AnalyzeMelodyRequest,
@@ -139,8 +139,6 @@ import type { PartRigRequest } from './instrument_types.js';
 import type {
   MasterAudioRequest,
   MasterAudioStereoRequest,
-  MasteringChainRequest,
-  MasteringChainStereoRequest,
   NormalizeRequest,
   NormalizeStereoRequest,
   StreamingLoudnessGainRequest,
@@ -149,17 +147,19 @@ import type {
 import type {
   MasteringAbMatchLoudnessRequest,
   MasteringAbMatchLoudnessStereoRequest,
-  MasteringAssistantParamsRequest,
-  MasteringAssistantStereoParamsRequest,
-  MasteringPairAnalyzeRequest,
-  MasteringPairProcessRequest,
-  MasteringPairProcessStereoRequest,
-  MasteringProcessRequest,
-  MasteringProcessStereoRequest,
-  MasteringRequest,
-  MasteringSamplesParamsRequest,
-  MasteringStereoAnalyzeRequest,
-  MasteringStereoParamsRequest,
+  MasteringAnalyzePairRequest,
+  MasteringAnalyzeStereoRequest,
+  MasteringApplyPairProcessorRequest,
+  MasteringApplyPairProcessorStereoRequest,
+  MasteringApplyProcessorRequest,
+  MasteringApplyProcessorStereoRequest,
+  MasteringAssistantSuggestRequest,
+  MasteringAssistantSuggestStereoRequest,
+  MasteringAudioProfileRequest,
+  MasteringAudioProfileStereoRequest,
+  MasteringInsertParamInfoRequest,
+  MasteringInsertTimingRequest,
+  MasteringNormalizeLoudnessRequest,
   MasteringStreamingPreviewRequest,
   MasteringStreamingPreviewStereoRequest,
 } from './mastering_core.js';
@@ -169,15 +169,21 @@ import type {
   MasteringDynamicsTransientShaperRequest,
 } from './mastering_dynamics.js';
 import type {
+  MeteringCrestFactorDbRequest,
+  MeteringCrestFactorDbStereoRequest,
+  MeteringDcOffsetRequest,
   MeteringDetectClippingRequest,
   MeteringDynamicRangeRequest,
-  MeteringSamplesRequest,
+  MeteringPeakDbRequest,
+  MeteringPhaseScopeRequest,
+  MeteringRmsDbRequest,
   MeteringSilenceRatioRequest,
   MeteringSpectrumFrameRequest,
   MeteringSpectrumRequest,
-  MeteringStereoDecimatedRequest,
-  MeteringStereoRequest,
-  MeteringTruePeakRequest,
+  MeteringStereoCorrelationRequest,
+  MeteringStereoWidthRequest,
+  MeteringTruePeakDbRequest,
+  MeteringVectorscopeRequest,
   WaveformPeakPyramidRequest,
   WaveformPeaksRequest,
 } from './metering.js';
@@ -193,7 +199,7 @@ import type {
   SendAutomationPoint,
   WidthAutomationPoint,
 } from './mixer.js';
-import type { SuggestMixSceneRequest } from './mixing_assistant.js';
+import type { MixingAssistantSuggestRequest } from './mixing_assistant.js';
 import type { MixStereoRequest } from './mixing_oneshot.js';
 import type { AnalyzePolyphonicRequest } from './polyphony.js';
 import type {
@@ -227,11 +233,7 @@ import type {
   RenderOfflineRequest,
   SidechainSource,
 } from './public_types_engine.js';
-import type {
-  MasteringChainConfig,
-  PairAnalysis,
-  StereoAnalysis,
-} from './public_types_mastering.js';
+import type { MasteringChainConfig } from './public_types_mastering.js';
 import type {
   Gm2DrumNameRequest,
   Gm2InstrumentNameRequest,
@@ -260,7 +262,6 @@ import type {
   MidiPolyPressureRequest,
   MidiProgramRequest,
 } from './public_types_midi_messages.js';
-import type { MixAssistantOptions } from './public_types_mixing.js';
 import type { ChordFunctionsInput } from './public_types_music.js';
 import type { PlaybackRendererConfig, RenderPlaybackRequest } from './public_types_playback.js';
 import type { AutoTuneKey } from './public_types_spectral.js';
@@ -1043,14 +1044,12 @@ const HpssWithResidualRequestKeys = keysOf<HpssWithResidualRequest>()([
   'validate',
 ]);
 const LufsRequestKeys = keysOf<LufsRequest>()(['samples', 'sampleRate', 'validate']);
-const LufsInterleavedRequestKeys = keysOf<LufsInterleavedRequest>()([
-  'samples',
+const LufsMultichannelRequestKeys = keysOf<LufsMultichannelRequest>()([
   'channels',
   'sampleRate',
   'validate',
 ]);
-const LufsSeriesInterleavedRequestKeys = keysOf<LufsSeriesInterleavedRequest>()([
-  'samples',
+const LufsSeriesMultichannelRequestKeys = keysOf<LufsSeriesMultichannelRequest>()([
   'channels',
   'sampleRate',
   'validate',
@@ -1062,6 +1061,7 @@ const MasterAudioRequestKeys = keysOf<MasterAudioRequest>()([
   'overrides',
   'onProgress',
   'cancel',
+  'validate',
 ]);
 const MasteringChainConfigKeys = keysOf<MasteringChainConfig>()([
   'repair',
@@ -1081,8 +1081,9 @@ const MasterAudioStereoRequestKeys = keysOf<MasterAudioStereoRequest>()([
   'overrides',
   'onProgress',
   'cancel',
+  'validate',
 ]);
-const MasteringRequestKeys = keysOf<MasteringRequest>()([
+const MasteringNormalizeLoudnessRequestKeys = keysOf<MasteringNormalizeLoudnessRequest>()([
   'samples',
   'sampleRate',
   'targetLufs',
@@ -1090,12 +1091,14 @@ const MasteringRequestKeys = keysOf<MasteringRequest>()([
   'truePeakOversample',
   'releaseMs',
   'applyGainAtInputRate',
+  'validate',
 ]);
 const MasteringAbMatchLoudnessRequestKeys = keysOf<MasteringAbMatchLoudnessRequest>()([
   'source',
   'reference',
   'sampleRate',
   'referenceSampleRate',
+  'validate',
 ]);
 const MasteringAbMatchLoudnessStereoRequestKeys = keysOf<MasteringAbMatchLoudnessStereoRequest>()([
   'sourceLeft',
@@ -1104,43 +1107,53 @@ const MasteringAbMatchLoudnessStereoRequestKeys = keysOf<MasteringAbMatchLoudnes
   'referenceRight',
   'sampleRate',
   'referenceSampleRate',
+  'validate',
 ]);
-const MasteringAssistantParamsRequestKeys = keysOf<MasteringAssistantParamsRequest>()([
+const MasteringAssistantSuggestRequestKeys = keysOf<MasteringAssistantSuggestRequest>()([
   'samples',
   'sampleRate',
-  'params',
+  'targetLufs',
+  'ceilingDb',
+  'enableRepair',
+  'preferStreamingSafe',
+  'speechMonoAmount',
+  'targetPlatform',
+  'preset',
+  'validate',
 ]);
-const MasteringAssistantStereoParamsRequestKeys = keysOf<MasteringAssistantStereoParamsRequest>()([
+const MasteringAssistantSuggestStereoRequestKeys = keysOf<MasteringAssistantSuggestStereoRequest>()(
+  [
+    'left',
+    'right',
+    'sampleRate',
+    'targetLufs',
+    'ceilingDb',
+    'enableRepair',
+    'preferStreamingSafe',
+    'speechMonoAmount',
+    'targetPlatform',
+    'preset',
+    'validate',
+  ],
+);
+const MasteringAudioProfileRequestKeys = keysOf<MasteringAudioProfileRequest>()([
+  'samples',
+  'sampleRate',
+  'nFft',
+  'hopLength',
+  'truePeakOversample',
+  'detectDefects',
+  'validate',
+]);
+const MasteringAudioProfileStereoRequestKeys = keysOf<MasteringAudioProfileStereoRequest>()([
   'left',
   'right',
   'sampleRate',
-  'params',
-]);
-const MasteringSamplesParamsRequestKeys = keysOf<MasteringSamplesParamsRequest>()([
-  'samples',
-  'sampleRate',
-  'params',
-]);
-const MasteringStereoParamsRequestKeys = keysOf<MasteringStereoParamsRequest>()([
-  'left',
-  'right',
-  'sampleRate',
-  'params',
-]);
-const MasteringChainRequestKeys = keysOf<MasteringChainRequest>()([
-  'samples',
-  'sampleRate',
-  'config',
-  'onProgress',
-  'cancel',
-]);
-const MasteringChainStereoRequestKeys = keysOf<MasteringChainStereoRequest>()([
-  'left',
-  'right',
-  'sampleRate',
-  'config',
-  'onProgress',
-  'cancel',
+  'nFft',
+  'hopLength',
+  'truePeakOversample',
+  'detectDefects',
+  'validate',
 ]);
 const MasteringDynamicsCompressorRequestKeys = keysOf<MasteringDynamicsCompressorRequest>()([
   'samples',
@@ -1153,8 +1166,7 @@ const MasteringDynamicsCompressorRequestKeys = keysOf<MasteringDynamicsCompresso
   'makeupGainDb',
   'autoMakeup',
   'detector',
-  'sidechainHpfEnabled',
-  'sidechainHpfHz',
+  'sidechainHighPassHz',
   'pdrTimeMs',
   'pdrReleaseScale',
   'validate',
@@ -1168,7 +1180,7 @@ const MasteringDynamicsGateRequestKeys = keysOf<MasteringDynamicsGateRequest>()(
   'rangeDb',
   'holdMs',
   'closeThresholdDb',
-  'keyHpfHz',
+  'keyHighPassHz',
   'validate',
 ]);
 const MasteringDynamicsTransientShaperRequestKeys =
@@ -1187,44 +1199,50 @@ const MasteringDynamicsTransientShaperRequestKeys =
     'lookaheadMs',
     'validate',
   ]);
-const MasteringPairAnalyzeRequestKeys = keysOf<MasteringPairAnalyzeRequest<PairAnalysis>>()([
-  'analysisName',
+const MasteringAnalyzePairRequestKeys = keysOf<MasteringAnalyzePairRequest>()([
+  'analysis',
   'source',
   'reference',
   'sampleRate',
   'referenceSampleRate',
   'params',
+  'validate',
 ]);
-const MasteringPairProcessRequestKeys = keysOf<MasteringPairProcessRequest>()([
-  'processorName',
+const MasteringApplyPairProcessorRequestKeys = keysOf<MasteringApplyPairProcessorRequest>()([
+  'processor',
   'source',
   'reference',
   'sampleRate',
   'referenceSampleRate',
   'params',
+  'validate',
 ]);
-const MasteringPairProcessStereoRequestKeys = keysOf<MasteringPairProcessStereoRequest>()([
-  'processorName',
-  'sourceLeft',
-  'sourceRight',
-  'referenceLeft',
-  'referenceRight',
-  'sampleRate',
-  'referenceSampleRate',
-  'params',
-]);
-const MasteringProcessRequestKeys = keysOf<MasteringProcessRequest>()([
-  'processorName',
+const MasteringApplyPairProcessorStereoRequestKeys =
+  keysOf<MasteringApplyPairProcessorStereoRequest>()([
+    'processor',
+    'sourceLeft',
+    'sourceRight',
+    'referenceLeft',
+    'referenceRight',
+    'sampleRate',
+    'referenceSampleRate',
+    'params',
+    'validate',
+  ]);
+const MasteringApplyProcessorRequestKeys = keysOf<MasteringApplyProcessorRequest>()([
+  'processor',
   'samples',
   'sampleRate',
   'params',
+  'validate',
 ]);
-const MasteringProcessStereoRequestKeys = keysOf<MasteringProcessStereoRequest>()([
-  'processorName',
+const MasteringApplyProcessorStereoRequestKeys = keysOf<MasteringApplyProcessorStereoRequest>()([
+  'processor',
   'left',
   'right',
   'sampleRate',
   'params',
+  'validate',
 ]);
 const MasteringRepairAnalyzeRequestKeys = keysOf<MasteringRepairAnalyzeRequest>()([
   'channels',
@@ -1558,20 +1576,31 @@ const MasteringRepairTrimSilenceStereoRequestKeys =
     'windowMs',
     'validate',
   ]);
-const MasteringStereoAnalyzeRequestKeys = keysOf<MasteringStereoAnalyzeRequest<StereoAnalysis>>()([
-  'analysisName',
+const MasteringAnalyzeStereoRequestKeys = keysOf<MasteringAnalyzeStereoRequest>()([
+  'analysis',
   'left',
   'right',
   'sampleRate',
   'params',
+  'validate',
+]);
+const MasteringInsertParamInfoRequestKeys = keysOf<MasteringInsertParamInfoRequest>()([
+  'insert',
+  'sampleRate',
+]);
+const MasteringInsertTimingRequestKeys = keysOf<MasteringInsertTimingRequest>()([
+  'insert',
+  'params',
+  'sampleRate',
 ]);
 const MasteringStreamingPreviewRequestKeys = keysOf<MasteringStreamingPreviewRequest>()([
   'samples',
   'sampleRate',
   'platforms',
+  'validate',
 ]);
 const MasteringStreamingPreviewStereoRequestKeys = keysOf<MasteringStreamingPreviewStereoRequest>()(
-  ['left', 'right', 'sampleRate', 'platforms'],
+  ['left', 'right', 'sampleRate', 'platforms', 'validate'],
 );
 const MelToStftRequestKeys = keysOf<MelToStftRequest>()([
   'power',
@@ -1660,12 +1689,39 @@ const MergeNotesRequestKeys = keysOf<MergeNotesRequest>()([
   'voicedThreshold',
   'validate',
 ]);
-const MeteringSamplesRequestKeys = keysOf<MeteringSamplesRequest>()([
+const MeteringPeakDbRequestKeys = keysOf<MeteringPeakDbRequest>()([
   'samples',
   'sampleRate',
   'validate',
 ]);
-const MeteringStereoRequestKeys = keysOf<MeteringStereoRequest>()([
+const MeteringRmsDbRequestKeys = keysOf<MeteringRmsDbRequest>()([
+  'samples',
+  'sampleRate',
+  'validate',
+]);
+const MeteringCrestFactorDbRequestKeys = keysOf<MeteringCrestFactorDbRequest>()([
+  'samples',
+  'sampleRate',
+  'validate',
+]);
+const MeteringDcOffsetRequestKeys = keysOf<MeteringDcOffsetRequest>()([
+  'samples',
+  'sampleRate',
+  'validate',
+]);
+const MeteringCrestFactorDbStereoRequestKeys = keysOf<MeteringCrestFactorDbStereoRequest>()([
+  'left',
+  'right',
+  'sampleRate',
+  'validate',
+]);
+const MeteringStereoCorrelationRequestKeys = keysOf<MeteringStereoCorrelationRequest>()([
+  'left',
+  'right',
+  'sampleRate',
+  'validate',
+]);
+const MeteringStereoWidthRequestKeys = keysOf<MeteringStereoWidthRequest>()([
   'left',
   'right',
   'sampleRate',
@@ -1674,7 +1730,7 @@ const MeteringStereoRequestKeys = keysOf<MeteringStereoRequest>()([
 const MeteringDetectClippingRequestKeys = keysOf<MeteringDetectClippingRequest>()([
   'samples',
   'sampleRate',
-  'threshold',
+  'thresholdDb',
   'minRegionSamples',
   'validate',
 ]);
@@ -1687,19 +1743,26 @@ const MeteringDynamicRangeRequestKeys = keysOf<MeteringDynamicRangeRequest>()([
   'highPercentile',
   'validate',
 ]);
-const MeteringStereoDecimatedRequestKeys = keysOf<MeteringStereoDecimatedRequest>()([
-  'maxPoints',
+const MeteringVectorscopeRequestKeys = keysOf<MeteringVectorscopeRequest>()([
   'left',
   'right',
   'sampleRate',
+  'maxPoints',
+  'validate',
+]);
+const MeteringPhaseScopeRequestKeys = keysOf<MeteringPhaseScopeRequest>()([
+  'left',
+  'right',
+  'sampleRate',
+  'maxPoints',
   'validate',
 ]);
 const MeteringSilenceRatioRequestKeys = keysOf<MeteringSilenceRatioRequest>()([
+  'samples',
+  'sampleRate',
   'thresholdDb',
   'frameLength',
   'hopLength',
-  'samples',
-  'sampleRate',
   'validate',
 ]);
 const MeteringSpectrumRequestKeys = keysOf<MeteringSpectrumRequest>()([
@@ -1713,9 +1776,9 @@ const MeteringSpectrumRequestKeys = keysOf<MeteringSpectrumRequest>()([
   'validate',
 ]);
 const MeteringSpectrumFrameRequestKeys = keysOf<MeteringSpectrumFrameRequest>()([
-  'frameOffset',
   'samples',
   'sampleRate',
+  'startSample',
   'nFft',
   'applyOctaveSmoothing',
   'octaveFraction',
@@ -1723,10 +1786,10 @@ const MeteringSpectrumFrameRequestKeys = keysOf<MeteringSpectrumFrameRequest>()(
   'dbAmin',
   'validate',
 ]);
-const MeteringTruePeakRequestKeys = keysOf<MeteringTruePeakRequest>()([
-  'oversampleFactor',
+const MeteringTruePeakDbRequestKeys = keysOf<MeteringTruePeakDbRequest>()([
   'samples',
   'sampleRate',
+  'oversampleFactor',
   'validate',
 ]);
 const MfccRequestKeys = keysOf<MfccRequest>()([
@@ -1742,17 +1805,7 @@ const MfccRequestKeys = keysOf<MfccRequest>()([
   'hopLength',
   'validate',
 ]);
-const MixStereoRequestKeys = keysOf<MixStereoRequest>()([
-  'leftChannels',
-  'rightChannels',
-  'sampleRate',
-  'inputTrimDb',
-  'faderDb',
-  'pan',
-  'panMode',
-  'width',
-  'muted',
-]);
+const MixStereoRequestKeys = keysOf<MixStereoRequest>()(['strips', 'sampleRate', 'validate']);
 const NnFilterRequestKeys = keysOf<NnFilterRequest>()(['s', 'aggregate', 'k', 'width']);
 const NnlsChromaRequestKeys = keysOf<NnlsChromaRequest>()([
   'samples',
@@ -2177,19 +2230,18 @@ const StreamingLoudnessGainRequestKeys = keysOf<StreamingLoudnessGainRequest>()(
   'samples',
   'sampleRate',
   'config',
+  'validate',
 ]);
 const StreamingLoudnessGainStereoRequestKeys = keysOf<StreamingLoudnessGainStereoRequest>()([
   'left',
   'right',
   'sampleRate',
   'config',
+  'validate',
 ]);
-const SuggestMixSceneRequestKeys = keysOf<SuggestMixSceneRequest>()([
+const MixingAssistantSuggestRequestKeys = keysOf<MixingAssistantSuggestRequest>()([
   'tracks',
   'sampleRate',
-  'options',
-]);
-const MixAssistantOptionsKeys = keysOf<MixAssistantOptions>()([
   'targetTrackLufs',
   'suggestionStrength',
   'eqMaxCutDb',
@@ -2204,6 +2256,7 @@ const MixAssistantOptionsKeys = keysOf<MixAssistantOptions>()([
   'enableHighPass',
   'nFft',
   'hopLength',
+  'validate',
 ]);
 const SynthesizeRirRequestKeys = keysOf<SynthesizeRirRequest>()([
   'sampleRate',
@@ -2328,13 +2381,11 @@ const VqtToAudioRequestKeys = keysOf<VqtToAudioRequest>()([
   'validate',
 ]);
 const WaveformPeakPyramidRequestKeys = keysOf<WaveformPeakPyramidRequest>()([
-  'samples',
   'channels',
   'samplesPerBucketLevels',
   'validate',
 ]);
 const WaveformPeaksRequestKeys = keysOf<WaveformPeaksRequest>()([
-  'samples',
   'channels',
   'samplesPerBucket',
   'validate',
@@ -2920,51 +2971,33 @@ export const REQUEST_SHAPES = {
   hpssWithResidual: { keys: HpssWithResidualRequestKeys },
   hybridCqt: { keys: HybridCqtRequestKeys },
   lufs: { keys: LufsRequestKeys },
-  lufsInterleaved: { keys: LufsInterleavedRequestKeys },
-  lufsSeriesInterleaved: { keys: LufsSeriesInterleavedRequestKeys },
+  lufsMultichannel: { keys: LufsMultichannelRequestKeys },
+  lufsSeriesMultichannel: { keys: LufsSeriesMultichannelRequestKeys },
   masterAudio: { keys: MasterAudioRequestKeys, hints: { overrides: MasteringChainConfigKeys } },
   masterAudioStereo: {
     keys: MasterAudioStereoRequestKeys,
     hints: { overrides: MasteringChainConfigKeys },
   },
-  masterAudioStereoWithProgress: {
-    keys: MasterAudioStereoRequestKeys,
-    hints: { overrides: MasteringChainConfigKeys },
-  },
-  masterAudioWithProgress: {
-    keys: MasterAudioRequestKeys,
-    hints: { overrides: MasteringChainConfigKeys },
-  },
-  mastering: { keys: MasteringRequestKeys },
   masteringAbMatchLoudness: { keys: MasteringAbMatchLoudnessRequestKeys },
   masteringAbMatchLoudnessStereo: { keys: MasteringAbMatchLoudnessStereoRequestKeys },
-  masteringAssistantSuggest: { keys: MasteringAssistantParamsRequestKeys },
-  masteringAssistantSuggestChain: { keys: MasteringAssistantParamsRequestKeys },
-  masteringAssistantSuggestChainStereo: { keys: MasteringAssistantStereoParamsRequestKeys },
-  masteringAssistantSuggestStereo: { keys: MasteringAssistantStereoParamsRequestKeys },
-  masteringAudioProfile: { keys: MasteringSamplesParamsRequestKeys },
-  masteringAudioProfileStereo: { keys: MasteringStereoParamsRequestKeys },
-  masteringChain: { keys: MasteringChainRequestKeys, hints: { config: MasteringChainConfigKeys } },
-  masteringChainStereo: {
-    keys: MasteringChainStereoRequestKeys,
-    hints: { config: MasteringChainConfigKeys },
-  },
-  masteringChainStereoWithProgress: {
-    keys: MasteringChainStereoRequestKeys,
-    hints: { config: MasteringChainConfigKeys },
-  },
-  masteringChainWithProgress: {
-    keys: MasteringChainRequestKeys,
-    hints: { config: MasteringChainConfigKeys },
-  },
+  masteringNormalizeLoudness: { keys: MasteringNormalizeLoudnessRequestKeys },
+  masteringAnalyzePair: { keys: MasteringAnalyzePairRequestKeys },
+  masteringAnalyzeStereo: { keys: MasteringAnalyzeStereoRequestKeys },
+  masteringApplyPairProcessor: { keys: MasteringApplyPairProcessorRequestKeys },
+  masteringApplyPairProcessorStereo: { keys: MasteringApplyPairProcessorStereoRequestKeys },
+  masteringApplyProcessor: { keys: MasteringApplyProcessorRequestKeys },
+  masteringApplyProcessorStereo: { keys: MasteringApplyProcessorStereoRequestKeys },
+  masteringAssistantSuggest: { keys: MasteringAssistantSuggestRequestKeys },
+  masteringAssistantSuggestChain: { keys: MasteringAssistantSuggestRequestKeys },
+  masteringAssistantSuggestChainStereo: { keys: MasteringAssistantSuggestStereoRequestKeys },
+  masteringAssistantSuggestStereo: { keys: MasteringAssistantSuggestStereoRequestKeys },
+  masteringAudioProfile: { keys: MasteringAudioProfileRequestKeys },
+  masteringAudioProfileStereo: { keys: MasteringAudioProfileStereoRequestKeys },
   masteringDynamicsCompressor: { keys: MasteringDynamicsCompressorRequestKeys },
   masteringDynamicsGate: { keys: MasteringDynamicsGateRequestKeys },
   masteringDynamicsTransientShaper: { keys: MasteringDynamicsTransientShaperRequestKeys },
-  masteringPairAnalyze: { keys: MasteringPairAnalyzeRequestKeys },
-  masteringPairProcess: { keys: MasteringPairProcessRequestKeys },
-  masteringPairProcessStereo: { keys: MasteringPairProcessStereoRequestKeys },
-  masteringProcess: { keys: MasteringProcessRequestKeys },
-  masteringProcessStereo: { keys: MasteringProcessStereoRequestKeys },
+  masteringInsertParamInfo: { keys: MasteringInsertParamInfoRequestKeys },
+  masteringInsertTiming: { keys: MasteringInsertTimingRequestKeys },
   masteringRepairAnalyze: { keys: MasteringRepairAnalyzeRequestKeys },
   masteringRepairApply: { keys: MasteringRepairApplyRequestKeys },
   masteringRepairDeclick: { keys: MasteringRepairDeclickRequestKeys },
@@ -2999,7 +3032,6 @@ export const REQUEST_SHAPES = {
   masteringRepairNoiseBandBins: { keys: MasteringRepairNoiseBandBinsRequestKeys },
   masteringRepairTrimSilence: { keys: MasteringRepairTrimSilenceRequestKeys },
   masteringRepairTrimSilenceStereo: { keys: MasteringRepairTrimSilenceStereoRequestKeys },
-  masteringStereoAnalyze: { keys: MasteringStereoAnalyzeRequestKeys },
   masteringStreamingPreview: { keys: MasteringStreamingPreviewRequestKeys },
   masteringStreamingPreviewStereo: { keys: MasteringStreamingPreviewStereoRequestKeys },
   melDelta: { keys: MelDeltaRequestKeys },
@@ -3007,27 +3039,26 @@ export const REQUEST_SHAPES = {
   melToAudio: { keys: MelToAudioRequestKeys },
   melToStft: { keys: MelToStftRequestKeys },
   mergeNotes: { keys: MergeNotesRequestKeys },
-  meteringCrestFactorDb: { keys: MeteringSamplesRequestKeys },
-  meteringCrestFactorDbStereo: { keys: MeteringStereoRequestKeys },
-  meteringDcOffset: { keys: MeteringSamplesRequestKeys },
+  meteringCrestFactorDb: { keys: MeteringCrestFactorDbRequestKeys },
+  meteringCrestFactorDbStereo: { keys: MeteringCrestFactorDbStereoRequestKeys },
+  meteringDcOffset: { keys: MeteringDcOffsetRequestKeys },
   meteringDetectClipping: { keys: MeteringDetectClippingRequestKeys },
   meteringDynamicRange: { keys: MeteringDynamicRangeRequestKeys },
-  meteringPeakDb: { keys: MeteringSamplesRequestKeys },
-  meteringPhaseScope: { keys: MeteringStereoDecimatedRequestKeys },
-  meteringPhaseScopeDecimated: { keys: MeteringStereoDecimatedRequestKeys },
-  meteringRmsDb: { keys: MeteringSamplesRequestKeys },
+  meteringPeakDb: { keys: MeteringPeakDbRequestKeys },
+  meteringPhaseScope: { keys: MeteringPhaseScopeRequestKeys },
+  meteringRmsDb: { keys: MeteringRmsDbRequestKeys },
   meteringSilenceRatio: { keys: MeteringSilenceRatioRequestKeys },
   meteringSpectrum: { keys: MeteringSpectrumRequestKeys },
   meteringSpectrumFrame: { keys: MeteringSpectrumFrameRequestKeys },
-  meteringStereoCorrelation: { keys: MeteringStereoRequestKeys },
-  meteringStereoWidth: { keys: MeteringStereoRequestKeys },
-  meteringTruePeakDb: { keys: MeteringTruePeakRequestKeys },
-  meteringVectorscope: { keys: MeteringStereoDecimatedRequestKeys },
-  meteringVectorscopeDecimated: { keys: MeteringStereoDecimatedRequestKeys },
+  meteringStereoCorrelation: { keys: MeteringStereoCorrelationRequestKeys },
+  meteringStereoWidth: { keys: MeteringStereoWidthRequestKeys },
+  meteringTruePeakDb: { keys: MeteringTruePeakDbRequestKeys },
+  meteringVectorscope: { keys: MeteringVectorscopeRequestKeys },
   mfcc: { keys: MfccRequestKeys },
   mfccToAudio: { keys: MfccToAudioRequestKeys },
   mfccToMel: { keys: MfccToMelRequestKeys },
   mixStereo: { keys: MixStereoRequestKeys },
+  mixingAssistantSuggest: { keys: MixingAssistantSuggestRequestKeys },
   momentaryLufs: { keys: MomentaryLufsRequestKeys },
   nnFilter: { keys: NnFilterRequestKeys },
   nnlsChroma: { keys: NnlsChromaRequestKeys },
@@ -3106,14 +3137,6 @@ export const REQUEST_SHAPES = {
   streamingLoudnessGainStereo: {
     keys: StreamingLoudnessGainStereoRequestKeys,
     hints: { config: MasteringChainConfigKeys },
-  },
-  suggestMixScene: {
-    keys: SuggestMixSceneRequestKeys,
-    hints: { options: MixAssistantOptionsKeys },
-  },
-  suggestMixSceneJson: {
-    keys: SuggestMixSceneRequestKeys,
-    hints: { options: MixAssistantOptionsKeys },
   },
   synthesizeRir: { keys: SynthesizeRirRequestKeys },
   tempogram: { keys: TempogramRequestKeys },

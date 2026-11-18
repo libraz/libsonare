@@ -13,7 +13,7 @@ import {
   masteringRepairDeclick,
   masteringRepairDeclip,
   masteringRepairDecrackle,
-  mixingScenePresetJson,
+  mixingScenePreset,
   mixStereo,
   RealtimeEngine,
 } from '../dist/index.js';
@@ -22,6 +22,9 @@ const SR = 48000;
 const BLOCK = 512;
 const leftOnly = () => new Float32Array(BLOCK).fill(1);
 const silence = () => new Float32Array(BLOCK);
+/** A one-strip mix of the left-only source with the given strip settings. */
+const oneStrip = (sampleRate: number, strip: Record<string, unknown> = {}) =>
+  mixStereo({ strips: [{ left: leftOnly(), right: silence(), ...strip }], sampleRate });
 
 function expectInvalid(fn: () => unknown, name: RegExp): void {
   let caught: unknown;
@@ -39,7 +42,7 @@ describe('wrong-typed option values are refused by name', () => {
     await init();
   });
 
-  describe('mixStereo options', () => {
+  describe('mixStereo strip fields', () => {
     it.each([
       ['muted', 'false'],
       ['muted', 0],
@@ -48,58 +51,52 @@ describe('wrong-typed option values are refused by name', () => {
       ['width', '1'],
       ['inputTrimDb', false],
     ])('refuses %s = %j', (key, value) => {
-      expectInvalid(
-        () => mixStereo([leftOnly()], [silence()], SR, { [key]: value } as never),
-        new RegExp(key),
-      );
+      expectInvalid(() => oneStrip(SR, { [key]: value }), new RegExp(`strips\\[0\\]\\.${key}`));
     });
 
-    it('refuses a wrong-typed element of a per-strip array by indexed name', () => {
+    it('names the strip index of a wrong-typed field', () => {
       expectInvalid(
         () =>
-          mixStereo([leftOnly(), leftOnly()], [silence(), silence()], SR, {
-            faderDb: [0, '-6'],
-          } as never),
-        /faderDb\[1\]/,
+          mixStereo({
+            strips: [
+              { left: leftOnly(), right: silence() },
+              { left: leftOnly(), right: silence(), faderDb: '-6' as never },
+            ],
+            sampleRate: SR,
+          }),
+        /strips\[1\]\.faderDb/,
       );
     });
 
-    it.each([
-      ['inputTrimDb', [0, -3]],
-      ['faderDb', [0, -6]],
-      ['pan', [0, 0.5]],
-      ['panMode', ['balance', 'dualPan']],
-      ['width', [1, 0.5]],
-      ['muted', [false, true]],
-    ])('refuses a %s array longer than the strip list', (key, value) => {
+    it('refuses the removed per-field options and positional arguments', () => {
       expectInvalid(
-        () => mixStereo([leftOnly()], [silence()], SR, { [key]: value } as never),
-        new RegExp(`mixStereo: '${key}' has more entries than strips \\(1\\)`),
+        () => mixStereo({ strips: [], sampleRate: SR, faderDb: [0] } as never),
+        /unknown request key 'faderDb'/,
+      );
+      expectInvalid(() => oneStrip(SR, { gain: 1 }), /unknown option 'gain' in 'strips\[0\]'/);
+      expectInvalid(
+        () => (mixStereo as (...args: unknown[]) => unknown)([leftOnly()], [silence()], SR),
+        /request must be an object/,
       );
     });
 
-    it('defaults the strips a shorter per-strip array leaves out', () => {
-      const two = (faderDb: number[]) =>
-        mixStereo([leftOnly(), leftOnly()], [silence(), silence()], SR, { faderDb });
+    it('defaults the strips that leave a field out', () => {
+      const two = (faderDb?: number) =>
+        mixStereo({
+          strips: [
+            { left: leftOnly(), right: silence(), faderDb },
+            { left: leftOnly(), right: silence() },
+          ],
+          sampleRate: SR,
+        });
       // The control: the one entry given is applied, so the equality is not vacuous.
-      expect(Array.from(two([-6]).left)).not.toEqual(Array.from(two([0, 0]).left));
-      expect(Array.from(two([-6]).left)).toEqual(Array.from(two([-6, 0]).left));
-    });
-
-    it('refuses a non-object options argument', () => {
-      expectInvalid(
-        () => mixStereo([leftOnly()], [silence()], SR, 'muted' as never),
-        /options must be an object/,
-      );
+      expect(Array.from(two(-6).left)).not.toEqual(Array.from(two(0).left));
+      expect(Array.from(two(undefined).left)).toEqual(Array.from(two(0).left));
     });
 
     it('treats undefined and null fields as absent', () => {
-      const plain = mixStereo([leftOnly()], [silence()], SR);
-      const absent = mixStereo([leftOnly()], [silence()], SR, {
-        muted: undefined,
-        pan: null,
-        width: undefined,
-      } as never);
+      const plain = oneStrip(SR);
+      const absent = oneStrip(SR, { muted: undefined, pan: null, width: undefined });
       expect(Array.from(absent.left)).toEqual(Array.from(plain.left));
     });
   });
@@ -112,7 +109,7 @@ describe('wrong-typed option values are refused by name', () => {
       ['lfe', 'x'],
       ['distance', {}],
     ])('refuses %s = %j', (key, value) => {
-      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
         sampleRate: SR,
         maxBlockSize: BLOCK,
       });
@@ -128,7 +125,7 @@ describe('wrong-typed option values are refused by name', () => {
     });
 
     it('refuses a non-object pan and still accepts absent fields', () => {
-      const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+      const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
         sampleRate: SR,
         maxBlockSize: BLOCK,
       });
@@ -171,17 +168,13 @@ describe('sample-rate range', () => {
   });
 
   it.each([7999, 384001, 44100.5])('mixStereo refuses %s', (rate) => {
-    expectInvalid(() => mixStereo([leftOnly()], [silence()], rate), /sampleRate/);
-    expectInvalid(
-      () => mixStereo({ leftChannels: [leftOnly()], rightChannels: [silence()], sampleRate: rate }),
-      /sampleRate/,
-    );
+    expectInvalid(() => oneStrip(rate), /sampleRate/);
   });
 
   it.each([7999, 384001])('Mixer.fromJson refuses %s', (rate) => {
     expectInvalid(
       () =>
-        Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+        Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
           sampleRate: rate,
           maxBlockSize: BLOCK,
         }),
@@ -190,8 +183,8 @@ describe('sample-rate range', () => {
   });
 
   it('accepts the range ends', () => {
-    expect(() => mixStereo([leftOnly()], [silence()], 8000)).not.toThrow();
-    const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
+    expect(() => oneStrip(8000)).not.toThrow();
+    const mixer = Mixer.fromJson(JSON.stringify(mixingScenePreset('vocalReverbSend')), {
       sampleRate: 384000,
       maxBlockSize: BLOCK,
     });
@@ -217,18 +210,16 @@ describe('mono repair and dynamics sampleRate', () => {
     expect(Array.from(a)).toEqual(Array.from(b));
   };
 
-  it('refuses an omitted rate on the mono repair entries and still resolves it to 22050 on the compressor', () => {
+  it('refuses an omitted rate on the mono repair entries and on the compressor', () => {
     const samples = tone();
-    for (const repair of [
+    for (const entry of [
       masteringRepairDeclick,
       masteringRepairDeclip,
       masteringRepairDecrackle,
+      masteringDynamicsCompressor,
     ] as unknown as Array<(request: unknown) => unknown>) {
-      expect(() => repair({ samples })).toThrow(TypeError);
+      expect(() => entry({ samples })).toThrow(TypeError);
     }
-    const compressed = masteringDynamicsCompressor({ samples });
-    const explicit = masteringDynamicsCompressor({ samples, sampleRate: 22050 });
-    same(compressed.samples, explicit.samples);
   });
 });
 
@@ -274,14 +265,14 @@ describe('mixStereo and Mixer.fromJson share the supported sample-rate range', (
   });
 
   it.each([7999, 384001, 1e6])('refuses sampleRate %d', (rate) => {
-    expect(() => mixStereo([leftOnly()], [silence()], rate)).toThrow(/sampleRate/);
+    expect(() => oneStrip(rate)).toThrow(/sampleRate/);
     expect(() => Mixer.fromJson(plainScene, { sampleRate: rate, maxBlockSize: BLOCK })).toThrow(
       /sampleRate/,
     );
   });
 
   it.each([8000, 48000, 384000])('accepts sampleRate %d', (rate) => {
-    expect(() => mixStereo([leftOnly()], [silence()], rate)).not.toThrow();
+    expect(() => oneStrip(rate)).not.toThrow();
     const mixer = Mixer.fromJson(plainScene, { sampleRate: rate, maxBlockSize: BLOCK });
     mixer.destroy();
   });

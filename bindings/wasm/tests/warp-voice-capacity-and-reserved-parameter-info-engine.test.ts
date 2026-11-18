@@ -107,7 +107,7 @@ describe('Sonare WASM Module', () => {
 
         // Ground truth read directly off the insert catalog, not through
         // parameterInfo -- the same catalog describe_reserved_parameter reads.
-        const threshold = masteringInsertParamInfo('dynamics.compressor').find(
+        const threshold = masteringInsertParamInfo({ insert: 'dynamics.compressor' }).find(
           (entry) => entry.name === 'thresholdDb',
         );
         if (!threshold) {

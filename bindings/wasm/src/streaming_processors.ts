@@ -10,45 +10,78 @@ import type {
   StreamingMasteringChainConfig,
   StreamingRetuneConfig,
 } from './public_types.js';
+import {
+  assertIntegerValue,
+  assertPositiveInteger,
+  assertSampleRate,
+  requireToken,
+} from './validation.js';
 
-type EqPhaseMode =
-  | 'zero'
-  | 'zero-latency'
-  | 'zero_latency'
-  | 'natural'
-  | 'natural-phase'
-  | 'natural_phase'
-  | 'linear'
-  | 'linear-phase'
-  | 'linear_phase'
-  | number;
+/** Global equalizer phase mode. */
+export type EqPhaseMode = 'zero' | 'natural' | 'linear';
 
-const EQ_PLACEMENTS: Record<string, number> = {
-  stereo: 0,
-  left: 1,
-  right: 2,
-  mid: 3,
-  side: 4,
+// Native still spells placements capitalised and reads magnitudeResponse's as an ordinal.
+const EQ_PLACEMENTS: Record<EqStereoPlacement, { name: string; ordinal: number }> = {
+  stereo: { name: 'Stereo', ordinal: 0 },
+  left: { name: 'Left', ordinal: 1 },
+  right: { name: 'Right', ordinal: 2 },
+  mid: { name: 'Mid', ordinal: 3 },
+  side: { name: 'Side', ordinal: 4 },
 };
 
-const EQ_PHASE_MODES: Record<string, number> = {
+/** Absent or null takes `'stereo'`; a non-string is a `TypeError`, an unknown token a `RangeError`. */
+function eqPlacementToNative(fnName: string, value: unknown): { name: string; ordinal: number } {
+  if (value === undefined || value === null) {
+    return EQ_PLACEMENTS.stereo;
+  }
+  if (typeof value !== 'string') {
+    throw new TypeError(`${fnName}: placement must be a string`);
+  }
+  if (!Object.keys(EQ_PLACEMENTS).includes(value)) {
+    throw new RangeError(
+      `${fnName}: placement must be one of ${Object.keys(EQ_PLACEMENTS).join(', ')}`,
+    );
+  }
+  return EQ_PLACEMENTS[value as EqStereoPlacement];
+}
+
+/** One block of planar stereo audio: the left and right channels, equal in length. */
+export interface StereoBlock {
+  left: Float32Array;
+  right: Float32Array;
+}
+
+// Native still reads the phase mode as an ordinal.
+const EQ_PHASE_MODE_ORDINALS: Record<EqPhaseMode, number> = {
   zero: 1,
-  'zero-latency': 1,
-  zero_latency: 1,
   natural: 2,
-  'natural-phase': 2,
-  natural_phase: 2,
   linear: 3,
-  'linear-phase': 3,
-  linear_phase: 3,
 };
+const EQ_PHASE_MODES = Object.keys(EQ_PHASE_MODE_ORDINALS) as EqPhaseMode[];
+
+const DEFAULT_CHAIN_BLOCK_SIZE = 128;
+const DEFAULT_EQ_BLOCK_SIZE = 512;
+
+function assertConfigObject(fnName: string, config: unknown): asserts config is object {
+  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+    throw new TypeError(`${fnName}: config must be an object`);
+  }
+}
+
+function assertOptionalBlockSize(fnName: string, value: unknown): void {
+  if (value === undefined || value === null) {
+    return;
+  }
+  assertIntegerValue(fnName, value, 'maxBlockSize');
+  assertPositiveInteger(fnName, value, 'maxBlockSize');
+}
 
 // ============================================================================
 // StreamingMasteringChain Class
 // ============================================================================
 
 /**
- * Block-by-block streaming variant of {@link masteringChain}.
+ * Block-by-block streaming variant of {@link masterAudio}.
  *
  * Maintains processor state across {@link processMono}/{@link processStereo}
  * calls. Only ProcessorBase-backed stages are supported: `eq.tilt`,
@@ -83,7 +116,7 @@ const EQ_PHASE_MODES: Record<string, number> = {
  * Reachable from the AudioWorklet realm through the `sonare/worklet` entry, but
  * the realtime contract is the caller's to keep:
  *
- * - {@link prepare} builds the processors and allocates. Call it once from a
+ * - The constructor builds the processors and allocates. Construct once from a
  *   message handler, never from `AudioWorkletProcessor.process()`.
  * - {@link processMono}/{@link processStereo} return fresh arrays. On the render
  *   thread, reuse the returned reference for the block rather than retaining it.
@@ -101,9 +134,12 @@ const EQ_PHASE_MODES: Record<string, number> = {
  *
  * @example
  * ```typescript
- * const chain = new StreamingMasteringChain({ eq: { tiltDb: 1.0 } });
+ * const chain = new StreamingMasteringChain({
+ *   sampleRate: 44100,
+ *   maxBlockSize: 512,
+ *   eq: { tilt: { tiltDb: 1.0 } },
+ * });
  * try {
- *   chain.prepare(44100, 512, 1);
  *   const out = chain.processMono(blockSamples);
  * } finally {
  *   chain.destroy();
@@ -119,25 +155,50 @@ export class StreamingMasteringChain {
     return this.chainHandle;
   }
 
+  /**
+   * Builds and prepares the chain in one step.
+   *
+   * `sampleRate` is required (Hz, integer); `maxBlockSize` defaults to 128
+   * samples and `numChannels` to 1. Stereo-only stages are skipped for mono.
+   *
+   * @throws TypeError for a non-object config, a wrong-typed field or a missing
+   *   `sampleRate`; RangeError for an out-of-domain rate, block size or channel count.
+   */
   constructor(config: StreamingMasteringChainConfig) {
+    const fn = 'StreamingMasteringChain';
+    assertConfigObject(fn, config);
+    const {
+      sampleRate,
+      maxBlockSize,
+      numChannels,
+      loudnessStaticGainDb,
+      loudnessStaticGainPeakDb,
+      ...chainConfig
+    } = config;
+    assertSampleRate(fn, sampleRate);
+    assertOptionalBlockSize(fn, maxBlockSize);
+    if (numChannels !== undefined && numChannels !== null) {
+      assertIntegerValue(fn, numChannels, 'numChannels');
+      if (numChannels !== 1 && numChannels !== 2) {
+        throw new RangeError(`${fn}: numChannels must be 1 or 2`);
+      }
+    }
     const module = getSonareModule();
-    const { loudnessStaticGainDb, loudnessStaticGainPeakDb, ...chainConfig } = config;
     this.chainHandle = module.createStreamingMasteringChain({
       __flatParams: flattenChainConfig(chainConfig),
       loudnessStaticGainDb,
       loudnessStaticGainPeakDb,
     });
-  }
-
-  /**
-   * Initialize processors for the given sample rate and block layout.
-   *
-   * @param sampleRate - Sample rate in Hz
-   * @param maxBlockSize - Maximum block size per process call
-   * @param numChannels - 1 (mono) or 2 (stereo)
-   */
-  prepare(sampleRate: number, maxBlockSize: number, numChannels: number): void {
-    this.chain.prepare(sampleRate, maxBlockSize, numChannels);
+    try {
+      this.chainHandle.prepare(
+        sampleRate,
+        maxBlockSize ?? DEFAULT_CHAIN_BLOCK_SIZE,
+        numChannels ?? 1,
+      );
+    } catch (error) {
+      this.chainHandle.delete();
+      throw error;
+    }
   }
 
   /**
@@ -150,10 +211,7 @@ export class StreamingMasteringChain {
   /**
    * Process one stereo block, returning the processed channels.
    */
-  processStereo(
-    left: Float32Array,
-    right: Float32Array,
-  ): { left: Float32Array; right: Float32Array } {
+  processStereo(left: Float32Array, right: Float32Array): StereoBlock {
     if (left.length !== right.length) {
       throw new RangeError('Stereo channel lengths must match.');
     }
@@ -173,7 +231,7 @@ export class StreamingMasteringChain {
   }
 
   /** Stereo counterpart of {@link flushMono}. */
-  flushStereo(): { left: Float32Array; right: Float32Array } {
+  flushStereo(): StereoBlock {
     return this.chain.flushStereo();
   }
 
@@ -190,12 +248,12 @@ export class StreamingMasteringChain {
     this.chain.setParameter(key, value);
   }
 
-  /** Total reported latency in samples across all active processors. */
-  latencySamples(): number {
+  /** Total reported latency in samples across all active processors (read-only). */
+  get latencySamples(): number {
     return this.chain.latencySamples();
   }
 
-  /** Ordered stage names that will run (e.g. `"eq.tilt"`). */
+  /** Ordered stage names that will run (e.g. `"eq.tilt"`); a new array per call. */
   stageNames(): string[] {
     return this.chain.stageNames();
   }
@@ -211,22 +269,22 @@ export class StreamingMasteringChain {
    * limiter and the loudness stage both disabled a zero here means no stage was
    * able to replace anything rather than that nothing needed replacing.
    *
-   * Cumulative over every block since {@link prepare}, and aggregated over the
+   * Cumulative over every block since construction, and aggregated over the
    * stages and channels, so it identifies neither which block nor which stage.
    * Read it per block and compare against the previous reading to localize one.
    *
-   * {@link prepare} rebuilds the stages and so clears it; {@link reset} does
-   * not, because it drops processor state without rebuilding.
+   * {@link reset} does not clear it, because it drops processor state without
+   * rebuilding.
    *
    * @example
    * ```typescript
    * chain.processMono(block);
-   * if (chain.nonFiniteSubstitutionCount() > previous) {
+   * if (chain.nonFiniteSubstitutionCount > previous) {
    *   // the block just produced is not derived from `block` everywhere
    * }
    * ```
    */
-  nonFiniteSubstitutionCount(): number {
+  get nonFiniteSubstitutionCount(): number {
     return this.chain.nonFiniteSubstitutionCount();
   }
 
@@ -250,12 +308,11 @@ export class StreamingMasteringChain {
    *
    * Both {@link processMono}/{@link processStereo} and
    * {@link flushMono}/{@link flushStereo} count, since a flush drives the
-   * same stages. {@link prepare} rebuilds the stages and so clears it (as it
-   * does {@link nonFiniteSubstitutionCount}, so the two counters on one
-   * handle share an epoch); {@link reset} does not, because it drops
-   * processor state without rebuilding.
+   * same stages. Both counters on one handle share an epoch (construction);
+   * {@link reset} clears neither, because it drops processor state without
+   * rebuilding.
    */
-  nonFiniteDiscardCount(): number {
+  get nonFiniteDiscardCount(): number {
     return this.chain.nonFiniteDiscardCount();
   }
 
@@ -308,16 +365,33 @@ export class StreamingEqualizer {
     return this.eqHandle;
   }
 
-  constructor(config: StreamingEqualizerConfig = {}) {
+  /**
+   * @param config - `sampleRate` (Hz, required integer) and `maxBlockSize` (default 512).
+   * @throws TypeError for a non-object config, a wrong-typed field or a missing
+   *   `sampleRate`; RangeError for an out-of-domain rate or block size.
+   */
+  constructor(config: StreamingEqualizerConfig) {
+    const fn = 'StreamingEqualizer';
+    assertConfigObject(fn, config);
+    const { sampleRate, maxBlockSize } = config;
+    assertSampleRate(fn, sampleRate);
+    assertOptionalBlockSize(fn, maxBlockSize);
     const module = getSonareModule();
-    this.eqHandle = module.createEqualizer(config as Record<string, unknown>);
+    this.eqHandle = module.createEqualizer({
+      sampleRate,
+      maxBlockSize: maxBlockSize ?? DEFAULT_EQ_BLOCK_SIZE,
+    });
   }
 
   /**
    * Configure the band at `index` (0..23). Omitted fields use C++ defaults.
    */
   setBand(index: number, band: EqBand): void {
-    this.eq.setBand(index, band as Record<string, unknown>);
+    const native: Record<string, unknown> = { ...band };
+    if (band.placement !== undefined) {
+      native.placement = eqPlacementToNative('StreamingEqualizer.setBand', band.placement).name;
+    }
+    this.eq.setBand(index, native);
   }
 
   /** Disable and reset every band. */
@@ -326,17 +400,27 @@ export class StreamingEqualizer {
   }
 
   /**
-   * Set the global phase mode: `'zero'` | `'natural'` | `'linear'` or 1/2/3.
+   * Set the global phase mode. `TypeError` for a non-string, `RangeError` for
+   * any spelling other than the three tokens (numbers and synonyms included).
    */
   setPhaseMode(mode: EqPhaseMode): void {
-    const value = typeof mode === 'number' ? mode : EQ_PHASE_MODES[mode.toLowerCase()];
-    if (value === undefined) {
-      throw new RangeError(`unknown EQ phase mode: ${mode}`);
+    if (mode === undefined || mode === null) {
+      throw new TypeError('StreamingEqualizer.setPhaseMode: mode must be a string');
     }
-    this.eq.setPhaseMode(value);
+    const token = requireToken(
+      'StreamingEqualizer.setPhaseMode',
+      mode,
+      'mode',
+      EQ_PHASE_MODES,
+      'zero',
+    );
+    this.eq.setPhaseMode(EQ_PHASE_MODE_ORDINALS[token]);
   }
 
-  /** Enable or disable output auto-gain compensation. */
+  /**
+   * Enable or disable output auto-gain compensation. A single boolean that is
+   * the property the name states, so it stays a method.
+   */
   setAutoGain(enabled: boolean): void {
     this.eq.setAutoGain(enabled);
   }
@@ -380,12 +464,12 @@ export class StreamingEqualizer {
   }
 
   /** Auto-gain applied on the most recent block, in dB. */
-  lastAutoGainDb(): number {
+  get lastAutoGainDb(): number {
     return this.eq.lastAutoGainDb();
   }
 
   /** Reported processing latency in samples (non-zero for linear-phase bands). */
-  latencySamples(): number {
+  get latencySamples(): number {
     return this.eq.latencySamples();
   }
 
@@ -412,7 +496,7 @@ export class StreamingEqualizer {
    * readings bracket a span of audio. The unit is one processed block, never
    * a channel or a plane.
    */
-  nonFiniteDiscardCount(): number {
+  get nonFiniteDiscardCount(): number {
     return this.eq.nonFiniteDiscardCount();
   }
 
@@ -426,10 +510,7 @@ export class StreamingEqualizer {
   /**
    * Process one stereo block, returning the equalized channels.
    */
-  processStereo(
-    left: Float32Array,
-    right: Float32Array,
-  ): { left: Float32Array; right: Float32Array } {
+  processStereo(left: Float32Array, right: Float32Array): StereoBlock {
     if (left.length !== right.length) {
       throw new RangeError('Stereo channel lengths must match.');
     }
@@ -448,7 +529,7 @@ export class StreamingEqualizer {
    * and a soloed band is drawn as the band pass it is heard as.
    *
    * `placement` selects which signal path the curve is for. A band placed on
-   * `'Stereo'` is on every path; one placed elsewhere appears only on its own,
+   * `'stereo'` is on every path; one placed elsewhere appears only on its own,
    * a mid band having no per-channel magnitude to fold into a left or right
    * curve. Frequencies are clamped to [0 Hz, Nyquist].
    *
@@ -460,13 +541,10 @@ export class StreamingEqualizer {
    */
   magnitudeResponse(
     frequenciesHz: Float32Array,
-    placement: EqStereoPlacement = 'Stereo',
+    placement: EqStereoPlacement = 'stereo',
   ): Float32Array {
-    const value = EQ_PLACEMENTS[placement.toLowerCase()];
-    if (value === undefined) {
-      throw new RangeError(`unknown EQ band placement: ${placement}`);
-    }
-    return this.eq.magnitudeResponse(value, frequenciesHz);
+    const { ordinal } = eqPlacementToNative('StreamingEqualizer.magnitudeResponse', placement);
+    return this.eq.magnitudeResponse(ordinal, frequenciesHz);
   }
 
   /**

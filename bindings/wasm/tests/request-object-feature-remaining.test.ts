@@ -11,7 +11,7 @@ import {
   hpssWithResidual,
   init,
   lufs,
-  lufsInterleaved,
+  lufsMultichannel,
   momentaryLufs,
   nnFilter,
   nnlsChroma,
@@ -81,8 +81,8 @@ describe('remaining feature request-object compatibility', () => {
     expect(lufs({ samples, sampleRate })).toEqual(lufs(samples, sampleRate));
     expect(momentaryLufs({ samples, sampleRate })).toEqual(momentaryLufs(samples, sampleRate));
     expect(shortTermLufs({ samples, sampleRate })).toEqual(shortTermLufs(samples, sampleRate));
-    expect(lufsInterleaved({ samples, channels: 1, sampleRate })).toEqual(
-      lufsInterleaved(samples, 1, sampleRate),
+    expect(lufsMultichannel({ channels: [samples], sampleRate })).toEqual(
+      lufsMultichannel({ channels: [samples], sampleRate, validate: true }),
     );
     const onset = new Float32Array(512).fill(0.2);
     const tempoGrid = tempogram({
