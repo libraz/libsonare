@@ -10,6 +10,7 @@ import {
   assertFloatValue,
   assertSampleRate,
   requestOnly,
+  requireBoolean,
   type ValidateOptions,
 } from './validation.js';
 
@@ -136,9 +137,8 @@ export function mixStereo(...args: unknown[]): MixResult {
     if (strip.panMode !== undefined && strip.panMode !== null) {
       given.panMode = panModeToNative(fnName, strip.panMode, `${path}.panMode`);
     }
-    // A wrong-typed `muted` is refused by name by the addon.
     if (strip.muted !== undefined && strip.muted !== null) {
-      given.muted = strip.muted;
+      given.muted = requireBoolean(fnName, strip.muted, `${path}.muted`);
     }
     for (const [key, value] of Object.entries(given)) {
       // A strip that leaves a field out stays at its default: the native array holds a hole.

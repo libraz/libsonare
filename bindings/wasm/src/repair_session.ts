@@ -4,7 +4,6 @@
 
 import { declipReportFromNative } from './internal/metering_native.js';
 import { dbFromLinear, linearFromDb } from './internal/repair_common.js';
-import type { MasteringAudioProfileDefects } from './mastering_core.js';
 import { getSonareModule } from './module_state.js';
 import type { ProgressCallback } from './public_types.js';
 import type {
@@ -76,15 +75,50 @@ function stageFromNative(native: Record<string, unknown>): MasteringRepairStage 
 }
 
 /**
+ * One channel's repair defects, or their aggregate, as {@link masteringRepairAnalyze} measures them.
+ * Flat, unlike the grouped `defects` of the audio profile.
+ */
+export interface MasteringRepairDefects {
+  /** False when the detectors did not run; every count is then 0. */
+  measured: boolean;
+  clickCount: number;
+  clickRejected: number;
+  clickLongestRunSamples: number;
+  clickPerSecond: number;
+  crackleSampleCount: number;
+  crackleSampleFraction: number;
+  cracklePerSecond: number;
+  clipSampleCount: number;
+  clipRunCount: number;
+  clipLongestRunSamples: number;
+  clipSampleFraction: number;
+  clipFlatRunCount: number;
+  clipFlatSampleCount: number;
+  clipLongestFlatRunSamples: number;
+  /** Linear amplitude of the flat runs. */
+  clipFlatLevel: number;
+  noiseFloorDbfs: number;
+  noiseBandPeakDbfs: number;
+  noiseBandPeakIndex: number;
+  humFundamentalHz: number;
+  /** Linear energy ratio of the winning hum candidate over the median candidate (not dB); 1.0 means no peak. */
+  humFundamentalProminence: number;
+  humHarmonics: number;
+  humFundamentalDbfs: number;
+  humPeakHarmonicDbfs: number;
+  lateDecayRatioDb: number;
+}
+
+/**
  * What {@link masteringRepairAnalyze} measured and recommends.
  *
  * Crosses as a string; this declaration is held to the paths the C++ writer publishes.
  */
 export interface MasteringRepairAnalysis {
   /** The channels' defects aggregated as the stereo audio profile aggregates them. */
-  defects: MasteringAudioProfileDefects;
+  defects: MasteringRepairDefects;
   /** Each channel's own defects, in input order. */
-  channels: MasteringAudioProfileDefects[];
+  channels: MasteringRepairDefects[];
   /**
    * Whether a declip at the flat level leaves louder audio alone. When false, declip is withheld
    * from `recommended` even though flat runs were found.

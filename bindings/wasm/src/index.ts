@@ -103,6 +103,7 @@ export type {
   MasteringRepairDeclipStereoRequest,
   MasteringRepairDecrackleRequest,
   MasteringRepairDecrackleStereoRequest,
+  MasteringRepairDefects,
   MasteringRepairDehumRequest,
   MasteringRepairDehumStereoRequest,
   MasteringRepairDenoiseClassicalLinkedRequest,

@@ -995,6 +995,7 @@
 "mastering_progress_callback": {"domain": "mastering", "surfaces": ["c"]},
 "mastering_realtime_cost": {"domain": "mastering", "surfaces": ["node", "wasm"]},
 "mastering_repair_analysis": {"domain": "effects", "surfaces": ["node", "python", "wasm"]},
+"mastering_repair_defects": {"domain": "effects", "surfaces": ["node", "wasm"]},
 "mastering_repair_analyze": {"domain": "effects", "surfaces": ["c", "node", "python", "wasm"]},
 "mastering_repair_analyze_request": {"domain": "effects", "surfaces": ["node", "wasm"]},
 "mastering_repair_apply": {"domain": "effects", "surfaces": ["c", "node", "python", "wasm"]},

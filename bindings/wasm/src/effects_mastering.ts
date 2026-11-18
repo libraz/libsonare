@@ -182,6 +182,7 @@ export type {
   MasteringRepairAnalyzeRequest,
   MasteringRepairApplyRequest,
   MasteringRepairApplyResult,
+  MasteringRepairDefects,
   MasteringRepairStage,
   MasteringRepairStageName,
   MasteringRepairStageReports,
