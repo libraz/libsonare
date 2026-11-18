@@ -391,6 +391,24 @@ class ConstructionRule(unittest.TestCase):
         self.assertEqual([f.key for f in verdict.violations], ["python:Bad"])
 
 
+class InputTypesRule(unittest.TestCase):
+    CLEAN = [
+        method("wasm", "Project", "setMarker"),
+        method("python", "Project", "set_marker"),
+        function("node", "exposure", "number"),
+    ]
+
+    def test_clean_surface_passes(self) -> None:
+        verdict = run("input-types", self.CLEAN)
+        self.assertEqual(verdict.read, 3)
+        self.assertFalse(verdict.failed)
+
+    def test_ex_method_is_named(self) -> None:
+        planted = method("python", "Project", "set_marker_ex")
+        verdict = run("input-types", [*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["python:Project.set_marker_ex"])
+
+
 class Framework(unittest.TestCase):
     def test_reading_nothing_fails(self) -> None:
         verdict = check.judge(rule("getters"), [])

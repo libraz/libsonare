@@ -364,6 +364,9 @@ def _construction_violation(r: dict) -> str | None:
     return None
 
 
+_EX_SUFFIX = re.compile(r"(Ex|_ex)$")
+
+
 RULES: list[Rule] = [
     Rule(
         name="getters",
@@ -497,6 +500,18 @@ RULES: list[Rule] = [
             "wasm:VocalEditWorkerDraft": "declare the guarded constructor private",
             "wasm:VocalEditWorkerSession": "declare the guarded constructor private",
         },
+    ),
+    Rule(
+        name="input-types",
+        summary="no public function or method carries an Ex / _ex suffix variant",
+        population=lambda r: (
+            r["surface"] in ("node", "wasm", "python") and r["kind"] in ("function", "method")
+        ),
+        violation=lambda r: (
+            "an operation has one entry point, not an Ex variant"
+            if _EX_SUFFIX.search(r.get("member") or r["name"])
+            else None
+        ),
     ),
 ]
 
