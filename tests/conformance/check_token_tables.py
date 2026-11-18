@@ -716,16 +716,27 @@ FAMILY_EXEMPT: typing.Mapping[tuple[str, str], str] = types.MappingProxyType(
             )
         },
         **{
-            (path, "MasteringChainConfig.aliasing"): (
-                "one key for every stage record's aliasing union, each the modes that stage accepts; "
-                "the scan keeps the first, a stage without the ADAA modes"
-            )
-            for path in ("bindings/node/src/types_mastering.ts", "bindings/wasm/src/public_types_mastering.ts")
-        },
-        **{
             (path, "EngineDither"): "an omitted dither means none, so the bounce options spell no 'none' token"
             for path in ("bindings/node/src/types_engine.ts", "bindings/wasm/src/public_types_engine.ts")
         },
+    }
+)
+
+class StageReader(typing.NamedTuple):
+    """A core reader that accepts only part of a writer family, and the refusal guarding the rest."""
+
+    path: str
+    refusal: str
+
+
+# Facade sets compared against one stage's reader instead of the whole family. The subset is read
+# off the condition guarding the refusal: a conjunction of ``!=`` tests naming the accepted members.
+STAGE_READERS: typing.Mapping[tuple[str, str], StageReader] = types.MappingProxyType(
+    {
+        (path, "MasteringChainConfig.aliasing"): StageReader(
+            "src/mastering/saturation/exciter.cpp", "exciter ADAA anti-aliasing is not supported"
+        )
+        for path in ("bindings/node/src/types_mastering.ts", "bindings/wasm/src/public_types_mastering.ts")
     }
 )
 
@@ -873,10 +884,42 @@ def _fold(token: str) -> str:
     return re.sub(r"[_\-\s]", "", token).lower()
 
 
+def stage_accepts(
+    root: Path, reader: StageReader, family: typing.Mapping[tuple[str, str, str], set[str]]
+) -> tuple[tuple[str, str, str], set[str]] | str:
+    """The family writer a stage reader narrows and the tokens it accepts, or why neither is read."""
+    where = f"{reader.path}: "
+    try:
+        text = (root / reader.path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return where + "cannot be read"
+    at = text.find(reader.refusal)
+    heads = list(re.finditer(r"\bif\s*\(", text[: max(at, 0)]))
+    if at < 0 or not heads:
+        return where + f"no condition guards the refusal '{reader.refusal}'"
+    cond = _balanced(text, heads[-1].start(), "(", ")") or ""
+    tests = re.findall(r"!=\s*((?:\w+::)+)(\w+)\b", cond)
+    if not tests or re.search(r"==|\|\|", cond) or len({q for q, _e in tests}) != 1:
+        return where + "the refusal's condition is not a conjunction of != tests on one enum"
+    enum = tests[0][0].removesuffix("::")
+    writers = [w for w in family if w[2] == enum]
+    if not writers:
+        return where + f"no family writer spells {enum}"
+    w = writers[0]
+    head = re.compile(rf"\b{re.escape(w[1])}\s*\(\s*(?:const\s+)?{re.escape(enum)}\b")
+    body = _function_body((root / w[0]).read_text(encoding="utf-8", errors="replace"), head) or ""
+    names = dict(re.findall(r"\bcase\s+(?:\w+::)*(\w+)\s*:\s*(?:\{\s*)?return\s*\"([^\"]+)\"", body))
+    unwritten = sorted(e for _q, e in tests if e not in names)
+    if unwritten:
+        return where + f"{w[1]}({enum}) writes no token for {unwritten}"
+    return w, {names[e] for _q, e in tests}
+
+
 def evaluate_family(
     root: Path,
     rows: tuple[TokenSet, ...] = ROWS,
     exempt: typing.Mapping[tuple[str, str], str] = FAMILY_EXEMPT,
+    stages: typing.Mapping[tuple[str, str], StageReader] = STAGE_READERS,
 ) -> tuple[list[str], int, int]:
     """Problems, facade sets compared against a family writer, and family writers drawn on.
 
@@ -892,6 +935,21 @@ def evaluate_family(
     excused: set[tuple[str, str]] = set()
     for (path, symbol), toks in sorted(facade_sets(root).items()):
         if (path, symbol) in pinned:
+            continue
+        if (path, symbol) in stages:
+            excused.add((path, symbol))
+            accepted = stage_accepts(root, stages[path, symbol], family)
+            if isinstance(accepted, str):
+                problems.append(f"{symbol} ({path}): stage reader {accepted}")
+                continue
+            w, subset = accepted
+            compared += 1
+            drawn.add(w)
+            if toks != subset:
+                problems.append(
+                    f"{symbol} ({path}) disagrees with what {stages[path, symbol].path} accepts of "
+                    f"{w[1]}({w[2]}): missing {sorted(subset - toks)}, extra {sorted(toks - subset)}"
+                )
             continue
         folded = {_fold(t) for t in toks}
         candidates: dict[tuple[str, str, str], int] = {}
@@ -919,6 +977,8 @@ def evaluate_family(
         )
     for path, symbol in sorted(set(exempt) - excused):
         problems.append(f"family exemption for {symbol} ({path}) excuses nothing")
+    for path, symbol in sorted(set(stages) - excused):
+        problems.append(f"stage reader for {symbol} ({path}) names no facade set")
     return problems, compared, len(drawn)
 
 

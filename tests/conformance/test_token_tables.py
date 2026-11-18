@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib.util
 import tempfile
+import typing
 import unittest
 from pathlib import Path
 
@@ -568,17 +569,19 @@ class FamilyTests(unittest.TestCase):
         self,
         edits: dict[str, tuple[str, str]] | None = None,
         exempt: dict[tuple[str, str], str] | None = None,
+        stages: dict[tuple[str, str], check.StageReader] | None = None,
+        extra: dict[str, str] | None = None,
     ) -> tuple[list[str], int, int]:
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
-            for rel, text in _FAMILY_FILES.items():
+            for rel, text in {**_FAMILY_FILES, **(extra or {})}.items():
                 old, new = (edits or {}).get(rel, ("", ""))
                 if old:
                     self.assertIn(old, text, f"fixture edit does not apply to {rel}")
                     text = text.replace(old, new)
                 (root / rel).parent.mkdir(parents=True, exist_ok=True)
                 (root / rel).write_text(text)
-            return check.evaluate_family(root, (), exempt or {})
+            return check.evaluate_family(root, (), exempt or {}, stages or {})
 
     def test_clean_tree_compares_every_set_drawing_on_a_qualified_overload(self) -> None:
         # Synth shares one token only and is a different vocabulary, so it draws on nothing.
@@ -622,6 +625,59 @@ class FamilyTests(unittest.TestCase):
         problems, sets, _ = self.run_with(exempt=exempt)
         self.assertEqual(sets, 2)
         self.assertEqual(problems, ["family exemption for Synth (bindings/node/src/fx.ts) excuses nothing"])
+
+    _STAGE: typing.ClassVar[dict[str, str]] = {
+        "src/stage.cpp": (
+            "void validate(const Config& config) {\n"
+            "  if (config.shape != sonare::fx::Shape::Sine &&\n"
+            "      config.shape != sonare::fx::Shape::Square) {\n"
+            '    throw SonareException(ErrorCode::InvalidParameter, "stage shape not supported");\n'
+            "  }\n"
+            "}\n"
+        ),
+        "bindings/node/src/stage.ts": "export interface StageConfig {\n  shape?: 'sine' | 'square';\n}\n",
+    }
+    _STAGE_KEY: typing.ClassVar[tuple[str, str]] = ("bindings/node/src/stage.ts", "StageConfig.shape")
+
+    def test_a_stage_set_is_compared_against_what_its_reader_accepts(self) -> None:
+        stages = {self._STAGE_KEY: check.StageReader("src/stage.cpp", "stage shape not supported")}
+        self.assertEqual(self.run_with(stages=stages, extra=self._STAGE), ([], 4, 2))
+
+    def test_a_stage_set_wider_than_its_reader_is_named(self) -> None:
+        stages = {self._STAGE_KEY: check.StageReader("src/stage.cpp", "stage shape not supported")}
+        extra = {**self._STAGE, "bindings/node/src/stage.ts": "export interface StageConfig {\n  shape?: 'sine' | 'sawUp' | 'square';\n}\n"}
+        problems, _, _ = self.run_with(stages=stages, extra=extra)
+        self.assertEqual(
+            problems,
+            [
+                (
+                    "StageConfig.shape (bindings/node/src/stage.ts) disagrees with what src/stage.cpp accepts of "
+                    "enum_choice_name(sonare::fx::Shape): missing [], extra ['sawUp']"
+                )
+            ],
+        )
+
+    def test_without_its_reader_a_stage_set_reads_as_family_drift(self) -> None:
+        problems, _, _ = self.run_with(extra=self._STAGE)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("missing ['sawUp']", problems[0])
+
+    def test_a_stage_reader_whose_refusal_moved_or_names_no_set_is_named(self) -> None:
+        stages = {
+            self._STAGE_KEY: check.StageReader("src/stage.cpp", "a refusal nobody throws"),
+            ("bindings/node/src/stage.ts", "Gone.shape"): check.StageReader("src/stage.cpp", "x"),
+        }
+        problems, _, _ = self.run_with(stages=stages, extra=self._STAGE)
+        self.assertEqual(
+            problems,
+            [
+                (
+                    "StageConfig.shape (bindings/node/src/stage.ts): stage reader src/stage.cpp: "
+                    "no condition guards the refusal 'a refusal nobody throws'"
+                ),
+                "stage reader for Gone.shape (bindings/node/src/stage.ts) names no facade set",
+            ],
+        )
 
     def test_the_shipped_family_exemptions_carry_a_reason(self) -> None:
         for key, reason in check.FAMILY_EXEMPT.items():
