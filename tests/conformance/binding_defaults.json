@@ -1,6 +1,8 @@
 {
   "schema_version": 1,
   "defaults": {
-    "voice_change_realtime.preset": "neutralMonitor"
+    "voice_change_realtime.preset": "neutralMonitor",
+    "normalize.target_db.peak": 0.0,
+    "normalize.target_db.rms": -20.0
   }
 }
