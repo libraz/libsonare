@@ -153,7 +153,7 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim(
         key="audio sample rate range",
-        pattern=r"[Ss]ample.?rate[\s\S]{0,110}?"
+        pattern=r"[Ss]ample.?[Rr]ate[\s\S]{0,110}?"
         + _OPEN
         + r"(?P<lo>\d{4,})"
         + _MID
@@ -279,7 +279,7 @@ CLAIMS: tuple[Claim, ...] = (
     # matching on 128 would let either claim answer for both.
     Claim(
         key="polyphony salience harmonic ceiling",
-        pattern=r"[Pp]artials summed per (?:F0 )?candidate.{0,60}?(?:at most\s+|in \[\s*1\s*,\s*)(?P<max>\d+)",
+        pattern=r"[Pp]artials summed per (?:[Ff]0 )?candidate.{0,60}?(?:at most\s+|in \[\s*1\s*,\s*)(?P<max>\d+)",
         groups={"max": ("max_salience_harmonics", 0)},
         floor=4,
     ),
@@ -301,7 +301,7 @@ CLAIMS: tuple[Claim, ...] = (
     # constant through a claim of its own rather than widening theirs to reach it.
     Claim(
         key="polyphony voice ceiling in the C header",
-        pattern=r"default 4, in \[\s*1\s*,\s*(?P<max>\d+)\s*\]",
+        pattern=r"[Dd]efault 4, in \[\s*1\s*,\s*(?P<max>\d+)\s*\]",
         groups={"max": ("max_polyphony_voices", 0)},
         floor=1,
     ),
