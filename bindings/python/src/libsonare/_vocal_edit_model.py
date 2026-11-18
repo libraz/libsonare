@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal, TypeAlias, get_args
 
@@ -78,7 +79,7 @@ class VocalNoteEdit:
     target_midi: float = 0.0
     """Target pitch as a (fractional) MIDI note number, used when ``target_mode`` is
     ``"center"``."""
-    target_points: tuple[VocalPitchPoint, ...] = ()
+    target_points: Sequence[VocalPitchPoint] = ()
     """Pitch curve over the source, used when ``target_mode`` is ``"curve"``."""
     amount: float = 0.0
     """Correction strength, 0 (none) to 1 (full)."""
@@ -104,7 +105,7 @@ class VocalNoteEdit:
     """Formant handling (``VocalFormantMode``): ``"preserve"`` or ``"shift"``."""
     formant_shift_semitones: float = 0.0
     """Formant shift in semitones, used when ``formant_mode`` is ``"shift"``."""
-    amplitude_envelope: tuple[float, ...] = ()
+    amplitude_envelope: Sequence[float] = ()
     """Amplitude envelope multipliers over the note; empty leaves the amplitude untouched."""
 
     def __post_init__(self) -> None:
@@ -392,7 +393,7 @@ class VocalSplitNote:
 class VocalMergeNotes:
     """Operation: merge adjacent notes into one."""
 
-    note_ids: tuple[int, ...]
+    note_ids: Sequence[int]
     """Ids of the adjacent notes to merge, in order."""
     merge_policy: VocalMergePolicy = "preserve"
     """Whether the merged note keeps the first note's edit or starts from defaults
@@ -424,7 +425,7 @@ class VocalRemoveTransition:
 class VocalResetNotes:
     """Operation: restore notes to their analysed state."""
 
-    note_ids: tuple[int, ...]
+    note_ids: Sequence[int]
     """Ids of the notes to restore to their analysed state."""
 
     def __post_init__(self) -> None:
