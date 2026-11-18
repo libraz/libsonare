@@ -1093,7 +1093,7 @@ describe('Sonare WASM Project', () => {
     }
   });
 
-  it('refuses a malformed MIDI-FX config before it reaches the core', () => {
+  it('refuses a non-object MIDI-FX config and leaves its content to the core', () => {
     const project = new Project();
     try {
       const { clipId } = project.addMidiClip(0, 4);
@@ -1102,9 +1102,16 @@ describe('Sonare WASM Project', () => {
       expect(bake('{}')).toThrow(TypeError);
       expect(bake(null)).toThrow(TypeError);
       expect(bake({ transposeSemitones: '12' })).toThrow(/transposeSemitones/);
-      expect(bake({ chordIntervals: [0, '4'] })).toThrow(TypeError);
-      expect(bake({ transpose_semitones: 12 })).toThrow(TypeError);
-      expect(bake({ seed: Number.NaN })).toThrow(RangeError);
+      for (const config of [
+        { transposeSemitones: '12' },
+        { chordIntervals: [0, '4'] },
+        { transpose_semitones: 12 },
+        { seed: Number.NaN },
+        { nope: 1 },
+      ]) {
+        expect(bake(config)).toThrow(expect.objectContaining({ code: ErrorCode.InvalidFormat }));
+      }
+      expect(bake({ transpose_semitones: 12 })).toThrow(/write transposeSemitones/);
       expect(() => project.previewMidiFxCount({ clipId, config: 1 as never })).toThrow(TypeError);
     } finally {
       project.destroy();

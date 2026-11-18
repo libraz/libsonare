@@ -152,9 +152,11 @@ describe('RealtimeEngine', () => {
     try {
       expect(() => engine.setMidiFx(0, { transposeSemitones: 12 })).not.toThrow();
       expect(() => engine.clearMidiFx(0)).not.toThrow();
-      // A JSON string is no longer a config, and a refused stage still reaches the core's check.
+      // A JSON string is no longer a config; the content of an object config is the core's to refuse.
       expect(() => engine.setMidiFx(0, '{"transpose_semitones":12}' as never)).toThrow(TypeError);
-      expect(() => engine.setMidiFx(0, { transposeSemitones: '12' as never })).toThrow(TypeError);
+      expect(() => engine.setMidiFx(0, { transposeSemitones: '12' as never })).toThrow(
+        expect.objectContaining({ code: ErrorCode.InvalidFormat }),
+      );
       expect(() => engine.setMidiFx(0, { quantizePpq: 0 })).toThrow();
     } finally {
       engine.destroy();

@@ -1716,7 +1716,7 @@ describe('MIDI message module functions', () => {
     ).toThrow(TypeError);
   });
 
-  it('serializes a typed MIDI-FX config and refuses a wrong-typed field', () => {
+  it('serializes a typed MIDI-FX config and leaves its content to the core to refuse', () => {
     const project = new Project();
     const { clipId } = project.addMidiClip(0, 4);
     project.setMidiEvents(clipId, [
@@ -1732,9 +1732,16 @@ describe('MIDI message module functions', () => {
     expect(() => bad('{}')).toThrow(TypeError);
     expect(() => bad(null)).toThrow(TypeError);
     expect(() => bad({ transposeSemitones: '12' })).toThrow(/transposeSemitones/);
-    expect(() => bad({ chordIntervals: [0, 'x'] })).toThrow(/chordIntervals\[1\]/);
-    expect(() => bad({ velocityScale: Number.NaN })).toThrow(RangeError);
-    expect(() => bad({ transpose_semitones: 1 })).toThrow(TypeError);
+    for (const config of [
+      { transposeSemitones: '12' },
+      { chordIntervals: [0, 'x'] },
+      { velocityScale: Number.NaN },
+      { transpose_semitones: 1 },
+      { nope: 1 },
+    ]) {
+      expect(() => bad(config)).toThrow(expect.objectContaining({ code: ErrorCode.InvalidFormat }));
+    }
+    expect(() => bad({ transpose_semitones: 1 })).toThrow(/write transposeSemitones/);
     expect(() => project.previewMidiFxCount({ clipId, config: { chordIntervals: [] } })).toThrow();
     project.destroy();
   });
