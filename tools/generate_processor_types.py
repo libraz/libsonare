@@ -178,16 +178,53 @@ def ts_param_type(param: dict[str, Any]) -> str:
 TS_LINE_WIDTH = 100
 
 
+# Catalog unit words spelled the way a reader writes them; any other unit is printed as given.
+UNIT_TEXT = {"dBPerOct": "dB/oct", "inPerSec": "in/s", "percent": "%"}
+
+
+def ts_number(value: float) -> str:
+    return str(int(value)) if float(value).is_integer() else repr(float(value))
+
+
+def ts_doc(param: dict[str, Any]) -> str:
+    """One metadata line per parameter: unit, range and default, as the catalog states them."""
+    parts = []
+    unit = param.get("unit")
+    if unit and unit != "none":
+        parts.append(f"Unit: {UNIT_TEXT.get(unit, unit)}.")
+    lo, hi = param.get("min"), param.get("max")
+    if param.get("maxRelativeTo") == "nyquist":
+        hi = "Nyquist"
+    if lo is not None or hi is not None:
+        low = "-inf" if lo is None else ts_number(lo)
+        high = "inf" if hi is None else hi if isinstance(hi, str) else ts_number(hi)
+        left = "(" if lo is None or param.get("minExclusive") else "["
+        right = ")" if hi is None or param.get("maxExclusive") else "]"
+        parts.append(f"Range: {left}{low}, {high}{right}.")
+    default = param.get("default")
+    if default is None:
+        parts.append("Default: unset.")
+    elif param["type"] == "boolean":
+        parts.append(f"Default: {'true' if default else 'false'}.")
+    elif param["type"] == "enum":
+        name = next((c["name"] for c in param["choices"] if c["value"] == default), None)
+        parts.append(f"Default: '{name}'." if name is not None else f"Default: {default}.")
+    else:
+        parts.append(f"Default: {ts_number(default)}.")
+    return f"    /** {' '.join(parts)} */"
+
+
 def ts_member(param: dict[str, Any]) -> list[str]:
     """Render one optional member, wrapping a long union the way the formatter does."""
     key = ts_key(param["name"])
     kind = ts_param_type(param)
+    doc = ts_doc(param)
     line = f"    {key}?: {kind};"
     if len(line) <= TS_LINE_WIDTH or " | " not in kind:
-        return [line]
+        return [doc, line]
     alternatives = kind.split(" | ")
     return (
-        [f"    {key}?:"]
+        [doc, f"    {key}?:"]
         + [f"      | {alt}" for alt in alternatives[:-1]]
         + [f"      | {alternatives[-1]};"]
     )
@@ -203,6 +240,7 @@ def render_param_map(catalog: Any) -> str:
     ]
     for processor in catalog["processors"]:
         params = processor["params"]
+        lines.append(f"  /** Parameters of the `{processor['id']}` processor. */")
         if not params:
             lines.append(f"  '{processor['id']}': Record<string, never>;")
             continue
