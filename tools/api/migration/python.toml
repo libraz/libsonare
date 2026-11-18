@@ -7651,3 +7651,17 @@ changed = "takes DeclipStage, DeclickStage, DecrackleStage, DehumStage, DenoiseS
 domain = "effects"
 rule = "typed-results"
 test = "bindings/python/tests/test_mastering_repair_session.py::test_refuses_stages_that_are_not_stage_records"
+
+[[entry]]
+kind = "option"
+old = "mfcc_to_mel(mfcc_coeffs)"
+new = "mfcc_to_mel(coefficients)"
+domain = "analysis"
+rule = "construction"
+
+[[entry]]
+kind = "option"
+old = "mfcc_to_audio(mfcc_coeffs)"
+new = "mfcc_to_audio(coefficients)"
+domain = "analysis"
+rule = "construction"

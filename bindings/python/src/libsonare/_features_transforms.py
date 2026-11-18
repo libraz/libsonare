@@ -361,14 +361,14 @@ def griffin_lim(
 
 
 def mfcc_to_mel(
-    mfcc_coeffs: npt.ArrayLike,
+    coefficients: npt.ArrayLike,
     n_mels: int = 128,
     lifter: float = 0.0,
 ) -> np.ndarray:
     """Invert MFCC coefficients back to a Mel power spectrogram.
 
     Args:
-        mfcc_coeffs: MFCC matrix, a 2-D array of shape ``(n_mfcc, n_frames)``.
+        coefficients: MFCC matrix, a 2-D array of shape ``(n_mfcc, n_frames)``.
         n_mels: Number of Mel bins to reconstruct (default 128).
         lifter: Cepstral lifter the coefficients were computed with (default 0.0).
 
@@ -379,7 +379,7 @@ def mfcc_to_mel(
     if not hasattr(lib, "sonare_mfcc_to_mel"):
         raise _not_supported("libsonare was built without inverse-reconstruction support")
     c_array, n_mfcc, n_frames = _to_c_float_matrix(
-        "mfcc_to_mel", mfcc_coeffs, arg_name="mfcc_coeffs"
+        "mfcc_to_mel", coefficients, arg_name="coefficients"
     )
     out = SonareInverseResult()
     if hasattr(lib, "sonare_mfcc_to_mel_ex"):
@@ -409,7 +409,7 @@ def mfcc_to_mel(
 
 
 def mfcc_to_audio(
-    mfcc_coeffs: npt.ArrayLike,
+    coefficients: npt.ArrayLike,
     n_mels: int = 128,
     sr: int = 22050,
     n_fft: int = 2048,
@@ -423,7 +423,7 @@ def mfcc_to_audio(
     """Reconstruct audio directly from MFCC via Mel inversion + Griffin-Lim.
 
     Args:
-        mfcc_coeffs: MFCC matrix, a 2-D array of shape ``(n_mfcc, n_frames)``.
+        coefficients: MFCC matrix, a 2-D array of shape ``(n_mfcc, n_frames)``.
         n_mels: Number of Mel bins (must match the MFCC source config).
         sr: Sample rate of the original audio in Hz (default 22050).
         n_fft: FFT size used for reconstruction (default 2048).
@@ -440,7 +440,7 @@ def mfcc_to_audio(
     if not hasattr(lib, "sonare_mfcc_to_audio"):
         raise _not_supported("libsonare was built without inverse-reconstruction support")
     c_array, n_mfcc, n_frames = _to_c_float_matrix(
-        "mfcc_to_audio", mfcc_coeffs, arg_name="mfcc_coeffs"
+        "mfcc_to_audio", coefficients, arg_name="coefficients"
     )
     if lifter == 0.0:
         return _inverse_audio(

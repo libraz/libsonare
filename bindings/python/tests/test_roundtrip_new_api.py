@@ -134,9 +134,9 @@ def test_inverse_transforms_refuse_a_flat_buffer_and_dim_length_mismatch():
 
     n_mfcc = 5
     flat_mfcc = np.full(n_mfcc * n_frames, 0.1, dtype=np.float32)
-    with pytest.raises(ls.SonareValueError, match="mfcc_coeffs must be a 2-D array"):
+    with pytest.raises(ls.SonareValueError, match="coefficients must be a 2-D array"):
         ls.mfcc_to_mel(flat_mfcc)
-    with pytest.raises(ls.SonareValueError, match="mfcc_coeffs must be a 2-D array"):
+    with pytest.raises(ls.SonareValueError, match="coefficients must be a 2-D array"):
         ls.mfcc_to_audio(flat_mfcc)
 
     n_features = 6  # expects 24 elements

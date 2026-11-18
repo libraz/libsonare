@@ -2690,12 +2690,12 @@ def griffin_lim(
     momentum: float = 0.99,
 ) -> np.ndarray[Any, Any]: ...
 def mfcc_to_mel(
-    mfcc_coeffs: npt.ArrayLike,
+    coefficients: npt.ArrayLike,
     n_mels: int = 128,
     lifter: float = 0.0,
 ) -> np.ndarray[Any, Any]: ...
 def mfcc_to_audio(
-    mfcc_coeffs: npt.ArrayLike,
+    coefficients: npt.ArrayLike,
     n_mels: int = 128,
     sr: int = 22050,
     n_fft: int = 2048,
