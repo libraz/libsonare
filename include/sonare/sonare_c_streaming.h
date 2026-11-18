@@ -13,214 +13,236 @@ extern "C" {
 // Streaming - StreamAnalyzer (stateful real-time frame analyzer)
 // ============================================================================
 
-/* Construction config for SonareStreamAnalyzer. Mirrors the relevant subset of
-   sonare::StreamConfig exposed by the WASM StreamAnalyzer constructor. Use
-   sonare_stream_analyzer_config_default to populate librosa/real-time defaults
-   before overriding fields. */
+/// @brief Construction config for SonareStreamAnalyzer.
+///
+/// Mirrors the relevant subset of sonare::StreamConfig exposed by the WASM StreamAnalyzer
+/// constructor. Use sonare_stream_analyzer_config_default to populate librosa/real-time defaults
+/// before overriding fields.
 typedef struct {
-  int sample_rate;           /* Input sample rate in Hz (default 44100) */
-  int n_fft;                 /* Window in samples at 44100 Hz (default 2048); rescaled below
-                                that rate, never shorter than the hop */
-  int hop_length;            /* Hop length between frames (default 512) */
-  int n_mels;                /* Number of Mel bands (default 128) */
-  float fmin_hz;             /* Minimum Mel frequency */
-  float fmax_hz;             /* Maximum Mel frequency (0 = Nyquist) */
-  float reference_hz;        /* A4 tuning reference in Hz (default 440; must be
-                                 within 220..880, the same range
-                                 sonare_stream_analyzer_set_reference_hz
-                                 accepts) */
-  int compute_magnitude;     /* Magnitude readout is not yet supported through the
-                                C ABI; must be 0 (non-zero is rejected with
-                                SONARE_ERROR_INVALID_PARAMETER). */
-  int compute_mel;           /* Non-zero to compute Mel spectra */
-  int compute_chroma;        /* Non-zero to compute chroma */
-  int compute_onset;         /* Non-zero to compute onset strength */
-  int compute_spectral;      /* Non-zero to compute spectral scalar features */
-  int emit_every_n_frames;   /* Emit every N frames (>=1, for throttling) */
-  int magnitude_downsample;  /* Downsample factor for magnitude output */
-  size_t max_pending_frames; /* Unread-frame cap; overflow drops newest (default 4096) */
-  float key_update_interval_sec;
-  float bpm_update_interval_sec;
-  int window;                     /* SonareWindowType value (default Hann) */
-  int output_format;              /* Deprecated; must be SONARE_STREAM_OUTPUT_FLOAT32.
-                                     Use an explicit U8/I16 read function instead. */
-  size_t max_progression_entries; /* Per chord/bar progression cap; drops oldest (default 4096) */
+  int sample_rate;  ///< Input sample rate in Hz (default 44100)
+  /// Window in samples at 44100 Hz (default 2048); rescaled below that rate, never shorter than
+  /// the hop.
+  int n_fft;
+  int hop_length;  ///< Hop between analysis frames in input samples (default 512, at most n_fft)
+  int n_mels;      ///< Number of Mel bands (default 128)
+  float fmin_hz;   ///< Lowest Mel filterbank frequency in Hz (default 0)
+  /// Highest Mel filterbank frequency in Hz (0 = Nyquist, default 0); at most 22050 effective
+  /// above 44100 Hz input, where the analyzer works at 44100 Hz.
+  float fmax_hz;
+  /// A4 tuning reference in Hz (default 440; must be within 220..880, the same range
+  /// sonare_stream_analyzer_set_reference_hz accepts).
+  float reference_hz;
+  /// Magnitude readout is not yet supported through the C ABI; must be 0 (non-zero is rejected
+  /// with SONARE_ERROR_INVALID_PARAMETER).
+  int compute_magnitude;
+  int compute_mel;                ///< Non-zero to compute Mel spectra
+  int compute_chroma;             ///< Non-zero to compute chroma and per-frame chord estimates
+  int compute_onset;              ///< Non-zero to compute onset strength
+  int compute_spectral;           ///< Non-zero to compute spectral centroid and flatness
+  int emit_every_n_frames;        ///< Emit one output frame per N analysis frames (>= 1, default 1)
+  int magnitude_downsample;       ///< Magnitude downsample factor (>= 1, default 1); unused while
+                                  ///< compute_magnitude must be 0
+  size_t max_pending_frames;      ///< Unread-frame cap; overflow drops newest (default 4096)
+  float key_update_interval_sec;  ///< Seconds between key re-estimates (> 0, default 5)
+  float bpm_update_interval_sec;  ///< Seconds between BPM re-estimates (> 0, default 10)
+  int window;  ///< A @ref SonareWindowType selecting the analysis window (default Hann)
+  /// A @ref SonareStreamOutputFormat; deprecated and must be SONARE_STREAM_OUTPUT_FLOAT32. Use an
+  /// explicit U8/I16 read function instead.
+  int output_format;
+  /// Per chord/bar progression cap; drops oldest (default 4096)
+  size_t max_progression_entries;
 } SonareStreamConfig;
 
+/// @brief Analysis window applied to each frame before the FFT.
 typedef enum SONARE_ENUM_BASE {
-  SONARE_WINDOW_HANN = 0,
-  SONARE_WINDOW_HAMMING = 1,
-  SONARE_WINDOW_BLACKMAN = 2,
-  SONARE_WINDOW_RECTANGULAR = 3,
+  SONARE_WINDOW_HANN = 0,         ///< Hann window (default)
+  SONARE_WINDOW_HAMMING = 1,      ///< Hamming window
+  SONARE_WINDOW_BLACKMAN = 2,     ///< Blackman window
+  SONARE_WINDOW_RECTANGULAR = 3,  ///< No tapering
 } SonareWindowType;
 
+/// @brief Sample type of the generic frame read; only Float32 is accepted.
 typedef enum SONARE_ENUM_BASE {
-  SONARE_STREAM_OUTPUT_FLOAT32 = 0,
-  SONARE_STREAM_OUTPUT_INT16 = 1, /* Legacy value; analyzer creation rejects it. */
-  SONARE_STREAM_OUTPUT_UINT8 = 2, /* Legacy value; analyzer creation rejects it. */
+  SONARE_STREAM_OUTPUT_FLOAT32 = 0,  ///< 32-bit float output (the only accepted value)
+  SONARE_STREAM_OUTPUT_INT16 = 1,    ///< Legacy value; analyzer creation rejects it.
+  SONARE_STREAM_OUTPUT_UINT8 = 2,    ///< Legacy value; analyzer creation rejects it.
 } SonareStreamOutputFormat;
 
-/* Feature arrays physically present in a SonareStreamFrames* result. RMS and
-   timestamps_sec are always present and therefore need no flag. */
+/// @brief Feature arrays physically present in a SonareStreamFrames* result.
+///
+/// RMS and timestamps_sec are always present and therefore need no flag.
 typedef enum SONARE_ENUM_BASE {
-  SONARE_STREAM_FEATURE_MEL = 1u << 0,
-  SONARE_STREAM_FEATURE_CHROMA = 1u << 1,
-  SONARE_STREAM_FEATURE_ONSET = 1u << 2,
-  SONARE_STREAM_FEATURE_SPECTRAL = 1u << 3,
+  SONARE_STREAM_FEATURE_MEL = 1u << 0,       ///< Mel array is populated
+  SONARE_STREAM_FEATURE_CHROMA = 1u << 1,    ///< Chroma and chord arrays are populated
+  SONARE_STREAM_FEATURE_ONSET = 1u << 2,     ///< Onset strength array is populated
+  SONARE_STREAM_FEATURE_SPECTRAL = 1u << 3,  ///< Spectral centroid and flatness are populated
 } SonareStreamFeatureFlags;
 
+/// @brief One chord change in the frame-level chord progression.
 typedef struct {
-  int root;
-  int quality;
-  float start_sec;
-  float confidence;
+  int root;          ///< Chord root pitch class (0-11, C = 0)
+  int quality;       ///< A @ref SonareChordQuality of the chord
+  float start_sec;   ///< Time the chord begins, in seconds on the stream timeline
+  float confidence;  ///< Detection confidence (0-1)
 } SonareStreamChordChange;
 
-/* One bar of the beat-synchronized chord progression.
-
-   bar_index is the bar number, and it is NOT the index of this entry in the
-   array: a bar whose frames were all below the chord-detection threshold is not
-   recorded, and the oldest entries are dropped once max_progression_entries is
-   reached. Anything that groups bars by their position in a repeating pattern
-   must key on bar_index.
-
-   start_sec is on the same timeline as SonareStreamFrames.timestamps_sec, offset
-   included, and consecutive bars are spaced by bar_duration_sec rather than snapped
-   to the analysis frame grid.
-
-   In voted_pattern, root is in [0,11] or -1 (unknown) and quality is a valid
-   chord-quality index; bar_index is the pattern position and start_sec is
-   unused. */
+/// @brief One bar of the beat-synchronized chord progression.
+///
+/// bar_index is the bar number, and it is NOT the index of this entry in the
+/// array: a bar whose frames were all below the chord-detection threshold is not
+/// recorded, and the oldest entries are dropped once max_progression_entries is
+/// reached. Anything that groups bars by their position in a repeating pattern
+/// must key on bar_index.
+///
+/// start_sec is on the same timeline as SonareStreamFrames.timestamps_sec, offset
+/// included, and consecutive bars are spaced by bar_duration_sec rather than snapped
+/// to the analysis frame grid.
+///
+/// In voted_pattern, root is in [0,11] or -1 (unknown) and quality is a valid
+/// chord-quality index; bar_index is the pattern position and start_sec is
+/// unused.
 typedef struct {
-  int bar_index;
-  int root;
-  int quality;
-  float start_sec;
-  float confidence;
+  int bar_index;     ///< Bar number (not the array position; see above)
+  int root;          ///< Chord root pitch class (0-11, C = 0)
+  int quality;       ///< A @ref SonareChordQuality of the bar's chord
+  float start_sec;   ///< Bar start in seconds on the stream timeline
+  float confidence;  ///< Detection confidence (0-1)
 } SonareStreamBarChord;
 
+/// @brief Match score of one chord-progression pattern template.
 typedef struct {
-  char name[64];
-  float score;
+  char name[64];  ///< NUL-terminated pattern name (truncated to fit)
+  float score;    ///< Match score of the pattern against the detected bars
 } SonareStreamPatternScore;
 
-/* Structure-of-arrays frame buffer returned by sonare_stream_analyzer_read_frames.
-   All arrays are heap-allocated; free the whole result with
-   sonare_free_stream_frames. Matrix layouts are row-major [n_frames x stride]. */
+/// @brief Structure-of-arrays frame buffer returned by sonare_stream_analyzer_read_frames.
+///
+/// All arrays are heap-allocated; free the whole result with sonare_free_stream_frames. Matrix
+/// layouts are row-major [n_frames x stride].
 typedef struct {
-  int n_frames;             /* Number of frames in this batch */
-  int n_mels;               /* Mel stride; 0 when MEL is absent */
-  float* timestamps_sec;    /* [n_frames] */
-  float* mel;               /* [n_frames * n_mels] linear mel power (NOT dB; the
-                               U8/I16 quantized variants pack dB instead) */
-  float* chroma;            /* [n_frames * n_chroma], NULL when CHROMA is absent */
-  float* onset_strength;    /* [n_frames], NULL when ONSET is absent */
-  float* rms_energy;        /* [n_frames] */
-  float* spectral_centroid; /* [n_frames], NULL when SPECTRAL is absent */
-  float* spectral_flatness; /* [n_frames], NULL when SPECTRAL is absent */
-  int* chord_root;          /* [n_frames], NULL when CHROMA is absent */
-  int* chord_quality;       /* [n_frames], NULL when CHROMA is absent */
-  float* chord_confidence;  /* [n_frames], NULL when CHROMA is absent */
-  uint32_t feature_flags;   /* Bitwise SonareStreamFeatureFlags for populated arrays */
-  int n_chroma;             /* Chroma bins per frame; 0 when chroma is disabled */
+  int n_frames;           ///< Number of frames in this batch
+  int n_mels;             ///< Mel stride; 0 when MEL is absent
+  float* timestamps_sec;  ///< [n_frames] frame times in seconds on the stream timeline
+  /// [n_frames * n_mels] linear mel power (NOT dB; the U8/I16 quantized variants pack dB instead)
+  float* mel;
+  float* chroma;             ///< [n_frames * n_chroma], NULL when CHROMA is absent
+  float* onset_strength;     ///< [n_frames], NULL when ONSET is absent
+  float* rms_energy;         ///< [n_frames] frame RMS (linear amplitude)
+  float* spectral_centroid;  ///< [n_frames] in Hz, NULL when SPECTRAL is absent
+  float* spectral_flatness;  ///< [n_frames] (0-1), NULL when SPECTRAL is absent
+  int* chord_root;           ///< [n_frames] root pitch class, NULL when CHROMA is absent
+  int* chord_quality;        ///< [n_frames] @ref SonareChordQuality, NULL when CHROMA is absent
+  float* chord_confidence;   ///< [n_frames] (0-1), NULL when CHROMA is absent
+  uint32_t feature_flags;    ///< Bitwise SonareStreamFeatureFlags for populated arrays
+  int n_chroma;              ///< Chroma bins per frame; 0 when chroma is disabled
 } SonareStreamFrames;
 
+/// @brief 8-bit quantized frame buffer from sonare_stream_analyzer_read_frames_u8[_ex].
+///
+/// Every array holds values scaled to 0..255 over the quantization range noted per field. Free
+/// with sonare_free_stream_frames_u8.
 typedef struct {
-  int n_frames;
-  int n_mels;
-  float* timestamps_sec;
-  uint8_t* mel; /* [n_frames * n_mels] mel in dB, quantized over [mel_db_min, mel_db_max] */
-  uint8_t* chroma;
-  uint8_t* onset_strength;
-  uint8_t* rms_energy;
-  uint8_t* spectral_centroid;
-  uint8_t* spectral_flatness;
-  uint32_t feature_flags; /* Bitwise SonareStreamFeatureFlags for populated arrays */
-  int n_chroma;           /* Chroma bins per frame; 0 when chroma is disabled */
+  int n_frames;           ///< Number of frames in this batch
+  int n_mels;             ///< Mel stride; 0 when MEL is absent
+  float* timestamps_sec;  ///< [n_frames] frame times in seconds (not quantized)
+  /// [n_frames * n_mels] mel in dB, quantized over [mel_db_min, mel_db_max]
+  uint8_t* mel;
+  uint8_t* chroma;             ///< [n_frames * n_chroma] chroma quantized over [0, 1]
+  uint8_t* onset_strength;     ///< [n_frames] quantized over [0, onset_max]
+  uint8_t* rms_energy;         ///< [n_frames] quantized over [0, rms_max]
+  uint8_t* spectral_centroid;  ///< [n_frames] quantized over [0, centroid_max]
+  uint8_t* spectral_flatness;  ///< [n_frames] quantized over [0, 1]
+  uint32_t feature_flags;      ///< Bitwise SonareStreamFeatureFlags for populated arrays
+  int n_chroma;                ///< Chroma bins per frame; 0 when chroma is disabled
 } SonareStreamFramesU8;
 
+/// @brief 16-bit quantized frame buffer from sonare_stream_analyzer_read_frames_i16[_ex].
+///
+/// Same layout and quantization ranges as SonareStreamFramesU8 with int16 samples. Free with
+/// sonare_free_stream_frames_i16.
 typedef struct {
-  int n_frames;
-  int n_mels;
-  float* timestamps_sec;
-  int16_t* mel; /* [n_frames * n_mels] mel in dB, quantized over [mel_db_min, mel_db_max] */
-  int16_t* chroma;
-  int16_t* onset_strength;
-  int16_t* rms_energy;
-  int16_t* spectral_centroid;
-  int16_t* spectral_flatness;
-  uint32_t feature_flags; /* Bitwise SonareStreamFeatureFlags for populated arrays */
-  int n_chroma;           /* Chroma bins per frame; 0 when chroma is disabled */
+  int n_frames;           ///< Number of frames in this batch
+  int n_mels;             ///< Mel stride; 0 when MEL is absent
+  float* timestamps_sec;  ///< [n_frames] frame times in seconds (not quantized)
+  /// [n_frames * n_mels] mel in dB, quantized over [mel_db_min, mel_db_max]
+  int16_t* mel;
+  int16_t* chroma;             ///< [n_frames * n_chroma] chroma quantized over [0, 1]
+  int16_t* onset_strength;     ///< [n_frames] quantized over [0, onset_max]
+  int16_t* rms_energy;         ///< [n_frames] quantized over [0, rms_max]
+  int16_t* spectral_centroid;  ///< [n_frames] quantized over [0, centroid_max]
+  int16_t* spectral_flatness;  ///< [n_frames] quantized over [0, 1]
+  uint32_t feature_flags;      ///< Bitwise SonareStreamFeatureFlags for populated arrays
+  int n_chroma;                ///< Chroma bins per frame; 0 when chroma is disabled
 } SonareStreamFramesI16;
 
-/* Quantization ranges for the u8/i16 bandwidth-reduction read paths. Mirrors
-   sonare::QuantizeConfig. Populate with sonare_stream_quantize_config_default,
-   then widen any range whose source values exceed the defaults: the quantizers
-   clamp normalized values to [0,1], so a stream louder/quieter than these
-   ranges otherwise saturates silently to the endpoints. */
+/// @brief Quantization ranges for the u8/i16 bandwidth-reduction read paths.
+///
+/// Mirrors sonare::QuantizeConfig. Populate with sonare_stream_quantize_config_default, then widen
+/// any range whose source values exceed the defaults: the quantizers clamp normalized values to
+/// [0,1], so a stream louder/quieter than these ranges otherwise saturates silently to the
+/// endpoints. Every range must be finite and ordered / positive or the read is refused.
 typedef struct {
-  float mel_db_min;   /* dB floor for mel quantization (default -80) */
-  float mel_db_max;   /* dB ceiling for mel quantization (default 0) */
-  float onset_max;    /* max expected onset strength (default 50) */
-  float rms_max;      /* max expected RMS energy (default 1) */
-  float centroid_max; /* max expected spectral centroid Hz (default 11025) */
+  float mel_db_min;    ///< dB floor for mel quantization (default -80)
+  float mel_db_max;    ///< dB ceiling for mel quantization (default 0)
+  float onset_max;     ///< max expected onset strength (default 50)
+  float rms_max;       ///< max expected RMS energy (default 1)
+  float centroid_max;  ///< max expected spectral centroid Hz (default 11025)
 } SonareStreamQuantizeConfig;
 
-/* Progressive estimate + counters snapshot. Mirrors sonare::AnalyzerStats and
-   ProgressiveEstimate. Variable-length arrays are owned by this result and
-   released by sonare_free_stream_stats. */
+/// @brief Progressive estimate + counters snapshot.
+///
+/// Mirrors sonare::AnalyzerStats and ProgressiveEstimate. Variable-length arrays are owned by this
+/// result and released by sonare_free_stream_stats.
 typedef struct {
-  int total_frames;             /* Total frames processed */
-  size_t total_samples;         /* Total samples processed */
-  float duration_sec;           /* Total audio processed (s) */
-  size_t pending_frames;        /* Unread frames currently retained */
-  size_t dropped_output_frames; /* New output frames dropped at the configured cap */
-  float bpm;                    /* Estimated BPM (0 if not yet estimated) */
-  float bpm_confidence;         /* BPM confidence (0-1) */
-  int bpm_candidate_count;      /* Tempo candidates the most recent BPM estimate
-                                   chose from; 0 until one has run. Same quantity
-                                   as SonareAnalysisResult.bpm_candidate_count */
-  int key;                      /* Estimated key (0-11, -1 = unknown) */
-  int key_minor;                /* Non-zero if minor mode */
-  float key_confidence;         /* Key confidence (0-1) */
-  int chord_root;               /* Current chord root (0-11, -1 = unknown) */
-  int chord_quality;            /* Current chord quality (0=Maj, 1=Min, ...) */
-  float chord_confidence;       /* Current chord confidence (0-1) */
-  float chord_start_sec;        /* Start time of current chord (s) */
-  int current_bar;              /* Current bar index (-1 if BPM not stable) */
-  float bar_duration_sec;       /* Duration of one bar (s, 0 if not stable) */
-  size_t chord_progression_count;
+  int total_frames;              ///< Total frames processed
+  size_t total_samples;          ///< Total samples processed
+  float duration_sec;            ///< Total audio processed (s)
+  size_t pending_frames;         ///< Unread frames currently retained
+  size_t dropped_output_frames;  ///< New output frames dropped at the configured cap
+  float bpm;                     ///< Estimated BPM (0 if not yet estimated)
+  float bpm_confidence;          ///< BPM confidence (0-1)
+  /// Tempo candidates the most recent BPM estimate chose from; 0 until one has run. Same quantity
+  /// as SonareAnalysisResult.bpm_candidate_count
+  int bpm_candidate_count;
+  int key;                         ///< Estimated key root pitch class (0-11, -1 = unknown)
+  int key_minor;                   ///< Non-zero if minor mode
+  float key_confidence;            ///< Key confidence (0-1)
+  int chord_root;                  ///< Current chord root (0-11, -1 = unknown)
+  int chord_quality;               ///< A @ref SonareChordQuality of the current chord
+  float chord_confidence;          ///< Current chord confidence (0-1)
+  float chord_start_sec;           ///< Start time of current chord (s)
+  int current_bar;                 ///< Current bar index (-1 if BPM not stable)
+  float bar_duration_sec;          ///< Duration of one bar (s, 0 if not stable)
+  size_t chord_progression_count;  ///< Number of entries in chord_progression
+  /// Frame-level chord changes, oldest first; capped at max_progression_entries
   SonareStreamChordChange* chord_progression;
-  size_t bar_chord_progression_count;
+  size_t bar_chord_progression_count;  ///< Number of entries in bar_chord_progression
+  /// Beat-synchronized chord per bar, oldest first; capped at max_progression_entries
   SonareStreamBarChord* bar_chord_progression;
-  int pattern_length;
-  size_t voted_pattern_count;
+  int pattern_length;  ///< Length in bars of the repeating chord pattern (see voted_pattern)
+  size_t voted_pattern_count;  ///< Number of entries in voted_pattern
+  /// Majority-voted chord per position of the repeating pattern; see SonareStreamBarChord
   SonareStreamBarChord* voted_pattern;
-  char detected_pattern_name[64];
-  float detected_pattern_score;
-  size_t all_pattern_scores_count;
+  char detected_pattern_name[64];   ///< NUL-terminated name of the best-matching pattern
+  float detected_pattern_score;     ///< Match score of the best-matching pattern
+  size_t all_pattern_scores_count;  ///< Number of entries in all_pattern_scores
+  /// Score of every candidate pattern
   SonareStreamPatternScore* all_pattern_scores;
-  float accumulated_sec;                    /* Total audio processed for estimation (s) */
-  int used_frames;                          /* Number of frames used for estimation */
-  int updated;                              /* Non-zero if the key or BPM was
-                                               re-estimated since the previous
-                                               snapshot; one change sets it on
-                                               exactly one snapshot */
-  size_t dropped_chord_progression_entries; /* Oldest chord changes dropped at cap */
-  size_t dropped_bar_progression_entries;   /* Oldest bar chords dropped at cap */
-  size_t non_finite_discard_blocks;         /* Blocks in which a non-finite input sample was
-                                               replaced before it could reach the analyzer's
-                                               recursive state. Unlike the drops above nothing
-                                               is missing from the output: every estimate is
-                                               produced as usual and simply stops describing
-                                               the input, so this is the only report that the
-                                               stream was degraded. The unit is one process()
-                                               call, never a sample, so a block carrying a
-                                               thousand NaNs adds one. Cleared by
-                                               sonare_stream_analyzer_reset alongside the drop
-                                               counts, because that call rebuilds the timeline
-                                               and the count describes a segment rather than
-                                               the analyzer. */
+  float accumulated_sec;  ///< Total audio processed for estimation (s)
+  int used_frames;        ///< Number of frames used for estimation
+  /// Non-zero if the key or BPM was re-estimated since the previous snapshot; one change sets it
+  /// on exactly one snapshot
+  int updated;
+  size_t dropped_chord_progression_entries;  ///< Oldest chord changes dropped at cap
+  size_t dropped_bar_progression_entries;    ///< Oldest bar chords dropped at cap
+  /// Blocks in which a non-finite input sample was replaced before it could reach the analyzer's
+  /// recursive state. Unlike the drops above nothing is missing from the output: every estimate
+  /// is produced as usual and simply stops describing the input, so this is the only report that
+  /// the stream was degraded. The unit is one process() call, never a sample, so a block carrying
+  /// a thousand NaNs adds one. Cleared by sonare_stream_analyzer_reset alongside the drop counts,
+  /// because that call rebuilds the timeline and the count describes a segment rather than the
+  /// analyzer.
+  size_t non_finite_discard_blocks;
 } SonareStreamStats;
 
 /// @brief Fills @p config with real-time defaults (44100 Hz, n_fft 2048, etc.).
@@ -358,7 +380,11 @@ SonareError sonare_stream_analyzer_set_reference_hz(SonareStreamAnalyzer* analyz
 
 /// @brief Frees all arrays held by a SonareStreamFrames batch.
 void sonare_free_stream_frames(SonareStreamFrames* frames);
+
+/// @brief Frees all arrays held by a SonareStreamFramesU8 batch.
 void sonare_free_stream_frames_u8(SonareStreamFramesU8* frames);
+
+/// @brief Frees all arrays held by a SonareStreamFramesI16 batch.
 void sonare_free_stream_frames_i16(SonareStreamFramesI16* frames);
 
 // ===========================================================================
