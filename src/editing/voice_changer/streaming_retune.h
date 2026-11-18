@@ -21,8 +21,7 @@ struct StreamingRetuneConfig {
   float semitones = 0.0f;
   float mix = 1.0f;
   int grain_size = 0;  ///< 0 = derive ~46 ms grain from sample rate in prepare(), capped at
-                       ///< @ref kMaxRetuneGrainSize. Structural: only applied by prepare();
-                       ///< once prepared, config() reports the effective grain size.
+                       ///< @ref kMaxRetuneGrainSize. Structural: only applied by prepare().
 };
 
 /// @brief Low-latency streaming pitch shifter with cross-block continuity.
@@ -54,6 +53,8 @@ class StreamingRetune {
   void prepare(double sample_rate, int max_block_size);
   void reset();
   void set_config(const StreamingRetuneConfig& config);
+  /// @brief The record as configured; an automatic grain reads back as 0, and
+  ///        set_config(config()) leaves behaviour unchanged. The size in use is @ref grain_size().
   const StreamingRetuneConfig& config() const noexcept { return config_; }
   /// @brief Fixed OLA latency once prepared, independent of @ref config().mix.
   /// @details One full grain: the drain tap must trail the newest grain by the
@@ -77,6 +78,7 @@ class StreamingRetune {
   ///          level via @ref prepare; this method exists only as a
   ///          last-resort defence against terminating the audio thread.
   void process_block(const float* input, float* output, int num_samples) noexcept;
+  /// @brief The grain length in use since the last prepare() (0 before it).
   int grain_size() const noexcept { return grain_size_; }
 
  private:
@@ -86,17 +88,6 @@ class StreamingRetune {
   float read_ring_linear(double position) const noexcept;
 
   StreamingRetuneConfig config_{};
-  // The grain size the CALLER last asked for, kept apart from the effective one
-  // reported through config().grain_size.
-  //
-  // They cannot share a field. config().grain_size has to report what is really
-  // allocated, so set_config() overwrites it with the effective value once
-  // prepared -- and that overwrite lands on the very memory the next prepare()
-  // reads to resolve the grain, which is how a requested size stopped surviving
-  // until the prepare() that was supposed to apply it. prepare() resolves from
-  // here; 0 still means "derive from the sample rate", so re-preparing at a new
-  // rate re-derives instead of freezing the first rate's answer.
-  int requested_grain_size_ = 0;
   double sample_rate_ = 0.0;
   int max_block_size_ = 0;
 

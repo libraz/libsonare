@@ -64,9 +64,6 @@ const RealtimeVoiceChangerConfig& checked_config(const RealtimeVoiceChangerConfi
 
 RealtimeVoiceChanger::RealtimeVoiceChanger(RealtimeVoiceChangerConfig config)
     : config_(checked_config(config)) {
-  // The constructed config IS the first request; nothing has resolved a grain
-  // yet, so config_ still carries what the caller asked for.
-  requested_retune_grain_size_ = config_.retune.grain_size;
   // Derive sample-rate-independent gains/mixes so that config() observers see
   // consistent state even before prepare() is called. The sample-rate-dependent
   // branch inside update_derived() is guarded and will be re-run by prepare().
@@ -117,11 +114,6 @@ void RealtimeVoiceChanger::prepare(double sample_rate, int max_block_size, int n
   for (std::size_t ch = 0; ch < channels_.size(); ++ch) {
     apply_channel_config(channels_[ch], static_cast<int>(ch), config_);
   }
-  // Report the resolved (effective) retune grain through config() rather than
-  // the requested value: grain size is structural and fixed at prepare() time
-  // (0 means "derive from sample rate"), so latency_samples() already uses the
-  // resolved grain. Mirror it into config_ so the two never disagree.
-  sync_effective_grain_size();
   update_latency_mirrors();
   non_finite_discard_count_.reset();
   reset_channels();
@@ -174,17 +166,6 @@ void RealtimeVoiceChanger::set_config(const RealtimeVoiceChangerConfig& config) 
                           "prepare(); they cannot change on a live chain");
   }
   config_ = accepted;
-  // Record the request before the effective-value mirror below lands on the
-  // same field; prepare() seeds the retune stages from this, not from config_.
-  // A grain equal to the effective one is config() read back, not a new request.
-  if (channels_.empty() || config_.retune.grain_size != channels_[0].retune.grain_size()) {
-    requested_retune_grain_size_ = config_.retune.grain_size;
-  }
-  // Keep config() reporting the effective grain: grain size is structural and
-  // cannot change after prepare(), so a newly-requested grain in `config` has
-  // no effect until the next prepare(). Overwrite it with the resolved value so
-  // config() never advertises a size that is not actually in use.
-  sync_effective_grain_size();
   update_latency_mirrors();
   config_cell_.store(config_);
   config_version_.fetch_add(1, std::memory_order_release);
@@ -192,15 +173,6 @@ void RealtimeVoiceChanger::set_config(const RealtimeVoiceChangerConfig& config) 
 
 void RealtimeVoiceChanger::update_latency_mirrors() noexcept {
   latency_isp_enabled_.store(config_.limiter.enable_isp_limiter, std::memory_order_relaxed);
-}
-
-void RealtimeVoiceChanger::sync_effective_grain_size() noexcept {
-  // Only meaningful once prepare() has allocated the per-channel retune stages;
-  // before that the requested value stands. All channels share the same
-  // resolved grain, so channel 0 is representative.
-  if (!channels_.empty()) {
-    config_.retune.grain_size = channels_[0].retune.grain_size();
-  }
 }
 
 void RealtimeVoiceChanger::update_derived() {
@@ -215,16 +187,9 @@ void RealtimeVoiceChanger::update_derived() {
 void RealtimeVoiceChanger::allocate_channel(ChannelState& state) {
   // Sub-component allocations: streaming retune/formant/reverb own their
   // internal buffers and resize them inside their own prepare() entry points.
-  // Seed the retune config BEFORE prepare() so the requested grain size is the
-  // one actually resolved/allocated. StreamingRetune::prepare() reads its own
-  // config_.grain_size to size the grain/ring buffers, and its set_config()
-  // treats grain size as structural (kept once prepared) — so if we relied on
-  // the post-prepare apply_channel_config() to deliver the grain, prepare()
-  // would have already locked in the default (auto) grain and the request would
-  // be silently ignored.
-  StreamingRetuneConfig retune_config = config_.retune;
-  retune_config.grain_size = requested_retune_grain_size_;
-  state.retune.set_config(retune_config);
+  // The retune stage resolves its grain in prepare() from the config it holds, so the
+  // configured grain is handed over first.
+  state.retune.set_config(config_.retune);
   state.retune.prepare(sample_rate_, max_block_size_);
   int aligned_latency = state.retune.latency_samples();
   if (prepared_engine_ == PitchEngine::Psola) {
@@ -306,11 +271,9 @@ int RealtimeVoiceChanger::allocate_transform(ChannelState& state) {
 
 void RealtimeVoiceChanger::apply_channel_config(ChannelState& state, int channel_index,
                                                 const RealtimeVoiceChangerConfig& config) {
-  // Sub-component coefficient updates (no buffer resizing). The grain is structural and the
-  // request lives in requested_retune_grain_size_, so the stage only ever sees its own size.
-  StreamingRetuneConfig retune = config.retune;
-  retune.grain_size = state.retune.grain_size();
-  state.retune.set_config(retune);
+  // Sub-component coefficient updates (no buffer resizing); the retune grain only moves at
+  // the stage's next prepare().
+  state.retune.set_config(config.retune);
   if (prepared_engine_ == PitchEngine::Psola) {
     // The grain resampling carries the formant factor, so the colour stage keeps only its tones.
     StreamingFormantConfig colour = config.formant;

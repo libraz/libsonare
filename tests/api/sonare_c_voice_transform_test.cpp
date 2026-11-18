@@ -374,11 +374,9 @@ TEST_CASE("Every preset round-trips through the POD and agrees with its JSON for
     const Config pod = preset_config(preset);
     const Handle from_pod = make(pod);
 
-    // The POD read back is the POD that went in, bar the grain size prepare() resolves (the
-    // struct has no padding, so a byte comparison covers every field).
-    Config expected = pod;
-    expected.retune_grain_size_samples = read_config(from_pod).retune_grain_size_samples;
-    CHECK(same_bytes(read_config(from_pod), expected));
+    // The POD read back is the POD that went in (the struct has no padding, so a byte
+    // comparison covers every field).
+    CHECK(same_bytes(read_config(from_pod), pod));
 
     // The POD route and the preset-id route build the same chain configuration.
     SonareRealtimeVoiceChanger* raw = nullptr;

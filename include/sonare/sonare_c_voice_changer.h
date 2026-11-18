@@ -64,7 +64,7 @@ typedef struct {
   /// Retune dry/wet ratio, [0, 1].
   float retune_mix;
   /// Retune grain length in samples, [0, 8192]; 0 derives about 46 ms from the sample rate. Applied
-  /// only when the handle is prepared; reads back as the effective size.
+  /// only when the handle is prepared; reads back as configured, so automatic stays 0.
   int retune_grain_size_samples;
 
   /// Formant scale factor, [0.55, 1.65]; 1 leaves formants unchanged.

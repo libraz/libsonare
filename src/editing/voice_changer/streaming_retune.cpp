@@ -66,9 +66,7 @@ void StreamingRetune::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
 
-  grain_size_ = resolve_grain_size(requested_grain_size_, sample_rate_);
-  // config() reports the grain in use; the request stays in requested_grain_size_.
-  config_.grain_size = grain_size_;
+  grain_size_ = resolve_grain_size(config_.grain_size, sample_rate_);
   hop_a_ = grain_size_ / 4;
   wrap_room_ = kWrapRoomGrains * grain_size_;
   // The ring holds the widest grain source span, the whole wrap room behind it, and the
@@ -126,22 +124,9 @@ void StreamingRetune::reset() {
 }
 
 void StreamingRetune::set_config(const StreamingRetuneConfig& config) {
+  // config() keeps the grain as configured (0 = derive). The grain is structural: resizing
+  // here would reallocate on the audio thread, so a new size takes effect at the next prepare().
   config_ = sanitize_config(config);
-  // Record the request BEFORE the effective-value overwrite below lands on the
-  // same field, so the next prepare() resolves what the caller asked for. Handing back the
-  // effective grain (as config() reports it) is not a new request and leaves the old one standing.
-  if (grain_size_ == 0 || config_.grain_size != grain_size_) {
-    requested_grain_size_ = config_.grain_size;
-  }
-  // grain_size is a structural parameter fixed at prepare() time: changing it
-  // would reallocate the grain/ring buffers, which is forbidden here because
-  // set_config runs on the audio thread via RealtimeVoiceChanger snapshot
-  // adoption. Once prepared, report the effective grain size so config() never
-  // advertises a size that is not actually in use; a new grain_size takes
-  // effect on the next prepare().
-  if (grain_size_ > 0) {
-    config_.grain_size = grain_size_;
-  }
   semitones_smoother_.set_target(config_.semitones);
   mix_smoother_.set_target(config_.mix);
   // Before prepare() no audio thread is consuming the values, so preserve the

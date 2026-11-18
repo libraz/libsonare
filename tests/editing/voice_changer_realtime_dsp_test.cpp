@@ -575,8 +575,8 @@ TEST_CASE("RealtimeVoiceChanger config reports resolved retune grain size",
   constexpr int sample_rate = 48000;
   constexpr int block = 128;
 
-  // Requested grain 0 => derive from sample rate. Before prepare() config()
-  // still reports the request; after prepare() it reports the effective grain.
+  // Requested grain 0 => derive from sample rate. config() reports the request in
+  // every state; retune_grain_size() is the grain in use.
   RealtimeVoiceChangerConfig cfg;
   cfg.voice_engine.engine = PitchEngine::Grain;
   cfg.retune = {0.0f, 1.0f, 0};
@@ -585,18 +585,20 @@ TEST_CASE("RealtimeVoiceChanger config reports resolved retune grain size",
   REQUIRE(changer.config().retune.grain_size == 0);
 
   changer.prepare(sample_rate, block, 1);
-  const int effective = changer.config().retune.grain_size;
+  REQUIRE(changer.config().retune.grain_size == 0);
+  const int effective = changer.retune_grain_size();
   REQUIRE(effective > 0);
   REQUIRE(effective % 4 == 0);  // resolve_grain_size rounds up to a multiple of 4
   // Both dry and wet are aligned to the OLA's fixed one-grain delay.
   REQUIRE(changer.latency_samples() == effective);
 
-  // set_config() with a *different* requested grain must not change the report:
-  // grain is structural and only re-resolves at the next prepare().
+  // set_config() with a *different* requested grain reads back at once, but the grain in use
+  // is structural and only re-resolves at the next prepare().
   RealtimeVoiceChangerConfig cfg2 = cfg;
   cfg2.retune.grain_size = 777;
   changer.set_config(cfg2);
-  REQUIRE(changer.config().retune.grain_size == effective);
+  REQUIRE(changer.config().retune.grain_size == 777);
+  REQUIRE(changer.retune_grain_size() == effective);
 
   // An explicit grain honored at prepare() is reported verbatim (500 is already
   // a multiple of 4, so resolve_grain_size leaves it unchanged).
@@ -606,6 +608,7 @@ TEST_CASE("RealtimeVoiceChanger config reports resolved retune grain size",
   RealtimeVoiceChanger changer3(cfg3);
   changer3.prepare(sample_rate, block, 1);
   REQUIRE(changer3.config().retune.grain_size == 500);
+  REQUIRE(changer3.retune_grain_size() == 500);
 }
 
 // ===================================================================
@@ -628,8 +631,8 @@ TEST_CASE("RealtimeVoiceChanger latency is fixed when retune.mix is zero",
 
   // grain_size() is non-zero, and the dry path is deliberately delayed by the
   // same OLA amount even though the wet contribution is scaled out.
-  REQUIRE(changer.config().retune.grain_size > 0);
-  REQUIRE(changer.latency_samples() == changer.config().retune.grain_size);
+  REQUIRE(changer.retune_grain_size() > 0);
+  REQUIRE(changer.latency_samples() == changer.retune_grain_size());
 
   // The impulse propagates at the reported fixed latency.
   constexpr int total = block * 20;

@@ -248,7 +248,14 @@ class RealtimeVoiceChanger {
   ///          @ref set_config (the returned reference may be invalidated by a
   ///          subsequent publish). Intended for UI sync / round-trip tests on
   ///          the configuration thread.
+  /// @details The record as configured; an automatic retune grain reads back as 0.
+  ///          set_config(config()) leaves behaviour unchanged on any instance.
   const RealtimeVoiceChangerConfig& config() const noexcept { return config_; }
+
+  /// @brief The retune grain length in use since the last prepare() (0 before it).
+  int retune_grain_size() const noexcept {
+    return channels_.empty() ? 0 : channels_[0].retune.grain_size();
+  }
 
   /// @brief Process a mono block. RT-safe and @c noexcept.
   /// @details Pre-condition violations (no @ref prepare, @p num_samples > @c
@@ -548,15 +555,6 @@ class RealtimeVoiceChanger {
   ///          past. Called once per block, on the audio thread.
   /// @return true when any cell was discarded.
   static bool discard_non_finite_state(ChannelState& state) noexcept;
-  /// @brief Mirrors the resolved retune grain size into @c config_ so config()
-  ///        reports the effective (prepared) grain rather than the requested
-  ///        one. No-op before prepare(). Control-thread only.
-  ///
-  /// The request it overwrites is preserved in @c requested_retune_grain_size_,
-  /// which is what prepare() seeds the per-channel retune stages from. Reading
-  /// the request back out of @c config_ after this ran would read the previous
-  /// prepare()'s answer instead.
-  void sync_effective_grain_size() noexcept;
   /// @brief Publishes the latency-report atomic mirrors from @c config_.
   ///        Control-thread only (constructor / prepare / set_config).
   void update_latency_mirrors() noexcept;
@@ -594,15 +592,6 @@ class RealtimeVoiceChanger {
   const RealtimeVoiceChangerConfig& adopt_snapshot_for_block() noexcept;
 
   RealtimeVoiceChangerConfig config_{};
-  /// @brief The retune grain size the CALLER last asked for, kept apart from the
-  ///        effective one @c config_.retune.grain_size reports.
-  ///
-  /// @c sync_effective_grain_size() overwrites that field with what the last
-  /// prepare() resolved, so it cannot also carry the request forward: seeding
-  /// the retune stages from it made a prepare() after a set_config() re-apply
-  /// the PREVIOUS grain, and a re-prepare at a different sample rate keep the
-  /// first rate's answer instead of re-deriving. 0 keeps meaning "derive".
-  int requested_retune_grain_size_ = 0;
   /// @brief Realtime-safe single-writer/single-reader hand-off cell (see @c
   ///        rt::SeqlockCell). Unlike @c rt::RtPublisher's shared_ptr
   ///        snapshots, storing into this cell never allocates on the writer

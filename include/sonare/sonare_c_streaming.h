@@ -434,14 +434,17 @@ SonareError sonare_streaming_retune_prepare(SonareStreamingRetune* retune, doubl
 SonareError sonare_streaming_retune_reset(SonareStreamingRetune* retune);
 
 /// @brief Updates the live controls. @p grain_size_samples is remembered but only
-///        applied by the next prepare() (see create); the value reported back by
-///        sonare_streaming_retune_grain_size_samples stays the effective one until then.
+///        applied by the next prepare() (see create); the size in use, read by
+///        sonare_streaming_retune_grain_size_samples, stays the prepared one until then.
 /// @return SONARE_ERROR_INVALID_PARAMETER for a NULL handle or a non-finite
 ///         @p pitch_semitones / @p mix.
 SonareError sonare_streaming_retune_set_config(SonareStreamingRetune* retune, float pitch_semitones,
                                                float mix, int grain_size_samples);
 
-/// @brief Reads the currently applied controls. Any out pointer may be NULL.
+/// @brief Reads the controls as configured. Any out pointer may be NULL.
+/// @details An automatic grain reads back as 0; the size in use is
+///          sonare_streaming_retune_grain_size_samples. Feeding the values back to
+///          set_config leaves behaviour unchanged.
 SonareError sonare_streaming_retune_config(SonareStreamingRetune* retune,
                                            float* out_pitch_semitones, float* out_mix,
                                            int* out_grain_size_samples);

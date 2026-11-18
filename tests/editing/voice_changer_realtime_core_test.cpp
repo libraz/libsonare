@@ -342,7 +342,7 @@ TEST_CASE("RealtimeVoiceChanger set_config does not reallocate after prepare", "
   // The resolved retune grain size is the buffer-footprint determinant (fixed at
   // prepare()); assert on it rather than latency_samples(), which now legitimately
   // varies with each preset's wet_mix and retune.mix.
-  const int grain_before = changer.config().retune.grain_size;
+  const int grain_before = changer.retune_grain_size();
 
   // Switching to another preset must not change retune grain size or reverb
   // buffer layout, because reverb delay-line sizes are sample-rate dependent
@@ -352,7 +352,7 @@ TEST_CASE("RealtimeVoiceChanger set_config does not reallocate after prepare", "
                       VoiceCharacterPreset::RobotMascot, VoiceCharacterPreset::DarkVillain,
                       VoiceCharacterPreset::SoftWhisper, VoiceCharacterPreset::NeutralMonitor}) {
     changer.set_config(realtime_voice_changer_preset(preset));
-    REQUIRE(changer.config().retune.grain_size == grain_before);
+    REQUIRE(changer.retune_grain_size() == grain_before);
     // Process to confirm we still produce finite output (no buffer mismatch).
     changer.process_block(in.data(), out.data(), max_block);
     for (float sample : out) REQUIRE(std::isfinite(sample));
@@ -1508,6 +1508,32 @@ std::array<int, 2> impulse_arrival(RealtimeVoiceChanger& changer, int channels, 
 
 }  // namespace
 
+TEST_CASE("RealtimeVoiceChanger config reports the retune grain as configured in every state",
+          "[voice_changer][retune][config]") {
+  constexpr int kBlock = 512;
+  // Automatic stays 0 across a rate change while the grain in use follows the rate.
+  RealtimeVoiceChanger automatic;
+  REQUIRE(automatic.config().retune.grain_size == 0);
+  automatic.prepare(48000.0, kBlock, 1);
+  const int at_48k = automatic.retune_grain_size();
+  REQUIRE(at_48k == 2232);
+  REQUIRE(automatic.config().retune.grain_size == 0);
+  automatic.set_config(automatic.config());
+  automatic.prepare(44100.0, kBlock, 1);
+  CHECK(automatic.config().retune.grain_size == 0);
+  CHECK(automatic.retune_grain_size() != at_48k);
+
+  // An explicit grain equal to the derived one is a request: it survives a rate change.
+  RealtimeVoiceChanger pinned;
+  pinned.prepare(48000.0, kBlock, 1);
+  RealtimeVoiceChangerConfig request = pinned.config();
+  request.retune.grain_size = 2232;
+  pinned.set_config(request);
+  pinned.prepare(44100.0, kBlock, 1);
+  CHECK(pinned.retune_grain_size() == 2232);
+  CHECK(pinned.config().retune.grain_size == 2232);
+}
+
 TEST_CASE("RealtimeVoiceChanger keeps the requested retune grain across config round trips",
           "[voice_changer][retune][config]") {
   constexpr int kBlock = 512;
@@ -1518,7 +1544,7 @@ TEST_CASE("RealtimeVoiceChanger keeps the requested retune grain across config r
   base.limiter.enable_isp_limiter = false;
   RealtimeVoiceChanger fresh(base);
   fresh.prepare(96000.0, kBlock, 1);
-  const int auto_grain = fresh.config().retune.grain_size;
+  const int auto_grain = fresh.retune_grain_size();
   REQUIRE(auto_grain != 4096);
 
   for (const int channels : {1, 2}) {
@@ -1533,14 +1559,15 @@ TEST_CASE("RealtimeVoiceChanger keeps the requested retune grain across config r
           changer.set_config(request);
         }
         if (round_trip) {
-          // An unrelated edit writes back the effective grain config() reports.
+          // An unrelated edit writes back the grain config() reports.
           RealtimeVoiceChangerConfig edited = changer.config();
           edited.output_gain_db = 1.0f;
           changer.set_config(edited);
         }
         changer.prepare(96000.0, kBlock, channels);
         const int expected = pending ? 4096 : auto_grain;
-        CHECK(changer.config().retune.grain_size == expected);
+        CHECK(changer.config().retune.grain_size == (pending ? 4096 : 0));
+        CHECK(changer.retune_grain_size() == expected);
         CHECK(changer.latency_samples() == expected);
         const std::array<int, 2> arrival = impulse_arrival(changer, channels, kBlock);
         CHECK(arrival[0] == expected);
@@ -1558,7 +1585,8 @@ TEST_CASE("RealtimeVoiceChanger keeps the requested retune grain across config r
   for (int pass = 0; pass < 3; ++pass) {
     CAPTURE(pass);
     changer.prepare(96000.0, kBlock, 1);
-    CHECK(changer.config().retune.grain_size == auto_grain);
+    CHECK(changer.config().retune.grain_size == 0);
+    CHECK(changer.retune_grain_size() == auto_grain);
     CHECK(changer.latency_samples() == auto_grain);
   }
 }

@@ -1022,7 +1022,7 @@ TEST_CASE("sonare_streaming_retune reports and applies grain size", "[voice_chan
 
   // The same contract the core carries, through the C surface: a grain
   // requested after prepare survives until the prepare() that applies it, and
-  // config() keeps reporting the effective one in the meantime.
+  // config() reports it as configured in the meantime.
   REQUIRE(sonare_streaming_retune_set_config(retune, 3.0f, 0.5f, 512) == SONARE_OK);
   float semitones = 0.0f;
   float mix = 0.0f;
@@ -1030,7 +1030,9 @@ TEST_CASE("sonare_streaming_retune reports and applies grain size", "[voice_chan
   REQUIRE(sonare_streaming_retune_config(retune, &semitones, &mix, &reported_grain) == SONARE_OK);
   REQUIRE_THAT(semitones, WithinAbs(3.0f, 1.0e-6f));
   REQUIRE_THAT(mix, WithinAbs(0.5f, 1.0e-6f));
-  REQUIRE(reported_grain == 2232);
+  REQUIRE(reported_grain == 512);
+  REQUIRE(sonare_streaming_retune_grain_size_samples(retune, &grain) == SONARE_OK);
+  REQUIRE(grain == 2232);
 
   REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 256) == SONARE_OK);
   REQUIRE(sonare_streaming_retune_grain_size_samples(retune, &grain) == SONARE_OK);
@@ -1176,39 +1178,40 @@ TEST_CASE("The POD config refuses an out-of-range field and keeps the previous c
   CHECK(refused == nullptr);
 }
 
-TEST_CASE("sonare_streaming_retune config grain matches the grain in use",
+TEST_CASE("sonare_streaming_retune config grain reads back as configured",
           "[voice_changer][capi]") {
   SonareStreamingRetune* retune = nullptr;
   REQUIRE(sonare_streaming_retune_create(0.0f, 1.0f, 513, &retune) == SONARE_OK);
   REQUIRE(retune != nullptr);
   REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 256) == SONARE_OK);
 
-  auto check_consistent = [&](int expected) {
+  auto check = [&](int configured, int in_use) {
     int grain = -1;
     int latency = -1;
     int reported = -1;
     REQUIRE(sonare_streaming_retune_grain_size_samples(retune, &grain) == SONARE_OK);
     REQUIRE(sonare_streaming_retune_latency_samples(retune, &latency) == SONARE_OK);
     REQUIRE(sonare_streaming_retune_config(retune, nullptr, nullptr, &reported) == SONARE_OK);
-    REQUIRE(grain == expected);
-    REQUIRE(reported == grain);
+    REQUIRE(reported == configured);
+    REQUIRE(grain == in_use);
     REQUIRE(latency == grain);
   };
-  check_consistent(516);
-  REQUIRE(sonare_streaming_retune_set_config(retune, 0.0f, 1.0f, 516) == SONARE_OK);
-  check_consistent(516);
+  check(513, 516);
+  REQUIRE(sonare_streaming_retune_set_config(retune, 0.0f, 1.0f, 513) == SONARE_OK);
+  REQUIRE(sonare_streaming_retune_prepare(retune, 96000.0, 256) == SONARE_OK);
+  check(513, 516);
   sonare_streaming_retune_destroy(retune);
 
-  // Automatic: the reported grain tracks the rate after a re-prepare.
+  // Automatic: config keeps 0 while the grain in use tracks the rate.
   REQUIRE(sonare_streaming_retune_create(0.0f, 1.0f, 0, &retune) == SONARE_OK);
   REQUIRE(retune != nullptr);
   REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 256) == SONARE_OK);
-  check_consistent(2232);
+  check(0, 2232);
   REQUIRE(sonare_streaming_retune_prepare(retune, 96000.0, 256) == SONARE_OK);
   int grain = 0;
   REQUIRE(sonare_streaming_retune_grain_size_samples(retune, &grain) == SONARE_OK);
   REQUIRE(grain > 2232);
-  check_consistent(grain);
+  check(0, grain);
   sonare_streaming_retune_destroy(retune);
 }
 
@@ -1223,7 +1226,7 @@ TEST_CASE("Realtime voice changer config JSON round-trips grain and latency at e
     REQUIRE(sonare_realtime_voice_changer_get_config(first, &pod) == SONARE_OK);
     int latency = 0;
     REQUIRE(sonare_realtime_voice_changer_latency_samples(first, &latency) == SONARE_OK);
-    REQUIRE(pod.retune_grain_size_samples > 0);
+    REQUIRE(pod.retune_grain_size_samples >= 0);
     REQUIRE(pod.retune_grain_size_samples <= 8192);
 
     // The serialized document carries the same grain get_config reports.

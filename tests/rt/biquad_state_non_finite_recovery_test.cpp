@@ -397,7 +397,7 @@ TEST_CASE("the realtime voice changer bounds a non-finite sample to its own bloc
   // rather than fed back, so it flushes without the rule.
   RealtimeVoiceChanger probe{base_config()};
   probe.prepare(kSampleRate, kBlockSize, 1);
-  const int ring_samples = 4 * probe.config().retune.grain_size;
+  const int ring_samples = 4 * probe.retune_grain_size();
   const int last_affected = kPoisonBlock + 1 + (ring_samples + kBlockSize - 1) / kBlockSize;
 
   const int block_count = kVoiceChangerRecoveryBlocks + kHorizonSlack;
