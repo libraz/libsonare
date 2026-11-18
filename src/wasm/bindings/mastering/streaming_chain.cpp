@@ -45,7 +45,9 @@ class StreamingMasteringChainWrapper {
   // nobody requested. sample_rate is a double, which is what a JS number already
   // is, so it has nothing to wrap into.
   void prepare(double sample_rate, const val& max_block_size, const val& num_channels) {
-    const int block_size = checkedIntFromVal(max_block_size, "maxBlockSize");
+    const int block_size = max_block_size.isUndefined() || max_block_size.isNull()
+                               ? mastering::api::MasteringChain::kDefaultMaxBlock
+                               : checkedIntFromVal(max_block_size, "maxBlockSize");
     const int channels = checkedIntFromVal(num_channels, "numChannels");
     chain_.prepare(sample_rate, block_size, channels);
     max_block_size_ = block_size;

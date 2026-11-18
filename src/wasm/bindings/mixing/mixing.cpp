@@ -3,6 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "mixing/api/scene.h"
 #include "mixing_wasm.h"
 
 val js_mixing_scene_preset_names() { return stringVectorToVal(mixing::api::scene_preset_names()); }
@@ -181,8 +182,11 @@ val MixerWasm::mixMeterSnapshotToVal(const SonareMixMeterSnapshot& snapshot) {
 
 MixerWasm* createMixerFromSceneJson(std::string json, const val& sample_rate,
                                     const val& block_size) {
+  const int resolved_block = block_size.isUndefined() || block_size.isNull()
+                                 ? sonare::mixing::api::kMixerDefaultMaxBlock
+                                 : checkedIntFromVal(block_size, "blockSize");
   return MixerWasm::fromSceneJson(std::move(json), checkedIntFromVal(sample_rate, "sampleRate"),
-                                  checkedIntFromVal(block_size, "blockSize"));
+                                  resolved_block);
 }
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH
 

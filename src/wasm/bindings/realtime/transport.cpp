@@ -55,13 +55,18 @@ void RealtimeEngineWasm::settleParameters() { engine_.settle_parameters(); }
 void RealtimeEngineWasm::primeOfflineParameters(const val& num_channels_val,
                                                 const val& block_size_val) {
   const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
-  const int block_size = checkedIntFromVal(block_size_val, "blockSize");
-  if (num_channels <= 0 || block_size <= 0) {
-    throw WasmRangeError("primeOfflineParameters: counts must be positive");
+  int block_size = (block_size_val.isUndefined() || block_size_val.isNull())
+                       ? 0
+                       : checkedIntFromVal(block_size_val, "blockSize");
+  if (num_channels <= 0 || block_size < 0) {
+    throw WasmRangeError(
+        "primeOfflineParameters: numChannels must be positive and blockSize "
+        "must not be negative");
   }
   if (engine_.max_block_size() <= 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
   }
+  block_size = resolveOfflineBlock(block_size);
   if (num_channels > engine_.prepared_channels()) {
     throw WasmRangeError("primeOfflineParameters: numChannels exceeds the prepared channel count");
   }

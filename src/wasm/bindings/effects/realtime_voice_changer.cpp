@@ -246,8 +246,14 @@ class RealtimeVoiceChangerWrapper {
       : changer_(realtimeVoiceChangerConfigFromVal(config)) {}
 
   void prepare(double sample_rate, const val& max_block_size_val, const val& channels_val) {
-    const int max_block_size = checkedIntFromVal(max_block_size_val, "maxBlockSize");
-    const int channels = checkedIntFromVal(channels_val, "channels");
+    const bool block_absent = max_block_size_val.isUndefined() || max_block_size_val.isNull();
+    const bool channels_absent = channels_val.isUndefined() || channels_val.isNull();
+    const int max_block_size = block_absent
+                                   ? editing::voice_changer::kRealtimeVoiceChangerDefaultMaxBlock
+                                   : checkedIntFromVal(max_block_size_val, "maxBlockSize");
+    const int channels = channels_absent
+                             ? editing::voice_changer::kRealtimeVoiceChangerDefaultChannels
+                             : checkedIntFromVal(channels_val, "channels");
     changer_.prepare(sample_rate, max_block_size, channels);
     // Pre-warm the per-instance scratch buffers so the first process* call
     // does not trigger an allocation. The `ensure_*_capacity` helpers only

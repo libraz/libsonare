@@ -13,6 +13,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <algorithm>
 #include <cstdint>
 #include <deque>
 #include <memory>
@@ -442,10 +443,17 @@ class RealtimeEngineWasm {
 
  private:
   // Maps a JS-supplied queue depth to the engine's size_t capacity. 0 selects
-  // the engine default (1024), matching the Node/Python bindings; a negative
-  // depth is refused by the caller before reaching this.
-  static size_t capacity(int requested);
+  // @p default_value; a negative depth is refused by the caller before reaching this.
+  static size_t capacity(int requested, size_t default_value);
 
+  // 0 selects the default offline block, capped at the prepared maximum block size.
+  int resolveOfflineBlock(int block_size) const {
+    return block_size == 0 ? std::min(sonare::engine::RealtimeEngine::kDefaultOfflineBlock,
+                                      engine_.max_block_size())
+                           : block_size;
+  }
+
+  // Record budget of a drain: undefined or null selects the library default.
   struct ChannelBlock {
     std::vector<std::vector<float>> storage;
     std::vector<float*> pointers;

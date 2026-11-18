@@ -107,7 +107,8 @@ class EqualizerWrapper {
  public:
   explicit EqualizerWrapper(val config) : processor_(makeConfig()) {
     const double sample_rate = floatProperty(config, "sampleRate", 48000.0f);
-    const int max_block_size = intProperty(config, "maxBlockSize", 512);
+    const int max_block_size =
+        intProperty(config, "maxBlockSize", mastering::eq::EqualizerProcessor::kDefaultMaxBlock);
     processor_.prepare(sample_rate, max_block_size);
     sample_rate_ = sample_rate;
     max_block_size_ = max_block_size;
@@ -310,7 +311,7 @@ class EqualizerWrapper {
 
   mastering::eq::EqualizerProcessor processor_;
   double sample_rate_ = 48000.0;
-  int max_block_size_ = 512;
+  int max_block_size_ = mastering::eq::EqualizerProcessor::kDefaultMaxBlock;
   std::vector<float> sidechain_left_;
   std::vector<float> sidechain_right_;
   std::array<const float*, 2> sidechain_channels_{};

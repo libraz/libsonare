@@ -138,6 +138,7 @@ export const READER_FAMILIES: Readonly<
     objectProperty: 'out-of-scope',
     optionAt: 'out-of-scope',
     requiredEnumProperty: 'out-of-scope',
+    requireIntProperty: 'out-of-scope',
     requireInt64Property: 'out-of-scope',
     requireNumberProperty: 'out-of-scope',
     requireTypedProperty: 'out-of-scope',

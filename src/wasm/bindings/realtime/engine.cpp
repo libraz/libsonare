@@ -23,8 +23,8 @@ void RealtimeEngineWasm::validatePrepare(double sample_rate, int max_block_size)
   }
 }
 
-size_t RealtimeEngineWasm::capacity(int requested) {
-  return requested == 0 ? 1024 : static_cast<size_t>(requested);
+size_t RealtimeEngineWasm::capacity(int requested, size_t default_value) {
+  return requested == 0 ? default_value : static_cast<size_t>(requested);
 }
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -64,7 +64,7 @@ void RealtimeEngineWasm::applyProjectTimeline(const val& timeline_id_val) {
 
 RealtimeEngineWasm::RealtimeEngineWasm(double sample_rate, const val& max_block_size,
                                        const val& command_capacity, const val& telemetry_capacity) {
-  prepareWithChannels(sample_rate, max_block_size, command_capacity, telemetry_capacity, val(64));
+  prepareWithChannels(sample_rate, max_block_size, command_capacity, telemetry_capacity, val(0));
 }
 
 RealtimeEngineWasm::RealtimeEngineWasm(double sample_rate, const val& max_block_size,
@@ -76,17 +76,21 @@ RealtimeEngineWasm::RealtimeEngineWasm(double sample_rate, const val& max_block_
 
 void RealtimeEngineWasm::prepare(double sample_rate, const val& max_block_size,
                                  const val& command_capacity, const val& telemetry_capacity) {
-  prepareWithChannels(sample_rate, max_block_size, command_capacity, telemetry_capacity, val(64));
+  prepareWithChannels(sample_rate, max_block_size, command_capacity, telemetry_capacity, val(0));
 }
 
 void RealtimeEngineWasm::prepareWithChannels(double sample_rate, const val& max_block_size_val,
                                              const val& command_capacity_val,
                                              const val& telemetry_capacity_val,
                                              const val& max_channels_val) {
-  const int max_block_size = checkedIntFromVal(max_block_size_val, "maxBlockSize");
+  using sonare::engine::RealtimeEngine;
+  // 0 is the library-default sentinel for each of the four sized arguments.
+  int max_block_size = checkedIntFromVal(max_block_size_val, "maxBlockSize");
+  if (max_block_size == 0) max_block_size = RealtimeEngine::kDefaultMaxBlock;
   const int command_capacity = checkedIntFromVal(command_capacity_val, "commandCapacity");
   const int telemetry_capacity = checkedIntFromVal(telemetry_capacity_val, "telemetryCapacity");
-  const int max_channels = checkedIntFromVal(max_channels_val, "maxChannels");
+  int max_channels = checkedIntFromVal(max_channels_val, "maxChannels");
+  if (max_channels == 0) max_channels = RealtimeEngine::kDefaultMaxChannels;
   validatePrepare(sample_rate, max_block_size);
   // Both the bound and the message it reports come from the engine's constant,
   // so raising the ceiling moves the guard and the text a host reads together.
@@ -99,20 +103,22 @@ void RealtimeEngineWasm::prepareWithChannels(double sample_rate, const val& max_
   // which would answer a caller error with the default queue.
   if (command_capacity < 0 || telemetry_capacity < 0) {
     throw WasmRangeError(
-        "prepare: command_capacity and telemetry_capacity must be 0 (the internal minimum) or "
-        "positive");
+        "prepare: command_capacity and telemetry_capacity must be 0 (the default) or positive");
   }
   // Mirrors the C ABI: the engine clamps these, but a host asking for more than
   // it can get should hear about it rather than quietly receive a smaller
   // engine. telemetry_capacity is the sharp one — the engine reserves it per
   // metered lane, so its fan-out dwarfs the requested number.
-  if (capacity(command_capacity) > sonare::engine::RealtimeEngine::kMaxCommandCapacity ||
-      capacity(telemetry_capacity) > sonare::engine::RealtimeEngine::kMaxTelemetryCapacity) {
+  const size_t command_resolved =
+      capacity(command_capacity, RealtimeEngine::kDefaultCommandCapacity);
+  const size_t telemetry_resolved =
+      capacity(telemetry_capacity, RealtimeEngine::kDefaultTelemetryCapacity);
+  if (command_resolved > RealtimeEngine::kMaxCommandCapacity ||
+      telemetry_resolved > RealtimeEngine::kMaxTelemetryCapacity) {
     throw WasmRangeError(
         "prepare: command_capacity or telemetry_capacity exceeds its documented maximum");
   }
-  engine_.prepare(sample_rate, max_block_size, capacity(command_capacity),
-                  capacity(telemetry_capacity), max_channels);
+  engine_.prepare(sample_rate, max_block_size, command_resolved, telemetry_resolved, max_channels);
 }
 
 void registerRealtimeEngineBindings() {

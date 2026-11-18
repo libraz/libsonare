@@ -59,14 +59,11 @@ uint32_t ProjectWasm::addClip(val desc) {
   d.length_ppq = doubleProperty(desc, "lengthPpq", 0.0);
   d.source_offset_ppq = doubleProperty(desc, "sourceOffsetPpq", 0.0);
   d.gain = floatProperty(desc, "gain", 1.0f);
-  d.audio_channels = hasProperty(desc, "audioChannels")
-                         ? checkedIntFromVal(desc["audioChannels"], "audioChannels")
-                         : 0;
   d.audio_sample_rate = hasProperty(desc, "audioSampleRate")
                             ? checkedIntFromVal(desc["audioSampleRate"], "audioSampleRate")
                             : 0;
   if (hasProperty(desc, "audio")) {
-    if (d.audio_channels == 0) d.audio_channels = 1;
+    d.audio_channels = requireIntProperty(desc, "audioChannels", "addClip descriptor");
     audio = float32ArrayToVector(desc["audio"]);
     if (d.audio_channels <= 0 || audio.size() % static_cast<size_t>(d.audio_channels) != 0) {
       throw WasmRangeError("audio length must be a multiple of audioChannels");

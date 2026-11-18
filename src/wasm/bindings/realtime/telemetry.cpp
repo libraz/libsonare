@@ -8,7 +8,10 @@
 #include "realtime_engine_wasm.h"
 
 val RealtimeEngineWasm::drainTelemetry(const val& max_records_val) {
-  const int max_records = checkedIntFromVal(max_records_val, "maxRecords");
+  const int max_records =
+      max_records_val.isUndefined()
+          ? static_cast<int>(sonare::engine::RealtimeEngine::kDefaultDrainRecords)
+          : checkedIntFromVal(max_records_val, "maxRecords");
   val out = val::array();
   if (max_records <= 0) return out;
   sonare::engine::Telemetry telemetry{};
@@ -62,7 +65,10 @@ int RealtimeEngineWasm::graphLatencySamplesQ8() const { return engine_.graph_lat
 uint32_t RealtimeEngineWasm::telemetryScratchValue() const { return telemetry_scratch_.value; }
 
 val RealtimeEngineWasm::drainMeterTelemetry(const val& max_records_val) {
-  const int max_records = checkedIntFromVal(max_records_val, "maxRecords");
+  const int max_records =
+      max_records_val.isUndefined()
+          ? static_cast<int>(sonare::engine::RealtimeEngine::kDefaultDrainRecords)
+          : checkedIntFromVal(max_records_val, "maxRecords");
   val out = val::array();
   if (max_records <= 0) return out;
 #if defined(SONARE_WITH_MIXING)
@@ -194,7 +200,10 @@ float RealtimeEngineWasm::meterScratchInputPeakDbR() const {
 // channelCount planes (canonical WAVE order), stereo being planes 0/1. It is the
 // one drain; drainMeterTelemetry consumes the same queue and stays for compatibility.
 val RealtimeEngineWasm::drainMeterTelemetryWide(const val& max_records_val) {
-  const int max_records = checkedIntFromVal(max_records_val, "maxRecords");
+  const int max_records =
+      max_records_val.isUndefined()
+          ? static_cast<int>(sonare::engine::RealtimeEngine::kDefaultDrainRecords)
+          : checkedIntFromVal(max_records_val, "maxRecords");
   val out = val::array();
   if (max_records <= 0) return out;
 #if defined(SONARE_WITH_MIXING)
@@ -255,7 +264,10 @@ unsigned int RealtimeEngineWasm::configureScopeTelemetry(const val& interval_fra
 }
 
 val RealtimeEngineWasm::drainScopeTelemetry(const val& max_records_val) {
-  const int max_records = checkedIntFromVal(max_records_val, "maxRecords");
+  const int max_records =
+      max_records_val.isUndefined()
+          ? static_cast<int>(sonare::engine::RealtimeEngine::kDefaultDrainRecords)
+          : checkedIntFromVal(max_records_val, "maxRecords");
   val out = val::array();
   if (max_records <= 0) return out;
 #if defined(SONARE_WITH_MIXING)

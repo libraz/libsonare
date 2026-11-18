@@ -340,19 +340,21 @@ val RealtimeEngineWasm::processWithMonitor(val channels_val) {
 }
 
 val RealtimeEngineWasm::renderOffline(val channels_val, const val& block_size_val, bool finalize) {
-  const int block_size = checkedIntFromVal(block_size_val, "blockSize");
+  int block_size = (block_size_val.isUndefined() || block_size_val.isNull())
+                       ? 0
+                       : checkedIntFromVal(block_size_val, "blockSize");
   // Mirror the C-ABI oracle (sonare_engine_render_offline): a never-prepared
   // engine renders nothing and cannot signal through telemetry, so fail closed
   // instead of handing back a silent buffer that reads as a completed render.
   if (engine_.max_block_size() <= 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
   }
-  // Match the C-ABI oracle (sonare_engine_render_offline): a non-positive block
-  // size is an error, not silently clamped to 1 as the core would do (WASM
-  // bypasses the C-ABI guard, and the sibling bounce/freeze paths reject it).
-  if (block_size <= 0) {
-    throw WasmRangeError("renderOffline block size must be positive");
+  // Match the C-ABI oracle (sonare_engine_render_offline): a negative block
+  // size is an error, and 0 selects the default offline block.
+  if (block_size < 0) {
+    throw WasmRangeError("renderOffline block size must not be negative");
   }
+  block_size = resolveOfflineBlock(block_size);
   ChannelBlock block = readChannels(channels_val);
   // More channels or a larger block than the engine was prepared for would write zeros past the
   // bound, as the C ABI refuses.
@@ -377,8 +379,8 @@ void RealtimeEngineWasm::finishOfflineRender() {
 
 val RealtimeEngineWasm::bounceOffline(val options_val) {
   const int64_t total_frames = int64Property(options_val, "totalFrames", 0);
-  const int block_size = intProperty(options_val, "blockSize", 128);
-  const int num_channels = intProperty(options_val, "numChannels", 2);
+  int block_size = intProperty(options_val, "blockSize", 0);
+  const int num_channels = requireIntProperty(options_val, "numChannels", "bounceOffline");
   // 0 (or absent) selects the prepared rate for the source and the source rate for the target.
   const int requested_source_rate = intProperty(options_val, "sourceSampleRate", 0);
   const int requested_target_rate = intProperty(options_val, "targetSampleRate", 0);
@@ -395,7 +397,7 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
   // it renders anything rather than silently mapping it to None, which would
   // hand back undithered audio with no way to tell the request was ignored.
   const int dither = intProperty(options_val, "dither", 0);
-  if (total_frames <= 0 || block_size <= 0 || num_channels <= 0 || requested_source_rate < 0 ||
+  if (total_frames <= 0 || block_size < 0 || num_channels <= 0 || requested_source_rate < 0 ||
       requested_target_rate < 0 || source_sample_rate <= 0 || dither_bits < 0 || dither < 0 ||
       dither > 3 ||
       !sonare::resource::engine_bounce_shape_fits(total_frames, num_channels, source_sample_rate,
@@ -415,6 +417,7 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
   if (engine_.max_block_size() <= 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
   }
+  block_size = resolveOfflineBlock(block_size);
   // Bouncing more channels than the engine was prepared for would write zeros for every plane
   // past the bound.
   if (num_channels > engine_.prepared_channels() || block_size > engine_.max_block_size()) {
@@ -488,9 +491,9 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
 
 val RealtimeEngineWasm::freezeOffline(val options_val) {
   const int64_t total_frames = int64Property(options_val, "totalFrames", 0);
-  const int block_size = intProperty(options_val, "blockSize", 128);
-  const int num_channels = intProperty(options_val, "numChannels", 2);
-  if (total_frames <= 0 || block_size <= 0 || num_channels <= 0 ||
+  int block_size = intProperty(options_val, "blockSize", 0);
+  const int num_channels = requireIntProperty(options_val, "numChannels", "freezeOffline");
+  if (total_frames <= 0 || block_size < 0 || num_channels <= 0 ||
       !sonare::resource::engine_offline_shape_fits(total_frames, num_channels, 1)) {
     throw WasmRangeError("invalid freeze options");
   }
@@ -499,6 +502,7 @@ val RealtimeEngineWasm::freezeOffline(val options_val) {
   if (engine_.max_block_size() <= 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
   }
+  block_size = resolveOfflineBlock(block_size);
   // Freezing more channels than the engine was prepared for would write zeros for every plane
   // past the bound.
   if (num_channels > engine_.prepared_channels() || block_size > engine_.max_block_size()) {

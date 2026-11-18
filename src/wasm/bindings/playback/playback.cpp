@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "c_api/sonare_c_error_mapping.h"
+#include "playback/renderer.h"
 #include "wasm/bindings/common/common.h"
 
 #if defined(SONARE_WITH_PLAYBACK)
@@ -110,7 +111,9 @@ class PlaybackRendererWasm {
   PlaybackRendererWasm(const std::string& config_json, const val& hrtf, const val& sample_rate_val,
                        const val& max_block_size_val) {
     sample_rate_ = checkedIntFromVal(sample_rate_val, "sampleRate");
-    max_block_ = checkedIntFromVal(max_block_size_val, "maxBlockSize");
+    max_block_ = max_block_size_val.isUndefined() || max_block_size_val.isNull()
+                     ? sonare::playback::kPlaybackRendererDefaultMaxBlock
+                     : checkedIntFromVal(max_block_size_val, "maxBlockSize");
     SonarePlaybackRenderer* created = nullptr;
     checkPlayback(sonare_playback_renderer_create_json(wasmCString(config_json, "configJson"),
                                                        hrtfHandleFromVal(hrtf), sample_rate_,

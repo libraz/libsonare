@@ -130,7 +130,10 @@ size_t RealtimeEngineWasm::externalMidiPendingCount() const {
 val RealtimeEngineWasm::drainExternalMidi(const val& max_records_val) {
   val out = val::array();
 #if defined(SONARE_WITH_ARRANGEMENT)
-  const int max_records = checkedIntFromVal(max_records_val, "maxRecords");
+  const int max_records =
+      max_records_val.isUndefined()
+          ? static_cast<int>(sonare::engine::RealtimeEngine::kDefaultDrainRecords)
+          : checkedIntFromVal(max_records_val, "maxRecords");
   // One queue record lowers to at most this many MIDI-1 messages, so a smaller
   // budget can never consume a record and the drain would report nothing while
   // the queue keeps growing. The bound is read from the shared lowering type so
