@@ -190,8 +190,13 @@ function assertTempo(fnName: string, value: unknown): void {
  * is returned; realizing the suggestion means handing `result.scene` to
  * {@link Mixer.fromJson} as an explicit second step.
  *
- * Degenerate input is not an error: no tracks, all-silent tracks or tracks too
- * short to measure yield an empty scene and an empty `explanation`.
+ * A degenerate track (empty, holding a NaN or Inf sample, too short for a gated
+ * loudness, silent, or without energy in the analysis bands) is excluded rather
+ * than refused: its profile reports `usable: false` and an `exclusionReason`
+ * naming which, and the call succeeds. This is documented behaviour, not a
+ * missing check.
+ *
+ * With no usable track at all the scene and the `explanation` are empty.
  *
  * @param request - Tracks, analysis sample rate and assistant tunables
  * @returns The suggested scene, per-track profiles, cross-track measurements

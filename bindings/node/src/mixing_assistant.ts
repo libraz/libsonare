@@ -221,6 +221,12 @@ function normalizeOptions(
  * Offline / control thread only: this runs an STFT per track and evaluates
  * every track pair. Tracks may differ in length.
  *
+ * A degenerate track (empty, holding a NaN or Inf sample, too short for a gated
+ * loudness, silent, or without energy in the analysis bands) is excluded rather
+ * than refused: its profile reports `usable: false` and an `exclusionReason`
+ * naming which, and the call succeeds. This is documented behaviour, not a
+ * missing check.
+ *
  * @param request - Tracks, analysis sample rate and assistant tunables
  * @throws TypeError for a wrong-typed or missing field or an unknown key; RangeError for an
  *   out-of-domain rate or tunable
