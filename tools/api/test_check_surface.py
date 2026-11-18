@@ -1918,5 +1918,244 @@ class UpgradeNotes(unittest.TestCase):
             self.assertEqual(first, upgrade_notes.render(d, TD / "rules.toml"))
 
 
+def _field(surface, owner, member, type="number", **kw):
+    return _rec(surface, "field", f"{owner}.{member}", owner=owner, member=member, type=type, **kw)
+
+
+def _fn(surface, name, returns="void", *params, **kw):
+    return _rec(
+        surface, "function", name, sigs=[{"params": list(params), "returns": returns}], **kw
+    )
+
+
+def _member_method(surface, owner, member):
+    return _rec(
+        surface,
+        "method",
+        f"{owner}.{member}",
+        owner=owner,
+        member=member,
+        static=False,
+        sigs=[{"params": [], "returns": "void"}],
+    )
+
+
+def _c_param(name, type):
+    return dict(_param(name, type=type), default=None)
+
+
+# One reintroduced violation per rule check: (check id, records, the exact finding lines).
+REFUSALS = (
+    (
+        "seconds-suffix",
+        [_field("node", "FadeOptions", "fadeSeconds")],
+        ["node field FadeOptions.fadeSeconds: name ends in seconds; use the Sec suffix"],
+    ),
+    (
+        "teardown:js",
+        [_rec("node", "class", "Player", sigs=[]), _member_method("node", "Player", "close")],
+        [
+            "node class Player: has a teardown member but no destroy()",
+            "node class Player: has a teardown member but no [Symbol.dispose] / [Symbol.asyncDispose]",
+            "node class Player: teardown is spelled destroy(), not close()",
+        ],
+    ),
+    (
+        "teardown:python",
+        [
+            _rec("python", "class", "Player"),
+            _member_method("python", "Player", "destroy"),
+            _member_method("python", "Player", "__enter__"),
+        ],
+        [
+            "python class Player: has a teardown member but no close",
+            "python class Player: has a teardown member but no __exit__",
+            "python class Player: teardown is spelled close(), not destroy()",
+        ],
+    ),
+    (
+        "no-internal-types",
+        [_fn("wasm", "renderStems", "WasmStemSet")],
+        ["wasm function renderStems: exposes internal type WasmStemSet"],
+    ),
+    (
+        "worklet-scope",
+        [_fn("node", "packEvents", file="bindings/node/src/internal/events.ts")],
+        [
+            "node function packEvents: declared in internal module bindings/node/src/internal/events.ts"
+        ],
+    ),
+    (
+        "progress-callback",
+        [_fn("node", "separateWithProgress")],
+        [
+            "node function separateWithProgress: progress is an option of the operation, not a WithProgress twin"
+        ],
+    ),
+    (
+        "options-struct:suffix",
+        [_fn("c", "sonare_detect_bpm_ex", "SonareError")],
+        ["c function sonare_detect_bpm_ex: suffix _ex marks a second form of one operation"],
+    ),
+    (
+        "options-struct:struct-size",
+        [
+            _rec("c", "type", "SonareFadeOptions", c_kind="struct"),
+            _field("c", "SonareFadeOptions", "struct_version", "uint32_t", index=0),
+            _field("c", "SonareFadeOptions", "length", "size_t", index=1),
+        ],
+        [
+            "c type SonareFadeOptions: first field must be uint32_t struct_size",
+            "c type SonareFadeOptions: no sonare_fade_options_init()",
+            "c type SonareFadeOptions: field struct_version duplicates struct_size",
+        ],
+    ),
+    (
+        "c-create",
+        [_fn("c", "sonare_player_create", "SonarePlayer*", _c_param("sample_rate", "int"))],
+        [
+            "c function sonare_player_create: returns SonarePlayer*, not SonareError",
+            "c function sonare_player_create: last parameter is not the out-pointer to the handle",
+        ],
+    ),
+    (
+        "c-count-types",
+        [
+            _field("c", "SonareRegion", "frame_count", "int"),
+            _field("c", "SonareRegion", "start_sample", "size_t"),
+            _field("c", "SonareRegion", "sample_rate", "float"),
+        ],
+        [
+            "c field SonareRegion.frame_count: frame_count is size_t, not int",
+            "c field SonareRegion.start_sample: start_sample is int64_t, not size_t",
+            "c field SonareRegion.sample_rate: sample_rate is int, not float",
+        ],
+    ),
+    (
+        "getters",
+        [_member_method("node", "Player", "getVolume"), _fn("python", "get_tempo")],
+        [
+            "node method Player.getVolume: drop the get prefix",
+            "python function get_tempo: drop the get prefix",
+        ],
+    ),
+    (
+        "typed-results",
+        [_fn("node", "suggestMastering", "TypedJson<MasteringAssistantResult>")],
+        [
+            "node function suggestMastering: returns or takes a JSON string; return the parsed object"
+        ],
+    ),
+    (
+        "array-results",
+        [_fn("python", "beat_times", "list[float]"), _fn("python", "key_pair", "tuple[str, str]")],
+        [
+            "python function beat_times: returns a list of numbers; return an ndarray",
+            "python function key_pair: returns a bare tuple; return a typed result",
+        ],
+    ),
+    (
+        "frozen-results",
+        [
+            _rec("python", "type", "TempoResult", dataclass=True, frozen=False),
+            _fn("python", "tempo", "TempoResult"),
+        ],
+        ["python type TempoResult: result dataclass is not frozen=True"],
+    ),
+    (
+        "one-positional-form",
+        [_fn("node", "trim", "void", *(_param(n) for n in "abcd"))],
+        ["node function trim: 4 positional parameters; take a request object"],
+    ),
+    (
+        "digit-tokens",
+        [
+            _field(
+                "node",
+                "EqOptions",
+                "slope",
+                "string",
+                inline_literals=True,
+                literals=["band-3", "12dB"],
+            )
+        ],
+        [
+            "node field EqOptions.slope: token 'band-3' separates digits with - or _",
+            "node field EqOptions.slope: token '12dB' spells the unit dB; use Db as in identifiers",
+        ],
+    ),
+    (
+        "high-pass",
+        [_field("node", "EqOptions", "hpfCutoffHz"), _field("python", "EqOptions", "highpass")],
+        [
+            "node field EqOptions.hpfCutoffHz: spell high-pass as highPass / high_pass",
+            "python field EqOptions.highpass: spell high-pass as highPass / high_pass",
+        ],
+    ),
+    (
+        "num-channels",
+        [_field("node", "Layout", "channelCount"), _field("python", "Layout", "channels", "int")],
+        [
+            "node field Layout.channelCount: channelCount: a channel count is numChannels / num_channels",
+            "python field Layout.channels: field channels holds a count; channels is the planar array",
+        ],
+    ),
+    (
+        "pitch-semitones",
+        [_field("node", "ShiftOptions", "semitones")],
+        ["node field ShiftOptions.semitones: semitones does not say which pitch quantity it moves"],
+    ),
+    (
+        "frequency-bounds",
+        [_field("node", "PitchOptions", "fmin"), _field("python", "PitchOptions", "f0_max")],
+        [
+            "node field PitchOptions.fmin: fmin is a frequency bound; add Hz",
+            "python field PitchOptions.f0_max: f0_max is a frequency bound; add Hz",
+        ],
+    ),
+    (
+        "frequency-bounds:centre",
+        [_field("node", "BandOptions", "centreHz")],
+        ["node field BandOptions.centreHz: spell centre as center"],
+    ),
+    (
+        "python-public-names",
+        [
+            _fn("python", "separate", "StemBuffers"),
+            _rec("python", "class", "Mixer", in_all=False, modules=["__init__", "mixing"]),
+        ],
+        [
+            "python function separate: annotation names StemBuffers, which libsonare does not export",
+            "python class Mixer: public in libsonare.mixing but not in __all__",
+        ],
+    ),
+    (
+        "cli-positional-input",
+        [
+            _rec("cli-python", "flag", "bpm --in", owner="bpm", member="in"),
+            _rec("cli-native", "flag", "bpm --use-hpss", owner="bpm", member="use-hpss"),
+        ],
+        [
+            "cli-native flag bpm --use-hpss: --use-hpss: name the feature, not the act of using it",
+            "cli-python flag bpm --in: --in names an input; take it positionally",
+        ],
+    ),
+)
+
+
+class Refusals(CheckerCase):
+    """Each rule check refuses the shape it exists for; the fixture alone is green."""
+
+    def test_every_rule_check_refuses_a_reintroduced_violation(self):
+        for check, records, want in REFUSALS:
+            with self.subTest(check=check):
+                self.inv = copy.deepcopy(BASE)
+                _, before = self.run_check("--check", check)
+                self.add(*copy.deepcopy(records))
+                _, lines = self.run_check("--check", check)
+                found = sorted(x.strip() for x in set(lines) - set(before) if x.startswith("    "))
+                self.assertEqual(found, sorted(want))
+
+
 if __name__ == "__main__":
     unittest.main()
