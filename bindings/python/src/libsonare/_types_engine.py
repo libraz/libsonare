@@ -18,6 +18,7 @@ from ._types_enums import (
     AutomationCurve,
     EngineTelemetryError,
     EngineTelemetryType,
+    ProjectWarpMode,
     SectionType,
 )
 
@@ -257,7 +258,7 @@ class EngineClip:
     gain: float = 1.0
     fade_in_samples: int = 0
     fade_out_samples: int = 0
-    warp_mode: str | int = "off"
+    warp_mode: ProjectWarpMode = "off"
     warp_anchors: list[tuple[float, float]] | None = None
     page_provider: object | None = None
 

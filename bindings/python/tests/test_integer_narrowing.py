@@ -301,14 +301,14 @@ def test_a_wrapped_arrangement_id_is_refused_rather_than_selecting_another_objec
         ("track_id", lambda v: project.add_automation_lane(v, 9, points), track_a, track_b),
         (
             "track_id",
-            lambda v: project.add_automation_lane(v, 9, points, "track-pan"),
+            lambda v: project.add_automation_lane(v, 9, points, "trackPan"),
             track_a,
             track_b,
         ),
         ("track_id", lambda v: project.edit_automation_lane(v, 7, points), track_a, track_b),
         (
             "track_id",
-            lambda v: project.edit_automation_lane(v, 7, points, "track-pan"),
+            lambda v: project.edit_automation_lane(v, 7, points, "trackPan"),
             track_a,
             track_b,
         ),
@@ -707,7 +707,7 @@ def _wrong_type_sites():
         ("finite_float", lambda v: _finite_float(v, "gain"), "x", float("nan")),
         ("unsigned", lambda v: _unsigned(v, "key", 127), "x", 1.5),
         ("note_set_index", lambda v: _note_set_index("fn", "index", v), "x", 1.5),
-        ("target_kind", _automation_target_kind_value, [], 1.5),
+        ("target_kind", _automation_target_kind_value, 1, "track-pan"),
         ("midi_word", lambda v: _validate_midi_event_word(v, "word"), "x", -1),
         ("enum", _meter_tap_value, [], "post"),
     ]

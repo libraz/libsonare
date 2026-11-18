@@ -3,7 +3,7 @@
 Most subclass :class:`enum.IntEnum` because the values cross the C ABI as
 plain integers, so either the member or its number is accepted. Key mode, key
 profile, section type, automation curve, pan law, pan mode, channel layout,
-meter tap, send timing, sidechain source kind and the effect modes are string tokens
+meter tap, send timing, sidechain source kind, warp mode and the effect modes are string tokens
 (:class:`typing.Literal`) whose position in the matching ``_*`` tuple is the C
 ordinal.
 """
@@ -197,6 +197,9 @@ DehumMode = Literal["subtract", "notch"]
 CompressorDetector = Literal["peak", "rms", "logRms"]
 """Level detector of the compressor."""
 
+ProjectWarpMode = Literal["off", "repitch", "tempoSync", "timeStretch"]
+"""How a clip follows the tempo: not at all, by resampling, synced, or time-stretched."""
+
 # Ordinal-ordered tokens: index == the C ordinal of each type.
 _KEY_MODES: tuple[KeyMode, ...] = get_args(KeyMode)
 _KEY_PROFILES: tuple[KeyProfile, ...] = get_args(KeyProfile)
@@ -218,5 +221,6 @@ _DENOISE_CLASSICAL_NOISE_ESTIMATORS: tuple[DenoiseClassicalNoiseEstimator, ...] 
 )
 _DEHUM_MODES: tuple[DehumMode, ...] = get_args(DehumMode)
 _COMPRESSOR_DETECTORS: tuple[CompressorDetector, ...] = get_args(CompressorDetector)
+_WARP_MODES: tuple[ProjectWarpMode, ...] = get_args(ProjectWarpMode)
 # Passed to the core by name, so the order carries no ordinal.
 _GENRE_HINTS: tuple[GenreHint, ...] = get_args(GenreHint)

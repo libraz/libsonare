@@ -8541,3 +8541,51 @@ changed = "takes a CompressorDetector token (\"peak\", \"rms\" or \"logRms\") on
 domain = "mastering"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_effect_mode_tokens.py::test_an_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "Project.add_track(kind)"
+changed = "takes a ProjectTrackKind token ('audio' default, 'midi', 'aux'); the TRACK_AUDIO / TRACK_MIDI / TRACK_AUX ordinals are removed and a number is TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_enum_ordinal_domain.py::test_a_track_kind_is_a_token_on_add_and_on_change"
+
+[[entry]]
+kind = "option"
+old = "Project.set_track_kind(kind)"
+changed = "takes a ProjectTrackKind token ('audio', 'midi', 'aux'); a number is TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_enum_ordinal_domain.py::test_a_track_kind_is_a_token_on_add_and_on_change"
+
+[[entry]]
+kind = "option"
+old = "Project.set_clip_warp_mode(mode)"
+changed = "takes a ProjectWarpMode token ('off', 'repitch', 'tempoSync', 'timeStretch'); 'tempo-sync' and 'time-stretch' raise SonareValueError and a number is TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_enum_ordinal_domain.py::test_a_refused_warp_mode_never_reaches_the_arrangement"
+
+[[entry]]
+kind = "option"
+old = "Project.add_automation_lane(target_kind)"
+changed = "takes a ProjectAutomationTargetKind token ('opaque', 'trackFaderDb', 'trackPan'); 'track-fader-db' and 'track-pan' raise SonareValueError, a number is TypeError, and the AUTOMATION_TARGET_* ordinals are removed"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_project_edit_ops.py::test_automation_lane_rejects_invalid_target_kind_without_mutation"
+
+[[entry]]
+kind = "option"
+old = "Project.edit_automation_lane(target_kind)"
+changed = "takes a ProjectAutomationTargetKind token ('opaque', 'trackFaderDb', 'trackPan'); 'track-fader-db' and 'track-pan' raise SonareValueError and a number is TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_enum_ordinal_domain.py::test_an_ordinal_or_a_bool_is_a_type_error"
+
+[[entry]]
+kind = "field"
+old = "EngineClip.warp_mode"
+changed = "takes a ProjectWarpMode token ('off' default, 'repitch', 'tempoSync', 'timeStretch'); 'tempo-sync' and 'time-stretch' raise SonareValueError and a number is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_engine_clips.py::test_realtime_engine_warp_mode_validation_matches_project_helper"

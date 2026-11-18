@@ -473,6 +473,8 @@ DehumMode: TypeAlias = Literal["subtract", "notch"]
 
 CompressorDetector: TypeAlias = Literal["peak", "rms", "logRms"]
 
+ProjectWarpMode: TypeAlias = Literal["off", "repitch", "tempoSync", "timeStretch"]
+
 KeyProfile: TypeAlias = Literal[
     "krumhanslSchmuckler",
     "temperley",
@@ -2639,7 +2641,7 @@ class EngineClip:
     gain: float
     fade_in_samples: int
     fade_out_samples: int
-    warp_mode: str | int
+    warp_mode: ProjectWarpMode
     warp_anchors: list[tuple[float, float]] | None
     page_provider: object | None
     def __init__(
@@ -2654,7 +2656,7 @@ class EngineClip:
         gain: float = 1.0,
         fade_in_samples: int = 0,
         fade_out_samples: int = 0,
-        warp_mode: str | int = "off",
+        warp_mode: ProjectWarpMode = "off",
         warp_anchors: list[tuple[float, float]] | None = None,
         page_provider: object | None = None,
     ) -> None: ...

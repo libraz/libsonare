@@ -25,9 +25,6 @@ from ._project_model import (
     _LOOP_MODES as _LOOP_MODES,
 )
 from ._project_model import (
-    _TRACK_KIND_NAMES as _TRACK_KIND_NAMES,
-)
-from ._project_model import (
     _automation_lane_desc as _automation_lane_desc,
 )
 from ._project_model import (

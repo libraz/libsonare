@@ -267,7 +267,7 @@ def test_automation_lane_typed_kind_roundtrip_and_legacy_edit_preservation() -> 
         track,
         2,
         [(0.0, 0.0, "linear"), (480.0, 1.0, "hold")],
-        target_kind="track-fader-db",
+        target_kind="trackFaderDb",
     )
     typed_before_edit = p.to_json()
     typed_doc = json.loads(typed_before_edit)
@@ -288,24 +288,37 @@ def test_automation_lane_typed_kind_roundtrip_and_legacy_edit_preservation() -> 
 def test_automation_lane_typed_kind_conflict_is_atomic() -> None:
     _require_typed_automation_api()
     p, track, _clip = _audio_project()
-    p.add_automation_lane(track, 1, [(0.0, 0.0, "linear")], target_kind=1)
-    pan_target = p.add_automation_lane(track, 2, [(0.0, 0.0, "linear")], target_kind=2)
+    p.add_automation_lane(track, 1, [(0.0, 0.0, "linear")], target_kind="trackFaderDb")
+    pan_target = p.add_automation_lane(track, 2, [(0.0, 0.0, "linear")], target_kind="trackPan")
     before = p.to_json()
 
     with pytest.raises(SonareError):
-        p.add_automation_lane(track, 3, [(0.0, 1.0, "linear")], target_kind="track-fader-db")
+        p.add_automation_lane(track, 3, [(0.0, 1.0, "linear")], target_kind="trackFaderDb")
     assert p.to_json() == before
 
     with pytest.raises(SonareError):
-        p.edit_automation_lane(track, pan_target, [(0.0, 1.0, "linear")], target_kind=1)
+        p.edit_automation_lane(
+            track, pan_target, [(0.0, 1.0, "linear")], target_kind="trackFaderDb"
+        )
     assert p.to_json() == before
 
 
 def test_automation_lane_rejects_invalid_target_kind_without_mutation() -> None:
     p, track, _clip = _audio_project()
     before = p.to_json()
-    for invalid in ("unknown", 3, 1.5, float("nan"), float("inf"), True, None):
-        expected = TypeError if invalid is None or isinstance(invalid, bool) else ValueError
+    for invalid in (
+        "unknown",
+        "track-fader-db",
+        "TrackPan",
+        0,
+        1,
+        3,
+        1.5,
+        float("nan"),
+        True,
+        None,
+    ):
+        expected = ValueError if isinstance(invalid, str) else TypeError
         with pytest.raises(expected):
             p.add_automation_lane(track, 1, [(0.0, 0.0, "linear")], target_kind=invalid)
         assert p.to_json() == before

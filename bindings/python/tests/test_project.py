@@ -491,7 +491,7 @@ def test_set_clip_warp_ref_round_trips_and_undoes() -> None:
         project.undo()
         assert project.to_json_bytes() == before
 
-        project.set_clip_warp_mode(clip_id, "tempo-sync")
+        project.set_clip_warp_mode(clip_id, "tempoSync")
         assert b'"warp_mode":2' in project.to_json_bytes()
     finally:
         project.close()

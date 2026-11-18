@@ -86,6 +86,7 @@ from ._runtime import (
     _utf8_arg,
     _warp_mode_value,
 )
+from ._types_enums import ProjectWarpMode
 from .types import ProjectSource
 
 if TYPE_CHECKING:
@@ -219,11 +220,11 @@ class _ProjectEditMixin:
 
     # -- edit ---------------------------------------------------------------
 
-    def add_track(self, kind: str | int = TRACK_AUDIO, name: str | None = None) -> int:
+    def add_track(self, kind: ProjectTrackKind = "audio", name: str | None = None) -> int:
         """Add a track and return its allocated stable id.
 
         Args:
-            kind: ``"audio"`` / ``"midi"`` / ``"aux"`` (or the integer ordinal).
+            kind: ``"audio"`` (default), ``"midi"`` or ``"aux"``.
             name: Optional track name.
         """
         desc = SonareProjectTrackDesc(
@@ -509,7 +510,7 @@ class _ProjectEditMixin:
             )
         )
 
-    def set_track_kind(self, track_id: int, kind: str | int) -> None:
+    def set_track_kind(self, track_id: int, kind: ProjectTrackKind) -> None:
         """Change a track kind via an undoable edit command."""
         _check(
             _get_lib().sonare_project_set_track_kind(
@@ -529,7 +530,7 @@ class _ProjectEditMixin:
             )
         )
 
-    def set_clip_warp_mode(self, clip_id: int, mode: str | int) -> None:
+    def set_clip_warp_mode(self, clip_id: int, mode: ProjectWarpMode) -> None:
         """Set a clip's warp playback mode."""
         _check(
             _get_lib().sonare_project_set_clip_warp_mode(
@@ -1038,8 +1039,8 @@ class _ProjectEditMixin:
         (``curve`` is an :data:`AutomationCurve` token; default ``"linear"``).
         ``target_param_id`` must be non-zero; zero is reserved as the unset id.
         Omit ``target_kind`` to use the legacy opaque-lane ABI. Supplying
-        ``"opaque"``/``0``, ``"track-fader-db"``/``1``, or
-        ``"track-pan"``/``2`` uses the typed extended ABI.
+        ``"opaque"``, ``"trackFaderDb"`` or ``"trackPan"`` uses the typed
+        extended ABI.
         A mapping descriptor with ``target_param_id``/``targetParamId``,
         ``points``, and optional ``target_kind``/``targetKind`` is also
         accepted for cross-binding parity.

@@ -57,7 +57,9 @@ from ._types_enums import _SECTION_TYPES as _SECTION_TYPES
 from ._types_enums import _SEND_TIMINGS as _SEND_TIMINGS
 from ._types_enums import _SIDECHAIN_SOURCE_KINDS as _SIDECHAIN_SOURCE_KINDS
 from ._types_enums import _TEMPOGRAM_MODES as _TEMPOGRAM_MODES
+from ._types_enums import _WARP_MODES as _WARP_MODES
 from ._types_enums import _WINDOW_TYPES as _WINDOW_TYPES
+from ._types_enums import ProjectWarpMode as ProjectWarpMode
 from .types import *  # noqa: F403
 
 _lib: ctypes.CDLL | None = None
@@ -1177,12 +1179,8 @@ def _channel_layout_value(value: ChannelLayout) -> int:
     return _token_ordinal(value, _CHANNEL_LAYOUTS, "channel layout")
 
 
-_WARP_MODE_NAMES = {"off": 0, "repitch": 1, "tempo-sync": 2, "time-stretch": 3}
-
-
-def _warp_mode_value(mode: str | int) -> int:
-    """Resolve a warp mode to its C enum value (0 off, 1 repitch, 2 tempo-sync, 3 time-stretch)."""
-    return _resolve_enum(mode, _WARP_MODE_NAMES, "warp mode", reject_bool=True)
+def _warp_mode_value(mode: ProjectWarpMode) -> int:
+    return _token_ordinal(mode, _WARP_MODES, "warp mode")
 
 
 def _mix_meter_from_c(snapshot: SonareMixMeterSnapshot) -> MixMeterSnapshot:

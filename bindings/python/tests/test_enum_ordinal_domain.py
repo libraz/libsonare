@@ -1,15 +1,14 @@
-"""An enum ordinal outside its field's domain is refused, not forwarded to the C ABI.
+"""A closed set takes its token spelling only; an ordinal never reaches the C ABI.
 
-The C ABI is not uniform about what it does with one: where it substitutes a
-default, the caller gets a successful call that did something other than what was
-asked, with nothing in the result to say so. A ``bool`` is the same defect wearing
-a different type -- it satisfies ``isinstance(value, int)`` and resolves to the
-ordinal 0 or 1, which is a legal value in every one of these tables.
+The C ABI is not uniform about what it does with an ordinal outside its field's
+domain: where it substitutes a default, the caller gets a successful call that
+did something other than what was asked, with nothing in the result to say so.
+A ``bool`` is the same defect wearing a different type -- it satisfies
+``isinstance(value, int)`` and would read as 0 or 1. So no ordinal is taken.
 
-Each family opens with a positive control -- a name and an ordinal resolving
-alike, and distinct names resolving differently. Without it a resolver that
-ignored its argument would read as one that accepted it, and the refusals below
-would mean nothing.
+Each case opens with a positive control -- distinct tokens resolving
+differently. Without it a resolver that ignored its argument would read as one
+that accepted it, and the refusals below would mean nothing.
 """
 
 from __future__ import annotations
@@ -19,7 +18,7 @@ from collections.abc import Callable, Sequence
 import pytest
 
 from libsonare import SonareValueError
-from libsonare._project_model import _track_kind_value
+from libsonare._project_model import _automation_target_kind_value, _track_kind_value
 from libsonare._runtime import (
     _mode_values,
     _profile_value,
@@ -32,74 +31,55 @@ from ._helpers import LIB_AVAILABLE
 # a value its own signature does not admit.
 Resolver = Callable[..., int]
 
-# (resolver, the field it names in its error, legal (name, ordinal) pairs,
-# accepted ordinals no spelling covers, ordinals outside the field's domain)
-_Family = tuple[Resolver, str, Sequence[tuple[str, int]], Sequence[int], Sequence[int]]
-
-_FAMILIES: Sequence[_Family] = (
+# (resolver, the field it names in its error, its tokens in C ordinal order,
+# spellings it once took)
+_FAMILIES: Sequence[tuple[Resolver, str, Sequence[str], Sequence[str]]] = (
     (
         _warp_mode_value,
         "warp mode",
-        (("off", 0), ("repitch", 1), ("tempo-sync", 2), ("time-stretch", 3)),
-        (),
-        (4, 99, -1),
+        ("off", "repitch", "tempoSync", "timeStretch"),
+        ("tempo-sync", "time-stretch", "Off"),
     ),
-    (_track_kind_value, "track kind", (("audio", 0), ("midi", 1), ("aux", 2)), (), (3, 99, -1)),
+    (_track_kind_value, "track kind", ("audio", "midi", "aux"), ("Audio", "MIDI")),
+    (
+        _automation_target_kind_value,
+        "automation target kind",
+        ("opaque", "trackFaderDb", "trackPan"),
+        ("track-fader-db", "track_pan", "OPAQUE"),
+    ),
 )
 
-_FAMILY_IDS = [
-    what.replace(" ", "_") + f"_{index}" for index, (_, what, _, _, _) in enumerate(_FAMILIES)
-]
-
-
-_PARAMS = ("resolve", "what", "legal", "unspelled", "out_of_domain")
+_FAMILY_IDS = [what.replace(" ", "_") for _, what, _, _ in _FAMILIES]
+_PARAMS = ("resolve", "what", "tokens", "retired")
 
 
 @pytest.mark.parametrize(_PARAMS, _FAMILIES, ids=_FAMILY_IDS)
-def test_a_name_and_its_ordinal_resolve_alike(
-    resolve: Resolver,
-    what: str,
-    legal: Sequence[tuple[str, int]],
-    unspelled: Sequence[int],
-    out_of_domain: Sequence[int],
+def test_each_token_resolves_to_its_ordinal(
+    resolve: Resolver, what: str, tokens: Sequence[str], retired: Sequence[str]
 ) -> None:
-    """The positive control: the resolver reads its argument rather than ignoring it."""
-    for name, ordinal in legal:
-        assert resolve(name) == resolve(ordinal) == ordinal, what
-    assert len({resolve(name) for name, _ in legal}) == len(legal), f"{what} collapses its names"
+    assert [resolve(token) for token in tokens] == list(range(len(tokens))), what
 
 
 @pytest.mark.parametrize(_PARAMS, _FAMILIES, ids=_FAMILY_IDS)
-def test_an_ordinal_outside_the_domain_is_refused(
-    resolve: Resolver,
-    what: str,
-    legal: Sequence[tuple[str, int]],
-    unspelled: Sequence[int],
-    out_of_domain: Sequence[int],
+def test_an_ordinal_or_a_bool_is_a_type_error(
+    resolve: Resolver, what: str, tokens: Sequence[str], retired: Sequence[str]
 ) -> None:
-    """The refusal names the field, quotes the value, and lists what would be taken."""
-    for ordinal in out_of_domain:
-        with pytest.raises(SonareValueError, match=what) as excinfo:
-            resolve(ordinal)
-        message = str(excinfo.value)
-        assert str(ordinal) in message
-        assert "expected one of" in message
-        for name, _ in legal:
-            assert repr(name) in message
-
-
-@pytest.mark.parametrize(_PARAMS, _FAMILIES, ids=_FAMILY_IDS)
-def test_a_bool_is_refused_rather_than_read_as_zero_or_one(
-    resolve: Resolver,
-    what: str,
-    legal: Sequence[tuple[str, int]],
-    unspelled: Sequence[int],
-    out_of_domain: Sequence[int],
-) -> None:
-    """Both spellings, because 0 and 1 are legal ordinals in every table here."""
-    for value in (True, False):
+    for value in (0, 1, 99, -1, 1.0, True, False, None):
         with pytest.raises(TypeError, match=what):
             resolve(value)
+
+
+@pytest.mark.parametrize(_PARAMS, _FAMILIES, ids=_FAMILY_IDS)
+def test_a_retired_spelling_lists_the_tokens(
+    resolve: Resolver, what: str, tokens: Sequence[str], retired: Sequence[str]
+) -> None:
+    for spelling in retired:
+        with pytest.raises(SonareValueError, match=what) as excinfo:
+            resolve(spelling)
+        message = str(excinfo.value)
+        assert repr(spelling) in message
+        for token in tokens:
+            assert repr(token) in message
 
 
 def test_a_key_ordinal_is_never_accepted_in_place_of_its_token() -> None:
@@ -117,7 +97,7 @@ def test_a_key_ordinal_is_never_accepted_in_place_of_its_token() -> None:
 
 
 @pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not found")
-def test_a_refused_ordinal_never_reaches_the_arrangement() -> None:
+def test_a_refused_warp_mode_never_reaches_the_arrangement() -> None:
     """The same guard seen from the public surface, against a serialized project."""
     from libsonare import Project
 
@@ -127,17 +107,36 @@ def test_a_refused_ordinal_never_reaches_the_arrangement() -> None:
         clip = project.add_clip(
             track, 0.0, 480.0, audio=[0.1, 0.2, 0.1, 0.0], audio_sample_rate=48000
         )
-        project.set_clip_warp_mode(clip, "tempo-sync")
+        project.set_clip_warp_mode(clip, "tempoSync")
         by_name = project.to_json()
-        project.set_clip_warp_mode(clip, 1)
+        project.set_clip_warp_mode(clip, "repitch")
         assert project.to_json() != by_name  # positive control: the mode reaches the JSON
-        project.set_clip_warp_mode(clip, 2)
+        project.set_clip_warp_mode(clip, "tempoSync")
         assert project.to_json() == by_name
 
-        for ordinal in (4, 99, -1, True):
-            expected = TypeError if isinstance(ordinal, bool) else SonareValueError
+        for refused in (2, 4, True, "tempo-sync"):
+            expected = SonareValueError if isinstance(refused, str) else TypeError
             with pytest.raises(expected, match="warp mode"):
-                project.set_clip_warp_mode(clip, ordinal)
+                project.set_clip_warp_mode(clip, refused)  # type: ignore[arg-type]
         assert project.to_json() == by_name
+    finally:
+        project.close()
+
+
+@pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not found")
+def test_a_track_kind_is_a_token_on_add_and_on_change() -> None:
+    from libsonare import Project
+
+    project = Project()
+    try:
+        track = project.add_track("midi", "keys")
+        project.set_track_kind(track, "aux")
+        assert '"kind":2' in project.to_json()
+        before = project.to_json()
+        with pytest.raises(TypeError, match="track kind"):
+            project.add_track(1, "x")  # type: ignore[arg-type]
+        with pytest.raises(TypeError, match="track kind"):
+            project.set_track_kind(track, 0)  # type: ignore[arg-type]
+        assert project.to_json() == before
     finally:
         project.close()

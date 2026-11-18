@@ -178,7 +178,6 @@ from ._runtime import (
     _curve_value,
     _get_lib,
     _require_export,
-    _resolve_enum,
     _to_c_size_t,
     _token_ordinal,
     _utf8_arg,
@@ -190,16 +189,10 @@ from ._runtime import (
 # or the arrangement subsystem was compiled out (runtime version 0).
 _EXPECTED_PROJECT_ABI_VERSION = 2
 
-# Track kind ordinals (mirror SonareProjectTrackKind).
-TRACK_AUDIO = 0
-TRACK_MIDI = 1
-TRACK_AUX = 2
-
-_TRACK_KIND_NAMES = {
-    "audio": TRACK_AUDIO,
-    "midi": TRACK_MIDI,
-    "aux": TRACK_AUX,
-}
+# Track kind; a token's index is its SonareProjectTrackKind ordinal.
+ProjectTrackKind: TypeAlias = Literal["audio", "midi", "aux"]
+"""What a track carries: audio clips, MIDI clips, or an auxiliary bus."""
+_TRACK_KINDS: tuple[str, ...] = get_args(ProjectTrackKind)
 
 # Clip fade curve; a token's index is its SonareProjectFadeCurve ordinal.
 ProjectFadeCurve: TypeAlias = Literal["linear", "equalPower", "exponential", "logarithmic"]
@@ -216,28 +209,13 @@ ProjectOverlapPolicy: TypeAlias = Literal["disallow", "allow"]
 """Whether clips on one track may overlap."""
 _OVERLAP_POLICIES: tuple[str, ...] = get_args(ProjectOverlapPolicy)
 
-# Automation target-kind ordinals (mirror SonareAutomationTargetKind).  The
-# optional Python value is deliberately kept separate from the legacy C
-# descriptor: omission selects the legacy ABI call, while an explicit opaque
-# value (0) selects the extended call and is therefore observable by callers
-# that instrument the FFI boundary.
-AUTOMATION_TARGET_OPAQUE = 0
-AUTOMATION_TARGET_TRACK_FADER_DB = 1
-AUTOMATION_TARGET_TRACK_PAN = 2
+# Automation target kind; a token's index is its SonareAutomationTargetKind ordinal.
+# Omitting it selects the legacy C call, while an explicit "opaque" selects the
+# extended call and is therefore observable at the FFI boundary.
+ProjectAutomationTargetKind: TypeAlias = Literal["opaque", "trackFaderDb", "trackPan"]
+"""What an automation lane drives: an opaque parameter, a track fader or a track pan."""
+_AUTOMATION_TARGET_KINDS: tuple[str, ...] = get_args(ProjectAutomationTargetKind)
 
-PROJECT_AUTOMATION_TARGET_OPAQUE = AUTOMATION_TARGET_OPAQUE
-PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB = AUTOMATION_TARGET_TRACK_FADER_DB
-PROJECT_AUTOMATION_TARGET_TRACK_PAN = AUTOMATION_TARGET_TRACK_PAN
-
-ProjectAutomationTargetKind: TypeAlias = Literal["opaque", "track-fader-db", "track-pan", 0, 1, 2]
-
-_AUTOMATION_TARGET_KIND_NAMES = {
-    "opaque": AUTOMATION_TARGET_OPAQUE,
-    "track-fader-db": AUTOMATION_TARGET_TRACK_FADER_DB,
-    "track_fader_db": AUTOMATION_TARGET_TRACK_FADER_DB,
-    "track-pan": AUTOMATION_TARGET_TRACK_PAN,
-    "track_pan": AUTOMATION_TARGET_TRACK_PAN,
-}
 
 # A private sentinel lets the facade distinguish an omitted optional kind from
 # an explicit ``None`` (which is not a valid target-kind value).
@@ -245,20 +223,7 @@ _AUTOMATION_TARGET_KIND_UNSET = cast(ProjectAutomationTargetKind | None, object(
 
 
 def _automation_target_kind_value(value: object) -> int:
-    """Resolve and validate one optional automation target-kind value."""
-    if isinstance(value, str):
-        key = value.lower()
-        if key in _AUTOMATION_TARGET_KIND_NAMES:
-            return _AUTOMATION_TARGET_KIND_NAMES[key]
-        raise SonareValueError(
-            "unknown automation target kind; expected opaque, track-fader-db, or track-pan"
-        )
-    if isinstance(value, bool) or not isinstance(value, numbers.Real):
-        raise TypeError("automation target kind must be an integer in [0, 2]")
-    ordinal = float(cast(SupportsFloat, value))
-    if not math.isfinite(ordinal) or not ordinal.is_integer() or ordinal < 0.0 or ordinal > 2.0:
-        raise SonareValueError("automation target kind must be an integer in [0, 2]")
-    return int(ordinal)
+    return _token_ordinal(value, _AUTOMATION_TARGET_KINDS, "automation target kind")
 
 
 def _automation_target_param_id_value(value: object) -> int:
@@ -602,8 +567,8 @@ def _check_project_abi(lib: Any) -> None:
         )
 
 
-def _track_kind_value(kind: str | int) -> int:
-    return _resolve_enum(kind, _TRACK_KIND_NAMES, "track kind")
+def _track_kind_value(kind: ProjectTrackKind) -> int:
+    return _token_ordinal(kind, _TRACK_KINDS, "track kind")
 
 
 def _midi_event_tuple(name: str, *args: float | ctypes._SimpleCData[int]) -> tuple[float, int, int]:

@@ -252,7 +252,7 @@ def test_realtime_engine_renders_repitch_warped_clip() -> None:
                     channels=[tempo_source],
                     start_ppq=0.0,
                     length_samples=8192,
-                    warp_mode="tempo-sync",
+                    warp_mode="tempoSync",
                     warp_anchors=[
                         (0.0, 0.0),
                         (2048.0, 1024.0),
@@ -279,7 +279,7 @@ def test_realtime_engine_renders_time_stretch_warped_clip_at_source_pitch() -> N
                     channels=[source],
                     start_ppq=0.0,
                     length_samples=output_samples,
-                    warp_mode="time-stretch",
+                    warp_mode="timeStretch",
                     warp_anchors=[(0.0, 0.0), (float(output_samples), float(source_samples))],
                 )
             ]
@@ -313,7 +313,7 @@ def test_realtime_engine_warp_mode_validation_matches_project_helper() -> None:
                     channels=[[0.0, 10.0, 20.0, 30.0]],
                     start_ppq=0.0,
                     length_samples=4,
-                    warp_mode="Repitch",
+                    warp_mode="repitch",
                     warp_anchors=[(0.0, 0.0), (3.0, 1.5)],
                 )
             ]
@@ -323,9 +323,9 @@ def test_realtime_engine_warp_mode_validation_matches_project_helper() -> None:
         assert math.isclose(processed[0][1], 5.0, abs_tol=0.0001)
 
     with RealtimeEngine(sample_rate=48000.0, max_block_size=4) as engine:
-        for mode in ("typo", 1.9, True):
-            expected = TypeError if isinstance(mode, bool) else ValueError
-            with pytest.raises(expected, match="unknown warp mode"):
+        for mode in ("typo", "Repitch", "time-stretch", 1, 1.9, True):
+            expected = ValueError if isinstance(mode, str) else TypeError
+            with pytest.raises(expected, match="invalid warp mode"):
                 engine.set_clips(
                     [
                         EngineClip(

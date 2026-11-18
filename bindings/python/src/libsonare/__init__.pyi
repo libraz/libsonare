@@ -20,10 +20,13 @@ from ._project import NotePairValidation as NotePairValidation
 from ._project import NoteTracking as NoteTracking
 from ._project import PartRigMode as PartRigMode
 from ._project import Project as Project
+from ._project import ProjectAutomationTargetKind as ProjectAutomationTargetKind
 from ._project import ProjectDeserializeResult as ProjectDeserializeResult
 from ._project import ProjectFadeCurve as ProjectFadeCurve
 from ._project import ProjectLoopMode as ProjectLoopMode
+from ._project import ProjectOverlapPolicy as ProjectOverlapPolicy
 from ._project import ProjectTimeline as ProjectTimeline
+from ._project import ProjectTrackKind as ProjectTrackKind
 from ._project import SampleBank as SampleBank
 from ._project import SampleDescLoopMode as SampleDescLoopMode
 from ._project import SampleKeyTrack as SampleKeyTrack
@@ -1259,6 +1262,9 @@ from .types import (
 )
 from .types import (
     ProjectTrack as ProjectTrack,
+)
+from .types import (
+    ProjectWarpMode as ProjectWarpMode,
 )
 from .types import (
     ReassignedSpectrogramResult as ReassignedSpectrogramResult,
