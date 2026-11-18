@@ -312,6 +312,14 @@ rule = "error-class-by-cause"
 test = "bindings/wasm/tests/surface/core-worker.test.ts::no Worker global and no worker option is NotSupported"
 
 [[entry]]
+kind = "class"
+old = "VocalEditWorkerClient"
+changed = "constructor without a Worker throws SonareError NotSupported instead of Error; a draft or session misuse inside the Worker (no open draft, a second draft, undo/redo/export with a draft open, an unknown or reused session id) rejects with SonareError InvalidState instead of Unknown"
+domain = "project"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/vocal_edit_worker_client_node.test.ts::has no global Worker"
+
+[[entry]]
 kind = "function"
 old = "vocalEditApiVersion"
 to = "vocalEditAbiVersion"

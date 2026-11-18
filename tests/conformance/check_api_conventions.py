@@ -1426,11 +1426,6 @@ RULES: list[Rule] = [
         scan=_error_construction_sites,
         pending={
             "wasm:bindings/wasm/src/opfs_clip_pages.ts:96": "throw SonareError with the code that names the cause",
-            **{
-                f"wasm:bindings/wasm/src/vocal_edit_worker.ts:{n}": "a worker-side failure is a coded SonareError"
-                for n in (297, 368, 389, 395, 410, 488, 727)
-            },
-            "wasm:bindings/wasm/src/vocal_edit_worker_client.ts:250": "throw SonareError with the code that names the cause",
         },
     ),
     Rule(

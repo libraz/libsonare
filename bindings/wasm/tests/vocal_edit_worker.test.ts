@@ -841,6 +841,7 @@ describe('vocal edit Worker mutation semantics', () => {
       expect(late?.type, `id ${id}`).toBe('sonare:vocal-error');
       if (late?.type === 'sonare:vocal-error') {
         expect(late.error.message).toBe('Unknown vocal session');
+        expect(late.error.code).toBe(ErrorCode.InvalidState);
       }
     }
     expect(endpoint.takeFinal(3)?.type).toBe('sonare:vocal-result');

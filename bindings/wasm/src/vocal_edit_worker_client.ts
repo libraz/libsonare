@@ -247,7 +247,8 @@ class ClientCore {
       this.worker = options.worker;
     } else {
       if (!options.workerFactory && typeof Worker === 'undefined') {
-        throw new Error(
+        throw new SonareError(
+          ErrorCode.NotSupported,
           'VocalEditWorkerClient requires a Worker implementation: pass `worker` or `workerFactory` outside a browser (for example a node:worker_threads Worker)',
         );
       }

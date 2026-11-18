@@ -294,7 +294,7 @@ function ensureSameEpoch(
 
 function draftRequired(session: WorkerSession): VocalEditWorkerNativeDraft {
   if (!session.draft) {
-    throw new Error('No vocal edit draft is open');
+    throw new SonareError(ErrorCode.InvalidState, 'No vocal edit draft is open');
   }
   return session.draft;
 }
@@ -365,7 +365,7 @@ async function execute(
       switch (mutation.kind) {
         case 'beginEdit':
           if (session.draft) {
-            throw new Error('A vocal edit draft is already open');
+            throw new SonareError(ErrorCode.InvalidState, 'A vocal edit draft is already open');
           }
           session.draft = session.value.beginEdit(mutation.expectedRevision);
           result = session.draft.token;
@@ -386,13 +386,19 @@ async function execute(
           break;
         case 'undo':
           if (session.draft) {
-            throw new Error('Cancel or commit the vocal draft before undo');
+            throw new SonareError(
+              ErrorCode.InvalidState,
+              'Cancel or commit the vocal draft before undo',
+            );
           }
           result = session.value.undo(mutation.expectedRevision);
           break;
         case 'redo':
           if (session.draft) {
-            throw new Error('Cancel or commit the vocal draft before redo');
+            throw new SonareError(
+              ErrorCode.InvalidState,
+              'Cancel or commit the vocal draft before redo',
+            );
           }
           result = session.value.redo(mutation.expectedRevision);
           break;
@@ -407,7 +413,10 @@ async function execute(
           break;
         case 'exportState':
           if (session.draft) {
-            throw new Error('Commit or cancel the vocal draft before export');
+            throw new SonareError(
+              ErrorCode.InvalidState,
+              'Commit or cancel the vocal draft before export',
+            );
           }
           result = session.value.exportState();
           break;
@@ -485,7 +494,7 @@ function queueCommand(
       message.id,
       message.sessionId,
       message.clientIntentSequence,
-      new Error('Unknown vocal session'),
+      new SonareError(ErrorCode.InvalidState, 'Unknown vocal session'),
     );
     return;
   }
@@ -724,7 +733,7 @@ export function installVocalEditWorkerEndpoint(
         throw cancelledError();
       }
       if (sessions.has(message.sessionId)) {
-        throw new Error('Vocal session id is already in use');
+        throw new SonareError(ErrorCode.InvalidState, 'Vocal session id is already in use');
       }
       value =
         message.request.kind === 'create'

@@ -5,7 +5,7 @@
 
 import { Worker as NodeWorker } from 'node:worker_threads';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { capabilities, init, VocalEditWorkerClient } from '../dist/index.js';
+import { capabilities, ErrorCode, init, VocalEditWorkerClient } from '../dist/index.js';
 
 const SR = 22050;
 const entry = new URL('./fixtures/vocal-edit-worker-node-entry.mjs', import.meta.url);
@@ -25,7 +25,12 @@ describe('VocalEditWorkerClient under Node', () => {
 
   it('has no global Worker, so the options are the only way in', () => {
     expect(typeof (globalThis as { Worker?: unknown }).Worker).toBe('undefined');
-    expect(() => new VocalEditWorkerClient()).toThrow(/worker/i);
+    expect(() => new VocalEditWorkerClient()).toThrow(
+      expect.objectContaining({
+        code: ErrorCode.NotSupported,
+        message: expect.stringMatching(/worker/i),
+      }),
+    );
   });
 
   const spellings: ReadonlyArray<[string, () => VocalEditWorkerClient]> = [
