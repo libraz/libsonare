@@ -76,6 +76,8 @@ export interface BadArgument<T> {
   error?: ErrorConstructor;
   /** When set, the refusal must also match this, so it names the argument it refuses. */
   message?: RegExp;
+  /** The entry returns a Promise and refuses by rejecting it rather than by throwing. */
+  rejects?: true;
 }
 
 const samples = (n = 4): Float32Array => new Float32Array(n);
@@ -133,7 +135,6 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
   ],
   ['addon.amplitudeToDb', 'ref', () => addon.amplitudeToDb(readerTone, 'x')],
   ['addon.analyze', 'sampleRate', () => addon.analyze(readerTone, 'x')],
-  ['addon.analyzeAsync', 'sampleRate', () => addon.analyzeAsync(readerTone, 'x')],
   ['addon.analyzeBpm', 'sampleRate', () => addon.analyzeBpm(readerTone, 'x')],
   ['addon.analyzeDynamics', 'sampleRate', () => addon.analyzeDynamics(readerTone, 'x')],
   [
@@ -172,7 +173,11 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
   ['addon.detectKey', 'sampleRate', () => addon.detectKey(readerTone, 'x')],
   ['addon.detectKeyCandidates', 'sampleRate', () => addon.detectKeyCandidates(readerTone, 'x')],
   ['addon.detectOnsets', 'sampleRate', () => addon.detectOnsets(readerTone, 'x')],
-  ['addon.ebur128LoudnessRange', 'sampleRate', () => addon.ebur128LoudnessRange(readerTone, 'x')],
+  [
+    'addon.ebur128LoudnessRangeLu',
+    'sampleRate',
+    () => addon.ebur128LoudnessRangeLu(readerTone, 'x'),
+  ],
   ['addon.estimateTuning', 'sampleRate', () => addon.estimateTuning(readerTone, 'x')],
   ['addon.fixFrames', 'xMin', () => addon.fixFrames(new Int32Array([0, 1]), 'x')],
   ['addon.fourierTempogram', 'sampleRate', () => addon.fourierTempogram(readerTone, 'x')],
@@ -353,6 +358,63 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
     'addon.masteringInsertParamInfo',
     'sampleRate',
     () => addon.masteringInsertParamInfo('limiter', 'x'),
+  ],
+  ['addon.masterAudio', 'overridesJson', () => addon.masterAudio(null, readerTone, 22050, 1)],
+  [
+    'addon.masterAudioStereo',
+    'overridesJson',
+    () => addon.masterAudioStereo(null, readerTone, readerTone, 22050, 1),
+  ],
+  [
+    'addon.masterAudioStereoWithProgress',
+    'overridesJson',
+    () => addon.masterAudioStereoWithProgress(null, readerTone, readerTone, 22050, 1, () => {}),
+  ],
+  [
+    'addon.masterAudioWithProgress',
+    'overridesJson',
+    () => addon.masterAudioWithProgress(null, readerTone, 22050, 1, () => {}),
+  ],
+  ['addon.masteringChain', 'configJson', () => addon.masteringChain(readerTone, 22050, 1)],
+  [
+    'addon.masteringChainStereo',
+    'configJson',
+    () => addon.masteringChainStereo(readerTone, readerTone, 22050, 1),
+  ],
+  [
+    'addon.masteringChainStereoWithProgress',
+    'configJson',
+    () => addon.masteringChainStereoWithProgress(readerTone, readerTone, 22050, 1, () => {}),
+  ],
+  [
+    'addon.masteringChainWithProgress',
+    'configJson',
+    () => addon.masteringChainWithProgress(readerTone, 22050, 1, () => {}),
+  ],
+  [
+    'addon.masteringStreamingLoudnessGain',
+    'configJson',
+    () => addon.masteringStreamingLoudnessGain(readerTone, 22050, 1),
+  ],
+  [
+    'addon.masteringStreamingLoudnessGainStereo',
+    'configJson',
+    () => addon.masteringStreamingLoudnessGainStereo(readerTone, readerTone, 22050, 1),
+  ],
+];
+
+/** As {@link NAMED_OPTIONAL_REFUSALS}, for Promise-returning entries, which refuse by rejecting. */
+const NAMED_OPTIONAL_REJECTIONS: Array<[string, string, () => unknown]> = [
+  ['addon.analyzeAsync', 'sampleRate', () => addon.analyzeAsync(readerTone, 'x')],
+  [
+    'addon.masterAudioAsync',
+    'overridesJson',
+    () => addon.masterAudioAsync(null, readerTone, 22050, 1),
+  ],
+  [
+    'addon.masterAudioStereoAsync',
+    'overridesJson',
+    () => addon.masterAudioStereoAsync(null, readerTone, readerTone, 22050, 1),
   ],
 ];
 
@@ -2598,5 +2660,12 @@ export const CASES: AbortGuardCase[] = [
     name,
     missingRequired: [],
     rejectsArgument: [{ argument, call, message: new RegExp(`\\b${argument} must be`) }],
+  })),
+  ...NAMED_OPTIONAL_REJECTIONS.map(([name, argument, call]) => ({
+    name,
+    missingRequired: [],
+    rejectsArgument: [
+      { argument, call, message: new RegExp(`\\b${argument} must be`), rejects: true as const },
+    ],
   })),
 ];

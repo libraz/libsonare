@@ -319,7 +319,17 @@ describe('the HPSS positional readers default only an omitted argument', () => {
 
 describe('addon object readers stop at the first bad field', () => {
   for (const { name, rejectsArgument } of CASES) {
-    for (const { argument, call, error, message } of rejectsArgument ?? []) {
+    for (const { argument, call, error, message, rejects } of rejectsArgument ?? []) {
+      if (rejects) {
+        it(`${name}: a wrong-typed ${argument} rejects the returned Promise`, async () => {
+          await expect(call() as unknown as Promise<unknown>).rejects.toThrow(error ?? TypeError);
+          if (message !== undefined) {
+            await expect(call() as unknown as Promise<unknown>).rejects.toThrow(message);
+          }
+          expectNativeStillWorks();
+        });
+        continue;
+      }
       it(`${name}: a wrong-typed ${argument} throws exactly one catchable error`, () => {
         expect(() => call()).toThrow(error ?? TypeError);
         if (message !== undefined) {
@@ -329,6 +339,15 @@ describe('addon object readers stop at the first bad field', () => {
       });
     }
   }
+
+  it('exactly the Async entries refuse by rejecting', () => {
+    // An async entry never throws synchronously, and a sync entry never hands back a Promise.
+    const rows = CASES.flatMap(({ name, rejectsArgument }) =>
+      (rejectsArgument ?? []).map(({ rejects }) => [name, rejects === true] as const),
+    );
+    expect(rows.filter(([name, rejects]) => rejects !== name.endsWith('Async'))).toEqual([]);
+    expect(rows.some(([, rejects]) => rejects)).toBe(true);
+  });
 
   it('every table entry drives at least one hostile call', () => {
     // A vacuous table would make every assertion below pass by iterating
