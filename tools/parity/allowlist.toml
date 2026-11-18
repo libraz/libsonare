@@ -964,13 +964,16 @@ fields = [
   "mastering_chain_stereo_result.stage_gain_reductions",
 
   # --- category 2 + 1: interleaved buffer + counts -> planar channels ---
-  # C takes `audio_interleaved` (const float*) with `audio_frames` and
-  # `audio_channels`; both JS facades pass `channels: Float32Array[]` and derive
-  # the frame and channel counts from the arrays.
+  # C takes `audio_interleaved` (const float*) with `audio_frames`,
+  # `audio_channels` and `audio_sample_rate`; both JS facades pass
+  # `channels: Float32Array[]` with `sampleRate` and derive the frame and channel
+  # counts from the arrays.
   "project_clip_desc.audio_interleaved",
   "project_clip_desc.audio_frames",
   "project_clip_desc.audio_channels",
+  "project_clip_desc.audio_sample_rate",
   "project_clip_desc.channels",
+  "project_clip_desc.sample_rate",
   "project_loop_recording_desc.audio_interleaved",
   "project_loop_recording_desc.audio_frames",
   "project_loop_recording_desc.audio",
