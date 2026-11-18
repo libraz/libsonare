@@ -330,6 +330,25 @@ TEST_CASE("the polyphonic handle forwards the chain exactly", "[c_api][polyphony
     REQUIRE(wide_frames < default_frames);
   }
 
+  SECTION("and tonality 0 turns the tonality weighting off") {
+    sonare::editing::polyphony::PolyphonicEditConfig untoned;
+    untoned.extraction.spectrum.use_tonality = false;
+    const sonare::Audio wanted_untoned = sonare::editing::polyphony::render_polyphonic(
+        sonare::editing::polyphony::analyze_polyphonic(audio, untoned));
+
+    SonarePolyphonicConfig config = initialized_config();
+    config.tonality = 0;
+    const Handle off(&config, samples);
+    REQUIRE(off.error() == SONARE_OK);
+    const std::vector<float> got_off = render(off.get());
+    REQUIRE(got_off.size() == wanted_untoned.size());
+    for (size_t i = 0; i < got_off.size(); ++i) REQUIRE(got_off[i] == wanted_untoned[i]);
+    // Both halves: the weighting has to move the render, or this compares two defaults.
+    bool moved = false;
+    for (size_t i = 0; i < got_off.size() && !moved; ++i) moved = got_off[i] != wanted_render[i];
+    REQUIRE(moved);
+  }
+
   SECTION("and a zero on a floor field is the value zero") {
     // Measured against the chain asked for 0 directly, so a 0 read as the default
     // (50 cents, 140 ms) cannot pass.
@@ -364,7 +383,7 @@ TEST_CASE("sonare_polyphonic_config_init sets every documented default", "[c_api
   CHECK(c.cent_ref_hz == 55.0f);
   CHECK(c.cents_per_bin == 100.0f / 3.0f);
   CHECK(c.cent_max_hz == 8000.0f);
-  CHECK(c.tonality_off == 0);
+  CHECK(c.tonality == 1);
   CHECK(c.salience_harmonics == 20);
   CHECK(c.f0_min_hz == 55.0f);
   CHECK(c.f0_max_hz == 1760.0f);

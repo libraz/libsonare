@@ -987,3 +987,10 @@ changed = "leads with uint32_t struct_size instead of struct_version; prepare it
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "tests/api/sonare_c_polyphony_test.cpp::sonare_polyphonic_config_init sets every documented default"
+
+[[entry]]
+kind = "field"
+old = "SonarePolyphonicConfig.tonality_off"
+new = "SonarePolyphonicConfig.tonality"
+domain = "analysis"
+rule = "no-positional-bools"

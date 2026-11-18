@@ -66,10 +66,10 @@ typedef struct {
   int32_t win_length; /* default 0, which means n_fft; otherwise in [1, n_fft] */
 
   /* --- The cent axis the salience is folded onto. --- */
-  float cent_ref_hz;    /* bottom of the axis; default 55, positive */
-  float cents_per_bin;  /* axis resolution; default 100/3, at least 1 */
-  float cent_max_hz;    /* top of the axis; default 8000, above cent_ref_hz */
-  int32_t tonality_off; /* non-zero stops weighting bins by tonality; default 0 */
+  float cent_ref_hz;   /* bottom of the axis; default 55, positive */
+  float cents_per_bin; /* axis resolution; default 100/3, at least 1 */
+  float cent_max_hz;   /* top of the axis; default 8000, above cent_ref_hz */
+  int32_t tonality;    /* weight bins by tonality; default 1, non-zero is on */
 
   /* --- Salience: what an f0 candidate is worth. --- */
   int32_t salience_harmonics;   /* partials summed per candidate; default 20, in [1, 128] */

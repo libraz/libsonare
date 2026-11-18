@@ -43,7 +43,7 @@ bool ReadPolyphonicConfig(Napi::Env env, const Napi::Value& value, SonarePolypho
   out->cent_ref_hz = FloatProperty(opts, "centRefHz", out->cent_ref_hz);
   out->cents_per_bin = FloatProperty(opts, "centsPerBin", out->cents_per_bin);
   out->cent_max_hz = FloatProperty(opts, "centMaxHz", out->cent_max_hz);
-  out->tonality_off = BoolProperty(opts, "tonalityOff", out->tonality_off != 0) ? 1 : 0;
+  out->tonality = BoolProperty(opts, "tonality", out->tonality != 0) ? 1 : 0;
 
   out->salience_harmonics = IntProperty(opts, "salienceHarmonics", out->salience_harmonics);
   out->f0_min_hz = FloatProperty(opts, "f0MinHz", out->f0_min_hz);

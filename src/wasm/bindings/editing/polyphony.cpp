@@ -63,7 +63,7 @@ editing::polyphony::PolyphonicEditConfig configFromVal(const val& config) {
   set_float("centRefHz", spectrum.ref_hz);
   set_float("centsPerBin", spectrum.cents_per_bin);
   set_float("centMaxHz", spectrum.max_hz);
-  spectrum.use_tonality = !boolProperty(config, "tonalityOff", !spectrum.use_tonality);
+  spectrum.use_tonality = boolProperty(config, "tonality", spectrum.use_tonality);
 
   auto& salience = out.extraction.estimation.salience;
   set_int("salienceHarmonics", salience.n_harmonics);

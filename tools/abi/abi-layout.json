@@ -6238,7 +6238,7 @@
       },
       {
         "kind": "signed",
-        "name": "tonality_off",
+        "name": "tonality",
         "offset": 28,
         "size": 4
       },

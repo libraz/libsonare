@@ -771,7 +771,7 @@ class SonarePolyphonicConfig(CStruct):
         ("cent_ref_hz", ctypes.c_float),
         ("cents_per_bin", ctypes.c_float),
         ("cent_max_hz", ctypes.c_float),
-        ("tonality_off", ctypes.c_int32),
+        ("tonality", ctypes.c_int32),
         ("salience_harmonics", ctypes.c_int32),
         ("f0_min_hz", ctypes.c_float),
         ("f0_max_hz", ctypes.c_float),

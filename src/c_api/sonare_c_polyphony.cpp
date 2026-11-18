@@ -47,7 +47,7 @@ SonareError resolve_config(const SonarePolyphonicConfig* in, PolyphonicEditConfi
   spectrum.ref_hz = in->cent_ref_hz;
   spectrum.cents_per_bin = in->cents_per_bin;
   spectrum.max_hz = in->cent_max_hz;
-  spectrum.use_tonality = in->tonality_off == 0;
+  spectrum.use_tonality = in->tonality != 0;
 
   auto& salience = out.extraction.estimation.salience;
   salience.n_harmonics = in->salience_harmonics;
@@ -157,7 +157,7 @@ void sonare_polyphonic_config_init(SonarePolyphonicConfig* config) {
   config->cent_ref_hz = spectrum.ref_hz;
   config->cents_per_bin = spectrum.cents_per_bin;
   config->cent_max_hz = spectrum.max_hz;
-  config->tonality_off = spectrum.use_tonality ? 0 : 1;
+  config->tonality = spectrum.use_tonality ? 1 : 0;
 
   const auto& salience = defaults.extraction.estimation.salience;
   config->salience_harmonics = salience.n_harmonics;
