@@ -76,8 +76,8 @@ TEST_CASE("an empty document takes the schema defaults and round-trips", "[playb
 
 TEST_CASE("a partial document fills only the omitted keys", "[playback][config]") {
   const RendererConfig config = parse_renderer_config(
-      R"({"upmix": {"enabled": false}, "night_mode": {"amount": 0.5},
-          "target": {"kind": "speakers", "layout": "5.1", "speakers": {"C": {"trim_db": -3}}}})");
+      R"({"upmix": {"enabled": false}, "nightMode": {"amount": 0.5},
+          "target": {"kind": "speakers", "layout": "5.1", "speakers": {"center": {"trimDb": -3}}}})");
   CHECK_FALSE(config.realtime.upmix_enabled);
   CHECK(config.realtime.upmix_center_width == 0.2f);
   CHECK(config.realtime.night_amount == 0.5f);
@@ -93,33 +93,33 @@ TEST_CASE("an unknown key is refused by name", "[playback][config]") {
   CHECK(mentions(refusal(R"({"bogus": 1})"), "bogus"));
   CHECK(mentions(refusal(R"({"upmix": {"width": 0.3}})"), "upmix.width"));
   CHECK(mentions(refusal(R"({"target": {"kind": "speakers", "layout": "5.1",
-                               "speakers": {"L": {"delay_ms": 1}}}})"),
-                 "target.speakers.L.delay_ms"));
+                               "speakers": {"left": {"delay_ms": 1}}}})"),
+                 "target.speakers.left.delay_ms"));
   CHECK(mentions(refusal(R"({"target": {"kind": "speakers", "layout": "5.1",
-                               "speakers": {"LFE": {"trim_db": 1}}}})"),
-                 "target.speakers.LFE"));
+                               "speakers": {"lfe": {"trimDb": 1}}}})"),
+                 "target.speakers.lfe"));
 }
 
 TEST_CASE("an out-of-range value is refused by name", "[playback][config]") {
-  CHECK(mentions(refusal(R"({"night_mode": {"amount": 1.5}})"), "night_mode.amount"));
-  CHECK(mentions(refusal(R"({"room": {"mix_db": 7}})"), "room.mix_db"));
-  CHECK(mentions(refusal(R"({"loudness": {"program_lufs": -71}})"), "loudness.program_lufs"));
-  CHECK(mentions(refusal(R"({"upmix": {"center_width": 0.01}})"), "upmix.center_width"));
+  CHECK(mentions(refusal(R"({"nightMode": {"amount": 1.5}})"), "nightMode.amount"));
+  CHECK(mentions(refusal(R"({"room": {"mixDb": 7}})"), "room.mixDb"));
+  CHECK(mentions(refusal(R"({"loudness": {"programLufs": -71}})"), "loudness.programLufs"));
+  CHECK(mentions(refusal(R"({"upmix": {"centerWidth": 0.01}})"), "upmix.centerWidth"));
   CHECK(mentions(refusal(R"({"target": {"kind": "speakers", "layout": "7.1",
-                               "speakers": {"Lss": {"distance_m": 31}}}})"),
-                 "target.speakers.Lss.distance_m"));
+                               "speakers": {"leftSideSurround": {"distanceM": 31}}}})"),
+                 "target.speakers.leftSideSurround.distanceM"));
   CHECK(mentions(refusal(R"({"target": {"kind": "speakers", "layout": "stereo",
-                               "bass_management": {"crossover_hz": 20}}})"),
-                 "target.bass_management.crossover_hz"));
+                               "bassManagement": {"crossoverHz": 20}}})"),
+                 "target.bassManagement.crossoverHz"));
   CHECK(
-      mentions(refusal(R"({"output_limiter": {"ceiling_db": 0.5}})"), "output_limiter.ceiling_db"));
+      mentions(refusal(R"({"outputLimiter": {"ceilingDbtp": 0.5}})"), "outputLimiter.ceilingDbtp"));
   CHECK(mentions(refusal(R"({"room": {"preset": "cathedral"}})"), "room.preset"));
   CHECK(mentions(refusal(R"({"upmix": {"enabled": 1}})"), "upmix.enabled"));
 }
 
 TEST_CASE("a number no float can hold is refused, not narrowed", "[playback][config]") {
-  const std::string message = refusal(R"({"loudness": {"target_lufs": -1e39}})");
-  CHECK(mentions(message, "loudness.target_lufs"));
+  const std::string message = refusal(R"({"loudness": {"targetLufs": -1e39}})");
+  CHECK(mentions(message, "loudness.targetLufs"));
   CHECK(mentions(message, "32-bit float"));
 }
 
@@ -131,25 +131,27 @@ TEST_CASE("target.layout is required for speakers and refused for headphones",
                  "target.layout"));
   CHECK(
       mentions(refusal(R"({"target": {"kind": "speakers", "layout": "mono"}})"), "target.layout"));
-  CHECK(
-      mentions(refusal(R"({"target": {"speakers": {"L": {"trim_db": 1}}}})"), "target.speakers.L"));
+  CHECK(mentions(refusal(R"({"target": {"speakers": {"left": {"trimDb": 1}}}})"),
+                 "target.speakers.left"));
   CHECK(mentions(refusal(R"({"target": {"kind": "speakers", "layout": "5.1",
-                               "speakers": {"Lss": {"trim_db": 1}}}})"),
-                 "target.speakers.Lss"));
+                               "speakers": {"leftSideSurround": {"trimDb": 1}}}})"),
+                 "target.speakers.leftSideSurround"));
 }
 
 TEST_CASE("a channel map needs a fixed layout and a valid role set", "[playback][config]") {
-  CHECK(mentions(refusal(R"({"input": {"channel_map": ["L", "R"]}})"),
-                 "channel_map requires a fixed input.layout"));
-  CHECK(mentions(refusal(R"({"input": {"layout": "auto", "channel_map": ["L", "R"]}})"),
-                 "channel_map requires a fixed input.layout"));
-  CHECK_FALSE(refusal(R"({"input": {"layout": "stereo", "channel_map": ["L", "L"]}})").empty());
-  CHECK_FALSE(refusal(R"({"input": {"layout": "stereo", "channel_map": ["L"]}})").empty());
-  CHECK_FALSE(refusal(R"({"input": {"layout": "stereo", "channel_map": ["L", "C"]}})").empty());
-  CHECK_FALSE(refusal(R"({"input": {"layout": "stereo", "channel_map": ["L", "Q"]}})").empty());
+  CHECK(mentions(refusal(R"({"input": {"channelMap": ["left", "right"]}})"),
+                 "channelMap requires a fixed input.layout"));
+  CHECK(mentions(refusal(R"({"input": {"layout": "auto", "channelMap": ["left", "right"]}})"),
+                 "channelMap requires a fixed input.layout"));
+  CHECK_FALSE(
+      refusal(R"({"input": {"layout": "stereo", "channelMap": ["left", "left"]}})").empty());
+  CHECK_FALSE(refusal(R"({"input": {"layout": "stereo", "channelMap": ["left"]}})").empty());
+  CHECK_FALSE(
+      refusal(R"({"input": {"layout": "stereo", "channelMap": ["left", "center"]}})").empty());
+  CHECK_FALSE(refusal(R"({"input": {"layout": "stereo", "channelMap": ["left", "Q"]}})").empty());
 
   const RendererConfig aac = parse_renderer_config(
-      R"({"input": {"layout": "5.1", "channel_map": ["C", "L", "R", "Ls", "Rs", "LFE"]}})");
+      R"({"input": {"layout": "5.1", "channelMap": ["center", "left", "right", "leftSurround", "rightSurround", "lfe"]}})");
   CHECK(aac.prepare.has_channel_map);
   CHECK(aac.prepare.channel_map[0] == SpeakerRole::C);
   CHECK(aac.prepare.channel_map[5] == SpeakerRole::LFE);
@@ -157,12 +159,12 @@ TEST_CASE("a channel map needs a fixed layout and a valid role set", "[playback]
 
 TEST_CASE("bass management needs a destination for the low band", "[playback][config]") {
   CHECK(mentions(refusal(R"({"target": {"kind": "speakers", "layout": "5.1",
-                               "speakers": {"L": {"size": "small"}},
-                               "bass_management": {"enabled": true, "subwoofer": false}}})"),
-                 "target.bass_management.subwoofer"));
+                               "speakers": {"left": {"size": "small"}},
+                               "bassManagement": {"enabled": true, "subwoofer": false}}})"),
+                 "target.bassManagement.subwoofer"));
   CHECK(refusal(R"({"target": {"kind": "speakers", "layout": "5.1",
-                     "speakers": {"Ls": {"size": "small"}},
-                     "bass_management": {"enabled": true, "subwoofer": false}}})")
+                     "speakers": {"leftSurround": {"size": "small"}},
+                     "bassManagement": {"enabled": true, "subwoofer": false}}})")
             .empty());
 }
 
@@ -272,7 +274,7 @@ TEST_CASE("set_config refuses a changed prepare key", "[playback][config]") {
   changed = config;
   changed.prepare.speakers[static_cast<size_t>(SpeakerRole::L)].has_distance = true;
   changed.prepare.speakers[static_cast<size_t>(SpeakerRole::L)].distance_m = 2.0f;
-  CHECK(mentions(refusal_of(changed), "requires a new renderer: target.speakers.L.distance_m"));
+  CHECK(mentions(refusal_of(changed), "requires a new renderer: target.speakers.left.distanceM"));
   changed = config;
   changed.prepare.input_layout = InputLayout::Stereo;
   CHECK(mentions(refusal_of(changed), "requires a new renderer: input.layout"));
@@ -325,9 +327,93 @@ TEST_CASE("diagnostics name the inactive stages and the latency split", "[playba
   CHECK(d.latency_samples == 1312);
 
   const std::string json = diagnostics_to_json(d);
-  CHECK(mentions(json, "\"active_input_layout\":\"stereo\""));
+  CHECK(mentions(json, "\"activeInputLayout\":\"stereo\""));
   CHECK(mentions(json, "\"dialogueLevel\""));
-  CHECK(mentions(json, "\"upmix\":{\"samples\":1024,\"q8\":262144}"));
-  CHECK(mentions(json, "\"layout_switches\":0"));
-  CHECK(mentions(json, "\"truncated_drains\":0"));
+  CHECK(mentions(json, "\"upmix\":{\"samples\":1024}"));
+  CHECK(mentions(json, "\"layoutSwitches\":0"));
+  CHECK(mentions(json, "\"truncatedDrains\":0"));
+  CHECK_FALSE(mentions(json, "q8"));
+}
+
+TEST_CASE("diagnostics report a fractional per-stage latency in samples", "[playback][config]") {
+  RendererDiagnostics d;
+  d.stage_latency_q8[static_cast<size_t>(Stage::NightMode)] = 240 * 256 + 64;
+  d.stage_latency_q8[static_cast<size_t>(Stage::Upmix)] = 512 * 256;
+  const std::string json = diagnostics_to_json(d);
+  CHECK(mentions(json, "\"nightMode\":{\"samples\":240.25}"));
+  CHECK(mentions(json, "\"upmix\":{\"samples\":512}"));
+  CHECK_FALSE(mentions(json, "q8"));
+}
+
+TEST_CASE("the document carries version 2 and an absent version reads as current",
+          "[playback][config]") {
+  CHECK(mentions(serialize_renderer_config(RendererConfig{}), "{\"version\":2,\"input\""));
+  CHECK_NOTHROW(parse_renderer_config("{}"));
+  CHECK_NOTHROW(parse_renderer_config(R"({"version": 2})"));
+  CHECK(mentions(refusal(R"({"version": 1})"), "version"));
+  CHECK(mentions(refusal(R"({"version": 3})"), "version"));
+  CHECK(mentions(refusal(R"({"version": 2.5})"), "version"));
+  CHECK(mentions(refusal(R"({"version": "2"})"), "version"));
+  CHECK(mentions(refusal(R"({"version": null})"), "version"));
+}
+
+TEST_CASE("an earlier key spelling is refused by name", "[playback][config]") {
+  const auto earlier = [](const std::string& json, const std::string& path,
+                          const std::string& replacement) {
+    CAPTURE(json);
+    CHECK(mentions(refusal(json), path + " is an earlier spelling; write " + replacement));
+  };
+  earlier(R"({"lfe_mix_db": 0})", "lfe_mix_db", "lfeMixDb");
+  earlier(R"({"night_mode": {"amount": 0.5}})", "night_mode", "nightMode");
+  earlier(R"({"output_limiter": {"enabled": true}})", "output_limiter", "outputLimiter");
+  earlier(R"({"outputLimiter": {"ceiling_db": -1}})", "outputLimiter.ceiling_db", "ceilingDbtp");
+  earlier(R"({"upmix": {"center_width": 0.3}})", "upmix.center_width", "centerWidth");
+  earlier(R"({"input": {"layout": "stereo", "channel_map": null}})", "input.channel_map",
+          "channelMap");
+  earlier(R"({"target": {"bass_management": {}}})", "target.bass_management", "bassManagement");
+  earlier(R"({"target": {"bassManagement": {"crossover_hz": 80}}})",
+          "target.bassManagement.crossover_hz", "crossoverHz");
+  earlier(R"({"target": {"kind": "speakers", "layout": "5.1",
+                         "speakers": {"left": {"trim_db": 1}}}})",
+          "target.speakers.left.trim_db", "trimDb");
+  earlier(R"({"target": {"kind": "speakers", "layout": "5.1",
+                         "speakers": {"left": {"distance_m": 1}}}})",
+          "target.speakers.left.distance_m", "distanceM");
+}
+
+TEST_CASE("an earlier speaker role token is refused by name", "[playback][config]") {
+  const std::pair<const char*, const char*> rows[] = {
+      {"L", "left"},
+      {"R", "right"},
+      {"C", "center"},
+      {"LFE", "lfe"},
+      {"Ls", "leftSurround"},
+      {"Rs", "rightSurround"},
+      {"Lss", "leftSideSurround"},
+      {"Rss", "rightSideSurround"},
+  };
+  for (const auto& [old_name, new_name] : rows) {
+    CAPTURE(old_name);
+    CHECK(
+        mentions(refusal(std::string(R"({"input": {"layout": "5.1", "channelMap": [")") + old_name +
+                         R"(", "right", "center", "lfe", "leftSurround", "rightSurround"]}})"),
+                 std::string("input.channelMap.") + old_name + " is an earlier spelling; write " +
+                     new_name));
+    CHECK(mentions(
+        refusal(std::string(R"({"target": {"kind": "speakers", "layout": "7.1",
+                                  "speakers": {")") +
+                old_name + R"(": {}}}})"),
+        std::string("target.speakers.") + old_name + " is an earlier spelling; write " + new_name));
+  }
+}
+
+TEST_CASE("the document with every role token written out round-trips", "[playback][config]") {
+  const RendererConfig config = parse_renderer_config(
+      R"({"input": {"layout": "7.1", "channelMap": ["center", "left", "right", "leftSideSurround",
+              "rightSideSurround", "leftSurround", "rightSurround", "lfe"]},
+          "target": {"kind": "speakers", "layout": "7.1",
+                     "speakers": {"leftSurround": {"trimDb": -1.5, "distanceM": 2.5}}}})");
+  const std::string text = serialize_renderer_config(config);
+  CHECK(mentions(text, "\"leftSurround\":{\"distanceM\":2.5,\"trimDb\":-1.5"));
+  CHECK(serialize_renderer_config(parse_renderer_config(text)) == text);
 }

@@ -52,7 +52,7 @@ struct LateTailIr {
 /// Throws SonareException when the synthesis fails.
 LateTailIr synthesize_late_tail(const RoomPresetSpec& spec, int sample_rate, int ear);
 
-/// Realtime parameters (`room.*`, `head_tracking.enabled`).
+/// Realtime parameters (`room.*`, `headTracking.enabled`).
 struct BinauralParams {
   bool room_enabled = true;
   float room_mix_db = -6.0f;

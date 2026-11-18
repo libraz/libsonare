@@ -298,11 +298,11 @@ struct PlaybackRenderer::Impl {
 
 std::string diagnostics_to_json(const RendererDiagnostics& diagnostics) {
   const auto number = [](double value) { return util::format_general(value, 6); };
-  std::string out = "{\"active_input_layout\":\"";
+  std::string out = "{\"activeInputLayout\":\"";
   out += layout_text(diagnostics.active_input_layout);
-  out += "\",\"layout_switches\":" + std::to_string(diagnostics.layout_switches);
-  out += ",\"truncated_drains\":" + std::to_string(diagnostics.truncated_drains);
-  out += ",\"inactive_stages\":[";
+  out += "\",\"layoutSwitches\":" + std::to_string(diagnostics.layout_switches);
+  out += ",\"truncatedDrains\":" + std::to_string(diagnostics.truncated_drains);
+  out += ",\"inactiveStages\":[";
   bool first = true;
   for (int s = 0; s < kStageCount; ++s) {
     if ((diagnostics.inactive_stages & (1u << static_cast<unsigned>(s))) == 0) continue;
@@ -319,17 +319,15 @@ std::string diagnostics_to_json(const RendererDiagnostics& diagnostics) {
     if (s > 0) out += ',';
     out += '"';
     out += stage_name(static_cast<Stage>(s));
-    out += "\":{\"samples\":" +
-           std::to_string(static_cast<long>(std::lround(static_cast<double>(q8) / kQ8)));
-    out += ",\"q8\":" + std::to_string(q8) + "}";
+    out += "\":{\"samples\":" + number(static_cast<double>(q8) / kQ8) + "}";
   }
-  out += "}},\"loudness_gain_db\":" + number(diagnostics.loudness_gain_db);
-  out += ",\"loudness_gain_clamped\":";
+  out += "}},\"loudnessGainDb\":" + number(diagnostics.loudness_gain_db);
+  out += ",\"loudnessGainClamped\":";
   out += diagnostics.loudness_gain_clamped ? "true" : "false";
-  out += ",\"hrtf_ignored\":";
+  out += ",\"hrtfIgnored\":";
   out += diagnostics.hrtf_ignored ? "true" : "false";
-  out += ",\"limiter_gain_reduction_db\":" + number(diagnostics.limiter_gain_reduction_db);
-  out += ",\"non_finite_discards\":" + std::to_string(diagnostics.non_finite_discards);
+  out += ",\"limiterGainReductionDb\":" + number(diagnostics.limiter_gain_reduction_db);
+  out += ",\"nonFiniteDiscards\":" + std::to_string(diagnostics.non_finite_discards);
   out += "}";
   return out;
 }

@@ -85,25 +85,26 @@ constexpr const char* stage_name(Stage stage) noexcept {
   return "";
 }
 
-/// Schema spelling of a speaker role ("L", "R", "C", "LFE", "Ls", "Rs", "Lss", "Rss").
+/// Schema spelling of a speaker role ("left", "right", "center", "lfe", "leftSurround",
+/// "rightSurround", "leftSideSurround", "rightSideSurround").
 constexpr const char* speaker_role_name(SpeakerRole role) noexcept {
   switch (role) {
     case SpeakerRole::L:
-      return "L";
+      return "left";
     case SpeakerRole::R:
-      return "R";
+      return "right";
     case SpeakerRole::C:
-      return "C";
+      return "center";
     case SpeakerRole::LFE:
-      return "LFE";
+      return "lfe";
     case SpeakerRole::Ls:
-      return "Ls";
+      return "leftSurround";
     case SpeakerRole::Rs:
-      return "Rs";
+      return "rightSurround";
     case SpeakerRole::Lss:
-      return "Lss";
+      return "leftSideSurround";
     case SpeakerRole::Rss:
-      return "Rss";
+      return "rightSideSurround";
   }
   return "";
 }
@@ -140,7 +141,7 @@ struct SpeakerPrepare {
   SpeakerSize size = SpeakerSize::Large;
 };
 
-/// `target.bass_management`, prepare keys.
+/// `target.bassManagement`, prepare keys.
 struct BassManagementConfig {
   bool enabled = false;
   float crossover_hz = 80.0f;  ///< [40, 200]
@@ -150,7 +151,7 @@ struct BassManagementConfig {
 /// Keys fixed at renderer creation.
 struct PrepareConfig {
   InputLayout input_layout = InputLayout::Auto;
-  /// `input.channel_map`: role of input channel i. Only with a fixed layout.
+  /// `input.channelMap`: role of input channel i. Only with a fixed layout.
   bool has_channel_map = false;
   std::array<SpeakerRole, kSpeakerRoleCount> channel_map{};
   TargetKind target_kind = TargetKind::Headphones;
@@ -171,7 +172,7 @@ struct RealtimeConfig {
   float upmix_front_ambience = 0.5f;  ///< [0, 1]
   bool upmix_lfe_from_upmix = false;
   float dialogue_level_db = 0.0f;  ///< [-12, 12]
-  bool has_program_lufs = false;   ///< false: `loudness.program_lufs` is null
+  bool has_program_lufs = false;   ///< false: `loudness.programLufs` is null
   float program_lufs = -24.0f;     ///< [-70, 0]
   float target_lufs = -24.0f;      ///< [-40, -5]
   float night_amount = 0.0f;       ///< [0, 1]

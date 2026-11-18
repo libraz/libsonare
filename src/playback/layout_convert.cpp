@@ -55,7 +55,7 @@ OutputBus make_output_bus(const PrepareConfig& config) noexcept {
 void validate_channel_map(ChannelLayout layout, const SpeakerRole* map, int length) {
   const int expected = channel_count(layout);
   SONARE_CHECK_MSG(length == expected, ErrorCode::InvalidParameter,
-                   "input.channel_map length " + std::to_string(length) +
+                   "input.channelMap length " + std::to_string(length) +
                        " does not match layout channel count " + std::to_string(expected));
 
   std::array<bool, kSpeakerRoleCount> required{};
@@ -66,18 +66,18 @@ void validate_channel_map(ChannelLayout layout, const SpeakerRole* map, int leng
   for (int i = 0; i < length; ++i) {
     const auto role_index = static_cast<size_t>(map[i]);
     SONARE_CHECK_MSG(role_index < kSpeakerRoleCount, ErrorCode::InvalidParameter,
-                     "input.channel_map: unrecognized role at index " + std::to_string(i));
+                     "input.channelMap: unrecognized role at index " + std::to_string(i));
     SONARE_CHECK_MSG(required[role_index], ErrorCode::InvalidParameter,
-                     std::string("input.channel_map: role ") + speaker_role_name(map[i]) +
+                     std::string("input.channelMap: role ") + speaker_role_name(map[i]) +
                          " is not part of the layout");
     ++seen[role_index];
     SONARE_CHECK_MSG(seen[role_index] == 1, ErrorCode::InvalidParameter,
-                     std::string("input.channel_map: duplicate role ") + speaker_role_name(map[i]));
+                     std::string("input.channelMap: duplicate role ") + speaker_role_name(map[i]));
   }
   for (int r = 0; r < kSpeakerRoleCount; ++r) {
     SONARE_CHECK_MSG(!required[static_cast<size_t>(r)] || seen[static_cast<size_t>(r)] == 1,
                      ErrorCode::InvalidParameter,
-                     std::string("input.channel_map: missing role ") +
+                     std::string("input.channelMap: missing role ") +
                          speaker_role_name(static_cast<SpeakerRole>(r)));
   }
 }

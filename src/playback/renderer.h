@@ -31,7 +31,7 @@ namespace sonare::playback {
 
 /// Output-limiter look-ahead.
 inline constexpr float kOutputLimiterLookaheadMs = 1.0f;
-/// Crossfade between the limited and the bypass output on an `output_limiter.enabled` change.
+/// Crossfade between the limited and the bypass output on an `outputLimiter.enabled` change.
 inline constexpr float kOutputLimiterSwitchMs = 20.0f;
 /// Block length of the offline one-shot render.
 inline constexpr int kOfflineRenderBlockFrames = 4096;
@@ -52,8 +52,8 @@ struct RendererDiagnostics {
   uint32_t non_finite_discards = 0;
 };
 
-/// Diagnostics document (`active_input_layout`, `layout_switches`,
-/// `truncated_drains`, `inactive_stages`, `latency.stages`, clamps).
+/// Diagnostics document (`activeInputLayout`, `layoutSwitches`,
+/// `truncatedDrains`, `inactiveStages`, `latency.stages`, clamps).
 std::string diagnostics_to_json(const RendererDiagnostics& diagnostics);
 
 /// Block size the renderer is created with when a caller names none.

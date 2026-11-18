@@ -446,7 +446,7 @@ TEST_CASE("an unsupported channel count is refused without advancing",
   // auto with a channel map is refused at creation.
   sonare::ErrorCode code = sonare::ErrorCode::Ok;
   try {
-    parse_renderer_config(R"({"input": {"layout": "auto", "channel_map": ["L", "R"]}})");
+    parse_renderer_config(R"({"input": {"layout": "auto", "channelMap": ["left", "right"]}})");
   } catch (const sonare::SonareException& e) {
     code = e.code();
   }

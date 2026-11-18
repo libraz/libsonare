@@ -133,7 +133,7 @@ TEST_CASE("playback renderer set_config_json adopts realtime keys and rejects a 
   // renderer's prepare shape (target.kind/layout) is accepted.
   CHECK(sonare_playback_renderer_set_config_json(
             renderer,
-            R"({"target": {"kind": "speakers", "layout": "5.1"}, "night_mode": {"amount": 1}})") ==
+            R"({"target": {"kind": "speakers", "layout": "5.1"}, "nightMode": {"amount": 1}})") ==
         SONARE_OK);
 
   // A document whose target.kind differs from the renderer's prepare shape is
@@ -315,7 +315,7 @@ TEST_CASE("playback renderer diagnostics_json and non_finite_discard_count", "[p
   char* diagnostics = nullptr;
   REQUIRE(sonare_playback_renderer_diagnostics_json(renderer, &diagnostics) == SONARE_OK);
   REQUIRE(diagnostics != nullptr);
-  CHECK(text_contains(diagnostics, "active_input_layout"));
+  CHECK(text_contains(diagnostics, "activeInputLayout"));
   sonare_free_string(diagnostics);
 
   diagnostics = reinterpret_cast<char*>(uintptr_t{1});
@@ -409,8 +409,8 @@ TEST_CASE("playback renderer render_offline matches the one-shot render through 
   // Unequal distances make the per-plane calibration delay part of the trim decision.
   const std::string config =
       R"({"target": {"kind": "speakers", "layout": "stereo",
-                     "speakers": {"L": {"distance_m": 1.0}, "R": {"distance_m": 5.0}}},
-          "output_limiter": {"enabled": false}})";
+                     "speakers": {"left": {"distanceM": 1.0}, "right": {"distanceM": 5.0}}},
+          "outputLimiter": {"enabled": false}})";
   constexpr size_t kFrames = 6000;
   std::vector<float> in(kFrames * 2, 0.0f);
   for (size_t i = 0; i < 480; ++i) {
