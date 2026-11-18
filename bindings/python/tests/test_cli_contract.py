@@ -1458,7 +1458,7 @@ def test_mastering_cli_reports_ceiling_limited_loudness(tmp_path) -> None:
     # The CLI payload must agree with the library entry points on the same input.
     with libsonare.Audio.from_file(str(source)) as audio:
         samples, sample_rate = audio.data, audio.sample_rate
-    named = libsonare.mastering_process(
+    named = libsonare.mastering_apply_processor(
         "maximizer.loudnessOptimize",
         samples,
         sample_rate=sample_rate,

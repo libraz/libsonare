@@ -212,7 +212,7 @@ def test_mastering_processor_hands_a_stereo_source_to_the_facade_unmixed(
             latency_samples=3,
         )
 
-    monkeypatch.setattr(libsonare, "mastering_process_stereo", stereo)
+    monkeypatch.setattr(libsonare, "mastering_apply_processor_stereo", stereo)
     monkeypatch.setattr(
         _cli_output,
         "_write_wav_stereo",
@@ -273,7 +273,7 @@ def test_mastering_processor_stereo_only_catalog_auto_routes(monkeypatch, capsys
     )
     monkeypatch.setattr(
         libsonare,
-        "mastering_process_stereo",
+        "mastering_apply_processor_stereo",
         lambda name, *args, **kwargs: (
             calls.append(name)
             or SimpleNamespace(
@@ -453,7 +453,7 @@ def test_mastering_cli_reports_a_blocked_loudness_target(capsys, monkeypatch) ->
 
     # The same input through the named-processor entry point must agree: these
     # are two views of one computation, not two independent estimates.
-    processed = libsonare.mastering_process(
+    processed = libsonare.mastering_apply_processor(
         "maximizer.loudnessOptimize",
         samples,
         sample_rate=sample_rate,

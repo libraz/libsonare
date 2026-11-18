@@ -119,7 +119,9 @@ def test_eq_json_has_canonical_output_and_sample_rate(monkeypatch, capsys) -> No
     from libsonare import _cli_mastering, cli
 
     patch_mono_decode(monkeypatch, lambda path: ([0.0], 44100))
-    monkeypatch.setattr(libsonare, "mastering_process", lambda *args, **kwargs: _mastering_result())
+    monkeypatch.setattr(
+        libsonare, "mastering_apply_processor", lambda *args, **kwargs: _mastering_result()
+    )
 
     args = cli._build_parser().parse_args(["eq", "input.wav", "--json"])
     assert _cli_mastering.cmd_eq(args) == 0
@@ -149,7 +151,9 @@ def test_mastering_processor_json_always_reports_stereo_mode(monkeypatch, capsys
 
     patch_mono_decode(monkeypatch, lambda path: ([0.0], 44100))
     monkeypatch.setattr(libsonare, "mastering_processor_catalog", lambda: [])
-    monkeypatch.setattr(libsonare, "mastering_process", lambda *args, **kwargs: _mastering_result())
+    monkeypatch.setattr(
+        libsonare, "mastering_apply_processor", lambda *args, **kwargs: _mastering_result()
+    )
 
     args = cli._build_parser().parse_args(
         ["mastering-processor", "--processor", "dynamics.compressor", "input.wav", "--json"]
@@ -185,7 +189,7 @@ def test_mastering_processor_json_marks_stereo_only_processor(monkeypatch, capsy
     )
     monkeypatch.setattr(
         libsonare,
-        "mastering_process_stereo",
+        "mastering_apply_processor_stereo",
         lambda *args, **kwargs: SimpleNamespace(
             left=[0.1],
             right=[0.1],

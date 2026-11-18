@@ -301,7 +301,7 @@ def test_mastering_processor_cli_uses_the_runtime_stereo_catalog(monkeypatch) ->
             latency_samples=0,
         )
 
-    monkeypatch.setattr(libsonare, "mastering_process_stereo", stereo)
+    monkeypatch.setattr(libsonare, "mastering_apply_processor_stereo", stereo)
     args = argparse.Namespace(
         processor="custom.stereo", file="tone.wav", params="", output="", json=True
     )

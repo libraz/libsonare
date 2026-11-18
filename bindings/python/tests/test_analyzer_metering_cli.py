@@ -550,7 +550,9 @@ def test_mastering_processor_feeds_a_mono_source_to_both_channels(monkeypatch, c
             latency_samples=0,
         )
 
-    monkeypatch.setattr(libsonare, "mastering_process_stereo", fake_mastering_process_stereo)
+    monkeypatch.setattr(
+        libsonare, "mastering_apply_processor_stereo", fake_mastering_process_stereo
+    )
 
     args = argparse.Namespace(
         file="input.wav",

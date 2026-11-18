@@ -484,7 +484,11 @@ def cmd_mastering(args: argparse.Namespace) -> int:
 
 
 def cmd_mastering_processor(args: argparse.Namespace) -> int:
-    from . import mastering_process, mastering_process_stereo, mastering_processor_catalog
+    from . import (
+        mastering_apply_processor,
+        mastering_apply_processor_stereo,
+        mastering_processor_catalog,
+    )
 
     planes, sr = _load_channels_or_downmix(args.file)
     params_raw = getattr(args, "params", "") or ""
@@ -505,7 +509,7 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
     channels: list[list[float]]
     if use_stereo:
         left, right = (planes[0], planes[1]) if len(planes) == 2 else (planes[0], planes[0])
-        stereo = mastering_process_stereo(
+        stereo = mastering_apply_processor_stereo(
             processor_name, left, right, sample_rate=sr, params=params
         )
         # Written as a pair rather than folded back: these processors exist to act
@@ -520,7 +524,7 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
             latency_samples=stereo.latency_samples,
         )
     else:
-        result = mastering_process(processor_name, planes[0], sample_rate=sr, params=params)
+        result = mastering_apply_processor(processor_name, planes[0], sample_rate=sr, params=params)
         channels = [list(result.samples)]
 
     output = getattr(args, "output", "") or ""
@@ -550,7 +554,7 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
 
 
 def cmd_eq(args: argparse.Namespace) -> int:
-    from . import mastering_process, mastering_process_stereo
+    from . import mastering_apply_processor, mastering_apply_processor_stereo
 
     # Ahead of the audio load and the --params conflict check, matching the
     # native CLI, which enforces every declared option domain from its registry
@@ -600,13 +604,13 @@ def cmd_eq(args: argparse.Namespace) -> int:
     result: Any
     channels: list[list[float]]
     if use_stereo:
-        stereo = mastering_process_stereo(
+        stereo = mastering_apply_processor_stereo(
             "eq.equalizer", planes[0], planes[1], sample_rate=sr, params=params
         )
         channels = [list(stereo.left), list(stereo.right)]
         result = stereo
     else:
-        result = mastering_process("eq.equalizer", planes[0], sample_rate=sr, params=params)
+        result = mastering_apply_processor("eq.equalizer", planes[0], sample_rate=sr, params=params)
         channels = [list(result.samples)]
 
     output = getattr(args, "output", "") or ""
@@ -694,13 +698,13 @@ def cmd_mastering_pair_analyze(args: argparse.Namespace) -> int:
 
 
 def cmd_mastering_pair_processor(args: argparse.Namespace) -> int:
-    from . import mastering_pair_process
+    from . import mastering_apply_pair_processor
 
     source, sr = _load_audio(args.file)
     reference, ref_sr = _load_audio(args.reference)
     params_raw = getattr(args, "params", "") or ""
     params = _parse_kv_params(params_raw) if params_raw else {}
-    result = mastering_pair_process(
+    result = mastering_apply_pair_processor(
         args.processor,
         source,
         reference,
