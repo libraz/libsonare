@@ -531,6 +531,26 @@
       "exclusiveMaximum": false
     },
     {
+      "command": "plp",
+      "option": "bpm-min",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "plp",
+      "option": "bpm-max",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
       "command": "pitch",
       "option": "algorithm",
       "rejectExit": "invalid_parameter",

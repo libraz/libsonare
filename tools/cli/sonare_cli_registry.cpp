@@ -961,10 +961,12 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "tempogram", true,
                 {global_int("n-fft", 2048), global_int("hop-length", 512),
                  global_int("n-mels", 128), int_value("win-length", 384)});
-    add_command(commands, "plp", true,
-                {global_int("n-fft", 2048), global_int("hop-length", 512),
-                 global_int("n-mels", 128), number_value("tempo-min", 30.0),
-                 number_value("tempo-max", 300.0), int_value("win-length", 384)});
+    add_command(
+        commands, "plp", true,
+        {global_int("n-fft", 2048), global_int("hop-length", 512), global_int("n-mels", 128),
+         with_domain(number_value("bpm-min"), greater_than(0.0, CliOptionDomainStage::Parameter)),
+         with_domain(number_value("bpm-max"), greater_than(0.0, CliOptionDomainStage::Parameter)),
+         int_value("win-length", 384)});
     add_command(commands, "nnls-chroma", true, {global_int("hop-length", 512)});
     // Zero keeps the 32.7 Hz default, so the domain refuses only a negative lower
     // bound -- which the handler otherwise substitutes that same default for,

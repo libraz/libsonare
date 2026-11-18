@@ -351,8 +351,9 @@ int cmd_plp(const CliArgs& args, const Audio& audio) {
   PlpConfig config;
   config.sr = audio.sample_rate();
   config.hop_length = args.hop_length;
-  config.tempo_min = args.get_float("tempo-min", 30.0f);
-  config.tempo_max = args.get_float("tempo-max", 300.0f);
+  // An omitted bound keeps the library's search range.
+  if (args.has("bpm-min")) config.tempo_min = args.get_float("bpm-min", config.tempo_min);
+  if (args.has("bpm-max")) config.tempo_max = args.get_float("bpm-max", config.tempo_max);
   config.win_length = args.get_int("win-length", 384);
   auto values = plp(envelope, config);
   Stats stats = Stats::compute(values);
@@ -361,8 +362,6 @@ int cmd_plp(const CliArgs& args, const Audio& audio) {
     JsonBuilder()
         .begin_object()
         .kv("n_frames", values.size())
-        .kv("tempo_min", config.tempo_min)
-        .kv("tempo_max", config.tempo_max)
         .key("stats")
         .begin_object()
         .kv("mean", stats.mean)

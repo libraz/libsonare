@@ -2693,6 +2693,38 @@
       ],
       "plp": [
         {
+          "name": "bpm-max",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "bpm-min",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
           "name": "hop-length",
           "type": "integer",
           "default": 512,
@@ -2723,24 +2755,6 @@
           "name": "n-mels",
           "type": "integer",
           "default": 128,
-          "aliases": [],
-          "repeatable": false,
-          "required": false,
-          "domain": null
-        },
-        {
-          "name": "tempo-max",
-          "type": "number",
-          "default": 300,
-          "aliases": [],
-          "repeatable": false,
-          "required": false,
-          "domain": null
-        },
-        {
-          "name": "tempo-min",
-          "type": "number",
-          "default": 30,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -9166,6 +9180,38 @@
       "path": "plp",
       "options": [
         {
+          "name": "bpm-max",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "bpm-min",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
           "name": "hop-length",
           "type": "integer",
           "default": 512,
@@ -9202,24 +9248,6 @@
           "domain": null
         },
         {
-          "name": "tempo-max",
-          "type": "number",
-          "default": 300,
-          "aliases": [],
-          "repeatable": false,
-          "required": false,
-          "domain": null
-        },
-        {
-          "name": "tempo-min",
-          "type": "number",
-          "default": 30,
-          "aliases": [],
-          "repeatable": false,
-          "required": false,
-          "domain": null
-        },
-        {
           "name": "win-length",
           "type": "integer",
           "default": 384,
@@ -9240,8 +9268,6 @@
         "success": {
           "keys": {
             "n_frames": "integer",
-            "tempo_min": "number",
-            "tempo_max": "number",
             "stats": {
               "keys": {
                 "max": "number",

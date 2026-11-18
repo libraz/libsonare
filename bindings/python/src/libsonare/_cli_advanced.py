@@ -291,20 +291,21 @@ def cmd_plp(args: argparse.Namespace) -> int:
     env = onset_strength(
         samples, sr=sr, n_fft=args.n_fft, hop_length=args.hop_length, n_mels=args.n_mels
     )
-    plp_options = {
-        name: getattr(args, name)
-        for name in ("tempo_min", "tempo_max", "win_length")
-        if hasattr(args, name)
-    }
-    pulse = plp(env, sr=sr, hop_length=args.hop_length, **plp_options).tolist()
+    # plp keeps librosa's keyword names; an omitted bound keeps the library's range.
+    tempo_bounds: dict[str, float] = {}
+    if args.bpm_min is not None:
+        tempo_bounds["tempo_min"] = args.bpm_min
+    if args.bpm_max is not None:
+        tempo_bounds["tempo_max"] = args.bpm_max
+    pulse = plp(
+        env, sr=sr, hop_length=args.hop_length, win_length=args.win_length, **tempo_bounds
+    ).tolist()
 
     if args.json:
         print(
             _strict_json_dumps(
                 {
                     "n_frames": len(pulse),
-                    "tempo_min": plp_options.get("tempo_min", 30.0),
-                    "tempo_max": plp_options.get("tempo_max", 300.0),
                     "stats": _array_stats(pulse, with_count=False),
                 }
             )
@@ -369,6 +370,24 @@ def register_advanced_parsers(
     )
     tempogram_p.add_argument("--win-length", type=_c_int, default=384)
     plp_p = sub.add_parser("plp", parents=[mel_options], help="Compute predominant local pulse")
-    plp_p.add_argument("--tempo-min", type=_finite_float, default=30.0)
-    plp_p.add_argument("--tempo-max", type=_finite_float, default=300.0)
+    _cli_domain(
+        plp_p.add_argument(
+            "--bpm-min",
+            type=_finite_float,
+            help="Lower bound of the tempo search (omitted: the library's range)",
+        ),
+        minimum=0,
+        exclusive_minimum=True,
+        reject_exit="invalid_parameter",
+    )
+    _cli_domain(
+        plp_p.add_argument(
+            "--bpm-max",
+            type=_finite_float,
+            help="Upper bound of the tempo search (omitted: the library's range)",
+        ),
+        minimum=0,
+        exclusive_minimum=True,
+        reject_exit="invalid_parameter",
+    )
     plp_p.add_argument("--win-length", type=_c_int, default=384)

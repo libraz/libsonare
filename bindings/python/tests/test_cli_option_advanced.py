@@ -159,8 +159,8 @@ def test_plp_forwards_mel_tempo_and_window_options(
                 n_fft=4096,
                 hop_length=128,
                 n_mels=64,
-                tempo_min=70.0,
-                tempo_max=180.0,
+                bpm_min=70.0,
+                bpm_max=180.0,
                 win_length=192,
             )
         )
@@ -182,6 +182,29 @@ def test_plp_forwards_mel_tempo_and_window_options(
             "win_length": 192,
         },
     )
+
+
+def test_plp_omitted_bpm_bounds_keep_the_library_range(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An omitted --bpm-min / --bpm-max passes nothing, so the library's range applies."""
+    from libsonare import _cli_advanced, _conversions
+
+    monkeypatch.setattr(_cli_advanced, "_load_audio", lambda _path: ([0.0, 0.5], 22050))
+    monkeypatch.setattr(_conversions, "onset_strength", lambda *_a, **_k: np.array([0.1, 0.2]))
+    calls: dict[str, object] = {}
+
+    def plp_spy(envelope: np.ndarray, **kwargs: object) -> np.ndarray:
+        calls["plp"] = kwargs
+        return np.array([0.0, 1.0])
+
+    monkeypatch.setattr(_conversions, "plp", plp_spy)
+    args = _args(n_fft=2048, hop_length=512, n_mels=128, bpm_min=None, bpm_max=None, win_length=384)
+    assert _cli_advanced.cmd_plp(args) == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert calls["plp"] == {"sr": 22050, "hop_length": 512, "win_length": 384}
+    assert set(payload) == {"n_frames", "stats"}
 
 
 def test_native_rhythm_handlers_use_explicit_mel_envelopes() -> None:
