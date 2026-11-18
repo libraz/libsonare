@@ -384,8 +384,10 @@ typedef struct {
  * because the relative threshold is applied to a curve scaled by its local
  * maximum. Start from sonare_boundary_options_default(). */
 typedef struct {
-  int n_fft;        ///< Window length in samples at 22050 Hz, rescaled to the analysis rate.
-  int hop_length;   ///< Hop between analysis frames in samples.
+  int n_fft;  ///< Window length in samples at 22050 Hz, rescaled to the analysis rate.
+  /** Hop in samples of the analysed signal: the input resampled to 22050 Hz when its rate is above
+   * 22050 Hz, the input itself otherwise. */
+  int hop_length;
   int kernel_size;  ///< checkerboard kernel, in frames
   float threshold;  ///< relative to the local novelty maximum, lone dominant event set aside
   float absolute_threshold;  ///< applied to the raw response, before scaling

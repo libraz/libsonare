@@ -54,6 +54,7 @@ SonareError sonare_detect_acoustic(const float* samples, size_t length, int samp
 SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sample_rate,
                                   float bpm_min, float bpm_max, float start_bpm, int n_fft,
                                   int hop_length, SonareRhythmResult* out);
+/// @param hop_length Hop in samples of the caller's buffer, at @p sample_rate.
 /// @param out Receives heap-owned arrays; free with sonare_free_dynamics_result.
 SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sample_rate,
                                     float window_sec, int hop_length,
@@ -70,6 +71,7 @@ SonareError sonare_analyze_timbre(const float* samples, size_t length, int sampl
 ///   Settings not listed here take the ChordConfig defaults: CQT chroma and HMM smoothing.
 /// @param n_fft STFT chroma window in samples at 22050 Hz, rescaled to the
 ///   input rate so its duration is the same at every rate.
+/// @param hop_length Hop in samples of the caller's buffer, at @p sample_rate.
 /// @param out Receives heap-owned arrays; free with sonare_free_chord_analysis_result.
 SonareError sonare_detect_chords(const float* samples, size_t length, int sample_rate,
                                  float min_duration_sec, float smoothing_window_sec,

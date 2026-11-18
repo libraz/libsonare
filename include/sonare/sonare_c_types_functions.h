@@ -165,8 +165,9 @@ SonareError sonare_detect_bpm(const float* samples, size_t length, int sample_ra
 SonareError sonare_detect_key(const float* samples, size_t length, int sample_rate,
                               SonareKey* out_key);
 /// @brief Detects the key with explicit chroma settings, measuring the tuning first.
-/// @param n_fft FFT size in samples at 22050 Hz, rescaled to the input rate.
-/// @param hop_length Hop in samples at the input rate.
+/// @param n_fft FFT size in samples at 22050 Hz, rescaled to the analysis rate.
+/// @param hop_length Hop in samples of the analysed signal: the input resampled to 22050 Hz
+///   when its rate is above 22050 Hz, the input itself otherwise.
 /// @param use_hpss Non-zero applies harmonic-percussive separation before the chroma.
 /// @param loudness_weighted Non-zero weights chroma frames by loudness.
 /// @param chroma_high_pass_hz High-pass cutoff for the chroma in Hz; 0 disables it.
@@ -345,7 +346,8 @@ typedef struct {
   int struct_version;
   /// Analysis window in samples at 22050 Hz, rescaled to the analysis rate. Default 2048.
   int n_fft;
-  /// Hop length in samples. Default 512.
+  /// Hop in samples of the analysed signal: the input resampled to 22050 Hz when its rate is above
+  /// 22050 Hz, the input itself otherwise. Default 512.
   int hop_length;
   /// Lower bound of the tempo search in BPM. Default 60.
   float bpm_min;

@@ -3,7 +3,9 @@
 /// @file analysis_rate.h
 /// @brief Converts a window length given in samples at 22050 Hz into the input rate.
 /// @details High-level analyzers state `n_fft` as a time quantity (samples at
-///          @ref kAnalysisSampleRate). The hop stays in caller-buffer samples.
+///          @ref kAnalysisSampleRate). The hop is in samples of the signal analysed: the
+///          caller's buffer for an analyzer that runs at the input rate, the
+///          @ref analysis_rate_audio signal for one that resamples first.
 
 #include <algorithm>
 #include <cmath>
