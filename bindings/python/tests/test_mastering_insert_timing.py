@@ -35,7 +35,7 @@ def test_param_info_flags_exclusive_bounds_and_nyquist_ceilings() -> None:
     compressor = {
         param.name: param for param in libsonare.mastering_insert_param_info("dynamics.compressor")
     }
-    hpf = compressor["sidechainHpfHz"]
+    hpf = compressor["sidechainHighPassHz"]
     assert hpf.min == 0
     assert isinstance(hpf.min_exclusive, bool)
     assert hpf.min_exclusive is True

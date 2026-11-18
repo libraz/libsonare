@@ -181,10 +181,10 @@ class TestApply:
 def test_a_declip_level_survives_the_round_trip_from_analysis_to_apply() -> None:
     from libsonare._effects_repair_session import _stage_from_wire, _stage_to_wire
 
-    wire = {"stage": "declip", "clipThreshold": 0.800000011920929, "lpcOrder": 36}
+    wire = {"stage": "declip", "clipThresholdDb": -1.9382, "lpcOrder": 36}
     stage = _stage_from_wire(wire)
     assert isinstance(stage, libsonare.DeclipStage)
-    assert stage.clip_threshold_db == pytest.approx(-1.9382, abs=1e-4)
+    assert stage.clip_threshold_db == -1.9382
     back = _stage_to_wire(stage)
-    assert back["clipThreshold"] == pytest.approx(wire["clipThreshold"], rel=1e-12)
+    assert back["clipThresholdDb"] == wire["clipThresholdDb"]
     assert back["lpcOrder"] == 36

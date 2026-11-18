@@ -5,7 +5,6 @@ from __future__ import annotations
 import ctypes
 import dataclasses
 import json
-import math
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, cast
 
@@ -99,8 +98,6 @@ def _audio_defects_from_wire(values: Mapping[str, Any]) -> AudioDefects:
 
 def _stage_from_wire(values: Mapping[str, Any]) -> RepairStage:
     settings = {_snake(key): value for key, value in values.items() if key != "stage"}
-    if "clip_threshold" in settings:
-        settings["clip_threshold_db"] = 20.0 * math.log10(settings.pop("clip_threshold"))
     return _STAGE_TYPES[values["stage"]](**settings)
 
 
@@ -110,11 +107,7 @@ def _stage_to_wire(stage: RepairStage) -> dict[str, Any]:
         value = getattr(stage, item.name)
         if item.name == "stage" or value is None:
             continue
-        if item.name == "clip_threshold_db":
-            # The stage document carries the declip level linear, as its catalog parameter does.
-            wire["clipThreshold"] = 10.0 ** (value / 20.0)
-        else:
-            wire[_camel(item.name)] = value
+        wire[_camel(item.name)] = value
     return wire
 
 
