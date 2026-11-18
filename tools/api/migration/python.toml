@@ -10584,3 +10584,11 @@ old = "restore_vocal_edit_session"
 removed = "call the classmethod VocalEditSession.restore(samples, sample_rate, state, ...) with the same keywords"
 domain = "project"
 rule = "construction"
+
+[[entry]]
+kind = "option"
+old = "StreamingEqualizer.set_band(band)"
+changed = "an EqBandInput mapping with camelCase keys only; JSON text raises TypeError, so parse it with json.loads first"
+domain = "mastering"
+rule = "one-input-form"
+test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_streaming_equalizer_takes_a_band_mapping_and_refuses_json_text"

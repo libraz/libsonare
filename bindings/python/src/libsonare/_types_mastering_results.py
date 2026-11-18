@@ -107,6 +107,14 @@ form :func:`libsonare.master_audio` takes as ``overrides`` and
 :func:`libsonare.mastering_assistant_suggest_chain` returns.
 """
 
+EqBandInput = dict[str, Any]
+"""One equalizer band with camelCase keys; omitted keys take the processor defaults.
+
+``{"type": "peak", "frequencyHz": 1000.0, "gainDb": 6.0, "q": 1.0, "enabled": True}``.
+Further keys: ``coeffMode``, ``slopeDbPerOct``, ``phase``, ``placement``. The
+form :meth:`libsonare.StreamingEqualizer.set_band` takes.
+"""
+
 
 @dataclass(frozen=True, slots=True)
 class MasteringAssistantProfile:

@@ -6,8 +6,7 @@ import contextlib
 import ctypes
 import json
 import math
-from collections.abc import Sequence
-from typing import Any
+from collections.abc import Mapping, Sequence
 
 import numpy as np
 
@@ -43,6 +42,7 @@ from ._runtime import (
 )
 from ._types_enums import _EQ_PHASE_MODES, _EQ_STEREO_PLACEMENTS, EqPhaseMode, EqStereoPlacement
 from .types import (
+    EqBandInput,
     EqSpectrumSnapshot,
     MasteringChainConfig,
     StereoBlock,
@@ -536,10 +536,12 @@ class StreamingEqualizer:
         self.sample_rate = sample_rate_value
         self._sidechain_refs: object | None = None
 
-    def set_band(self, index: int, band: dict[str, Any] | str) -> None:
-        """Set one EQ band from a JSON string or a Python dict."""
+    def set_band(self, index: int, band: EqBandInput) -> None:
+        """Set one EQ band from an :data:`EqBandInput` mapping."""
         self._ensure_open()
-        payload = band if isinstance(band, str) else json.dumps(band, separators=(",", ":"))
+        if not isinstance(band, Mapping):
+            raise TypeError("band must be a mapping (parse JSON text with json.loads first)")
+        payload = json.dumps(dict(band), separators=(",", ":"))
         rc = self._lib.sonare_eq_set_band(
             self._handle, _to_c_int(index, "index"), _utf8_arg(payload, "payload")
         )

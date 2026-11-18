@@ -524,6 +524,9 @@ from ._types_mastering import (
     StreamingLoudnessGain as StreamingLoudnessGain,
 )
 from ._types_mastering_results import (
+    EqBandInput as EqBandInput,
+)
+from ._types_mastering_results import (
     MasteringAssistantProfile as MasteringAssistantProfile,
 )
 from ._types_mastering_results import (

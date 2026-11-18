@@ -2177,6 +2177,7 @@ class MasteringAudioProfile:
     ) -> None: ...
 
 MasteringChainConfig: TypeAlias = dict[str, Any]
+EqBandInput: TypeAlias = dict[str, Any]
 
 @dataclass(frozen=True)
 class MasteringAssistantProfile:

@@ -114,6 +114,17 @@ def test_streaming_equalizer_refuses_earlier_band_spellings(band: dict, current:
         eq.set_band(0, band)
 
 
+def test_streaming_equalizer_takes_a_band_mapping_and_refuses_json_text() -> None:
+    """A band is an ``EqBandInput`` mapping; JSON text is not a second input form."""
+    from libsonare import StreamingEqualizer
+
+    with (
+        StreamingEqualizer(sample_rate=44100, max_block_size=256) as eq,
+        pytest.raises(TypeError, match="json.loads"),
+    ):
+        eq.set_band(0, '{"type":"peak","enabled":true}')  # type: ignore[arg-type]
+
+
 def test_streaming_mastering_chain_preserves_ndarray_input() -> None:
     """process_* must not overwrite a float32 ndarray input (non-destructive)."""
     import numpy as np

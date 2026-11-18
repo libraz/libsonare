@@ -1072,6 +1072,9 @@ from .types import (
     EngineTrackMonitorMode as EngineTrackMonitorMode,
 )
 from .types import (
+    EqBandInput as EqBandInput,
+)
+from .types import (
     EqPhaseMode as EqPhaseMode,
 )
 from .types import (
