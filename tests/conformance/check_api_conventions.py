@@ -11,6 +11,10 @@ Two tables sit beside each rule, both keyed by ``surface:name``:
 * ``exempt`` -- a symbol the rule's own text places outside it, with the reason.
 * ``pending`` -- a known violation with the fix it awaits.
 
+A rule whose record aggregates several sites (one per C source file) also records
+each pending entry's site count, and a count that moved either way fails: a fix
+lowers it in the same change, and a new site is a violation rather than a guest.
+
 An entry in either table that matches no violation fails, so each one expires with
 the divergence it describes.
 
@@ -50,6 +54,9 @@ class Rule:
     scan: Callable[[Path], list[dict]] | None = None
     # Builds synthetic records from the inventory for a rule that compares records.
     derive: Callable[[list[dict]], list[dict]] | None = None
+    # Counts the sites inside one record; such a rule's pending entries record that count.
+    size: Callable[[dict], int] | None = None
+    pending_size: dict[str, int] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass
@@ -157,9 +164,9 @@ _NUMERIC_TYPE = re.compile(
 
 # (stem, unit token) pairs: a measurement named by its stem ends in the unit's spelling.
 _LOUDNESS_UNITS = (
-    (re.compile(r"loudness_?range", re.I), "Lu"),
-    (re.compile(r"true_?peak(?!_?oversample)", re.I), "Dbtp"),
-    (re.compile(r"integrated|momentary|short_?term", re.I), "Lufs"),
+    (re.compile(r"loudness_?range", re.IGNORECASE), "Lu"),
+    (re.compile(r"true_?peak(?!_?oversample)", re.IGNORECASE), "Dbtp"),
+    (re.compile(r"integrated|momentary|short_?term", re.IGNORECASE), "Lufs"),
 )
 
 
@@ -261,9 +268,9 @@ def _cancellation_violation(record: dict) -> str | None:
     return None
 
 
-_BPM_BOUND = re.compile(r"^bpm_?(min|max)$", re.I)
+_BPM_BOUND = re.compile(r"^bpm_?(min|max)$", re.IGNORECASE)
 _DEFAULT_BPM = {"min": 60.0, "max": 200.0}
-_DOC_DEFAULT = re.compile(r"Default\s+`?(-?\d+(?:\.\d+)?)", re.I)
+_DOC_DEFAULT = re.compile(r"Default\s+`?(-?\d+(?:\.\d+)?)", re.IGNORECASE)
 
 
 def _tempo_bound_violation(r: dict) -> str | None:
@@ -627,7 +634,7 @@ def _payload_channel_violation(r: dict) -> str | None:
 _ERROR_CLASS_REASON = "the error class keeps its Sonare prefix"
 
 
-_Q8 = re.compile(r"q8", re.I)
+_Q8 = re.compile(r"q8", re.IGNORECASE)
 
 
 _RESULT_OWNER = re.compile(r"Result$")
@@ -654,7 +661,7 @@ def _summary_stems(member: str) -> list[str]:
         if "_" in member
         else "".join(w if i == 0 else w.capitalize() for i, w in enumerate(stem))
     )
-    return [base, base + "s", base[:-1] if base.endswith("s") else base]
+    return [base, base + "s", base.removesuffix("s")]
 
 
 def _derived_summary_records(records: list[dict]) -> list[dict]:
@@ -751,8 +758,8 @@ def _error_construction_sites(root: Path) -> list[dict]:
 
 _QUANTUM_LITERAL = re.compile(r"(?<![\w.])128(?![\w.])")
 _QUANTUM_DEFINITION = re.compile(r"AUDIO_WORKLET_RENDER_QUANTUM\s*=\s*128")
-_RING_CONTEXT = re.compile(r"capacity|RingOptions|resolveRing", re.I)
-_MIDI_CONTEXT = re.compile(r"midi|velocity|program|controller", re.I)
+_RING_CONTEXT = re.compile(r"capacity|RingOptions|resolveRing", re.IGNORECASE)
+_MIDI_CONTEXT = re.compile(r"midi|velocity|program|controller", re.IGNORECASE)
 
 
 def _worklet_quantum_sites(root: Path) -> list[dict]:
@@ -819,12 +826,12 @@ def _matrix_violation(r: dict) -> str | None:
 
 
 _C_LEXICAL = re.compile(
-    r"R\"(\w*)\(.*?\)\1\"|//[^\n]*|/\*.*?\*/|\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'", re.S
+    r"R\"(\w*)\(.*?\)\1\"|//[^\n]*|/\*.*?\*/|\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'", re.DOTALL
 )
-_C_ENTRY = re.compile(r"^[A-Za-z_][^\n(){};]*?\b(sonare_\w+)\s*\(", re.M)
+_C_ENTRY = re.compile(r"^[A-Za-z_][^\n(){};]*?\b(sonare_\w+)\s*\(", re.MULTILINE)
 _C_DEFINITION = re.compile(
     r"^[ \t]*(?:[A-Za-z_][^\n;{}()=]*?)\b([A-Za-z_]\w*)\s*\([^;{}]*\)\s*(?:const\s*)?(?:noexcept\s*)?\{",
-    re.M | re.S,
+    re.MULTILINE | re.DOTALL,
 )
 _C_BASE_SETTERS = ("set_last_error", "set_last_error_static", "record_current_exception")
 _C_NOT_A_FUNCTION = frozenset(
@@ -950,6 +957,64 @@ def _c_error_path_violation(r: dict) -> str | None:
     if r["unset"]:
         return f"{len(r['unset'])} non-OK returns set no error message, first {r['unset'][0]}"
     return None
+
+
+_C_ERROR_PATH_PENDING: dict[str, int] = {
+    "src/c_api/core_analysis.cpp": 21,
+    "src/c_api/core_audio.cpp": 21,
+    "src/c_api/core_cqt.cpp": 2,
+    "src/c_api/core_quick.cpp": 19,
+    "src/c_api/features_inverse.cpp": 48,
+    "src/c_api/features_music.cpp": 7,
+    "src/c_api/features_segment.cpp": 14,
+    "src/c_api/features_spectral_pitch.cpp": 44,
+    "src/c_api/features_spectrogram_mel.cpp": 6,
+    "src/c_api/features_streaming.cpp": 24,
+    "src/c_api/mixing_assistant.cpp": 2,
+    "src/c_api/mixing_graph.cpp": 6,
+    "src/c_api/mixing_mixer.cpp": 29,
+    "src/c_api/mixing_strip.cpp": 49,
+    "src/c_api/project_bounce.cpp": 11,
+    "src/c_api/project_core.cpp": 41,
+    "src/c_api/project_edit_clip.cpp": 76,
+    "src/c_api/project_edit_track.cpp": 84,
+    "src/c_api/project_external_stems.cpp": 6,
+    "src/c_api/project_midi.cpp": 42,
+    "src/c_api/project_mir.cpp": 25,
+    "src/c_api/project_part_rig.cpp": 11,
+    "src/c_api/project_soundfont.cpp": 5,
+    "src/c_api/project_timeline.cpp": 1,
+    "src/c_api/project_vocal_edit.cpp": 7,
+    "src/c_api/sonare_c_acoustic.cpp": 7,
+    "src/c_api/sonare_c_assist.cpp": 2,
+    "src/c_api/sonare_c_compat.cpp": 40,
+    "src/c_api/sonare_c_daw.cpp": 44,
+    "src/c_api/sonare_c_editing.cpp": 41,
+    "src/c_api/sonare_c_effects.cpp": 40,
+    "src/c_api/sonare_c_engine.cpp": 64,
+    "src/c_api/sonare_c_engine_capture.cpp": 21,
+    "src/c_api/sonare_c_engine_clips.cpp": 15,
+    "src/c_api/sonare_c_engine_controller.cpp": 19,
+    "src/c_api/sonare_c_engine_midi.cpp": 99,
+    "src/c_api/sonare_c_engine_mixing.cpp": 108,
+    "src/c_api/sonare_c_engine_render.cpp": 37,
+    "src/c_api/sonare_c_engine_timeline.cpp": 1,
+    "src/c_api/sonare_c_mastering_apply.cpp": 10,
+    "src/c_api/sonare_c_mastering_chain.cpp": 4,
+    "src/c_api/sonare_c_mastering_dynamics.cpp": 3,
+    "src/c_api/sonare_c_mastering_eq.cpp": 13,
+    "src/c_api/sonare_c_mastering_preset.cpp": 7,
+    "src/c_api/sonare_c_mastering_repair.cpp": 12,
+    "src/c_api/sonare_c_mastering_streaming.cpp": 25,
+    "src/c_api/sonare_c_memory.cpp": 1,
+    "src/c_api/sonare_c_playback.cpp": 20,
+    "src/c_api/sonare_c_polyphony.cpp": 15,
+    "src/c_api/sonare_c_sample_bank.cpp": 9,
+    "src/c_api/sonare_c_streaming_retune.cpp": 10,
+    "src/c_api/sonare_c_transcribe.cpp": 2,
+    "src/c_api/sonare_c_voice_changer.cpp": 40,
+    "src/c_api/synth_catalog.cpp": 1,
+}
 
 
 RULES: list[Rule] = [
@@ -1361,65 +1426,12 @@ RULES: list[Rule] = [
         population=lambda r: r["kind"] == "c-error-path",
         violation=_c_error_path_violation,
         scan=_c_error_path_files,
+        size=lambda r: len(r["unset"]),
         pending={
             f"c:{path}": "set the error message on each validation return, which records none today"
-            for path in (
-                "src/c_api/core_analysis.cpp",
-                "src/c_api/core_audio.cpp",
-                "src/c_api/core_cqt.cpp",
-                "src/c_api/core_quick.cpp",
-                "src/c_api/features_inverse.cpp",
-                "src/c_api/features_music.cpp",
-                "src/c_api/features_segment.cpp",
-                "src/c_api/features_spectral_pitch.cpp",
-                "src/c_api/features_spectrogram_mel.cpp",
-                "src/c_api/features_streaming.cpp",
-                "src/c_api/mixing_assistant.cpp",
-                "src/c_api/mixing_graph.cpp",
-                "src/c_api/mixing_mixer.cpp",
-                "src/c_api/mixing_strip.cpp",
-                "src/c_api/project_bounce.cpp",
-                "src/c_api/project_core.cpp",
-                "src/c_api/project_edit_clip.cpp",
-                "src/c_api/project_edit_track.cpp",
-                "src/c_api/project_external_stems.cpp",
-                "src/c_api/project_midi.cpp",
-                "src/c_api/project_mir.cpp",
-                "src/c_api/project_part_rig.cpp",
-                "src/c_api/project_soundfont.cpp",
-                "src/c_api/project_timeline.cpp",
-                "src/c_api/project_vocal_edit.cpp",
-                "src/c_api/sonare_c_acoustic.cpp",
-                "src/c_api/sonare_c_assist.cpp",
-                "src/c_api/sonare_c_compat.cpp",
-                "src/c_api/sonare_c_daw.cpp",
-                "src/c_api/sonare_c_editing.cpp",
-                "src/c_api/sonare_c_effects.cpp",
-                "src/c_api/sonare_c_engine.cpp",
-                "src/c_api/sonare_c_engine_capture.cpp",
-                "src/c_api/sonare_c_engine_clips.cpp",
-                "src/c_api/sonare_c_engine_controller.cpp",
-                "src/c_api/sonare_c_engine_midi.cpp",
-                "src/c_api/sonare_c_engine_mixing.cpp",
-                "src/c_api/sonare_c_engine_render.cpp",
-                "src/c_api/sonare_c_engine_timeline.cpp",
-                "src/c_api/sonare_c_mastering_apply.cpp",
-                "src/c_api/sonare_c_mastering_chain.cpp",
-                "src/c_api/sonare_c_mastering_dynamics.cpp",
-                "src/c_api/sonare_c_mastering_eq.cpp",
-                "src/c_api/sonare_c_mastering_preset.cpp",
-                "src/c_api/sonare_c_mastering_repair.cpp",
-                "src/c_api/sonare_c_mastering_streaming.cpp",
-                "src/c_api/sonare_c_memory.cpp",
-                "src/c_api/sonare_c_playback.cpp",
-                "src/c_api/sonare_c_polyphony.cpp",
-                "src/c_api/sonare_c_sample_bank.cpp",
-                "src/c_api/sonare_c_streaming_retune.cpp",
-                "src/c_api/sonare_c_transcribe.cpp",
-                "src/c_api/sonare_c_voice_changer.cpp",
-                "src/c_api/synth_catalog.cpp",
-            )
+            for path in _C_ERROR_PATH_PENDING
         },
+        pending_size={f"c:{path}": n for path, n in _C_ERROR_PATH_PENDING.items()},
     ),
 ]
 
@@ -1441,6 +1453,16 @@ def judge(rule: Rule, records: Iterable[dict]) -> Verdict:
             excused.append(key)
         elif key in rule.pending:
             deferred.append(key)
+            if rule.size is not None:
+                held, measured = rule.pending_size.get(key), rule.size(record)
+                if held != measured:
+                    violations.append(
+                        Finding(
+                            key,
+                            f"pending entry holds {held} sites and the source has {measured}: "
+                            "a fix lowers the count, a new site is a violation",
+                        )
+                    )
         else:
             violations.append(Finding(key, detail))
     hit = set(excused) | set(deferred)

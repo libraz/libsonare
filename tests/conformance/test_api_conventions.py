@@ -802,12 +802,18 @@ class CErrorPathRule(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
 
-    def judge(self, **files: str):
+    def judge(self, held: dict[str, int | None] | None = None, **files: str):
         root = Path(self._tmp.name)
         (root / "src" / "c_api").mkdir(parents=True)
         for name, text in files.items():
             (root / "src" / "c_api" / f"{name}.cpp").write_text(text)
-        r = dataclasses.replace(rule("c-error-path"), pending={}, exempt={})
+        held = held or {}
+        r = dataclasses.replace(
+            rule("c-error-path"),
+            pending={key: "awaits a fix" for key in held},
+            pending_size={key: n for key, n in held.items() if n is not None},
+            exempt={},
+        )
         return check.judge(r, r.scan(root))
 
     def test_clean_tree_passes(self) -> None:
@@ -819,6 +825,26 @@ class CErrorPathRule(unittest.TestCase):
         verdict = self.judge(good=self.GOOD, bad=self.BAD)
         self.assertEqual([f.key for f in verdict.violations], ["c:src/c_api/bad.cpp"])
         self.assertIn("sonare_bad:4", verdict.violations[0].detail)
+
+    def test_pending_entry_holding_the_measured_count_defers(self) -> None:
+        verdict = self.judge({"c:src/c_api/bad.cpp": 1}, bad=self.BAD)
+        self.assertEqual(verdict.deferred, ["c:src/c_api/bad.cpp"])
+        self.assertFalse(verdict.failed)
+
+    def test_pending_count_above_the_source_fails_until_lowered(self) -> None:
+        verdict = self.judge({"c:src/c_api/bad.cpp": 2}, bad=self.BAD)
+        self.assertEqual([f.key for f in verdict.violations], ["c:src/c_api/bad.cpp"])
+        self.assertIn("holds 2 sites and the source has 1", verdict.violations[0].detail)
+
+    def test_new_site_in_a_pending_file_fails(self) -> None:
+        grown = self.BAD.replace("  return SONARE_OK;", "  if (*out == 3) return SONARE_ERROR_INVALID_PARAMETER;\n  return SONARE_OK;")
+        verdict = self.judge({"c:src/c_api/bad.cpp": 1}, bad=grown)
+        self.assertEqual([f.key for f in verdict.violations], ["c:src/c_api/bad.cpp"])
+        self.assertIn("source has 2", verdict.violations[0].detail)
+
+    def test_pending_entry_without_a_count_fails(self) -> None:
+        verdict = self.judge({"c:src/c_api/bad.cpp": None}, bad=self.BAD)
+        self.assertTrue(verdict.failed)
 
 
 class Framework(unittest.TestCase):
