@@ -3,10 +3,14 @@ import { addon } from './native.js';
 import type { AnalysisChord, Chord } from './types_analysis.js';
 import type { ProjectChordSymbol, ProjectKeyMode } from './types_project.js';
 
+/** The native layer's "bass is the root" value, which the result spells as an absent key. */
+const NO_SLASH_BASS = 255;
+
 /** The annotation fields {@link chordSymbolFromAnalysis} fills; spreads into a {@link ProjectChordSymbol}. */
 export type ChordSymbolFields = Required<
-  Pick<ProjectChordSymbol, 'rootPc' | 'quality' | 'extensions' | 'slashBassPc'>
->;
+  Pick<ProjectChordSymbol, 'rootPc' | 'quality' | 'extensions'>
+> &
+  Pick<ProjectChordSymbol, 'slashBassPc'>;
 
 /**
  * Convert a chord from analysis into the root, quality, extensions and slash bass
@@ -15,7 +19,8 @@ export type ChordSymbolFields = Required<
  * Analysis and annotations number chord qualities differently, so the quality is
  * mapped through the library's own table rather than by index. The result spreads
  * into an entry for {@link Project.annotateChords}; the caller supplies
- * `startPpq` and `endPpq`.
+ * `startPpq` and `endPpq`. `slashBassPc` is present only when the bass differs
+ * from the root.
  *
  * @param chord A {@link Chord} or an {@link AnalysisChord}: `root` and `bass` are pitch
  *        classes and `quality` is a {@link ChordQuality} token.
@@ -28,8 +33,15 @@ export type ChordSymbolFields = Required<
  * ```
  */
 export function chordSymbolFromAnalysis(chord: Chord | AnalysisChord): ChordSymbolFields {
-  const native = addon.chordSymbolFromAnalysis(chord);
-  return { ...native, quality: tokenName(CHORD_QUALITY, native.quality, 'chord quality') };
+  const { slashBassPc, ...native } = addon.chordSymbolFromAnalysis(chord);
+  const fields: ChordSymbolFields = {
+    ...native,
+    quality: tokenName(CHORD_QUALITY, native.quality, 'chord quality'),
+  };
+  if (slashBassPc !== NO_SLASH_BASS) {
+    fields.slashBassPc = slashBassPc;
+  }
+  return fields;
 }
 
 /**

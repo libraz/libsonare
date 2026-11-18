@@ -48,7 +48,8 @@ describe('chordSymbolFromAnalysis', () => {
     'maps %s to annotation quality %s with extensions %j',
     (_name, quality, mapped, extensions) => {
       const out = chordSymbolFromAnalysis(chord(7, quality));
-      expect(out).toEqual({ rootPc: 7, quality: mapped, extensions, slashBassPc: 255 });
+      expect(out).toEqual({ rootPc: 7, quality: mapped, extensions });
+      expect(out).not.toHaveProperty('slashBassPc');
     },
   );
 

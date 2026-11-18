@@ -3,6 +3,9 @@ import { projectChordQualityName, projectKeyModeName, projectModule } from './pr
 import type { ProjectChordQuality, ProjectKeyMode } from './project_types.js';
 import type { Chord, KeyMode } from './public_types.js';
 
+/** The native layer's "bass is the root" value, which the result spells as an absent key. */
+const NO_SLASH_BASS = 255;
+
 /**
  * The annotation fields of one chord, named as {@link ProjectChordSymbol} names
  * them so the result spreads into an {@link Project.annotateChords} entry.
@@ -14,8 +17,8 @@ export interface ChordSymbolFields {
   quality: ProjectChordQuality;
   /** Extensions as scale degrees, e.g. `[7, 9, 13]` for a dominant 13th. */
   extensions: number[];
-  /** Slash-bass pitch class 0..11, or 255 when the bass is the root. */
-  slashBassPc: number;
+  /** Slash-bass pitch class 0..11; absent when the bass is the root. */
+  slashBassPc?: number;
 }
 
 /**
@@ -29,7 +32,8 @@ export interface ChordSymbolFields {
  *
  * @param chord - An analysis chord; `root`, `bass` and `quality` are read, as a
  *   pitch class 0-11 and a chord quality token
- * @returns `{ rootPc, quality, extensions, slashBassPc }`
+ * @returns `{ rootPc, quality, extensions }`, plus `slashBassPc` when the bass
+ *   differs from the root
  * @throws {TypeError} when `chord` is not an object
  * @throws {RangeError} naming `root`, `bass` or `quality` for an unrecognised value
  *
@@ -50,8 +54,12 @@ export function chordSymbolFromAnalysis(
   const root = pitchClassOrdinal(chord.root, 'root');
   const bass = pitchClassOrdinal(chord.bass, 'bass');
   const quality = chordQualityOrdinal(chord.quality, 'quality');
-  const native = projectModule().chordSymbolFromAnalysis(root, quality, bass);
-  return { ...native, quality: projectChordQualityName(native.quality) };
+  const { slashBassPc, ...native } = projectModule().chordSymbolFromAnalysis(root, quality, bass);
+  const fields: ChordSymbolFields = { ...native, quality: projectChordQualityName(native.quality) };
+  if (slashBassPc !== NO_SLASH_BASS) {
+    fields.slashBassPc = slashBassPc;
+  }
+  return fields;
 }
 
 /**

@@ -49,7 +49,6 @@ describe('chordSymbolFromAnalysis', () => {
       rootPc: 2,
       quality,
       extensions,
-      slashBassPc: 255,
     });
   });
 
@@ -58,13 +57,12 @@ describe('chordSymbolFromAnalysis', () => {
       rootPc: 6,
       quality: 'unknown',
       extensions: [],
-      slashBassPc: 255,
     });
   });
 
   it('reports a slash bass only when it differs from the root', () => {
     expect(chordSymbolFromAnalysis(chord('major', 'C', 'E')).slashBassPc).toBe(4);
-    expect(chordSymbolFromAnalysis(chord('major', 'C', 'C')).slashBassPc).toBe(255);
+    expect(chordSymbolFromAnalysis(chord('major', 'C', 'C'))).not.toHaveProperty('slashBassPc');
   });
 
   it('accepts an AnalysisChord with ordinals and agrees with the string form', () => {
