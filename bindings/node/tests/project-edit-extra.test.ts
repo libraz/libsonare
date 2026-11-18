@@ -502,7 +502,6 @@ describe('Project edit ops (new bindings)', () => {
     expect(targetParamId).toBe(1);
 
     const afterAdd = project.toJson();
-    expect(afterAdd).toContain('"version":1');
     expect(afterAdd).not.toContain('"target_kind"');
     project.editAutomationLane(track, targetParamId, {
       targetParamId: 1,
@@ -520,7 +519,7 @@ describe('Project edit ops (new bindings)', () => {
     project.destroy();
   });
 
-  it('adds typed fader and pan lanes and round-trips schema v2 JSON', () => {
+  it('adds typed fader and pan lanes and round-trips them through the project JSON', () => {
     const project = new Project();
     const track = project.addTrack({ kind: 'audio' });
     project.addAutomationLane(track, {
@@ -535,7 +534,6 @@ describe('Project edit ops (new bindings)', () => {
     });
 
     const json = project.toJson();
-    expect(json).toContain('"version":2');
     expect(json).toContain('"target_kind":1');
     expect(json).toContain('"target_kind":2');
 
@@ -634,7 +632,6 @@ describe('Project edit ops (new bindings)', () => {
       points: [{ ppq: 0, value: -6 }],
     });
     const json = project.toJson();
-    expect(json).toContain('"version":2');
     expect(json).toContain('"target_kind":1');
     project.destroy();
   });

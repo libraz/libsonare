@@ -316,8 +316,18 @@ function makeTruncatedSmf(): Buffer {
   return out;
 }
 
+/** A current document whose one clip names a source the document does not carry. */
 function danglingSourceJson(): string {
-  return '{"version":1,"sample_rate":48000,"tracks":[{"id":1,"name":"audio","kind":0,"channel_strip_ref":"","output_target":"","midi_destination_id":0,"automation_lanes":[]}],"clips":[{"id":1,"track_id":1,"source_id":99,"start_ppq":0,"length_ppq":1,"source_offset_ppq":0,"gain":1,"fade_in":{"length_ppq":0,"curve":0},"fade_out":{"length_ppq":0,"curve":0},"loop_mode":0,"loop_length_ppq":0,"warp_ref_id":0,"warp_mode":0}]}';
+  const project = new Project();
+  try {
+    const trackId = project.addTrack({ kind: 'audio', name: 'audio' });
+    project.addClip({ trackId, startPpq: 0, lengthPpq: 1, sourceUri: 'asset://dangling.wav' });
+    const document = JSON.parse(project.toJson());
+    document.clips[0].source_id = 99;
+    return JSON.stringify(document);
+  } finally {
+    project.destroy();
+  }
 }
 
 function accelerando(sampleRate = 22050, startBpm = 100, endBpm = 160, seconds = 24): Float32Array {
@@ -378,7 +388,10 @@ describe('Project native binding', () => {
   });
 
   it('refuses a fractional project rate with the C code, on load and on set', () => {
-    const document = JSON.stringify({ version: 1, sample_rate: 44100.5, tracks: [], clips: [] });
+    const current = new Project();
+    const parsed = JSON.parse(current.toJson());
+    current.destroy();
+    const document = JSON.stringify({ ...parsed, sample_rate: 44100.5 });
     expect(() => Project.fromJson(document)).toThrow(
       expect.objectContaining({ code: ErrorCode.InvalidFormat }),
     );

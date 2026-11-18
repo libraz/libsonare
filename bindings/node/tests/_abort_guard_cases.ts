@@ -579,8 +579,8 @@ export const CASES: AbortGuardCase[] = [
         p.addAutomationLane(trackId, {
           targetParamId: 1,
           points: [
-            { ppq: 0, value: 0, curve: {} },
-            { ppq: 1, value: 1, curve: {} },
+            { ppq: 0, value: 0, curveToNext: {} },
+            { ppq: 1, value: 1, curveToNext: {} },
           ],
         });
       }),

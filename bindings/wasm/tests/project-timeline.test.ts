@@ -22,8 +22,19 @@ const FRAMES = BLOCK_SIZE * 500;
 const DESTINATION = 9;
 const SYNTH = { waveform: 'saw', gain: 0.3, attackMs: 1, releaseMs: 20, polyphony: 4 } as const;
 
-const DANGLING_SOURCE_JSON =
-  '{"version":1,"sample_rate":48000,"tracks":[{"id":1,"name":"audio","kind":0,"channel_strip_ref":"","output_target":"","midi_destination_id":0,"automation_lanes":[]}],"clips":[{"id":1,"track_id":1,"source_id":99,"start_ppq":0,"length_ppq":1,"source_offset_ppq":0,"gain":1,"fade_in":{"length_ppq":0,"curve":0},"fade_out":{"length_ppq":0,"curve":0},"loop_mode":0,"loop_length_ppq":0,"warp_ref_id":0,"warp_mode":0}]}';
+/** A current document whose one clip names a source the document does not carry. */
+function danglingSourceJson(): string {
+  const project = new Project();
+  try {
+    const trackId = project.addTrack({ kind: 'audio', name: 'audio' });
+    project.addClip({ trackId, startPpq: 0, lengthPpq: 1, sourceUri: 'asset://dangling.wav' });
+    const document = JSON.parse(project.toJson());
+    document.clips[0].source_id = 99;
+    return JSON.stringify(document);
+  } finally {
+    project.destroy();
+  }
+}
 
 /** A strip with one ducker insert, the insert a lane sidechain binding keys. */
 function duckerStripJson(trackId: number): string {
@@ -186,7 +197,7 @@ describe('Project timeline applied to a RealtimeEngine', () => {
   });
 
   it('reports a failed compile as its diagnostics with no timeline', () => {
-    const { project, diagnostics } = Project.fromJsonWithDiagnostics(DANGLING_SOURCE_JSON);
+    const { project, diagnostics } = Project.fromJsonWithDiagnostics(danglingSourceJson());
     try {
       expect(diagnostics).toContain('dangling_clip_source');
       const result = project.compileTimeline();
