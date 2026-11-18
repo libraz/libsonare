@@ -3899,6 +3899,7 @@ export interface WasmRealtimeVoiceChanger {
   setPodConfig: (config: WasmRealtimeVoiceChangerPodConfig) => void;
   configJson: () => string;
   latencySamples: () => number;
+  maxBlockSize: () => number;
   nonFiniteDiscardCount: () => number;
   bufferGeneration: () => number;
   processMono: (samples: Float32Array) => Float32Array;

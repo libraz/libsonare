@@ -204,6 +204,11 @@ export class RealtimeVoiceChanger {
     return this.changer.latencySamples();
   }
 
+  /** Largest block a process call accepts, as the native side resolved it (the library default when `maxBlockSize` was omitted). */
+  get maxBlockSize(): number {
+    return this.changer.maxBlockSize();
+  }
+
   /**
    * Blocks in which the chain discarded its own state because a
    * non-finite value had reached it.

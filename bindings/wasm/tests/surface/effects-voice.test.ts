@@ -150,6 +150,27 @@ describe('voice changer surface', () => {
       }
     });
 
+    it('reports the library default block size it accepts when maxBlockSize is omitted', () => {
+      const c = new RealtimeVoiceChanger({ sampleRate, numChannels: 1 });
+      try {
+        const max = c.maxBlockSize;
+        expect(max).toBeGreaterThan(0);
+        expect(c.processMono(new Float32Array(max)).length).toBe(max);
+        expect(() => c.processMono(new Float32Array(max + 1))).toThrow(RangeError);
+      } finally {
+        c.destroy();
+      }
+    });
+
+    it('reports the given block size as maxBlockSize', () => {
+      const c = changer();
+      try {
+        expect(c.maxBlockSize).toBe(BLOCK);
+      } finally {
+        c.destroy();
+      }
+    });
+
     it('treats null as absent for the optional options', () => {
       const c = new RealtimeVoiceChanger({
         sampleRate,
