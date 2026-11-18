@@ -536,12 +536,6 @@ python = [
 # (f0_hz, target_midi, hop_length, voiced?, voiced_prob?) and DERIVES n_frames
 # from the f0_hz array length — passing both the contour array and a redundant
 # frame count would let them disagree. Remapped to C order in the ctypes wrapper.
-# pitch_correct_timevarying (python): C is (f0_hz, voiced_prob, voiced, n_frames,
-# hop_length, config). The facade exposes (f0_hz, sample_rate, hop_length, ...),
-# DERIVES n_frames from the f0_hz array length, then folds the
-# SonarePitchCorrectionConfig fields and the voiced / voiced_prob companion
-# arrays into keyword args. Same ergonomic options-fold + array-length derivation
-# as spectral_edit. Remapped to C order internally. Not order drift.
 # midi_cc_learn (python): C is (events, count, param_id, min_value, max_value,
 # min_movement). The facade DERIVES `count` from the events array length and keeps
 # the range params as keyword args. Passing both the array and a redundant count
@@ -549,43 +543,17 @@ python = [
 # not order drift. Node and WASM carry no entry: their request object declares no
 # order.
 # midi_route_events (python): C is (events, count, config). The facade exposes
-# (events, config) and DERIVES `count` from the events array length — same
-# array-length derivation as spectral_edit's ops. Node and WASM carry no entry: their
+# (events, config) and DERIVES `count` from the events array length. Node and WASM carry no entry: their
 # trailing options bag is structural, so what reaches the comparison is a strict
 # prefix of the C order and there is nothing left to excuse. (The facade method is
 # `midiRouteEvents` / `route_midi_events`, mapped to this C key.)
-# spectral_edit (python): C is (config, ops, n_ops). The facade exposes (ops, ...)
-# and DERIVES `n_ops` from the ops array length, then folds the
-# SonareSpectralEditConfig fields into keyword args. Passing both the ops array
-# and a redundant count would let them disagree; same ergonomic options-fold +
-# array-length derivation already accepted for midi_route_events. Remapped to C
-# order in the ctypes wrapper. Not order drift.
-# note_stretch / note_move (python): the facade appends the `onset_sec` /
-# `offset_sec` (and `target_onset_sec`) keyword-only alternatives to the C sample
-# parameters; each pair is mutually exclusive and converted to samples at the
-# call's rate before the C call. Binding-side seconds, not order drift.
-# extract_notes (python): C is (f0_hz, voiced_prob, voiced, n_frames, frame_rate,
-# config). The facade exposes (f0_hz, frame_rate, ...) and DERIVES n_frames from
-# the f0_hz array length, then folds the SonareNoteExtractorConfig fields and the
-# voiced / voiced_prob companion arrays into keyword args. Same ergonomic
-# options-fold + array-length derivation already accepted for
-# pitch_correct_timevarying, whose C signature this one mirrors. Remapped to C
-# order in the ctypes wrapper. Not order drift.
-# render_notes / decompose_note_pitch / split_note / merge_notes (python): the
-# same two folds as extract_notes, on the four entry points that carry a note
-# set. Each DERIVES `n_frames` from the f0_hz array length and folds the
-# SonareNoteExtractorConfig fields and the voiced / voiced_prob companions into
-# keyword args. The three that take a note set also drop `envelopes`: the C
-# signature passes one pooled array because SonareNoteEdit indexes it by offset,
+# split_note / merge_notes (python): C is (samples, length, sample_rate, f0_hz,
+# voiced_prob, voiced, n_frames, frame_rate, ...). The facade DERIVES n_frames from
+# the f0_hz array length and folds the SonareNoteExtractorConfig fields and the
+# voiced / voiced_prob companions into keyword args. It also drops `envelopes`: the
+# C signature passes one pooled array because SonareNoteEdit indexes it by offset,
 # while the facade hands each note its own envelope, so there is no pool for the
 # argument to name. Same fold recorded for note_edit under [record].
-# render_percussive_events (python): C is (events, count, config). The facade
-# exposes (events, ...) and DERIVES `count` from the events sequence length, then
-# folds the SonarePercussiveRenderConfig fields into keyword args. Only this one
-# of the pair flags: extract takes no companion count, so its C shape already
-# matches. There is no pooled array here -- an event carries three scalars and no
-# per-frame curve -- so the envelope fold the note set needed has no counterpart.
-# Remapped to C order in the ctypes wrapper. Not order drift.
 # split_silence_common (python): C is (signals, signal_count, lengths, top_db,
 # frame_length, hop_length). The facade takes one sequence of sequences and
 # DERIVES both the count and the per-signal `lengths` array from it — a Python
@@ -594,16 +562,6 @@ python = [
 # as midi_route_events, on a ragged input. Node and WASM carry no entry: their
 # request object declares no order, so nothing reaches the comparison.
 #
-# note_targets_from_smf (python): C is (bytes, len). The facade spells the buffer
-# `data` and derives the length from it, so only `track_index` is left to compare
-# and the two sides disagree on a count rather than an order. `data` is what this
-# project's Python already calls an in-memory file buffer — Project.import_smf and
-# import_clip_file both take `data` — and `bytes` cannot be borrowed from the C
-# side because it is a Python builtin, so shadowing it in a published signature
-# would be worse than the rename. The C side keeps `bytes` to match its own
-# sibling, sonare_project_import_smf. Ergonomic rename plus the usual
-# array-length derivation; Node and WASM carry no entry, their request object
-# declares no order.
 # downmix (all facades): C is (channels, frames, channel_count, target_layout) over one
 # packed planar block. Every facade takes (channels, target_layout) with one array
 # per channel and DERIVES frames and channel_count from them.
@@ -632,11 +590,8 @@ wasm = [
 python = [
   # chord_functions: Python takes (chords, key) and derives the count from the list
   # and splits `key` into the C root/mode pair; the C out-arrays become the added
-  # roman/function fields. room_geometry_from_estimate: the keyword-only source and
-  # listener are the placement the estimate lacks, and the C out-struct becomes the
-  # returned mapping.
+  # roman/function fields.
   "chord_functions",
-  "room_geometry_from_estimate",
   "detect_key_candidates",
   "strip_meter",
   "tempogram",
@@ -646,27 +601,16 @@ python = [
   "analyze_melody",
   "voice_change",
   "pitch_correct_to_midi_timevarying",
-  "pitch_correct_timevarying",
   "midi_cc_learn",
   "midi_route_events",
-  "spectral_edit",
-  "note_stretch",
-  "note_move",
-  "extract_notes",
-  "render_notes",
-  "decompose_note_pitch",
   "split_note",
   "merge_notes",
-  "note_targets_from_smf",
-  "render_percussive_events",
   "split_silence_common",
   "mastering_ab_match_loudness", # Python derives both C lengths from array length, folds the optional out_match into `with_match`, and takes reference_sample_rate as a keyword that defaults to sample_rate
   "mastering_ab_match_loudness_stereo", # Python derives both stereo lengths, folds optional out_match into with_match and defaults reference_sample_rate, as in the mono API
   "align_take_to_reference", # Python derives both C lengths from array length and folds the SonareTakeAlignConfig fields into keyword args
   "downmix", # Python derives frames and channel_count from the channel arrays
-  "mastering_repair_analyze", # Python folds the C request JSON into the prefer_streaming_safe keyword
   "chord_symbol_from_analysis", # the facade folds root/quality/bass into one analysis chord object and sizes the extensions array itself
-  "mastering_repair_apply", # Python serializes the `stages` mappings into stages_json and folds the cancel callback pair into `cancel`
 ]
 
 # ---------------------------------------------------------------------------
