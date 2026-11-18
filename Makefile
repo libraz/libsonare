@@ -935,6 +935,8 @@ conformance-checks:
 	$(CHECK) python3 -m unittest tests/conformance/test_mastering_param_surfaces.py
 	$(CHECK) python3 tests/conformance/check_result_schema_surfaces.py
 	$(CHECK) python3 -m unittest tests/conformance/test_result_schema_surfaces.py
+	$(CHECK) python3 tests/conformance/check_facade_default_literals.py
+	$(CHECK) python3 -m unittest tests/conformance/test_facade_default_literals.py
 	$(CHECK) python3 -m unittest tests/conformance/test_bank_versions.py
 	$(CHECK) python3 tests/conformance/check_bank_policy.py
 	$(CHECK) python3 -m unittest tests/conformance/test_bank_policy.py
