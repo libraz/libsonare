@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   type EqPhaseMode,
@@ -360,16 +359,6 @@ describe('native still uses the old spelling', () => {
       expect(raw.latencySamples()).toBeGreaterThan(0);
     } finally {
       raw.destroy();
-    }
-  });
-
-  it('placement names are still capitalised in the native source', () => {
-    const source = readFileSync(
-      new URL('../../src/addon/sonare_wrap_streaming.cpp', import.meta.url),
-      'utf8',
-    );
-    for (const name of ['"Stereo"']) {
-      expect(source).toContain(name);
     }
   });
 
