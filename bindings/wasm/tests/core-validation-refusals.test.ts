@@ -6,6 +6,7 @@ import {
   mfccToAudio,
   mfccToMel,
   pitchShift,
+  resample,
   StreamingEqualizer,
   StreamingMasteringChain,
   StreamingRetune,
@@ -62,6 +63,19 @@ type RetuneCase = {
   message?: string;
 };
 type RetuneRoute = { accepted: RetuneCase[]; refused: RetuneCase[] };
+type ResampleCase = {
+  id: string;
+  src_sr: number;
+  target_sr: number;
+  nan_at?: number;
+  cause?: Cause;
+  message?: string;
+};
+type ResampleRoute = {
+  input: { length: number; fill: number };
+  accepted: ResampleCase[];
+  refused: ResampleCase[];
+};
 
 const corpus = JSON.parse(
   readFileSync(
@@ -76,6 +90,7 @@ const corpus = JSON.parse(
   streaming_mastering_chain_prepare: RateBlockRoute;
   equalizer_prepare: EqualizerRoute;
   streaming_retune_prepare: RetuneRoute;
+  resample: ResampleRoute;
 };
 
 const errorClassFor: Record<Cause, typeof RangeError> = { argument: RangeError };
@@ -92,6 +107,7 @@ type RawInverse = {
     nMels: number;
   };
   mfccToAudio(...args: unknown[]): Float32Array;
+  resample(samples: Float32Array, srcSr: number, targetSr: number): Float32Array;
   melToAudio(...args: unknown[]): Float32Array;
   timeStretchEx(...args: unknown[]): Float32Array;
   pitchShiftEx(...args: unknown[]): Float32Array;
@@ -388,5 +404,48 @@ describe('streaming retune prepare refusals come from the core', () => {
       retune.destroy();
       handle.delete();
     }
+  });
+});
+
+describe('resample refusals come from the core', () => {
+  const { input, accepted, refused } = corpus.resample;
+  const raw = () => getSonareModule() as unknown as RawInverse;
+  const samplesFor = ({ nan_at }: ResampleCase) => {
+    const samples = new Float32Array(input.length).fill(input.fill);
+    if (nan_at !== undefined) {
+      samples[nan_at] = Number.NaN;
+    }
+    return samples;
+  };
+
+  it.each(accepted)('accepts $id', (item) => {
+    const samples = samplesFor(item);
+    expect(resample(samples, item.src_sr, item.target_sr).length).toBeGreaterThan(0);
+    expect(raw().resample(samples, item.src_sr, item.target_sr).length).toBeGreaterThan(0);
+  });
+
+  it.each(refused)('refuses $id', (item) => {
+    const kind = errorClassFor[item.cause as Cause];
+    const text = literal(item.message as string);
+    const samples = samplesFor(item);
+    const calls: Array<() => unknown> = [
+      () => resample(samples, item.src_sr, item.target_sr),
+      () => raw().resample(samples, item.src_sr, item.target_sr),
+    ];
+    for (const call of calls) {
+      expect(expectRefusalOf(call, kind).message).toMatch(text);
+    }
+  });
+});
+
+describe('resample takes no validate option', () => {
+  it('refuses validate as an unknown request key', () => {
+    const samples = new Float32Array(480).fill(0.25);
+    const error = expectRefusalOf(
+      () =>
+        resample({ samples, sampleRate: 48000, targetSampleRate: 16000, validate: false } as never),
+      TypeError,
+    );
+    expect(error.message).toMatch(/validate/);
   });
 });

@@ -4,6 +4,7 @@
 #include <array>
 #include <climits>
 #include <cmath>
+#include <string>
 
 #include "CDSPResampler.h"
 #include "util/exception.h"
@@ -96,6 +97,31 @@ std::vector<float> resample(const float* samples, size_t size, int src_sr, int t
   }
 
   return result;
+}
+
+std::vector<float> resample_checked(const float* samples, size_t size, int src_sr, int target_sr) {
+  const std::string range =
+      "[" + std::to_string(kMinAudioSampleRate) + ", " + std::to_string(kMaxAudioSampleRate) + "]";
+  if (target_sr < kMinAudioSampleRate || target_sr > kMaxAudioSampleRate) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "resample: target_sr must be within " + range);
+  }
+  if (src_sr < kMinAudioSampleRate || src_sr > kMaxAudioSampleRate) {
+    throw SonareException(ErrorCode::InvalidParameter, "resample: src_sr must be within " + range);
+  }
+  if (size == 0) {
+    return {};
+  }
+  validate_offline_audio_input(samples, size, src_sr);
+  // Computed in double so the product cannot overflow before the comparison.
+  const double projected =
+      static_cast<double>(size) * static_cast<double>(target_sr) / static_cast<double>(src_sr);
+  if (projected > static_cast<double>(kMaxAudioBufferSize)) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "resample: projected output length exceeds the maximum audio buffer size");
+  }
+  return resample(samples, size, src_sr, target_sr);
 }
 
 std::vector<float> resample_impulse_response(const float* samples, size_t size, int src_sr,

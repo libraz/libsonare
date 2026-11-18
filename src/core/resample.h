@@ -20,11 +20,25 @@ namespace sonare {
 Audio resample(const Audio& audio, int target_sr);
 
 /// @brief Resamples raw samples to a target sample rate.
+/// @details Internal engine; untrusted input goes through resample_checked.
 /// @param samples Input samples
 /// @param src_sr Source sample rate in Hz
 /// @param target_sr Target sample rate in Hz
 /// @return Resampled samples
 std::vector<float> resample(const float* samples, size_t size, int src_sr, int target_sr);
+
+/// @brief Resamples raw samples after validating them as untrusted input.
+/// @details The entry for caller-supplied input (C ABI, Node addon, WASM embind). Both rates must
+///          lie within [kMinAudioSampleRate, kMaxAudioSampleRate], the samples must be finite, and
+///          the projected output length must not exceed kMaxAudioBufferSize. An empty input
+///          returns an empty vector once the rates are accepted.
+/// @param samples Input samples
+/// @param size Number of input samples
+/// @param src_sr Source sample rate in Hz
+/// @param target_sr Target sample rate in Hz
+/// @return Resampled samples
+/// @throws SonareException with ErrorCode::InvalidParameter on any refused argument
+std::vector<float> resample_checked(const float* samples, size_t size, int src_sr, int target_sr);
 
 /// @brief Resamples a finite impulse response while preserving its DC gain.
 /// @param samples Input FIR coefficients.

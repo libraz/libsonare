@@ -1,13 +1,8 @@
 import { addon } from './native.js';
-import {
-  assertAudioInput,
-  assertSampleRate,
-  requestObject,
-  type ValidateOptions,
-} from './validation.js';
+import { assertAudioSamples, assertInt32, requestObject } from './validation.js';
 
 /** Inputs for {@link resample}. */
-export interface ResampleRequest extends ValidateOptions {
+export interface ResampleRequest {
   /** Mono audio to resample. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -20,7 +15,8 @@ export interface ResampleRequest extends ValidateOptions {
  * Resample mono audio to another sample rate.
  *
  * @throws TypeError for a wrong-typed argument, an omitted rate, or an argument
- *   after a request object; RangeError for a rate outside the supported range.
+ *   after a request object; RangeError for a rate that is not an integer or lies outside the
+ *   supported range.
  */
 export function resample(request: ResampleRequest): Float32Array;
 export function resample(
@@ -42,7 +38,9 @@ export function resample(...args: unknown[]): Float32Array {
     }
     request = requestObject('resample', first as ResampleRequest);
   }
-  assertAudioInput('resample', request.samples, request.sampleRate, request);
-  assertSampleRate('resample', request.targetSampleRate, 'targetSampleRate');
+  // Type and emptiness only: rate range and non-finite samples are the core's to refuse.
+  assertAudioSamples('resample', request.samples, { validate: false });
+  assertInt32('resample', request.sampleRate, 'sampleRate');
+  assertInt32('resample', request.targetSampleRate, 'targetSampleRate');
   return addon.resample(request.samples, request.sampleRate, request.targetSampleRate);
 }

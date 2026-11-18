@@ -5,12 +5,14 @@
 #include <fstream>
 #include <functional>
 #include <iterator>
+#include <limits>
 #include <string>
 #include <vector>
 
 #if defined(SONARE_WITH_VOICE_CHANGER)
 #include "editing/voice_changer/streaming_retune.h"
 #endif
+#include "core/resample.h"
 #include "effects/native_spectral_stretch.h"
 #include "effects/pitch_shift.h"
 #include "effects/time_stretch.h"
@@ -366,3 +368,65 @@ TEST_CASE("streaming retune prepare refusals are owned by the core function",
   }
 }
 #endif  // defined(SONARE_WITH_VOICE_CHANGER)
+
+namespace {
+
+std::vector<float> resample_input(const Value& route, const Value& item) {
+  const Value& input = route["input"];
+  std::vector<float> samples(static_cast<size_t>(input["length"].as_number()),
+                             static_cast<float>(input["fill"].as_number()));
+  if (item.contains("nan_at")) {
+    samples[static_cast<size_t>(item["nan_at"].as_number())] =
+        std::numeric_limits<float>::quiet_NaN();
+  }
+  return samples;
+}
+
+}  // namespace
+
+TEST_CASE("resample refusals are owned by the core function", "[conformance][core_validation]") {
+  const Value corpus = load_refusal_corpus();
+  const Value& route = corpus["resample"];
+
+  for (const auto& item : route["accepted"].as_array()) {
+    const int src_sr = static_cast<int>(item["src_sr"].as_number());
+    const int target_sr = static_cast<int>(item["target_sr"].as_number());
+    const std::vector<float> samples = resample_input(route, item);
+    INFO(item["id"].as_string());
+    CHECK_FALSE(
+        sonare::resample_checked(samples.data(), samples.size(), src_sr, target_sr).empty());
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_resample(samples.data(), samples.size(), src_sr, target_sr, &out, &out_length) ==
+            SONARE_OK);
+    CHECK(out_length > 0);
+    sonare_free_floats(out);
+  }
+
+  for (const auto& item : route["refused"].as_array()) {
+    const int src_sr = static_cast<int>(item["src_sr"].as_number());
+    const int target_sr = static_cast<int>(item["target_sr"].as_number());
+    const std::string message = item["message"].as_string();
+    const std::vector<float> samples = resample_input(route, item);
+    INFO(item["id"].as_string());
+    REQUIRE(item["cause"].as_string() == "argument");
+
+    require_argument_refusal(
+        [&] { sonare::resample_checked(samples.data(), samples.size(), src_sr, target_sr); },
+        message);
+
+    float* out = nullptr;
+    size_t out_length = 0;
+    CHECK(sonare_resample(samples.data(), samples.size(), src_sr, target_sr, &out, &out_length) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK_THAT(last_error_message(), Catch::Matchers::ContainsSubstring(message));
+  }
+}
+
+TEST_CASE("the resample engine still serves internal rates the checked entry refuses",
+          "[conformance][core_validation]") {
+  const std::vector<float> samples(4800, 0.25f);
+  CHECK_FALSE(sonare::resample(samples.data(), samples.size(), 48000, 768000).empty());
+  CHECK_THROWS_AS(sonare::resample_checked(samples.data(), samples.size(), 48000, 768000),
+                  sonare::SonareException);
+}

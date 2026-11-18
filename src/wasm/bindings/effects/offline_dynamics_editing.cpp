@@ -261,16 +261,7 @@ val js_resample(val samples, const val& src_sr_val, const val& target_sr_val) {
   const int src_sr = checkedIntFromVal(src_sr_val, "srcSr");
   const int target_sr = checkedIntFromVal(target_sr_val, "targetSr");
   std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), src_sr);
-  if (target_sr < kMinAudioSampleRate || target_sr > kMaxAudioSampleRate) {
-    throw WasmRangeError("resample: target sample rate is out of range");
-  }
-  const double projected = static_cast<double>(data.size()) * static_cast<double>(target_sr) /
-                           static_cast<double>(src_sr);
-  if (projected > static_cast<double>(kMaxAudioBufferSize)) {
-    throw WasmRangeError("resample: output buffer would be too large");
-  }
-  std::vector<float> result = resample(data.data(), data.size(), src_sr, target_sr);
+  std::vector<float> result = resample_checked(data.data(), data.size(), src_sr, target_sr);
   return vectorToFloat32Array(result);
 }
 

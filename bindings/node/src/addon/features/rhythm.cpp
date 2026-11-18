@@ -328,7 +328,7 @@ Napi::Value SonareWrap::Resample(const Napi::CallbackInfo& info) {
   int src_sr = node_narrow_int(env, info[1], "srcSr");
   int target_sr = node_narrow_int(env, info[2], "targetSr");
 
-  std::vector<float> result = sonare::resample(data, length, src_sr, target_sr);
+  std::vector<float> result = sonare::resample_checked(data, length, src_sr, target_sr);
   return VecToFloat32(env, result);
   SONARE_NODE_CATCH(env)
 }

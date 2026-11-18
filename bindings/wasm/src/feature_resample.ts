@@ -1,10 +1,5 @@
 import { getSonareModule } from './module_state.js';
-import {
-  assertAudioInput,
-  assertSampleRate,
-  requestOnly,
-  type ValidateOptions,
-} from './validation.js';
+import { assertAudioSamples, assertInt32, requestOnly } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -15,7 +10,7 @@ function requireModule() {
 // ============================================================================
 
 /** Inputs for {@link resample}. */
-export interface ResampleRequest extends ValidateOptions {
+export interface ResampleRequest {
   /** Mono audio to resample. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -31,7 +26,7 @@ export interface ResampleRequest extends ValidateOptions {
  * @param sampleRate - Sample rate of `samples` in Hz
  * @param targetSampleRate - Sample rate to resample to, in Hz
  * @returns Resampled audio
- * @throws TypeError for a missing or non-number rate, RangeError for a rate that is not an integer in the supported range.
+ * @throws TypeError for a missing or non-number rate, RangeError for a rate that is not an integer or lies outside the supported range.
  */
 export function resample(request: ResampleRequest): Float32Array;
 export function resample(
@@ -54,7 +49,9 @@ export function resample(...args: unknown[]): Float32Array {
   } else {
     request = requestOnly<ResampleRequest>('resample', args);
   }
-  assertAudioInput('resample', request.samples, request.sampleRate, request);
-  assertSampleRate('resample', request.targetSampleRate, 'targetSampleRate');
+  // Type and emptiness only: rate range and non-finite samples are the core's to refuse.
+  assertAudioSamples('resample', request.samples, { validate: false });
+  assertInt32('resample', request.sampleRate, 'sampleRate');
+  assertInt32('resample', request.targetSampleRate, 'targetSampleRate');
   return requireModule().resample(request.samples, request.sampleRate, request.targetSampleRate);
 }

@@ -2073,7 +2073,6 @@ const ResampleRequestKeys = keysOf<ResampleRequest>()([
   'samples',
   'sampleRate',
   'targetSampleRate',
-  'validate',
 ]);
 const VocalRestoreRequestKeys = keysOf<VocalRestoreRequest>()([
   'samples',

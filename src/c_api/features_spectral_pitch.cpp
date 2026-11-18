@@ -636,29 +636,10 @@ SonareError sonare_resample(const float* samples, size_t length, int sample_rate
                             int target_sample_rate, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate ||
-      target_sample_rate < kMinSampleRate || target_sample_rate > kMaxSampleRate) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  // Follow the C-array convention used by the sibling offline APIs: an empty
-  // span is valid even when its data pointer is null and returns (NULL, 0).
-  if (length == 0) {
-    return SONARE_OK;
-  }
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  // Bound the projected output size (length * target_sr / src_sr) against
-  // kMaxBufferSize, mirroring the input-side ceiling in validate_audio_params.
-  // Compute in double so the multiplication cannot overflow before comparison
-  // (src_sr is already validated >= kMinSampleRate, so the division is safe).
-  const double projected = static_cast<double>(length) * static_cast<double>(target_sample_rate) /
-                           static_cast<double>(sample_rate);
-  if (projected > static_cast<double>(kMaxBufferSize)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
 
   SONARE_C_TRY
-  std::vector<float> result = resample(samples, length, sample_rate, target_sample_rate);
+  // An empty span is valid even with a null data pointer and yields (NULL, 0).
+  std::vector<float> result = resample_checked(samples, length, sample_rate, target_sample_rate);
   return copy_vector(result, out, out_length);
   SONARE_C_CATCH
 }

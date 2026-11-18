@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import libsonare
-from libsonare import SonareValueError
+from libsonare import SonareValueError, _conversions
 
 _CORPUS = json.loads(
     (
@@ -27,6 +27,7 @@ _STRETCH = _CORPUS["native_spectral_stretch"]
 _CHAIN = _CORPUS["streaming_mastering_chain_prepare"]
 _EQ = _CORPUS["equalizer_prepare"]
 _RETUNE = _CORPUS["streaming_retune_prepare"]
+_RESAMPLE = _CORPUS["resample"]
 
 
 def _mfcc() -> np.ndarray:
@@ -158,3 +159,28 @@ def test_streaming_retune_prepare_refuses(case: dict) -> None:
         pytest.raises(error_class, match=re.escape(case["message"])),
     ):
         retune.prepare(case["sample_rate"], case["max_block_size"])
+
+
+def _resample_input(case: dict) -> np.ndarray:
+    samples = np.full(_RESAMPLE["input"]["length"], _RESAMPLE["input"]["fill"], dtype=np.float32)
+    if "nan_at" in case:
+        samples[case["nan_at"]] = np.nan
+    return samples
+
+
+@pytest.mark.parametrize("case", _RESAMPLE["accepted"], ids=lambda case: case["id"])
+def test_resample_accepts(case: dict) -> None:
+    out = libsonare.resample(_resample_input(case), case["src_sr"], case["target_sr"])
+    assert out.shape[0] > 0
+
+
+@pytest.mark.parametrize("case", _RESAMPLE["refused"], ids=lambda case: case["id"])
+def test_resample_refuses(case: dict) -> None:
+    error_class = _ERROR_CLASS[case["cause"]]
+    samples = _resample_input(case)
+    with pytest.raises(error_class):
+        libsonare.resample(samples, case["src_sr"], case["target_sr"])
+    # The facade's buffer guard names a non-finite sample first, so the core's message is
+    # read through the ctypes wrapper that reaches the C entry directly.
+    with pytest.raises(error_class, match=re.escape(case["message"])):
+        _conversions._resample_float32(samples, case["src_sr"], case["target_sr"])
