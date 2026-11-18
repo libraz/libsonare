@@ -91,6 +91,32 @@ interface NativeTrackArrays {
   sampleRates: number[] | null;
 }
 
+/** A track's one or two planes; a stereo pair must agree in length. */
+function trackChannels(
+  fnName: string,
+  prefix: string,
+  channels: unknown,
+): [Float32Array, Float32Array | undefined] {
+  if (!Array.isArray(channels)) {
+    throw new TypeError(`${fnName}: ${prefix}.channels must be an array of Float32Array`);
+  }
+  if (channels.length < 1 || channels.length > 2) {
+    throw new RangeError(
+      `${fnName}: ${prefix}.channels must hold 1 or 2 channels, got ${channels.length}`,
+    );
+  }
+  channels.forEach((plane, ch) => {
+    if (!(plane instanceof Float32Array)) {
+      throw new TypeError(`${fnName}: ${prefix}.channels[${ch}] must be a Float32Array`);
+    }
+  });
+  const [first, second] = channels as Float32Array[];
+  if (second !== undefined && second.length !== first.length) {
+    throw new RangeError(`${fnName}: ${prefix}.channels must have equal lengths`);
+  }
+  return [first, second];
+}
+
 function normalizeTracks(
   fnName: string,
   tracks: MixAssistantTrack[],
@@ -121,27 +147,19 @@ function normalizeTracks(
       throw new RangeError(`${fnName}: duplicate track id '${track.id}'`);
     }
     seen.add(track.id);
-    if (!(track.left instanceof Float32Array)) {
-      throw new TypeError(`${fnName}: ${prefix}.left must be a Float32Array`);
-    }
-    if (track.right !== undefined && !(track.right instanceof Float32Array)) {
-      throw new TypeError(`${fnName}: ${prefix}.right must be a Float32Array when present`);
-    }
-    if (track.right !== undefined && track.right.length !== track.left.length) {
-      throw new RangeError(`${fnName}: ${prefix}.left and ${prefix}.right must have equal lengths`);
-    }
+    const [first, second] = trackChannels(fnName, prefix, track.channels);
     if (track.name !== undefined && typeof track.name !== 'string') {
       throw new TypeError(`${fnName}: ${prefix}.name must be a string when present`);
     }
     if (track.sampleRate !== undefined) {
       assertSampleRate(fnName, track.sampleRate, `${prefix}.sampleRate`);
     }
-    left.push(track.left);
-    right.push(track.right ?? null);
+    left.push(first);
+    right.push(second ?? null);
     ids.push(track.id);
     names.push(track.name ?? null);
     sampleRates.push(track.sampleRate ?? sampleRate);
-    anyRight ||= track.right !== undefined;
+    anyRight ||= second !== undefined;
     anyName ||= track.name !== undefined;
     anySampleRate ||= track.sampleRate !== undefined;
   });

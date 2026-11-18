@@ -322,7 +322,7 @@ const TABLE: Entry[] = [
     name: 'mixingAssistantSuggest',
     reportsDegenerate: true,
     call: (samples, sampleRate) =>
-      fn('mixingAssistantSuggest')({ tracks: [{ id: 'a', left: samples }], sampleRate }),
+      fn('mixingAssistantSuggest')({ tracks: [{ id: 'a', channels: [samples] }], sampleRate }),
   },
   mono('renderPlayback', {
     numChannels: 1,

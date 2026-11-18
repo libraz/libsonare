@@ -100,17 +100,37 @@ interface PlanarTracks {
   sampleRates: number[] | null;
 }
 
+/** A track's one or two planes; a stereo pair must agree in length. */
+function trackChannels(
+  fnName: string,
+  prefix: string,
+  channels: unknown,
+): [Float32Array, Float32Array | undefined] {
+  if (!Array.isArray(channels)) {
+    throw new TypeError(`${fnName}: ${prefix}.channels must be an array of Float32Array`);
+  }
+  if (channels.length < 1 || channels.length > 2) {
+    throw new RangeError(
+      `${fnName}: ${prefix}.channels must hold 1 or 2 channels, got ${channels.length}`,
+    );
+  }
+  channels.forEach((plane, ch) => {
+    if (!(plane instanceof Float32Array)) {
+      throw new TypeError(`${fnName}: ${prefix}.channels[${ch}] must be a Float32Array`);
+    }
+  });
+  const [first, second] = channels as Float32Array[];
+  if (second !== undefined && second.length !== first.length) {
+    throw new RangeError(`${fnName}: ${prefix}.channels must have equal lengths`);
+  }
+  return [first, second];
+}
+
 /**
  * Splits the request's track list into the planar per-track arrays the binding
  * takes, rejecting the shapes that would otherwise reach the analysis as a
  * missing buffer or a nameless strip.
  */
-function assertTrackBuffer(fnName: string, value: unknown, argName: string): void {
-  if (!(value instanceof Float32Array)) {
-    throw new TypeError(`${fnName}: ${argName} must be a Float32Array`);
-  }
-}
-
 function planarTracks(
   fnName: string,
   tracks: MixAssistantTrack[],
@@ -135,15 +155,12 @@ function planarTracks(
     }
     // An empty or non-finite track is not refused: the core reports it as an excluded track so a
     // batch needs no per-track error handling.
-    assertTrackBuffer(fnName, track.left, `tracks[${index}].left`);
-    if (track.right !== undefined) {
-      assertTrackBuffer(fnName, track.right, `tracks[${index}].right`);
-    }
+    const [first, second] = trackChannels(fnName, `tracks[${index}]`, track.channels);
     if (track.sampleRate !== undefined) {
       assertSampleRate(fnName, track.sampleRate, `tracks[${index}].sampleRate`);
     }
-    left.push(track.left);
-    right.push(track.right ?? null);
+    left.push(first);
+    right.push(second ?? null);
     ids.push(track.id);
     names.push(track.name ?? null);
     sampleRates.push(track.sampleRate ?? sampleRate);

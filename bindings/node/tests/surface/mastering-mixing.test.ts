@@ -72,8 +72,8 @@ function thrown(fn: () => unknown): unknown {
 
 function assistantTracks() {
   return [
-    { id: 'bass', name: 'Bass', left: tone(0.6, 80) },
-    { id: 'keys', name: 'Keys', left: tone(0.6, 440), right: tone(0.6, 441) },
+    { id: 'bass', name: 'Bass', channels: [tone(0.6, 80)] },
+    { id: 'keys', name: 'Keys', channels: [tone(0.6, 440), tone(0.6, 441)] },
   ];
 }
 

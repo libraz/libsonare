@@ -1540,10 +1540,6 @@ RULES: list[Rule] = [
         population=lambda r: r["kind"] == "stereo-call",
         violation=_stereo_pair_violation,
         derive=_stereo_calls,
-        pending={
-            "node:mixingAssistantSuggest": "MixAssistantTrack carries left/right; a mixing track takes channels",
-            "wasm:mixingAssistantSuggest": "MixAssistantTrack carries left/right; a mixing track takes channels",
-        },
     ),
     Rule(
         name="strip-ref",

@@ -39,9 +39,9 @@ function pulsedTone(freqHz: number, durationSec: number, pulseHz: number): Float
 
 function musicalTracks(): MixAssistantTrack[] {
   return [
-    { id: 'bass', name: 'Bass', left: pulsedTone(70, DURATION, 4) },
-    { id: 'keys', name: 'Keys', left: pulsedTone(440, DURATION, 2) },
-    { id: 'hat', name: 'Hi-Hat', left: pulsedTone(7000, DURATION, 8) },
+    { id: 'bass', name: 'Bass', channels: [pulsedTone(70, DURATION, 4)] },
+    { id: 'keys', name: 'Keys', channels: [pulsedTone(440, DURATION, 2)] },
+    { id: 'hat', name: 'Hi-Hat', channels: [pulsedTone(7000, DURATION, 8)] },
   ];
 }
 
@@ -74,7 +74,7 @@ function voiceWithRumble(durationSec = DURATION): Float32Array {
 
 /** The high-pass case owns its input rather than sharing `musicalTracks`. */
 function rumblingVoiceTracks(): MixAssistantTrack[] {
-  return [{ id: 'vox', name: 'Lead Vox', left: voiceWithRumble() }];
+  return [{ id: 'vox', name: 'Lead Vox', channels: [voiceWithRumble()] }];
 }
 
 /** Ids of the strips and buses carrying a high-pass insert, in scene order. */
@@ -108,8 +108,8 @@ describe('mixing assistant (WASM)', () => {
       const right = pulsedTone(441, DURATION, 2);
       const result = mixingAssistantSuggest({
         tracks: [
-          { id: 'bass', left: pulsedTone(70, DURATION, 4) },
-          { id: 'keys', left: pulsedTone(440, DURATION, 2), right },
+          { id: 'bass', channels: [pulsedTone(70, DURATION, 4)] },
+          { id: 'keys', channels: [pulsedTone(440, DURATION, 2), right] },
         ],
         sampleRate: SR,
       });
@@ -120,8 +120,8 @@ describe('mixing assistant (WASM)', () => {
     it('keeps each track at its own length instead of truncating to the shortest', () => {
       const result = mixingAssistantSuggest({
         tracks: [
-          { id: 'long', left: pulsedTone(220, 1.0, 2) },
-          { id: 'short', left: pulsedTone(660, 0.5, 4) },
+          { id: 'long', channels: [pulsedTone(220, 1.0, 2)] },
+          { id: 'short', channels: [pulsedTone(660, 0.5, 4)] },
         ],
         sampleRate: SR,
       });
@@ -142,8 +142,8 @@ describe('mixing assistant (WASM)', () => {
     it('marks a silent track unusable without excluding the rest', () => {
       const result = mixingAssistantSuggest({
         tracks: [
-          { id: 'silent', left: new Float32Array(Math.floor(SR * DURATION)) },
-          { id: 'keys', left: pulsedTone(440, DURATION, 2) },
+          { id: 'silent', channels: [new Float32Array(Math.floor(SR * DURATION))] },
+          { id: 'keys', channels: [pulsedTone(440, DURATION, 2)] },
         ],
         sampleRate: SR,
       });
@@ -341,8 +341,8 @@ describe('mixing assistant (WASM)', () => {
       expect(() =>
         mixingAssistantSuggest({
           tracks: [
-            { id: 'same', left },
-            { id: 'same', left },
+            { id: 'same', channels: [left] },
+            { id: 'same', channels: [left] },
           ],
           sampleRate: SR,
         }),
@@ -356,7 +356,7 @@ describe('mixing assistant (WASM)', () => {
       const left = pulsedTone(440, DURATION, 2);
       left[100] = Number.NaN;
       const result = mixingAssistantSuggest({
-        tracks: [{ id: 'poisoned', left }],
+        tracks: [{ id: 'poisoned', channels: [left] }],
         sampleRate: SR,
       });
       expect(result.tracks[0].usable).toBe(false);
@@ -367,12 +367,12 @@ describe('mixing assistant (WASM)', () => {
       const left = pulsedTone(440, DURATION, 2);
       expect(() =>
         mixingAssistantSuggest({
-          tracks: [{ left } as unknown as MixAssistantTrack],
+          tracks: [{ channels: [left] } as unknown as MixAssistantTrack],
           sampleRate: SR,
         }),
       ).toThrow();
       expect(() =>
-        mixingAssistantSuggest({ tracks: [{ id: '', left }], sampleRate: SR }),
+        mixingAssistantSuggest({ tracks: [{ id: '', channels: [left] }], sampleRate: SR }),
       ).toThrow();
     });
 
@@ -385,25 +385,27 @@ describe('mixing assistant (WASM)', () => {
       ).toThrow();
       expect(() =>
         mixingAssistantSuggest({
-          tracks: [{ id: 'keys', left: [0, 1, 0] as unknown as Float32Array }],
+          tracks: [{ id: 'keys', channels: [[0, 1, 0] as unknown as Float32Array] }],
           sampleRate: SR,
         }),
       ).toThrow();
     });
 
-    it('rejects a right plane whose length differs from its left', () => {
-      expect(() =>
-        mixingAssistantSuggest({
-          tracks: [
-            {
-              id: 'keys',
-              left: pulsedTone(440, DURATION, 2),
-              right: pulsedTone(441, DURATION / 2, 2),
-            },
-          ],
-          sampleRate: SR,
-        }),
-      ).toThrow();
+    it('takes one or two channels of equal length and refuses any other track shape', () => {
+      const plane = pulsedTone(440, DURATION, 2);
+      const suggest = (track: unknown) => () =>
+        mixingAssistantSuggest({ tracks: [track as MixAssistantTrack], sampleRate: SR });
+      expect(suggest({ id: 'keys' })).toThrow(TypeError);
+      expect(suggest({ id: 'keys', channels: plane })).toThrow(TypeError);
+      expect(suggest({ id: 'keys', channels: [Array.from(plane)] })).toThrow(TypeError);
+      expect(suggest({ id: 'keys', channels: [] })).toThrow(
+        /tracks\[0\]\.channels must hold 1 or 2/,
+      );
+      expect(suggest({ id: 'keys', channels: [] })).toThrow(RangeError);
+      expect(suggest({ id: 'keys', channels: [plane, plane, plane] })).toThrow(RangeError);
+      expect(suggest({ id: 'keys', channels: [plane, pulsedTone(441, DURATION / 2, 2)] })).toThrow(
+        RangeError,
+      );
     });
 
     it('rejects a tracks value that is not an array', () => {

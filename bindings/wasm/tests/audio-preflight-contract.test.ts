@@ -313,7 +313,7 @@ const TABLE: Entry[] = [
     name: 'mixingAssistantSuggest',
     reportsDegenerate: true,
     call: (samples, sampleRate) =>
-      fn('mixingAssistantSuggest')({ tracks: [{ id: 'a', left: samples }], sampleRate }),
+      fn('mixingAssistantSuggest')({ tracks: [{ id: 'a', channels: [samples] }], sampleRate }),
   },
   mono('renderPlayback', {
     numChannels: 1,
@@ -648,7 +648,10 @@ describe('wrong-typed arguments are TypeErrors that name the argument', () => {
   it('mixingAssistantSuggest refuses an empty or missing track id as a TypeError', () => {
     for (const id of ['', undefined]) {
       expect(() =>
-        sonare.mixingAssistantSuggest({ tracks: [{ id: id as never, left: x }], sampleRate: SR }),
+        sonare.mixingAssistantSuggest({
+          tracks: [{ id: id as never, channels: [x] }],
+          sampleRate: SR,
+        }),
       ).toThrow(TypeError);
     }
   });

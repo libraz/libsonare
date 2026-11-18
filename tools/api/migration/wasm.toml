@@ -29300,3 +29300,21 @@ old = "EqBand"
 new = "EqBandInput"
 domain = "core"
 rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantTrack.left"
+to = "MixAssistantTrack.channels"
+changed = "left/right -> channels (Float32Array[] holding one plane for mono or two of equal length for stereo)"
+domain = "mastering"
+rule = "stereo-pair"
+test = "bindings/wasm/tests/mixing-assistant.test.ts::takes one or two channels of equal length and refuses any other track shape"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantTrack.right"
+to = "MixAssistantTrack.channels"
+changed = "left/right -> channels (Float32Array[] holding one plane for mono or two of equal length for stereo)"
+domain = "mastering"
+rule = "stereo-pair"
+test = "bindings/wasm/tests/mixing-assistant.test.ts::takes one or two channels of equal length and refuses any other track shape"

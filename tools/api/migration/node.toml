@@ -16056,3 +16056,21 @@ old = "PlaybackChannelRole='Rss'"
 new = "PlaybackChannelRole='rightSideSurround'"
 domain = "engine"
 rule = "token-case"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantTrack.left"
+to = "MixAssistantTrack.channels"
+changed = "left/right -> channels (Float32Array[] holding one plane for mono or two of equal length for stereo)"
+domain = "mastering"
+rule = "stereo-pair"
+test = "bindings/node/tests/mixing_assistant.test.ts::takes one or two channels of equal length and refuses any other track shape"
+
+[[entry]]
+kind = "field"
+old = "MixAssistantTrack.right"
+to = "MixAssistantTrack.channels"
+changed = "left/right -> channels (Float32Array[] holding one plane for mono or two of equal length for stereo)"
+domain = "mastering"
+rule = "stereo-pair"
+test = "bindings/node/tests/mixing_assistant.test.ts::takes one or two channels of equal length and refuses any other track shape"

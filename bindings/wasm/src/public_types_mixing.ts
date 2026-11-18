@@ -184,8 +184,8 @@ export type MixBandOccupancy = Record<MixAnalysisBand, number>;
  * One track handed to `mixingAssistantSuggest`.
  *
  * Planar and per-track: tracks in one call may differ in length, and each is
- * mono (`right` omitted) or stereo independently of the others. A stereo
- * track's `right` must be the same length as its `left`.
+ * mono (one channel) or stereo (two channels of equal length) independently of
+ * the others.
  */
 export interface MixAssistantTrack {
   /** Strip id the suggestion is written against. Must be unique and non-empty. */
@@ -206,10 +206,8 @@ export interface MixAssistantTrack {
    * none.
    */
   name?: string;
-  /** Left/mono plane. */
-  left: Float32Array;
-  /** Right plane; omit for a mono track. */
-  right?: Float32Array;
+  /** One plane for a mono track, two (left, right) of equal length for a stereo one. */
+  channels: Float32Array[];
   /**
    * Rate of this track, in Hz. Omitted: the request's `sampleRate`. A track at
    * another rate is resampled onto the request's rate before analysis.

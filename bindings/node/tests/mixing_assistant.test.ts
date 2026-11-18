@@ -27,9 +27,9 @@ function clicks(durationSec: number, intervalSec: number, sampleRate = SR): Floa
 
 function baseTracks(): MixAssistantTrack[] {
   return [
-    { id: 'kick', name: 'Kick', left: clicks(1.0, 0.5) },
-    { id: 'bass', name: 'Bass', left: sine(80, 1.0, { sampleRate: SR, amp: 0.4 }) },
-    { id: 'lead', name: 'Lead', left: sine(880, 1.0, { sampleRate: SR, amp: 0.2 }) },
+    { id: 'kick', name: 'Kick', channels: [clicks(1.0, 0.5)] },
+    { id: 'bass', name: 'Bass', channels: [sine(80, 1.0, { sampleRate: SR, amp: 0.4 })] },
+    { id: 'lead', name: 'Lead', channels: [sine(880, 1.0, { sampleRate: SR, amp: 0.2 })] },
   ];
 }
 
@@ -62,7 +62,7 @@ function voiceWithRumble(durationSec = 0.6, sampleRate = SR): Float32Array {
 
 /** The high-pass case owns its input rather than sharing `baseTracks`. */
 function rumblingVoiceTracks(): MixAssistantTrack[] {
-  return [{ id: 'vox', name: 'Lead Vox', left: voiceWithRumble() }];
+  return [{ id: 'vox', name: 'Lead Vox', channels: [voiceWithRumble()] }];
 }
 
 /** Ids of the strips and buses carrying a high-pass insert, in scene order. */
@@ -100,8 +100,8 @@ describe('mixing assistant native binding', () => {
     const stereoRight = sine(441, 1.0, { sampleRate: SR, amp: 0.3 });
     const result = mixingAssistantSuggest({
       tracks: [
-        { id: 'mono', left: sine(220, 1.0, { sampleRate: SR }) },
-        { id: 'stereo', left: stereoLeft, right: stereoRight },
+        { id: 'mono', channels: [sine(220, 1.0, { sampleRate: SR })] },
+        { id: 'stereo', channels: [stereoLeft, stereoRight] },
       ],
       sampleRate: SR,
     });
@@ -112,8 +112,8 @@ describe('mixing assistant native binding', () => {
   it('accepts tracks of different lengths', () => {
     const result = mixingAssistantSuggest({
       tracks: [
-        { id: 'short', left: sine(220, 0.4, { sampleRate: SR }) },
-        { id: 'long', left: sine(660, 1.2, { sampleRate: SR }) },
+        { id: 'short', channels: [sine(220, 0.4, { sampleRate: SR })] },
+        { id: 'long', channels: [sine(660, 1.2, { sampleRate: SR })] },
       ],
       sampleRate: SR,
     });
@@ -135,8 +135,8 @@ describe('mixing assistant native binding', () => {
   it('marks a silent track unusable without failing the request', () => {
     const result = mixingAssistantSuggest({
       tracks: [
-        { id: 'silent', left: new Float32Array(SR) },
-        { id: 'tone', left: sine(440, 1.0, { sampleRate: SR }) },
+        { id: 'silent', channels: [new Float32Array(SR)] },
+        { id: 'tone', channels: [sine(440, 1.0, { sampleRate: SR })] },
       ],
       sampleRate: SR,
     });
@@ -150,8 +150,8 @@ describe('mixing assistant native binding', () => {
   it('leaves only integratedLufs absent for a silent track, as the types declare', () => {
     const result = mixingAssistantSuggest({
       tracks: [
-        { id: 'mono', left: new Float32Array(SR) },
-        { id: 'stereo', left: new Float32Array(SR), right: new Float32Array(SR) },
+        { id: 'mono', channels: [new Float32Array(SR)] },
+        { id: 'stereo', channels: [new Float32Array(SR), new Float32Array(SR)] },
       ],
       sampleRate: SR,
     });
@@ -399,8 +399,8 @@ describe('mixing assistant input validation', () => {
     expect(() =>
       mixingAssistantSuggest({
         tracks: [
-          { id: 'same', left },
-          { id: 'same', left },
+          { id: 'same', channels: [left] },
+          { id: 'same', channels: [left] },
         ],
         sampleRate: SR,
       }),
@@ -414,7 +414,10 @@ describe('mixing assistant input validation', () => {
     // than about the buffer.
     const left = sine(440, 0.4, { sampleRate: SR });
     left[100] = Number.NaN;
-    const result = mixingAssistantSuggest({ tracks: [{ id: 'poisoned', left }], sampleRate: SR });
+    const result = mixingAssistantSuggest({
+      tracks: [{ id: 'poisoned', channels: [left] }],
+      sampleRate: SR,
+    });
     expect(result.tracks[0].usable).toBe(false);
     expect(result.tracks[0].exclusionReason).toBe('track has non-finite samples');
   });
@@ -422,31 +425,28 @@ describe('mixing assistant input validation', () => {
   it('rejects a missing or empty track id', () => {
     const left = sine(440, 0.4, { sampleRate: SR });
     expect(() =>
-      mixingAssistantSuggest({ tracks: [{ left } as MixAssistantTrack], sampleRate: SR }),
+      mixingAssistantSuggest({
+        tracks: [{ channels: [left] } as MixAssistantTrack],
+        sampleRate: SR,
+      }),
     ).toThrow(TypeError);
-    expect(() => mixingAssistantSuggest({ tracks: [{ id: '', left }], sampleRate: SR })).toThrow(
-      TypeError,
-    );
+    expect(() =>
+      mixingAssistantSuggest({ tracks: [{ id: '', channels: [left] }], sampleRate: SR }),
+    ).toThrow(TypeError);
   });
 
-  it('rejects a missing left channel and a mismatched right channel', () => {
-    expect(() =>
-      mixingAssistantSuggest({
-        tracks: [{ id: 'a' } as unknown as MixAssistantTrack],
-        sampleRate: SR,
-      }),
-    ).toThrow(TypeError);
-    expect(() =>
-      mixingAssistantSuggest({
-        tracks: [
-          {
-            id: 'a',
-            left: sine(440, 0.4, { sampleRate: SR }),
-            right: sine(440, 0.2, { sampleRate: SR }),
-          },
-        ],
-        sampleRate: SR,
-      }),
-    ).toThrow(RangeError);
+  it('takes one or two channels of equal length and refuses any other track shape', () => {
+    const plane = sine(440, 0.4, { sampleRate: SR });
+    const suggest = (track: unknown) => () =>
+      mixingAssistantSuggest({ tracks: [track as MixAssistantTrack], sampleRate: SR });
+    expect(suggest({ id: 'a' })).toThrow(TypeError);
+    expect(suggest({ id: 'a', channels: plane })).toThrow(TypeError);
+    expect(suggest({ id: 'a', channels: [Array.from(plane)] })).toThrow(TypeError);
+    expect(suggest({ id: 'a', channels: [] })).toThrow(/tracks\[0\]\.channels must hold 1 or 2/);
+    expect(suggest({ id: 'a', channels: [] })).toThrow(RangeError);
+    expect(suggest({ id: 'a', channels: [plane, plane, plane] })).toThrow(RangeError);
+    expect(suggest({ id: 'a', channels: [plane, sine(440, 0.2, { sampleRate: SR })] })).toThrow(
+      RangeError,
+    );
   });
 });

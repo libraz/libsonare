@@ -234,8 +234,8 @@ describe('StreamingEqualizer.match resamples a reference at another rate', () =>
 
 describe('mixing assistant resamples a track at another rate', () => {
   const tracks = (keys: Float32Array, sampleRate?: number) => [
-    { id: 'bass', name: 'bass', left: sine(110, SR, 0.8, 0.3) },
-    { id: 'keys', name: 'keys', left: keys, sampleRate },
+    { id: 'bass', name: 'bass', channels: [sine(110, SR, 0.8, 0.3)] },
+    { id: 'keys', name: 'keys', channels: [keys], sampleRate },
   ];
 
   it('equals the pre-resampled track', () => {
