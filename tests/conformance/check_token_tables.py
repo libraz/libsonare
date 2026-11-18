@@ -716,6 +716,13 @@ FAMILY_EXEMPT: typing.Mapping[tuple[str, str], str] = types.MappingProxyType(
             )
         },
         **{
+            (path, "MasteringChainConfig.aliasing"): (
+                "one key for every stage record's aliasing union, each the modes that stage accepts; "
+                "the scan keeps the first, a stage without the ADAA modes"
+            )
+            for path in ("bindings/node/src/types_mastering.ts", "bindings/wasm/src/public_types_mastering.ts")
+        },
+        **{
             (path, "EngineDither"): "an omitted dither means none, so the bounce options spell no 'none' token"
             for path in ("bindings/node/src/types_engine.ts", "bindings/wasm/src/public_types_engine.ts")
         },
