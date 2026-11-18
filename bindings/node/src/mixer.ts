@@ -34,44 +34,6 @@ import {
   sendTimingValue,
 } from './value_coercion.js';
 
-/** Inputs for the one-shot {@link resample} facade. */
-export interface ResampleRequest {
-  samples: Float32Array;
-  sourceSampleRate: number;
-  targetSampleRate: number;
-}
-
-/**
- * Resample to another rate; the one entry point that takes two rates.
- *
- * @throws TypeError for a wrong-typed argument, an omitted rate, or an argument
- *   after a request object; RangeError for a rate outside the supported range.
- */
-export function resample(request: ResampleRequest): Float32Array;
-export function resample(
-  samples: Float32Array,
-  sourceSampleRate: number,
-  targetSampleRate: number,
-): Float32Array;
-export function resample(...args: unknown[]): Float32Array {
-  const [first, sourceSampleRate, targetSampleRate] = args;
-  let request: ResampleRequest;
-  if (first instanceof Float32Array) {
-    if (args.length > 3) {
-      throw new TypeError('resample: expected (samples, sourceSampleRate, targetSampleRate)');
-    }
-    request = { samples: first, sourceSampleRate, targetSampleRate } as ResampleRequest;
-  } else {
-    if (args.length > 1) {
-      throw new TypeError('resample: unexpected argument after the request object');
-    }
-    request = requestObject('resample', first as ResampleRequest);
-  }
-  assertSampleRate('resample', request.sourceSampleRate, 'sourceSampleRate');
-  assertSampleRate('resample', request.targetSampleRate, 'targetSampleRate');
-  return addon.resample(request.samples, request.sourceSampleRate, request.targetSampleRate);
-}
-
 /** Role of a bus added with {@link Mixer.addBus}. */
 export type MixBusRole = 'master' | 'aux' | 'submix';
 
@@ -274,7 +236,7 @@ export class Mixer {
   }
 
   /**
-   * Build a mixer from a scene JSON string (see {@link mixingScenePresetJson}).
+   * Build a mixer from a scene JSON string (for example a {@link mixingScenePreset} serialized with `JSON.stringify`).
    *
    * @param json - Scene JSON (strips, buses, sends, connections, inserts)
    * @param options - Sample rate (required) and block size, see {@link MixerJsonOptions}

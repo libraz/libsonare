@@ -115,14 +115,6 @@ const CLIPPED = SIG.map((v) => Math.max(-0.12, Math.min(0.12, v * 2)));
 /** Sparse full-scale impulses over the tones, for the click and crackle repairs. */
 const CLICKY = SIG.map((v, i) => (i % 1500 === 700 ? 0.9 : i % 1500 === 701 ? -0.8 : v));
 const HUMMED = SIG.map((v, i) => v + 0.05 * Math.sin((2 * Math.PI * 60 * i) / SR));
-const STEREO = (() => {
-  const out = new Float32Array(SIG.length * 2);
-  for (let i = 0; i < SIG.length; i++) {
-    out[2 * i] = SIG[i];
-    out[2 * i + 1] = SIG2[i];
-  }
-  return out;
-})();
 /** An exponentially decaying noise burst, for the impulse-response readers. */
 const IR = (() => {
   const noise = lcg(3);
@@ -1187,8 +1179,8 @@ const ROWS: Row[] = [
   {
     name: 'resample',
     fn: sonare.resample,
-    params: 'samples sourceSampleRate targetSampleRate',
-    values: { samples: SIG, sourceSampleRate: SR, targetSampleRate: 16000 },
+    params: 'samples sampleRate targetSampleRate',
+    values: { samples: SIG, sampleRate: SR, targetSampleRate: 16000 },
     invalid: { targetSampleRate: 0 },
   },
   {

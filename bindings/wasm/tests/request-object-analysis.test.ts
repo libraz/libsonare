@@ -164,9 +164,9 @@ describe('WASM basic analysis request objects', () => {
     const yin = { frameLength: 1024, hopLength: 256, f0MinHz: 65, f0MaxHz: 1000 };
     expect(pitchYin({ samples, sampleRate, ...yin })).toEqual(pitchYin(samples, sampleRate, yin));
     expect(pitchPyin({ samples, sampleRate, ...yin })).toEqual(pitchPyin(samples, sampleRate, yin));
-    expect(
-      Array.from(resample({ samples, sourceSampleRate: sampleRate, targetSampleRate: 16000 })),
-    ).toEqual(Array.from(resample(samples, sampleRate, 16000)));
+    expect(Array.from(resample({ samples, sampleRate, targetSampleRate: 16000 }))).toEqual(
+      Array.from(resample(samples, sampleRate, 16000)),
+    );
   });
 
   it('keeps Constant-Q transform request objects equivalent', () => {

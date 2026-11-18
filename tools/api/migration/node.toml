@@ -5051,7 +5051,7 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::estimateMeter takes 
 [[entry]]
 kind = "function"
 old = "resample"
-changed = "one positional form (resample(samples, sourceSampleRate, targetSampleRate)); request ResampleRequest {samples, sourceSampleRate, targetSampleRate}"
+changed = "one positional form (resample(samples, sampleRate, targetSampleRate)); request ResampleRequest {samples, sampleRate, targetSampleRate, validate?}"
 domain = "analysis"
 rule = "sample-rate-name"
 test = "bindings/node/tests/surface/analysis-music.test.ts::resample takes two named rates"
@@ -5413,7 +5413,7 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted s
 [[entry]]
 kind = "option"
 old = "resample(srcSr)"
-new = "resample(sourceSampleRate)"
+new = "resample(sampleRate)"
 domain = "analysis"
 rule = "sample-rate-name"
 
@@ -6539,7 +6539,7 @@ rule = "no-positional-bools"
 [[entry]]
 kind = "field"
 old = "ResampleRequest.srcSr"
-new = "ResampleRequest.sourceSampleRate"
+new = "ResampleRequest.sampleRate"
 domain = "analysis"
 rule = "sample-rate-name"
 

@@ -13,6 +13,7 @@ export {
 export * from './effects_mastering.js';
 export * from './effects_polyphony.js';
 export * from './errors.js';
+export * from './feature_resample.js';
 export * from './features.js';
 export * from './metering.js';
 export * from './midi_messages.js';

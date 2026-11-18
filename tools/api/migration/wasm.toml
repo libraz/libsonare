@@ -1520,7 +1520,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the reque
 [[entry]]
 kind = "function"
 old = "resample"
-changed = "one positional form (resample(samples, sourceSampleRate, targetSampleRate)); request ResampleRequest {samples, sourceSampleRate, targetSampleRate}"
+changed = "one positional form (resample(samples, sampleRate, targetSampleRate)); request ResampleRequest {samples, sampleRate, targetSampleRate, validate?}"
 domain = "analysis"
 rule = "sample-rate-name"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::resamples by source and target rate"
@@ -1528,7 +1528,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::resamples by sour
 [[entry]]
 kind = "function"
 old = "resample"
-changed = "one positional form (resample(samples, sourceSampleRate, targetSampleRate)); request ResampleRequest {samples, sourceSampleRate, targetSampleRate}"
+changed = "one positional form (resample(samples, sampleRate, targetSampleRate)); request ResampleRequest {samples, sampleRate, targetSampleRate, validate?}"
 domain = "analysis"
 rule = "sample-rate-name"
 entry = "./analysis"
@@ -4829,14 +4829,14 @@ entry = "./analysis"
 [[entry]]
 kind = "option"
 old = "resample(srcSr)"
-new = "resample(sourceSampleRate)"
+new = "resample(sampleRate)"
 domain = "analysis"
 rule = "sample-rate-name"
 
 [[entry]]
 kind = "option"
 old = "resample(srcSr)"
-new = "resample(sourceSampleRate)"
+new = "resample(sampleRate)"
 domain = "analysis"
 rule = "sample-rate-name"
 entry = "./analysis"
@@ -8118,14 +8118,14 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::is a row-major Ma
 [[entry]]
 kind = "field"
 old = "ResampleRequest.srcSr"
-new = "ResampleRequest.sourceSampleRate"
+new = "ResampleRequest.sampleRate"
 domain = "analysis"
 rule = "sample-rate-name"
 
 [[entry]]
 kind = "field"
 old = "ResampleRequest.srcSr"
-new = "ResampleRequest.sourceSampleRate"
+new = "ResampleRequest.sampleRate"
 domain = "analysis"
 rule = "sample-rate-name"
 entry = "./analysis"

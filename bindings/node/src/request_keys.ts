@@ -1151,7 +1151,7 @@ const METERING_SPECTRUM_FRAME_REQUEST_KEYS = keySet(
 );
 const WAVEFORM_PEAKS_REQUEST_KEYS = keySet('channels', 'samplesPerBucket', 'validate');
 const WAVEFORM_PEAK_PYRAMID_REQUEST_KEYS = keySet('channels', 'samplesPerBucketLevels', 'validate');
-const RESAMPLE_REQUEST_KEYS = keySet('samples', 'sourceSampleRate', 'targetSampleRate');
+const RESAMPLE_REQUEST_KEYS = keySet('samples', 'sampleRate', 'targetSampleRate', 'validate');
 const MIX_STEREO_REQUEST_KEYS = keySet('strips', 'sampleRate', 'validate');
 const ANALYZE_POLYPHONIC_REQUEST_KEYS = keySet(
   'samples',

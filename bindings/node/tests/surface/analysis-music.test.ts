@@ -492,10 +492,13 @@ describe('resample takes two named rates', () => {
     const positional = resample(input, 22050, 11025);
     const viaRequest = resample({
       samples: input,
-      sourceSampleRate: 22050,
+      sampleRate: 22050,
       targetSampleRate: 11025,
     });
-    expect(viaRequest.length).toBe(positional.length);
+    expect(viaRequest).toEqual(positional);
+    expect(
+      resample({ samples: input, sampleRate: 22050, targetSampleRate: 11025, validate: false }),
+    ).toEqual(positional);
   });
 
   it('refuses the old field names and trailing arguments', () => {
@@ -503,8 +506,11 @@ describe('resample takes two named rates', () => {
       TypeError,
     );
     expect(() =>
+      resample({ samples: input, sourceSampleRate: 22050, targetSampleRate: 11025 } as never),
+    ).toThrow(TypeError);
+    expect(() =>
       (resample as (...a: unknown[]) => unknown)(
-        { samples: input, sourceSampleRate: 22050, targetSampleRate: 11025 },
+        { samples: input, sampleRate: 22050, targetSampleRate: 11025 },
         22050,
       ),
     ).toThrow(TypeError);

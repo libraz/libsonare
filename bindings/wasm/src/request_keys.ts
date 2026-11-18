@@ -2047,8 +2047,9 @@ const PlaybackRendererConfigKeys = keysOf<PlaybackRendererConfig>()([
 ]);
 const ResampleRequestKeys = keysOf<ResampleRequest>()([
   'samples',
+  'sampleRate',
   'targetSampleRate',
-  'sourceSampleRate',
+  'validate',
 ]);
 const VocalRestoreRequestKeys = keysOf<VocalRestoreRequest>()([
   'samples',

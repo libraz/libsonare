@@ -9,7 +9,7 @@ for (let i = 0; i < samples.length; i += 1) {
 
 describe('mixer and voice request objects', () => {
   it('keeps resample request and positional forms equivalent', () => {
-    expect(resample({ samples, sourceSampleRate: sampleRate, targetSampleRate: 44100 })).toEqual(
+    expect(resample({ samples, sampleRate, targetSampleRate: 44100 })).toEqual(
       resample(samples, sampleRate, 44100),
     );
   });
@@ -50,9 +50,7 @@ describe('mixer and voice request objects', () => {
     expect(reqVoice.message).toBe(posVoice.message);
 
     const posResample = captureThrow(() => resample(samples, sampleRate, 0));
-    const reqResample = captureThrow(() =>
-      resample({ samples, sourceSampleRate: sampleRate, targetSampleRate: 0 }),
-    );
+    const reqResample = captureThrow(() => resample({ samples, sampleRate, targetSampleRate: 0 }));
     expect(posResample.threw).toBe(true);
     expect(reqResample.threw).toBe(true);
     expect(reqResample.message).toBe(posResample.message);

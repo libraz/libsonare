@@ -563,15 +563,19 @@ describe('analysis features: plp tempo range', () => {
 
 describe('analysis features: resample and silence', () => {
   it('resamples by source and target rate, request and positional', () => {
-    const viaRequest = resample({ samples, sourceSampleRate: sr, targetSampleRate: 16000 });
+    const viaRequest = resample({ samples, sampleRate: sr, targetSampleRate: 16000 });
     expect(resample(samples, sr, 16000)).toEqual(viaRequest);
+    expect(resample({ samples, sampleRate: sr, targetSampleRate: 16000, validate: false })).toEqual(
+      viaRequest,
+    );
+    expect(
+      caught(() => resample({ samples, sourceSampleRate: sr, targetSampleRate: 16000 } as never)),
+    ).toBeInstanceOf(TypeError);
     expect(viaRequest.length).toBe(Math.round((samples.length * 16000) / sr));
     expect(
-      caught(() => resample({ samples, sourceSampleRate: 22050.5, targetSampleRate: 16000 })),
+      caught(() => resample({ samples, sampleRate: 22050.5, targetSampleRate: 16000 })),
     ).toBeInstanceOf(RangeError);
-    expect(caught(() => resample({ samples, sourceSampleRate: sr } as never))).toBeInstanceOf(
-      TypeError,
-    );
+    expect(caught(() => resample({ samples, sampleRate: sr } as never))).toBeInstanceOf(TypeError);
   });
 
   it('returns a declared trim result', () => {
