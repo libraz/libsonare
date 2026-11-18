@@ -33,6 +33,7 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _out_float_array,
+    _require_instance,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -900,6 +901,38 @@ def mastering_preset_params(preset: str) -> MasteringChainConfig:
         if json_ptr.value:
             lib.sonare_free_string(json_ptr)
     return _chain_config_from_document(json_text)
+
+
+def mastering_chain_config_from_json(document: str) -> MasteringChainConfig:
+    """Validate a chain configuration document and return it as nested overrides.
+
+    Reads ``document`` as the native CLI's ``--chain-config`` reads it and returns
+    the chain it describes in the nested shape :func:`mastering_preset_params`
+    returns, ready for :func:`master_audio` as ``overrides``. Every chain
+    parameter is present in the result, at its document value or its default.
+
+    Args:
+        document: Chain configuration JSON text (version 1 or 2).
+
+    Raises:
+        TypeError: If ``document`` is not a ``str``.
+        SonareError: Code ``INVALID_FORMAT`` when the document is malformed,
+            lacks ``version`` or ``params``, carries another version, an unknown
+            or earlier key spelling, or a
+            value outside its domain; the message names the field and, for an
+            earlier spelling, the current one.
+    """
+    _require_instance(document, str, "document")
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_chain_config_params_json"):
+        raise _not_supported("libsonare was built without mastering chain config support")
+    json_ptr = ctypes.c_char_p()
+    _check(
+        lib.sonare_mastering_chain_config_params_json(
+            _utf8_arg(document, "document"), ctypes.byref(json_ptr)
+        )
+    )
+    return _chain_config_from_params(_take_json(lib, json_ptr).get("params"))
 
 
 @_guard_buffer("left", "right")
