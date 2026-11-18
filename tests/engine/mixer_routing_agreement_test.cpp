@@ -489,8 +489,9 @@ std::vector<float> render_project_bounce(const Row& row) {
 
   float* out = nullptr;
   size_t out_len = 0;
+  int bounce_channels = 0;
   REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1, &out,
-                                                         &out_len) == SONARE_OK);
+                                                         &out_len, &bounce_channels) == SONARE_OK);
   REQUIRE(out_len == static_cast<size_t>(kTotalFrames * output_channels(row)));
   std::vector<float> result(out, out + out_len);
   sonare_free_floats(out);

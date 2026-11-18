@@ -489,10 +489,13 @@ void sonare_project_free_compile_result(SonareProjectCompileResult* result);
 
 /// @brief Compiles + renders the project offline to interleaved float audio.
 /// @param options Render options (zero-init then override). May be NULL for
-///        defaults (project sample rate, 2 channels, block 128).
+///        defaults (project sample rate, the scene master's layout width, block 128).
 /// @param out_interleaved Receives a heap float array (free with
 ///        @ref sonare_free_floats) of length @p out_len = total_frames * channels.
 /// @param out_len Receives the interleaved sample count.
+/// @param out_num_channels Receives the width the render was mixed at: the requested
+///        num_channels, or the resolved default when it was 0. Written 0 first, so it is
+///        defined on every return.
 /// @details Deterministic: the same project + options yields bit-identical
 ///          output within one build. When options->total_frames is positive,
 ///          that explicit length is used as-is; mixer FX / instrument tails are
@@ -502,7 +505,7 @@ void sonare_project_free_compile_result(SonareProjectCompileResult* result);
 ///         rendered (its derived length overflows, or the compiled arrangement
 ///         does not fit the engine or the scene's mixer).
 SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBounceOptions* options,
-                                  float** out_interleaved, size_t* out_len);
+                                  float** out_interleaved, size_t* out_len, int* out_num_channels);
 
 #ifdef __cplusplus
 }

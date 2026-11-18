@@ -93,11 +93,13 @@ static_assert(offsetof(SonareInstrumentBinding, callbacks) ==
 ///       source-aware built-in / NativeSynth / SF2 binding, or one destination
 ///       per strip.
 /// @note Free @p out_interleaved with @ref sonare_free_floats.
+/// @note @p out_num_channels receives the width the render was mixed at, as in
+///       @ref sonare_project_bounce; it is written 0 first.
 SonareError sonare_project_bounce_with_instruments(SonareProject* project,
                                                    const SonareProjectBounceOptions* options,
                                                    const SonareInstrumentBinding* instruments,
                                                    size_t instrument_count, float** out_interleaved,
-                                                   size_t* out_len);
+                                                   size_t* out_len, int* out_num_channels);
 
 // ============================================================================
 // Built-in instrument (minimal polyphonic oscillator synth)
@@ -163,10 +165,12 @@ typedef struct {
 ///        and does not auto-extend for mixer FX / instrument tails.
 ///        Deterministic for a fixed project + options + patch.
 /// @note Free @p out_interleaved with @ref sonare_free_floats.
+/// @note @p out_num_channels receives the width the render was mixed at, as in
+///       @ref sonare_project_bounce; it is written 0 first.
 SonareError sonare_project_bounce_with_builtin_instruments(
     SonareProject* project, const SonareProjectBounceOptions* options,
     const SonareBuiltinInstrumentBinding* instruments, size_t instrument_count,
-    float** out_interleaved, size_t* out_len);
+    float** out_interleaved, size_t* out_len, int* out_num_channels);
 
 // ============================================================================
 // NativeSynth instrument (patch-driven synthesizer; see SonareSynthPatch)
@@ -356,10 +360,12 @@ typedef struct {
 ///        and does not auto-extend for mixer FX / instrument tails.
 ///        Deterministic for a fixed project + options + patch.
 /// @note Free @p out_interleaved with @ref sonare_free_floats.
+/// @note @p out_num_channels receives the width the render was mixed at, as in
+///       @ref sonare_project_bounce; it is written 0 first.
 SonareError sonare_project_bounce_with_synth_instruments(
     SonareProject* project, const SonareProjectBounceOptions* options,
     const SonareSynthInstrumentBinding* instruments, size_t instrument_count,
-    float** out_interleaved, size_t* out_len);
+    float** out_interleaved, size_t* out_len, int* out_num_channels);
 
 // ============================================================================
 // SoundFont (SF2) instrument: host-supplied sample data, GS-compatible player
@@ -474,10 +480,12 @@ typedef struct {
 ///        that report for their dedicated melodic families. Deterministic for a fixed project +
 ///        options + SoundFont + patch.
 /// @note Free @p out_interleaved with @ref sonare_free_floats.
+/// @note @p out_num_channels receives the width the render was mixed at, as in
+///       @ref sonare_project_bounce; it is written 0 first.
 SonareError sonare_project_bounce_with_sf2_instruments(
     SonareProject* project, const SonareProjectBounceOptions* options,
     const SonareSf2InstrumentBinding* instruments, size_t instrument_count, float** out_interleaved,
-    size_t* out_len);
+    size_t* out_len, int* out_num_channels);
 
 #ifdef __cplusplus
 }

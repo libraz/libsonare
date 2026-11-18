@@ -545,8 +545,9 @@ TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project]
   // fallback is the data-free floor.
   float* out = nullptr;
   size_t out_len = 0;
-  REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out,
-                                                     &out_len) == SONARE_OK);
+  int bounce_channels1 = 0;
+  REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out, &out_len,
+                                                     &bounce_channels1) == SONARE_OK);
   REQUIRE(out != nullptr);
   {
     float fallback_peak = 0.0f;
@@ -562,8 +563,10 @@ TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project]
 
   // An unknown struct version is rejected.
   binding.config.struct_version = 99;
-  REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out,
-                                                     &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+  int bounce_channels2 = 0;
+  REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out, &out_len,
+                                                     &bounce_channels2) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   binding.config.struct_version = 0;
 
   // A gain the player's constructor would silently replace with its own default
@@ -573,22 +576,27 @@ TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project]
        {-1.0f, std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
     CAPTURE(bad);
     binding.config.gain = bad;
-    CHECK(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out,
-                                                     &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+    int bounce_channels3 = 0;
+    CHECK(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out, &out_len,
+                                                     &bounce_channels3) ==
+          SONARE_ERROR_INVALID_PARAMETER);
     CHECK(out == nullptr);
   }
   binding.config.gain = 0.0f;
   for (int bad : {-1, -48}) {
     CAPTURE(bad);
     binding.config.polyphony = bad;
-    CHECK(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out,
-                                                     &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+    int bounce_channels4 = 0;
+    CHECK(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out, &out_len,
+                                                     &bounce_channels4) ==
+          SONARE_ERROR_INVALID_PARAMETER);
     CHECK(out == nullptr);
   }
   binding.config.polyphony = 0;
 
-  REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out,
-                                                     &out_len) == SONARE_OK);
+  int bounce_channels5 = 0;
+  REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out, &out_len,
+                                                     &bounce_channels5) == SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_len == static_cast<size_t>(options.total_frames) * 2);
   float peak = 0.0f;
@@ -598,8 +606,9 @@ TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project]
   // Deterministic: a second bounce is bit-identical.
   float* out2 = nullptr;
   size_t out2_len = 0;
+  int bounce_channels6 = 0;
   REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out2,
-                                                     &out2_len) == SONARE_OK);
+                                                     &out2_len, &bounce_channels6) == SONARE_OK);
   REQUIRE(out2_len == out_len);
   REQUIRE(std::memcmp(out, out2, out_len * sizeof(float)) == 0);
   sonare_free_floats(out2);
@@ -607,8 +616,9 @@ TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project]
   // Zero bindings bounce silently (same contract as the built-in synth path).
   float* silent = nullptr;
   size_t silent_len = 0;
+  int bounce_channels7 = 0;
   REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, nullptr, 0, &silent,
-                                                     &silent_len) == SONARE_OK);
+                                                     &silent_len, &bounce_channels7) == SONARE_OK);
   float silent_peak = 0.0f;
   for (size_t i = 0; i < silent_len; ++i) silent_peak = std::max(silent_peak, std::abs(silent[i]));
   REQUIRE(silent_peak == 0.0f);

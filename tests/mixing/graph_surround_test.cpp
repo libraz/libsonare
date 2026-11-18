@@ -152,8 +152,9 @@ SonareError bounce(SonareProject* project, int channels, std::vector<float>* out
   binding.config = project_synth();
   float* out = nullptr;
   size_t out_len = 0;
+  int bounce_channels = 0;
   const SonareError err = sonare_project_bounce_with_builtin_instruments(
-      project, &options, &binding, 1, &out, &out_len);
+      project, &options, &binding, 1, &out, &out_len, &bounce_channels);
   if (err == SONARE_OK && out_samples != nullptr) out_samples->assign(out, out + out_len);
   if (out != nullptr) sonare_free_floats(out);
   return err;

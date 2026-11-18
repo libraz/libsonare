@@ -59,8 +59,9 @@ std::vector<float> bounce_synth(SonareProject* project, const SonareSynthPatch& 
   binding.patch = patch;
   float* out = nullptr;
   size_t out_len = 0;
+  int bounce_channels1 = 0;
   REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len) == SONARE_OK);
+                                                       &out_len, &bounce_channels1) == SONARE_OK);
   REQUIRE(out != nullptr);
   std::vector<float> result(out, out + out_len);
   sonare_free_floats(out);
@@ -385,8 +386,9 @@ TEST_CASE("synth patch engine params are refused through the C ABI with the key 
     patch.engine_param_count = 1;
     binding.patch = patch;
     out = nullptr;
+    int bounce_channels2 = 0;
     const SonareError status = sonare_project_bounce_with_synth_instruments(
-        project, &options, &binding, 1, &out, &out_len);
+        project, &options, &binding, 1, &out, &out_len, &bounce_channels2);
     sonare_free_floats(out);
     return status;
   };
@@ -414,14 +416,17 @@ TEST_CASE("synth patch engine params are refused through the C ABI with the key 
   dangling.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
   dangling.engine_param_count = 1;
   binding.patch = dangling;
+  int bounce_channels3 = 0;
   REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+                                                       &out_len, &bounce_channels3) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   // A version-7 caller's struct ends before the params, so whatever sits there is not read.
   SonareSynthPatch older = dangling;
   older.struct_version = 7;
   binding.patch = older;
+  int bounce_channels4 = 0;
   REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len) == SONARE_OK);
+                                                       &out_len, &bounce_channels4) == SONARE_OK);
   sonare_free_floats(out);
 
   sonare_project_destroy(project);
@@ -1077,15 +1082,19 @@ TEST_CASE("a mod routing naming none on either end is refused",
   none_source.num_mod_routings = 1;
   none_source.mod_routings[0] = {0 /*none*/, 1 /*pitchCents*/, 80.0f};
   binding.patch = none_source;
+  int bounce_channels5 = 0;
   REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+                                                       &out_len, &bounce_channels5) ==
+          SONARE_ERROR_INVALID_PARAMETER);
 
   SonareSynthPatch none_destination{};
   none_destination.num_mod_routings = 1;
   none_destination.mod_routings[0] = {3 /*lfo1*/, 0 /*none*/, 80.0f};
   binding.patch = none_destination;
+  int bounce_channels6 = 0;
   REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+                                                       &out_len, &bounce_channels6) ==
+          SONARE_ERROR_INVALID_PARAMETER);
 
   // Not vacuous: a routing naming a real source and destination on both ends
   // still passes.
@@ -1093,8 +1102,9 @@ TEST_CASE("a mod routing naming none on either end is refused",
   valid.num_mod_routings = 1;
   valid.mod_routings[0] = {3 /*lfo1*/, 1 /*pitchCents*/, 80.0f};
   binding.patch = valid;
+  int bounce_channels7 = 0;
   REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len) == SONARE_OK);
+                                                       &out_len, &bounce_channels7) == SONARE_OK);
   sonare_free_floats(out);
 
   sonare_project_destroy(project);
@@ -1132,13 +1142,17 @@ TEST_CASE("synth patch field overrides shape the preset", "[project][synth_patch
   binding.patch = bad_version;
   float* out = nullptr;
   size_t out_len = 0;
+  int bounce_channels8 = 0;
   REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+                                                       &out_len, &bounce_channels8) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   SonareSynthPatch bad_name{};
   std::strcpy(bad_name.preset, "no-such-preset");
   binding.patch = bad_name;
+  int bounce_channels9 = 0;
   REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+                                                       &out_len, &bounce_channels9) ==
+          SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_project_destroy(project);
 }
@@ -1377,8 +1391,9 @@ std::vector<float> census_render(const SonareSynthPatch& patch, SonareSampleBank
   binding.sample_bank = bank;
   float* out = nullptr;
   size_t out_len = 0;
+  int bounce_channels10 = 0;
   REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len) == SONARE_OK);
+                                                       &out_len, &bounce_channels10) == SONARE_OK);
   REQUIRE(out != nullptr);
   std::vector<float> result(out, out + out_len);
   sonare_free_floats(out);

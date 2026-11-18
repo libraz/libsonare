@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 
 #include "bindings/binding_project_parity_test_helpers.h"
 
@@ -87,8 +88,9 @@ TEST_CASE("channel-strip bounce keeps a stem tail past the arrangement for expli
 
   float* out = nullptr;
   size_t out_len = 0;
-  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len) ==
-          SONARE_OK);
+  int bounce_channels1 = 0;
+  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
+                                                 &bounce_channels1) == SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_len == static_cast<size_t>(kTotalFrames) * 2u);
 
@@ -132,7 +134,8 @@ TEST_CASE("project bounce rejects channel counts beyond mono/stereo like engine-
 
   float* out = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
   size_t out_len = 123;
-  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) ==
+  int bounce_channels2 = 0;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len, &bounce_channels2) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(out == nullptr);
   REQUIRE(out_len == 0);
@@ -141,14 +144,16 @@ TEST_CASE("project bounce rejects channel counts beyond mono/stereo like engine-
   options.num_channels = 3;
   out = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
   out_len = 123;
-  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) ==
+  int bounce_channels3 = 0;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len, &bounce_channels3) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(out == nullptr);
   REQUIRE(out_len == 0);
 
   // Stereo still bounces.
   options.num_channels = 2;
-  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_OK);
+  int bounce_channels4 = 0;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len, &bounce_channels4) == SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_len == 256u);
   sonare_free_floats(out);
@@ -175,8 +180,9 @@ TEST_CASE("project bounce reads only zero as the default for block size, width a
   float* out = nullptr;
   size_t out_len = 0;
 
+  int bounce_channels5 = 0;
   // All-zero options: default block size, the scene's output width, the project's rate.
-  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_OK);
+  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len, &bounce_channels5) == SONARE_OK);
   REQUIRE(out != nullptr);
   CHECK(out_len == 256u);
   sonare_free_floats(out);
@@ -188,7 +194,8 @@ TEST_CASE("project bounce reads only zero as the default for block size, width a
     if (field == 2) negative.sample_rate = -48000;
     out = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
     out_len = 123;
-    CHECK(sonare_project_bounce(project, &negative, &out, &out_len) ==
+    int bounce_channels6 = 0;
+    CHECK(sonare_project_bounce(project, &negative, &out, &out_len, &bounce_channels6) ==
           SONARE_ERROR_INVALID_PARAMETER);
     CHECK(out == nullptr);
     CHECK(out_len == 0);
@@ -196,24 +203,44 @@ TEST_CASE("project bounce reads only zero as the default for block size, width a
   sonare_project_destroy(project);
 }
 
-TEST_CASE("project bounce defaults its width to a mono master's own width", "[project]") {
-  SonareProject* project = nullptr;
-  REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
-  REQUIRE(
-      sonare_project_set_mixer_scene_json(
-          project, R"({"version":1,"buses":[{"id":"master","role":"master","layout":"mono"}]})") ==
-      SONARE_OK);
-  uint32_t track = 0;
-  uint32_t clip = 0;
-  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track, &clip) == SONARE_OK);
+TEST_CASE("project bounce defaults its width to the master's layout and reports it", "[project]") {
+  struct Case {
+    const char* layout;  // nullptr: no scene, so no master
+    int width;
+  };
+  for (const Case c :
+       {Case{nullptr, 2}, Case{"mono", 1}, Case{"stereo", 2}, Case{"5.1", 6}, Case{"7.1", 8}}) {
+    CAPTURE(c.layout ? c.layout : "none", c.width);
+    SonareProject* project = nullptr;
+    REQUIRE(sonare_project_create(&project) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+    if (c.layout != nullptr) {
+      const std::string scene =
+          std::string(R"({"version":1,"buses":[{"id":"master","role":"master","layout":")") +
+          c.layout + R"("}]})";
+      REQUIRE(sonare_project_set_mixer_scene_json(project, scene.c_str()) == SONARE_OK);
+    }
+    uint32_t track = 0;
+    uint32_t clip = 0;
+    REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track, &clip) == SONARE_OK);
 
-  SonareProjectBounceOptions options{};
-  options.total_frames = 128;
-  float* out = nullptr;
-  size_t out_len = 0;
-  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_OK);
-  CHECK(out_len == 128u);
-  sonare_free_floats(out);
-  sonare_project_destroy(project);
+    SonareProjectBounceOptions options{};
+    options.total_frames = 128;
+    float* out = nullptr;
+    size_t out_len = 0;
+    int bounce_channels = -1;
+    REQUIRE(sonare_project_bounce(project, &options, &out, &out_len, &bounce_channels) ==
+            SONARE_OK);
+    CHECK(bounce_channels == c.width);
+    CHECK(out_len == 128u * static_cast<size_t>(c.width));
+    sonare_free_floats(out);
+
+    // A refused call still defines the width, as 0.
+    options.block_size = -1;
+    bounce_channels = -1;
+    CHECK(sonare_project_bounce(project, &options, &out, &out_len, &bounce_channels) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(bounce_channels == 0);
+    sonare_project_destroy(project);
+  }
 }

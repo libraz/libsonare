@@ -72,8 +72,9 @@ StereoEnergy bounce_energy(SonareProject* project) {
 
   float* out = nullptr;
   size_t out_len = 0;
+  int bounce_channels1 = 0;
   REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1, &out,
-                                                         &out_len) == SONARE_OK);
+                                                         &out_len, &bounce_channels1) == SONARE_OK);
   StereoEnergy energy;
   for (size_t i = 0; i + 1 < out_len; i += 2) {
     energy.left += static_cast<double>(out[i]) * static_cast<double>(out[i]);
@@ -145,8 +146,9 @@ TEST_CASE("an opaque callback instrument keeps its strip's controls, not its tra
     state = CallbackInstrumentState{};
     float* out = nullptr;
     size_t out_len = 0;
-    REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out,
-                                                   &out_len) == SONARE_OK);
+    int bounce_channels2 = 0;
+    REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
+                                                   &bounce_channels2) == SONARE_OK);
     double sum = 0.0;
     for (size_t i = 0; i < out_len; ++i)
       sum += static_cast<double>(out[i]) * static_cast<double>(out[i]);
@@ -220,8 +222,9 @@ TEST_CASE("a callback destination shared by unrouted tracks bounces once",
     binding.callbacks.render = &cb_render;
     float* out = nullptr;
     size_t out_len = 0;
-    REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out,
-                                                   &out_len) == SONARE_OK);
+    int bounce_channels3 = 0;
+    REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len,
+                                                   &bounce_channels3) == SONARE_OK);
     std::vector<float> samples(out, out + out_len);
     sonare_free_floats(out);
     sonare_project_destroy(project);

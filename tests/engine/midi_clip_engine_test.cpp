@@ -631,8 +631,9 @@ TEST_CASE("sonare_project_set_clip_gain and set_clip_fade change a MIDI clip's b
   const auto bounce = [&]() {
     float* out = nullptr;
     size_t out_len = 0;
-    REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1, &out,
-                                                           &out_len) == SONARE_OK);
+    int bounce_channels = 0;
+    REQUIRE(sonare_project_bounce_with_builtin_instruments(
+                project, &options, &binding, 1, &out, &out_len, &bounce_channels) == SONARE_OK);
     std::vector<float> result(out, out + out_len);
     sonare_free_floats(out);
     return result;

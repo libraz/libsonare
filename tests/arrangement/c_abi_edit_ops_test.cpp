@@ -1246,7 +1246,9 @@ TEST_CASE("C-ABI set_warp_map/remove_warp_map with clip reference and undo",
   options.sample_rate = 48000;
   float* bounced = nullptr;
   size_t bounced_len = 0;
-  REQUIRE(sonare_project_bounce(project, &options, &bounced, &bounced_len) == SONARE_OK);
+  int bounce_channels = 0;
+  REQUIRE(sonare_project_bounce(project, &options, &bounced, &bounced_len, &bounce_channels) ==
+          SONARE_OK);
   REQUIRE(bounced_len == 960);
   sonare_free_floats(bounced);
   REQUIRE(sonare_project_undo(project) == SONARE_OK);

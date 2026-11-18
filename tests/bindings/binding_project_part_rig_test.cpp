@@ -47,8 +47,9 @@ std::vector<float> bounce_gm_synth(SonareProject* project) {
   binding.use_gm_programs = 1;
   float* out = nullptr;
   size_t out_len = 0;
+  int bounce_channels1 = 0;
   REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len) == SONARE_OK);
+                                                       &out_len, &bounce_channels1) == SONARE_OK);
   REQUIRE(out != nullptr);
   std::vector<float> result(out, out + out_len);
   sonare_free_floats(out);
@@ -122,8 +123,9 @@ TEST_CASE("a SoundFont-player bounce honours part rigs", "[bindings][part_rig]")
   const auto bounce = [&] {
     float* out = nullptr;
     size_t out_len = 0;
+    int bounce_channels2 = 0;
     REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len) == SONARE_OK);
+                                                       &out_len, &bounce_channels2) == SONARE_OK);
     std::vector<float> result(out, out + out_len);
     sonare_free_floats(out);
     return result;

@@ -251,8 +251,9 @@ TEST_CASE("an all-zero zone covers the whole keyboard", "[project][sample_bank]"
   options.total_frames = 48000;
   float* out = nullptr;
   size_t len = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &len) == SONARE_OK);
+  int bounce_channels1 = 0;
+  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out, &len,
+                                                       &bounce_channels1) == SONARE_OK);
   REQUIRE(out != nullptr);
   float peak = 0.0f;
   for (size_t i = 0; i < len; ++i) peak = std::max(peak, std::fabs(out[i]));
@@ -297,8 +298,9 @@ TEST_CASE("narrowing one range leaves the other covering everything", "[project]
   options.total_frames = 48000;
   float* out = nullptr;
   size_t len = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &len) == SONARE_OK);
+  int bounce_channels2 = 0;
+  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out, &len,
+                                                       &bounce_channels2) == SONARE_OK);
   REQUIRE(out != nullptr);
   float peak = 0.0f;
   for (size_t i = 0; i < len; ++i) peak = std::max(peak, std::fabs(out[i]));
@@ -324,8 +326,9 @@ TEST_CASE("a sample patch without a bank renders silence, not an error", "[proje
   options.total_frames = 24000;
   float* out = nullptr;
   size_t len = 0;
-  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
-                                                       &len) == SONARE_OK);
+  int bounce_channels3 = 0;
+  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out, &len,
+                                                       &bounce_channels3) == SONARE_OK);
   REQUIRE(out != nullptr);
   float peak = 0.0f;
   for (size_t i = 0; i < len; ++i) peak = std::max(peak, std::fabs(out[i]));
@@ -359,7 +362,9 @@ TEST_CASE("a struct_version past the newest is refused", "[project][sample_bank]
   options.total_frames = 4800;
   float* out = nullptr;
   size_t len = 0;
-  CHECK(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out, &len) ==
+  int bounce_channels4 = 0;
+  CHECK(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out, &len,
+                                                     &bounce_channels4) ==
         SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_project_destroy(project);

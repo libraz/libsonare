@@ -161,16 +161,19 @@ void clear_last_bounce_result(SonareProject* project) noexcept {
 // Returns through the SONARE_C_TRY/CATCH guard of the caller.
 SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceOptions* options,
                               const std::vector<HostedInstrument>& instruments,
-                              float** out_interleaved, size_t* out_len) {
+                              float** out_interleaved, size_t* out_len, int* out_num_channels) {
   if (out_interleaved) *out_interleaved = nullptr;
   if (out_len) *out_len = 0;
+  if (out_num_channels) *out_num_channels = 0;
   // Above the pointer rejection, not below it: sonare_project_bounce routes
   // straight here with no clear of its own, so a rejected call used to leave the
   // previous bounce's diagnostics queryable. Null-safe, and the four
   // bounce_with_* entries already cleared before calling, so this is idempotent
   // for them.
   clear_last_bounce_result(project);
-  if (!project || !out_interleaved || !out_len) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!project || !out_interleaved || !out_len || !out_num_channels) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
 
   SonareProjectBounceOptions opts{};
   if (options) opts = *options;
@@ -330,16 +333,19 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
     // Empty arrangement (or zero-length request): a valid empty render.
     *out_interleaved = new float[1];
     *out_len = 0;
+    *out_num_channels = num_channels;
     return SONARE_OK;
   }
 
 #if defined(SONARE_WITH_MIXING)
   // Per-track channel-strip bounce when the project binds tracks to scene strips.
   if (mixer_required) {
-    return bounce_through_mixer(*compiled.timeline, instruments, routing, sample_rate, block_size,
-                                num_channels, frames, pdc, mixer_input_frames, out_interleaved,
-                                out_len, reusable_mixer.release(),
-                                &project->last_bounce_diagnostics);
+    const SonareError mixed =
+        bounce_through_mixer(*compiled.timeline, instruments, routing, sample_rate, block_size,
+                             num_channels, frames, pdc, mixer_input_frames, out_interleaved,
+                             out_len, reusable_mixer.release(), &project->last_bounce_diagnostics);
+    if (mixed == SONARE_OK) *out_num_channels = num_channels;
+    return mixed;
   }
 #endif
 
@@ -380,6 +386,7 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   }
   *out_interleaved = interleaved.release();
   *out_len = total;
+  *out_num_channels = num_channels;
   return SONARE_OK;
 }
 
@@ -492,14 +499,15 @@ bool probe_hosted_latency_tail(const arr::CompiledTimeline& timeline,
 #endif
 
 SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBounceOptions* options,
-                                  float** out_interleaved, size_t* out_len) {
+                                  float** out_interleaved, size_t* out_len, int* out_num_channels) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_TRY
-  return do_project_bounce(project, options, {}, out_interleaved, out_len);
+  return do_project_bounce(project, options, {}, out_interleaved, out_len, out_num_channels);
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, options, out_interleaved, out_len);
+  if (out_num_channels) *out_num_channels = 0;
+  SONARE_C_STUB_NOT_SUPPORTED(project, options, out_interleaved, out_len, out_num_channels);
 #endif
 }
 
@@ -507,12 +515,13 @@ SonareError sonare_project_bounce_with_instruments(SonareProject* project,
                                                    const SonareProjectBounceOptions* options,
                                                    const SonareInstrumentBinding* instruments,
                                                    size_t instrument_count, float** out_interleaved,
-                                                   size_t* out_len) {
+                                                   size_t* out_len, int* out_num_channels) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_TRY
   if (out_interleaved) *out_interleaved = nullptr;
   if (out_len) *out_len = 0;
+  if (out_num_channels) *out_num_channels = 0;
   // Before the first argument rejection below, so an early return leaves the
   // recorded compile result empty rather than describing the previous bounce.
   clear_last_bounce_result(project);
@@ -529,25 +538,27 @@ SonareError sonare_project_bounce_with_instruments(SonareProject* project,
     owned.push_back(std::make_unique<CallbackInstrument>(instruments[i].callbacks));
     hosted.push_back({instruments[i].destination_id, owned.back().get(), owned.back().get()});
   }
-  return do_project_bounce(project, options, hosted, out_interleaved, out_len);
+  return do_project_bounce(project, options, hosted, out_interleaved, out_len, out_num_channels);
   SONARE_C_CATCH
 #else
   if (out_interleaved) *out_interleaved = {};
   if (out_len) *out_len = {};
+  if (out_num_channels) *out_num_channels = 0;
   SONARE_C_STUB_NOT_SUPPORTED(project, options, instruments, instrument_count, out_interleaved,
-                              out_len);
+                              out_len, out_num_channels);
 #endif
 }
 
 SonareError sonare_project_bounce_with_builtin_instruments(
     SonareProject* project, const SonareProjectBounceOptions* options,
     const SonareBuiltinInstrumentBinding* instruments, size_t instrument_count,
-    float** out_interleaved, size_t* out_len) {
+    float** out_interleaved, size_t* out_len, int* out_num_channels) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_TRY
   if (out_interleaved) *out_interleaved = nullptr;
   if (out_len) *out_len = 0;
+  if (out_num_channels) *out_num_channels = 0;
   // Before the first argument rejection below, so an early return leaves the
   // recorded compile result empty rather than describing the previous bounce.
   clear_last_bounce_result(project);
@@ -569,25 +580,27 @@ SonareError sonare_project_bounce_with_builtin_instruments(
         sonare_c_detail::builtin_synth_config_from_c(instruments[i].config)));
     hosted.push_back({instruments[i].destination_id, owned.back().get()});
   }
-  return do_project_bounce(project, options, hosted, out_interleaved, out_len);
+  return do_project_bounce(project, options, hosted, out_interleaved, out_len, out_num_channels);
   SONARE_C_CATCH
 #else
   if (out_interleaved) *out_interleaved = {};
   if (out_len) *out_len = {};
+  if (out_num_channels) *out_num_channels = 0;
   SONARE_C_STUB_NOT_SUPPORTED(project, options, instruments, instrument_count, out_interleaved,
-                              out_len);
+                              out_len, out_num_channels);
 #endif
 }
 
 SonareError sonare_project_bounce_with_synth_instruments(
     SonareProject* project, const SonareProjectBounceOptions* options,
     const SonareSynthInstrumentBinding* instruments, size_t instrument_count,
-    float** out_interleaved, size_t* out_len) {
+    float** out_interleaved, size_t* out_len, int* out_num_channels) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_TRY
   if (out_interleaved) *out_interleaved = nullptr;
   if (out_len) *out_len = 0;
+  if (out_num_channels) *out_num_channels = 0;
   // Before the first argument rejection below, so an early return leaves the
   // recorded compile result empty rather than describing the previous bounce.
   clear_last_bounce_result(project);
@@ -629,25 +642,27 @@ SonareError sonare_project_bounce_with_synth_instruments(
 #if defined(SONARE_TUNING) && SONARE_TUNING
   const RenderPathDump path_dump(owned);
 #endif
-  return do_project_bounce(project, options, hosted, out_interleaved, out_len);
+  return do_project_bounce(project, options, hosted, out_interleaved, out_len, out_num_channels);
   SONARE_C_CATCH
 #else
   if (out_interleaved) *out_interleaved = {};
   if (out_len) *out_len = {};
+  if (out_num_channels) *out_num_channels = 0;
   SONARE_C_STUB_NOT_SUPPORTED(project, options, instruments, instrument_count, out_interleaved,
-                              out_len);
+                              out_len, out_num_channels);
 #endif
 }
 
 SonareError sonare_project_bounce_with_sf2_instruments(
     SonareProject* project, const SonareProjectBounceOptions* options,
     const SonareSf2InstrumentBinding* instruments, size_t instrument_count, float** out_interleaved,
-    size_t* out_len) {
+    size_t* out_len, int* out_num_channels) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_TRY
   if (out_interleaved) *out_interleaved = nullptr;
   if (out_len) *out_len = 0;
+  if (out_num_channels) *out_num_channels = 0;
   // Before the first argument rejection below, so an early return leaves the
   // recorded compile result empty rather than describing the previous bounce.
   clear_last_bounce_result(project);
@@ -689,12 +704,13 @@ SonareError sonare_project_bounce_with_sf2_instruments(
 #if defined(SONARE_TUNING) && SONARE_TUNING
   const RenderPathDump path_dump(owned);
 #endif
-  return do_project_bounce(project, options, hosted, out_interleaved, out_len);
+  return do_project_bounce(project, options, hosted, out_interleaved, out_len, out_num_channels);
   SONARE_C_CATCH
 #else
   if (out_interleaved) *out_interleaved = {};
   if (out_len) *out_len = {};
+  if (out_num_channels) *out_num_channels = 0;
   SONARE_C_STUB_NOT_SUPPORTED(project, options, instruments, instrument_count, out_interleaved,
-                              out_len);
+                              out_len, out_num_channels);
 #endif
 }

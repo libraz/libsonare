@@ -339,7 +339,6 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
 
   SonareProjectBounceOptions options{};
   options.total_frames = static_cast<int64_t>(args.get_int("frames", 0));
-  options.block_size = args.get_int("block-size", 0);
   options.num_channels = args.get_int("channels", 0);
   options.instrument_latency_samples = args.get_int("instrument-latency", 0);
   // CRITICAL: the WAV header MUST be tagged with the SAME sample rate the render
@@ -366,14 +365,17 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
 
   float* interleaved = nullptr;
   size_t total = 0;
-  SonareError err = use_synth ? sonare_project_bounce_with_synth_instruments(
-                                    handle.ptr, &options, &synth_binding, 1, &interleaved, &total)
-                              : sonare_project_bounce(handle.ptr, &options, &interleaved, &total);
+  int rendered_channels = 0;
+  SonareError err =
+      use_synth
+          ? sonare_project_bounce_with_synth_instruments(handle.ptr, &options, &synth_binding, 1,
+                                                         &interleaved, &total, &rendered_channels)
+          : sonare_project_bounce(handle.ptr, &options, &interleaved, &total, &rendered_channels);
   if (err != SONARE_OK) {
     project_report_error("bounce project", err);
     return project_exit_code(err);
   }
-  const int channels = options.num_channels > 0 ? options.num_channels : 2;
+  const int channels = rendered_channels;
   // The WAV header sample rate equals the render rate the engine used (see above).
   const int sample_rate = render_sample_rate;
   const size_t frames = channels > 0 ? total / static_cast<size_t>(channels) : total;

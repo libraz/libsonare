@@ -247,8 +247,9 @@ std::vector<float> render_project_bounce(const BusStripCase& c) {
 
   float* out = nullptr;
   size_t out_len = 0;
+  int bounce_channels1 = 0;
   REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1, &out,
-                                                         &out_len) == SONARE_OK);
+                                                         &out_len, &bounce_channels1) == SONARE_OK);
   REQUIRE(out_len == static_cast<size_t>(kTotalFrames) * 2);
   std::vector<float> result(out, out + out_len);
   sonare_free_floats(out);
@@ -356,15 +357,19 @@ TEST_CASE("project serialize/deserialize preserves bus and master pan+EQ through
 
       float* before_out = nullptr;
       size_t before_len = 0;
-      REQUIRE(sonare_project_bounce_with_builtin_instruments(
-                  project, &options, &binding, 1, &before_out, &before_len) == SONARE_OK);
+      int bounce_channels2 = 0;
+      REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1,
+                                                             &before_out, &before_len,
+                                                             &bounce_channels2) == SONARE_OK);
       std::vector<float> before(before_out, before_out + before_len);
       sonare_free_floats(before_out);
 
       float* after_out = nullptr;
       size_t after_len = 0;
+      int bounce_channels3 = 0;
       REQUIRE(sonare_project_bounce_with_builtin_instruments(reloaded, &options, &binding, 1,
-                                                             &after_out, &after_len) == SONARE_OK);
+                                                             &after_out, &after_len,
+                                                             &bounce_channels3) == SONARE_OK);
       std::vector<float> after(after_out, after_out + after_len);
       sonare_free_floats(after_out);
 

@@ -1701,7 +1701,9 @@ TEST_CASE("project C surface warns that a MIDI-only project bounces to silence",
   options.total_frames = 256;
   float* bounced = nullptr;
   size_t bounced_len = 0;
-  REQUIRE(sonare_project_bounce(project, &options, &bounced, &bounced_len) == SONARE_OK);
+  int bounce_channels = 0;
+  REQUIRE(sonare_project_bounce(project, &options, &bounced, &bounced_len, &bounce_channels) ==
+          SONARE_OK);
   REQUIRE(bounced != nullptr);
   sonare_free_floats(bounced);
 

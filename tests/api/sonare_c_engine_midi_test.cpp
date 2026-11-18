@@ -1557,8 +1557,10 @@ TEST_CASE("an SF2 instrument config outside its struct_version range is refused"
     binding.config.struct_version = version;
     float* out = nullptr;
     size_t out_len = 0;
+    int bounce_channels = 0;
     REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out,
-                                                       &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+                                                       &out_len, &bounce_channels) ==
+            SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(out == nullptr);
   }
   sonare_project_destroy(project);
