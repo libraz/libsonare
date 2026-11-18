@@ -330,7 +330,11 @@ def detect_key(
     profile: KeyProfile | None = None,
     genre_hint: GenreHint | None = None,
     tuning_cents: float | str = "auto",
-) -> KeyDetection: ...
+) -> KeyDetection:
+    """``n_fft`` is in samples at 22050 Hz, rescaled to the analysis rate; ``hop_length`` is the
+    hop in samples of the analysed signal: the input resampled to 22050 Hz when its rate is
+    above 22050 Hz, the input itself otherwise."""
+
 def detect_key_candidates(
     samples: FloatSamples,
     sample_rate: int,
@@ -394,7 +398,11 @@ def analyze(
     tuning_cents: float | str = "auto",
     on_progress: ProgressCallback | None = None,
     cancel: CancelCallback | None = None,
-) -> AnalysisResult: ...
+) -> AnalysisResult:
+    """``n_fft`` is in samples at 22050 Hz, rescaled to the analysis rate; ``hop_length`` is the
+    hop in samples of the analysed signal: the input resampled to 22050 Hz when its rate is
+    above 22050 Hz, the input itself otherwise."""
+
 def estimate_meter(
     beats: Sequence[Beat],
     *,
@@ -543,7 +551,9 @@ def analyze_dynamics(
     window_sec: float = 0.4,
     hop_length: int = 512,
     compression_threshold_db: float = 6.0,
-) -> DynamicsResult: ...
+) -> DynamicsResult:
+    """``hop_length`` is the hop in samples of the caller's buffer, at the sample rate."""
+
 def analyze_timbre(
     samples: FloatSamples,
     sample_rate: int,
@@ -574,7 +584,9 @@ def detect_chords(
     detect_inversions: bool = False,
     chroma_method: ChordChromaMethod = "cqt",
     tuning_cents: float | str = "auto",
-) -> ChordAnalysisResult: ...
+) -> ChordAnalysisResult:
+    """``hop_length`` is the hop in samples of the caller's buffer, at the sample rate."""
+
 def chord_functional_analysis(
     samples: FloatSamples,
     sample_rate: int,
@@ -605,7 +617,10 @@ def analyze_sections(
     hop_length: int = 512,
     min_section_sec: float = 4.0,
     threshold: float | None = None,
-) -> list[Section]: ...
+) -> list[Section]:
+    """``hop_length`` is the hop in samples of the analysed signal: the input resampled to
+    22050 Hz when its rate is above 22050 Hz, the input itself otherwise."""
+
 def detect_boundaries(
     samples: FloatSamples,
     sample_rate: int,
@@ -629,6 +644,8 @@ def detect_boundaries(
     set aside; 0 disables that threshold. Boundaries with ``strength`` below ``threshold``
     can still be
     returned, because the gate is local while ``strength`` ranks within the track.
+    ``hop_length`` is the hop in samples of the analysed signal: the input resampled to
+    22050 Hz when its rate is above 22050 Hz, the input itself otherwise.
     """
     ...
 

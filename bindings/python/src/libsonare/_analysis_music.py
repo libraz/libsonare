@@ -119,6 +119,7 @@ def detect_chords(
     this unit. The value used, given or measured, is the result's ``tuning_cents``.
     ``n_fft`` is the STFT chroma window in samples at 22050 Hz,
     rescaled to the input rate so its duration is the same at every rate.
+    ``hop_length`` is the hop in samples of the caller's buffer, at the sample rate.
     ``chroma_method`` is ``"cqt"`` (default), ``"stft"`` or ``"nnls"``; the
     defaults decode triads only, with the HMM on.
     """
@@ -346,7 +347,8 @@ def analyze_sections(
         samples: Mono audio samples (1D float).
         sample_rate: Sample rate in Hz.
         n_fft: FFT window size used for the structural features.
-        hop_length: Hop length in samples.
+        hop_length: Hop in samples of the analysed signal: the input resampled to
+            22050 Hz when its rate is above 22050 Hz, the input itself otherwise.
         min_section_sec: Minimum section duration in seconds.
         threshold: Relative boundary threshold, as in :func:`detect_boundaries`;
             ``None`` keeps the library default, which is lower than the boundary
@@ -422,7 +424,8 @@ def detect_boundaries(
         sample_rate: Sample rate in Hz. Rates above 22050 are
             analyzed at 22050, so boundary times are stable across source rates.
         n_fft: FFT window size used for the structural features.
-        hop_length: Hop length in samples.
+        hop_length: Hop in samples of the analysed signal: the input resampled to
+            22050 Hz when its rate is above 22050 Hz, the input itself otherwise.
         kernel_size: Checkerboard kernel size in frames.
         threshold: Relative novelty threshold: a peak must reach this fraction of
             the largest raw novelty event within ``reference_window_sec`` of it, a

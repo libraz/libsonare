@@ -134,8 +134,9 @@ def detect_key(
         samples: Mono audio samples (1D float). See :func:`detect_bpm` for
             accepted types.
         sample_rate: Sample rate in Hz.
-        n_fft: FFT size used for chroma analysis.
-        hop_length: Hop length used for chroma analysis.
+        n_fft: Chroma window in samples at 22050 Hz, rescaled to the analysis rate.
+        hop_length: Hop in samples of the analysed signal: the input resampled to
+            22050 Hz when its rate is above 22050 Hz, the input itself otherwise.
         use_hpss: Use harmonic-percussive separation before chroma analysis.
         loudness_weighted: Weight chroma frames by RMS loudness.
         chroma_high_pass_hz: Optional high-pass cutoff before chroma analysis.

@@ -188,6 +188,10 @@ def analyze(
 ) -> AnalysisResult:
     """Run full audio analysis on samples.
 
+    ``n_fft`` is in samples at 22050 Hz, rescaled to the analysis rate; ``hop_length`` is the
+    hop in samples of the analysed signal: the input resampled to 22050 Hz when its rate is
+    above 22050 Hz, the input itself otherwise.
+
     Args:
         samples: Mono audio samples (1D float). See :func:`detect_bpm` for
             accepted types.
@@ -772,7 +776,10 @@ def analyze_dynamics(
     hop_length: int = 512,
     compression_threshold_db: float = 6.0,
 ) -> DynamicsResult:
-    """Analyze dynamics and loudness primitives."""
+    """Analyze dynamics and loudness primitives.
+
+    ``hop_length`` is the hop in samples of the caller's buffer, at the sample rate.
+    """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareDynamicsResult()
