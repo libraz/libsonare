@@ -32,7 +32,6 @@ describe('mel results carry the forward parameters', () => {
       hopLength: 256,
       nMels: 40,
       fminHz: 100,
-      fmaxHz: 0,
       htk: true,
     });
     expect(mel).toMatchObject({

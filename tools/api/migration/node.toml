@@ -3657,9 +3657,11 @@ rule = "matrix-2d"
 [[entry]]
 kind = "field"
 old = "MelSpectrogramRequest.fmax"
-new = "MelSpectrogramRequest.fmaxHz"
+to = "MelSpectrogramRequest.fmaxHz"
+changed = "an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist"
 domain = "analysis"
 rule = "frequency-bounds"
+test = "bindings/node/tests/argument-domain-oracle.test.ts::takes the Nyquist for an omitted fmaxHz and refuses an explicit 0"
 
 [[entry]]
 kind = "field"
@@ -3730,9 +3732,11 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::carries every 2-D
 [[entry]]
 kind = "field"
 old = "MelToAudioRequest.fmax"
-new = "MelToAudioRequest.fmaxHz"
+to = "MelToAudioRequest.fmaxHz"
+changed = "an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist"
 domain = "analysis"
 rule = "frequency-bounds"
+test = "bindings/node/tests/argument-domain-oracle.test.ts::takes the Nyquist for an omitted fmaxHz and refuses an explicit 0"
 
 [[entry]]
 kind = "field"
@@ -3766,9 +3770,11 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix 
 [[entry]]
 kind = "field"
 old = "MelToStftRequest.fmax"
-new = "MelToStftRequest.fmaxHz"
+to = "MelToStftRequest.fmaxHz"
+changed = "an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist"
 domain = "analysis"
 rule = "frequency-bounds"
+test = "bindings/node/tests/argument-domain-oracle.test.ts::takes the Nyquist for an omitted fmaxHz and refuses an explicit 0"
 
 [[entry]]
 kind = "field"
@@ -3802,9 +3808,11 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix 
 [[entry]]
 kind = "field"
 old = "MfccRequest.fmax"
-new = "MfccRequest.fmaxHz"
+to = "MfccRequest.fmaxHz"
+changed = "an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist"
 domain = "analysis"
 rule = "frequency-bounds"
+test = "bindings/node/tests/argument-domain-oracle.test.ts::takes the Nyquist for an omitted fmaxHz and refuses an explicit 0"
 
 [[entry]]
 kind = "field"
@@ -3875,9 +3883,11 @@ test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix 
 [[entry]]
 kind = "field"
 old = "MfccToAudioRequest.fmax"
-new = "MfccToAudioRequest.fmaxHz"
+to = "MfccToAudioRequest.fmaxHz"
+changed = "an explicit 0 is refused with RangeError; it used to select the Nyquist. Omit fmaxHz for the Nyquist"
 domain = "analysis"
 rule = "frequency-bounds"
+test = "bindings/node/tests/argument-domain-oracle.test.ts::takes the Nyquist for an omitted fmaxHz and refuses an explicit 0"
 
 [[entry]]
 kind = "field"

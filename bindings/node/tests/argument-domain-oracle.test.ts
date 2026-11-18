@@ -44,13 +44,13 @@ describe('mel band edges', () => {
     }
   });
 
-  it('keeps 0 as the default spelling of both edges', () => {
-    const mel = melSpectrogram({ samples, sampleRate: SR, fminHz: 0, fmaxHz: 0 });
+  it('takes the Nyquist for an omitted fmaxHz and refuses an explicit 0', () => {
+    const mel = melSpectrogram({ samples, sampleRate: SR, fminHz: 0 });
     expect(mel.fminHz).toBe(0);
     expect(mel.fmaxHz).toBe(SR / 2);
-    expect(
-      mfcc({ samples, sampleRate: SR, fminHz: 0, fmaxHz: 0 }).coefficients.cols,
-    ).toBeGreaterThan(0);
+    expect(mfcc({ samples, sampleRate: SR, fminHz: 0 }).coefficients.cols).toBeGreaterThan(0);
+    expectRefusal(() => melSpectrogram({ samples, sampleRate: SR, fmaxHz: 0 }), RangeError);
+    expectRefusal(() => mfcc({ samples, sampleRate: SR, fmaxHz: 0 }), RangeError);
   });
 });
 
@@ -101,21 +101,29 @@ describe('inverse mel band edges', () => {
     }
   });
 
-  it('keeps 0 as the default spelling of both edges', () => {
-    expect(melToStft({ power, sampleRate: SR, nFft: 512, fminHz: 0, fmaxHz: 0 }).cols).toBe(
-      nFrames,
-    );
+  it('takes the Nyquist for an omitted fmaxHz and refuses an explicit 0', () => {
+    expect(melToStft({ power, sampleRate: SR, nFft: 512, fminHz: 0 }).cols).toBe(nFrames);
     expect(
-      melToAudio({
-        power,
-        sampleRate: SR,
-        nFft: 512,
-        hopLength: 128,
-        fminHz: 0,
-        fmaxHz: 0,
-        nIter: 1,
-      }).length,
+      melToAudio({ power, sampleRate: SR, nFft: 512, hopLength: 128, fminHz: 0, nIter: 1 }).length,
     ).toBeGreaterThan(0);
+    expectRefusal(() => melToStft({ power, sampleRate: SR, nFft: 512, fmaxHz: 0 }), RangeError);
+    expectRefusal(
+      () => melToAudio({ power, sampleRate: SR, nFft: 512, hopLength: 128, fmaxHz: 0, nIter: 1 }),
+      RangeError,
+    );
+    expectRefusal(
+      () =>
+        mfccToAudio({
+          coefficients,
+          nMels,
+          sampleRate: SR,
+          nFft: 512,
+          hopLength: 128,
+          fmaxHz: 0,
+          nIter: 1,
+        }),
+      RangeError,
+    );
   });
 });
 

@@ -22,6 +22,7 @@ import {
   assertFiniteScalar,
   assertFloatFields,
   assertMatrix2D,
+  assertPositiveFloatValue,
   assertPositiveInteger,
   requestOnly,
   sampleOneShot,
@@ -128,7 +129,7 @@ export interface MelSpectrogramRequest extends GuardedOptions {
   nMels?: number;
   /** Lowest band edge in Hz. Default 0. */
   fminHz?: number;
-  /** Highest band edge in Hz; absent or 0 is the Nyquist. */
+  /** Highest band edge in Hz. Absent means the Nyquist; an explicit 0 is refused (`RangeError`). */
   fmaxHz?: number;
   /** Use the HTK mel formula instead of Slaney. Default `false`. */
   htk?: boolean;
@@ -148,7 +149,7 @@ export interface MfccRequest extends GuardedOptions {
   nMels?: number;
   /** Lowest band edge in Hz. Default 0. */
   fminHz?: number;
-  /** Highest band edge in Hz; absent or 0 is the Nyquist. */
+  /** Highest band edge in Hz. Absent means the Nyquist; an explicit 0 is refused (`RangeError`). */
   fmaxHz?: number;
   /** Use the HTK mel formula instead of Slaney. Default `false`. */
   htk?: boolean;
@@ -386,6 +387,10 @@ export function melSpectrogram(...args: unknown[]): MelSpectrogramResult {
   const fminHz = r.fminHz ?? 0;
   const fmaxHz = r.fmaxHz ?? 0;
   assertFloatFields('melSpectrogram', { fminHz, fmaxHz });
+  // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
+  if (r.fmaxHz !== undefined) {
+    assertPositiveFloatValue('melSpectrogram', fmaxHz, 'fmaxHz');
+  }
   const native = requireModule().melSpectrogram(
     r.samples,
     r.sampleRate,
@@ -429,6 +434,10 @@ export function mfcc(...args: unknown[]): MfccResult {
   const fminHz = r.fminHz ?? 0;
   const fmaxHz = r.fmaxHz ?? 0;
   assertFloatFields('mfcc', { fminHz, fmaxHz });
+  // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
+  if (r.fmaxHz !== undefined) {
+    assertPositiveFloatValue('mfcc', fmaxHz, 'fmaxHz');
+  }
   const native = requireModule().mfcc(
     r.samples,
     r.sampleRate,

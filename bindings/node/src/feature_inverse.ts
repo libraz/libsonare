@@ -50,7 +50,7 @@ export interface MelToStftRequest {
   nFft?: number;
   /** Lower band edge in Hz. Default 0. */
   fminHz?: number;
-  /** Upper band edge in Hz. Absent means the Nyquist. */
+  /** Upper band edge in Hz. Absent means the Nyquist; an explicit 0 is refused (`RangeError`). */
   fmaxHz?: number;
   /** Use the HTK mel formula instead of Slaney. Default `false`. */
   htk?: boolean;
@@ -106,7 +106,7 @@ export interface MfccToAudioRequest extends MfccToMelRequest {
   hopLength?: number;
   /** Lower mel band edge in Hz. Default `0`. */
   fminHz?: number;
-  /** Upper mel band edge in Hz. Absent means the Nyquist. */
+  /** Upper mel band edge in Hz. Absent means the Nyquist; an explicit 0 is refused (`RangeError`). */
   fmaxHz?: number;
   /** Griffin-Lim iterations. Default 32. */
   nIter?: number;
@@ -239,6 +239,10 @@ export function melToStft(...args: unknown[]): Matrix2D {
   const fminHz = r.fminHz ?? 0;
   const fmaxHz = r.fmaxHz ?? 0;
   assertFloatFields('melToStft', { fminHz, fmaxHz });
+  // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
+  if (r.fmaxHz !== undefined) {
+    assertPositiveFloatValue('melToStft', fmaxHz, 'fmaxHz');
+  }
   const out = addon.melToStft(
     r.power.data,
     r.power.rows,
@@ -267,6 +271,10 @@ export function melToAudio(...args: unknown[]): Float32Array {
   const fminHz = r.fminHz ?? 0;
   const fmaxHz = r.fmaxHz ?? 0;
   assertFloatFields('melToAudio', { fminHz, fmaxHz });
+  // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
+  if (r.fmaxHz !== undefined) {
+    assertPositiveFloatValue('melToAudio', fmaxHz, 'fmaxHz');
+  }
   return addon.melToAudio(
     r.power.data,
     r.power.rows,
@@ -336,6 +344,10 @@ export function mfccToAudio(...args: unknown[]): Float32Array {
   const fminHz = r.fminHz ?? 0;
   const fmaxHz = r.fmaxHz ?? 0;
   assertFloatFields('mfccToAudio', { fminHz, fmaxHz });
+  // An omitted fmaxHz is the core's Nyquist sentinel 0; a given one is a frequency.
+  if (r.fmaxHz !== undefined) {
+    assertPositiveFloatValue('mfccToAudio', fmaxHz, 'fmaxHz');
+  }
   return addon.mfccToAudio(
     r.coefficients.data,
     r.coefficients.rows,

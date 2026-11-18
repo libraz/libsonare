@@ -170,15 +170,16 @@ describe('mel band edges', () => {
     }
   });
 
-  it('refuses an fmax at or below fmin and keeps 0 as the default spelling', () => {
+  it('refuses an fmax at or below fmin and an explicit fmax of 0, and takes the Nyquist when it is omitted', () => {
     expectRefusalOf(() => melSpectrogram({ samples, sampleRate: SR, fminHz: 4000, fmaxHz: 2000 }));
     expectRefusalOf(() =>
       melToStft({ power, sampleRate: SR, nFft: 512, fminHz: 4000, fmaxHz: 4000 }),
     );
-    expect(melSpectrogram({ samples, sampleRate: SR, fminHz: 0, fmaxHz: 0 }).fmaxHz).toBe(SR / 2);
-    expect(melToStft({ power, sampleRate: SR, nFft: 512, fminHz: 0, fmaxHz: 0 }).cols).toBe(
-      nFrames,
-    );
+    expect(melSpectrogram({ samples, sampleRate: SR, fminHz: 0 }).fmaxHz).toBe(SR / 2);
+    expect(melToStft({ power, sampleRate: SR, nFft: 512, fminHz: 0 }).cols).toBe(nFrames);
+    expectRefusalOf(() => melSpectrogram({ samples, sampleRate: SR, fmaxHz: 0 }));
+    expectRefusalOf(() => mfcc({ samples, sampleRate: SR, fmaxHz: 0 }));
+    expectRefusalOf(() => melToStft({ power, sampleRate: SR, nFft: 512, fmaxHz: 0 }));
   });
 });
 
