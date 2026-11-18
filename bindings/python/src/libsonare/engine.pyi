@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, TypeAlias
+from typing import Any, Literal, TypeAlias
 
 import numpy as np
 
@@ -20,7 +20,7 @@ from ._project import (
     Sf2InstrumentConfig,
     SynthPatch,
 )
-from .analyzer import FloatSamples
+from .analyzer import FloatSamples, StripRef
 from .types import (
     AutomationPoint,
     ClipPageRequest,
@@ -38,6 +38,7 @@ from .types import (
     EngineProcessWithMonitorResult,
     EngineTelemetry,
     EngineTrackMonitorMode,
+    EqBandInput,
     ExternalMidiEvent,
     MeterTelemetryRecord,
     MeterTelemetryRecordWide,
@@ -245,51 +246,76 @@ class RealtimeEngine:
     def set_bus_strip_json(self, bus_id: int, scene_json: str) -> None:
         """Install a bus strip from a scene JSON document."""
         ...
-    def set_bus_strip_eq_band(
-        self, bus_id: int, band_index: int, band: Mapping[str, object]
+    def set_strip_eq_band(self, ref: StripRef, band_index: int, band: EqBandInput) -> None:
+        """Replace one equalizer band of a strip in realtime; a track id or ``"master"``."""
+        ...
+    def set_bus_eq_band(self, bus_id: int, band_index: int, band: EqBandInput) -> None:
+        """Replace one equalizer band of a bus strip in realtime."""
+        ...
+    def set_strip_insert_bypassed(
+        self, ref: StripRef, insert_index: int, bypassed: bool, reset_on_bypass: bool = False
     ) -> None:
-        """Realtime change of one bus-strip EQ band from a mapping."""
-        ...
-    def set_bus_strip_eq_band_json(self, bus_id: int, band_index: int, band_json: str) -> None:
-        """Realtime change of one bus-strip EQ band from a JSON document."""
-        ...
-    def set_track_strip_json(self, track_id: int, scene_json: str) -> None:
-        """Install a track strip from a scene JSON document."""
-        ...
-    def set_track_strip_eq_band(
-        self, track_id: int, band_index: int, band: Mapping[str, object]
-    ) -> None:
-        """Realtime change of one track-strip EQ band from a mapping."""
-        ...
-    def set_track_strip_eq_band_json(self, track_id: int, band_index: int, band_json: str) -> None:
-        """Realtime change of one track-strip EQ band from a JSON document."""
-        ...
-    def set_track_strip_insert_bypassed(
-        self, track_id: int, insert_index: int, bypassed: bool, reset_on_bypass: bool = False
-    ) -> None:
-        """Toggle bypass of a track-strip insert; ``reset_on_bypass`` clears its state when
+        """Bypass or engage one strip insert; ``reset_on_bypass`` clears its state when
         bypassed."""
         ...
-    def set_track_strip_insert_param_by_name(
-        self, track_id: int, insert_index: int, param_name: str, value: float
+    def set_bus_insert_bypassed(
+        self, bus_id: int, insert_index: int, bypassed: bool, reset_on_bypass: bool = False
     ) -> None:
-        """Realtime change of one track-strip insert parameter, addressed by name."""
+        """Bus counterpart of :meth:`set_strip_insert_bypassed`."""
         ...
-    def set_track_strip_pan(self, track_id: int, pan: float) -> None:
-        """Set a track strip's pan position (-1.0 hard left .. 1.0 hard right)."""
+    def set_strip_insert_param(
+        self, ref: StripRef, insert_index: int, name: str, value: float
+    ) -> None:
+        """Realtime change of one strip insert parameter, addressed by name."""
         ...
-    def set_track_strip_pan_law(self, track_id: int, pan_law: PanLaw) -> None:
-        """Set a track strip's pan law (a :data:`PanLaw` token)."""
+    def set_bus_insert_param(self, bus_id: int, insert_index: int, name: str, value: float) -> None:
+        """Bus counterpart of :meth:`set_strip_insert_param`."""
         ...
-    def set_track_strip_pan_mode(self, track_id: int, pan_mode: PanMode) -> None:
-        """Set a track strip's pan mode (a :data:`PanMode` name or its ordinal)."""
+    def apply_strip_insert_param_now(
+        self, ref: StripRef, insert_index: int, name: str, value: float
+    ) -> bool:
+        """Apply a strip insert parameter immediately on the calling thread; returns False for an
+        unknown strip, insert or name."""
         ...
-    def set_track_strip_dual_pan(self, track_id: int, left_pan: float, right_pan: float) -> None:
-        """Set a track strip's dual-pan positions for the left and right channels."""
+    def apply_bus_insert_param_now(
+        self, bus_id: int, insert_index: int, name: str, value: float
+    ) -> bool:
+        """Bus counterpart of :meth:`apply_strip_insert_param_now`."""
         ...
-    def set_track_strip_surround_pan(
+    def restore_strip_insert_param(
+        self, ref: StripRef, insert_index: int, name: str, value: float
+    ) -> None:
+        """Restore a retained strip insert value exactly, without a ramp; raises if the strip,
+        insert or name is unknown."""
+        ...
+    def restore_bus_insert_param(
+        self, bus_id: int, insert_index: int, name: str, value: float
+    ) -> None:
+        """Bus counterpart of :meth:`restore_strip_insert_param`."""
+        ...
+    def clear_strip_insert_parameter_bases(self, ref: StripRef) -> None:
+        """Forget the remembered manual insert-parameter values of a strip and discard its queued
+        insert edits."""
+        ...
+    def clear_bus_insert_parameter_bases(self, bus_id: int) -> None:
+        """Forget the remembered manual insert-parameter values of a bus strip."""
+        ...
+    def set_strip_pan(self, ref: StripRef, pan: float) -> None:
+        """Set a track strip's pan position (-1.0 hard left .. 1.0 hard right); the master strip
+        is refused."""
+        ...
+    def set_strip_pan_law(self, ref: StripRef, pan_law: PanLaw) -> None:
+        """Set a track strip's pan law (a :data:`PanLaw` token); the master strip is refused."""
+        ...
+    def set_strip_pan_mode(self, ref: StripRef, pan_mode: PanMode) -> None:
+        """Set a track strip's pan mode (a :data:`PanMode` token); the master strip is refused."""
+        ...
+    def set_strip_dual_pan(self, ref: StripRef, left_pan: float, right_pan: float) -> None:
+        """Set a track strip's dual-pan positions; the master strip is refused."""
+        ...
+    def set_strip_surround_pan(
         self,
-        track_id: int,
+        ref: StripRef,
         *,
         azimuth: float = ...,
         elevation: float = ...,
@@ -300,125 +326,65 @@ class RealtimeEngine:
         """Set a track strip's surround pan position; a non-finite or out-of-range value raises
         SonareValueError."""
         ...
-    def set_track_strip_channel_delay_samples(self, track_id: int, delay_samples: int) -> None:
-        """Set a track strip's alignment delay in samples."""
+    def set_strip_channel_delay_samples(self, ref: StripRef, delay_samples: int) -> None:
+        """Set a track strip's alignment delay in samples; the master strip is refused."""
         ...
-    def set_master_strip_json(self, scene_json: str) -> None:
-        """Install the master strip from a scene JSON document."""
-        ...
-    def set_master_strip_eq_band(self, band_index: int, band: Mapping[str, object]) -> None:
-        """Realtime change of one master-strip EQ band from a mapping."""
-        ...
-    def set_master_strip_eq_band_json(self, band_index: int, band_json: str) -> None:
-        """Realtime change of one master-strip EQ band from a JSON document."""
-        ...
-    def set_master_strip_insert_bypassed(
-        self, insert_index: int, bypassed: bool, reset_on_bypass: bool = False
-    ) -> None:
-        """Toggle bypass of a master-strip insert; ``reset_on_bypass`` clears its state when
-        bypassed."""
-        ...
-    def set_master_strip_insert_param_by_name(
-        self, insert_index: int, param_name: str, value: float
-    ) -> None:
-        """Realtime change of one master-strip insert parameter, addressed by name."""
-        ...
-    def set_bus_strip_insert_param_by_name(
-        self, bus_id: int, insert_index: int, param_name: str, value: float
-    ) -> None:
-        """Realtime change of one bus-strip insert parameter, addressed by name."""
-        ...
-    def apply_track_strip_insert_param_by_name_now(
-        self, track_id: int, insert_index: int, param_name: str, value: float
-    ) -> bool:
-        """Apply a track-strip insert parameter immediately on the calling thread; returns False
-        for an unknown track, insert or name."""
-        ...
-    def apply_master_strip_insert_param_by_name_now(
-        self, insert_index: int, param_name: str, value: float
-    ) -> bool:
-        """Apply a master-strip insert parameter immediately on the calling thread; returns False
-        for an unknown insert or name."""
-        ...
-    def apply_bus_strip_insert_param_by_name_now(
-        self, bus_id: int, insert_index: int, param_name: str, value: float
-    ) -> bool:
-        """Apply a bus-strip insert parameter immediately on the calling thread; returns False for
-        an unknown bus, insert or name."""
-        ...
-    def restore_track_strip_insert_param_by_name(
-        self, track_id: int, insert_index: int, param_name: str, value: float
-    ) -> None:
-        """Restore a retained track-strip insert value exactly, without a ramp; raises if the
-        track, insert or name is unknown."""
-        ...
-    def restore_master_strip_insert_param_by_name(
-        self, insert_index: int, param_name: str, value: float
-    ) -> None:
-        """Restore a retained master-strip insert value exactly, without a ramp; raises if the
-        insert or name is unknown."""
-        ...
-    def restore_bus_strip_insert_param_by_name(
-        self, bus_id: int, insert_index: int, param_name: str, value: float
-    ) -> None:
-        """Restore a retained bus-strip insert value exactly, without a ramp; raises if the bus,
-        insert or name is unknown."""
-        ...
-    def clear_track_insert_parameter_bases(self, track_id: int) -> None:
-        """Forget the remembered manual insert-parameter values of a track strip and discard its
-        queued insert edits."""
-        ...
-    def clear_master_insert_parameter_bases(self) -> None:
-        """Forget the remembered manual insert-parameter values of the master strip."""
-        ...
-    def clear_bus_insert_parameter_bases(self, bus_id: int) -> None:
-        """Forget the remembered manual insert-parameter values of a bus strip."""
-        ...
-    def set_bus_strip_insert_bypassed(
-        self, bus_id: int, insert_index: int, bypassed: bool, reset_on_bypass: bool = False
-    ) -> None:
-        """Toggle bypass of a bus-strip insert; ``reset_on_bypass`` clears its state
-        when bypassed."""
-        ...
-    def set_bus_strip_pan(self, bus_id: int, pan: float) -> None:
+    def set_bus_pan(self, bus_id: int, pan: float) -> None:
         """Set a bus strip's pan position (-1.0 hard left .. 1.0 hard right)."""
         ...
-    def set_bus_strip_pan_law(self, bus_id: int, pan_law: PanLaw) -> None:
+    def set_bus_pan_law(self, bus_id: int, pan_law: PanLaw) -> None:
         """Set a bus strip's pan law (a :data:`PanLaw` token)."""
         ...
-    def set_bus_strip_pan_mode(self, bus_id: int, pan_mode: PanMode) -> None:
-        """Set a bus strip's pan mode (a :data:`PanMode` name or its ordinal)."""
+    def set_bus_pan_mode(self, bus_id: int, pan_mode: PanMode) -> None:
+        """Set a bus strip's pan mode (a :data:`PanMode` token)."""
         ...
-    def set_bus_strip_dual_pan(self, bus_id: int, left_pan: float, right_pan: float) -> None:
+    def set_bus_dual_pan(self, bus_id: int, left_pan: float, right_pan: float) -> None:
         """Set a bus strip's dual-pan positions for the left and right channels."""
         ...
-    def resolve_track_insert_automation_id(
-        self, track_id: int, insert_index: int, param_name: str
+    def set_strip_fader_db(
+        self, ref: StripRef, fader_db: float, render_frame: int | None = None
+    ) -> None:
+        """Set a strip's fader in dB in realtime through its reserved automation id."""
+        ...
+    def set_bus_gain_db(self, bus_id: int, gain_db: float, render_frame: int | None = None) -> None:
+        """Set a bus's gain in dB in realtime through its reserved automation id."""
+        ...
+    def resolve_strip_insert_automation_id(
+        self, ref: StripRef, insert_index: int, param_name: str
     ) -> int:
-        """Resolve a track-lane insert parameter to its automation id; an unknown track, insert or
+        """Resolve a strip insert parameter to its automation id; an unknown strip, insert or
         name raises SonareValueError."""
-        ...
-    def resolve_track_lane_automation_id(self, track_id: int, param_name: str) -> int:
-        """Resolve a track lane's ``"faderDb"`` or ``"pan"`` to its automation id; an unknown track
-        or name raises SonareValueError."""
-        ...
-    def resolve_bus_automation_id(self, bus_id: int, param_name: str) -> int:
-        """Resolve a bus's ``"faderDb"`` to its automation id; an unknown bus or name raises
-        SonareValueError."""
-        ...
-    def resolve_master_automation_id(self, param_name: str) -> int:
-        """Resolve the master ``"faderDb"``, ``"pan"`` or ``"width"`` to its automation id; any
-        other name raises SonareValueError."""
-        ...
-    def resolve_master_insert_automation_id(self, insert_index: int, param_name: str) -> int:
-        """Resolve a master-strip insert parameter to its automation id; an unknown insert or name
-        raises SonareValueError."""
         ...
     def resolve_bus_insert_automation_id(
         self, bus_id: int, insert_index: int, param_name: str
     ) -> int:
         """Resolve a bus-strip insert parameter to its automation id; an unknown bus, insert or
         name raises SonareValueError."""
+        ...
+    def resolve_strip_automation_id(
+        self, ref: StripRef, kind: Literal["faderDb", "pan", "width"]
+    ) -> int:
+        """Resolve a strip's ``"faderDb"``, ``"pan"`` or, for the master only, ``"width"`` to its
+        automation id."""
+        ...
+    def resolve_bus_automation_id(self, bus_id: int, param_name: str) -> int:
+        """Resolve a bus's ``"faderDb"`` to its automation id; an unknown bus or name raises
+        SonareValueError."""
+        ...
+    def set_bus_strip_eq_band_json(self, bus_id: int, band_index: int, band_json: str) -> None:
+        """Realtime change of one bus-strip EQ band from a JSON document."""
+        ...
+    def set_track_strip_json(self, track_id: int, scene_json: str) -> None:
+        """Install a track strip from a scene JSON document."""
+        ...
+    def set_track_strip_eq_band_json(self, track_id: int, band_index: int, band_json: str) -> None:
+        """Realtime change of one track-strip EQ band from a JSON document."""
+        ...
+    def set_master_strip_json(self, scene_json: str) -> None:
+        """Install the master strip from a scene JSON document."""
+        ...
+    def set_master_strip_eq_band_json(self, band_index: int, band_json: str) -> None:
+        """Realtime change of one master-strip EQ band from a JSON document."""
         ...
     def insert_parameter_constructed_value(self, param_id: int) -> float:
         """Return an insert parameter's immutable construction value."""

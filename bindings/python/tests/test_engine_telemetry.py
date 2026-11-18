@@ -83,7 +83,7 @@ def test_engine_set_track_strip_surround_pan_moves_lane_between_planes() -> None
         engine.set_track_strip_json(
             10, '{"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"s"}]}'
         )
-        engine.set_track_strip_surround_pan(10, azimuth=-110.0)
+        engine.set_strip_surround_pan(10, azimuth=-110.0)
         engine.play()
 
         def run_blocks() -> list[list[float]]:
@@ -106,7 +106,7 @@ def test_engine_set_track_strip_surround_pan_moves_lane_between_planes() -> None
         steady_power = sum(plane[-1] ** 2 for plane in settled)
         assert steady_power > 1e-4
 
-        engine.set_track_strip_surround_pan(10, azimuth=110.0)
+        engine.set_strip_surround_pan(10, azimuth=110.0)
         # The first blocks carry the glide; check every frame of the move.
         moving = run_blocks()
         ratios = [
@@ -131,16 +131,16 @@ def test_engine_set_track_strip_surround_pan_moves_lane_between_planes() -> None
         assert sum(after) == pytest.approx(total_before, rel=0.05)
 
         with pytest.raises(SonareValueError) as nan_error:
-            engine.set_track_strip_surround_pan(10, azimuth=math.nan)
+            engine.set_strip_surround_pan(10, azimuth=math.nan)
         assert nan_error.value.code == 4
         with pytest.raises(SonareError):
-            engine.set_track_strip_surround_pan(10, lfe=math.inf)
+            engine.set_strip_surround_pan(10, lfe=math.inf)
         for field in ({"azimuth": 181.0}, {"divergence": 1.5}, {"lfe": -0.1}):
             with pytest.raises(SonareValueError) as range_error:
-                engine.set_track_strip_surround_pan(10, **field)
+                engine.set_strip_surround_pan(10, **field)
             assert range_error.value.code == 4
         with pytest.raises(SonareValueError) as unknown_error:
-            engine.set_track_strip_surround_pan(99, azimuth=0.0)
+            engine.set_strip_surround_pan(99, azimuth=0.0)
         assert unknown_error.value.code == 4
 
 

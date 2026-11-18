@@ -65,9 +65,31 @@ def test_bus_fader_id_keeps_its_bus_across_a_reorder_and_retires_with_it() -> No
 def test_master_automation_ids_resolve_fader_pan_and_width() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as engine:
         names = ("faderDb", "pan", "width")
-        ids = [engine.resolve_master_automation_id(name) for name in names]
+        ids = [engine.resolve_strip_automation_id("master", name) for name in names]
         assert len(set(ids)) == 3
         for name, param_id in zip(names, ids, strict=True):
             assert engine.parameter_info(param_id).name == name
         with pytest.raises(SonareError):
-            engine.resolve_master_automation_id("gain")
+            engine.resolve_strip_automation_id("master", "gain")
+
+
+def test_set_bus_gain_db_drives_the_bus_fader() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as engine:
+        engine.set_clips(
+            [
+                EngineClip(
+                    id=1,
+                    track_id=20,
+                    channels=[[1.0] * _FRAMES],
+                    start_ppq=0.0,
+                    length_samples=_FRAMES,
+                )
+            ]
+        )
+        engine.set_track_buses([{"bus_id": 200}])
+        engine.set_track_lanes([{"track_id": 20, "output_bus_id": 200}])
+        engine.set_bus_gain_db(200, -60.0)
+        engine.play()
+        assert _settled(engine) == pytest.approx(0.001, abs=1e-4)
+        with pytest.raises(SonareError):
+            engine.set_bus_gain_db(300, 0.0)

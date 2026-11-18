@@ -79,7 +79,7 @@ def test_resolve_master_unknown_name_is_a_value_error() -> None:
         RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine,
         pytest.raises(SonareValueError),
     ):
-        engine.resolve_master_automation_id("noSuchParameter")
+        engine.resolve_strip_automation_id("master", "noSuchParameter")
 
 
 def test_bounce_and_render_results_are_float32_arrays() -> None:

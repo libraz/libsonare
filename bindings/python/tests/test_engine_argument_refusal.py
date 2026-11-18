@@ -23,7 +23,7 @@ _VALUE_REFUSALS: list[tuple[str, Callable[[RealtimeEngine], object]]] = [
     ("unknown_synth_preset", lambda e: e.set_synth_instrument("no-such-preset", destination_id=3)),
     ("track_sends_unknown_track", lambda e: e.set_track_sends(_UNKNOWN_ID, [])),
     ("track_output_bus_unknown_track", lambda e: e.set_track_output_bus(_UNKNOWN_ID, 0)),
-    ("bus_strip_pan_bus_zero", lambda e: e.set_bus_strip_pan(0, 0.0)),
+    ("bus_strip_pan_bus_zero", lambda e: e.set_bus_pan(0, 0.0)),
 ]
 
 
@@ -40,10 +40,10 @@ def test_value_refusal_is_sonare_value_error(
 
 _MASTER_STRIP_SETTERS: list[tuple[str, Callable[[RealtimeEngine], object]]] = [
     ("eq_band_json", lambda e: e.set_master_strip_eq_band_json(0, _BAND)),
-    ("insert_bypassed", lambda e: e.set_master_strip_insert_bypassed(0, True)),
+    ("insert_bypassed", lambda e: e.set_strip_insert_bypassed("master", 0, True)),
     (
         "insert_param_by_name",
-        lambda e: e.set_master_strip_insert_param_by_name(0, "levelDb", -3.0),
+        lambda e: e.set_strip_insert_param("master", 0, "levelDb", -3.0),
     ),
 ]
 

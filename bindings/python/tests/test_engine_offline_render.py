@@ -342,7 +342,7 @@ def test_tail_samples_reports_a_lane_channel_delay() -> None:
         )
         # An insert-free strip adds nothing, so the tail is the channel delay alone.
         assert engine.tail_samples == 0
-        engine.set_track_strip_channel_delay_samples(10, 300)
+        engine.set_strip_channel_delay_samples(10, 300)
         assert engine.tail_samples == 300
 
 

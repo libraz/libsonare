@@ -5926,6 +5926,7 @@ test = "bindings/python/tests/test_mixing.py::test_set_pan_law_matches_shared_na
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.set_track_strip_pan_law"
+to = "RealtimeEngine.set_strip_pan_law"
 changed = "takes an exact PanLaw token; another spelling is SonareValueError, a number is TypeError"
 domain = "engine"
 rule = "string-closed-sets"
@@ -5934,6 +5935,7 @@ test = "bindings/python/tests/test_engine_mixer.py::test_engine_track_strip_pan_
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.set_bus_strip_pan_law"
+to = "RealtimeEngine.set_bus_pan_law"
 changed = "takes an exact PanLaw token; another spelling is SonareValueError, a number is TypeError"
 domain = "engine"
 rule = "string-closed-sets"
@@ -6078,6 +6080,7 @@ test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_mixer_cl
 [[entry]]
 kind = "option"
 old = "RealtimeEngine.set_track_strip_pan_mode(pan_mode)"
+to = "RealtimeEngine.set_strip_pan_mode(pan_mode)"
 changed = "a PanMode token; 'stereo-pan' / 'dual-pan' and ordinals are refused"
 domain = "engine"
 rule = "string-closed-sets"
@@ -6086,6 +6089,7 @@ test = "bindings/python/tests/test_engine_mixer.py::test_engine_track_strip_pan_
 [[entry]]
 kind = "option"
 old = "RealtimeEngine.set_bus_strip_pan_mode(pan_mode)"
+to = "RealtimeEngine.set_bus_pan_mode(pan_mode)"
 changed = "a PanMode token; 'stereo-pan' / 'dual-pan' and ordinals are refused"
 domain = "engine"
 rule = "string-closed-sets"
@@ -9171,6 +9175,7 @@ test = "bindings/python/tests/test_block_size_absence.py::test_a_clip_states_its
 [[entry]]
 kind = "option"
 old = "RealtimeEngine.set_track_strip_eq_band(band)"
+to = "RealtimeEngine.set_strip_eq_band(band)"
 changed = "takes a band mapping only; a JSON string is TypeError and goes to set_track_strip_eq_band_json instead"
 domain = "engine"
 rule = "one-input-form"
@@ -9179,6 +9184,7 @@ test = "bindings/python/tests/test_mapping_keys.py::test_a_positional_tuple_or_d
 [[entry]]
 kind = "option"
 old = "RealtimeEngine.set_bus_strip_eq_band(band)"
+to = "RealtimeEngine.set_bus_eq_band(band)"
 changed = "takes a band mapping only; a JSON string is TypeError and goes to set_bus_strip_eq_band_json instead"
 domain = "engine"
 rule = "one-input-form"
@@ -9187,6 +9193,7 @@ test = "bindings/python/tests/test_mapping_keys.py::test_a_positional_tuple_or_d
 [[entry]]
 kind = "option"
 old = "RealtimeEngine.set_master_strip_eq_band(band)"
+to = "RealtimeEngine.set_strip_eq_band(band)"
 changed = "takes a band mapping only; a JSON string is TypeError and goes to set_master_strip_eq_band_json instead"
 domain = "engine"
 rule = "one-input-form"
@@ -10592,3 +10599,374 @@ changed = "an EqBandInput mapping with camelCase keys only; JSON text raises Typ
 domain = "mastering"
 rule = "one-input-form"
 test = "bindings/python/tests/test_analyzer_streaming_mastering.py::test_streaming_equalizer_takes_a_band_mapping_and_refuses_json_text"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_track_strip_eq_band"
+new = "RealtimeEngine.set_strip_eq_band"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_master_strip_eq_band"
+new = "RealtimeEngine.set_strip_eq_band"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_bus_strip_eq_band"
+new = "RealtimeEngine.set_bus_eq_band"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_track_strip_insert_bypassed"
+new = "RealtimeEngine.set_strip_insert_bypassed"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_master_strip_insert_bypassed"
+new = "RealtimeEngine.set_strip_insert_bypassed"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_bus_strip_insert_bypassed"
+new = "RealtimeEngine.set_bus_insert_bypassed"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_track_strip_insert_param_by_name"
+new = "RealtimeEngine.set_strip_insert_param"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_master_strip_insert_param_by_name"
+new = "RealtimeEngine.set_strip_insert_param"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_bus_strip_insert_param_by_name"
+new = "RealtimeEngine.set_bus_insert_param"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.apply_track_strip_insert_param_by_name_now"
+new = "RealtimeEngine.apply_strip_insert_param_now"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.apply_master_strip_insert_param_by_name_now"
+new = "RealtimeEngine.apply_strip_insert_param_now"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.apply_bus_strip_insert_param_by_name_now"
+new = "RealtimeEngine.apply_bus_insert_param_now"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.restore_track_strip_insert_param_by_name"
+new = "RealtimeEngine.restore_strip_insert_param"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.restore_master_strip_insert_param_by_name"
+new = "RealtimeEngine.restore_strip_insert_param"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.restore_bus_strip_insert_param_by_name"
+new = "RealtimeEngine.restore_bus_insert_param"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.clear_track_insert_parameter_bases"
+new = "RealtimeEngine.clear_strip_insert_parameter_bases"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.clear_master_insert_parameter_bases"
+new = "RealtimeEngine.clear_strip_insert_parameter_bases"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.resolve_track_insert_automation_id"
+new = "RealtimeEngine.resolve_strip_insert_automation_id"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.resolve_master_insert_automation_id"
+new = "RealtimeEngine.resolve_strip_insert_automation_id"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.resolve_track_lane_automation_id"
+new = "RealtimeEngine.resolve_strip_automation_id"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.resolve_master_automation_id"
+new = "RealtimeEngine.resolve_strip_automation_id"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_track_strip_pan"
+new = "RealtimeEngine.set_strip_pan"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_track_strip_pan_mode"
+new = "RealtimeEngine.set_strip_pan_mode"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_track_strip_dual_pan"
+new = "RealtimeEngine.set_strip_dual_pan"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_track_strip_surround_pan"
+new = "RealtimeEngine.set_strip_surround_pan"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_track_strip_channel_delay_samples"
+new = "RealtimeEngine.set_strip_channel_delay_samples"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_bus_strip_pan"
+new = "RealtimeEngine.set_bus_pan"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_bus_strip_pan_mode"
+new = "RealtimeEngine.set_bus_pan_mode"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_bus_strip_dual_pan"
+new = "RealtimeEngine.set_bus_dual_pan"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.apply_bus_strip_insert_param_by_name_now(param_name)"
+new = "RealtimeEngine.apply_bus_insert_param_now(name)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.apply_master_strip_insert_param_by_name_now(param_name)"
+new = "RealtimeEngine.apply_strip_insert_param_now(name)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.apply_track_strip_insert_param_by_name_now(param_name)"
+new = "RealtimeEngine.apply_strip_insert_param_now(name)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.apply_track_strip_insert_param_by_name_now(track_id)"
+new = "RealtimeEngine.apply_strip_insert_param_now(ref)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.clear_track_insert_parameter_bases(track_id)"
+new = "RealtimeEngine.clear_strip_insert_parameter_bases(ref)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.resolve_master_automation_id(param_name)"
+new = "RealtimeEngine.resolve_strip_automation_id(kind)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.resolve_track_insert_automation_id(track_id)"
+new = "RealtimeEngine.resolve_strip_insert_automation_id(ref)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.resolve_track_lane_automation_id(param_name)"
+new = "RealtimeEngine.resolve_strip_automation_id(kind)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.resolve_track_lane_automation_id(track_id)"
+new = "RealtimeEngine.resolve_strip_automation_id(ref)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.restore_bus_strip_insert_param_by_name(param_name)"
+new = "RealtimeEngine.restore_bus_insert_param(name)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.restore_master_strip_insert_param_by_name(param_name)"
+new = "RealtimeEngine.restore_strip_insert_param(name)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.restore_track_strip_insert_param_by_name(param_name)"
+new = "RealtimeEngine.restore_strip_insert_param(name)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.restore_track_strip_insert_param_by_name(track_id)"
+new = "RealtimeEngine.restore_strip_insert_param(ref)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_bus_strip_insert_param_by_name(param_name)"
+new = "RealtimeEngine.set_bus_insert_param(name)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_master_strip_insert_param_by_name(param_name)"
+new = "RealtimeEngine.set_strip_insert_param(name)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_track_strip_channel_delay_samples(track_id)"
+new = "RealtimeEngine.set_strip_channel_delay_samples(ref)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_track_strip_dual_pan(track_id)"
+new = "RealtimeEngine.set_strip_dual_pan(ref)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_track_strip_eq_band(track_id)"
+new = "RealtimeEngine.set_strip_eq_band(ref)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_track_strip_insert_bypassed(track_id)"
+new = "RealtimeEngine.set_strip_insert_bypassed(ref)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_track_strip_insert_param_by_name(param_name)"
+new = "RealtimeEngine.set_strip_insert_param(name)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_track_strip_insert_param_by_name(track_id)"
+new = "RealtimeEngine.set_strip_insert_param(ref)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_track_strip_pan(track_id)"
+new = "RealtimeEngine.set_strip_pan(ref)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_track_strip_pan_mode(track_id)"
+new = "RealtimeEngine.set_strip_pan_mode(ref)"
+domain = "engine"
+rule = "strip-ref"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_track_strip_surround_pan(track_id)"
+new = "RealtimeEngine.set_strip_surround_pan(ref)"
+domain = "engine"
+rule = "strip-ref"

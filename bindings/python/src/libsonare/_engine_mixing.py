@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 from ._engine_conversions import _band_json_arg
-from ._errors import _unknown_error
+from ._errors import SonareValueError, _unknown_error
 from ._ffi import SonareSurroundPan
+from ._mixing import StripRef
 from ._narrowing import _narrow_double
 from ._runtime import (
     _UINT32_MAX,
@@ -33,9 +34,31 @@ from ._runtime import (
     _to_c_int,
     _to_c_uint,
     _to_c_uint32,
+    _token_arg,
     _utf8_arg,
 )
 from ._types_engine import _SIDECHAIN_REFUSALS, SidechainCheck, SidechainRefusal
+from .types import EqBandInput
+
+StripAutomationKind = Literal["faderDb", "pan", "width"]
+_STRIP_AUTOMATION_KINDS: tuple[str, ...] = ("faderDb", "pan", "width")
+
+
+def _strip_target(fn: str, ref: StripRef) -> int | None:
+    """Return the track id a strip reference names, or None for the master strip."""
+    if isinstance(ref, str):
+        if ref == "master":
+            return None
+        raise SonareValueError(f"{fn}: strip must be a track id or 'master', got {ref!r}")
+    return _narrow_int(ref, "strip", 0, _UINT32_MAX)
+
+
+def _track_only(fn: str, ref: StripRef) -> int:
+    """Return the track id a strip reference names, refusing the master strip."""
+    track_id = _strip_target(fn, ref)
+    if track_id is None:
+        raise SonareValueError(f"{fn}: the master strip has no such setter")
+    return track_id
 
 
 def _sidechain_check(refusal: int) -> SidechainCheck:
@@ -311,13 +334,25 @@ class _EngineMixingMixin:
             )
         )
 
-    def set_bus_strip_eq_band(
-        self, bus_id: int, band_index: int, band: Mapping[str, object]
-    ) -> None:
-        """Realtime change of one bus-strip EQ band.
+    def set_strip_eq_band(self, ref: StripRef, band_index: int, band: EqBandInput) -> None:
+        """Replace one equalizer band of a strip in realtime; a track id or ``"master"``."""
+        fn = "set_strip_eq_band"
+        track_id = _strip_target(fn, ref)
+        if track_id is None:
+            rc = _get_lib().sonare_engine_set_master_strip_eq_band_json(
+                self._require_handle(), _to_c_int(band_index, "band_index"), _band_json_arg(band)
+            )
+        else:
+            rc = _get_lib().sonare_engine_set_track_strip_eq_band_json(
+                self._require_handle(),
+                _to_c_uint32(track_id, "strip"),
+                _to_c_int(band_index, "band_index"),
+                _band_json_arg(band),
+            )
+        _check(rc)
 
-        Bus-strip counterpart of :meth:`set_track_strip_eq_band`.
-        """
+    def set_bus_eq_band(self, bus_id: int, band_index: int, band: EqBandInput) -> None:
+        """Replace one equalizer band of a bus strip in realtime."""
         _check(
             _get_lib().sonare_engine_set_bus_strip_eq_band_json(
                 self._require_handle(),
@@ -326,6 +361,470 @@ class _EngineMixingMixin:
                 _band_json_arg(band),
             )
         )
+
+    def set_strip_insert_bypassed(
+        self, ref: StripRef, insert_index: int, bypassed: bool, reset_on_bypass: bool = False
+    ) -> None:
+        """Bypass or engage one strip insert; ``reset_on_bypass`` clears its state when bypassed.
+
+        For the master strip ``insert_index`` counts the pre-fader inserts first, then the
+        post-fader inserts.
+        """
+        track_id = _strip_target("set_strip_insert_bypassed", ref)
+        if track_id is None:
+            rc = _get_lib().sonare_engine_set_master_strip_insert_bypassed(
+                self._require_handle(),
+                _to_c_uint(insert_index, "insert_index"),
+                1 if bypassed else 0,
+                1 if reset_on_bypass else 0,
+            )
+        else:
+            rc = _get_lib().sonare_engine_set_track_strip_insert_bypassed(
+                self._require_handle(),
+                _to_c_uint32(track_id, "strip"),
+                _to_c_uint(insert_index, "insert_index"),
+                1 if bypassed else 0,
+                1 if reset_on_bypass else 0,
+            )
+        _check(rc)
+
+    def set_bus_insert_bypassed(
+        self, bus_id: int, insert_index: int, bypassed: bool, reset_on_bypass: bool = False
+    ) -> None:
+        """Bus counterpart of :meth:`set_strip_insert_bypassed`.
+
+        ``bus_id`` must carry a strip configured via :meth:`set_bus_strip_json`.
+        """
+        _check(
+            _get_lib().sonare_engine_set_bus_strip_insert_bypassed(
+                self._require_handle(),
+                _to_c_uint32(bus_id, "bus_id"),
+                _to_c_uint(insert_index, "insert_index"),
+                1 if bypassed else 0,
+                1 if reset_on_bypass else 0,
+            )
+        )
+
+    def set_strip_insert_param(
+        self, ref: StripRef, insert_index: int, name: str, value: float
+    ) -> None:
+        """Change one strip insert parameter in realtime, addressed by its JSON-key name.
+
+        Applied at the next block head through the engine command queue; safe during
+        playback. Raises if the strip, insert or name is unknown, the parameter is not
+        realtime-safe, or the queue is full.
+        """
+        track_id = _strip_target("set_strip_insert_param", ref)
+        if track_id is None:
+            rc = _get_lib().sonare_engine_set_master_strip_insert_param_by_name(
+                self._require_handle(),
+                _to_c_uint(insert_index, "insert_index"),
+                _utf8_arg(name, "name"),
+                _to_c_float(value, "value"),
+            )
+        else:
+            rc = _get_lib().sonare_engine_set_track_strip_insert_param_by_name(
+                self._require_handle(),
+                _to_c_uint32(track_id, "strip"),
+                _to_c_uint(insert_index, "insert_index"),
+                _utf8_arg(name, "name"),
+                _to_c_float(value, "value"),
+            )
+        _check(rc)
+
+    def set_bus_insert_param(self, bus_id: int, insert_index: int, name: str, value: float) -> None:
+        """Bus counterpart of :meth:`set_strip_insert_param`.
+
+        ``bus_id`` must carry a strip configured via :meth:`set_bus_strip_json`.
+        """
+        _check(
+            _get_lib().sonare_engine_set_bus_strip_insert_param_by_name(
+                self._require_handle(),
+                _to_c_uint32(bus_id, "bus_id"),
+                _to_c_uint(insert_index, "insert_index"),
+                _utf8_arg(name, "name"),
+                _to_c_float(value, "value"),
+            )
+        )
+
+    def apply_strip_insert_param_now(
+        self, ref: StripRef, insert_index: int, name: str, value: float
+    ) -> bool:
+        """Apply one strip insert parameter immediately, bypassing the command queue.
+
+        Runs on the calling (engine-owning) thread and is recorded as the parameter's
+        manual base like :meth:`set_strip_insert_param`. An unknown strip, insert or
+        name is reported by a ``False`` return instead of raising; not safe
+        concurrently with :meth:`process`.
+        """
+        out_applied = ctypes.c_int()
+        track_id = _strip_target("apply_strip_insert_param_now", ref)
+        if track_id is None:
+            rc = _get_lib().sonare_engine_apply_master_strip_insert_param_by_name_now(
+                self._require_handle(),
+                _to_c_uint(insert_index, "insert_index"),
+                _utf8_arg(name, "name"),
+                _to_c_float(value, "value"),
+                ctypes.byref(out_applied),
+            )
+        else:
+            rc = _get_lib().sonare_engine_apply_track_strip_insert_param_by_name_now(
+                self._require_handle(),
+                _to_c_uint32(track_id, "strip"),
+                _to_c_uint(insert_index, "insert_index"),
+                _utf8_arg(name, "name"),
+                _to_c_float(value, "value"),
+                ctypes.byref(out_applied),
+            )
+        _check(rc)
+        return bool(out_applied.value)
+
+    def apply_bus_insert_param_now(
+        self, bus_id: int, insert_index: int, name: str, value: float
+    ) -> bool:
+        """Bus counterpart of :meth:`apply_strip_insert_param_now`."""
+        out_applied = ctypes.c_int()
+        _check(
+            _get_lib().sonare_engine_apply_bus_strip_insert_param_by_name_now(
+                self._require_handle(),
+                _to_c_uint32(bus_id, "bus_id"),
+                _to_c_uint(insert_index, "insert_index"),
+                _utf8_arg(name, "name"),
+                _to_c_float(value, "value"),
+                ctypes.byref(out_applied),
+            )
+        )
+        return bool(out_applied.value)
+
+    def restore_strip_insert_param(
+        self, ref: StripRef, insert_index: int, name: str, value: float
+    ) -> None:
+        """Restore a retained strip insert value exactly, without a ramp.
+
+        Retires any in-flight smoother for the parameter and records the value as the
+        manual base. Used to replay retained edits after :meth:`set_track_strip_json`
+        replaced the strip. Raises if the strip, insert or name is unknown; not safe
+        concurrently with :meth:`process`.
+        """
+        track_id = _strip_target("restore_strip_insert_param", ref)
+        if track_id is None:
+            rc = _get_lib().sonare_engine_restore_master_strip_insert_param_by_name(
+                self._require_handle(),
+                _to_c_uint(insert_index, "insert_index"),
+                _utf8_arg(name, "name"),
+                _to_c_float(value, "value"),
+            )
+        else:
+            rc = _get_lib().sonare_engine_restore_track_strip_insert_param_by_name(
+                self._require_handle(),
+                _to_c_uint32(track_id, "strip"),
+                _to_c_uint(insert_index, "insert_index"),
+                _utf8_arg(name, "name"),
+                _to_c_float(value, "value"),
+            )
+        _check(rc)
+
+    def restore_bus_insert_param(
+        self, bus_id: int, insert_index: int, name: str, value: float
+    ) -> None:
+        """Bus counterpart of :meth:`restore_strip_insert_param`."""
+        _check(
+            _get_lib().sonare_engine_restore_bus_strip_insert_param_by_name(
+                self._require_handle(),
+                _to_c_uint32(bus_id, "bus_id"),
+                _to_c_uint(insert_index, "insert_index"),
+                _utf8_arg(name, "name"),
+                _to_c_float(value, "value"),
+            )
+        )
+
+    def clear_strip_insert_parameter_bases(self, ref: StripRef) -> None:
+        """Forget the remembered manual insert-parameter values of one strip.
+
+        Also discards its queued insert edits. Call before :meth:`set_track_strip_json`
+        replaces the strip when its old values must not carry over; the setter never
+        does this itself, since a queued edit may already target the new chain. Raises
+        if a track is not a published lane; not safe concurrently with :meth:`process`.
+        """
+        track_id = _strip_target("clear_strip_insert_parameter_bases", ref)
+        if track_id is None:
+            rc = _get_lib().sonare_engine_clear_master_insert_parameter_bases(
+                self._require_handle()
+            )
+        else:
+            rc = _get_lib().sonare_engine_clear_track_insert_parameter_bases(
+                self._require_handle(), _to_c_uint32(track_id, "strip")
+            )
+        _check(rc)
+
+    def clear_bus_insert_parameter_bases(self, bus_id: int) -> None:
+        """Bus counterpart of :meth:`clear_strip_insert_parameter_bases`.
+
+        Also accepts a bus identity that was already removed, covering every
+        selector the identity held across remove/re-add.
+        """
+        _check(
+            _get_lib().sonare_engine_clear_bus_insert_parameter_bases(
+                self._require_handle(), _to_c_uint32(bus_id, "bus_id")
+            )
+        )
+
+    def set_strip_pan(self, ref: StripRef, pan: float) -> None:
+        """Set a track strip's pan position (-1.0 hard left .. 1.0 hard right).
+
+        The master strip has no pan setter here; drive its pan through
+        :meth:`resolve_strip_automation_id`.
+        """
+        _check(
+            _get_lib().sonare_engine_set_track_strip_pan(
+                self._require_handle(),
+                _to_c_uint32(_track_only("set_strip_pan", ref), "strip"),
+                _to_c_float(pan, "pan"),
+            )
+        )
+
+    def set_strip_pan_law(self, ref: StripRef, pan_law: PanLaw) -> None:
+        """Set a track strip's pan law (a :data:`PanLaw` token such as ``"const3Db"``).
+
+        Balance mode keeps centre unity and uses the law only for the far-channel
+        taper; stereo-pan and dual-pan modes take the law's centre attenuation.
+        A mono source is unity at centre under every law (see :data:`PanLaw`).
+        """
+        _check(
+            _get_lib().sonare_engine_set_track_strip_pan_law(
+                self._require_handle(),
+                _to_c_uint32(_track_only("set_strip_pan_law", ref), "strip"),
+                _pan_law_value(pan_law),
+            )
+        )
+
+    def set_strip_pan_mode(self, ref: StripRef, pan_mode: PanMode) -> None:
+        """Set a track strip's pan mode (a :data:`PanMode` token)."""
+        _check(
+            _get_lib().sonare_engine_set_track_strip_pan_mode(
+                self._require_handle(),
+                _to_c_uint32(_track_only("set_strip_pan_mode", ref), "strip"),
+                _pan_mode_value(pan_mode),
+            )
+        )
+
+    def set_strip_dual_pan(self, ref: StripRef, left_pan: float, right_pan: float) -> None:
+        """Set a track strip's dual-pan positions for the left and right channels."""
+        _check(
+            _get_lib().sonare_engine_set_track_strip_dual_pan(
+                self._require_handle(),
+                _to_c_uint32(_track_only("set_strip_dual_pan", ref), "strip"),
+                _to_c_float(left_pan, "left_pan"),
+                _to_c_float(right_pan, "right_pan"),
+            )
+        )
+
+    def set_strip_surround_pan(
+        self,
+        ref: StripRef,
+        *,
+        azimuth: float = 0.0,
+        elevation: float = 0.0,
+        divergence: float = 0.0,
+        lfe: float = 0.0,
+        distance: float = 1.0,
+    ) -> None:
+        """Set a track strip's surround pan position without a graph rebuild.
+
+        Fields as in :meth:`Mixer.set_surround_pan`; a ``distance`` of 0 or less
+        means the default of 1. Applied when the lane feeds a bus with more than
+        two channels; non-finite or out-of-range ``azimuth`` / ``divergence`` /
+        ``lfe`` raise :class:`SonareValueError` rather than being clamped.
+        """
+        track_id = _track_only("set_strip_surround_pan", ref)
+        pan = SonareSurroundPan(
+            azimuth=_to_c_float(azimuth, "azimuth"),
+            elevation=_to_c_float(elevation, "elevation"),
+            divergence=_to_c_float(divergence, "divergence"),
+            lfe=_to_c_float(lfe, "lfe"),
+            distance=_to_c_float(distance, "distance"),
+        )
+        _check(
+            _get_lib().sonare_engine_set_track_strip_surround_pan(
+                self._require_handle(), _to_c_uint32(track_id, "strip"), ctypes.byref(pan)
+            )
+        )
+
+    def set_strip_channel_delay_samples(self, ref: StripRef, delay_samples: int) -> None:
+        """Set a track strip's alignment delay in samples, moving it later than the other lanes."""
+        _check(
+            _get_lib().sonare_engine_set_track_strip_channel_delay_samples(
+                self._require_handle(),
+                _to_c_uint32(_track_only("set_strip_channel_delay_samples", ref), "strip"),
+                _to_c_int(delay_samples, "delay_samples"),
+            )
+        )
+
+    def set_bus_pan(self, bus_id: int, pan: float) -> None:
+        """Set a bus strip's pan position (-1.0 hard left .. 1.0 hard right).
+
+        Rejected on a surround (>2ch) bus, where pan is not defined.
+        """
+        _check(
+            _get_lib().sonare_engine_set_bus_strip_pan(
+                self._require_handle(),
+                _to_c_uint32(bus_id, "bus_id"),
+                _to_c_float(pan, "pan"),
+            )
+        )
+
+    def set_bus_pan_law(self, bus_id: int, pan_law: PanLaw) -> None:
+        """Set a bus strip's pan law (a :data:`PanLaw` token); rejected on a surround bus."""
+        _check(
+            _get_lib().sonare_engine_set_bus_strip_pan_law(
+                self._require_handle(),
+                _to_c_uint32(bus_id, "bus_id"),
+                _pan_law_value(pan_law),
+            )
+        )
+
+    def set_bus_pan_mode(self, bus_id: int, pan_mode: PanMode) -> None:
+        """Set a bus strip's pan mode (a :data:`PanMode` token); rejected on a surround bus."""
+        _check(
+            _get_lib().sonare_engine_set_bus_strip_pan_mode(
+                self._require_handle(),
+                _to_c_uint32(bus_id, "bus_id"),
+                _pan_mode_value(pan_mode),
+            )
+        )
+
+    def set_bus_dual_pan(self, bus_id: int, left_pan: float, right_pan: float) -> None:
+        """Set a bus strip's dual-pan positions; rejected on a surround bus."""
+        _check(
+            _get_lib().sonare_engine_set_bus_strip_dual_pan(
+                self._require_handle(),
+                _to_c_uint32(bus_id, "bus_id"),
+                _to_c_float(left_pan, "left_pan"),
+                _to_c_float(right_pan, "right_pan"),
+            )
+        )
+
+    def resolve_strip_insert_automation_id(
+        self, ref: StripRef, insert_index: int, param_name: str
+    ) -> int:
+        """Resolve a strip insert parameter to its reserved automation id.
+
+        The returned id drives :meth:`set_automation_lane`,
+        :meth:`set_parameter`, or :meth:`set_parameter_smoothed` exactly like a
+        :meth:`resolve_strip_automation_id` id. Raises :class:`SonareValueError`
+        if the strip, insert, or name is unknown.
+
+        This is how a mastering processor gets time-varying automation:
+        the ``eq.*``, ``dynamics.*``, ``saturation.*``, ``spectral.*``,
+        ``stereo.*``, ``maximizer.*`` and ``multiband.*`` processors are all
+        available as strip inserts, so placing one on a strip and resolving its
+        parameter here drives it at audio-block precision, live and offline
+        alike. The whole-signal stages of the offline mastering chain that have no insert form
+        (``repair.declick``, ``repair.declip``, ``repair.trimSilence``, ``loudness``, and the match
+        stages) have no automation id: they buffer the entire signal by construction and do not run
+        on the realtime path. The four realtime repair inserts (``repair.decrackle``,
+        ``repair.dehum``, ``repair.denoiseClassical``, ``repair.dereverbClassical``) load into a
+        strip, but every one of their parameters is construction-only, so no automation id resolves
+        and an edit needs a strip replacement.
+
+        Track, bus and master insert ids share one lifetime rule: an id names
+        its strip by identity and the kind of processor in its slot (for
+        ``effects.gsEfx``, its EFX type too), so it survives lane and bus
+        reorders and the removal of other strips, and stays valid until its
+        track or bus is removed or its slot comes to hold another kind of
+        processor. After that it applies nothing, its queued edits are dropped,
+        and it is never reissued; resolve again for the new processor. A change
+        that would take the engine past its 8192 insert-id entries is refused.
+        """
+        out_id = ctypes.c_uint32()
+        track_id = _strip_target("resolve_strip_insert_automation_id", ref)
+        if track_id is None:
+            rc = _get_lib().sonare_engine_resolve_master_insert_automation_id(
+                self._require_handle(),
+                _to_c_uint(insert_index, "insert_index"),
+                _utf8_arg(param_name, "param_name"),
+                ctypes.byref(out_id),
+            )
+        else:
+            rc = _get_lib().sonare_engine_resolve_track_insert_automation_id(
+                self._require_handle(),
+                _to_c_uint32(track_id, "strip"),
+                _to_c_uint(insert_index, "insert_index"),
+                _utf8_arg(param_name, "param_name"),
+                ctypes.byref(out_id),
+            )
+        _check(rc)
+        return int(out_id.value)
+
+    def resolve_bus_insert_automation_id(
+        self, bus_id: int, insert_index: int, param_name: str
+    ) -> int:
+        """Bus-strip counterpart of :meth:`resolve_strip_insert_automation_id`.
+
+        ``bus_id`` must carry a strip configured via :meth:`set_bus_strip_json`.
+        """
+        out_id = ctypes.c_uint32()
+        _check(
+            _get_lib().sonare_engine_resolve_bus_insert_automation_id(
+                self._require_handle(),
+                _to_c_uint32(bus_id, "bus_id"),
+                _to_c_uint(insert_index, "insert_index"),
+                _utf8_arg(param_name, "param_name"),
+                ctypes.byref(out_id),
+            )
+        )
+        return int(out_id.value)
+
+    def resolve_strip_automation_id(self, ref: StripRef, kind: StripAutomationKind) -> int:
+        """Resolve a strip's ``"faderDb"``, ``"pan"`` or, for the master only, ``"width"``.
+
+        Same lifetime rule as :meth:`resolve_strip_insert_automation_id`: a track id
+        names the track, not its lane position, so it keeps driving that track across
+        :meth:`set_track_lanes` reorders and applies nothing once the track is removed;
+        the master strip always exists, so its id never goes stale. Raises
+        :class:`SonareValueError` when the track has no lane, the kind is unknown, or
+        ``"width"`` is asked of a track.
+        """
+        fn = "resolve_strip_automation_id"
+        track_id = _strip_target(fn, ref)
+        token = _token_arg(kind, _STRIP_AUTOMATION_KINDS, "kind")
+        out_id = ctypes.c_uint32()
+        if track_id is None:
+            rc = _get_lib().sonare_engine_resolve_master_automation_id(
+                self._require_handle(), _utf8_arg(token, "kind"), ctypes.byref(out_id)
+            )
+        else:
+            if token == "width":
+                raise SonareValueError(f"{fn}: a track strip has no 'width' parameter")
+            rc = _get_lib().sonare_engine_resolve_track_lane_automation_id(
+                self._require_handle(),
+                _to_c_uint32(track_id, "strip"),
+                _utf8_arg(token, "kind"),
+                ctypes.byref(out_id),
+            )
+        _check(rc)
+        return int(out_id.value)
+
+    def resolve_bus_automation_id(self, bus_id: int, param_name: str) -> int:
+        """Resolve a bus's fader to its reserved automation id.
+
+        ``param_name`` is ``"faderDb"``. Same lifetime rule as
+        :meth:`resolve_strip_insert_automation_id`: the id names the bus, not its
+        position in the bus list, so it keeps driving that bus across
+        :meth:`set_track_buses` reorders and the removal of other buses, and
+        applies nothing once the bus is removed. Raises :class:`SonareValueError` if
+        the bus is not configured or the name is not ``"faderDb"``.
+        """
+        out_id = ctypes.c_uint32()
+        _check(
+            _get_lib().sonare_engine_resolve_bus_automation_id(
+                self._require_handle(),
+                _to_c_uint32(bus_id, "bus_id"),
+                _utf8_arg(param_name, "param_name"),
+                ctypes.byref(out_id),
+            )
+        )
+        return int(out_id.value)
 
     def set_bus_strip_eq_band_json(self, bus_id: int, band_index: int, band_json: str) -> None:
         _check(
@@ -346,18 +845,6 @@ class _EngineMixingMixin:
             )
         )
 
-    def set_track_strip_eq_band(
-        self, track_id: int, band_index: int, band: Mapping[str, object]
-    ) -> None:
-        _check(
-            _get_lib().sonare_engine_set_track_strip_eq_band_json(
-                self._require_handle(),
-                _to_c_uint32(track_id, "track_id"),
-                _to_c_int(band_index, "band_index"),
-                _band_json_arg(band),
-            )
-        )
-
     def set_track_strip_eq_band_json(self, track_id: int, band_index: int, band_json: str) -> None:
         _check(
             _get_lib().sonare_engine_set_track_strip_eq_band_json(
@@ -365,120 +852,6 @@ class _EngineMixingMixin:
                 _to_c_uint32(track_id, "track_id"),
                 _to_c_int(band_index, "band_index"),
                 _utf8_arg(band_json, "band_json"),
-            )
-        )
-
-    def set_track_strip_insert_bypassed(
-        self, track_id: int, insert_index: int, bypassed: bool, reset_on_bypass: bool = False
-    ) -> None:
-        _check(
-            _get_lib().sonare_engine_set_track_strip_insert_bypassed(
-                self._require_handle(),
-                _to_c_uint32(track_id, "track_id"),
-                _to_c_uint(insert_index, "insert_index"),
-                1 if bypassed else 0,
-                1 if reset_on_bypass else 0,
-            )
-        )
-
-    def set_track_strip_insert_param_by_name(
-        self, track_id: int, insert_index: int, param_name: str, value: float
-    ) -> None:
-        _check(
-            _get_lib().sonare_engine_set_track_strip_insert_param_by_name(
-                self._require_handle(),
-                _to_c_uint32(track_id, "track_id"),
-                _to_c_uint(insert_index, "insert_index"),
-                _utf8_arg(param_name, "param_name"),
-                _to_c_float(value, "value"),
-            )
-        )
-
-    def set_track_strip_pan(self, track_id: int, pan: float) -> None:
-        """Set a track strip's pan position (-1.0 hard left .. 1.0 hard right)."""
-        _check(
-            _get_lib().sonare_engine_set_track_strip_pan(
-                self._require_handle(),
-                _to_c_uint32(track_id, "track_id"),
-                _to_c_float(pan, "pan"),
-            )
-        )
-
-    def set_track_strip_pan_law(self, track_id: int, pan_law: PanLaw) -> None:
-        """Set a track strip's pan law (a :data:`PanLaw` token such as ``"const3Db"``).
-
-        Balance mode keeps centre unity and uses the law only for the far-channel
-        taper; stereo-pan and dual-pan modes take the law's centre attenuation.
-        A mono source is unity at centre under every law (see :data:`PanLaw`).
-        """
-        _check(
-            _get_lib().sonare_engine_set_track_strip_pan_law(
-                self._require_handle(),
-                _to_c_uint32(track_id, "track_id"),
-                _pan_law_value(pan_law),
-            )
-        )
-
-    def set_track_strip_pan_mode(self, track_id: int, pan_mode: PanMode) -> None:
-        """Set a track strip's pan mode (name 'balance'/'stereo-pan'/'dual-pan', or int 0..2)."""
-        _check(
-            _get_lib().sonare_engine_set_track_strip_pan_mode(
-                self._require_handle(),
-                _to_c_uint32(track_id, "track_id"),
-                _pan_mode_value(pan_mode),
-            )
-        )
-
-    def set_track_strip_dual_pan(self, track_id: int, left_pan: float, right_pan: float) -> None:
-        """Set a track strip's dual-pan positions for the left and right channels."""
-        _check(
-            _get_lib().sonare_engine_set_track_strip_dual_pan(
-                self._require_handle(),
-                _to_c_uint32(track_id, "track_id"),
-                _to_c_float(left_pan, "left_pan"),
-                _to_c_float(right_pan, "right_pan"),
-            )
-        )
-
-    def set_track_strip_surround_pan(
-        self,
-        track_id: int,
-        *,
-        azimuth: float = 0.0,
-        elevation: float = 0.0,
-        divergence: float = 0.0,
-        lfe: float = 0.0,
-        distance: float = 1.0,
-    ) -> None:
-        """Set a track strip's surround pan position without a graph rebuild.
-
-        Fields as in :meth:`Mixer.set_surround_pan`; a ``distance`` of 0 or less
-        means the default of 1. Applied when the lane feeds a bus with more than
-        two channels; non-finite or out-of-range ``azimuth`` / ``divergence`` /
-        ``lfe`` raise :class:`SonareValueError` rather than being clamped.
-        """
-        pan = SonareSurroundPan(
-            azimuth=_to_c_float(azimuth, "azimuth"),
-            elevation=_to_c_float(elevation, "elevation"),
-            divergence=_to_c_float(divergence, "divergence"),
-            lfe=_to_c_float(lfe, "lfe"),
-            distance=_to_c_float(distance, "distance"),
-        )
-        _check(
-            _get_lib().sonare_engine_set_track_strip_surround_pan(
-                self._require_handle(),
-                _to_c_uint32(track_id, "track_id"),
-                ctypes.byref(pan),
-            )
-        )
-
-    def set_track_strip_channel_delay_samples(self, track_id: int, delay_samples: int) -> None:
-        """Set a track strip's alignment delay in samples, moving it later than the other lanes."""
-        _check(
-            _get_lib().sonare_engine_set_track_strip_channel_delay_samples(
-                self._require_handle(),
-                _to_c_uint32(track_id, "track_id"),
-                _to_c_int(delay_samples, "delay_samples"),
             )
         )
 
@@ -490,15 +863,6 @@ class _EngineMixingMixin:
             )
         )
 
-    def set_master_strip_eq_band(self, band_index: int, band: Mapping[str, object]) -> None:
-        _check(
-            _get_lib().sonare_engine_set_master_strip_eq_band_json(
-                self._require_handle(),
-                _to_c_int(band_index, "band_index"),
-                _band_json_arg(band),
-            )
-        )
-
     def set_master_strip_eq_band_json(self, band_index: int, band_json: str) -> None:
         _check(
             _get_lib().sonare_engine_set_master_strip_eq_band_json(
@@ -507,391 +871,3 @@ class _EngineMixingMixin:
                 _utf8_arg(band_json, "band_json"),
             )
         )
-
-    def set_master_strip_insert_bypassed(
-        self, insert_index: int, bypassed: bool, reset_on_bypass: bool = False
-    ) -> None:
-        _check(
-            _get_lib().sonare_engine_set_master_strip_insert_bypassed(
-                self._require_handle(),
-                _to_c_uint(insert_index, "insert_index"),
-                1 if bypassed else 0,
-                1 if reset_on_bypass else 0,
-            )
-        )
-
-    def set_master_strip_insert_param_by_name(
-        self, insert_index: int, param_name: str, value: float
-    ) -> None:
-        _check(
-            _get_lib().sonare_engine_set_master_strip_insert_param_by_name(
-                self._require_handle(),
-                _to_c_uint(insert_index, "insert_index"),
-                _utf8_arg(param_name, "param_name"),
-                _to_c_float(value, "value"),
-            )
-        )
-
-    def set_bus_strip_insert_param_by_name(
-        self, bus_id: int, insert_index: int, param_name: str, value: float
-    ) -> None:
-        """Realtime change of one bus-strip insert parameter, addressed by name.
-
-        Bus-strip counterpart of :meth:`set_track_strip_insert_param_by_name`;
-        ``bus_id`` must carry a strip configured via :meth:`set_bus_strip_json`.
-        """
-        _check(
-            _get_lib().sonare_engine_set_bus_strip_insert_param_by_name(
-                self._require_handle(),
-                _to_c_uint32(bus_id, "bus_id"),
-                _to_c_uint(insert_index, "insert_index"),
-                _utf8_arg(param_name, "param_name"),
-                _to_c_float(value, "value"),
-            )
-        )
-
-    def apply_track_strip_insert_param_by_name_now(
-        self, track_id: int, insert_index: int, param_name: str, value: float
-    ) -> bool:
-        """Apply one track-strip insert parameter immediately, bypassing the queue.
-
-        Runs on the calling (engine-owning) thread rather than going through
-        the command ring, and is recorded as the parameter's manual base like
-        :meth:`set_track_strip_insert_param_by_name`. An unknown track, insert
-        or name is reported by a ``False`` return instead of raising; not safe
-        concurrently with :meth:`process`.
-        """
-        out_applied = ctypes.c_int()
-        _check(
-            _get_lib().sonare_engine_apply_track_strip_insert_param_by_name_now(
-                self._require_handle(),
-                _to_c_uint32(track_id, "track_id"),
-                _to_c_uint(insert_index, "insert_index"),
-                _utf8_arg(param_name, "param_name"),
-                _to_c_float(value, "value"),
-                ctypes.byref(out_applied),
-            )
-        )
-        return bool(out_applied.value)
-
-    def apply_master_strip_insert_param_by_name_now(
-        self, insert_index: int, param_name: str, value: float
-    ) -> bool:
-        """Master-strip counterpart of :meth:`apply_track_strip_insert_param_by_name_now`."""
-        out_applied = ctypes.c_int()
-        _check(
-            _get_lib().sonare_engine_apply_master_strip_insert_param_by_name_now(
-                self._require_handle(),
-                _to_c_uint(insert_index, "insert_index"),
-                _utf8_arg(param_name, "param_name"),
-                _to_c_float(value, "value"),
-                ctypes.byref(out_applied),
-            )
-        )
-        return bool(out_applied.value)
-
-    def apply_bus_strip_insert_param_by_name_now(
-        self, bus_id: int, insert_index: int, param_name: str, value: float
-    ) -> bool:
-        """Bus-strip counterpart of :meth:`apply_track_strip_insert_param_by_name_now`."""
-        out_applied = ctypes.c_int()
-        _check(
-            _get_lib().sonare_engine_apply_bus_strip_insert_param_by_name_now(
-                self._require_handle(),
-                _to_c_uint32(bus_id, "bus_id"),
-                _to_c_uint(insert_index, "insert_index"),
-                _utf8_arg(param_name, "param_name"),
-                _to_c_float(value, "value"),
-                ctypes.byref(out_applied),
-            )
-        )
-        return bool(out_applied.value)
-
-    def restore_track_strip_insert_param_by_name(
-        self, track_id: int, insert_index: int, param_name: str, value: float
-    ) -> None:
-        """Restore a retained track-strip insert value exactly, without a ramp.
-
-        Retires any in-flight smoother for the parameter and records the
-        value as the manual base. Used to replay retained edits after
-        :meth:`set_track_strip_json` replaced the strip. Raises if the track,
-        insert, or name is unknown; not safe concurrently with :meth:`process`.
-        """
-        _check(
-            _get_lib().sonare_engine_restore_track_strip_insert_param_by_name(
-                self._require_handle(),
-                _to_c_uint32(track_id, "track_id"),
-                _to_c_uint(insert_index, "insert_index"),
-                _utf8_arg(param_name, "param_name"),
-                _to_c_float(value, "value"),
-            )
-        )
-
-    def restore_master_strip_insert_param_by_name(
-        self, insert_index: int, param_name: str, value: float
-    ) -> None:
-        """Master-strip counterpart of :meth:`restore_track_strip_insert_param_by_name`."""
-        _check(
-            _get_lib().sonare_engine_restore_master_strip_insert_param_by_name(
-                self._require_handle(),
-                _to_c_uint(insert_index, "insert_index"),
-                _utf8_arg(param_name, "param_name"),
-                _to_c_float(value, "value"),
-            )
-        )
-
-    def restore_bus_strip_insert_param_by_name(
-        self, bus_id: int, insert_index: int, param_name: str, value: float
-    ) -> None:
-        """Bus-strip counterpart of :meth:`restore_track_strip_insert_param_by_name`."""
-        _check(
-            _get_lib().sonare_engine_restore_bus_strip_insert_param_by_name(
-                self._require_handle(),
-                _to_c_uint32(bus_id, "bus_id"),
-                _to_c_uint(insert_index, "insert_index"),
-                _utf8_arg(param_name, "param_name"),
-                _to_c_float(value, "value"),
-            )
-        )
-
-    def clear_track_insert_parameter_bases(self, track_id: int) -> None:
-        """Forget the remembered manual insert-parameter values of one track strip.
-
-        Also discards its queued insert edits. Call before
-        :meth:`set_track_strip_json` replaces the strip when its old values
-        must not carry over; the setter never does this itself, since a queued
-        edit may already target the new chain. Raises if the track is not a published
-        lane; not safe concurrently with :meth:`process`.
-        """
-        _check(
-            _get_lib().sonare_engine_clear_track_insert_parameter_bases(
-                self._require_handle(), _to_c_uint32(track_id, "track_id")
-            )
-        )
-
-    def clear_master_insert_parameter_bases(self) -> None:
-        """Master-strip counterpart of :meth:`clear_track_insert_parameter_bases`."""
-        _check(_get_lib().sonare_engine_clear_master_insert_parameter_bases(self._require_handle()))
-
-    def clear_bus_insert_parameter_bases(self, bus_id: int) -> None:
-        """Bus-strip counterpart of :meth:`clear_track_insert_parameter_bases`.
-
-        Also accepts a bus identity that was already removed, covering every
-        selector the identity held across remove/re-add.
-        """
-        _check(
-            _get_lib().sonare_engine_clear_bus_insert_parameter_bases(
-                self._require_handle(), _to_c_uint32(bus_id, "bus_id")
-            )
-        )
-
-    def set_bus_strip_insert_bypassed(
-        self, bus_id: int, insert_index: int, bypassed: bool, reset_on_bypass: bool = False
-    ) -> None:
-        """Toggle bypass for a bus-strip insert.
-
-        Bus-strip counterpart of :meth:`set_track_strip_insert_bypassed`;
-        ``bus_id`` must carry a strip configured via :meth:`set_bus_strip_json`.
-        """
-        _check(
-            _get_lib().sonare_engine_set_bus_strip_insert_bypassed(
-                self._require_handle(),
-                _to_c_uint32(bus_id, "bus_id"),
-                _to_c_uint(insert_index, "insert_index"),
-                1 if bypassed else 0,
-                1 if reset_on_bypass else 0,
-            )
-        )
-
-    def set_bus_strip_pan(self, bus_id: int, pan: float) -> None:
-        """Set a bus strip's pan position (-1.0 hard left .. 1.0 hard right).
-
-        Bus-strip counterpart of :meth:`set_track_strip_pan`; rejected on a
-        surround bus.
-        """
-        _check(
-            _get_lib().sonare_engine_set_bus_strip_pan(
-                self._require_handle(),
-                _to_c_uint32(bus_id, "bus_id"),
-                _to_c_float(pan, "pan"),
-            )
-        )
-
-    def set_bus_strip_pan_law(self, bus_id: int, pan_law: PanLaw) -> None:
-        """Set a bus strip's pan law (a :data:`PanLaw` token such as ``"const3Db"``).
-
-        Bus-strip counterpart of :meth:`set_track_strip_pan_law`.
-        """
-        _check(
-            _get_lib().sonare_engine_set_bus_strip_pan_law(
-                self._require_handle(),
-                _to_c_uint32(bus_id, "bus_id"),
-                _pan_law_value(pan_law),
-            )
-        )
-
-    def set_bus_strip_pan_mode(self, bus_id: int, pan_mode: PanMode) -> None:
-        """Set a bus strip's pan mode (name 'balance'/'stereo-pan'/'dual-pan', or int 0..2).
-
-        Bus-strip counterpart of :meth:`set_track_strip_pan_mode`.
-        """
-        _check(
-            _get_lib().sonare_engine_set_bus_strip_pan_mode(
-                self._require_handle(),
-                _to_c_uint32(bus_id, "bus_id"),
-                _pan_mode_value(pan_mode),
-            )
-        )
-
-    def set_bus_strip_dual_pan(self, bus_id: int, left_pan: float, right_pan: float) -> None:
-        """Set a bus strip's dual-pan positions for the left and right channels.
-
-        Bus-strip counterpart of :meth:`set_track_strip_dual_pan`.
-        """
-        _check(
-            _get_lib().sonare_engine_set_bus_strip_dual_pan(
-                self._require_handle(),
-                _to_c_uint32(bus_id, "bus_id"),
-                _to_c_float(left_pan, "left_pan"),
-                _to_c_float(right_pan, "right_pan"),
-            )
-        )
-
-    def resolve_track_insert_automation_id(
-        self, track_id: int, insert_index: int, param_name: str
-    ) -> int:
-        """Resolve a track-lane insert parameter to its reserved automation id.
-
-        The returned id drives :meth:`set_automation_lane`,
-        :meth:`set_parameter`, or :meth:`set_parameter_smoothed` exactly like a
-        :meth:`resolve_track_lane_automation_id` id. Raises :class:`SonareValueError`
-        if the track, insert, or name is unknown.
-
-        This trio is how a mastering processor gets time-varying automation:
-        the ``eq.*``, ``dynamics.*``, ``saturation.*``, ``spectral.*``,
-        ``stereo.*``, ``maximizer.*`` and ``multiband.*`` processors are all
-        available as strip inserts, so placing one on a strip and resolving its
-        parameter here drives it at audio-block precision, live and offline
-        alike. The whole-signal stages of the offline mastering chain that have no insert form
-        (``repair.declick``, ``repair.declip``, ``repair.trimSilence``, ``loudness``, and the match
-        stages) have no automation id: they buffer the entire signal by construction and do not run
-        on the realtime path. The four realtime repair inserts (``repair.decrackle``,
-        ``repair.dehum``, ``repair.denoiseClassical``, ``repair.dereverbClassical``) load into a
-        strip, but every one of their parameters is construction-only, so no automation id resolves
-        (-1) and an edit needs a strip replacement.
-
-        Track, bus and master insert ids share one lifetime rule: an id names
-        its strip by identity and the kind of processor in its slot (for
-        ``effects.gsEfx``, its EFX type too), so it survives lane and bus
-        reorders and the removal of other strips, and stays valid until its
-        track or bus is removed or its slot comes to hold another kind of
-        processor. After that it applies nothing, its queued edits are dropped,
-        and it is never reissued; resolve again for the new processor. A change
-        that would take the engine past its 8192 insert-id entries is refused.
-        """
-        out_id = ctypes.c_uint32()
-        _check(
-            _get_lib().sonare_engine_resolve_track_insert_automation_id(
-                self._require_handle(),
-                _to_c_uint32(track_id, "track_id"),
-                _to_c_uint(insert_index, "insert_index"),
-                _utf8_arg(param_name, "param_name"),
-                ctypes.byref(out_id),
-            )
-        )
-        return int(out_id.value)
-
-    def resolve_track_lane_automation_id(self, track_id: int, param_name: str) -> int:
-        """Resolve a track lane's fader or pan to its reserved automation id.
-
-        ``param_name`` is ``"faderDb"`` or ``"pan"``. Same lifetime rule as
-        :meth:`resolve_track_insert_automation_id`: the id names the track, not
-        its lane position, so it keeps driving that track across
-        :meth:`set_track_lanes` reorders and applies nothing once the track is
-        removed. Raises :class:`SonareValueError` if the track has no lane or the name
-        is neither.
-        """
-        out_id = ctypes.c_uint32()
-        _check(
-            _get_lib().sonare_engine_resolve_track_lane_automation_id(
-                self._require_handle(),
-                _to_c_uint32(track_id, "track_id"),
-                _utf8_arg(param_name, "param_name"),
-                ctypes.byref(out_id),
-            )
-        )
-        return int(out_id.value)
-
-    def resolve_bus_automation_id(self, bus_id: int, param_name: str) -> int:
-        """Resolve a bus's fader to its reserved automation id.
-
-        ``param_name`` is ``"faderDb"``. Same lifetime rule as
-        :meth:`resolve_track_insert_automation_id`: the id names the bus, not its
-        position in the bus list, so it keeps driving that bus across
-        :meth:`set_track_buses` reorders and the removal of other buses, and
-        applies nothing once the bus is removed. Raises :class:`SonareValueError` if
-        the bus is not configured or the name is not ``"faderDb"``.
-        """
-        out_id = ctypes.c_uint32()
-        _check(
-            _get_lib().sonare_engine_resolve_bus_automation_id(
-                self._require_handle(),
-                _to_c_uint32(bus_id, "bus_id"),
-                _utf8_arg(param_name, "param_name"),
-                ctypes.byref(out_id),
-            )
-        )
-        return int(out_id.value)
-
-    def resolve_master_automation_id(self, param_name: str) -> int:
-        """Resolve the master strip's fader, pan or width to its reserved automation id.
-
-        ``param_name`` is ``"faderDb"``, ``"pan"`` or ``"width"``. The master strip always
-        exists, so the id never goes stale. Raises :class:`SonareValueError` if the name is none
-        of the three.
-        """
-        out_id = ctypes.c_uint32()
-        _check(
-            _get_lib().sonare_engine_resolve_master_automation_id(
-                self._require_handle(),
-                _utf8_arg(param_name, "param_name"),
-                ctypes.byref(out_id),
-            )
-        )
-        return int(out_id.value)
-
-    def resolve_master_insert_automation_id(self, insert_index: int, param_name: str) -> int:
-        """Resolve a master-strip insert parameter to its reserved automation id.
-
-        Master-strip counterpart of :meth:`resolve_track_insert_automation_id`.
-        """
-        out_id = ctypes.c_uint32()
-        _check(
-            _get_lib().sonare_engine_resolve_master_insert_automation_id(
-                self._require_handle(),
-                _to_c_uint(insert_index, "insert_index"),
-                _utf8_arg(param_name, "param_name"),
-                ctypes.byref(out_id),
-            )
-        )
-        return int(out_id.value)
-
-    def resolve_bus_insert_automation_id(
-        self, bus_id: int, insert_index: int, param_name: str
-    ) -> int:
-        """Resolve a bus-strip insert parameter to its reserved automation id.
-
-        Bus-strip counterpart of :meth:`resolve_track_insert_automation_id`;
-        ``bus_id`` must carry a strip configured via :meth:`set_bus_strip_json`.
-        """
-        out_id = ctypes.c_uint32()
-        _check(
-            _get_lib().sonare_engine_resolve_bus_insert_automation_id(
-                self._require_handle(),
-                _to_c_uint32(bus_id, "bus_id"),
-                _to_c_uint(insert_index, "insert_index"),
-                _utf8_arg(param_name, "param_name"),
-                ctypes.byref(out_id),
-            )
-        )
-        return int(out_id.value)

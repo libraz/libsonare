@@ -250,7 +250,7 @@ def test_engine_resolve_and_set_bus_master_insert_automation_ids() -> None:
         engine.set_parameter(bus_param, 3.0)
 
         # The by-name manual set reaches the same target.
-        engine.set_bus_strip_insert_param_by_name(1, 0, "band0.gainDb", -3.0)
+        engine.set_bus_insert_param(1, 0, "band0.gainDb", -3.0)
 
         # Unknown bus / insert / name are rejected.
         with pytest.raises(SonareValueError) as bad_bus_error:
@@ -259,7 +259,7 @@ def test_engine_resolve_and_set_bus_master_insert_automation_ids() -> None:
         with pytest.raises(SonareError):
             engine.resolve_bus_insert_automation_id(1, 0, "nope")
         with pytest.raises(SonareError):
-            engine.set_bus_strip_insert_param_by_name(9, 0, "band0.gainDb", 1.0)
+            engine.set_bus_insert_param(9, 0, "band0.gainDb", 1.0)
 
         # Master strip insert resolution mirrors the bus path.
         engine.set_master_strip_json(
@@ -268,7 +268,7 @@ def test_engine_resolve_and_set_bus_master_insert_automation_ids() -> None:
             '"params":{"thresholdDb":-3,"ratio":4}}]}],'
             '"buses":[],"connections":[]}'
         )
-        master_param = engine.resolve_master_insert_automation_id(0, "thresholdDb")
+        master_param = engine.resolve_strip_insert_automation_id("master", 0, "thresholdDb")
         assert master_param & 0xE0000000 == 0xE0000000
         assert master_param != bus_param
 
@@ -346,35 +346,35 @@ def test_engine_apply_restore_clear_insert_param_by_name_now() -> None:
         )
 
         # A known target applies immediately and reports True.
-        assert engine.apply_track_strip_insert_param_by_name_now(10, 0, "band0.gainDb", 3.0)
-        assert engine.apply_master_strip_insert_param_by_name_now(0, "thresholdDb", -6.0)
-        assert engine.apply_bus_strip_insert_param_by_name_now(1, 0, "band0.gainDb", 3.0)
+        assert engine.apply_strip_insert_param_now(10, 0, "band0.gainDb", 3.0)
+        assert engine.apply_strip_insert_param_now("master", 0, "thresholdDb", -6.0)
+        assert engine.apply_bus_insert_param_now(1, 0, "band0.gainDb", 3.0)
 
         # An unknown name -- or an otherwise-unknown target -- is not an
         # error; it just does not apply.
-        assert not engine.apply_track_strip_insert_param_by_name_now(10, 0, "nope", 1.0)
-        assert not engine.apply_master_strip_insert_param_by_name_now(0, "nope", 1.0)
-        assert not engine.apply_bus_strip_insert_param_by_name_now(1, 0, "nope", 1.0)
-        assert not engine.apply_track_strip_insert_param_by_name_now(99, 0, "band0.gainDb", 1.0)
+        assert not engine.apply_strip_insert_param_now(10, 0, "nope", 1.0)
+        assert not engine.apply_strip_insert_param_now("master", 0, "nope", 1.0)
+        assert not engine.apply_bus_insert_param_now(1, 0, "nope", 1.0)
+        assert not engine.apply_strip_insert_param_now(99, 0, "band0.gainDb", 1.0)
 
         # A retained value replays exactly, without a ramp.
-        engine.restore_track_strip_insert_param_by_name(10, 0, "band0.gainDb", -3.0)
-        engine.restore_master_strip_insert_param_by_name(0, "thresholdDb", -9.0)
-        engine.restore_bus_strip_insert_param_by_name(1, 0, "band0.gainDb", -3.0)
+        engine.restore_strip_insert_param(10, 0, "band0.gainDb", -3.0)
+        engine.restore_strip_insert_param("master", 0, "thresholdDb", -9.0)
+        engine.restore_bus_insert_param(1, 0, "band0.gainDb", -3.0)
 
         # Unlike apply_*_now, restore raises for an unknown track.
         with pytest.raises(SonareError):
-            engine.restore_track_strip_insert_param_by_name(99, 0, "band0.gainDb", 1.0)
+            engine.restore_strip_insert_param(99, 0, "band0.gainDb", 1.0)
 
         # Forgetting the remembered manual values does not error for a known
         # track/bus and the master strip.
-        engine.clear_track_insert_parameter_bases(10)
-        engine.clear_master_insert_parameter_bases()
+        engine.clear_strip_insert_parameter_bases(10)
+        engine.clear_strip_insert_parameter_bases("master")
         engine.clear_bus_insert_parameter_bases(1)
 
         # Unlike the bus/master forms, an unknown track is rejected.
         with pytest.raises(SonareError):
-            engine.clear_track_insert_parameter_bases(99)
+            engine.clear_strip_insert_parameter_bases(99)
 
 
 def test_engine_set_param_smoothing_ms_validates_argument() -> None:

@@ -83,7 +83,7 @@ def test_engine_track_monitor_mode_pfl_and_afl() -> None:
         assert monitor[0][block // 2] == pytest.approx(1.0, abs=0.01)
         assert monitor[0][-1] == pytest.approx(1.0, abs=0.01)
 
-        engine.set_parameter(engine.resolve_track_lane_automation_id(10, "faderDb"), -6.0)
+        engine.set_parameter(engine.resolve_strip_automation_id(10, "faderDb"), -6.0)
         for _ in range(9):
             processed = engine.process_with_monitor([[0.0] * block])
             main, monitor = processed.output, processed.monitor
@@ -134,7 +134,7 @@ def test_engine_track_lanes_route_clips_and_lane_commands() -> None:
             processed = engine.process([[0.0] * 256, [0.0] * 256])
         assert 0.75 < processed[0][-1] < 1.25
 
-        engine.set_parameter_smoothed(engine.resolve_track_lane_automation_id(10, "faderDb"), -12.0)
+        engine.set_parameter_smoothed(engine.resolve_strip_automation_id(10, "faderDb"), -12.0)
         for _ in range(6):
             processed = engine.process([[0.0] * 256, [0.0] * 256])
         assert processed[0][-1] < 0.45
@@ -350,14 +350,14 @@ def test_engine_track_strip_insert_bypass_toggles_insert() -> None:
             '"buses":[],"connections":[]}',
         )
         with pytest.raises(SonareValueError) as bad_index_error:
-            engine.set_track_strip_insert_bypassed(10, 7, True)
+            engine.set_strip_insert_bypassed(10, 7, True)
         assert bad_index_error.value.code == 4
 
         engine.play()
         eq_out = [0.0] * 256
         for _ in range(6):
             eq_out = engine.process([[0.0] * 256])[0]
-        engine.set_track_strip_insert_bypassed(10, 0, True, True)
+        engine.set_strip_insert_bypassed(10, 0, True, True)
         engine.seek_sample(0)
         bypassed_out = engine.process([[0.0] * 256])[0]
         assert math.sqrt(sum(sample * sample for sample in eq_out) / len(eq_out)) > (
@@ -386,12 +386,12 @@ def test_engine_track_strip_eq_band_updates_embedded_eq() -> None:
             '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
         )
         with pytest.raises(SonareValueError) as bad_index_error:
-            engine.set_track_strip_eq_band(10, 99, {"type": "peak", "enabled": True})
+            engine.set_strip_eq_band(10, 99, {"type": "peak", "enabled": True})
         assert bad_index_error.value.code == 4
 
         engine.play()
         flat_out = engine.process([[0.0] * 256])[0]
-        engine.set_track_strip_eq_band(
+        engine.set_strip_eq_band(
             10,
             0,
             {
@@ -446,7 +446,7 @@ def test_engine_master_strip_json_routes_master_strip() -> None:
             )
         assert bad_param_error.value.code == 4
         with pytest.raises(SonareValueError) as bad_bypass_error:
-            engine.set_master_strip_insert_bypassed(0, True)
+            engine.set_strip_insert_bypassed("master", 0, True)
         assert bad_bypass_error.value.code == 4
 
         engine.play()
@@ -479,7 +479,7 @@ def test_engine_refuses_a_reserved_mixer_id_that_names_no_strip() -> None:
             with pytest.raises(SonareValueError) as lane:
                 engine.set_automation_lane(positional, points)
             assert lane.value.code == 4
-        lane_fader = engine.resolve_track_lane_automation_id(7, "faderDb")
+        lane_fader = engine.resolve_strip_automation_id(7, "faderDb")
         engine.set_parameter_smoothed(lane_fader, -6.0)
         engine.set_automation_lane(lane_fader, points)
         engine.set_parameter_smoothed(0x4D58FF01, -6.0)
@@ -504,12 +504,13 @@ def test_engine_master_strip_eq_band_updates_embedded_eq() -> None:
             '{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}'
         )
         with pytest.raises(SonareValueError) as bad_index_error:
-            engine.set_master_strip_eq_band(99, {"type": "peak", "enabled": True})
+            engine.set_strip_eq_band("master", 99, {"type": "peak", "enabled": True})
         assert bad_index_error.value.code == 4
 
         engine.play()
         flat_out = engine.process([[0.0] * 256])[0]
-        engine.set_master_strip_eq_band(
+        engine.set_strip_eq_band(
+            "master",
             0,
             {
                 "type": "peak",
@@ -564,32 +565,32 @@ def test_engine_track_strip_pan_and_send_setters() -> None:
 
         # An unknown / zero track id is rejected by every setter.
         with pytest.raises(SonareValueError) as bad_pan_error:
-            engine.set_track_strip_pan(0, -1.0)
+            engine.set_strip_pan(0, -1.0)
         assert bad_pan_error.value.code == 4
         with pytest.raises(SonareError):
-            engine.set_track_strip_pan_law(0, "linear0Db")
+            engine.set_strip_pan_law(0, "linear0Db")
         with pytest.raises(SonareError):
-            engine.set_track_strip_pan_mode(0, "balance")
+            engine.set_strip_pan_mode(0, "balance")
         with pytest.raises(SonareError):
-            engine.set_track_strip_dual_pan(0, -1.0, 1.0)
+            engine.set_strip_dual_pan(0, -1.0, 1.0)
         with pytest.raises(SonareError):
-            engine.set_track_strip_channel_delay_samples(0, 8)
+            engine.set_strip_channel_delay_samples(0, 8)
 
         # The pan law takes the exact shared tokens and nothing else.
         for case in _PAN_LAW_CORPUS["accepted"]:
-            engine.set_track_strip_pan_law(10, case["value"])
+            engine.set_strip_pan_law(10, case["value"])
         for value in _PAN_LAW_CORPUS["rejected"]:
             with pytest.raises(SonareValueError):
-                engine.set_track_strip_pan_law(10, value)
+                engine.set_strip_pan_law(10, value)
         for value in _PAN_LAW_CORPUS["rejected_numeric"]:
             with pytest.raises(TypeError):
-                engine.set_track_strip_pan_law(10, value)
-        engine.set_track_strip_pan_mode(10, "stereoPan")
-        engine.set_track_strip_channel_delay_samples(10, 0)
-        engine.set_track_strip_dual_pan(10, 0.0, 0.0)
+                engine.set_strip_pan_law(10, value)
+        engine.set_strip_pan_mode(10, "stereoPan")
+        engine.set_strip_channel_delay_samples(10, 0)
+        engine.set_strip_dual_pan(10, 0.0, 0.0)
 
         # Hard-left pan should leave the left channel louder than the right.
-        engine.set_track_strip_pan(10, -1.0)
+        engine.set_strip_pan(10, -1.0)
         engine.play()
         left, right = engine.process([[0.0] * 256, [0.0] * 256])
         left_rms = math.sqrt(sum(s * s for s in left) / len(left))
@@ -618,11 +619,11 @@ def test_realtime_engine_dual_pan_routes_left_input_to_expected_output() -> None
             10,
             '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
         )
-        engine.set_track_strip_pan_mode(10, "dualPan")
+        engine.set_strip_pan_mode(10, "dualPan")
 
         # A +1 left-input pan routes that input to the right output. Settling
         # removes the panner's normal smoothing ramp from this routing check.
-        engine.set_track_strip_dual_pan(10, 1.0, -1.0)
+        engine.set_strip_dual_pan(10, 1.0, -1.0)
         engine.settle_parameters()
         engine.play()
         right_routed = engine.process([[0.0] * block, [0.0] * block])
@@ -630,7 +631,7 @@ def test_realtime_engine_dual_pan_routes_left_input_to_expected_output() -> None
         assert energy(right_routed[1]) > 1.0
 
         # Swapping the dual-pan positions reverses the same left-only source.
-        engine.set_track_strip_dual_pan(10, -1.0, 1.0)
+        engine.set_strip_dual_pan(10, -1.0, 1.0)
         engine.settle_parameters()
         left_routed = engine.process([[0.0] * block, [0.0] * block])
         assert energy(left_routed[0]) > 1.0
@@ -661,40 +662,40 @@ def test_engine_bus_strip_pan_and_send_setters() -> None:
 
         # An unknown / zero bus id is rejected by every setter.
         with pytest.raises(SonareValueError) as bad_pan_error:
-            engine.set_bus_strip_pan(0, -1.0)
+            engine.set_bus_pan(0, -1.0)
         assert bad_pan_error.value.code == 4
         with pytest.raises(SonareError):
-            engine.set_bus_strip_pan_law(0, "linear0Db")
+            engine.set_bus_pan_law(0, "linear0Db")
         with pytest.raises(SonareError):
-            engine.set_bus_strip_pan_mode(0, "balance")
+            engine.set_bus_pan_mode(0, "balance")
         with pytest.raises(SonareError):
-            engine.set_bus_strip_dual_pan(0, -1.0, 1.0)
+            engine.set_bus_dual_pan(0, -1.0, 1.0)
         with pytest.raises(SonareValueError) as unknown_bus_error:
-            engine.set_bus_strip_pan(99, 0.0)
+            engine.set_bus_pan(99, 0.0)
         assert unknown_bus_error.value.code == 4
 
         # Non-finite pan is refused outright rather than clamped.
         with pytest.raises(SonareError):
-            engine.set_bus_strip_pan(1, math.nan)
+            engine.set_bus_pan(1, math.nan)
         with pytest.raises(SonareError):
-            engine.set_bus_strip_pan(1, math.inf)
+            engine.set_bus_pan(1, math.inf)
         with pytest.raises(SonareError):
-            engine.set_bus_strip_dual_pan(1, math.nan, 0.0)
+            engine.set_bus_dual_pan(1, math.nan, 0.0)
 
         # The pan law takes the exact shared tokens and nothing else.
         for case in _PAN_LAW_CORPUS["accepted"]:
-            engine.set_bus_strip_pan_law(1, case["value"])
+            engine.set_bus_pan_law(1, case["value"])
         for value in _PAN_LAW_CORPUS["rejected"]:
             with pytest.raises(SonareValueError):
-                engine.set_bus_strip_pan_law(1, value)
+                engine.set_bus_pan_law(1, value)
         for value in _PAN_LAW_CORPUS["rejected_numeric"]:
             with pytest.raises(TypeError):
-                engine.set_bus_strip_pan_law(1, value)
-        engine.set_bus_strip_pan_mode(1, "stereoPan")
-        engine.set_bus_strip_dual_pan(1, 0.0, 0.0)
+                engine.set_bus_pan_law(1, value)
+        engine.set_bus_pan_mode(1, "stereoPan")
+        engine.set_bus_dual_pan(1, 0.0, 0.0)
 
         # Hard-left pan should leave the left channel louder than the right.
-        engine.set_bus_strip_pan(1, -1.0)
+        engine.set_bus_pan(1, -1.0)
         engine.play()
         left, right = engine.process([[0.0] * 256, [0.0] * 256])
         left_rms = math.sqrt(sum(s * s for s in left) / len(left))
@@ -712,15 +713,15 @@ def test_engine_bus_strip_pan_rejects_surround_bus() -> None:
             '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
         )
         with pytest.raises(SonareValueError) as surround_pan_error:
-            engine.set_bus_strip_pan(1, 0.0)
+            engine.set_bus_pan(1, 0.0)
         assert surround_pan_error.value.code == 4
         with pytest.raises(SonareError):
-            engine.set_bus_strip_pan_law(1, "linear0Db")
+            engine.set_bus_pan_law(1, "linear0Db")
         with pytest.raises(SonareError):
-            engine.set_bus_strip_pan_mode(1, "balance")
+            engine.set_bus_pan_mode(1, "balance")
         with pytest.raises(SonareError):
-            engine.set_bus_strip_dual_pan(1, -1.0, 1.0)
-        engine.set_bus_strip_eq_band(1, 0, {"type": "peak", "enabled": True})
+            engine.set_bus_dual_pan(1, -1.0, 1.0)
+        engine.set_bus_eq_band(1, 0, {"type": "peak", "enabled": True})
 
 
 def test_engine_bus_strip_eq_band_updates_embedded_eq() -> None:
@@ -745,12 +746,12 @@ def test_engine_bus_strip_eq_band_updates_embedded_eq() -> None:
             '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
         )
         with pytest.raises(SonareValueError) as bad_index_error:
-            engine.set_bus_strip_eq_band(1, 99, {"type": "peak", "enabled": True})
+            engine.set_bus_eq_band(1, 99, {"type": "peak", "enabled": True})
         assert bad_index_error.value.code == 4
 
         engine.play()
         flat_out = engine.process([[0.0] * 256])[0]
-        engine.set_bus_strip_eq_band(
+        engine.set_bus_eq_band(
             1,
             0,
             {

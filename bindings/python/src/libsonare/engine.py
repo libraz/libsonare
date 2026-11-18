@@ -62,6 +62,7 @@ from ._engine_pages import ClipPageProvider as ClipPageProvider
 from ._engine_pages import FileClipPageProvider as FileClipPageProvider
 from ._errors import ErrorCode, SonareError, _not_supported, _require_open
 from ._facade import rebind_facade_exports as _rebind_facade_exports
+from ._mixing import StripRef
 from ._narrowing import _narrow_double, _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
@@ -707,6 +708,22 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         _check(_get_lib().sonare_engine_clip_count(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
 
+    def set_strip_fader_db(
+        self, ref: StripRef, fader_db: float, render_frame: int | None = None
+    ) -> None:
+        """Set a strip's fader in decibels in realtime, through its reserved automation id.
+
+        ``ref`` is a track id or ``"master"``; ``render_frame`` is the render-frame time
+        to apply, None for immediate.
+        """
+        param_id = self.resolve_strip_automation_id(ref, "faderDb")
+        self.set_parameter(param_id, fader_db, render_frame)
+
+    def set_bus_gain_db(self, bus_id: int, gain_db: float, render_frame: int | None = None) -> None:
+        """Set a bus's gain in decibels in realtime, through its reserved automation id."""
+        param_id = self.resolve_bus_automation_id(bus_id, "faderDb")
+        self.set_parameter(param_id, gain_db, render_frame)
+
     def set_parameter(self, param_id: int, value: float, render_frame: int | None = None) -> None:
         """Push a live parameter value to the engine (immediate jump).
 
@@ -716,8 +733,8 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         target reverts to this value once that lane empties -- see
         :meth:`set_automation_lane`. A reserved mixer id (``0x4D58xxxx``) other
         than a master id names no strip and raises :class:`SonareValueError`;
-        resolve ids with the ``resolve_*_automation_id``
-        methods (``resolve_master_automation_id`` for the master fader, pan and width).
+        resolve ids with the ``resolve_*_automation_id`` methods
+        (``resolve_strip_automation_id("master", ...)`` for the master fader, pan and width).
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_parameter"):

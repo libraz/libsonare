@@ -34,7 +34,7 @@ def test_constructed_insert_value_and_invalid_id() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_track_lanes([{"track_id": 10}])
         engine.set_track_strip_json(10, _STRIP_JSON)
-        param_id = engine.resolve_track_insert_automation_id(10, 0, "band0.gainDb")
+        param_id = engine.resolve_strip_insert_automation_id(10, 0, "band0.gainDb")
         assert param_id > 0
         assert engine.insert_parameter_constructed_value(param_id) == pytest.approx(-3.0, abs=1e-5)
         with pytest.raises(SonareError):

@@ -191,4 +191,4 @@ def test_a_positional_tuple_or_descriptor_in_place_of_a_mapping_is_a_type_error(
             engine.set_time_signature_segments([(0.0, 3, 4)])  # type: ignore[list-item]
         # Refused before the library is reached, so no master strip is needed.
         with pytest.raises(TypeError, match="band must be a mapping"):
-            engine.set_master_strip_eq_band(0, '{"type":"peak"}')  # type: ignore[arg-type]
+            engine.set_strip_eq_band("master", 0, '{"type":"peak"}')  # type: ignore[arg-type]
