@@ -345,6 +345,31 @@ def test_facade_field_absent_from_c_is_an_active_finding() -> None:
     assert ("thing", "node") in _active_records(rep), _active_records(rep)
 
 
+def _optional(shape: RecordShape, *names: str) -> RecordShape:
+    for f in shape.fields:
+        if f.raw_name in names:
+            f.optional = True
+    return shape
+
+
+def test_presence_flag_is_the_absence_of_an_optional_field() -> None:
+    """``has_x`` + ``x`` in C is one optional ``x`` on a facade, not a missing flag."""
+    c = _ex("c", _rec("c", "SonareThing", "late", "has_late"))
+    rep = _report({"c": c, "node": _ex("node", _optional(_rec("node", "Thing", "late"), "late"))})
+    assert _active_records(rep) == set(), _active_records(rep)
+
+
+def test_presence_flag_still_reports_beside_a_required_or_absent_field() -> None:
+    """Only an optional ``x`` carries the flag; a required one leaves it unrepresented."""
+    c = _ex("c", _rec("c", "SonareThing", "late", "has_late"))
+    required = _report({"c": c, "node": _ex("node", _rec("node", "Thing", "late"))})
+    assert ("thing", "node") in _active_records(required), _active_records(required)
+    absent = _report(
+        {"c": c, "node": _ex("node", _optional(_rec("node", "Thing", "other"), "other"))}
+    )
+    assert ("thing", "node") in _active_records(absent), _active_records(absent)
+
+
 def test_structural_c_member_is_never_a_finding() -> None:
     """Padding / version / length members have no facade counterpart by design."""
     c = _c_records(

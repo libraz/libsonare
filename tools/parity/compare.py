@@ -383,6 +383,9 @@ _ALIAS_COVERAGE = {
     # (Python / WASM expose decompose_with_init by name, matched directly before
     # this; the alias credits the Node fold onto the base decompose() function.)
     "decompose_with_init": ("decompose",),
+    # Correction toward a fixed MIDI target is the time-varying corrector with its
+    # default target mode, so every facade reaches it through that one function.
+    "pitch_correct_to_midi_timevarying": ("pitch_correct_timevarying",),
     # Progress-callback mastering variants -> base fn with an optional callback.
     "master_audio_with_progress": ("master_audio",),
     # The mixing assistant's C entry points are named after the subsystem; the
@@ -500,10 +503,6 @@ _ALIAS_COVERAGE = {
     "playback_renderer_config_json": ("config",),
     "playback_renderer_set_config_json": ("set_config",),
     "playback_renderer_diagnostics_json": ("diagnostics",),
-    # Renderer channel-count accessors drop the `_count` and abbreviate
-    # `channel` to plural, identically on all three facades.
-    "playback_renderer_input_channel_count": ("input_channels",),
-    "playback_renderer_output_channel_count": ("output_channels",),
     # Members of a collection the count / by-index rule does not name: the
     # sidecar lookup by name and the parameter descriptors read by index.
     "project_get_assist_sidecar": ("assist_sidecars",),
@@ -1830,6 +1829,16 @@ def _index_records(ex: Extraction | None) -> dict[str, RecordShape]:
     return out
 
 
+def _presence_flag_of_optional(name: str, c_names: set[str], optional: set[str]) -> bool:
+    """True for a C ``has_<x>`` flag whose ``<x>`` the facade declares optional.
+
+    The facade spells "not measured" as the field's absence, so the flag has no
+    member of its own there; a required ``<x>`` leaves the flag unrepresented.
+    """
+    target = name.removeprefix("has_")
+    return target != name and target in c_names and target in optional
+
+
 def _record_verdict(c_rec: RecordShape, shape: RecordShape | None) -> str:
     """Whole-record verdict for one facade against its C struct oracle."""
     if shape is None:
@@ -1916,6 +1925,7 @@ def _record_drift(extractions, allow, rep: Report, selected) -> None:
                 )
                 continue
             declared = {f.name for f in shape.fields}
+            optional = {f.name for f in shape.fields if f.optional}
             c_names = {x.name for x in c_rec.fields}
             missing: list[str] = []
             extra: list[str] = []
@@ -1924,7 +1934,7 @@ def _record_drift(extractions, allow, rep: Report, selected) -> None:
             # before a Finding is ever built.
             suppressed: list[str] = []
             for n in c_fields:
-                if n in declared:
+                if n in declared or _presence_flag_of_optional(n, c_names, optional):
                     allow.record_field_ok(key, n, AGREED)
                     continue
                 div = f"[{s}] {shape.raw_name} declares no '{n}' of {c_rec.raw_name}"

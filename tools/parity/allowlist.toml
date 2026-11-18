@@ -364,8 +364,8 @@ wasm = [
   # (sonare_audio_from_file is #ifndef __EMSCRIPTEN__-excluded in core_audio.cpp.)
   "audio_from_file",
   # Source-file channel probing also requires host filesystem access and the
-  # native decoder stack; WASM intentionally has no Audio.fileChannelCount.
-  "audio_file_channel_count",
+  # native decoder stack; WASM intentionally has no Audio.fileNumChannels.
+  "audio_file_num_channels",
   # Loading one channel of a file is the same host-filesystem and decoder
   # dependency as audio_from_file above; a WASM caller already holds the samples
   # and builds each channel through Audio.fromBuffer.
@@ -531,11 +531,6 @@ python = [
 # analyze_melody (python): the facade appends the extended use_pyin/center params
 # that map to C sonare_analyze_melody_ex; the base C analyze_melody lacks them.
 # Folded extended-facade params, not order drift.
-# pitch_correct_to_midi_timevarying (python): C is (f0_hz, voiced_prob, voiced,
-# n_frames, hop_length, target_midi). The facade uses the ergonomic order
-# (f0_hz, target_midi, hop_length, voiced?, voiced_prob?) and DERIVES n_frames
-# from the f0_hz array length — passing both the contour array and a redundant
-# frame count would let them disagree. Remapped to C order in the ctypes wrapper.
 # midi_cc_learn (python): C is (events, count, param_id, min_value, max_value,
 # min_movement). The facade DERIVES `count` from the events array length and keeps
 # the range params as keyword args. Passing both the array and a redundant count
@@ -600,7 +595,6 @@ python = [
   "chord_functional_analysis",
   "analyze_melody",
   "voice_change",
-  "pitch_correct_to_midi_timevarying",
   "midi_cc_learn",
   "midi_route_events",
   "split_note",
