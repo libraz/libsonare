@@ -8671,8 +8671,8 @@ export interface StreamingMasteringChainConfig extends MasteringChainConfig {
   sampleRate: number;
   /** Largest block `process` is given, in samples per channel. Default 128. */
   maxBlockSize?: number;
-  /** Channel count of the stream: 1 or 2. Default 1. */
-  numChannels?: 1 | 2;
+  /** Channel count of the stream: 1 or 2. Required. */
+  numChannels: 1 | 2;
   /**
    * Precomputed static loudness gain in dB. When omitted, an enabled `loudness`
    * stage still throws. When provided and `loudness.enabled` is set, the chain

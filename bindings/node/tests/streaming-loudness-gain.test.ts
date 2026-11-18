@@ -68,6 +68,7 @@ describe('streamingLoudnessGain', () => {
     const chain = new StreamingMasteringChain({
       ...STAGED,
       sampleRate: SR,
+      numChannels: 1,
       maxBlockSize: 512,
       loudnessStaticGainDb: gain.loudnessStaticGainDb,
       loudnessStaticGainPeakDb: gain.truePeakDbtp,

@@ -123,6 +123,7 @@ describe('typed multiband crossover + bands', () => {
     const run = (config: MasteringChainConfig): Float32Array => {
       const chain = new StreamingMasteringChain({
         sampleRate: SAMPLE_RATE,
+        numChannels: 1,
         maxBlockSize: 512,
         ...config,
       });
@@ -171,6 +172,7 @@ describe('typed multiband crossover + bands', () => {
       () =>
         new StreamingMasteringChain({
           sampleRate: SAMPLE_RATE,
+          numChannels: 1,
           ...(empty as MasteringChainConfig),
         }),
     ).toThrow(message);

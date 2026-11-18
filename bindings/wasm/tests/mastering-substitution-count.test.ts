@@ -118,6 +118,7 @@ describe('mastering nonFiniteSubstitutionCount (WASM)', () => {
   it('reports 0 across a clean stream', () => {
     const chain = new StreamingMasteringChain({
       sampleRate,
+      numChannels: 1,
       maxBlockSize: 512,
       maximizer: { truePeakLimiter: { enabled: true } },
     });

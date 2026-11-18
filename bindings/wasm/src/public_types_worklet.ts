@@ -119,8 +119,8 @@ export interface SonareRealtimeVoiceChangerWorkletProcessorOptions {
   sampleRate?: number;
   /** Largest render quantum the processor accepts, a positive integer. Default 128. */
   maxBlockSize?: number;
-  /** Channel count, 1 or 2. Default 1. */
-  numChannels?: 1 | 2;
+  /** Channel count of the stream, 1 or 2. Required. */
+  numChannels: 1 | 2;
   /** Compiled module bytes, used when the worklet realm has not initialized the module. */
   wasmBinary?: ArrayBuffer | Uint8Array;
 }

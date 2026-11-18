@@ -124,7 +124,11 @@ function voiceChangerReference(
   rate: number,
   blocks: number,
 ): { output: Float32Array; latency: number } {
-  const changer = new RealtimeVoiceChanger({ sampleRate: rate, maxBlockSize: BLOCK });
+  const changer = new RealtimeVoiceChanger({
+    sampleRate: rate,
+    numChannels: 1,
+    maxBlockSize: BLOCK,
+  });
   try {
     const latency = changer.latencySamples;
     return { output: renderBlocks((input) => changer.processMono(input), blocks), latency };

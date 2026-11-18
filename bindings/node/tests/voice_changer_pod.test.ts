@@ -12,7 +12,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
   it('applies every field of a flat preset POD, not just the root fields', () => {
     const pod = realtimeVoiceChangerPresetConfig('brightIdol');
     pod.retunePitchSemitones = 5;
-    const vc = new RealtimeVoiceChanger({ sampleRate: 48000 });
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1 });
     vc.setConfig(pod);
     const applied = JSON.parse(vc.configJson()).dsp;
     // The mutated field and the preset's sections survive instead of reverting
@@ -26,7 +26,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
   });
 
   it('applies a complete nested preset document', () => {
-    const vc = new RealtimeVoiceChanger({ sampleRate: 48000 });
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1 });
     const preset = JSON.parse(realtimeVoiceChangerPresetJson('neutralMonitor'));
     preset.dsp.retune.pitchSemitones = 3;
     vc.setConfig(preset);
@@ -36,7 +36,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
   });
 
   it('rejects a partial nested preset instead of applying defaults', () => {
-    const vc = new RealtimeVoiceChanger({ sampleRate: 48000 });
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1 });
     expect(() =>
       // @ts-expect-error deliberately partial nested preset; setConfig must reject it, not fill in defaults.
       vc.setConfig({ schemaVersion: 3, dsp: { retune: { pitchSemitones: 3 } } }),
@@ -47,10 +47,10 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
   it('reports a refused preset-or-config document as InvalidFormat', () => {
     const partial = { schemaVersion: 3, dsp: { retune: { pitchSemitones: 3 } } } as never;
     expectRefusal(
-      () => new RealtimeVoiceChanger({ sampleRate: 48000, config: partial }),
+      () => new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1, config: partial }),
       ErrorCode.InvalidFormat,
     );
-    const vc = new RealtimeVoiceChanger({ sampleRate: 48000 });
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1 });
     try {
       expectRefusal(() => vc.setConfig(partial), ErrorCode.InvalidFormat);
     } finally {
@@ -61,7 +61,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
   it('accepts a flat preset POD in the constructor', () => {
     const pod = realtimeVoiceChangerPresetConfig('brightIdol');
     pod.retunePitchSemitones = -9;
-    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, config: pod });
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1, config: pod });
     expect(JSON.parse(vc.configJson()).dsp.retune.pitchSemitones).toBeCloseTo(-9, 4);
     vc.destroy();
   });
@@ -73,9 +73,10 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
       voiceEngine: 'grain' as const,
     };
     expect(pod.formantMode).toBe('relative');
-    const relative = new RealtimeVoiceChanger({ sampleRate: 48000, config: pod });
+    const relative = new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1, config: pod });
     const absolute = new RealtimeVoiceChanger({
       sampleRate: 48000,
+      numChannels: 1,
       config: { ...pod, formantMode: 'absolute', formantFactor: 1.1 },
     });
     // One analysis frame (1024 samples at 48 kHz) more than the relative chain.
@@ -92,7 +93,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
 
   it('refuses an out-of-range field instead of clamping it and keeps the previous config', () => {
     const pod = realtimeVoiceChangerPresetConfig('neutralMonitor');
-    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, config: pod });
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1, config: pod });
     try {
       const before = vc.configJson();
       expect(() => vc.setConfig({ ...pod, formantFactor: 3.0 })).toThrow(RangeError);
@@ -107,7 +108,12 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
       vc.destroy();
     }
     expect(
-      () => new RealtimeVoiceChanger({ sampleRate: 48000, config: { ...pod, formantFactor: 3.0 } }),
+      () =>
+        new RealtimeVoiceChanger({
+          sampleRate: 48000,
+          numChannels: 1,
+          config: { ...pod, formantFactor: 3.0 },
+        }),
     ).toThrow(RangeError);
   });
 
@@ -117,13 +123,14 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
       voiceEngine: 'grain' as const,
     };
     const unreachable = { ...pod, formantMode: 'absolute' as const, retunePitchSemitones: -9 };
-    expect(() => new RealtimeVoiceChanger({ sampleRate: 48000, config: unreachable })).toThrow(
-      /\[0\.55, 0\.9811\]/,
-    );
+    expect(
+      () => new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1, config: unreachable }),
+    ).toThrow(/\[0\.55, 0\.9811\]/);
     expect(
       () =>
         new RealtimeVoiceChanger({
           sampleRate: 48000,
+          numChannels: 1,
           config: { ...pod, formantMode: 'sideways' as never },
         }),
     ).toThrow();
@@ -136,13 +143,13 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
     // @ts-expect-error formantMode is required on the flat POD, as the runtime enforces
     const typed: RealtimeVoiceChangerConfig = partial;
     expect(typed).toBe(partial);
-    expect(() => new RealtimeVoiceChanger({ sampleRate: 48000, config: podWithoutMode })).toThrow(
-      TypeError,
-    );
-    expect(() => new RealtimeVoiceChanger({ sampleRate: 48000, config: podWithoutMode })).toThrow(
-      /formantMode is required/,
-    );
-    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, config: pod });
+    expect(
+      () => new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1, config: podWithoutMode }),
+    ).toThrow(TypeError);
+    expect(
+      () => new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1, config: podWithoutMode }),
+    ).toThrow(/formantMode is required/);
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1, config: pod });
     try {
       expect(() => vc.setConfig(podWithoutMode)).toThrow(TypeError);
       expect(() => vc.setConfig({ ...pod, formantMode: 3 } as never)).toThrow(

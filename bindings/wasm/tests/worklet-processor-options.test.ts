@@ -54,7 +54,7 @@ describe('processorOptions refuses undeclared keys', () => {
   });
 
   describe('voice changer', () => {
-    const base = { config: 'neutralMonitor', sampleRate: 48000 };
+    const base = { config: 'neutralMonitor', sampleRate: 48000, numChannels: 1 };
 
     it.each([
       ['preset', 'neutralMonitor'],

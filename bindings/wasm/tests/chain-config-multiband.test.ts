@@ -91,11 +91,18 @@ describe('typed multiband crossover + bands', () => {
   it('refuses the dotted spelling on every entry point', () => {
     const dotted = { [`${MB}.enabled`]: true } as unknown as MasteringChainConfig;
     expect(() => masterAudio({ samples: left, sampleRate, overrides: dotted })).toThrow(TypeError);
-    expect(() => new StreamingMasteringChain({ sampleRate, ...dotted })).toThrow(TypeError);
+    expect(() => new StreamingMasteringChain({ sampleRate, numChannels: 1, ...dotted })).toThrow(
+      TypeError,
+    );
   });
 
   it('StreamingMasteringChain: runs the nested config like the offline chain stage list', () => {
-    const chain = new StreamingMasteringChain({ sampleRate, maxBlockSize: 512, ...typed });
+    const chain = new StreamingMasteringChain({
+      sampleRate,
+      numChannels: 1,
+      maxBlockSize: 512,
+      ...typed,
+    });
     try {
       expect(chain.stageNames()).toContain(MB);
       const out: number[] = [];
@@ -149,7 +156,9 @@ describe('typed multiband crossover + bands', () => {
     };
     const message = `Mastering override '${MB}.crossover.cutoffsHz' is an empty list, which has no flat spelling.`;
     expect(() => masterAudio({ samples: left, sampleRate, overrides: empty })).toThrow(message);
-    expect(() => new StreamingMasteringChain({ sampleRate, ...empty })).toThrow(message);
+    expect(() => new StreamingMasteringChain({ sampleRate, numChannels: 1, ...empty })).toThrow(
+      message,
+    );
     expect(() =>
       masterAudio({
         samples: left,

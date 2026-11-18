@@ -121,12 +121,12 @@ describe('Symbol.dispose / using', () => {
     },
     {
       name: 'RealtimeVoiceChanger',
-      make: () => new RealtimeVoiceChanger({ sampleRate: 48000 }),
+      make: () => new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1 }),
       call: (h: RealtimeVoiceChanger) => h.reset(),
     },
     {
       name: 'StreamingMasteringChain',
-      make: () => new StreamingMasteringChain({ sampleRate: 48000 }),
+      make: () => new StreamingMasteringChain({ sampleRate: 48000, numChannels: 1 }),
       call: (h: StreamingMasteringChain) => h.reset(),
     },
     {

@@ -34,7 +34,12 @@ function errorOf(fn: () => unknown): unknown {
   return undefined;
 }
 
-const chainConfig = { sampleRate, maxBlockSize: block, eq: { tilt: { tiltDb: 1 } } };
+const chainConfig = {
+  sampleRate,
+  numChannels: 1 as const,
+  maxBlockSize: block,
+  eq: { tilt: { tiltDb: 1 } },
+};
 
 beforeAll(async () => {
   await init();
@@ -109,6 +114,7 @@ describe('StreamingMasteringChain.constructor', () => {
     ['fractional sampleRate', { sampleRate: 48000.5 }, RangeError],
     ['zero maxBlockSize', { sampleRate, maxBlockSize: 0 }, RangeError],
     ['string maxBlockSize', { sampleRate, maxBlockSize: '128' }, TypeError],
+    ['no numChannels', { sampleRate }, TypeError],
     ['three channels', { sampleRate, numChannels: 3 }, RangeError],
     ['zero channels', { sampleRate, numChannels: 0 }, RangeError],
     ['string channels', { sampleRate, numChannels: '2' }, TypeError],
@@ -116,7 +122,7 @@ describe('StreamingMasteringChain.constructor', () => {
     expect(errorOf(() => new StreamingMasteringChain(config as never))).toBeInstanceOf(errorClass);
   });
 
-  it('prepares in the constructor: mono by default, stereo on request', () => {
+  it('prepares in the constructor for the requested channel count', () => {
     const mono = new StreamingMasteringChain(chainConfig);
     const stereo = new StreamingMasteringChain({
       ...chainConfig,
@@ -144,7 +150,7 @@ describe('StreamingMasteringChain.constructor', () => {
 describe('StreamingMasteringChainConfig', () => {
   it('carries the construction fields beside the chain sections', () => {
     expectTypeOf<StreamingMasteringChainConfig['sampleRate']>().toEqualTypeOf<number>();
-    expectTypeOf<StreamingMasteringChainConfig['numChannels']>().toEqualTypeOf<1 | 2 | undefined>();
+    expectTypeOf<StreamingMasteringChainConfig['numChannels']>().toEqualTypeOf<1 | 2>();
     expectTypeOf<StreamingMasteringChainConfig['maxBlockSize']>().toEqualTypeOf<
       number | undefined
     >();

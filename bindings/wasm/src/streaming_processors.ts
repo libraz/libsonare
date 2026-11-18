@@ -139,6 +139,7 @@ function assertOptionalBlockSize(fnName: string, value: unknown): void {
  * ```typescript
  * const chain = new StreamingMasteringChain({
  *   sampleRate: 44100,
+ *   numChannels: 1,
  *   maxBlockSize: 512,
  *   eq: { tilt: { tiltDb: 1.0 } },
  * });
@@ -161,8 +162,8 @@ export class StreamingMasteringChain {
   /**
    * Builds and prepares the chain in one step.
    *
-   * `sampleRate` is required (Hz, integer); `maxBlockSize` defaults to 128
-   * samples and `numChannels` to 1. Stereo-only stages are skipped for mono.
+   * `sampleRate` (Hz, integer) and `numChannels` are required; `maxBlockSize`
+   * defaults to 128 samples. Stereo-only stages are skipped for mono.
    *
    * @throws TypeError for a non-object config, a wrong-typed field or a missing
    *   `sampleRate`; RangeError for an out-of-domain rate, block size or channel count.
@@ -180,11 +181,9 @@ export class StreamingMasteringChain {
     } = config;
     assertSampleRate(fn, sampleRate);
     assertOptionalBlockSize(fn, maxBlockSize);
-    if (numChannels !== undefined && numChannels !== null) {
-      assertIntegerValue(fn, numChannels, 'numChannels');
-      if (numChannels !== 1 && numChannels !== 2) {
-        throw new RangeError(`${fn}: numChannels must be 1 or 2`);
-      }
+    assertIntegerValue(fn, numChannels, 'numChannels');
+    if (numChannels !== 1 && numChannels !== 2) {
+      throw new RangeError(`${fn}: numChannels must be 1 or 2`);
     }
     const module = getSonareModule();
     this.chainHandle = module.createStreamingMasteringChain({
@@ -193,11 +192,7 @@ export class StreamingMasteringChain {
       loudnessStaticGainPeakDb,
     });
     try {
-      this.chainHandle.prepare(
-        sampleRate,
-        maxBlockSize ?? DEFAULT_CHAIN_BLOCK_SIZE,
-        numChannels ?? 1,
-      );
+      this.chainHandle.prepare(sampleRate, maxBlockSize ?? DEFAULT_CHAIN_BLOCK_SIZE, numChannels);
     } catch (error) {
       this.chainHandle.delete();
       throw error;

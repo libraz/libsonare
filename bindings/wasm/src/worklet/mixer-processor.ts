@@ -32,6 +32,7 @@ import {
   spectrumRingFromSharedBuffer,
   tryBeginOverwriteWrite,
 } from './protocol.js';
+import { AUDIO_WORKLET_RENDER_QUANTUM } from './render_quantum.js';
 
 /**
  * AudioWorklet-style mixer bridge backed by the package's single `sonare.wasm`.
@@ -90,7 +91,7 @@ export class SonareWorkletProcessor {
       throw new TypeError('sceneJson is required.');
     }
     this.sampleRate = resolveScopeSampleRate(options.sampleRate, 'SonareWorkletProcessor');
-    this.maxBlockSize = options.maxBlockSize ?? 128;
+    this.maxBlockSize = options.maxBlockSize ?? AUDIO_WORKLET_RENDER_QUANTUM;
     // Zero is the off switch for both publications, so the floor is 0.
     this.meterIntervalFrames = requireIntegerOption(
       options.meterIntervalFrames,

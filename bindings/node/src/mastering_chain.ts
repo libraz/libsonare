@@ -85,6 +85,7 @@ function streamingGainFromNative(raw: object): StreamingLoudnessGainResult {
  * const chain = new StreamingMasteringChain({
  *   ...config,
  *   sampleRate: 48000,
+ *   numChannels: 1,
  *   loudnessStaticGainDb,
  *   loudnessStaticGainPeakDb: truePeakDbtp,
  * });

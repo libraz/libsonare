@@ -131,7 +131,7 @@ describe('embedded NUL refusal, by reader', () => {
   });
 
   it('RequiredStringValue names the label', () => {
-    const chain = new StreamingMasteringChain({ sampleRate: 48000 });
+    const chain = new StreamingMasteringChain({ sampleRate: 48000, numChannels: 1 });
     try {
       expectNulRefusal(() => chain.setParameter(`a${NUL}b`, 1), 'key');
     } finally {

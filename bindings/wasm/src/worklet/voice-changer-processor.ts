@@ -21,6 +21,7 @@ import {
   requireIntegerOption,
   resolveScopeSampleRate,
 } from './guards.js';
+import { AUDIO_WORKLET_RENDER_QUANTUM } from './render_quantum.js';
 
 /** AudioWorklet-side bridge that runs a {@link RealtimeVoiceChanger} over the worklet's input and output blocks and applies control messages from the main thread. */
 export class SonareRealtimeVoiceChangerWorkletProcessor {
@@ -38,7 +39,7 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
   private readonly monoPlane: Float32Array[] = [new Float32Array(0)];
   private destroyed = false;
 
-  constructor(options: SonareRealtimeVoiceChangerWorkletProcessorOptions = {}) {
+  constructor(options: SonareRealtimeVoiceChangerWorkletProcessorOptions) {
     assertKnownProcessorOptions(
       'SonareRealtimeVoiceChangerWorkletProcessor',
       'voiceChangerProcessor',
@@ -48,12 +49,22 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
       options.sampleRate,
       'SonareRealtimeVoiceChangerWorkletProcessor',
     );
-    this.maxBlockSize = requireIntegerOption(options.maxBlockSize, 128, 'maxBlockSize', 1);
-    this.numChannels = requireIntegerOption(options.numChannels, 1, 'numChannels', 1);
+    this.maxBlockSize = requireIntegerOption(
+      options.maxBlockSize,
+      AUDIO_WORKLET_RENDER_QUANTUM,
+      'maxBlockSize',
+      1,
+    );
+    const numChannels = options.numChannels;
+    if (numChannels !== 1 && numChannels !== 2) {
+      const message = 'SonareRealtimeVoiceChangerWorkletProcessor: numChannels must be 1 or 2';
+      throw typeof numChannels === 'number' ? new RangeError(message) : new TypeError(message);
+    }
+    this.numChannels = numChannels;
     this.changer = new RealtimeVoiceChanger({
       sampleRate: this.sampleRate,
       maxBlockSize: this.maxBlockSize,
-      numChannels: this.numChannels as 1 | 2,
+      numChannels,
       config: options.config ?? 'neutralMonitor',
     });
     try {
@@ -121,12 +132,9 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
       }
       this.loadCarrier(buffer.carrier, carrier, frames);
       buffer.processWithCarrier();
-      // One plane fans out to every output channel and anything it does not
-      // fill is zeroed. Writing only output[0] left a stereo host hard-panned
-      // left -- the default `numChannels` here is 1 while AudioWorkletNode's
-      // default `channelCountMode: 'max'` gives a 2-channel output, so that was
-      // the ordinary configuration -- and left the previous block's samples in
-      // the channels it skipped.
+      // One plane fans out to every output channel and zeroes the rest: a mono
+      // processor under AudioWorkletNode's default `channelCountMode: 'max'`
+      // still gets a 2-channel output, which writing only output[0] hard-panned.
       this.monoPlane[0] = buffer.output;
       copyPlanesToOutput(output, this.monoPlane, frames);
       return true;
@@ -268,7 +276,8 @@ export function registerSonareRealtimeVoiceChangerWorkletProcessor(
     }) {
       super();
       const port = this.port;
-      const processorOptions = options?.processorOptions ?? {};
+      const processorOptions: Partial<SonareRealtimeVoiceChangerWorkletProcessorOptions> =
+        options?.processorOptions ?? {};
       assertKnownProcessorOptions(name, 'voiceChangerProcessor', processorOptions);
       const reportError = (
         request: SonareRealtimeVoiceChangerErrorMessage['request'],
@@ -298,7 +307,10 @@ export function registerSonareRealtimeVoiceChangerWorkletProcessor(
         }
       };
       const start = () => {
-        this.bridge = new SonareRealtimeVoiceChangerWorkletProcessor(processorOptions);
+        // Options cross from the main thread unchecked; the constructor refuses a missing field.
+        this.bridge = new SonareRealtimeVoiceChangerWorkletProcessor(
+          processorOptions as SonareRealtimeVoiceChangerWorkletProcessorOptions,
+        );
         for (const message of this.pendingMessages.splice(0)) {
           deliver(this.bridge, message);
         }

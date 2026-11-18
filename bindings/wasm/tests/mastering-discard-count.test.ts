@@ -24,6 +24,7 @@ describe('mastering nonFiniteDiscardCount (WASM)', () => {
     // for a reason unrelated to the method under test.
     const chain = new StreamingMasteringChain({
       sampleRate,
+      numChannels: 1,
       maxBlockSize: blockSize,
       eq: { tilt: { tiltDb: 24 } },
     });

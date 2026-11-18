@@ -351,7 +351,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
   });
 
   it('sizes RealtimeVoiceChanger.processMono from the real sample count', () => {
-    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, maxBlockSize: 256 });
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1, maxBlockSize: 256 });
     // The control: two legal block sizes select an output of that size.
     expect(vc.processMono(new Float32Array(4)).length).toBe(4);
     expect(vc.processMono(new Float32Array(8)).length).toBe(8);
@@ -361,7 +361,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
   });
 
   it("sizes RealtimeVoiceChanger.processMonoInto's output check from the real buffer", () => {
-    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, maxBlockSize: 256 });
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1, maxBlockSize: 256 });
     const input = new Float32Array(4);
     // The control: an output exactly the input's size accepts; one short refuses.
     expect(() => vc.processMonoInto(input, new Float32Array(4))).not.toThrow();

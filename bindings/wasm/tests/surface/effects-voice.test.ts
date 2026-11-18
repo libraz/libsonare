@@ -64,6 +64,7 @@ function changer(
 ): RealtimeVoiceChanger {
   return new RealtimeVoiceChanger({
     sampleRate,
+    numChannels: 1,
     maxBlockSize: BLOCK,
     ...options,
     ...(config === undefined ? {} : { config }),
@@ -99,6 +100,12 @@ describe('voice changer surface', () => {
       }
     });
 
+    it("requires numChannels, the channel count of the caller's stream", () => {
+      expect(
+        () => new RealtimeVoiceChanger({ sampleRate } as unknown as RealtimeVoiceChangerOptions),
+      ).toThrow(new TypeError('RealtimeVoiceChanger: numChannels must be 1 or 2'));
+    });
+
     it.each([
       ['channels', { channels: 1 }],
       ['preset', { preset: 'neutralMonitor' }],
@@ -108,6 +115,7 @@ describe('voice changer surface', () => {
         () =>
           new RealtimeVoiceChanger({
             sampleRate,
+            numChannels: 1,
             ...extra,
           } as unknown as RealtimeVoiceChangerOptions),
       );
@@ -123,7 +131,12 @@ describe('voice changer surface', () => {
     ])('refuses an out-of-domain option: %s with a RangeError', (_name, extra) => {
       expect(
         caught(
-          () => new RealtimeVoiceChanger({ sampleRate, ...extra } as RealtimeVoiceChangerOptions),
+          () =>
+            new RealtimeVoiceChanger({
+              sampleRate,
+              numChannels: 1,
+              ...extra,
+            } as RealtimeVoiceChangerOptions),
         ).name,
       ).toBe('RangeError');
     });
@@ -132,7 +145,7 @@ describe('voice changer surface', () => {
       const c = new RealtimeVoiceChanger({
         sampleRate,
         maxBlockSize: null,
-        numChannels: null,
+        numChannels: 1,
         config: null,
       } as unknown as RealtimeVoiceChangerOptions);
       c.destroy();
@@ -719,6 +732,7 @@ describe('voice changer surface', () => {
           () =>
             new workletModule.SonareRealtimeVoiceChangerWorkletProcessor({
               sampleRate,
+              numChannels: 1,
               ...extra,
             } as never),
         ).name,
@@ -790,7 +804,7 @@ describe('voice changer surface', () => {
       expectTypeOf<RealtimeVoiceChangerOptions>().toEqualTypeOf<{
         sampleRate: number;
         maxBlockSize?: number;
-        numChannels?: 1 | 2;
+        numChannels: 1 | 2;
         config?: RealtimeVoiceChangerConfigInput;
       }>();
     });

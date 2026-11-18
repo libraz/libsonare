@@ -122,7 +122,7 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
               maxBlockSize: 128,
               numChannels: numChannels as never,
             }),
-        ).toThrow(/numChannels must be an integer of at least 1/);
+        ).toThrow(/numChannels must be 1 or 2/);
       }
     });
 
@@ -696,6 +696,7 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
         new SonareRealtimeVoiceChangerWorkletProcessor({
           config: 'definitelyNotAPreset',
           sampleRate: 48000,
+          numChannels: 1,
         } as never);
       } catch (error) {
         caught = error;

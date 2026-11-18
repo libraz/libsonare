@@ -137,6 +137,7 @@ describe('StreamingMasteringChain.nonFiniteSubstitutionCount', () => {
   it('is zero across a clean mono stream and its flush', () => {
     const chain = new StreamingMasteringChain({
       sampleRate: SR,
+      numChannels: 1,
       maxBlockSize: 512,
       dynamics: { compressor: { thresholdDb: -24 } },
       maximizer: { truePeakLimiter: { enabled: true } },
@@ -167,7 +168,11 @@ describe('StreamingMasteringChain.nonFiniteSubstitutionCount', () => {
   });
 
   it('reports zero from construction and throws after destroy', () => {
-    const chain = new StreamingMasteringChain({ sampleRate: SR, eq: { tilt: { tiltDb: 0.5 } } });
+    const chain = new StreamingMasteringChain({
+      sampleRate: SR,
+      numChannels: 1,
+      eq: { tilt: { tiltDb: 0.5 } },
+    });
     expect(chain.nonFiniteSubstitutionCount).toBe(0);
     chain.destroy();
     expect(() => chain.nonFiniteSubstitutionCount).toThrow();

@@ -20,6 +20,7 @@ describe('Sonare WASM Module', () => {
     it('should stream a mono block through StreamingMasteringChain', () => {
       const chain = new StreamingMasteringChain({
         sampleRate: 44100,
+        numChannels: 1,
         maxBlockSize: 512,
         eq: { tilt: { tiltDb: 1.0 } },
       });
@@ -42,6 +43,7 @@ describe('Sonare WASM Module', () => {
     it('flushes delayed StreamingMasteringChain output once', () => {
       const chain = new StreamingMasteringChain({
         sampleRate: 48000,
+        numChannels: 1,
         maxBlockSize: 64,
         maximizer: { truePeakLimiter: { enabled: true } },
       });
@@ -66,6 +68,7 @@ describe('Sonare WASM Module', () => {
     it('uses the canonical flat parser for nested streaming-chain configuration', () => {
       const chain = new StreamingMasteringChain({
         sampleRate: 44100,
+        numChannels: 1,
         maxBlockSize: 512,
         repair: { denoise: { enabled: false } },
         eq: { tilt: { enabled: true, tiltDb: 2.0, pivotHz: 1500 } },
@@ -83,6 +86,7 @@ describe('Sonare WASM Module', () => {
       // loudnessStaticGainDb must let it construct, prepare, and process.
       const chain = new StreamingMasteringChain({
         sampleRate: 44100,
+        numChannels: 1,
         maxBlockSize: 512,
         eq: { tilt: { tiltDb: 1.0 } },
         loudness: { targetLufs: -18, ceilingDb: -1, truePeakOversample: 4 },
@@ -109,6 +113,7 @@ describe('Sonare WASM Module', () => {
         () =>
           new StreamingMasteringChain({
             sampleRate: 44100,
+            numChannels: 1,
             loudness: { targetLufs: -18, ceilingDb: -1, truePeakOversample: 4 },
           }),
       ).toThrow();

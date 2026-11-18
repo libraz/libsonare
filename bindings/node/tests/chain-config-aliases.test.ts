@@ -56,7 +56,7 @@ describe('streaming chain config rejects the same leaves as the offline chain', 
   });
 
   it('the streaming constructor rejects it the same way', () => {
-    const config = { sampleRate: 48000, ...badConfig } as never;
+    const config = { sampleRate: 48000, numChannels: 1, ...badConfig } as never;
     expect(() => new StreamingMasteringChain(config)).toThrow(TypeError);
     expect(() => new StreamingMasteringChain(config)).toThrow(
       /maximizer\.truePeakLimiter\.ceilingDb/,
@@ -69,7 +69,12 @@ describe('streaming chain config rejects the same leaves as the offline chain', 
       'maximizer.truePeakLimiter.enabled': true,
       'maximizer.truePeakLimiter.ceilingDb': -1,
     });
-    const chain = new StreamingMasteringChain({ sampleRate: 48000, maxBlockSize: 512, ...good });
+    const chain = new StreamingMasteringChain({
+      sampleRate: 48000,
+      numChannels: 1,
+      maxBlockSize: 512,
+      ...good,
+    });
     try {
       expect(chain.stageNames()).toContain('maximizer.truePeakLimiter');
     } finally {
@@ -80,6 +85,7 @@ describe('streaming chain config rejects the same leaves as the offline chain', 
   it('the streaming-only top-level options are not rejected as chain leaves', () => {
     const chain = new StreamingMasteringChain({
       sampleRate: 48000,
+      numChannels: 1,
       maxBlockSize: 512,
       loudnessStaticGainDb: -3,
       loudnessStaticGainPeakDb: -0.5,

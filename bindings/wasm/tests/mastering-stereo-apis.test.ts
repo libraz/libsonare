@@ -22,6 +22,7 @@ describe('WASM stereo mastering design APIs', () => {
   it('rejects streaming updates after delete', () => {
     const chain = new StreamingMasteringChain({
       sampleRate: SAMPLE_RATE,
+      numChannels: 1,
       eq: { tilt: { enabled: true } },
     });
     chain.destroy();
@@ -120,6 +121,7 @@ describe('WASM stereo mastering design APIs', () => {
   it('applies a changed streaming parameter to the running stream', () => {
     const config = {
       sampleRate: SAMPLE_RATE,
+      numChannels: 1 as const,
       dynamics: { compressor: { enabled: true, thresholdDb: -24, ratio: 3 } },
     };
     const edited = new StreamingMasteringChain(config);
@@ -139,6 +141,7 @@ describe('WASM stereo mastering design APIs', () => {
   it('exposes the streaming chain realtime-safe setter', () => {
     const chain = new StreamingMasteringChain({
       sampleRate: SAMPLE_RATE,
+      numChannels: 1,
       dynamics: { compressor: { enabled: true, thresholdDb: -24 } },
     });
     try {

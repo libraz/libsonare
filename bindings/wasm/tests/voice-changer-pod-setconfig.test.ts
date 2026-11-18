@@ -13,7 +13,12 @@ const SAMPLE_RATE = 48000;
 
 /** A changer prepared for mono blocks of at most 128 samples. */
 function make(config: RealtimeVoiceChangerConfigInput): RealtimeVoiceChanger {
-  return new RealtimeVoiceChanger({ sampleRate: SAMPLE_RATE, maxBlockSize: 128, config });
+  return new RealtimeVoiceChanger({
+    sampleRate: SAMPLE_RATE,
+    numChannels: 1,
+    maxBlockSize: 128,
+    config,
+  });
 }
 
 describe('RealtimeVoiceChanger flat config setConfig', () => {

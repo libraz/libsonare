@@ -200,7 +200,7 @@ export class RealtimeVoiceChanger {
       throw new TypeError(`${fnName}: maxBlockSize must be a number`);
     }
     assertPositiveInteger(fnName, maxBlockSize, 'maxBlockSize');
-    const numChannels = options.numChannels ?? 1;
+    const numChannels = options.numChannels;
     assertChannelCount(fnName, numChannels);
     this.native = new addon.RealtimeVoiceChanger(
       nativeVoiceConfig(fnName, options.config ?? 'neutralMonitor'),

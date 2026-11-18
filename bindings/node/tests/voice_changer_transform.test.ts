@@ -43,6 +43,7 @@ function withChanger(
 ): void {
   const changer = new RealtimeVoiceChanger({
     sampleRate: SR,
+    numChannels: 1,
     maxBlockSize: 256,
     config: preset,
     ...options,
@@ -111,7 +112,7 @@ describe('voice transformer presets and flat config', () => {
   it('refuses a flat config that lacks a transformer key', () => {
     const { harmonySteps: _omitted, ...partial } = realtimeVoiceChangerPresetConfig('brightIdol');
     expectRefusal(
-      () => new RealtimeVoiceChanger({ sampleRate: SR, config: partial as never }),
+      () => new RealtimeVoiceChanger({ sampleRate: SR, numChannels: 1, config: partial as never }),
       TypeError,
     );
   });
@@ -140,6 +141,7 @@ describe('voice transformer presets and flat config', () => {
       () =>
         new RealtimeVoiceChanger({
           sampleRate: SR,
+          numChannels: 1,
           config: { ...GRAIN, pitchCorrectionMode: 'auto' },
         }),
     ).toThrow(RangeError);
@@ -188,7 +190,7 @@ describe('RealtimeVoiceChanger note API', () => {
       expect(codeOf(() => changer.noteOff(60))).toBe(ErrorCode.InvalidState);
       expect(() => changer.allNotesOff()).not.toThrow();
     });
-    const destroyed = new RealtimeVoiceChanger({ sampleRate: SR, config: psola });
+    const destroyed = new RealtimeVoiceChanger({ sampleRate: SR, numChannels: 1, config: psola });
     destroyed.destroy();
     expectRefusal(() => destroyed.noteOn(60), ErrorCode.InvalidState);
     expectRefusal(() => destroyed.noteOff(60), ErrorCode.InvalidState);

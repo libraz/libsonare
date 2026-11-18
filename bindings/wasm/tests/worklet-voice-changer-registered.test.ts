@@ -54,7 +54,12 @@ describe('registered voice changer worklet processor', () => {
   it('answers a refused control message with an error reply and keeps rendering', () => {
     const { ctor, posted, send } = register();
     const instance = new ctor({
-      processorOptions: { config: 'neutralMonitor', sampleRate: 48000, maxBlockSize: 128 },
+      processorOptions: {
+        config: 'neutralMonitor',
+        sampleRate: 48000,
+        maxBlockSize: 128,
+        numChannels: 1,
+      },
     });
     send({ type: 'noteOn', note: 60, velocity: 2 });
     send({ type: 'setConfig', config: {} });

@@ -67,8 +67,8 @@ export interface RealtimeVoiceChangerOptions {
   sampleRate: number;
   /** Largest block the process calls accept, a positive integer. Default 128. */
   maxBlockSize?: number;
-  /** Channel count, 1 or 2. Default 1. */
-  numChannels?: 1 | 2;
+  /** Channel count of the stream, 1 or 2. Required. */
+  numChannels: 1 | 2;
   /** Preset id, preset document or flat config. Default `'neutralMonitor'`. */
   config?: RealtimeVoiceChangerConfigInput;
 }

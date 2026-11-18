@@ -84,7 +84,11 @@ const CASES: readonly ReleasableCase[] = [
   {
     name: 'RealtimeVoiceChanger',
     make: () => {
-      const changer = new RealtimeVoiceChanger({ sampleRate: 48000, maxBlockSize: 512 });
+      const changer = new RealtimeVoiceChanger({
+        sampleRate: 48000,
+        numChannels: 1,
+        maxBlockSize: 512,
+      });
       changer.processMono(block(512));
       return changer;
     },

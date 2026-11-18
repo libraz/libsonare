@@ -230,6 +230,7 @@ describe('StreamingMasteringChain.setParameter', () => {
   it('rejects updates after destroy', () => {
     const chain = new StreamingMasteringChain({
       sampleRate: SR,
+      numChannels: 1,
       maxBlockSize: 128,
       eq: { tilt: { enabled: true } },
     });
@@ -238,9 +239,11 @@ describe('StreamingMasteringChain.setParameter', () => {
   });
 
   it('requires an integer sample rate at construction and has no prepare()', () => {
-    expect(() => new StreamingMasteringChain({ sampleRate: SR + 0.5 })).toThrow(RangeError);
+    expect(() => new StreamingMasteringChain({ sampleRate: SR + 0.5, numChannels: 1 })).toThrow(
+      RangeError,
+    );
     expect(() => new StreamingMasteringChain({} as never)).toThrow(TypeError);
-    const chain = new StreamingMasteringChain({ sampleRate: SR });
+    const chain = new StreamingMasteringChain({ sampleRate: SR, numChannels: 1 });
     expect((chain as unknown as Record<string, unknown>).prepare).toBeUndefined();
     chain.destroy();
   });
@@ -248,6 +251,7 @@ describe('StreamingMasteringChain.setParameter', () => {
   it('retains state when setting the current value at a block boundary', () => {
     const config = {
       sampleRate: SR,
+      numChannels: 1 as const,
       maxBlockSize: 128,
       dynamics: { compressor: { enabled: true, thresholdDb: -24, ratio: 3 } },
     };
@@ -264,6 +268,7 @@ describe('StreamingMasteringChain.setParameter', () => {
   it('applies a changed value to the running stream', () => {
     const config = {
       sampleRate: SR,
+      numChannels: 1 as const,
       maxBlockSize: 128,
       dynamics: { compressor: { enabled: true, thresholdDb: -24, ratio: 3 } },
     };
@@ -279,10 +284,15 @@ describe('StreamingMasteringChain.setParameter', () => {
   it('rejects unknown and non-realtime parameters', () => {
     const chain = new StreamingMasteringChain({
       sampleRate: SR,
+      numChannels: 1,
       maxBlockSize: 128,
       dynamics: { compressor: { enabled: true } },
     });
-    const disabled = new StreamingMasteringChain({ sampleRate: SR, maxBlockSize: 128 });
+    const disabled = new StreamingMasteringChain({
+      sampleRate: SR,
+      numChannels: 1,
+      maxBlockSize: 128,
+    });
     expect(() => chain.setParameter('does.not.exist', 1)).toThrow();
     expect(() => chain.setParameter('dynamics.compressor.enabled', 0)).toThrow();
     expect(() => disabled.setParameter('dynamics.compressor.thresholdDb', -24)).toThrow();

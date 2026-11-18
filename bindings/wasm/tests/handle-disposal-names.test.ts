@@ -51,7 +51,12 @@ describe('WASM handle teardown names', () => {
   const handles: ReadonlyArray<[string, () => Disposable]> = [
     [
       'StreamingMasteringChain',
-      () => new StreamingMasteringChain({ sampleRate: 48000, eq: { tilt: { tiltDb: 0.5 } } }),
+      () =>
+        new StreamingMasteringChain({
+          sampleRate: 48000,
+          numChannels: 1,
+          eq: { tilt: { tiltDb: 0.5 } },
+        }),
     ],
     ['StreamingEqualizer', () => new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 })],
     [
@@ -60,7 +65,8 @@ describe('WASM handle teardown names', () => {
     ],
     [
       'RealtimeVoiceChanger',
-      () => new RealtimeVoiceChanger({ sampleRate: 48000, config: 'neutralMonitor' }),
+      () =>
+        new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1, config: 'neutralMonitor' }),
     ],
     ['StreamAnalyzer', () => new StreamAnalyzer({ sampleRate: 22050 })],
     ['RealtimeEngine', () => new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 })],

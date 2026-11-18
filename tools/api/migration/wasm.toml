@@ -19618,7 +19618,7 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::renames the processor
 kind = "field"
 old = "SonareRealtimeVoiceChangerWorkletProcessorOptions.channelCount"
 to = "SonareRealtimeVoiceChangerWorkletProcessorOptions.numChannels"
-changed = "channelCount -> numChannels"
+changed = "channelCount -> numChannels (1 | 2), required: the channel count of the caller's stream has no default (was 1)"
 domain = "effects"
 rule = "num-channels"
 entry = "./worklet"
@@ -19724,7 +19724,7 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::voiceChange requires 
 [[entry]]
 kind = "class"
 old = "RealtimeVoiceChanger"
-changed = "constructor(options: RealtimeVoiceChangerOptions)"
+changed = "constructor(options: RealtimeVoiceChangerOptions), sampleRate and numChannels required"
 domain = "effects"
 rule = "individual"
 test = "bindings/wasm/tests/surface/effects-voice.test.ts::takes one options object with sampleRate required"

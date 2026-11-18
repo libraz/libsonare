@@ -18,6 +18,7 @@ describe('StreamingMasteringChain from the worklet entry', () => {
   it('prepares and processes inside the worklet realm', () => {
     const chain = new StreamingMasteringChain({
       sampleRate: 48000,
+      numChannels: 1,
       maxBlockSize: 256,
       eq: { tilt: { tiltDb: 1.5 } },
     });
@@ -40,7 +41,12 @@ describe('StreamingMasteringChain from the worklet entry', () => {
     // Whole-signal integrated LUFS cannot be measured block by block, so the
     // host must supply the offline-measured gain or the chain refuses to build.
     expect(
-      () => new StreamingMasteringChain({ sampleRate: 48000, loudness: { targetLufs: -14 } }),
+      () =>
+        new StreamingMasteringChain({
+          sampleRate: 48000,
+          numChannels: 1,
+          loudness: { targetLufs: -14 },
+        }),
     ).toThrow();
     const chain = new StreamingMasteringChain({
       sampleRate: 48000,

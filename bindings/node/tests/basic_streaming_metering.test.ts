@@ -221,6 +221,7 @@ describe('StreamingMasteringChain', () => {
   it('processes mono blocks and reports stage names', () => {
     const chain = new StreamingMasteringChain({
       sampleRate: 48000,
+      numChannels: 1,
       maxBlockSize: 512,
       eq: { tilt: { tiltDb: 0.5 } },
       dynamics: { compressor: { thresholdDb: -20 } },
@@ -235,6 +236,7 @@ describe('StreamingMasteringChain', () => {
   it('flushes delayed mono output exactly once', () => {
     const chain = new StreamingMasteringChain({
       sampleRate: 48000,
+      numChannels: 1,
       maxBlockSize: 64,
       maximizer: { truePeakLimiter: { enabled: true } },
     });
@@ -255,17 +257,27 @@ describe('StreamingMasteringChain', () => {
   it('accepts denoise by default, refuses its whole-signal estimator and a loudness stage', () => {
     expect(
       () =>
-        new StreamingMasteringChain({ sampleRate: 48000, repair: { denoise: { enabled: true } } }),
+        new StreamingMasteringChain({
+          sampleRate: 48000,
+          numChannels: 1,
+          repair: { denoise: { enabled: true } },
+        }),
     ).not.toThrow();
     expect(
       () =>
         new StreamingMasteringChain({
           sampleRate: 48000,
+          numChannels: 1,
           repair: { denoise: { enabled: true, noiseEstimator: 'quantile' } },
         }),
     ).toThrow(/quantile/);
     expect(
-      () => new StreamingMasteringChain({ sampleRate: 48000, loudness: { targetLufs: -14 } }),
+      () =>
+        new StreamingMasteringChain({
+          sampleRate: 48000,
+          numChannels: 1,
+          loudness: { targetLufs: -14 },
+        }),
     ).toThrow();
   });
 
@@ -275,6 +287,7 @@ describe('StreamingMasteringChain', () => {
     // method under test. Setting any field under a module enables it.
     const chain = new StreamingMasteringChain({
       sampleRate: 48000,
+      numChannels: 1,
       maxBlockSize: 128,
       eq: { tilt: { tiltDb: 24 } },
     });
@@ -293,6 +306,7 @@ describe('StreamingMasteringChain', () => {
   it('accepts a loudness stage when a static gain is supplied', () => {
     const chain = new StreamingMasteringChain({
       sampleRate: 48000,
+      numChannels: 1,
       maxBlockSize: 512,
       loudness: { targetLufs: -14 },
       loudnessStaticGainDb: 3.0,
@@ -708,6 +722,7 @@ describe('streaming handles signal use-after-destroy', () => {
   it('throws from every StreamingMasteringChain reader after destroy()', () => {
     const chain = new StreamingMasteringChain({
       sampleRate: 48000,
+      numChannels: 1,
       maxBlockSize: 64,
       maximizer: { truePeakLimiter: { enabled: true } },
     });

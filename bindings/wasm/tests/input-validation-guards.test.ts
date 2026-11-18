@@ -393,31 +393,51 @@ describe('RealtimeVoiceChanger.setConfig rejects a partial POD instead of zero-f
   }
 
   it('rejects a POD missing limiterEnableIspLimiter instead of silently turning the ISP limiter off', () => {
-    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, config: 'neutralMonitor' });
+    const vc = new RealtimeVoiceChanger({
+      sampleRate: 48000,
+      numChannels: 1,
+      config: 'neutralMonitor',
+    });
     const { limiterEnableIspLimiter: _omitted, ...partial } = fullPod();
     expect(() => vc.setConfig(partial as never)).toThrow(/limiterEnableIspLimiter/);
   });
 
   it('rejects a POD missing any other required numeric field', () => {
-    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, config: 'neutralMonitor' });
+    const vc = new RealtimeVoiceChanger({
+      sampleRate: 48000,
+      numChannels: 1,
+      config: 'neutralMonitor',
+    });
     const { wetMix: _omitted, ...partial } = fullPod();
     expect(() => vc.setConfig(partial as never)).toThrow(/wetMix/);
   });
 
   it('rejects a POD with a wrong-typed field instead of coercing it', () => {
-    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, config: 'neutralMonitor' });
+    const vc = new RealtimeVoiceChanger({
+      sampleRate: 48000,
+      numChannels: 1,
+      config: 'neutralMonitor',
+    });
     expect(() => vc.setConfig({ ...fullPod(), wetMix: 'loud' as unknown as number })).toThrow(
       /wetMix/,
     );
   });
 
   it('accepts a fully specified POD', () => {
-    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, config: 'neutralMonitor' });
+    const vc = new RealtimeVoiceChanger({
+      sampleRate: 48000,
+      numChannels: 1,
+      config: 'neutralMonitor',
+    });
     expect(() => vc.setConfig(fullPod())).not.toThrow();
   });
 
   it('reports a refused preset-or-config document as InvalidFormat on setConfig', () => {
-    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, config: 'neutralMonitor' });
+    const vc = new RealtimeVoiceChanger({
+      sampleRate: 48000,
+      numChannels: 1,
+      config: 'neutralMonitor',
+    });
     let caught: unknown;
     try {
       vc.setConfig({ schemaVersion: 3, dsp: { retune: { pitchSemitones: 3 } } } as never);
@@ -430,7 +450,7 @@ describe('RealtimeVoiceChanger.setConfig rejects a partial POD instead of zero-f
 
 describe('RealtimeVoiceChanger legacy block-size guard', () => {
   it('rejects a block larger than the prepared max block size', () => {
-    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, maxBlockSize: 128 });
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1, maxBlockSize: 128 });
     // Within the prepared max: fine.
     expect(() => vc.processMono(new Float32Array(128))).not.toThrow();
     // Larger than the prepared max: must throw, not emit stale/garbage scratch.

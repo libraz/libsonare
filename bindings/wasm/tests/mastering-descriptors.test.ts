@@ -135,6 +135,7 @@ describe('streaming denoise', () => {
   it('prepares at its default estimator', () => {
     const chain = new StreamingMasteringChain({
       sampleRate: SR,
+      numChannels: 1,
       maxBlockSize: 512,
       repair: { denoise: { enabled: true } },
     });
@@ -147,6 +148,7 @@ describe('streaming denoise', () => {
     for (const name of ['mcra', 'imcra', 'spp'] as const) {
       const chain = new StreamingMasteringChain({
         sampleRate: SR,
+        numChannels: 1,
         maxBlockSize: 512,
         repair: { denoise: { enabled: true, noiseEstimator: name } },
       });
@@ -155,6 +157,7 @@ describe('streaming denoise', () => {
     expect(() => {
       const chain = new StreamingMasteringChain({
         sampleRate: SR,
+        numChannels: 1,
         maxBlockSize: 512,
         repair: { denoise: { enabled: true, noiseEstimator: 'quantile' } },
       });
@@ -215,6 +218,7 @@ describe('enum tokens in mastering overrides', () => {
     expect(() => {
       new StreamingMasteringChain({
         sampleRate: SR,
+        numChannels: 1,
         ...denoise({ noiseEstimator: 'nope' }),
       } as never);
     }).toThrow(RangeError);

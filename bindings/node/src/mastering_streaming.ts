@@ -43,8 +43,8 @@ export interface StreamingMasteringChainConfig extends MasteringChainConfig {
   /** Largest block passed to a process call, in samples. Default 128. */
   maxBlockSize?: number;
 
-  /** Channel layout the chain is prepared for: 1 (mono) or 2 (stereo). Default 1. */
-  numChannels?: 1 | 2;
+  /** Channel layout of the stream: 1 (mono) or 2 (stereo). Required. */
+  numChannels: 1 | 2;
 
   /**
    * Precomputed static loudness gain in dB, measured at the loudness stage's
@@ -123,6 +123,7 @@ function assertOptionalBlockSize(fnName: string, value: unknown): void {
  * ```typescript
  * const chain = new StreamingMasteringChain({
  *   sampleRate: 44100,
+ *   numChannels: 1,
  *   maxBlockSize: 512,
  *   eq: { tilt: { tiltDb: 1.0 } },
  * });
@@ -135,8 +136,8 @@ export class StreamingMasteringChain {
   private disposed = false;
 
   /**
-   * Builds and prepares the chain in one step. `maxBlockSize` defaults to 128
-   * and `numChannels` to 1; stereo-only stages are skipped for mono.
+   * Builds and prepares the chain in one step. `sampleRate` and `numChannels`
+   * are required; `maxBlockSize` defaults to 128. Stereo-only stages are skipped for mono.
    *
    * @throws TypeError for a non-object config, a wrong-typed field or a missing
    *   `sampleRate`; RangeError for an out-of-domain rate, block size or channel count.
@@ -147,11 +148,9 @@ export class StreamingMasteringChain {
     const { sampleRate, maxBlockSize, numChannels, ...chainConfig } = config;
     assertSampleRate(fn, sampleRate);
     assertOptionalBlockSize(fn, maxBlockSize);
-    if (numChannels !== undefined && numChannels !== null) {
-      assertIntegerValue(fn, numChannels, 'numChannels');
-      if (numChannels !== 1 && numChannels !== 2) {
-        throw new RangeError(`${fn}: numChannels must be 1 or 2`);
-      }
+    assertIntegerValue(fn, numChannels, 'numChannels');
+    if (numChannels !== 1 && numChannels !== 2) {
+      throw new RangeError(`${fn}: numChannels must be 1 or 2`);
     }
     // The addon keeps only the number and boolean leaves of what it is given;
     // anything else is skipped with no error. The canonical flattener runs
@@ -167,7 +166,7 @@ export class StreamingMasteringChain {
     }
     this.native = new addon.StreamingMasteringChain(native);
     try {
-      this.native.prepare(sampleRate, maxBlockSize ?? DEFAULT_CHAIN_BLOCK_SIZE, numChannels ?? 1);
+      this.native.prepare(sampleRate, maxBlockSize ?? DEFAULT_CHAIN_BLOCK_SIZE, numChannels);
     } catch (error) {
       this.native.destroy();
       throw error;
