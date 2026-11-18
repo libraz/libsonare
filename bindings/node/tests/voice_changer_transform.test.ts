@@ -97,14 +97,13 @@ describe('voice transformer presets and flat config', () => {
       });
       const applied = JSON.parse(changer.configJson()).dsp;
       expect(applied.pitchCorrection.mode).toBe('auto');
-      // The serialized document keeps the core spelling of the scale.
-      expect(applied.pitchCorrection.scale).toBe('natural_minor');
+      expect(applied.pitchCorrection.scale).toBe('naturalMinor');
       expect(applied.pitchCorrection.keyRoot).toBe(9);
       expect(applied.harmony.voices).toBe(2);
       expect(applied.harmony.steps.slice(0, 2)).toEqual([2, -3]);
-      expect(applied.character.type).toBe('bbd_chorus');
-      expect(applied.reverbVariation.variation).toBe('tempo_delay');
-      expect(applied.reverbVariation.division).toBe('dotted_eighth');
+      expect(applied.character.type).toBe('bbdChorus');
+      expect(applied.reverbVariation.variation).toBe('tempoDelay');
+      expect(applied.reverbVariation.division).toBe('dottedEighth');
       expect(applied.midi.release).toBe('input');
     });
   });

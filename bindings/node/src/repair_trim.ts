@@ -45,7 +45,7 @@ function nativeTrimOptions(
   request: object,
   sampleRate: number,
 ): Record<string, unknown> {
-  const native = repairNativeOptions(fnName, request);
+  const native = repairNativeOptions(request);
   const padding = resolveSampleBound(
     fnName,
     native.paddingSamples as number | undefined,

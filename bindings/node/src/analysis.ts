@@ -88,11 +88,6 @@ const ZERO_IS_DEFAULT_FIELDS = [
 
 const ACOUSTIC_MODES = ['auto', 'blind', 'impulseResponse'] as const;
 
-// The native side still spells the analyzer mode `impulse_response`.
-const ACOUSTIC_MODE_NATIVE: Readonly<Record<string, string>> = {
-  impulseResponse: 'impulse_response',
-};
-
 /** A placement the caller gave, checked; absent (`undefined` / `null`) stays `undefined`. */
 function checkedPlacement(
   fnName: string,
@@ -113,10 +108,9 @@ function checkedPlacement(
 }
 
 /**
- * Turns the public room options into the addon's: `source` / `listener` become
- * the flat position fields, `maxSec` becomes `maxSeconds`, `impulseResponse`
- * becomes the native mode name, and an explicit 0 on a zero-means-default field
- * is refused. Fractional `seed` / `nOctaveBands` are refused before the addon
+ * Checks the public room options before the addon reads them: `source` /
+ * `listener` and `mode` are validated, and an explicit 0 on a zero-means-default
+ * field is refused. Fractional `seed` / `nOctaveBands` are refused before the addon
  * narrows them onto that zero.
  */
 function nativeRoomOptions(fnName: string, options: object): Record<string, unknown> {
@@ -145,35 +139,17 @@ function nativeRoomOptions(fnName: string, options: object): Record<string, unkn
   if (nOctaveBands !== undefined) {
     assertInt32(fnName, nOctaveBands, 'nOctaveBands');
   }
-  const maxSec = read('maxSec');
-  delete resolved.maxSec;
-  if (maxSec !== undefined) {
-    resolved.maxSeconds = maxSec;
-  }
   for (const name of ['source', 'listener'] as const) {
     const placement = checkedPlacement(fnName, name, given[name]);
     delete resolved[name];
     if (placement !== undefined) {
-      resolved[`${name}X`] = placement.x;
-      resolved[`${name}Y`] = placement.y;
-      resolved[`${name}Z`] = placement.z;
+      resolved[name] = placement;
     }
   }
   if (given.mode !== undefined) {
     assertClosedToken(fnName, given.mode, ACOUSTIC_MODES, 'mode');
-    resolved.mode = ACOUSTIC_MODE_NATIVE[given.mode] ?? given.mode;
   }
   return resolved;
-}
-
-/** The addon's flat estimate geometry as the public `source` / `listener` placements. */
-function publicRoomGeometry(native: Record<string, unknown>): RoomGeometryOptions {
-  const { sourceX, sourceY, sourceZ, listenerX, listenerY, listenerZ, ...rest } = native;
-  return {
-    ...rest,
-    source: { x: sourceX, y: sourceY, z: sourceZ },
-    listener: { x: listenerX, y: listenerY, z: listenerZ },
-  } as RoomGeometryOptions;
 }
 
 // The native layer answers in its own field names and ordinals; the facade
@@ -880,7 +856,7 @@ export function roomGeometryFromEstimate(...args: unknown[]): RoomGeometryOption
   if (typeof request.estimate !== 'object' || request.estimate === null) {
     throw new TypeError('roomGeometryFromEstimate: estimate must be an object');
   }
-  const geometry = publicRoomGeometry(addon.roomGeometryFromEstimate(request.estimate));
+  const geometry = addon.roomGeometryFromEstimate(request.estimate) as RoomGeometryOptions;
   for (const name of ['source', 'listener'] as const) {
     const placement = checkedPlacement('roomGeometryFromEstimate', name, request[name]);
     if (placement !== undefined) {

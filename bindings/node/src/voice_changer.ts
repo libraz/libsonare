@@ -15,7 +15,7 @@ import {
   sampleOneShot,
 } from './validation.js';
 
-// Native still spells the preset ids in kebab case; same order as the native ordinals.
+/** Public preset ids in the order of the native preset ordinals. */
 const PRESET_IDS: readonly VoicePresetId[] = [
   'neutralMonitor',
   'brightIdol',
@@ -30,21 +30,6 @@ const PRESET_IDS: readonly VoicePresetId[] = [
   'megaphone',
   'radioVoice',
 ];
-const NATIVE_PRESET_IDS: readonly string[] = [
-  'neutral-monitor',
-  'bright-idol',
-  'soft-whisper',
-  'deep-narrator',
-  'robot-mascot',
-  'dark-villain',
-  'hard-tune',
-  'robot-monotone',
-  'choir-harmony',
-  'vocoder-strings',
-  'megaphone',
-  'radio-voice',
-];
-
 function presetOrdinal(fnName: string, id: unknown, argName = 'preset'): number {
   if (typeof id !== 'string') {
     throw new TypeError(`${fnName}: ${argName} must be a string`);
@@ -56,53 +41,9 @@ function presetOrdinal(fnName: string, id: unknown, argName = 'preset'): number 
   return ordinal;
 }
 
-function presetIdToNative(fnName: string, id: unknown, argName = 'preset'): string {
-  return NATIVE_PRESET_IDS[presetOrdinal(fnName, id, argName)] as string;
+function checkedPresetId(fnName: string, id: unknown, argName = 'preset'): VoicePresetId {
+  return PRESET_IDS[presetOrdinal(fnName, id, argName)] as VoicePresetId;
 }
-
-// Native still spells these fields the old way; the map runs in both directions.
-const NATIVE_KEY: Readonly<Record<string, string>> = {
-  voiceEngine: 'voiceEngineEngine',
-  reverbVariation: 'reverbVariationVariation',
-  eqHighPassHz: 'eqHighpassHz',
-  retunePitchSemitones: 'retuneSemitones',
-  retuneGrainSizeSamples: 'retuneGrainSize',
-};
-const PUBLIC_KEY: Readonly<Record<string, string>> = Object.fromEntries(
-  Object.entries(NATIVE_KEY).map(([publicKey, nativeKey]) => [nativeKey, publicKey]),
-);
-
-// Native-only spellings: a config carrying one is refused, not forwarded.
-const RETIRED_KEYS: ReadonlySet<string> = new Set([
-  ...Object.values(NATIVE_KEY),
-  'harmonyStep1',
-  'harmonyStep2',
-  'harmonyStep3',
-]);
-
-// Native still spells these tokens in snake case; keyed by the public field name.
-const NATIVE_TOKENS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
-  pitchCorrectionScale: { major: 'major', naturalMinor: 'natural_minor', chromatic: 'chromatic' },
-  characterType: {
-    none: 'none',
-    megaphone: 'megaphone',
-    radio: 'radio',
-    bbdChorus: 'bbd_chorus',
-    strobo: 'strobo',
-  },
-  reverbVariation: {
-    reverb: 'reverb',
-    echo: 'echo',
-    tempoDelay: 'tempo_delay',
-    dubEcho: 'dub_echo',
-  },
-  reverbVariationDivision: {
-    quarter: 'quarter',
-    eighth: 'eighth',
-    dottedEighth: 'dotted_eighth',
-    sixteenth: 'sixteenth',
-  },
-};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -110,23 +51,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /** True for the flat config object (as opposed to a nested preset document). */
 function isFlatConfig(config: unknown): config is Record<string, unknown> {
-  return isRecord(config) && ('retunePitchSemitones' in config || 'retuneSemitones' in config);
-}
-
-function mapToken(fnName: string, field: string, value: unknown, toNative: boolean): string {
-  const publicTable = NATIVE_TOKENS[field] as Readonly<Record<string, string>>;
-  const table: Record<string, string> = toNative
-    ? { ...publicTable }
-    : Object.fromEntries(Object.entries(publicTable).map(([k, v]) => [v, k]));
-  if (typeof value !== 'string') {
-    throw new TypeError(`${fnName}: ${field} must be a string`);
-  }
-  if (!Object.hasOwn(table, value)) {
-    throw new RangeError(
-      `${fnName}: ${field} must be one of ${Object.keys(publicTable).join(', ')}`,
-    );
-  }
-  return table[value] as string;
+  return isRecord(config) && 'retunePitchSemitones' in config;
 }
 
 let flatReference: RealtimeVoiceChangerConfig | undefined;
@@ -139,7 +64,7 @@ function flatConfigReference(): RealtimeVoiceChangerConfig {
 
 /**
  * Refuses a flat config missing a field or carrying one of the wrong JS type, naming the public
- * field before native sees it: native reports its own spelling of the key.
+ * field before native sees it.
  */
 function assertFlatConfigFields(fnName: string, config: Record<string, unknown>): void {
   for (const [key, sample] of Object.entries(flatConfigReference())) {
@@ -154,62 +79,26 @@ function assertFlatConfigFields(fnName: string, config: Record<string, unknown>)
 }
 
 /**
- * The flat config spelt the way the addon reads it. Every field is required, as in the native
- * parser.
+ * The flat config as the addon reads it. Every field is required, as in the native parser.
  *
- * @throws TypeError for a missing or wrong-typed field or a
- *   native-only key; RangeError for an unknown token or a `harmonySteps` of another length.
+ * @throws TypeError for a missing or wrong-typed field; RangeError for a `harmonySteps` of
+ *   another length.
  */
 function nativePodConfig(fnName: string, config: Record<string, unknown>): Record<string, unknown> {
   assertFlatConfigFields(fnName, config);
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(config)) {
-    if (RETIRED_KEYS.has(key)) {
-      throw new TypeError(`${fnName}: unknown config key '${key}'`);
-    }
-    if (key === 'harmonySteps' || value === undefined) {
-      continue;
-    }
-    out[NATIVE_KEY[key] ?? key] = Object.hasOwn(NATIVE_TOKENS, key)
-      ? mapToken(fnName, key, value, true)
-      : value;
-  }
   const steps = config.harmonySteps;
-  if (steps === undefined) {
-    throw new TypeError(`${fnName}: harmonySteps is required`);
-  }
   if (!Array.isArray(steps)) {
     throw new TypeError(`${fnName}: harmonySteps must be an array of three numbers`);
   }
   if (steps.length !== 3) {
     throw new RangeError(`${fnName}: harmonySteps must hold exactly three numbers`);
   }
-  [out.harmonyStep1, out.harmonyStep2, out.harmonyStep3] = steps;
-  return out;
-}
-
-/** Inverse of {@link nativePodConfig}. */
-function publicPodConfig(
-  fnName: string,
-  config: Record<string, unknown>,
-): RealtimeVoiceChangerConfig {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(config)) {
-    if (/^harmonyStep[123]$/.test(key)) {
-      continue;
-    }
-    const field = PUBLIC_KEY[key] ?? key;
-    out[field] = Object.hasOwn(NATIVE_TOKENS, field)
-      ? mapToken(fnName, field, value, false)
-      : value;
-  }
-  out.harmonySteps = [config.harmonyStep1, config.harmonyStep2, config.harmonyStep3];
-  return out as unknown as RealtimeVoiceChangerConfig;
+  return config;
 }
 
 /**
- * A voice-changer config in the form the addon reads: a preset id becomes its native id, the
- * flat config its native spelling, and a nested preset document passes through.
+ * A voice-changer config in the form the addon reads: a preset id is checked, a flat config is
+ * validated, and a nested preset document passes through.
  *
  * @throws TypeError for any other type; RangeError for an unknown preset id.
  */
@@ -218,7 +107,7 @@ function nativeVoiceConfig(
   config: RealtimeVoiceChangerConfigInput,
 ): Record<string, unknown> | string {
   if (typeof config === 'string') {
-    return presetIdToNative(fnName, config, 'config');
+    return checkedPresetId(fnName, config, 'config');
   }
   if (isFlatConfig(config)) {
     return nativePodConfig(fnName, config);
@@ -594,13 +483,7 @@ export function voiceChangeRealtime(request: VoiceChangeRealtimeRequest): Float3
 
 /** The built-in preset ids, in preset-ordinal order. */
 export function realtimeVoiceChangerPresetNames(): VoicePresetId[] {
-  return (addon.realtimeVoiceChangerPresetNames() as string[]).map((native) => {
-    const ordinal = NATIVE_PRESET_IDS.indexOf(native);
-    if (ordinal < 0) {
-      throw new RangeError(`realtimeVoiceChangerPresetNames: unknown native preset '${native}'`);
-    }
-    return PRESET_IDS[ordinal] as VoicePresetId;
-  });
+  return addon.realtimeVoiceChangerPresetNames() as VoicePresetId[];
 }
 
 /**
@@ -610,7 +493,7 @@ export function realtimeVoiceChangerPresetNames(): VoicePresetId[] {
  */
 export function realtimeVoiceChangerPresetJson(name: VoicePresetId): string {
   return addon.realtimeVoiceChangerPresetJson(
-    presetIdToNative('realtimeVoiceChangerPresetJson', name, 'name'),
+    checkedPresetId('realtimeVoiceChangerPresetJson', name, 'name'),
   );
 }
 
@@ -644,8 +527,7 @@ export function voiceCharacterPresetId(ordinal: number): VoicePresetId {
       `voiceCharacterPresetId: ordinal must be an integer in [0, ${PRESET_IDS.length - 1}]`,
     );
   }
-  const native = addon.voiceCharacterPresetId(ordinal) as string;
-  return PRESET_IDS[NATIVE_PRESET_IDS.indexOf(native)] as VoicePresetId;
+  return addon.voiceCharacterPresetId(ordinal) as VoicePresetId;
 }
 
 /**
@@ -657,10 +539,9 @@ export function voiceCharacterPresetId(ordinal: number): VoicePresetId {
 export function realtimeVoiceChangerPresetConfig(
   preset: VoicePresetId,
 ): RealtimeVoiceChangerConfig {
-  const native = addon.realtimeVoiceChangerPresetConfig(
+  return addon.realtimeVoiceChangerPresetConfig(
     presetOrdinal('realtimeVoiceChangerPresetConfig', preset),
-  ) as Record<string, unknown>;
-  return publicPodConfig('realtimeVoiceChangerPresetConfig', native);
+  ) as RealtimeVoiceChangerConfig;
 }
 
 /** Live controls for {@link StreamingRetune}. */
@@ -678,6 +559,14 @@ export interface StreamingRetuneConfig {
   grainSizeSamples?: number;
 }
 
+// Native refuses unknown keys, wrong types and an explicit 0 `grainSizeSamples` itself.
+function assertRetuneConfig(fnName: string, config: StreamingRetuneConfig): StreamingRetuneConfig {
+  if (!isRecord(config)) {
+    throw new TypeError(`${fnName}: config must be an object`);
+  }
+  return config;
+}
+
 /**
  * Block-by-block mono pitch shifter (grain overlap-add), the streaming
  * counterpart of the offline `pitchShift`.
@@ -688,44 +577,12 @@ export interface StreamingRetuneConfig {
  * non-finite sample is rejected rather than zeroed: either would otherwise
  * enter the grain history and persist into every later block.
  */
-// Native still spells these controls `semitones` and `grainSize`.
-function retuneConfigToNative(
-  fnName: string,
-  config: StreamingRetuneConfig,
-): Record<string, unknown> {
-  if (!isRecord(config)) {
-    throw new TypeError(`${fnName}: config must be an object`);
-  }
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(config)) {
-    if (value === undefined || value === null) {
-      continue;
-    }
-    if (key === 'pitchSemitones') {
-      out.semitones = value;
-    } else if (key === 'grainSizeSamples') {
-      if (typeof value !== 'number') {
-        throw new TypeError(`${fnName}: grainSizeSamples must be a number`);
-      }
-      if (value === 0) {
-        throw new RangeError(`${fnName}: grainSizeSamples must not be 0 (omit it for the default)`);
-      }
-      out.grainSize = value;
-    } else if (key === 'mix') {
-      out.mix = value;
-    } else {
-      throw new TypeError(`${fnName}: unknown config key '${key}'`);
-    }
-  }
-  return out;
-}
-
 export class StreamingRetune {
   private native: InstanceType<typeof addon.StreamingRetune>;
   private disposed = false;
 
   constructor(config: StreamingRetuneConfig = {}) {
-    this.native = new addon.StreamingRetune(retuneConfigToNative('StreamingRetune', config));
+    this.native = new addon.StreamingRetune(assertRetuneConfig('StreamingRetune', config));
   }
 
   /** Allocate native state for `sampleRate` and resolve the grain size. */
@@ -747,22 +604,26 @@ export class StreamingRetune {
    *   `grainSizeSamples` or a non-finite control.
    */
   setConfig(config: StreamingRetuneConfig): void {
-    this.native.setConfig(retuneConfigToNative('StreamingRetune.setConfig', config));
+    this.native.setConfig(assertRetuneConfig('StreamingRetune.setConfig', config));
   }
 
   /** The currently applied controls, with `grainSizeSamples` as the effective one. */
   config(): Required<StreamingRetuneConfig> {
-    const native = this.native.config() as { semitones: number; mix: number; grainSize: number };
+    const native = this.native.config() as {
+      pitchSemitones: number;
+      mix: number;
+      grainSizeSamples: number;
+    };
     return {
-      pitchSemitones: native.semitones,
+      pitchSemitones: native.pitchSemitones,
       mix: native.mix,
-      grainSizeSamples: native.grainSize,
+      grainSizeSamples: native.grainSizeSamples,
     };
   }
 
   /** Resolved grain length in samples; 0 before {@link prepare}. */
   get grainSizeSamples(): number {
-    return this.native.grainSize();
+    return this.native.grainSizeSamples();
   }
 
   /** Fixed overlap-add latency in samples (one grain); 0 before prepare. */
