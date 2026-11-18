@@ -285,7 +285,7 @@ import type {
 } from './public_types_vocal_edit.js';
 import type { ProjectVocalEditApplyRequest } from './public_types_vocal_project.js';
 import type {
-  PlaybackNodeOptions,
+  SonarePlaybackNodeOptions,
   SonarePlaybackWorkletProcessorConstructorOptions,
   SonarePlaybackWorkletProcessorOptions,
   SonareRealtimeEngineNodeOptions,
@@ -3347,13 +3347,14 @@ export const PROCESSOR_OPTION_KEYS = {
     'wasmBinary',
     'port',
   ]),
-  playbackNode: keysOf<PlaybackNodeOptions>()([
+  playbackNode: keysOf<SonarePlaybackNodeOptions>()([
     'config',
     'hrtf',
     'maxBlockSize',
     'sampleRate',
     'wasmBinary',
     'processorName',
+    'moduleUrl',
     'nodeFactory',
   ]),
   streamAnalyzerProcessor: keysOf<SonareStreamAnalyzerWorkletProcessorOptions>()(['chunkFrames']),

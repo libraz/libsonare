@@ -21,7 +21,7 @@ export type { CaptureOptions } from './public_types_engine.js';
 export type {
   EngineClipPageRequestMessage,
   EngineSyncErrorMessage,
-  PlaybackNodeOptions,
+  SonarePlaybackNodeOptions,
   SonarePlaybackWorkletProcessorDiagnostics,
   SonarePlaybackWorkletProcessorOptions,
   SonareRealtimeEngineNodeCapabilities,
@@ -46,8 +46,8 @@ export {
   registerSonareWorkletProcessor,
   SonareWorkletProcessor,
 } from './worklet/mixer-processor.js';
+export { SonarePlaybackNode } from './worklet/playback-node.js';
 export {
-  createPlaybackNode,
   registerSonarePlaybackWorkletProcessor,
   SonarePlaybackWorkletProcessor,
 } from './worklet/playback-processor.js';

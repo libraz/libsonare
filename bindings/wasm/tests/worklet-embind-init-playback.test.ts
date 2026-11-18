@@ -5,7 +5,11 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { createPlaybackNode, registerSonarePlaybackWorkletProcessor } from '../dist/worklet.js';
+import {
+  init,
+  registerSonarePlaybackWorkletProcessor,
+  SonarePlaybackNode,
+} from '../dist/worklet.js';
 
 interface Posted {
   type: string;
@@ -13,20 +17,6 @@ interface Posted {
 }
 
 describe('playback worklet embind initialization', () => {
-  it('forwards wasmBinary through createPlaybackNode', () => {
-    const wasmBinary = new Uint8Array([0, 97, 115, 109]);
-    let seen: { processorOptions?: { wasmBinary?: unknown } } | undefined;
-    createPlaybackNode({ sampleRate: 48000 } as unknown as BaseAudioContext, {
-      config: { target: { kind: 'speakers', layout: 'stereo' } },
-      wasmBinary,
-      nodeFactory: (_context, _name, options) => {
-        seen = options as typeof seen;
-        return {} as AudioWorkletNode;
-      },
-    });
-    expect(seen?.processorOptions?.wasmBinary).toBe(wasmBinary);
-  });
-
   it('builds the module from the global factory, renders silence until ready, then renders', async () => {
     const createModule = (await import('../dist/sonare.js')).default;
     const wasmBinary = new Uint8Array([0, 97, 115, 109]);
@@ -73,5 +63,21 @@ describe('playback worklet embind initialization', () => {
     }
     expect(factoryCalls).toEqual([{ wasmBinary }]);
     expect(instance.process([[new Float32Array(128), new Float32Array(128)]], [out])).toBe(true);
+  });
+
+  it('forwards wasmBinary through SonarePlaybackNode.create', async () => {
+    // Runs last, with the module up: create() leaves it alone and only forwards the bytes.
+    await init();
+    const wasmBinary = new Uint8Array([0, 97, 115, 109]);
+    let seen: { processorOptions?: { wasmBinary?: unknown } } | undefined;
+    await SonarePlaybackNode.create({ sampleRate: 48000 } as unknown as BaseAudioContext, {
+      config: { target: { kind: 'speakers', layout: 'stereo' } },
+      wasmBinary,
+      nodeFactory: (_context, _name, options) => {
+        seen = options as typeof seen;
+        return { port: {} } as unknown as AudioWorkletNode;
+      },
+    });
+    expect(seen?.processorOptions?.wasmBinary).toBe(wasmBinary);
   });
 });

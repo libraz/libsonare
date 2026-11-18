@@ -242,7 +242,7 @@ export interface SonarePlaybackWorkletProcessorOptions {
    * Defaults to the AudioWorkletGlobalScope `sampleRate`; any other value is
    * refused with a RangeError, since nothing resamples the scope's quanta.
    * Outside a worklet scope there is no default and the option is required.
-   * `createPlaybackNode` defaults it to the AudioContext's.
+   * `SonarePlaybackNode.create` defaults it to the AudioContext's.
    */
   sampleRate?: number;
   /**
@@ -262,10 +262,12 @@ export interface SonarePlaybackWorkletProcessorConstructorOptions
   port?: WorkletPort;
 }
 
-/** Options of `createPlaybackNode`, on top of the processor options. */
-export interface PlaybackNodeOptions extends SonarePlaybackWorkletProcessorOptions {
+/** Options of `SonarePlaybackNode.create`, on top of the processor options. */
+export interface SonarePlaybackNodeOptions extends SonarePlaybackWorkletProcessorOptions {
   /** Registered processor name. Default `'sonare-playback-processor'`. */
   processorName?: string;
+  /** Worklet module loaded with `audioWorklet.addModule` before the node is created. Omitted: no module is added. */
+  moduleUrl?: string | URL;
   /** Creates the `AudioWorkletNode`. Omitted: `new AudioWorkletNode(context, name, options)`. */
   nodeFactory?: (
     context: BaseAudioContext,

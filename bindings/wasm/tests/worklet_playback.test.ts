@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, type PlaybackRendererConfig } from '../dist/index.js';
+import { ErrorCode, init, type PlaybackRendererConfig } from '../dist/index.js';
 import {
-  createPlaybackNode,
   init as initWorklet,
   registerSonarePlaybackWorkletProcessor,
+  SonarePlaybackNode,
   SonarePlaybackWorkletProcessor,
 } from '../dist/worklet.js';
 
@@ -53,6 +53,19 @@ function requestDiagnostics(
   const reply = port.messages.at(-1);
   expect(reply?.type).toBe('diagnostics');
   return reply?.diagnostics as Record<string, unknown>;
+}
+
+/** A stand-in AudioWorkletNode recording what the wrapper posts. */
+function fakeNode(posted: unknown[] = []) {
+  return {
+    port: {
+      onmessage: null as ((event: MessageEvent) => void) | null,
+      postMessage: (message: unknown) => posted.push(message),
+    },
+    disconnect: () => undefined,
+  } as unknown as AudioWorkletNode & {
+    port: { onmessage: ((event: MessageEvent) => void) | null };
+  };
 }
 
 describe('SonarePlaybackWorkletProcessor', () => {
@@ -306,19 +319,21 @@ describe('SonarePlaybackWorkletProcessor', () => {
     );
   });
 
-  it('refuses a serialized JSON string as the configuration', () => {
+  it('refuses a serialized JSON string as the configuration', async () => {
     const context = { sampleRate: 44100 } as BaseAudioContext;
-    const nodeFactory = () => ({}) as AudioWorkletNode;
+    const nodeFactory = () => fakeNode();
     const text = JSON.stringify(SPEAKERS_5_1_AUTO);
-    expect(() => createPlaybackNode(context, { config: text as never, nodeFactory })).toThrow(
-      new TypeError('config must be a configuration object'),
+    await expect(
+      SonarePlaybackNode.create(context, { config: text as never, nodeFactory }),
+    ).rejects.toThrow(
+      new TypeError('SonarePlaybackNode.create: config must be a configuration object'),
     );
     expect(
       () => new SonarePlaybackWorkletProcessor({ config: text as never, sampleRate: 48000 }),
     ).toThrow(/config must be a configuration object/);
   });
 
-  it('creates a node whose input follows its source without browser remixing', () => {
+  it('creates a node whose input follows its source without browser remixing', async () => {
     const calls: Array<{ name: string; options: AudioWorkletNodeOptions }> = [];
     const nodeFactory = (
       _context: BaseAudioContext,
@@ -326,13 +341,17 @@ describe('SonarePlaybackWorkletProcessor', () => {
       options: AudioWorkletNodeOptions,
     ) => {
       calls.push({ name, options });
-      return {} as AudioWorkletNode;
+      return fakeNode();
     };
     const context = { sampleRate: 44100 } as BaseAudioContext;
-    createPlaybackNode(context, { config: SPEAKERS_5_1_AUTO, nodeFactory });
+    const surround = await SonarePlaybackNode.create(context, {
+      config: SPEAKERS_5_1_AUTO,
+      nodeFactory,
+    });
     const hrtf = hrtfBuffer();
-    createPlaybackNode(context, { hrtf, nodeFactory, processorName: 'custom' });
+    await SonarePlaybackNode.create(context, { hrtf, nodeFactory, processorName: 'custom' });
 
+    expect(surround.node).toBeDefined();
     expect(calls[0].name).toBe('sonare-playback-processor');
     expect(calls[0].options).toMatchObject({
       numberOfInputs: 1,
@@ -348,12 +367,67 @@ describe('SonarePlaybackWorkletProcessor', () => {
     expect(calls[1].options.processorOptions.hrtf).toBe(hrtf);
 
     // An explicit rate must be the context's: nothing resamples its quanta.
-    createPlaybackNode(context, { nodeFactory, sampleRate: 44100 });
+    await SonarePlaybackNode.create(context, { nodeFactory, sampleRate: 44100 });
     expect(calls).toHaveLength(3);
-    expect(() => createPlaybackNode(context, { nodeFactory, sampleRate: 48000 })).toThrow(
-      RangeError,
+    await expect(
+      SonarePlaybackNode.create(context, { nodeFactory, sampleRate: 48000 }),
+    ).rejects.toThrow(RangeError);
+    expect(calls).toHaveLength(3);
+  });
+
+  it('sizes the output from the configuration as the core reads it, refusing an unknown layout', async () => {
+    const counts: number[] = [];
+    const nodeFactory = (
+      _context: BaseAudioContext,
+      _name: string,
+      options: AudioWorkletNodeOptions,
+    ) => {
+      counts.push(options.outputChannelCount?.[0] ?? -1);
+      return fakeNode();
+    };
+    const context = { sampleRate: 48000 } as BaseAudioContext;
+    for (const layout of ['stereo', '5.1', '7.1'] as const) {
+      await SonarePlaybackNode.create(context, {
+        config: { target: { kind: 'speakers', layout } },
+        nodeFactory,
+      });
+    }
+    expect(counts).toEqual([2, 6, 8]);
+    await expect(
+      SonarePlaybackNode.create(context, {
+        config: { target: { kind: 'speakers', layout: '9.1' as never } },
+        nodeFactory,
+      }),
+    ).rejects.toThrow(expect.objectContaining({ code: ErrorCode.InvalidFormat }));
+    expect(counts).toHaveLength(3);
+  });
+
+  it('drives the processor through its methods and releases it once', async () => {
+    const posted: unknown[] = [];
+    const node = fakeNode(posted);
+    const playback = await SonarePlaybackNode.create({ sampleRate: 48000 } as BaseAudioContext, {
+      config: SPEAKERS_5_1_AUTO,
+      nodeFactory: () => node,
+    });
+    playback.setHeadOrientation(30);
+    playback.reset();
+    const diagnostics = playback.diagnostics();
+    node.port.onmessage?.({
+      data: { type: 'diagnostics', diagnostics: { unsupported_input_blocks: 3 } },
+    } as MessageEvent);
+    await expect(diagnostics).resolves.toMatchObject({ unsupported_input_blocks: 3 });
+    expect(posted).toEqual([
+      { type: 'orientation', yaw: 30, pitch: 0, roll: 0 },
+      { type: 'reset' },
+      { type: 'diagnostics' },
+    ]);
+    const pending = playback.diagnostics();
+    await playback.destroy();
+    await expect(pending).rejects.toMatchObject({ code: ErrorCode.InvalidState });
+    expect(() => playback.reset()).toThrow(
+      expect.objectContaining({ code: ErrorCode.InvalidState }),
     );
-    expect(calls).toHaveLength(3);
+    expect(posted.at(-1)).toEqual({ type: 'destroy' });
   });
 
   it('registers a processor that routes port messages', () => {

@@ -165,6 +165,10 @@ python = [
 #     which the name-matching extractor does not credit. WASM still constructs
 #     the NativeSynth directly, as above.
 node = [
+  # Platform constraint: only the WASM worklet must size its output bus before a
+  # renderer exists, so the two playback channel-count probes have no mirror here.
+  "playback_config_num_output_channels",
+  "playback_renderer_max_input_channels",
   # Name tables behind the string forms of materialPreset / mode: the facades
   # resolve a name against the core's list and refuse an integer, so
   # the getter itself is not a public operation beside synthesizeRir/estimateRoom.
@@ -283,6 +287,11 @@ node = [
   "project_assist_apply_json",
 ]
 wasm = [
+  # Platform constraint: AudioWorkletNode fixes its output channel count before the
+  # processor exists, so SonarePlaybackNode reads it from the config and the processor
+  # sizes its input planes from the renderer; neither is a public operation of its own.
+  "playback_config_num_output_channels",
+  "playback_renderer_max_input_channels",
   # Name tables behind the string forms of materialPreset / mode: the facades
   # resolve a name against the core's list and refuse an integer, so
   # the getter itself is not a public operation beside synthesizeRir/estimateRoom.
@@ -384,6 +393,10 @@ wasm = [
   "project_assist_apply_json",
 ]
 python = [
+  # Platform constraint: only the WASM worklet must size its output bus before a
+  # renderer exists, so the two playback channel-count probes have no mirror here.
+  "playback_config_num_output_channels",
+  "playback_renderer_max_input_channels",
   # Name tables behind the string forms of materialPreset / mode: the facades
   # resolve a name against the core's list and refuse an integer, so
   # the getter itself is not a public operation beside synthesizeRir/estimateRoom.

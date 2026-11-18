@@ -1,6 +1,6 @@
 import { ErrorCode, SonareError } from '../errors.js';
 import type { StreamFrames, StreamStats } from '../index.js';
-import { StreamAnalyzer } from '../index.js';
+import { init, isInitialized, StreamAnalyzer } from '../index.js';
 import type { SonareStreamAnalyzerChunkMessage } from '../internal/stream_analyzer_messages.js';
 import type {
   SonareStreamAnalyzerNodeOptions,
@@ -27,7 +27,6 @@ import { resolveStreamAnalyzerChunkFrames } from './stream-analyzer-processor.js
  *
  * @example
  * ```ts
- * await init();
  * const processorUrl = '/assets/stream-analyzer-worklet.js'; // the app's worklet bundle
  * const source = context.createMediaElementSource(document.querySelector('audio') as HTMLAudioElement);
  * const draw = (mel: unknown, nFrames: number) => console.log(mel, nFrames); // the app's renderer
@@ -75,7 +74,10 @@ export class SonareStreamAnalyzerNode {
     };
   }
 
-  /** Creates the analyzer and its AudioWorkletNode on `context`. The processor module must already be registered, or `options.moduleUrl` names it. */
+  /**
+   * Creates the analyzer and its AudioWorkletNode on `context`, initializing the module first
+   * when it is not yet. The processor module must already be registered, or `options.moduleUrl` names it.
+   */
   static async create(
     context: BaseAudioContext,
     options: SonareStreamAnalyzerNodeOptions = {},
@@ -85,6 +87,10 @@ export class SonareStreamAnalyzerNode {
     const processorName = options.processorName ?? 'sonare-stream-analyzer-processor';
     if (options.moduleUrl && context.audioWorklet?.addModule) {
       await context.audioWorklet.addModule(options.moduleUrl);
+    }
+    // The analyzer runs on this thread, so the module is initialized here when it is not yet.
+    if (!isInitialized()) {
+      await init();
     }
     // Built before the node so an invalid configuration leaves nothing behind.
     const analyzer = new StreamAnalyzer({

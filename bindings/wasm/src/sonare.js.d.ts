@@ -3795,6 +3795,8 @@ export interface SonareModule {
     configJson: string,
     hrtf: WasmHrtfSet | null,
   ) => { samples: Float32Array; channels: number };
+  /** Output channel count a renderer built from `configJson` would have, without building one. */
+  playbackConfigOutputChannels: (configJson: string) => number;
 
   // Mixing - scene-based Mixer
   createMixerFromSceneJson: (
@@ -3972,6 +3974,8 @@ export interface WasmPlaybackRenderer {
   maxBlockSize: () => number;
   inputChannels: () => number;
   outputChannels: () => number;
+  /** Widest input block the active input layout accepts (8 under "auto"). */
+  maxInputChannels: () => number;
   diagnosticsJson: () => string;
   nonFiniteDiscardCount: () => number;
   // AudioWorklet path: heap views allocated once at construction (they detach

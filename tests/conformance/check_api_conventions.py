@@ -942,6 +942,7 @@ _ERROR_CLASS_REASON = "the error class keeps its Sonare prefix"
 _REGISTERED_CLASS_REASON = "registered with Web Audio or as a global"
 _REGISTERED_CLASSES = (
     "wasm:SonareEngine",
+    "wasm:SonarePlaybackNode",
     "wasm:SonarePlaybackWorkletProcessor",
     "wasm:SonareRealtimeEngineNode",
     "wasm:SonareRealtimeEngineWorkletProcessor",
@@ -1395,9 +1396,6 @@ RULES: list[Rule] = [
                     "wasm:chain_config.flattenChainConfig",
                 )
             },
-            "wasm:playback-processor.outputChannelCount": (
-                "the worklet sizes its output from target.layout before the core reads the config"
-            ),
         },
     ),
     Rule(

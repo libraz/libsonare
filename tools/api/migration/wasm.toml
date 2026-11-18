@@ -28642,14 +28642,6 @@ rule = "type-names"
 entry = "./worklet"
 
 [[entry]]
-kind = "type"
-old = "SonarePlaybackNodeOptions"
-new = "PlaybackNodeOptions"
-domain = "engine"
-rule = "type-names"
-entry = "./worklet"
-
-[[entry]]
 kind = "function"
 old = "readSonareClipPageRequestRingBuffer"
 new = "readClipPageRequestRingBuffer"
@@ -28700,10 +28692,12 @@ entry = "./worklet"
 [[entry]]
 kind = "function"
 old = "createSonarePlaybackNode"
-new = "createPlaybackNode"
+to = "SonarePlaybackNode.create"
+changed = "an async static factory resolving to a SonarePlaybackNode whose AudioWorkletNode is .node; it initializes the main-thread module when it is not yet, sizes the output from the configuration as the core reads it (an unknown layout is InvalidFormat), and drives the processor through setConfig, setHeadOrientation, reset and diagnostics instead of raw port messages"
 domain = "engine"
-rule = "type-names"
+rule = "construction"
 entry = "./worklet"
+test = "bindings/wasm/tests/worklet_playback.test.ts::sizes the output from the configuration as the core reads it, refusing an unknown layout"
 
 [[entry]]
 kind = "type"

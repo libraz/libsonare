@@ -5,9 +5,7 @@ import type {
   SonarePlaybackErrorMessage,
   SonarePlaybackMessage,
 } from '../internal/worklet_messages.js';
-import type { PlaybackRendererConfig } from '../public_types_playback.js';
 import type {
-  PlaybackNodeOptions,
   SonarePlaybackWorkletProcessorConstructorOptions,
   SonarePlaybackWorkletProcessorDiagnostics,
   SonarePlaybackWorkletProcessorOptions,
@@ -25,36 +23,9 @@ import {
   assertKnownProcessorOptions,
   isPlaybackMessage,
   requireIntegerOption,
-  resolveContextSampleRate,
   resolveScopeSampleRate,
 } from './guards.js';
 import { AUDIO_WORKLET_RENDER_QUANTUM } from './render_quantum.js';
-
-/** Largest input channel count any layout accepts (7.1). */
-const MAX_INPUT_CHANNELS = 8;
-const SPEAKER_LAYOUT_CHANNELS: Readonly<Record<string, number>> = { stereo: 2, '5.1': 6, '7.1': 8 };
-
-function configObject(config: PlaybackRendererConfig | undefined): PlaybackRendererConfig {
-  if (config === undefined) {
-    return {};
-  }
-  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
-    throw new TypeError('config must be a configuration object');
-  }
-  return config;
-}
-
-/** The target's channel count, known before any renderer exists (headphones: 2). */
-function outputChannelCount(config: PlaybackRendererConfig): number {
-  if (config.target?.kind !== 'speakers') {
-    return 2;
-  }
-  const count = SPEAKER_LAYOUT_CHANNELS[config.target.layout ?? ''];
-  if (count === undefined) {
-    throw new RangeError('target.layout must be "stereo", "5.1" or "7.1" for a speakers target');
-  }
-  return count;
-}
 
 /**
  * The playback renderer inside an AudioWorklet.
@@ -78,6 +49,7 @@ export class SonarePlaybackWorkletProcessor {
   private readonly port?: WorkletPort;
   private readonly maxBlockSize: number;
   private readonly outputChannels: number;
+  private maxInputChannels = 0;
   private inputPlanes: Float32Array[] = [];
   private outputPlanes: Float32Array[] = [];
   private unsupportedInputBlocks = 0;
@@ -130,6 +102,7 @@ export class SonarePlaybackWorkletProcessor {
       switch (message.type) {
         case 'config':
           this.renderer.setConfig(message.config);
+          this.acquirePlanes();
           break;
         case 'orientation':
           this.renderer.setHeadOrientation(message.yaw, message.pitch ?? 0, message.roll ?? 0);
@@ -191,7 +164,7 @@ export class SonarePlaybackWorkletProcessor {
     let code: number;
     if (inChannels === 0) {
       code = this.native.processPreparedSilence(frames);
-    } else if (inChannels > MAX_INPUT_CHANNELS) {
+    } else if (inChannels > this.maxInputChannels) {
       this.unsupportedInputBlocks++;
       code = this.native.processPreparedSilence(frames);
     } else {
@@ -236,8 +209,10 @@ export class SonarePlaybackWorkletProcessor {
   }
 
   private acquirePlanes(): void {
+    // The widest input the active layout accepts; a wider block is refused before any copy.
+    this.maxInputChannels = this.native.maxInputChannels();
     this.inputPlanes = [];
-    for (let ch = 0; ch < MAX_INPUT_CHANNELS; ch++) {
+    for (let ch = 0; ch < this.maxInputChannels; ch++) {
       this.inputPlanes.push(this.native.inputPlane(ch));
     }
     this.outputPlanes = [];
@@ -300,6 +275,7 @@ export function registerSonarePlaybackWorkletProcessor(name = 'sonare-playback-p
       };
       if (isEmbindReady()) {
         start();
+        port?.postMessage?.({ type: 'ready', runtimeTarget: 'embind' });
       } else {
         // The module is not initialized in this realm: build it the way the
         // realtime engine processor does, then construct the renderer.
@@ -345,51 +321,4 @@ export function registerSonarePlaybackWorkletProcessor(name = 'sonare-playback-p
     }
   }
   scope.registerProcessor(name, RegisteredSonarePlaybackWorkletProcessor);
-}
-
-/**
- * Creates the AudioWorkletNode for a processor registered with
- * {@link registerSonarePlaybackWorkletProcessor}. The node's input follows its
- * source's channel count without any browser up/down mix
- * (`channelCountMode: "max"`, `channelInterpretation: "discrete"`), and its
- * output carries the target's channel count. The configuration is serialized
- * here, on the main thread.
- *
- * @example
- * ```ts
- * const playbackWorkletUrl = '/assets/playback-worklet.js'; // the app's worklet bundle
- * const hrtfUrl = '/assets/hrtf/default.shrf'; // where the app serves the packaged asset
- * const video = document.querySelector('video') as HTMLVideoElement;
- * await context.audioWorklet.addModule(playbackWorkletUrl);
- * const hrtf = await (await fetch(hrtfUrl)).arrayBuffer();
- * const node = createPlaybackNode(context, { config: {}, hrtf });
- * context.createMediaElementSource(video).connect(node).connect(context.destination);
- * video.addEventListener('seeking', () => node.port.postMessage({ type: 'reset' }));
- * ```
- */
-export function createPlaybackNode(
-  context: BaseAudioContext,
-  options: PlaybackNodeOptions = {},
-): AudioWorkletNode {
-  assertKnownProcessorOptions('createPlaybackNode', 'playbackNode', options);
-  const config = configObject(options.config);
-  const factory =
-    options.nodeFactory ??
-    ((ctx: BaseAudioContext, name: string, nodeOptions: AudioWorkletNodeOptions) =>
-      new AudioWorkletNode(ctx, name, nodeOptions));
-  const processorOptions: SonarePlaybackWorkletProcessorOptions = {
-    config,
-    hrtf: options.hrtf,
-    maxBlockSize: options.maxBlockSize,
-    sampleRate: resolveContextSampleRate(options.sampleRate, context, 'createPlaybackNode'),
-    wasmBinary: options.wasmBinary,
-  };
-  return factory(context, options.processorName ?? 'sonare-playback-processor', {
-    numberOfInputs: 1,
-    numberOfOutputs: 1,
-    outputChannelCount: [outputChannelCount(config)],
-    channelCountMode: 'max',
-    channelInterpretation: 'discrete',
-    processorOptions,
-  });
 }

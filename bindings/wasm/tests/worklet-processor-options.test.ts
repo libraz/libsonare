@@ -5,13 +5,13 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { init } from '../dist/index.js';
 import {
-  createPlaybackNode,
   init as initWorklet,
   registerSonarePlaybackWorkletProcessor,
   registerSonareRealtimeEngineWorkletProcessor,
   registerSonareRealtimeVoiceChangerWorkletProcessor,
   registerSonareStreamAnalyzerWorkletProcessor,
   registerSonareWorkletProcessor,
+  SonarePlaybackNode,
   SonarePlaybackWorkletProcessor,
   SonareRealtimeVoiceChangerWorkletProcessor,
   SonareStreamAnalyzerNode,
@@ -89,10 +89,10 @@ describe('processorOptions refuses undeclared keys', () => {
     it.each([
       ['blockSize', 128],
       ['channelCount', 2],
-    ])('the node factory and the processor refuse the retired %s by name', (key, value) => {
-      expect(() => createPlaybackNode(context, { nodeFactory, [key]: value } as never)).toThrow(
-        new TypeError(`createPlaybackNode: unknown option '${key}'`),
-      );
+    ])('the node factory and the processor refuse the retired %s by name', async (key, value) => {
+      await expect(
+        SonarePlaybackNode.create(context, { nodeFactory, [key]: value } as never),
+      ).rejects.toThrow(new TypeError(`SonarePlaybackNode.create: unknown option '${key}'`));
       const Processor = registered(registerSonarePlaybackWorkletProcessor, 'pb-test');
       expect(
         () => new Processor({ processorOptions: { sampleRate: 48000, [key]: value } }),
