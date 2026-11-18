@@ -308,10 +308,52 @@ def _midi_function_violation(r: dict) -> str | None:
 
 
 _PY_CONFIG_PARAMS = ("options", "config", "overrides")
+_PY_PACKAGE = ROOT / "bindings/python/src/libsonare"
+_PY_DOCUMENT_FORMS = {"dict[str, Any]", "Mapping[str, Any]"}
 
 
-def _python_init_params(path: Path, cls: str) -> list[str] | None:
-    """Parameter names of ``cls.__init__`` in a Python source file, or None when it has none."""
+def _python_document_aliases() -> set[str]:
+    """Module-level aliases the package declares for a free-form JSON document."""
+    aliases: set[str] = set()
+    for path in sorted(_PY_PACKAGE.glob("*.py")):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError):
+            continue
+        for node in tree.body:
+            target, value = None, None
+            if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                target, value = node.targets[0], node.value
+            elif isinstance(node, ast.AnnAssign):
+                target, value = node.target, node.value
+            if (
+                isinstance(target, ast.Name)
+                and value is not None
+                and ast.unparse(value) in _PY_DOCUMENT_FORMS
+            ):
+                aliases.add(target.id)
+    return aliases
+
+
+def _python_is_document(annotation: ast.expr | None, aliases: set[str]) -> bool:
+    """True when every member of the annotation is a document, its JSON text, or None."""
+    if annotation is None:
+        return False
+    members: list[ast.expr] = []
+    stack = [annotation]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+            stack += [node.left, node.right]
+        else:
+            members.append(node)
+    forms = [ast.unparse(m) for m in members]
+    documents = [f for f in forms if f in _PY_DOCUMENT_FORMS or f in aliases]
+    return bool(documents) and all(f in documents or f in ("str", "None") for f in forms)
+
+
+def _python_init_params(path: Path, cls: str) -> tuple[list[str], list[str]] | None:
+    """Parameter names of ``cls.__init__`` and those typed as a library document, or None."""
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"))
     except (OSError, SyntaxError):
@@ -321,12 +363,15 @@ def _python_init_params(path: Path, cls: str) -> list[str] | None:
             for item in node.body:
                 if isinstance(item, ast.FunctionDef) and item.name == "__init__":
                     a = item.args
-                    names = [x.arg for x in (*a.posonlyargs, *a.args, *a.kwonlyargs)]
-                    return [
-                        *names,
+                    args = [*a.posonlyargs, *a.args, *a.kwonlyargs]
+                    names = [
+                        *(x.arg for x in args),
                         *([a.vararg.arg] if a.vararg else []),
                         *([a.kwarg.arg] if a.kwarg else []),
                     ]
+                    aliases = _python_document_aliases()
+                    documents = [x.arg for x in args if _python_is_document(x.annotation, aliases)]
+                    return names, documents
     return None
 
 
@@ -353,10 +398,17 @@ def _construction_records(records: list[dict]) -> list[dict]:
                 }
             )
         elif r["kind"] == "class" and r["surface"] == "python":
-            params = _python_init_params(ROOT / r["file"], r["name"])
-            if params is not None:
+            found = _python_init_params(ROOT / r["file"], r["name"])
+            if found is not None:
+                params, documents = found
                 out.append(
-                    {"surface": "python", "kind": "py-ctor", "name": r["name"], "params": params}
+                    {
+                        "surface": "python",
+                        "kind": "py-ctor",
+                        "name": r["name"],
+                        "params": params,
+                        "documents": documents,
+                    }
                 )
     return out
 
@@ -366,7 +418,12 @@ def _construction_violation(r: dict) -> str | None:
         return "a synchronous constructor takes one config object"
     if r["kind"] == "js-create" and not r["returns"].startswith("Promise<"):
         return "static create() exists only for constructions that return a Promise"
-    if r["kind"] == "py-ctor" and any(p in _PY_CONFIG_PARAMS for p in r["params"]):
+    # A library document (mixer scene, playback config, mastering chain) is the value the
+    # object is built from, not an option bag, so a parameter typed as one is exempt by type.
+    documents = r.get("documents", [])
+    if r["kind"] == "py-ctor" and any(
+        p in _PY_CONFIG_PARAMS and p not in documents for p in r["params"]
+    ):
         return "a Python constructor takes keyword arguments, not an options or config object"
     return None
 
@@ -1130,9 +1187,7 @@ RULES: list[Rule] = [
         violation=_construction_violation,
         derive=_construction_records,
         pending={
-            "python:PlaybackRenderer": "take the renderer config as keyword arguments",
             "python:StreamAnalyzer": "take the stream config as keyword arguments",
-            "python:StreamingMasteringChain": "take the chain config as keyword arguments",
             "python:VocalEditSession": "drop options= and **option_overrides, take keyword arguments",
             "wasm:ClipPageStreamer": "take one config object holding the engine",
             "wasm:SonarePlaybackWorkletProcessor": "fold port into the options object",

@@ -391,6 +391,45 @@ class ConstructionRule(unittest.TestCase):
         self.assertEqual(verdict.read, 2)
         self.assertEqual([f.key for f in verdict.violations], ["python:Bad"])
 
+    def test_python_document_parameter_is_exempt_by_type(self) -> None:
+        classes = {
+            "Aliased": "config: Doc | None = None",
+            "JsonText": "config: Mapping[str, Any] | str",
+            "Record": "config: StreamConfig",
+            "Text": "config: str",
+            "Untyped": "config",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "m.py"
+            src.write_text(
+                "Doc = dict[str, Any]\n"
+                + "".join(
+                    f"\nclass {n}:\n    def __init__(self, {p}) -> None: ...\n"
+                    for n, p in classes.items()
+                )
+            )
+            records = [
+                {
+                    "surface": "python",
+                    "kind": "class",
+                    "name": n,
+                    "owner": "",
+                    "member": "",
+                    "file": "m.py",
+                }
+                for n in classes
+            ]
+            with (
+                mock.patch.object(check, "ROOT", Path(tmp)),
+                mock.patch.object(check, "_PY_PACKAGE", Path(tmp)),
+            ):
+                verdict = self.judge(records)
+        self.assertEqual(verdict.read, 5)
+        self.assertEqual(
+            sorted(f.key for f in verdict.violations),
+            ["python:Record", "python:Text", "python:Untyped"],
+        )
+
 
 class InputTypesRule(unittest.TestCase):
     CLEAN: ClassVar[list[dict]] = [
