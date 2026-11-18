@@ -15524,3 +15524,10 @@ old = "PlaybackStageName='speaker_calibration'"
 new = "PlaybackStageName='speakerCalibration'"
 domain = "engine"
 rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "SoloProcessor='effects.reverb.dattorro'"
+new = "SoloProcessor='effects.reverb.plate'"
+domain = "mastering"
+rule = "aliases-removed"

@@ -122,7 +122,6 @@ export const SOLO_PROCESSORS = [
   'effects.modulation.rotary',
   'effects.modulation.wah',
   'effects.reverb.convolution',
-  'effects.reverb.dattorro',
   'effects.reverb.fdn',
   'effects.reverb.plate',
   'effects.reverb.room',
@@ -222,7 +221,6 @@ export const MASTERING_INSERT_NAMES = [
   'effects.modulation.rotary',
   'effects.modulation.wah',
   'effects.reverb.convolution',
-  'effects.reverb.dattorro',
   'effects.reverb.fdn',
   'effects.reverb.plate',
   'effects.reverb.room',
@@ -922,35 +920,6 @@ export interface MasteringProcessorParamMap {
     /** Range: [0, inf). Default: 1364306893. */
     seed?: number;
   };
-  /** Parameters of the `effects.reverb.dattorro` processor. */
-  'effects.reverb.dattorro': {
-    /** Range: [0, 0.98]. Default: 0.5. */
-    decay?: number;
-    /** Range: [0, 1]. Default: 0.5. */
-    damping?: number;
-    /** Range: [0, 1]. Default: 0.35. */
-    dryWet?: number;
-    /** Unit: Hz. Default: 0.5. */
-    modRateHz?: number;
-    /** Unit: samples. Range: [0, 672]. Default: 6. */
-    modDepthSamples?: number;
-    /** Unit: Hz. Range: [0, inf). Default: 0. */
-    dampingHz?: number;
-    /** Unit: dB. Default: -120. */
-    gateThresholdDb?: number;
-    /** Unit: ms. Range: [0, inf). Default: 100. */
-    gateHoldMs?: number;
-    /** Default: 'normal'. */
-    gateType?: 'normal' | 'reverse' | 'sweep1' | 'sweep2';
-    /** Unit: ms. Range: [0, 4000]. Default: unset. */
-    preDelayMs?: number;
-    /** Range: [0, 6]. Default: 0. */
-    character?: number;
-    /** Default: 'crossfade'. */
-    mixLaw?: 'crossfade' | 'twoRamps';
-    /** Unit: s. Range: [0.05, 62.0087]. Default: unset. */
-    decaySec?: number;
-  };
   /** Parameters of the `effects.reverb.fdn` processor. */
   'effects.reverb.fdn': {
     /** Range: [0, 1.5]. Default: 0.55. */
@@ -1295,8 +1264,6 @@ export interface MasteringProcessorParamMap {
     'band7.detectorDelayMs'?: number;
     /** Default: true. */
     'band0.enabled'?: boolean;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band0.lookaheadMs'?: number;
     /** Default: 'peak'. */
     'band0.type'?:
       | 'peak'
@@ -1309,8 +1276,6 @@ export interface MasteringProcessorParamMap {
       | 'allPass';
     /** Default: true. */
     'band1.enabled'?: boolean;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band1.lookaheadMs'?: number;
     /** Default: 'peak'. */
     'band1.type'?:
       | 'peak'
@@ -1323,8 +1288,6 @@ export interface MasteringProcessorParamMap {
       | 'allPass';
     /** Default: true. */
     'band2.enabled'?: boolean;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band2.lookaheadMs'?: number;
     /** Default: 'peak'. */
     'band2.type'?:
       | 'peak'
@@ -1337,8 +1300,6 @@ export interface MasteringProcessorParamMap {
       | 'allPass';
     /** Default: true. */
     'band3.enabled'?: boolean;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band3.lookaheadMs'?: number;
     /** Default: 'peak'. */
     'band3.type'?:
       | 'peak'
@@ -1351,8 +1312,6 @@ export interface MasteringProcessorParamMap {
       | 'allPass';
     /** Default: true. */
     'band4.enabled'?: boolean;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band4.lookaheadMs'?: number;
     /** Default: 'peak'. */
     'band4.type'?:
       | 'peak'
@@ -1365,8 +1324,6 @@ export interface MasteringProcessorParamMap {
       | 'allPass';
     /** Default: true. */
     'band5.enabled'?: boolean;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band5.lookaheadMs'?: number;
     /** Default: 'peak'. */
     'band5.type'?:
       | 'peak'
@@ -1379,8 +1336,6 @@ export interface MasteringProcessorParamMap {
       | 'allPass';
     /** Default: true. */
     'band6.enabled'?: boolean;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band6.lookaheadMs'?: number;
     /** Default: 'peak'. */
     'band6.type'?:
       | 'peak'
@@ -1393,8 +1348,6 @@ export interface MasteringProcessorParamMap {
       | 'allPass';
     /** Default: true. */
     'band7.enabled'?: boolean;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band7.lookaheadMs'?: number;
     /** Default: 'peak'. */
     'band7.type'?:
       | 'peak'
@@ -1568,8 +1521,6 @@ export interface MasteringProcessorParamMap {
     'band0.dynamic'?: boolean;
     /** Default: true. */
     'band0.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band0.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band0.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -1620,8 +1571,6 @@ export interface MasteringProcessorParamMap {
     'band1.dynamic'?: boolean;
     /** Default: true. */
     'band1.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band1.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band1.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -1672,8 +1621,6 @@ export interface MasteringProcessorParamMap {
     'band10.dynamic'?: boolean;
     /** Default: true. */
     'band10.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band10.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band10.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -1724,8 +1671,6 @@ export interface MasteringProcessorParamMap {
     'band11.dynamic'?: boolean;
     /** Default: true. */
     'band11.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band11.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band11.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -1776,8 +1721,6 @@ export interface MasteringProcessorParamMap {
     'band12.dynamic'?: boolean;
     /** Default: true. */
     'band12.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band12.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band12.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -1828,8 +1771,6 @@ export interface MasteringProcessorParamMap {
     'band13.dynamic'?: boolean;
     /** Default: true. */
     'band13.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band13.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band13.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -1880,8 +1821,6 @@ export interface MasteringProcessorParamMap {
     'band14.dynamic'?: boolean;
     /** Default: true. */
     'band14.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band14.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band14.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -1932,8 +1871,6 @@ export interface MasteringProcessorParamMap {
     'band15.dynamic'?: boolean;
     /** Default: true. */
     'band15.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band15.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band15.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -1984,8 +1921,6 @@ export interface MasteringProcessorParamMap {
     'band16.dynamic'?: boolean;
     /** Default: true. */
     'band16.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band16.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band16.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -2036,8 +1971,6 @@ export interface MasteringProcessorParamMap {
     'band17.dynamic'?: boolean;
     /** Default: true. */
     'band17.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band17.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band17.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -2088,8 +2021,6 @@ export interface MasteringProcessorParamMap {
     'band18.dynamic'?: boolean;
     /** Default: true. */
     'band18.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band18.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band18.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -2140,8 +2071,6 @@ export interface MasteringProcessorParamMap {
     'band19.dynamic'?: boolean;
     /** Default: true. */
     'band19.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band19.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band19.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -2192,8 +2121,6 @@ export interface MasteringProcessorParamMap {
     'band2.dynamic'?: boolean;
     /** Default: true. */
     'band2.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band2.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band2.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -2244,8 +2171,6 @@ export interface MasteringProcessorParamMap {
     'band20.dynamic'?: boolean;
     /** Default: true. */
     'band20.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band20.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band20.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -2296,8 +2221,6 @@ export interface MasteringProcessorParamMap {
     'band21.dynamic'?: boolean;
     /** Default: true. */
     'band21.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band21.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band21.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -2348,8 +2271,6 @@ export interface MasteringProcessorParamMap {
     'band22.dynamic'?: boolean;
     /** Default: true. */
     'band22.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band22.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band22.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -2400,8 +2321,6 @@ export interface MasteringProcessorParamMap {
     'band23.dynamic'?: boolean;
     /** Default: true. */
     'band23.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band23.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band23.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -2452,8 +2371,6 @@ export interface MasteringProcessorParamMap {
     'band3.dynamic'?: boolean;
     /** Default: true. */
     'band3.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band3.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band3.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -2504,8 +2421,6 @@ export interface MasteringProcessorParamMap {
     'band4.dynamic'?: boolean;
     /** Default: true. */
     'band4.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band4.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band4.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -2556,8 +2471,6 @@ export interface MasteringProcessorParamMap {
     'band5.dynamic'?: boolean;
     /** Default: true. */
     'band5.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band5.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band5.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -2608,8 +2521,6 @@ export interface MasteringProcessorParamMap {
     'band6.dynamic'?: boolean;
     /** Default: true. */
     'band6.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band6.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band6.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -2660,8 +2571,6 @@ export interface MasteringProcessorParamMap {
     'band7.dynamic'?: boolean;
     /** Default: true. */
     'band7.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band7.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band7.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -2712,8 +2621,6 @@ export interface MasteringProcessorParamMap {
     'band8.dynamic'?: boolean;
     /** Default: true. */
     'band8.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band8.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band8.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -2764,8 +2671,6 @@ export interface MasteringProcessorParamMap {
     'band9.dynamic'?: boolean;
     /** Default: true. */
     'band9.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band9.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band9.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -3048,8 +2953,6 @@ export interface MasteringProcessorParamMap {
     'band0.dynamic'?: boolean;
     /** Default: true. */
     'band0.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band0.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band0.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -3097,8 +3000,6 @@ export interface MasteringProcessorParamMap {
     'band1.dynamic'?: boolean;
     /** Default: true. */
     'band1.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band1.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band1.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -3146,8 +3047,6 @@ export interface MasteringProcessorParamMap {
     'band10.dynamic'?: boolean;
     /** Default: true. */
     'band10.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band10.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band10.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -3195,8 +3094,6 @@ export interface MasteringProcessorParamMap {
     'band11.dynamic'?: boolean;
     /** Default: true. */
     'band11.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band11.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band11.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -3244,8 +3141,6 @@ export interface MasteringProcessorParamMap {
     'band12.dynamic'?: boolean;
     /** Default: true. */
     'band12.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band12.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band12.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -3293,8 +3188,6 @@ export interface MasteringProcessorParamMap {
     'band13.dynamic'?: boolean;
     /** Default: true. */
     'band13.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band13.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band13.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -3342,8 +3235,6 @@ export interface MasteringProcessorParamMap {
     'band14.dynamic'?: boolean;
     /** Default: true. */
     'band14.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band14.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band14.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -3391,8 +3282,6 @@ export interface MasteringProcessorParamMap {
     'band15.dynamic'?: boolean;
     /** Default: true. */
     'band15.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band15.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band15.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -3440,8 +3329,6 @@ export interface MasteringProcessorParamMap {
     'band16.dynamic'?: boolean;
     /** Default: true. */
     'band16.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band16.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band16.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -3489,8 +3376,6 @@ export interface MasteringProcessorParamMap {
     'band17.dynamic'?: boolean;
     /** Default: true. */
     'band17.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band17.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band17.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -3538,8 +3423,6 @@ export interface MasteringProcessorParamMap {
     'band18.dynamic'?: boolean;
     /** Default: true. */
     'band18.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band18.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band18.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -3587,8 +3470,6 @@ export interface MasteringProcessorParamMap {
     'band19.dynamic'?: boolean;
     /** Default: true. */
     'band19.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band19.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band19.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -3636,8 +3517,6 @@ export interface MasteringProcessorParamMap {
     'band2.dynamic'?: boolean;
     /** Default: true. */
     'band2.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band2.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band2.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -3685,8 +3564,6 @@ export interface MasteringProcessorParamMap {
     'band20.dynamic'?: boolean;
     /** Default: true. */
     'band20.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band20.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band20.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -3734,8 +3611,6 @@ export interface MasteringProcessorParamMap {
     'band21.dynamic'?: boolean;
     /** Default: true. */
     'band21.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band21.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band21.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -3783,8 +3658,6 @@ export interface MasteringProcessorParamMap {
     'band22.dynamic'?: boolean;
     /** Default: true. */
     'band22.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band22.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band22.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -3832,8 +3705,6 @@ export interface MasteringProcessorParamMap {
     'band23.dynamic'?: boolean;
     /** Default: true. */
     'band23.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band23.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band23.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -3881,8 +3752,6 @@ export interface MasteringProcessorParamMap {
     'band3.dynamic'?: boolean;
     /** Default: true. */
     'band3.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band3.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band3.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -3930,8 +3799,6 @@ export interface MasteringProcessorParamMap {
     'band4.dynamic'?: boolean;
     /** Default: true. */
     'band4.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band4.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band4.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -3979,8 +3846,6 @@ export interface MasteringProcessorParamMap {
     'band5.dynamic'?: boolean;
     /** Default: true. */
     'band5.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band5.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band5.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -4028,8 +3893,6 @@ export interface MasteringProcessorParamMap {
     'band6.dynamic'?: boolean;
     /** Default: true. */
     'band6.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band6.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band6.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -4077,8 +3940,6 @@ export interface MasteringProcessorParamMap {
     'band7.dynamic'?: boolean;
     /** Default: true. */
     'band7.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band7.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band7.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -4126,8 +3987,6 @@ export interface MasteringProcessorParamMap {
     'band8.dynamic'?: boolean;
     /** Default: true. */
     'band8.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band8.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band8.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -4175,8 +4034,6 @@ export interface MasteringProcessorParamMap {
     'band9.dynamic'?: boolean;
     /** Default: true. */
     'band9.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band9.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band9.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -4525,8 +4382,6 @@ export interface MasteringProcessorParamMap {
     'midBand0.dynamic'?: boolean;
     /** Default: true. */
     'midBand0.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand0.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand0.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -4575,8 +4430,6 @@ export interface MasteringProcessorParamMap {
     'midBand1.dynamic'?: boolean;
     /** Default: true. */
     'midBand1.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand1.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand1.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -4625,8 +4478,6 @@ export interface MasteringProcessorParamMap {
     'midBand10.dynamic'?: boolean;
     /** Default: true. */
     'midBand10.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand10.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand10.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -4675,8 +4526,6 @@ export interface MasteringProcessorParamMap {
     'midBand11.dynamic'?: boolean;
     /** Default: true. */
     'midBand11.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand11.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand11.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -4725,8 +4574,6 @@ export interface MasteringProcessorParamMap {
     'midBand12.dynamic'?: boolean;
     /** Default: true. */
     'midBand12.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand12.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand12.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -4775,8 +4622,6 @@ export interface MasteringProcessorParamMap {
     'midBand13.dynamic'?: boolean;
     /** Default: true. */
     'midBand13.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand13.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand13.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -4825,8 +4670,6 @@ export interface MasteringProcessorParamMap {
     'midBand14.dynamic'?: boolean;
     /** Default: true. */
     'midBand14.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand14.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand14.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -4875,8 +4718,6 @@ export interface MasteringProcessorParamMap {
     'midBand15.dynamic'?: boolean;
     /** Default: true. */
     'midBand15.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand15.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand15.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -4925,8 +4766,6 @@ export interface MasteringProcessorParamMap {
     'midBand16.dynamic'?: boolean;
     /** Default: true. */
     'midBand16.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand16.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand16.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -4975,8 +4814,6 @@ export interface MasteringProcessorParamMap {
     'midBand17.dynamic'?: boolean;
     /** Default: true. */
     'midBand17.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand17.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand17.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -5025,8 +4862,6 @@ export interface MasteringProcessorParamMap {
     'midBand18.dynamic'?: boolean;
     /** Default: true. */
     'midBand18.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand18.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand18.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -5075,8 +4910,6 @@ export interface MasteringProcessorParamMap {
     'midBand19.dynamic'?: boolean;
     /** Default: true. */
     'midBand19.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand19.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand19.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -5125,8 +4958,6 @@ export interface MasteringProcessorParamMap {
     'midBand2.dynamic'?: boolean;
     /** Default: true. */
     'midBand2.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand2.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand2.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -5175,8 +5006,6 @@ export interface MasteringProcessorParamMap {
     'midBand20.dynamic'?: boolean;
     /** Default: true. */
     'midBand20.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand20.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand20.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -5225,8 +5054,6 @@ export interface MasteringProcessorParamMap {
     'midBand21.dynamic'?: boolean;
     /** Default: true. */
     'midBand21.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand21.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand21.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -5275,8 +5102,6 @@ export interface MasteringProcessorParamMap {
     'midBand22.dynamic'?: boolean;
     /** Default: true. */
     'midBand22.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand22.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand22.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -5325,8 +5150,6 @@ export interface MasteringProcessorParamMap {
     'midBand23.dynamic'?: boolean;
     /** Default: true. */
     'midBand23.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand23.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand23.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -5375,8 +5198,6 @@ export interface MasteringProcessorParamMap {
     'midBand3.dynamic'?: boolean;
     /** Default: true. */
     'midBand3.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand3.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand3.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -5425,8 +5246,6 @@ export interface MasteringProcessorParamMap {
     'midBand4.dynamic'?: boolean;
     /** Default: true. */
     'midBand4.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand4.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand4.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -5475,8 +5294,6 @@ export interface MasteringProcessorParamMap {
     'midBand5.dynamic'?: boolean;
     /** Default: true. */
     'midBand5.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand5.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand5.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -5525,8 +5342,6 @@ export interface MasteringProcessorParamMap {
     'midBand6.dynamic'?: boolean;
     /** Default: true. */
     'midBand6.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand6.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand6.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -5575,8 +5390,6 @@ export interface MasteringProcessorParamMap {
     'midBand7.dynamic'?: boolean;
     /** Default: true. */
     'midBand7.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand7.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand7.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -5625,8 +5438,6 @@ export interface MasteringProcessorParamMap {
     'midBand8.dynamic'?: boolean;
     /** Default: true. */
     'midBand8.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand8.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand8.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -5675,8 +5486,6 @@ export interface MasteringProcessorParamMap {
     'midBand9.dynamic'?: boolean;
     /** Default: true. */
     'midBand9.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'midBand9.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'midBand9.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -5725,8 +5534,6 @@ export interface MasteringProcessorParamMap {
     'sideBand0.dynamic'?: boolean;
     /** Default: true. */
     'sideBand0.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand0.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand0.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -5775,8 +5582,6 @@ export interface MasteringProcessorParamMap {
     'sideBand1.dynamic'?: boolean;
     /** Default: true. */
     'sideBand1.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand1.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand1.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -5825,8 +5630,6 @@ export interface MasteringProcessorParamMap {
     'sideBand10.dynamic'?: boolean;
     /** Default: true. */
     'sideBand10.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand10.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand10.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -5875,8 +5678,6 @@ export interface MasteringProcessorParamMap {
     'sideBand11.dynamic'?: boolean;
     /** Default: true. */
     'sideBand11.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand11.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand11.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -5925,8 +5726,6 @@ export interface MasteringProcessorParamMap {
     'sideBand12.dynamic'?: boolean;
     /** Default: true. */
     'sideBand12.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand12.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand12.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -5975,8 +5774,6 @@ export interface MasteringProcessorParamMap {
     'sideBand13.dynamic'?: boolean;
     /** Default: true. */
     'sideBand13.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand13.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand13.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -6025,8 +5822,6 @@ export interface MasteringProcessorParamMap {
     'sideBand14.dynamic'?: boolean;
     /** Default: true. */
     'sideBand14.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand14.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand14.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -6075,8 +5870,6 @@ export interface MasteringProcessorParamMap {
     'sideBand15.dynamic'?: boolean;
     /** Default: true. */
     'sideBand15.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand15.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand15.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -6125,8 +5918,6 @@ export interface MasteringProcessorParamMap {
     'sideBand16.dynamic'?: boolean;
     /** Default: true. */
     'sideBand16.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand16.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand16.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -6175,8 +5966,6 @@ export interface MasteringProcessorParamMap {
     'sideBand17.dynamic'?: boolean;
     /** Default: true. */
     'sideBand17.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand17.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand17.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -6225,8 +6014,6 @@ export interface MasteringProcessorParamMap {
     'sideBand18.dynamic'?: boolean;
     /** Default: true. */
     'sideBand18.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand18.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand18.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -6275,8 +6062,6 @@ export interface MasteringProcessorParamMap {
     'sideBand19.dynamic'?: boolean;
     /** Default: true. */
     'sideBand19.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand19.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand19.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -6325,8 +6110,6 @@ export interface MasteringProcessorParamMap {
     'sideBand2.dynamic'?: boolean;
     /** Default: true. */
     'sideBand2.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand2.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand2.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -6375,8 +6158,6 @@ export interface MasteringProcessorParamMap {
     'sideBand20.dynamic'?: boolean;
     /** Default: true. */
     'sideBand20.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand20.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand20.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -6425,8 +6206,6 @@ export interface MasteringProcessorParamMap {
     'sideBand21.dynamic'?: boolean;
     /** Default: true. */
     'sideBand21.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand21.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand21.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -6475,8 +6254,6 @@ export interface MasteringProcessorParamMap {
     'sideBand22.dynamic'?: boolean;
     /** Default: true. */
     'sideBand22.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand22.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand22.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -6525,8 +6302,6 @@ export interface MasteringProcessorParamMap {
     'sideBand23.dynamic'?: boolean;
     /** Default: true. */
     'sideBand23.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand23.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand23.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -6575,8 +6350,6 @@ export interface MasteringProcessorParamMap {
     'sideBand3.dynamic'?: boolean;
     /** Default: true. */
     'sideBand3.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand3.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand3.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -6625,8 +6398,6 @@ export interface MasteringProcessorParamMap {
     'sideBand4.dynamic'?: boolean;
     /** Default: true. */
     'sideBand4.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand4.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand4.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -6675,8 +6446,6 @@ export interface MasteringProcessorParamMap {
     'sideBand5.dynamic'?: boolean;
     /** Default: true. */
     'sideBand5.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand5.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand5.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -6725,8 +6494,6 @@ export interface MasteringProcessorParamMap {
     'sideBand6.dynamic'?: boolean;
     /** Default: true. */
     'sideBand6.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand6.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand6.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -6775,8 +6542,6 @@ export interface MasteringProcessorParamMap {
     'sideBand7.dynamic'?: boolean;
     /** Default: true. */
     'sideBand7.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand7.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand7.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -6825,8 +6590,6 @@ export interface MasteringProcessorParamMap {
     'sideBand8.dynamic'?: boolean;
     /** Default: true. */
     'sideBand8.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand8.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand8.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -6875,8 +6638,6 @@ export interface MasteringProcessorParamMap {
     'sideBand9.dynamic'?: boolean;
     /** Default: true. */
     'sideBand9.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'sideBand9.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'sideBand9.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -7072,8 +6833,6 @@ export interface MasteringProcessorParamMap {
     'band0.dynamic'?: boolean;
     /** Default: true. */
     'band0.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band0.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band0.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -7122,8 +6881,6 @@ export interface MasteringProcessorParamMap {
     'band1.dynamic'?: boolean;
     /** Default: true. */
     'band1.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band1.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band1.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -7172,8 +6929,6 @@ export interface MasteringProcessorParamMap {
     'band10.dynamic'?: boolean;
     /** Default: true. */
     'band10.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band10.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band10.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -7222,8 +6977,6 @@ export interface MasteringProcessorParamMap {
     'band11.dynamic'?: boolean;
     /** Default: true. */
     'band11.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band11.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band11.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -7272,8 +7025,6 @@ export interface MasteringProcessorParamMap {
     'band12.dynamic'?: boolean;
     /** Default: true. */
     'band12.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band12.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band12.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -7322,8 +7073,6 @@ export interface MasteringProcessorParamMap {
     'band13.dynamic'?: boolean;
     /** Default: true. */
     'band13.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band13.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band13.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -7372,8 +7121,6 @@ export interface MasteringProcessorParamMap {
     'band14.dynamic'?: boolean;
     /** Default: true. */
     'band14.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band14.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band14.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -7422,8 +7169,6 @@ export interface MasteringProcessorParamMap {
     'band15.dynamic'?: boolean;
     /** Default: true. */
     'band15.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band15.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band15.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -7472,8 +7217,6 @@ export interface MasteringProcessorParamMap {
     'band16.dynamic'?: boolean;
     /** Default: true. */
     'band16.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band16.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band16.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -7522,8 +7265,6 @@ export interface MasteringProcessorParamMap {
     'band17.dynamic'?: boolean;
     /** Default: true. */
     'band17.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band17.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band17.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -7572,8 +7313,6 @@ export interface MasteringProcessorParamMap {
     'band18.dynamic'?: boolean;
     /** Default: true. */
     'band18.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band18.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band18.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -7622,8 +7361,6 @@ export interface MasteringProcessorParamMap {
     'band19.dynamic'?: boolean;
     /** Default: true. */
     'band19.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band19.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band19.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -7672,8 +7409,6 @@ export interface MasteringProcessorParamMap {
     'band2.dynamic'?: boolean;
     /** Default: true. */
     'band2.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band2.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band2.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -7722,8 +7457,6 @@ export interface MasteringProcessorParamMap {
     'band20.dynamic'?: boolean;
     /** Default: true. */
     'band20.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band20.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band20.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -7772,8 +7505,6 @@ export interface MasteringProcessorParamMap {
     'band21.dynamic'?: boolean;
     /** Default: true. */
     'band21.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band21.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band21.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -7822,8 +7553,6 @@ export interface MasteringProcessorParamMap {
     'band22.dynamic'?: boolean;
     /** Default: true. */
     'band22.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band22.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band22.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -7872,8 +7601,6 @@ export interface MasteringProcessorParamMap {
     'band23.dynamic'?: boolean;
     /** Default: true. */
     'band23.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band23.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band23.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -7922,8 +7649,6 @@ export interface MasteringProcessorParamMap {
     'band3.dynamic'?: boolean;
     /** Default: true. */
     'band3.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band3.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band3.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -7972,8 +7697,6 @@ export interface MasteringProcessorParamMap {
     'band4.dynamic'?: boolean;
     /** Default: true. */
     'band4.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band4.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band4.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -8022,8 +7745,6 @@ export interface MasteringProcessorParamMap {
     'band5.dynamic'?: boolean;
     /** Default: true. */
     'band5.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band5.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band5.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -8072,8 +7793,6 @@ export interface MasteringProcessorParamMap {
     'band6.dynamic'?: boolean;
     /** Default: true. */
     'band6.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band6.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band6.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -8122,8 +7841,6 @@ export interface MasteringProcessorParamMap {
     'band7.dynamic'?: boolean;
     /** Default: true. */
     'band7.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band7.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band7.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -8172,8 +7889,6 @@ export interface MasteringProcessorParamMap {
     'band8.dynamic'?: boolean;
     /** Default: true. */
     'band8.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band8.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band8.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -8222,8 +7937,6 @@ export interface MasteringProcessorParamMap {
     'band9.dynamic'?: boolean;
     /** Default: true. */
     'band9.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band9.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band9.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -8419,8 +8132,6 @@ export interface MasteringProcessorParamMap {
     'band0.dynamic'?: boolean;
     /** Default: true. */
     'band0.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band0.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band0.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -8469,8 +8180,6 @@ export interface MasteringProcessorParamMap {
     'band1.dynamic'?: boolean;
     /** Default: true. */
     'band1.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band1.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band1.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -8519,8 +8228,6 @@ export interface MasteringProcessorParamMap {
     'band10.dynamic'?: boolean;
     /** Default: true. */
     'band10.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band10.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band10.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -8569,8 +8276,6 @@ export interface MasteringProcessorParamMap {
     'band11.dynamic'?: boolean;
     /** Default: true. */
     'band11.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band11.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band11.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -8619,8 +8324,6 @@ export interface MasteringProcessorParamMap {
     'band12.dynamic'?: boolean;
     /** Default: true. */
     'band12.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band12.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band12.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -8669,8 +8372,6 @@ export interface MasteringProcessorParamMap {
     'band13.dynamic'?: boolean;
     /** Default: true. */
     'band13.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band13.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band13.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -8719,8 +8420,6 @@ export interface MasteringProcessorParamMap {
     'band14.dynamic'?: boolean;
     /** Default: true. */
     'band14.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band14.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band14.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -8769,8 +8468,6 @@ export interface MasteringProcessorParamMap {
     'band15.dynamic'?: boolean;
     /** Default: true. */
     'band15.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band15.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band15.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -8819,8 +8516,6 @@ export interface MasteringProcessorParamMap {
     'band16.dynamic'?: boolean;
     /** Default: true. */
     'band16.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band16.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band16.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -8869,8 +8564,6 @@ export interface MasteringProcessorParamMap {
     'band17.dynamic'?: boolean;
     /** Default: true. */
     'band17.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band17.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band17.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -8919,8 +8612,6 @@ export interface MasteringProcessorParamMap {
     'band18.dynamic'?: boolean;
     /** Default: true. */
     'band18.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band18.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band18.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -8969,8 +8660,6 @@ export interface MasteringProcessorParamMap {
     'band19.dynamic'?: boolean;
     /** Default: true. */
     'band19.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band19.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band19.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -9019,8 +8708,6 @@ export interface MasteringProcessorParamMap {
     'band2.dynamic'?: boolean;
     /** Default: true. */
     'band2.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band2.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band2.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -9069,8 +8756,6 @@ export interface MasteringProcessorParamMap {
     'band20.dynamic'?: boolean;
     /** Default: true. */
     'band20.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band20.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band20.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -9119,8 +8804,6 @@ export interface MasteringProcessorParamMap {
     'band21.dynamic'?: boolean;
     /** Default: true. */
     'band21.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band21.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band21.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -9169,8 +8852,6 @@ export interface MasteringProcessorParamMap {
     'band22.dynamic'?: boolean;
     /** Default: true. */
     'band22.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band22.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band22.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -9219,8 +8900,6 @@ export interface MasteringProcessorParamMap {
     'band23.dynamic'?: boolean;
     /** Default: true. */
     'band23.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band23.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band23.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -9269,8 +8948,6 @@ export interface MasteringProcessorParamMap {
     'band3.dynamic'?: boolean;
     /** Default: true. */
     'band3.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band3.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band3.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -9319,8 +8996,6 @@ export interface MasteringProcessorParamMap {
     'band4.dynamic'?: boolean;
     /** Default: true. */
     'band4.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band4.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band4.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -9369,8 +9044,6 @@ export interface MasteringProcessorParamMap {
     'band5.dynamic'?: boolean;
     /** Default: true. */
     'band5.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band5.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band5.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -9419,8 +9092,6 @@ export interface MasteringProcessorParamMap {
     'band6.dynamic'?: boolean;
     /** Default: true. */
     'band6.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band6.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band6.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -9469,8 +9140,6 @@ export interface MasteringProcessorParamMap {
     'band7.dynamic'?: boolean;
     /** Default: true. */
     'band7.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band7.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band7.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -9519,8 +9188,6 @@ export interface MasteringProcessorParamMap {
     'band8.dynamic'?: boolean;
     /** Default: true. */
     'band8.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band8.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band8.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -9569,8 +9236,6 @@ export interface MasteringProcessorParamMap {
     'band9.dynamic'?: boolean;
     /** Default: true. */
     'band9.enabled'?: boolean;
-    /** Unit: ms. Default: 0. */
-    'band9.lookaheadMs'?: number;
     /** Default: 'inherit'. */
     'band9.phase'?: 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
     /** Default: 'stereo'. */
@@ -9901,8 +9566,6 @@ export interface MasteringProcessorParamMap {
     'band0.dyn0.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band0.dyn0.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band0.dyn0.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band0.dyn1.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -9925,8 +9588,6 @@ export interface MasteringProcessorParamMap {
     'band0.dyn1.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band0.dyn1.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band0.dyn1.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band0.dyn2.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -9949,8 +9610,6 @@ export interface MasteringProcessorParamMap {
     'band0.dyn2.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band0.dyn2.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band0.dyn2.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band0.dyn3.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -9973,8 +9632,6 @@ export interface MasteringProcessorParamMap {
     'band0.dyn3.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band0.dyn3.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band0.dyn3.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band0.dyn4.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -9997,8 +9654,6 @@ export interface MasteringProcessorParamMap {
     'band0.dyn4.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band0.dyn4.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band0.dyn4.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band0.dyn5.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -10021,8 +9676,6 @@ export interface MasteringProcessorParamMap {
     'band0.dyn5.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band0.dyn5.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band0.dyn5.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band0.dyn6.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -10045,8 +9698,6 @@ export interface MasteringProcessorParamMap {
     'band0.dyn6.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band0.dyn6.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band0.dyn6.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band0.dyn7.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -10069,8 +9720,6 @@ export interface MasteringProcessorParamMap {
     'band0.dyn7.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band0.dyn7.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band0.dyn7.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band1.dyn0.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -10093,8 +9742,6 @@ export interface MasteringProcessorParamMap {
     'band1.dyn0.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band1.dyn0.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band1.dyn0.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band1.dyn1.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -10117,8 +9764,6 @@ export interface MasteringProcessorParamMap {
     'band1.dyn1.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band1.dyn1.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band1.dyn1.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band1.dyn2.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -10141,8 +9786,6 @@ export interface MasteringProcessorParamMap {
     'band1.dyn2.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band1.dyn2.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band1.dyn2.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band1.dyn3.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -10165,8 +9808,6 @@ export interface MasteringProcessorParamMap {
     'band1.dyn3.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band1.dyn3.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band1.dyn3.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band1.dyn4.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -10189,8 +9830,6 @@ export interface MasteringProcessorParamMap {
     'band1.dyn4.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band1.dyn4.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band1.dyn4.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band1.dyn5.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -10213,8 +9852,6 @@ export interface MasteringProcessorParamMap {
     'band1.dyn5.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band1.dyn5.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band1.dyn5.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band1.dyn6.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -10237,8 +9874,6 @@ export interface MasteringProcessorParamMap {
     'band1.dyn6.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band1.dyn6.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band1.dyn6.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band1.dyn7.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -10261,8 +9896,6 @@ export interface MasteringProcessorParamMap {
     'band1.dyn7.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band1.dyn7.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band1.dyn7.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band2.dyn0.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -10285,8 +9918,6 @@ export interface MasteringProcessorParamMap {
     'band2.dyn0.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band2.dyn0.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band2.dyn0.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band2.dyn1.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -10309,8 +9940,6 @@ export interface MasteringProcessorParamMap {
     'band2.dyn1.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band2.dyn1.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band2.dyn1.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band2.dyn2.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -10333,8 +9962,6 @@ export interface MasteringProcessorParamMap {
     'band2.dyn2.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band2.dyn2.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band2.dyn2.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band2.dyn3.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -10357,8 +9984,6 @@ export interface MasteringProcessorParamMap {
     'band2.dyn3.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band2.dyn3.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band2.dyn3.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band2.dyn4.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -10381,8 +10006,6 @@ export interface MasteringProcessorParamMap {
     'band2.dyn4.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band2.dyn4.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band2.dyn4.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band2.dyn5.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -10405,8 +10028,6 @@ export interface MasteringProcessorParamMap {
     'band2.dyn5.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band2.dyn5.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band2.dyn5.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band2.dyn6.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -10429,8 +10050,6 @@ export interface MasteringProcessorParamMap {
     'band2.dyn6.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band2.dyn6.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band2.dyn6.lookaheadMs'?: number;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band2.dyn7.frequencyHz'?: number;
     /** Unit: dB. Default: 0. */
@@ -10453,8 +10072,6 @@ export interface MasteringProcessorParamMap {
     'band2.dyn7.releaseMs'?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     'band2.dyn7.detectorDelayMs'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band2.dyn7.lookaheadMs'?: number;
     /** Default: true. */
     'band0.dyn0.enabled'?: boolean;
     /** Default: 'peak'. */
@@ -10751,8 +10368,6 @@ export interface MasteringProcessorParamMap {
     'band3.dyn0.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band3.dyn0.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band3.dyn0.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band3.dyn0.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -10787,8 +10402,6 @@ export interface MasteringProcessorParamMap {
     'band3.dyn1.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band3.dyn1.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band3.dyn1.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band3.dyn1.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -10823,8 +10436,6 @@ export interface MasteringProcessorParamMap {
     'band3.dyn2.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band3.dyn2.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band3.dyn2.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band3.dyn2.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -10859,8 +10470,6 @@ export interface MasteringProcessorParamMap {
     'band3.dyn3.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band3.dyn3.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band3.dyn3.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band3.dyn3.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -10895,8 +10504,6 @@ export interface MasteringProcessorParamMap {
     'band3.dyn4.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band3.dyn4.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band3.dyn4.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band3.dyn4.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -10931,8 +10538,6 @@ export interface MasteringProcessorParamMap {
     'band3.dyn5.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band3.dyn5.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band3.dyn5.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band3.dyn5.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -10967,8 +10572,6 @@ export interface MasteringProcessorParamMap {
     'band3.dyn6.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band3.dyn6.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band3.dyn6.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band3.dyn6.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11003,8 +10606,6 @@ export interface MasteringProcessorParamMap {
     'band3.dyn7.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band3.dyn7.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band3.dyn7.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band3.dyn7.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11039,8 +10640,6 @@ export interface MasteringProcessorParamMap {
     'band4.dyn0.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band4.dyn0.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band4.dyn0.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band4.dyn0.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11075,8 +10674,6 @@ export interface MasteringProcessorParamMap {
     'band4.dyn1.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band4.dyn1.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band4.dyn1.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band4.dyn1.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11111,8 +10708,6 @@ export interface MasteringProcessorParamMap {
     'band4.dyn2.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band4.dyn2.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band4.dyn2.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band4.dyn2.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11147,8 +10742,6 @@ export interface MasteringProcessorParamMap {
     'band4.dyn3.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band4.dyn3.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band4.dyn3.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band4.dyn3.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11183,8 +10776,6 @@ export interface MasteringProcessorParamMap {
     'band4.dyn4.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band4.dyn4.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band4.dyn4.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band4.dyn4.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11219,8 +10810,6 @@ export interface MasteringProcessorParamMap {
     'band4.dyn5.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band4.dyn5.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band4.dyn5.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band4.dyn5.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11255,8 +10844,6 @@ export interface MasteringProcessorParamMap {
     'band4.dyn6.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band4.dyn6.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band4.dyn6.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band4.dyn6.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11291,8 +10878,6 @@ export interface MasteringProcessorParamMap {
     'band4.dyn7.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band4.dyn7.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band4.dyn7.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band4.dyn7.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11327,8 +10912,6 @@ export interface MasteringProcessorParamMap {
     'band5.dyn0.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band5.dyn0.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band5.dyn0.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band5.dyn0.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11363,8 +10946,6 @@ export interface MasteringProcessorParamMap {
     'band5.dyn1.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band5.dyn1.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band5.dyn1.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band5.dyn1.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11399,8 +10980,6 @@ export interface MasteringProcessorParamMap {
     'band5.dyn2.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band5.dyn2.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band5.dyn2.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band5.dyn2.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11435,8 +11014,6 @@ export interface MasteringProcessorParamMap {
     'band5.dyn3.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band5.dyn3.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band5.dyn3.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band5.dyn3.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11471,8 +11048,6 @@ export interface MasteringProcessorParamMap {
     'band5.dyn4.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band5.dyn4.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band5.dyn4.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band5.dyn4.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11507,8 +11082,6 @@ export interface MasteringProcessorParamMap {
     'band5.dyn5.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band5.dyn5.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band5.dyn5.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band5.dyn5.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11543,8 +11116,6 @@ export interface MasteringProcessorParamMap {
     'band5.dyn6.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band5.dyn6.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band5.dyn6.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band5.dyn6.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11579,8 +11150,6 @@ export interface MasteringProcessorParamMap {
     'band5.dyn7.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band5.dyn7.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band5.dyn7.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band5.dyn7.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11615,8 +11184,6 @@ export interface MasteringProcessorParamMap {
     'band6.dyn0.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band6.dyn0.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band6.dyn0.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band6.dyn0.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11651,8 +11218,6 @@ export interface MasteringProcessorParamMap {
     'band6.dyn1.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band6.dyn1.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band6.dyn1.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band6.dyn1.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11687,8 +11252,6 @@ export interface MasteringProcessorParamMap {
     'band6.dyn2.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band6.dyn2.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band6.dyn2.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band6.dyn2.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11723,8 +11286,6 @@ export interface MasteringProcessorParamMap {
     'band6.dyn3.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band6.dyn3.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band6.dyn3.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band6.dyn3.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11759,8 +11320,6 @@ export interface MasteringProcessorParamMap {
     'band6.dyn4.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band6.dyn4.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band6.dyn4.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band6.dyn4.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11795,8 +11354,6 @@ export interface MasteringProcessorParamMap {
     'band6.dyn5.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band6.dyn5.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band6.dyn5.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band6.dyn5.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11831,8 +11388,6 @@ export interface MasteringProcessorParamMap {
     'band6.dyn6.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band6.dyn6.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band6.dyn6.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band6.dyn6.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11867,8 +11422,6 @@ export interface MasteringProcessorParamMap {
     'band6.dyn7.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band6.dyn7.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band6.dyn7.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band6.dyn7.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11903,8 +11456,6 @@ export interface MasteringProcessorParamMap {
     'band7.dyn0.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band7.dyn0.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band7.dyn0.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band7.dyn0.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11939,8 +11490,6 @@ export interface MasteringProcessorParamMap {
     'band7.dyn1.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band7.dyn1.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band7.dyn1.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band7.dyn1.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -11975,8 +11524,6 @@ export interface MasteringProcessorParamMap {
     'band7.dyn2.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band7.dyn2.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band7.dyn2.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band7.dyn2.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -12011,8 +11558,6 @@ export interface MasteringProcessorParamMap {
     'band7.dyn3.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band7.dyn3.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band7.dyn3.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band7.dyn3.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -12047,8 +11592,6 @@ export interface MasteringProcessorParamMap {
     'band7.dyn4.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band7.dyn4.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band7.dyn4.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band7.dyn4.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -12083,8 +11626,6 @@ export interface MasteringProcessorParamMap {
     'band7.dyn5.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band7.dyn5.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band7.dyn5.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band7.dyn5.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -12119,8 +11660,6 @@ export interface MasteringProcessorParamMap {
     'band7.dyn6.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band7.dyn6.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band7.dyn6.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band7.dyn6.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -12155,8 +11694,6 @@ export interface MasteringProcessorParamMap {
     'band7.dyn7.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band7.dyn7.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band7.dyn7.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band7.dyn7.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -12191,8 +11728,6 @@ export interface MasteringProcessorParamMap {
     'band8.dyn0.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band8.dyn0.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band8.dyn0.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band8.dyn0.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -12227,8 +11762,6 @@ export interface MasteringProcessorParamMap {
     'band8.dyn1.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band8.dyn1.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band8.dyn1.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band8.dyn1.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -12263,8 +11796,6 @@ export interface MasteringProcessorParamMap {
     'band8.dyn2.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band8.dyn2.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band8.dyn2.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band8.dyn2.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -12299,8 +11830,6 @@ export interface MasteringProcessorParamMap {
     'band8.dyn3.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band8.dyn3.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band8.dyn3.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band8.dyn3.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -12335,8 +11864,6 @@ export interface MasteringProcessorParamMap {
     'band8.dyn4.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band8.dyn4.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band8.dyn4.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band8.dyn4.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -12371,8 +11898,6 @@ export interface MasteringProcessorParamMap {
     'band8.dyn5.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band8.dyn5.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band8.dyn5.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band8.dyn5.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -12407,8 +11932,6 @@ export interface MasteringProcessorParamMap {
     'band8.dyn6.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band8.dyn6.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band8.dyn6.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band8.dyn6.q'?: number;
     /** Unit: dB. Default: -6. */
@@ -12443,8 +11966,6 @@ export interface MasteringProcessorParamMap {
     'band8.dyn7.enabled'?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 1000. */
     'band8.dyn7.frequencyHz'?: number;
-    /** Unit: ms. Range: [0, inf). Default: 0. */
-    'band8.dyn7.lookaheadMs'?: number;
     /** Range: (0, inf). Default: 1. */
     'band8.dyn7.q'?: number;
     /** Unit: dB. Default: -6. */
