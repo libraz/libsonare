@@ -540,26 +540,8 @@ Napi::Object AnalysisToObject(Napi::Env env, const SonareAnalysisResult& analysi
 }
 
 bool EnrichFullAnalysisObject(Napi::Env env, Napi::Object result, Napi::Error* error) {
-  Napi::Value beats_val = result.Get("beats");
-  if (beats_val.IsArray()) {
-    Napi::Array beats_arr = beats_val.As<Napi::Array>();
-    uint32_t n = beats_arr.Length();
-    auto beat_times = Napi::Float32Array::New(env, n);
-    for (uint32_t i = 0; i < n; ++i) {
-      Napi::Value beat = beats_arr.Get(i);
-      if (beat.IsObject()) {
-        Napi::Value t = beat.As<Napi::Object>().Get("time");
-        beat_times[i] =
-            t.IsNumber() ? static_cast<float>(t.As<Napi::Number>().DoubleValue()) : 0.0f;
-      }
-    }
-    result.Set("beatTimes", beat_times);
-  } else {
-    result.Set("beatTimes", Napi::Float32Array::New(env, 0));
-  }
-
-  // The full-analysis JSON carries chord ordinals only; add the spelled names and the duration
-  // so every chord entry has the shape detectChords reports.
+  // The full-analysis JSON carries chord ordinals only; add the spelled names detectChords
+  // reports.
   Napi::Value chords_val = result.Get("chords");
   if (chords_val.IsArray()) {
     Napi::Array chords = chords_val.As<Napi::Array>();
@@ -569,8 +551,6 @@ bool EnrichFullAnalysisObject(Napi::Env env, Napi::Object result, Napi::Error* e
       Napi::Object chord = entry.As<Napi::Object>();
       Napi::Value root = chord.Get("root");
       Napi::Value bass = chord.Get("bass");
-      Napi::Value start = chord.Get("start");
-      Napi::Value end = chord.Get("end");
       if (root.IsNumber()) {
         chord.Set("rootName",
                   Napi::String::New(env, PitchClassNameLocal(static_cast<SonarePitchClass>(
@@ -580,10 +560,6 @@ bool EnrichFullAnalysisObject(Napi::Env env, Napi::Object result, Napi::Error* e
         chord.Set("bassName",
                   Napi::String::New(env, PitchClassNameLocal(static_cast<SonarePitchClass>(
                                              node_narrow_int(env, bass, "bass")))));
-      }
-      if (start.IsNumber() && end.IsNumber()) {
-        chord.Set("duration", Napi::Number::New(env, end.As<Napi::Number>().DoubleValue() -
-                                                         start.As<Napi::Number>().DoubleValue()));
       }
     }
   }

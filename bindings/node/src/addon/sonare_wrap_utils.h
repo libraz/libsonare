@@ -309,10 +309,9 @@ bool EnrichFullAnalysisObject(Napi::Env env, Napi::Object result, Napi::Error* e
 /// @return The parsed object or env.Undefined() (exception already thrown).
 Napi::Value ParseJsonObjectAndFree(Napi::Env env, char* json, const char* failure_message);
 
-/// @brief Run sonare_analyze_json, parse the result with JSON.parse, inject a
-/// legacy `beatTimes` Float32Array derived from `beats[].time`, and return the
-/// enriched object. Frees the heap-allocated JSON string. Throws a JS error on
-/// C-ABI failure or JSON parse failure.
+/// @brief Run sonare_analyze_json, parse the result with JSON.parse, add the
+/// spelled chord and key names, and return the object. Frees the heap-allocated
+/// JSON string. Throws a JS error on C-ABI failure or JSON parse failure.
 ///
 /// @return The enriched JS object or env.Undefined() (exception already thrown).
 Napi::Value FullAnalysisJsonToObject(Napi::Env env, const float* data, size_t length,

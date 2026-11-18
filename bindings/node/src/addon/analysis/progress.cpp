@@ -109,7 +109,7 @@ Napi::Value SonareWrap::AnalyzeWithProgress(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
-  // Parse JSON and inject beatTimes on the main thread.
+  // Parse JSON and add the spelled names on the main thread.
   Napi::Object json_global = env.Global().Get("JSON").As<Napi::Object>();
   Napi::Function json_parse = json_global.Get("parse").As<Napi::Function>();
   Napi::Value parsed =
@@ -169,8 +169,8 @@ Napi::Value SonareWrap::AnalyzeSections(const Napi::CallbackInfo& info) {
     Napi::Object obj = Napi::Object::New(env);
     obj.Set("type", Napi::Number::New(env, static_cast<int>(section.type)));
     obj.Set("name", Napi::String::New(env, SectionTypeName(section.type)));
-    obj.Set("start", Napi::Number::New(env, section.start_sec));
-    obj.Set("end", Napi::Number::New(env, section.end_sec));
+    obj.Set("startSec", Napi::Number::New(env, section.start_sec));
+    obj.Set("endSec", Napi::Number::New(env, section.end_sec));
     obj.Set("energyLevel", Napi::Number::New(env, section.energy_level));
     obj.Set("confidence", Napi::Number::New(env, section.confidence));
     obj.Set("group", Napi::Number::New(env, section.group));

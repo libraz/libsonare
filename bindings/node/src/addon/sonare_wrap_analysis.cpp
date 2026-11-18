@@ -940,9 +940,9 @@ Napi::Array ChordsToJs(Napi::Env env, const SonareChordAnalysisResult& analysis)
     chord.Set("bassName", Napi::String::New(env, PitchClassNameLocal(analysis.chords[i].bass)));
     chord.Set("quality", Napi::Number::New(env, static_cast<int>(analysis.chords[i].quality)));
     chord.Set("name", Napi::String::New(env, ChordSymbol(analysis.chords[i])));
-    chord.Set("start", Napi::Number::New(env, analysis.chords[i].start_sec));
-    chord.Set("end", Napi::Number::New(env, analysis.chords[i].end_sec));
-    chord.Set("duration",
+    chord.Set("startSec", Napi::Number::New(env, analysis.chords[i].start_sec));
+    chord.Set("endSec", Napi::Number::New(env, analysis.chords[i].end_sec));
+    chord.Set("durationSec",
               Napi::Number::New(env, analysis.chords[i].end_sec - analysis.chords[i].start_sec));
     chord.Set("confidence", Napi::Number::New(env, analysis.chords[i].confidence));
     chords.Set(static_cast<uint32_t>(i), chord);
