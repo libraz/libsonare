@@ -20,7 +20,7 @@ import { assertAudioInput, assertPositiveFloatValue, sampleOneShot } from './val
  * See {@link TranscribeOptions} for what this deliberately does not do —
  * quantizing, tempo-map installation and key/chord annotation each already live
  * somewhere else. The tuning reference is `referenceHz`, or measured with
- * `referenceHz: 'auto'`; the result reports it as `tuning`.
+ * `referenceHz: 'auto'`; the result reports it as `tuningCents`.
  *
  * @example
  * ```typescript

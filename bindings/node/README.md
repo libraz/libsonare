@@ -36,8 +36,8 @@ console.log(`BPM: ${result.bpm.toFixed(1)}  Key: ${result.key.name}`);
 
 // Master toward a target loudness with a named preset
 const mastered = masterAudio({
-  samples: audio.getData(),
-  sampleRate: audio.getSampleRate(),
+  samples: audio.data,
+  sampleRate: audio.sampleRate,
   preset: 'streaming',
 });
 console.log(mastered.outputLufs, mastered.appliedGainDb);
@@ -46,15 +46,15 @@ console.log(mastered.outputLufs, mastered.appliedGainDb);
 Render a MIDI arrangement through a built-in instrument with the headless `Project`. Call `destroy()` to release the native handle.
 
 ```typescript
-import { Project } from '@libraz/libsonare-native';
+import { Project, midiNoteOff, midiNoteOn } from '@libraz/libsonare-native';
 
-const project = Project.create();
+const project = new Project();
 const { clipId } = project.addMidiClip(0, 4);
 project.setMidiEvents(clipId, [
-  Project.midiNoteOn(0, 0, 0, 60, 100),       // ppq, group, channel, note, velocity
-  Project.midiNoteOff(1, 0, 0, 60),
+  midiNoteOn({ ppq: 0, group: 0, channel: 0, note: 60, velocity: 100 }),
+  midiNoteOff({ ppq: 1, group: 0, channel: 0, note: 60 }),
 ]);
-const audio = project.bounceWithSynthInstrument('sawLead', { numChannels: 2 });
+const audio = project.bounceWithSynthInstruments([{ instrument: { preset: 'sawLead' } }], { numChannels: 2 });
 project.destroy();
 ```
 
@@ -62,14 +62,14 @@ project.destroy();
 
 - **Analysis** — BPM, key, chords, downbeats, sections grouped by repeated material, melody, tuning, pitch, timbre, spectral features and metering. → [Analysis](https://libsonare.libraz.net/docs/node-api-analysis)
 - **Stem decomposition and transcription** — `decomposeStems` splits a mix into stems, and `transcribe` turns audio into MIDI events, with a `singing` model (`monophonicModel: 'singing'`) for vocals. → [Analysis](https://libsonare.libraz.net/docs/node-api-analysis), [Audio to notes](https://libsonare.libraz.net/docs/audio-to-notes)
-- **Mastering** — 95 named DSP processors, the configurable `masteringChain`, 30 named presets via `masterAudio`, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
+- **Mastering** — 95 named DSP processors, a configurable chain and 30 named presets through `masterAudio`, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
 - **Restoration** — five repair-only presets, `vinyl`, `tapeHiss`, `fieldRecording`, `voiceMemo` and `shellac78`, plus repair of any channel count in one call (`masteringRepairAnalyze` / `masteringRepairApply`). → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
 - **Mixing** — offline `mixStereo`, the block-based `Mixer` with scene presets, and `suggestMixScene`, which suggests a mixer scene with a written explanation without applying it; `sampleRate` is **required** and must be an integer within `[8000, 384000]`. → [Mixing](https://libsonare.libraz.net/docs/mixing), [Mixing assistant](https://libsonare.libraz.net/docs/mixing-assistant)
 - **Editing DSP** — time-stretch, pitch-shift, `autoTune`, HPSS, phase vocoder, normalize, trim, remix. → [Editing DSP](https://libsonare.libraz.net/docs/editing-dsp)
 - **Note editing and takes** — edit the notes of monophonic takes (`extractNotes`) and polyphonic material (`analyzePolyphonic`), align a take to a reference with `alignTakeToReference`, and build tuning targets from a MIDI melody with `noteTargetsFromSmf`, and edit vocal takes offline with undo/redo through `createVocalEditSession`. → [Project editing](https://libsonare.libraz.net/docs/project-editing-midi), [Recording and takes](https://libsonare.libraz.net/docs/recording-and-takes)
 - **Room acoustics** — blind RT60, impulse-response metrics, RIR synthesis, room estimation and morphing (`roomMorphStereo` for stereo). → [Room acoustics](https://libsonare.libraz.net/docs/acoustic-analysis)
-- **Realtime and streaming** — `RealtimeEngine` with MIDI 1.0 / 2.0 input, bus-to-bus routing with sends, sidechain keys (`setBusSidechain`), `StreamingMasteringChain` and `RealtimeVoiceChanger` (also an insert, `voice.changer`; pitch correction, harmony, vocoder and character stages, driven by `noteOn` / `noteOff` / `allNotesOff` and `process*WithCarrier`, with the presets `hard-tune`, `robot-monotone`, `choir-harmony`, `vocoder-strings`, `megaphone` and `radio-voice`). → [Realtime engine](https://libsonare.libraz.net/docs/realtime-engine)
-- **Instruments and synthesis** — built-in synth, the patch-driven NativeSynth (including a singing-voice engine, preset `singingVoice`), and a GS-compatible SoundFont (SF2) player that receives GS SysEx and offers two GS insertion-effect realisations (`gsEfxRealization`), with a selectable rig per part (`setPartRig`). The acoustic piano is calibrated; the other physical-model voices are still being tuned and will change in 1.11.x patch releases. → [GM and GS](https://libsonare.libraz.net/docs/gm-gs), [Native synth](https://libsonare.libraz.net/docs/native-synth)
+- **Realtime and streaming** — `RealtimeEngine` with MIDI 1.0 / 2.0 input, bus-to-bus routing with sends, sidechain keys (`setBusSidechain`), `StreamingMasteringChain` and `RealtimeVoiceChanger` (also an insert, `voice.changer`; pitch correction, harmony, vocoder and character stages, driven by `noteOn` / `noteOff` / `allNotesOff` and `process*WithCarrier`, with the presets `hardTune`, `robotMonotone`, `choirHarmony`, `vocoderStrings`, `megaphone` and `radioVoice`). → [Realtime engine](https://libsonare.libraz.net/docs/realtime-engine)
+- **Instruments and synthesis** — built-in synth, the patch-driven NativeSynth (including a singing-voice engine, preset `singingVoice`), and a GS-compatible SoundFont (SF2) player that receives GS SysEx and offers two GS insertion-effect realisations (`gsEfxRealization`), with a selectable rig per part (`setPartRig`). The acoustic piano is calibrated; the other physical-model voices are still being tuned and will change in 2.0.x patch releases. → [GM and GS](https://libsonare.libraz.net/docs/gm-gs), [Native synth](https://libsonare.libraz.net/docs/native-synth)
 - **Headless DAW** — `Project` with audio and MIDI tracks, undo/redo, SMF and MIDI 2.0 Clip File I/O, and offline `bounce`; `transcribeToClip` writes a transcription into a clip, and `compileTimeline` turns a project into a timeline a stopped `RealtimeEngine` plays. → [Project editing](https://libsonare.libraz.net/docs/project-editing)
 - **Playback** — `PlaybackRenderer` renders PCM up to 7.1 to speakers or HRTF binaural headphones. → [Playback](https://libsonare.libraz.net/docs/playback)
 - **Parameter descriptors** — `capabilityCatalog`, `masteringInsertParamInfo`, `synthEngineParamInfo` and `synthPatchParamInfo` describe every parameter's range, default, unit, display scale and the other parameters that bound or switch it, so a host builds its controls without a hand-written table. → [Build controls from descriptors](https://libsonare.libraz.net/docs/use-cases/parameter-controls)
@@ -84,7 +84,7 @@ The whole surface is listed in the [Node.js API reference](https://libsonare.lib
 | MP3                                        | yes           | yes                 |
 | M4A / AAC / FLAC / OGG / Opus / WMA / ...  | no            | yes                 |
 
-`hasFfmpegSupport()` reports whether the loaded binding was built with FFmpeg.
+`capabilities().features.ffmpeg` reports whether the loaded binding was built with FFmpeg.
 
 ## Documentation
 

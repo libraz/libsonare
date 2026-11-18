@@ -57,7 +57,7 @@ export interface TranscribeRequest extends TranscribeOptions, ValidateOptions {
  *   {@link Project.annotateChords}.
  *
  * The tuning reference is `referenceHz`, or measured from the audio with
- * `referenceHz: 'auto'`; the result reports it as `tuning` — see
+ * `referenceHz: 'auto'`; the result reports it as `tuningCents` — see
  * {@link TranscribeOptions.referenceHz}.
  *
  * @throws {RangeError} on empty `samples`, a non-finite sample, or a

@@ -174,7 +174,7 @@ export interface AnalysisChord extends Chord {
   /**
    * Roman numeral of the chord relative to the analysis key
    * ({@link AnalysisResult.key}), e.g. `'V7'`, `'vi'`, `'bVII'`. The same
-   * spelling `chordFunctionalAnalysis` reports as `roman` for that chord and key. Empty
+   * spelling `chordFunctionalAnalysis` reports as `romanNumeral` for that chord and key. Empty
    * for a chord that is N.C.
    */
   romanNumeral: string;
@@ -467,7 +467,7 @@ export interface BoundaryOptions {
   kernelSize?: number;
   /**
    * Relative threshold: a peak must reach this fraction of the largest raw novelty
-   * event within `referenceWindow` of it, a lone dominant event (one no other event
+   * event within `referenceWindowSec` of it, a lone dominant event (one no other event
    * in the window comes within 30% of) set aside. Default 0.3.
    */
   threshold?: number;

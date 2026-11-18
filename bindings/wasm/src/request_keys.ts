@@ -3325,5 +3325,3 @@ export const PROCESSOR_OPTION_KEYS = {
 
 /** Name of an entry point that declares a request shape. */
 export type RequestFn = keyof typeof REQUEST_SHAPES;
-
-/** Option fields {@link analyzeWithProgress} reads from the request itself as well as from `options`. */
