@@ -349,7 +349,6 @@ nodeFacade.pitchYin({
   f0MinHz: 50,
   f0MaxHz: 1000,
   threshold: 0.1,
-  fillNa: true,
 });
 nodeFacade.pitchPyin({
   samples,
