@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "analysis/key_analyzer.h"
+#include "analysis/melody_analyzer.h"
 #include "analysis/section_analyzer.h"
 #include "core/audio.h"
 #include "core/channel_layout.h"
@@ -413,15 +414,12 @@ CliValidationError validate_rhythm_tempo_range(const CliArgs& args) {
   return {message.str(), true};
 }
 
-// Compared against the values the handler will actually use, not the raw
-// options: melody substitutes its own band for an absent one, so checking the
-// raw pair lets `--f0-max-hz 50` through against an unstated 80 Hz floor that the
-// analyzer then inverts. The two numbers repeat the handler's because the
-// substitution lives there; they are this command's published band, not
-// MelodyConfig's wider default.
+// Compared against the band the analyzer will use, not the raw options: an absent
+// bound is MelodyConfig's, so `--f0-max-hz 50` alone is refused against its floor.
 CliValidationError validate_melody_frequency_band(const CliArgs& args) {
-  const float minimum = args.get_float("f0-min-hz", 80.0f);
-  const float maximum = args.get_float("f0-max-hz", 1000.0f);
+  const sonare::MelodyConfig library;
+  const float minimum = args.get_float("f0-min-hz", library.fmin);
+  const float maximum = args.get_float("f0-max-hz", library.fmax);
   if (maximum > minimum) return {};
   std::ostringstream message;
   message << "--f0-max-hz must be greater than --f0-min-hz (--f0-min-hz " << minimum
@@ -604,14 +602,18 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // (yin_with_confidence) validates nothing either -- the checks live in
     // yin_track, which this path does not go through.
     add_command(commands, "melody", true,
-                {with_domain(number_value("threshold", 0.1),
-                             greater_than(0.0, CliOptionDomainStage::Parameter)),
-                 with_domain(global_int("hop-length", 512),
-                             greater_than(0.0, CliOptionDomainStage::Parameter)),
-                 with_domain(number_value("f0-min-hz", 80.0),
-                             greater_than(0.0, CliOptionDomainStage::Parameter)),
-                 with_domain(number_value("f0-max-hz", 1000.0),
-                             greater_than(0.0, CliOptionDomainStage::Parameter))},
+                {library_default(with_domain(number_value("threshold"),
+                                             greater_than(0.0, CliOptionDomainStage::Parameter)),
+                                 "0.1"),
+                 library_default(with_domain(int_value("hop-length", false, true),
+                                             greater_than(0.0, CliOptionDomainStage::Parameter)),
+                                 "256"),
+                 library_default(with_domain(number_value("f0-min-hz"),
+                                             greater_than(0.0, CliOptionDomainStage::Parameter)),
+                                 "65.0"),
+                 library_default(with_domain(number_value("f0-max-hz"),
+                                             greater_than(0.0, CliOptionDomainStage::Parameter)),
+                                 "2093.0")},
                 {}, validate_melody_frequency_band);
     // The whole of BoundaryConfig, so a command line can reach the same detector
     // the other surfaces do. `absolute-threshold` is the one that was missing and
@@ -1000,15 +1002,17 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "nnls-chroma", true, {global_int("hop-length", 512)});
     // An omitted lower bound is the library's (C1); a constant-Q bin cannot sit at
     // or below 0 Hz, so a spelled one must be above it.
-    add_command(
-        commands, "cqt", true,
-        {int_value("n-bins", 84), int_value("bins-per-octave", 12), global_int("hop-length", 512),
-         with_domain(number_value("fmin-hz", false, true),
-                     greater_than(0.0, CliOptionDomainStage::Usage))});
+    add_command(commands, "cqt", true,
+                {library_default(int_value("n-bins"), "84"),
+                 library_default(int_value("bins-per-octave"), "12"), global_int("hop-length", 512),
+                 with_domain(number_value("fmin-hz", false, true),
+                             greater_than(0.0, CliOptionDomainStage::Usage))});
     add_command(
         commands, "vqt", true,
-        {int_value("n-bins", 84), int_value("bins-per-octave", 12), number_value("gamma", 0.0),
-         number_value("filter-scale", 1.0), global_int("hop-length", 512),
+        {library_default(int_value("n-bins"), "84"),
+         library_default(int_value("bins-per-octave"), "12"),
+         library_default(number_value("gamma"), "-1.0"),
+         library_default(number_value("filter-scale"), "1.0"), global_int("hop-length", 512),
          with_domain(number_value("fmin-hz", false, true),
                      greater_than(0.0, CliOptionDomainStage::Usage))});
     add_command(
@@ -1082,12 +1086,16 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "lufs", true, {flag("series")}, {}, nullptr, 0,
                 /*preserves_stereo_input=*/false, /*preserves_multichannel_input=*/true);
     add_command(commands, "meter", true,
-                {number_value("clip-threshold", 0.999), int_value("oversample", 4)});
+                {library_default(number_value("clip-threshold"), "0.999"),
+                 library_default(int_value("oversample"), "4")});
     add_command(commands, "clipping", true,
-                {number_value("threshold", 0.999), int_value("min-region", 1)});
+                {library_default(number_value("threshold"), "0.999"),
+                 library_default(int_value("min-region"), "1")});
     add_command(commands, "dynamic-range", true,
-                {number_value("window-sec", 3.0), number_value("hop-sec", 1.0),
-                 number_value("low-percentile", 0.10), number_value("high-percentile", 0.95)});
+                {library_default(number_value("window-sec"), "3.0"),
+                 library_default(number_value("hop-sec"), "1.0"),
+                 library_default(number_value("low-percentile"), "0.1"),
+                 library_default(number_value("high-percentile"), "0.95")});
     add_command(commands, "stereo", true, {path_value("reference")});
     add_command(commands, "phase", true, {path_value("reference")});
     // Without --n-fft the conversion applies no centring offset, as the library does.

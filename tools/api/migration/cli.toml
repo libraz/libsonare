@@ -388,18 +388,22 @@ rule = "frequency-bounds"
 [[entry]]
 kind = "flag"
 old = "melody --fmin"
-new = "melody --f0-min-hz"
 frontend = "native"
+changed = "renamed --f0-min-hz; omitted, the library default (65 Hz) applies rather than 80 Hz; pass the 1.x value to keep 1.x output"
+to = "melody --f0-min-hz"
 domain = "analysis"
-rule = "frequency-bounds"
+rule = "library-owned-defaults"
+test = "tests/cli/cli_contract_test.cpp::CLI options left to the library reproduce their stated default"
 
 [[entry]]
 kind = "flag"
 old = "melody --fmax"
-new = "melody --f0-max-hz"
 frontend = "native"
+changed = "renamed --f0-max-hz; omitted, the library default (2093 Hz) applies rather than 1000 Hz; pass the 1.x value to keep 1.x output"
+to = "melody --f0-max-hz"
 domain = "analysis"
-rule = "frequency-bounds"
+rule = "library-owned-defaults"
+test = "tests/cli/cli_contract_test.cpp::CLI options left to the library reproduce their stated default"
 
 [[entry]]
 kind = "flag"
@@ -858,3 +862,39 @@ old = "split-silence --input"
 removed = "pass every take as a positional argument: split-silence a.wav b.wav"
 domain = "analysis"
 rule = "cli-positional-input"
+
+[[entry]]
+kind = "flag"
+old = "frames-to-samples --n-fft"
+frontend = "native"
+changed = "omitted, no centring offset is applied, as the library does; pass --n-fft 2048 to keep the 1.x offset of 1024 samples"
+domain = "core"
+rule = "library-owned-defaults"
+test = "tests/cli/cli_contract_test.cpp::CLI options left to the library reproduce their stated default"
+
+[[entry]]
+kind = "flag"
+old = "samples-to-frames --n-fft"
+frontend = "native"
+changed = "omitted, no centring offset is applied, as the library does; pass --n-fft 2048 to keep the 1.x offset of 1024 samples"
+domain = "core"
+rule = "library-owned-defaults"
+test = "tests/cli/cli_contract_test.cpp::CLI options left to the library reproduce their stated default"
+
+[[entry]]
+kind = "flag"
+old = "melody --hop-length"
+frontend = "native"
+changed = "omitted, the library hop of 256 samples applies rather than 512; pass --hop-length 512 to keep 1.x output"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "tests/cli/cli_contract_test.cpp::CLI options left to the library reproduce their stated default"
+
+[[entry]]
+kind = "flag"
+old = "vqt --gamma"
+frontend = "native"
+changed = "omitted, the library chooses the bandwidth offset automatically rather than using 0 (a constant-Q transform); pass --gamma 0 to keep 1.x output"
+domain = "analysis"
+rule = "library-owned-defaults"
+test = "tests/cli/cli_contract_test.cpp::CLI options left to the library reproduce their stated default"

@@ -368,8 +368,8 @@ TEST_CASE("CLI global DSP options reach the analysis on every path that reads th
     const std::string base_command = CLI + " melody " + TEST_WAV + " --json -q";
     const auto base = payload_of(base_command);
 
-    const auto finer_hop = payload_of(base_command + " --hop-length 256");
-    REQUIRE(finer_hop["pitch_count"].as_int() != base["pitch_count"].as_int());
+    const auto coarser_hop = payload_of(base_command + " --hop-length 512");
+    REQUIRE(coarser_hop["pitch_count"].as_int() != base["pitch_count"].as_int());
 
     // A measure read off voiced frames is absent when none is voiced.
     const auto mean_hz = [](const auto& payload) {
@@ -1639,4 +1639,121 @@ TEST_CASE("CLI command help", "[cli]") {
   REQUIRE_THAT(project_output, ContainsSubstring("<project.json>"));
   REQUIRE_THAT(project_output, ContainsSubstring("--output <value>"));
 #endif
+}
+
+// An option the handler leaves to the library states the library's value in `--help`. Leaving
+// it out must render what passing that stated value renders, and a different value must render
+// something else, so the row's input reaches the option at all.
+TEST_CASE("CLI options left to the library reproduce their stated default", "[cli][defaults]") {
+  const std::string tone_wav = unique_temp_path("_stated_tone.wav");
+  const std::string clipped_wav = unique_temp_path("_stated_clipped.wav");
+  const std::string stepped_wav = unique_temp_path("_stated_stepped.wav");
+  const std::string noisy_wav = unique_temp_path("_stated_noisy.wav");
+  const std::string out = unique_temp_path("_stated_out.wav");
+  create_test_wav(tone_wav, 1.0f);
+  create_clipped_wav(clipped_wav);
+  create_stepped_level_wav(stepped_wav);
+  create_noisy_wav(noisy_wav);
+
+  struct Row {
+    std::string command;
+    std::string arguments;
+    std::string option;
+    // Empty where the option changes nothing the command prints (vqt reports only its shape).
+    std::string other_value;
+  };
+  const std::string to_out = " -o " + out + " --json -q";
+  const std::vector<Row> rows = {
+      {"preemphasis", tone_wav + to_out, "coef", "0.5"},
+      {"deemphasis", tone_wav + to_out, "coef", "0.5"},
+      {"power-to-db", "--values 0.5,0.25", "ref", "2"},
+      {"power-to-db", "--values 1e-3,1e-12", "amin", "1e-9"},
+      {"power-to-db", "--values 1,1e-9", "top-db", "100"},
+      {"amplitude-to-db", "--values 0.5", "ref", "2"},
+      {"amplitude-to-db", "--values 1e-2,1e-7", "amin", "1e-4"},
+      {"amplitude-to-db", "--values 1,1e-5", "top-db", "120"},
+      {"db-to-power", "--values -3", "ref", "2"},
+      {"db-to-amplitude", "--values -3", "ref", "2"},
+      {"pad-center", "--values 1,2 --size 4", "pad-value", "9"},
+      {"fix-length", "--values 1,2 --size 4", "pad-value", "9"},
+      {"fix-frames", "--values 3,5", "x-min", "1"},
+      {"fix-frames", "--values 3,5", "x-max", "10"},
+      {"vector-normalize", "--values 3,4", "norm-type", "2"},
+      {"vector-normalize", "--values 0.3,0.4", "threshold", "1"},
+      {"frames-to-samples", "--frames 10", "n-fft", "2048"},
+      {"samples-to-frames", "--samples 5000", "n-fft", "2048"},
+      {"pcen", "--values 1,2,3,4 --n-bins 2 --n-frames 2", "sample-rate", "44100"},
+      {"pcen", "--values 1,2,3,4 --n-bins 2 --n-frames 2", "time-constant", "0.1"},
+      {"pcen", "--values 1,2,3,4 --n-bins 2 --n-frames 2", "gain", "0.5"},
+      {"pcen", "--values 1,2,3,4 --n-bins 2 --n-frames 2", "bias", "1"},
+      {"pcen", "--values 1,2,3,4 --n-bins 2 --n-frames 2", "power", "0.25"},
+      {"pcen", "--values 1,2,3,4 --n-bins 2 --n-frames 2", "eps", "10"},
+      {"pcen", "--values 1,2,3,4 --n-bins 2 --n-frames 2", "hop-length", "128"},
+      {"tone", "--frequency-hz 440" + to_out, "sample-rate", "16000"},
+      {"tone", "--frequency-hz 440" + to_out, "duration-sec", "0.5"},
+      {"tone", "--frequency-hz 440" + to_out, "phase", "1"},
+      {"tone", "--frequency-hz 440" + to_out, "amplitude", "0.5"},
+      {"chirp", "--fmin-hz 100 --fmax-hz 1000" + to_out, "sample-rate", "16000"},
+      {"chirp", "--fmin-hz 100 --fmax-hz 1000" + to_out, "duration-sec", "0.5"},
+      {"clicks", "--times 0.1" + to_out, "sample-rate", "16000"},
+      {"clicks", "--times 0.1" + to_out, "length", "44100"},
+      {"clicks", "--times 0.1" + to_out, "frequency-hz", "500"},
+      {"clicks", "--times 0.1" + to_out, "click-duration-sec", "0.05"},
+      {"melody", noisy_wav + " --json -q", "threshold", "0.9"},
+      {"melody", tone_wav + " --json -q", "hop-length", "512"},
+      {"melody", tone_wav + " --json -q", "f0-min-hz", "500"},
+      {"melody", tone_wav + " --json -q", "f0-max-hz", "300"},
+      {"cqt", tone_wav + " --json -q", "n-bins", "48"},
+      {"cqt", tone_wav + " --json -q", "bins-per-octave", "24"},
+      {"vqt", tone_wav + " --json -q", "n-bins", "48"},
+      {"vqt", tone_wav + " --json -q", "bins-per-octave", "24"},
+      {"vqt", tone_wav + " --json -q", "gamma", "0"},
+      {"vqt", tone_wav + " --json -q", "filter-scale", ""},
+      {"meter", clipped_wav + " --json -q", "clip-threshold", "0.2"},
+      {"meter", clipped_wav + " --json -q", "oversample", "1"},
+      {"clipping", clipped_wav + " --json -q", "threshold", "0.2"},
+      {"clipping", clipped_wav + " --json -q", "min-region", "100000"},
+      {"dynamic-range", stepped_wav + " --json -q", "window-sec", "1"},
+      {"dynamic-range", stepped_wav + " --window-sec 0.5 --json -q", "hop-sec", "0.25"},
+      {"dynamic-range", stepped_wav + " --window-sec 0.5 --json -q", "low-percentile", "0.5"},
+      {"dynamic-range", stepped_wav + " --window-sec 0.5 --json -q", "high-percentile", "0.5"},
+  };
+
+  // stdout plus the written file, if any, so a generator is compared by what it rendered.
+  const auto rendered = [&](const std::string& invocation) {
+    std::remove(out.c_str());
+    auto [code, output] = exec_command(CLI + " " + invocation);
+    REQUIRE(code == 0);
+    std::ifstream file(out, std::ios::binary);
+    return output + std::string(std::istreambuf_iterator<char>(file), {});
+  };
+
+  // Every option that states a library default is in the table.
+  for (const CliCommandSpec& command : cli_command_registry()) {
+    for (const CliOptionSpec& option : command.options) {
+      if (option.stated_default.empty()) continue;
+      CAPTURE(command.path, option.name);
+      CHECK(std::any_of(rows.begin(), rows.end(), [&](const Row& row) {
+        return row.command == command.path && row.option == option.name;
+      }));
+    }
+  }
+
+  for (const Row& row : rows) {
+    CAPTURE(row.command, row.option);
+    const auto* spec = cli_option_spec_for_command(row.command, row.option);
+    REQUIRE(spec != nullptr);
+    REQUIRE(spec->default_value.kind == CliOptionDefaultKind::Null);
+    REQUIRE_FALSE(spec->stated_default.empty());
+
+    const std::string base = row.command + " " + row.arguments;
+    const std::string omitted = rendered(base);
+    CHECK(omitted == rendered(base + " --" + row.option + " " + spec->stated_default));
+    if (!row.other_value.empty()) {
+      CHECK(omitted != rendered(base + " --" + row.option + " " + row.other_value));
+    }
+  }
+
+  for (const std::string& path : {tone_wav, clipped_wav, stepped_wav, noisy_wav, out})
+    std::remove(path.c_str());
 }

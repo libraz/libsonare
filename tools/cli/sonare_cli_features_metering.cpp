@@ -384,8 +384,8 @@ int cmd_cqt(const CliArgs& args, const Audio& audio) {
   CqtConfig config;
   config.hop_length = args.hop_length;
   if (args.has("fmin-hz")) config.fmin = args.fmin;
-  config.n_bins = args.get_int("n-bins", 84);
-  config.bins_per_octave = args.get_int("bins-per-octave", 12);
+  config.n_bins = args.get_int("n-bins", config.n_bins);
+  config.bins_per_octave = args.get_int("bins-per-octave", config.bins_per_octave);
 
   CqtResult result = cqt(audio, config);
 
@@ -415,10 +415,10 @@ int cmd_vqt(const CliArgs& args, const Audio& audio) {
   VqtConfig config;
   config.hop_length = args.hop_length;
   if (args.has("fmin-hz")) config.fmin = args.fmin;
-  config.n_bins = args.get_int("n-bins", 84);
-  config.bins_per_octave = args.get_int("bins-per-octave", 12);
-  config.gamma = args.get_float("gamma", 0.0f);
-  config.filter_scale = args.get_float("filter-scale", 1.0f);
+  config.n_bins = args.get_int("n-bins", config.n_bins);
+  config.bins_per_octave = args.get_int("bins-per-octave", config.bins_per_octave);
+  config.gamma = args.get_float("gamma", config.gamma);
+  config.filter_scale = args.get_float("filter-scale", config.filter_scale);
 
   VqtResult result = vqt(audio, config);
   // A negative gamma is the automatic sentinel, so report what the bandwidths were
@@ -950,8 +950,9 @@ int cmd_lufs(const CliArgs& args, const Audio&) {
 }
 
 int cmd_meter(const CliArgs& args, const Audio& audio) {
-  const float clip_threshold = args.get_float("clip-threshold", 0.999f);
-  const int oversample = args.get_int("oversample", 4);
+  const float clip_threshold =
+      args.get_float("clip-threshold", metering::kDefaultClippingThreshold);
+  const int oversample = args.get_int("oversample", metering::kDefaultTruePeakOversample);
 
   const float peak = metering::peak_db(audio);
   const float rms = metering::rms_db(audio);
@@ -990,9 +991,10 @@ int cmd_meter(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_clipping(const CliArgs& args, const Audio& audio) {
-  const float threshold = args.get_float("threshold", 0.999f);
+  const float threshold = args.get_float("threshold", metering::kDefaultClippingThreshold);
   const auto min_region = static_cast<size_t>(
-      args.get_int_in_range("min-region", 1, std::numeric_limits<int>::max(), 1));
+      args.get_int_in_range("min-region", 1, std::numeric_limits<int>::max(),
+                            static_cast<int>(metering::kDefaultClippingMinRegionSamples)));
 
   metering::ClippingResult result = metering::detect_clipping(audio, threshold, min_region);
 
