@@ -27893,14 +27893,14 @@ rule = "token-case"
 kind = "field"
 old = "EqBand.lookaheadMs"
 removed = "use detectorDelayMs"
-domain = "analysis"
+domain = "core"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "field"
 old = "EqBand.lookaheadMs"
 removed = "use detectorDelayMs"
-domain = "analysis"
+domain = "core"
 rule = "aliases-removed"
 entry = "./analysis"
 
