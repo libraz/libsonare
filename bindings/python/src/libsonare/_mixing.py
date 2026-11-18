@@ -8,6 +8,7 @@ from collections.abc import Sequence
 
 from ._errors import _not_supported, _require_open
 from ._ffi import SonareMixGoniometerPoint, SonareSurroundPan
+from ._ffi_types_analysis import SonareMixerMasterMeterConfig
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -678,6 +679,60 @@ class Mixer:
         )
         return _mix_meter_from_c(snapshot)
 
+    def configure_meter(
+        self,
+        enabled: bool = True,
+        *,
+        true_peak_oversample: int = 4,
+        measure_lufs: bool = True,
+        measure_true_peak: bool = True,
+    ) -> None:
+        """Turn the master-output meter on or off and choose what it measures.
+
+        While enabled, every process and drain call meters the master output,
+        and :meth:`flush_meters` folds its pending true-peak stretch too.
+
+        Args:
+            enabled: Whether the master output is metered.
+            true_peak_oversample: True-peak oversampling factor, 4 or 8.
+            measure_lufs: Whether loudness is measured.
+            measure_true_peak: Whether true peak is measured.
+
+        Raises:
+            TypeError: If a flag is not a bool.
+            SonareValueError: If ``true_peak_oversample`` is not 4 or 8 while enabled.
+        """
+        self._require()
+        flags = {
+            "enabled": enabled,
+            "measure_lufs": measure_lufs,
+            "measure_true_peak": measure_true_peak,
+        }
+        for name, value in flags.items():
+            if not isinstance(value, bool):
+                raise TypeError(f"configure_meter: {name} must be a bool")
+        lib = _get_lib()
+        config = SonareMixerMasterMeterConfig()
+        lib.sonare_mixer_master_meter_config_init(ctypes.byref(config))
+        config.enabled = int(enabled)
+        config.measure_lufs = int(measure_lufs)
+        config.measure_true_peak = int(measure_true_peak)
+        config.true_peak_oversample = _narrow_int(
+            true_peak_oversample, "true_peak_oversample", _C_INT_MIN, _C_INT_MAX
+        )
+        _check(lib.sonare_mixer_configure_master_meter(self._handle, ctypes.byref(config)))
+
+    def meter_snapshot(self) -> MixMeterSnapshot:
+        """Read the master-output meter.
+
+        Raises:
+            SonareError: ``InvalidState`` before :meth:`configure_meter` first enables it.
+        """
+        self._require()
+        snapshot = SonareMixMeterSnapshot()
+        _check(_get_lib().sonare_mixer_master_meter(self._handle, ctypes.byref(snapshot)))
+        return _mix_meter_from_c(snapshot)
+
     def strip_non_finite_discard_count(self, strip: StripRef) -> int:
         """Return the blocks in which the strip discarded recursive state.
 
@@ -1008,7 +1063,7 @@ class Mixer:
         )
 
     def flush_meters(self) -> None:
-        """Mark the end of the signal for every strip and bus meter.
+        """Mark the end of the signal for every strip, bus and master meter.
 
         The true-peak reading runs one reconstruction-filter group delay behind
         the block; this reads that pending stretch against silence and folds it
