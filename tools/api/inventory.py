@@ -1832,7 +1832,10 @@ def build_at_tag(root: Path, tag: str) -> tuple[dict | None, str]:
         check=False,
     )
     if probe.returncode != 0:
-        return None, f"tag {tag} is not in this clone"
+        return (
+            None,
+            f"refs/tags/{tag} is not in this clone; fetch it with: git fetch origin tag {tag}",
+        )
     with tempfile.TemporaryDirectory(prefix="sonare-api-tag-") as d:
         tree = Path(d)
         arch = subprocess.run(

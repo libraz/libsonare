@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import copy
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -372,6 +373,20 @@ class LedgerAgainstBaseline(CheckerCase):
         _, lines = self.run_check()
         self.assertTrue(any("not compared: ledger old names against v1.10.0" in x for x in lines))
         self.assertTrue(any("not compared: v1.10.0 names gone with no row" in x for x in lines))
+
+    def test_a_default_run_without_the_tag_fails_naming_it(self):
+        repo = self.dir / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        argv = ["--root", str(repo), "--ledger-dir", str(TD / "ledgers")]
+        code, lines, report = check_surface.run(check_surface.parse_args(argv))
+        self.assertEqual(code, 1)
+        expected = (
+            "baseline v1.10.0 cannot be compared: refs/tags/v1.10.0 is not in this clone;"
+            " fetch it with: git fetch origin tag v1.10.0"
+        )
+        self.assertEqual(lines, [expected])
+        self.assertEqual(report, {"error": lines[0]})
 
     def test_old_name_absent_from_the_base_release_fails(self):
         self.base["records"] = [r for r in self.base["records"] if r["name"] != "bpm_legacy"]

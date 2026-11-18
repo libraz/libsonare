@@ -2327,6 +2327,19 @@ _CATEGORY_FITS = {
 
 def run(args) -> tuple[int, list[str], dict]:
     root = args.root
+    if args.baseline_inventory_file:
+        base_inv = json.loads(Path(args.baseline_inventory_file).read_text(encoding="utf-8"))
+        why = ""
+    elif args.inventory_file:
+        base_inv, why = None, "the inventory was read from a file; pass --baseline-inventory-file"
+    else:
+        import inventory
+
+        # A default run compares against the release; one that cannot is a failure, not a pass.
+        base_inv, why = inventory.build_at_tag(root, BASELINE_TAG)
+        if base_inv is None:
+            line = f"baseline {BASELINE_TAG} cannot be compared: {why}"
+            return 1, [line], {"error": line}
     out: list[str] = []
     failed = False
     if args.inventory_file:
@@ -2429,15 +2442,6 @@ def run(args) -> tuple[int, list[str], dict]:
     for r in records:
         for e in (r["entries"] or ["."]) if r["surface"] == "wasm" else [None]:
             by_key[(r["surface"], r["kind"], r["name"], e)] = r
-    if args.baseline_inventory_file:
-        base_inv = json.loads(Path(args.baseline_inventory_file).read_text(encoding="utf-8"))
-        why = ""
-    elif args.inventory_file:
-        base_inv, why = None, "the inventory was read from a file; pass --baseline-inventory-file"
-    else:
-        import inventory
-
-        base_inv, why = inventory.build_at_tag(root, BASELINE_TAG)
     baseline = build_lookup(base_inv["records"]) if base_inv else None
     lfail, changed = check_ledger(
         [e for e in entries if keep_entry(e)], lookup, selected, by_key, baseline
