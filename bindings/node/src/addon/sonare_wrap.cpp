@@ -77,7 +77,7 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&SonareWrap::DynamicRangeInstance>("dynamicRange"),
           InstanceMethod<&SonareWrap::SpectrumInstance>("spectrum"),
           InstanceMethod<&SonareWrap::SpectrumFrameInstance>("spectrumFrame"),
-          InstanceMethod<&SonareWrap::Ebur128LoudnessRangeInstance>("ebur128LoudnessRange"),
+          InstanceMethod<&SonareWrap::Ebur128LoudnessRangeLuInstance>("ebur128LoudnessRangeLu"),
           InstanceMethod<&SonareWrap::Destroy>("destroy"),
           StaticMethod<&SonareWrap::FromFile>("fromFile"),
           StaticMethod<&SonareWrap::FromFileChannel>("fromFileChannel"),
@@ -144,8 +144,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::LufsInterleaved, "lufsInterleaved"));
   exports.Set("lufsSeriesInterleaved", Napi::Function::New(env, &SonareWrap::LufsSeriesInterleaved,
                                                            "lufsSeriesInterleaved"));
-  exports.Set("ebur128LoudnessRange",
-              Napi::Function::New(env, &SonareWrap::Ebur128LoudnessRange, "ebur128LoudnessRange"));
+  exports.Set(
+      "ebur128LoudnessRangeLu",
+      Napi::Function::New(env, &SonareWrap::Ebur128LoudnessRangeLu, "ebur128LoudnessRangeLu"));
   exports.Set("meteringPeakDb",
               Napi::Function::New(env, &SonareWrap::MeteringPeakDb, "meteringPeakDb"));
   exports.Set("waveformPeaks",

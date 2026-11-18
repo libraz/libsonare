@@ -430,6 +430,9 @@ TEST_CASE("a chain document refuses what it cannot mean, naming the path",
           "renamed to dynamics.multibandComp.crossover.cutoffsHz.0");
   refused(R"({"params":{"dynamics.multibandComp.highCutoffHz":2000}})",
           "renamed to dynamics.multibandComp.crossover.cutoffsHz.1");
+  refused(R"({"params":{"loudness":{"ceilingDb":-1}}})", "renamed to loudness.ceilingDbtp");
+  refused(R"({"params":{"maximizer.truePeakLimiter.ceilingDb":-1}})",
+          "renamed to maximizer.truePeakLimiter.ceilingDbtp");
   refused(R"({"params":{},"extra":1})", "unknown chain config key: extra");
 
   // Annotation keys pass at any depth, and a non-positive threshold is the declipper's own.
@@ -703,7 +706,7 @@ TEST_CASE("new platform and genre presets expose planned loudness targets", "[ma
     REQUIRE(config.loudness.enabled);
     REQUIRE_FALSE(config.maximizer.true_peak_limiter.enabled);
     REQUIRE_THAT(config.loudness.target_lufs, WithinAbs(item.lufs, 1e-6f));
-    REQUIRE_THAT(config.loudness.ceiling_db, WithinAbs(item.ceiling, 1e-6f));
+    REQUIRE_THAT(config.loudness.ceiling_dbtp, WithinAbs(item.ceiling, 1e-6f));
   }
 }
 

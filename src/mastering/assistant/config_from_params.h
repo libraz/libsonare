@@ -34,9 +34,9 @@ inline AssistantConfig assistant_config_from_params(const api::Param* params, st
       // Record that the caller named it, so a delivery target cannot claim the
       // one slider position that happens to equal the default.
       config.target_lufs_explicit = true;
-    } else if (key == "ceilingDb") {
-      config.ceiling_db = static_cast<float>(value);
-      config.ceiling_db_explicit = true;
+    } else if (key == "ceilingDbtp") {
+      config.ceiling_dbtp = static_cast<float>(value);
+      config.ceiling_dbtp_explicit = true;
     } else if (key == "enableRepair") {
       config.enable_repair = value != 0.0;
     } else if (key == "preferStreamingSafe") {
@@ -67,13 +67,13 @@ inline AssistantConfig assistant_config_from_params(const api::Param* params, st
                        "preset must be a preset index from sonare_mastering_preset_from_name");
       config.preset = api::preset_from_string(names[static_cast<std::size_t>(index)]);
     } else {
-      refuse_snake_case_param(key, {"targetLufs", "ceilingDb", "enableRepair",
+      refuse_snake_case_param(key, {"targetLufs", "ceilingDbtp", "enableRepair",
                                     "preferStreamingSafe", "speechMonoAmount", "targetPlatform"});
       // Refused rather than ignored, as a chain override is: a misspelt key
       // would otherwise leave its setting at the default with nothing to say so.
       throw SonareException(ErrorCode::InvalidParameter,
                             "unknown mastering assistant param: " + key +
-                                " (expected targetLufs, ceilingDb, enableRepair, "
+                                " (expected targetLufs, ceilingDbtp, enableRepair, "
                                 "preferStreamingSafe, speechMonoAmount, targetPlatform, preset)");
     }
   }

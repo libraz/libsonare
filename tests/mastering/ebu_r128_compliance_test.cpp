@@ -142,9 +142,9 @@ TEST_CASE("EBU R128 optional loudness test vectors", "[mastering][ebu_r128]") {
 
     if (vector.has_lra) {
       WARN("Report EBU R128 fixture " << vector.filename << " measured lra "
-                                      << loudness.loudness_range << "; expected " << vector.lra
+                                      << loudness.loudness_range_lu << "; expected " << vector.lra
                                       << " +/- " << vector.tolerance_lu);
-      REQUIRE_THAT(loudness.loudness_range, WithinAbs(vector.lra, vector.tolerance_lu));
+      REQUIRE_THAT(loudness.loudness_range_lu, WithinAbs(vector.lra, vector.tolerance_lu));
     }
     if (vector.has_true_peak) {
       const float true_peak_db = max_true_peak_db(audio);

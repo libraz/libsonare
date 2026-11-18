@@ -211,8 +211,8 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(SonareSpectrumResult),
     ]
 
-    lib.sonare_audio_ebur128_loudness_range.restype = ctypes.c_int32
-    lib.sonare_audio_ebur128_loudness_range.argtypes = [
+    lib.sonare_audio_ebur128_loudness_range_lu.restype = ctypes.c_int32
+    lib.sonare_audio_ebur128_loudness_range_lu.argtypes = [
         ctypes.c_void_p,
         ctypes.POINTER(ctypes.c_float),
     ]

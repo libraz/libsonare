@@ -28,7 +28,7 @@ SR = 44100
 SAMPLES = sine(220.0, 0.4, sr=SR, amp=0.2)
 LEFT = SAMPLES
 RIGHT = sine(220.0, 0.4, sr=SR, amp=0.15)
-PARAMS = {"targetLufs": -13.0, "ceilingDb": -0.8}
+PARAMS = {"targetLufs": -13.0, "ceilingDbtp": -0.8}
 
 
 def test_chain_matches_the_suggestion_chain_config() -> None:

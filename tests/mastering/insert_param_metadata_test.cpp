@@ -927,9 +927,9 @@ namespace {
 // The closed unit vocabulary the catalog schema publishes.
 const std::set<std::string>& unit_vocabulary() {
   static const std::set<std::string> units = {
-      "dB",       "dBFS",      "LUFS",  "Hz",      "ms",   "s",     "samples",
-      "m",        "cm",        "deg",   "percent", "degC", "V",     "inPerSec",
-      "dBPerOct", "semitones", "cents", "ratio",   "bits", "count", "none"};
+      "dB",        "dBFS",  "dBTP",  "LUFS",    "Hz",    "ms",  "s",        "samples",
+      "m",         "cm",    "deg",   "percent", "degC",  "V",   "inPerSec", "dBPerOct",
+      "semitones", "cents", "ratio", "bits",    "count", "none"};
   return units;
 }
 
@@ -946,7 +946,7 @@ std::vector<std::string> descriptor_defects(const json::Array& params) {
       if (!unit.is_string()) {
         defects.push_back(name + ": numeric parameter declares no unit");
       } else if (unit_vocabulary().count(unit.as_string()) == 0) {
-        defects.push_back(name + ": unit outside the vocabulary");
+        defects.push_back(name + ": unit " + unit.as_string() + " outside the vocabulary");
       }
     } else if (!unit.is_null()) {
       defects.push_back(name + ": non-numeric parameter carries a unit");
@@ -1094,7 +1094,7 @@ TEST_CASE("declared units follow what each reader declared, not the key's spelli
   CHECK(unit_of("dynamics.compressor", "ratio") == "ratio");
   CHECK(unit_of("dynamics.compressor", "attackMs") == "ms");
   CHECK(unit_of("dynamics.compressor", "sidechainHighPassHz") == "Hz");
-  CHECK(unit_of("maximizer.truePeakLimiter", "ceilingDb") == "dBFS");
+  CHECK(unit_of("maximizer.truePeakLimiter", "ceilingDbtp") == "dBTP");
   CHECK(unit_of("maximizer.truePeakLimiter", "oversampleFactor") == "ratio");
   CHECK(unit_of("eq.linearPhase", "fftSize") == "samples");
   CHECK(unit_of("eq.parametric", "band0.slopeDbOct") == "dBPerOct");

@@ -93,7 +93,7 @@ Napi::Value SonareWrap::Lufs(const Napi::CallbackInfo& info) {
   result.Set("shortTermLufs", Napi::Number::New(env, lufs.short_term_lufs));
   result.Set("maxMomentaryLufs", Napi::Number::New(env, lufs.max_momentary_lufs));
   result.Set("maxShortTermLufs", Napi::Number::New(env, lufs.max_short_term_lufs));
-  result.Set("loudnessRange", Napi::Number::New(env, lufs.loudness_range_lu));
+  result.Set("loudnessRangeLu", Napi::Number::New(env, lufs.loudness_range_lu));
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -188,7 +188,7 @@ Napi::Value SonareWrap::LufsInterleaved(const Napi::CallbackInfo& info) {
   result.Set("shortTermLufs", Napi::Number::New(env, lufs.short_term_lufs));
   result.Set("maxMomentaryLufs", Napi::Number::New(env, lufs.max_momentary_lufs));
   result.Set("maxShortTermLufs", Napi::Number::New(env, lufs.max_short_term_lufs));
-  result.Set("loudnessRange", Napi::Number::New(env, lufs.loudness_range_lu));
+  result.Set("loudnessRangeLu", Napi::Number::New(env, lufs.loudness_range_lu));
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -237,7 +237,7 @@ Napi::Value SonareWrap::LufsSeriesInterleaved(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
-Napi::Value SonareWrap::Ebur128LoudnessRange(const Napi::CallbackInfo& info) {
+Napi::Value SonareWrap::Ebur128LoudnessRangeLu(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
@@ -250,7 +250,7 @@ Napi::Value SonareWrap::Ebur128LoudnessRange(const Napi::CallbackInfo& info) {
 
   float out_lra = 0.0f;
   SonareError err =
-      sonare_ebur128_loudness_range(typed.Data(), typed.ElementLength(), sr, &out_lra);
+      sonare_ebur128_loudness_range_lu(typed.Data(), typed.ElementLength(), sr, &out_lra);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -1077,7 +1077,7 @@ Napi::Value SonareWrap::SpectrumFrameInstance(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
-Napi::Value SonareWrap::Ebur128LoudnessRangeInstance(const Napi::CallbackInfo& info) {
+Napi::Value SonareWrap::Ebur128LoudnessRangeLuInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
@@ -1085,7 +1085,7 @@ Napi::Value SonareWrap::Ebur128LoudnessRangeInstance(const Napi::CallbackInfo& i
     return env.Undefined();
   }
   float out_lra = 0.0f;
-  SonareError err = sonare_audio_ebur128_loudness_range(audio_, &out_lra);
+  SonareError err = sonare_audio_ebur128_loudness_range_lu(audio_, &out_lra);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

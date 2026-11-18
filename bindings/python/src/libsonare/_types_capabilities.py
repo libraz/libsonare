@@ -24,6 +24,7 @@ MasteringPresetKind = Literal["mastering", "restoration"]
 MasteringInsertParamUnit = Literal[
     "dB",
     "dBFS",
+    "dBTP",
     "LUFS",
     "Hz",
     "ms",

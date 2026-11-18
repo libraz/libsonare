@@ -119,6 +119,37 @@ std::vector<mastering::api::Param> parse_mastering_params(const std::string& tex
   return params;
 }
 
+std::vector<mastering::api::Param> parse_chain_params(const std::string& text) {
+  namespace json = sonare::util::json;
+  // Read as the flat params of a chain document, so the core decides a choice-valued key
+  // (a name is resolved, a number refused) in its own words.
+  json::Object params;
+  std::stringstream stream(text);
+  std::string item;
+  while (std::getline(stream, item, ',')) {
+    const auto eq = item.find('=');
+    if (eq == std::string::npos || eq == 0 || eq + 1 == item.size()) {
+      throw std::invalid_argument("invalid parameter entry: '" + item + "' (expected key=value)");
+    }
+    const std::string value_text = item.substr(eq + 1);
+    std::istringstream ss(value_text);
+    ss.imbue(std::locale::classic());
+    double number = 0.0;
+    ss >> number;
+    const bool is_number = ss && ss.peek() == std::char_traits<char>::eof();
+    params[item.substr(0, eq)] = is_number ? json::Value(number) : json::Value(value_text);
+  }
+  json::Object document;
+  document.emplace("version", json::Value(2.0));
+  document.emplace("params", json::Value(std::move(params)));
+  std::vector<mastering::api::Param> out;
+  for (auto& leaf :
+       mastering::api::chain_config_flat_params(json::dump(json::Value(std::move(document))))) {
+    out.push_back({std::move(leaf.key), leaf.value});
+  }
+  return out;
+}
+
 /// One `--platforms` entry, owning its name so the C array built from it can
 /// borrow a stable pointer.
 struct StreamingPlatformSpec {
@@ -245,7 +276,7 @@ void append_mastering_loudness_summary_json(
       .kv("max_momentary_lufs", summary.max_momentary_lufs)
       .kv("max_short_term_lufs", summary.max_short_term_lufs)
       .kv("true_peak_dbtp", summary.true_peak_dbtp)
-      .kv("loudness_range", summary.loudness_range)
+      .kv("loudness_range", summary.loudness_range_lu)
       .end_object();
 }
 
@@ -314,7 +345,7 @@ void print_loudness_result_json(const LoudnessResult& result,
       .kv("output_lufs", result.output_lufs)
       .kv("applied_gain_db", result.applied_gain_db)
       .kv("target_lufs", config.target_lufs)
-      .kv("ceiling_dbtp", config.ceiling_db)
+      .kv("ceiling_dbtp", config.ceiling_dbtp)
       .kv("true_peak_oversample", config.true_peak_oversample)
       .kv("latency_samples", result.latency_samples)
       .kv("loudness_target_limited", result.loudness_target_limited)
@@ -349,7 +380,7 @@ struct AssistantOption {
 
 constexpr AssistantOption kAssistantOptions[] = {
     {"targetLufs", "target-lufs"},
-    {"ceilingDb", "ceiling-dbtp"},
+    {"ceilingDbtp", "ceiling-dbtp"},
     {"enableRepair", "enable-repair"},
     {"preferStreamingSafe", "no-streaming-safe"},
     {"speechMonoAmount", "speech-mono-amount"},
@@ -405,7 +436,8 @@ mastering::assistant::AssistantConfig assistant_config_from_cli(const CliArgs& a
   }
 
   if (args.has("target-lufs")) params.push_back({"targetLufs", args.get_float("target-lufs", 0)});
-  if (args.has("ceiling-dbtp")) params.push_back({"ceilingDb", args.get_float("ceiling-dbtp", 0)});
+  if (args.has("ceiling-dbtp"))
+    params.push_back({"ceilingDbtp", args.get_float("ceiling-dbtp", 0)});
   if (args.has("enable-repair")) params.push_back({"enableRepair", 1.0});
   if (args.has("no-streaming-safe")) params.push_back({"preferStreamingSafe", 0.0});
   if (args.has("speech-mono-amount")) {
@@ -504,7 +536,7 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
       }
     }
 
-    auto overrides = parse_mastering_params(params_text, true);
+    auto overrides = parse_chain_params(params_text);
     if (has_assistant && args.has("true-peak-oversample")) {
       overrides.push_back({"loudness.truePeakOversample",
                            static_cast<double>(args.get_int("true-peak-oversample", 4))});
@@ -572,7 +604,7 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
 
   mastering::maximizer::LoudnessOptimizeConfig config;
   config.target_lufs = args.get_float("target-lufs", -14.0f);
-  config.ceiling_db = args.get_float("ceiling-dbtp", -1.0f);
+  config.ceiling_dbtp = args.get_float("ceiling-dbtp", -1.0f);
   config.true_peak_oversample = args.get_int("true-peak-oversample", 4);
 
   // The standalone loudness facade predates the chain report and has no stereo
@@ -586,7 +618,7 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
     mastering::api::MasteringChainConfig chain_config;
     chain_config.loudness.enabled = true;
     chain_config.loudness.target_lufs = config.target_lufs;
-    chain_config.loudness.ceiling_db = config.ceiling_db;
+    chain_config.loudness.ceiling_dbtp = config.ceiling_dbtp;
     chain_config.loudness.true_peak_oversample = config.true_peak_oversample;
     mastering::api::MasteringChain chain(std::move(chain_config));
     const std::string report_path = args.has("report") ? args.get_string("report") : std::string{};

@@ -40,13 +40,13 @@
 namespace sonare::mastering::assistant {
 
 /// One delivery target. `overrides_loudness == false` means the target keeps
-/// whatever loudness the caller asked for; `target_lufs` / `ceiling_db` are then
+/// whatever loudness the caller asked for; `target_lufs` / `ceiling_dbtp` are then
 /// unused rather than meaningful zeros.
 struct PlatformTarget {
   const char* name;
   bool overrides_loudness;
   float target_lufs;
-  float ceiling_db;
+  float ceiling_dbtp;
 };
 
 /// Accepted delivery targets. The array index is the value a numeric transport

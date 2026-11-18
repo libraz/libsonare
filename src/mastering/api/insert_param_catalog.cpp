@@ -156,6 +156,7 @@ bool read_chain_only_config(const ParamMap& params) {
   // The field table names its metadata as detail does.
   using detail::kDb;
   using detail::kDbfs;
+  using detail::kDbtp;
   using detail::kLufs;
   using detail::kMsLog;
   using detail::kNone;

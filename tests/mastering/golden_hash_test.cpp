@@ -80,7 +80,7 @@ std::vector<float> run_explicit_transformer_chain(const std::vector<float>& samp
       {{"driveDb", 10.0}, {"asymmetry", 0.3}, {"mix", 1.0}});
   const auto limited =
       api::apply_named_processor("maximizer.truePeakLimiter", driven.samples.data(),
-                                 driven.samples.size(), kSampleRate, {{"ceilingDb", -0.3}});
+                                 driven.samples.size(), kSampleRate, {{"ceilingDbtp", -0.3}});
   return limited.samples;
 }
 

@@ -294,7 +294,7 @@ TEST_CASE("Property: LUFS measurement is deterministic", "[mastering][property]"
   REQUIRE_THAT(second.integrated_lufs, WithinAbs(first.integrated_lufs, 1.0e-6f));
   REQUIRE_THAT(second.momentary_lufs, WithinAbs(first.momentary_lufs, 1.0e-6f));
   REQUIRE_THAT(second.short_term_lufs, WithinAbs(first.short_term_lufs, 1.0e-6f));
-  REQUIRE_THAT(second.loudness_range, WithinAbs(first.loudness_range, 1.0e-6f));
+  REQUIRE_THAT(second.loudness_range_lu, WithinAbs(first.loudness_range_lu, 1.0e-6f));
 }
 
 TEST_CASE("Property: true peak measurement is deterministic", "[mastering][property]") {

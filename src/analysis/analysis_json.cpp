@@ -273,7 +273,7 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
     d["peakDb"] = Value(result.dynamics.peak_db);
     d["rmsDb"] = Value(result.dynamics.rms_db);
     d["crestFactor"] = Value(result.dynamics.crest_factor);
-    d["loudnessRangeLu"] = Value(result.dynamics.loudness_range_db);
+    d["loudnessRangeLu"] = Value(result.dynamics.loudness_range_lu);
     d["isCompressed"] = Value(result.dynamics.is_compressed);
     root["dynamics"] = Value(std::move(d));
   }

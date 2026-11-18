@@ -177,7 +177,7 @@ sonare::mastering::api::MasteringChainConfig chain_config(float makeup_db, int o
   config.dynamics.compressor.enabled = true;
   config.dynamics.compressor.config.makeup_gain_db = makeup_db;
   config.maximizer.true_peak_limiter.enabled = true;
-  config.maximizer.true_peak_limiter.config.ceiling_db = kChainCeilingDb;
+  config.maximizer.true_peak_limiter.config.ceiling_dbtp = kChainCeilingDb;
   config.maximizer.true_peak_limiter.config.oversample_factor = oversample;
   return config;
 }
@@ -731,7 +731,7 @@ TEST_CASE("loudness_optimize reports the substitutions its internal limiter made
 
   SECTION("ordinary audio leaves the count at zero") {
     LoudnessOptimizeConfig config;
-    config.ceiling_db = kChainCeilingDb;
+    config.ceiling_dbtp = kChainCeilingDb;
     const auto result = loudness_optimize(audio, config);
     // Non-vacuity: the ceiling sits under the fixture peak, so the limiter is
     // holding the output down rather than passing it through.

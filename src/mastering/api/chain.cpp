@@ -49,8 +49,8 @@ bool valid_true_peak_oversample(int factor) noexcept {
 // The loudness stage's release time with the documented 0 sentinel resolved.
 // The values were already accepted by validate_mastering_chain_config().
 float loudness_release_ms(const LoudnessStage& stage) {
-  return maximizer::validate_loudness_params(stage.target_lufs, stage.ceiling_db, stage.release_ms,
-                                             stage.max_limiter_gain_reduction_db,
+  return maximizer::validate_loudness_params(stage.target_lufs, stage.ceiling_dbtp,
+                                             stage.release_ms, stage.max_limiter_gain_reduction_db,
                                              stage.true_peak_oversample);
 }
 
@@ -79,7 +79,7 @@ float max_abs_gain_reduction(const std::vector<float>& gain_reductions_db) {
 
 MasteringLoudnessSummary to_report_summary(const common::LoudnessSummary& summary) {
   return {summary.integrated_lufs, summary.max_momentary_lufs, summary.max_short_term_lufs,
-          summary.true_peak_dbtp, summary.loudness_range};
+          summary.true_peak_dbtp, summary.loudness_range_lu};
 }
 
 // `reference_spectrum()` is the existing long-term spectrum implementation
@@ -292,7 +292,7 @@ void validate_mastering_chain_config(const MasteringChainConfig& config) {
                    "loudness.maxLimiterGainReductionDb must be finite and >= 0");
   check_stage("loudness", [&] {
     maximizer::validate_loudness_params(
-        config.loudness.target_lufs, config.loudness.ceiling_db, config.loudness.release_ms,
+        config.loudness.target_lufs, config.loudness.ceiling_dbtp, config.loudness.release_ms,
         config.loudness.max_limiter_gain_reduction_db, config.loudness.true_peak_oversample);
   });
   // Repair's own validators are only reached from inside the repair call, which
@@ -624,7 +624,7 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
     // describes the original chain input and must not drive this stage's
     // normalization.
     const detail::LoudnessStageGain stage_gain = detail::loudness_gain_db_with_ceiling(
-        data, sample_rate, config_.loudness.target_lufs, config_.loudness.ceiling_db,
+        data, sample_rate, config_.loudness.target_lufs, config_.loudness.ceiling_dbtp,
         config_.loudness.true_peak_oversample, config_.loudness.max_limiter_gain_reduction_db);
     const float gain_db = stage_gain.applied_db;
     loudness_requested_gain_db = stage_gain.requested_db;
@@ -635,7 +635,7 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
     }
     const mastering::maximizer::TruePeakLimiterConfig limiter_config =
         mastering::maximizer::loudness_limiter_config(
-            config_.loudness.ceiling_db, config_.loudness.true_peak_oversample,
+            config_.loudness.ceiling_dbtp, config_.loudness.true_peak_oversample,
             loudness_release_ms(config_.loudness), config_.loudness.apply_gain_at_input_rate);
     mastering::maximizer::TruePeakLimiter processor(limiter_config);
     run_processor_mono(processor, data, sample_rate);
@@ -666,7 +666,7 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
   }
   result.applied_gain_db = applied_gain_db;
   result.output_true_peak_dbtp = result.report.after.true_peak_dbtp;
-  result.output_lra = result.report.after.loudness_range;
+  result.output_loudness_range_lu = result.report.after.loudness_range_lu;
   result.report.applied_gain_db = applied_gain_db;
   result.report.max_gain_reduction_db = max_gain_reduction_db(result.stage_gain_reductions);
   result.report.loudness_target_limited = result.loudness_target_limited;
@@ -885,7 +885,7 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
   if (config_.loudness.enabled) {
     // One BS.1770 measurement drives both the requested gain and the bounded gain.
     const detail::LoudnessStageGain stage_gain = detail::loudness_gain_db_with_ceiling(
-        left, right, sample_rate, config_.loudness.target_lufs, config_.loudness.ceiling_db,
+        left, right, sample_rate, config_.loudness.target_lufs, config_.loudness.ceiling_dbtp,
         config_.loudness.true_peak_oversample, config_.loudness.max_limiter_gain_reduction_db);
     const float gain_db = stage_gain.applied_db;
     loudness_requested_gain_db = stage_gain.requested_db;
@@ -896,7 +896,7 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
     }
     const mastering::maximizer::TruePeakLimiterConfig limiter_config =
         mastering::maximizer::loudness_limiter_config(
-            config_.loudness.ceiling_db, config_.loudness.true_peak_oversample,
+            config_.loudness.ceiling_dbtp, config_.loudness.true_peak_oversample,
             loudness_release_ms(config_.loudness), config_.loudness.apply_gain_at_input_rate);
     mastering::maximizer::TruePeakLimiter processor(limiter_config);
     run_processor_stereo(processor, left, right, sample_rate);
@@ -927,7 +927,7 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
   }
   result.applied_gain_db = applied_gain_db;
   result.output_true_peak_dbtp = result.report.after.true_peak_dbtp;
-  result.output_lra = result.report.after.loudness_range;
+  result.output_loudness_range_lu = result.report.after.loudness_range_lu;
   result.report.applied_gain_db = applied_gain_db;
   result.report.max_gain_reduction_db = max_gain_reduction_db(result.stage_gain_reductions);
   result.report.loudness_target_limited = result.loudness_target_limited;
@@ -988,7 +988,7 @@ StreamingLoudnessGain streaming_loudness_gain_mono(const MasteringChainConfig& c
   MasteringChain chain(without_loudness_stage(config));
   const MonoChainResult stage_input = chain.process_mono(samples, length, sample_rate);
   return to_streaming_loudness_gain(detail::loudness_gain_db_with_ceiling(
-      stage_input.samples, sample_rate, config.loudness.target_lufs, config.loudness.ceiling_db,
+      stage_input.samples, sample_rate, config.loudness.target_lufs, config.loudness.ceiling_dbtp,
       config.loudness.true_peak_oversample, config.loudness.max_limiter_gain_reduction_db));
 }
 
@@ -1000,7 +1000,7 @@ StreamingLoudnessGain streaming_loudness_gain_stereo(const MasteringChainConfig&
   const StereoChainResult stage_input = chain.process_stereo(left, right, length, sample_rate);
   return to_streaming_loudness_gain(detail::loudness_gain_db_with_ceiling(
       stage_input.left, stage_input.right, sample_rate, config.loudness.target_lufs,
-      config.loudness.ceiling_db, config.loudness.true_peak_oversample,
+      config.loudness.ceiling_dbtp, config.loudness.true_peak_oversample,
       config.loudness.max_limiter_gain_reduction_db));
 }
 }  // namespace sonare::mastering::api

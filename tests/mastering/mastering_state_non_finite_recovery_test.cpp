@@ -617,7 +617,7 @@ TEST_CASE(
   using sonare::mastering::maximizer::TruePeakLimiterConfig;
 
   TruePeakLimiterConfig config;
-  config.ceiling_db = -1.0f;
+  config.ceiling_dbtp = -1.0f;
   config.release_ms = 50.0f;
 
   const int block_count = std::max(kTruePeakRecoveryBlocks + kHorizonSlack, kMinimumCleanBlocks);
@@ -663,7 +663,7 @@ TEST_CASE(
   using sonare::mastering::maximizer::AdaptiveReleaseConfig;
 
   AdaptiveReleaseConfig config;
-  config.ceiling_db = -1.0f;
+  config.ceiling_dbtp = -1.0f;
 
   const int block_count = std::max(kAdaptiveReleaseBlocks + kHorizonSlack, kMinimumCleanBlocks);
 

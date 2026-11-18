@@ -206,7 +206,7 @@ class Audio:
     def mastering(
         self,
         target_lufs: float = -14.0,
-        ceiling_db: float = -1.0,
+        ceiling_dbtp: float = -1.0,
         true_peak_oversample: int = 4,
         release_ms: float | None = None,
         apply_gain_at_input_rate: bool = False,

@@ -273,7 +273,7 @@ StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config,
     // configured limiter depth when the stage-input peak is provided, mirroring
     // the offline chain's loudness stage (bound_loudness_gain_db).
     const float gain_db = detail::bound_loudness_gain_db(
-        options.loudness_static_gain_db, config_.loudness.ceiling_db,
+        options.loudness_static_gain_db, config_.loudness.ceiling_dbtp,
         options.loudness_static_gain_peak_db, config_.loudness.max_limiter_gain_reduction_db);
     loudness_static_gain_linear_ = ::sonare::db_to_linear(gain_db);
     if (!numeric::finite(loudness_static_gain_linear_)) {
@@ -439,12 +439,12 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
     // config was already accepted by validate_mastering_chain_config() above,
     // so this call cannot throw -- it exists only for the resolved value.
     const float resolved_release_ms = mastering::maximizer::validate_loudness_params(
-        config_.loudness.target_lufs, config_.loudness.ceiling_db, config_.loudness.release_ms,
+        config_.loudness.target_lufs, config_.loudness.ceiling_dbtp, config_.loudness.release_ms,
         config_.loudness.max_limiter_gain_reduction_db, config_.loudness.true_peak_oversample);
     const mastering::maximizer::TruePeakLimiterConfig limiter_config =
         mastering::maximizer::loudness_limiter_config(
-            config_.loudness.ceiling_db, config_.loudness.true_peak_oversample, resolved_release_ms,
-            config_.loudness.apply_gain_at_input_rate);
+            config_.loudness.ceiling_dbtp, config_.loudness.true_peak_oversample,
+            resolved_release_ms, config_.loudness.apply_gain_at_input_rate);
     auto limiter = std::make_unique<mastering::maximizer::TruePeakLimiter>(limiter_config);
     limiter->prepare(sample_rate, max_block_size, num_channels);
     add_parameter_targets(parameter_targets, "loudness.optimize", limiter.get(), true);
@@ -656,7 +656,7 @@ void StreamingMasteringChain::set_parameter(const std::string& full_key, double 
   if (full_key == "loudness.releaseMs" && canonical_value == 0.0f) {
     // Zero is the loudness sentinel: config() keeps 0, the limiter gets the default.
     live_value = mastering::maximizer::validate_loudness_params(
-        candidate.loudness.target_lufs, candidate.loudness.ceiling_db,
+        candidate.loudness.target_lufs, candidate.loudness.ceiling_dbtp,
         candidate.loudness.release_ms, candidate.loudness.max_limiter_gain_reduction_db,
         candidate.loudness.true_peak_oversample);
   }
@@ -664,7 +664,7 @@ void StreamingMasteringChain::set_parameter(const std::string& full_key, double 
   bool live_value_unchanged = false;
   if (full_key == "loudness.releaseMs") {
     const float current_live_value = mastering::maximizer::validate_loudness_params(
-        config_.loudness.target_lufs, config_.loudness.ceiling_db, config_.loudness.release_ms,
+        config_.loudness.target_lufs, config_.loudness.ceiling_dbtp, config_.loudness.release_ms,
         config_.loudness.max_limiter_gain_reduction_db, config_.loudness.true_peak_oversample);
     live_value_unchanged = current_live_value == live_value;
   }

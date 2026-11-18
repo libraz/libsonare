@@ -623,6 +623,10 @@ _CHAIN_CONTENT_REFUSALS = {
         {"repair": {"declip": {"clipThresholdDb": 1.0}}},
         r"repair\.declip\.clipThresholdDb must be at or below 0 dBFS",
     ),
+    "earlier_true_peak_ceiling_spelling": (
+        {"loudness": {"ceilingDb": -1.0}},
+        r"loudness\.ceilingDb.*ceilingDbtp",
+    ),
 }
 
 

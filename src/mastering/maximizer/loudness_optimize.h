@@ -12,7 +12,7 @@ namespace sonare::mastering::maximizer {
 
 struct LoudnessOptimizeConfig {
   float target_lufs = -14.0f;
-  float ceiling_db = -1.0f;
+  float ceiling_dbtp = -1.0f;
   int true_peak_oversample = 4;
   /// Release time of the post true-peak limiter, in milliseconds. Mirrors
   /// @ref TruePeakLimiterConfig::release_ms so the standalone helper and the
@@ -24,7 +24,7 @@ struct LoudnessOptimizeConfig {
   /// @brief How deep (dB, >= 0) the helper may drive its post-gain true-peak
   ///        limiter to reach @ref target_lufs.
   /// @details The static gain may exceed the peak headroom toward
-  ///          @ref ceiling_db by this much; 0 restores a strict headroom clamp,
+  ///          @ref ceiling_dbtp by this much; 0 restores a strict headroom clamp,
   ///          under which peak-normalized input keeps its input loudness
   ///          whatever target is asked for. Mirrors
   ///          @ref sonare::mastering::api::LoudnessStage::max_limiter_gain_reduction_db.
@@ -60,7 +60,7 @@ struct LoudnessOptimizeResult {
 /// @return The release time to run: the caller's value, or
 ///         @ref kDefaultLoudnessReleaseMs for the documented 0 sentinel.
 /// @throws SonareException (InvalidParameter) naming the offending field.
-float validate_loudness_params(float target_lufs, float ceiling_db, float release_ms,
+float validate_loudness_params(float target_lufs, float ceiling_dbtp, float release_ms,
                                float max_limiter_gain_reduction_db, int true_peak_oversample);
 
 /// @brief Single-pass loudness normalization followed by a true-peak limiter.

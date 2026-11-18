@@ -515,10 +515,10 @@ TEST_CASE("TruePeakLimiter ceiling automation is realtime-safe and preserves sta
   CHECK(limiter.parameter_is_realtime_safe(0));
   CHECK(limiter.parameter_is_realtime_safe(1));
   CHECK_FALSE(limiter.parameter_is_realtime_safe(2));
-  CHECK(limiter.config().ceiling_db == kCeilingDb);
+  CHECK(limiter.config().ceiling_dbtp == kCeilingDb);
   CHECK(limiter.last_gain_reduction_db() == reduction_before);
 
-  config.ceiling_db = kCeilingDb;
+  config.ceiling_dbtp = kCeilingDb;
   reference.set_config(config);
   const float ceiling = std::pow(10.0f, kCeilingDb / 20.0f);
   for (int block = 0; block < 4; ++block) {
@@ -634,11 +634,11 @@ TEST_CASE("TruePeakLimiter release time constant is independent of oversample fa
   // factor-8 limiter released ~4x faster than the factor-2 limiter). With the
   // fix the base-sample recovery is essentially factor-independent.
   const int sample_rate = 48000;
-  const float ceiling_db = -6.0f;
+  const float ceiling_dbtp = -6.0f;
   const float release_ms = 50.0f;
 
   auto recovery_samples = [&](int factor) {
-    TruePeakLimiter limiter({ceiling_db, 0.0f, release_ms, factor});
+    TruePeakLimiter limiter({ceiling_dbtp, 0.0f, release_ms, factor});
     limiter.prepare(static_cast<double>(sample_rate), 1);
     // Drive the gain hard down with a loud burst longer than the interpolator's
     // group delay, one base sample per block so last_gain_reduction_db() tracks
@@ -786,7 +786,7 @@ TEST_CASE("Maximizer-family configs refuse a non-finite value in every field",
 
   using AdaptiveField = float AdaptiveReleaseConfig::*;
   for (const AdaptiveField field :
-       {&AdaptiveReleaseConfig::ceiling_db, &AdaptiveReleaseConfig::lookahead_ms,
+       {&AdaptiveReleaseConfig::ceiling_dbtp, &AdaptiveReleaseConfig::lookahead_ms,
         &AdaptiveReleaseConfig::min_release_ms, &AdaptiveReleaseConfig::max_release_ms,
         &AdaptiveReleaseConfig::crest_window_ms, &AdaptiveReleaseConfig::crest_low,
         &AdaptiveReleaseConfig::crest_high, &AdaptiveReleaseConfig::release_smoothing_ms}) {
@@ -1034,7 +1034,7 @@ TEST_CASE("LoudnessOptimize drives its limiter toward a target the headroom cann
   const Audio input = sine_audio(0.8f);
   LoudnessOptimizeConfig config;
   config.target_lufs = 0.0f;
-  config.ceiling_db = -6.0f;
+  config.ceiling_dbtp = -6.0f;
   const auto result = loudness_optimize(input, config);
 
   REQUIRE(result.applied_gain_db > 0.0f);
@@ -1051,7 +1051,7 @@ TEST_CASE("LoudnessOptimize clamps to the bare headroom at zero limiter allowanc
   const Audio input = sine_audio(0.8f);
   LoudnessOptimizeConfig config;
   config.target_lufs = 0.0f;
-  config.ceiling_db = -6.0f;
+  config.ceiling_dbtp = -6.0f;
   config.max_limiter_gain_reduction_db = 0.0f;
   const auto result = loudness_optimize(input, config);
 
@@ -1139,7 +1139,7 @@ TEST_CASE("maximizer.loudnessOptimize releaseMs 0 runs the library default relea
   // A target the peak headroom cannot reach, so the limiter is doing the work
   // and its release is audible in the output.
   const std::vector<sonare::mastering::api::Param> base = {{"targetLufs", 0.0},
-                                                           {"ceilingDb", -6.0}};
+                                                           {"ceilingDbtp", -6.0}};
   auto with_release = [&](double release_ms) {
     std::vector<sonare::mastering::api::Param> params = base;
     params.push_back({"releaseMs", release_ms});
@@ -1307,7 +1307,7 @@ TEST_CASE("Limiter configurations reject nonfinite values before changing live s
                -std::numeric_limits<float>::infinity());
   const int field = GENERATE(0, 1, 2);
   TruePeakLimiterConfig bad;
-  if (field == 0) bad.ceiling_db = invalid;
+  if (field == 0) bad.ceiling_dbtp = invalid;
   if (field == 1) bad.lookahead_ms = invalid;
   if (field == 2) bad.release_ms = invalid;
   CHECK_THROWS(TruePeakLimiter{bad});
@@ -1315,7 +1315,7 @@ TEST_CASE("Limiter configurations reject nonfinite values before changing live s
   if (field != 1) limiter.prepare(48000.0, 32, 1);
   const int latency = limiter.latency_samples();
   CHECK_THROWS(limiter.set_config(bad));
-  CHECK(limiter.config().ceiling_db == -1.0f);
+  CHECK(limiter.config().ceiling_dbtp == -1.0f);
   CHECK(limiter.config().lookahead_ms == 1.0f);
   CHECK(limiter.config().release_ms == 50.0f);
   CHECK(limiter.latency_samples() == latency);
@@ -1510,7 +1510,7 @@ TEST_CASE("AdaptiveRelease live parameters refuse the values set_config refuses"
       if (prepared) processor.prepare(48000.0, 256);
       CHECK_FALSE(processor.set_parameter(row.id, row.refused));
       const auto& config = processor.config();
-      CHECK(config.ceiling_db == start.ceiling_db);
+      CHECK(config.ceiling_dbtp == start.ceiling_dbtp);
       CHECK(config.min_release_ms == start.min_release_ms);
       CHECK(config.max_release_ms == start.max_release_ms);
       CHECK(config.crest_window_ms == start.crest_window_ms);
@@ -1520,7 +1520,7 @@ TEST_CASE("AdaptiveRelease live parameters refuse the values set_config refuses"
 
       CHECK(processor.set_parameter(row.id, row.accepted));
       const auto& applied = processor.config();
-      const float stored[] = {applied.ceiling_db,          applied.min_release_ms,
+      const float stored[] = {applied.ceiling_dbtp,        applied.min_release_ms,
                               applied.max_release_ms,      applied.crest_window_ms,
                               applied.crest_low,           applied.crest_high,
                               applied.release_smoothing_ms};
@@ -1561,7 +1561,7 @@ TEST_CASE("Limiter family live parameters refuse out-of-domain values",
           "[mastering][maximizer][live_domain]") {
   const auto true_peak = [] { return TruePeakLimiter(); };
   check_live_domain("TruePeakLimiter ceiling", true_peak, 0u, 0.125f, 0.0f,
-                    [](const TruePeakLimiter& p) { return p.config().ceiling_db; });
+                    [](const TruePeakLimiter& p) { return p.config().ceiling_dbtp; });
   check_live_domain("TruePeakLimiter release", true_peak, 1u, -0.125f, 0.0f,
                     [](const TruePeakLimiter& p) { return p.config().release_ms; });
 
@@ -1585,7 +1585,7 @@ TEST_CASE("AdaptiveRelease and SoftKneeMax refuse a ceiling before forwarding it
   AdaptiveRelease adaptive;
   adaptive.prepare(48000.0, 512);
   CHECK_FALSE(adaptive.set_parameter(0, 3.0f));
-  CHECK(adaptive.config().ceiling_db <= 0.0f);
+  CHECK(adaptive.config().ceiling_dbtp <= 0.0f);
 
   SoftKneeMax soft_knee;
   soft_knee.prepare(48000.0, 512);
@@ -1604,7 +1604,7 @@ TEST_CASE("TruePeakLimiter bounds queued output to a lowered ceiling", "[masteri
           for (const int channels : {1, 2}) {
             CAPTURE(factor, input_rate_gain, via_config, block, channels);
             TruePeakLimiterConfig config;
-            config.ceiling_db = -1.0f;
+            config.ceiling_dbtp = -1.0f;
             config.oversample_factor = factor;
             config.apply_gain_at_input_rate = input_rate_gain;
             TruePeakLimiter limiter(config);
@@ -1629,7 +1629,7 @@ TEST_CASE("TruePeakLimiter bounds queued output to a lowered ceiling", "[masteri
             for (int b = 0; b < 40; ++b) run_block();
 
             if (via_config) {
-              config.ceiling_db = kNewCeilingDb;
+              config.ceiling_dbtp = kNewCeilingDb;
               limiter.set_config(config);
             } else {
               REQUIRE(limiter.set_parameter(0, kNewCeilingDb));

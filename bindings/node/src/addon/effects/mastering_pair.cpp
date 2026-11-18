@@ -574,14 +574,15 @@ Napi::Value SonareWrap::MasteringStreamingPreview(const Napi::CallbackInfo& info
       }
       Napi::Object object = value.As<Napi::Object>();
       if (!object.Get("name").IsString() || !object.Get("targetLufs").IsNumber() ||
-          !object.Get("ceilingDb").IsNumber()) {
-        Napi::TypeError::New(env, "platforms entries require name, targetLufs, ceilingDb")
+          !object.Get("ceilingDbtp").IsNumber()) {
+        Napi::TypeError::New(env, "platforms entries require name, targetLufs, ceilingDbtp")
             .ThrowAsJavaScriptException();
         return env.Undefined();
       }
-      platforms.push_back({StringProperty(object, "name", ""),
-                           node_narrow_finite_float(env, object.Get("targetLufs"), "targetLufs"),
-                           node_narrow_finite_float(env, object.Get("ceilingDb"), "ceilingDb")});
+      platforms.push_back(
+          {StringProperty(object, "name", ""),
+           node_narrow_finite_float(env, object.Get("targetLufs"), "targetLufs"),
+           node_narrow_finite_float(env, object.Get("ceilingDbtp"), "ceilingDbtp")});
     }
   }
   const sonare::Audio audio =
@@ -671,14 +672,15 @@ Napi::Value SonareWrap::MasteringStreamingPreviewStereo(const Napi::CallbackInfo
       }
       Napi::Object object = value.As<Napi::Object>();
       if (!object.Get("name").IsString() || !object.Get("targetLufs").IsNumber() ||
-          !object.Get("ceilingDb").IsNumber()) {
-        Napi::TypeError::New(env, "platforms entries require name, targetLufs, ceilingDb")
+          !object.Get("ceilingDbtp").IsNumber()) {
+        Napi::TypeError::New(env, "platforms entries require name, targetLufs, ceilingDbtp")
             .ThrowAsJavaScriptException();
         return env.Undefined();
       }
-      platforms.push_back({StringProperty(object, "name", ""),
-                           node_narrow_finite_float(env, object.Get("targetLufs"), "targetLufs"),
-                           node_narrow_finite_float(env, object.Get("ceilingDb"), "ceilingDb")});
+      platforms.push_back(
+          {StringProperty(object, "name", ""),
+           node_narrow_finite_float(env, object.Get("targetLufs"), "targetLufs"),
+           node_narrow_finite_float(env, object.Get("ceilingDbtp"), "ceilingDbtp")});
     }
   }
   const auto results = platforms.empty()

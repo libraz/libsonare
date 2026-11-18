@@ -21,13 +21,13 @@ struct AssistantConfig {
   api::Preset preset = api::Preset::Streaming;
   std::string target_platform = "streaming";
   float target_lufs = -14.0f;
-  float ceiling_db = -1.0f;
+  float ceiling_dbtp = -1.0f;
   bool enable_repair = false;
   /// @brief Prefer the recursive SPP noise estimator over whole-signal quantile estimation.
   /// @details Applies only to denoise; other repair stages may require offline processing.
   bool prefer_streaming_safe = true;
   float speech_mono_amount = 1.0f;
-  /// @brief Whether the caller named @ref target_lufs / @ref ceiling_db at all.
+  /// @brief Whether the caller named @ref target_lufs / @ref ceiling_dbtp at all.
   /// @details A delivery target only fills in what the caller left alone, and
   ///          "left alone" cannot be decided by comparing against the default:
   ///          a host UI that always sends its slider position sends -14 when
@@ -38,7 +38,7 @@ struct AssistantConfig {
   ///          compare-to-default behaviour, so setting a non-default value
   ///          still suppresses the override without the flag.
   bool target_lufs_explicit = false;
-  bool ceiling_db_explicit = false;
+  bool ceiling_dbtp_explicit = false;
 };
 
 struct AssistantResult {

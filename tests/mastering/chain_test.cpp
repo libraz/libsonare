@@ -83,7 +83,7 @@ TEST_CASE("MasteringChain aggregates a compact before and after report", "[maste
   REQUIRE(result.report.before.integrated_lufs == result.input_lufs);
   REQUIRE(result.report.after.integrated_lufs == result.output_lufs);
   REQUIRE(result.report.after.true_peak_dbtp == result.output_true_peak_dbtp);
-  REQUIRE(result.report.after.loudness_range == result.output_lra);
+  REQUIRE(result.report.after.loudness_range_lu == result.output_loudness_range_lu);
   REQUIRE(std::isfinite(result.report.before.max_momentary_lufs));
   REQUIRE(std::isfinite(result.report.after.max_short_term_lufs));
   REQUIRE(result.report.band_energy_delta_db.size() == kMasteringReportBandCount);
@@ -211,7 +211,7 @@ TEST_CASE("MasteringChain stereo LRA uses channel summing, not a phase-cancellin
 
   MasteringChain chain(MasteringChainConfig{});
   auto result = chain.process_stereo(left.data(), right.data(), left.size(), sr);
-  REQUIRE(result.output_lra > 1.0f);
+  REQUIRE(result.output_loudness_range_lu > 1.0f);
 }
 
 // The progress callback re-enters caller code mid-render, and every binding
@@ -582,18 +582,18 @@ TEST_CASE("a ceiling above full scale is refused by construction and by the stre
 
   MasteringChainConfig config;
   config.maximizer.true_peak_limiter.enabled = true;
-  config.maximizer.true_peak_limiter.config.ceiling_db = 1.0f;
+  config.maximizer.true_peak_limiter.config.ceiling_dbtp = 1.0f;
   REQUIRE_THROWS_AS(MasteringChain(config), SonareException);
 
-  config.maximizer.true_peak_limiter.config.ceiling_db = -1.0f;
+  config.maximizer.true_peak_limiter.config.ceiling_dbtp = -1.0f;
   StreamingMasteringChain streaming(config);
   streaming.prepare(48000.0, 512, 1);
-  REQUIRE_THROWS_AS(streaming.set_parameter("maximizer.truePeakLimiter.ceilingDb", 1.0),
+  REQUIRE_THROWS_AS(streaming.set_parameter("maximizer.truePeakLimiter.ceilingDbtp", 1.0),
                     SonareException);
-  REQUIRE_THROWS_AS(streaming.set_parameter("maximizer.truePeakLimiter.ceilingDb",
+  REQUIRE_THROWS_AS(streaming.set_parameter("maximizer.truePeakLimiter.ceilingDbtp",
                                             std::numeric_limits<double>::quiet_NaN()),
                     SonareException);
-  REQUIRE_NOTHROW(streaming.set_parameter("maximizer.truePeakLimiter.ceilingDb", -3.0));
+  REQUIRE_NOTHROW(streaming.set_parameter("maximizer.truePeakLimiter.ceilingDbtp", -3.0));
 }
 
 TEST_CASE("parse_chain_config_params rejects unknown keys", "[mastering][chain]") {
@@ -855,7 +855,7 @@ TEST_CASE("MasteringChain reports when peak headroom limits the LUFS target",
   MasteringChainConfig config;
   config.loudness.enabled = true;
   config.loudness.target_lufs = -2.0f;
-  config.loudness.ceiling_db = -1.0f;
+  config.loudness.ceiling_dbtp = -1.0f;
   const auto result =
       MasteringChain(config).process_mono(samples.data(), samples.size(), sample_rate);
   REQUIRE(result.loudness_target_limited);
@@ -877,7 +877,7 @@ TEST_CASE("Stereo chain uses channel-summed LUFS when limiting a loudness target
   MasteringChainConfig config;
   config.loudness.enabled = true;
   config.loudness.target_lufs = 0.0f;
-  config.loudness.ceiling_db = -1.0f;
+  config.loudness.ceiling_dbtp = -1.0f;
   const auto result =
       MasteringChain(config).process_stereo(left.data(), right.data(), left.size(), sample_rate);
 
@@ -907,7 +907,7 @@ TEST_CASE("Mono chain measures loudness at the stage input after upstream makeup
   MasteringChainConfig config = upstream_config;
   config.loudness.enabled = true;
   config.loudness.target_lufs = upstream.output_lufs - 3.0f;
-  config.loudness.ceiling_db = -1.0f;
+  config.loudness.ceiling_dbtp = -1.0f;
   const auto result =
       MasteringChain(config).process_mono(samples.data(), samples.size(), sample_rate);
 
@@ -1558,7 +1558,7 @@ TEST_CASE(
     MasteringChainConfig config;
     config.loudness.enabled = true;
     config.loudness.target_lufs = -6.0f;
-    config.loudness.ceiling_db = -0.3f;
+    config.loudness.ceiling_dbtp = -0.3f;
     config.loudness.release_ms = release_ms;
     config.loudness.max_limiter_gain_reduction_db = 24.0f;
 
@@ -1969,7 +1969,7 @@ TEST_CASE("StreamingMasteringChain treats signed zero release as unchanged",
   constexpr int kBlockSize = 127;
   MasteringChainConfig config;
   config.maximizer.true_peak_limiter.enabled = true;
-  config.maximizer.true_peak_limiter.config.ceiling_db = -6.0f;
+  config.maximizer.true_peak_limiter.config.ceiling_dbtp = -6.0f;
   config.maximizer.true_peak_limiter.config.release_ms = 0.0f;
 
   StreamingMasteringChain repeated(config);
@@ -2065,7 +2065,7 @@ TEST_CASE("StreamingMasteringChain changes realtime parameters without rebuildin
   SECTION("mono true-peak ceiling retains the running lookahead") {
     MasteringChainConfig config;
     config.maximizer.true_peak_limiter.enabled = true;
-    config.maximizer.true_peak_limiter.config.ceiling_db = -1.0f;
+    config.maximizer.true_peak_limiter.config.ceiling_dbtp = -1.0f;
 
     StreamingMasteringChain changed(config);
     StreamingMasteringChain continuity(config);
@@ -2081,11 +2081,11 @@ TEST_CASE("StreamingMasteringChain changes realtime parameters without rebuildin
     process_mono(continuity, first_continuity);
     process_mono(control, first_control);
 
-    REQUIRE_NOTHROW(changed.set_parameter("maximizer.truePeakLimiter.ceilingDb", -12.0));
+    REQUIRE_NOTHROW(changed.set_parameter("maximizer.truePeakLimiter.ceilingDbtp", -12.0));
     // Setting the current value is the continuity probe: a setter that
     // re-prepared or reset the limiter would diverge from the untouched chain.
-    REQUIRE_NOTHROW(continuity.set_parameter("maximizer.truePeakLimiter.ceilingDb", -1.0));
-    REQUIRE(changed.config().maximizer.true_peak_limiter.config.ceiling_db ==
+    REQUIRE_NOTHROW(continuity.set_parameter("maximizer.truePeakLimiter.ceilingDbtp", -1.0));
+    REQUIRE(changed.config().maximizer.true_peak_limiter.config.ceiling_dbtp ==
             Catch::Approx(-12.0f));
     REQUIRE(changed.latency_samples() == control.latency_samples());
 
@@ -2118,7 +2118,7 @@ TEST_CASE("StreamingMasteringChain changes realtime parameters without rebuildin
     constexpr int kReleaseBlockSize = 127;
     MasteringChainConfig config;
     config.maximizer.true_peak_limiter.enabled = true;
-    config.maximizer.true_peak_limiter.config.ceiling_db = -6.0f;
+    config.maximizer.true_peak_limiter.config.ceiling_dbtp = -6.0f;
     config.maximizer.true_peak_limiter.config.release_ms = 120.0f;
 
     StreamingMasteringChain repeated(config);
@@ -2177,7 +2177,7 @@ TEST_CASE("StreamingMasteringChain changes realtime parameters without rebuildin
   SECTION("stereo true-peak ceiling changes both channels") {
     MasteringChainConfig config;
     config.maximizer.true_peak_limiter.enabled = true;
-    config.maximizer.true_peak_limiter.config.ceiling_db = -1.0f;
+    config.maximizer.true_peak_limiter.config.ceiling_dbtp = -1.0f;
 
     StreamingMasteringChain changed(config);
     StreamingMasteringChain control(config);
@@ -2190,7 +2190,7 @@ TEST_CASE("StreamingMasteringChain changes realtime parameters without rebuildin
     auto first_control_right = first_right;
     process_stereo(changed, first_left, first_right);
     process_stereo(control, first_control_left, first_control_right);
-    REQUIRE_NOTHROW(changed.set_parameter("maximizer.truePeakLimiter.ceilingDb", -12.0));
+    REQUIRE_NOTHROW(changed.set_parameter("maximizer.truePeakLimiter.ceilingDbtp", -12.0));
 
     std::vector<float> changed_left;
     std::vector<float> changed_right;
@@ -2392,9 +2392,9 @@ TEST_CASE("StreamingMasteringChain changes realtime parameters without rebuildin
     options.loudness_static_gain_db = 0.0f;
     StreamingMasteringChain chain(config, options);
     chain.prepare(kSampleRate, kBlockSize, 1);
-    REQUIRE_NOTHROW(chain.set_parameter("loudness.ceilingDb", -2.0));
+    REQUIRE_NOTHROW(chain.set_parameter("loudness.ceilingDbtp", -2.0));
     REQUIRE_NOTHROW(chain.set_parameter("loudness.releaseMs", 0.0));
-    REQUIRE(chain.config().loudness.ceiling_db == Catch::Approx(-2.0f));
+    REQUIRE(chain.config().loudness.ceiling_dbtp == Catch::Approx(-2.0f));
     REQUIRE(chain.config().loudness.release_ms == Catch::Approx(0.0f));
   }
 }
@@ -2432,11 +2432,11 @@ TEST_CASE("StreamingMasteringChain rejects unsafe parameters without touching hi
 
   REQUIRE_THROWS_AS(chain.set_parameter("maximizer.truePeakLimiter.lookaheadMs", 4.0),
                     SonareException);
-  REQUIRE_THROWS_AS(chain.set_parameter("maximizer.truePeakLimiter.ceilingDb",
+  REQUIRE_THROWS_AS(chain.set_parameter("maximizer.truePeakLimiter.ceilingDbtp",
                                         std::numeric_limits<double>::quiet_NaN()),
                     SonareException);
   REQUIRE_THROWS_AS(chain.set_parameter("unknown.stage.parameter", -1.0), SonareException);
-  REQUIRE_THROWS_AS(chain.set_parameter("maximizer.truePeakLimiter.ceilingDb",
+  REQUIRE_THROWS_AS(chain.set_parameter("maximizer.truePeakLimiter.ceilingDbtp",
                                         std::numeric_limits<double>::max()),
                     SonareException);
 
@@ -2565,7 +2565,7 @@ TEST_CASE("StreamingMasteringChain reset clears state", "[mastering][chain][stre
   SECTION("true peak limiter") {
     MasteringChainConfig config;
     config.maximizer.true_peak_limiter.enabled = true;
-    config.maximizer.true_peak_limiter.config.ceiling_db = -6.0f;
+    config.maximizer.true_peak_limiter.config.ceiling_dbtp = -6.0f;
     check_stage(config);
   }
 

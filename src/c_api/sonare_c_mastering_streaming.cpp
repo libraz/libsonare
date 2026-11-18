@@ -34,7 +34,7 @@ SonareError sonare_mastering_streaming_preview(const float* samples, size_t leng
     for (size_t index = 0; index < platform_count; ++index) {
       if (!platforms[index].name) return SONARE_ERROR_INVALID_PARAMETER;
       cpp_platforms.push_back(
-          {platforms[index].name, platforms[index].target_lufs, platforms[index].ceiling_db});
+          {platforms[index].name, platforms[index].target_lufs, platforms[index].ceiling_dbtp});
     }
 
     const auto results =
@@ -199,7 +199,7 @@ SonareError sonare_mastering_streaming_preview_stereo(const float* left, const f
   for (size_t index = 0; index < platform_count; ++index) {
     if (!platforms[index].name) return SONARE_ERROR_INVALID_PARAMETER;
     cpp_platforms.push_back(
-        {platforms[index].name, platforms[index].target_lufs, platforms[index].ceiling_db});
+        {platforms[index].name, platforms[index].target_lufs, platforms[index].ceiling_dbtp});
   }
 
   const std::vector<float> interleaved = interleave_pair(left, right, length);

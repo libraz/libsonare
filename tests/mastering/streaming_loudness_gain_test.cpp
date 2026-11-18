@@ -104,11 +104,11 @@ float max_abs_difference(const std::vector<float>& a, const std::vector<float>& 
 // peak: the two limiters see the same signal block-wise versus whole-signal.
 constexpr float kRenderToleranceOfPeak = 0.02f;
 
-MasteringChainConfig loudness_config(float target_lufs, float ceiling_db) {
+MasteringChainConfig loudness_config(float target_lufs, float ceiling_dbtp) {
   MasteringChainConfig config;
   config.loudness.enabled = true;
   config.loudness.target_lufs = target_lufs;
-  config.loudness.ceiling_db = ceiling_db;
+  config.loudness.ceiling_dbtp = ceiling_dbtp;
   return config;
 }
 

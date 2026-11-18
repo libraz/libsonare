@@ -105,7 +105,7 @@ val js_analyze_dynamics(val samples, const val& sample_rate, const val& window_s
   out.set("peakDb", dyn.peak_db);
   out.set("rmsDb", dyn.rms_db);
   out.set("crestFactor", dyn.crest_factor);
-  out.set("loudnessRangeDb", dyn.loudness_range_db);
+  out.set("loudnessRangeLu", dyn.loudness_range_lu);
   out.set("isCompressed", dyn.is_compressed);
 
   const auto& curve = analyzer.loudness_curve();

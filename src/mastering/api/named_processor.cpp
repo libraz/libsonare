@@ -442,7 +442,7 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
   } else if (name == "maximizer.loudnessOptimize") {
     maximizer::LoudnessOptimizeConfig config;
     config.target_lufs = f(params, "targetLufs", config.target_lufs);
-    config.ceiling_db = f(params, "ceilingDb", config.ceiling_db);
+    config.ceiling_dbtp = f(params, "ceilingDbtp", config.ceiling_dbtp);
     config.true_peak_oversample = i(params, "truePeakOversample", config.true_peak_oversample);
     config.release_ms = f(params, "releaseMs", config.release_ms);
     config.apply_gain_at_input_rate =
@@ -846,22 +846,22 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
   } else if (name == "maximizer.loudnessOptimize") {
     const maximizer::LoudnessOptimizeConfig defaults;
     const float target_lufs = f(map, "targetLufs", defaults.target_lufs);
-    const float ceiling_db = f(map, "ceilingDb", defaults.ceiling_db);
+    const float ceiling_dbtp = f(map, "ceilingDbtp", defaults.ceiling_dbtp);
     const int true_peak_oversample = i(map, "truePeakOversample", defaults.true_peak_oversample);
     const float max_limiter_gain_reduction_db =
         f(map, "maxLimiterGainReductionDb", defaults.max_limiter_gain_reduction_db);
     // Same validator as the mono helper, before the limiter config is built, so
     // the two branches accept and reject the same parameter map.
     const float release_ms = maximizer::validate_loudness_params(
-        target_lufs, ceiling_db, f(map, "releaseMs", defaults.release_ms),
+        target_lufs, ceiling_dbtp, f(map, "releaseMs", defaults.release_ms),
         max_limiter_gain_reduction_db, true_peak_oversample);
     const maximizer::TruePeakLimiterConfig config = maximizer::loudness_limiter_config(
-        ceiling_db, true_peak_oversample, release_ms,
+        ceiling_dbtp, true_peak_oversample, release_ms,
         b(map, "applyGainAtInputRate", defaults.apply_gain_at_input_rate));
     // Bound the static normalization gain to the ceiling headroom plus the depth
     // the limiter may be driven to (mirrors the mono loudness_optimize() helper).
     const detail::LoudnessStageGain stage_gain = detail::loudness_gain_db_with_ceiling(
-        result.left, result.right, sample_rate, target_lufs, config.ceiling_db,
+        result.left, result.right, sample_rate, target_lufs, config.ceiling_dbtp,
         config.oversample_factor, max_limiter_gain_reduction_db);
     const float gain_db = stage_gain.applied_db;
     loudness_target_lufs = target_lufs;

@@ -21,7 +21,7 @@ inline emscripten::val masteringLoudnessSummaryToVal(
   out.set("maxMomentaryLufs", summary.max_momentary_lufs);
   out.set("maxShortTermLufs", summary.max_short_term_lufs);
   out.set("truePeakDbtp", summary.true_peak_dbtp);
-  out.set("loudnessRange", summary.loudness_range);
+  out.set("loudnessRangeLu", summary.loudness_range_lu);
   return out;
 }
 
@@ -46,7 +46,7 @@ inline void setMasteringReport(emscripten::val& out,
 template <typename Result>
 inline void setChainMetrics(emscripten::val& out, const Result& metrics) {
   out.set("outputTruePeakDbtp", metrics.output_true_peak_dbtp);
-  out.set("outputLra", metrics.output_lra);
+  out.set("outputLoudnessRangeLu", metrics.output_loudness_range_lu);
   out.set("loudnessTargetLimited", metrics.loudness_target_limited);
   out.set("nonFiniteSubstitutionCount", static_cast<double>(metrics.non_finite_substitution_count));
   emscripten::val reductions = emscripten::val::array();

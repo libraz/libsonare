@@ -20,6 +20,7 @@ enum class Unit : std::uint8_t {
   None,
   Db,
   Dbfs,
+  Dbtp,
   Lufs,
   Hz,
   Ms,
@@ -58,6 +59,8 @@ constexpr const char* unit_name(Unit unit) {
       return "dB";
     case Unit::Dbfs:
       return "dBFS";
+    case Unit::Dbtp:
+      return "dBTP";
     case Unit::Lufs:
       return "LUFS";
     case Unit::Hz:
@@ -195,6 +198,7 @@ constexpr ParamMeta display_range(ParamMeta meta, double ui_min, double ui_max) 
 inline constexpr ParamMeta kNone{Unit::None};
 inline constexpr ParamMeta kDb{Unit::Db};
 inline constexpr ParamMeta kDbfs{Unit::Dbfs};
+inline constexpr ParamMeta kDbtp{Unit::Dbtp};
 inline constexpr ParamMeta kLufs{Unit::Lufs};
 inline constexpr ParamMeta kHz{Unit::Hz};
 inline constexpr ParamMeta kHzLog{Unit::Hz, Scale::Log};

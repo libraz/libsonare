@@ -23,7 +23,7 @@ std::vector<StreamingPreviewResult> preview_from_measurements(
       throw SonareException(ErrorCode::InvalidParameter, "platform name must not be empty");
     const float gain = std::isfinite(integrated) ? platform.target_lufs - integrated : 0.0f;
     results.push_back({platform.name, integrated, true_peak, gain,
-                       std::isfinite(true_peak) && true_peak + gain > platform.ceiling_db});
+                       std::isfinite(true_peak) && true_peak + gain > platform.ceiling_dbtp});
   }
   return results;
 }

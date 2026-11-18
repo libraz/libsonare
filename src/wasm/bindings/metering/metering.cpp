@@ -22,7 +22,7 @@ val js_lufs(val samples, const val& sample_rate_val) {
   out.set("shortTermLufs", result.short_term_lufs);
   out.set("maxMomentaryLufs", result.max_momentary_lufs);
   out.set("maxShortTermLufs", result.max_short_term_lufs);
-  out.set("loudnessRange", result.loudness_range);
+  out.set("loudnessRangeLu", result.loudness_range_lu);
   return out;
 }
 
@@ -59,7 +59,7 @@ val js_lufs_interleaved(val samples, const val& channels_val, const val& sample_
   out.set("shortTermLufs", result.short_term_lufs);
   out.set("maxMomentaryLufs", result.max_momentary_lufs);
   out.set("maxShortTermLufs", result.max_short_term_lufs);
-  out.set("loudnessRange", result.loudness_range);
+  out.set("loudnessRangeLu", result.loudness_range_lu);
   return out;
 }
 
@@ -84,11 +84,11 @@ val js_lufs_series_interleaved(val samples, const val& channels_val, const val& 
 }
 
 // EBU R128 / Tech 3342 Loudness Range (LRA) in LU for a mono buffer. Mirrors
-// the C ABI sonare_ebur128_loudness_range.
-float js_ebur128_loudness_range(val samples, const val& sample_rate_val) {
+// the C ABI sonare_ebur128_loudness_range_lu.
+float js_ebur128_loudness_range_lu(val samples, const val& sample_rate_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   Audio audio = loadValidatedAudio(samples, sample_rate);
-  return metering::ebur128_loudness_range(audio);
+  return metering::ebur128_loudness_range_lu(audio);
 }
 
 // ============================================================================
@@ -515,7 +515,7 @@ void registerMeteringBindings() {
   function("shortTermLufs", &js_short_term_lufs);
   function("lufsInterleaved", &js_lufs_interleaved);
   function("lufsSeriesInterleaved", &js_lufs_series_interleaved);
-  function("ebur128LoudnessRange", &js_ebur128_loudness_range);
+  function("ebur128LoudnessRangeLu", &js_ebur128_loudness_range_lu);
 
   // Metering — basic / true-peak / clipping / dynamic range
   function("meteringPeakDb", &js_metering_peak_db);

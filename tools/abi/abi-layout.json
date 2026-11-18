@@ -3874,7 +3874,7 @@
       },
       {
         "kind": "float",
-        "name": "ceiling_db",
+        "name": "ceiling_dbtp",
         "offset": 4,
         "size": 4
       },
@@ -10072,7 +10072,7 @@
       },
       {
         "kind": "float",
-        "name": "ceiling_db",
+        "name": "ceiling_dbtp",
         "offset": 12,
         "size": 4
       }

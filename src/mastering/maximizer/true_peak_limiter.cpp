@@ -188,7 +188,7 @@ void TruePeakLimiter::prepare(double sample_rate, int max_block_size, int max_ch
   max_working_channels_ = max_channels;
   lookahead_samples_ = lookahead_samples;
   update_time_constants();
-  limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, config_.release_ms});
+  limiter_.set_config({config_.ceiling_dbtp, config_.lookahead_ms, config_.release_ms});
   limiter_.prepare(sample_rate_, max_block_size_);
   oversampler_.set_factor(config_.oversample_factor);
   oversampled_peak_window_.prepare(
@@ -275,7 +275,7 @@ void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels
   const int excluded_channel =
       prepare_polyphase_input(channels, num_channels, num_samples, oversampled_samples);
 
-  const float ceiling = db_to_linear(config_.ceiling_db);
+  const float ceiling = db_to_linear(config_.ceiling_dbtp);
   float min_gain = 1.0f;
   std::uint32_t substituted = 0;
   for (size_t os = 0; os < oversampled_samples; ++os) {
@@ -346,7 +346,7 @@ void TruePeakLimiter::process_polyphase_detect_only(float* const* channels, int 
   const int excluded_channel =
       prepare_polyphase_input(channels, num_channels, num_samples, oversampled_samples);
 
-  const float ceiling = db_to_linear(config_.ceiling_db);
+  const float ceiling = db_to_linear(config_.ceiling_dbtp);
   float min_gain = 1.0f;
   std::uint32_t substituted = 0;
   std::fill_n(input_rate_gain_.begin(), num_samples, 1.0f);
@@ -491,7 +491,7 @@ void TruePeakLimiter::set_config(const TruePeakLimiterConfig& config) {
       return;
     }
     update_time_constants();
-    limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, config_.release_ms});
+    limiter_.set_config({config_.ceiling_dbtp, config_.lookahead_ms, config_.release_ms});
   });
 }
 
@@ -521,9 +521,9 @@ bool TruePeakLimiter::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       if (!common::valid_ceiling_db(value)) return false;
-      config_.ceiling_db = value;
+      config_.ceiling_dbtp = value;
       // Update the ceiling in place: set_config() would publish a snapshot and allocate per event.
-      return limiter_.set_parameter(0, config_.ceiling_db);
+      return limiter_.set_parameter(0, config_.ceiling_dbtp);
     case 1:
       // In-place: recomputes time constants and forwards to inner limiter
       // without clearing lookahead or gain-envelope state. Must use the noexcept
@@ -538,7 +538,7 @@ bool TruePeakLimiter::set_parameter_impl(unsigned int param_id, float value) {
 }
 
 std::vector<rt::ParamDescriptor> TruePeakLimiter::parameter_descriptors() const {
-  return {{"ceilingDb", 0}, {"releaseMs", 1}};
+  return {{"ceilingDbtp", 0}, {"releaseMs", 1}};
 }
 
 bool TruePeakLimiter::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
@@ -546,7 +546,7 @@ bool TruePeakLimiter::parameter_is_realtime_safe(unsigned int param_id) const no
 }
 
 void TruePeakLimiter::validate_config(const TruePeakLimiterConfig& config) {
-  if (!common::valid_ceiling_db(config.ceiling_db) || !std::isfinite(config.lookahead_ms) ||
+  if (!common::valid_ceiling_db(config.ceiling_dbtp) || !std::isfinite(config.lookahead_ms) ||
       !valid_release_ms(config.release_ms) || config.lookahead_ms < 0.0f ||
       (config.oversample_factor != 1 && config.oversample_factor != 2 &&
        config.oversample_factor != 4 && config.oversample_factor != 8 &&

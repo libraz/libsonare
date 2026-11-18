@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <initializer_list>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -1314,6 +1315,22 @@ inline bool OptionalStringArg(Napi::Env env, const Napi::CallbackInfo& info, siz
     return true;
   }
   return RequiredStringValue(env, value, name, out);
+}
+
+/// @brief Read an optional UTF-8 string positional argument whose absence is
+///        kept apart from every string: not given leaves @p out empty.
+inline bool OptionalStringArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                              const char* name, std::optional<std::string>* out) {
+  if (env.IsExceptionPending()) return false;
+  const Napi::Value value = info[index];
+  if (value.IsUndefined() || value.IsNull()) {
+    out->reset();
+    return true;
+  }
+  std::string text;
+  if (!RequiredStringValue(env, value, name, &text)) return false;
+  *out = std::move(text);
+  return true;
 }
 
 /// @brief Read an optional positional argument destined for a uint8_t C-ABI

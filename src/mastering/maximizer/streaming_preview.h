@@ -13,7 +13,7 @@ namespace sonare::mastering::maximizer {
 struct StreamingPlatform {
   std::string name;
   float target_lufs = -14.0f;
-  float ceiling_db = -1.0f;
+  float ceiling_dbtp = -1.0f;
 };
 
 struct StreamingPreviewResult {

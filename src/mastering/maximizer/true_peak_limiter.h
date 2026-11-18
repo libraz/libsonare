@@ -45,7 +45,7 @@ struct TruePeakLimiterConfig {
   ///   rescale: a correction derived from a block's own maximum would make the
   ///   output depend on the host's buffer size, so an offline render and a
   ///   streaming render of the same material would disagree.
-  float ceiling_db = -1.0f;
+  float ceiling_dbtp = -1.0f;
   float lookahead_ms = 1.0f;
   float release_ms = 50.0f;
   int oversample_factor = 4;
@@ -142,11 +142,11 @@ inline constexpr float kDefaultLoudnessReleaseMs = 50.0f;
 ///          standalone path that read only a subset (e.g. dropped @p release_ms
 ///          or @p apply_gain_at_input_rate) would limit differently from the
 ///          identical settings inside a chain.
-inline TruePeakLimiterConfig loudness_limiter_config(float ceiling_db, int oversample_factor,
+inline TruePeakLimiterConfig loudness_limiter_config(float ceiling_dbtp, int oversample_factor,
                                                      float release_ms,
                                                      bool apply_gain_at_input_rate) {
   TruePeakLimiterConfig config;
-  config.ceiling_db = ceiling_db;
+  config.ceiling_dbtp = ceiling_dbtp;
   config.oversample_factor = oversample_factor;
   config.release_ms = release_ms;
   config.apply_gain_at_input_rate = apply_gain_at_input_rate;
@@ -195,12 +195,12 @@ class TruePeakLimiter : public rt::ProcessorBase {
   int tail_samples() const noexcept override;
 
   // Parameters:
-  //   0 = ceiling_db (refused unless finite and <= 0; realtime-safe, in-place)
+  //   0 = ceiling_dbtp (refused unless finite and <= 0; realtime-safe, in-place)
   //   1 = release_ms (refused unless >= 0; in-place time-constant recompute)
   // lookahead_ms, oversample_factor and apply_gain_at_input_rate are NOT
   // automatable (they resize buffers or switch processing modes).
   bool set_parameter_impl(unsigned int param_id, float value) override;
-  // Automatable parameters: 0=ceilingDb, 1=releaseMs
+  // Automatable parameters: 0=ceilingDbtp, 1=releaseMs
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
 

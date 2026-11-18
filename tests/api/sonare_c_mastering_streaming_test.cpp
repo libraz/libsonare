@@ -22,10 +22,10 @@ TEST_CASE("streaming mastering C API sets prepared realtime parameters",
   REQUIRE(chain != nullptr);
 
   REQUIRE(sonare_streaming_mastering_chain_set_parameter(
-              chain, "maximizer.truePeakLimiter.ceilingDb", -12.0) == SONARE_ERROR_INVALID_STATE);
+              chain, "maximizer.truePeakLimiter.ceilingDbtp", -12.0) == SONARE_ERROR_INVALID_STATE);
   REQUIRE(sonare_streaming_mastering_chain_prepare(chain, 48000, 128, 1) == SONARE_OK);
   REQUIRE(sonare_streaming_mastering_chain_set_parameter(
-              chain, "maximizer.truePeakLimiter.ceilingDb", -12.0) == SONARE_OK);
+              chain, "maximizer.truePeakLimiter.ceilingDbtp", -12.0) == SONARE_OK);
 
   std::vector<float> block(128, 0.8f);
   REQUIRE(sonare_streaming_mastering_chain_process_mono(chain, block.data(), block.size()) ==
@@ -35,7 +35,7 @@ TEST_CASE("streaming mastering C API sets prepared realtime parameters",
                                                          "maximizer.truePeakLimiter.lookaheadMs",
                                                          4.0) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_streaming_mastering_chain_set_parameter(
-              chain, "maximizer.truePeakLimiter.ceilingDb",
+              chain, "maximizer.truePeakLimiter.ceilingDbtp",
               std::numeric_limits<double>::quiet_NaN()) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_streaming_mastering_chain_set_parameter(chain, "missing.parameter", -1.0) ==
           SONARE_ERROR_INVALID_PARAMETER);
@@ -46,7 +46,7 @@ TEST_CASE("streaming mastering C API sets prepared realtime parameters",
 TEST_CASE("streaming mastering C API validates setter handles and keys",
           "[c_api][mastering][streaming]") {
   REQUIRE(sonare_streaming_mastering_chain_set_parameter(nullptr,
-                                                         "maximizer.truePeakLimiter.ceilingDb",
+                                                         "maximizer.truePeakLimiter.ceilingDbtp",
                                                          -12.0) == SONARE_ERROR_INVALID_PARAMETER);
 
   SonareStreamingMasteringChain* chain = nullptr;
@@ -57,7 +57,7 @@ TEST_CASE("streaming mastering C API validates setter handles and keys",
   REQUIRE(sonare_streaming_mastering_chain_set_parameter(chain, "", -12.0) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_streaming_mastering_chain_set_parameter(
-              chain, "maximizer.truePeakLimiter.ceilingDb",
+              chain, "maximizer.truePeakLimiter.ceilingDbtp",
               std::numeric_limits<double>::infinity()) == SONARE_ERROR_INVALID_PARAMETER);
   sonare_streaming_mastering_chain_destroy(chain);
 }

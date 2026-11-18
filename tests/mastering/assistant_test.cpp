@@ -311,12 +311,12 @@ TEST_CASE("Assistant chain does not follow the material outside repair", "[maste
 
   assistant::AssistantConfig cfg;
   cfg.target_lufs = -13.0f;
-  cfg.ceiling_db = -0.8f;
+  cfg.ceiling_dbtp = -0.8f;
   const auto result = assistant::suggest_chain(extreme, cfg);
 
   REQUIRE(result.config.loudness.enabled);
   REQUIRE(result.config.loudness.target_lufs == -13.0f);
-  REQUIRE(result.config.loudness.ceiling_db == -0.8f);
+  REQUIRE(result.config.loudness.ceiling_dbtp == -0.8f);
   REQUIRE(sonare::mastering::api::chain_config_to_json(result.config) ==
           sonare::mastering::api::chain_config_to_json(
               assistant::suggest_chain(assistant::AudioProfile{}, cfg).config));
@@ -363,7 +363,7 @@ TEST_CASE("Assistant rejects non-finite suggestion controls at the profile bound
         [&] { (void)assistant::suggest_chain(assistant::AudioProfile{}, target); });
 
     assistant::AssistantConfig ceiling;
-    ceiling.ceiling_db = value;
+    ceiling.ceiling_dbtp = value;
     require_invalid_parameter(
         [&] { (void)assistant::suggest_chain(assistant::AudioProfile{}, ceiling); });
 
@@ -379,10 +379,10 @@ TEST_CASE("Assistant keeps finite loudness values unrestricted and clamps speech
           "[mastering][assistant][validation]") {
   assistant::AssistantConfig finite;
   finite.target_lufs = -100.0f;
-  finite.ceiling_db = -100.0f;
+  finite.ceiling_dbtp = -100.0f;
   const auto finite_result = assistant::suggest_chain(assistant::AudioProfile{}, finite);
   REQUIRE(finite_result.config.loudness.target_lufs == -100.0f);
-  REQUIRE(finite_result.config.loudness.ceiling_db == -100.0f);
+  REQUIRE(finite_result.config.loudness.ceiling_dbtp == -100.0f);
   REQUIRE_NOTHROW(sonare::mastering::api::MasteringChain{finite_result.config});
 
   for (const auto& [amount, expected] : {std::pair{-1.0f, 0.0f}, std::pair{2.0f, 1.0f}}) {
@@ -413,7 +413,7 @@ TEST_CASE("Assistant validates controls through raw Audio and interleaved entry 
       [&] { (void)assistant::suggest_chain(samples.data(), samples.size(), sample_rate, raw); });
 
   assistant::AssistantConfig from_audio;
-  from_audio.ceiling_db = std::numeric_limits<float>::infinity();
+  from_audio.ceiling_dbtp = std::numeric_limits<float>::infinity();
   require_invalid_parameter([&] { (void)assistant::suggest_chain(audio, from_audio); });
 
   assistant::AssistantConfig from_interleaved;
@@ -432,9 +432,9 @@ TEST_CASE("Assistant rejects unknown target platforms at the profile boundary",
     config.target_platform = "brodcast";
     if (explicit_values) {
       config.target_lufs = -13.0f;
-      config.ceiling_db = -0.8f;
+      config.ceiling_dbtp = -0.8f;
       config.target_lufs_explicit = true;
-      config.ceiling_db_explicit = true;
+      config.ceiling_dbtp_explicit = true;
     }
     require_invalid_parameter([&] { (void)assistant::suggest_chain(profile, config); });
   }
@@ -476,14 +476,14 @@ TEST_CASE("Assistant target platform and streaming-safe preference affect sugges
   club.target_platform = "club";
   auto club_result = assistant::suggest_chain(profile, club);
   REQUIRE(club_result.config.loudness.target_lufs == -9.0f);
-  REQUIRE(club_result.config.loudness.ceiling_db == -0.3f);
+  REQUIRE(club_result.config.loudness.ceiling_dbtp == -0.3f);
 
   // A target that deliberately adds nothing keeps the caller's request.
   assistant::AssistantConfig cinema;
   cinema.target_platform = "cinema";
   auto cinema_result = assistant::suggest_chain(profile, cinema);
   REQUIRE(cinema_result.config.loudness.target_lufs == -14.0f);
-  REQUIRE(cinema_result.config.loudness.ceiling_db == -1.0f);
+  REQUIRE(cinema_result.config.loudness.ceiling_dbtp == -1.0f);
 
   // Repair is selected from the defect measurement, so the profile has to carry
   // one. A floor 6 dB under the programme clears the rule; the click count is a
@@ -631,6 +631,14 @@ TEST_CASE("Assistant param builders refuse a snake_case spelling", "[mastering][
   } catch (const sonare::SonareException& e) {
     REQUIRE(e.code() == sonare::ErrorCode::InvalidParameter);
     REQUIRE(std::string(e.what()).find("targetLufs") != std::string::npos);
+  }
+  const sonare::mastering::api::Param former[] = {{"ceilingDb", -1.0}};
+  try {
+    (void)assistant::assistant_config_from_params(former, 1);
+    FAIL("the former ceiling key was accepted");
+  } catch (const sonare::SonareException& e) {
+    REQUIRE(e.code() == sonare::ErrorCode::InvalidParameter);
+    REQUIRE(std::string(e.what()).find("expected targetLufs, ceilingDbtp") != std::string::npos);
   }
   const sonare::mastering::api::Param profile[] = {{"hop_length", 256.0}};
   REQUIRE_THROWS_AS(assistant::audio_profile_config_from_params(profile, 1),
@@ -780,11 +788,11 @@ TEST_CASE("Assistant delivery target yields to a named loudness, default-valued 
   // target while every other position won.
   const api::Param default_valued[] = {{"targetPlatform", static_cast<double>(broadcast)},
                                        {"targetLufs", -14.0},
-                                       {"ceilingDb", -1.0}};
+                                       {"ceilingDbtp", -1.0}};
   const auto explicit_default =
       assistant::suggest_chain(profile, assistant::assistant_config_from_params(default_valued, 3));
   REQUIRE(explicit_default.config.loudness.target_lufs == -14.0f);
-  REQUIRE(explicit_default.config.loudness.ceiling_db == -1.0f);
+  REQUIRE(explicit_default.config.loudness.ceiling_dbtp == -1.0f);
 
   // Presence, not value: naming one field must not suppress the target on the
   // other.
@@ -793,14 +801,14 @@ TEST_CASE("Assistant delivery target yields to a named loudness, default-valued 
   const auto partial =
       assistant::suggest_chain(profile, assistant::assistant_config_from_params(loudness_only, 2));
   REQUIRE(partial.config.loudness.target_lufs == -14.0f);
-  REQUIRE(partial.config.loudness.ceiling_db == -0.3f);
+  REQUIRE(partial.config.loudness.ceiling_dbtp == -0.3f);
 
   // Naming nothing still takes the whole target.
   const api::Param platform_only[] = {{"targetPlatform", static_cast<double>(club)}};
   const auto full =
       assistant::suggest_chain(profile, assistant::assistant_config_from_params(platform_only, 1));
   REQUIRE(full.config.loudness.target_lufs == -9.0f);
-  REQUIRE(full.config.loudness.ceiling_db == -0.3f);
+  REQUIRE(full.config.loudness.ceiling_dbtp == -0.3f);
 }
 
 TEST_CASE("Assistant AudioProfile dynamics and band levels do not depend on the input rate",

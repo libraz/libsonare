@@ -312,7 +312,7 @@ LufsResult measure_lufs(const float* samples, size_t frames, int channels, int s
   result.short_term_lufs = last_or_silence(short_term);
   result.max_momentary_lufs = max_or_silence(momentary);
   result.max_short_term_lufs = max_or_silence(short_term);
-  result.loudness_range = lra_from_short_term_blocks(short_term);
+  result.loudness_range_lu = lra_from_short_term_blocks(short_term);
   if (momentary_out != nullptr) *momentary_out = std::move(momentary);
   if (short_term_out != nullptr) *short_term_out = std::move(short_term);
   return result;
@@ -380,7 +380,7 @@ LufsResult lufs_interleaved(const float* samples, size_t frames, int channels, i
                       short_term_out);
 }
 
-float ebur128_loudness_range(const Audio& audio) {
+float ebur128_loudness_range_lu(const Audio& audio) {
   if (audio.empty()) return 0.0f;
 
   // EBU Tech 3342: short-term loudness, 3 s window, 100 ms hop.

@@ -33,6 +33,21 @@ def test_mastering_returns_audio_and_loudness_metadata() -> None:
         audio.close()
 
 
+def test_the_true_peak_ceiling_keyword_is_ceiling_dbtp() -> None:
+    """The ceiling is held on a true-peak measurement, so its keyword carries dBTP."""
+    import libsonare
+
+    sr = 22050
+    samples = [0.2 * math.sin(2 * math.pi * 440 * i / sr) for i in range(sr // 2)]
+    with pytest.raises(TypeError, match="ceiling_db"):
+        libsonare.mastering(samples, sample_rate=sr, ceiling_db=-1.0)  # type: ignore[call-arg]
+    with pytest.raises(TypeError, match="ceiling_db"):
+        libsonare.Audio.from_buffer(samples, sample_rate=sr).mastering(ceiling_db=-1.0)  # type: ignore[call-arg]
+    # A loud target drives the limiter, so the ceiling given bounds the output peak.
+    result = libsonare.mastering(samples, sample_rate=sr, target_lufs=-6.0, ceiling_dbtp=-3.0)
+    assert float(np.max(np.abs(result.samples))) <= 10 ** ((-3.0 + 0.2) / 20)
+
+
 def test_mastering_accepts_release_and_input_rate_knobs() -> None:
     """The appended maximizer knobs are accepted and zero-init stays default."""
     import libsonare
@@ -61,12 +76,12 @@ def test_mastering_accepts_release_and_input_rate_knobs() -> None:
     with pytest.raises(libsonare.SonareError):
         libsonare.mastering(samples, sample_rate=sr, target_lufs=float("nan"))
     with pytest.raises(libsonare.SonareError):
-        libsonare.mastering(samples, sample_rate=sr, ceiling_db=float("inf"))
-    recovered = libsonare.mastering(samples, sample_rate=sr, target_lufs=-14.0, ceiling_db=-1.0)
+        libsonare.mastering(samples, sample_rate=sr, ceiling_dbtp=float("inf"))
+    recovered = libsonare.mastering(samples, sample_rate=sr, target_lufs=-14.0, ceiling_dbtp=-1.0)
     assert all(math.isfinite(value) for value in recovered.samples)
     assert isinstance(recovered.loudness_target_limited, bool)
     ceiling_limited = libsonare.mastering(
-        samples, sample_rate=sr, target_lufs=-2.0, ceiling_db=-1.0
+        samples, sample_rate=sr, target_lufs=-2.0, ceiling_dbtp=-1.0
     )
     assert ceiling_limited.loudness_target_limited
 
@@ -379,13 +394,13 @@ def test_mastering_assistant_suggest_returns_its_record() -> None:
     suggestion = libsonare.mastering_assistant_suggest(
         samples,
         sample_rate=sr,
-        params={"targetLufs": -13.0, "ceilingDb": -0.8},
+        params={"targetLufs": -13.0, "ceilingDbtp": -0.8},
     )
 
     assert suggestion.explanation
     assert not hasattr(suggestion, "genre_candidates")
     assert suggestion.chain_config["loudness.targetLufs"] == pytest.approx(-13.0)
-    assert suggestion.chain_config["loudness.ceilingDb"] == pytest.approx(-0.8)
+    assert suggestion.chain_config["loudness.ceilingDbtp"] == pytest.approx(-0.8)
 
 
 def test_mastering_audio_profile_returns_its_record() -> None:
@@ -560,7 +575,7 @@ def test_master_audio_reports_output_metrics() -> None:
     samples = [0.3 * math.sin(2 * math.pi * 220 * i / sr) for i in range(4096)]
     config = {
         "dynamics": {"compressor": {"thresholdDb": -30.0, "ratio": 4.0}},
-        "loudness": {"targetLufs": -14.0, "ceilingDb": -1.0},
+        "loudness": {"targetLufs": -14.0, "ceilingDbtp": -1.0},
     }
     result = libsonare.master_audio(samples, sample_rate=sr, overrides=config)
 
@@ -605,20 +620,20 @@ def test_loudness_target_limited_agrees_across_entry_points() -> None:
 
     def run_all(target_lufs: float, ceiling_db: float) -> list[bool]:
         simple = libsonare.mastering(
-            samples, sample_rate=sr, target_lufs=target_lufs, ceiling_db=ceiling_db
+            samples, sample_rate=sr, target_lufs=target_lufs, ceiling_dbtp=ceiling_db
         )
         named = libsonare.mastering_apply_processor(
             "maximizer.loudnessOptimize",
             samples,
             sample_rate=sr,
-            params={"targetLufs": target_lufs, "ceilingDb": ceiling_db},
+            params={"targetLufs": target_lufs, "ceilingDbtp": ceiling_db},
         )
         # The chain's loudness stage is the one master_audio composes; a preset
         # only supplies different target / ceiling values.
         chain = libsonare.master_audio(
             samples,
             sample_rate=sr,
-            overrides={"loudness": {"targetLufs": target_lufs, "ceilingDb": ceiling_db}},
+            overrides={"loudness": {"targetLufs": target_lufs, "ceilingDbtp": ceiling_db}},
         )
         return [
             simple.loudness_target_limited,
@@ -649,7 +664,7 @@ def test_loudness_target_limited_matches_on_the_stereo_named_processor() -> None
     ceiling_db = -3.0
     samples = [0.05 * math.sin(2 * math.pi * 440 * i / sr) for i in range(sr)]
     samples[len(samples) // 2] = 1.0
-    params = {"targetLufs": target_lufs, "ceilingDb": ceiling_db, "truePeakOversample": 4}
+    params = {"targetLufs": target_lufs, "ceilingDbtp": ceiling_db, "truePeakOversample": 4}
 
     mono = libsonare.mastering_apply_processor(
         "maximizer.loudnessOptimize", samples, sample_rate=sr, params=params
@@ -700,7 +715,7 @@ def test_mastering_assistant_suggest_follows_target_platform() -> None:
         samples, sample_rate=sr, params={"targetPlatform": "club"}
     )
     assert club.chain_config["loudness.targetLufs"] == pytest.approx(-9.0)
-    assert club.chain_config["loudness.ceilingDb"] == pytest.approx(-0.3)
+    assert club.chain_config["loudness.ceilingDbtp"] == pytest.approx(-0.3)
 
     with pytest.raises(ValueError):
         libsonare.mastering_assistant_suggest(
@@ -756,7 +771,7 @@ def test_clean_input_reports_no_non_finite_substitution() -> None:
     other = [0.2 * math.sin(2 * math.pi * 330 * i / sr) for i in range(4096)]
     config = {
         "dynamics": {"compressor": {"thresholdDb": -30.0, "ratio": 4.0}},
-        "loudness": {"targetLufs": -14.0, "ceilingDb": -1.0},
+        "loudness": {"targetLufs": -14.0, "ceilingDbtp": -1.0},
     }
 
     results = [

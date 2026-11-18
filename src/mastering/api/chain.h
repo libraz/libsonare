@@ -165,7 +165,7 @@ struct MaximizerChainConfig {
 struct LoudnessStage {
   bool enabled = false;
   float target_lufs = -14.0f;
-  float ceiling_db = -1.0f;
+  float ceiling_dbtp = -1.0f;
   int true_peak_oversample = 4;
   /// Post true-peak limiter release in ms. 0 selects the library default
   /// (@ref mastering::maximizer::kDefaultLoudnessReleaseMs); a negative or
@@ -175,7 +175,7 @@ struct LoudnessStage {
   /// @brief How deep (dB, >= 0) the stage may drive its post-gain true-peak
   ///        limiter to reach @ref target_lufs.
   /// @details The static normalization gain may exceed the peak headroom toward
-  ///          @ref ceiling_db by this much. 0 restores a strict headroom clamp,
+  ///          @ref ceiling_dbtp by this much. 0 restores a strict headroom clamp,
   ///          under which a peak-normalized input (headroom ~0 dB) keeps its
   ///          input loudness no matter what target is asked for. The ceiling
   ///          itself is never exceeded: the limiter enforces it after the gain.
@@ -244,7 +244,7 @@ void validate_chain_multiband_config(const mastering::multiband::MultibandCompre
 // MonoChainResult / StereoChainResult inherit both the common audio-output
 // fields (`samples` / `left+right`, `sample_rate`, LUFS, applied gain,
 // latency) via @ref MonoAudioResult / @ref StereoAudioResult and the
-// chain-specific measurement fields (`output_true_peak_dbtp`, `output_lra`,
+// chain-specific measurement fields (`output_true_peak_dbtp`, `output_loudness_range_lu`,
 // `stages`, `stage_gain_reductions`) via @ref ChainMetrics, so callers can
 // access them flat on the result without going through a nested struct.
 //
@@ -365,7 +365,7 @@ class MasteringChain {
 /// gain per block before the loudness stage's true-peak limiter instead of
 /// throwing. The true-peak ceiling is still enforced live by the loudness
 /// stage's own true-peak limiter, built at `prepare()` from
-/// `loudness.ceiling_db` / `true_peak_oversample` / `release_ms`; the
+/// `loudness.ceiling_dbtp` / `true_peak_oversample` / `release_ms`; the
 /// standalone `maximizer.truePeakLimiter` stage stays off, since limiting on
 /// both sides of the loudness gain pumps transients for no ceiling benefit.
 struct StreamingMasteringChainOptions {
@@ -376,7 +376,7 @@ struct StreamingMasteringChainOptions {
   /// True peak (dBFS) of the loudness stage's input, measured offline with the
   /// static gain (@ref StreamingLoudnessGain::true_peak_db). When finite, the static gain is
   /// clamped to
-  /// `(loudness.ceiling_db - loudness_static_gain_peak_db) +
+  /// `(loudness.ceiling_dbtp - loudness_static_gain_peak_db) +
   /// max(loudness.max_limiter_gain_reduction_db, 0)` so the streaming preview
   /// does not drive the loudness limiter harder than the offline chain (which
   /// applies the same clamp via `bound_loudness_gain_db`).
@@ -436,7 +436,7 @@ class StreamingMasteringChain {
 
   /// @brief Change one realtime-safe parameter of an enabled, prepared stage.
   /// @details @p full_key uses the chain's dot notation, for example
-  /// `maximizer.truePeakLimiter.ceilingDb`. Calls must be serialized with
+  /// `maximizer.truePeakLimiter.ceilingDbtp`. Calls must be serialized with
   /// processing, flushing, reset and prepare, at a block boundary. Existing
   /// DSP instances and audio history are retained. Structural, disabled-stage,
   /// unknown, non-realtime-safe, non-finite and non-representable parameters
@@ -578,10 +578,10 @@ StreamingLoudnessGain streaming_loudness_gain_stereo(const MasteringChainConfig&
 //   "spectral.airBand.amount"
 //   "stereo.imager.width"          (stereo path only)
 //   "stereo.monoMaker.amount"      (stereo path only)
-//   "maximizer.truePeakLimiter.ceilingDb"
+//   "maximizer.truePeakLimiter.ceilingDbtp"
 //   "loudness.enabled"             (0 = off; setting any loudness.* field also enables it)
 //   "loudness.targetLufs"
-//   "loudness.ceilingDb"
+//   "loudness.ceilingDbtp"
 //   "loudness.truePeakOversample"
 // Setting any field under a module also implicitly enables that module unless
 // "<module>.enabled" is explicitly set to 0. The color stages (tape and

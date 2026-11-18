@@ -22,7 +22,7 @@ namespace sonare::mastering::maximizer {
 /// @c num_samples, so a host that renders in 512-sample callbacks and one that
 /// renders a whole file in a single block get the same output.
 struct AdaptiveReleaseConfig {
-  float ceiling_db = -1.0f;
+  float ceiling_dbtp = -1.0f;
   float lookahead_ms = 1.0f;
   float min_release_ms = 20.0f;
   float max_release_ms = 250.0f;
@@ -62,7 +62,7 @@ class AdaptiveRelease : public rt::ProcessorBase {
   // the per-sample adaptive-release mapping, so writing config_ is sufficient;
   // the two that set an envelope speed (3, 6) also refresh their cached
   // one-pole coefficient, which is plain arithmetic:
-  //   0 = ceiling_db (refused unless finite and <= 0; forwarded in-place to the inner limiter)
+  //   0 = ceiling_dbtp (refused unless finite and <= 0; forwarded in-place to the inner limiter)
   //   1 = min_release_ms (refused unless >= 0 and <= max_release_ms)
   //   2 = max_release_ms (refused unless >= min_release_ms)
   //   3 = crest_window_ms (refused unless > 0)
@@ -71,10 +71,10 @@ class AdaptiveRelease : public rt::ProcessorBase {
   //   6 = release_smoothing_ms (refused unless >= 0)
   // lookahead_ms is NOT automatable (it resizes the inner lookahead buffers).
   bool set_parameter_impl(unsigned int param_id, float value) override;
-  // Automatable parameters: 0=ceilingDb, 1=minReleaseMs, 2=maxReleaseMs,
+  // Automatable parameters: 0=ceilingDbtp, 1=minReleaseMs, 2=maxReleaseMs,
   // 3=crestWindowMs, 4=crestLow, 5=crestHigh, 6=releaseSmoothingMs.
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
-  // Every automatable parameter, ceilingDb included, updates in place.
+  // Every automatable parameter, ceilingDbtp included, updates in place.
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
 
  private:

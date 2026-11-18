@@ -475,7 +475,7 @@ TEST_CASE("multiband custom cutoff count builds and processes",
 TEST_CASE("loudness_limiter_config maps all four loudness limiter fields",
           "[mastering][maximizer][param_wiring]") {
   const auto cfg = sonare::mastering::maximizer::loudness_limiter_config(-2.5f, 8, 173.0f, true);
-  REQUIRE(cfg.ceiling_db == -2.5f);
+  REQUIRE(cfg.ceiling_dbtp == -2.5f);
   REQUIRE(cfg.oversample_factor == 8);
   REQUIRE(cfg.release_ms == 173.0f);  // dropped by the standalone path before the fix
   REQUIRE(cfg.apply_gain_at_input_rate == true);
@@ -499,7 +499,7 @@ TEST_CASE("maximizer.loudnessOptimize standalone paths pass every loudness param
   // Non-default everything, including a release time and the detect-only path
   // the old standalone branch ignored.
   const std::vector<Param> params{{"targetLufs", -16.0},
-                                  {"ceilingDb", -1.5},
+                                  {"ceilingDbtp", -1.5},
                                   {"truePeakOversample", 4.0},
                                   {"releaseMs", 200.0},
                                   {"applyGainAtInputRate", 1.0}};
@@ -507,7 +507,7 @@ TEST_CASE("maximizer.loudnessOptimize standalone paths pass every loudness param
   SECTION("mono path matches a direct loudness_optimize() with the same config") {
     sonare::mastering::maximizer::LoudnessOptimizeConfig config;
     config.target_lufs = -16.0f;
-    config.ceiling_db = -1.5f;
+    config.ceiling_dbtp = -1.5f;
     config.true_peak_oversample = 4;
     config.release_ms = 200.0f;
     config.apply_gain_at_input_rate = true;
@@ -530,7 +530,7 @@ TEST_CASE("maximizer.loudnessOptimize standalone paths pass every loudness param
     MasteringChainConfig cfg;
     cfg.loudness.enabled = true;
     cfg.loudness.target_lufs = -16.0f;
-    cfg.loudness.ceiling_db = -1.5f;
+    cfg.loudness.ceiling_dbtp = -1.5f;
     cfg.loudness.true_peak_oversample = 4;
     cfg.loudness.release_ms = 200.0f;
     cfg.loudness.apply_gain_at_input_rate = true;
@@ -1403,6 +1403,18 @@ TEST_CASE("a renamed processor parameter is refused naming its successor",
     });
     CHECK(names_unread_key(message, "clipThreshold"));
     CHECK(message.find("clipThresholdDb") != std::string::npos);
+  }
+
+  SECTION("the true-peak ceilings are named in dBTP") {
+    for (const char* processor :
+         {"maximizer.truePeakLimiter", "maximizer.adaptiveRelease", "maximizer.loudnessOptimize"}) {
+      CAPTURE(processor);
+      const std::string message = refusal_of([&] {
+        api::apply_named_processor(processor, samples.data(), samples.size(), 48000,
+                                   {{"ceilingDb", -1.0}});
+      });
+      CHECK(names_unread_key(message, "ceilingDb (renamed to ceilingDbtp)"));
+    }
   }
 
   SECTION("compressor and router keep their indices under the new names") {

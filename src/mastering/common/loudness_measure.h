@@ -58,7 +58,7 @@ struct LoudnessSummary {
   float max_momentary_lufs = 0.0f;
   float max_short_term_lufs = 0.0f;
   float true_peak_dbtp = 0.0f;
-  float loudness_range = 0.0f;
+  float loudness_range_lu = 0.0f;
 };
 
 /// @brief The per-block series the scalar loudness meters are reduced from.
@@ -98,11 +98,11 @@ float measure_lufs_interleaved(const float* samples, std::size_t frames, int cha
                                int sample_rate);
 
 /// @brief Loudness range (LRA) in LU. Forwards to
-///        `metering::lufs(audio).loudness_range`.
+///        `metering::lufs(audio).loudness_range_lu`.
 float measure_lra(const Audio& audio);
 
 /// @brief Loudness range (LRA) in LU of an interleaved multi-channel buffer.
-/// @details Forwards to `metering::lufs_interleaved(...).loudness_range`, which
+/// @details Forwards to `metering::lufs_interleaved(...).loudness_range_lu`, which
 ///          applies BS.1770 channel summing. Prefer this over downmixing to mono
 ///          and calling `measure_lra`: a phase-cancelling `0.5*(L+R)` downmix
 ///          collapses the loudness range of wide / out-of-phase stereo material.

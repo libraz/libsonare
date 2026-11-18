@@ -527,7 +527,7 @@ AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig&
   std::vector<float> short_term;
   const auto loudness = metering::lufs(audio, metering::LufsConfig(), &short_term);
   profile.loudness.integrated_lufs = loudness.integrated_lufs;
-  profile.loudness.lra_lu = loudness.loudness_range;
+  profile.loudness.lra_lu = loudness.loudness_range_lu;
   profile.loudness.true_peak_db = metering::true_peak_db(audio, config.true_peak_oversample);
   profile.loudness.crest_factor_db = metering::crest_factor_db(audio);
 
@@ -566,7 +566,7 @@ AudioProfile analyze_audio_profile_interleaved(const float* samples, std::size_t
   const auto summary = common::measure_loudness_summary_interleaved(
       samples, frames, channels, sample_rate, config.true_peak_oversample);
   profile.loudness.integrated_lufs = summary.integrated_lufs;
-  profile.loudness.lra_lu = summary.loudness_range;
+  profile.loudness.lra_lu = summary.loudness_range_lu;
   profile.loudness.true_peak_db = summary.true_peak_dbtp;
   profile.loudness.crest_factor_db =
       metering::crest_factor_db_interleaved(samples, frames, channels);

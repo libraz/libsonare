@@ -281,9 +281,9 @@ def configure_extra_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_size_t),
     ]
 
-    # sonare_ebur128_loudness_range (scalar)
-    lib.sonare_ebur128_loudness_range.restype = ctypes.c_int32
-    lib.sonare_ebur128_loudness_range.argtypes = [
+    # sonare_ebur128_loudness_range_lu (scalar)
+    lib.sonare_ebur128_loudness_range_lu.restype = ctypes.c_int32
+    lib.sonare_ebur128_loudness_range_lu.argtypes = [
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,

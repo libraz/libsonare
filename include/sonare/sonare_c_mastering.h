@@ -24,8 +24,8 @@ extern "C" {
 ///   true-peak limiter up to 12 dB to close the distance and stops there, so peaky or
 ///   peak-normalized input can finish below the target with @c loudness_target_limited set.
 typedef struct {
-  float target_lufs;  ///< Target integrated loudness, LUFS.
-  float ceiling_db;   ///< True-peak ceiling, dBTP.
+  float target_lufs;   ///< Target integrated loudness, LUFS.
+  float ceiling_dbtp;  ///< True-peak ceiling, dBTP.
   /// True-peak oversample factor; 0 selects 4, otherwise one of 1, 2, 4, 8, 16.
   int true_peak_oversample;
   /// Release time of the post true-peak limiter in ms (one time constant, about 63% of the way
@@ -793,9 +793,9 @@ SonareError sonare_mastering_ab_match_loudness_stereo(
 
 /// @brief One delivery platform: a loudness target and a true-peak ceiling.
 typedef struct {
-  const char* name;   ///< Platform name, NUL-terminated; must not be NULL.
-  float target_lufs;  ///< Target integrated loudness, LUFS.
-  float ceiling_db;   ///< True-peak ceiling, dBTP.
+  const char* name;    ///< Platform name, NUL-terminated; must not be NULL.
+  float target_lufs;   ///< Target integrated loudness, LUFS.
+  float ceiling_dbtp;  ///< True-peak ceiling, dBTP.
 } SonareStreamingPlatform;
 
 /// @brief The loudness numbers a streaming mastering chain is constructed with,
@@ -876,7 +876,7 @@ int sonare_mastering_platform_from_name(const char* name);
 int sonare_mastering_preset_from_name(const char* name);
 
 /// @brief Analyze audio and suggest a mastering chain as JSON.
-/// @details @p params accepts targetLufs, ceilingDb, enableRepair,
+/// @details @p params accepts targetLufs, ceilingDbtp, enableRepair,
 /// preferStreamingSafe, speechMonoAmount, targetPlatform and preset. The last
 /// two carry the index from @ref sonare_mastering_platform_from_name and
 /// @ref sonare_mastering_preset_from_name, because a param value is a number;
@@ -1158,7 +1158,7 @@ SonareError sonare_streaming_mastering_chain_create(const SonareMasteringParam* 
 /// Pass NaN to reproduce the fail-on-loudness behaviour of the non-_ex create.
 /// @param loudness_static_gain_peak_db True peak (dBFS) of the loudness stage's
 ///        input the static gain was computed for. When finite, the static gain
-///        is clamped to `(ceiling_db - peak_db) +
+///        is clamped to `(ceiling_dbtp - peak_db) +
 ///        max(max_limiter_gain_reduction_db, 0)` so the streaming preview does
 ///        not overdrive the loudness limiter harder than the offline chain
 ///        (which applies the same clamp). Pass NaN to apply the static gain
@@ -1226,7 +1226,7 @@ SonareError sonare_streaming_mastering_chain_reset(SonareStreamingMasteringChain
 
 /// @brief Change one realtime-safe parameter of an enabled, prepared stage.
 /// @details key uses the chain's full dot notation, for example
-/// "maximizer.truePeakLimiter.ceilingDb". Calls must be serialized with processing,
+/// "maximizer.truePeakLimiter.ceilingDbtp". Calls must be serialized with processing,
 /// flushing, reset and prepare, at a block boundary. Existing DSP instances and
 /// audio history are retained. Structural, disabled-stage and unknown parameters
 /// are rejected before mutation. Realtime-safe does not guarantee a click-free

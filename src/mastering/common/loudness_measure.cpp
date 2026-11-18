@@ -68,7 +68,7 @@ LoudnessSummary interleaved_summary(const float* samples, std::size_t frames, in
                                  series != nullptr ? &series->short_term_lufs : nullptr);
   return {lufs.integrated_lufs, lufs.max_momentary_lufs, lufs.max_short_term_lufs,
           true_peak_to_dbtp(interleaved_true_peak(samples, frames, channels, true_peak_oversample)),
-          lufs.loudness_range};
+          lufs.loudness_range_lu};
 }
 
 // Shared body behind both stereo planar summary overloads; @p series may be null.
@@ -94,7 +94,7 @@ LoudnessSummary stereo_planar_summary(const float* left, const float* right, std
   const float true_peak = std::max(metering::true_peak(left, frames, true_peak_oversample),
                                    metering::true_peak(right, frames, true_peak_oversample));
   return {lufs.integrated_lufs, lufs.max_momentary_lufs, lufs.max_short_term_lufs,
-          true_peak_to_dbtp(true_peak), lufs.loudness_range};
+          true_peak_to_dbtp(true_peak), lufs.loudness_range_lu};
 }
 
 // Silence is -inf in a loudness series. Floor it the way true_peak_to_dbtp
@@ -135,19 +135,19 @@ float measure_lufs_interleaved(const float* samples, std::size_t frames, int cha
   return metering::lufs_interleaved(samples, frames, channels, sample_rate).integrated_lufs;
 }
 
-float measure_lra(const Audio& audio) { return metering::lufs(audio).loudness_range; }
+float measure_lra(const Audio& audio) { return metering::lufs(audio).loudness_range_lu; }
 
 float measure_lra_interleaved(const float* samples, std::size_t frames, int channels,
                               int sample_rate) {
   if (frames == 0) {
-    return metering::lufs_interleaved(nullptr, 0, channels, sample_rate).loudness_range;
+    return metering::lufs_interleaved(nullptr, 0, channels, sample_rate).loudness_range_lu;
   }
   if (samples == nullptr) {
     throw SonareException(
         ErrorCode::InvalidParameter,
         "measure_lra_interleaved: samples pointer is null with non-zero frame count");
   }
-  return metering::lufs_interleaved(samples, frames, channels, sample_rate).loudness_range;
+  return metering::lufs_interleaved(samples, frames, channels, sample_rate).loudness_range_lu;
 }
 
 float measure_true_peak_dbtp(const Audio& audio, int oversample_factor) {
@@ -175,7 +175,7 @@ LufsAndTruePeak measure_lufs_and_true_peak(const Audio& audio, int true_peak_ove
 LoudnessSummary measure_loudness_summary(const Audio& audio, int true_peak_oversample) {
   const metering::LufsResult lufs = metering::lufs(audio);
   return {lufs.integrated_lufs, lufs.max_momentary_lufs, lufs.max_short_term_lufs,
-          metering::true_peak_db(audio, true_peak_oversample), lufs.loudness_range};
+          metering::true_peak_db(audio, true_peak_oversample), lufs.loudness_range_lu};
 }
 
 LoudnessSummary measure_loudness_summary_interleaved(const float* samples, std::size_t frames,
@@ -292,7 +292,7 @@ LoudnessSummary measure_residual_loudness_summary(const float* before, const flo
       metering::lufs_interleaved(residual.data(), frames, 1, sample_rate, kSeriesConfig);
   return {lufs.integrated_lufs, lufs.max_momentary_lufs, lufs.max_short_term_lufs,
           true_peak_to_dbtp(metering::true_peak(residual.data(), frames, true_peak_oversample)),
-          lufs.loudness_range};
+          lufs.loudness_range_lu};
 }
 
 LoudnessSummary measure_residual_loudness_summary_stereo_planar(

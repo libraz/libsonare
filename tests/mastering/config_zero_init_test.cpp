@@ -33,7 +33,7 @@ TEST_CASE("zero-init mastering config uses default true_peak_oversample", "[c_ap
   // true_peak_oversample (and release_ms / apply_gain_at_input_rate) stay 0.
   SonareMasteringConfig config{};
   config.target_lufs = -18.0f;
-  config.ceiling_db = -1.0f;
+  config.ceiling_dbtp = -1.0f;
   REQUIRE(config.true_peak_oversample == 0);
 
   SonareMasteringResult result{};

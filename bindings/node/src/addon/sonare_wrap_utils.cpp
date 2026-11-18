@@ -111,8 +111,10 @@ void ThrowCurrentException(Napi::Env env) {
 }
 
 Napi::Promise RejectedFromPending(Napi::Env env) {
+  // Cleared first: napi_create_promise refuses to run while an exception is pending.
+  const Napi::Error pending = env.GetAndClearPendingException();
   Napi::Promise::Deferred deferred = Napi::Promise::Deferred::New(env);
-  deferred.Reject(env.GetAndClearPendingException().Value());
+  deferred.Reject(pending.Value());
   return deferred.Promise();
 }
 

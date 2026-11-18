@@ -212,7 +212,7 @@ class StreamingMasteringChain:
                 true-peak limiter.
             loudness_static_gain_peak_db: True peak (dBFS) of the loudness
                 stage's input the static gain was computed for. When given, the static
-                gain is clamped to ``(ceiling_db - peak) +
+                gain is clamped to ``(ceilingDbtp - peak) +
                 max(max_limiter_gain_reduction_db, 0)`` so the streaming preview
                 does not overdrive the loudness limiter harder than the offline
                 render. Ignored unless ``loudness_static_gain_db`` is given.

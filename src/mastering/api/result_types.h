@@ -147,7 +147,7 @@ struct MasteringLoudnessSummary {
   float max_momentary_lufs = 0.0f;
   float max_short_term_lufs = 0.0f;
   float true_peak_dbtp = 0.0f;
-  float loudness_range = 0.0f;
+  float loudness_range_lu = 0.0f;
 };
 
 /// @brief Explanation-oriented measurements for a complete mastering run.
@@ -179,7 +179,7 @@ struct ChainMetrics {
   /// stage ran. See reported_true_peak_oversample() in chain.cpp.
   float output_true_peak_dbtp = 0.0f;
   /// EBU Tech 3342 Loudness Range (LU).
-  float output_lra = 0.0f;
+  float output_loudness_range_lu = 0.0f;
   /// True when the loudness stage could not apply target-input LUFS gain
   /// because doing so would exceed its true-peak ceiling.
   bool loudness_target_limited = false;

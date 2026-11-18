@@ -277,7 +277,7 @@ def ebur128_loudness_range_lu(
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
     out = ctypes.c_float(0.0)
-    rc = lib.sonare_ebur128_loudness_range(
+    rc = lib.sonare_ebur128_loudness_range_lu(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),

@@ -17,7 +17,7 @@ struct Dynamics {
   float peak_db = 0.0f;            ///< Peak level in dB
   float rms_db = 0.0f;             ///< RMS level in dB
   float crest_factor = 0.0f;       ///< Peak to RMS ratio
-  float loudness_range_db = 0.0f;  ///< Loudness range (LRA) in dB
+  float loudness_range_lu = 0.0f;  ///< Loudness range (LRA) in dB
   bool is_compressed = false;      ///< True if audio appears heavily compressed; false for silence
 };
 

@@ -194,7 +194,7 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     REQUIRE(loud_code == 0);
     const auto loud = sonare::util::json::parse_strict(loud_output);
     CHECK(loud["chain_config"]["params"]["loudness.targetLufs"].as_number() == -12.0);
-    CHECK(loud["chain_config"]["params"]["loudness.ceilingDb"].as_number() == -2.0);
+    CHECK(loud["chain_config"]["params"]["loudness.ceilingDbtp"].as_number() == -2.0);
   }
 
   SECTION("mastering-suggest refuses an earlier --params spelling naming the current key") {
@@ -555,29 +555,28 @@ TEST_CASE("CLI mastering-streaming takes one platform record spelling", "[cli][m
   CHECK_THAT(missing.err, ContainsSubstring("missing ceiling_dbtp"));
 }
 
-TEST_CASE("CLI mastering takes an enum-valued key by its name", "[cli][mastering]") {
+TEST_CASE("CLI mastering takes an enum-valued key by its name and refuses a number",
+          "[cli][mastering]") {
   create_test_wav(TEST_WAV);
   const std::string by_name_out = unique_temp_path("_enum_by_name.wav");
-  const std::string by_number_out = unique_temp_path("_enum_by_number.wav");
   const std::string run = CLI + " mastering " + TEST_WAV;
 
-  // --params: the name and the number select the same estimator, so the audio is identical.
+  // --params: the name selects the estimator; a number in its place is refused.
   auto [name_code, name_output] =
       exec_command(run + " --preset pop -o " + by_name_out +
                    " --params repair.denoise.enabled=1,repair.denoise.noiseEstimator=mcra -q");
   INFO(name_output);
   REQUIRE(name_code == 0);
-  auto [number_code, number_output] =
-      exec_command(run + " --preset pop -o " + by_number_out +
-                   " --params repair.denoise.enabled=1,repair.denoise.noiseEstimator=1 -q");
-  INFO(number_output);
-  REQUIRE(number_code == 0);
   std::ifstream by_name(by_name_out, std::ios::binary);
-  std::ifstream by_number(by_number_out, std::ios::binary);
   const std::string name_bytes((std::istreambuf_iterator<char>(by_name)), {});
-  const std::string number_bytes((std::istreambuf_iterator<char>(by_number)), {});
-  REQUIRE_FALSE(name_bytes.empty());
-  CHECK(name_bytes == number_bytes);
+  CHECK_FALSE(name_bytes.empty());
+  auto [number_code, number_output] =
+      exec_command(run + " --preset pop -o " + unique_temp_path("_enum_by_number.wav") +
+                   " --params repair.denoise.enabled=1,repair.denoise.noiseEstimator=1 -q 2>&1");
+  CHECK(number_code == 5);
+  CHECK_THAT(number_output,
+             ContainsSubstring("Error: repair.denoise.noiseEstimator takes a token, not a number "
+                               "(valid names: quantile, mcra, imcra, spp)\n"));
 
   // --chain-config: the same name inside the JSON file.
   const std::string config_path = unique_temp_path("_enum_chain.json");
@@ -599,13 +598,13 @@ TEST_CASE("CLI mastering takes an enum-valued key by its name", "[cli][mastering
   CHECK_THAT(bad_output, ContainsSubstring("repair.denoise.noiseEstimator"));
   CHECK_THAT(bad_output, ContainsSubstring("quantile, mcra, imcra, spp"));
 
-  // A name for a number-valued key stays the numeric-value error.
+  // A name on a number-valued key is refused as a token the key does not take.
   auto [number_key_code, number_key_output] =
       exec_command(run + " --preset pop --params loudness.targetLufs=loud -q 2>&1");
-  CHECK(number_key_code != 0);
-  CHECK_THAT(number_key_output, ContainsSubstring("invalid numeric value"));
+  CHECK(number_key_code == 5);
+  CHECK_THAT(number_key_output,
+             ContainsSubstring("Error: loudness.targetLufs is a string, but takes no token\n"));
   std::remove(by_name_out.c_str());
-  std::remove(by_number_out.c_str());
   std::remove(config_path.c_str());
   std::remove(config_out.c_str());
 }

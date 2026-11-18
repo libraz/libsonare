@@ -139,6 +139,7 @@ using detail::kCents;
 using detail::kCount;
 using detail::kDb;
 using detail::kDbfs;
+using detail::kDbtp;
 using detail::kDegrees;
 using detail::kDegreesCelsius;
 using detail::kHz;

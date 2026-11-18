@@ -257,7 +257,7 @@ SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sam
     out->peak_db = dynamics.peak_db;
     out->rms_db = dynamics.rms_db;
     out->crest_factor = dynamics.crest_factor;
-    out->loudness_range_lu = dynamics.loudness_range_db;
+    out->loudness_range_lu = dynamics.loudness_range_lu;
     out->is_compressed = dynamics.is_compressed ? 1 : 0;
 
     const LoudnessCurve& curve = analyzer.loudness_curve();

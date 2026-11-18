@@ -97,7 +97,7 @@ MasteringChainConfig preset_config(Preset preset);
 
 /// @brief Enable the chain's canonical loudness stage without a duplicate
 /// standalone limiter.
-void enable_loudness(MasteringChainConfig& config, float target_lufs, float ceiling_db);
+void enable_loudness(MasteringChainConfig& config, float target_lufs, float ceiling_dbtp);
 
 /// @brief High-level: build preset config, apply optional overrides, run mono chain.
 /// @param overrides Optional flat-params (same dot-notation as parse_chain_config_params)

@@ -305,6 +305,7 @@ inline std::string renamed_param_note(const std::string& key) {
       {"clipThreshold", "clipThresholdDb"},
       {"sidechainHpfEnabled", "sidechainHighPassEnabled"},
       {"sidechainHpfHz", "sidechainHighPassHz"},
+      {"ceilingDb", "ceilingDbtp"},
   };
   for (const auto& [old_key, new_key] : kRenamed) {
     if (key == old_key) return std::string(" (renamed to ") + new_key + ")";

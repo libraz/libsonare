@@ -1271,7 +1271,7 @@ inline double field_as_double(Enum value) {
   X("releaseMs", release_ms, display_range(kMsLog, 0.1, 1000))
 
 #define SONARE_FIELDS_TRUE_PEAK_LIMITER(X)         \
-  X("ceilingDb", ceiling_db, kDbfs)                \
+  X("ceilingDbtp", ceiling_dbtp, kDbtp)            \
   X("lookaheadMs", lookahead_ms, kMs)              \
   X("releaseMs", release_ms, kMsLog)               \
   X("oversampleFactor", oversample_factor, kRatio) \
@@ -1284,7 +1284,7 @@ inline double field_as_double(Enum value) {
   X("releaseMs", release_ms, kMsLog)
 
 #define SONARE_FIELDS_ADAPTIVE_RELEASE(X)   \
-  X("ceilingDb", ceiling_db, kDbfs)         \
+  X("ceilingDbtp", ceiling_dbtp, kDbtp)     \
   X("lookaheadMs", lookahead_ms, kMs)       \
   X("minReleaseMs", min_release_ms, kMsLog) \
   X("maxReleaseMs", max_release_ms, kMsLog) \
@@ -1373,7 +1373,7 @@ inline double field_as_double(Enum value) {
 
 #define SONARE_FIELDS_LOUDNESS(X)                            \
   X("targetLufs", target_lufs, kLufs)                        \
-  X("ceilingDb", ceiling_db, kDbfs)                          \
+  X("ceilingDbtp", ceiling_dbtp, kDbtp)                      \
   X("truePeakOversample", true_peak_oversample, kRatio)      \
   X("releaseMs", release_ms, kMsLog)                         \
   X("applyGainAtInputRate", apply_gain_at_input_rate, kNone) \
@@ -1421,7 +1421,7 @@ inline double field_as_double(Enum value) {
   X("limiterCeilingDb", limiter.ceiling_db, display_range(kDbfs, -12, -1))                     \
   X("limiterReleaseMs", limiter.release_ms, display_range(kMsLog, 1, 500))                     \
   X("limiterEnableIspLimiter", limiter.enable_isp_limiter, kNone)                              \
-  X("limiterIspCeilingDbtp", limiter.isp_ceiling_dbtp, display_range(kDbfs, -12, 0))           \
+  X("limiterIspCeilingDbtp", limiter.isp_ceiling_dbtp, display_range(kDbtp, -12, 0))           \
   X("voiceEngineEngine", voice_engine.engine, kNone)                                           \
   X("voiceEngineF0MinHz", voice_engine.f0_min_hz, display_range(kHzLog, 50, 200))              \
   X("pitchCorrectionMode", pitch_correction.mode, kNone)                                       \

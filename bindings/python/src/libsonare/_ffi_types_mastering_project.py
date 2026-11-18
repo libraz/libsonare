@@ -13,7 +13,7 @@ class SonareMasteringConfig(CStruct):
 
     _fields_ = [
         ("target_lufs", ctypes.c_float),
-        ("ceiling_db", ctypes.c_float),
+        ("ceiling_dbtp", ctypes.c_float),
         ("true_peak_oversample", ctypes.c_int32),
         ("release_ms", ctypes.c_float),
         ("apply_gain_at_input_rate", ctypes.c_int32),
@@ -161,7 +161,7 @@ class SonareStreamingPlatform(CStruct):
     _fields_ = [
         ("name", ctypes.c_char_p),
         ("target_lufs", ctypes.c_float),
-        ("ceiling_db", ctypes.c_float),
+        ("ceiling_dbtp", ctypes.c_float),
     ]
 
 

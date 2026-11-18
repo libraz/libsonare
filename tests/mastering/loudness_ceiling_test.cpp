@@ -153,7 +153,7 @@ TEST_CASE("mono loudness limiter keeps output true peak at or below preset ceili
           "[mastering][loudness][ceiling]") {
   struct PresetCase {
     std::string name;
-    float ceiling_db;  // Must match enable_loudness(...) in presets.cpp.
+    float ceiling_dbtp;  // Must match enable_loudness(...) in presets.cpp.
   };
   // Ceilings hardcoded from src/mastering/api/presets.cpp enable_loudness calls.
   const std::vector<PresetCase> presets = {
@@ -177,12 +177,12 @@ TEST_CASE("mono loudness limiter keeps output true peak at or below preset ceili
       const auto result = api::master_audio_mono(api::preset_from_string(preset.name),
                                                  samples.data(), samples.size(), kSampleRate);
 
-      CAPTURE(preset.name, preset.ceiling_db, signal.name, signal.amplitude, result.input_lufs,
-              result.output_lufs, result.output_true_peak_dbtp, result.output_lra);
+      CAPTURE(preset.name, preset.ceiling_dbtp, signal.name, signal.amplitude, result.input_lufs,
+              result.output_lufs, result.output_true_peak_dbtp, result.output_loudness_range_lu);
 
       // A band-limited true-peak limiter must keep output at or below ceiling
       // (within the BS.1770-4 measurement tolerance).
-      CHECK(result.output_true_peak_dbtp <= preset.ceiling_db + kTruePeakTolerance);
+      CHECK(result.output_true_peak_dbtp <= preset.ceiling_dbtp + kTruePeakTolerance);
     }
   }
 }

@@ -67,7 +67,7 @@ TEST_CASE("G4 latency compensation time-aligns the true-peak limiter output",
   // 0.5-amplitude signal is not limited (the limiter acts as a pure delay).
   api::MasteringChainConfig config;
   config.maximizer.true_peak_limiter.enabled = true;
-  config.maximizer.true_peak_limiter.config.ceiling_db = 0.0f;
+  config.maximizer.true_peak_limiter.config.ceiling_dbtp = 0.0f;
 
   api::MasteringChain chain(config);
   const api::MonoChainResult result = chain.process_mono(input.data(), input.size(), kSampleRate);

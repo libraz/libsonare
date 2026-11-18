@@ -489,7 +489,7 @@ def _streaming_platforms(
     platform_array = array_type(
         *[
             SonareStreamingPlatform(
-                name=platform_buffers[index], target_lufs=target, ceiling_db=ceiling
+                name=platform_buffers[index], target_lufs=target, ceiling_dbtp=ceiling
             )
             for index, (_, target, ceiling) in enumerate(fields)
         ]

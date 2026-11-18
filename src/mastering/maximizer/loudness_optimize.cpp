@@ -15,12 +15,12 @@
 
 namespace sonare::mastering::maximizer {
 
-float validate_loudness_params(float target_lufs, float ceiling_db, float release_ms,
+float validate_loudness_params(float target_lufs, float ceiling_dbtp, float release_ms,
                                float max_limiter_gain_reduction_db, int true_peak_oversample) {
   SONARE_CHECK_MSG(std::isfinite(target_lufs), ErrorCode::InvalidParameter,
                    "target_lufs must be finite");
-  SONARE_CHECK_MSG(common::valid_ceiling_db(ceiling_db), ErrorCode::InvalidParameter,
-                   "ceiling_db must be finite and <= 0");
+  SONARE_CHECK_MSG(common::valid_ceiling_db(ceiling_dbtp), ErrorCode::InvalidParameter,
+                   "ceiling_dbtp must be finite and <= 0");
   SONARE_CHECK_MSG(std::isfinite(release_ms) && release_ms >= 0.0f, ErrorCode::InvalidParameter,
                    "release_ms must be 0 (the library default) or a finite positive value");
   SONARE_CHECK_MSG(
@@ -38,14 +38,14 @@ float validate_loudness_params(float target_lufs, float ceiling_db, float releas
 LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptimizeConfig& config) {
   if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   const float release_ms =
-      validate_loudness_params(config.target_lufs, config.ceiling_db, config.release_ms,
+      validate_loudness_params(config.target_lufs, config.ceiling_dbtp, config.release_ms,
                                config.max_limiter_gain_reduction_db, config.true_peak_oversample);
 
   // The re-gated solve the chain and the stereo named processor use, so every
   // entry point requests the same gain for the same input.
   const float peak_db = common::measure_true_peak_dbtp(audio, config.true_peak_oversample);
   const api::detail::LoudnessStageGain stage = api::detail::loudness_stage_gain(
-      audio.data(), audio.size(), 1, audio.sample_rate(), config.target_lufs, config.ceiling_db,
+      audio.data(), audio.size(), 1, audio.sample_rate(), config.target_lufs, config.ceiling_dbtp,
       peak_db, config.max_limiter_gain_reduction_db);
   const float gain = db_to_linear(stage.applied_db);
   std::vector<float> samples(audio.data(), audio.data() + audio.size());
@@ -55,12 +55,13 @@ LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptim
 
   // Bound inter-sample peaks to the ceiling with a real oversampling true-peak
   // limiter instead of a per-sample clamp, so reconstructed (D/A) peaks stay at
-  // or below config.ceiling_db rather than only the discrete sample peaks. The
+  // or below config.ceiling_dbtp rather than only the discrete sample peaks. The
   // limiter has look-ahead latency, so the shared runner streams trailing
   // silence and removes the delayed prefix. Its fixed-size blocks also keep
   // the limiter's oversampled scratch allocation independent of track length.
-  const TruePeakLimiterConfig limiter_config = loudness_limiter_config(
-      config.ceiling_db, config.true_peak_oversample, release_ms, config.apply_gain_at_input_rate);
+  const TruePeakLimiterConfig limiter_config =
+      loudness_limiter_config(config.ceiling_dbtp, config.true_peak_oversample, release_ms,
+                              config.apply_gain_at_input_rate);
   TruePeakLimiter limiter(limiter_config);
   api::internal::run_processor_mono(limiter, samples, audio.sample_rate());
 

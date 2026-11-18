@@ -175,6 +175,7 @@
           "enum": [
             "dB",
             "dBFS",
+            "dBTP",
             "LUFS",
             "Hz",
             "ms",

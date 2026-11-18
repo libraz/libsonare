@@ -24,7 +24,7 @@ namespace {
 
 // The core summary carries no unit in the field name; the surface does.
 float LoudnessRangeLu(const sonare::mastering::api::MasteringLoudnessSummary& summary) {
-  return summary.loudness_range;
+  return summary.loudness_range_lu;
 }
 
 template <typename Summary>
@@ -34,7 +34,7 @@ Napi::Object MasteringLoudnessSummaryToObject(Napi::Env env, const Summary& summ
   out.Set("maxMomentaryLufs", Napi::Number::New(env, summary.max_momentary_lufs));
   out.Set("maxShortTermLufs", Napi::Number::New(env, summary.max_short_term_lufs));
   out.Set("truePeakDbtp", Napi::Number::New(env, summary.true_peak_dbtp));
-  out.Set("loudnessRange", Napi::Number::New(env, LoudnessRangeLu(summary)));
+  out.Set("loudnessRangeLu", Napi::Number::New(env, LoudnessRangeLu(summary)));
   return out;
 }
 
@@ -63,7 +63,7 @@ void SetMasteringReport(Napi::Env env, Napi::Object out, const Report& report) {
 template <typename Result>
 void SetChainMetrics(Napi::Env env, Napi::Object out, const Result& metrics) {
   out.Set("outputTruePeakDbtp", Napi::Number::New(env, metrics.output_true_peak_dbtp));
-  out.Set("outputLra", Napi::Number::New(env, metrics.output_lra));
+  out.Set("outputLoudnessRangeLu", Napi::Number::New(env, metrics.output_loudness_range_lu));
   out.Set("loudnessTargetLimited", Napi::Boolean::New(env, metrics.loudness_target_limited));
   out.Set("nonFiniteSubstitutionCount",
           Napi::Number::New(env, metrics.non_finite_substitution_count));
@@ -80,18 +80,6 @@ void SetChainMetrics(Napi::Env env, Napi::Object out, const Result& metrics) {
 }
 
 namespace mastering_api = sonare::mastering::api;
-
-// Reads an optional chain-document argument; absent leaves `out` empty, a non-string is refused.
-bool ReadOptionalDocument(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
-                          const char* usage, std::optional<std::string>* out) {
-  if (info.Length() <= index || info[index].IsUndefined() || info[index].IsNull()) return true;
-  if (!info[index].IsString()) {
-    Napi::TypeError::New(env, usage).ThrowAsJavaScriptException();
-    return false;
-  }
-  *out = node_narrow_string(env, info[index], "configJson");
-  return true;
-}
 
 bool IsDocumentOrAbsent(const Napi::Value& value) {
   return value.IsString() || value.IsUndefined() || value.IsNull();
@@ -183,7 +171,7 @@ Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
 
   sonare::mastering::maximizer::LoudnessOptimizeConfig config;
   if (!OptionalFiniteFloatArg(env, info, 2, "targetLufs", -14.0f, &config.target_lufs) ||
-      !OptionalFiniteFloatArg(env, info, 3, "ceilingDb", -1.0f, &config.ceiling_db)) {
+      !OptionalFiniteFloatArg(env, info, 3, "ceilingDbtp", -1.0f, &config.ceiling_dbtp)) {
     return env.Undefined();
   }
   // 0 is the C-ABI sentinel for the library default; any other value reaches
@@ -310,8 +298,7 @@ Napi::Value SonareWrap::MasteringChain(const Napi::CallbackInfo& info) {
   sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(),
                                        node_narrow_int(env, info[1], node_arg_label(1).c_str()));
   std::optional<std::string> document;
-  if (!ReadOptionalDocument(
-          env, info, 2, "Expected (Float32Array, sampleRate, configJson?: string)", &document)) {
+  if (!OptionalStringArg(env, info, 2, "configJson", &document)) {
     return env.Undefined();
   }
   sonare::mastering::api::MasteringChain chain(OfflineChainConfig(document));
@@ -354,8 +341,7 @@ Napi::Value SonareWrap::MasteringChainStereo(const Napi::CallbackInfo& info) {
   sonare::validate_offline_audio_input(left.Data(), left.ElementLength(), sr);
   sonare::validate_offline_audio_input(right.Data(), right.ElementLength(), sr);
   std::optional<std::string> document;
-  if (!ReadOptionalDocument(env, info, 3, "Expected (left, right, sampleRate, configJson?: string)",
-                            &document)) {
+  if (!OptionalStringArg(env, info, 3, "configJson", &document)) {
     return env.Undefined();
   }
   sonare::mastering::api::MasteringChain chain(OfflineChainConfig(document));
@@ -403,8 +389,7 @@ Napi::Value SonareWrap::MasteringStreamingLoudnessGain(const Napi::CallbackInfo&
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sample_rate);
   std::optional<std::string> document;
-  if (!ReadOptionalDocument(
-          env, info, 2, "Expected (Float32Array, sampleRate, configJson?: string)", &document)) {
+  if (!OptionalStringArg(env, info, 2, "configJson", &document)) {
     return env.Undefined();
   }
   const auto config = StreamingChainConfig(document);
@@ -434,8 +419,7 @@ Napi::Value SonareWrap::MasteringStreamingLoudnessGainStereo(const Napi::Callbac
   sonare::validate_offline_audio_input(left.Data(), left.ElementLength(), sample_rate);
   sonare::validate_offline_audio_input(right.Data(), right.ElementLength(), sample_rate);
   std::optional<std::string> document;
-  if (!ReadOptionalDocument(env, info, 3, "Expected (left, right, sampleRate, configJson?: string)",
-                            &document)) {
+  if (!OptionalStringArg(env, info, 3, "configJson", &document)) {
     return env.Undefined();
   }
   const auto config = StreamingChainConfig(document);
@@ -462,10 +446,7 @@ Napi::Value SonareWrap::MasterAudio(const Napi::CallbackInfo& info) {
   sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(),
                                        node_narrow_int(env, info[2], node_arg_label(2).c_str()));
   std::optional<std::string> overrides;
-  if (!ReadOptionalDocument(
-          env, info, 3,
-          "Expected (presetName | null, Float32Array, sampleRate, overridesJson?: string)",
-          &overrides)) {
+  if (!OptionalStringArg(env, info, 3, "overridesJson", &overrides)) {
     return env.Undefined();
   }
   sonare::mastering::api::MasteringChain chain(PresetChainConfig(preset_name, overrides));
@@ -646,19 +627,6 @@ class MasterAudioStereoAsyncWorker : public Napi::AsyncWorker {
   SonareError error_code_ = SONARE_ERROR_UNKNOWN;
 };
 
-/// @brief Turns a pending synchronous throw into a rejected Promise.
-/// @details A Promise-returning entry point must reject rather than throw: the
-///          caller's `.catch()` is the only handler it has. Leaving the
-///          exception pending also let the AsyncWorker below be queued, so a
-///          full mastering render ran in the background for a call that had
-///          already failed, resolving a deferred nobody could observe.
-Napi::Value RejectPendingException(Napi::Env env) {
-  const Napi::Error pending = env.GetAndClearPendingException();
-  auto deferred = Napi::Promise::Deferred::New(env);
-  deferred.Reject(pending.Value());
-  return deferred.Promise();
-}
-
 }  // namespace
 
 Napi::Value SonareWrap::MasterAudioAsync(const Napi::CallbackInfo& info) {
@@ -682,18 +650,15 @@ Napi::Value SonareWrap::MasterAudioAsync(const Napi::CallbackInfo& info) {
   std::vector<float> samples(typed.Data(), typed.Data() + typed.ElementLength());
   int sample_rate = node_narrow_int(env, info[2], "sampleRate");
   std::optional<std::string> overrides;
-  if (!ReadOptionalDocument(
-          env, info, 3,
-          "Expected (presetName | null, Float32Array, sampleRate, overridesJson?: string)",
-          &overrides)) {
-    return RejectPendingException(env);
+  if (!OptionalStringArg(env, info, 3, "overridesJson", &overrides)) {
+    return sonare_node::RejectedFromPending(env);
   }
   auto* worker = new MasterAudioAsyncWorker(env, std::move(preset_name), std::move(samples),
                                             sample_rate, std::move(overrides));
   Napi::Promise promise = worker->GetPromise();
   worker->Queue();
   return promise;
-  SONARE_NODE_CATCH(env)
+  SONARE_NODE_CATCH_REJECT(env)
 }
 
 Napi::Value SonareWrap::MasterAudioStereoAsync(const Napi::CallbackInfo& info) {
@@ -725,11 +690,8 @@ Napi::Value SonareWrap::MasterAudioStereoAsync(const Napi::CallbackInfo& info) {
   std::vector<float> right(right_typed.Data(), right_typed.Data() + right_typed.ElementLength());
   int sample_rate = node_narrow_int(env, info[3], "sampleRate");
   std::optional<std::string> overrides;
-  if (!ReadOptionalDocument(
-          env, info, 4,
-          "Expected (presetName | null, left, right, sampleRate, overridesJson?: string)",
-          &overrides)) {
-    return RejectPendingException(env);
+  if (!OptionalStringArg(env, info, 4, "overridesJson", &overrides)) {
+    return sonare_node::RejectedFromPending(env);
   }
   auto* worker =
       new MasterAudioStereoAsyncWorker(env, std::move(preset_name), std::move(left),
@@ -737,7 +699,7 @@ Napi::Value SonareWrap::MasterAudioStereoAsync(const Napi::CallbackInfo& info) {
   Napi::Promise promise = worker->GetPromise();
   worker->Queue();
   return promise;
-  SONARE_NODE_CATCH(env)
+  SONARE_NODE_CATCH_REJECT(env)
 }
 
 Napi::Value SonareWrap::MasterAudioStereo(const Napi::CallbackInfo& info) {
@@ -764,10 +726,7 @@ Napi::Value SonareWrap::MasterAudioStereo(const Napi::CallbackInfo& info) {
   sonare::validate_offline_audio_input(left.Data(), left.ElementLength(), sr);
   sonare::validate_offline_audio_input(right.Data(), right.ElementLength(), sr);
   std::optional<std::string> overrides;
-  if (!ReadOptionalDocument(
-          env, info, 4,
-          "Expected (presetName | null, left, right, sampleRate, overridesJson?: string)",
-          &overrides)) {
+  if (!OptionalStringArg(env, info, 4, "overridesJson", &overrides)) {
     return env.Undefined();
   }
   sonare::mastering::api::MasteringChain chain(PresetChainConfig(preset_name, overrides));
@@ -794,8 +753,7 @@ Napi::Value SonareWrap::MasteringChainWithProgress(const Napi::CallbackInfo& inf
   constexpr const char* kUsage =
       "Expected (Float32Array, sampleRate, configJson: string | null, onProgress, cancel?)";
   if (info.Length() < 4 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
-      !IsDocumentOrAbsent(info[2]) || !info[3].IsFunction() ||
-      (info.Length() > 4 && !info[4].IsFunction())) {
+      !info[3].IsFunction() || (info.Length() > 4 && !info[4].IsFunction())) {
     Napi::TypeError::New(env, kUsage).ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -812,7 +770,7 @@ Napi::Value SonareWrap::MasteringChainWithProgress(const Napi::CallbackInfo& inf
   const int sr = node_narrow_int(env, info[1], node_arg_label(1).c_str());
   sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   std::optional<std::string> document;
-  if (!ReadOptionalDocument(env, info, 2, kUsage, &document)) return env.Undefined();
+  if (!OptionalStringArg(env, info, 2, "configJson", &document)) return env.Undefined();
   sonare::mastering::api::MasteringChain chain(OfflineChainConfig(document));
   ProgressContext progress{env, info[3].As<Napi::Function>(),
                            info.Length() > 4
@@ -832,7 +790,7 @@ Napi::Value SonareWrap::MasteringChainStereoWithProgress(const Napi::CallbackInf
   constexpr const char* kUsage =
       "Expected (left, right, sampleRate, configJson: string | null, onProgress, cancel?)";
   if (info.Length() < 5 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
-      !info[2].IsNumber() || !IsDocumentOrAbsent(info[3]) || !info[4].IsFunction() ||
+      !info[2].IsNumber() || !info[4].IsFunction() ||
       (info.Length() > 5 && !info[5].IsFunction())) {
     Napi::TypeError::New(env, kUsage).ThrowAsJavaScriptException();
     return env.Undefined();
@@ -849,7 +807,7 @@ Napi::Value SonareWrap::MasteringChainStereoWithProgress(const Napi::CallbackInf
   sonare::validate_offline_audio_input(left.Data(), left.ElementLength(), sr);
   sonare::validate_offline_audio_input(right.Data(), right.ElementLength(), sr);
   std::optional<std::string> document;
-  if (!ReadOptionalDocument(env, info, 3, kUsage, &document)) return env.Undefined();
+  if (!OptionalStringArg(env, info, 3, "configJson", &document)) return env.Undefined();
   sonare::mastering::api::MasteringChain chain(OfflineChainConfig(document));
   // Pointers lent across the callbacks for the same reason as the mono variant:
   // process_stereo_impl copies both channels before any progress callback runs.
@@ -875,7 +833,7 @@ Napi::Value SonareWrap::MasterAudioWithProgress(const Napi::CallbackInfo& info) 
       "Expected (presetName | null, Float32Array, sampleRate, overridesJson: string | null, "
       "onProgress, cancel?)";
   if (info.Length() < 5 || !IsDocumentOrAbsent(info[0]) || !IsFloat32Array(info[1]) ||
-      !info[2].IsNumber() || !IsDocumentOrAbsent(info[3]) || !info[4].IsFunction() ||
+      !info[2].IsNumber() || !info[4].IsFunction() ||
       (info.Length() > 5 && !info[5].IsFunction())) {
     Napi::TypeError::New(env, kUsage).ThrowAsJavaScriptException();
     return env.Undefined();
@@ -889,7 +847,7 @@ Napi::Value SonareWrap::MasterAudioWithProgress(const Napi::CallbackInfo& info) 
   const int sr = node_narrow_int(env, info[2], node_arg_label(2).c_str());
   sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   std::optional<std::string> overrides;
-  if (!ReadOptionalDocument(env, info, 3, kUsage, &overrides)) return env.Undefined();
+  if (!OptionalStringArg(env, info, 3, "overridesJson", &overrides)) return env.Undefined();
   sonare::mastering::api::MasteringChain chain(PresetChainConfig(preset_name, overrides));
   ProgressContext progress{env, info[4].As<Napi::Function>(),
                            info.Length() > 5
@@ -910,8 +868,8 @@ Napi::Value SonareWrap::MasterAudioStereoWithProgress(const Napi::CallbackInfo& 
       "Expected (presetName | null, left, right, sampleRate, overridesJson: string | null, "
       "onProgress, cancel?)";
   if (info.Length() < 6 || !IsDocumentOrAbsent(info[0]) || !IsFloat32Array(info[1]) ||
-      !IsFloat32Array(info[2]) || !info[3].IsNumber() || !IsDocumentOrAbsent(info[4]) ||
-      !info[5].IsFunction() || (info.Length() > 6 && !info[6].IsFunction())) {
+      !IsFloat32Array(info[2]) || !info[3].IsNumber() || !info[5].IsFunction() ||
+      (info.Length() > 6 && !info[6].IsFunction())) {
     Napi::TypeError::New(env, kUsage).ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -929,7 +887,7 @@ Napi::Value SonareWrap::MasterAudioStereoWithProgress(const Napi::CallbackInfo& 
   sonare::validate_offline_audio_input(left.Data(), left.ElementLength(), sr);
   sonare::validate_offline_audio_input(right.Data(), right.ElementLength(), sr);
   std::optional<std::string> overrides;
-  if (!ReadOptionalDocument(env, info, 4, kUsage, &overrides)) return env.Undefined();
+  if (!OptionalStringArg(env, info, 4, "overridesJson", &overrides)) return env.Undefined();
   sonare::mastering::api::MasteringChain chain(PresetChainConfig(preset_name, overrides));
   // Pointers lent across the callbacks for the same reason as the chain variants.
   ProgressContext progress{env, info[5].As<Napi::Function>(),

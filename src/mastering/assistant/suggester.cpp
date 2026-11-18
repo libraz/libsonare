@@ -119,9 +119,9 @@ void select_repair_stages(const AudioProfile& profile, const AssistantConfig& co
 namespace {
 
 void resolve_platform_loudness(const AssistantConfig& config, float* target_lufs,
-                               float* ceiling_db) {
+                               float* ceiling_dbtp) {
   *target_lufs = config.target_lufs;
-  *ceiling_db = config.ceiling_db;
+  *ceiling_dbtp = config.ceiling_dbtp;
 
   const AssistantConfig defaults;
   // "The caller did not ask for one" is a presence question, not a value
@@ -132,7 +132,7 @@ void resolve_platform_loudness(const AssistantConfig& config, float* target_lufs
   const bool loudness_is_default =
       !config.target_lufs_explicit && config.target_lufs == defaults.target_lufs;
   const bool ceiling_is_default =
-      !config.ceiling_db_explicit && config.ceiling_db == defaults.ceiling_db;
+      !config.ceiling_dbtp_explicit && config.ceiling_dbtp == defaults.ceiling_dbtp;
   if (!loudness_is_default && !ceiling_is_default) {
     return;
   }
@@ -144,14 +144,14 @@ void resolve_platform_loudness(const AssistantConfig& config, float* target_lufs
   const PlatformTarget* target = platform_target_from_name(config.target_platform.c_str());
   if (target == nullptr || !target->overrides_loudness) return;
   if (loudness_is_default) *target_lufs = target->target_lufs;
-  if (ceiling_is_default) *ceiling_db = target->ceiling_db;
+  if (ceiling_is_default) *ceiling_dbtp = target->ceiling_dbtp;
 }
 
 void validate_suggestion_config(const AssistantConfig& config) {
   SONARE_CHECK_MSG(std::isfinite(config.target_lufs), ErrorCode::InvalidParameter,
                    "assistant target_lufs must be finite");
-  SONARE_CHECK_MSG(std::isfinite(config.ceiling_db), ErrorCode::InvalidParameter,
-                   "assistant ceiling_db must be finite");
+  SONARE_CHECK_MSG(std::isfinite(config.ceiling_dbtp), ErrorCode::InvalidParameter,
+                   "assistant ceiling_dbtp must be finite");
   SONARE_CHECK_MSG(std::isfinite(config.speech_mono_amount), ErrorCode::InvalidParameter,
                    "assistant speech_mono_amount must be finite");
   SONARE_CHECK_MSG(platform_target_from_name(config.target_platform.c_str()) != nullptr,
@@ -198,9 +198,9 @@ AssistantResult suggest_chain(const AudioProfile& profile, const AssistantConfig
   explain(result.explanation, std::string("base preset: ") + api::preset_to_string(config.preset));
 
   float target_lufs = config.target_lufs;
-  float ceiling_db = config.ceiling_db;
-  resolve_platform_loudness(config, &target_lufs, &ceiling_db);
-  api::enable_loudness(result.config, target_lufs, ceiling_db);
+  float ceiling_dbtp = config.ceiling_dbtp;
+  resolve_platform_loudness(config, &target_lufs, &ceiling_dbtp);
+  api::enable_loudness(result.config, target_lufs, ceiling_dbtp);
   explain(result.explanation, "target loudness and ceiling applied from AssistantConfig");
 
   if (config.preset == api::Preset::Speech) {

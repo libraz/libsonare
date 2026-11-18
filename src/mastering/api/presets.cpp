@@ -30,7 +30,7 @@
 
 namespace sonare::mastering::api {
 
-void enable_loudness(MasteringChainConfig& cfg, float target_lufs, float ceiling_db) {
+void enable_loudness(MasteringChainConfig& cfg, float target_lufs, float ceiling_dbtp) {
   // The loudness stage runs its own true-peak limiter at this same ceiling after
   // applying the normalization gain, so it alone guarantees the ceiling. Enabling
   // the standalone maximizer limiter as well would limit the signal twice around
@@ -39,7 +39,7 @@ void enable_loudness(MasteringChainConfig& cfg, float target_lufs, float ceiling
   // stage's built-in limiter only.
   cfg.loudness.enabled = true;
   cfg.loudness.target_lufs = target_lufs;
-  cfg.loudness.ceiling_db = ceiling_db;
+  cfg.loudness.ceiling_dbtp = ceiling_dbtp;
   // BS.1770 Annex 2 (true-peak metering) specifies at least 4x oversampling.
   cfg.loudness.true_peak_oversample = 4;
 }

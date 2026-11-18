@@ -930,7 +930,7 @@ int cmd_lufs(const CliArgs& args, const Audio&) {
         .kv("integrated_lufs", result.integrated_lufs)
         .kv("momentary_lufs", result.momentary_lufs)
         .kv("short_term_lufs", result.short_term_lufs)
-        .kv("loudness_range", result.loudness_range);
+        .kv("loudness_range", result.loudness_range_lu);
     if (series) {
       json.key("momentary_series").float_array(momentary_series);
       json.key("short_term_series").float_array(short_term_series);
@@ -943,7 +943,7 @@ int cmd_lufs(const CliArgs& args, const Audio&) {
     printf("    Integrated:    %.2f LUFS\n", result.integrated_lufs);
     printf("    Momentary:     %.2f LUFS\n", result.momentary_lufs);
     printf("    Short-term:    %.2f LUFS\n", result.short_term_lufs);
-    printf("    Loudness Range: %.2f LU\n", result.loudness_range);
+    printf("    Loudness Range: %.2f LU\n", result.loudness_range_lu);
     std::cout << "\n";
   }
   return 0;

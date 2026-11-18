@@ -12,6 +12,7 @@ from typing import Any
 PARAMETER_UNITS = {
     "dB",
     "dBFS",
+    "dBTP",
     "LUFS",
     "Hz",
     "ms",

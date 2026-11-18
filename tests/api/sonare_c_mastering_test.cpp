@@ -136,7 +136,7 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
 
     SonareMasteringConfig config{};
     config.target_lufs = -18.0f;
-    config.ceiling_db = -1.0f;
+    config.ceiling_dbtp = -1.0f;
     config.true_peak_oversample = 4;
 
     SonareMasteringResult result{};
@@ -182,7 +182,7 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     auto run = [&](float release_ms, int apply_gain_at_input_rate) {
       SonareMasteringConfig config{};
       config.target_lufs = -14.0f;
-      config.ceiling_db = -1.0f;
+      config.ceiling_dbtp = -1.0f;
       config.true_peak_oversample = 4;
       config.release_ms = release_ms;
       config.apply_gain_at_input_rate = apply_gain_at_input_rate;
@@ -216,7 +216,7 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     auto run = [&](int oversample, float release_ms) {
       SonareMasteringConfig config{};
       config.target_lufs = -14.0f;
-      config.ceiling_db = -1.0f;
+      config.ceiling_dbtp = -1.0f;
       config.true_peak_oversample = oversample;
       config.release_ms = release_ms;
       SonareMasteringResult result{};
@@ -245,7 +245,7 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     auto samples = generate_sine(440.0f, 22050, 1.0f);
     SonareMasteringConfig config{};
     config.target_lufs = -18.0f;
-    config.ceiling_db = -1.0f;
+    config.ceiling_dbtp = -1.0f;
     config.true_peak_oversample = 4;
     SonareMasteringResult result{};
 
@@ -258,11 +258,11 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     REQUIRE(sonare_mastering_process(samples.data(), samples.size(), 22050, &config, &result) ==
             SONARE_ERROR_INVALID_PARAMETER);
     config.target_lufs = -18.0f;
-    config.ceiling_db = std::numeric_limits<float>::infinity();
+    config.ceiling_dbtp = std::numeric_limits<float>::infinity();
     REQUIRE(sonare_mastering_process(samples.data(), samples.size(), 22050, &config, &result) ==
             SONARE_ERROR_INVALID_PARAMETER);
 
-    config.ceiling_db = -1.0f;
+    config.ceiling_dbtp = -1.0f;
     REQUIRE(sonare_mastering_process(samples.data(), samples.size(), 22050, &config, &result) ==
             SONARE_OK);
     for (size_t i = 0; i < result.length; ++i) REQUIRE(std::isfinite(result.samples[i]));
@@ -586,7 +586,7 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
   SECTION("assistant suggestion is reachable through the C API") {
     auto samples = generate_sine(220.0f, 48000, 3.0f);
     for (auto& sample : samples) sample *= 0.2f;
-    SonareMasteringParam params[] = {{"targetLufs", -13.0}, {"ceilingDb", -0.8}};
+    SonareMasteringParam params[] = {{"targetLufs", -13.0}, {"ceilingDbtp", -0.8}};
 
     char* json = nullptr;
     REQUIRE(sonare_mastering_assistant_suggest(samples.data(), samples.size(), 48000, params, 2,
@@ -595,7 +595,7 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     REQUIRE(std::strstr(json, "\"chainConfig\"") != nullptr);
     REQUIRE(std::strstr(json, "\"explanation\"") != nullptr);
     REQUIRE(std::strstr(json, "\"loudness.targetLufs\":-13") != nullptr);
-    REQUIRE(std::strstr(json, "\"loudness.ceilingDb\":-0.8") != nullptr);
+    REQUIRE(std::strstr(json, "\"loudness.ceilingDbtp\":-0.8") != nullptr);
     sonare_free_string(json);
   }
 
@@ -631,7 +631,7 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
                                                1, &json) == SONARE_OK);
     REQUIRE(json != nullptr);
     REQUIRE(std::strstr(json, "\"loudness.targetLufs\":-9") != nullptr);
-    REQUIRE(std::strstr(json, "\"loudness.ceilingDb\":-0.3") != nullptr);
+    REQUIRE(std::strstr(json, "\"loudness.ceilingDbtp\":-0.3") != nullptr);
     sonare_free_string(json);
 
     // An index naming no target, and a fractional index, are rejected rather
@@ -1234,7 +1234,7 @@ TEST_CASE("the capability catalog's chain-only params are measured through the c
   // Each bound below is the chain's own refusal, not a value written beside it.
   const auto& oversample = find("loudness.truePeakOversample");
   REQUIRE(oversample["choices"].as_array().size() == 5);
-  REQUIRE(find("loudness.ceilingDb")["max"].as_number() == 0.0);
+  REQUIRE(find("loudness.ceilingDbtp")["max"].as_number() == 0.0);
   REQUIRE(find("loudness.maxLimiterGainReductionDb")["min"].as_number() == 0.0);
   REQUIRE(find("loudness.targetLufs")["unit"].as_string() == "LUFS");
   const auto& fir = find("dynamics.multibandComp.crossover.firKernelSize");
@@ -1454,7 +1454,7 @@ TEST_CASE("mastering chain C result includes the before and after report", "[c_a
   auto samples = generate_sine(440.0f, sample_rate, 4.0f);
   for (auto& sample : samples) sample *= 0.2f;
   const SonareMasteringParam params[] = {{"loudness.targetLufs", -14.0},
-                                         {"loudness.ceilingDb", -1.0}};
+                                         {"loudness.ceilingDbtp", -1.0}};
   SonareMasteringChainResult result{};
   REQUIRE(sonare_mastering_chain(samples.data(), samples.size(), sample_rate, params, 2, &result) ==
           SONARE_OK);
@@ -1480,23 +1480,24 @@ TEST_CASE("loudness_target_limited agrees across the mastering entry points",
   // with the same material and the same target / ceiling, and returns their
   // reported values. The chain stands in for master_audio: a preset chain runs
   // the same loudness stage, just with preset-chosen values.
-  const auto run_all = [&](float target_lufs, float ceiling_db) {
+  const auto run_all = [&](float target_lufs, float ceiling_dbtp) {
     SonareMasteringConfig config{};
     config.target_lufs = target_lufs;
-    config.ceiling_db = ceiling_db;
+    config.ceiling_dbtp = ceiling_dbtp;
     config.true_peak_oversample = 4;
     SonareMasteringResult simple{};
     REQUIRE(sonare_mastering_process(samples.data(), samples.size(), sample_rate, &config,
                                      &simple) == SONARE_OK);
 
-    const SonareMasteringParam params[] = {{"targetLufs", target_lufs}, {"ceilingDb", ceiling_db}};
+    const SonareMasteringParam params[] = {{"targetLufs", target_lufs},
+                                           {"ceilingDbtp", ceiling_dbtp}};
     SonareMasteringResult named{};
     REQUIRE(sonare_mastering_apply_processor("maximizer.loudnessOptimize", samples.data(),
                                              samples.size(), sample_rate, params, 2,
                                              &named) == SONARE_OK);
 
     const SonareMasteringParam chain_params[] = {{"loudness.targetLufs", target_lufs},
-                                                 {"loudness.ceilingDb", ceiling_db}};
+                                                 {"loudness.ceilingDbtp", ceiling_dbtp}};
     SonareMasteringChainResult chain{};
     REQUIRE(sonare_mastering_chain(samples.data(), samples.size(), sample_rate, chain_params, 2,
                                    &chain) == SONARE_OK);
@@ -1599,7 +1600,7 @@ TEST_CASE("a peak-normalized source under a blocking ceiling reports limited on 
   // used to report a confident false.
   const SonareMasteringParam processor_params[] = {
       {"targetLufs", kTargetLufs},
-      {"ceilingDb", kCeilingDb},
+      {"ceilingDbtp", kCeilingDb},
       {"truePeakOversample", 4.0},
   };
   SonareMasteringResult named{};
@@ -1614,7 +1615,7 @@ TEST_CASE("a peak-normalized source under a blocking ceiling reports limited on 
   const SonareMasteringParam chain_params[] = {
       {"loudness.enabled", 1.0},
       {"loudness.targetLufs", kTargetLufs},
-      {"loudness.ceilingDb", kCeilingDb},
+      {"loudness.ceilingDbtp", kCeilingDb},
   };
   SonareMasteringChainResult chain{};
   REQUIRE(sonare_mastering_chain(samples.data(), samples.size(), kSampleRate, chain_params,
@@ -1627,7 +1628,7 @@ TEST_CASE("a peak-normalized source under a blocking ceiling reports limited on 
   // JSON payload, so this pins the value that CLI reports.
   sonare::mastering::maximizer::LoudnessOptimizeConfig cpp_config;
   cpp_config.target_lufs = kTargetLufs;
-  cpp_config.ceiling_db = kCeilingDb;
+  cpp_config.ceiling_dbtp = kCeilingDb;
   cpp_config.true_peak_oversample = 4;
   const auto direct = sonare::mastering::maximizer::loudness_optimize(
       sonare::Audio::from_buffer(samples.data(), samples.size(), kSampleRate), cpp_config);
@@ -1653,7 +1654,7 @@ TEST_CASE("the stereo named-processor path reports loudness_target_limited like 
 
   const SonareMasteringParam params[] = {
       {"targetLufs", kTargetLufs},
-      {"ceilingDb", kCeilingDb},
+      {"ceilingDbtp", kCeilingDb},
       {"truePeakOversample", 4.0},
   };
 
@@ -1896,7 +1897,7 @@ TEST_CASE("the true-peak limiter's residual guard is channel-linked", "[masterin
   }
 
   sonare::mastering::maximizer::TruePeakLimiterConfig config;
-  config.ceiling_db = kCeilingDb;
+  config.ceiling_dbtp = kCeilingDb;
   config.lookahead_ms = 0.0f;
   sonare::mastering::maximizer::TruePeakLimiter limiter(config);
   limiter.prepare(static_cast<double>(kSr), kBlock, 2);
@@ -2360,7 +2361,7 @@ TEST_CASE("every mastering chain entry point reports the true non-finite substit
   const SonareMasteringParam params[] = {{"dynamics.compressor.enabled", 1.0},
                                          {"dynamics.compressor.makeupGainDb", 760.0},
                                          {"maximizer.truePeakLimiter.enabled", 1.0},
-                                         {"maximizer.truePeakLimiter.ceilingDb", -20.0},
+                                         {"maximizer.truePeakLimiter.ceilingDbtp", -20.0},
                                          {"maximizer.truePeakLimiter.oversampleFactor", 1.0}};
   const auto never_cancel = [](void*) { return 0; };
 

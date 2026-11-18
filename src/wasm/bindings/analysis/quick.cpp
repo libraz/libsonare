@@ -258,7 +258,7 @@ val analysisResultToVal(const AnalysisResult& result) {
   dynamics.set("peakDb", result.dynamics.peak_db);
   dynamics.set("rmsDb", result.dynamics.rms_db);
   dynamics.set("crestFactor", result.dynamics.crest_factor);
-  dynamics.set("loudnessRangeLu", result.dynamics.loudness_range_db);
+  dynamics.set("loudnessRangeLu", result.dynamics.loudness_range_lu);
   dynamics.set("isCompressed", result.dynamics.is_compressed);
   out.set("dynamics", dynamics);
 

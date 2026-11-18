@@ -134,7 +134,7 @@ void AdaptiveRelease::set_config(const AdaptiveReleaseConfig& config) {
   validate_config(config);
   // The limiter's own refusals, checked before anything is committed.
   TruePeakLimiter::validate_config(
-      {config.ceiling_db, config.lookahead_ms, current_release_ms_, 4});
+      {config.ceiling_dbtp, config.lookahead_ms, current_release_ms_, 4});
   if (prepared_) {
     (void)dynamics::checked_lookahead_samples(sample_rate_, config.lookahead_ms,
                                               std::numeric_limits<int>::max() / 4 - 1);
@@ -154,7 +154,7 @@ void AdaptiveRelease::set_config(const AdaptiveReleaseConfig& config) {
     }
     current_release_ms_ = std::clamp(current_release_ms_, lowest_release_ms(),
                                      std::max(config_.min_release_ms, config_.max_release_ms));
-    if (diff.changed(&AdaptiveReleaseConfig::ceiling_db, &AdaptiveReleaseConfig::lookahead_ms)) {
+    if (diff.changed(&AdaptiveReleaseConfig::ceiling_dbtp, &AdaptiveReleaseConfig::lookahead_ms)) {
       configure_limiter();
     }
   });
@@ -164,10 +164,10 @@ bool AdaptiveRelease::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       if (!common::valid_ceiling_db(value)) return false;
-      config_.ceiling_db = value;
+      config_.ceiling_dbtp = value;
       // Forward the ceiling to the inner true-peak limiter in place (param 0);
       // does not disturb the crest-factor / release smoothing state held here.
-      if (prepared_) limiter_.set_parameter(0, config_.ceiling_db);
+      if (prepared_) limiter_.set_parameter(0, config_.ceiling_dbtp);
       return true;
     case 1:
       // Read directly by the per-sample release mapping; no recompute needed.
@@ -206,8 +206,8 @@ bool AdaptiveRelease::set_parameter_impl(unsigned int param_id, float value) {
 }
 
 std::vector<rt::ParamDescriptor> AdaptiveRelease::parameter_descriptors() const {
-  return {{"ceilingDb", 0}, {"minReleaseMs", 1}, {"maxReleaseMs", 2},      {"crestWindowMs", 3},
-          {"crestLow", 4},  {"crestHigh", 5},    {"releaseSmoothingMs", 6}};
+  return {{"ceilingDbtp", 0}, {"minReleaseMs", 1}, {"maxReleaseMs", 2},      {"crestWindowMs", 3},
+          {"crestLow", 4},    {"crestHigh", 5},    {"releaseSmoothingMs", 6}};
 }
 
 bool AdaptiveRelease::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
@@ -223,7 +223,7 @@ void AdaptiveRelease::validate_config(const AdaptiveReleaseConfig& config) {
                             "adaptive release configuration values must be finite");
     }
   }
-  if (!common::valid_ceiling_db(config.ceiling_db) || config.lookahead_ms < 0.0f ||
+  if (!common::valid_ceiling_db(config.ceiling_dbtp) || config.lookahead_ms < 0.0f ||
       !valid_release_pair(config.min_release_ms, config.max_release_ms) ||
       !valid_crest_window_ms(config.crest_window_ms) ||
       !valid_crest_pair(config.crest_low, config.crest_high) ||
@@ -233,7 +233,7 @@ void AdaptiveRelease::validate_config(const AdaptiveReleaseConfig& config) {
 }
 
 void AdaptiveRelease::configure_limiter() {
-  limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, current_release_ms_, 4});
+  limiter_.set_config({config_.ceiling_dbtp, config_.lookahead_ms, current_release_ms_, 4});
 }
 
 void AdaptiveRelease::normalize_bound_pairs() noexcept {

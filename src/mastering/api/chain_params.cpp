@@ -190,6 +190,8 @@ std::string retired_chain_key_successor(const std::string& key) {
       {"eq.pivotHz", "eq.tilt.pivotHz"},
       {"dynamics.multibandComp.lowCutoffHz", "dynamics.multibandComp.crossover.cutoffsHz.0"},
       {"dynamics.multibandComp.highCutoffHz", "dynamics.multibandComp.crossover.cutoffsHz.1"},
+      {"loudness.ceilingDb", "loudness.ceilingDbtp"},
+      {"maximizer.truePeakLimiter.ceilingDb", "maximizer.truePeakLimiter.ceilingDbtp"},
   };
   for (const auto& [retired, current] : kRenamed) {
     if (key == retired) return std::string(current);

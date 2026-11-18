@@ -82,6 +82,7 @@ class CStruct(ctypes.Structure):
     # builds its own table instead of inheriting its parent's.
     _integer_bounds_cache: ClassVar[dict[str, tuple[int, int]]]
     _float_fields_cache: ClassVar[frozenset[str]]
+    _field_names_cache: ClassVar[frozenset[str]]
 
     @classmethod
     def _integer_bounds(cls) -> dict[str, tuple[int, int]]:
@@ -107,7 +108,20 @@ class CStruct(ctypes.Structure):
             cls._float_fields_cache = names
         return names
 
+    @classmethod
+    def _field_names(cls) -> frozenset[str]:
+        """Every declared field name, built once per struct as above."""
+        names = cls.__dict__.get("_field_names_cache")
+        if names is None:
+            names = frozenset(field[0] for field in getattr(cls, "_fields_", ()))
+            cls._field_names_cache = names
+        return names
+
     def __setattr__(self, name: str, value: Any) -> None:
+        # ctypes keeps an unknown name as a plain attribute, so a renamed field
+        # spelled the old way would leave the real field at zero without a word.
+        if not name.startswith("_") and name not in type(self)._field_names():
+            raise AttributeError(f"{type(self).__name__} has no field '{name}'")
         # An already-built ctypes scalar went through the argument readers, which
         # apply the same range check; re-reading it here would only reject the
         # spelling.

@@ -988,7 +988,7 @@ class Audio:
     def mastering(
         self,
         target_lufs: float = -14.0,
-        ceiling_db: float = -1.0,
+        ceiling_dbtp: float = -1.0,
         true_peak_oversample: int = 4,
         release_ms: float | None = None,
         apply_gain_at_input_rate: bool = False,
@@ -998,7 +998,7 @@ class Audio:
             self.data,
             self.sample_rate,
             target_lufs,
-            ceiling_db,
+            ceiling_dbtp,
             true_peak_oversample,
             release_ms,
             apply_gain_at_input_rate,
@@ -1444,7 +1444,7 @@ class Audio:
     def ebur128_loudness_range_lu(self) -> float:
         """EBU R128 / Tech 3342 Loudness Range (LRA) in LU."""
         out = ctypes.c_float(0.0)
-        rc = self._lib.sonare_audio_ebur128_loudness_range(
+        rc = self._lib.sonare_audio_ebur128_loudness_range_lu(
             self._require_handle(), ctypes.byref(out)
         )
         _check(rc)

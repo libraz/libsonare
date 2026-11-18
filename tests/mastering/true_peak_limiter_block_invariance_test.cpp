@@ -42,7 +42,7 @@ std::vector<float> program(float drive) {
 
 TruePeakLimiterConfig limiter_config() {
   TruePeakLimiterConfig config;
-  config.ceiling_db = -0.3f;
+  config.ceiling_dbtp = -0.3f;
   config.release_ms = 50.0f;
   config.oversample_factor = 4;
   return config;
@@ -220,7 +220,7 @@ TEST_CASE("TruePeakLimiter keeps the true peak at the ceiling within tolerance",
   CAPTURE(true_peak_db);
   // 0.1 dB: the measured residue is about +0.02 dB at an 8x meter (finer than
   // the 4x the limiter itself runs at) and is flat in drive.
-  CHECK(true_peak_db <= limiter_config().ceiling_db + 0.1f);
+  CHECK(true_peak_db <= limiter_config().ceiling_dbtp + 0.1f);
 }
 
 TEST_CASE("TruePeakOutputGuard holds the ceiling at its own factor on any burst",

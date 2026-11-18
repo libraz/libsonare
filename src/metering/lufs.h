@@ -33,7 +33,7 @@ struct LufsResult {
   float max_momentary_lufs = 0.0f;
   /// Maximum 3 s measurement (EBU R128 Max-S).
   float max_short_term_lufs = 0.0f;
-  float loudness_range = 0.0f;
+  float loudness_range_lu = 0.0f;
 };
 
 struct LufsConfig {
@@ -113,7 +113,7 @@ std::vector<float> short_term_lufs(const Audio& audio, const LufsConfig& config 
 ///          and a relative gate 20 LU below the ungated mean loudness. The LRA is the
 ///          difference between the 95th and 10th percentiles of the gated distribution.
 /// @return Loudness range in LU (0 if insufficient data).
-float ebur128_loudness_range(const Audio& audio);
+float ebur128_loudness_range_lu(const Audio& audio);
 
 /// @brief Computes the EBU Tech 3342 Loudness Range (LRA) from short-term loudness blocks.
 /// @param short_term_lufs Per-block short-term loudness values (LUFS). Non-finite
@@ -122,8 +122,8 @@ float ebur128_loudness_range(const Audio& audio);
 ///          relative gate 20 LU below the energy-domain mean of the absolute-gated
 ///          blocks) and returns the difference between the 95th and 10th percentiles
 ///          of the gated distribution. This is the single shared implementation used
-///          by both `lufs_interleaved`'s `loudness_range` field and
-///          `ebur128_loudness_range`; it is exposed for reuse from the C-API.
+///          by both `lufs_interleaved`'s `loudness_range_lu` field and
+///          `ebur128_loudness_range_lu`; it is exposed for reuse from the C-API.
 /// @return Loudness range in LU (0 if fewer than two gated blocks remain).
 float lra_from_short_term_blocks(const std::vector<float>& short_term_lufs);
 

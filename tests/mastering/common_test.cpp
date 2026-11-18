@@ -968,7 +968,7 @@ TEST_CASE("Loudness series reduce to the summary scalars exactly", "[mastering]"
   CHECK(max_short_term == summary.max_short_term_lufs);
   // The returned array is the one the loudness range was computed from.
   CHECK(sonare::metering::lra_from_short_term_blocks(series.short_term_lufs) ==
-        summary.loudness_range);
+        summary.loudness_range_lu);
   // A constant series would satisfy the two maxima trivially.
   CHECK(max_momentary >
         *std::min_element(series.momentary_lufs.begin(), series.momentary_lufs.end()));
@@ -993,14 +993,14 @@ TEST_CASE("Single-channel series overload matches the mono summary bit for bit",
 
   // The fixture's job is to make these five comparisons distinguishable; if the
   // signal ever goes stationary again, two of them go trivial in silence.
-  CHECK(mono.loudness_range > 0.0f);
+  CHECK(mono.loudness_range_lu > 0.0f);
   CHECK(mono.max_momentary_lufs != mono.max_short_term_lufs);
 
   CHECK(interleaved.integrated_lufs == mono.integrated_lufs);
   CHECK(interleaved.max_momentary_lufs == mono.max_momentary_lufs);
   CHECK(interleaved.max_short_term_lufs == mono.max_short_term_lufs);
   CHECK(interleaved.true_peak_dbtp == mono.true_peak_dbtp);
-  CHECK(interleaved.loudness_range == mono.loudness_range);
+  CHECK(interleaved.loudness_range_lu == mono.loudness_range_lu);
 }
 
 // A static gain is the one stage whose level delta has a closed form, so it is

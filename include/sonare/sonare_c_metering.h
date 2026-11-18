@@ -372,8 +372,8 @@ SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, 
 /// @param sample_rate Sample rate in Hz; must be in [8000, 384000] (the shared
 ///        offline-input policy), not merely positive.
 /// @param out_loudness_range_lu Receives the loudness range in LU. Must not be null.
-SonareError sonare_ebur128_loudness_range(const float* samples, size_t length, int sample_rate,
-                                          float* out_loudness_range_lu);
+SonareError sonare_ebur128_loudness_range_lu(const float* samples, size_t length, int sample_rate,
+                                             float* out_loudness_range_lu);
 
 // ============================================================================
 // Metering - handle form
@@ -444,9 +444,9 @@ SonareError sonare_audio_spectrum_frame(const SonareAudio* audio, size_t frame_o
                                         int apply_octave_smoothing, int octave_fraction,
                                         float db_ref, float db_amin, SonareSpectrumResult* out);
 
-/// @brief Handle form of @ref sonare_ebur128_loudness_range.
-SonareError sonare_audio_ebur128_loudness_range(const SonareAudio* audio,
-                                                float* out_loudness_range_lu);
+/// @brief Handle form of @ref sonare_ebur128_loudness_range_lu.
+SonareError sonare_audio_ebur128_loudness_range_lu(const SonareAudio* audio,
+                                                   float* out_loudness_range_lu);
 
 /// @}
 

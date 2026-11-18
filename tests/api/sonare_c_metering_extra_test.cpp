@@ -1,7 +1,7 @@
 /// @file sonare_c_metering_extra_test.cpp
 /// @brief C API tests for the multi-channel / standards-compliant LUFS
 ///        extensions (sonare_lufs_interleaved, sonare_lufs_series_interleaved,
-///        sonare_ebur128_loudness_range),
+///        sonare_ebur128_loudness_range_lu),
 ///        the extended true-peak oversample-factor validation (factor 16
 ///        accepted, non-power-of-two rejected), and sonare_metering_spectrum_frame's
 ///        windowed copy, windowed non-finite scan and reused FFT plan against the
@@ -218,11 +218,11 @@ TEST_CASE("sonare_lufs_series_interleaved", "[c_api][metering][lufs]") {
   }
 }
 
-TEST_CASE("sonare_ebur128_loudness_range", "[c_api]") {
+TEST_CASE("sonare_ebur128_loudness_range_lu", "[c_api]") {
   SECTION("returns a finite, non-negative loudness range") {
     auto samples = generate_sine(440.0f, 48000, 6.0f);
     float lra = -1.0f;
-    REQUIRE(sonare_ebur128_loudness_range(samples.data(), samples.size(), 48000, &lra) ==
+    REQUIRE(sonare_ebur128_loudness_range_lu(samples.data(), samples.size(), 48000, &lra) ==
             SONARE_OK);
     REQUIRE(std::isfinite(lra));
     REQUIRE(lra >= 0.0f);
@@ -232,9 +232,9 @@ TEST_CASE("sonare_ebur128_loudness_range", "[c_api]") {
     auto samples = generate_sine(440.0f, 48000, 1.0f);
     float lra = 0.0f;
 
-    REQUIRE(sonare_ebur128_loudness_range(samples.data(), samples.size(), 48000, nullptr) ==
+    REQUIRE(sonare_ebur128_loudness_range_lu(samples.data(), samples.size(), 48000, nullptr) ==
             SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_ebur128_loudness_range(nullptr, samples.size(), 48000, &lra) ==
+    REQUIRE(sonare_ebur128_loudness_range_lu(nullptr, samples.size(), 48000, &lra) ==
             SONARE_ERROR_INVALID_PARAMETER);
   }
 }
@@ -770,7 +770,7 @@ TEST_CASE(
   sonare_audio_destroy(audio);
 }
 
-TEST_CASE("Handle-form ebur128_loudness_range matches its buffer twin",
+TEST_CASE("Handle-form ebur128_loudness_range_lu matches its buffer twin",
           "[c_api][metering][handle]") {
   const std::vector<float> samples = make_loudness_range_fixture();
   SonareAudio* audio = nullptr;
@@ -779,9 +779,9 @@ TEST_CASE("Handle-form ebur128_loudness_range matches its buffer twin",
 
   float handle_lra = -1.0f;
   float buffer_lra = -1.0f;
-  REQUIRE(sonare_audio_ebur128_loudness_range(audio, &handle_lra) == SONARE_OK);
-  REQUIRE(sonare_ebur128_loudness_range(samples.data(), samples.size(), kScalarSampleRate,
-                                        &buffer_lra) == SONARE_OK);
+  REQUIRE(sonare_audio_ebur128_loudness_range_lu(audio, &handle_lra) == SONARE_OK);
+  REQUIRE(sonare_ebur128_loudness_range_lu(samples.data(), samples.size(), kScalarSampleRate,
+                                           &buffer_lra) == SONARE_OK);
 
   CAPTURE(handle_lra);
   REQUIRE(handle_lra > 0.5f);  // the alternating loud/quiet blocks move the range off zero
@@ -1035,9 +1035,9 @@ TEST_CASE("Handle-form and buffer-form metering agree on a null out-pointer",
   CHECK(sonare_metering_true_peak_dbtp(samples.data(), samples.size(), kScalarSampleRate, 4,
                                        nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 
-  CHECK(sonare_audio_ebur128_loudness_range(audio, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(sonare_ebur128_loudness_range(samples.data(), samples.size(), kScalarSampleRate, nullptr) ==
-        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_audio_ebur128_loudness_range_lu(audio, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_ebur128_loudness_range_lu(samples.data(), samples.size(), kScalarSampleRate,
+                                         nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 
   CHECK(sonare_audio_detect_clipping(audio, 0.0f, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_metering_detect_clipping(samples.data(), samples.size(), kScalarSampleRate, 0.0f, 0,
@@ -1072,7 +1072,7 @@ TEST_CASE("A NULL handle is refused rather than dereferenced by every handle-for
   CHECK(sonare_audio_silence_ratio(nullptr, -40.0f, 1024, 512, &scalar_out) ==
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_audio_true_peak_dbtp(nullptr, 4, &scalar_out) == SONARE_ERROR_INVALID_PARAMETER);
-  CHECK(sonare_audio_ebur128_loudness_range(nullptr, &scalar_out) ==
+  CHECK(sonare_audio_ebur128_loudness_range_lu(nullptr, &scalar_out) ==
         SONARE_ERROR_INVALID_PARAMETER);
 
   SonareClippingResult clipping_result = {};

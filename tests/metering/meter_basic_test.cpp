@@ -552,7 +552,7 @@ TEST_CASE("LUFS returns silence for silent audio", "[meter]") {
   REQUIRE(!std::isfinite(result.integrated_lufs));
   REQUIRE(!std::isfinite(result.momentary_lufs));
   REQUIRE(!std::isfinite(result.short_term_lufs));
-  REQUIRE_THAT(result.loudness_range, WithinAbs(0.0f, 0.001f));
+  REQUIRE_THAT(result.loudness_range_lu, WithinAbs(0.0f, 0.001f));
 }
 
 TEST_CASE("LUFS measures a steady tone consistently", "[meter]") {
@@ -564,7 +564,7 @@ TEST_CASE("LUFS measures a steady tone consistently", "[meter]") {
   REQUIRE(result.integrated_lufs > -5.0f);
   REQUIRE(result.integrated_lufs < -1.0f);
   REQUIRE_THAT(result.momentary_lufs, WithinAbs(result.integrated_lufs, 0.5f));
-  REQUIRE_THAT(result.loudness_range, WithinAbs(0.0f, 0.1f));
+  REQUIRE_THAT(result.loudness_range_lu, WithinAbs(0.0f, 0.1f));
 }
 
 TEST_CASE("LUFS relative gate ignores much quieter tail", "[meter]") {
@@ -661,7 +661,7 @@ TEST_CASE("LUFS yields the short-term series it reduced to scalars", "[meter][lu
   REQUIRE(result.integrated_lufs == plain.integrated_lufs);
   REQUIRE(result.short_term_lufs == plain.short_term_lufs);
   REQUIRE(result.max_short_term_lufs == plain.max_short_term_lufs);
-  REQUIRE(result.loudness_range == plain.loudness_range);
+  REQUIRE(result.loudness_range_lu == plain.loudness_range_lu);
 }
 
 TEST_CASE("mono LUFS series match an independent whole-signal reference", "[meter][lufs]") {
@@ -828,7 +828,7 @@ TEST_CASE("interleaved LUFS yields the two series it reduced to scalars", "[mete
     REQUIRE(result.short_term_lufs == plain.short_term_lufs);
     REQUIRE(result.max_momentary_lufs == plain.max_momentary_lufs);
     REQUIRE(result.max_short_term_lufs == plain.max_short_term_lufs);
-    REQUIRE(result.loudness_range == plain.loudness_range);
+    REQUIRE(result.loudness_range_lu == plain.loudness_range_lu);
 
     std::vector<float> only_short_term;
     metering::lufs_interleaved(samples.data(), samples.size(), 1, sample_rate, {}, nullptr,
@@ -1006,8 +1006,8 @@ TEST_CASE("LUFS interleaved overlapped short-term path stays finite", "[meter]")
   REQUIRE(std::isfinite(result.integrated_lufs));
   REQUIRE(std::isfinite(result.momentary_lufs));
   REQUIRE(std::isfinite(result.short_term_lufs));
-  REQUIRE(std::isfinite(result.loudness_range));
-  REQUIRE(result.loudness_range >= 0.0f);
+  REQUIRE(std::isfinite(result.loudness_range_lu));
+  REQUIRE(result.loudness_range_lu >= 0.0f);
 }
 
 TEST_CASE("LUFS result distinguishes final windows from Max-M and Max-S", "[meter][lufs]") {
@@ -1030,21 +1030,21 @@ TEST_CASE("LUFS result distinguishes final windows from Max-M and Max-S", "[mete
   REQUIRE(result.max_short_term_lufs > result.short_term_lufs + 10.0f);
 }
 
-TEST_CASE("ebur128_loudness_range accepts mono input", "[meter][lufs]") {
+TEST_CASE("ebur128_loudness_range_lu accepts mono input", "[meter][lufs]") {
   // Mono input is the documented contract. A steady tone should yield a near
   // -zero LRA and no exception.
   const Audio audio = make_sine(0.5f, 48000, 5.0f);
 
   float lra = 0.0f;
-  REQUIRE_NOTHROW(lra = metering::ebur128_loudness_range(audio));
+  REQUIRE_NOTHROW(lra = metering::ebur128_loudness_range_lu(audio));
   REQUIRE(std::isfinite(lra));
   REQUIRE(lra >= 0.0f);
   REQUIRE(lra < 1.0f);  // steady tone => very small loudness range
 }
 
-TEST_CASE("ebur128_loudness_range handles empty input", "[meter][lufs]") {
+TEST_CASE("ebur128_loudness_range_lu handles empty input", "[meter][lufs]") {
   const Audio audio;  // empty (still mono)
-  REQUIRE_THAT(metering::ebur128_loudness_range(audio), WithinAbs(0.0f, 1e-7f));
+  REQUIRE_THAT(metering::ebur128_loudness_range_lu(audio), WithinAbs(0.0f, 1e-7f));
 }
 
 TEST_CASE("dynamic range reports zero for steady signal", "[meter]") {
@@ -1309,7 +1309,7 @@ TEST_CASE("ebur128 LRA matches independent whole-signal reference blocks", "[met
   }
   const Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
 
-  const float lra = metering::ebur128_loudness_range(audio);
+  const float lra = metering::ebur128_loudness_range_lu(audio);
   const std::vector<double> weighted =
       reference_k_weighted(samples.data(), samples.size(), sample_rate);
   const size_t block_size = static_cast<size_t>(std::round(3.0 * sample_rate));
@@ -1470,7 +1470,7 @@ TEST_CASE("LUFS short-term uses the spec 100 ms hop, not 150 ms", "[meter][lufs]
   //   round(144000 * 0.05) = 7200 samples = 150 ms,
   // instead of the spec 100 ms = 4800 samples. That non-compliant hop also made
   // the interleaved short-term path inconsistent with the explicit-100 ms-hop
-  // ebur128_loudness_range(). This test pins the block count to the value implied
+  // ebur128_loudness_range_lu(). This test pins the block count to the value implied
   // by a 100 ms hop so a regression to 150 ms (fewer blocks) is caught.
   const int sample_rate = 48000;
   const float duration_sec = 8.0f;

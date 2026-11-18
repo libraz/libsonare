@@ -475,35 +475,19 @@ Napi::Value SonareWrap::AnalyzeAsync(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   std::vector<float> samples(typed.Data(), typed.Data() + typed.ElementLength());
   int sample_rate{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) {
+    return sonare_node::RejectedFromPending(env);
+  }
   SonareMusicAnalyzeOptions options{};
-  bool has_options = false;
-  try {
-    // Most ReadMusicAnalyzeOptions fields (the *Property family) report a
-    // wrong-typed value by C++ throw, which unwinds straight past a
-    // pending-exception check -- unlike the array field
-    // (meterCandidateNumerators), which leaves a pending exception without
-    // throwing. Both must become a rejection rather than a synchronous throw
-    // out of this Promise-returning entry point.
-    has_options = info.Length() >= 3 && ReadMusicAnalyzeOptions(info[2], &options);
-  } catch (const Napi::Error& e) {
-    auto deferred = Napi::Promise::Deferred::New(env);
-    deferred.Reject(e.Value());
-    return deferred.Promise();
-  }
-  if (env.IsExceptionPending()) {
-    // The async form reports bad input as a rejected Promise, so the pending
-    // exception is cleared before it can collide with the Promise plumbing.
-    Napi::Error error = env.GetAndClearPendingException();
-    auto deferred = Napi::Promise::Deferred::New(env);
-    deferred.Reject(error.Value());
-    return deferred.Promise();
-  }
+  // A *Property reader refuses by C++ throw, the array field by a pending
+  // exception; SONARE_NODE_CATCH_REJECT and the check below turn both into a rejection.
+  const bool has_options = info.Length() >= 3 && ReadMusicAnalyzeOptions(info[2], &options);
+  if (env.IsExceptionPending()) return sonare_node::RejectedFromPending(env);
   auto* worker = new AnalyzeAsyncWorker(env, std::move(samples), sample_rate, options, has_options);
   Napi::Promise promise = worker->GetPromise();
   worker->Queue();
   return promise;
-  SONARE_NODE_CATCH(env)
+  SONARE_NODE_CATCH_REJECT(env)
 }
 
 Napi::Value SonareWrap::AnalyzeBpm(const Napi::CallbackInfo& info) {

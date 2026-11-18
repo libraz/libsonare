@@ -1110,9 +1110,9 @@ TEST_CASE("streaming preset equals pop preset", "[mastering][presets]") {
   const MasteringChainConfig streaming = preset_config(Preset::Streaming);
   REQUIRE(streaming.loudness.enabled == pop.loudness.enabled);
   REQUIRE(streaming.loudness.target_lufs == pop.loudness.target_lufs);
-  REQUIRE(streaming.loudness.ceiling_db == pop.loudness.ceiling_db);
-  REQUIRE(streaming.maximizer.true_peak_limiter.config.ceiling_db ==
-          pop.maximizer.true_peak_limiter.config.ceiling_db);
+  REQUIRE(streaming.loudness.ceiling_dbtp == pop.loudness.ceiling_dbtp);
+  REQUIRE(streaming.maximizer.true_peak_limiter.config.ceiling_dbtp ==
+          pop.maximizer.true_peak_limiter.config.ceiling_dbtp);
   REQUIRE(streaming.dynamics.compressor.config.threshold_db ==
           pop.dynamics.compressor.config.threshold_db);
 }

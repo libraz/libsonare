@@ -30,7 +30,7 @@ inline sonare::mastering::maximizer::LoudnessOptimizeConfig to_cpp_config(
   sonare::mastering::maximizer::LoudnessOptimizeConfig cpp;
   if (config) {
     cpp.target_lufs = config->target_lufs;
-    cpp.ceiling_db = config->ceiling_db;
+    cpp.ceiling_dbtp = config->ceiling_dbtp;
     // Both fields take 0 as "keep the C++ default", so a zero-initialized
     // config validates. Any other request reaches the loudness validator --
     // which rejects an oversample outside {1, 2, 4, 8, 16} and a non-positive
@@ -199,7 +199,7 @@ inline void set_mastering_loudness_summary(
   out->max_momentary_lufs = summary.max_momentary_lufs;
   out->max_short_term_lufs = summary.max_short_term_lufs;
   out->true_peak_dbtp = summary.true_peak_dbtp;
-  out->loudness_range_lu = summary.loudness_range;
+  out->loudness_range_lu = summary.loudness_range_lu;
 }
 
 template <typename ChainResultT>
@@ -224,7 +224,7 @@ template <typename ChainResultT>
 inline void set_chain_metrics(const sonare::mastering::api::ChainMetrics& metrics,
                               ChainResultT* out) {
   out->output_true_peak_dbtp = metrics.output_true_peak_dbtp;
-  out->output_loudness_range_lu = metrics.output_lra;
+  out->output_loudness_range_lu = metrics.output_loudness_range_lu;
   out->loudness_target_limited = metrics.loudness_target_limited ? 1 : 0;
   set_mastering_report(metrics.report, out);
   const auto& reductions = metrics.stage_gain_reductions;

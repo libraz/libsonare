@@ -51,7 +51,7 @@ void check_tail(Processor& processor, const std::string& name) {
 
 TEST_CASE("TruePeakLimiter reports a finite streaming tail", "[mastering][streaming][boundary]") {
   sonare::mastering::maximizer::TruePeakLimiterConfig config;
-  config.ceiling_db = -12.0f;
+  config.ceiling_dbtp = -12.0f;
   config.lookahead_ms = 1.0f;
   config.release_ms = 50.0f;
   config.oversample_factor = 4;
@@ -65,7 +65,7 @@ TEST_CASE("AdaptiveRelease reports the tail of its inner limiter",
   using sonare::mastering::maximizer::AdaptiveRelease;
   using sonare::mastering::maximizer::AdaptiveReleaseConfig;
   AdaptiveReleaseConfig config;
-  config.ceiling_db = -12.0f;
+  config.ceiling_dbtp = -12.0f;
   AdaptiveRelease defaults(config);
   check_tail(defaults, "AdaptiveRelease default");
   config.lookahead_ms = 5.0f;
@@ -86,9 +86,9 @@ TEST_CASE("TruePeakLimiter bounds the detector-excluded plane without letting it
     for (const bool detect_only : {false, true}) {
       CAPTURE(rate, detect_only);
       TruePeakLimiterConfig config;
-      config.ceiling_db = -1.0f;
+      config.ceiling_dbtp = -1.0f;
       config.apply_gain_at_input_rate = detect_only;
-      const float ceiling = sonare::db_to_linear(config.ceiling_db);
+      const float ceiling = sonare::db_to_linear(config.ceiling_dbtp);
       const auto run = [&](float lfe_amplitude, std::vector<float>* reductions) {
         TruePeakLimiter limiter(config);
         limiter.prepare(rate, kBlock);

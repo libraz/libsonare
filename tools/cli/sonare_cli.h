@@ -273,6 +273,9 @@ sonare::util::json::Value json_keys_to_snake_case(const sonare::util::json::Valu
 std::vector<mastering::api::Param> parse_mastering_params(const std::string& text,
                                                           bool resolve_names = false,
                                                           const std::string& processor = {});
+/// Parses a chain `--params` list through the core's chain document reader; defined in
+/// sonare_cli_mastering.cpp.
+std::vector<mastering::api::Param> parse_chain_params(const std::string& text);
 #endif
 
 #ifdef SONARE_WITH_MIXING
