@@ -461,7 +461,10 @@ describe('RealtimeEngine strip addressing', () => {
       ).not.toThrow();
       expect(() => engine.setStrip(10, { id: 'track-10', panMode: 2 as never })).toThrow(TypeError);
       expect(() =>
-        engine.setStrip(10, { id: 'track-10', sends: [{ id: 's', timing: 'post' as never }] }),
+        engine.setStrip(10, {
+          id: 'track-10',
+          sends: [{ id: 's', destinationBusId: 'bus-1', timing: 'post' as never }],
+        }),
       ).toThrow(RangeError);
       expect(() =>
         engine.setBusStrip(1, { id: '1', role: 'aux', panLaw: 'const-6db' as never }),
