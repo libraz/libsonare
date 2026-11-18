@@ -1,4 +1,4 @@
-"""Pan law, automation curve, clip fade and loop, and voice-changer enum fields are exact tokens.
+"""Mixer, automation, clip fade and loop, and voice-changer closed sets are exact tokens.
 
 Each takes only its lowerCamel tokens: another spelling is a
 ``SonareValueError`` naming the accepted ones, and a number (an old ordinal,
@@ -14,7 +14,15 @@ import pytest
 
 import libsonare
 from libsonare import SonareValueError
-from libsonare._runtime import _curve_value, _pan_law_value
+from libsonare._runtime import (
+    _channel_layout_value,
+    _curve_value,
+    _meter_tap_value,
+    _pan_law_value,
+    _pan_mode_value,
+    _send_timing_value,
+    _sidechain_source_kind_value,
+)
 
 from ._helpers import LIB_AVAILABLE
 
@@ -29,6 +37,27 @@ def test_the_closed_sets_are_literal_types_in_ordinal_order() -> None:
     assert get_args(libsonare.AutomationCurve) == CURVES
     assert [_pan_law_value(token) for token in PAN_LAWS] == [0, 1, 2, 3]
     assert [_curve_value(token) for token in CURVES] == [0, 1, 2, 3]
+
+
+# Each Literal in ordinal order, except SendTiming, whose C ordinals put postFader first.
+MIXER_SETS = [
+    ("PanMode", _pan_mode_value, ("balance", "stereoPan", "dualPan")),
+    ("MeterTap", _meter_tap_value, ("preFader", "postFader")),
+    ("SendTiming", _send_timing_value, ("postFader", "preFader")),
+    ("SidechainSourceKind", _sidechain_source_kind_value, ("track", "bus")),
+    ("ChannelLayout", _channel_layout_value, ("mono", "stereo", "5.1", "7.1")),
+]
+
+
+@pytest.mark.parametrize(("name", "resolve", "tokens"), MIXER_SETS)
+def test_the_mixer_closed_sets_are_literal_types(name: str, resolve, tokens: tuple) -> None:
+    assert set(get_args(getattr(libsonare, name))) == set(tokens)
+    assert [resolve(token) for token in tokens] == list(range(len(tokens)))
+    with pytest.raises(SonareValueError, match=tokens[-1]):
+        resolve(tokens[-1] + " ")
+    for number in (0, True):
+        with pytest.raises(TypeError):
+            resolve(number)
 
 
 @pytest.mark.parametrize(

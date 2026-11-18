@@ -11,7 +11,6 @@ import pytest
 from libsonare import (
     MAX_TRACK_LANES,
     AutomationPoint,
-    ChannelLayout,
     EngineClip,
     EngineTrackMonitorMode,
     RealtimeEngine,
@@ -78,7 +77,7 @@ def test_engine_track_monitor_mode_pfl_and_afl() -> None:
                 )
             ]
         )
-        engine.set_track_lanes([{"track_id": 10, "source_channel_layout": ChannelLayout.STEREO}])
+        engine.set_track_lanes([{"track_id": 10, "source_channel_layout": "stereo"}])
         engine.set_track_strip_json(
             10,
             '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
@@ -167,19 +166,21 @@ def test_engine_track_buses_route_lane_sends() -> None:
         assert duplicate_bus_error.value.code == 4
 
         # A surround bus/source layout flows through to the native struct fields;
-        # an out-of-range value is rejected.
-        engine.set_track_buses([{"bus_id": 1, "channel_layout": ChannelLayout.FIVE_POINT_ONE}])
-        with pytest.raises(SonareError):
-            engine.set_track_buses([{"bus_id": 1, "channel_layout": 99}])
-        with pytest.raises(SonareError):
-            engine.set_track_lanes([{"track_id": 10, "source_channel_layout": 99}])
+        # an ordinal or an unknown token is rejected.
+        engine.set_track_buses([{"bus_id": 1, "channel_layout": "5.1"}])
+        with pytest.raises(TypeError):
+            engine.set_track_buses([{"bus_id": 1, "channel_layout": 2}])
+        with pytest.raises(SonareValueError, match="5.1"):
+            engine.set_track_buses([{"bus_id": 1, "channel_layout": "quad"}])
+        with pytest.raises(TypeError):
+            engine.set_track_lanes([{"track_id": 10, "source_channel_layout": 1}])
         # Only stereo (or an omitted layout) is accepted for a lane.
-        engine.set_track_lanes([{"track_id": 10, "source_channel_layout": ChannelLayout.STEREO}])
+        engine.set_track_lanes([{"track_id": 10, "source_channel_layout": "stereo"}])
         engine.set_track_lanes([{"track_id": 10}])
         for layout in (
-            ChannelLayout.MONO,
-            ChannelLayout.FIVE_POINT_ONE,
-            ChannelLayout.SEVEN_POINT_ONE,
+            "mono",
+            "5.1",
+            "7.1",
         ):
             with pytest.raises(SonareError, match="must be stereo"):
                 engine.set_track_lanes([{"track_id": 10, "source_channel_layout": layout}])
@@ -564,7 +565,7 @@ def test_engine_track_strip_pan_and_send_setters() -> None:
         for value in _PAN_LAW_CORPUS["rejected_numeric"]:
             with pytest.raises(TypeError):
                 engine.set_track_strip_pan_law(10, value)
-        engine.set_track_strip_pan_mode(10, "stereo-pan")
+        engine.set_track_strip_pan_mode(10, "stereoPan")
         engine.set_track_strip_channel_delay_samples(10, 0)
         engine.set_track_strip_dual_pan(10, 0.0, 0.0)
 
@@ -598,7 +599,7 @@ def test_realtime_engine_dual_pan_routes_left_input_to_expected_output() -> None
             10,
             '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
         )
-        engine.set_track_strip_pan_mode(10, "dual-pan")
+        engine.set_track_strip_pan_mode(10, "dualPan")
 
         # A +1 left-input pan routes that input to the right output. Settling
         # removes the panner's normal smoothing ramp from this routing check.
@@ -670,7 +671,7 @@ def test_engine_bus_strip_pan_and_send_setters() -> None:
         for value in _PAN_LAW_CORPUS["rejected_numeric"]:
             with pytest.raises(TypeError):
                 engine.set_bus_strip_pan_law(1, value)
-        engine.set_bus_strip_pan_mode(1, "stereo-pan")
+        engine.set_bus_strip_pan_mode(1, "stereoPan")
         engine.set_bus_strip_dual_pan(1, 0.0, 0.0)
 
         # Hard-left pan should leave the left channel louder than the right.
@@ -686,7 +687,7 @@ def test_engine_bus_strip_pan_rejects_surround_bus() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
         # A 5.1 bus rejects every pan setter outright (unknown and surround
         # buses share one generic failure), but keeps its EQ available.
-        engine.set_track_buses([{"bus_id": 1, "channel_layout": ChannelLayout.FIVE_POINT_ONE}])
+        engine.set_track_buses([{"bus_id": 1, "channel_layout": "5.1"}])
         engine.set_bus_strip_json(
             1,
             '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
@@ -718,9 +719,7 @@ def test_engine_bus_strip_eq_band_updates_embedded_eq() -> None:
                 )
             ]
         )
-        engine.set_track_buses(
-            [{"bus_id": 1, "gain_db": 0.0, "channel_layout": ChannelLayout.MONO}]
-        )
+        engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0, "channel_layout": "mono"}])
         engine.set_track_lanes([{"track_id": 10, "output_bus_id": 1}])
         engine.set_bus_strip_json(
             1,
@@ -764,13 +763,13 @@ def test_engine_track_lane_accepts_send_timing_aliases() -> None:
                 {
                     "track_id": 10,
                     "sends": [
-                        {"bus_id": 1, "level_db": 0.0, "timing": "pre-fader"},
+                        {"bus_id": 1, "level_db": 0.0, "timing": "preFader"},
                     ],
                 },
                 {
                     "track_id": 20,
                     "sends": [
-                        {"bus_id": 1, "level_db": 0.0, "send_timing": 1},
+                        {"bus_id": 1, "level_db": 0.0, "send_timing": "preFader"},
                     ],
                 },
                 {

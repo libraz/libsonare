@@ -14,6 +14,7 @@ from ._errors import SonareValueError, _not_supported, _require_open, _unknown_e
 from ._features_metering import _dynamic_range_args, _oversample_factor_arg, _spectrum_args
 from ._ffi_types_core import SonareDownmixOptions
 from ._runtime import (
+    _channel_layout_value,
     _check,
     _float_array_result,
     _from_c_float_array,
@@ -189,12 +190,7 @@ if TYPE_CHECKING:
     pass
 
 # Plane count of each layout, the same table as the core's channel_count().
-_LAYOUT_CHANNEL_COUNTS = {
-    ChannelLayout.MONO: 1,
-    ChannelLayout.STEREO: 2,
-    ChannelLayout.FIVE_POINT_ONE: 6,
-    ChannelLayout.SEVEN_POINT_ONE: 8,
-}
+_LAYOUT_CHANNEL_COUNTS = {"mono": 1, "stereo": 2, "5.1": 6, "7.1": 8}
 
 
 def decode_channels(data: bytes) -> tuple[np.ndarray, int]:
@@ -250,7 +246,7 @@ def decode_channels(data: bytes) -> tuple[np.ndarray, int]:
 
 def downmix(
     channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
-    target_layout: ChannelLayout | int,
+    target_layout: ChannelLayout,
     *,
     normalize: bool = False,
     include_lfe: bool = False,
@@ -262,7 +258,7 @@ def downmix(
     the decoders use. The source layout is the one the channel count names (1, 2,
     6 or 8). Supported targets narrow the bed (7.1 to 5.1, 5.1 or 7.1 to stereo,
     anything modelled to mono) or copy it. A channel count outside 1/2/6/8 folds
-    to ``ChannelLayout.MONO`` as the unweighted mean of its channels, as the
+    to ``"mono"`` as the unweighted mean of its channels, as the
     decoders do, and has no other target.
 
     The fold is not normalised: the coefficients sum, so a source with several
@@ -273,7 +269,8 @@ def downmix(
     Args:
         channels: One buffer per channel, or a 2-D ``(channels, frames)`` array.
             All channels must be the same length.
-        target_layout: A :class:`ChannelLayout` (or its integer value).
+        target_layout: A :data:`ChannelLayout` token (``"mono"``, ``"stereo"``,
+            ``"5.1"`` or ``"7.1"``).
         normalize: Scale the fold so the worst case (every input at full scale, in
             phase) cannot exceed unity. A peak divisor, not a loudness match, so
             typical material comes out a few dB quieter.
@@ -303,7 +300,7 @@ def downmix(
         raise TypeError("downmix: normalize must be a bool")
     if not isinstance(include_lfe, bool):
         raise TypeError("downmix: include_lfe must be a bool")
-    layout = ChannelLayout(_to_c_int(target_layout, "target_layout").value)
+    layout = _channel_layout_value(target_layout)
     planes = _linked_channel_planes("downmix", channels)
     frame_count = int(planes[0].shape[0])
     if any(int(plane.shape[0]) != frame_count for plane in planes):
@@ -319,12 +316,12 @@ def downmix(
                 packed.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
                 _to_c_size_t(frame_count, "frames"),
                 _to_c_size_t(len(planes), "num_channels"),
-                _to_c_int(int(layout), "target_layout"),
+                _to_c_int(layout, "target_layout"),
                 ctypes.byref(fold),
                 ctypes.byref(out),
             )
         )
-        out_channels = _LAYOUT_CHANNEL_COUNTS[layout]
+        out_channels = _LAYOUT_CHANNEL_COUNTS[target_layout]
         planar = _from_c_float_array(out, out_channels * frame_count)
         return planar.reshape(out_channels, frame_count)
 

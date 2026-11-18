@@ -1178,6 +1178,7 @@ from .types import (
     NoteSegment as NoteSegment,
 )
 from .types import PanLaw as PanLaw
+from .types import PanMode as PanMode
 from .types import (
     ParameterInfo as ParameterInfo,
 )

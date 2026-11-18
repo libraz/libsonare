@@ -25,7 +25,7 @@ from collections.abc import Callable, Sequence
 
 import pytest
 
-from libsonare import MeterTap, SendTiming, SonareValueError
+from libsonare import SonareValueError
 from libsonare._project_model import _track_kind_value
 from libsonare._project_synth import (
     _sample_desc_loop_value,
@@ -33,11 +33,8 @@ from libsonare._project_synth import (
     _sample_loop_value,
 )
 from libsonare._runtime import (
-    _meter_tap_value,
     _mode_values,
-    _pan_mode_value,
     _profile_value,
-    _send_timing_value,
     _warp_mode_value,
 )
 
@@ -52,15 +49,6 @@ Resolver = Callable[..., int]
 _Family = tuple[Resolver, str, Sequence[tuple[str, int]], Sequence[int], Sequence[int]]
 
 _FAMILIES: Sequence[_Family] = (
-    (
-        _pan_mode_value,
-        "pan mode",
-        (("balance", 0), ("stereo-pan", 1), ("dual-pan", 2)),
-        (),
-        (3, 99, -1),
-    ),
-    (_meter_tap_value, "meter tap", (("pre-fader", 0), ("post-fader", 1)), (), (2, 99, -1)),
-    (_send_timing_value, "send timing", (("post-fader", 0), ("pre-fader", 1)), (), (2, 99, -1)),
     (
         _warp_mode_value,
         "warp mode",
@@ -165,18 +153,6 @@ def test_a_bool_is_refused_rather_than_read_as_zero_or_one(
     for value in (True, False):
         with pytest.raises(TypeError, match=what):
             resolve(value)
-
-
-@pytest.mark.parametrize(
-    ("resolve", "member"),
-    (
-        (_meter_tap_value, MeterTap.POST_FADER),
-        (_send_timing_value, SendTiming.PRE_FADER),
-    ),
-)
-def test_an_enum_member_still_resolves_to_its_own_ordinal(resolve: Resolver, member: int) -> None:
-    """The enum branch runs before the integer one, so validation cannot shadow it."""
-    assert resolve(member) == int(member)
 
 
 @pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not found")

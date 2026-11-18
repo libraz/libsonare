@@ -707,7 +707,7 @@ def _wrong_type_sites():
         ("note_set_index", lambda v: _note_set_index("fn", "index", v), "x", 1.5),
         ("target_kind", _automation_target_kind_value, [], 1.5),
         ("midi_word", lambda v: _validate_midi_event_word(v, "word"), "x", -1),
-        ("enum", _meter_tap_value, [], 1.5),
+        ("enum", _meter_tap_value, [], "post"),
     ]
 
 
@@ -725,7 +725,7 @@ def test_a_non_bool_flag_is_a_type_error_on_the_boolean_arguments() -> None:
     with pytest.raises(TypeError, match="hard_mask must be a bool"):
         ls.hpss(np.zeros(4096, dtype=np.float32), 22050, hard_mask=1)  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="include_lfe must be a bool"):
-        ls.downmix(samples, ls.ChannelLayout.STEREO, include_lfe=1)  # type: ignore[arg-type]
+        ls.downmix(samples, "stereo", include_lfe=1)  # type: ignore[arg-type]
 
 
 def test_a_non_bool_is_a_type_error_in_the_vocal_edit_flag() -> None:

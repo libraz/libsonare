@@ -12,12 +12,15 @@ from ._ffi import SonareSurroundPan
 from ._narrowing import _narrow_double
 from ._runtime import (
     _UINT32_MAX,
+    ChannelLayout,
     PanLaw,
+    PanMode,
     SendTiming,
     SidechainSourceKind,
     SonareEngineBus,
     SonareEngineTrackLane,
     SonareEngineTrackSend,
+    _channel_layout_value,
     _check,
     _get_lib,
     _narrow_int,
@@ -70,9 +73,9 @@ def _marshal_sends(sends: Sequence[Mapping[str, object]]) -> ctypes.Array[Sonare
         # prior behavior.
         timing = send.get("timing", send.get("send_timing", send.get("sendTiming")))
         send_array[send_index].send_timing = (
-            _send_timing_value(cast(SendTiming | str | int, timing))
+            _send_timing_value(cast(SendTiming, timing))
             if timing is not None
-            else int(SendTiming.POST_FADER)
+            else 0
         )
     return send_array
 
@@ -92,7 +95,7 @@ class _EngineMixingMixin:
         send_arrays: list[object] = []
         for i, lane in enumerate(lanes):
             # ctypes zero-inits source_channel_layout to 0 (mono); default to
-            # stereo (ChannelLayout.STEREO) so callers that omit it keep the
+            # stereo so callers that omit it keep the
             # prior stereo behavior.
             raw[i].source_channel_layout = 1
             if isinstance(lane, Mapping):
@@ -119,10 +122,13 @@ class _EngineMixingMixin:
                     _UINT32_MAX,
                 )
                 if "source_channel_layout" in lane or "sourceChannelLayout" in lane:
-                    raw[i].source_channel_layout = (
-                        cast(int, lane["source_channel_layout"])
-                        if "source_channel_layout" in lane
-                        else cast(int, lane["sourceChannelLayout"])
+                    raw[i].source_channel_layout = _channel_layout_value(
+                        cast(
+                            ChannelLayout,
+                            lane["source_channel_layout"]
+                            if "source_channel_layout" in lane
+                            else lane["sourceChannelLayout"],
+                        )
                     )
             else:
                 raw[i].track_id = lane
@@ -208,7 +214,7 @@ class _EngineMixingMixin:
         self,
         bus_id: int,
         insert_index: int,
-        source_kind: SidechainSourceKind | str | int,
+        source_kind: SidechainSourceKind,
         source_id: int,
     ) -> SidechainCheck:
         """Report whether :meth:`set_bus_sidechain` would accept a binding."""
@@ -226,7 +232,7 @@ class _EngineMixingMixin:
         return _sidechain_check(refusal.value)
 
     def can_set_master_sidechain(
-        self, insert_index: int, source_kind: SidechainSourceKind | str | int, source_id: int
+        self, insert_index: int, source_kind: SidechainSourceKind, source_id: int
     ) -> SidechainCheck:
         """Report whether :meth:`set_master_sidechain` would accept a binding."""
         refusal = ctypes.c_int()
@@ -245,7 +251,7 @@ class _EngineMixingMixin:
         self,
         bus_id: int,
         insert_index: int,
-        source_kind: SidechainSourceKind | str | int,
+        source_kind: SidechainSourceKind,
         source_id: int,
     ) -> None:
         """Key one insert of a bus strip from a track's or another bus's signal.
@@ -266,7 +272,7 @@ class _EngineMixingMixin:
         )
 
     def set_master_sidechain(
-        self, insert_index: int, source_kind: SidechainSourceKind | str | int, source_id: int
+        self, insert_index: int, source_kind: SidechainSourceKind, source_id: int
     ) -> None:
         """Key one insert of the master strip from a track's or a bus's signal.
 
@@ -292,11 +298,13 @@ class _EngineMixingMixin:
                 bus["gain_db"] if "gain_db" in bus else bus.get("gainDb", 0.0), "gain_db"
             )
             # ctypes zero-inits channel_layout to 0 (mono); default to stereo
-            # (ChannelLayout.STEREO) unless the caller specifies it.
+            # unless the caller specifies it.
             if "channel_layout" in bus or "channelLayout" in bus:
-                raw[i].channel_layout = cast(
-                    int,
-                    bus["channel_layout"] if "channel_layout" in bus else bus["channelLayout"],
+                raw[i].channel_layout = _channel_layout_value(
+                    cast(
+                        ChannelLayout,
+                        bus["channel_layout"] if "channel_layout" in bus else bus["channelLayout"],
+                    )
                 )
             else:
                 raw[i].channel_layout = 1
@@ -318,9 +326,9 @@ class _EngineMixingMixin:
                     # keep the prior behavior.
                     timing = send.get("timing", send.get("send_timing", send.get("sendTiming")))
                     send_array[send_index].send_timing = (
-                        _send_timing_value(cast(SendTiming | str | int, timing))
+                        _send_timing_value(cast(SendTiming, timing))
                         if timing is not None
-                        else int(SendTiming.POST_FADER)
+                        else 0
                     )
                 raw[i].sends = send_array
                 raw[i].send_count = len(sends)
@@ -453,7 +461,7 @@ class _EngineMixingMixin:
             )
         )
 
-    def set_track_strip_pan_mode(self, track_id: int, pan_mode: str | int) -> None:
+    def set_track_strip_pan_mode(self, track_id: int, pan_mode: PanMode) -> None:
         """Set a track strip's pan mode (name 'balance'/'stereo-pan'/'dual-pan', or int 0..2)."""
         _check(
             _get_lib().sonare_engine_set_track_strip_pan_mode(
@@ -764,7 +772,7 @@ class _EngineMixingMixin:
             )
         )
 
-    def set_bus_strip_pan_mode(self, bus_id: int, pan_mode: str | int) -> None:
+    def set_bus_strip_pan_mode(self, bus_id: int, pan_mode: PanMode) -> None:
         """Set a bus strip's pan mode (name 'balance'/'stereo-pan'/'dual-pan', or int 0..2).
 
         Bus-strip counterpart of :meth:`set_track_strip_pan_mode`.

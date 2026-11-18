@@ -17,6 +17,7 @@ from ._runtime import (
     MixMeterSnapshot,
     MixResult,
     PanLaw,
+    PanMode,
     SendTiming,
     SonareMixMeterSnapshot,
     SonareValueError,
@@ -523,21 +524,18 @@ class Mixer:
         handle = self._strip_handle(strip)
         _check(_get_lib().sonare_strip_set_input_trim_db(handle, _to_c_float(db, "db")))
 
-    def set_pan(self, strip: StripRef, pan: float, pan_mode: int | str | None = None) -> None:
+    def set_pan(self, strip: StripRef, pan: float, pan_mode: PanMode | None = None) -> None:
         """Set a strip's pan position.
 
         Pan modes: ``balance`` (default) keeps the stereo image, attenuates only
         the channel away from the pan direction and is unity at centre under
-        every law; ``stereo-pan`` folds the pair to mono and applies the law's
+        every law; ``stereoPan`` folds the pair to mono and applies the law's
         centre attenuation (-3.01, -4.52, -6.02 and 0 dB for the four laws);
-        ``dual-pan`` pans the left and right inputs independently (default -1
+        ``dualPan`` pans the left and right inputs independently (default -1
         and +1, a pass-through) with the same centre attenuation.
 
-        ``pan_mode`` accepts a :data:`PanLaw`-independent pan mode as an int
-        (``0`` balance, ``1`` stereo-pan, ``2`` dual-pan), a name
-        (``"balance"``/``"stereoPan"``/``"stereo-pan"``/``"dualPan"``/
-        ``"dual-pan"``), or ``None`` to keep the strip's current pan mode. The
-        ``None``/keep sentinel is passed to the C ABI as ``-1``.
+        ``pan_mode`` is a :data:`PanMode` token, or ``None`` to keep the
+        strip's current pan mode.
 
         Raises:
             SonareValueError: If ``pan`` is outside [-1, 1] or non-finite.
@@ -599,14 +597,12 @@ class Mixer:
         send_id: str,
         destination_bus_id: str,
         send_db: float = 0.0,
-        timing: SendTiming | str | int = SendTiming.POST_FADER,
+        timing: SendTiming = "postFader",
     ) -> int:
         """Add a send from a strip to a bus and return its send index.
 
-        ``timing`` accepts a :class:`SendTiming` enum, a name
-        (``"pre_fader"``/``"post_fader"`` or ``"pre"``/``"post"``), or an int
-        (``0`` post-fader, ``1`` pre-fader). Call :meth:`compile` after adding
-        sends before processing.
+        ``timing`` is ``"postFader"`` (default) or ``"preFader"``. Call
+        :meth:`compile` after adding sends before processing.
         """
         handle = self._strip_handle(strip)
         index_out = ctypes.c_size_t()
@@ -645,14 +641,13 @@ class Mixer:
         _check(lib.sonare_strip_remove_send(handle, _to_c_uint32(index, "index")))
 
     def strip_meter(
-        self, strip: StripRef, tap: MeterTap | str | int = MeterTap.POST_FADER
+        self, strip: StripRef, tap: MeterTap = "postFader"
     ) -> MixMeterSnapshot:
         """Read a per-strip meter snapshot at the given tap point.
 
         Args:
             strip: Strip index or id.
-            tap: ``MeterTap`` enum, name (``"pre_fader"``/``"post_fader"``), or
-                int (``0`` pre-fader, ``1`` post-fader).
+            tap: ``"preFader"`` or ``"postFader"`` (default).
 
         Returns:
             A :class:`MixMeterSnapshot` with all peak/RMS/correlation/LUFS/true
@@ -672,7 +667,7 @@ class Mixer:
         return _mix_meter_from_c(snapshot)
 
     def meter_tap(
-        self, strip: StripRef, tap: MeterTap | str | int = MeterTap.POST_FADER
+        self, strip: StripRef, tap: MeterTap = "postFader"
     ) -> MixMeterSnapshot:
         """Alias of :meth:`strip_meter` matching the C ``meter_tap`` naming."""
         return self.strip_meter(strip, tap)
@@ -1068,7 +1063,7 @@ def mix_stereo(
     sample_rate: int,
     fader_db: Sequence[float] | None = None,
     pan: Sequence[float] | None = None,
-    pan_mode: Sequence[str | int] | str | int = "balance",
+    pan_mode: Sequence[PanMode] | PanMode = "balance",
     width: Sequence[float] | None = None,
     muted: Sequence[bool] | None = None,
     input_trim_db: Sequence[float] | None = None,
@@ -1195,7 +1190,7 @@ def mix_stereo(
             # just created already carries -- centre (0.0) for an absent
             # position, and Balance for the default mode.
             if mode_list is None:
-                mode = typing.cast("str | int", pan_mode)
+                mode = typing.cast("PanMode", pan_mode)
             else:
                 mode = mode_list[index] if index < len(mode_list) else "balance"
             _check(

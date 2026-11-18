@@ -42,21 +42,22 @@ from ._narrowing import _resolve_time_offset as _resolve_time_offset
 from ._narrowing import _resolve_zero_default as _resolve_zero_default
 from ._narrowing import _utf8_arg as _utf8_arg
 from ._types_enums import _AUTOMATION_CURVES as _AUTOMATION_CURVES
+from ._types_enums import _CHANNEL_LAYOUTS as _CHANNEL_LAYOUTS
 from ._types_enums import _CHORD_CHROMA_METHODS as _CHORD_CHROMA_METHODS
 from ._types_enums import _GENRE_HINTS as _GENRE_HINTS
 from ._types_enums import _KEY_MODES as _KEY_MODES
 from ._types_enums import _KEY_PROFILES as _KEY_PROFILES
+from ._types_enums import _METER_TAPS as _METER_TAPS
 from ._types_enums import _NORM_TYPES as _NORM_TYPES
 from ._types_enums import _PAN_LAWS as _PAN_LAWS
+from ._types_enums import _PAN_MODES as _PAN_MODES
 from ._types_enums import _PITCH_TARGET_MODES as _PITCH_TARGET_MODES
 from ._types_enums import _SECTION_TYPES as _SECTION_TYPES
+from ._types_enums import _SEND_TIMINGS as _SEND_TIMINGS
+from ._types_enums import _SIDECHAIN_SOURCE_KINDS as _SIDECHAIN_SOURCE_KINDS
 from ._types_enums import _TEMPOGRAM_MODES as _TEMPOGRAM_MODES
 from ._types_enums import _WINDOW_TYPES as _WINDOW_TYPES
 from .types import *  # noqa: F403
-
-PAN_MODE_BALANCE = 0
-PAN_MODE_STEREO_PAN = 1
-PAN_MODE_DUAL_PAN = 2
 
 _lib: ctypes.CDLL | None = None
 
@@ -885,15 +886,6 @@ def _tuning_arg(fn_name: str, tuning_cents: float | str) -> tuple[float, int]:
     return tuning_cents, 0
 
 
-_PAN_MODE_NAMES = {
-    "balance": PAN_MODE_BALANCE,
-    "stereo-pan": PAN_MODE_STEREO_PAN,
-    "stereopan": PAN_MODE_STEREO_PAN,
-    "dual-pan": PAN_MODE_DUAL_PAN,
-    "dualpan": PAN_MODE_DUAL_PAN,
-}
-
-
 def _enum_error(
     value: object,
     names: Mapping[str, int],
@@ -1133,8 +1125,9 @@ def _synth_enum_value(value: str | int, names: Mapping[str, int], what: str) -> 
     return _resolve_enum(value, names, what, expected=True)
 
 
-def _pan_mode_value(value: str | int) -> int:
-    return _resolve_enum(value, _PAN_MODE_NAMES, "pan mode", dash=True)
+def _pan_mode_value(value: PanMode) -> int:
+    """Resolve a pan mode token to its C enum value."""
+    return _token_ordinal(value, _PAN_MODES, "pan mode")
 
 
 def _curve_value(value: AutomationCurve) -> int:
@@ -1147,47 +1140,24 @@ def _pan_law_value(value: PanLaw) -> int:
     return _token_ordinal(value, _PAN_LAWS, "pan law")
 
 
-_METER_TAP_NAMES = {
-    "pre-fader": int(MeterTap.PRE_FADER),
-    "pre": int(MeterTap.PRE_FADER),
-    "prefader": int(MeterTap.PRE_FADER),
-    "post-fader": int(MeterTap.POST_FADER),
-    "post": int(MeterTap.POST_FADER),
-    "postfader": int(MeterTap.POST_FADER),
-}
+def _meter_tap_value(value: MeterTap) -> int:
+    """Resolve a meter tap token to its C enum value."""
+    return _token_ordinal(value, _METER_TAPS, "meter tap")
 
 
-def _meter_tap_value(value: MeterTap | str | int) -> int:
-    """Resolve a meter tap point to its C enum value (0 pre-fader, 1 post-fader)."""
-    return _resolve_enum(value, _METER_TAP_NAMES, "meter tap", enum_cls=MeterTap, dash=True)
+def _send_timing_value(value: SendTiming) -> int:
+    """Resolve a send timing token to its C enum value."""
+    return _token_ordinal(value, _SEND_TIMINGS, "send timing")
 
 
-_SEND_TIMING_NAMES = {
-    "pre-fader": int(SendTiming.PRE_FADER),
-    "pre": int(SendTiming.PRE_FADER),
-    "prefader": int(SendTiming.PRE_FADER),
-    "post-fader": int(SendTiming.POST_FADER),
-    "post": int(SendTiming.POST_FADER),
-    "postfader": int(SendTiming.POST_FADER),
-}
+def _sidechain_source_kind_value(value: SidechainSourceKind) -> int:
+    """Resolve a sidechain source kind token to its C enum value."""
+    return _token_ordinal(value, _SIDECHAIN_SOURCE_KINDS, "sidechain source kind")
 
 
-def _send_timing_value(value: SendTiming | str | int) -> int:
-    """Resolve a send timing to its C enum value (0 post-fader, 1 pre-fader)."""
-    return _resolve_enum(value, _SEND_TIMING_NAMES, "send timing", enum_cls=SendTiming, dash=True)
-
-
-_SIDECHAIN_SOURCE_KIND_NAMES = {
-    "track": int(SidechainSourceKind.TRACK),
-    "bus": int(SidechainSourceKind.BUS),
-}
-
-
-def _sidechain_source_kind_value(value: SidechainSourceKind | str | int) -> int:
-    """Resolve a sidechain source kind to its C enum value (0 track, 1 bus)."""
-    return _resolve_enum(
-        value, _SIDECHAIN_SOURCE_KIND_NAMES, "sidechain source kind", enum_cls=SidechainSourceKind
-    )
+def _channel_layout_value(value: ChannelLayout) -> int:
+    """Resolve a channel layout token to its C enum value."""
+    return _token_ordinal(value, _CHANNEL_LAYOUTS, "channel layout")
 
 
 _WARP_MODE_NAMES = {"off": 0, "repitch": 1, "tempo-sync": 2, "time-stretch": 3}

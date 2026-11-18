@@ -8,7 +8,6 @@ import pytest
 
 from libsonare import (
     AutomationPoint,
-    ChannelLayout,
     EngineClip,
     EngineGraphConnection,
     EngineGraphNode,
@@ -42,7 +41,7 @@ def test_engine_drain_meter_telemetry_wide_surround_bus() -> None:
             ]
         )
         # 5.1 group bus; the lane routes into it and is panned hard to Ls.
-        engine.set_track_buses([{"bus_id": 1, "channel_layout": ChannelLayout.FIVE_POINT_ONE}])
+        engine.set_track_buses([{"bus_id": 1, "channel_layout": "5.1"}])
         engine.set_track_lanes([{"track_id": 10, "output_bus_id": 1}])
         engine.set_track_strip_json(
             10,
@@ -79,7 +78,7 @@ def test_engine_set_track_strip_surround_pan_moves_lane_between_planes() -> None
                 )
             ]
         )
-        engine.set_track_buses([{"bus_id": 1, "channel_layout": ChannelLayout.FIVE_POINT_ONE}])
+        engine.set_track_buses([{"bus_id": 1, "channel_layout": "5.1"}])
         engine.set_track_lanes([{"track_id": 10, "output_bus_id": 1}])
         engine.set_track_strip_json(
             10, '{"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"s"}]}'

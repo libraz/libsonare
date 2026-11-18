@@ -2,7 +2,8 @@
 
 Most subclass :class:`enum.IntEnum` because the values cross the C ABI as
 plain integers, so either the member or its number is accepted. Key mode, key
-profile, section type, automation curve and pan law are string tokens
+profile, section type, automation curve, pan law, pan mode, channel layout,
+meter tap, send timing and sidechain source kind are string tokens
 (:class:`typing.Literal`) whose position in the matching ``_*`` tuple is the C
 ordinal.
 """
@@ -62,47 +63,31 @@ is unity at centre under every law.
 _PAN_LAWS: tuple[str, ...] = get_args(PanLaw)
 
 
-class ChannelLayout(IntEnum):
-    """Speaker bed layout for a bus or source (mirrors SonareChannelLayout).
+ChannelLayout = Literal["mono", "stereo", "5.1", "7.1"]
+"""Speaker bed layout for a bus or source.
 
-    Plane order is WAVE_FORMAT_EXTENSIBLE: ``FIVE_POINT_ONE`` = L R C LFE Ls Rs,
-    ``SEVEN_POINT_ONE`` = L R C LFE Ls Rs Lss Rss.
-    """
+Plane order is WAVE_FORMAT_EXTENSIBLE: ``"5.1"`` = L R C LFE Ls Rs, ``"7.1"`` =
+L R C LFE Ls Rs Lss Rss.
+"""
+_CHANNEL_LAYOUTS: tuple[str, ...] = get_args(ChannelLayout)
 
-    MONO = 0
-    STEREO = 1
-    FIVE_POINT_ONE = 2
-    SEVEN_POINT_ONE = 3
+MeterTap = Literal["preFader", "postFader"]
+"""Tap point at which a strip meter snapshot is read."""
+_METER_TAPS: tuple[str, ...] = get_args(MeterTap)
 
+SendTiming = Literal["preFader", "postFader"]
+"""Pre/post-fader timing of a mixer strip send."""
+# C ordinal order: post-fader is 0 so a zero-initialized send is post-fader.
+_SEND_TIMINGS: tuple[str, ...] = ("postFader", "preFader")
 
-class MeterTap(IntEnum):
-    """Tap point at which a strip meter snapshot is read."""
+SidechainSourceKind = Literal["track", "bus"]
+"""Where a bus or master insert's sidechain key is taken from: a track's
+post-strip output, or a bus's output before its gain."""
+_SIDECHAIN_SOURCE_KINDS: tuple[str, ...] = get_args(SidechainSourceKind)
 
-    PRE_FADER = 0
-    POST_FADER = 1
-
-
-class SendTiming(IntEnum):
-    """Pre/post-fader timing of a mixer strip send.
-
-    POST_FADER is 0 so a zero-initialized C ABI send defaults to post-fader; the
-    integer mirrors ``SonareSendTiming`` and is never serialized (scene/project
-    JSON uses the strings ``"pre"``/``"post"``).
-    """
-
-    POST_FADER = 0
-    PRE_FADER = 1
-
-
-class SidechainSourceKind(IntEnum):
-    """Where a bus or master insert's sidechain key is taken from.
-
-    Mirrors ``SonareSidechainSourceKind``: a track's post-strip output, or a
-    bus's output before its gain.
-    """
-
-    TRACK = 0
-    BUS = 1
+PanMode = Literal["balance", "stereoPan", "dualPan"]
+"""How a strip pans a stereo pair: keep the image, fold to mono, or pan each side."""
+_PAN_MODES: tuple[str, ...] = get_args(PanMode)
 
 
 class EngineTelemetryType(IntEnum):

@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from libsonare import Audio, ChannelLayout, SonareError, SonareValueError, decode_channels, downmix
+from libsonare import Audio, SonareError, SonareValueError, decode_channels, downmix
 
 SAMPLE_RATE = 22050
 FRAMES = 64
@@ -58,7 +58,7 @@ def test_downmix_to_mono_equals_the_mono_decoder(channel_count: int) -> None:
     """Folding the decoded channels lands on the samples Audio.from_memory returns."""
     wav = _pcm16_wav(channel_count)
     channels, _ = decode_channels(wav)
-    mono = downmix(channels, ChannelLayout.MONO)
+    mono = downmix(channels, "mono")
     assert mono.shape == (1, FRAMES)
     with Audio.from_memory(wav) as audio:
         np.testing.assert_array_equal(mono[0], audio.data)
@@ -74,45 +74,47 @@ def test_decode_channels_refuses_unusable_bytes() -> None:
 def test_downmix_is_not_normalised_and_takes_options() -> None:
     inv = math.sqrt(0.5)
     full = np.ones((6, 8), dtype=np.float32)
-    np.testing.assert_allclose(downmix(full, ChannelLayout.STEREO), 1 + 2 * inv, atol=1e-5)
-    np.testing.assert_allclose(downmix(full, ChannelLayout.STEREO, normalize=True), 1.0, atol=1e-5)
+    np.testing.assert_allclose(downmix(full, "stereo"), 1 + 2 * inv, atol=1e-5)
+    np.testing.assert_allclose(downmix(full, "stereo", normalize=True), 1.0, atol=1e-5)
     surround = np.stack([np.full(8, v, dtype=np.float32) for v in (0.1, 0.2, 0.3, 0.4, 0.05, 0.15)])
     left = 0.1 + inv * 0.3 + inv * 0.05
     np.testing.assert_allclose(
-        downmix(surround, ChannelLayout.STEREO, include_lfe=True)[0], left + inv * 0.4, atol=1e-6
+        downmix(surround, "stereo", include_lfe=True)[0], left + inv * 0.4, atol=1e-6
     )
     with pytest.raises(TypeError, match="normalize must be a bool"):
-        downmix(surround, ChannelLayout.STEREO, normalize=1)  # type: ignore[arg-type]
+        downmix(surround, "stereo", normalize=1)  # type: ignore[arg-type]
 
 
 def test_downmix_applies_bs775_coefficients() -> None:
     inv = math.sqrt(0.5)
     surround = np.stack([np.full(8, v, dtype=np.float32) for v in (0.1, 0.2, 0.3, 0.4, 0.05, 0.15)])
-    stereo = downmix(surround, ChannelLayout.STEREO)
+    stereo = downmix(surround, "stereo")
     assert stereo.shape == (2, 8)
     left = 0.1 + inv * 0.3 + inv * 0.05
     right = 0.2 + inv * 0.3 + inv * 0.15
     np.testing.assert_allclose(stereo[0], left, atol=1e-6)
     np.testing.assert_allclose(stereo[1], right, atol=1e-6)
-    np.testing.assert_allclose(downmix(surround, 0)[0], 0.5 * (left + right), atol=1e-6)
+    np.testing.assert_allclose(downmix(surround, "mono")[0], 0.5 * (left + right), atol=1e-6)
 
 
 def test_downmix_copies_on_identity_and_means_an_unmodelled_count() -> None:
     stereo = [np.full(8, 0.25, dtype=np.float32), np.full(8, -0.5, dtype=np.float32)]
-    np.testing.assert_array_equal(downmix(stereo, ChannelLayout.STEREO), np.stack(stereo))
+    np.testing.assert_array_equal(downmix(stereo, "stereo"), np.stack(stereo))
     three = [np.full(8, v, dtype=np.float32) for v in (0.3, 0.6, 0.9)]
-    np.testing.assert_allclose(downmix(three, ChannelLayout.MONO)[0], 0.6, atol=1e-6)
+    np.testing.assert_allclose(downmix(three, "mono")[0], 0.6, atol=1e-6)
     with pytest.raises(SonareError):
-        downmix(three, ChannelLayout.STEREO)
+        downmix(three, "stereo")
 
 
 def test_downmix_refuses_an_upmix_an_unknown_layout_and_malformed_channels() -> None:
     pair = [np.zeros(8, dtype=np.float32), np.zeros(8, dtype=np.float32)]
     with pytest.raises(SonareError):
-        downmix(pair, ChannelLayout.FIVE_POINT_ONE)
-    with pytest.raises(ValueError):
-        downmix(pair, 4)
+        downmix(pair, "5.1")
+    with pytest.raises(SonareValueError, match="7.1"):
+        downmix(pair, "quad")  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        downmix(pair, 0)  # type: ignore[arg-type]
     with pytest.raises(SonareValueError):
-        downmix([], ChannelLayout.MONO)
+        downmix([], "mono")
     with pytest.raises(SonareValueError):
-        downmix([np.zeros(8, dtype=np.float32), np.zeros(3, dtype=np.float32)], 0)
+        downmix([np.zeros(8, dtype=np.float32), np.zeros(3, dtype=np.float32)], "mono")

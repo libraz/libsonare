@@ -485,23 +485,11 @@ SectionType: TypeAlias = Literal[
 AutomationCurve = Literal["linear", "exponential", "hold", "sCurve"]
 PanLaw = Literal["const3Db", "const4.5Db", "const6Db", "linear0Db"]
 
-class ChannelLayout(IntEnum):
-    MONO = 0
-    STEREO = 1
-    FIVE_POINT_ONE = 2
-    SEVEN_POINT_ONE = 3
-
-class MeterTap(IntEnum):
-    PRE_FADER = 0
-    POST_FADER = 1
-
-class SendTiming(IntEnum):
-    POST_FADER = 0
-    PRE_FADER = 1
-
-class SidechainSourceKind(IntEnum):
-    TRACK = 0
-    BUS = 1
+PanMode = Literal["balance", "stereoPan", "dualPan"]
+ChannelLayout = Literal["mono", "stereo", "5.1", "7.1"]
+MeterTap = Literal["preFader", "postFader"]
+SendTiming = Literal["preFader", "postFader"]
+SidechainSourceKind = Literal["track", "bus"]
 
 class EngineTelemetryType(IntEnum):
     PROCESS_BLOCK = 0

@@ -1466,7 +1466,7 @@
 "pan_law": {"domain": "mastering", "surfaces": ["c", "node", "python", "wasm"]},
 "pan_law_input": {"domain": "mastering", "surfaces": ["node", "wasm"]},
 "pan_law_name": {"domain": "mastering", "surfaces": ["node", "wasm"]},
-"pan_mode": {"domain": "mastering", "surfaces": ["c", "node", "wasm"]},
+"pan_mode": {"domain": "mastering", "surfaces": ["c", "node", "python", "wasm"]},
 "pan_mode_keep": {"domain": "mastering", "surfaces": ["c"]},
 "parameter_info": {"domain": "engine", "surfaces": ["c", "python"]},
 "part_rig": {"domain": "engine", "surfaces": ["wasm"]},

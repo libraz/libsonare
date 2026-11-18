@@ -20,7 +20,6 @@ from libsonare import (
     EngineMidiEvent,
     RealtimeEngine,
     SidechainCheck,
-    SidechainSourceKind,
     SonareError,
     SonareValueError,
 )
@@ -151,11 +150,11 @@ def test_engine_bus_sends_tap_before_or_after_gain_db() -> None:
             engine.set_track_lanes([{"track_id": 10, "output_bus_id": 1}])
             return _render_last(engine)
 
-    assert run("pre", 0.0, True) == pytest.approx(x * (g1 + 1.0), rel=1e-3)
-    assert run("post", 0.0, True) == pytest.approx(x * 2.0 * g1, rel=1e-3)
+    assert run("preFader", 0.0, True) == pytest.approx(x * (g1 + 1.0), rel=1e-3)
+    assert run("postFader", 0.0, True) == pytest.approx(x * 2.0 * g1, rel=1e-3)
     half = 10.0 ** (-6.0 / 20.0)
-    assert run("pre", -6.0, True) == pytest.approx(x * (g1 + half), rel=1e-3)
-    assert run("post", 0.0, False) == pytest.approx(x * g1, rel=1e-2)
+    assert run("preFader", -6.0, True) == pytest.approx(x * (g1 + half), rel=1e-3)
+    assert run("postFader", 0.0, False) == pytest.approx(x * g1, rel=1e-2)
 
 
 def _routing_engine(lanes: list[object]) -> RealtimeEngine:
@@ -324,36 +323,21 @@ def test_engine_bus_and_master_sidechain_reject_invalid_source_kind() -> None:
             engine.set_bus_sidechain(2, 0, "lane", 30)
         with pytest.raises(SonareValueError):
             engine.set_master_sidechain(0, "lane", 30)
-        # An out-of-range ordinal reaches the C ABI's own source_kind check.
-        for bad_kind in (2, -1):
-            with pytest.raises(SonareValueError) as bus_exc:
-                engine.set_bus_sidechain(2, 0, bad_kind, 30)
-            assert bus_exc.value.code == 4
-            with pytest.raises(SonareValueError) as master_exc:
-                engine.set_master_sidechain(0, bad_kind, 30)
-            assert master_exc.value.code == 4
+        # An ordinal is not a token.
+        for bad_kind in (0, 2, -1, True):
+            with pytest.raises(TypeError):
+                engine.set_bus_sidechain(2, 0, bad_kind, 30)  # type: ignore[arg-type]
+            with pytest.raises(TypeError):
+                engine.set_master_sidechain(0, bad_kind, 30)  # type: ignore[arg-type]
     finally:
         engine.destroy()
 
 
-@pytest.mark.parametrize(
-    ("kind", "expected"),
-    [
-        ("track", 0),
-        ("Track", 0),
-        ("TRACK", 0),
-        ("bus", 1),
-        ("Bus", 1),
-        (0, 0),
-        (1, 1),
-        (SidechainSourceKind.TRACK, 0),
-        (SidechainSourceKind.BUS, 1),
-    ],
-)
-def test_sidechain_source_kind_value_accepts_case_insensitive_aliases(
-    kind: SidechainSourceKind | str | int, expected: int
-) -> None:
-    assert _sidechain_source_kind_value(kind) == expected
+def test_sidechain_source_kind_value_takes_exact_tokens() -> None:
+    assert [_sidechain_source_kind_value(kind) for kind in ("track", "bus")] == [0, 1]
+    for other in ("Track", "TRACK", "Bus", "lane"):
+        with pytest.raises(SonareValueError, match="track"):
+            _sidechain_source_kind_value(other)
 
 
 def _midi1_word(status: int, channel: int, data0: int, data1: int) -> int:
@@ -519,16 +503,16 @@ def test_can_set_sidechain_reports_each_refusal_and_matches_the_setters() -> Non
         check(engine.can_set_bus_sidechain(9, 0, "track", 10), "invalid_target")
         check(engine.can_set_bus_sidechain(1, 1, "track", 30), "insert_out_of_range")
         check(engine.can_set_bus_sidechain(1, 0, "track", 99), "undeclared_source")
-        with pytest.raises(SonareValueError):
-            engine.can_set_bus_sidechain(1, 0, 2, 30)
+        with pytest.raises(TypeError):
+            engine.can_set_bus_sidechain(1, 0, 2, 30)  # type: ignore[arg-type]
         check(engine.can_set_bus_sidechain(1, 0, "bus", 1), "self_key")
         check(engine.can_set_bus_sidechain(1, 0, "bus", 2), "cycle")
-        check(engine.can_set_bus_sidechain(2, 0, SidechainSourceKind.TRACK, 30), None)
+        check(engine.can_set_bus_sidechain(2, 0, "track", 30), None)
         # Master keys.
         check(engine.can_set_master_sidechain(1, "track", 30), "insert_out_of_range")
         check(engine.can_set_master_sidechain(0, "track", 99), "undeclared_source")
-        with pytest.raises(SonareValueError):
-            engine.can_set_master_sidechain(0, 2, 30)
+        with pytest.raises(TypeError):
+            engine.can_set_master_sidechain(0, 2, 30)  # type: ignore[arg-type]
         check(engine.can_set_master_sidechain(0, "bus", 1), None)
         # Queries leave the bindings alone: the refused reverse bus key stays refused.
         check(engine.can_set_bus_sidechain(1, 0, "bus", 2), "cycle")

@@ -427,16 +427,17 @@ def _pan_mode(mixer, strip_id: str) -> int:
 
 
 def test_set_pan_accepts_string_pan_mode(mixer) -> None:
-    """set_pan accepts string pan modes ('stereoPan' / 'dual-pan')."""
+    """set_pan accepts string pan modes ('stereoPan' / 'dualPan')."""
     mixer.set_pan("vocal", 0.5, "stereoPan")
     assert _pan_mode(mixer, "vocal") == 1  # PAN_MODE_STEREO_PAN
 
-    mixer.set_pan("vocal", -0.2, "dual-pan")
+    mixer.set_pan("vocal", -0.2, "dualPan")
     assert _pan_mode(mixer, "vocal") == 2  # PAN_MODE_DUAL_PAN
 
-    # An int pan_mode still works for backward compatibility.
-    mixer.set_pan("vocal", 0.1, 0)
+    mixer.set_pan("vocal", 0.1, "balance")
     assert _pan_mode(mixer, "vocal") == 0  # PAN_MODE_BALANCE
+    with pytest.raises(TypeError):
+        mixer.set_pan("vocal", 0.1, 0)  # type: ignore[arg-type]
 
 
 def test_set_pan_keeps_current_mode_by_default(mixer) -> None:

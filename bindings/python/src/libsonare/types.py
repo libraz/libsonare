@@ -422,6 +422,9 @@ from ._types_enums import (
     PanLaw as PanLaw,
 )
 from ._types_enums import (
+    PanMode as PanMode,
+)
+from ._types_enums import (
     PitchClass as PitchClass,
 )
 from ._types_enums import (

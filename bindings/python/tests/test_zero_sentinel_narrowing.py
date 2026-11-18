@@ -301,7 +301,7 @@ def test_a_fractional_output_bus_is_refused_rather_than_read_as_the_master_mix()
                 ]
             )
             engine.set_track_buses(
-                [{"bus_id": 1, "channel_layout": ls.ChannelLayout.FIVE_POINT_ONE}]
+                [{"bus_id": 1, "channel_layout": "5.1"}]
             )
             lane: dict[str, object] = {"track_id": 10}
             if output_bus_id is not None:

@@ -109,7 +109,6 @@ def test_strip_by_id_returns_index_and_raises_on_unknown(mixer) -> None:
 
 def test_strip_meter_and_meter_tap_return_snapshots(mixer) -> None:
     """strip_meter / meter_tap return a MixMeterSnapshot with numeric fields."""
-    from libsonare import MeterTap
     from libsonare.types import MixMeterSnapshot
 
     _process_one_block(mixer)
@@ -133,10 +132,11 @@ def test_strip_meter_and_meter_tap_return_snapshots(mixer) -> None:
     assert isinstance(snapshot.likely_mono_compatible, bool)
     assert isinstance(snapshot.seq, int)
 
-    # meter_tap is an alias and accepts the enum, an int, and a name.
-    assert isinstance(mixer.meter_tap(0, MeterTap.PRE_FADER), MixMeterSnapshot)
-    assert isinstance(mixer.strip_meter(0, 0), MixMeterSnapshot)
-    assert isinstance(mixer.strip_meter(0, "pre"), MixMeterSnapshot)
+    # The tap is a token; an ordinal is refused.
+    assert isinstance(mixer.meter_tap(0, "preFader"), MixMeterSnapshot)
+    with pytest.raises(TypeError):
+        mixer.strip_meter(0, 0)  # type: ignore[arg-type]
+    assert isinstance(mixer.strip_meter(0, "preFader"), MixMeterSnapshot)
     master = mixer.bus_meter("master")
     assert isinstance(master, MixMeterSnapshot)
     assert master.channel_count == 2
@@ -512,7 +512,7 @@ def test_soloed_and_solo_safe_reflected_in_scene(mixer) -> None:
 
 def test_sends_add_and_set_level(mixer) -> None:
     """add_send returns an int index that set_send_db then accepts."""
-    index = mixer.add_send("vocal", "extra-send", "vocal-verb", send_db=-12.0, timing=0)
+    index = mixer.add_send("vocal", "extra-send", "vocal-verb", send_db=-12.0, timing="postFader")
     assert isinstance(index, int)
     assert index >= 0
     mixer.set_send_db("vocal", index, -6.0)
@@ -520,8 +520,8 @@ def test_sends_add_and_set_level(mixer) -> None:
 
 def test_remove_send_drops_a_send_and_shifts_indices(mixer) -> None:
     """remove_send drops a send; later sends shift down and the index goes stale."""
-    i0 = mixer.add_send("vocal", "rm-send-0", "vocal-verb", send_db=-12.0, timing=0)
-    i1 = mixer.add_send("vocal", "rm-send-1", "vocal-verb", send_db=-9.0, timing=0)
+    i0 = mixer.add_send("vocal", "rm-send-0", "vocal-verb", send_db=-12.0, timing="postFader")
+    i1 = mixer.add_send("vocal", "rm-send-1", "vocal-verb", send_db=-9.0, timing="postFader")
     assert i1 == i0 + 1
 
     mixer.remove_send("vocal", i0)
@@ -531,16 +531,17 @@ def test_remove_send_drops_a_send_and_shifts_indices(mixer) -> None:
         mixer.set_send_db("vocal", i1, -6.0)
 
 
-def test_add_send_accepts_send_timing_enum_name_and_int(mixer) -> None:
-    """add_send accepts a SendTiming enum, a name, and a raw int; invalid raises."""
-    from libsonare import SendTiming
+def test_add_send_takes_exact_send_timing_tokens(mixer) -> None:
+    """add_send takes postFader / preFader; another spelling or a number is refused."""
 
-    i0 = mixer.add_send("vocal", "send-enum", "vocal-verb", timing=SendTiming.POST_FADER)
-    i1 = mixer.add_send("vocal", "send-name", "vocal-verb", timing="pre_fader")
-    i2 = mixer.add_send("vocal", "send-int", "vocal-verb", timing=1)
-    assert all(isinstance(i, int) and i >= 0 for i in (i0, i1, i2))
-    with pytest.raises(ValueError):
-        mixer.add_send("vocal", "send-bad", "vocal-verb", timing="sideways")
+    i0 = mixer.add_send("vocal", "send-post", "vocal-verb", timing="postFader")
+    i1 = mixer.add_send("vocal", "send-pre", "vocal-verb", timing="preFader")
+    assert all(isinstance(i, int) and i >= 0 for i in (i0, i1))
+    for other in ("pre_fader", "pre-fader", "sideways"):
+        with pytest.raises(SonareValueError, match="preFader"):
+            mixer.add_send("vocal", "send-bad", "vocal-verb", timing=other)  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        mixer.add_send("vocal", "send-int", "vocal-verb", timing=1)  # type: ignore[arg-type]
 
 
 def test_strip_can_be_added_to_a_live_mixer(mixer) -> None:
@@ -687,7 +688,9 @@ def test_automation_schedulers_take_curve_tokens(mixer) -> None:
     mixer.schedule_fader_automation("vocal", 256, -12.0, "hold")
     mixer.schedule_pan_automation("vocal", 384, -0.25, "sCurve")
 
-    send_index = mixer.add_send("vocal", "auto-send", "vocal-verb", send_db=-10.0, timing=1)
+    send_index = mixer.add_send(
+        "vocal", "auto-send", "vocal-verb", send_db=-10.0, timing="preFader"
+    )
     mixer.schedule_send_automation("vocal", send_index, 0, -3.0, "exponential")
 
 

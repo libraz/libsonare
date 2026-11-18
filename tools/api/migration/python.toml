@@ -6512,3 +6512,163 @@ changed = "an enum field given as a number is TypeError (was SonareValueError)"
 domain = "effects"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_a_voice_changer_enum_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "type"
+old = "PanMode"
+changed = "Literal['balance', 'stereoPan', 'dualPan']; new public type, the PAN_MODE_* constants are removed"
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_mixer_closed_sets_are_literal_types"
+
+[[entry]]
+kind = "type"
+old = "MeterTap"
+changed = "Literal['preFader', 'postFader']; the IntEnum and its members are removed"
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_mixer_closed_sets_are_literal_types"
+
+[[entry]]
+kind = "type"
+old = "SendTiming"
+changed = "Literal['postFader', 'preFader']; the IntEnum and its members are removed"
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_mixer_closed_sets_are_literal_types"
+
+[[entry]]
+kind = "type"
+old = "SidechainSourceKind"
+changed = "Literal['track', 'bus']; the IntEnum and its members are removed"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_mixer_closed_sets_are_literal_types"
+
+[[entry]]
+kind = "type"
+old = "ChannelLayout"
+changed = "Literal['mono', 'stereo', '5.1', '7.1']; the IntEnum and its members are removed"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_mixer_closed_sets_are_literal_types"
+
+[[entry]]
+kind = "option"
+old = "Mixer.set_pan(pan_mode)"
+changed = "a PanMode token or None; 'stereo-pan' / 'dual-pan' and ordinals are refused"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_binding_consistency.py::test_set_pan_accepts_string_pan_mode"
+
+[[entry]]
+kind = "option"
+old = "Mixer.add_send(timing)"
+changed = "a SendTiming token, default 'postFader'; 'pre-fader' / 'pre_fader' are SonareValueError, a number is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_mixing.py::test_add_send_takes_exact_send_timing_tokens"
+
+[[entry]]
+kind = "option"
+old = "Mixer.strip_meter(tap)"
+changed = "a MeterTap token, default 'postFader'; a number is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_mixing.py::test_strip_meter_and_meter_tap_return_snapshots"
+
+[[entry]]
+kind = "option"
+old = "Mixer.meter_tap(tap)"
+changed = "a MeterTap token, default 'postFader'; a number is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_mixing.py::test_strip_meter_and_meter_tap_return_snapshots"
+
+[[entry]]
+kind = "option"
+old = "mix_stereo(pan_mode)"
+changed = "a PanMode token or a sequence of them, default 'balance'; a number is TypeError"
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_mixer_closed_sets_are_literal_types"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_track_strip_pan_mode(pan_mode)"
+changed = "a PanMode token; 'stereo-pan' / 'dual-pan' and ordinals are refused"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_engine_mixer.py::test_engine_track_strip_pan_and_send_setters"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_bus_strip_pan_mode(pan_mode)"
+changed = "a PanMode token; 'stereo-pan' / 'dual-pan' and ordinals are refused"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_engine_mixer.py::test_engine_bus_strip_pan_and_send_setters"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_bus_sidechain(source_kind)"
+changed = "'track' or 'bus' exactly; other casings are SonareValueError, an ordinal is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_engine_routing.py::test_engine_bus_and_master_sidechain_reject_invalid_source_kind"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_master_sidechain(source_kind)"
+changed = "'track' or 'bus' exactly; other casings are SonareValueError, an ordinal is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_engine_routing.py::test_engine_bus_and_master_sidechain_reject_invalid_source_kind"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.can_set_bus_sidechain(source_kind)"
+changed = "'track' or 'bus' exactly; an ordinal is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_engine_routing.py::test_can_set_sidechain_reports_each_refusal_and_matches_the_setters"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.can_set_master_sidechain(source_kind)"
+changed = "'track' or 'bus' exactly; an ordinal is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_engine_routing.py::test_can_set_sidechain_reports_each_refusal_and_matches_the_setters"
+
+[[entry]]
+kind = "field"
+old = "EngineSend.timing"
+changed = "a SendTiming token; 'pre-fader' and ordinals are refused"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_engine_mixer.py::test_engine_track_lane_accepts_send_timing_aliases"
+
+[[entry]]
+kind = "field"
+old = "EngineTrackBus.channel_layout"
+changed = "a ChannelLayout token; an ordinal is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_engine_mixer.py::test_engine_track_buses_route_lane_sends"
+
+[[entry]]
+kind = "field"
+old = "EngineTrackLane.source_channel_layout"
+changed = "a ChannelLayout token; an ordinal is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_engine_mixer.py::test_engine_track_buses_route_lane_sends"
+
+[[entry]]
+kind = "option"
+old = "downmix(target_layout)"
+changed = "a ChannelLayout token; the ordinal form is TypeError"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_decode_channels.py::test_downmix_refuses_an_upmix_an_unknown_layout_and_malformed_channels"
