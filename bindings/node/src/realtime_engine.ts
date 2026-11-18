@@ -2395,7 +2395,8 @@ export class RealtimeEngine {
    *
    * @param destinationId - Destination to insert on
    * @param config - Typed MIDI-FX chain configuration
-   * @throws TypeError when `config` is not an object or a field has the wrong type
+   * @throws TypeError when `config` is not an object
+   * @throws SonareError InvalidFormat when the core refuses a key or a field's value
    */
   setMidiFx(destinationId: number, config: MidiFxConfig): void {
     this.native.setMidiFx(destinationId, midiFxConfigJson(config, 'setMidiFx'));

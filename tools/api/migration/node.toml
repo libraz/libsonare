@@ -12027,7 +12027,7 @@ rule = "typed-results"
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.setMidiFx"
-changed = "takes a MidiFxConfig object instead of a JSON string; a non-object config, an unknown key or a wrong-typed field is a TypeError"
+changed = "takes a MidiFxConfig object instead of a JSON string; a non-object config is a TypeError, and the core refuses an unknown key or a wrong-typed field as InvalidFormat"
 domain = "engine"
 rule = "typed-results"
 test = "bindings/node/tests/basic_engine_mixer.test.ts::exposes live non-destructive MIDI FX inserts"
