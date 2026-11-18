@@ -830,7 +830,8 @@ describe('features', () => {
 
   it('pitchYin detects 440 Hz', () => {
     const result = pitchYin(tone, SR);
-    expect(result.nFrames).toBeGreaterThan(0);
+    expect(result.f0.length).toBeGreaterThan(0);
+    expect(result).not.toHaveProperty('nFrames');
     expect(result.medianF0).toBeGreaterThan(400);
     expect(result.medianF0).toBeLessThan(480);
     expect(result.f0).toBeInstanceOf(Float32Array);
@@ -839,7 +840,8 @@ describe('features', () => {
 
   it('pitchPyin detects 440 Hz', () => {
     const result = pitchPyin(tone, SR);
-    expect(result.nFrames).toBeGreaterThan(0);
+    expect(result.f0.length).toBeGreaterThan(0);
+    expect(result).not.toHaveProperty('nFrames');
     expect(result.medianF0).toBeGreaterThan(400);
     expect(result.medianF0).toBeLessThan(480);
   });

@@ -534,8 +534,6 @@ export interface BoundaryResult {
   sampleRate: number;
   /** Hop length the analysis grid was built on. */
   hopLength: number;
-  /** Analysis frame count, pooled for a long-form input. */
-  nFrames: number;
   /**
    * Feature pooling stride: 1 for every realistic input length, otherwise the
    * number of raw STFT frames averaged into each analysis frame.

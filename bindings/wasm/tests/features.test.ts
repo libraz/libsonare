@@ -613,7 +613,8 @@ describe('Feature API precision (reference compatibility)', () => {
         threshold: 0.3,
       });
 
-      expect(result.nFrames).toBeGreaterThan(0);
+      expect(result.f0.length).toBeGreaterThan(0);
+      expect(result).not.toHaveProperty('nFrames');
       expect(result.medianF0).toBeGreaterThan(400);
       expect(result.medianF0).toBeLessThan(480);
 
@@ -622,7 +623,7 @@ describe('Feature API precision (reference compatibility)', () => {
       // cannot be marshalled by Emscripten's embind.
       let nearCount = 0;
       let voicedCount = 0;
-      for (let i = 0; i < result.nFrames; i++) {
+      for (let i = 0; i < result.f0.length; i++) {
         if (result.voicedProb[i] > 0.5) {
           voicedCount++;
           if (withinRel(result.f0[i], 440.0, 0.05)) {
@@ -862,7 +863,8 @@ describe('Feature API precision (reference compatibility)', () => {
         threshold: 0.3,
       });
 
-      expect(result.nFrames).toBeGreaterThan(0);
+      expect(result.f0.length).toBeGreaterThan(0);
+      expect(result).not.toHaveProperty('nFrames');
       expect(result.medianF0).toBeGreaterThan(400);
       expect(result.medianF0).toBeLessThan(480);
     });

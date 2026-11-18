@@ -1081,8 +1081,10 @@ export function detectBoundaries(...args: unknown[]): BoundaryResult {
       referenceWindow: request.referenceWindowSec,
     }),
   );
+  // The frame count is the novelty curve's length; the result does not repeat it.
+  const { nFrames: _nFrames, ...rest } = raw;
   return {
-    ...raw,
+    ...rest,
     boundaries: raw.boundaries.map((b: Native) => ({
       timeSec: b.time,
       frame: b.frame,

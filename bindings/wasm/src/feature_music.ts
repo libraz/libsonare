@@ -504,7 +504,6 @@ export function detectBoundaries(...args: unknown[]): BoundaryResult {
     noveltyPeak: result.noveltyPeak,
     sampleRate: result.sampleRate,
     hopLength: result.hopLength,
-    nFrames: result.nFrames,
     frameStride: result.frameStride,
   };
 }

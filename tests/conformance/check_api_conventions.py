@@ -1353,11 +1353,6 @@ RULES: list[Rule] = [
             else None
         ),
         derive=_derived_summary_records,
-        pending={
-            f"{s}:{r}.numChannels": "drop the count; it is channels.length"
-            for s in ("node", "wasm")
-            for r in ("EngineBounceResult", "ProjectBounceResult")
-        },
     ),
     Rule(
         name="collections",
@@ -1410,14 +1405,9 @@ RULES: list[Rule] = [
         population=lambda r: r["kind"] == "matrix-shape" or r["kind"] == "field",
         violation=_matrix_violation,
         derive=_matrix_records,
-        pending={
-            f"{s}:{o}.{f}": "drop the dimension field; a 1-D count is derived from the array, a 2-D one lives in Matrix2D"
+        exempt={
+            f"{s}:MfccResult.nMels": "echo of the request parameter nMels; not a dimension of any array in the result"
             for s in ("node", "wasm")
-            for o, f in (
-                ("BoundaryResult", "nFrames"),
-                ("PitchResult", "nFrames"),
-                ("MfccResult", "nMels"),
-            )
         },
     ),
     Rule(

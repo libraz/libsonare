@@ -540,8 +540,6 @@ export interface BoundaryResult {
   sampleRate: number;
   /** The hop length the analysis ran at. */
   hopLength: number;
-  /** Analysis frames the similarity band was built on. */
-  nFrames: number;
   /** Raw frames averaged per analysis frame; 1 unless pooled. */
   frameStride: number;
 }

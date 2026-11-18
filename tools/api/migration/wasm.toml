@@ -28277,3 +28277,33 @@ changed = "readonly property (was a method), matching VocalEditSession"
 domain = "project"
 rule = "getters"
 test = "bindings/wasm/tests/vocal_edit_worker.test.ts::answers every read-only command against the session or the open draft"
+
+[[entry]]
+kind = "field"
+old = "BoundaryResult.nFrames"
+removed = "read noveltyCurve.length"
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "BoundaryResult.nFrames"
+removed = "read noveltyCurve.length"
+domain = "analysis"
+rule = "matrix-2d"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "PitchResult.nFrames"
+removed = "read f0.length (every per-frame array has the same length)"
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "PitchResult.nFrames"
+removed = "read f0.length (every per-frame array has the same length)"
+domain = "analysis"
+rule = "matrix-2d"
+entry = "./analysis"

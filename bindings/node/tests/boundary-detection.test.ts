@@ -65,7 +65,8 @@ describe('detectBoundaries', () => {
     }
 
     expect(result.noveltyCurve).toBeInstanceOf(Float32Array);
-    expect(result.noveltyCurve.length).toBe(result.nFrames);
+    expect(result.noveltyCurve.length).toBeGreaterThan(0);
+    expect(result).not.toHaveProperty('nFrames');
     expect(result.noveltyPeak).toBeGreaterThan(0);
     // The curve is scaled by its own maximum, so it tops out at 1 whatever the
     // raw response was.

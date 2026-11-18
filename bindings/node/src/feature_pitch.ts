@@ -605,9 +605,13 @@ function pitchTrack(fnName: 'pitchYin' | 'pitchPyin', args: unknown[]): PitchRes
     request.threshold ?? 0.1,
   ] as const;
   // Only pYIN takes a fill flag; the YIN request refuses fillNa as an unknown key.
-  return fnName === 'pitchPyin'
-    ? addon.pitchPyin(...positional, request.fillNa ?? false)
-    : addon.pitchYin(...positional);
+  const native: PitchResult & { nFrames: number } =
+    fnName === 'pitchPyin'
+      ? addon.pitchPyin(...positional, request.fillNa ?? false)
+      : addon.pitchYin(...positional);
+  // The frame count is the length of every per-frame array; the result does not repeat it.
+  const { nFrames: _nFrames, ...result } = native;
+  return result;
 }
 
 /** YIN fundamental-frequency track. */

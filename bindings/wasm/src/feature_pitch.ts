@@ -109,6 +109,12 @@ export function piptrack(...args: unknown[]): PiptrackResult {
   };
 }
 
+// The frame count is the length of every per-frame array; the result does not repeat it.
+function toPitchResult(native: PitchResult & { nFrames: number }): PitchResult {
+  const { nFrames: _nFrames, ...result } = native;
+  return result;
+}
+
 /** Detect pitch using the YIN algorithm. */
 export function pitchYin(request: PitchYinRequest): PitchResult;
 export function pitchYin(
@@ -122,14 +128,16 @@ export function pitchYin(...args: unknown[]): PitchResult {
   const f0MinHz = r.f0MinHz ?? 65.0;
   const f0MaxHz = r.f0MaxHz ?? 2093.0;
   assertFrequencyBounds('pitchYin', f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
-  return requireModule().pitchYin(
-    r.samples,
-    r.sampleRate,
-    r.frameLength ?? 2048,
-    r.hopLength ?? 512,
-    f0MinHz,
-    f0MaxHz,
-    r.threshold ?? 0.1,
+  return toPitchResult(
+    requireModule().pitchYin(
+      r.samples,
+      r.sampleRate,
+      r.frameLength ?? 2048,
+      r.hopLength ?? 512,
+      f0MinHz,
+      f0MaxHz,
+      r.threshold ?? 0.1,
+    ),
   );
 }
 
@@ -146,15 +154,17 @@ export function pitchPyin(...args: unknown[]): PitchResult {
   const f0MinHz = r.f0MinHz ?? 65.0;
   const f0MaxHz = r.f0MaxHz ?? 2093.0;
   assertFrequencyBounds('pitchPyin', f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
-  return requireModule().pitchPyin(
-    r.samples,
-    r.sampleRate,
-    r.frameLength ?? 2048,
-    r.hopLength ?? 512,
-    f0MinHz,
-    f0MaxHz,
-    r.threshold ?? 0.1,
-    r.fillNa ?? false,
+  return toPitchResult(
+    requireModule().pitchPyin(
+      r.samples,
+      r.sampleRate,
+      r.frameLength ?? 2048,
+      r.hopLength ?? 512,
+      f0MinHz,
+      f0MaxHz,
+      r.threshold ?? 0.1,
+      r.fillNa ?? false,
+    ),
   );
 }
 

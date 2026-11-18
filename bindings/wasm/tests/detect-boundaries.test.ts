@@ -66,8 +66,8 @@ describe('detectBoundaries', () => {
     expect(result.sampleRate).toBe(SAMPLE_RATE);
     expect(result.hopLength).toBe(HOP);
     expect(result.frameStride).toBe(1);
-    expect(result.nFrames).toBeGreaterThan(0);
-    expect(result.noveltyCurve.length).toBe(result.nFrames);
+    expect(result.noveltyCurve.length).toBeGreaterThan(0);
+    expect(result).not.toHaveProperty('nFrames');
     expect(result.noveltyPeak).toBeGreaterThan(0);
 
     const tolerance = (2 * HOP) / SAMPLE_RATE;
