@@ -316,7 +316,7 @@ export function setStripPanLaw(
     (offline) => offline.setStripPanLaw(trackId, panLaw),
     () => {
       mergeStripJson(ctx, { kind: 'track', trackId }, (entry) => {
-        entry.panLaw = code;
+        entry.panLaw = panLaw;
       });
       ctx.postSync({ type: 'syncTrackStripPanLaw', trackId, panLaw: code });
     },
@@ -335,7 +335,7 @@ export function setStripPanMode(
     (offline) => offline.setStripPanMode(trackId, panMode),
     () => {
       mergeStripJson(ctx, { kind: 'track', trackId }, (entry) => {
-        entry.panMode = code;
+        entry.panMode = panMode;
       });
       ctx.postSync({ type: 'syncTrackStripPanMode', trackId, panMode: code });
     },
@@ -439,7 +439,7 @@ export function setBusPanLaw(ctx: EngineStripContext, busId: number, panLaw: Pan
     (offline) => offline.setBusPanLaw(busId, panLaw),
     () => {
       mergeStripJson(ctx, { kind: 'bus', busId }, (entry) => {
-        entry.panLaw = code;
+        entry.panLaw = panLaw;
       });
       ctx.postSync({ type: 'syncBusStripPanLaw', busId, panLaw: code });
     },
@@ -453,7 +453,7 @@ export function setBusPanMode(ctx: EngineStripContext, busId: number, panMode: P
     (offline) => offline.setBusPanMode(busId, panMode),
     () => {
       mergeStripJson(ctx, { kind: 'bus', busId }, (entry) => {
-        entry.panMode = code;
+        entry.panMode = panMode;
       });
       ctx.postSync({ type: 'syncBusStripPanMode', busId, panMode: code });
     },

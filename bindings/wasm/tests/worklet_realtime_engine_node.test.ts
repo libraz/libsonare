@@ -27,9 +27,6 @@ const busDocument = (json: string) => JSON.parse(json).buses[0];
 const sceneOf = (key: 'strips' | 'buses', json: string): string =>
   JSON.stringify({ [key]: [JSON.parse(json)[key][0]] });
 
-/** The worklet carries the pan law as its native ordinal; `linear0Db` is 3. */
-const nativePanLaw = (json: string): string => json.replace('"panLaw":"linear0Db"', '"panLaw":3');
-
 /** The offline mirror's read side the commit tests inspect. */
 type RealtimeEngineLike = {
   transportState(): { loopStartPpq: number; loopEndPpq: number; samplePosition: number };
@@ -1310,10 +1307,8 @@ describe('SonareRealtimeEngineNode', () => {
             }),
             expect.objectContaining({
               type: 'syncMixer',
-              trackStrips: [
-                { trackId: 3, sceneJson: sceneOf('strips', nativePanLaw(trackStripJson)) },
-              ],
-              masterStripJson: sceneOf('strips', nativePanLaw(masterStripJson)),
+              trackStrips: [{ trackId: 3, sceneJson: sceneOf('strips', trackStripJson) }],
+              masterStripJson: sceneOf('strips', masterStripJson),
             }),
             expect.objectContaining({
               type: 'syncTrackStripEqBand',
@@ -2822,15 +2817,15 @@ describe('SonareRealtimeEngineNode', () => {
           expect.objectContaining({
             id: '100',
             pan: 0.6,
-            panLaw: 2,
-            panMode: 1,
+            panLaw: 'const6Db',
+            panMode: 'stereoPan',
             eq: { enabled: true, bands: [{}, {}, expect.objectContaining({ frequencyHz: 800 })] },
           }),
         );
         expect(busScene(200)).toEqual({
           version: 1,
           strips: [],
-          buses: [{ id: 'bus-200', dualPanLeft: -0.7, dualPanRight: -0.2, panMode: 2 }],
+          buses: [{ id: 'bus-200', dualPanLeft: -0.7, dualPanRight: -0.2, panMode: 'dualPan' }],
           connections: [],
         });
         expect(JSON.parse(lastSync.masterStripJson).strips[0].eq).toEqual({
