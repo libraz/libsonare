@@ -385,7 +385,7 @@ export class Audio {
 
   /**
    * Inter-sample (true) peak in dBTP. `oversampleFactor` must be a power of two
-   * in [1, 16]; pass 0 to use the library default (4).
+   * in [1, 16].
    */
   truePeakDbtp(oversampleFactor = 4): number {
     this.requireAlive();
