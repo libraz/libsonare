@@ -634,9 +634,9 @@ describe('WASM Project.transcribeToClip', () => {
   /** The clip's stored events, read back out of the serialized project. */
   function storedEvents(project: Project, sourceId: number): ProjectMidiEvent[] {
     const document = JSON.parse(project.toJson()) as {
-      midi_content: Record<string, ProjectMidiEvent[]>;
+      midiContent: Record<string, ProjectMidiEvent[]>;
     };
-    return document.midi_content[String(sourceId)] ?? [];
+    return document.midiContent[String(sourceId)] ?? [];
   }
 
   it('writes the transcribed notes into the clip, replacing what it held', () => {

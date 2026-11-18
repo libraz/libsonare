@@ -79,7 +79,7 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
   ],
   [
     'sonare_wrap_sample_bank.cpp:loopEnd',
-    'A frame offset inside the sample; the core gates looping on loop_mode and loop_end > loop_start, so zero is a frame index rather than a selector.',
+    'A frame offset inside the sample; the core gates looping on loopMode and loopEnd > loopStart, so zero is a frame index rather than a selector.',
   ],
   [
     'sonare_wrap_sample_bank.cpp:sampleIndex',
@@ -103,7 +103,7 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
   ],
   [
     'project/vocal_edit.cpp:takeId',
-    'The vocal project C ABI defines takeId 0 as the clip base binding, resolving clip.source_id and clip.source_offset_ppq; zero is therefore an explicit binding selector rather than omission.',
+    'The vocal project C ABI defines takeId 0 as the clip base binding, resolving clip.sourceId and clip.sourceOffsetPpq; zero is therefore an explicit binding selector rather than omission.',
   ],
   [
     'project/edit.cpp:trackId',

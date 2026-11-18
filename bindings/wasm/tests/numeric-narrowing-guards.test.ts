@@ -468,7 +468,7 @@ describe('annotation ordinals refuse a value that clamps or truncates onto a mem
     const project = new Project();
     try {
       project.annotateKeys([{ startPpq: 0, endPpq: 480, tonicPc: 0, mode: 'unknown', ...entry }]);
-      return JSON.parse(project.toJson()).annotation.keys[0].tonic_pc;
+      return JSON.parse(project.toJson()).annotation.keys[0].tonicPc;
     } finally {
       project.destroy();
     }

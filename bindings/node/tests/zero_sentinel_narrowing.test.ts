@@ -435,7 +435,7 @@ describe('project bounce and take selection', () => {
           }
           return project.toJson();
         }),
-      (json) => json.match(/"active_take_id":\d+/)?.[0] ?? 'absent',
+      (json) => json.match(/"activeTakeId":\d+/)?.[0] ?? 'absent',
       2,
       'refused',
     );
@@ -458,7 +458,7 @@ describe('project bounce and take selection', () => {
           ]);
           return project.toJson();
         }),
-      (json) => json.match(/"comp_segments":\[[^\]]*\]/)?.[0] ?? 'absent',
+      (json) => json.match(/"compSegments":\[[^\]]*\]/)?.[0] ?? 'absent',
       2,
     );
   });

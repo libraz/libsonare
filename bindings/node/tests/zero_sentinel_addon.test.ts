@@ -551,7 +551,7 @@ describe('a facade-guarded sentinel key, reached past the facade', () => {
       }
       try {
         project.setClipTakes(clipId, [take], 1);
-        return JSON.parse(project.toJson()).clips[0].takes[0].source_id;
+        return JSON.parse(project.toJson()).clips[0].takes[0].sourceId;
       } finally {
         project.destroy();
       }

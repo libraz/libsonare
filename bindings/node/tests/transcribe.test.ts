@@ -408,9 +408,9 @@ describe('Project.transcribeToClip', () => {
   /** The events a clip holds, read back out of the project's own serialization. */
   function storedEvents(project: Project, clipId: number) {
     const payload = JSON.parse(project.toJson()) as {
-      midi_content: Record<string, Array<{ ppq: number; word0: number; word1: number }>>;
+      midiContent: Record<string, Array<{ ppq: number; word0: number; word1: number }>>;
     };
-    return (payload.midi_content[String(clipId)] ?? []).map(decode);
+    return (payload.midiContent[String(clipId)] ?? []).map(decode);
   }
 
   it('accepts minNoteDivision and refuses it beside minNoteMs', () => {

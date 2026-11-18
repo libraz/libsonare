@@ -595,7 +595,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
     const project = new Project();
     try {
       project.setSampleRate(48000);
-      const anchorsOf = (): unknown[] => JSON.parse(project.toJson()).warp_maps[0].anchors;
+      const anchorsOf = (): unknown[] => JSON.parse(project.toJson()).warpMaps[0].anchors;
       const anchor = (i: number) => ({ warpSample: i * 10, sourceSample: i * 10 });
       // The control: two legal anchor lists (2 and 3 -- setWarpMap requires at
       // least 2) reload with that many anchors.
@@ -858,7 +858,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       const trackId = project.addTrack({ kind: 'audio', name: 't' });
       const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4 });
       project.setClipTakes(clipId, [{ id: 1 }], { activeTakeId: 1 });
-      const segmentsOf = (): unknown[] => JSON.parse(project.toJson()).clips[0].comp_segments;
+      const segmentsOf = (): unknown[] => JSON.parse(project.toJson()).clips[0].compSegments;
       // The control: two legal comp-segment lists reload with that many segments.
       project.setClipCompSegments(clipId, [{ startPpq: 0, endPpq: 1, takeId: 1 }]);
       expect(segmentsOf().length).toBe(1);
