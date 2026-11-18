@@ -17,7 +17,7 @@ import { assertPositiveInteger, assertSampleRate, assertString } from './validat
 export interface RealtimeVoiceChangerOptions {
   /** Sample rate in Hz, an integer in [8000, 384000]. Required. */
   sampleRate: number;
-  /** Largest block the process calls accept, a positive integer. Default 128. */
+  /** Largest block the process calls accept, a positive integer. Omit it for the library default; an explicit 0 is refused. */
   maxBlockSize?: number;
   /** Channel count of the stream, 1 or 2. Required. */
   numChannels: 1 | 2;
@@ -155,11 +155,13 @@ export class RealtimeVoiceChanger {
       }
     }
     assertSampleRate(fnName, options.sampleRate);
-    const maxBlockSize = options.maxBlockSize ?? 128;
-    if (typeof maxBlockSize !== 'number') {
-      throw new TypeError(`${fnName}: maxBlockSize must be a number`);
+    const maxBlockSize = options.maxBlockSize ?? undefined;
+    if (maxBlockSize !== undefined) {
+      if (typeof maxBlockSize !== 'number') {
+        throw new TypeError(`${fnName}: maxBlockSize must be a number`);
+      }
+      assertPositiveInteger(fnName, maxBlockSize, 'maxBlockSize');
     }
-    assertPositiveInteger(fnName, maxBlockSize, 'maxBlockSize');
     const numChannels = options.numChannels;
     assertChannelCount(fnName, numChannels);
     const nativeConfig = nativeVoiceConfig(fnName, options.config ?? 'neutralMonitor');

@@ -3890,7 +3890,8 @@ export interface WasmStreamingRetune {
 }
 
 export interface WasmRealtimeVoiceChanger {
-  prepare: (sampleRate: number, maxBlockSize: number, channels: number) => void;
+  /** An undefined `maxBlockSize` selects the library default. */
+  prepare: (sampleRate: number, maxBlockSize: number | undefined, channels: number) => void;
   reset: () => void;
   setConfig: (config: Record<string, unknown> | string) => void;
   setPodConfig: (config: WasmRealtimeVoiceChangerPodConfig) => void;

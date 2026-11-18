@@ -65,7 +65,7 @@ export type RealtimeVoiceChangerConfigInput =
 export interface RealtimeVoiceChangerOptions {
   /** Sample rate in Hz, an integer in [8000, 384000]. Required. */
   sampleRate: number;
-  /** Largest block the process calls accept, a positive integer. Default 128. */
+  /** Largest block the process calls accept, a positive integer. Omit it for the library default; an explicit 0 is refused. */
   maxBlockSize?: number;
   /** Channel count of the stream, 1 or 2. Required. */
   numChannels: 1 | 2;

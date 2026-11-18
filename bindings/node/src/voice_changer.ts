@@ -195,11 +195,13 @@ export class RealtimeVoiceChanger {
       }
     }
     assertSampleRate(fnName, options.sampleRate);
-    const maxBlockSize = options.maxBlockSize ?? 128;
-    if (typeof maxBlockSize !== 'number') {
-      throw new TypeError(`${fnName}: maxBlockSize must be a number`);
+    const maxBlockSize = options.maxBlockSize ?? undefined;
+    if (maxBlockSize !== undefined) {
+      if (typeof maxBlockSize !== 'number') {
+        throw new TypeError(`${fnName}: maxBlockSize must be a number`);
+      }
+      assertPositiveInteger(fnName, maxBlockSize, 'maxBlockSize');
     }
-    assertPositiveInteger(fnName, maxBlockSize, 'maxBlockSize');
     const numChannels = options.numChannels;
     assertChannelCount(fnName, numChannels);
     this.native = new addon.RealtimeVoiceChanger(

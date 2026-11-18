@@ -15351,3 +15351,11 @@ changed = "maxBlockSize: the facade default is gone: omit it for the library def
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/surface/mastering-streaming.test.ts::builds with only a sampleRate and processes a block"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerOptions.maxBlockSize"
+changed = "the facade default is gone: omit it for the library default; an explicit 0 is refused"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/effects-voice.test.ts::takes the library default block size when maxBlockSize is omitted"

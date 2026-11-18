@@ -141,6 +141,15 @@ describe('voice changer surface', () => {
       ).toBe('RangeError');
     });
 
+    it('takes the library default block size when maxBlockSize is omitted', () => {
+      const c = new RealtimeVoiceChanger({ sampleRate, numChannels: 1 });
+      try {
+        expect(c.processMono(new Float32Array(64)).length).toBe(64);
+      } finally {
+        c.destroy();
+      }
+    });
+
     it('treats null as absent for the optional options', () => {
       const c = new RealtimeVoiceChanger({
         sampleRate,

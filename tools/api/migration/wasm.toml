@@ -19731,7 +19731,7 @@ test = "bindings/wasm/tests/surface/effects-voice.test.ts::voiceChange requires 
 [[entry]]
 kind = "class"
 old = "RealtimeVoiceChanger"
-changed = "constructor(options: RealtimeVoiceChangerOptions), sampleRate and numChannels required"
+changed = "constructor(options: RealtimeVoiceChangerOptions), sampleRate and numChannels required; maxBlockSize has no facade default: omit it for the library default, an explicit 0 is refused"
 domain = "effects"
 rule = "individual"
 test = "bindings/wasm/tests/surface/effects-voice.test.ts::takes one options object with sampleRate required"
