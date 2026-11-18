@@ -31,12 +31,12 @@ function serialTailScene(): string {
   const delay = (ms: number) => ({
     slot: 'post',
     processor: 'effects.delay.stereo',
-    params: JSON.stringify({
+    params: {
       delayTimeLMs: ms,
       delayTimeRMs: ms,
       feedback: 0,
       dryWet: 1,
-    }),
+    },
   });
   return JSON.stringify({
     version: 1,
@@ -364,12 +364,12 @@ describe('Mixer runtime controls (WASM)', () => {
               {
                 slot: 'pre',
                 processor: 'eq.parametric',
-                params: JSON.stringify({
+                params: {
                   'band0.frequencyHz': 1000,
                   'band0.gainDb': 200,
                   'band0.q': 1,
                   'band0.enabled': true,
-                }),
+                },
               },
             ],
           },

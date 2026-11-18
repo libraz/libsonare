@@ -145,7 +145,7 @@ describe('strip state retention', () => {
     ]);
     const after = scene(
       [
-        { processor_name: 'eq.parametric', params_json: '{"bands":[{"frequencyHz":100}]}' },
+        { slot: 'pre', processor: 'eq.parametric', params: { bands: [{ frequencyHz: 100 }] } },
         { slot: 'post', processor: 'delay', params: { feedback: 0.4, timeMs: 240 } },
       ],
       { width: 1.25, faderDb: -3 },
@@ -158,22 +158,16 @@ describe('strip state retention', () => {
   it('keeps absent params distinct from an explicit empty params object', () => {
     const absent = scene([{ processor: 'delay' }]);
     const explicitEmpty = scene([{ processor: 'delay', params: {} }]);
-    const legacyEmpty = scene([{ processor: 'delay', params_json: '' }]);
     expect(decodedInsertSignature(absent, trackTarget)).not.toBe(
       decodedInsertSignature(explicitEmpty, trackTarget),
     );
-    expect(decodedInsertSignature(absent, trackTarget)).toBe(
-      decodedInsertSignature(legacyEmpty, trackTarget),
-    );
   });
 
-  it('matches numeric params across object and legacy JSON representations', () => {
-    const objectParams = scene([{ processor: 'delay', params: { feedback: 0.1 } }]);
-    const legacyParams = scene([
-      { processor: 'delay', params_json: '{ "feedback": 0.10000000000000001 }' },
-    ]);
-    expect(decodedInsertSignature(objectParams, trackTarget)).toBe(
-      decodedInsertSignature(legacyParams, trackTarget),
+  it('does not read the earlier processor_name / params_json keys as the insert', () => {
+    const current = scene([{ processor: 'delay', params: { feedback: 0.1 } }]);
+    const earlier = scene([{ processor_name: 'delay', params_json: '{"feedback":0.1}' }]);
+    expect(decodedInsertSignature(current, trackTarget)).not.toBe(
+      decodedInsertSignature(earlier, trackTarget),
     );
   });
 

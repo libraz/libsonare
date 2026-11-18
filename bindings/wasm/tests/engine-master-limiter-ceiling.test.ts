@@ -24,7 +24,7 @@ const masterLimiterScene = JSON.stringify({
           processor: 'maximizer.truePeakLimiter',
           // lookaheadMs is intentionally present in construction JSON.  It is
           // a valid construction field, but is not realtime-safe by name.
-          params: JSON.stringify({ ceilingDb: -1, lookaheadMs: 0, releaseMs: 50 }),
+          params: { ceilingDb: -1, lookaheadMs: 0, releaseMs: 50 },
         },
       ],
     },

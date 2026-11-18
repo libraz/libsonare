@@ -7,8 +7,8 @@ const sceneStrip = (json: string): MixSceneStrip => JSON.parse(json).strips[0];
 
 const stripJson =
   '{"version":1,"strips":[{"id":"track-10","inserts":[' +
-  '{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,' +
-  '\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":-3,\\"band0.enabled\\":1}"}]}],' +
+  '{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,' +
+  '"band0.frequencyHz":1000,"band0.gainDb":-3,"band0.enabled":1}}]}],' +
   '"buses":[],"connections":[]}';
 
 describe('engine meter input peaks and constructed insert values', () => {

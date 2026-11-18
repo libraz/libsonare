@@ -486,13 +486,13 @@ export const RECORD_OFFSET = 64;
 const eqInsert = (gainDb: number) => ({
   slot: 'pre',
   processor: 'eq.parametric',
-  params: JSON.stringify({
+  params: {
     'band0.type': 1,
     'band0.frequencyHz': 1000,
     'band0.gainDb': gainDb,
     'band0.q': 1,
     'band0.enabled': 1,
-  }),
+  },
 });
 
 export const trackStripJson = (gainDb = 0) =>

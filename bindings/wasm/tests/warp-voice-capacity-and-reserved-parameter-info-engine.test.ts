@@ -70,10 +70,10 @@ describe('Sonare WASM Module', () => {
       const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 256 });
       try {
         const compressorInsert = (slot: string) =>
-          `{"slot":"${slot}","processor":"dynamics.compressor","params":"{\\"thresholdDb\\":-18,\\"ratio\\":2,\\"attackMs\\":10,\\"releaseMs\\":100,\\"kneeDb\\":0}"}`;
+          `{"slot":"${slot}","processor":"dynamics.compressor","params":{"thresholdDb":-18,"ratio":2,"attackMs":10,"releaseMs":100,"kneeDb":0}}`;
         // A leading pre-fader insert puts the compressor at index 1 on the
         // track/master strips, exercising the PreFader-then-PostFader count.
-        const eqInsert = '{"slot":"pre","processor":"eq.parametric","params":"{}"}';
+        const eqInsert = '{"slot":"pre","processor":"eq.parametric","params":{}}';
 
         engine.setTrackLanes([{ trackId: 10 }]);
         engine.setStrip(

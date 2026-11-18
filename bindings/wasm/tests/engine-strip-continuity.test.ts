@@ -38,28 +38,29 @@ type Fixture = {
   resetCount: () => number;
 };
 
-function stripScene(width: number, legacyParams = false, includeTail = true): string {
+function stripScene(width: number, reordered = false, includeTail = true): string {
   const params = {
     decaySec: 1.2,
     dryWet: 0.75,
   };
   const gain = { levelDb: 0 };
+  // The same inserts with their keys reordered and the default slot omitted.
   const inserts = includeTail
-    ? legacyParams
+    ? reordered
       ? [
           {
             slot: 'post',
             processor: 'effects.reverb.fdn',
-            params_json: '{ "dryWet": 0.750000, "decaySec": 1.200000 }',
+            params: { dryWet: 0.75, decaySec: 1.2 },
           },
-          { processor_name: 'utility.gain', params_json: '{"levelDb":0.000000}' },
+          { processor: 'utility.gain', params: { levelDb: 0 } },
         ]
       : [
           { slot: 'post', processor: 'effects.reverb.fdn', params },
           { slot: 'pre', processor: 'utility.gain', params: gain },
         ]
-    : legacyParams
-      ? [{ processor_name: 'utility.gain', params_json: '{"levelDb":0.000000}' }]
+    : reordered
+      ? [{ processor: 'utility.gain', params: { levelDb: 0 } }]
       : [{ slot: 'pre', processor: 'utility.gain', params: gain }];
   return JSON.stringify({
     version: 1,

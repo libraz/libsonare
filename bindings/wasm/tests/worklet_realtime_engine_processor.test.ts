@@ -2198,22 +2198,22 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
             {
               trackId: 10,
               sceneJson:
-                '{"version":1,"strips":[{"id":"track-10","faderDb":-12,"panLaw":3}],"buses":[],"connections":[]}',
+                '{"version":1,"strips":[{"id":"track-10","faderDb":-12,"panLaw":"linear0Db"}],"buses":[],"connections":[]}',
             },
           ],
           masterStripJson:
-            '{"version":1,"strips":[{"id":"master","faderDb":-6,"panLaw":3}],"buses":[],"connections":[]}',
+            '{"version":1,"strips":[{"id":"master","faderDb":-6,"panLaw":"linear0Db"}],"buses":[],"connections":[]}',
         });
         processor.receiveSync({
           type: 'syncTrackStripEqBand',
           trackId: 10,
           bandIndex: 0,
-          bandJson: '{"type":"Peak","frequencyHz":1000,"gainDb":3}',
+          bandJson: '{"type":"peak","frequencyHz":1000,"gainDb":3}',
         });
         processor.receiveSync({
           type: 'syncMasterStripEqBand',
           bandIndex: 0,
-          bandJson: '{"type":"Peak","frequencyHz":1000,"gainDb":1}',
+          bandJson: '{"type":"peak","frequencyHz":1000,"gainDb":1}',
         });
         processor.receiveSync({
           type: 'syncClips',
@@ -2239,17 +2239,17 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       try {
         const source = new Float32Array(blockSize * 4).fill(1);
         const insertParams =
-          '{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":6,\\"band0.enabled\\":1}';
+          '{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":6,"band0.enabled":1}';
         processor.receiveSync({
           type: 'syncMixer',
           lanes: [{ trackId: 10 }],
           trackStrips: [
             {
               trackId: 10,
-              sceneJson: `{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":"${insertParams}"}]}],"buses":[],"connections":[]}`,
+              sceneJson: `{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":${insertParams}}]}],"buses":[],"connections":[]}`,
             },
           ],
-          masterStripJson: `{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":"${insertParams}"}]}],"buses":[],"connections":[]}`,
+          masterStripJson: `{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":${insertParams}}]}],"buses":[],"connections":[]}`,
         });
         processor.receiveSync({
           type: 'syncTrackStripInsertBypassed',
@@ -2300,7 +2300,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
             {
               busId: 200,
               sceneJson:
-                '{"version":1,"strips":[],"buses":[{"id":"200","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":0,\\"band0.enabled\\":1}"}]}],"connections":[]}',
+                '{"version":1,"strips":[],"buses":[{"id":"200","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1}}]}],"connections":[]}',
             },
           ],
         });
@@ -2365,7 +2365,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           type: 'syncBusStripEqBand',
           busId: 200,
           bandIndex: 0,
-          bandJson: '{"type":"Peak","frequencyHz":1000,"gainDb":12,"q":1,"enabled":true}',
+          bandJson: '{"type":"peak","frequencyHz":1000,"gainDb":12,"q":1,"enabled":true}',
         });
         processor.receiveSync({
           type: 'syncClips',
@@ -2554,11 +2554,11 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           });
         }
         const insertParams =
-          '{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":0,\\"band0.enabled\\":1}';
+          '{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1}';
         processor.receiveSync({
           type: 'syncMixer',
           lanes: [],
-          masterStripJson: `{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":"${insertParams}"}]}],"buses":[],"connections":[]}`,
+          masterStripJson: `{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":${insertParams}}]}],"buses":[],"connections":[]}`,
           insertParamOverrides: [
             { kind: 'master', insertIndex: 0, paramName: 'band0.gainDb', value: 6 },
           ],
@@ -2781,7 +2781,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         type: 'syncBusStripEqBand',
         busId: 200,
         bandIndex: 0,
-        bandJson: '{"type":"Peak","frequencyHz":1000,"gainDb":3}',
+        bandJson: '{"type":"peak","frequencyHz":1000,"gainDb":3}',
       },
       syncBusStripInsertBypassed: {
         type: 'syncBusStripInsertBypassed',
@@ -2835,7 +2835,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       syncMasterStripEqBand: {
         type: 'syncMasterStripEqBand',
         bandIndex: 0,
-        bandJson: '{"type":"Peak","frequencyHz":1000,"gainDb":3}',
+        bandJson: '{"type":"peak","frequencyHz":1000,"gainDb":3}',
       },
       syncMasterStripInsertBypassed: {
         type: 'syncMasterStripInsertBypassed',
@@ -3031,7 +3031,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         type: 'syncTrackStripEqBand',
         trackId: 10,
         bandIndex: 0,
-        bandJson: '{"type":"Peak","frequencyHz":1000,"gainDb":3}',
+        bandJson: '{"type":"peak","frequencyHz":1000,"gainDb":3}',
       },
       syncTrackStripInsertBypassed: {
         type: 'syncTrackStripInsertBypassed',
@@ -3155,8 +3155,8 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         // syncs resolve a live target instead of throwing; this also drives
         // syncMixer through the same guarded path.
         const insertParams =
-          '{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":0,\\"band0.enabled\\":1}';
-        const insertJson = `{"slot":"pre","processor":"eq.parametric","params":"${insertParams}"}`;
+          '{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1}';
+        const insertJson = `{"slot":"pre","processor":"eq.parametric","params":${insertParams}}`;
         port.onmessage?.({
           data: {
             type: 'syncMixer',

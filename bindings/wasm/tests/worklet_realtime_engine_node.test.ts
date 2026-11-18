@@ -1133,9 +1133,9 @@ describe('SonareRealtimeEngineNode', () => {
         expect(engine.setStripFaderDb(3, -6)).toBeUndefined();
         expect(engine.setStripPan(3, 0.25)).toBeUndefined();
         const trackStripJson =
-          '{"version":1,"strips":[{"id":"track-3","faderDb":-6,"panLaw":"linear0Db","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":12,\\"band0.enabled\\":1}"}]}],"buses":[],"connections":[]}';
+          '{"version":1,"strips":[{"id":"track-3","faderDb":-6,"panLaw":"linear0Db","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":12,"band0.enabled":1}}]}],"buses":[],"connections":[]}';
         const masterStripJson =
-          '{"version":1,"strips":[{"id":"master","faderDb":-3,"panLaw":"linear0Db","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":12,\\"band0.enabled\\":1}"}]}],"buses":[],"connections":[]}';
+          '{"version":1,"strips":[{"id":"master","faderDb":-3,"panLaw":"linear0Db","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":12,"band0.enabled":1}}]}],"buses":[],"connections":[]}';
         engine.setStrip(3, stripDocument(trackStripJson));
         engine.setStrip('master', stripDocument(masterStripJson));
         expect(engine.setStripFaderDb('master', -3)).toBeUndefined();
@@ -1160,7 +1160,7 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setStripDualPan(3, -1, 1);
         engine.setStripChannelDelaySamples(3, 32);
         const busStripJson =
-          '{"version":1,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":0,\\"band0.enabled\\":1}"}]}],"connections":[]}';
+          '{"version":1,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1}}]}],"connections":[]}';
         engine.setBusStrip(100, busDocument(busStripJson));
         engine.setBusInsertParam(100, 0, { name: 'band0.gainDb', value: 1 });
         engine.setBuiltinInstrument(3, { gain: 0.5 });
@@ -2030,7 +2030,7 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setBusStrip(
           100,
           busDocument(
-            '{"version":1,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":6,\\"band0.enabled\\":1}"}]}],"connections":[]}',
+            '{"version":1,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":6,"band0.enabled":1}}]}],"connections":[]}',
           ),
         );
         engine.setBusInsertBypassed(100, 0, { bypassed: true, resetOnBypass: true });
@@ -2560,15 +2560,7 @@ describe('SonareRealtimeEngineNode', () => {
           buses: [
             {
               id: '100',
-              // Keep the legacy params_json spelling to prove realtime edits
-              // do not silently canonicalize older project scenes.
-              inserts: [
-                {
-                  slot: 'pre',
-                  processor: 'eq.parametric',
-                  params_json: JSON.stringify(eqParams(0)),
-                },
-              ],
+              inserts: [{ slot: 'pre', processor: 'eq.parametric', params: eqParams(0) }],
             },
           ],
           connections: [],
@@ -2582,15 +2574,7 @@ describe('SonareRealtimeEngineNode', () => {
               strips: [
                 {
                   id: 'master',
-                  // The canonical key may still carry the legacy JSON-string
-                  // value. It must remain a string after a by-name edit.
-                  inserts: [
-                    {
-                      slot: 'pre',
-                      processor: 'eq.parametric',
-                      params: JSON.stringify(eqParams(0)),
-                    },
-                  ],
+                  inserts: [{ slot: 'pre', processor: 'eq.parametric', params: eqParams(0) }],
                 },
               ],
               buses: [],
@@ -2842,14 +2826,10 @@ describe('SonareRealtimeEngineNode', () => {
         expect(trackScene.strips[0].inserts[0].params).toEqual(
           expect.objectContaining({ 'band0.gainDb': 0 }),
         );
-        expect(typeof JSON.parse(lastSync.masterStripJson).strips[0].inserts[0].params).toBe(
-          'string',
+        expect(JSON.parse(lastSync.masterStripJson).strips[0].inserts[0].params).toEqual(
+          expect.objectContaining({ 'band0.gainDb': 0 }),
         );
-        expect(
-          JSON.parse(JSON.parse(lastSync.masterStripJson).strips[0].inserts[0].params),
-        ).toEqual(expect.objectContaining({ 'band0.gainDb': 0 }));
-        expect(typeof busScene(100).buses[0].inserts[0].params_json).toBe('string');
-        expect(JSON.parse(busScene(100).buses[0].inserts[0].params_json)).toEqual(
+        expect(busScene(100).buses[0].inserts[0].params).toEqual(
           expect.objectContaining({ 'band0.gainDb': 0 }),
         );
         expect(lastSync.insertParamOverrides).toHaveLength(3);

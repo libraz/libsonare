@@ -265,13 +265,13 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
     // pass-through limiter so it has an insert 0 to key; the master carries a
     // ducker. JSON strings match kDuckerBusJson / kLimiterBusJson /
     // kDuckerMasterJson in the C ABI test byte for byte.
-    const duckerParams = JSON.stringify({
+    const duckerParams = {
       thresholdDb: -20,
       ratio: 20,
       attackMs: 0.05,
       releaseMs: 80,
       rangeDb: 30,
-    });
+    };
     const duckerBusJson = JSON.stringify({
       version: 1,
       strips: [],
@@ -293,7 +293,7 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
             {
               slot: 'pre',
               processor: 'dynamics.limiter',
-              params: JSON.stringify({ thresholdDb: 24, lookaheadMs: 0, releaseMs: 50 }),
+              params: { thresholdDb: 24, lookaheadMs: 0, releaseMs: 50 },
             },
           ],
         },
@@ -505,7 +505,7 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
                 {
                   slot: 'pre',
                   processor: 'dynamics.limiter',
-                  params: JSON.stringify({ thresholdDb: 0, lookaheadMs: 0, releaseMs: 50 }),
+                  params: { thresholdDb: 0, lookaheadMs: 0, releaseMs: 50 },
                 },
               ],
             },
@@ -530,7 +530,7 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
                     {
                       slot: 'pre',
                       processor: 'dynamics.limiter',
-                      params: JSON.stringify({ thresholdDb: 0, lookaheadMs: 0, releaseMs: 50 }),
+                      params: { thresholdDb: 0, lookaheadMs: 0, releaseMs: 50 },
                     },
                   ],
                 },

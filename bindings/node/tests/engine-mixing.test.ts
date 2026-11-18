@@ -404,7 +404,7 @@ describe('RealtimeEngine native binding', () => {
       engine.setStrip(
         10,
         sceneStrip(
-          '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"missing.processor","params":"{}"}]}],"buses":[],"connections":[]}',
+          '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"missing.processor","params":{}}]}],"buses":[],"connections":[]}',
         ),
       );
     } catch (error) {
@@ -417,7 +417,7 @@ describe('RealtimeEngine native binding', () => {
       engine.setStrip(
         10,
         sceneStrip(
-          '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.gainDb\\":\\"loud\\"}"}]}],"buses":[],"connections":[]}',
+          '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":"loud"}}]}],"buses":[],"connections":[]}',
         ),
       );
     } catch (error) {
@@ -549,7 +549,7 @@ describe('RealtimeEngine native binding', () => {
     engine.setStrip(
       10,
       sceneStrip(
-        '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":12,\\"band0.enabled\\":1}"}]}],"buses":[],"connections":[]}',
+        '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":12,"band0.enabled":1}}]}],"buses":[],"connections":[]}',
       ),
     );
     let badIndexError: unknown;
@@ -766,7 +766,7 @@ describe('RealtimeEngine native binding', () => {
       engine.setStrip(
         'master',
         sceneStrip(
-          '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.gainDb\\":\\"loud\\"}"}]}],"buses":[],"connections":[]}',
+          '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":"loud"}}]}],"buses":[],"connections":[]}',
         ),
       );
     } catch (error) {

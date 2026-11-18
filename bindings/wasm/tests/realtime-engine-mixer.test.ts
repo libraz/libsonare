@@ -130,7 +130,7 @@ describe('Sonare WASM Module', () => {
         engine.setStrip(
           10,
           JSON.parse(
-            '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"missing.processor","params":"{}"}]}],"buses":[],"connections":[]}',
+            '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"missing.processor","params":{}}]}],"buses":[],"connections":[]}',
           ).strips[0],
         );
       } catch (error) {
@@ -143,7 +143,7 @@ describe('Sonare WASM Module', () => {
         engine.setStrip(
           10,
           JSON.parse(
-            '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.gainDb\\":\\"loud\\"}"}]}],"buses":[],"connections":[]}',
+            '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":"loud"}}]}],"buses":[],"connections":[]}',
           ).strips[0],
         );
       } catch (error) {
@@ -191,7 +191,7 @@ describe('Sonare WASM Module', () => {
       engine.setStrip(
         10,
         JSON.parse(
-          '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":12,\\"band0.enabled\\":1}"}]}],"buses":[],"connections":[]}',
+          '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":12,"band0.enabled":1}}]}],"buses":[],"connections":[]}',
         ).strips[0],
       );
       let badIndexError: unknown;
@@ -290,7 +290,7 @@ describe('Sonare WASM Module', () => {
         engine.setStrip(
           'master',
           JSON.parse(
-            '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.gainDb\\":\\"loud\\"}"}]}],"buses":[],"connections":[]}',
+            '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":{"band0.gainDb":"loud"}}]}],"buses":[],"connections":[]}',
           ).strips[0],
         );
       } catch (error) {
@@ -468,7 +468,7 @@ describe('Sonare WASM Module', () => {
     const limiter = JSON.stringify({
       slot: 'pre',
       processor: 'dynamics.limiter',
-      params: JSON.stringify({ thresholdDb: 0, lookaheadMs: 0, releaseMs: 50 }),
+      params: { thresholdDb: 0, lookaheadMs: 0, releaseMs: 50 },
     });
 
     const burst = (): Float32Array[] => {
