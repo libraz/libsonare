@@ -91,6 +91,7 @@ PROBES: dict[str, tuple[tuple[object, ...], tuple[object, ...]]] = {
         (1.5, None, 48000, "probe", "probe_sec"),
         (7, None, 48000, "probe", "probe_sec"),
     ),
+    "_resolve_absent_positive": ((0, "probe"), (7, "probe")),
     "_resolve_optional_non_negative": ((math.inf, "probe"), (7, "probe")),
     "_resolve_zero_default": ((-1, "probe"), (7, "probe")),
     "_resolve_render_frame": ((1.5,), (7,)),
@@ -198,3 +199,15 @@ def test_guard_accepts_in_domain(name: str) -> None:
     """The control. A guard that refused everything would pass the probe above."""
     _, in_domain = PROBES[name]
     _guard(name)(*in_domain)
+
+
+@pytest.mark.parametrize("value", [0, -1, -0.5, math.inf, math.nan])
+def test_absent_positive_refuses_every_non_positive_or_non_finite_value(value: object) -> None:
+    """Zero and the C ABI's -1 are both refused; only None spells the default."""
+    with pytest.raises(_runtime.SonareValueError, match="probe"):
+        _narrowing._resolve_absent_positive(value, "probe")
+
+
+def test_absent_positive_maps_none_to_the_c_absent_code() -> None:
+    assert _narrowing._resolve_absent_positive(None, "probe") == -1
+    assert _narrowing._resolve_absent_positive(3, "probe") == 3
