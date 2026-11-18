@@ -503,9 +503,14 @@ SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBou
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_TRY
+  if (out_interleaved) *out_interleaved = nullptr;
+  if (out_len) *out_len = 0;
+  if (out_num_channels) *out_num_channels = 0;
   return do_project_bounce(project, options, {}, out_interleaved, out_len, out_num_channels);
   SONARE_C_CATCH
 #else
+  if (out_interleaved) *out_interleaved = {};
+  if (out_len) *out_len = {};
   if (out_num_channels) *out_num_channels = 0;
   SONARE_C_STUB_NOT_SUPPORTED(project, options, out_interleaved, out_len, out_num_channels);
 #endif

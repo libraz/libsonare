@@ -70,18 +70,6 @@
       "reason": "Core response to a negative or non-finite threshold not driven."
     },
     {
-      "file": "src/c_api/project_bounce.cpp",
-      "value": "opts.block_size",
-      "measured": "no",
-      "reason": "Bounce block size; core response not driven."
-    },
-    {
-      "file": "src/c_api/project_bounce.cpp",
-      "value": "opts.num_channels",
-      "measured": "no",
-      "reason": "Bounce channel count; core response not driven."
-    },
-    {
       "file": "src/c_api/project_bounce_internal.h",
       "value": "max_block_size",
       "measured": "no",
