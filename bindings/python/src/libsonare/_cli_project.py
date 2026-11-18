@@ -162,7 +162,11 @@ def _resolve_bounce_audio_sources(project: object, args: argparse.Namespace) -> 
     # A document with no audio sources at all -- every MIDI-only project -- has
     # nothing to resolve and nothing to report, so it never pays for the second
     # read the URI map costs.
-    if not assignments and not resolve and not cast(Any, project).unresolved_audio_source_ids():
+    if (
+        not assignments
+        and not resolve
+        and not cast(Any, project).unresolved_audio_source_ids().size
+    ):
         return
     uris = _audio_source_uris(_read_bounded(args.input, _MAX_PROJECT_OR_MIDI_BYTES))
     for assignment in assignments:
@@ -181,7 +185,7 @@ def _resolve_bounce_audio_sources(project: object, args: argparse.Namespace) -> 
                 )
             _bind_source_audio(project, source_id, resolved)
     remaining = cast(Any, project).unresolved_audio_source_ids()
-    if remaining:
+    if remaining.size:
         # One line per source, each carrying its own id, because the caller has
         # to act on every one of them: stopping at the first turns a document
         # with four missing takes into four runs.

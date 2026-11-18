@@ -176,8 +176,8 @@ def cmd_lufs(args: argparse.Namespace) -> int:
 
     if args.json:
         if args.series:
-            payload["momentary_series"] = list(momentary_series)
-            payload["short_term_series"] = list(short_term_series)
+            payload["momentary_series"] = [float(value) for value in momentary_series]
+            payload["short_term_series"] = [float(value) for value in short_term_series]
         print(_strict_json_dumps(payload))
     else:
         print("  Loudness (LUFS):")

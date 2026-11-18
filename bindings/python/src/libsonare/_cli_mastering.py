@@ -77,7 +77,7 @@ def _mastering_report_payload(report: Any) -> dict[str, object]:
         "applied_gain_db": report.applied_gain_db,
         "max_gain_reduction_db": report.max_gain_reduction_db,
         "loudness_target_limited": report.loudness_target_limited,
-        "band_energy_delta_db": report.band_energy_delta_db,
+        "band_energy_delta_db": report.band_energy_delta_db.tolist(),
     }
 
 
