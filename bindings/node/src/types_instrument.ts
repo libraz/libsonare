@@ -764,8 +764,8 @@ export type PartRigMode = (typeof PART_RIG_MODES)[number];
 export interface PartRigInsert {
   /** Processor name, e.g. `'saturation.overdrive'`. */
   processor: string;
-  /** Processor parameters; an object is serialized to JSON. */
-  params?: Record<string, unknown> | string;
+  /** Processor parameters. */
+  params?: Record<string, unknown>;
 }
 
 /** Selects one part rig entry of a destination; `part` is 0-15 or {@link PART_RIG_ALL_PARTS}. */

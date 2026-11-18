@@ -52,16 +52,19 @@ describe('part rig on a project', () => {
     expect((got?.inserts?.[0]?.params as { gainDb: number } | undefined)?.gainDb).toBe(12);
   });
 
-  it('accepts params as a JSON string', () => {
+  it('refuses params as a JSON string', () => {
     using project = new Project();
-    project.setPartRig({
+    const request = {
       destinationId: 1,
       part: 0,
       mode: 'chain',
       inserts: [{ processor: 'saturation.overdrive', params: '{"gainDb":6}' }],
-    });
-    const got = project.partRig({ destinationId: 1, part: 0 });
-    expect((got?.inserts?.[0]?.params as { gainDb: number } | undefined)?.gainDb).toBe(6);
+    };
+    expect(() => project.setPartRig(request as never)).toThrow(TypeError);
+    expect(() => project.setPartRig(request as never)).toThrow(
+      /inserts\[0\]\.params must be an object/,
+    );
+    expect(project.partRig({ destinationId: 1, part: 0 })).toBeNull();
   });
 
   it('defaults omitted insert params to an empty object', () => {
@@ -112,6 +115,12 @@ describe('part rig on a project', () => {
         inserts: [{ processor: 'saturation.overdrive', params: 1 }],
       })(),
     ).toThrow(/params/);
+    expect(() =>
+      set({
+        mode: 'chain',
+        inserts: [{ processor: 'saturation.overdrive', params: '{' }],
+      })(),
+    ).toThrow(TypeError);
     expect(set({ part: 16 })).toThrow(RangeError);
     // Content defects of the rig document are the loader's InvalidFormat, a coded SonareError.
     const invalidFormat = (request: object) => {
@@ -127,10 +136,6 @@ describe('part rig on a project', () => {
     };
     invalidFormat({ mode: 'chain', inserts: [] });
     invalidFormat({ mode: 'chain', inserts: [{ processor: 'no.such', params: {} }] });
-    invalidFormat({
-      mode: 'chain',
-      inserts: [{ processor: 'saturation.overdrive', params: '{' }],
-    });
     expect(set({ mode: 'none', inserts: chain })).toThrow(RangeError);
     expect(project.partRig({ destinationId: 4, part: 0 })).toBeNull();
   });

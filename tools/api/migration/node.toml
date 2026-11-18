@@ -15493,6 +15493,15 @@ changed = "PlaybackRendererConfig object only; a JSON string is a TypeError"
 domain = "engine"
 rule = "one-input-form"
 test = "bindings/node/tests/playback.test.ts::refuses a serialized JSON string as the configuration"
+
+[[entry]]
+kind = "field"
+old = "PartRigInsert.params"
+changed = "an object only; a JSON string is a TypeError"
+domain = "engine"
+rule = "one-input-form"
+test = "bindings/node/tests/part_rig.test.ts::refuses params as a JSON string"
+
 [[entry]]
 kind = "value"
 old = "PlaybackStageName='bass_management'"

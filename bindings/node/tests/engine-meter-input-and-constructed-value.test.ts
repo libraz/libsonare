@@ -109,7 +109,7 @@ describe('per-insert gain reduction query', () => {
   const insert = (slot: string, processor: string, params: Record<string, number>) => ({
     slot,
     processor,
-    params: JSON.stringify(params),
+    params,
   });
   const sceneJson = JSON.stringify({
     version: 1,

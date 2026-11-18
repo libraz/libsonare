@@ -117,7 +117,7 @@ describe('insert param validation', () => {
             {
               slot: 'post',
               processor: 'eq.parametric',
-              params: JSON.stringify({ highPassHz: 80, presenceDb: 4 }),
+              params: { highPassHz: 80, presenceDb: 4 },
             },
           ],
         },
@@ -142,7 +142,7 @@ describe('insert param validation', () => {
             {
               slot: 'post',
               processor: 'eq.parametric',
-              params: JSON.stringify({ 'band0.frequencyHz': 1000, 'band0.gainDb': 3 }),
+              params: { 'band0.frequencyHz': 1000, 'band0.gainDb': 3 },
             },
           ],
         },

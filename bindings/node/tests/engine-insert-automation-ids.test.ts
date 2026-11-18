@@ -15,7 +15,7 @@ function insertScene(kind: 'strips' | 'buses', id: string, processors: string[])
   const inserts = processors.map((processor, index) => ({
     slot: index < 32 ? 'pre' : 'post',
     processor,
-    params: '{}',
+    params: {},
   }));
   const strip = { id, inserts };
   return JSON.stringify({

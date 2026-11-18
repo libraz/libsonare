@@ -123,46 +123,15 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function aliasedValue(
-  object: SceneObject,
-  primary: string,
-  legacy: string,
-): { present: boolean; value: unknown } {
-  if (hasOwn(object, primary)) {
-    return { present: true, value: object[primary] };
-  }
-  if (hasOwn(object, legacy)) {
-    return { present: true, value: object[legacy] };
-  }
-  return { present: false, value: undefined };
-}
-
 function insertSignature(insert: unknown): string {
   const object = insert !== null && typeof insert === 'object' ? (insert as SceneObject) : {};
   const slot = object.slot === undefined ? 'pre' : object.slot;
-  const processor = aliasedValue(object, 'processor', 'processor_name');
-  const params = aliasedValue(object, 'params', 'params_json');
-  const sidechain = aliasedValue(object, 'sidechainKey', 'sidechain_key');
-  const processorValue = typeof processor.value === 'string' ? processor.value : '';
-  const sidechainValue = typeof sidechain.value === 'string' ? sidechain.value : '';
-  let paramsValue: unknown;
-  // A missing params bag and an empty legacy blob decode alike; "{}" is distinct.
-  if (!params.present) {
-    paramsValue = ['absent'];
-  } else if (typeof params.value === 'string') {
-    // Canonicalize legacy text like object params; invalid text stays byte-exact.
-    if (params.value.length === 0) {
-      paramsValue = ['absent'];
-    } else {
-      try {
-        paramsValue = ['params', canonicalJson(JSON.parse(params.value))];
-      } catch {
-        paramsValue = ['params-invalid', params.value];
-      }
-    }
-  } else {
-    paramsValue = ['params', canonicalJson(params.value)];
-  }
+  const processorValue = typeof object.processor === 'string' ? object.processor : '';
+  const sidechainValue = typeof object.sidechainKey === 'string' ? object.sidechainKey : '';
+  // A missing params bag and an explicit "{}" are distinct identities.
+  const paramsValue = hasOwn(object, 'params')
+    ? ['params', canonicalJson(object.params)]
+    : ['absent'];
   return JSON.stringify([slot, processorValue, paramsValue, sidechainValue]);
 }
 

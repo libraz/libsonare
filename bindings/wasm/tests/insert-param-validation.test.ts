@@ -73,9 +73,9 @@ describe('insert param validation (WASM)', () => {
     expect(dryWet).toBeDefined();
     expect(dryWet?.rtSafe).toBe(true);
     expect(typeof dryWet?.id).toBe('number');
-    // Dattorro publishes a non-realtime-safe param (modDepthSamples).
-    const dat = masteringInsertParamInfo({ insert: 'effects.reverb.dattorro' });
-    expect(dat.find((d) => d.name === 'modDepthSamples')?.rtSafe).toBe(false);
+    // The plate reverb publishes a non-realtime-safe param (modDepthSamples).
+    const plate = masteringInsertParamInfo({ insert: 'effects.reverb.plate' });
+    expect(plate.find((d) => d.name === 'modDepthSamples')?.rtSafe).toBe(false);
     // Unknown name -> empty list.
     expect(masteringInsertParamInfo({ insert: 'not.a.real.processor' as never })).toEqual([]);
   });
@@ -225,7 +225,7 @@ describe('insert param validation (WASM)', () => {
             {
               slot: 'post',
               processor: 'eq.parametric',
-              params: JSON.stringify({ highPassHz: 80, presenceDb: 4 }),
+              params: { highPassHz: 80, presenceDb: 4 },
             },
           ],
         },
@@ -250,7 +250,7 @@ describe('insert param validation (WASM)', () => {
             {
               slot: 'post',
               processor: 'eq.parametric',
-              params: JSON.stringify({ 'band0.frequencyHz': 1000, 'band0.gainDb': 3 }),
+              params: { 'band0.frequencyHz': 1000, 'band0.gainDb': 3 },
             },
           ],
         },

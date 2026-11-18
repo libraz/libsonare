@@ -42,12 +42,21 @@ describe('Sonare WASM part rig', () => {
         inserts: [{ processor: 'dynamics.limiter', params: LIMITER.params }],
       });
 
-      // An already-serialized params string is accepted.
+      // An already-serialized params string is refused, and nothing is stored.
+      expect(() =>
+        project.setPartRig({
+          destinationId: 3,
+          part: 1,
+          mode: 'chain',
+          inserts: [{ processor: LIMITER.processor, params: '{"thresholdDb":-3}' as never }],
+        }),
+      ).toThrow(/inserts\[0\]\.params must be an object/);
+      expect(project.partRig({ destinationId: 3, part: 1 })).toBeNull();
       project.setPartRig({
         destinationId: 3,
         part: 1,
         mode: 'chain',
-        inserts: [{ processor: LIMITER.processor, params: '{"thresholdDb":-3}' }],
+        inserts: [{ processor: LIMITER.processor, params: { thresholdDb: -3 } }],
       });
       expect(project.partRig({ destinationId: 3, part: 1 })?.inserts?.[0].params).toEqual({
         thresholdDb: -3,
@@ -121,9 +130,9 @@ describe('Sonare WASM part rig', () => {
           destinationId: 0,
           part: 0,
           mode: 'chain',
-          inserts: [{ processor: LIMITER.processor, params: '{not json' }],
+          inserts: [{ processor: LIMITER.processor, params: '{not json' as never }],
         }),
-      ).toThrow();
+      ).toThrow(TypeError);
       expect(project.partRig({ destinationId: 0, part: 0 })).toEqual({ mode: 'none' });
     } finally {
       project.destroy();

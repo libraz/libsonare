@@ -20,7 +20,7 @@ const LIMITER_MASTER = JSON.stringify({
         {
           slot: 'pre',
           processor: 'dynamics.limiter',
-          params: JSON.stringify({ thresholdDb: 0, lookaheadMs: 0, releaseMs: 50 }),
+          params: { thresholdDb: 0, lookaheadMs: 0, releaseMs: 50 },
         },
       ],
     },

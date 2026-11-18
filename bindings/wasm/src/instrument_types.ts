@@ -516,8 +516,8 @@ export type PartRigMode = (typeof PART_RIG_MODES)[number];
 /** One stage of a `'chain'` part rig: a processor name and its parameters. */
 export interface PartRigInsert {
   processor: string;
-  /** Processor parameters, as an object or an already-serialized JSON object string. */
-  params?: Record<string, unknown> | string;
+  /** Processor parameters. */
+  params?: Record<string, unknown>;
 }
 
 /** Selects one part rig entry of a destination; `part` is 0-15 or `PART_RIG_ALL_PARTS`. */

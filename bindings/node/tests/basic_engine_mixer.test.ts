@@ -13,11 +13,11 @@ function sceneWithBusEq(gainDb: number): string {
           {
             slot: 'pre',
             processor: 'eq.parametric',
-            params: JSON.stringify({
+            params: {
               'band0.frequencyHz': 1000,
               'band0.gainDb': gainDb,
               'band0.q': 2,
-            }),
+            },
           },
         ],
       },

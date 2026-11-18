@@ -1029,7 +1029,7 @@ describe('RealtimeEngine native binding', () => {
                 {
                   slot: 'pre',
                   processor: 'effects.reverb.fdn',
-                  params: '{"dryWet":0.0,"decaySec":2.0}',
+                  params: { dryWet: 0.0, decaySec: 2.0 },
                 },
               ],
             },
@@ -1084,12 +1084,12 @@ describe('RealtimeEngine native binding', () => {
                 {
                   slot: 'pre',
                   processor: 'eq.parametric',
-                  params: JSON.stringify({
+                  params: {
                     'band0.type': 1,
                     'band0.frequencyHz': 1000,
                     'band0.gainDb': 0,
                     'band0.enabled': 1,
-                  }),
+                  },
                 },
               ],
             },
@@ -1142,7 +1142,7 @@ describe('RealtimeEngine native binding', () => {
           strips: [
             {
               id: 'track-10',
-              inserts: [{ slot: 'pre', processor: 'effects.reverb.fdn', params: '{"dryWet":0.0}' }],
+              inserts: [{ slot: 'pre', processor: 'effects.reverb.fdn', params: { dryWet: 0.0 } }],
             },
           ],
           buses: [],
@@ -1162,12 +1162,12 @@ describe('RealtimeEngine native binding', () => {
                 {
                   slot: 'pre',
                   processor: 'eq.parametric',
-                  params: JSON.stringify({
+                  params: {
                     'band0.type': 1,
                     'band0.frequencyHz': 1000,
                     'band0.gainDb': 0,
                     'band0.enabled': 1,
-                  }),
+                  },
                 },
               ],
             },
@@ -1191,12 +1191,12 @@ describe('RealtimeEngine native binding', () => {
                 {
                   slot: 'pre',
                   processor: 'eq.parametric',
-                  params: JSON.stringify({
+                  params: {
                     'band0.type': 1,
                     'band0.frequencyHz': 1000,
                     'band0.gainDb': 0,
                     'band0.enabled': 1,
-                  }),
+                  },
                 },
               ],
             },
@@ -1290,12 +1290,12 @@ describe('RealtimeEngine prime, reset, tail and latency', () => {
           {
             slot: 'post',
             processor: 'effects.delay.stereo',
-            params: JSON.stringify({
+            params: {
               delayTimeLMs: 5,
               delayTimeRMs: 7,
               feedback: 0.6,
               dryWet: 0.5,
-            }),
+            },
           },
         ],
       },

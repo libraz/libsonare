@@ -21,12 +21,12 @@ function serialTailScene(): string {
   const delay = (ms: number) => ({
     slot: 'post',
     processor: 'effects.delay.stereo',
-    params: JSON.stringify({
+    params: {
       delayTimeLMs: ms,
       delayTimeRMs: ms,
       feedback: 0,
       dryWet: 1,
-    }),
+    },
   });
   return JSON.stringify({
     version: 1,

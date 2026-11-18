@@ -301,13 +301,13 @@ const kDuckerBusJson = JSON.stringify({
         {
           slot: 'pre',
           processor: 'dynamics.duckingProcessor',
-          params: JSON.stringify({
+          params: {
             thresholdDb: -20,
             ratio: 20,
             attackMs: 0.05,
             releaseMs: 80,
             rangeDb: 30,
-          }),
+          },
         },
       ],
     },
@@ -324,7 +324,7 @@ const kLimiterBusJson = JSON.stringify({
         {
           slot: 'pre',
           processor: 'dynamics.limiter',
-          params: JSON.stringify({ thresholdDb: 24, lookaheadMs: 0, releaseMs: 50 }),
+          params: { thresholdDb: 24, lookaheadMs: 0, releaseMs: 50 },
         },
       ],
     },
@@ -340,13 +340,13 @@ const kDuckerMasterJson = JSON.stringify({
         {
           slot: 'pre',
           processor: 'dynamics.duckingProcessor',
-          params: JSON.stringify({
+          params: {
             thresholdDb: -20,
             ratio: 20,
             attackMs: 0.05,
             releaseMs: 80,
             rangeDb: 30,
-          }),
+          },
         },
       ],
     },
