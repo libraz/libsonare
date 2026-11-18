@@ -178,10 +178,13 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim(
         key="A4 tuning reference range",
-        # The trailing guard names the quantity: the range is voiced in Hz or
-        # tied to the live setter's range. A bare `lo..hi` is how MIDI program
-        # and family ranges are written too, and a BPM range states another bound.
-        pattern=r"(?:within|outside|range)\s+(?P<lo>\d+)\.\.(?P<hi>\d+)(?:\s*Hz\b|,\s+the same range)",
+        # The trailing guard names the quantity: the range is voiced in Hz or tied to
+        # the live setter's range, in words or by the setter's name. A bare `lo..hi`
+        # is also how MIDI program, family and BPM ranges are written.
+        pattern=(
+            r"(?:within|outside|range)\s+(?P<lo>\d+)\.\.(?P<hi>\d+)"
+            r"(?:\s*Hz\b|,\s+the same range|\s+as\s+:meth:`set_reference_hz`)"
+        ),
         groups={"lo": ("min_tuning_ref_hz", 0), "hi": ("max_tuning_ref_hz", 0)},
         floor=10,
     ),
