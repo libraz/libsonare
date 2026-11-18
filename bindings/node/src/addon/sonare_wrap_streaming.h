@@ -53,6 +53,7 @@ class StreamingMasteringChainWrap : public Napi::ObjectWrap<StreamingMasteringCh
   Napi::Value Reset(const Napi::CallbackInfo& info);
   Napi::Value SetParameter(const Napi::CallbackInfo& info);
   Napi::Value LatencySamples(const Napi::CallbackInfo& info);
+  Napi::Value MaxBlockSize(const Napi::CallbackInfo& info);
   Napi::Value StageNames(const Napi::CallbackInfo& info);
   Napi::Value NonFiniteSubstitutionCount(const Napi::CallbackInfo& info);
   Napi::Value NonFiniteDiscardCount(const Napi::CallbackInfo& info);
@@ -96,6 +97,7 @@ class StreamingEqualizerWrap : public Napi::ObjectWrap<StreamingEqualizerWrap> {
   void ClearSidechainStorage();
   Napi::Value LastAutoGainDb(const Napi::CallbackInfo& info);
   Napi::Value LatencySamples(const Napi::CallbackInfo& info);
+  Napi::Value MaxBlockSize(const Napi::CallbackInfo& info);
   Napi::Value NonFiniteDiscardCount(const Napi::CallbackInfo& info);
   Napi::Value ProcessMono(const Napi::CallbackInfo& info);
   Napi::Value ProcessStereo(const Napi::CallbackInfo& info);
@@ -172,6 +174,7 @@ class RealtimeVoiceChangerWrap : public Napi::ObjectWrap<RealtimeVoiceChangerWra
   Napi::Value SetConfig(const Napi::CallbackInfo& info);
   Napi::Value ConfigJson(const Napi::CallbackInfo& info);
   Napi::Value LatencySamples(const Napi::CallbackInfo& info);
+  Napi::Value MaxBlockSize(const Napi::CallbackInfo& info);
   Napi::Value NonFiniteDiscardCount(const Napi::CallbackInfo& info);
   Napi::Value ProcessMono(const Napi::CallbackInfo& info);
   Napi::Value ProcessMonoInto(const Napi::CallbackInfo& info);

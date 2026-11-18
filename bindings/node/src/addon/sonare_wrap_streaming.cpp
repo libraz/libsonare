@@ -189,6 +189,7 @@ Napi::Object StreamingMasteringChainWrap::Init(Napi::Env env, Napi::Object expor
           InstanceMethod<&StreamingMasteringChainWrap::Reset>("reset"),
           InstanceMethod<&StreamingMasteringChainWrap::SetParameter>("setParameter"),
           InstanceMethod<&StreamingMasteringChainWrap::LatencySamples>("latencySamples"),
+          InstanceMethod<&StreamingMasteringChainWrap::MaxBlockSize>("maxBlockSize"),
           InstanceMethod<&StreamingMasteringChainWrap::StageNames>("stageNames"),
           InstanceMethod<&StreamingMasteringChainWrap::NonFiniteSubstitutionCount>(
               "nonFiniteSubstitutionCount"),
@@ -399,6 +400,14 @@ Napi::Value StreamingMasteringChainWrap::LatencySamples(const Napi::CallbackInfo
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value StreamingMasteringChainWrap::MaxBlockSize(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, chain_, "StreamingMasteringChain");
+  return Napi::Number::New(env, chain_->max_block_size());
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value StreamingMasteringChainWrap::StageNames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
@@ -445,6 +454,7 @@ Napi::Object StreamingEqualizerWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&StreamingEqualizerWrap::ClearSidechain>("clearSidechain"),
           InstanceMethod<&StreamingEqualizerWrap::LastAutoGainDb>("lastAutoGainDb"),
           InstanceMethod<&StreamingEqualizerWrap::LatencySamples>("latencySamples"),
+          InstanceMethod<&StreamingEqualizerWrap::MaxBlockSize>("maxBlockSize"),
           InstanceMethod<&StreamingEqualizerWrap::NonFiniteDiscardCount>("nonFiniteDiscardCount"),
           InstanceMethod<&StreamingEqualizerWrap::ProcessMono>("processMono"),
           InstanceMethod<&StreamingEqualizerWrap::ProcessStereo>("processStereo"),
@@ -672,6 +682,14 @@ Napi::Value StreamingEqualizerWrap::LatencySamples(const Napi::CallbackInfo& inf
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   return Napi::Number::New(env, eq_->latency_samples());
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value StreamingEqualizerWrap::MaxBlockSize(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
+  return Napi::Number::New(env, eq_->max_block_size());
   SONARE_NODE_CATCH(env)
 }
 

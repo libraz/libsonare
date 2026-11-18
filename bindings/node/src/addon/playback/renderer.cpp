@@ -19,6 +19,7 @@ Napi::Object PlaybackRendererWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&PlaybackRendererWrap::SetHeadOrientation>("setHeadOrientation"),
           InstanceMethod<&PlaybackRendererWrap::Reset>("reset"),
           InstanceMethod<&PlaybackRendererWrap::LatencySamples>("latencySamples"),
+          InstanceMethod<&PlaybackRendererWrap::MaxBlockSize>("maxBlockSize"),
           InstanceMethod<&PlaybackRendererWrap::InputChannels>("inputChannels"),
           InstanceMethod<&PlaybackRendererWrap::OutputChannels>("outputChannels"),
           InstanceMethod<&PlaybackRendererWrap::Diagnostics>("diagnostics"),
@@ -262,6 +263,17 @@ Napi::Value PlaybackRendererWrap::LatencySamples(const Napi::CallbackInfo& info)
   sonare_node::ThrowIfError(env, sonare_playback_renderer_latency_samples(renderer_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value PlaybackRendererWrap::MaxBlockSize(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (!EnsureAlive(env)) return env.Undefined();
+  int max_block = 0;
+  sonare_node::ThrowIfError(env, sonare_playback_renderer_max_block_size(renderer_, &max_block));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, max_block);
   SONARE_NODE_CATCH(env)
 }
 

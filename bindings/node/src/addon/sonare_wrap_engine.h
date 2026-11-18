@@ -28,6 +28,7 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value PrimeOfflineParameters(const Napi::CallbackInfo& info);
   Napi::Value ResetProcessorState(const Napi::CallbackInfo& info);
   Napi::Value TailSamples(const Napi::CallbackInfo& info);
+  Napi::Value MaxBlockSize(const Napi::CallbackInfo& info);
   Napi::Value GraphLatencySamplesQ8(const Napi::CallbackInfo& info);
   Napi::Value SetTempoSegments(const Napi::CallbackInfo& info);
   Napi::Value SetTimeSignatureSegments(const Napi::CallbackInfo& info);

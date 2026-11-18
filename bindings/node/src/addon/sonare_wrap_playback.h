@@ -76,6 +76,7 @@ class PlaybackRendererWrap : public Napi::ObjectWrap<PlaybackRendererWrap> {
   Napi::Value SetHeadOrientation(const Napi::CallbackInfo& info);
   Napi::Value Reset(const Napi::CallbackInfo& info);
   Napi::Value LatencySamples(const Napi::CallbackInfo& info);
+  Napi::Value MaxBlockSize(const Napi::CallbackInfo& info);
   Napi::Value InputChannels(const Napi::CallbackInfo& info);
   Napi::Value OutputChannels(const Napi::CallbackInfo& info);
   Napi::Value Diagnostics(const Napi::CallbackInfo& info);

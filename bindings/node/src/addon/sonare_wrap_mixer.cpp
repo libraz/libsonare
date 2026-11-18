@@ -22,6 +22,7 @@ Napi::Object MixerWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&MixerWrap::FlushMeters>("flushMeters"),
           InstanceMethod<&MixerWrap::TailSamples>("tailSamples"),
           InstanceMethod<&MixerWrap::LatencySamples>("latencySamples"),
+          InstanceMethod<&MixerWrap::MaxBlockSize>("maxBlockSize"),
           InstanceMethod<&MixerWrap::StripCount>("stripCount"),
           InstanceMethod<&MixerWrap::SceneWarnings>("sceneWarnings"),
           InstanceMethod<&MixerWrap::ScheduleInsertAutomation>("scheduleInsertAutomation"),
@@ -237,6 +238,17 @@ Napi::Value MixerWrap::LatencySamples(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return Napi::Number::New(env, latency);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value MixerWrap::MaxBlockSize(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
+  int max_block = 0;
+  sonare_node::ThrowIfError(env, sonare_mixer_max_block_size(mixer_, &max_block));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, max_block);
   SONARE_NODE_CATCH(env)
 }
 

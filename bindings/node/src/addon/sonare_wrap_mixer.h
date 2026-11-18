@@ -46,6 +46,7 @@ class MixerWrap : public Napi::ObjectWrap<MixerWrap> {
   Napi::Value FlushMeters(const Napi::CallbackInfo& info);
   Napi::Value TailSamples(const Napi::CallbackInfo& info);
   Napi::Value LatencySamples(const Napi::CallbackInfo& info);
+  Napi::Value MaxBlockSize(const Napi::CallbackInfo& info);
   Napi::Value StripCount(const Napi::CallbackInfo& info);
   /// @brief Non-fatal warnings captured when this mixer was built from scene
   /// JSON (e.g. insert params no processor read); a JS string[], empty when none.
