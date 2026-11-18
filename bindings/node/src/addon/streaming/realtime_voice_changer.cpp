@@ -137,9 +137,7 @@ Napi::Value RealtimeVoiceChangerWrap::Prepare(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int channels{};
-  if (!OptionalIntArg(env, info, 2, "channels",
-                      sonare::editing::voice_changer::kRealtimeVoiceChangerDefaultChannels,
-                      &channels)) {
+  if (!RequiredIntArg(env, info, 2, "channels", &channels)) {
     return env.Undefined();
   }
   changer_->prepare(sample_rate, max_block_size, channels);
