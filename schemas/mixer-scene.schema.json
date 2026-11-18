@@ -81,9 +81,9 @@
           "default": 0
         },
         "timing": {
-          "description": "Whether the send is taken before or after the strip's fader. A post-fader send follows the fader; a pre-fader one does not.",
-          "enum": ["pre", "post"],
-          "default": "post"
+          "description": "Whether the send is taken before or after the strip's fader. A post-fader send follows the fader; a pre-fader one does not. The loader also reads the earlier spellings pre and post; the writer never emits them.",
+          "enum": ["preFader", "postFader"],
+          "default": "postFader"
         }
       }
     },
@@ -234,11 +234,9 @@
           "default": false
         },
         "panMode": {
-          "description": "Panner shape, matching SONARE_PAN_MODE_*. 0 is balance, which is what `pan` drives; a dual-pan mode reads dualPanLeft / dualPanRight instead. The loader rejects a value outside the range rather than clamping it, so the maximum here is what makes validation sufficient.",
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 2,
-          "default": 0
+          "description": "Panner shape, matching SONARE_PAN_MODE_*. balance is what `pan` drives; dualPan reads dualPanLeft / dualPanRight instead. The loader also reads the earlier integer ordinal (0 to 2) and refuses an unknown token or an ordinal outside that range; the writer never emits the ordinal.",
+          "enum": ["balance", "stereoPan", "dualPan"],
+          "default": "balance"
         },
         "dualPanLeft": {
           "description": "Destination of the source's left channel under a dual-pan panMode. Ignored in balance mode.",
@@ -257,11 +255,9 @@
         "polarityInvertLeft": { "type": "boolean", "default": false },
         "polarityInvertRight": { "type": "boolean", "default": false },
         "panLaw": {
-          "description": "Pan law, matching the PanLaw enum order. 0 is Const3dB. The maximum is kPanLawCount - 1; the loader rejects anything above it.",
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 3,
-          "default": 0
+          "description": "Pan law. The loader also reads the earlier integer ordinal (0 to 3, in this enum's order) and refuses an unknown token or an ordinal outside that range; the writer never emits the ordinal.",
+          "enum": ["const3Db", "const4.5Db", "const6Db", "linear0Db"],
+          "default": "const3Db"
         },
         "channelDelaySamples": {
           "description": "Whole-sample delay applied to this strip, for time-aligning a multi-mic source against its siblings. The maximum is kMaxAlignmentDelaySamples, which the loader rejects above rather than clamping.",
@@ -329,11 +325,9 @@
           "default": 0
         },
         "panMode": {
-          "description": "Panner shape, matching SONARE_PAN_MODE_*. Same meaning as a strip's.",
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 2,
-          "default": 0
+          "description": "Panner shape, matching SONARE_PAN_MODE_*. Same meaning and earlier form as a strip's.",
+          "enum": ["balance", "stereoPan", "dualPan"],
+          "default": "balance"
         },
         "dualPanLeft": {
           "type": "number",
@@ -348,11 +342,9 @@
           "default": 1
         },
         "panLaw": {
-          "description": "Pan law, matching the PanLaw enum order. Same meaning as a strip's.",
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 3,
-          "default": 0
+          "description": "Pan law. Same meaning and earlier form as a strip's.",
+          "enum": ["const3Db", "const4.5Db", "const6Db", "linear0Db"],
+          "default": "const3Db"
         },
         "inserts": {
           "description": "Processors on this bus, run on the summed signal.",
