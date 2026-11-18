@@ -909,7 +909,8 @@ TEST_CASE("CLI vocal-notes lists the notes a vocal session finds", "[cli][vocal]
   for (size_t i = 0; i < notes.size(); ++i) {
     const auto& note = notes[i];
     REQUIRE(note["index"].as_int() == static_cast<int>(i));
-    REQUIRE(note["has_pitch"].as_bool());
+    // A pitched note is told apart by its pitch keys; there is no separate flag.
+    REQUIRE_FALSE(note.contains("has_pitch"));
     REQUIRE(note["note_name"].as_string() == names[i]);
     REQUIRE(note["cents"].as_number() == Catch::Approx(cents[i]).margin(12.0));
     // The seconds are the sample positions over the take's own rate.

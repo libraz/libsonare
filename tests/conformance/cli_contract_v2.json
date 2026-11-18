@@ -11417,7 +11417,6 @@
                       "end_sec": "number",
                       "analysis_frame_start": "integer",
                       "analysis_frame_end": "integer",
-                      "has_pitch": "boolean",
                       "median_hz": "number|null",
                       "center_midi": "number|null",
                       "f0_stability": "number|null",
@@ -11440,7 +11439,6 @@
                       "end_sec": "number",
                       "analysis_frame_start": "integer",
                       "analysis_frame_end": "integer",
-                      "has_pitch": "boolean",
                       "amplitude": {
                         "type": "array",
                         "items": "number|null"

@@ -133,7 +133,7 @@ def test_vocal_notes_reports_each_note_with_its_name_and_offset() -> None:
         previous_end = 0.0
         for index, note in enumerate(payload["notes"]):
             assert note["index"] == index
-            assert note["has_pitch"] is True
+            assert "has_pitch" not in note
             assert note["cents"] == pytest.approx(_EXPECTED_CENTS[index], abs=12.0)
             midi = note["center_midi"]
             assert note["cents"] == pytest.approx((midi - math.floor(midi + 0.5)) * 100.0)

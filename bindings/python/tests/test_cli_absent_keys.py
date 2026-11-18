@@ -98,6 +98,8 @@ def test_vocal_notes_omit_every_pitch_key_of_an_unpitched_note(
     assert all(key in pitched for key in _PITCH_KEYS)
     assert pitched["note_name"] == "A4"
     assert not any(key in unpitched for key in _PITCH_KEYS)
+    # The absent pitch keys are the statement; no flag beside them says it twice.
+    assert "has_pitch" not in pitched and "has_pitch" not in unpitched
 
 
 def test_polyphonic_notes_omit_the_median_of_a_note_with_no_usable_pitch(

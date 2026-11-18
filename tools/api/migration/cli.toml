@@ -153,3 +153,11 @@ changed = "each platform is exactly {name, target_lufs, ceiling_dbtp}, all three
 domain = "mastering"
 rule = "loudness-names"
 test = "tests/cli/cli_mastering_test.cpp::CLI mastering-streaming takes one platform record spelling"
+
+[[entry]]
+kind = "command"
+old = "vocal-notes"
+changed = "the JSON note record no longer carries has_pitch: the pitch keys (median_hz, center_midi, f0_stability, note_name, cents) are absent on an unpitched note, so test for center_midi instead"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_cli_absent_keys.py::test_vocal_notes_omit_every_pitch_key_of_an_unpitched_note"

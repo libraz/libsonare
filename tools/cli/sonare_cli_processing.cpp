@@ -588,8 +588,7 @@ int cmd_vocal_notes(const CliArgs& args, const Audio& audio) {
           .kv("start_sec", static_cast<double>(note.source_start_sample) / sample_rate)
           .kv("end_sec", static_cast<double>(note.source_end_sample) / sample_rate)
           .kv("analysis_frame_start", static_cast<size_t>(note.analysis_frame_start))
-          .kv("analysis_frame_end", static_cast<size_t>(note.analysis_frame_end))
-          .kv("has_pitch", note.has_pitch != 0);
+          .kv("analysis_frame_end", static_cast<size_t>(note.analysis_frame_end));
       // An unpitched note has no pitch to report, so its pitch keys are omitted.
       if (note.has_pitch != 0) {
         const NearestNote nearest = nearest_note(note.center_midi);

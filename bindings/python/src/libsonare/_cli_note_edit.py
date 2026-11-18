@@ -507,7 +507,6 @@ def cmd_vocal_notes(args: argparse.Namespace) -> int:
             "end_sec": note.source_end_sample / sr,
             "analysis_frame_start": note.analysis_frame_start,
             "analysis_frame_end": note.analysis_frame_end,
-            "has_pitch": note.center_midi is not None,
         }
         # An unpitched note has no pitch to report, so its pitch keys are omitted.
         if note.center_midi is not None:
@@ -528,7 +527,7 @@ def cmd_vocal_notes(args: argparse.Namespace) -> int:
         print(f"Vocal notes: {len(rows)}")
         for row in rows:
             span = f"{cast(float, row['start_sec']):.3f}-{cast(float, row['end_sec']):.3f} s"
-            if row["has_pitch"]:
+            if "center_midi" in row:
                 print(
                     f"  [{row['index']}] {span}  "
                     f"{cast(str, row['note_name']):<4s} {cast(float, row['cents']):+6.1f} cents  "
