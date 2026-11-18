@@ -135,7 +135,9 @@ CLAIMS: tuple[Claim, ...] = (
         key="HPSS median kernel largest legal size",
         pattern=r"positive odd integer at most\s+(?P<largest>\d+)",
         groups={"largest": ("max_stft_n_fft", -1)},
-        floor=10,
+        # The WASM hpss() @param restated the request field's sentence; it now
+        # documents the field once, on HpssRequest.
+        floor=9,
     ),
     Claim(
         key="HPSS median kernel ceiling",
@@ -162,7 +164,9 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim(
         key="public tempo ceiling",
-        pattern=r"\(\s*0\s*,\s*(?P<max>\d{3,})\s*\]`{0,2}\s*(?:BPM|;|,)",
+        # Anchored on a tempo or a range named before the interval: a bare
+        # `(0, 10000]` is also how a millisecond window is written.
+        pattern=r"(?:[Bb][Pp][Mm]|range)[\s\S]{0,40}?\(\s*0\s*,\s*(?P<max>\d{3,})\s*\]`{0,2}\s*(?:BPM|;|,)",
         groups={"max": ("max_public_tempo_bpm", 0)},
         floor=7,
     ),
@@ -174,11 +178,10 @@ CLAIMS: tuple[Claim, ...] = (
     ),
     Claim(
         key="A4 tuning reference range",
-        # The trailing guard is the unit: a bare `lo..hi` is this claim, and so
-        # is one voiced in Hz, but a range carrying any other unit states a
-        # different bound. Without it the assistant's `20..400 BPM` read as a
-        # tuning range and reported the tempo constants as stale Hz.
-        pattern=r"(?:within|outside|range)\s+(?P<lo>\d+)\.\.(?P<hi>\d+)(?!\d|\s+(?!Hz\b)\w)",
+        # The trailing guard names the quantity: the range is voiced in Hz or
+        # tied to the live setter's range. A bare `lo..hi` is how MIDI program
+        # and family ranges are written too, and a BPM range states another bound.
+        pattern=r"(?:within|outside|range)\s+(?P<lo>\d+)\.\.(?P<hi>\d+)(?:\s*Hz\b|,\s+the same range)",
         groups={"lo": ("min_tuning_ref_hz", 0), "hi": ("max_tuning_ref_hz", 0)},
         floor=10,
     ),
@@ -276,13 +279,13 @@ CLAIMS: tuple[Claim, ...] = (
     # matching on 128 would let either claim answer for both.
     Claim(
         key="polyphony salience harmonic ceiling",
-        pattern=r"[Pp]artials summed per (?:F0 )?candidate.{0,60}?at most\s+(?P<max>\d+)",
+        pattern=r"[Pp]artials summed per (?:F0 )?candidate.{0,60}?(?:at most\s+|in \[\s*1\s*,\s*)(?P<max>\d+)",
         groups={"max": ("max_salience_harmonics", 0)},
         floor=4,
     ),
     Claim(
         key="polyphony note mask harmonic ceiling",
-        pattern=r"[Pp]artials claimed per note.{0,60}?at most\s+(?P<max>\d+)",
+        pattern=r"[Pp]artials claimed per note.{0,60}?(?:at most\s+|in \[\s*1\s*,\s*)(?P<max>\d+)",
         groups={"max": ("max_note_mask_harmonics", 0)},
         floor=4,
     ),
@@ -293,12 +296,12 @@ CLAIMS: tuple[Claim, ...] = (
         groups={"max": ("max_polyphony_voices", 0)},
         floor=4,
     ),
-    # The polyphony C header states the same ceiling as a bare sentinel-and-limit pair,
-    # sharing no wording with the three facades, so it reads the constant
-    # through a claim of its own rather than widening theirs to reach it.
+    # The polyphony C header states the same ceiling as a default-and-interval pair
+    # (its default is 4, the transcription header's is 10), sharing no wording with the three facades, so it reads the
+    # constant through a claim of its own rather than widening theirs to reach it.
     Claim(
         key="polyphony voice ceiling in the C header",
-        pattern=r"0 => 4, at most\s+(?P<max>\d+)",
+        pattern=r"default 4, in \[\s*1\s*,\s*(?P<max>\d+)\s*\]",
         groups={"max": ("max_polyphony_voices", 0)},
         floor=1,
     ),
