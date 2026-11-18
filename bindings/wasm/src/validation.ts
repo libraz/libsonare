@@ -326,6 +326,9 @@ export const C_INT_MAX = 2147483647;
  * value into the accepted domain first.
  */
 export function assertInt32(fnName: string, value: number, argName: string): void {
+  if (typeof value !== 'number') {
+    throw new TypeError(`${fnName}: ${argName} must be a number`);
+  }
   if (!Number.isInteger(value) || value < C_INT_MIN || value > C_INT_MAX) {
     throw new RangeError(`${fnName}: ${argName} must be an integer within the signed 32-bit range`);
   }
