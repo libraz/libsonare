@@ -1111,14 +1111,14 @@ class SpectrumReport:
 class WaveformPeaksReport:
     min: NDArray[np.float32]
     max: NDArray[np.float32]
-    channels: int
+    num_channels: int
     bucket_count: int
     samples_per_bucket: int
     def __init__(
         self,
         min: NDArray[np.float32],
         max: NDArray[np.float32],
-        channels: int,
+        num_channels: int,
         bucket_count: int,
         samples_per_bucket: int,
     ) -> None: ...

@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from libsonare import (
+    SonareValueError,
     mastering_dynamics_compressor,
     mastering_dynamics_gate,
     mastering_dynamics_transient_shaper,
@@ -58,6 +59,20 @@ class TestCompressor:
         with pytest.raises(ValueError, match="invalid compressor detector"):
             mastering_dynamics_compressor(x, SR, detector="not-a-mode")  # type: ignore[arg-type]
 
+    def test_sidechain_high_pass_eases_compression_of_a_low_tone(self) -> None:
+        x = sine(60.0, 0.5, sr=SR, amp=0.8)
+        plain, _ = mastering_dynamics_compressor(x, SR, threshold_db=-30.0, ratio=8.0)
+        keyed, _ = mastering_dynamics_compressor(
+            x, SR, threshold_db=-30.0, ratio=8.0, sidechain_high_pass_hz=2000.0
+        )
+        assert float(np.max(np.abs(keyed))) > float(np.max(np.abs(plain)))
+
+    @pytest.mark.parametrize("corner", [0.0, -1.0])
+    def test_refuses_a_sidechain_high_pass_that_is_not_positive(self, corner: float) -> None:
+        x = sine(440.0, 0.1, sr=SR, amp=0.5)
+        with pytest.raises(SonareValueError, match="sidechain_high_pass_hz"):
+            mastering_dynamics_compressor(x, SR, sidechain_high_pass_hz=corner)
+
     def test_empty_input_raises(self) -> None:
         with pytest.raises(ValueError, match="samples must not be empty"):
             mastering_dynamics_compressor(np.array([], dtype=np.float32), SR)
@@ -95,9 +110,20 @@ class TestGate:
             range_db=-90.0,
             hold_ms=10.0,
             close_threshold_db=-45.0,
-            key_hpf_hz=120.0,
+            key_high_pass_hz=120.0,
         )
         assert y.shape == x.shape
+
+    def test_a_zero_key_high_pass_is_the_unfiltered_key(self) -> None:
+        x = sine(440.0, 0.3, sr=SR, amp=0.8)
+        omitted, _ = mastering_dynamics_gate(x, SR)
+        zero, _ = mastering_dynamics_gate(x, SR, key_high_pass_hz=0.0)
+        np.testing.assert_array_equal(zero, omitted)
+
+    def test_refuses_a_negative_key_high_pass(self) -> None:
+        x = sine(440.0, 0.1, sr=SR, amp=0.5)
+        with pytest.raises(SonareValueError, match="key_high_pass_hz"):
+            mastering_dynamics_gate(x, SR, key_high_pass_hz=-1.0)
 
 
 class TestTransientShaper:

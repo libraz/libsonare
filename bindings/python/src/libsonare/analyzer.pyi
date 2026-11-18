@@ -2644,14 +2644,14 @@ def metering_spectrum_frame(
 ) -> SpectrumReport: ...
 def waveform_peaks(
     samples: FloatSamples,
-    channels: int,
+    num_channels: int,
     *,
     samples_per_bucket: int = 512,
     validate: bool = True,
 ) -> WaveformPeaksReport: ...
 def waveform_peak_pyramid(
     samples: FloatSamples,
-    channels: int,
+    num_channels: int,
     *,
     samples_per_bucket_levels: Sequence[int] = (512, 1024, 2048, 4096),
     validate: bool = True,
@@ -2787,8 +2787,7 @@ def mastering_dynamics_compressor(
     makeup_gain_db: float = 0.0,
     auto_makeup: bool = False,
     detector: CompressorDetector = "rms",
-    sidechain_hpf_enabled: bool = False,
-    sidechain_hpf_hz: float = 100.0,
+    sidechain_high_pass_hz: float | None = None,
     pdr_time_ms: float = 0.0,
     pdr_release_scale: float = 1.0,
     validate: bool = True,
@@ -2803,7 +2802,7 @@ def mastering_dynamics_gate(
     range_db: float = -80.0,
     hold_ms: float = 0.0,
     close_threshold_db: float = -50.0,
-    key_hpf_hz: float = 0.0,
+    key_high_pass_hz: float | None = None,
     validate: bool = True,
 ) -> tuple[np.ndarray[Any, Any], int]: ...
 def mastering_dynamics_transient_shaper(

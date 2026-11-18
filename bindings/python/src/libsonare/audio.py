@@ -12,7 +12,7 @@ from ._analysis_detection import _DEFAULT_BPM_MAX, _DEFAULT_BPM_MIN
 from ._effects_repair_common import _linked_channel_planes
 from ._errors import SonareValueError, _not_supported, _require_open, _unknown_error
 from ._features_metering import _dynamic_range_args, _oversample_factor, _spectrum_args
-from ._ffi_types_core import SonareDownmixOptions
+from ._ffi_types_core import SonareDownmixOptions as _SonareDownmixOptions
 from ._runtime import (
     _channel_layout_value,
     _check,
@@ -305,7 +305,7 @@ def downmix(
     if any(int(plane.shape[0]) != frame_count for plane in planes):
         raise SonareValueError("downmix: channels must all be the same length")
     packed = np.ascontiguousarray(np.stack(planes), dtype=np.float32)
-    fold = SonareDownmixOptions()
+    fold = _SonareDownmixOptions()
     lib.sonare_downmix_options_init(ctypes.byref(fold))
     fold.include_lfe = 1 if include_lfe else 0
     fold.normalize = 1 if normalize else 0

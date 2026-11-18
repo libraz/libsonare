@@ -15,12 +15,6 @@ from ._runtime import (
     _WINDOW_TYPES,
     Key,
     PitchClass,
-    SonareStreamConfig,
-    SonareStreamFrames,
-    SonareStreamFramesI16,
-    SonareStreamFramesU8,
-    SonareStreamQuantizeConfig,
-    SonareStreamStats,
     StreamBarChord,
     StreamChordChange,
     StreamConfig,
@@ -40,12 +34,30 @@ from ._runtime import (
     _to_c_size_t,
     _token_ordinal,
 )
+from ._runtime import (
+    SonareStreamConfig as _SonareStreamConfig,
+)
+from ._runtime import (
+    SonareStreamFrames as _SonareStreamFrames,
+)
+from ._runtime import (
+    SonareStreamFramesI16 as _SonareStreamFramesI16,
+)
+from ._runtime import (
+    SonareStreamFramesU8 as _SonareStreamFramesU8,
+)
+from ._runtime import (
+    SonareStreamQuantizeConfig as _SonareStreamQuantizeConfig,
+)
+from ._runtime import (
+    SonareStreamStats as _SonareStreamStats,
+)
 from ._types_analysis import CHORD_QUALITIES, _chord_symbol
 
 
 def _quantize_config_to_c(
     config: StreamQuantizeConfig | None,
-) -> SonareStreamQuantizeConfig | None:
+) -> _SonareStreamQuantizeConfig | None:
     """Marshal a :class:`StreamQuantizeConfig` to a C struct (``None`` stays ``None`` = defaults).
 
     The caller keeps the returned struct alive and passes ``ctypes.byref`` of it
@@ -53,7 +65,7 @@ def _quantize_config_to_c(
     """
     if config is None:
         return None
-    raw = SonareStreamQuantizeConfig()
+    raw = _SonareStreamQuantizeConfig()
     raw.mel_db_min = _narrow_double(config.mel_db_min, "config.mel_db_min")
     raw.mel_db_max = _narrow_double(config.mel_db_max, "config.mel_db_max")
     raw.onset_max = _narrow_double(config.onset_max, "config.onset_max")
@@ -92,7 +104,7 @@ class StreamAnalyzer:
         lib = _get_lib()
         if not hasattr(lib, "sonare_stream_analyzer_create"):
             raise _not_supported("libsonare was built without StreamAnalyzer support")
-        raw = SonareStreamConfig()
+        raw = _SonareStreamConfig()
         # Seed real-time defaults from the native layer, then override.
         _check(lib.sonare_stream_analyzer_config_default(ctypes.byref(raw)))
         # Integer fields are assigned bare: SonareStreamConfig is a CStruct, so
@@ -207,7 +219,7 @@ class StreamAnalyzer:
     def read_frames(self, max_frames: int) -> StreamFrames:
         """Read up to ``max_frames`` analyzed frames (consumes them)."""
         lib = _get_lib()
-        raw = SonareStreamFrames()
+        raw = _SonareStreamFrames()
         _check(
             lib.sonare_stream_analyzer_read_frames(
                 self._require_handle(), _to_c_size_t(max_frames, "max_frames"), ctypes.byref(raw)
@@ -227,7 +239,7 @@ class StreamAnalyzer:
         louder or quieter than the defaults (``None`` keeps the defaults).
         """
         lib = _get_lib()
-        raw = SonareStreamFramesU8()
+        raw = _SonareStreamFramesU8()
         qconfig = _quantize_config_to_c(quantize_config)
         _check(
             lib.sonare_stream_analyzer_read_frames_u8_ex(
@@ -251,7 +263,7 @@ class StreamAnalyzer:
         louder or quieter than the defaults (``None`` keeps the defaults).
         """
         lib = _get_lib()
-        raw = SonareStreamFramesI16()
+        raw = _SonareStreamFramesI16()
         qconfig = _quantize_config_to_c(quantize_config)
         _check(
             lib.sonare_stream_analyzer_read_frames_i16_ex(
@@ -276,7 +288,7 @@ class StreamAnalyzer:
 
     def stats(self) -> StreamStats:
         """Read the current statistics and progressive estimate snapshot."""
-        raw = SonareStreamStats()
+        raw = _SonareStreamStats()
         lib = _get_lib()
         _check(lib.sonare_stream_analyzer_stats(self._require_handle(), ctypes.byref(raw)))
         try:
@@ -470,7 +482,7 @@ def _pattern_scores(ptr: object, count: int) -> list[StreamPatternScore]:
     ]
 
 
-def _stream_frames_from_c(raw: SonareStreamFrames) -> StreamFrames:
+def _stream_frames_from_c(raw: _SonareStreamFrames) -> StreamFrames:
     n = int(raw.n_frames)
     chords = bool(int(raw.feature_flags) & _FEATURE_CHROMA)
     return StreamFrames(
@@ -483,7 +495,7 @@ def _stream_frames_from_c(raw: SonareStreamFrames) -> StreamFrames:
     )
 
 
-def _stream_frames_u8_from_c(raw: SonareStreamFramesU8) -> StreamFramesU8:
+def _stream_frames_u8_from_c(raw: _SonareStreamFramesU8) -> StreamFramesU8:
     n = int(raw.n_frames)
     return StreamFramesU8(
         n_frames=n,
@@ -492,7 +504,7 @@ def _stream_frames_u8_from_c(raw: SonareStreamFramesU8) -> StreamFramesU8:
     )
 
 
-def _stream_frames_i16_from_c(raw: SonareStreamFramesI16) -> StreamFramesI16:
+def _stream_frames_i16_from_c(raw: _SonareStreamFramesI16) -> StreamFramesI16:
     n = int(raw.n_frames)
     return StreamFramesI16(
         n_frames=n,
@@ -501,7 +513,7 @@ def _stream_frames_i16_from_c(raw: SonareStreamFramesI16) -> StreamFramesI16:
     )
 
 
-def _estimate_from_c(raw: SonareStreamStats) -> StreamProgressiveEstimate:
+def _estimate_from_c(raw: _SonareStreamStats) -> StreamProgressiveEstimate:
     has_bpm = float(raw.bpm) > 0
     key_root = int(raw.key)
     has_key = 0 <= key_root < len(PitchClass)
@@ -546,7 +558,7 @@ def _estimate_from_c(raw: SonareStreamStats) -> StreamProgressiveEstimate:
     )
 
 
-def _stream_stats_from_c(raw: SonareStreamStats) -> StreamStats:
+def _stream_stats_from_c(raw: _SonareStreamStats) -> StreamStats:
     return StreamStats(
         total_frames=int(raw.total_frames),
         total_samples=int(raw.total_samples),

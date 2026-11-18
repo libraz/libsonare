@@ -135,7 +135,7 @@ def test_waveform_peaks_bucket_interleaved_stereo_audio() -> None:
         dtype=np.float32,
     )
     report = libsonare.waveform_peaks(samples, 2, samples_per_bucket=2)
-    assert report.channels == 2
+    assert report.num_channels == 2
     assert report.bucket_count == 3
     assert report.samples_per_bucket == 2
     np.testing.assert_allclose(report.min, [-1.0, -0.5, 0.0, -0.25, -0.75, 0.9])

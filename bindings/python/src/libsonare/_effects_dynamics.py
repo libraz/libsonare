@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 
+from ._errors import SonareValueError
 from ._ffi import (
     SonareCompressorConfig,
     SonareGateConfig,
@@ -29,6 +30,20 @@ from ._types_enums import _COMPRESSOR_DETECTORS, CompressorDetector
 
 def _coerce_compressor_detector(value: CompressorDetector) -> int:
     return _token_ordinal(value, _COMPRESSOR_DETECTORS, "compressor detector")
+
+
+# The C config still pairs an enable flag with a corner it validates as positive
+# even while the flag is off, so a disabled sidechain high-pass carries this.
+_SIDECHAIN_HIGH_PASS_UNUSED_HZ = 100.0
+
+
+def _high_pass_corner(value: object, name: str, *, positive: bool) -> float:
+    """Narrow a given high-pass corner, refusing one outside its domain by name."""
+    corner = _narrow_double(value, name)
+    if corner < 0 or (positive and corner == 0):
+        bound = "positive" if positive else "non-negative"
+        raise SonareValueError(f"{name} must be {bound} (omit it for no high-pass)")
+    return corner
 
 
 def _run_dynamics(
@@ -74,8 +89,7 @@ def mastering_dynamics_compressor(
     makeup_gain_db: float = 0.0,
     auto_makeup: bool = False,
     detector: CompressorDetector = "rms",
-    sidechain_hpf_enabled: bool = False,
-    sidechain_hpf_hz: float = 100.0,
+    sidechain_high_pass_hz: float | None = None,
     pdr_time_ms: float = 0.0,
     pdr_release_scale: float = 1.0,
     validate: bool = True,
@@ -94,9 +108,8 @@ def mastering_dynamics_compressor(
         makeup_gain_db: Static makeup gain in dB (default 0).
         auto_makeup: Whether to enable automatic makeup gain (default False).
         detector: Level detector, ``"peak"``, ``"rms"`` or ``"logRms"`` (default ``"rms"``).
-        sidechain_hpf_enabled: Whether to high-pass-filter the sidechain
-            (default False).
-        sidechain_hpf_hz: Sidechain HPF cutoff in Hz (default 100).
+        sidechain_high_pass_hz: Sidechain high-pass corner in Hz, above 0.
+            ``None`` (the default) leaves the sidechain unfiltered.
         pdr_time_ms: Program-dependent release time in ms (default 0).
         pdr_release_scale: PDR release multiplier (default 1.0).
 
@@ -113,8 +126,10 @@ def mastering_dynamics_compressor(
         makeup_gain_db=_narrow_double(makeup_gain_db, "makeup_gain_db"),
         auto_makeup=1 if auto_makeup else 0,
         detector=_coerce_compressor_detector(detector),
-        sidechain_hpf_enabled=1 if sidechain_hpf_enabled else 0,
-        sidechain_hpf_hz=_narrow_double(sidechain_hpf_hz, "sidechain_hpf_hz"),
+        sidechain_hpf_enabled=0 if sidechain_high_pass_hz is None else 1,
+        sidechain_hpf_hz=_SIDECHAIN_HIGH_PASS_UNUSED_HZ
+        if sidechain_high_pass_hz is None
+        else _high_pass_corner(sidechain_high_pass_hz, "sidechain_high_pass_hz", positive=True),
         pdr_time_ms=_narrow_double(pdr_time_ms, "pdr_time_ms"),
         pdr_release_scale=_narrow_double(pdr_release_scale, "pdr_release_scale"),
     )
@@ -138,7 +153,7 @@ def mastering_dynamics_gate(
     range_db: float = -80.0,
     hold_ms: float = 0.0,
     close_threshold_db: float = -50.0,
-    key_hpf_hz: float = 0.0,
+    key_high_pass_hz: float | None = None,
     validate: bool = True,
 ) -> tuple[np.ndarray, int]:
     """Apply the offline noise gate.
@@ -154,7 +169,8 @@ def mastering_dynamics_gate(
         hold_ms: Minimum open time in milliseconds (default 0).
         close_threshold_db: Hysteresis close-threshold in dB; clamped to
             ``<= threshold_db`` (default -50).
-        key_hpf_hz: Sidechain HPF cutoff in Hz (default 0 = disabled).
+        key_high_pass_hz: Key high-pass corner in Hz, at least 0. ``None`` (the
+            default) leaves the key unfiltered, as does 0 Hz.
 
     Returns:
         Tuple of ``(output ndarray, latency_samples)``.
@@ -166,7 +182,9 @@ def mastering_dynamics_gate(
         range_db=_narrow_double(range_db, "range_db"),
         hold_ms=_narrow_double(hold_ms, "hold_ms"),
         close_threshold_db=_narrow_double(close_threshold_db, "close_threshold_db"),
-        key_hpf_hz=_narrow_double(key_hpf_hz, "key_hpf_hz"),
+        key_hpf_hz=0.0
+        if key_high_pass_hz is None
+        else _high_pass_corner(key_high_pass_hz, "key_high_pass_hz", positive=False),
     )
     return _run_dynamics(
         _get_lib().sonare_mastering_dynamics_gate,

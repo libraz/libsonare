@@ -9796,3 +9796,150 @@ changed = "a frozen dataclass; a changed copy comes from dataclasses.replace"
 domain = "effects"
 rule = "frozen-results"
 test = "bindings/python/tests/test_frozen_records.py::test_voice_changer_config_is_frozen"
+
+[[entry]]
+kind = "option"
+old = "mastering_dynamics_compressor(sidechain_hpf_hz)"
+new = "mastering_dynamics_compressor(sidechain_high_pass_hz)"
+domain = "mastering"
+rule = "high-pass"
+
+[[entry]]
+kind = "option"
+old = "mastering_dynamics_compressor(sidechain_hpf_enabled)"
+removed = "give sidechain_high_pass_hz; omitting it leaves the sidechain unfiltered"
+domain = "mastering"
+rule = "high-pass"
+
+[[entry]]
+kind = "option"
+old = "mastering_dynamics_gate(key_hpf_hz)"
+new = "mastering_dynamics_gate(key_high_pass_hz)"
+domain = "mastering"
+rule = "high-pass"
+
+[[entry]]
+kind = "field"
+old = "WaveformPeaksReport.channels"
+new = "WaveformPeaksReport.num_channels"
+domain = "mastering"
+rule = "num-channels"
+
+[[entry]]
+kind = "option"
+old = "waveform_peaks(channels)"
+new = "waveform_peaks(num_channels)"
+domain = "mastering"
+rule = "num-channels"
+
+[[entry]]
+kind = "option"
+old = "waveform_peak_pyramid(channels)"
+new = "waveform_peak_pyramid(num_channels)"
+domain = "mastering"
+rule = "num-channels"
+
+[[entry]]
+kind = "class"
+old = "SonareEngineMarker"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+domain = "engine"
+rule = "python-public-names"
+
+[[entry]]
+kind = "class"
+old = "SonareEngineMetronomeConfig"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+domain = "engine"
+rule = "python-public-names"
+
+[[entry]]
+kind = "class"
+old = "SonareEngineMidiClipSchedule"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+domain = "engine"
+rule = "python-public-names"
+
+[[entry]]
+kind = "class"
+old = "SonareEngineMidiEvent"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+domain = "engine"
+rule = "python-public-names"
+
+[[entry]]
+kind = "class"
+old = "SonareExternalMidiEvent"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+domain = "engine"
+rule = "python-public-names"
+
+[[entry]]
+kind = "class"
+old = "SonareParameterInfo"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+domain = "engine"
+rule = "python-public-names"
+
+[[entry]]
+kind = "class"
+old = "SonareProjectTempoSegment"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+domain = "project"
+rule = "python-public-names"
+
+[[entry]]
+kind = "class"
+old = "SonareProjectTimeSignatureSegment"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+domain = "project"
+rule = "python-public-names"
+
+[[entry]]
+kind = "class"
+old = "SonareTransportState"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+domain = "engine"
+rule = "python-public-names"
+
+[[entry]]
+kind = "class"
+old = "SonareStreamConfig"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+domain = "analysis"
+rule = "python-public-names"
+
+[[entry]]
+kind = "class"
+old = "SonareStreamFrames"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+domain = "analysis"
+rule = "python-public-names"
+
+[[entry]]
+kind = "class"
+old = "SonareStreamFramesI16"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+domain = "analysis"
+rule = "python-public-names"
+
+[[entry]]
+kind = "class"
+old = "SonareStreamFramesU8"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+domain = "analysis"
+rule = "python-public-names"
+
+[[entry]]
+kind = "class"
+old = "SonareStreamQuantizeConfig"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+domain = "analysis"
+rule = "python-public-names"
+
+[[entry]]
+kind = "class"
+old = "SonareStreamStats"
+removed = "a ctypes mirror of the C struct, never part of the API; use the dataclass the facade returns"
+domain = "analysis"
+rule = "python-public-names"

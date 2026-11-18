@@ -480,7 +480,7 @@ class WaveformPeaksReport:
     """Per-bucket minima, channel-major: index ``channel * bucket_count + bucket``."""
     max: NDArray[np.float32]
     """Per-bucket maxima, channel-major: index ``channel * bucket_count + bucket``."""
-    channels: int
+    num_channels: int
     """Number of channels."""
     bucket_count: int
     """Number of buckets per channel."""
