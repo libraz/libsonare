@@ -240,17 +240,16 @@ TEST_CASE("default multiband chain keeps the canonical v1 JSON", "[mastering][pr
       "deesser.enabled\":false,\"dynamics.deesse"
       "r.frequencyHz\":6000,\"dynamics.deesser.rangeDb\":12,\"dynamics.deesser.ratio\":4,"
       "\"dynamics.deesser.releaseMs\":60,\"dynamics.d"
-      "eesser.thresholdDb\":-24,\"dynamics.multibandComp.enabled\":false,\"dynamics.multibandComp."
-      "highAttackMs\":10,\"dynamics.multib"
-      "andComp.highCutoffHz\":2000,\"dynamics.multibandComp.highRatio\":2,\"dynamics.multibandComp."
-      "highReleaseMs\":100,\"dynamics.mul"
-      "tibandComp.highThresholdDb\":-18,\"dynamics.multibandComp.lowAttackMs\":10,\"dynamics."
-      "multibandComp.lowCutoffHz\":120,\"dynami"
-      "cs.multibandComp.lowRatio\":2,\"dynamics.multibandComp.lowReleaseMs\":100,\"dynamics."
-      "multibandComp.lowThresholdDb\":-18,\"dyna"
-      "mics.multibandComp.midAttackMs\":10,\"dynamics.multibandComp.midRatio\":2,\"dynamics."
-      "multibandComp.midReleaseMs\":100,\"dynami"
-      "cs.multibandComp.midThresholdDb\":-18,\"dynamics.transientShaper.attackGainDb\":3,"
+      "eesser.thresholdDb\":-24,\"dynamics.multibandComp.bands.0.attackMs\":10,\"dynamics."
+      "multibandComp.bands.0.ratio\":2,\"dynamics.multibandComp.bands.0.releaseMs\":100,"
+      "\"dynamics.multibandComp.bands.0.thresholdDb\":-18,\"dynamics.multibandComp.bands.1."
+      "attackMs\":10,\"dynamics.multibandComp.bands.1.ratio\":2,\"dynamics.multibandComp."
+      "bands.1.releaseMs\":100,\"dynamics.multibandComp.bands.1.thresholdDb\":-18,"
+      "\"dynamics.multibandComp.bands.2.attackMs\":10,\"dynamics.multibandComp.bands.2.ratio\":2,"
+      "\"dynamics.multibandComp.bands.2.releaseMs\":100,\"dynamics.multibandComp.bands.2."
+      "thresholdDb\":-18,\"dynamics.multibandComp.cutoff0Hz\":120,\"dynamics.multibandComp."
+      "cutoff1Hz\":2000,\"dynamics.multibandComp.enabled\":false,"
+      "\"dynamics.transientShaper.attackGainDb\":3,"
       "\"dynamics.transientShaper.enabled\":false,"
       "\"dynamics.transientShaper.fastAttackMs\":0,\"dynamics.transientShaper.fastReleaseMs\":20,"
       "\"dynamics.transientShaper.gainSmoo"
@@ -328,7 +327,7 @@ TEST_CASE("v2 multiband JSON preserves four and five full compressor bands",
     const std::string json = chain_config_to_json(config);
     REQUIRE(json.find("\"version\":2") != std::string::npos);
     REQUIRE(json.find("\"dynamics.multibandComp\":{") != std::string::npos);
-    REQUIRE(json.find("\"dynamics.multibandComp.lowRatio\"") == std::string::npos);
+    REQUIRE(json.find("\"dynamics.multibandComp.bands.0.ratio\"") == std::string::npos);
 
     const auto restored = chain_config_from_json(json);
     const auto& expected = config.dynamics.multiband_comp;
@@ -362,7 +361,7 @@ TEST_CASE("advanced three-band multiband settings select v2", "[mastering][prese
       sonare::mastering::multiband::CrossoverSlope::LR8;
   const std::string json = chain_config_to_json(config);
   REQUIRE(json.find("\"version\":2") != std::string::npos);
-  REQUIRE(json.find("\"dynamics.multibandComp.lowCutoffHz\"") == std::string::npos);
+  REQUIRE(json.find("\"dynamics.multibandComp.cutoff0Hz\"") == std::string::npos);
   REQUIRE(chain_config_to_json(chain_config_from_json(json)) == json);
 }
 
@@ -403,7 +402,7 @@ TEST_CASE("v2 multiband JSON rejects malformed structured fields", "[mastering][
     std::string malformed = valid;
     const auto params_end = malformed.rfind("},\"version\":2}");
     REQUIRE(params_end != std::string::npos);
-    malformed.insert(params_end, ",\"dynamics.multibandComp.lowRatio\":2");
+    malformed.insert(params_end, ",\"dynamics.multibandComp.bands.0.ratio\":2");
     REQUIRE_THROWS_AS(chain_config_from_json(malformed), sonare::SonareException);
   }
 
@@ -523,12 +522,12 @@ TEST_CASE("chain config flat params refuse what has no flat spelling",
                        sonare::ErrorCode::InvalidFormat);
 
   require_refused_with(
-      [] { chain_config_flat_params(R"({"version":1,"params":{"eq.tiltDb":"steep"}})"); },
-      "chain config param 'eq.tiltDb' is not a number or boolean",
+      [] { chain_config_flat_params(R"({"version":1,"params":{"eq.tilt.tiltDb":"steep"}})"); },
+      "chain config param 'eq.tilt.tiltDb' is not a number or boolean",
       sonare::ErrorCode::InvalidFormat);
   require_refused_with(
-      [] { chain_config_flat_params(R"({"version":1,"params":{"eq.tiltDb":null}})"); },
-      "chain config param 'eq.tiltDb' is not a number or boolean",
+      [] { chain_config_flat_params(R"({"version":1,"params":{"eq.tilt.tiltDb":null}})"); },
+      "chain config param 'eq.tilt.tiltDb' is not a number or boolean",
       sonare::ErrorCode::InvalidFormat);
   require_refused_with(
       [] {

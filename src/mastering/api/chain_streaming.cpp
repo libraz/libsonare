@@ -7,6 +7,7 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -141,18 +142,18 @@ void add_parameter_targets(std::vector<StreamingParameterTarget>& targets,
       full_key = "loudness." + descriptor.key;
       config_key = full_key;
     } else if (stage_name == "dynamics.multibandComp") {
-      // Every band descriptor is a target under the chain's band<i>.<field> key. Bands 0..2 also
-      // answer to the low/mid/high shorthand the canonicalizer folds onto that key.
+      // Every band descriptor (`band<i>.<field>`) is a target under the chain's
+      // `bands.<i>.<field>` key.
       full_key = stage_name + "." + descriptor.key;
-      config_key = full_key;
-      for (const char* band : {"low", "mid", "high"}) {
-        for (const char* field : {"ThresholdDb", "Ratio", "AttackMs", "ReleaseMs"}) {
-          const std::string alias = stage_name + "." + band + field;
-          std::string storage;
-          if (canonical_chain_param_key(alias, &storage) != config_key) continue;
-          targets.push_back({alias, config_key, processor, descriptor.id});
-        }
+      constexpr std::string_view kBandHead = "band";
+      const std::string_view band_key = descriptor.key;
+      const std::size_t dot = band_key.find('.');
+      if (band_key.substr(0, kBandHead.size()) == kBandHead && dot != std::string_view::npos) {
+        full_key = stage_name + ".bands." +
+                   std::string(band_key.substr(kBandHead.size(), dot - kBandHead.size())) + "." +
+                   std::string(band_key.substr(dot + 1));
       }
+      config_key = full_key;
     } else {
       full_key = stage_name + "." + descriptor.key;
       config_key = full_key;
@@ -600,6 +601,9 @@ void StreamingMasteringChain::set_parameter(const std::string& full_key, double 
                                      return candidate.full_key == full_key;
                                    });
   if (target == impl_->parameter_targets.end()) {
+    // A retired spelling is refused here, naming the current key.
+    std::string retired_check_storage;
+    (void)canonical_chain_param_key(full_key, &retired_check_storage);
     throw SonareException(ErrorCode::InvalidParameter,
                           "unknown or unavailable streaming mastering parameter: " + full_key);
   }

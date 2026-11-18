@@ -17,11 +17,13 @@
 #include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cctype>
 #include <cmath>
 #include <memory>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "mastering/api/insert_factory.h"
@@ -1891,21 +1893,27 @@ TEST_CASE("an enum parameter's name resolves to the number the flat lists carry"
   CHECK(mastering_enum_value("", "repair.dehum.mode", "notch") ==
         static_cast<double>(sonare::mastering::repair::DehumMode::Notch));
 
-  // The compressor and multiband chain keys, in every spelling and at every band index.
+  // The compressor and multiband chain keys, at every band index.
   CHECK(mastering_enum_value("", "dynamics.compressor.detector", "logRms") == 2.0);
-  CHECK(mastering_enum_value("", "dynamics.multibandComp.slope", "lr8") == 2.0);
-  CHECK(mastering_enum_value("", "dynamics.multibandComp.crossover.slope", "lr2") == 0.0);
-  CHECK(mastering_enum_value("", "dynamics.multibandComp.mode", "bessel") == 2.0);
-  CHECK(mastering_enum_value("", "dynamics.multibandComp.crossover.mode", "firLinearPhase") == 3.0);
+  CHECK(mastering_enum_value("", "dynamics.multibandComp.crossover.slope", "lr8") == 2.0);
+  CHECK(mastering_enum_value("", "dynamics.multibandComp.crossover.mode", "bessel") == 2.0);
   for (const int band : {0, 2, 9, 63}) {
     CAPTURE(band);
     const std::string index = std::to_string(band);
-    CHECK(mastering_enum_value("", "dynamics.multibandComp.band" + index + ".detector", "peak") ==
-          0.0);
     CHECK(mastering_enum_value("", "dynamics.multibandComp.bands." + index + ".detector",
                                "logRms") == 2.0);
   }
-  CHECK_FALSE(mastering_enum_value("", "dynamics.multibandComp.band3.ratio", "x").has_value());
+  // A retired spelling is refused with the current key named.
+  const std::vector<std::pair<std::string, std::string>> retired_keys = {
+      {"dynamics.multibandComp.slope", "dynamics.multibandComp.crossover.slope"},
+      {"dynamics.multibandComp.mode", "dynamics.multibandComp.crossover.mode"},
+      {"dynamics.multibandComp.band3.detector", "dynamics.multibandComp.bands.3.detector"}};
+  for (const auto& [retired, current] : retired_keys) {
+    INFO(retired);
+    CHECK_THROWS_WITH(
+        mastering_enum_value("", retired, "lr2"),
+        Catch::Matchers::ContainsSubstring(retired) && Catch::Matchers::ContainsSubstring(current));
+  }
   CHECK_FALSE(mastering_enum_value("", "dynamics.multibandComp.cutoff0Hz", "x").has_value());
   CHECK_FALSE(mastering_enum_value("", "dynamics.compressor.ratio", "x").has_value());
   std::string band_message;

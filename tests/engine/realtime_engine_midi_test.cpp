@@ -3272,7 +3272,7 @@ TEST_CASE("sonare_engine_set_part_rig refuses what it cannot apply", "[engine][m
   synth.destination_id = 1;
   synth.use_gm_programs = 1;
   REQUIRE(sonare_engine_set_synth_instrument_binding(engine, &synth) == SONARE_OK);
-  constexpr const char* kChain = R"([{"processor":"saturation.softClipper","params":"{}"}])";
+  constexpr const char* kChain = R"([{"processor":"saturation.softClipper","params":{}}])";
 
   // Control: the same destination takes a valid rig.
   REQUIRE(sonare_engine_set_part_rig(engine, 1, 0, SONARE_PART_RIG_CHAIN, kChain) == SONARE_OK);

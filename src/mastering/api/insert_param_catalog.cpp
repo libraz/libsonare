@@ -2,7 +2,6 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
-#include <cstring>
 #include <functional>
 #include <limits>
 #include <optional>
@@ -15,10 +14,10 @@
 #include "mastering/api/chain.h"
 #include "mastering/api/insert_construction.h"
 #include "mastering/api/insert_factory.h"
-#include "mastering/api/legacy_ids.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/param_field_tables.h"
 #include "mastering/api/processor_params.h"
+#include "mastering/api/retired_names.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
 #include "util/number_format.h"
@@ -43,8 +42,7 @@ std::vector<std::string> construction_keys(const ParamMap& params) {
 
 }  // namespace
 
-std::vector<std::string> insert_param_names(const std::string& requested_name) {
-  const std::string name = canonical_processor_id(requested_name);
+std::vector<std::string> insert_param_names(const std::string& name) {
   // Build the processor against an empty param map: every config builder probes
   // or declares the keys it reads (falling back to defaults when absent), so
   // those are exactly the parameter names this processor consumes. The
@@ -171,7 +169,7 @@ bool read_chain_only_config(const ParamMap& params) {
   SONARE_FIELDS_LOUDNESS(X)
 #undef X
   // The chain caps the kernel at kMaxFirKernelSize, which the multiband insert does not.
-  const std::string fir_key = "dynamics.multibandComp.firKernelSize";
+  const std::string fir_key = "dynamics.multibandComp.crossover.firKernelSize";
   int fir_kernel_size = defaults.dynamics.multiband_comp.config.crossover.fir_kernel_size;
   detail::read_field(params, fir_key.c_str(), fir_kernel_size, detail::kSamples);
   supply_if_given(fir_key, fir_key, fir_kernel_size);
@@ -246,9 +244,8 @@ int required_crossover_cutoffs(const SlotList& slots, const std::string& key) {
 
 }  // namespace
 
-std::vector<Param> insert_probe_params(const std::string& requested_name, const std::string& key,
+std::vector<Param> insert_probe_params(const std::string& name, const std::string& key,
                                        double value) {
-  const std::string name = canonical_processor_id(requested_name);
   std::vector<Param> params{Param{key, value}};
   if (name == "effects.gsEfx") {
     // TYPE is a paired selector, so a single-key probe gets the other byte at zero.
@@ -1038,20 +1035,20 @@ bool chain_key_processor(const std::string& chain_key, std::string* processor, s
 
 std::optional<double> mastering_enum_value(const std::string& processor, const std::string& key,
                                            const std::string& choice) {
-  std::string id = canonical_processor_id(processor);
+  std::string id = processor;
   std::string leaf = key;
   if (processor.empty() && !chain_key_processor(key, &id, &leaf)) return std::nullopt;
   const auto declared = empty_build(id).probed_choices().find(leaf);
   if (declared == empty_build(id).probed_choices().end()) return std::nullopt;
-  const std::string current_choice = canonical_choice_name(leaf, choice);
   std::string valid;
   for (const detail::EnumChoice& entry : declared->second) {
-    if (entry.name == current_choice) return static_cast<double>(entry.value);
+    if (entry.name == choice) return static_cast<double>(entry.value);
     if (!valid.empty()) valid += ", ";
     valid += entry.name;
   }
-  throw SonareException(ErrorCode::InvalidParameter,
-                        key + ": unknown name '" + choice + "' (valid names: " + valid + ")");
+  throw SonareException(ErrorCode::InvalidParameter, key + ": unknown name '" + choice + "'" +
+                                                         retired_choice_note(leaf, choice) +
+                                                         " (valid names: " + valid + ")");
 }
 
 namespace {
@@ -1060,44 +1057,6 @@ void append_json_string(std::string& out, const std::string& text) {
   out += '"';
   out += text;
   out += '"';
-}
-
-// `{key, aliases}` entries: each other spelling canonical_chain_param_key folds onto a key, with
-// the list spellings canonical and `<i>` standing for an index.
-std::vector<std::pair<std::string, std::string>> chain_aliases() {
-  const std::string multiband = "dynamics.multibandComp.";
-  std::vector<std::pair<std::string, std::string>> aliases = {
-      {"repair.denoise.enabled", "repair.denoise"},
-      {"repair.denoise.nFft", "repair.nFft"},
-      {"repair.denoise.hopLength", "repair.hopLength"},
-      {"repair.denoise.ddAlpha", "repair.ddAlpha"},
-      {"repair.denoise.reductionDb", "repair.reductionDb"},
-      {"repair.denoise.gainFloor", "repair.gainFloor"},
-      {"eq.tilt.tiltDb", "eq.tiltDb"},
-      {"eq.tilt.pivotHz", "eq.pivotHz"},
-      {multiband + "slope", multiband + "crossover.slope"},
-      {multiband + "mode", multiband + "crossover.mode"},
-      {multiband + "firKernelSize", multiband + "crossover.firKernelSize"},
-      {std::string(kChainCutoffList) + ".<i>", multiband + "cutoff<i>Hz"},
-      {std::string(kChainCutoffList) + ".0", multiband + "lowCutoffHz"},
-      {std::string(kChainCutoffList) + ".1", multiband + "highCutoffHz"},
-  };
-#define X(jkey, member, meta) \
-  aliases.emplace_back(std::string(kChainBandList) + ".<i>." jkey, multiband + "band<i>." jkey);
-  SONARE_FIELDS_COMPRESSOR(X)
-#undef X
-  // The shorthand of the default split's three bands.
-  const char* const band_words[] = {"low", "mid", "high"};
-  for (std::size_t band = 0; band < std::size(band_words); ++band) {
-    for (const char* field : {"thresholdDb", "ratio", "attackMs", "releaseMs"}) {
-      std::string shorthand = multiband + band_words[band] + field;
-      const std::size_t capital = shorthand.size() - std::strlen(field);
-      shorthand[capital] = static_cast<char>(std::toupper(static_cast<unsigned char>(field[0])));
-      aliases.emplace_back(std::string(kChainBandList) + "." + std::to_string(band) + "." + field,
-                           std::move(shorthand));
-    }
-  }
-  return aliases;
 }
 
 std::string chain_only_param_info_json() {
@@ -1137,16 +1096,7 @@ std::string chain_catalog_json() {
   out += ",\"minItems\":" + std::to_string(kMinMultibandBands) +
          ",\"maxItems\":" + std::to_string(kMaxMultibandBands) + "}],\"params\":";
   out += chain_only_param_info_json();
-  out += ",\"aliases\":[";
-  for (const auto& [key, alias] : chain_aliases()) {
-    if (out.back() != '[') out += ',';
-    out += "{\"key\":";
-    append_json_string(out, key);
-    out += ",\"aliases\":[";
-    append_json_string(out, alias);
-    out += "]}";
-  }
-  out += "]}";
+  out += '}';
   return out;
 }
 
@@ -1159,8 +1109,7 @@ std::string info_or_repair(std::string info, const std::string& name) {
 
 }  // namespace
 
-std::string insert_slot_info_json(const std::string& requested_name) {
-  const std::string name = canonical_processor_id(requested_name);
+std::string insert_slot_info_json(const std::string& name) {
   // Same declarations the param entries' `slot` field is read from.
   std::string out = "[";
   for (const auto& [slot_name, declaration] : empty_build(name).declared_slots()) {
@@ -1185,8 +1134,7 @@ std::string insert_slot_info_json(const std::string& requested_name) {
   return out;
 }
 
-std::string insert_param_info_json(const std::string& requested_name) {
-  const std::string name = canonical_processor_id(requested_name);
+std::string insert_param_info_json(const std::string& name) {
   // Measuring the bounds costs one processor construction per probe point, so a
   // repeat query — and the capability catalog, which asks for every insert —
   // reads a memo instead of probing again. Thread-local because the C ABI's own
@@ -1199,8 +1147,7 @@ std::string insert_param_info_json(const std::string& requested_name) {
       .first->second;
 }
 
-std::string insert_param_info_json_at_rate(const std::string& requested_name, double sample_rate) {
-  const std::string name = canonical_processor_id(requested_name);
+std::string insert_param_info_json_at_rate(const std::string& name, double sample_rate) {
   // Keyed apart from the rate-less memo, so the rate-less answer never depends on
   // an earlier call.
   static thread_local std::unordered_map<std::string, std::string> memo;
@@ -1212,9 +1159,7 @@ std::string insert_param_info_json_at_rate(const std::string& requested_name, do
       .first->second;
 }
 
-std::string insert_param_info_json_measured_per_key(const std::string& requested_name,
-                                                    double sample_rate) {
-  const std::string name = canonical_processor_id(requested_name);
+std::string insert_param_info_json_measured_per_key(const std::string& name, double sample_rate) {
   return info_or_repair(
       build_insert_param_info_json(name, sample_rate, /*share_indexed_verdicts=*/false), name);
 }

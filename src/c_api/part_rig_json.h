@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-#include "mastering/api/legacy_insert_params.h"
 #include "midi/part_rig.h"
 #include "sonare_c_internal.h"
 #include "util/json_budget.h"
@@ -35,7 +34,7 @@ inline SonareError parse_part_rig_inserts(const char* inserts_json,
   }
   const auto bad_shape = [] {
     set_last_error(SONARE_ERROR_INVALID_FORMAT,
-                   "inserts_json must be an array of {\"processor\": string, \"params\": string}");
+                   "inserts_json must be an array of {\"processor\": string, \"params\": object}");
     return SONARE_ERROR_INVALID_FORMAT;
   };
   if (!root.is_array()) return bad_shape();
@@ -44,11 +43,10 @@ inline SonareError parse_part_rig_inserts(const char* inserts_json,
     const json::Value* processor = item.find("processor");
     if (processor == nullptr || !processor->is_string()) return bad_shape();
     sonare::midi::PartRigStage stage;
-    stage.processor = sonare::mastering::api::canonical_processor_id(processor->as_string());
+    stage.processor = processor->as_string();
     if (const json::Value* params = item.find("params")) {
-      if (!params->is_string()) return bad_shape();
-      stage.params_json = sonare::mastering::api::canonical_insert_params_text(stage.processor,
-                                                                               params->as_string());
+      if (!params->is_object()) return bad_shape();
+      stage.params_json = json::dump(*params);
     } else {
       stage.params_json = "{}";
     }

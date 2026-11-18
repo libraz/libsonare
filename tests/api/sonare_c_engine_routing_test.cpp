@@ -25,11 +25,11 @@ constexpr int kRoutingFrames = kRoutingBlock * kRoutingBlocks;
 
 #if defined(SONARE_WITH_MIXING)
 constexpr const char* kDuckerBusJson =
-    R"({"version":1,"strips":[],"buses":[{"id":"1","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":"{\"thresholdDb\":-20,\"ratio\":20,\"attackMs\":0.05,\"releaseMs\":80,\"rangeDb\":30}"}]}],"connections":[]})";
+    R"({"version":1,"strips":[],"buses":[{"id":"1","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]}],"connections":[]})";
 constexpr const char* kLimiterBusJson =
-    R"({"version":1,"strips":[],"buses":[{"id":"1","inserts":[{"slot":"pre","processor":"dynamics.limiter","params":"{\"thresholdDb\":24,\"lookaheadMs\":0,\"releaseMs\":50}"}]}],"connections":[]})";
+    R"({"version":1,"strips":[],"buses":[{"id":"1","inserts":[{"slot":"pre","processor":"dynamics.limiter","params":{"thresholdDb":24,"lookaheadMs":0,"releaseMs":50}}]}],"connections":[]})";
 constexpr const char* kDuckerMasterJson =
-    R"({"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":"{\"thresholdDb\":-20,\"ratio\":20,\"attackMs\":0.05,\"releaseMs\":80,\"rangeDb\":30}"}]}],"buses":[],"connections":[]})";
+    R"({"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]}],"buses":[],"connections":[]})";
 
 // A DC 1.0 mono source shared by every clip; clips never outlive it.
 const std::vector<float>& dc_source() {
@@ -1026,7 +1026,7 @@ TEST_CASE("a track insert automation id survives per-lane routing edits", "[c_en
   REQUIRE(
       sonare_engine_set_track_strip_json(
           engine, 10,
-          R"({"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"utility.gain","params":"{\"levelDb\":0}"}]}],"buses":[],"connections":[]})") ==
+          R"({"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"utility.gain","params":{"levelDb":0}}]}],"buses":[],"connections":[]})") ==
       SONARE_OK);
   uint32_t gain_id = 0;
   REQUIRE(sonare_engine_resolve_track_insert_automation_id(engine, 10, 0, "levelDb", &gain_id) ==

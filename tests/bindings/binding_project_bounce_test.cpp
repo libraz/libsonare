@@ -1211,7 +1211,7 @@ TEST_CASE("mono project bounce downmixes stereo audio clips instead of dropping 
 TEST_CASE("deserialize success returns warnings and failed bounce records missing timeline",
           "[project]") {
   const std::string json =
-      R"({"version":1,"sample_rate":48000,"tracks":[{"id":1,"name":"audio","kind":0,)"
+      R"({"version":7,"sample_rate":48000,"tracks":[{"id":1,"name":"audio","kind":0,)"
       R"("channel_strip_ref":"","output_target":"","midi_destination_id":0,)"
       R"("automation_lanes":[]}],"clips":[{"id":1,"track_id":1,"source_id":99,)"
       R"("start_ppq":0,"length_ppq":1,"source_offset_ppq":0,"gain":1,)"
@@ -1285,7 +1285,7 @@ TEST_CASE("a bounce rejected for bad arguments clears the recorded compile resul
   // bounce's diagnostics instead would show a host errors for a render that
   // never ran, on a call it already knows failed.
   const std::string json =
-      R"({"version":1,"sample_rate":48000,"tracks":[{"id":1,"name":"audio","kind":0,)"
+      R"({"version":7,"sample_rate":48000,"tracks":[{"id":1,"name":"audio","kind":0,)"
       R"("channel_strip_ref":"","output_target":"","midi_destination_id":0,)"
       R"("automation_lanes":[]}],"clips":[{"id":1,"track_id":1,"source_id":99,)"
       R"("start_ppq":0,"length_ppq":1,"source_offset_ppq":0,"gain":1,)"
@@ -1603,15 +1603,15 @@ TEST_CASE("channel-strip bounce preserves the longest serial send tail", "[proje
     "version":1,
     "strips":[{"id":"source","inserts":[
       {"slot":"post","processor":"effects.delay.stereo",
-       "params":"{\"delayTimeLMs\":10,\"delayTimeRMs\":10,\"feedback\":0,\"dryWet\":1}"}],
-      "sends":[{"id":"to-aux","destinationBusId":"aux","sendDb":0,"timing":"post"}]}],
+       "params":{"delayTimeLMs":10,"delayTimeRMs":10,"feedback":0,"dryWet":1}}],
+      "sends":[{"id":"to-aux","destinationBusId":"aux","sendDb":0,"timing":"postFader"}]}],
     "buses":[
       {"id":"aux","role":"aux","inserts":[
         {"slot":"post","processor":"effects.delay.stereo",
-         "params":"{\"delayTimeLMs\":20,\"delayTimeRMs\":20,\"feedback\":0,\"dryWet\":1}"}]},
+         "params":{"delayTimeLMs":20,"delayTimeRMs":20,"feedback":0,"dryWet":1}}]},
       {"id":"master","role":"master","inserts":[
         {"slot":"post","processor":"effects.delay.stereo",
-         "params":"{\"delayTimeLMs\":30,\"delayTimeRMs\":30,\"feedback\":0,\"dryWet\":1}"}]}],
+         "params":{"delayTimeLMs":30,"delayTimeRMs":30,"feedback":0,"dryWet":1}}]}],
     "connections":[{"source":"aux","destination":"master"}]
   })";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
@@ -1677,7 +1677,7 @@ TEST_CASE("channel-strip bounce preserves tail impulse through master latency in
       "{\"version\":1,\"strips\":[{\"id\":\"track\"}],"
       "\"buses\":[{\"id\":\"master\",\"role\":\"master\",\"inserts\":["
       "{\"slot\":\"post\",\"processor\":\"dynamics.brickwallLimiter\","
-      "\"params\":\"{\\\"lookaheadMs\\\":1.0,\\\"ceilingDb\\\":0.0}\"}]}],"
+      "\"params\":{\"lookaheadMs\":1.0,\"ceilingDb\":0.0}}]}],"
       "\"connections\":[{\"source\":\"track\",\"destination\":\"master\"}]}";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
 
@@ -1744,7 +1744,7 @@ TEST_CASE("channel-strip bounce compensates mixer latency for unbound tracks", "
   const char* scene_json =
       "{\"version\":1,\"strips\":[{\"id\":\"latency\",\"inserts\":[{\"slot\":\"pre\","
       "\"processor\":\"dynamics.limiter\","
-      "\"params\":\"{\\\"thresholdDb\\\":24,\\\"lookaheadMs\\\":0.33333333}\"}]}],"
+      "\"params\":{\"thresholdDb\":24,\"lookaheadMs\":0.33333333}}]}],"
       "\"buses\":[{\"id\":\"master\",\"role\":\"master\"}],"
       "\"connections\":[{\"source\":\"latency\",\"destination\":\"master\"}]}";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
@@ -1815,7 +1815,7 @@ TEST_CASE("channel-strip bounce routes unbound tracks through master bus effects
       "{\"version\":1,\"strips\":[{\"id\":\"bound\"}],"
       "\"buses\":[{\"id\":\"master\",\"role\":\"master\",\"inserts\":["
       "{\"slot\":\"post\",\"processor\":\"effects.reverb.plate\","
-      "\"params\":\"{\\\"decaySec\\\":1.2,\\\"dryWet\\\":1.0}\"}]}],"
+      "\"params\":{\"decaySec\":1.2,\"dryWet\":1.0}}]}],"
       "\"connections\":[{\"source\":\"bound\",\"destination\":\"master\"}]}";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
 
@@ -2475,15 +2475,15 @@ TEST_CASE("project bounce applies the master trim when every track is unbound",
   const char* scene_json =
       "{\"version\":1,\"strips\":[{\"id\":\"unused\"}],"
       "\"buses\":[{\"id\":\"master\",\"role\":\"master\","
-      "\"input_trim_db\":-12}],"
+      "\"inputTrimDb\":-12}],"
       "\"connections\":[{\"source\":\"unused\",\"destination\":\"master\"}]}";
   SECTION("the generated direct strip avoids explicit bus IDs") {
     scene_json =
-        R"({"version":1,"strips":[{"id":"unused"}],"buses":[{"id":"__sonare_direct_master__","role":"master","input_trim_db":-12},{"id":"__sonare_direct_master___1","role":"aux"}]})";
+        R"({"version":1,"strips":[{"id":"unused"}],"buses":[{"id":"__sonare_direct_master__","role":"master","inputTrimDb":-12},{"id":"__sonare_direct_master___1","role":"aux"}]})";
   }
   SECTION("the generated direct strip avoids implicit send bus IDs") {
     scene_json =
-        R"({"version":1,"strips":[{"id":"unused","sends":[{"destination_bus_id":"__sonare_direct_master__","send_db":-6}]}],"buses":[{"id":"master","role":"master","input_trim_db":-12}]})";
+        R"({"version":1,"strips":[{"id":"unused","sends":[{"destinationBusId":"__sonare_direct_master__","sendDb":-6}]}],"buses":[{"id":"master","role":"master","inputTrimDb":-12}]})";
   }
   SECTION("ordinary master IDs retain their existing rendering") {}
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
@@ -2544,8 +2544,8 @@ TEST_CASE("all-unbound project bounce auto-length includes the master FX tail",
       "{\"version\":1,\"strips\":[{\"id\":\"unused\"}],"
       "\"buses\":[{\"id\":\"master\",\"role\":\"master\",\"inserts\":["
       "{\"slot\":\"post\",\"processor\":\"effects.delay.stereo\","
-      "\"params\":\"{\\\"delayTimeLMs\\\":10,\\\"delayTimeRMs\\\":10,"
-      "\\\"feedback\\\":0,\\\"dryWet\\\":1}\"}]}],"
+      "\"params\":{\"delayTimeLMs\":10,\"delayTimeRMs\":10,"
+      "\"feedback\":0,\"dryWet\":1}}]}],"
       "\"connections\":[{\"source\":\"unused\",\"destination\":\"master\"}]}";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
 
@@ -2611,9 +2611,9 @@ TEST_CASE("legacy opaque fader automation stays on musical time after channel PD
     const std::string scene_json =
         "{\"version\":1,\"strips\":[{\"id\":\"voice\","
         "\"inserts\":[{\"slot\":\"pre\",\"processor\":\"dynamics.limiter\","
-        "\"params\":\"{\\\"thresholdDb\\\":24,\\\"lookaheadMs\\\":" +
+        "\"params\":{\"thresholdDb\":24,\"lookaheadMs\":" +
         std::to_string(latency_samples / 48.0) +
-        "}\"}]}],"
+        "}}]}],"
         "\"buses\":[{\"id\":\"master\",\"role\":\"master\"}]}";
     REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json.c_str()) == SONARE_OK);
 
@@ -2699,11 +2699,11 @@ TEST_CASE("legacy opaque automation follows the pre-fader insert clock",
     const std::string scene_json =
         "{\"version\":1,\"strips\":[{\"id\":\"voice\","
         "\"inserts\":[{\"slot\":\"pre\",\"processor\":\"dynamics.limiter\","
-        "\"params\":\"{\\\"thresholdDb\\\":24,\\\"lookaheadMs\\\":" +
+        "\"params\":{\"thresholdDb\":24,\"lookaheadMs\":" +
         std::to_string(latency_samples / 48.0) +
-        "}\"},{\"slot\":\"pre\","
+        "}},{\"slot\":\"pre\","
         "\"processor\":\"dynamics.brickwallLimiter\","
-        "\"params\":\"{\\\"lookaheadMs\\\":1.0,\\\"ceilingDb\\\":0.0}\"}]}],"
+        "\"params\":{\"lookaheadMs\":1.0,\"ceilingDb\":0.0}}]}],"
         "\"buses\":[{\"id\":\"master\",\"role\":\"master\"}]}";
     REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json.c_str()) == SONARE_OK);
 
@@ -2785,7 +2785,7 @@ TEST_CASE("legacy opaque automation ignores master-only latency for its stage cl
       "{\"version\":1,\"strips\":[{\"id\":\"voice\"}],"
       "\"buses\":[{\"id\":\"master\",\"role\":\"master\",\"inserts\":["
       "{\"slot\":\"post\",\"processor\":\"dynamics.brickwallLimiter\","
-      "\"params\":\"{\\\"lookaheadMs\\\":1.0,\\\"ceilingDb\\\":0.0}\"}]}]}";
+      "\"params\":{\"lookaheadMs\":1.0,\"ceilingDb\":0.0}}]}]}";
   REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
 
   SonareProjectTrackDesc track_desc{};
@@ -3002,13 +3002,13 @@ TEST_CASE(
   const InsertTopology topologies[] = {
       {"none", "", false},
       {"pre",
-       R"(,"inserts":[{"slot":"pre","processor":"dynamics.brickwallLimiter","params":"{\"lookaheadMs\":1.0,\"ceilingDb\":0.0}"}])",
+       R"(,"inserts":[{"slot":"pre","processor":"dynamics.brickwallLimiter","params":{"lookaheadMs":1.0,"ceilingDb":0.0}}])",
        true},
       {"post",
-       R"(,"inserts":[{"slot":"post","processor":"dynamics.brickwallLimiter","params":"{\"lookaheadMs\":1.0,\"ceilingDb\":0.0}"}])",
+       R"(,"inserts":[{"slot":"post","processor":"dynamics.brickwallLimiter","params":{"lookaheadMs":1.0,"ceilingDb":0.0}}])",
        false},
       {"pre+post",
-       R"(,"inserts":[{"slot":"pre","processor":"dynamics.brickwallLimiter","params":"{\"lookaheadMs\":1.0,\"ceilingDb\":0.0}"},{"slot":"post","processor":"dynamics.brickwallLimiter","params":"{\"lookaheadMs\":1.0,\"ceilingDb\":0.0}"}])",
+       R"(,"inserts":[{"slot":"pre","processor":"dynamics.brickwallLimiter","params":{"lookaheadMs":1.0,"ceilingDb":0.0}},{"slot":"post","processor":"dynamics.brickwallLimiter","params":{"lookaheadMs":1.0,"ceilingDb":0.0}}])",
        true},
   };
 

@@ -556,7 +556,7 @@ TEST_CASE("a surround return strip sends its whole bed, folded only into a narro
   const auto reference = render_mixer(return_strip_scene(""), 6, kReturnBlocks, 1);
   const auto send_to = [&](const char* bus) {
     return std::string(R"(,"sends":[{"id":"s","destinationBusId":")") + bus +
-           R"(","sendDb":-6.0,"timing":"post"}])";
+           R"(","sendDb":-6.0,"timing":"postFader"}])";
   };
 
   SECTION("into another 5.1 bus, plane for plane") {
@@ -618,7 +618,7 @@ TEST_CASE("a key tapped from a surround return strip is its main output folded t
   // the bus directly. A bus key is the downmix of its planes, so the two agree.
   const auto scene = [](const std::string& key) {
     std::string ducker =
-        R"({"slot":"pre","processor":"dynamics.duckingProcessor","params":"{\"thresholdDb\":-30,\"ratio\":8,\"attackMs\":1,\"releaseMs\":20,\"rangeDb\":18}")";
+        R"({"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-30,"ratio":8,"attackMs":1,"releaseMs":20,"rangeDb":18})";
     if (!key.empty()) ducker += R"(,"sidechainKey":")" + key + "\"";
     ducker += "}";
     return std::string(R"({"version":1,"strips":[{"id":"bed"},{)") + track_strip_body() +

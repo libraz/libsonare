@@ -300,10 +300,10 @@ TEST_CASE(
     REQUIRE(shifted_empty.right == shifted_explicit.right);
   }
 
-  SECTION("effects.reverb.dattorro") {
-    const RenderResult empty = render("effects.reverb.dattorro", "{}");
+  SECTION("effects.reverb.plate") {
+    const RenderResult empty = render("effects.reverb.plate", "{}");
     const RenderResult explicit_defaults = render(
-        "effects.reverb.dattorro",
+        "effects.reverb.plate",
         R"({"decay":0.5,"damping":0.5,"dryWet":0.35,"modRateHz":0.5,"modDepthSamples":6.0,"preDelayMs":0.0,"dampingHz":0.0,"gateThresholdDb":-120.0,"gateHoldMs":100.0,"gateType":0,"character":0})");
     REQUIRE(empty.left == explicit_defaults.left);
     REQUIRE(empty.right == explicit_defaults.right);

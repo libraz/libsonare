@@ -24,7 +24,7 @@ std::string inserts_to_json(const std::vector<midi::PartRigStage>& stages) {
   for (const midi::PartRigStage& stage : stages) {
     json::Object o;
     o["processor"] = stage.processor;
-    o["params"] = stage.params_json;
+    o["params"] = json::parse(stage.params_json);
     inserts.push_back(std::move(o));
   }
   return json::dump(json::Value(std::move(inserts)));

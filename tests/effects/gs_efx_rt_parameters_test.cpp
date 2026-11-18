@@ -131,7 +131,7 @@ TEST_CASE("GS-bound insert controls publish realtime descriptors", "[fx][gs][aut
     std::size_t key_count;
   };
   const FactoryCase cases[] = {
-      {"effects.reverb.dattorro",
+      {"effects.reverb.plate",
        R"({"preDelayMs":17,"character":4})",
        {"preDelayMs", "character", nullptr, nullptr, nullptr},
        2},

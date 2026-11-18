@@ -86,7 +86,8 @@ sonare::mastering::eq::EqBandType ParseBandType(const std::string& value) {
   const auto parsed = sonare::mastering::eq::band_type_from_string(value);
   if (!parsed) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "unknown EQ band type: " + value);
+                                  "unknown EQ band type: " + value + " (expected " +
+                                      sonare::mastering::eq::band_type_tokens() + ")");
   }
   return *parsed;
 }
@@ -95,7 +96,8 @@ sonare::mastering::eq::BiquadCoeffMode ParseCoeffMode(const std::string& value) 
   const auto parsed = sonare::mastering::eq::coeff_mode_from_string(value);
   if (!parsed) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "unknown EQ coefficient mode: " + value);
+                                  "unknown EQ coefficient mode: " + value + " (expected " +
+                                      sonare::mastering::eq::coeff_mode_tokens() + ")");
   }
   return *parsed;
 }
@@ -104,7 +106,8 @@ sonare::mastering::eq::StereoPlacement ParsePlacement(const std::string& value) 
   const auto parsed = sonare::mastering::eq::placement_from_string(value);
   if (!parsed) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "unknown EQ placement: " + value);
+                                  "unknown EQ placement: " + value + " (expected " +
+                                      sonare::mastering::eq::placement_tokens() + ")");
   }
   return *parsed;
 }
@@ -113,7 +116,8 @@ sonare::mastering::eq::PhaseMode ParseBandPhase(const std::string& value) {
   const auto parsed = sonare::mastering::eq::phase_mode_from_string(value);
   if (!parsed) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "unknown EQ band phase mode: " + value);
+                                  "unknown EQ band phase mode: " + value + " (expected " +
+                                      sonare::mastering::eq::phase_mode_tokens() + ")");
   }
   return *parsed;
 }
@@ -136,15 +140,19 @@ sonare::mastering::eq::StereoPlacement ParsePlacementInt(int placement) {
 
 sonare::mastering::eq::EqBand EqBandFromObject(const Napi::Object& object) {
   sonare::mastering::eq::EqBand band;
-  band.type = ParseBandType(StringProperty(object, "type", "Peak"));
-  band.coeff_mode = ParseCoeffMode(StringProperty(object, "coeffMode", "Rbj"));
+  band.type = ParseBandType(
+      StringProperty(object, "type", sonare::mastering::eq::band_type_to_string(band.type)));
+  band.coeff_mode = ParseCoeffMode(StringProperty(
+      object, "coeffMode", sonare::mastering::eq::coeff_mode_to_string(band.coeff_mode)));
   band.frequency_hz = static_cast<float>(DoubleProperty(object, "frequencyHz", band.frequency_hz));
   band.gain_db = static_cast<float>(DoubleProperty(object, "gainDb", band.gain_db));
   band.q = static_cast<float>(DoubleProperty(object, "q", band.q));
   band.enabled = BoolProperty(object, "enabled", band.enabled);
   band.slope_db_oct = IntProperty(object, "slopeDbOct", band.slope_db_oct);
-  band.placement = ParsePlacement(StringProperty(object, "placement", "Stereo"));
-  band.phase = ParseBandPhase(StringProperty(object, "phase", "Inherit"));
+  band.placement = ParsePlacement(StringProperty(
+      object, "placement", sonare::mastering::eq::placement_to_string(band.placement)));
+  band.phase = ParseBandPhase(
+      StringProperty(object, "phase", sonare::mastering::eq::phase_mode_to_string(band.phase)));
   band.soloed = BoolProperty(object, "soloed", band.soloed);
   band.bypassed = BoolProperty(object, "bypassed", band.bypassed);
   band.proportional_q = BoolProperty(object, "proportionalQ", band.proportional_q);
@@ -159,11 +167,11 @@ sonare::mastering::eq::EqBand EqBandFromObject(const Napi::Object& object) {
   band.dyn.attack_ms = static_cast<float>(DoubleProperty(object, "attackMs", band.dyn.attack_ms));
   band.dyn.release_ms =
       static_cast<float>(DoubleProperty(object, "releaseMs", band.dyn.release_ms));
-  // "lookaheadMs" is the field's former (misleading) spelling; still accepted
-  // so a stored config keeps working, but "detectorDelayMs" wins if both are
-  // present.
-  band.dyn.detector_delay_ms =
-      static_cast<float>(DoubleProperty(object, "lookaheadMs", band.dyn.detector_delay_ms));
+  if (object.Has("lookaheadMs") && !object.Get("lookaheadMs").IsUndefined() &&
+      !object.Get("lookaheadMs").IsNull()) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "lookaheadMs is an earlier spelling; write detectorDelayMs");
+  }
   band.dyn.detector_delay_ms =
       static_cast<float>(DoubleProperty(object, "detectorDelayMs", band.dyn.detector_delay_ms));
   band.dyn.external_sidechain =

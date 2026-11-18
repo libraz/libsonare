@@ -56,10 +56,13 @@ sonare::mastering::eq::EqBand parse_eq_band_json(const char* band_json) {
   } catch (const sonare::util::json::JsonError& ex) {
     malformed_eq_json(std::string("invalid JSON: ") + ex.what());
   }
-  refuse_unknown_band_keys(json);
   // Field parsing and validation are shared with the scene walker; this call
-  // keeps the "sonare_eq_set_band: " prefix.
-  return sonare::mastering::eq::eq_band_from_value(json, "sonare_eq_set_band: ");
+  // keeps the "sonare_eq_set_band: " prefix. It runs first so an earlier spelling of a
+  // known key is refused naming the current one rather than as an unknown key.
+  const sonare::mastering::eq::EqBand band =
+      sonare::mastering::eq::eq_band_from_value(json, "sonare_eq_set_band: ");
+  refuse_unknown_band_keys(json);
+  return band;
 }
 
 }  // namespace sonare::c_api

@@ -185,31 +185,31 @@ sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg,
   if (include_flat_multiband) {
     add_field(params, "dynamics.multibandComp.enabled", cfg.dynamics.multiband_comp.enabled);
     if (cfg.dynamics.multiband_comp.config.crossover.cutoffs_hz.size() >= 2) {
-      add_field(params, "dynamics.multibandComp.lowCutoffHz",
+      add_field(params, "dynamics.multibandComp.cutoff0Hz",
                 cfg.dynamics.multiband_comp.config.crossover.cutoffs_hz[0]);
-      add_field(params, "dynamics.multibandComp.highCutoffHz",
+      add_field(params, "dynamics.multibandComp.cutoff1Hz",
                 cfg.dynamics.multiband_comp.config.crossover.cutoffs_hz[1]);
     }
     if (cfg.dynamics.multiband_comp.config.bands.size() >= 1) {
       const auto& low = cfg.dynamics.multiband_comp.config.bands[0];
-      add_field(params, "dynamics.multibandComp.lowThresholdDb", low.threshold_db);
-      add_field(params, "dynamics.multibandComp.lowRatio", low.ratio);
-      add_field(params, "dynamics.multibandComp.lowAttackMs", low.attack_ms);
-      add_field(params, "dynamics.multibandComp.lowReleaseMs", low.release_ms);
+      add_field(params, "dynamics.multibandComp.bands.0.thresholdDb", low.threshold_db);
+      add_field(params, "dynamics.multibandComp.bands.0.ratio", low.ratio);
+      add_field(params, "dynamics.multibandComp.bands.0.attackMs", low.attack_ms);
+      add_field(params, "dynamics.multibandComp.bands.0.releaseMs", low.release_ms);
     }
     if (cfg.dynamics.multiband_comp.config.bands.size() >= 2) {
       const auto& mid = cfg.dynamics.multiband_comp.config.bands[1];
-      add_field(params, "dynamics.multibandComp.midThresholdDb", mid.threshold_db);
-      add_field(params, "dynamics.multibandComp.midRatio", mid.ratio);
-      add_field(params, "dynamics.multibandComp.midAttackMs", mid.attack_ms);
-      add_field(params, "dynamics.multibandComp.midReleaseMs", mid.release_ms);
+      add_field(params, "dynamics.multibandComp.bands.1.thresholdDb", mid.threshold_db);
+      add_field(params, "dynamics.multibandComp.bands.1.ratio", mid.ratio);
+      add_field(params, "dynamics.multibandComp.bands.1.attackMs", mid.attack_ms);
+      add_field(params, "dynamics.multibandComp.bands.1.releaseMs", mid.release_ms);
     }
     if (cfg.dynamics.multiband_comp.config.bands.size() >= 3) {
       const auto& high = cfg.dynamics.multiband_comp.config.bands[2];
-      add_field(params, "dynamics.multibandComp.highThresholdDb", high.threshold_db);
-      add_field(params, "dynamics.multibandComp.highRatio", high.ratio);
-      add_field(params, "dynamics.multibandComp.highAttackMs", high.attack_ms);
-      add_field(params, "dynamics.multibandComp.highReleaseMs", high.release_ms);
+      add_field(params, "dynamics.multibandComp.bands.2.thresholdDb", high.threshold_db);
+      add_field(params, "dynamics.multibandComp.bands.2.ratio", high.ratio);
+      add_field(params, "dynamics.multibandComp.bands.2.attackMs", high.attack_ms);
+      add_field(params, "dynamics.multibandComp.bands.2.releaseMs", high.release_ms);
     }
   }
 

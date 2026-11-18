@@ -224,9 +224,10 @@ TEST_CASE("insert construction captures effective realtime parameter values",
   REQUIRE_THAT(
       ConstructedValue("effects.reverb.fdn", R"({"decaySec":12,"hfDamping":0.2})", "damping"),
       WithinAbs(0.2f, 1e-6f));
-  REQUIRE_THAT(ConstructedValue("eq.dynamic", R"({"band0.frequencyHz":1000,"band0.lookaheadMs":8})",
-                                "band0.detectorDelayMs"),
-               WithinAbs(8.0f, 1e-6f));
+  REQUIRE_THAT(
+      ConstructedValue("eq.dynamic", R"({"band0.frequencyHz":1000,"band0.detectorDelayMs":8})",
+                       "band0.detectorDelayMs"),
+      WithinAbs(8.0f, 1e-6f));
   REQUIRE_THAT(
       ConstructedValue("saturation.ampSim", R"({"preset":"crunchStack","presetIndex":5})", "drive"),
       WithinAbs(ConstructedValue("saturation.ampSim", R"({"presetIndex":5})", "drive"), 1e-6f));
@@ -404,7 +405,7 @@ TEST_CASE("Modulation/delay inserts read their JSON params",
           nullptr);
   REQUIRE(
       make_insert(
-          "effects.reverb.dattorro",
+          "effects.reverb.plate",
           R"({"dampingHz":2500,"gateThresholdDb":-40,"gateHoldMs":120,"gateType":2,"character":5})") !=
       nullptr);
   REQUIRE(
@@ -508,18 +509,18 @@ TEST_CASE("decaySec maps to a comparable RT60 across the time-tunable reverbs",
   };
 
   const double fdn = rt60_seconds("effects.reverb.fdn");
-  const double dattorro = rt60_seconds("effects.reverb.dattorro");
+  const double plate = rt60_seconds("effects.reverb.plate");
 
   // Both land in the neighbourhood of the requested 2 s tail (the plate tank has
   // no exact closed-form RT60, so allow a wide but bounded band).
   REQUIRE(fdn > 1.0);
   REQUIRE(fdn < 4.0);
-  REQUIRE(dattorro > 1.0);
-  REQUIRE(dattorro < 4.0);
+  REQUIRE(plate > 1.0);
+  REQUIRE(plate < 4.0);
   // And crucially they are the same order of magnitude rather than the old ~10x
   // gap (decaySec=2 used to give the plate a 0.2 feedback / very short tail).
-  REQUIRE(dattorro > 0.4 * fdn);
-  REQUIRE(dattorro < 2.5 * fdn);
+  REQUIRE(plate > 0.4 * fdn);
+  REQUIRE(plate < 2.5 * fdn);
 }
 
 TEST_CASE("effects.reverb.convolution loads user IR from JSON params",
@@ -1284,9 +1285,8 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
 
 #ifdef SONARE_WITH_FX
   // The plate tank is a delay network like the FDN, so the two reverb families
-  // share a tier. "effects.reverb.plate" is an alias for the same processor.
-  REQUIRE(cost_of("effects.reverb.dattorro") == cost_of("effects.reverb.fdn"));
-  REQUIRE(cost_of("effects.reverb.plate") == cost_of("effects.reverb.dattorro"));
+  // share a tier.
+  REQUIRE(cost_of("effects.reverb.plate") == cost_of("effects.reverb.fdn"));
 
   // The geometry-driven room reverb IS the convolution reverb (it derives from
   // it and inherits process()), so it carries that engine's tier exactly. The
@@ -1550,14 +1550,13 @@ TEST_CASE("reverb inserts refuse an out-of-range decaySec by key and accept the 
     const char* too_high;
     const char* at_ceiling;
   };
-  // Ceilings: convolution 12 s, fdn 15 s, velvet 12 s * (0.5 + 0.45), dattorro ~62 s.
+  // Ceilings: convolution 12 s, fdn 15 s, velvet 12 s * (0.5 + 0.45), plate ~62 s.
   const Case cases[] = {
       {"effects.reverb.convolution", R"({"decaySec":-1})", R"({"decaySec":12.5})",
        R"({"decaySec":12})"},
       {"effects.reverb.fdn", R"({"decaySec":-1})", R"({"decaySec":40})", R"({"decaySec":15})"},
       {"effects.reverb.velvet", R"({"decaySec":0.01})", R"({"decaySec":12})", R"({"decaySec":11})"},
-      {"effects.reverb.dattorro", R"({"decaySec":0.01})", R"({"decaySec":200})",
-       R"({"decaySec":60})"},
+      {"effects.reverb.plate", R"({"decaySec":0.01})", R"({"decaySec":200})", R"({"decaySec":60})"},
   };
   for (const auto& c : cases) {
     INFO(c.name);
@@ -1607,7 +1606,7 @@ TEST_CASE(
   // The inherently-stereo set: stereo-image processors, eq.midSide,
   // multiband.imager, the GS EFX unit, and every reverb/modulation/delay effect operate on the
   // front L/R pair and pass surround planes through dry.
-  const std::array<const char*, 27> spo = {"stereo.imager",
+  const std::array<const char*, 26> spo = {"stereo.imager",
                                            "stereo.monoMaker",
                                            "stereo.stereoBalance",
                                            "stereo.haasEnhancer",
@@ -1617,7 +1616,6 @@ TEST_CASE(
                                            "eq.midSide",
                                            "multiband.imager",
                                            "effects.reverb.plate",
-                                           "effects.reverb.dattorro",
                                            "effects.reverb.fdn",
                                            "effects.reverb.velvet",
                                            "effects.reverb.convolution",
@@ -1718,11 +1716,8 @@ TEST_CASE("Mastering inserts publish non-empty automation parameter descriptors"
   }
 }
 
-TEST_CASE("eq.dynamic accepts detectorDelayMs and its former lookaheadMs spelling",
+TEST_CASE("eq.dynamic reads detectorDelayMs and refuses its earlier lookaheadMs spelling",
           "[mastering][insert_factory][eq]") {
-  // detectorDelayMs is the corrected name (see dynamic_eq.h); lookaheadMs is
-  // kept accepted through the flat param-map construction path so a stored
-  // config using the old spelling is not silently dropped.
   using sonare::mastering::eq::DynamicEq;
 
   auto with_new =
@@ -1732,19 +1727,14 @@ TEST_CASE("eq.dynamic accepts detectorDelayMs and its former lookaheadMs spellin
   REQUIRE(dyn_new != nullptr);
   REQUIRE(dyn_new->band(0).detector_delay_ms == 12.0f);
 
-  auto with_old_camel =
-      make_insert("eq.dynamic", R"({"band0.frequencyHz":1000,"band0.lookaheadMs":8})");
-  auto* dyn_old_camel = dynamic_cast<DynamicEq*>(with_old_camel.get());
-  REQUIRE(dyn_old_camel != nullptr);
-  REQUIRE(dyn_old_camel->band(0).detector_delay_ms == 8.0f);
-
-  // The canonical spelling wins when both are present.
-  auto both =
+  REQUIRE_THROWS_WITH(
+      make_insert("eq.dynamic", R"({"band0.frequencyHz":1000,"band0.lookaheadMs":8})"),
+      Catch::Matchers::ContainsSubstring(
+          "band0.lookaheadMs is an earlier spelling; write band0.detectorDelayMs"));
+  REQUIRE_THROWS_WITH(
       make_insert("eq.dynamic",
-                  R"({"band0.frequencyHz":1000,"band0.lookaheadMs":8,"band0.detectorDelayMs":12})");
-  auto* dyn_both = dynamic_cast<DynamicEq*>(both.get());
-  REQUIRE(dyn_both != nullptr);
-  REQUIRE(dyn_both->band(0).detector_delay_ms == 12.0f);
+                  R"({"band0.frequencyHz":1000,"band0.lookaheadMs":8,"band0.detectorDelayMs":12})"),
+      Catch::Matchers::ContainsSubstring("write band0.detectorDelayMs"));
 }
 
 // ---------------------------------------------------------------------------
@@ -2055,54 +2045,65 @@ TEST_CASE("an enum wire value no enumerator is declared for is refused",
   }
 }
 
-TEST_CASE("renamed processors accept their former ids on input only",
-          "[mastering][insert_factory][legacy]") {
+TEST_CASE("renamed processors refuse their former ids and name the current one",
+          "[mastering][insert_factory][retired]") {
+  using Catch::Matchers::ContainsSubstring;
   const std::vector<std::pair<std::string, std::string>> renamed = {
-      {"eq.pultec", "eq.passiveTube"}, {"eq.apiStyle", "eq.steppedProportionalQ"}};
-  for (const auto& [legacy, current] : renamed) {
-    INFO(legacy);
-    REQUIRE(make_insert(legacy, "{}") != nullptr);
-    REQUIRE(sonare::mastering::api::insert_param_names(legacy) ==
-            sonare::mastering::api::insert_param_names(current));
-    REQUIRE(sonare::mastering::api::insert_param_info_json(legacy) ==
-            sonare::mastering::api::insert_param_info_json(current));
-    REQUIRE(sonare::mastering::api::channel_policy(legacy) ==
-            sonare::mastering::api::channel_policy(current));
+      {"eq.pultec", "eq.passiveTube"},
+      {"eq.apiStyle", "eq.steppedProportionalQ"},
+      {"effects.reverb.dattorro", "effects.reverb.plate"}};
+  for (const auto& [retired, current] : renamed) {
+    INFO(retired);
+    REQUIRE(make_insert(retired, "{}") == nullptr);
+    REQUIRE(sonare::mastering::api::insert_param_names(retired).empty());
+    REQUIRE_THROWS_WITH(sonare::mastering::api::insert_timing(retired, "{}", 48000.0),
+                        ContainsSubstring(retired) && ContainsSubstring(current));
+    const std::vector<sonare::mastering::api::Param> no_params;
+    const std::vector<float> audio(256, 0.0f);
+    REQUIRE_THROWS_WITH(sonare::mastering::api::apply_named_processor(
+                            retired, audio.data(), audio.size(), 48000, no_params),
+                        ContainsSubstring(retired) && ContainsSubstring(current));
 
-    REQUIRE_FALSE(ListContains(sonare::mastering::api::insert_factory_names(), legacy));
-    REQUIRE_FALSE(ListContains(sonare::mastering::api::processor_names(), legacy));
+    REQUIRE_FALSE(ListContains(sonare::mastering::api::insert_factory_names(), retired));
+    REQUIRE_FALSE(ListContains(sonare::mastering::api::processor_names(), retired));
     REQUIRE(ListContains(sonare::mastering::api::insert_factory_names(), current));
     REQUIRE(ListContains(sonare::mastering::api::processor_names(), current));
-    REQUIRE(sonare::mastering::api::processor_catalog_json().find("\"" + legacy + "\"") ==
+    REQUIRE(sonare::mastering::api::processor_catalog_json().find("\"" + retired + "\"") ==
             std::string::npos);
   }
 }
 
-TEST_CASE("renamed amp choices and presets resolve from their former names",
-          "[mastering][insert_factory][legacy]") {
+TEST_CASE("renamed amp choices and presets are refused and name the current one",
+          "[mastering][insert_factory][retired]") {
+  using Catch::Matchers::ContainsSubstring;
   namespace sat = sonare::mastering::saturation;
   const std::vector<std::pair<std::string, std::string>> models = {{"fenderClean", "cleanCombo"},
                                                                    {"tweed", "vintageCombo"},
                                                                    {"voxChime", "classAChime"},
                                                                    {"rectifier", "heavyHiGain"}};
-  for (const auto& [legacy, current] : models) {
-    INFO(legacy);
-    const auto value =
-        sonare::mastering::api::mastering_enum_value("saturation.ampSim", "ampModel", current);
-    REQUIRE(value.has_value());
-    REQUIRE(sonare::mastering::api::mastering_enum_value("saturation.ampSim", "ampModel", legacy) ==
-            value);
+  for (const auto& [retired, current] : models) {
+    INFO(retired);
+    REQUIRE(sonare::mastering::api::mastering_enum_value("saturation.ampSim", "ampModel", current)
+                .has_value());
+    REQUIRE_THROWS_WITH(
+        sonare::mastering::api::mastering_enum_value("saturation.ampSim", "ampModel", retired),
+        ContainsSubstring(retired) && ContainsSubstring(current));
     REQUIRE(sonare::mastering::api::insert_param_info_json("saturation.ampSim")
-                .find("\"" + legacy + "\"") == std::string::npos);
+                .find("\"" + retired + "\"") == std::string::npos);
   }
-  REQUIRE(sonare::mastering::api::mastering_enum_value("eq.pultec", "componentModel", "eqp1aWdf") ==
-          sonare::mastering::api::mastering_enum_value("eq.passiveTube", "componentModel",
-                                                       "wdfCircuit"));
+  REQUIRE_THROWS_WITH(
+      sonare::mastering::api::mastering_enum_value("eq.passiveTube", "componentModel", "eqp1aWdf"),
+      ContainsSubstring("eqp1aWdf") && ContainsSubstring("wdfCircuit"));
 
-  REQUIRE(sat::amp_preset_from_string("tweedGrind") == sat::AmpPreset::kVintageGrind);
-  REQUIRE(sat::amp_preset_from_string("rectifierChug") == sat::AmpPreset::kHeavyChug);
-  REQUIRE(sat::amp_preset_from_string("britStack") == sat::AmpPreset::kCrunchStack);
-  REQUIRE(make_insert("saturation.ampSim", R"({"preset":"rectifierChug"})") != nullptr);
+  const std::vector<std::pair<std::string, std::string>> presets = {
+      {"tweedGrind", "vintageGrind"}, {"rectifierChug", "heavyChug"}, {"britStack", "crunchStack"}};
+  for (const auto& [retired, current] : presets) {
+    INFO(retired);
+    REQUIRE_THROWS_WITH(sat::amp_preset_from_string(retired),
+                        ContainsSubstring(retired) && ContainsSubstring(current));
+    REQUIRE_THROWS_WITH(make_insert("saturation.ampSim", "{\"preset\":\"" + retired + "\"}"),
+                        ContainsSubstring(retired) && ContainsSubstring(current));
+  }
   for (const std::string& name : sat::amp_preset_names()) {
     REQUIRE(name != "tweedGrind");
     REQUIRE(name != "rectifierChug");

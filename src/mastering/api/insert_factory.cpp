@@ -18,7 +18,6 @@
 
 #include "mastering/api/chain.h"
 #include "mastering/api/insert_construction.h"
-#include "mastering/api/legacy_ids.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/param_field_tables.h"
 #include "mastering/api/processor_params.h"
@@ -735,9 +734,7 @@ void note_room_coupling(const ParamMap& params) {
 std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap& params,
                                          const Value* json_root) {
   using namespace sonare::effects::reverb;
-  // "effects.reverb.plate" is an alias for "effects.reverb.dattorro": both names
-  // construct the same DattorroReverb processor with identical parameters.
-  if (name == "effects.reverb.plate" || name == "effects.reverb.dattorro") {
+  if (name == "effects.reverb.plate") {
     DattorroReverbConfig config;
     // decaySec is a tail-length intent in seconds; DattorroReverbConfig.decay is
     // a normalized tank feedback clamped internally to [0, 0.98]. The plate tank
@@ -1314,10 +1311,9 @@ void prepare_for_build_rate(sonare::rt::ProcessorBase& processor, double sample_
 }
 
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert(
-    const std::string& requested_name, const std::string& json_params,
+    const std::string& name, const std::string& json_params,
     std::vector<std::string>* out_unknown_keys,
     const sonare::resource::ProjectImportResourceLimits& limits, double build_sample_rate) {
-  const std::string name = canonical_processor_id(requested_name);
   // One admission, one document: every reader below works off the same parsed
   // value, so the call's parse cost is the cost of this admission.
   Value root;
@@ -1331,18 +1327,15 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert(
 }
 
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert_from_params(
-    const std::string& requested_name, const std::vector<Param>& param_list,
+    const std::string& name, const std::vector<Param>& param_list,
     std::vector<std::string>* out_unknown_keys) {
-  const std::string name = canonical_processor_id(requested_name);
   const ParamMap params = detail::make_map(param_list);
   return finish_insert(build_insert(name, params), params, out_unknown_keys);
 }
 
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(
-    const std::string& requested_name, const std::string& json_params,
-    const float* impulse_response, int ir_num_samples,
-    const sonare::resource::ProjectImportResourceLimits& limits) {
-  const std::string name = canonical_processor_id(requested_name);
+    const std::string& name, const std::string& json_params, const float* impulse_response,
+    int ir_num_samples, const sonare::resource::ProjectImportResourceLimits& limits) {
   if (ir_num_samples < 0 || (ir_num_samples > 0 && impulse_response == nullptr)) {
     throw SonareException(ErrorCode::InvalidParameter, "make_insert_with_ir: invalid IR");
   }
@@ -1445,10 +1438,7 @@ std::vector<std::string> insert_factory_names() {
       "repair.dereverbClassical",
 #ifdef SONARE_HAVE_FX
       "effects.gsEfx",
-      // "effects.reverb.plate" is an alias for "effects.reverb.dattorro" (same
-      // processor); both names are listed so either resolves via make_insert.
       "effects.reverb.plate",
-      "effects.reverb.dattorro",
       "effects.reverb.fdn",
       "effects.reverb.velvet",
       "effects.reverb.convolution",

@@ -293,8 +293,8 @@ def validate_mastering_presets(root: dict[str, Any]) -> None:
 def validate_chain(root: dict[str, Any]) -> None:
     """Guard `chain`: every processor it links exists, and every enable key is a boolean."""
     chain = require_object(root["chain"], "catalog.chain")
-    require_keys(chain, "catalog.chain", {"stages", "lists", "params", "aliases"})
-    for name in ("stages", "lists", "params", "aliases"):
+    require_keys(chain, "catalog.chain", {"stages", "lists", "params"})
+    for name in ("stages", "lists", "params"):
         if not isinstance(chain[name], list):
             raise ValueError(  # noqa: TRY004 -- one error class per document
                 f"catalog.chain.{name} must be an array"
@@ -352,19 +352,6 @@ def validate_chain(root: dict[str, Any]) -> None:
             0 <= counts[0] <= counts[1] and counts[1] >= 1
         ):
             raise ValueError(f"{path} must carry integer minItems <= maxItems")
-    spellings: set[str] = set()
-    for index, alias_value in enumerate(chain["aliases"]):
-        path = f"catalog.chain.aliases[{index}]"
-        entry = require_object(alias_value, path)
-        require_keys(entry, path, {"key", "aliases"})
-        if not isinstance(entry["key"], str) or not entry["key"]:
-            raise ValueError(f"{path}.key must be a non-empty string")
-        if not isinstance(entry["aliases"], list) or not entry["aliases"]:
-            raise ValueError(f"{path}.aliases must be a non-empty array")
-        for spelling in entry["aliases"]:
-            if not isinstance(spelling, str) or not spelling or spelling in spellings:
-                raise ValueError(f"{path}.aliases must hold strings no other entry spells")
-            spellings.add(spelling)
 
 
 def validate_catalog(catalog: Any) -> dict[str, Any]:

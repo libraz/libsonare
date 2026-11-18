@@ -1117,11 +1117,11 @@ TEST_CASE("CLI voice-preset-validate emits the Batch-0 JSON envelope", "[cli][co
   const std::string invalid_path = unique_temp_path("_contract_invalid_preset.json");
   {
     std::ofstream valid(valid_path);
-    valid << R"({"schemaVersion":1,"id":"contract-fixture","name":"Contract Fixture",)"
+    valid << R"({"schemaVersion":3,"id":"contract-fixture","name":"Contract Fixture",)"
              R"("category":"custom","macros":{"pitch":0,"formant":1,"brightness":0,)"
              R"("space":0,"intensity":0.5,"noiseControl":0,"sibilance":0}})";
     std::ofstream invalid(invalid_path);
-    invalid << R"({"schemaVersion":1,"id":"contract-invalid","name":"Invalid",)"
+    invalid << R"({"schemaVersion":3,"id":"contract-invalid","name":"Invalid",)"
                R"("category":"custom","dsp":{}})";
   }
 
@@ -1263,7 +1263,7 @@ TEST_CASE("CLI --set delivers a JSON value that contains commas intact",
   const std::string preset_path = unique_temp_path("_macro_preset.json");
   {
     std::ofstream preset(preset_path);
-    preset << R"({"schemaVersion":1,"id":"set-fixture","name":"Set Fixture","category":"custom",)"
+    preset << R"({"schemaVersion":3,"id":"set-fixture","name":"Set Fixture","category":"custom",)"
            << R"("macros":{"pitch":0,"formant":1,"brightness":0,"space":0,"intensity":0.5,)"
            << R"("noiseControl":0,"sibilance":0}})";
   }

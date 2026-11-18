@@ -20,7 +20,8 @@
 mastering::eq::EqBandType eqBandTypeFromString(const std::string& value) {
   const auto parsed = mastering::eq::band_type_from_string(value);
   if (!parsed) {
-    throw WasmRangeError("unknown EQ band type: " + value);
+    throw WasmRangeError("unknown EQ band type: " + value + " (expected " +
+                         mastering::eq::band_type_tokens() + ")");
   }
   return *parsed;
 }
@@ -28,7 +29,8 @@ mastering::eq::EqBandType eqBandTypeFromString(const std::string& value) {
 mastering::eq::BiquadCoeffMode eqCoeffModeFromString(const std::string& value) {
   const auto parsed = mastering::eq::coeff_mode_from_string(value);
   if (!parsed) {
-    throw WasmRangeError("unknown EQ coefficient mode: " + value);
+    throw WasmRangeError("unknown EQ coefficient mode: " + value + " (expected " +
+                         mastering::eq::coeff_mode_tokens() + ")");
   }
   return *parsed;
 }
@@ -36,7 +38,8 @@ mastering::eq::BiquadCoeffMode eqCoeffModeFromString(const std::string& value) {
 mastering::eq::StereoPlacement eqPlacementFromString(const std::string& value) {
   const auto parsed = mastering::eq::placement_from_string(value);
   if (!parsed) {
-    throw WasmRangeError("unknown EQ placement: " + value);
+    throw WasmRangeError("unknown EQ placement: " + value + " (expected " +
+                         mastering::eq::placement_tokens() + ")");
   }
   return *parsed;
 }
@@ -44,7 +47,8 @@ mastering::eq::StereoPlacement eqPlacementFromString(const std::string& value) {
 mastering::eq::PhaseMode eqBandPhaseFromString(const std::string& value) {
   const auto parsed = mastering::eq::phase_mode_from_string(value);
   if (!parsed) {
-    throw WasmRangeError("unknown EQ band phase mode: " + value);
+    throw WasmRangeError("unknown EQ band phase mode: " + value + " (expected " +
+                         mastering::eq::phase_mode_tokens() + ")");
   }
   return *parsed;
 }
@@ -67,15 +71,19 @@ mastering::eq::StereoPlacement eqPlacementFromInt(int placement) {
 
 mastering::eq::EqBand eqBandFromVal(val band) {
   mastering::eq::EqBand result;
-  result.type = eqBandTypeFromString(stringProperty(band, "type", "Peak"));
-  result.coeff_mode = eqCoeffModeFromString(stringProperty(band, "coeffMode", "Rbj"));
+  result.type = eqBandTypeFromString(
+      stringProperty(band, "type", mastering::eq::band_type_to_string(result.type)));
+  result.coeff_mode = eqCoeffModeFromString(
+      stringProperty(band, "coeffMode", mastering::eq::coeff_mode_to_string(result.coeff_mode)));
   result.frequency_hz = floatProperty(band, "frequencyHz", result.frequency_hz);
   result.gain_db = floatProperty(band, "gainDb", result.gain_db);
   result.q = floatProperty(band, "q", result.q);
   result.enabled = boolProperty(band, "enabled", result.enabled);
   result.slope_db_oct = intProperty(band, "slopeDbOct", result.slope_db_oct);
-  result.placement = eqPlacementFromString(stringProperty(band, "placement", "Stereo"));
-  result.phase = eqBandPhaseFromString(stringProperty(band, "phase", "Inherit"));
+  result.placement = eqPlacementFromString(
+      stringProperty(band, "placement", mastering::eq::placement_to_string(result.placement)));
+  result.phase = eqBandPhaseFromString(
+      stringProperty(band, "phase", mastering::eq::phase_mode_to_string(result.phase)));
   result.soloed = boolProperty(band, "soloed", result.soloed);
   result.bypassed = boolProperty(band, "bypassed", result.bypassed);
   result.proportional_q = boolProperty(band, "proportionalQ", result.proportional_q);
@@ -89,10 +97,10 @@ mastering::eq::EqBand eqBandFromVal(val band) {
   result.dyn.range_db = floatProperty(band, "rangeDb", result.dyn.range_db);
   result.dyn.attack_ms = floatProperty(band, "attackMs", result.dyn.attack_ms);
   result.dyn.release_ms = floatProperty(band, "releaseMs", result.dyn.release_ms);
-  // "lookaheadMs" is the field's former (misleading) spelling; still accepted
-  // so a stored config keeps working, but "detectorDelayMs" wins if both are
-  // present.
-  result.dyn.detector_delay_ms = floatProperty(band, "lookaheadMs", result.dyn.detector_delay_ms);
+  const val earlier_lookahead = band["lookaheadMs"];
+  if (!earlier_lookahead.isUndefined() && !earlier_lookahead.isNull()) {
+    throw WasmRangeError("lookaheadMs is an earlier spelling; write detectorDelayMs");
+  }
   result.dyn.detector_delay_ms =
       floatProperty(band, "detectorDelayMs", result.dyn.detector_delay_ms);
   result.dyn.external_sidechain =

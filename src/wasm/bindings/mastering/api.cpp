@@ -560,18 +560,19 @@ std::vector<float> interleaveValidatedPair(val left_samples, val right_samples, 
 // carries is a transport detail for callers that cannot pass a string, so a
 // number is rejected here rather than silently accepted as an index.
 mastering::assistant::AssistantConfig assistantConfigFromParams(val params_obj) {
-  static const std::vector<std::string> kPlatformKeys = {"targetPlatform", "target_platform"};
-  static const std::vector<std::string> kNameKeys = {"targetPlatform", "target_platform", "preset"};
+  static const std::vector<std::string> kNameKeys = {"targetPlatform", "preset"};
   std::string platform;
   bool has_platform = false;
   std::string preset;
   bool has_preset = false;
   if (!params_obj.isNull() && !params_obj.isUndefined()) {
-    for (const std::string& key : kPlatformKeys) {
-      if (!hasProperty(params_obj, key.c_str())) continue;
-      val value = params_obj[key];
+    if (hasProperty(params_obj, "target_platform")) {
+      throw WasmRangeError("'target_platform' is an earlier spelling; write targetPlatform");
+    }
+    if (hasProperty(params_obj, "targetPlatform")) {
+      val value = params_obj["targetPlatform"];
       if (value.typeOf().as<std::string>() != "string") {
-        throw WasmRangeError("'" + key + "' must be one of the delivery-target names: " +
+        throw WasmRangeError("'targetPlatform' must be one of the delivery-target names: " +
                              mastering::assistant::platform_names_joined());
       }
       platform = value.as<std::string>();

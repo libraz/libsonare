@@ -154,9 +154,6 @@ std::vector<rt::ParamDescriptor> MultibandDynamicEq::parameter_descriptors() con
       const unsigned int band_offset = db * eq::DynamicEq::kParamsPerBand;
       for (unsigned int field = 0; field < eq::DynamicEq::kParamsPerBand; ++field) {
         descriptors.push_back({prefix + kFieldKeys[field], block + band_offset + field});
-        if (field == eq::DynamicEq::kParamsPerBand - 1) {
-          descriptors.push_back({prefix + "lookaheadMs", block + band_offset + field});
-        }
       }
     }
   }

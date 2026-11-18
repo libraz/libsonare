@@ -20,21 +20,6 @@ using util::json::Value;
   throw SonareException(ErrorCode::InvalidParameter, message);
 }
 
-// The snake_case spelling is the earlier document form: still read, never written.
-const char* legacy_room_preset_name(RoomPreset preset) noexcept {
-  switch (preset) {
-    case RoomPreset::LivingRoom:
-      return "living_room";
-    case RoomPreset::HomeTheater:
-      return "home_theater";
-    case RoomPreset::ScreeningRoom:
-      return "screening_room";
-    case RoomPreset::None:
-      break;
-  }
-  return "none";
-}
-
 std::string join(const std::string& path, const std::string& key) {
   return path.empty() ? key : path + "." + key;
 }
@@ -285,7 +270,7 @@ void parse_sections(const Value& root, RendererConfig& config) {
       bool found = false;
       for (RoomPreset preset : {RoomPreset::None, RoomPreset::LivingRoom, RoomPreset::HomeTheater,
                                 RoomPreset::ScreeningRoom}) {
-        if (text == room_preset_name(preset) || text == legacy_room_preset_name(preset)) {
+        if (text == room_preset_name(preset)) {
           config.prepare.room_preset = preset;
           found = true;
         }

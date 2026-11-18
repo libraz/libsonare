@@ -883,7 +883,7 @@ class StateListLawRuleTest(unittest.TestCase):
             ("Ratio", "00/01/02/03", "dynamics.limiter", "d.limiter_ratio", 4),
             ("Pre Filter", "00–05", "saturation.bitcrusher", "d.lofi_filter_hz", 6),
             ("Post Filter", "00–05", "saturation.bitcrusher", "d.lofi_filter_hz", 6),
-            ("Type", "00/01/02/03/04/05", "effects.reverb.dattorro", "d.type_index6", 6),
+            ("Type", "00/01/02/03/04/05", "effects.reverb.plate", "d.type_index6", 6),
             ("Lo-Fi Type", "00–08", "saturation.bitcrusher", "d.type_index9", 9),
             ("Lo-Fi Type", "00–05", "saturation.bitcrusher", "d.type_index6", 6),
         )
@@ -891,7 +891,7 @@ class StateListLawRuleTest(unittest.TestCase):
             with self.subTest(name=name, printed=printed):
                 self.assertEqual(coverage.rule_matches(laws, name, printed, stage), [law])
                 self.assertEqual(coverage.designed_law(laws, law)["n_states"], n_states)
-        gate = coverage.rule_matches(laws, "Type", "00/01/02/03", "effects.reverb.dattorro")
+        gate = coverage.rule_matches(laws, "Type", "00/01/02/03", "effects.reverb.plate")
         self.assertEqual(gate, ["d.enum4"])
 
     def test_the_vowel_drive_is_a_fraction(self) -> None:

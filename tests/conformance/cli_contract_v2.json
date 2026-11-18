@@ -7442,7 +7442,7 @@
             "dynamics.multibandComp.bands.0.thresholdDb=-18",
             "--json"
           ],
-          "exit": 3,
+          "exit": 5,
           "payload": "none",
           "artifact": "none",
           "stdout": "empty",
@@ -18164,17 +18164,17 @@
       }
     },
     "projects": {
-      "clean": "{\"version\":1,\"sample_rate\":48000,\"tracks\":[],\"clips\":[]}",
-      "warning": "{\"version\":1,\"sample_rate\":48000,\"tracks\":[{\"id\":1,\"name\":\"audio\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]}],\"clips\":[{\"id\":1,\"track_id\":1,\"source_id\":99,\"start_ppq\":0,\"length_ppq\":1,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0}]}",
+      "clean": "{\"version\":7,\"sample_rate\":48000,\"tracks\":[],\"clips\":[]}",
+      "warning": "{\"version\":7,\"sample_rate\":48000,\"tracks\":[{\"id\":1,\"name\":\"audio\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]}],\"clips\":[{\"id\":1,\"track_id\":1,\"source_id\":99,\"start_ppq\":0,\"length_ppq\":1,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0}]}",
       "malformed": "{ this is not valid json ",
-      "takes": "{\"version\":1,\"sample_rate\":22050,\"sources\":[{\"kind\":0,\"id\":1,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0},{\"kind\":0,\"id\":2,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0}],\"tracks\":[{\"id\":1,\"name\":\"reference\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]},{\"id\":2,\"name\":\"take\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]}],\"clips\":[{\"id\":1,\"track_id\":1,\"source_id\":1,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0},{\"id\":2,\"track_id\":2,\"source_id\":2,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0}],\"warp_maps\":[]}",
-      "takes_many": "{\"version\":1,\"sample_rate\":22050,\"sources\":[{\"kind\":0,\"id\":3,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0},{\"kind\":0,\"id\":1,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0},{\"kind\":0,\"id\":2,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0}],\"tracks\":[{\"id\":1,\"name\":\"reference\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]},{\"id\":2,\"name\":\"take-a\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]},{\"id\":3,\"name\":\"take-b\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]}],\"clips\":[{\"id\":1,\"track_id\":1,\"source_id\":1,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0},{\"id\":2,\"track_id\":2,\"source_id\":3,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0},{\"id\":3,\"track_id\":3,\"source_id\":2,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0}],\"warp_maps\":[{\"id\":7,\"name\":\"hand-made\",\"anchors\":[{\"warp_sample\":0.0,\"source_sample\":0.0},{\"warp_sample\":100.0,\"source_sample\":120.0}]}]}",
-      "takes_single": "{\"version\":1,\"sample_rate\":22050,\"sources\":[{\"kind\":0,\"id\":1,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0}],\"tracks\":[{\"id\":1,\"name\":\"reference\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]}],\"clips\":[{\"id\":1,\"track_id\":1,\"source_id\":1,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0}],\"warp_maps\":[]}",
-      "takes_other_rate": "{\"version\":1,\"sample_rate\":48000,\"sources\":[{\"kind\":0,\"id\":1,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0},{\"kind\":0,\"id\":2,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":32000,\"storage_handle_id\":0}],\"tracks\":[{\"id\":1,\"name\":\"reference\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]},{\"id\":2,\"name\":\"take\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]}],\"clips\":[{\"id\":1,\"track_id\":1,\"source_id\":1,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0},{\"id\":2,\"track_id\":2,\"source_id\":2,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0}],\"warp_maps\":[]}"
+      "takes": "{\"version\":7,\"sample_rate\":22050,\"sources\":[{\"kind\":0,\"id\":1,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0},{\"kind\":0,\"id\":2,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0}],\"tracks\":[{\"id\":1,\"name\":\"reference\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]},{\"id\":2,\"name\":\"take\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]}],\"clips\":[{\"id\":1,\"track_id\":1,\"source_id\":1,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0},{\"id\":2,\"track_id\":2,\"source_id\":2,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0}],\"warp_maps\":[]}",
+      "takes_many": "{\"version\":7,\"sample_rate\":22050,\"sources\":[{\"kind\":0,\"id\":3,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0},{\"kind\":0,\"id\":1,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0},{\"kind\":0,\"id\":2,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0}],\"tracks\":[{\"id\":1,\"name\":\"reference\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]},{\"id\":2,\"name\":\"take-a\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]},{\"id\":3,\"name\":\"take-b\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]}],\"clips\":[{\"id\":1,\"track_id\":1,\"source_id\":1,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0},{\"id\":2,\"track_id\":2,\"source_id\":3,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0},{\"id\":3,\"track_id\":3,\"source_id\":2,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0}],\"warp_maps\":[{\"id\":7,\"name\":\"hand-made\",\"anchors\":[{\"warp_sample\":0.0,\"source_sample\":0.0},{\"warp_sample\":100.0,\"source_sample\":120.0}]}]}",
+      "takes_single": "{\"version\":7,\"sample_rate\":22050,\"sources\":[{\"kind\":0,\"id\":1,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0}],\"tracks\":[{\"id\":1,\"name\":\"reference\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]}],\"clips\":[{\"id\":1,\"track_id\":1,\"source_id\":1,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0}],\"warp_maps\":[]}",
+      "takes_other_rate": "{\"version\":7,\"sample_rate\":48000,\"sources\":[{\"kind\":0,\"id\":1,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0},{\"kind\":0,\"id\":2,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":32000,\"storage_handle_id\":0}],\"tracks\":[{\"id\":1,\"name\":\"reference\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]},{\"id\":2,\"name\":\"take\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]}],\"clips\":[{\"id\":1,\"track_id\":1,\"source_id\":1,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0},{\"id\":2,\"track_id\":2,\"source_id\":2,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0}],\"warp_maps\":[]}"
     },
     "presets": {
       "valid": {
-        "schemaVersion": 1,
+        "schemaVersion": 3,
         "id": "contract-fixture",
         "name": "Contract Fixture",
         "category": "custom",
@@ -18189,7 +18189,7 @@
         }
       },
       "invalid": {
-        "schemaVersion": 1,
+        "schemaVersion": 3,
         "id": "contract-invalid",
         "name": "Invalid",
         "category": "custom",
@@ -18213,7 +18213,7 @@
           "eq": {
             "airDb": 0.5,
             "bodyDb": 0,
-            "highpassHz": 75,
+            "highPassHz": 75,
             "presenceDb": 1.2
           },
           "formant": {
@@ -18236,9 +18236,51 @@
           },
           "outputGainDb": 0,
           "retune": {
-            "grainSize": 64,
+            "grainSizeSamples": 64,
             "mix": 0,
-            "semitones": 0
+            "pitchSemitones": 0
+          },
+          "pitchCorrection": {
+            "mode": "off",
+            "amount": 1,
+            "speedMs": 20,
+            "keyRoot": 0,
+            "scale": "major",
+            "robotOctave": 0
+          },
+          "harmony": {
+            "voices": 0,
+            "steps": [2, 4, -3],
+            "level": 0.7,
+            "leadLevel": 1,
+            "detuneCents": 6,
+            "delayMs": 12
+          },
+          "vocoder": {
+            "enabled": false,
+            "bands": 20,
+            "attackMs": 2,
+            "releaseMs": 20,
+            "sibilance": 0.3,
+            "carrierSource": "internal",
+            "carrierWave": "saw",
+            "ensembleDetuneCents": 12,
+            "level": 1
+          },
+          "character": {
+            "type": "none",
+            "amount": 0.5,
+            "tone": 0
+          },
+          "reverbVariation": {
+            "variation": "reverb",
+            "delayMs": 250,
+            "feedback": 0.35,
+            "tempoBpm": 120,
+            "division": "eighth"
+          },
+          "midi": {
+            "release": "hold"
           },
           "voiceEngine": {
             "engine": "grain",
@@ -18255,7 +18297,7 @@
         "id": "contract-custom",
         "name": "Contract Custom",
         "category": "custom",
-        "schemaVersion": 1
+        "schemaVersion": 3
       }
     },
     "chain_configs": {

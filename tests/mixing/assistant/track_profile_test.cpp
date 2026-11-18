@@ -379,7 +379,7 @@ TEST_CASE("Track profile params reject negative or non-finite minimum duration",
 
   const api::Param zero[] = {{"minDurationSec", 0.0}};
   CHECK(assistant::track_profile_config_from_params(zero, 1).min_duration_sec == 0.0f);
-  const api::Param positive[] = {{"min_duration_sec", 0.25}};
+  const api::Param positive[] = {{"minDurationSec", 0.25}};
   CHECK(assistant::track_profile_config_from_params(positive, 1).min_duration_sec == 0.25f);
   CHECK(assistant::track_profile_config_from_params(nullptr, 0).min_duration_sec > 0.0f);
 }

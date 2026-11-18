@@ -153,10 +153,10 @@ constexpr const char* kSurroundPan =
 // 1 ms of lookahead; the threshold sits far above the signal, so the limiter is
 // a pure delay.
 constexpr const char* kLatentInsert =
-    R"({"slot":"pre","processor":"dynamics.limiter","params":"{\"thresholdDb\":24,\"releaseMs\":50,\"lookaheadMs\":1}"})";
+    R"({"slot":"pre","processor":"dynamics.limiter","params":{"thresholdDb":24,"releaseMs":50,"lookaheadMs":1}})";
 std::string ducker_insert(const std::string& key) {
   std::string insert =
-      R"({"slot":"pre","processor":"dynamics.duckingProcessor","params":"{\"thresholdDb\":-30,\"ratio\":8,\"attackMs\":1,\"releaseMs\":20,\"rangeDb\":18}")";
+      R"({"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-30,"ratio":8,"attackMs":1,"releaseMs":20,"rangeDb":18})";
   if (!key.empty()) insert += R"(,"sidechainKey":")" + key + "\"";
   return insert + "}";
 }
@@ -193,7 +193,7 @@ std::string project_scene_json(const Row& row) {
     if (has_sends(row)) {
       strips += R"(,"sends":[{"id":"toB","destinationBusId":"B","sendDb":)" +
                 std::to_string(kSendDb) + R"(,"timing":")" +
-                (row.routing == Routing::kASendPreB ? "pre" : "post") + "\"}]";
+                (row.routing == Routing::kASendPreB ? "preFader" : "postFader") + "\"}]";
     }
     strips += "}";
   }

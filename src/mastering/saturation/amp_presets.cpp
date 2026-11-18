@@ -1,6 +1,6 @@
 #include "mastering/saturation/amp_presets.h"
 
-#include "mastering/api/legacy_ids.h"
+#include "mastering/api/retired_names.h"
 #include "mastering/saturation/amp_physics.h"
 #include "util/exception.h"
 
@@ -341,11 +341,11 @@ const char* amp_preset_to_string(AmpPreset preset) noexcept {
 
 AmpPreset amp_preset_from_string(const std::string& name) {
   const std::vector<std::string> names = amp_preset_names();
-  const std::string canonical = api::canonical_amp_preset_name(name);
   for (size_t i = 0; i < names.size(); ++i) {
-    if (names[i] == canonical) return static_cast<AmpPreset>(i);
+    if (names[i] == name) return static_cast<AmpPreset>(i);
   }
-  throw SonareException(ErrorCode::InvalidParameter, "unknown amp preset: " + name);
+  throw SonareException(ErrorCode::InvalidParameter,
+                        "unknown amp preset: " + name + api::retired_amp_preset_note(name));
 }
 
 AmpSimConfig amp_preset_config(AmpPreset preset) {

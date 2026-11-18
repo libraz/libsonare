@@ -17,7 +17,6 @@
 #include "arrangement/edit_command_internal.h"
 #include "arrangement/edit_source.h"
 #include "core/audio.h"
-#include "mastering/api/legacy_insert_params.h"
 #include "mixing/api/scene.h"
 #include "serialize/project_serializer_internal.h"
 #include "serialize/project_serializer_private.h"
@@ -52,7 +51,7 @@ Value part_rig_to_json(const arrangement::ProjectPartRig& entry) {
     for (const auto& stage : entry.rig.stages) {
       Object so;
       so["processor"] = stage.processor;
-      so["params"] = stage.params_json;
+      so["params"] = json::parse(stage.params_json);
       inserts.push_back(std::move(so));
     }
     o["inserts"] = std::move(inserts);
@@ -75,10 +74,10 @@ std::optional<arrangement::ProjectPartRig> part_rig_from_json(const Value& v) {
   if (const auto* inserts = array_at(v, "inserts")) {
     for (const auto& sv : *inserts) {
       if (!sv.is_object()) return std::nullopt;
-      const std::string processor =
-          mastering::api::canonical_processor_id(str_or(sv, "processor", ""));
-      entry.rig.stages.push_back({processor, mastering::api::canonical_insert_params_text(
-                                                 processor, str_or(sv, "params", "{}"))});
+      const Value* params = sv.find("params");
+      if (params != nullptr && !params->is_object()) return std::nullopt;
+      entry.rig.stages.push_back({str_or(sv, "processor", ""),
+                                  params != nullptr ? json::dump(*params) : std::string("{}")});
     }
   }
   return entry;
@@ -147,37 +146,7 @@ std::size_t base64_decoded_upper_bound(const std::string& text) noexcept {
 Value project_to_value(const arrangement::Project& project,
                        const arrangement::MidiContentStore& midi) {
   Object root;
-  const bool has_typed_automation_lane = std::any_of(
-      project.tracks().begin(), project.tracks().end(), [](const arrangement::Track& track) {
-        return std::any_of(track.automation_lanes.begin(), track.automation_lanes.end(),
-                           [](const automation::AutomationLane& lane) {
-                             return lane.target_kind() != automation::AutomationTargetKind::kOpaque;
-                           });
-      });
-  const bool has_physical_clip_field = std::any_of(
-      project.clips().begin(), project.clips().end(), [](const arrangement::EditClip& clip) {
-        return clip.source_offset_seconds.has_value() || clip.loop_anchor.has_value() ||
-               std::any_of(clip.takes.begin(), clip.takes.end(),
-                           [](const arrangement::ClipTake& take) {
-                             return take.source_offset_seconds.has_value();
-                           });
-      });
-  const bool has_comp_render_parts = std::any_of(
-      project.clips().begin(), project.clips().end(),
-      [](const arrangement::EditClip& clip) { return !clip.comp_render_parts.empty(); });
-  uint32_t schema_version = SONARE_PROJECT_SCHEMA_VERSION_OPAQUE;
-  if (!project.assist_sidecars().empty()) {
-    schema_version = SONARE_PROJECT_SCHEMA_VERSION_CAMEL_MODULE_IDS;
-  } else if (!project.part_rigs().empty()) {
-    schema_version = SONARE_PROJECT_SCHEMA_VERSION_PART_RIGS;
-  } else if (has_comp_render_parts) {
-    schema_version = SONARE_PROJECT_SCHEMA_VERSION_COMP_RENDER_PARTS;
-  } else if (has_physical_clip_field) {
-    schema_version = SONARE_PROJECT_SCHEMA_VERSION_PHYSICAL_CLIP;
-  } else if (has_typed_automation_lane) {
-    schema_version = SONARE_PROJECT_SCHEMA_VERSION_TYPED_AUTOMATION;
-  }
-  root["version"] = static_cast<double>(schema_version);
+  root["version"] = static_cast<double>(SONARE_PROJECT_SCHEMA_VERSION);
   root["sample_rate"] = project.sample_rate();
   root["overlap_policy"] = static_cast<int>(project.overlap_policy());
 
@@ -198,7 +167,7 @@ Value project_to_value(const arrangement::Project& project,
   root["tracks"] = std::move(tracks);
 
   Array clips;
-  for (const auto& c : project.clips()) clips.push_back(clip_to_json(c, schema_version));
+  for (const auto& c : project.clips()) clips.push_back(clip_to_json(c));
   root["clips"] = std::move(clips);
 
   Array warp_maps;
@@ -365,17 +334,13 @@ DeserializeResult project_from_json(const std::string& json_text) {
                                     "schema version must be a non-negative uint32 integer"});
       return result;
     }
-    if (schema_version < SONARE_PROJECT_SCHEMA_VERSION_OPAQUE) {
-      result.diagnostics.push_back({DiagnosticSeverity::kError, "invalid_version",
-                                    "schema version must be at least " +
-                                        std::to_string(SONARE_PROJECT_SCHEMA_VERSION_OPAQUE)});
-      return result;
-    }
-    if (!schema_version_supported(schema_version)) {
-      result.diagnostics.push_back({DiagnosticSeverity::kError, "unsupported_schema_version",
-                                    "schema version " + std::to_string(schema_version) +
-                                        " is newer than supported " +
-                                        std::to_string(SONARE_PROJECT_SCHEMA_VERSION)});
+    if (schema_version != SONARE_PROJECT_SCHEMA_VERSION) {
+      result.diagnostics.push_back(
+          {DiagnosticSeverity::kError, "unsupported_schema_version",
+           "project schema version " + std::to_string(schema_version) + " is " +
+               (schema_version < SONARE_PROJECT_SCHEMA_VERSION ? "older" : "newer") +
+               " than the version this release reads (" +
+               std::to_string(SONARE_PROJECT_SCHEMA_VERSION) + ")"});
       return result;
     }
 
@@ -505,7 +470,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
     std::unordered_set<arrangement::TrackId> track_ids;
     if (const auto* arr = array_at(root, "tracks")) {
       for (const auto& tv : *arr) {
-        arrangement::Track t = track_from_json(object_element(tv, "tracks"), schema_version);
+        arrangement::Track t = track_from_json(object_element(tv, "tracks"));
         if (invalid_entity_id(t.id)) {
           reject_entity_id("track", t.id, false);
           return result;
@@ -527,7 +492,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
     std::unordered_set<arrangement::ClipId> clip_ids;
     if (const auto* arr = array_at(root, "clips")) {
       for (const auto& cv : *arr) {
-        arrangement::EditClip c = clip_from_json(object_element(cv, "clips"), schema_version);
+        arrangement::EditClip c = clip_from_json(object_element(cv, "clips"));
         if (invalid_entity_id(c.id)) {
           reject_entity_id("clip", c.id, false);
           return result;
@@ -562,17 +527,15 @@ DeserializeResult project_from_json(const std::string& json_text) {
       }
     }
 
-    // Part rigs (plain project metadata, schema version 5 and later). An entry
-    // that fails the shared shape check is dropped with a warning.
-    if (schema_version >= SONARE_PROJECT_SCHEMA_VERSION_PART_RIGS) {
-      if (const auto* arr = array_at(root, "part_rigs")) {
-        for (const auto& rv : *arr) {
-          const auto entry = part_rig_from_json(object_element(rv, "part_rigs"));
-          if (!entry || !project.set_part_rig(*entry)) {
-            decode_diagnostics.warn("invalid_part_rig",
-                                    "a part rig entry has an invalid part, mode or inserts "
-                                    "and was dropped");
-          }
+    // Part rigs (plain project metadata). An entry that fails the shared shape
+    // check is dropped with a warning.
+    if (const auto* arr = array_at(root, "part_rigs")) {
+      for (const auto& rv : *arr) {
+        const auto entry = part_rig_from_json(object_element(rv, "part_rigs"));
+        if (!entry || !project.set_part_rig(*entry)) {
+          decode_diagnostics.warn("invalid_part_rig",
+                                  "a part rig entry has an invalid part, mode or inserts "
+                                  "and was dropped");
         }
       }
     }
@@ -738,12 +701,11 @@ DeserializeResult project_from_json(const std::string& json_text) {
         }
         arrangement::AssistSidecar sidecar;
         sidecar_fields_from_json(sv, &sidecar);
-        if (!migrate_assist_module_id(schema_version, &sidecar.module_id)) {
-          result.diagnostics.push_back(
-              {DiagnosticSeverity::kError, "legacy_assist_module_id",
-               "assist sidecar module id \"" + sidecar.module_id +
-                   "\" is not a lowerCamel id and is not valid in a version " +
-                   std::to_string(schema_version) + " document"});
+        if (std::string current_id; earlier_assist_module_id(sidecar.module_id, &current_id)) {
+          result.diagnostics.push_back({DiagnosticSeverity::kError, "legacy_assist_module_id",
+                                        "assist sidecar module id \"" + sidecar.module_id +
+                                            "\" is an earlier spelling; write \"" + current_id +
+                                            "\""});
           return result;
         }
         if (!sidecar_from_borrowed_payload(payload, &sidecar, remaining_payload_bytes)) {

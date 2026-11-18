@@ -597,8 +597,8 @@ TEST_CASE("gs_efx_insert_name maps the adapted EFX types to inserts", "[midi][sf
   REQUIRE(gs_efx_insert_name(0x0151) == "effects.delay.stereo");             // Modulation Delay
   REQUIRE(gs_efx_insert_name(0x0152) == "effects.delay.stereo");             // 3-tap Delay
   REQUIRE(gs_efx_insert_name(0x0154) == "effects.delay.stereo");             // Time Control Delay
-  REQUIRE(gs_efx_insert_name(0x0155) == "effects.reverb.dattorro");          // Reverb
-  REQUIRE(gs_efx_insert_name(0x0156) == "effects.reverb.dattorro");          // Gate Reverb
+  REQUIRE(gs_efx_insert_name(0x0155) == "effects.reverb.plate");             // Reverb
+  REQUIRE(gs_efx_insert_name(0x0156) == "effects.reverb.plate");             // Gate Reverb
   REQUIRE(gs_efx_insert_name(0x0157) == "effects.delay.stereo");             // 3D Delay
   REQUIRE(gs_efx_insert_name(0x0160) == "effects.modulation.pitchShifter");  // 2-voice Pitch Shift
   REQUIRE(gs_efx_insert_name(0x0161) == "effects.modulation.pitchShifter");  // Feedback Pitch Shift

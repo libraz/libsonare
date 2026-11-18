@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://libraz.net/schemas/libsonare/mixer-scene.schema.json",
   "title": "MixSceneDocument",
-  "description": "A libsonare mixer scene: the document `sonare mix --scene` reads, `suggestMixScene` returns, and `Mixer.fromSceneJson` builds a graph from. Field paths are held to src/mixing/api/scene_json.cpp's scene_schema_paths() by tests/conformance/check_result_schema_surfaces.py, so this file cannot drift from the writer. Keys starting with `$` or `x-` are annotations and are allowed on every object; any other unknown key is reported on the load warning channel by the parser. Two things this schema deliberately does not describe. The parser also accepts a legacy snake_case spelling of most keys (fader_db beside faderDb); the writer never emits one, and admitting them here would let a document validate in a shape nothing produces. And a scene reaches the mixer through the C++ parser, which refuses values this schema cannot express - an unknown insert processor, a send naming a bus that is not in the document, a connection whose endpoints do not exist. Validating here narrows what reaches that parser; it does not replace it. One numeric limit is also outside what this file states: every float field is stored as a 32-bit float, and the parser refuses a value that is non-finite or past that range. JSON cannot spell a non-finite number at all, and putting the float magnitude on each of the sixteen numeric fields would be sixteen copies of one constant, so a double beyond float range is the one class of value that validates here and is then refused.",
+  "description": "A libsonare mixer scene: the document `sonare mix --scene` reads, `suggestMixScene` returns, and `Mixer.fromSceneJson` builds a graph from. Field paths are held to src/mixing/api/scene_json.cpp's scene_schema_paths() by tests/conformance/check_result_schema_surfaces.py, so this file cannot drift from the writer. Keys starting with `$` or `x-` are annotations and are allowed on every object; any other unknown key is reported on the load warning channel by the parser. One thing this schema deliberately does not describe: a scene reaches the mixer through the C++ parser, which refuses values this schema cannot express - an unknown insert processor, a send naming a bus that is not in the document, a connection whose endpoints do not exist. Validating here narrows what reaches that parser; it does not replace it. One numeric limit is also outside what this file states: every float field is stored as a 32-bit float, and the parser refuses a value that is non-finite or past that range. JSON cannot spell a non-finite number at all, and putting the float magnitude on each of the sixteen numeric fields would be sixteen copies of one constant, so a double beyond float range is the one class of value that validates here and is then refused.",
   "type": "object",
   "additionalProperties": false,
   "patternProperties": { "^(\\$|x-)": {} },
@@ -81,7 +81,7 @@
           "default": 0
         },
         "timing": {
-          "description": "Whether the send is taken before or after the strip's fader. A post-fader send follows the fader; a pre-fader one does not. The loader also reads the earlier spellings pre and post; the writer never emits them.",
+          "description": "Whether the send is taken before or after the strip's fader. A post-fader send follows the fader; a pre-fader one does not.",
           "enum": ["preFader", "postFader"],
           "default": "postFader"
         }
@@ -107,29 +107,29 @@
       "patternProperties": { "^(\\$|x-)": {} },
       "properties": {
         "type": {
-          "enum": ["Peak", "LowShelf", "HighShelf", "LowPass", "HighPass", "BandPass", "Notch", "TiltShelf", "FlatTilt", "AllPass"],
-          "default": "Peak"
+          "enum": ["peak", "lowShelf", "highShelf", "lowPass", "highPass", "bandPass", "notch", "tiltShelf", "flatTilt", "allPass"],
+          "default": "peak"
         },
         "frequencyHz": { "type": "number", "default": 1000 },
         "gainDb": { "type": "number", "default": 0 },
         "q": {
-          "description": "Resonance/slope. Ignored for a LowShelf/HighShelf band under coeffMode Vicanek, which has no Q/S parameter.",
+          "description": "Resonance/slope. Ignored for a lowShelf/highShelf band under coeffMode vicanek, which has no Q/S parameter.",
           "type": "number"
         },
         "enabled": { "type": "boolean", "default": false },
-        "coeffMode": { "enum": ["Rbj", "Vicanek"], "default": "Rbj" },
+        "coeffMode": { "enum": ["rbj", "vicanek"], "default": "rbj" },
         "slopeDbOct": {
           "description": "6 selects a first-order section on a pass or shelf band.",
           "type": "integer",
           "default": 12
         },
         "placement": {
-          "enum": ["Stereo", "Left", "Right", "Mid", "Side"],
-          "default": "Stereo"
+          "enum": ["stereo", "left", "right", "mid", "side"],
+          "default": "stereo"
         },
         "phase": {
-          "enum": ["Inherit", "ZeroLatency", "NaturalPhase", "LinearPhase"],
-          "default": "Inherit"
+          "enum": ["inherit", "zeroLatency", "naturalPhase", "linearPhase"],
+          "default": "inherit"
         },
         "soloed": { "type": "boolean", "default": false },
         "bypassed": { "type": "boolean", "default": false },
@@ -234,7 +234,7 @@
           "default": false
         },
         "panMode": {
-          "description": "Panner shape, matching SONARE_PAN_MODE_*. balance is what `pan` drives; dualPan reads dualPanLeft / dualPanRight instead. The loader also reads the earlier integer ordinal (0 to 2) and refuses an unknown token or an ordinal outside that range; the writer never emits the ordinal.",
+          "description": "Panner shape, matching SONARE_PAN_MODE_*. balance is what `pan` drives; dualPan reads dualPanLeft / dualPanRight instead. The loader refuses any other value, an integer included.",
           "enum": ["balance", "stereoPan", "dualPan"],
           "default": "balance"
         },
@@ -255,7 +255,7 @@
         "polarityInvertLeft": { "type": "boolean", "default": false },
         "polarityInvertRight": { "type": "boolean", "default": false },
         "panLaw": {
-          "description": "Pan law. The loader also reads the earlier integer ordinal (0 to 3, in this enum's order) and refuses an unknown token or an ordinal outside that range; the writer never emits the ordinal.",
+          "description": "Pan law. The loader refuses any other value, an integer included.",
           "enum": ["const3Db", "const4.5Db", "const6Db", "linear0Db"],
           "default": "const3Db"
         },
@@ -325,7 +325,7 @@
           "default": 0
         },
         "panMode": {
-          "description": "Panner shape, matching SONARE_PAN_MODE_*. Same meaning and earlier form as a strip's.",
+          "description": "Panner shape, matching SONARE_PAN_MODE_*. Same meaning as a strip's.",
           "enum": ["balance", "stereoPan", "dualPan"],
           "default": "balance"
         },
@@ -342,7 +342,7 @@
           "default": 1
         },
         "panLaw": {
-          "description": "Pan law. Same meaning and earlier form as a strip's.",
+          "description": "Pan law. Same meaning as a strip's.",
           "enum": ["const3Db", "const4.5Db", "const6Db", "linear0Db"],
           "default": "const3Db"
         },

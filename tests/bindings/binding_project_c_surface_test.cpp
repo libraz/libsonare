@@ -16,7 +16,7 @@ TEST_CASE("a successful project load hands back the warnings it collected", "[pr
   // string, so a C embedder that frees it only on failure leaks one per warned
   // load, and one that reads "non-NULL means failure" reports a good load as a
   // bad one.
-  const std::string warned = R"({"version":1,"midi_content":{"not-a-clip-id":[]}})";
+  const std::string warned = R"({"version":7,"midi_content":{"not-a-clip-id":[]}})";
   SonareProject* project = nullptr;
   char* diagnostics = nullptr;
   REQUIRE(sonare_project_deserialize(warned.data(), warned.size(), &project, &diagnostics) ==
@@ -29,7 +29,7 @@ TEST_CASE("a successful project load hands back the warnings it collected", "[pr
 
   // A clean document leaves it NULL, so "loaded with warnings" stays
   // distinguishable from "loaded clean".
-  const std::string clean = R"({"version":1})";
+  const std::string clean = R"({"version":7})";
   project = nullptr;
   diagnostics = nullptr;
   REQUIRE(sonare_project_deserialize(clean.data(), clean.size(), &project, &diagnostics) ==

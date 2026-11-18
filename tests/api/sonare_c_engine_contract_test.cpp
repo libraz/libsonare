@@ -447,7 +447,7 @@ TEST_CASE("a scene JSON entry point separates a malformed document from an inval
   const char* unsupported_version =
       R"({"version":2,"strips":[{"id":"master"}],"buses":[],"connections":[]})";
   const char* unknown_insert_slot =
-      R"({"version":1,"strips":[{"id":"master","inserts":[{"slot":"nowhere","processor":"eq.parametric","params":"{}"}]}],"buses":[],"connections":[]})";
+      R"({"version":1,"strips":[{"id":"master","inserts":[{"slot":"nowhere","processor":"eq.parametric","params":{}}]}],"buses":[],"connections":[]})";
 
   REQUIRE(sonare_engine_set_master_strip_json(engine, malformed) == SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_engine_set_master_strip_json(engine, unsupported_version) ==

@@ -458,12 +458,7 @@ TEST_CASE("scene_from_json rejects out-of-range strip enums like the project wal
   REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(
                           R"({"version":1,"strips":[{"id":"a","panLaw":"equal"}]})"),
                       ContainsSubstring("strips[0].panLaw"));
-  // A valid strip still loads, from its tokens and from the earlier ordinal form alike.
-  const auto ok = sonare::mixing::api::scene_from_json(
-      R"({"version":1,"strips":[{"id":"a","panMode":2,"panLaw":3,"channelDelaySamples":0}]})");
-  REQUIRE(ok.strips.size() == 1);
-  REQUIRE(ok.strips[0].pan_mode == 2);
-  REQUIRE(ok.strips[0].pan_law == 3);
+  // A valid strip still loads.
   const auto tokens = sonare::mixing::api::scene_from_json(
       R"({"version":1,"strips":[{"id":"a","panMode":"dualPan","panLaw":"linear0Db"}]})");
   REQUIRE(tokens.strips[0].pan_mode == 2);
@@ -732,7 +727,6 @@ TEST_CASE("Scene scalar and nested-object fields refuse a wrong type, naming the
   };
   const Case cases[] = {
       {R"({"version":1,"strips":[{"id":"a","faderDb":"loud"}]})", "strips[0].faderDb"},
-      {R"({"version":1,"strips":[{"id":"a","fader_db":"loud"}]})", "strips[0].fader_db"},
       {R"({"version":1,"strips":[{"id":"a","pan":null}]})", "strips[0].pan"},
       {R"({"version":1,"strips":[{"id":"a"},{"id":"b","muted":1}]})", "strips[1].muted"},
       {R"({"version":1,"strips":[{"id":"a","soloSafe":"yes"}]})", "strips[0].soloSafe"},
@@ -995,11 +989,8 @@ TEST_CASE("Scene JSON rejects non-string insert slot and send timing", "[mixing]
   REQUIRE(scene.strips[0].inserts[0].slot == sonare::mixing::api::InsertSlot::PostFader);
 }
 
-TEST_CASE("Scene insert params load the same from an object and from a string",
-          "[mixing][routing]") {
-  // The writer embeds the bag as an object; every project file saved before it
-  // did carries the same bag as escaped text. Both must reach Insert identically,
-  // or loading an existing project would silently change what the insert runs.
+TEST_CASE("Scene insert params load from an object and refuse a string", "[mixing][routing]") {
+  using Catch::Matchers::ContainsSubstring;
   const std::string embedded = R"({
     "version": 1,
     "buses": [{"id": "master", "role": "master"}],
@@ -1020,14 +1011,11 @@ TEST_CASE("Scene insert params load the same from an object and from a string",
   })";
 
   const auto from_object = sonare::mixing::api::scene_from_json(embedded);
-  const auto from_string = sonare::mixing::api::scene_from_json(stringified);
   REQUIRE(from_object.strips.size() == 1);
   REQUIRE(from_object.strips[0].inserts.size() == 1);
-  REQUIRE(from_string.strips.size() == 1);
-  REQUIRE(from_string.strips[0].inserts.size() == 1);
-  CHECK(from_object.strips[0].inserts[0].params_json ==
-        from_string.strips[0].inserts[0].params_json);
   CHECK(from_object.strips[0].inserts[0].params_json == "{\"ratio\":3.25,\"thresholdDb\":-22}");
+  REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(stringified),
+                      ContainsSubstring("params must be a JSON object"));
 
   // And the writer emits the bag as a real object, so a consumer reads one
   // document rather than parsing a field out of it a second time.
@@ -1090,7 +1078,7 @@ TEST_CASE("Scene load surfaces silently-ignored insert params as a warning",
     "buses": [{"id": "master", "role": "master"}],
     "strips": [{"id": "vocal", "inserts": [
       {"slot": "post", "processor": "eq.parametric",
-       "params": "{\"highPassHz\":80,\"presenceDb\":4}"}
+       "params": {"highPassHz":80,"presenceDb":4}}
     ]}],
     "connections": [{"source": "vocal", "destination": "master"}]
   })";
@@ -1114,7 +1102,7 @@ TEST_CASE("Scene load surfaces silently-ignored insert params as a warning",
     "buses": [{"id": "master", "role": "master"}],
     "strips": [{"id": "vocal", "inserts": [
       {"slot": "post", "processor": "eq.parametric",
-       "params": "{\"band0.frequencyHz\":1000,\"band0.gainDb\":3}"}
+       "params": {"band0.frequencyHz":1000,"band0.gainDb":3}}
     ]}],
     "connections": [{"source": "vocal", "destination": "master"}]
   })";
@@ -1165,7 +1153,7 @@ TEST_CASE("A bus insert reports its ignored params the way a strip insert does",
     "version": 1,
     "buses": [{"id": "master", "role": "master", "inserts": [
       {"slot": "post", "processor": "eq.parametric",
-       "params": "{\"highPassHz\":80,\"presenceDb\":4}"}
+       "params": {"highPassHz":80,"presenceDb":4}}
     ]}],
     "strips": [{"id": "vocal"}],
     "connections": [{"source": "vocal", "destination": "master"}]
@@ -1252,28 +1240,82 @@ TEST_CASE("Scene load exempts $ and x- keys at every level", "[mixing][routing][
   CHECK(scene_key_warnings(R"({"version":1,"xnote":1})").size() == 1);
 }
 
-TEST_CASE("Scene load accepts every legacy snake_case alias without a warning",
-          "[mixing][routing][warning]") {
-  const std::string legacy = R"({
-    "version": 1,
-    "strips": [{"id": "a", "input_trim_db": 1, "fader_db": -1, "vca_offset_db": 0,
-      "solo_safe": true, "pan_mode": 1, "dual_pan_left": -0.5, "dual_pan_right": 0.5,
-      "polarity_invert_left": true, "polarity_invert_right": false, "pan_law": 1,
-      "channel_delay_samples": 4,
-      "inserts": [{"processor_name": "dynamics.compressor", "params_json": "{}",
-                   "sidechain_key": "k"}],
-      "sends": [{"id": "s", "destination_bus_id": "m", "send_db": -6}],
-      "eq": {"bands": [{"frequency_hz": 100, "gain_db": 1, "coeff_mode": "Rbj",
-        "slope_db_oct": 12, "proportional_q": true, "proportional_q_strength": 1,
-        "dyn_enabled": true, "threshold_db": -20, "auto_threshold": false, "range_db": -6,
-        "attack_ms": 5, "release_ms": 50, "lookahead_ms": 1, "detector_delay_ms": 1,
-        "sidechain_freq_hz": 100, "sidechain_q": 1, "external_sidechain": false}]}}],
-    "buses": [{"id": "m", "input_trim_db": 1, "polarity_invert_left": true,
-      "polarity_invert_right": true, "pan_mode": 1, "dual_pan_left": -0.5,
-      "dual_pan_right": 0.5, "pan_law": 1}],
-    "vca_groups": [{"id": "g", "gain_db": -2, "members": ["a"]}]
-  })";
-  CHECK(scene_key_warnings(legacy).empty());
+TEST_CASE("Scene load refuses every earlier snake_case spelling, naming the current one",
+          "[mixing][routing]") {
+  using Catch::Matchers::ContainsSubstring;
+  struct Case {
+    const char* document;
+    const char* path;
+    const char* current;
+  };
+  const Case cases[] = {
+      {R"({"version":1,"strips":[{"id":"a","input_trim_db":1}]})", "strips[0].input_trim_db",
+       "inputTrimDb"},
+      {R"({"version":1,"strips":[{"id":"a","fader_db":-1}]})", "strips[0].fader_db", "faderDb"},
+      {R"({"version":1,"strips":[{"id":"a","vca_offset_db":0}]})", "strips[0].vca_offset_db",
+       "vcaOffsetDb"},
+      {R"({"version":1,"strips":[{"id":"a","solo_safe":true}]})", "strips[0].solo_safe",
+       "soloSafe"},
+      {R"({"version":1,"strips":[{"id":"a","pan_mode":"stereoPan"}]})", "strips[0].pan_mode",
+       "panMode"},
+      {R"({"version":1,"strips":[{"id":"a","dual_pan_left":-0.5}]})", "strips[0].dual_pan_left",
+       "dualPanLeft"},
+      {R"({"version":1,"strips":[{"id":"a","dual_pan_right":0.5}]})", "strips[0].dual_pan_right",
+       "dualPanRight"},
+      {R"({"version":1,"strips":[{"id":"a","polarity_invert_left":true}]})",
+       "strips[0].polarity_invert_left", "polarityInvertLeft"},
+      {R"({"version":1,"strips":[{"id":"a","polarity_invert_right":true}]})",
+       "strips[0].polarity_invert_right", "polarityInvertRight"},
+      {R"({"version":1,"strips":[{"id":"a","pan_law":"const6Db"}]})", "strips[0].pan_law",
+       "panLaw"},
+      {R"({"version":1,"strips":[{"id":"a","channel_delay_samples":4}]})",
+       "strips[0].channel_delay_samples", "channelDelaySamples"},
+      {R"({"version":1,"strips":[{"id":"a","inserts":[{"processor_name":"dynamics.compressor"}]}]})",
+       "strips[0].inserts[0].processor_name", "processor"},
+      {R"({"version":1,"strips":[{"id":"a","inserts":[{"processor":"dynamics.compressor","params_json":"{}"}]}]})",
+       "strips[0].inserts[0].params_json", "params"},
+      {R"({"version":1,"strips":[{"id":"a","inserts":[{"processor":"dynamics.compressor","sidechain_key":"k"}]}]})",
+       "strips[0].inserts[0].sidechain_key", "sidechainKey"},
+      {R"({"version":1,"strips":[{"id":"a","sends":[{"id":"s","destination_bus_id":"m"}]}]})",
+       "strips[0].sends[0].destination_bus_id", "destinationBusId"},
+      {R"({"version":1,"strips":[{"id":"a","sends":[{"id":"s","send_db":-6}]}]})",
+       "strips[0].sends[0].send_db", "sendDb"},
+      {R"({"version":1,"buses":[{"id":"m","input_trim_db":1}]})", "buses[0].input_trim_db",
+       "inputTrimDb"},
+      {R"({"version":1,"buses":[{"id":"m","pan_mode":"stereoPan"}]})", "buses[0].pan_mode",
+       "panMode"},
+      {R"({"version":1,"buses":[{"id":"m","pan_law":"const6Db"}]})", "buses[0].pan_law", "panLaw"},
+      {R"({"version":1,"vca_groups":[]})", "vca_groups", "vcaGroups"},
+      {R"({"version":1,"vcaGroups":[{"id":"g","gain_db":-2}]})", "vcaGroups[0].gain_db", "gainDb"},
+  };
+  for (const Case& c : cases) {
+    CAPTURE(c.document);
+    REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(c.document),
+                        ContainsSubstring(c.path) && ContainsSubstring(c.current));
+  }
+}
+
+TEST_CASE("Scene load refuses the earlier pan and send-timing values, naming the tokens",
+          "[mixing][routing]") {
+  using Catch::Matchers::ContainsSubstring;
+  REQUIRE_THROWS_WITH(
+      sonare::mixing::api::scene_from_json(R"({"version":1,"strips":[{"id":"a","panMode":1}]})"),
+      ContainsSubstring("strips[0].panMode") && ContainsSubstring("stereoPan"));
+  REQUIRE_THROWS_WITH(
+      sonare::mixing::api::scene_from_json(R"({"version":1,"buses":[{"id":"b","panLaw":0}]})"),
+      ContainsSubstring("buses[0].panLaw") && ContainsSubstring("const3Db"));
+  for (const char* earlier : {"pre", "post"}) {
+    CAPTURE(earlier);
+    const std::string document =
+        std::string(R"({"version":1,"strips":[{"id":"a","sends":[{"id":"s","timing":")") + earlier +
+        R"("}]}]})";
+    REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(document),
+                        ContainsSubstring("preFader") && ContainsSubstring("postFader"));
+  }
+  REQUIRE_THROWS_WITH(
+      sonare::mixing::api::scene_from_json(
+          R"({"version":1,"strips":[{"id":"a","inserts":[{"processor":"dynamics.compressor","params":"{}"}]}]})"),
+      ContainsSubstring("strips[0].inserts[0].params") && ContainsSubstring("JSON object"));
 }
 
 TEST_CASE("Scene writer output carries no unknown key", "[mixing][routing][warning]") {
@@ -1281,9 +1323,9 @@ TEST_CASE("Scene writer output carries no unknown key", "[mixing][routing][warni
   const std::string maximal = R"({
     "version": 1,
     "strips": [{"id": "a", "inputTrimDb": 1, "faderDb": -1, "vcaOffsetDb": 1, "pan": 0.2,
-      "width": 0.8, "muted": true, "soloed": true, "soloSafe": true, "panMode": 1,
+      "width": 0.8, "muted": true, "soloed": true, "soloSafe": true, "panMode": "stereoPan",
       "dualPanLeft": -0.5, "dualPanRight": 0.5, "polarityInvertLeft": true,
-      "polarityInvertRight": true, "panLaw": 1, "channelDelaySamples": 3,
+      "polarityInvertRight": true, "panLaw": "const4.5Db", "channelDelaySamples": 3,
       "sourceLayout": "5.1",
       "surroundPan": {"azimuth": 30, "elevation": 10, "divergence": 0.2, "lfe": 0.1,
                       "distance": 2},
@@ -1291,20 +1333,20 @@ TEST_CASE("Scene writer output carries no unknown key", "[mixing][routing][warni
                    "truePeakOversample": 8},
       "inserts": [{"slot": "post", "processor": "dynamics.compressor", "params": {},
                    "sidechainKey": "k"}],
-      "sends": [{"id": "s", "destinationBusId": "m", "sendDb": -6, "timing": "pre"}],
-      "eq": {"enabled": false, "bands": [{"type": "HighShelf", "frequencyHz": 5000,
-        "gainDb": 3, "q": 1.2, "enabled": true, "coeffMode": "Vicanek", "slopeDbOct": 24,
-        "placement": "Mid", "phase": "ZeroLatency", "soloed": true, "bypassed": true,
+      "sends": [{"id": "s", "destinationBusId": "m", "sendDb": -6, "timing": "preFader"}],
+      "eq": {"enabled": false, "bands": [{"type": "highShelf", "frequencyHz": 5000,
+        "gainDb": 3, "q": 1.2, "enabled": true, "coeffMode": "vicanek", "slopeDbOct": 24,
+        "placement": "mid", "phase": "zeroLatency", "soloed": true, "bypassed": true,
         "proportionalQ": true, "proportionalQStrength": 0.5, "dynamic": true,
         "thresholdDb": -30, "autoThreshold": true, "ratio": 3, "rangeDb": -9,
         "attackMs": 3, "releaseMs": 80, "detectorDelayMs": 2, "externalSidechain": true,
         "sidechainFreqHz": 2000, "sidechainQ": 2}]}}],
     "buses": [{"id": "m", "role": "master", "inputTrimDb": 1, "width": 0.5,
-      "polarityInvertLeft": true, "polarityInvertRight": true, "pan": 0.3, "panMode": 1,
-      "dualPanLeft": -0.5, "dualPanRight": 0.5, "panLaw": 1,
+      "polarityInvertLeft": true, "polarityInvertRight": true, "pan": 0.3, "panMode": "stereoPan",
+      "dualPanLeft": -0.5, "dualPanRight": 0.5, "panLaw": "const4.5Db",
       "inserts": [{"slot": "pre", "processor": "dynamics.compressor", "params": {},
                    "sidechainKey": "k"}],
-      "eq": {"bands": [{"type": "Notch", "frequencyHz": 400}]}},
+      "eq": {"bands": [{"type": "notch", "frequencyHz": 400}]}},
       {"id": "surround", "role": "aux", "layout": "7.1"}],
     "vcaGroups": [{"id": "g", "gainDb": -2, "members": ["a"]}],
     "connections": [{"source": "a", "destination": "m"}]
@@ -1474,7 +1516,7 @@ TEST_CASE("Scene EQ rejects more than 24 bands", "[mixing][routing]") {
   REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(document), ContainsSubstring("24"));
 }
 
-TEST_CASE("Scene EQ rejects TiltShelf/FlatTilt band types", "[mixing][routing]") {
+TEST_CASE("Scene EQ rejects tiltShelf/flatTilt band types", "[mixing][routing]") {
   // ParametricEq, which a strip/bus EQ ultimately runs on, has no coefficient
   // design for these types (parametric.cpp's design_eq_biquad throws for both);
   // the scene walker rejects them up front rather than letting the failure
@@ -1482,12 +1524,12 @@ TEST_CASE("Scene EQ rejects TiltShelf/FlatTilt band types", "[mixing][routing]")
   using Catch::Matchers::ContainsSubstring;
   REQUIRE_THROWS_WITH(
       sonare::mixing::api::scene_from_json(
-          R"({"version":1,"strips":[{"id":"s","eq":{"bands":[{"type":"TiltShelf"}]}}]})"),
-      ContainsSubstring("TiltShelf"));
+          R"({"version":1,"strips":[{"id":"s","eq":{"bands":[{"type":"tiltShelf"}]}}]})"),
+      ContainsSubstring("tiltShelf"));
   REQUIRE_THROWS_WITH(
       sonare::mixing::api::scene_from_json(
-          R"({"version":1,"buses":[{"id":"b","eq":{"bands":[{"type":"FlatTilt"}]}}]})"),
-      ContainsSubstring("FlatTilt"));
+          R"({"version":1,"buses":[{"id":"b","eq":{"bands":[{"type":"flatTilt"}]}}]})"),
+      ContainsSubstring("flatTilt"));
 }
 
 TEST_CASE("Scene bus pan round-trips and omits at the default", "[mixing][routing]") {
@@ -1603,31 +1645,37 @@ TEST_CASE("VocalReverbSend return insert is wet only", "[mixing][scene]") {
   }
 }
 
-TEST_CASE("Scene saved with a former processor id round-trips to the current id",
-          "[mixing][scene][legacy]") {
-  const std::string saved =
-      R"({"version":1,"strips":[{"id":"gtr","inserts":[)"
-      R"({"slot":"pre","processor":"eq.pultec","params":{}},)"
-      R"({"slot":"post","processor":"eq.apiStyle","params":{}},)"
-      R"({"slot":"post","processor":"saturation.ampSim","params":{"preset":"tweedGrind"}},)"
-      R"({"slot":"post","processor":"saturation.ampSim","params":{"preset":"britStack"}}]}]})";
-  const auto scene = sonare::mixing::api::scene_from_json(saved);
-  REQUIRE(scene.strips.size() == 1);
-  const auto& inserts = scene.strips[0].inserts;
-  REQUIRE(inserts.size() == 4);
-  CHECK(inserts[0].processor_name == "eq.passiveTube");
-  CHECK(inserts[1].processor_name == "eq.steppedProportionalQ");
-  CHECK(inserts[2].params_json.find("vintageGrind") != std::string::npos);
-  CHECK(inserts[3].params_json.find("crunchStack") != std::string::npos);
+TEST_CASE("Scene with a former processor id or amp preset is refused naming the current one",
+          "[mixing][scene][retired]") {
+  using Catch::Matchers::ContainsSubstring;
+  struct Case {
+    const char* insert;
+    const char* current;
+  };
+  for (
+      const Case c : {
+          Case{R"({"slot":"pre","processor":"eq.pultec","params":{}})", "eq.passiveTube"},
+          Case{R"({"slot":"post","processor":"eq.apiStyle","params":{}})",
+               "eq.steppedProportionalQ"},
+          Case{
+              R"({"slot":"post","processor":"saturation.ampSim","params":{"preset":"tweedGrind"}})",
+              "vintageGrind"},
+          Case{R"({"slot":"post","processor":"saturation.ampSim","params":{"preset":"britStack"}})",
+               "crunchStack"},
+      }) {
+    INFO(c.insert);
+    const std::string saved =
+        std::string(R"({"version":1,"strips":[{"id":"gtr","inserts":[)") + c.insert + "]}]}";
+    // The scene document keeps the name it was given; nothing folds it onto the current one.
+    const auto scene = sonare::mixing::api::scene_from_json(saved);
+    REQUIRE(scene.strips.at(0).inserts.size() == 1);
+    CHECK(sonare::mixing::api::scene_to_json(scene).find(c.current) == std::string::npos);
 
-  const std::string rewritten = sonare::mixing::api::scene_to_json(scene);
-  for (const char* legacy : {"eq.pultec", "eq.apiStyle", "tweedGrind", "britStack"}) {
-    INFO(legacy);
-    CHECK(rewritten.find(legacy) == std::string::npos);
+    SonareMixer* mixer = sonare_mixer_from_scene_json(saved.c_str(), 48000, 512);
+    CHECK(mixer == nullptr);
+    CHECK_THAT(std::string(sonare_last_error_message()), ContainsSubstring(c.current));
+    sonare_mixer_destroy(mixer);
   }
-  CHECK(rewritten.find("eq.passiveTube") != std::string::npos);
-  CHECK(sonare::mixing::api::scene_to_json(sonare::mixing::api::scene_from_json(rewritten)) ==
-        rewritten);
 }
 
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH

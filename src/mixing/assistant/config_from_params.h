@@ -2,8 +2,8 @@
 
 /// @file config_from_params.h
 /// @brief Shared param-list parsers for the mixing-assistant config structs.
-/// @details Maps flat string-keyed params (accepting both camelCase and
-///          snake_case aliases) into MixAssistantConfig / TrackProfileConfig.
+/// @details Maps flat string-keyed params (camelCase keys only; a snake_case
+///          spelling is refused) into MixAssistantConfig / TrackProfileConfig.
 ///          Used by both the C-ABI helper layer and the WASM binding so the JS
 ///          and C/Python paths stay in lock-step.
 
@@ -12,6 +12,7 @@
 
 #include "mastering/api/named_processor.h"
 #include "mastering/api/param_field_tables.h"
+#include "mastering/assistant/param_spelling.h"
 #include "mixing/assistant/suggester.h"
 #include "mixing/assistant/track_profile.h"
 #include "util/exception.h"
@@ -28,15 +29,15 @@ inline MixAssistantConfig mix_assistant_config_from_params(const mastering::api:
   for (std::size_t index = 0; index < count; ++index) {
     const std::string& key = params[index].key;
     const double value = params[index].value;
-    if (key == "targetTrackLufs" || key == "target_track_lufs") {
+    if (key == "targetTrackLufs") {
       config.target_track_lufs = static_cast<float>(value);
-    } else if (key == "suggestionStrength" || key == "suggestion_strength") {
+    } else if (key == "suggestionStrength") {
       config.suggestion_strength = static_cast<float>(value);
-    } else if (key == "eqMaxCutDb" || key == "eq_max_cut_db") {
+    } else if (key == "eqMaxCutDb") {
       config.eq_max_cut_db = static_cast<float>(value);
-    } else if (key == "mixBusHeadroomDbtp" || key == "mix_bus_headroom_dbtp") {
+    } else if (key == "mixBusHeadroomDbtp") {
       config.mix_bus_headroom_dbtp = static_cast<float>(value);
-    } else if (key == "tempoBpm" || key == "tempo_bpm") {
+    } else if (key == "tempoBpm") {
       const auto tempo = static_cast<float>(value);
       // Zero is the only sentinel for the transport fallback; anything else is
       // taken as a real tempo and is refused unless it reads as one.
@@ -47,25 +48,29 @@ inline MixAssistantConfig mix_assistant_config_from_params(const mastering::api:
               std::to_string(static_cast<int>(kMinAssistantTempoBpm)) + " and " +
               std::to_string(static_cast<int>(kMaxAssistantTempoBpm)) + " BPM");
       config.tempo_bpm = tempo;
-    } else if (key == "enableStructure" || key == "enable_structure") {
+    } else if (key == "enableStructure") {
       config.enable_structure = value != 0.0;
-    } else if (key == "enableGain" || key == "enable_gain") {
+    } else if (key == "enableGain") {
       config.enable_gain = value != 0.0;
-    } else if (key == "enableBalance" || key == "enable_balance") {
+    } else if (key == "enableBalance") {
       config.enable_balance = value != 0.0;
-    } else if (key == "enableEq" || key == "enable_eq") {
+    } else if (key == "enableEq") {
       config.enable_eq = value != 0.0;
-    } else if (key == "enableDynamics" || key == "enable_dynamics") {
+    } else if (key == "enableDynamics") {
       config.enable_dynamics = value != 0.0;
-    } else if (key == "enableImage" || key == "enable_image") {
+    } else if (key == "enableImage") {
       config.enable_image = value != 0.0;
-    } else if (key == "enableHighPass" || key == "enable_high_pass") {
+    } else if (key == "enableHighPass") {
       config.enable_high_pass = value != 0.0;
-    } else if (key == "nFft" || key == "n_fft") {
+    } else if (key == "nFft") {
       mastering::api::assign_int_param(key, value, config.n_fft);
-    } else if (key == "hopLength" || key == "hop_length") {
+    } else if (key == "hopLength") {
       mastering::api::assign_int_param(key, value, config.hop_length);
     } else {
+      mastering::assistant::refuse_snake_case_param(
+          key, {"targetTrackLufs", "suggestionStrength", "eqMaxCutDb", "mixBusHeadroomDbtp",
+                "tempoBpm", "enableStructure", "enableGain", "enableBalance", "enableEq",
+                "enableDynamics", "enableImage", "enableHighPass", "nFft", "hopLength"});
       throw SonareException(ErrorCode::InvalidParameter,
                             "unknown mixing assistant param: " + key +
                                 " (expected targetTrackLufs, suggestionStrength, eqMaxCutDb, "
@@ -85,14 +90,15 @@ inline TrackProfileConfig track_profile_config_from_params(const mastering::api:
   for (std::size_t index = 0; index < count; ++index) {
     const std::string& key = params[index].key;
     const double value = params[index].value;
-    if (key == "nFft" || key == "n_fft") {
+    if (key == "nFft") {
       mastering::api::assign_int_param(key, value, config.n_fft);
-    } else if (key == "hopLength" || key == "hop_length") {
+    } else if (key == "hopLength") {
       mastering::api::assign_int_param(key, value, config.hop_length);
-    } else if (key == "minDurationSec" || key == "min_duration_sec") {
+    } else if (key == "minDurationSec") {
       SONARE_CHECK_MSG(value >= 0.0, ErrorCode::InvalidParameter, key + " must be non-negative");
       config.min_duration_sec = static_cast<float>(value);
     } else {
+      mastering::assistant::refuse_snake_case_param(key, {"nFft", "hopLength", "minDurationSec"});
       throw SonareException(
           ErrorCode::InvalidParameter,
           "unknown track profile param: " + key + " (expected nFft, hopLength, minDurationSec)");

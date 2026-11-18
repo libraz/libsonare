@@ -2,8 +2,8 @@
 
 /// @file config_from_params.h
 /// @brief Shared param-list parsers for the mastering-assistant config structs.
-/// @details Maps flat string-keyed mastering params (accepting both camelCase
-///          and snake_case aliases) into AssistantConfig / AudioProfileConfig.
+/// @details Maps flat string-keyed mastering params (camelCase keys only; a
+///          snake_case spelling is refused) into AssistantConfig / AudioProfileConfig.
 ///          Used by both the C-ABI helper layer and the WASM binding so the JS
 ///          and C/Python paths stay in lock-step.
 
@@ -15,6 +15,7 @@
 #include "mastering/api/named_processor.h"
 #include "mastering/api/param_field_tables.h"
 #include "mastering/assistant/audio_profile.h"
+#include "mastering/assistant/param_spelling.h"
 #include "mastering/assistant/platform_targets.h"
 #include "mastering/assistant/suggester.h"
 #include "util/exception.h"
@@ -28,21 +29,21 @@ inline AssistantConfig assistant_config_from_params(const api::Param* params, st
   for (std::size_t index = 0; index < count; ++index) {
     const std::string& key = params[index].key;
     const double value = params[index].value;
-    if (key == "targetLufs" || key == "target_lufs") {
+    if (key == "targetLufs") {
       config.target_lufs = static_cast<float>(value);
       // Record that the caller named it, so a delivery target cannot claim the
       // one slider position that happens to equal the default.
       config.target_lufs_explicit = true;
-    } else if (key == "ceilingDb" || key == "ceiling_db") {
+    } else if (key == "ceilingDb") {
       config.ceiling_db = static_cast<float>(value);
       config.ceiling_db_explicit = true;
-    } else if (key == "enableRepair" || key == "enable_repair") {
+    } else if (key == "enableRepair") {
       config.enable_repair = value != 0.0;
-    } else if (key == "preferStreamingSafe" || key == "prefer_streaming_safe") {
+    } else if (key == "preferStreamingSafe") {
       config.prefer_streaming_safe = value != 0.0;
-    } else if (key == "speechMonoAmount" || key == "speech_mono_amount") {
+    } else if (key == "speechMonoAmount") {
       config.speech_mono_amount = static_cast<float>(value);
-    } else if (key == "targetPlatform" || key == "target_platform") {
+    } else if (key == "targetPlatform") {
       // A param value is a number, so the delivery target arrives as the index
       // platform_index_from_name() resolved. Anything that is not exactly one of
       // those indices is rejected rather than truncated toward a neighbouring
@@ -66,6 +67,8 @@ inline AssistantConfig assistant_config_from_params(const api::Param* params, st
                        "preset must be a preset index from sonare_mastering_preset_from_name");
       config.preset = api::preset_from_string(names[static_cast<std::size_t>(index)]);
     } else {
+      refuse_snake_case_param(key, {"targetLufs", "ceilingDb", "enableRepair",
+                                    "preferStreamingSafe", "speechMonoAmount", "targetPlatform"});
       // Refused rather than ignored, as a chain override is: a misspelt key
       // would otherwise leave its setting at the default with nothing to say so.
       throw SonareException(ErrorCode::InvalidParameter,
@@ -85,15 +88,16 @@ inline AudioProfileConfig audio_profile_config_from_params(const api::Param* par
   for (std::size_t index = 0; index < count; ++index) {
     const std::string& key = params[index].key;
     const double value = params[index].value;
-    if (key == "nFft" || key == "n_fft") {
+    if (key == "nFft") {
       api::assign_int_param(key, value, config.n_fft);
-    } else if (key == "hopLength" || key == "hop_length") {
+    } else if (key == "hopLength") {
       api::assign_int_param(key, value, config.hop_length);
-    } else if (key == "truePeakOversample" || key == "true_peak_oversample") {
+    } else if (key == "truePeakOversample") {
       api::assign_int_param(key, value, config.true_peak_oversample);
-    } else if (key == "detectDefects" || key == "detect_defects") {
+    } else if (key == "detectDefects") {
       config.detect_defects = value != 0.0;
     } else {
+      refuse_snake_case_param(key, {"nFft", "hopLength", "truePeakOversample", "detectDefects"});
       throw SonareException(ErrorCode::InvalidParameter,
                             "unknown mastering profile param: " + key +
                                 " (expected nFft, hopLength, truePeakOversample, detectDefects)");

@@ -89,8 +89,8 @@ def _read_fixture() -> tuple[str, bytes]:
             f"cannot read GM project fixture {FIXTURE}: {exc}"
         ) from exc
 
-    if payload.get("version") != 1 or payload.get("sample_rate") != SAMPLE_RATE:
-        raise HarnessFailure("fixture must be project version 1 at 48 kHz")
+    if payload.get("version") != 7 or payload.get("sample_rate") != SAMPLE_RATE:
+        raise HarnessFailure("fixture must be project version 7 at 48 kHz")
     tracks = payload.get("tracks")
     if not isinstance(tracks, list) or len(tracks) != 1:
         raise HarnessFailure("fixture must contain exactly one track")
@@ -175,6 +175,7 @@ def _render_c(
 
     try:
         with out_float_array(lib) as (out, out_length):
+            out_channels = ctypes.c_int(0)
             check(
                 lib.sonare_project_bounce_with_synth_instruments(
                     handle,
@@ -183,8 +184,13 @@ def _render_c(
                     ctypes.c_size_t(1),
                     ctypes.byref(out),
                     ctypes.byref(out_length),
+                    ctypes.byref(out_channels),
                 )
             )
+            if out_channels.value != NUM_CHANNELS:
+                raise HarnessFailure(
+                    f"bounce reported {out_channels.value} channels, expected {NUM_CHANNELS}"
+                )
             samples = from_c_float_array(out, int(out_length.value))
     finally:
         lib.sonare_project_destroy(handle)

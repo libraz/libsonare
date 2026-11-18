@@ -172,7 +172,7 @@ TEST_CASE("FX names are registered in insert_factory_names()",
   const auto names = insert_factory_names();
   for (const char* name :
        {"effects.reverb.convolution", "effects.reverb.fdn", "effects.reverb.velvet",
-        "effects.reverb.dattorro", "effects.modulation.phaser", "effects.delay.stereo"}) {
+        "effects.reverb.plate", "effects.modulation.phaser", "effects.delay.stereo"}) {
     DYNAMIC_SECTION(name) { REQUIRE(ListContains(names, name)); }
   }
 }

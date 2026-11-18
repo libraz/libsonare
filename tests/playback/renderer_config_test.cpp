@@ -166,15 +166,12 @@ TEST_CASE("bass management needs a destination for the low band", "[playback][co
             .empty());
 }
 
-TEST_CASE("room presets are written in lowerCamel and the snake_case form is still read",
+TEST_CASE("room presets are written in lowerCamel and the snake_case form is refused",
           "[playback][config]") {
   const std::pair<const char*, RoomPreset> rows[] = {
       {"livingRoom", RoomPreset::LivingRoom},
       {"homeTheater", RoomPreset::HomeTheater},
       {"screeningRoom", RoomPreset::ScreeningRoom},
-      {"living_room", RoomPreset::LivingRoom},
-      {"home_theater", RoomPreset::HomeTheater},
-      {"screening_room", RoomPreset::ScreeningRoom},
       {"none", RoomPreset::None},
   };
   for (const auto& [token, preset] : rows) {
@@ -182,12 +179,16 @@ TEST_CASE("room presets are written in lowerCamel and the snake_case form is sti
     const RendererConfig config =
         parse_renderer_config(std::string(R"({"room": {"preset": ")") + token + R"("}})");
     CHECK(config.prepare.room_preset == preset);
-    const std::string written = serialize_renderer_config(config);
-    CHECK(mentions(written, std::string("\"preset\":\"") + room_preset_name(preset) + "\""));
-    CHECK_FALSE(mentions(written, "_room"));
-    CHECK_FALSE(mentions(written, "home_theater"));
+    CHECK(mentions(serialize_renderer_config(config),
+                   std::string("\"preset\":\"") + room_preset_name(preset) + "\""));
   }
-  CHECK(mentions(refusal(R"({"room": {"preset": "cathedral"}})"), "livingRoom"));
+  for (const char* earlier : {"living_room", "home_theater", "screening_room"}) {
+    CAPTURE(earlier);
+    const std::string message =
+        refusal(std::string(R"({"room": {"preset": ")") + earlier + R"("}})");
+    CHECK(mentions(message, "room.preset"));
+    CHECK(mentions(message, "livingRoom"));
+  }
 }
 
 TEST_CASE("a complete document round-trips through serialize and parse", "[playback][config]") {
@@ -325,7 +326,7 @@ TEST_CASE("diagnostics name the inactive stages and the latency split", "[playba
 
   const std::string json = diagnostics_to_json(d);
   CHECK(mentions(json, "\"active_input_layout\":\"stereo\""));
-  CHECK(mentions(json, "\"dialogue_level\""));
+  CHECK(mentions(json, "\"dialogueLevel\""));
   CHECK(mentions(json, "\"upmix\":{\"samples\":1024,\"q8\":262144}"));
   CHECK(mentions(json, "\"layout_switches\":0"));
   CHECK(mentions(json, "\"truncated_drains\":0"));

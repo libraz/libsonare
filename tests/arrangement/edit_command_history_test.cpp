@@ -2850,7 +2850,7 @@ TEST_CASE("Shrinking then re-extending a comp clip retains discarded seam refere
   }
 
   const std::string narrow_json = sonare::serialize::project_to_json(fixture.project, fixture.midi);
-  REQUIRE(narrow_json.find("\"version\":4") != std::string::npos);
+  REQUIRE(narrow_json.find("\"version\":7") != std::string::npos);
   auto narrow_decoded = sonare::serialize::project_from_json(narrow_json);
   REQUIRE(narrow_decoded.ok());
   const EditClip* decoded_narrow = narrow_decoded.project->find_clip(fixture.clip_id);
@@ -2907,7 +2907,7 @@ TEST_CASE("Comp render geometry survives undo redo and JSON, while real loop gap
 
   const std::string json =
       sonare::serialize::project_to_json(history.project(), history.midi_content());
-  REQUIRE(json.find("\"version\":4") != std::string::npos);
+  REQUIRE(json.find("\"version\":7") != std::string::npos);
   const auto decoded = sonare::serialize::project_from_json(json);
   REQUIRE(decoded.ok());
   CHECK(decoded.project->find_clip(fixture.clip_id)->comp_render_parts == expected_parts);

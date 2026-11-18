@@ -47,7 +47,7 @@ TEST_CASE("malformed and garbage input never crashes and yields diagnostics", "[
       "[",                                                // truncated array
       "{\"version\":",                                    // truncated mid-value
       "{\"version\": 1",                                  // missing closing brace
-      "{\"version\": 1,}",                                // trailing comma
+      "{\"version\": 7,}",                                // trailing comma
       "{\"version\": }",                                  // missing value
       "{version: 1}",                                     // unquoted key
       "{\"version\": 01}",                                // leading zero
@@ -61,13 +61,13 @@ TEST_CASE("malformed and garbage input never crashes and yields diagnostics", "[
       "42",                                               // top-level number
       "null",                                             // top-level null
       "true",                                             // top-level bool
-      "{\"version\": 1, \"sample_rate\": \"x\"}",         // wrong-typed scalar
-      "{\"version\": 1, \"tracks\": \"notarray\"}",       // wrong-typed array
-      "{\"version\": 1, \"clips\": [\"notobject\", 5]}",  // bad array elements
+      "{\"version\": 7, \"sample_rate\": \"x\"}",         // wrong-typed scalar
+      "{\"version\": 7, \"tracks\": \"notarray\"}",       // wrong-typed array
+      "{\"version\": 7, \"clips\": [\"notobject\", 5]}",  // bad array elements
       // Sidecar with malformed base64 payload => diagnostic, not crash.
-      "{\"version\": 1, \"assist_sidecars\": [{\"module_id\": \"m\", "
+      "{\"version\": 7, \"assist_sidecars\": [{\"module_id\": \"m\", "
       "\"payload_b64\": \"!!!notbase64\"}]}",
-      "{\"version\": 1, \"assist_sidecars\": [{\"payload_b64\": \"ABC\"}]}",  // bad length
+      "{\"version\": 7, \"assist_sidecars\": [{\"payload_b64\": \"ABC\"}]}",  // bad length
       "\xFF\xFE\x00\x01garbage",                                              // raw binary bytes
       std::string(1, '\0'),                                                   // a single NUL byte
   };
@@ -89,7 +89,7 @@ TEST_CASE("decode-path warning diagnostics are bounded for a hostile document", 
   // suppression summary is appended, so reporting cannot dwarf the input.
   constexpr int kClipCount = 4000;
   std::string json =
-      "{\"version\": 1, \"sample_rate\": 48000, "
+      "{\"version\": 7, \"sample_rate\": 48000, "
       "\"sources\": [{\"id\": 1, \"kind\": 0, \"uri\": \"file://x.wav\"}], "
       "\"tracks\": [{\"id\": 1, \"kind\": 0, \"name\": \"T\"}], "
       "\"clips\": [";
@@ -126,7 +126,7 @@ TEST_CASE("deeply nested input is rejected without stack overflow", "[serialize]
   CHECK_FALSE(result.ok());
   CHECK_FALSE(result.diagnostics.empty());
 
-  std::string deep_obj = "{\"version\": 1, \"x\":";
+  std::string deep_obj = "{\"version\": 7, \"x\":";
   for (int i = 0; i < 5000; ++i) deep_obj += "[";
   auto result2 = safe_parse(deep_obj);
   CHECK_FALSE(result2.ok());
@@ -134,10 +134,10 @@ TEST_CASE("deeply nested input is rejected without stack overflow", "[serialize]
 
 TEST_CASE("huge and degenerate numbers do not crash", "[serialize]") {
   const std::vector<std::string> inputs = {
-      "{\"version\": 1, \"sample_rate\": 1e400}",  // overflow -> inf (parser may reject)
-      "{\"version\": 1, \"sample_rate\": -1e400}",
-      "{\"version\": 1, \"sample_rate\": 1e-400}",  // underflow -> 0
-      "{\"version\": 1, \"tempo_segments\": [{\"bpm\": 1e308}]}",
+      "{\"version\": 7, \"sample_rate\": 1e400}",  // overflow -> inf (parser may reject)
+      "{\"version\": 7, \"sample_rate\": -1e400}",
+      "{\"version\": 7, \"sample_rate\": 1e-400}",  // underflow -> 0
+      "{\"version\": 7, \"tempo_segments\": [{\"bpm\": 1e308}]}",
       "{\"version\": 1.0e1}",  // version 10 -> unsupported
   };
   for (const auto& input : inputs) {
@@ -152,7 +152,6 @@ TEST_CASE("project schema version rejects fractional and out-of-range numbers", 
       "{\"version\": 1.5}",
       "{\"version\": 4294967296}",
       "{\"version\": 1e100}",
-      "{\"version\": 0}",
   };
   for (const auto& input : inputs) {
     INFO("input: " << input);

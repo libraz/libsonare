@@ -1114,8 +1114,18 @@ TEST_CASE("the mixing assistant param builders refuse an unknown key", "[mixing]
   namespace assistant = sonare::mixing::assistant;
   const sonare::mastering::api::Param known[] = {{"suggestionStrength", 0.5}};
   CHECK(assistant::mix_assistant_config_from_params(known, 1).suggestion_strength == 0.5f);
+  const sonare::mastering::api::Param camel[] = {{"minDurationSec", 2.0}};
+  CHECK(assistant::track_profile_config_from_params(camel, 1).min_duration_sec == 2.0f);
+
+  // A snake_case spelling is refused, naming the camelCase key that replaced it.
   const sonare::mastering::api::Param snake[] = {{"min_duration_sec", 2.0}};
-  CHECK(assistant::track_profile_config_from_params(snake, 1).min_duration_sec == 2.0f);
+  try {
+    (void)assistant::track_profile_config_from_params(snake, 1);
+    FAIL("snake_case key was accepted");
+  } catch (const sonare::SonareException& e) {
+    CHECK(e.code() == sonare::ErrorCode::InvalidParameter);
+    CHECK(std::string(e.what()).find("minDurationSec") != std::string::npos);
+  }
 
   // A misspelt key would otherwise leave its setting at the default unannounced.
   const sonare::mastering::api::Param misspelt[] = {{"suggestionStrenght", 0.5}};

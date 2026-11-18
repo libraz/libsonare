@@ -412,9 +412,6 @@ const std::vector<std::string>& capability_catalog_schema_paths() {
       "chain.params[].slot",
       "chain.params[].dependsOn",
       "chain.params[].coupledWith",
-      "chain.aliases",
-      "chain.aliases[].key",
-      "chain.aliases[].aliases",
   };
   return paths;
 }

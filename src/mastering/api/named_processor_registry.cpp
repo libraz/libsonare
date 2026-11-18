@@ -5,8 +5,8 @@
 #include <vector>
 
 #include "mastering/api/insert_factory.h"
-#include "mastering/api/legacy_ids.h"
 #include "mastering/api/named_processor.h"
+#include "mastering/api/retired_names.h"
 #include "mastering/saturation/amp_presets.h"
 #include "rt/processor_base.h"
 #include "util/exception.h"
@@ -114,8 +114,7 @@ std::vector<std::string> stereo_analysis_names() {
   return {"stereo.monoCompatCheck", "stereo.monoCompatCheckLogBands"};
 }
 
-ChannelPolicy channel_policy(const std::string& requested_id) {
-  const std::string id = canonical_processor_id(requested_id);
+ChannelPolicy channel_policy(const std::string& id) {
   // Inherently-stereo processors: they operate on planes 0/1 and pass any
   // surround planes through dry. Everything else processes all planes correctly
   // in a single full-buffer call (Multichannel), which is also the safe default
@@ -135,7 +134,6 @@ ChannelPolicy channel_policy(const std::string& requested_id) {
       "eq.midSide",
       "multiband.imager",
       "effects.reverb.plate",
-      "effects.reverb.dattorro",
       "effects.reverb.fdn",
       "effects.reverb.velvet",
       "effects.reverb.convolution",
@@ -180,13 +178,13 @@ const char* channel_policy_to_string(ChannelPolicy policy) noexcept {
   return "multichannel";
 }
 
-InsertTiming insert_timing(const std::string& requested_name, const std::string& json_params,
+InsertTiming insert_timing(const std::string& name, const std::string& json_params,
                            double sample_rate) {
-  const std::string name = canonical_processor_id(requested_name);
   std::vector<std::string> unknown;
   std::unique_ptr<sonare::rt::ProcessorBase> processor = make_insert(name, json_params, &unknown);
   if (processor == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "unknown insert processor: " + name);
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "unknown insert processor: " + name + retired_processor_note(name));
   }
   if (!unknown.empty()) {
     std::string keys;
@@ -237,9 +235,8 @@ const char* realtime_cost(const std::string& id) noexcept {
   // FFT-designed linear-phase FIR) and delay-network reverbs, whose tanks of
   // delay lines and allpasses are an order of magnitude above a biquad chain.
   if (id == "effects.reverb.fdn" || id == "effects.reverb.convolution" ||
-      id == "effects.reverb.room" || id == "effects.reverb.dattorro" ||
-      id == "effects.reverb.plate" || id == "effects.acoustic.roomMorph" ||
-      id == "eq.linearPhase") {
+      id == "effects.reverb.room" || id == "effects.reverb.plate" ||
+      id == "effects.acoustic.roomMorph" || id == "eq.linearPhase") {
     return "moderate";
   }
   // Four direct-form HRIR FIRs per sample, plus the canceller's two in speakers mode.

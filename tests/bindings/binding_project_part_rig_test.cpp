@@ -13,7 +13,7 @@
 namespace {
 
 constexpr uint32_t kDestination = 3;
-constexpr const char* kSoftClipChain = R"([{"processor":"saturation.softClipper","params":"{}"}])";
+constexpr const char* kSoftClipChain = R"([{"processor":"saturation.softClipper","params":{}}])";
 
 /// One MIDI track routed to kDestination: program 30 (electric guitar, a program
 /// the default rig covers) on channel 0, then a held note.

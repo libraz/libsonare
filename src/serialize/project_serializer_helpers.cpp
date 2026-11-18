@@ -216,18 +216,5 @@ const Value& object_element(const Value& element, const char* array_key) {
   return element;
 }
 
-// ===========================================================================
-// Migration hook. A document from SONARE_PROJECT_SCHEMA_VERSION_OPAQUE (the
-// oldest version the encoder writes) up to SONARE_PROJECT_SCHEMA_VERSION is
-// accepted -- forward-compatible field handling above absorbs earlier versions'
-// documents; an unknown future version is rejected with a diagnostic rather
-// than misread.
-// ===========================================================================
-
-bool schema_version_supported(uint32_t version) {
-  return version >= SONARE_PROJECT_SCHEMA_VERSION_OPAQUE &&
-         version <= SONARE_PROJECT_SCHEMA_VERSION;
-}
-
 }  // namespace detail
 }  // namespace sonare::serialize

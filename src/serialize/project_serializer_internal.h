@@ -113,7 +113,6 @@ const Value* object_value_at(const Value& obj, const char* key);
 const Object* object_at(const Value& obj, const char* key);
 /// Returns @p element, or throws InvalidFormat naming @p array_key when it is not an object.
 const Value& object_element(const Value& element, const char* array_key);
-bool schema_version_supported(uint32_t version);
 
 // ===========================================================================
 // Encode: arrangement model -> util::json::Value
@@ -127,7 +126,7 @@ Value fade_to_json(const arrangement::ClipFade& f);
 Value take_to_json(const arrangement::ClipTake& take);
 Value comp_segment_to_json(const arrangement::ClipCompSegment& segment);
 Value comp_render_part_to_json(const arrangement::ClipCompRenderPart& part);
-Value clip_to_json(const arrangement::EditClip& c, uint32_t schema_version);
+Value clip_to_json(const arrangement::EditClip& c);
 Value warp_map_to_json(const arrangement::WarpMapRef& map);
 Value source_to_json(const arrangement::ClipSource& src);
 Value marker_to_json(const arrangement::ProjectMarker& m);
@@ -144,8 +143,8 @@ Value scene_to_value(const mixing::api::Scene& scene);
 
 transport::TempoSegment tempo_segment_from_json(const Value& v);
 transport::TimeSignatureSegment time_signature_from_json(const Value& v);
-automation::AutomationLane automation_lane_from_json(const Value& v, uint32_t schema_version);
-arrangement::Track track_from_json(const Value& v, uint32_t schema_version);
+automation::AutomationLane automation_lane_from_json(const Value& v);
+arrangement::Track track_from_json(const Value& v);
 
 // ===========================================================================
 // Edit-API invariants on the load path
@@ -175,18 +174,18 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Proje
                                                               arrangement::MidiContentStore* midi,
                                                               BoundedDiagnostics* diagnostics);
 arrangement::ClipFade fade_from_json(const Value& v);
-arrangement::ClipTake take_from_json(const Value& v, uint32_t schema_version);
+arrangement::ClipTake take_from_json(const Value& v);
 arrangement::ClipCompSegment comp_segment_from_json(const Value& v);
 arrangement::ClipCompRenderPart comp_render_part_from_json(const Value& v);
-arrangement::EditClip clip_from_json(const Value& v, uint32_t schema_version);
+arrangement::EditClip clip_from_json(const Value& v);
 arrangement::WarpMapRef warp_map_from_json(const Value& v);
 arrangement::ClipSource source_from_json(const Value& v);
 arrangement::ChordSymbol chord_from_json(const Value& v);
 arrangement::KeySegment key_segment_from_json(const Value& v);
 void annotation_from_json(const Value& v, arrangement::ProjectAnnotation* a);
-/// Rewrites a pre-version-6 built-in assist module id to its lowerCamel form. Returns false
-/// when a version-6 or later document still carries one of the old ids.
-bool migrate_assist_module_id(uint32_t schema_version, std::string* module_id);
+/// Returns true when @p module_id is an earlier snake_case spelling of a built-in assist module
+/// id, and stores the current lowerCamel id in @p current.
+bool earlier_assist_module_id(const std::string& module_id, std::string* current);
 
 bool sidecar_from_json(const Value& v, arrangement::AssistSidecar* out,
                        size_t max_payload_bytes = std::numeric_limits<size_t>::max());

@@ -118,11 +118,11 @@ TEST_CASE("sonare_engine tail and graph latency queries", "[c_api][engine][feedb
 namespace {
 
 constexpr const char* kLimiterBusJson =
-    R"({"version":1,"strips":[],"buses":[{"id":"1","inserts":[{"slot":"pre","processor":"dynamics.limiter","params":"{\"thresholdDb\":24,\"lookaheadMs\":0,\"releaseMs\":50}"}]}],"connections":[]})";
+    R"({"version":1,"strips":[],"buses":[{"id":"1","inserts":[{"slot":"pre","processor":"dynamics.limiter","params":{"thresholdDb":24,"lookaheadMs":0,"releaseMs":50}}]}],"connections":[]})";
 constexpr const char* kDuckerBusJson =
-    R"({"version":1,"strips":[],"buses":[{"id":"1","inserts":[{"slot":"pre","processor":"dynamics.limiter","params":"{\"thresholdDb\":24,\"lookaheadMs\":0,\"releaseMs\":50}"}]},{"id":"2","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":"{\"thresholdDb\":-20,\"ratio\":20,\"attackMs\":0.05,\"releaseMs\":80,\"rangeDb\":30}"}]}],"connections":[]})";
+    R"({"version":1,"strips":[],"buses":[{"id":"1","inserts":[{"slot":"pre","processor":"dynamics.limiter","params":{"thresholdDb":24,"lookaheadMs":0,"releaseMs":50}}]},{"id":"2","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]}],"connections":[]})";
 constexpr const char* kDuckerMasterJson =
-    R"({"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":"{\"thresholdDb\":-20,\"ratio\":20,\"attackMs\":0.05,\"releaseMs\":80,\"rangeDb\":30}"}]}],"buses":[],"connections":[]})";
+    R"({"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]}],"buses":[],"connections":[]})";
 constexpr const char* kDuckerTrackJson =
     R"({"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]}],"buses":[],"connections":[]})";
 constexpr const char* kDuckerTrack30Json =

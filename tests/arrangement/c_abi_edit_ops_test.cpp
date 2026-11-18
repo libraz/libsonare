@@ -1497,7 +1497,7 @@ TEST_CASE("C-ABI typed automation lane add/edit preserves legacy compatibility",
           SONARE_OK);
   REQUIRE(out_target == 100);
   const std::string with_fader = serialize(project);
-  REQUIRE(with_fader.find("\"version\":2") != std::string::npos);
+  REQUIRE(with_fader.find("\"version\":7") != std::string::npos);
   REQUIRE(with_fader.find("\"target_kind\":1") != std::string::npos);
 
   // The legacy edit descriptor has no kind and must retain the typed target.

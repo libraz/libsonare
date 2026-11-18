@@ -5,6 +5,7 @@
 #include "c_api/mixing_internal.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
+#include "mastering/api/retired_names.h"
 #include "mixing/channel_strip_eq.h"
 #include "util/json.h"
 
@@ -545,9 +546,11 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
       std::vector<std::string> unknown_keys;
       auto processor = make_scene_insert(insert, &unknown_keys, mixer->sample_rate);
       if (!processor) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
-                                      "unknown insert processor: " + insert.processor_name +
-                                          " (strip " + scene_strip.id + ")");
+        throw sonare::SonareException(
+            sonare::ErrorCode::InvalidFormat,
+            "unknown insert processor: " + insert.processor_name +
+                sonare::mastering::api::retired_processor_note(insert.processor_name) + " (strip " +
+                scene_strip.id + ")");
       }
       if (!unknown_keys.empty()) {
         std::string note = "insert '" + insert.processor_name + "' on strip '" + scene_strip.id +

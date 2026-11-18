@@ -60,27 +60,27 @@ constexpr const char* stage_name(Stage stage) noexcept {
     case Stage::Reorder:
       return "reorder";
     case Stage::DialogueLevel:
-      return "dialogue_level";
+      return "dialogueLevel";
     case Stage::Upmix:
       return "upmix";
     case Stage::Loudness:
       return "loudness";
     case Stage::NightMode:
-      return "night_mode";
+      return "nightMode";
     case Stage::LayoutConvert:
-      return "layout_convert";
+      return "layoutConvert";
     case Stage::SpeakerCalibration:
-      return "speaker_calibration";
+      return "speakerCalibration";
     case Stage::BassManagement:
-      return "bass_management";
+      return "bassManagement";
     case Stage::Binaural:
       return "binaural";
     case Stage::RoomEarly:
-      return "room_early";
+      return "roomEarly";
     case Stage::RoomLate:
-      return "room_late";
+      return "roomLate";
     case Stage::OutputLimiter:
-      return "output_limiter";
+      return "outputLimiter";
   }
   return "";
 }

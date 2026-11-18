@@ -97,10 +97,10 @@
       }
     },
     "chain": {
-      "description": "The flat mastering chain keys. A key resolves through its canonical spelling (aliases), then a chain-only descriptor (params), then a list element (lists: `<key>.<i>` is the descriptor named `key` when processor is null, `<key>.<i>.<field>` is the processor's `field` otherwise), then the longest stage prefix (stages: `<prefix>.<leaf>` is the processor's `leaf`). `<i>` in an alias stands for a list index, decimal with no leading zero.",
+      "description": "The flat mastering chain keys. A key resolves through a chain-only descriptor (params), then a list element (lists: `<key>.<i>` is the descriptor named `key` when processor is null, `<key>.<i>.<field>` is the processor's `field` otherwise), then the longest stage prefix (stages: `<prefix>.<leaf>` is the processor's `leaf`). A list index is decimal with no leading zero.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["stages", "lists", "params", "aliases"],
+      "required": ["stages", "lists", "params"],
       "properties": {
         "stages": {
           "type": "array",
@@ -132,23 +132,6 @@
         "params": {
           "type": "array",
           "items": { "$ref": "#/$defs/parameter" }
-        },
-        "aliases": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["key", "aliases"],
-            "properties": {
-              "key": { "type": "string", "minLength": 1 },
-              "aliases": {
-                "type": "array",
-                "minItems": 1,
-                "items": { "type": "string", "minLength": 1 },
-                "uniqueItems": true
-              }
-            }
-          }
         }
       }
     }

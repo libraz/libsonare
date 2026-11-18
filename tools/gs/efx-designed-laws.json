@@ -93,7 +93,7 @@
     {"name": "(Pre|Post) Filter", "printed": "00–05", "stage": "saturation.bitcrusher", "law": "d.lofi_filter_hz"},
     {"name": "Lo-Fi Type", "printed": "00–05", "stage": "saturation.bitcrusher", "law": "d.type_index6"},
     {"name": "Lo-Fi Type", "printed": "00–08", "stage": "saturation.bitcrusher", "law": "d.type_index9"},
-    {"name": "Type", "printed": "00/01/02/03/04/05", "stage": "effects.reverb.dattorro", "law": "d.type_index6"},
+    {"name": "Type", "printed": "00/01/02/03/04/05", "stage": "effects.reverb.plate", "law": "d.type_index6"},
     {
       "name": ".*\\b(Level|Lev)( [0-9A-Z])?",
       "printed": "00–7F",

@@ -54,24 +54,12 @@
 
 namespace sonare::serialize {
 
-/// @brief Latest project schema version understood by this serializer. Each
-///        document is emitted at the lowest version that carries its content, so
-///        older readers reject what they would misread: version 1 by default,
-///        version 2 when a typed automation lane is present, version 3 when a
-///        clip or take carries a physical source offset or loop anchor, and
-///        version 4 when a clip carries internal comp render geometry, and
-///        version 5 when the project holds per-part rig selections, and
-///        version 6 when the project holds assist sidecars (module ids are
-///        lowerCamel from this version on).
+/// @brief The one project schema version this serializer writes and reads. A
+///        document of any other version is refused with a diagnostic naming both
+///        versions; there is no migration of older documents.
 ///        Distinct from the engine RT ABI (rt::kEngineAbiVersion) and from the
 ///        flat project struct ABI; this layer only owns the JSON schema.
-inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION = 6;
-inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION_OPAQUE = 1;
-inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION_TYPED_AUTOMATION = 2;
-inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION_PHYSICAL_CLIP = 3;
-inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION_COMP_RENDER_PARTS = 4;
-inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION_PART_RIGS = 5;
-inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION_CAMEL_MODULE_IDS = 6;
+inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION = 7;
 
 /// @brief Severity of a deserialize diagnostic.
 ///

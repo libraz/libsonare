@@ -56,7 +56,7 @@ TEST_CASE("sonare_project_set_mixer_scene_json reports unknown scene keys as war
 TEST_CASE("sonare_project_deserialize reports unknown scene keys with the project path",
           "[c_api][project][warning]") {
   const std::string typo =
-      R"({"version":1,"scene":{"version":1,"strips":[{"id":"lead","faderDB":-3.0}],)"
+      R"({"version":7,"scene":{"version":1,"strips":[{"id":"lead","faderDB":-3.0}],)"
       R"("buses":[{"id":"master","role":"master","x-note":true}]}})";
   SonareProject* loaded = nullptr;
   char* diagnostics = nullptr;
@@ -123,7 +123,7 @@ TEST_CASE("engine strip setters refuse an unknown key by name", "[c_api][engine]
   CHECK(last_error().find('\n') == std::string::npos);
 }
 
-TEST_CASE("engine strip setters accept annotation keys and every legacy alias",
+TEST_CASE("engine strip setters accept annotation keys and refuse earlier spellings",
           "[c_api][engine][warning]") {
   StripEngine f;
   const char* annotated =
@@ -131,22 +131,17 @@ TEST_CASE("engine strip setters accept annotation keys and every legacy alias",
   CHECK(sonare_engine_set_track_strip_json(f.engine, 10, annotated) == SONARE_OK);
   CHECK(sonare_engine_set_master_strip_json(f.engine, annotated) == SONARE_OK);
 
-  const char* legacy =
-      R"({"version":1,"strips":[{"id":"s","input_trim_db":1,"fader_db":-1,"vca_offset_db":0,)"
-      R"("solo_safe":true,"pan_mode":1,"dual_pan_left":-0.5,"dual_pan_right":0.5,)"
-      R"("polarity_invert_left":true,"polarity_invert_right":false,"pan_law":1,)"
-      R"("channel_delay_samples":4}],"vca_groups":[]})";
-  CHECK(sonare_engine_set_track_strip_json(f.engine, 10, legacy) == SONARE_OK);
-  const char* legacy_bus =
-      R"({"version":1,"buses":[{"id":"1","input_trim_db":1,"polarity_invert_left":true,)"
-      R"("polarity_invert_right":true,"pan_mode":1,"dual_pan_left":-0.5,"dual_pan_right":0.5,)"
-      R"("pan_law":1}]})";
-  CHECK(sonare_engine_set_bus_strip_json(f.engine, 1, legacy_bus) == SONARE_OK);
+  const char* earlier = R"({"version":1,"strips":[{"id":"s","fader_db":-1}]})";
+  CHECK(sonare_engine_set_track_strip_json(f.engine, 10, earlier) == SONARE_ERROR_INVALID_FORMAT);
+  CHECK(std::string(sonare_last_error_message()).find("faderDb") != std::string::npos);
+  const char* earlier_bus = R"({"version":1,"buses":[{"id":"1","pan_mode":"stereoPan"}]})";
+  CHECK(sonare_engine_set_bus_strip_json(f.engine, 1, earlier_bus) == SONARE_ERROR_INVALID_FORMAT);
+  CHECK(std::string(sonare_last_error_message()).find("panMode") != std::string::npos);
 }
 
 TEST_CASE("engine EQ band setters refuse an unknown key by name", "[c_api][engine][warning]") {
   StripEngine f;
-  const char* typo = R"({"type":"Peak","frequencyHz":1000,"gainDB":3,"qq":1})";
+  const char* typo = R"({"type":"peak","frequencyHz":1000,"gainDB":3,"qq":1})";
   REQUIRE(sonare_engine_set_track_strip_eq_band_json(f.engine, 10, 0, typo) ==
           SONARE_ERROR_INVALID_FORMAT);
   CHECK(last_error().find("unknown band key 'gainDB' (and 1 more)") != std::string::npos);
@@ -164,7 +159,7 @@ TEST_CASE("engine EQ band setters refuse an unknown key by name", "[c_api][engin
   CHECK(last_error().find("unknown band key 'a\\x0ab'") != std::string::npos);
 
   const char* annotated =
-      R"({"$schema":"s","x-note":1,"type":"Peak","frequencyHz":1000,"gain_db":3,"dyn_enabled":false})";
+      R"({"$schema":"s","x-note":1,"type":"peak","frequencyHz":1000,"gainDb":3,"dynamic":false})";
   REQUIRE(sonare_engine_set_track_strip_json(
               f.engine, 10, R"({"version":1,"strips":[{"id":"s","faderDb":0}]})") == SONARE_OK);
   CHECK(sonare_engine_set_track_strip_eq_band_json(f.engine, 10, 0, annotated) == SONARE_OK);
@@ -177,10 +172,10 @@ TEST_CASE("engine EQ band setters refuse an unknown key by name", "[c_api][engin
 TEST_CASE("sonare_eq_set_band refuses an unknown key by name", "[c_api][warning]") {
   SonareEq* eq = sonare_eq_create(48000.0, 512);
   REQUIRE(eq != nullptr);
-  CHECK(sonare_eq_set_band(eq, 0, R"({"type":"Peak","gainDB":3})") == SONARE_ERROR_INVALID_FORMAT);
+  CHECK(sonare_eq_set_band(eq, 0, R"({"type":"peak","gainDB":3})") == SONARE_ERROR_INVALID_FORMAT);
   CHECK(std::string(sonare_last_error_message()).find("unknown band key 'gainDB'") !=
         std::string::npos);
-  CHECK(sonare_eq_set_band(eq, 0, R"({"type":"Peak","gainDb":3,"x-note":"keep"})") == SONARE_OK);
+  CHECK(sonare_eq_set_band(eq, 0, R"({"type":"peak","gainDb":3,"x-note":"keep"})") == SONARE_OK);
   sonare_eq_destroy(eq);
 }
 

@@ -45,7 +45,7 @@ TEST_CASE("Project default sample rate is 48 kHz", "[serialize][arrangement]") {
 
   // Serializer fallback: a document that OMITS "sample_rate" must deserialize to
   // the same 48 kHz default as an in-memory project (not the old 22.05 kHz).
-  const std::string json_without_sr = R"({"version": 1})";
+  const std::string json_without_sr = R"({"version": 7})";
   auto result = project_from_json(json_without_sr);
   REQUIRE(result.ok());
   CHECK(result.project->sample_rate() == 48000.0);

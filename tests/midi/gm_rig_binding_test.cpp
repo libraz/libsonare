@@ -572,9 +572,9 @@ TEST_CASE("a host describes a rig in the mixing scene's own words", "[midi][sf2]
   // decoded list rather than the JSON, which is what keeps it from linking the
   // mixing module to read one.
   const std::string scene_json = R"({"version":1,"strips":[{"id":"gtr","inserts":[
-      {"processor":"dynamics.gate","params":"{}","slot":"pre"},
-      {"processor":"saturation.ampSim","params":"{\"preset\":\"crunchStack\",\"drive\":0.8}","slot":"pre"},
-      {"processor":"effects.delay.stereo","params":"{}","slot":"pre"}]}]})";
+      {"processor":"dynamics.gate","params":{},"slot":"pre"},
+      {"processor":"saturation.ampSim","params":{"preset":"crunchStack","drive":0.8},"slot":"pre"},
+      {"processor":"effects.delay.stereo","params":{},"slot":"pre"}]}]})";
   const sonare::mixing::api::Scene scene = sonare::mixing::api::scene_from_json(scene_json);
   REQUIRE(scene.strips.size() == 1);
   REQUIRE(scene.strips.front().inserts.size() == 3);

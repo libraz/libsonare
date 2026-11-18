@@ -120,8 +120,8 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
       sonare::midi::MidiEvent event;
       event.render_frame = int64Property(event_val, "renderFrame", 0);
       sonare::midi::Ump ump;
-      ump.words[0] = wordProperty(event_val, "word0", wordProperty(event_val, "data0", 0));
-      ump.words[1] = wordProperty(event_val, "word1", wordProperty(event_val, "data1", 0));
+      ump.words[0] = wordProperty(event_val, "word0", 0);
+      ump.words[1] = wordProperty(event_val, "word1", 0);
       ump.words[2] = wordProperty(event_val, "word2", 0);
       ump.words[3] = wordProperty(event_val, "word3", 0);
       const uint32_t word_count = uintProperty(event_val, "wordCount", 0);

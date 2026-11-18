@@ -120,7 +120,7 @@ Value comp_render_part_to_json(const arrangement::ClipCompRenderPart& part) {
   return o;
 }
 
-Value clip_to_json(const arrangement::EditClip& c, uint32_t schema_version) {
+Value clip_to_json(const arrangement::EditClip& c) {
   Object o;
   o["id"] = static_cast<double>(c.id);
   o["track_id"] = static_cast<double>(c.track_id);
@@ -161,8 +161,7 @@ Value clip_to_json(const arrangement::EditClip& c, uint32_t schema_version) {
     }
     o["comp_segments"] = std::move(segments);
   }
-  if (schema_version >= SONARE_PROJECT_SCHEMA_VERSION_COMP_RENDER_PARTS &&
-      !c.comp_render_parts.empty()) {
+  if (!c.comp_render_parts.empty()) {
     Array parts;
     for (const auto& part : c.comp_render_parts) {
       parts.push_back(comp_render_part_to_json(part));

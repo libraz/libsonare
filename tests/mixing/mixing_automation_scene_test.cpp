@@ -262,8 +262,8 @@ TEST_CASE("Mixing Scene JSON parses exponent-form numbers it can emit", "[mixing
   const std::string json =
       "{\"version\":1,\"strips\":[{\"id\":\"tiny\",\"inputTrimDb\":1e-05,\"faderDb\":-3E+00,"
       "\"pan\":0,\"width\":1,\"muted\":false,\"soloed\":false,\"soloSafe\":false,"
-      "\"panMode\":0,\"dualPanLeft\":-1.25e-01,\"dualPanRight\":1.25E-01,"
-      "\"polarityInvertLeft\":false,\"polarityInvertRight\":false,\"panLaw\":0,"
+      "\"panMode\":\"balance\",\"dualPanLeft\":-1.25e-01,\"dualPanRight\":1.25E-01,"
+      "\"polarityInvertLeft\":false,\"polarityInvertRight\":false,\"panLaw\":\"const3Db\","
       "\"channelDelaySamples\":0,\"inserts\":[],\"sends\":[]}],\"buses\":[],"
       "\"vcaGroups\":[],\"connections\":[]}";
 
@@ -326,7 +326,7 @@ TEST_CASE("Mixing Scene JSON ignores unknown forward-compat fields", "[mixing]")
       "\"strips\":[{"
       "\"id\":\"vox\","
       "\"faderDb\":-4.5,"
-      "\"panLaw\":2,"
+      "\"panLaw\":\"const6Db\","
       "\"channelDelaySamples\":9,"
       "\"futureStripScalar\":\"hello\","
       "\"futureStripObject\":{\"a\":1,\"b\":[{\"c\":2}]},"

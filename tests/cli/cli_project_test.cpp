@@ -164,7 +164,7 @@ TEST_CASE("CLI project command group", "[cli]") {
     const std::string wav = unique_temp_path(".wav");
     {
       std::ofstream out(project);
-      out << R"({"version":1,"sample_rate":44100.5,"tracks":[],"clips":[]})";
+      out << R"({"version":7,"sample_rate":44100.5,"tracks":[],"clips":[]})";
     }
     const SplitResult result =
         exec_command_split(CLI + " project bounce --in " + project + " -o " + wav + " --frames 64");
@@ -219,7 +219,7 @@ TEST_CASE("CLI project command group", "[cli]") {
     {
       std::ofstream file(invalid);
       file << R"json({
-        "version": 1,
+        "version": 7,
         "sample_rate": 48000,
         "tempo_segments": [{"start_ppq": 0, "bpm": 120, "start_sample": 0, "end_bpm": 90}],
         "sources": [{"kind": 0, "id": 1, "uri": "missing.wav", "channel_count": 1,
@@ -325,7 +325,7 @@ TEST_CASE("CLI project command group", "[cli]") {
     const std::string canonical = unique_temp_path("_warning_canonical.json");
     {
       std::ofstream file(project);
-      file << R"({"version":1,"clips":[{"id":1,"track_id":99,"source_id":99,)"
+      file << R"({"version":7,"clips":[{"id":1,"track_id":99,"source_id":99,)"
               R"("length_ppq":1.0}]})";
     }
 

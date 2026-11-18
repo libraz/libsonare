@@ -302,7 +302,7 @@ TEST_CASE("applied timeline binds a 1:1 scene strip like the project bounce mixe
   TestProject built = build_project(tone);
   const char* scene =
       R"({"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"lead",)"
-      R"("faderDb":-4.0,"pan":0.4,"eq":{"enabled":true,"bands":[{"type":"Peak",)"
+      R"("faderDb":-4.0,"pan":0.4,"eq":{"enabled":true,"bands":[{"type":"peak",)"
       R"("frequencyHz":1000.0,"gainDb":6.0,"q":0.7,"enabled":true}]}}]})";
   REQUIRE(sonare_project_set_mixer_scene_json(built.project, scene) == SONARE_OK);
   const std::vector<float> unrouted = project_bounce(built.project);
@@ -499,7 +499,7 @@ TEST_CASE("compile_timeline returns no handle and the diagnostics when compile f
           "[timeline-apply][c_api]") {
   // A clip pointing at a source id the project does not hold is a compile error.
   const std::string json =
-      R"({"version":1,"sample_rate":48000,"tracks":[{"id":1,"name":"audio","kind":0,)"
+      R"({"version":7,"sample_rate":48000,"tracks":[{"id":1,"name":"audio","kind":0,)"
       R"("channel_strip_ref":"","output_target":"","midi_destination_id":0,)"
       R"("automation_lanes":[]}],"clips":[{"id":1,"track_id":1,"source_id":99,)"
       R"("start_ppq":0,"length_ppq":1,"source_offset_ppq":0,"gain":1,)"

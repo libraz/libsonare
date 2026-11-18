@@ -105,16 +105,13 @@ transport::TimeSignatureSegment time_signature_from_json(const Value& v) {
   return s;
 }
 
-automation::AutomationLane automation_lane_from_json(const Value& v, uint32_t schema_version) {
-  automation::AutomationTargetKind target_kind = automation::AutomationTargetKind::kOpaque;
-  if (schema_version >= 2u) {
-    const uint32_t ordinal = uint_or(v, "target_kind", 0);
-    if (ordinal > kMaxSerializedOrdinal<automation::AutomationTargetKind>) {
-      throw SonareException(ErrorCode::InvalidFormat,
-                            "automation target kind ordinal is out of range");
-    }
-    target_kind = static_cast<automation::AutomationTargetKind>(ordinal);
+automation::AutomationLane automation_lane_from_json(const Value& v) {
+  const uint32_t ordinal = uint_or(v, "target_kind", 0);
+  if (ordinal > kMaxSerializedOrdinal<automation::AutomationTargetKind>) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          "automation target kind ordinal is out of range");
   }
+  const auto target_kind = static_cast<automation::AutomationTargetKind>(ordinal);
   automation::AutomationLane lane(uint_or(v, "target_param_id", 0), target_kind);
   std::vector<automation::Breakpoint> points;
   if (const auto* arr = array_at(v, "points")) {
@@ -131,7 +128,7 @@ automation::AutomationLane automation_lane_from_json(const Value& v, uint32_t sc
   return lane;
 }
 
-arrangement::Track track_from_json(const Value& v, uint32_t schema_version) {
+arrangement::Track track_from_json(const Value& v) {
   arrangement::Track t;
   t.id = uint_or(v, "id", 0);
   t.name = str_or(v, "name", "");
@@ -152,7 +149,7 @@ arrangement::Track track_from_json(const Value& v, uint32_t schema_version) {
     // whole model by enforce_edit_api_invariants().
     for (const auto& lv : *arr) {
       t.automation_lanes.push_back(
-          automation_lane_from_json(object_element(lv, "automation_lanes"), schema_version));
+          automation_lane_from_json(object_element(lv, "automation_lanes")));
     }
   }
   return t;
@@ -165,14 +162,13 @@ arrangement::ClipFade fade_from_json(const Value& v) {
   return f;
 }
 
-arrangement::ClipTake take_from_json(const Value& v, uint32_t schema_version) {
+arrangement::ClipTake take_from_json(const Value& v) {
   arrangement::ClipTake take;
   take.id = uint_or(v, "id", 0);
   take.source_id = uint_or(v, "source_id", 0);
   take.source_offset_ppq = num_or(v, "source_offset_ppq", 0.0);
   take.name = str_or(v, "name", "");
-  if (schema_version >= SONARE_PROJECT_SCHEMA_VERSION_PHYSICAL_CLIP &&
-      v.contains("source_offset_seconds")) {
+  if (v.contains("source_offset_seconds")) {
     take.source_offset_seconds = num_or(v, "source_offset_seconds", 0.0);
   }
   take.partial = bool_or(v, "partial", false);
@@ -203,9 +199,7 @@ arrangement::ClipCompRenderPart comp_render_part_from_json(const Value& v) {
   return part;
 }
 
-arrangement::EditClip clip_from_json(const Value& v, uint32_t schema_version) {
-  // Physical fields are read from schema 3 on, as a schema-2 reader would ignore them.
-  const bool physical = schema_version >= SONARE_PROJECT_SCHEMA_VERSION_PHYSICAL_CLIP;
+arrangement::EditClip clip_from_json(const Value& v) {
   arrangement::EditClip c;
   c.id = uint_or(v, "id", 0);
   c.track_id = uint_or(v, "track_id", 0);
@@ -213,7 +207,7 @@ arrangement::EditClip clip_from_json(const Value& v, uint32_t schema_version) {
   c.start_ppq = num_or(v, "start_ppq", 0.0);
   c.length_ppq = num_or(v, "length_ppq", 0.0);
   c.source_offset_ppq = num_or(v, "source_offset_ppq", 0.0);
-  if (physical && v.contains("source_offset_seconds")) {
+  if (v.contains("source_offset_seconds")) {
     c.source_offset_seconds = num_or(v, "source_offset_seconds", 0.0);
   }
   c.gain = float_or(v, "gain", 1.0f, "clips[].gain");
@@ -222,8 +216,8 @@ arrangement::EditClip clip_from_json(const Value& v, uint32_t schema_version) {
   c.loop_mode = enum_or(v, "loop_mode", arrangement::LoopMode::kOff);
   c.loop_length_ppq = num_or(v, "loop_length_ppq", 0.0);
   c.loop_crossfade_ppq = num_or(v, "loop_crossfade_ppq", 0.0);
-  const bool has_loop_period = physical && v.contains("loop_period_seconds");
-  const bool has_loop_phase = physical && v.contains("loop_phase_seconds");
+  const bool has_loop_period = v.contains("loop_period_seconds");
+  const bool has_loop_phase = v.contains("loop_phase_seconds");
   if (has_loop_period != has_loop_phase) {
     throw SonareException(ErrorCode::InvalidFormat,
                           "loop_period_seconds and loop_phase_seconds must be supplied together");
@@ -238,7 +232,7 @@ arrangement::EditClip clip_from_json(const Value& v, uint32_t schema_version) {
   c.warp_mode = enum_or(v, "warp_mode", arrangement::WarpMode::kOff);
   if (const auto* arr = array_at(v, "takes")) {
     for (const auto& tv : *arr) {
-      c.takes.push_back(take_from_json(object_element(tv, "takes"), schema_version));
+      c.takes.push_back(take_from_json(object_element(tv, "takes")));
     }
   }
   c.active_take_id = uint_or(v, "active_take_id", 0);
@@ -247,12 +241,10 @@ arrangement::EditClip clip_from_json(const Value& v, uint32_t schema_version) {
       c.comp_segments.push_back(comp_segment_from_json(object_element(sv, "comp_segments")));
     }
   }
-  if (schema_version >= SONARE_PROJECT_SCHEMA_VERSION_COMP_RENDER_PARTS) {
-    if (const auto* arr = array_at(v, "comp_render_parts")) {
-      for (const auto& pv : *arr) {
-        c.comp_render_parts.push_back(
-            comp_render_part_from_json(object_element(pv, "comp_render_parts")));
-      }
+  if (const auto* arr = array_at(v, "comp_render_parts")) {
+    for (const auto& pv : *arr) {
+      c.comp_render_parts.push_back(
+          comp_render_part_from_json(object_element(pv, "comp_render_parts")));
     }
   }
   return c;
@@ -370,18 +362,17 @@ void sidecar_fields_from_json(const Value& v, arrangement::AssistSidecar* out) {
   out->region_end_ppq = num_or(v, "region_end_ppq", 0.0);
 }
 
-bool migrate_assist_module_id(uint32_t schema_version, std::string* module_id) {
+bool earlier_assist_module_id(const std::string& module_id, std::string* current) {
   static const std::pair<const char*, const char*> kRenamed[] = {
       {"sonare.builtin.chord_tone_generator", "sonare.builtin.chordToneGenerator"},
       {"sonare.builtin.diatonic_harmonizer", "sonare.builtin.diatonicHarmonizer"},
   };
   for (const auto& [old_id, new_id] : kRenamed) {
-    if (*module_id != old_id) continue;
-    if (schema_version >= SONARE_PROJECT_SCHEMA_VERSION_CAMEL_MODULE_IDS) return false;
-    *module_id = new_id;
+    if (module_id != old_id) continue;
+    *current = new_id;
     return true;
   }
-  return true;
+  return false;
 }
 
 bool sidecar_from_borrowed_payload(const std::string& encoded_payload,

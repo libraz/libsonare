@@ -566,11 +566,10 @@ StreamingLoudnessGain streaming_loudness_gain_stereo(const MasteringChainConfig&
 //   "dynamics.transientShaper.attackGainDb"
 //   "dynamics.compressor.thresholdDb"
 //   "dynamics.multibandComp.enabled"
-//   "dynamics.multibandComp.lowCutoffHz"          (shorthand for cutoff0Hz)
 //   "dynamics.multibandComp.cutoff<i>Hz"          (edits one cutoff in place)
-//   "dynamics.multibandComp.band<i>.<field>"      (field of dynamics.compressor)
 //   "dynamics.multibandComp.crossover.cutoffsHz.<i>" (replaces the list; bands = n + 1)
-//   "dynamics.multibandComp.bands.<i>.<field>"    (same field as band<i>.<field>)
+//   "dynamics.multibandComp.bands.<i>.<field>"    (field of dynamics.compressor)
+//   "dynamics.multibandComp.{slope,mode,firKernelSize}"
 //   "saturation.tape.driveDb"
 //   "saturation.exciter.amount"
 //   "spectral.airBand.amount"
@@ -595,16 +594,14 @@ StreamingLoudnessGain streaming_loudness_gain_stereo(const MasteringChainConfig&
 // spellings of one multiband field in one call are refused.
 // ---------------------------------------------------------------------------
 
-/// @brief The canonical spelling of a flat chain key.
-/// @details Folds the short aliases (`repair.nFft`, `eq.tiltDb`, the multiband
-///          low/mid/high shorthand) and the multiband array spellings onto one
-///          key per field: `crossover.{slope,mode,firKernelSize}` become
-///          `dynamics.multibandComp.{slope,mode,firKernelSize}`,
-///          `bands.<i>.<field>` becomes `band<i>.<field>`, `lowCutoffHz` /
-///          `highCutoffHz` become `cutoff0Hz` / `cutoff1Hz`. A
-///          `crossover.cutoffsHz.<i>` list element stays its own canonical form.
-///          Whether the result names a field is decided where it is applied.
+/// @brief The internal spelling of a flat chain key.
+/// @details `bands.<i>.<field>` becomes `band<i>.<field>`; every other current key is returned
+///          as given. A retired spelling (`repair.nFft`, `eq.tiltDb`, `crossover.slope`,
+///          `band<i>.<field>`, `lowCutoffHz`, the low/mid/high shorthand, ...) is refused with
+///          the current key named. Whether the result names a field is decided where it is
+///          applied.
 /// @param storage Holds a rewritten key; the return refers to it or to @p key.
+/// @throws SonareException (InvalidParameter) for a retired spelling.
 const std::string& canonical_chain_param_key(const std::string& key, std::string* storage);
 
 /// @brief Reads one field of the multiband stage named by a canonical key.
@@ -646,7 +643,7 @@ std::string chain_config_to_json(const MasteringChainConfig& config);
 /// @details This control-side helper intentionally does not serialize JSON or
 ///          apply document-size limits. Streaming automation uses it to detect
 ///          a repeated value before asking a realtime-safe processor to refresh
-///          coefficients. @p key may be any spelling canonical_chain_param_key
+///          coefficients. @p key may be any key canonical_chain_param_key
 ///          accepts, so every multiband band and cutoff is readable.
 /// @return The field value, or @c std::nullopt when the key is not a numeric
 ///         flat field.

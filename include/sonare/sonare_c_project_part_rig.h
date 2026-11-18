@@ -39,12 +39,13 @@ typedef enum {
 /// @param part GS part slot 0-15, or @ref SONARE_PART_RIG_ALL_PARTS.
 /// @param mode A @ref SonarePartRigMode value.
 /// @param inserts_json Required for @c SONARE_PART_RIG_CHAIN, NULL otherwise: a
-///        JSON array of 1-8 objects `{"processor": "<name>", "params": "<JSON
-///        object as a string>"}` (@c params defaults to "{}"). Every processor
+///        JSON array of 1-8 objects `{"processor": "<name>", "params": {...}}`
+///        (@c params defaults to an empty object). Every processor
 ///        must be a known insert, accept its params, and report at most 256
 ///        samples of latency at 48 kHz.
 /// @return SONARE_ERROR_INVALID_FORMAT when @p inserts_json does not parse or is
-///         not an array of objects with string @c processor / @c params;
+///         not an array of objects with a string @c processor and an object
+///         @c params;
 ///         SONARE_ERROR_INVALID_PARAMETER for a part out of range, an unknown
 ///         mode, inserts that do not match the mode, or an invalid chain
 ///         (stage count, unknown processor, bad params, excess latency);

@@ -4,236 +4,6 @@
     "project": 2
   },
   "chain": {
-    "aliases": [
-      {
-        "aliases": [
-          "repair.denoise"
-        ],
-        "key": "repair.denoise.enabled"
-      },
-      {
-        "aliases": [
-          "repair.nFft"
-        ],
-        "key": "repair.denoise.nFft"
-      },
-      {
-        "aliases": [
-          "repair.hopLength"
-        ],
-        "key": "repair.denoise.hopLength"
-      },
-      {
-        "aliases": [
-          "repair.ddAlpha"
-        ],
-        "key": "repair.denoise.ddAlpha"
-      },
-      {
-        "aliases": [
-          "repair.reductionDb"
-        ],
-        "key": "repair.denoise.reductionDb"
-      },
-      {
-        "aliases": [
-          "repair.gainFloor"
-        ],
-        "key": "repair.denoise.gainFloor"
-      },
-      {
-        "aliases": [
-          "eq.tiltDb"
-        ],
-        "key": "eq.tilt.tiltDb"
-      },
-      {
-        "aliases": [
-          "eq.pivotHz"
-        ],
-        "key": "eq.tilt.pivotHz"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.crossover.slope"
-        ],
-        "key": "dynamics.multibandComp.slope"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.crossover.mode"
-        ],
-        "key": "dynamics.multibandComp.mode"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.crossover.firKernelSize"
-        ],
-        "key": "dynamics.multibandComp.firKernelSize"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.cutoff<i>Hz"
-        ],
-        "key": "dynamics.multibandComp.crossover.cutoffsHz.<i>"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.lowCutoffHz"
-        ],
-        "key": "dynamics.multibandComp.crossover.cutoffsHz.0"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.highCutoffHz"
-        ],
-        "key": "dynamics.multibandComp.crossover.cutoffsHz.1"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.band<i>.thresholdDb"
-        ],
-        "key": "dynamics.multibandComp.bands.<i>.thresholdDb"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.band<i>.ratio"
-        ],
-        "key": "dynamics.multibandComp.bands.<i>.ratio"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.band<i>.attackMs"
-        ],
-        "key": "dynamics.multibandComp.bands.<i>.attackMs"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.band<i>.releaseMs"
-        ],
-        "key": "dynamics.multibandComp.bands.<i>.releaseMs"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.band<i>.kneeDb"
-        ],
-        "key": "dynamics.multibandComp.bands.<i>.kneeDb"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.band<i>.makeupGainDb"
-        ],
-        "key": "dynamics.multibandComp.bands.<i>.makeupGainDb"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.band<i>.autoMakeup"
-        ],
-        "key": "dynamics.multibandComp.bands.<i>.autoMakeup"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.band<i>.detector"
-        ],
-        "key": "dynamics.multibandComp.bands.<i>.detector"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.band<i>.sidechainHpfEnabled"
-        ],
-        "key": "dynamics.multibandComp.bands.<i>.sidechainHpfEnabled"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.band<i>.sidechainHpfHz"
-        ],
-        "key": "dynamics.multibandComp.bands.<i>.sidechainHpfHz"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.band<i>.pdrTimeMs"
-        ],
-        "key": "dynamics.multibandComp.bands.<i>.pdrTimeMs"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.band<i>.pdrReleaseScale"
-        ],
-        "key": "dynamics.multibandComp.bands.<i>.pdrReleaseScale"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.lowThresholdDb"
-        ],
-        "key": "dynamics.multibandComp.bands.0.thresholdDb"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.lowRatio"
-        ],
-        "key": "dynamics.multibandComp.bands.0.ratio"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.lowAttackMs"
-        ],
-        "key": "dynamics.multibandComp.bands.0.attackMs"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.lowReleaseMs"
-        ],
-        "key": "dynamics.multibandComp.bands.0.releaseMs"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.midThresholdDb"
-        ],
-        "key": "dynamics.multibandComp.bands.1.thresholdDb"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.midRatio"
-        ],
-        "key": "dynamics.multibandComp.bands.1.ratio"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.midAttackMs"
-        ],
-        "key": "dynamics.multibandComp.bands.1.attackMs"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.midReleaseMs"
-        ],
-        "key": "dynamics.multibandComp.bands.1.releaseMs"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.highThresholdDb"
-        ],
-        "key": "dynamics.multibandComp.bands.2.thresholdDb"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.highRatio"
-        ],
-        "key": "dynamics.multibandComp.bands.2.ratio"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.highAttackMs"
-        ],
-        "key": "dynamics.multibandComp.bands.2.attackMs"
-      },
-      {
-        "aliases": [
-          "dynamics.multibandComp.highReleaseMs"
-        ],
-        "key": "dynamics.multibandComp.bands.2.releaseMs"
-      }
-    ],
     "lists": [
       {
         "key": "dynamics.multibandComp.crossover.cutoffsHz",
@@ -312,6 +82,26 @@
       {
         "choices": null,
         "coupledWith": [],
+        "default": 513,
+        "dependsOn": [],
+        "id": null,
+        "max": 65535,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": 1,
+        "minExclusive": false,
+        "name": "dynamics.multibandComp.crossover.firKernelSize",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "number",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": "samples"
+      },
+      {
+        "choices": null,
+        "coupledWith": [],
         "default": false,
         "dependsOn": [],
         "id": null,
@@ -328,26 +118,6 @@
         "uiMax": null,
         "uiMin": null,
         "unit": null
-      },
-      {
-        "choices": null,
-        "coupledWith": [],
-        "default": 513,
-        "dependsOn": [],
-        "id": null,
-        "max": 65535,
-        "maxExclusive": false,
-        "maxRelativeTo": null,
-        "min": 1,
-        "minExclusive": false,
-        "name": "dynamics.multibandComp.firKernelSize",
-        "rtSafe": false,
-        "scale": "linear",
-        "slot": null,
-        "type": "number",
-        "uiMax": null,
-        "uiMin": null,
-        "unit": "samples"
       },
       {
         "choices": null,
@@ -7500,307 +7270,6 @@
       "category": "effects",
       "causal": true,
       "channelPolicy": "stereoPairOnly",
-      "id": "effects.reverb.dattorro",
-      "kind": "realtime",
-      "latencySamples": 0,
-      "params": [
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0.5,
-          "dependsOn": [],
-          "id": 0,
-          "max": 0.98,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "decay",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": null,
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "none"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0.5,
-          "dependsOn": [],
-          "id": 1,
-          "max": 1,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "damping",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": null,
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "none"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0.35,
-          "dependsOn": [],
-          "id": 2,
-          "max": 1,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "dryWet",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": null,
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "none"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0.5,
-          "dependsOn": [],
-          "id": 3,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "modRateHz",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": null,
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 6,
-          "dependsOn": [],
-          "id": 4,
-          "max": 672,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "modDepthSamples",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": null,
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "samples"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 5,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "dampingHz",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": null,
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": -120,
-          "dependsOn": [],
-          "id": 6,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "gateThresholdDb",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": null,
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "dB"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 100,
-          "dependsOn": [],
-          "id": 7,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "gateHoldMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": null,
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": [
-            {
-              "name": "normal",
-              "value": 0
-            },
-            {
-              "name": "reverse",
-              "value": 1
-            },
-            {
-              "name": "sweep1",
-              "value": 2
-            },
-            {
-              "name": "sweep2",
-              "value": 3
-            }
-          ],
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 8,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "gateType",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": null,
-          "type": "enum",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": null,
-          "dependsOn": [],
-          "id": 9,
-          "max": 4000,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "preDelayMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": null,
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 10,
-          "max": 6,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "character",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": null,
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "none"
-        },
-        {
-          "choices": [
-            {
-              "name": "crossfade",
-              "value": 0
-            },
-            {
-              "name": "twoRamps",
-              "value": 1
-            }
-          ],
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 11,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "mixLaw",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": null,
-          "type": "enum",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": null,
-          "dependsOn": [],
-          "id": null,
-          "max": 62.0087,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0.05,
-          "minExclusive": false,
-          "name": "decaySec",
-          "rtSafe": false,
-          "scale": "log",
-          "slot": null,
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "s"
-        }
-      ],
-      "realtimeCost": "moderate",
-      "realtimeInsertable": true,
-      "slots": [],
-      "stereoOnly": false,
-      "tailSamples": 193266
-    },
-    {
-      "category": "effects",
-      "causal": true,
-      "channelPolicy": "stereoPairOnly",
       "id": "effects.reverb.fdn",
       "kind": "realtime",
       "latencySamples": 0,
@@ -11037,26 +10506,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band0.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band0",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "peak",
@@ -11128,26 +10577,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band1.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band1",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -11223,26 +10652,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band2.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band2",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "peak",
@@ -11314,26 +10723,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band3.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band3",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -11409,26 +10798,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band4.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band4",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "peak",
@@ -11500,26 +10869,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band5.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band5",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -11595,26 +10944,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band6.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band6",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "peak",
@@ -11686,26 +11015,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band7.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band7",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -13434,26 +12743,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band0.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band0",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -13940,26 +13229,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band1.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band1",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -14450,26 +13719,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band10.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band10",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -14956,26 +14205,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band11.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band11",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -15466,26 +14695,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band12.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band12",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -15972,26 +15181,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band13.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band13",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -16482,26 +15671,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band14.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band14",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -16988,26 +16157,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band15.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band15",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -17498,26 +16647,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band16.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band16",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -18004,26 +17133,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band17.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band17",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -18514,26 +17623,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band18.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band18",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -19020,26 +18109,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band19.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band19",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -19530,26 +18599,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band2.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band2",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -20036,26 +19085,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band20.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band20",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -20546,26 +19575,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band21.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band21",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -21052,26 +20061,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band22.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band22",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -21562,26 +20551,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band23.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band23",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -22068,26 +21037,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band3.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band3",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -22578,26 +21527,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band4.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band4",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -23084,26 +22013,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band5.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band5",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -23594,26 +22503,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band6.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band6",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -24100,26 +22989,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band7.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band7",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -24610,26 +23479,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band8.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band8",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -25116,26 +23965,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band9.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band9",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -28115,26 +26944,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band0.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band0",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -28609,26 +27418,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band1.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band1",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -29107,26 +27896,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band10.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band10",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -29601,26 +28370,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band11.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band11",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -30099,26 +28848,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band12.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band12",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -30593,26 +29322,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band13.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band13",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -31091,26 +29800,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band14.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band14",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -31585,26 +30274,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band15.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band15",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -32083,26 +30752,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band16.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band16",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -32577,26 +31226,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band17.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band17",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -33075,26 +31704,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band18.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band18",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -33569,26 +32178,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band19.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band19",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -34067,26 +32656,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band2.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band2",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -34561,26 +33130,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band20.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band20",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -35059,26 +33608,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band21.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band21",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -35553,26 +34082,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band22.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band22",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -36051,26 +34560,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band23.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band23",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -36545,26 +35034,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band3.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band3",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -37043,26 +35512,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band4.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band4",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -37537,26 +35986,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band5.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band5",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -38035,26 +36464,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band6.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band6",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -38529,26 +36938,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band7.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band7",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -39027,26 +37416,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band8.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band8",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -39521,26 +37890,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band9.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band9",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -43200,26 +41549,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand0.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand0",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -43698,26 +42027,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand1.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand1",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -44200,26 +42509,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand10.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand10",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -44698,26 +42987,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand11.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand11",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -45200,26 +43469,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand12.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand12",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -45698,26 +43947,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand13.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand13",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -46200,26 +44429,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand14.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand14",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -46698,26 +44907,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand15.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand15",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -47200,26 +45389,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand16.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand16",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -47698,26 +45867,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand17.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand17",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -48200,26 +46349,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand18.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand18",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -48698,26 +46827,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand19.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand19",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -49200,26 +47309,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand2.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand2",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -49698,26 +47787,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand20.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand20",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -50200,26 +48269,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand21.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand21",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -50698,26 +48747,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand22.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand22",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -51200,26 +49229,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand23.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand23",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -51698,26 +49707,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand3.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand3",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -52200,26 +50189,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand4.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand4",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -52698,26 +50667,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand5.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand5",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -53200,26 +51149,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand6.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand6",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -53698,26 +51627,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand7.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand7",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -54200,26 +52109,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand8.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand8",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -54698,26 +52587,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "midBand9.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "midBand9",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -55200,26 +53069,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand0.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand0",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -55698,26 +53547,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand1.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand1",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -56200,26 +54029,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand10.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand10",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -56698,26 +54507,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand11.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand11",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -57200,26 +54989,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand12.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand12",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -57698,26 +55467,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand13.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand13",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -58200,26 +55949,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand14.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand14",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -58698,26 +56427,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand15.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand15",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -59200,26 +56909,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand16.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand16",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -59698,26 +57387,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand17.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand17",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -60200,26 +57869,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand18.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand18",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -60698,26 +58347,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand19.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand19",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -61200,26 +58829,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand2.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand2",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -61698,26 +59307,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand20.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand20",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -62200,26 +59789,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand21.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand21",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -62698,26 +60267,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand22.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand22",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -63200,26 +60749,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand23.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand23",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -63698,26 +61227,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand3.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand3",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -64200,26 +61709,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand4.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand4",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -64698,26 +62187,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand5.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand5",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -65200,26 +62669,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand6.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand6",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -65698,26 +63147,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand7.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand7",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -66200,26 +63629,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand8.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand8",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -66698,26 +64107,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "sideBand9.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "sideBand9",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -68944,26 +66333,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band0.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band0",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -69442,26 +66811,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band1.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band1",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -69944,26 +67293,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band10.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band10",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -70442,26 +67771,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band11.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band11",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -70944,26 +68253,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band12.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band12",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -71442,26 +68731,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band13.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band13",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -71944,26 +69213,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band14.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band14",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -72442,26 +69691,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band15.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band15",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -72944,26 +70173,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band16.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band16",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -73442,26 +70651,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band17.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band17",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -73944,26 +71133,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band18.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band18",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -74442,26 +71611,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band19.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band19",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -74944,26 +72093,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band2.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band2",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -75442,26 +72571,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band20.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band20",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -75944,26 +73053,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band21.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band21",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -76442,26 +73531,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band22.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band22",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -76944,26 +74013,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band23.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band23",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -77442,26 +74491,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band3.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band3",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -77944,26 +74973,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band4.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band4",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -78442,26 +75451,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band5.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band5",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -78944,26 +75933,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band6.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band6",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -79442,26 +76411,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band7.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band7",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -79944,26 +76893,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band8.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band8",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -80442,26 +77371,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band9.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band9",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -82544,26 +79453,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band0.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band0",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -83042,26 +79931,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band1.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band1",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -83544,26 +80413,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band10.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band10",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -84042,26 +80891,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band11.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band11",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -84544,26 +81373,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band12.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band12",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -85042,26 +81851,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band13.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band13",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -85544,26 +82333,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band14.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band14",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -86042,26 +82811,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band15.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band15",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -86544,26 +83293,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band16.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band16",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -87042,26 +83771,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band17.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band17",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -87544,26 +84253,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band18.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band18",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -88042,26 +84731,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band19.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band19",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -88544,26 +85213,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band2.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band2",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -89042,26 +85691,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band20.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band20",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -89544,26 +86173,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band21.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band21",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -90042,26 +86651,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band22.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band22",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -90544,26 +87133,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band23.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band23",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -91042,26 +87611,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band3.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band3",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -91544,26 +88093,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band4.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band4",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -92042,26 +88571,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band5.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band5",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -92544,26 +89053,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band6.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band6",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -93042,26 +89531,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band7.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band7",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -93544,26 +90013,6 @@
           "unit": null
         },
         {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band8.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band8",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
           "choices": [
             {
               "name": "inherit",
@@ -94042,26 +90491,6 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": null,
-          "minExclusive": false,
-          "name": "band9.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band9",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": [
@@ -97533,26 +93962,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 10,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band0.dyn0.lookaheadMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band0.dyn0",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1000,
           "dependsOn": [],
           "id": 11,
@@ -97762,26 +94171,6 @@
           "min": 0,
           "minExclusive": false,
           "name": "band0.dyn1.detectorDelayMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band0.dyn1",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 21,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band0.dyn1.lookaheadMs",
           "rtSafe": true,
           "scale": "linear",
           "slot": "band0.dyn1",
@@ -98013,26 +94402,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 32,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band0.dyn2.lookaheadMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band0.dyn2",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1000,
           "dependsOn": [],
           "id": 33,
@@ -98242,26 +94611,6 @@
           "min": 0,
           "minExclusive": false,
           "name": "band0.dyn3.detectorDelayMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band0.dyn3",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 43,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band0.dyn3.lookaheadMs",
           "rtSafe": true,
           "scale": "linear",
           "slot": "band0.dyn3",
@@ -98493,26 +94842,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 54,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band0.dyn4.lookaheadMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band0.dyn4",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1000,
           "dependsOn": [],
           "id": 55,
@@ -98722,26 +95051,6 @@
           "min": 0,
           "minExclusive": false,
           "name": "band0.dyn5.detectorDelayMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band0.dyn5",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 65,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band0.dyn5.lookaheadMs",
           "rtSafe": true,
           "scale": "linear",
           "slot": "band0.dyn5",
@@ -98973,26 +95282,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 76,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band0.dyn6.lookaheadMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band0.dyn6",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1000,
           "dependsOn": [],
           "id": 77,
@@ -99202,26 +95491,6 @@
           "min": 0,
           "minExclusive": false,
           "name": "band0.dyn7.detectorDelayMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band0.dyn7",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 87,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band0.dyn7.lookaheadMs",
           "rtSafe": true,
           "scale": "linear",
           "slot": "band0.dyn7",
@@ -99453,26 +95722,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 98,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band1.dyn0.lookaheadMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band1.dyn0",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1000,
           "dependsOn": [],
           "id": 99,
@@ -99682,26 +95931,6 @@
           "min": 0,
           "minExclusive": false,
           "name": "band1.dyn1.detectorDelayMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band1.dyn1",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 109,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band1.dyn1.lookaheadMs",
           "rtSafe": true,
           "scale": "linear",
           "slot": "band1.dyn1",
@@ -99933,26 +96162,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 120,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band1.dyn2.lookaheadMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band1.dyn2",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1000,
           "dependsOn": [],
           "id": 121,
@@ -100162,26 +96371,6 @@
           "min": 0,
           "minExclusive": false,
           "name": "band1.dyn3.detectorDelayMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band1.dyn3",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 131,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band1.dyn3.lookaheadMs",
           "rtSafe": true,
           "scale": "linear",
           "slot": "band1.dyn3",
@@ -100413,26 +96602,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 142,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band1.dyn4.lookaheadMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band1.dyn4",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1000,
           "dependsOn": [],
           "id": 143,
@@ -100642,26 +96811,6 @@
           "min": 0,
           "minExclusive": false,
           "name": "band1.dyn5.detectorDelayMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band1.dyn5",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 153,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band1.dyn5.lookaheadMs",
           "rtSafe": true,
           "scale": "linear",
           "slot": "band1.dyn5",
@@ -100893,26 +97042,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 164,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band1.dyn6.lookaheadMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band1.dyn6",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1000,
           "dependsOn": [],
           "id": 165,
@@ -101122,26 +97251,6 @@
           "min": 0,
           "minExclusive": false,
           "name": "band1.dyn7.detectorDelayMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band1.dyn7",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 175,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band1.dyn7.lookaheadMs",
           "rtSafe": true,
           "scale": "linear",
           "slot": "band1.dyn7",
@@ -101373,26 +97482,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 186,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band2.dyn0.lookaheadMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band2.dyn0",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1000,
           "dependsOn": [],
           "id": 187,
@@ -101602,26 +97691,6 @@
           "min": 0,
           "minExclusive": false,
           "name": "band2.dyn1.detectorDelayMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band2.dyn1",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 197,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band2.dyn1.lookaheadMs",
           "rtSafe": true,
           "scale": "linear",
           "slot": "band2.dyn1",
@@ -101853,26 +97922,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 208,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band2.dyn2.lookaheadMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band2.dyn2",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1000,
           "dependsOn": [],
           "id": 209,
@@ -102082,26 +98131,6 @@
           "min": 0,
           "minExclusive": false,
           "name": "band2.dyn3.detectorDelayMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band2.dyn3",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 219,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band2.dyn3.lookaheadMs",
           "rtSafe": true,
           "scale": "linear",
           "slot": "band2.dyn3",
@@ -102333,26 +98362,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 230,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band2.dyn4.lookaheadMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band2.dyn4",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1000,
           "dependsOn": [],
           "id": 231,
@@ -102562,26 +98571,6 @@
           "min": 0,
           "minExclusive": false,
           "name": "band2.dyn5.detectorDelayMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band2.dyn5",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 241,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band2.dyn5.lookaheadMs",
           "rtSafe": true,
           "scale": "linear",
           "slot": "band2.dyn5",
@@ -102813,26 +98802,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 252,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band2.dyn6.lookaheadMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band2.dyn6",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1000,
           "dependsOn": [],
           "id": 253,
@@ -103042,26 +99011,6 @@
           "min": 0,
           "minExclusive": false,
           "name": "band2.dyn7.detectorDelayMs",
-          "rtSafe": true,
-          "scale": "linear",
-          "slot": "band2.dyn7",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": 263,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band2.dyn7.lookaheadMs",
           "rtSafe": true,
           "scale": "linear",
           "slot": "band2.dyn7",
@@ -104905,26 +100854,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band3.dyn0.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band3.dyn0",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -105214,26 +101143,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band3.dyn1.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band3.dyn1",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -105531,26 +101440,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band3.dyn2.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band3.dyn2",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -105840,26 +101729,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band3.dyn3.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band3.dyn3",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -106157,26 +102026,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band3.dyn4.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band3.dyn4",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -106466,26 +102315,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band3.dyn5.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band3.dyn5",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -106783,26 +102612,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band3.dyn6.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band3.dyn6",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -107092,26 +102901,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band3.dyn7.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band3.dyn7",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -107409,26 +103198,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band4.dyn0.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band4.dyn0",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -107718,26 +103487,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band4.dyn1.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band4.dyn1",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -108035,26 +103784,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band4.dyn2.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band4.dyn2",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -108344,26 +104073,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band4.dyn3.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band4.dyn3",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -108661,26 +104370,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band4.dyn4.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band4.dyn4",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -108970,26 +104659,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band4.dyn5.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band4.dyn5",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -109287,26 +104956,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band4.dyn6.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band4.dyn6",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -109596,26 +105245,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band4.dyn7.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band4.dyn7",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -109913,26 +105542,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band5.dyn0.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band5.dyn0",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -110222,26 +105831,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band5.dyn1.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band5.dyn1",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -110539,26 +106128,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band5.dyn2.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band5.dyn2",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -110848,26 +106417,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band5.dyn3.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band5.dyn3",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -111165,26 +106714,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band5.dyn4.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band5.dyn4",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -111474,26 +107003,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band5.dyn5.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band5.dyn5",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -111791,26 +107300,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band5.dyn6.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band5.dyn6",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -112100,26 +107589,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band5.dyn7.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band5.dyn7",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -112417,26 +107886,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band6.dyn0.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band6.dyn0",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -112726,26 +108175,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band6.dyn1.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band6.dyn1",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -113043,26 +108472,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band6.dyn2.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band6.dyn2",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -113352,26 +108761,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band6.dyn3.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band6.dyn3",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -113669,26 +109058,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band6.dyn4.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band6.dyn4",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -113978,26 +109347,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band6.dyn5.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band6.dyn5",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -114295,26 +109644,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band6.dyn6.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band6.dyn6",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -114604,26 +109933,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band6.dyn7.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band6.dyn7",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -114921,26 +110230,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band7.dyn0.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band7.dyn0",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -115230,26 +110519,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band7.dyn1.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band7.dyn1",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -115547,26 +110816,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band7.dyn2.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band7.dyn2",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -115856,26 +111105,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band7.dyn3.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band7.dyn3",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -116173,26 +111402,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band7.dyn4.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band7.dyn4",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -116482,26 +111691,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band7.dyn5.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band7.dyn5",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -116799,26 +111988,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band7.dyn6.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band7.dyn6",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -117108,26 +112277,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band7.dyn7.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band7.dyn7",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -117425,26 +112574,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band8.dyn0.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band8.dyn0",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -117734,26 +112863,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band8.dyn1.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band8.dyn1",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -118051,26 +113160,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band8.dyn2.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band8.dyn2",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -118360,26 +113449,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band8.dyn3.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band8.dyn3",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -118677,26 +113746,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band8.dyn4.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band8.dyn4",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -118986,26 +114035,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band8.dyn5.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band8.dyn5",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,
@@ -119303,26 +114332,6 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band8.dyn6.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band8.dyn6",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
           "default": 1,
           "dependsOn": [],
           "id": null,
@@ -119612,26 +114621,6 @@
           "uiMax": 20000,
           "uiMin": 20,
           "unit": "Hz"
-        },
-        {
-          "choices": null,
-          "coupledWith": [],
-          "default": 0,
-          "dependsOn": [],
-          "id": null,
-          "max": null,
-          "maxExclusive": false,
-          "maxRelativeTo": null,
-          "min": 0,
-          "minExclusive": false,
-          "name": "band8.dyn7.lookaheadMs",
-          "rtSafe": false,
-          "scale": "linear",
-          "slot": "band8.dyn7",
-          "type": "number",
-          "uiMax": null,
-          "uiMin": null,
-          "unit": "ms"
         },
         {
           "choices": null,

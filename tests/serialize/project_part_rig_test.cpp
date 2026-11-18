@@ -22,8 +22,8 @@ using sonare::midi::PartRigMode;
 using sonare::midi::PartRigStage;
 
 constexpr const char* kChainJson =
-    R"([{"processor":"saturation.softClipper","params":"{}"},)"
-    R"({"processor":"saturation.softClipper","params":"{\"drive\":0.5}"}])";
+    R"([{"processor":"saturation.softClipper","params":{}},)"
+    R"({"processor":"saturation.softClipper","params":{"drive":0.5}}])";
 
 struct ProjectHandle {
   SonareProject* p = nullptr;
@@ -47,14 +47,14 @@ double version_of(const std::string& text) {
 
 }  // namespace
 
-TEST_CASE("empty project keeps its lowest schema version", "[serialize][part_rig]") {
+TEST_CASE("empty project is written at the current schema version", "[serialize][part_rig]") {
   ProjectHandle h;
   const std::string text = serialize(h.p);
-  CHECK(version_of(text) == 1.0);
+  CHECK(version_of(text) == sonare::serialize::SONARE_PROJECT_SCHEMA_VERSION);
   CHECK(json::parse(text).find("part_rigs") == nullptr);
 }
 
-TEST_CASE("part rigs round-trip as schema version 5", "[serialize][part_rig]") {
+TEST_CASE("part rigs round-trip", "[serialize][part_rig]") {
   ProjectHandle h;
   REQUIRE(sonare_project_set_part_rig(h.p, 5, 2, SONARE_PART_RIG_CHAIN, kChainJson) == SONARE_OK);
   REQUIRE(sonare_project_set_part_rig(h.p, 5, SONARE_PART_RIG_ALL_PARTS, SONARE_PART_RIG_NONE,
@@ -62,7 +62,7 @@ TEST_CASE("part rigs round-trip as schema version 5", "[serialize][part_rig]") {
   REQUIRE(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_BANK, nullptr) == SONARE_OK);
 
   const std::string text = serialize(h.p);
-  CHECK(version_of(text) == 5.0);
+  CHECK(version_of(text) == sonare::serialize::SONARE_PROJECT_SCHEMA_VERSION);
 
   const json::Value root = json::parse(text);
   const json::Value* rigs = root.find("part_rigs");
@@ -80,7 +80,10 @@ TEST_CASE("part rigs round-trip as schema version 5", "[serialize][part_rig]") {
   REQUIRE(chain.find("inserts")->as_array().size() == 2);
   CHECK(chain.find("inserts")->as_array()[1].find("processor")->as_string() ==
         "saturation.softClipper");
-  CHECK(chain.find("inserts")->as_array()[1].find("params")->as_string() == R"({"drive":0.5})");
+  const json::Value* drive_params = chain.find("inserts")->as_array()[1].find("params");
+  REQUIRE(drive_params != nullptr);
+  REQUIRE(drive_params->is_object());
+  CHECK(drive_params->find("drive")->as_number() == 0.5);
   const json::Value& dest_default = rigs->as_array()[2];
   CHECK(dest_default.find("part")->as_number() == 255.0);
   CHECK(dest_default.find("mode")->as_string() == "none");
@@ -145,11 +148,12 @@ TEST_CASE("part rig set refuses malformed input", "[serialize][part_rig]") {
   // Malformed documents.
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, "not json") == bad_format);
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, "{}") == bad_format);
-  CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, R"([{"params":"{}"}])") ==
+  CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, R"([{"params":{}}])") ==
         bad_format);
   CHECK(sonare_project_set_part_rig(
             h.p, 1, 0, SONARE_PART_RIG_CHAIN,
-            R"([{"processor":"saturation.softClipper","params":{"drive":0.5}}])") == bad_format);
+            R"([{"processor":"saturation.softClipper","params":"{\"drive\":0.5}"}])") ==
+        bad_format);
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, "[1]") == bad_format);
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, R"([{"processor":""}])") ==
         bad_format);
@@ -158,14 +162,14 @@ TEST_CASE("part rig set refuses malformed input", "[serialize][part_rig]") {
   std::string nine = "[";
   for (int i = 0; i < 9; ++i) {
     if (i > 0) nine += ",";
-    nine += R"({"processor":"saturation.softClipper","params":"{}"})";
+    nine += R"({"processor":"saturation.softClipper","params":{}})";
   }
   nine += "]";
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, nine.c_str()) == bad_format);
 
 #if defined(SONARE_WITH_MASTERING)
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN,
-                                    R"([{"processor":"no.such.processor","params":"{}"}])") ==
+                                    R"([{"processor":"no.such.processor","params":{}}])") ==
         bad_format);
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN,
                                     R"([{"processor":"saturation.softClipper","params":"{"}])") ==
@@ -192,7 +196,7 @@ TEST_CASE("part rig edits undo and redo", "[serialize][part_rig]") {
   CHECK(serialize(h.p) == one);
   REQUIRE(sonare_project_undo(h.p) == SONARE_OK);
   CHECK(serialize(h.p) == empty);
-  CHECK(version_of(serialize(h.p)) == 1.0);
+  CHECK(version_of(serialize(h.p)) == sonare::serialize::SONARE_PROJECT_SCHEMA_VERSION);
 
   REQUIRE(sonare_project_redo(h.p) == SONARE_OK);
   CHECK(serialize(h.p) == one);
@@ -225,18 +229,18 @@ TEST_CASE("part rig entries survive without a referencing track", "[serialize][p
   sonare_project_destroy(loaded);
 }
 
-TEST_CASE("part rig decode honours schema version and shape", "[serialize][part_rig]") {
+TEST_CASE("part rig decode honours the schema version and shape", "[serialize][part_rig]") {
   using sonare::serialize::project_from_json;
   const char* body =
       R"("part_rigs":[{"destination_id":3,"part":1,"mode":"none"},)"
       R"({"destination_id":3,"part":16,"mode":"none"},)"
       R"({"destination_id":3,"part":2,"mode":"bogus"},)"
       R"({"destination_id":3,"part":4,"mode":"chain"},)"
-      R"({"destination_id":3,"part":5,"mode":"bank","inserts":[{"processor":"a","params":"{}"}]},)"
+      R"({"destination_id":3,"part":5,"mode":"bank","inserts":[{"processor":"a","params":{}}]},)"
       R"({"destination_id":3,"part":6,"mode":"chain","unknown":1,)"
-      R"("inserts":[{"processor":"x.y","params":"{}"}]}]})";
+      R"("inserts":[{"processor":"x.y","params":{}}]}]})";
 
-  const auto v5 = project_from_json(std::string(R"({"version":5,)") + body);
+  const auto v5 = project_from_json(std::string(R"({"version":7,)") + body);
   REQUIRE(v5.ok());
   // Only the well-formed entries load; the rest are dropped with warnings.
   REQUIRE(v5.project->part_rigs().size() == 2);
@@ -246,19 +250,18 @@ TEST_CASE("part rig decode honours schema version and shape", "[serialize][part_
   CHECK(v5.project->part_rigs()[1].rig.stages[0].processor == "x.y");
   CHECK_FALSE(v5.diagnostics.empty());
 
-  // Below version 5 the key is not part of the schema.
-  const auto v4 = project_from_json(std::string(R"({"version":4,)") + body);
-  REQUIRE(v4.ok());
-  CHECK(v4.project->part_rigs().empty());
-
-  const auto v6 = project_from_json(std::string(R"({"version":7,)") + body);
-  CHECK_FALSE(v6.ok());
+  // An earlier or later document is refused, never read.
+  for (const char* version : {"4", "5", "6", "8"}) {
+    const auto other = project_from_json(std::string(R"({"version":)") + version + "," + body);
+    CHECK_FALSE(other.ok());
+    CHECK(other.diagnostics.front().code == "unsupported_schema_version");
+  }
 }
 
 TEST_CASE("part rig decode bounds malformed-entry diagnostics", "[serialize][part_rig]") {
   using sonare::serialize::project_from_json;
 
-  std::string document = R"({"version":5,"part_rigs":[)";
+  std::string document = R"({"version":7,"part_rigs":[)";
   for (int i = 0; i < 130; ++i) {
     if (i > 0) document += ",";
     document += R"({"destination_id":1,"part":16,"mode":"none"})";

@@ -4,6 +4,7 @@
 #include <array>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <string>
+#include <utility>
 
 #include "c_api/eq_band_json.h"
 #include "c_api/sonare_c_mastering_helpers.h"
@@ -28,29 +29,36 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     SonareEq* eq = sonare_eq_create(48000.0, 512);
     REQUIRE(eq != nullptr);
     REQUIRE(sonare_eq_set_band(eq, 0,
-                               "{\"type\":\"Peak\",\"frequencyHz\":1000,\"gainDb\":9,"
-                               "\"q\":1,\"enabled\":true,\"coeffMode\":\"Vicanek\","
+                               "{\"type\":\"peak\",\"frequencyHz\":1000,\"gainDb\":9,"
+                               "\"q\":1,\"enabled\":true,\"coeffMode\":\"vicanek\","
                                "\"proportionalQ\":true}") == SONARE_OK);
     // A refused band document, malformed or carrying a bad field, is
     // INVALID_FORMAT, matching every other JSON-accepting C-ABI entry point.
     REQUIRE(sonare_eq_set_band(eq, 0, "not json") == SONARE_ERROR_INVALID_FORMAT);
-    REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Peak\",\"enabled\":truish}") ==
+    REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"peak\",\"enabled\":truish}") ==
             SONARE_ERROR_INVALID_FORMAT);
-    REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Peak\" \"enabled\":true}") ==
+    REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"peak\" \"enabled\":true}") ==
             SONARE_ERROR_INVALID_FORMAT);
-    REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Peak\",\"type\":\"Notch\"}") ==
+    REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"peak\",\"type\":\"notch\"}") ==
             SONARE_ERROR_INVALID_FORMAT);
     REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Unknown\",\"enabled\":true}") ==
             SONARE_ERROR_INVALID_FORMAT);
     REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":7,\"enabled\":true}") ==
             SONARE_ERROR_INVALID_FORMAT);
-    REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Peak\",\"coeffMode\":\"unknown\"}") ==
+    REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"peak\",\"coeffMode\":\"unknown\"}") ==
             SONARE_ERROR_INVALID_FORMAT);
     REQUIRE(sonare_eq_set_band(eq, 0,
                                "{\"x-note\":\"\\\"type\\\":\\\"Unknown\\\"\","
-                               "\"type\":\"Peak\",\"frequency_hz\":1000,\"gain_db\":9,"
-                               "\"q\":1,\"enabled\":true,\"coeff_mode\":\"vicanek\","
-                               "\"proportional_q\":true}") == SONARE_OK);
+                               "\"type\":\"peak\",\"frequencyHz\":1000,\"gainDb\":9,"
+                               "\"q\":1,\"enabled\":true,\"coeffMode\":\"vicanek\","
+                               "\"proportionalQ\":true}") == SONARE_OK);
+    // An earlier snake_case spelling is refused, not read.
+    REQUIRE(sonare_eq_set_band(eq, 0,
+                               "{\"type\":\"peak\",\"frequency_hz\":1000,\"gainDb\":9,"
+                               "\"q\":1,\"enabled\":true}") == SONARE_ERROR_INVALID_FORMAT);
+    REQUIRE_THAT(sonare_last_error_message(),
+                 Catch::Matchers::ContainsSubstring(
+                     "frequency_hz is an earlier spelling; write frequencyHz"));
     REQUIRE(sonare_eq_latency_samples(eq) == 0);
     sonare_eq_set_auto_gain(eq, 1);
     REQUIRE(sonare_eq_set_gain_scale(eq, 0.5f) == SONARE_OK);
@@ -893,43 +901,97 @@ TEST_CASE("band_json exceeding the JSON byte budget is refused, not parsed",
 
   // An ordinary band still parses, so the refusal above is the size and not
   // some other change to band_json handling.
-  const auto ordinary = parse_eq_band_json(R"({"type":"Peak","frequencyHz":1000})");
+  const auto ordinary = parse_eq_band_json(R"({"type":"peak","frequencyHz":1000})");
   REQUIRE(ordinary.frequency_hz == Catch::Approx(1000.0));
 }
 
-TEST_CASE("sonare_eq_set_band accepts detectorDelayMs and its former lookaheadMs spelling",
+TEST_CASE("sonare_eq_set_band reads detectorDelayMs and refuses its earlier lookaheadMs spelling",
           "[c_api][mastering][eq]") {
-  // detectorDelayMs is the corrected name (see dynamic_eq.h); lookaheadMs is
-  // kept accepted so a stored band config using the old spelling is not
-  // silently dropped. Checked directly against the shared JSON parser (not
-  // just SONARE_OK) so a regression that silently ignored the key would be
-  // caught here rather than only showing up as a behavioural difference.
+  using Catch::Matchers::ContainsSubstring;
   using sonare::c_api::parse_eq_band_json;
 
   const auto with_new =
-      parse_eq_band_json(R"({"type":"Peak","dynamic":true,"detectorDelayMs":12})");
+      parse_eq_band_json(R"({"type":"peak","dynamic":true,"detectorDelayMs":12})");
   REQUIRE(with_new.dyn.detector_delay_ms == 12.0f);
 
-  const auto with_old_camel =
-      parse_eq_band_json(R"({"type":"Peak","dynamic":true,"lookaheadMs":8})");
-  REQUIRE(with_old_camel.dyn.detector_delay_ms == 8.0f);
+  REQUIRE_THROWS_WITH(
+      parse_eq_band_json(R"({"type":"peak","dynamic":true,"lookaheadMs":8})"),
+      ContainsSubstring("lookaheadMs is an earlier spelling; write detectorDelayMs"));
+  REQUIRE_THROWS_WITH(
+      parse_eq_band_json(R"({"type":"peak","dynamic":true,"lookahead_ms":6})"),
+      ContainsSubstring("lookahead_ms is an earlier spelling; write detectorDelayMs"));
+  REQUIRE_THROWS_WITH(
+      parse_eq_band_json(R"({"type":"peak","dynamic":true,"lookaheadMs":8,"detectorDelayMs":12})"),
+      ContainsSubstring("write detectorDelayMs"));
 
-  const auto with_old_snake =
-      parse_eq_band_json(R"({"type":"Peak","dynamic":true,"lookahead_ms":6})");
-  REQUIRE(with_old_snake.dyn.detector_delay_ms == 6.0f);
-
-  // The canonical spelling wins when both are present.
-  const auto both =
-      parse_eq_band_json(R"({"type":"Peak","dynamic":true,"lookaheadMs":8,"detectorDelayMs":12})");
-  REQUIRE(both.dyn.detector_delay_ms == 12.0f);
-
-  // Also reachable end to end through the C ABI, not just the parser.
   SonareEq* eq = sonare_eq_create(48000.0, 512);
   REQUIRE(eq != nullptr);
-  REQUIRE(sonare_eq_set_band(eq, 0,
-                             "{\"type\":\"Peak\",\"dynamic\":true,"
-                             "\"lookaheadMs\":8}") == SONARE_OK);
+  REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"peak\",\"dynamic\":true,\"detectorDelayMs\":8}") ==
+          SONARE_OK);
+  REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"peak\",\"dynamic\":true,\"lookaheadMs\":8}") ==
+          SONARE_ERROR_INVALID_FORMAT);
   sonare_eq_destroy(eq);
+}
+
+TEST_CASE(
+    "sonare_eq_set_band refuses earlier snake_case keys, numeric booleans and non-lowerCamel "
+    "tokens",
+    "[c_api][mastering][eq]") {
+  using Catch::Matchers::ContainsSubstring;
+  using sonare::c_api::parse_eq_band_json;
+
+  const std::pair<const char*, const char*> earlier_keys[] = {
+      {R"({"frequency_hz":1000})", "frequency_hz is an earlier spelling; write frequencyHz"},
+      {R"({"gain_db":3})", "gain_db is an earlier spelling; write gainDb"},
+      {R"({"coeff_mode":"rbj"})", "coeff_mode is an earlier spelling; write coeffMode"},
+      {R"({"slope_db_oct":12})", "slope_db_oct is an earlier spelling; write slopeDbOct"},
+      {R"({"proportional_q":true})", "proportional_q is an earlier spelling; write proportionalQ"},
+      {R"({"proportional_q_strength":0.1})",
+       "proportional_q_strength is an earlier spelling; write proportionalQStrength"},
+      {R"({"threshold_db":-20})", "threshold_db is an earlier spelling; write thresholdDb"},
+      {R"({"auto_threshold":true})", "auto_threshold is an earlier spelling; write autoThreshold"},
+      {R"({"range_db":-6})", "range_db is an earlier spelling; write rangeDb"},
+      {R"({"attack_ms":5})", "attack_ms is an earlier spelling; write attackMs"},
+      {R"({"release_ms":50})", "release_ms is an earlier spelling; write releaseMs"},
+      {R"({"detector_delay_ms":5})",
+       "detector_delay_ms is an earlier spelling; write detectorDelayMs"},
+      {R"({"sidechain_freq_hz":100})",
+       "sidechain_freq_hz is an earlier spelling; write sidechainFreqHz"},
+      {R"({"sidechain_q":1})", "sidechain_q is an earlier spelling; write sidechainQ"},
+      {R"({"external_sidechain":true})",
+       "external_sidechain is an earlier spelling; write externalSidechain"},
+      {R"({"dyn_enabled":true})", "dyn_enabled is an earlier spelling; write dynamic"},
+      {R"({"dynEnabled":true})", "dynEnabled is an earlier spelling; write dynamic"},
+  };
+  for (const auto& [json, message] : earlier_keys) {
+    INFO(json);
+    REQUIRE_THROWS_WITH(parse_eq_band_json(json), ContainsSubstring(message));
+  }
+
+  REQUIRE_THROWS_WITH(parse_eq_band_json(R"({"enabled":1})"),
+                      ContainsSubstring("expected boolean JSON field: enabled"));
+  REQUIRE_THROWS_WITH(parse_eq_band_json(R"({"dynamic":1})"),
+                      ContainsSubstring("expected boolean JSON field: dynamic"));
+
+  const char* earlier_tokens[] = {
+      R"({"type":"Peak"})",     R"({"type":"Bell"})",         R"({"type":"bell"})",
+      R"({"type":"HighCut"})",  R"({"type":"lowCut"})",       R"({"type":"LowShelf"})",
+      R"({"coeffMode":"Rbj"})", R"({"coeffMode":"RBJ"})",     R"({"coeffMode":"Vicanek"})",
+      R"({"placement":"Mid"})", R"({"phase":"ZeroLatency"})", R"({"phase":"LinearPhase"})",
+  };
+  for (const char* json : earlier_tokens) {
+    INFO(json);
+    REQUIRE_THROWS_WITH(parse_eq_band_json(json), ContainsSubstring("(expected "));
+  }
+  REQUIRE_THROWS_WITH(parse_eq_band_json(R"({"type":"Bell"})"),
+                      ContainsSubstring("peak, lowShelf, highShelf, lowPass, highPass, bandPass"));
+
+  const auto lower = parse_eq_band_json(
+      R"({"type":"lowShelf","coeffMode":"vicanek","placement":"mid","phase":"linearPhase"})");
+  REQUIRE(lower.type == sonare::mastering::eq::EqBandType::LowShelf);
+  REQUIRE(lower.coeff_mode == sonare::mastering::eq::BiquadCoeffMode::Vicanek);
+  REQUIRE(lower.placement == sonare::mastering::eq::StereoPlacement::Mid);
+  REQUIRE(lower.phase == sonare::mastering::eq::PhaseMode::LinearPhase);
 }
 
 TEST_CASE("sonare_mastering name getters return a stable pointer across calls",
@@ -1082,62 +1144,12 @@ TEST_CASE("the capability catalog schema list matches what the writer emits",
   REQUIRE(interior == prefixed);
 }
 
-TEST_CASE("the capability catalog's chain aliases name what the chain parser folds together",
-          "[c_api][mastering]") {
+TEST_CASE("the capability catalog's chain lists bound the multiband lists", "[c_api][mastering]") {
   namespace api = sonare::mastering::api;
   const auto catalog =
       sonare::util::json::parse_strict(sonare_test::c_string(sonare_capability_catalog_json));
   const auto& chain = catalog["chain"];
-  const auto& aliases = chain["aliases"].as_array();
-  REQUIRE(aliases.size() > 30);
-
-  const auto substitute = [](std::string text, std::size_t index) {
-    const std::size_t at = text.find("<i>");
-    if (at != std::string::npos) text.replace(at, 3, std::to_string(index));
-    return text;
-  };
-  const auto parse_one = [](const std::string& key, double value) {
-    const api::Param param{key, value};
-    return api::parse_chain_config_params(&param, 1);
-  };
-  // A value the canonical spelling accepts that is not the field's default, so a fold onto the
-  // wrong field shows.
-  const auto accepted_value = [&](const std::string& key) {
-    const auto fallback = api::chain_config_parameter_value(api::MasteringChainConfig{}, key);
-    const double scaled = fallback ? *fallback * 2.0 : 3.0;
-    for (const double candidate : {1.0, 0.5, 2.0, 1000.0, scaled}) {
-      if (fallback && candidate == *fallback) continue;
-      try {
-        (void)api::chain_config_to_json(parse_one(key, candidate));
-        return candidate;
-      } catch (const sonare::SonareException&) {
-      }
-    }
-    FAIL("no accepted value for " << key);
-    return 0.0;
-  };
-  const std::string cutoff_list = "dynamics.multibandComp.crossover.cutoffsHz.";
-  for (const auto& entry : aliases) {
-    const std::string canonical = entry["key"].as_string();
-    for (std::size_t index : {0u, 1u}) {
-      const std::string key = substitute(canonical, index);
-      const bool is_cutoff = key.rfind(cutoff_list, 0) == 0;
-      // A cutoff stays ascending against the default split's other one.
-      const double value = is_cutoff ? (key.back() == '1' ? 1000.0 : 50.0) : accepted_value(key);
-      for (const auto& spelling : entry["aliases"].as_array()) {
-        const std::string alias = substitute(spelling.as_string(), index);
-        CAPTURE(alias, key);
-        const auto via_alias = parse_one(alias, value);
-        if (is_cutoff) {
-          // The list spelling replaces the whole list, so the alias is compared by the element.
-          REQUIRE(api::chain_config_parameter_value(via_alias, key) == value);
-        } else {
-          REQUIRE(api::chain_config_to_json(via_alias) ==
-                  api::chain_config_to_json(parse_one(key, value)));
-        }
-      }
-    }
-  }
+  REQUIRE(chain.find("aliases") == nullptr);
 
   const auto& lists = chain["lists"].as_array();
   REQUIRE(lists.size() == 2);
@@ -1172,7 +1184,7 @@ TEST_CASE("the capability catalog's chain-only params are measured through the c
   REQUIRE(find("loudness.ceilingDb")["max"].as_number() == 0.0);
   REQUIRE(find("loudness.maxLimiterGainReductionDb")["min"].as_number() == 0.0);
   REQUIRE(find("loudness.targetLufs")["unit"].as_string() == "LUFS");
-  const auto& fir = find("dynamics.multibandComp.firKernelSize");
+  const auto& fir = find("dynamics.multibandComp.crossover.firKernelSize");
   REQUIRE(fir["min"].as_number() == 1.0);
   REQUIRE(fir["max"].as_number() == static_cast<double>(sonare::mastering::api::kMaxFirKernelSize));
   const auto& cutoff = find("dynamics.multibandComp.crossover.cutoffsHz");
@@ -1614,28 +1626,25 @@ TEST_CASE("the stereo named-processor path reports loudness_target_limited like 
 TEST_CASE("EQ band JSON narrows every numeric field through a checked cast",
           "[c_api][mastering][eq]") {
   struct NumericField {
-    const char* camel;
-    const char* snake;  // nullptr when the field accepts only one spelling
-    bool gain_db;       // reaches the biquad design as a dB gain
+    const char* key;
+    bool gain_db;  // reaches the biquad design as a dB gain
   };
-  // Every numeric field parse_eq_band_json reads, in both spellings where it
-  // takes two. A table rather than a hand-picked sample, so a field added to
-  // the parser without a row here shows up as an uncovered name.
+  // Every numeric field parse_eq_band_json reads. A table rather than a hand-picked sample, so a
+  // field added to the parser without a row here shows up as an uncovered name.
   const NumericField fields[] = {
-      {"frequencyHz", "frequency_hz", false},
-      {"gainDb", "gain_db", true},
-      {"q", nullptr, false},
-      {"slopeDbOct", "slope_db_oct", false},
-      {"proportionalQStrength", "proportional_q_strength", false},
-      {"thresholdDb", "threshold_db", true},
-      {"ratio", nullptr, false},
-      {"rangeDb", "range_db", true},
-      {"attackMs", "attack_ms", false},
-      {"releaseMs", "release_ms", false},
-      {"lookaheadMs", "lookahead_ms", false},
-      {"detectorDelayMs", "detector_delay_ms", false},
-      {"sidechainFreqHz", "sidechain_freq_hz", false},
-      {"sidechainQ", "sidechain_q", false},
+      {"frequencyHz", false},
+      {"gainDb", true},
+      {"q", false},
+      {"slopeDbOct", false},
+      {"proportionalQStrength", false},
+      {"thresholdDb", true},
+      {"ratio", false},
+      {"rangeDb", true},
+      {"attackMs", false},
+      {"releaseMs", false},
+      {"detectorDelayMs", false},
+      {"sidechainFreqHz", false},
+      {"sidechainQ", false},
   };
   // Value classes crossed with every field above. `accepted` says whether the
   // narrowing guard must let the literal through, not whether the value is
@@ -1669,9 +1678,9 @@ TEST_CASE("EQ band JSON narrows every numeric field through a checked cast",
 
   // Positive controls. Without these a parser that rejects unconditionally
   // satisfies every rejection row below.
-  REQUIRE(parses("{\"type\":\"Peak\"}"));
+  REQUIRE(parses("{\"type\":\"peak\"}"));
   REQUIRE(
-      parses("{\"type\":\"Peak\",\"frequencyHz\":1000,\"gainDb\":6,\"q\":1.2,\"slopeDbOct\":12,"
+      parses("{\"type\":\"peak\",\"frequencyHz\":1000,\"gainDb\":6,\"q\":1.2,\"slopeDbOct\":12,"
              "\"proportionalQStrength\":0.5,\"dynamic\":true,\"thresholdDb\":-24,\"ratio\":4,"
              "\"rangeDb\":12,\"attackMs\":5,\"releaseMs\":80,\"detectorDelayMs\":2,"
              "\"sidechainFreqHz\":800,\"sidechainQ\":0.7}"));
@@ -1682,20 +1691,17 @@ TEST_CASE("EQ band JSON narrows every numeric field through a checked cast",
   for (const NumericField& field : fields) {
     for (const ValueClass& value : classes) {
       const bool expected = field.gain_db ? value.accepted_for_gain_db : value.accepted;
-      for (const char* key : {field.camel, field.snake}) {
-        if (key == nullptr) continue;
-        const std::string json =
-            std::string("{\"type\":\"Peak\",\"") + key + "\":" + value.literal + "}";
-        INFO(json);
-        REQUIRE(parses(json) == expected);
-        // Every accepted row must survive the whole C ABI, not just the parser.
-        if (!expected) continue;
-        SonareEq* eq = sonare_eq_create(48000.0, 512);
-        REQUIRE(eq != nullptr);
-        const SonareError err = sonare_eq_set_band(eq, 0, json.c_str());
-        REQUIRE((err == SONARE_OK || err == SONARE_ERROR_INVALID_PARAMETER));
-        sonare_eq_destroy(eq);
-      }
+      const std::string json =
+          std::string("{\"type\":\"peak\",\"") + field.key + "\":" + value.literal + "}";
+      INFO(json);
+      REQUIRE(parses(json) == expected);
+      // Every accepted row must survive the whole C ABI, not just the parser.
+      if (!expected) continue;
+      SonareEq* eq = sonare_eq_create(48000.0, 512);
+      REQUIRE(eq != nullptr);
+      const SonareError err = sonare_eq_set_band(eq, 0, json.c_str());
+      REQUIRE((err == SONARE_OK || err == SONARE_ERROR_INVALID_PARAMETER));
+      sonare_eq_destroy(eq);
     }
   }
 
@@ -1707,15 +1713,15 @@ TEST_CASE("EQ band JSON narrows every numeric field through a checked cast",
   for (const char* admitting : {"gainDb", "ratio", "attackMs", "releaseMs", "detectorDelayMs"}) {
     for (const char* caught : {"frequencyHz", "q"}) {
       const std::string caught_first =
-          std::string("{\"type\":\"Peak\",\"") + caught + "\":1e39,\"" + admitting + "\":1e39}";
+          std::string("{\"type\":\"peak\",\"") + caught + "\":1e39,\"" + admitting + "\":1e39}";
       const std::string admitting_first =
-          std::string("{\"type\":\"Peak\",\"") + admitting + "\":1e39,\"" + caught + "\":1e39}";
+          std::string("{\"type\":\"peak\",\"") + admitting + "\":1e39,\"" + caught + "\":1e39}";
       INFO(caught_first << " | " << admitting_first);
       REQUIRE_FALSE(parses(caught_first));
       REQUIRE_FALSE(parses(admitting_first));
       // And the admitting field alone still rejects, so the pair above cannot
       // be passing only because of its partner.
-      REQUIRE_FALSE(parses(std::string("{\"type\":\"Peak\",\"") + admitting + "\":1e39}"));
+      REQUIRE_FALSE(parses(std::string("{\"type\":\"peak\",\"") + admitting + "\":1e39}"));
     }
   }
 }
@@ -1726,17 +1732,17 @@ TEST_CASE("sonare_eq_set_band refuses a band that would design non-finite taps",
   REQUIRE(eq != nullptr);
 
   const char* good =
-      "{\"type\":\"Peak\",\"frequencyHz\":1000,\"gainDb\":6,\"q\":1,"
+      "{\"type\":\"peak\",\"frequencyHz\":1000,\"gainDb\":6,\"q\":1,"
       "\"enabled\":true}";
   REQUIRE(sonare_eq_set_band(eq, 0, good) == SONARE_OK);
 
   // An out-of-float-range double and a finite-but-unrealizable dB value both
   // have to be refused before the band is installed, not absorbed as +inf.
   REQUIRE(sonare_eq_set_band(eq, 0,
-                             "{\"type\":\"Peak\",\"frequencyHz\":1000,\"gainDb\":1e39,\"q\":1,"
+                             "{\"type\":\"peak\",\"frequencyHz\":1000,\"gainDb\":1e39,\"q\":1,"
                              "\"enabled\":true}") == SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_eq_set_band(eq, 0,
-                             "{\"type\":\"Peak\",\"frequencyHz\":1000,\"gainDb\":20000,\"q\":1,"
+                             "{\"type\":\"peak\",\"frequencyHz\":1000,\"gainDb\":20000,\"q\":1,"
                              "\"enabled\":true}") == SONARE_ERROR_INVALID_FORMAT);
 
   // The refused bands left no infinite tap behind: the still-installed band
@@ -1792,7 +1798,7 @@ TEST_CASE("an unrealizable dynamic EQ gain never reaches the audio as NaN",
   SonareEq* eq = sonare_eq_create(48000.0, 512);
   REQUIRE(eq != nullptr);
   REQUIRE(sonare_eq_set_band(eq, 0,
-                             "{\"type\":\"Peak\",\"frequencyHz\":1000,\"gainDb\":700,\"q\":1,"
+                             "{\"type\":\"peak\",\"frequencyHz\":1000,\"gainDb\":700,\"q\":1,"
                              "\"enabled\":true,\"dynamic\":true,\"thresholdDb\":-60,"
                              "\"ratio\":20,\"rangeDb\":300,\"attackMs\":1,\"releaseMs\":10}") ==
           SONARE_OK);
@@ -2183,7 +2189,7 @@ TEST_CASE("sonare_eq_non_finite_discard_count reports the state the EQ discarded
   // Without an enabled band the EQ holds no recursive state, so its count would
   // stay at zero for a reason unrelated to the entry.
   REQUIRE(sonare_eq_set_band(eq, 0,
-                             "{\"type\":\"Peak\",\"frequencyHz\":1000,\"gainDb\":9,"
+                             "{\"type\":\"peak\",\"frequencyHz\":1000,\"gainDb\":9,"
                              "\"q\":2,\"enabled\":true}") == SONARE_OK);
 
   // Pre-set to a value the entry must overwrite, so a read that never writes

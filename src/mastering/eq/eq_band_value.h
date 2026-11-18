@@ -18,22 +18,23 @@
 
 namespace sonare::mastering::eq {
 
-/// @brief Parses one EQ band, accepting the same keys/aliases/validation as
-///        `sonare_eq_set_band`'s JSON.
+/// @brief Parses one EQ band with the keys and validation of `sonare_eq_set_band`'s JSON. An
+///        earlier spelling of a key (snake_case, `lookaheadMs`, `dynEnabled`) is refused naming
+///        the current key, as is a token outside the lowerCamel sets of band_strings.h.
 /// @param context Prefix for every thrown message (e.g. "sonare_eq_set_band: "
 ///        or a scene field path), so a caller embedding this in a larger
 ///        document names where the band came from.
-/// @throws SonareException(InvalidParameter) on a value that is not a JSON
+/// @throws SonareException(InvalidFormat) on a value that is not a JSON
 ///         object, an unrecognised enum spelling, a wrongly-typed field, or a
 ///         numeric field that is non-finite or out of range.
 EqBand eq_band_from_value(const util::json::Value& value, const char* context);
 
-/// @brief Every key `eq_band_from_value` reads: canonical camelCase plus each accepted
-///        legacy spelling. A caller reporting unrecognised keys checks against this list.
+/// @brief Every key `eq_band_from_value` reads. A caller reporting unrecognised keys checks
+///        against this list.
 const std::vector<std::string>& eq_band_known_keys();
 
-/// @brief Serializes one EQ band. Canonical camelCase keys only (no legacy
-///        aliases); a field matching @c EqBand{} is omitted, except `enabled`,
+/// @brief Serializes one EQ band. camelCase keys and lowerCamel tokens
+///        only; a field matching @c EqBand{} is omitted, except `enabled`,
 ///        which is always written.
 util::json::Value eq_band_to_value(const EqBand& band);
 

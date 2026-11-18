@@ -13,8 +13,8 @@
 #include "mastering/api/audio_utils.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/internal_processor_runner.h"
-#include "mastering/api/legacy_ids.h"
 #include "mastering/api/processor_params.h"
+#include "mastering/api/retired_names.h"
 #include "mastering/common/loudness_measure.h"
 #include "mastering/dynamics/brickwall_limiter.h"
 #include "mastering/dynamics/compressor.h"
@@ -663,7 +663,8 @@ bool try_run_effects_insert_mono(const std::string& name, const std::vector<Para
   std::vector<std::string> unread;
   auto processor = make_insert_from_params(name, params, &unread);
   if (!processor) {
-    throw SonareException(ErrorCode::InvalidParameter, "unknown mastering processor: " + name);
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "unknown mastering processor: " + name + retired_processor_note(name));
   }
   detail::refuse_unread_params(name, unread);
   internal::run_processor_mono(*processor, samples, sample_rate);
@@ -678,7 +679,8 @@ bool try_run_effects_insert_stereo(const std::string& name, const std::vector<Pa
   std::vector<std::string> unread;
   auto processor = make_insert_from_params(name, params, &unread);
   if (!processor) {
-    throw SonareException(ErrorCode::InvalidParameter, "unknown mastering processor: " + name);
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "unknown mastering processor: " + name + retired_processor_note(name));
   }
   detail::refuse_unread_params(name, unread);
   internal::run_processor_stereo(*processor, left, right, sample_rate);
@@ -693,10 +695,11 @@ bool try_run_effects_insert_stereo(const std::string& name, const std::vector<Pa
 [[noreturn]] void throw_missing_branch(const std::string& name, bool mono_entry_point) {
   const auto names = processor_names();
   const bool registered = std::find(names.begin(), names.end(), name) != names.end();
-  throw SonareException(ErrorCode::InvalidParameter,
-                        (mono_entry_point && registered)
-                            ? "processor is stereo-only; use the stereo API: " + name
-                            : "unknown mastering processor: " + name);
+  throw SonareException(
+      ErrorCode::InvalidParameter,
+      (mono_entry_point && registered)
+          ? "processor is stereo-only; use the stereo API: " + name
+          : "unknown mastering processor: " + name + retired_processor_note(name));
 }
 
 // True when try_configure_processor() has a branch for @p name, i.e. the id has a
@@ -760,10 +763,8 @@ std::vector<std::string> stereo_processor_names() {
   return names;
 }
 
-MonoResult apply_named_processor(const std::string& requested_name, const float* samples,
-                                 std::size_t length, int sample_rate,
-                                 const std::vector<Param>& params) {
-  const std::string name = canonical_processor_id(requested_name);
+MonoResult apply_named_processor(const std::string& name, const float* samples, std::size_t length,
+                                 int sample_rate, const std::vector<Param>& params) {
   validate_params(params.data(), params.size());
   validate_offline_audio_input(samples, length, sample_rate);
   auto map = make_map(params);
@@ -784,10 +785,9 @@ MonoResult apply_named_processor(const std::string& requested_name, const float*
   return result;
 }
 
-StereoResult apply_named_processor_stereo(const std::string& requested_name, const float* left,
+StereoResult apply_named_processor_stereo(const std::string& name, const float* left,
                                           const float* right, std::size_t length, int sample_rate,
                                           const std::vector<Param>& params) {
-  const std::string name = canonical_processor_id(requested_name);
   validate_params(params.data(), params.size());
   validate_offline_audio_input(left, length, sample_rate);
   validate_offline_audio_input(right, length, sample_rate);

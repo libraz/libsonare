@@ -846,11 +846,11 @@ TEST_CASE("CLI voice-change rejects a realtime preset document with an unknown f
     {
       std::ofstream preset(preset_path);
       REQUIRE(preset.good());
-      preset << R"json({"schemaVersion":1,"id":"typo-test","name":"Typo Test","category":"custom",
+      preset << R"json({"schemaVersion":3,"id":"typo-test","name":"Typo Test","category":"custom",
         "dsp":{"inputGainDb":0,"outputGainDb":0,"wetMix":1,
-          "retune":{"semitones":0,"mix":0,"grainSize":0},
+          "retune":{"pitchSemitones":0,"mix":0,"grainSizeSamples":0},
           "formnt":{"factor":1,"amount":0,"body":0,"brightness":0,"nasal":0},
-          "eq":{"highpassHz":75,"bodyDb":0,"presenceDb":0,"airDb":0},
+          "eq":{"highPassHz":75,"bodyDb":0,"presenceDb":0,"airDb":0},
           "gate":{"thresholdDb":-55,"attackMs":2,"releaseMs":100,"rangeDb":18},
           "compressor":{"thresholdDb":-22,"ratio":2.5,"attackMs":6,"releaseMs":90,"makeupGainDb":1},
           "deesser":{"frequencyHz":7200,"thresholdDb":-28,"ratio":4,"rangeDb":8},
@@ -872,7 +872,7 @@ TEST_CASE("CLI voice-change rejects a realtime preset document with an unknown f
     {
       std::ofstream preset(preset_path);
       REQUIRE(preset.good());
-      preset << R"json({"schemaVersion":1,"id":"macro-typo-test","name":"Macro Typo Test",
+      preset << R"json({"schemaVersion":3,"id":"macro-typo-test","name":"Macro Typo Test",
         "category":"custom","macros":{"brightness":0.2}})json";
     }
     auto [code, output] =

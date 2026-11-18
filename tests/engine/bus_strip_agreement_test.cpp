@@ -64,7 +64,7 @@ const BusStripCase kCases[] = {
 
 // One clearly audible peaking band, shared by every "active"/"disabledBands" case.
 std::string band_fragment() {
-  return R"("bands":[{"type":"Peak","frequencyHz":1000.0,"gainDb":6.0,"q":0.7,"enabled":true}])";
+  return R"("bands":[{"type":"peak","frequencyHz":1000.0,"gainDb":6.0,"q":0.7,"enabled":true}])";
 }
 
 std::string eq_fragment(const std::string& variant) {
@@ -81,8 +81,10 @@ std::string strip_eq_fragment(bool active) {
 // Bus body shared verbatim between the engine's set_bus_strip_json wrapper and
 // the project scene's buses[] entry.
 std::string bus_body(const BusStripCase& c) {
-  return std::string(R"("id":"fx","panMode":)") + std::to_string(c.pan_mode) + R"(,"panLaw":)" +
-         std::to_string(c.pan_law) + R"(,"pan":)" + std::to_string(c.pan) + R"(,"width":)" +
+  static const char* const kPanModes[] = {"balance", "stereoPan", "dualPan"};
+  static const char* const kPanLaws[] = {"const3Db", "const4.5Db", "const6Db", "linear0Db"};
+  return std::string(R"("id":"fx","panMode":")") + kPanModes[c.pan_mode] + R"(","panLaw":")" +
+         kPanLaws[c.pan_law] + R"(","pan":)" + std::to_string(c.pan) + R"(,"width":)" +
          std::to_string(c.width) + eq_fragment(c.bus_eq);
 }
 

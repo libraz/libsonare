@@ -3,7 +3,6 @@
 #include <unordered_set>
 #include <utility>
 
-#include "mastering/api/legacy_insert_params.h"
 #include "mastering/eq/eq_band_value.h"
 #include "mastering/eq/parametric.h"
 #include "mixing/alignment_delay.h"
@@ -62,11 +61,11 @@ InsertSlot insert_slot_from_string(const std::string& value) {
   throw SonareException(ErrorCode::InvalidFormat, "unknown insert slot: " + value);
 }
 
-// "pre" and "post" are the earlier file form: still read, never written.
 SendTiming send_timing_from_string(const std::string& value) {
-  if (value == "preFader" || value == "pre") return SendTiming::PreFader;
-  if (value == "postFader" || value == "post") return SendTiming::PostFader;
-  throw SonareException(ErrorCode::InvalidFormat, "unknown send timing: " + value);
+  if (value == "preFader") return SendTiming::PreFader;
+  if (value == "postFader") return SendTiming::PostFader;
+  throw SonareException(ErrorCode::InvalidFormat,
+                        "unknown send timing: " + value + " (expected preFader or postFader)");
 }
 
 PanLaw pan_law_from_string(const std::string& value) {
@@ -74,14 +73,17 @@ PanLaw pan_law_from_string(const std::string& value) {
   if (value == "const4.5Db") return PanLaw::Const4p5dB;
   if (value == "const6Db") return PanLaw::Const6dB;
   if (value == "linear0Db") return PanLaw::Linear0dB;
-  throw SonareException(ErrorCode::InvalidFormat, "unknown pan law: " + value);
+  throw SonareException(
+      ErrorCode::InvalidFormat,
+      "unknown pan law: " + value + " (expected const3Db, const4.5Db, const6Db or linear0Db)");
 }
 
 PanMode pan_mode_from_string(const std::string& value) {
   if (value == "balance") return PanMode::Balance;
   if (value == "stereoPan") return PanMode::StereoPan;
   if (value == "dualPan") return PanMode::DualPan;
-  throw SonareException(ErrorCode::InvalidFormat, "unknown pan mode: " + value);
+  throw SonareException(ErrorCode::InvalidFormat,
+                        "unknown pan mode: " + value + " (expected balance, stereoPan or dualPan)");
 }
 
 // Reads an optional channel-layout string field. Absent -> fallback (so old
@@ -111,10 +113,9 @@ ChannelLayout channel_layout_or(const JsonValue& object, const char* key, Channe
 
 using KeySet = std::unordered_set<std::string>;
 
-// Direct children of `prefix` in the writer's canonical path list ("" is the root),
-// plus the legacy spellings the readers still accept.
-KeySet known_keys(const std::string& prefix, std::initializer_list<const char*> legacy) {
-  KeySet keys(legacy.begin(), legacy.end());
+// Direct children of `prefix` in the writer's canonical path list ("" is the root).
+KeySet known_keys(const std::string& prefix) {
+  KeySet keys;
   const std::string head = prefix.empty() ? std::string() : prefix + ".";
   for (const auto& path : scene_schema_paths()) {
     if (path.compare(0, head.size(), head) != 0) continue;
@@ -150,14 +151,14 @@ std::string child_path(const std::string& path, const char* key) {
   throw SonareException(ErrorCode::InvalidFormat, child_path(path, key) + " must be " + expected);
 }
 
-const JsonValue* value_or_legacy(const JsonValue& object, const char* key, const char* legacy_key) {
-  if (const auto* value = object.find(key)) return value;
-  return object.find(legacy_key);
-}
-
-// The spelling a present value was written under, for the refusal's path.
-const char* spelling_of(const JsonValue& object, const char* key, const char* legacy_key) {
-  return object.find(key) ? key : legacy_key;
+// An earlier spelling of a key is refused naming the current one; only `key` is read.
+const JsonValue* current_value(const JsonValue& object, const std::string& path, const char* key,
+                               const char* earlier_key) {
+  if (object.find(earlier_key) != nullptr) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          child_path(path, earlier_key) + " is an earlier spelling; write " + key);
+  }
+  return object.find(key);
 }
 
 float float_from(const JsonValue& value, const char* key, const char* field_path) {
@@ -188,11 +189,11 @@ float number_or(const JsonValue& object, const std::string& path, const char* ke
   return float_from(*value, key, field_path);
 }
 
-float number_or_legacy(const JsonValue& object, const std::string& path, const char* key,
-                       const char* legacy_key, float fallback, const char* field_path = nullptr) {
-  const auto* value = value_or_legacy(object, key, legacy_key);
+float number_or_earlier(const JsonValue& object, const std::string& path, const char* key,
+                        const char* earlier_key, float fallback, const char* field_path = nullptr) {
+  const auto* value = current_value(object, path, key, earlier_key);
   if (!value) return fallback;
-  if (!value->is_number()) refuse_type(path, spelling_of(object, key, legacy_key), "a number");
+  if (!value->is_number()) refuse_type(path, key, "a number");
   return float_from(*value, key, field_path);
 }
 
@@ -230,45 +231,36 @@ float checked_surround_unit(float value, const char* field_path) {
   return value;
 }
 
-int int_or_legacy(const JsonValue& object, const std::string& path, const char* key,
-                  const char* legacy_key, int fallback) {
-  const auto* value = value_or_legacy(object, key, legacy_key);
+int int_or_earlier(const JsonValue& object, const std::string& path, const char* key,
+                   const char* earlier_key, int fallback) {
+  const auto* value = current_value(object, path, key, earlier_key);
   if (!value) return fallback;
-  if (!value->is_number()) refuse_type(path, spelling_of(object, key, legacy_key), "an integer");
+  if (!value->is_number()) refuse_type(path, key, "an integer");
   return int_from(*value, key);
 }
 
-// A closed set written as its token. An integer ordinal is the earlier file form, still read.
+// A closed set is read only as its token; a number is refused naming the tokens.
 template <typename Enum>
-int token_or_legacy(const JsonValue& object, const std::string& path, const char* key,
-                    const char* legacy_key, int fallback, int count,
-                    Enum (*from_string)(const std::string&)) {
-  const auto* value = value_or_legacy(object, key, legacy_key);
+int token_or(const JsonValue& object, const std::string& path, const char* key,
+             const char* earlier_key, int fallback, const char* tokens,
+             Enum (*from_string)(const std::string&)) {
+  const auto* value = current_value(object, path, key, earlier_key);
   if (!value) return fallback;
-  const char* spelling = spelling_of(object, key, legacy_key);
-  if (value->is_string()) {
-    try {
-      return static_cast<int>(from_string(value->as_string()));
-    } catch (const SonareException&) {
-      throw SonareException(
-          ErrorCode::InvalidFormat,
-          child_path(path, spelling) + " is not a known token: " + value->as_string());
-    }
-  }
-  if (!value->is_number()) refuse_type(path, spelling, "a string token");
-  const int ordinal = int_from(*value, key);
-  if (ordinal < 0 || ordinal >= count) {
+  if (!value->is_string()) refuse_type(path, key, tokens);
+  try {
+    return static_cast<int>(from_string(value->as_string()));
+  } catch (const SonareException&) {
     throw SonareException(ErrorCode::InvalidFormat,
-                          child_path(path, spelling) + " enum is out of range");
+                          child_path(path, key) + " is not a known token: " + value->as_string() +
+                              " (expected " + tokens + ")");
   }
-  return ordinal;
 }
 
-bool bool_or_legacy(const JsonValue& object, const std::string& path, const char* key,
-                    const char* legacy_key, bool fallback) {
-  const auto* value = value_or_legacy(object, key, legacy_key);
+bool bool_or_earlier(const JsonValue& object, const std::string& path, const char* key,
+                     const char* earlier_key, bool fallback) {
+  const auto* value = current_value(object, path, key, earlier_key);
   if (!value) return fallback;
-  if (!value->is_bool()) refuse_type(path, spelling_of(object, key, legacy_key), "a boolean");
+  if (!value->is_bool()) refuse_type(path, key, "a boolean");
   return value->as_bool();
 }
 
@@ -294,18 +286,17 @@ std::string string_or(const JsonValue& object, const std::string& path, const ch
   return value->as_string();
 }
 
-std::string string_or_legacy(const JsonValue& object, const std::string& path, const char* key,
-                             const char* legacy_key, const std::string& fallback) {
-  const auto* value = value_or_legacy(object, key, legacy_key);
+std::string string_or_earlier(const JsonValue& object, const std::string& path, const char* key,
+                              const char* earlier_key, const std::string& fallback) {
+  const auto* value = current_value(object, path, key, earlier_key);
   if (!value) return fallback;
-  if (!value->is_string()) refuse_type(path, spelling_of(object, key, legacy_key), "a string");
+  if (!value->is_string()) refuse_type(path, key, "a string");
   return value->as_string();
 }
 
 Insert insert_from_value(const JsonValue& object, const std::string& path,
                          std::vector<std::string>* warnings) {
-  static const KeySet kKnown =
-      known_keys("strips[].inserts[]", {"processor_name", "params_json", "sidechain_key"});
+  static const KeySet kKnown = known_keys("strips[].inserts[]");
   report_unknown_keys(object, path, kKnown, warnings);
   Insert insert;
   if (const auto* slot = object.find("slot")) {
@@ -315,24 +306,14 @@ Insert insert_from_value(const JsonValue& object, const std::string& path,
     }
     insert.slot = insert_slot_from_string(slot->as_string());
   }
-  insert.processor_name = mastering::api::canonical_processor_id(
-      string_or_legacy(object, path, "processor", "processor_name", insert.processor_name));
-  // The writer embeds the params bag as an object; the string form is what every
-  // project file saved before that carries, so both load into the same text.
-  if (const auto* params = value_or_legacy(object, "params", "params_json")) {
-    if (params->is_object()) {
-      insert.params_json = sonare::util::json::dump(*params);
-    } else if (params->is_string()) {
-      insert.params_json = params->as_string();
-    } else {
-      throw SonareException(ErrorCode::InvalidFormat,
-                            "insert params must be a JSON object (or the legacy JSON string)");
-    }
+  insert.processor_name =
+      string_or_earlier(object, path, "processor", "processor_name", insert.processor_name);
+  if (const auto* params = current_value(object, path, "params", "params_json")) {
+    if (!params->is_object()) refuse_type(path, "params", "a JSON object");
+    insert.params_json = sonare::util::json::dump(*params);
   }
-  insert.params_json =
-      mastering::api::canonical_insert_params_text(insert.processor_name, insert.params_json);
   insert.sidechain_key =
-      string_or_legacy(object, path, "sidechainKey", "sidechain_key", insert.sidechain_key);
+      string_or_earlier(object, path, "sidechainKey", "sidechain_key", insert.sidechain_key);
   return insert;
 }
 
@@ -368,14 +349,14 @@ std::vector<Insert> inserts_from_value(const JsonValue& array, const std::string
 
 Send send_from_value(const JsonValue& object, const std::string& path,
                      std::vector<std::string>* warnings) {
-  static const KeySet kKnown = known_keys("strips[].sends[]", {"destination_bus_id", "send_db"});
+  static const KeySet kKnown = known_keys("strips[].sends[]");
   report_unknown_keys(object, path, kKnown, warnings);
   Send send;
   send.id = string_or(object, path, "id", send.id);
-  send.destination_bus_id = string_or_legacy(object, path, "destinationBusId", "destination_bus_id",
-                                             send.destination_bus_id);
-  send.send_db = number_or_legacy(object, path, "sendDb", "send_db", send.send_db,
-                                  "scene.strips[].sends[].sendDb");
+  send.destination_bus_id = string_or_earlier(object, path, "destinationBusId",
+                                              "destination_bus_id", send.destination_bus_id);
+  send.send_db = number_or_earlier(object, path, "sendDb", "send_db", send.send_db,
+                                   "scene.strips[].sends[].sendDb");
   if (const auto* timing = object.find("timing")) {
     if (!timing->is_string()) {
       throw SonareException(ErrorCode::InvalidFormat,
@@ -396,7 +377,7 @@ std::vector<Send> sends_from_value(const JsonValue& array, const std::string& pa
 // messages, matching the convention the other scene fields use.
 StripEq eq_from_value(const JsonValue& object, const char* field_prefix, const std::string& path,
                       std::vector<std::string>* warnings) {
-  static const KeySet kKnownEq = known_keys("strips[].eq", {});
+  static const KeySet kKnownEq = known_keys("strips[].eq");
   static const KeySet kKnownBand(mastering::eq::eq_band_known_keys().begin(),
                                  mastering::eq::eq_band_known_keys().end());
   StripEq eq;
@@ -433,7 +414,7 @@ StripEq eq_from_value(const JsonValue& object, const char* field_prefix, const s
         band.type == mastering::eq::EqBandType::FlatTilt) {
       throw SonareException(
           ErrorCode::InvalidFormat,
-          band_context + "TiltShelf/FlatTilt is not supported on a strip or bus EQ");
+          band_context + "tiltShelf/flatTilt is not supported on a strip or bus EQ");
     }
     eq.bands.push_back(band);
   }
@@ -442,21 +423,18 @@ StripEq eq_from_value(const JsonValue& object, const char* field_prefix, const s
 
 Strip strip_from_value(const JsonValue& object, const std::string& path,
                        std::vector<std::string>* warnings) {
-  static const KeySet kKnown =
-      known_keys("strips[]", {"input_trim_db", "fader_db", "vca_offset_db", "solo_safe", "pan_mode",
-                              "dual_pan_left", "dual_pan_right", "polarity_invert_left",
-                              "polarity_invert_right", "pan_law", "channel_delay_samples"});
-  static const KeySet kKnownSurround = known_keys("strips[].surroundPan", {});
-  static const KeySet kKnownMetering = known_keys("strips[].metering", {});
+  static const KeySet kKnown = known_keys("strips[]");
+  static const KeySet kKnownSurround = known_keys("strips[].surroundPan");
+  static const KeySet kKnownMetering = known_keys("strips[].metering");
   report_unknown_keys(object, path, kKnown, warnings);
   Strip strip;
   strip.id = string_or(object, path, "id", strip.id);
-  strip.input_trim_db = number_or_legacy(object, path, "inputTrimDb", "input_trim_db",
-                                         strip.input_trim_db, "scene.strips[].inputTrimDb");
-  strip.fader_db = number_or_legacy(object, path, "faderDb", "fader_db", strip.fader_db,
-                                    "scene.strips[].faderDb");
-  strip.vca_offset_db = number_or_legacy(object, path, "vcaOffsetDb", "vca_offset_db",
-                                         strip.vca_offset_db, "scene.strips[].vcaOffsetDb");
+  strip.input_trim_db = number_or_earlier(object, path, "inputTrimDb", "input_trim_db",
+                                          strip.input_trim_db, "scene.strips[].inputTrimDb");
+  strip.fader_db = number_or_earlier(object, path, "faderDb", "fader_db", strip.fader_db,
+                                     "scene.strips[].faderDb");
+  strip.vca_offset_db = number_or_earlier(object, path, "vcaOffsetDb", "vca_offset_db",
+                                          strip.vca_offset_db, "scene.strips[].vcaOffsetDb");
   // Pan and width outside their domains are refused, like the enums and counts below.
   strip.pan = checked_pan(number_or(object, path, "pan", strip.pan, "scene.strips[].pan"),
                           "scene.strips[].pan");
@@ -464,27 +442,27 @@ Strip strip_from_value(const JsonValue& object, const std::string& path,
                               "scene.strips[].width");
   strip.muted = bool_or(object, path, "muted", strip.muted);
   strip.soloed = bool_or(object, path, "soloed", strip.soloed);
-  strip.solo_safe = bool_or_legacy(object, path, "soloSafe", "solo_safe", strip.solo_safe);
+  strip.solo_safe = bool_or_earlier(object, path, "soloSafe", "solo_safe", strip.solo_safe);
   // Out-of-range values are refused in the one canonical scene walker, so standalone mixer JSON
   // and project-embedded scene JSON stay identical.
-  strip.pan_mode = token_or_legacy(object, path, "panMode", "pan_mode", strip.pan_mode,
-                                   kPanModeCount, &pan_mode_from_string);
+  strip.pan_mode = token_or(object, path, "panMode", "pan_mode", strip.pan_mode,
+                            "balance, stereoPan or dualPan", &pan_mode_from_string);
   strip.dual_pan_left =
-      checked_pan(number_or_legacy(object, path, "dualPanLeft", "dual_pan_left",
-                                   strip.dual_pan_left, "scene.strips[].dualPanLeft"),
+      checked_pan(number_or_earlier(object, path, "dualPanLeft", "dual_pan_left",
+                                    strip.dual_pan_left, "scene.strips[].dualPanLeft"),
                   "scene.strips[].dualPanLeft");
   strip.dual_pan_right =
-      checked_pan(number_or_legacy(object, path, "dualPanRight", "dual_pan_right",
-                                   strip.dual_pan_right, "scene.strips[].dualPanRight"),
+      checked_pan(number_or_earlier(object, path, "dualPanRight", "dual_pan_right",
+                                    strip.dual_pan_right, "scene.strips[].dualPanRight"),
                   "scene.strips[].dualPanRight");
-  strip.polarity_invert_left = bool_or_legacy(object, path, "polarityInvertLeft",
-                                              "polarity_invert_left", strip.polarity_invert_left);
-  strip.polarity_invert_right = bool_or_legacy(
+  strip.polarity_invert_left = bool_or_earlier(object, path, "polarityInvertLeft",
+                                               "polarity_invert_left", strip.polarity_invert_left);
+  strip.polarity_invert_right = bool_or_earlier(
       object, path, "polarityInvertRight", "polarity_invert_right", strip.polarity_invert_right);
-  strip.pan_law = token_or_legacy(object, path, "panLaw", "pan_law", strip.pan_law, kPanLawCount,
-                                  &pan_law_from_string);
-  strip.channel_delay_samples = int_or_legacy(object, path, "channelDelaySamples",
-                                              "channel_delay_samples", strip.channel_delay_samples);
+  strip.pan_law = token_or(object, path, "panLaw", "pan_law", strip.pan_law,
+                           "const3Db, const4.5Db, const6Db or linear0Db", &pan_law_from_string);
+  strip.channel_delay_samples = int_or_earlier(
+      object, path, "channelDelaySamples", "channel_delay_samples", strip.channel_delay_samples);
   if (strip.channel_delay_samples < 0 || strip.channel_delay_samples > kMaxAlignmentDelaySamples) {
     throw SonareException(ErrorCode::InvalidFormat, "channelDelaySamples must be in [0, 192000]");
   }
@@ -554,37 +532,35 @@ std::vector<Strip> strips_from_value(const JsonValue& array, const std::string& 
 
 Bus bus_from_value(const JsonValue& object, const std::string& path,
                    std::vector<std::string>* warnings) {
-  static const KeySet kKnown =
-      known_keys("buses[]", {"input_trim_db", "polarity_invert_left", "polarity_invert_right",
-                             "pan_mode", "dual_pan_left", "dual_pan_right", "pan_law"});
+  static const KeySet kKnown = known_keys("buses[]");
   report_unknown_keys(object, path, kKnown, warnings);
   Bus bus;
   bus.id = string_or(object, path, "id", bus.id);
   bus.role = string_or(object, path, "role", bus.role);
   bus.layout = channel_layout_or(object, "layout", bus.layout);
-  bus.input_trim_db = number_or_legacy(object, path, "inputTrimDb", "input_trim_db",
-                                       bus.input_trim_db, "scene.buses[].inputTrimDb");
+  bus.input_trim_db = number_or_earlier(object, path, "inputTrimDb", "input_trim_db",
+                                        bus.input_trim_db, "scene.buses[].inputTrimDb");
   // Same domain as scene.strips[].width above.
   bus.width = checked_width(number_or(object, path, "width", bus.width, "scene.buses[].width"),
                             "scene.buses[].width");
-  bus.polarity_invert_left = bool_or_legacy(object, path, "polarityInvertLeft",
-                                            "polarity_invert_left", bus.polarity_invert_left);
-  bus.polarity_invert_right = bool_or_legacy(object, path, "polarityInvertRight",
-                                             "polarity_invert_right", bus.polarity_invert_right);
+  bus.polarity_invert_left = bool_or_earlier(object, path, "polarityInvertLeft",
+                                             "polarity_invert_left", bus.polarity_invert_left);
+  bus.polarity_invert_right = bool_or_earlier(object, path, "polarityInvertRight",
+                                              "polarity_invert_right", bus.polarity_invert_right);
   // Pan: same field names and ranges as Strip's above.
   bus.pan = checked_pan(number_or(object, path, "pan", bus.pan, "scene.buses[].pan"),
                         "scene.buses[].pan");
-  bus.pan_mode = token_or_legacy(object, path, "panMode", "pan_mode", bus.pan_mode, kPanModeCount,
-                                 &pan_mode_from_string);
-  bus.dual_pan_left = checked_pan(number_or_legacy(object, path, "dualPanLeft", "dual_pan_left",
-                                                   bus.dual_pan_left, "scene.buses[].dualPanLeft"),
+  bus.pan_mode = token_or(object, path, "panMode", "pan_mode", bus.pan_mode,
+                          "balance, stereoPan or dualPan", &pan_mode_from_string);
+  bus.dual_pan_left = checked_pan(number_or_earlier(object, path, "dualPanLeft", "dual_pan_left",
+                                                    bus.dual_pan_left, "scene.buses[].dualPanLeft"),
                                   "scene.buses[].dualPanLeft");
   bus.dual_pan_right =
-      checked_pan(number_or_legacy(object, path, "dualPanRight", "dual_pan_right",
-                                   bus.dual_pan_right, "scene.buses[].dualPanRight"),
+      checked_pan(number_or_earlier(object, path, "dualPanRight", "dual_pan_right",
+                                    bus.dual_pan_right, "scene.buses[].dualPanRight"),
                   "scene.buses[].dualPanRight");
-  bus.pan_law = token_or_legacy(object, path, "panLaw", "pan_law", bus.pan_law, kPanLawCount,
-                                &pan_law_from_string);
+  bus.pan_law = token_or(object, path, "panLaw", "pan_law", bus.pan_law,
+                         "const3Db, const4.5Db, const6Db or linear0Db", &pan_law_from_string);
   // A surround bus has no pan or stereo-width stage, so a non-default value there is
   // refused rather than dropped.
   if (channel_count(bus.layout) > 2) {
@@ -623,12 +599,12 @@ std::vector<Bus> buses_from_value(const JsonValue& array, const std::string& pat
 
 VcaGroup vca_group_from_value(const JsonValue& object, const std::string& path,
                               std::vector<std::string>* warnings) {
-  static const KeySet kKnown = known_keys("vcaGroups[]", {"gain_db"});
+  static const KeySet kKnown = known_keys("vcaGroups[]");
   report_unknown_keys(object, path, kKnown, warnings);
   VcaGroup group;
   group.id = string_or(object, path, "id", group.id);
-  group.gain_db = number_or_legacy(object, path, "gainDb", "gain_db", group.gain_db,
-                                   "scene.vcaGroups[].gainDb");
+  group.gain_db = number_or_earlier(object, path, "gainDb", "gain_db", group.gain_db,
+                                    "scene.vcaGroups[].gainDb");
   if (const auto* members = object.find("members")) {
     const std::string members_path = child_path(path, "members");
     if (!members->is_array()) {
@@ -655,7 +631,7 @@ std::vector<VcaGroup> vca_groups_from_value(const JsonValue& array, const std::s
 
 Connection connection_from_value(const JsonValue& object, const std::string& path,
                                  std::vector<std::string>* warnings) {
-  static const KeySet kKnown = known_keys("connections[]", {});
+  static const KeySet kKnown = known_keys("connections[]");
   report_unknown_keys(object, path, kKnown, warnings);
   Connection connection;
   connection.source = string_or(object, path, "source", connection.source);
@@ -698,11 +674,8 @@ JsonValue insert_params_to_value(const Insert& insert) {
 JsonValue insert_to_value(const Insert& insert) {
   sonare::util::json::Object object;
   util::json::put(object, "slot", to_string(insert.slot));
-  const std::string processor = mastering::api::canonical_processor_id(insert.processor_name);
-  Insert current = insert;
-  current.params_json = mastering::api::canonical_insert_params_text(processor, insert.params_json);
-  util::json::put(object, "processor", processor);
-  util::json::put(object, "params", insert_params_to_value(current));
+  util::json::put(object, "processor", insert.processor_name);
+  util::json::put(object, "params", insert_params_to_value(insert));
   // Omit `sidechainKey` when empty: the walker treats a missing field and an
   // empty string identically, but the legacy serializer also dropped the field
   // so existing snapshots can still byte-compare against new output.
@@ -1038,7 +1011,7 @@ Scene scene_from_value(const JsonValue& root, std::vector<std::string>* warnings
   if (!root.is_object()) {
     throw SonareException(ErrorCode::InvalidFormat, "scene JSON must be an object");
   }
-  static const KeySet kKnownRoot = known_keys("", {"vca_groups"});
+  static const KeySet kKnownRoot = known_keys("");
   report_unknown_keys(root, "", kKnownRoot, warnings);
   Scene scene;
   scene.version = int_or(root, std::string(), "version", 1);
@@ -1049,7 +1022,7 @@ Scene scene_from_value(const JsonValue& root, std::vector<std::string>* warnings
     scene.strips = strips_from_value(*strips, "strips", warnings);
   if (const auto* buses = root.find("buses"))
     scene.buses = buses_from_value(*buses, "buses", warnings);
-  if (const auto* groups = value_or_legacy(root, "vcaGroups", "vca_groups"))
+  if (const auto* groups = current_value(root, std::string(), "vcaGroups", "vca_groups"))
     scene.vca_groups = vca_groups_from_value(*groups, "vcaGroups", warnings);
   if (const auto* connections = root.find("connections"))
     scene.connections = connections_from_value(*connections, "connections", warnings);

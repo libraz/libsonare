@@ -174,8 +174,7 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
   SECTION("mastering-suggest takes the assistant options by name") {
     // As an option or a --params key, a delivery target and a preset are names.
     for (const std::string extra :
-         {" --target-platform broadcast", " --params targetPlatform=broadcast",
-          " --params target_platform=broadcast"}) {
+         {" --target-platform broadcast", " --params targetPlatform=broadcast"}) {
       CAPTURE(extra);
       auto [code, output] =
           exec_command(CLI + " mastering-suggest " + TEST_WAV + extra + " --json");
@@ -666,14 +665,14 @@ TEST_CASE("CLI mastering reads a chain config and --params as one list", "[cli][
     return bytes;
   };
 
-  SECTION("two spellings of one field across the document and --params are refused") {
+  SECTION("a retired shorthand in the document is refused naming the current key") {
     const std::string config = write_config(
         R"("dynamics.multibandComp.enabled":true,"dynamics.multibandComp.lowThresholdDb":-20)");
     auto [code, output] =
         exec_command(CLI + " mastering " + TEST_WAV + " --chain-config " + config +
                      " --params dynamics.multibandComp.bands.0.thresholdDb=-18"
                      " -q 2>&1");
-    CHECK(code == 3);
+    CHECK(code == 5);
     CHECK_THAT(output, ContainsSubstring("dynamics.multibandComp.lowThresholdDb"));
     CHECK_THAT(output, ContainsSubstring("dynamics.multibandComp.bands.0.thresholdDb"));
     std::remove(config.c_str());

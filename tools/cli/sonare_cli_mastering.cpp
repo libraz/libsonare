@@ -381,17 +381,21 @@ mastering::assistant::AssistantConfig assistant_config_from_cli(const CliArgs& a
       throw std::invalid_argument("invalid parameter entry: '" + item + "' (expected key=value)");
     }
     const std::string key = item.substr(0, eq);
-    const std::string canonical = json_key_to_snake_case(key);
+    if (key == "target_platform") {
+      throw std::invalid_argument(
+          "--params target_platform is an earlier spelling; write "
+          "targetPlatform");
+    }
     for (const AssistantOption& named : kAssistantOptions) {
-      if (canonical == json_key_to_snake_case(named.key) && args.has(named.option)) {
+      if (key == named.key && args.has(named.option)) {
         throw std::invalid_argument(std::string("--") + named.option + " and --params " + key +
                                     "= set the same value");
       }
     }
-    if (canonical == "target_platform") {
+    if (key == "targetPlatform") {
       platform = item.substr(eq + 1);
       has_platform = true;
-    } else if (canonical == "preset") {
+    } else if (key == "preset") {
       preset = item.substr(eq + 1);
       has_preset = true;
     } else {

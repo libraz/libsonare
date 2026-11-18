@@ -31,14 +31,19 @@ double json_number(const JsonValue& object, const char* key, double fallback, co
   return value->as_number();
 }
 
-double json_number_any(const JsonValue& object, const char* first_key, const char* second_key,
-                       double fallback, const char* context) {
-  const JsonValue* value = find_json_value(object, first_key);
-  if (value && !value->is_number()) {
-    invalid_band(context, std::string("expected numeric JSON field: ") + first_key);
+// An earlier spelling of a key is refused by name rather than read.
+void refuse_earlier_key(const JsonValue& object, const char* earlier_key, const char* current_key,
+                        const char* context) {
+  if (find_json_value(object, earlier_key)) {
+    invalid_band(context,
+                 std::string(earlier_key) + " is an earlier spelling; write " + current_key);
   }
-  if (value) return value->as_number();
-  return json_number(object, second_key, fallback, context);
+}
+
+double json_number_any(const JsonValue& object, const char* key, const char* earlier_key,
+                       double fallback, const char* context) {
+  refuse_earlier_key(object, earlier_key, key, context);
+  return json_number(object, key, fallback, context);
 }
 
 // Every JSON double reaches a float field through here: as_number() yields a
@@ -55,37 +60,34 @@ float json_float(const JsonValue& object, const char* key, float fallback, const
   return converted;
 }
 
-float json_float_any(const JsonValue& object, const char* first_key, const char* second_key,
+float json_float_any(const JsonValue& object, const char* key, const char* earlier_key,
                      float fallback, const char* context) {
   float converted = 0.0f;
   if (!sonare::numeric::checked_float_cast(
-          json_number_any(object, first_key, second_key, fallback, context), &converted)) {
-    invalid_band(context, std::string("numeric JSON field is non-finite or out of float range: ") +
-                              first_key);
+          json_number_any(object, key, earlier_key, fallback, context), &converted)) {
+    invalid_band(context,
+                 std::string("numeric JSON field is non-finite or out of float range: ") + key);
   }
   return converted;
 }
 
 // A dB field that ends up as a filter gain: the shelf designs raise 10^(dB/20)
 // in float, which overflows past roughly 770 dB and no longer realizes the gain.
-float json_gain_db_any(const JsonValue& object, const char* first_key, const char* second_key,
+float json_gain_db_any(const JsonValue& object, const char* key, const char* earlier_key,
                        float fallback, const char* context) {
-  const float value = json_float_any(object, first_key, second_key, fallback, context);
+  const float value = json_float_any(object, key, earlier_key, fallback, context);
   if (!sonare::numeric::finite(db_to_linear(value))) {
-    invalid_band(context,
-                 std::string("dB JSON field is too large to realize as a filter: ") + first_key);
+    invalid_band(context, std::string("dB JSON field is too large to realize as a filter: ") + key);
   }
   return value;
 }
 
-int json_int_any(const JsonValue& object, const char* first_key, const char* second_key,
-                 int fallback, const char* context) {
+int json_int_any(const JsonValue& object, const char* key, const char* earlier_key, int fallback,
+                 const char* context) {
   int converted = 0;
   if (!sonare::numeric::checked_integral_cast(
-          std::round(json_number_any(object, first_key, second_key, fallback, context)),
-          &converted)) {
-    invalid_band(context,
-                 std::string("integer JSON field is non-finite or out of range: ") + first_key);
+          std::round(json_number_any(object, key, earlier_key, fallback, context)), &converted)) {
+    invalid_band(context, std::string("integer JSON field is non-finite or out of range: ") + key);
   }
   return converted;
 }
@@ -94,15 +96,13 @@ bool json_bool(const JsonValue& object, const char* key, bool fallback, const ch
   const JsonValue* value = find_json_value(object, key);
   if (!value) return fallback;
   if (value->is_bool()) return value->as_bool();
-  if (value->is_number()) return value->as_number() != 0.0;
   invalid_band(context, std::string("expected boolean JSON field: ") + key);
 }
 
-bool json_bool_any(const JsonValue& object, const char* first_key, const char* second_key,
-                   bool fallback, const char* context) {
-  const JsonValue* value = find_json_value(object, first_key);
-  if (value) return json_bool(object, first_key, fallback, context);
-  return json_bool(object, second_key, fallback, context);
+bool json_bool_any(const JsonValue& object, const char* key, const char* earlier_key, bool fallback,
+                   const char* context) {
+  refuse_earlier_key(object, earlier_key, key, context);
+  return json_bool(object, key, fallback, context);
 }
 
 std::string json_string(const JsonValue& object, const char* key, const std::string& fallback,
@@ -115,95 +115,42 @@ std::string json_string(const JsonValue& object, const char* key, const std::str
   return value->as_string();
 }
 
-std::string json_string_any(const JsonValue& object, const char* first_key, const char* second_key,
+std::string json_string_any(const JsonValue& object, const char* key, const char* earlier_key,
                             const std::string& fallback, const char* context) {
-  const JsonValue* value = find_json_value(object, first_key);
-  if (value) return json_string(object, first_key, fallback, context);
-  return json_string(object, second_key, fallback, context);
+  refuse_earlier_key(object, earlier_key, key, context);
+  return json_string(object, key, fallback, context);
 }
 
 EqBandType parse_band_type(const std::string& value, const char* context) {
   const auto parsed = band_type_from_string(value);
-  if (!parsed) invalid_band(context, "unknown EQ band type: " + value);
+  if (!parsed)
+    invalid_band(context,
+                 "unknown EQ band type: " + value + " (expected " + band_type_tokens() + ")");
   return *parsed;
 }
 
 BiquadCoeffMode parse_coeff_mode(const std::string& value, const char* context) {
   const auto parsed = coeff_mode_from_string(value);
-  if (!parsed) invalid_band(context, "unknown EQ coefficient mode: " + value);
+  if (!parsed)
+    invalid_band(context, "unknown EQ coefficient mode: " + value + " (expected " +
+                              coeff_mode_tokens() + ")");
   return *parsed;
 }
 
 StereoPlacement parse_placement(const std::string& value, const char* context) {
   const auto parsed = placement_from_string(value);
-  if (!parsed) invalid_band(context, "unknown EQ placement: " + value);
+  if (!parsed)
+    invalid_band(context,
+                 "unknown EQ placement: " + value + " (expected " + placement_tokens() + ")");
   return *parsed;
 }
 
 PhaseMode parse_band_phase(const std::string& value, const char* context) {
   const auto parsed = phase_mode_from_string(value);
-  if (!parsed) invalid_band(context, "unknown EQ band phase mode: " + value);
+  if (!parsed)
+    invalid_band(context, "unknown EQ band phase mode: " + value + " (expected " +
+                              phase_mode_tokens() + ")");
   return *parsed;
-}
-
-const char* band_type_to_string(EqBandType type) {
-  switch (type) {
-    case EqBandType::Peak:
-      return "Peak";
-    case EqBandType::LowShelf:
-      return "LowShelf";
-    case EqBandType::HighShelf:
-      return "HighShelf";
-    case EqBandType::LowPass:
-      return "LowPass";
-    case EqBandType::HighPass:
-      return "HighPass";
-    case EqBandType::BandPass:
-      return "BandPass";
-    case EqBandType::Notch:
-      return "Notch";
-    case EqBandType::TiltShelf:
-      return "TiltShelf";
-    case EqBandType::FlatTilt:
-      return "FlatTilt";
-    case EqBandType::AllPass:
-      return "AllPass";
-  }
-  return "Peak";
-}
-
-const char* coeff_mode_to_string(BiquadCoeffMode mode) {
-  return mode == BiquadCoeffMode::Vicanek ? "Vicanek" : "Rbj";
-}
-
-const char* placement_to_string(StereoPlacement placement) {
-  switch (placement) {
-    case StereoPlacement::Stereo:
-      return "Stereo";
-    case StereoPlacement::Left:
-      return "Left";
-    case StereoPlacement::Right:
-      return "Right";
-    case StereoPlacement::Mid:
-      return "Mid";
-    case StereoPlacement::Side:
-      return "Side";
-  }
-  return "Stereo";
-}
-
-const char* phase_mode_to_string(PhaseMode phase) {
-  switch (phase) {
-    case PhaseMode::Inherit:
-      return "Inherit";
-    case PhaseMode::ZeroLatency:
-      return "ZeroLatency";
-    case PhaseMode::NaturalPhase:
-      return "NaturalPhase";
-    case PhaseMode::LinearPhase:
-      return "LinearPhase";
-  }
-  return "Inherit";
 }
 
 }  // namespace
@@ -211,17 +158,22 @@ const char* phase_mode_to_string(PhaseMode phase) {
 EqBand eq_band_from_value(const JsonValue& value, const char* context) {
   if (!value.is_object()) invalid_band(context, "value must be a JSON object");
   EqBand band;
-  band.type = parse_band_type(json_string(value, "type", "Peak", context), context);
+  band.type =
+      parse_band_type(json_string(value, "type", band_type_to_string(band.type), context), context);
   band.coeff_mode =
-      parse_coeff_mode(json_string_any(value, "coeffMode", "coeff_mode", "Rbj", context), context);
+      parse_coeff_mode(json_string_any(value, "coeffMode", "coeff_mode",
+                                       coeff_mode_to_string(band.coeff_mode), context),
+                       context);
   band.frequency_hz =
       json_float_any(value, "frequencyHz", "frequency_hz", band.frequency_hz, context);
   band.gain_db = json_gain_db_any(value, "gainDb", "gain_db", band.gain_db, context);
   band.q = json_float(value, "q", band.q, context);
   band.enabled = json_bool(value, "enabled", band.enabled, context);
   band.slope_db_oct = json_int_any(value, "slopeDbOct", "slope_db_oct", band.slope_db_oct, context);
-  band.placement = parse_placement(json_string(value, "placement", "Stereo", context), context);
-  band.phase = parse_band_phase(json_string(value, "phase", "Inherit", context), context);
+  band.placement = parse_placement(
+      json_string(value, "placement", placement_to_string(band.placement), context), context);
+  band.phase = parse_band_phase(
+      json_string(value, "phase", phase_mode_to_string(band.phase), context), context);
   band.soloed = json_bool(value, "soloed", false, context);
   band.bypassed = json_bool(value, "bypassed", false, context);
   band.proportional_q = json_bool_any(value, "proportionalQ", "proportional_q", false, context);
@@ -229,8 +181,9 @@ EqBand eq_band_from_value(const JsonValue& value, const char* context) {
       json_float_any(value, "proportionalQStrength", "proportional_q_strength",
                      band.proportional_q_strength, context);
 
-  band.dyn.enabled = json_bool_any(value, "dynamic", "dynEnabled", false, context);
-  band.dyn.enabled = json_bool(value, "dyn_enabled", band.dyn.enabled, context);
+  refuse_earlier_key(value, "dynEnabled", "dynamic", context);
+  refuse_earlier_key(value, "dyn_enabled", "dynamic", context);
+  band.dyn.enabled = json_bool(value, "dynamic", false, context);
   // threshold_db and range_db are the two dynamic terms that reach the biquad
   // as gain (detector_db - threshold_db, scaled by ratio, clamped to range_db),
   // so they carry the same realizability bound as the static gain.
@@ -243,11 +196,8 @@ EqBand eq_band_from_value(const JsonValue& value, const char* context) {
   band.dyn.attack_ms = json_float_any(value, "attackMs", "attack_ms", band.dyn.attack_ms, context);
   band.dyn.release_ms =
       json_float_any(value, "releaseMs", "release_ms", band.dyn.release_ms, context);
-  // "lookaheadMs"/"lookahead_ms" are the field's former (misleading) spelling;
-  // still accepted so a stored config keeps working, but the canonical
-  // "detectorDelayMs"/"detector_delay_ms" wins if both are present.
-  band.dyn.detector_delay_ms =
-      json_float_any(value, "lookaheadMs", "lookahead_ms", band.dyn.detector_delay_ms, context);
+  refuse_earlier_key(value, "lookaheadMs", "detectorDelayMs", context);
+  refuse_earlier_key(value, "lookahead_ms", "detectorDelayMs", context);
   band.dyn.detector_delay_ms = json_float_any(value, "detectorDelayMs", "detector_delay_ms",
                                               band.dyn.detector_delay_ms, context);
   band.dyn.sidechain_freq_hz = json_float_any(value, "sidechainFreqHz", "sidechain_freq_hz",
@@ -263,47 +213,28 @@ const std::vector<std::string>& eq_band_known_keys() {
   static const std::vector<std::string> keys = {
       "type",
       "coeffMode",
-      "coeff_mode",
       "frequencyHz",
-      "frequency_hz",
       "gainDb",
-      "gain_db",
       "q",
       "enabled",
       "slopeDbOct",
-      "slope_db_oct",
       "placement",
       "phase",
       "soloed",
       "bypassed",
       "proportionalQ",
-      "proportional_q",
       "proportionalQStrength",
-      "proportional_q_strength",
       "dynamic",
-      "dynEnabled",
-      "dyn_enabled",
       "thresholdDb",
-      "threshold_db",
       "autoThreshold",
-      "auto_threshold",
       "ratio",
       "rangeDb",
-      "range_db",
       "attackMs",
-      "attack_ms",
       "releaseMs",
-      "release_ms",
-      "lookaheadMs",
-      "lookahead_ms",
       "detectorDelayMs",
-      "detector_delay_ms",
       "sidechainFreqHz",
-      "sidechain_freq_hz",
       "sidechainQ",
-      "sidechain_q",
       "externalSidechain",
-      "external_sidechain",
   };
   return keys;
 }

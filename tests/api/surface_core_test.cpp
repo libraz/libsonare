@@ -121,7 +121,7 @@ constexpr const char* kSceneWithEveryMixingWarning = R"({
   "buses": [{"id": "master", "role": "master"}],
   "strips": [{"id": "a", "faderDB": -3,
     "inserts": [{"slot": "post", "processor": "eq.parametric",
-                 "params": "{\"highPassHz\":80}"}],
+                 "params": {"highPassHz":80}}],
     "sends": [{"id": "s", "destinationBusId": "aux1typo", "sendDb": 0}]}],
   "connections": [{"source": "a", "destination": "master"}]
 })";

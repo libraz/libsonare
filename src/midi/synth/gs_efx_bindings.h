@@ -34,7 +34,7 @@ inline constexpr std::array<std::string_view, 25> kGsEfxRowStages = {{
     "effects.modulation.ringModulator",
     "effects.modulation.rotary",
     "effects.modulation.wah",
-    "effects.reverb.dattorro",
+    "effects.reverb.plate",
     "eq.graphic",
     "eq.parametric",
     "saturation.ampSim",
@@ -928,19 +928,19 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
     // level.output -> utility.gain.levelDb
     {0x0154, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
      0, 69, 0},
-    // d.type_index6 -> effects.reverb.dattorro.character
+    // d.type_index6 -> effects.reverb.plate.character
     {0x0155, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawTypeIndex6, 0x00, 0x05, 0, 0, GsEfxOut::kValue,
      13, 0, 31, 0},
-    // delay_time.pre_delay -> effects.reverb.dattorro.preDelayMs
+    // delay_time.pre_delay -> effects.reverb.plate.preDelayMs
     {0x0155, 1, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13, 0,
      89, 0},
-    // d.tank_decay -> effects.reverb.dattorro.decay
+    // d.tank_decay -> effects.reverb.plate.decay
     {0x0155, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawTankDecay, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 13,
      0, 35, '+'},
-    // freq.damping -> effects.reverb.dattorro.dampingHz
+    // freq.damping -> effects.reverb.plate.dampingHz
     {0x0155, 3, kGsEfxRowDesigned, 2, 2, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 13, 0,
      34, 0},
-    // balance.effect -> effects.reverb.dattorro.dryWet
+    // balance.effect -> effects.reverb.plate.dryWet
     {0x0155, 15, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 13, 0,
      53, '#'},
     // gain.tone -> eq.parametric.band0.gainDb
@@ -952,16 +952,16 @@ inline constexpr std::array<GsEfxBindingRow, 849> kGsEfxBindingRows = {{
     // level.output -> utility.gain.levelDb
     {0x0155, 19, kGsEfxRowTranslated, 4, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 24,
      0, 69, 0},
-    // d.enum4 -> effects.reverb.dattorro.gateType
+    // d.enum4 -> effects.reverb.plate.gateType
     {0x0156, 0, kGsEfxRowDesigned, 0, 0, kGsEfxLawEnum4, 0x00, 0x03, 0, 0, GsEfxOut::kValue, 13, 0,
      58, 0},
-    // delay_time.pre_delay -> effects.reverb.dattorro.preDelayMs
+    // delay_time.pre_delay -> effects.reverb.plate.preDelayMs
     {0x0156, 1, kGsEfxRowTranslated, 1, 0, kGsEfxLawNone, 0x00, 0x00, 0, 0, GsEfxOut::kValue, 13, 0,
      89, 0},
-    // d.gate_ms -> effects.reverb.dattorro.gateHoldMs
+    // d.gate_ms -> effects.reverb.plate.gateHoldMs
     {0x0156, 2, kGsEfxRowDesigned, 0, 0, kGsEfxLawGateMs, 0x00, 0x63, 0, 0, GsEfxOut::kValue, 13, 0,
      57, 0},
-    // balance.effect -> effects.reverb.dattorro.dryWet
+    // balance.effect -> effects.reverb.plate.dryWet
     {0x0156, 15, kGsEfxRowDesigned, 8, 0, kGsEfxLawNone, 0x00, 0x7F, 0, 0, GsEfxOut::kValue, 13, 0,
      53, '+'},
     // gain.tone -> eq.parametric.band0.gainDb

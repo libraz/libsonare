@@ -623,6 +623,20 @@ TEST_CASE("Assistant param builders refuse an unknown key", "[mastering][assista
                     sonare::SonareException);
 }
 
+TEST_CASE("Assistant param builders refuse a snake_case spelling", "[mastering][assistant]") {
+  const sonare::mastering::api::Param snake[] = {{"target_lufs", -12.0}};
+  try {
+    (void)assistant::assistant_config_from_params(snake, 1);
+    FAIL("snake_case key was accepted");
+  } catch (const sonare::SonareException& e) {
+    REQUIRE(e.code() == sonare::ErrorCode::InvalidParameter);
+    REQUIRE(std::string(e.what()).find("targetLufs") != std::string::npos);
+  }
+  const sonare::mastering::api::Param profile[] = {{"hop_length", 256.0}};
+  REQUIRE_THROWS_AS(assistant::audio_profile_config_from_params(profile, 1),
+                    sonare::SonareException);
+}
+
 TEST_CASE("Assistant suggester loudness config matches preset true-peak oversampling",
           "[mastering][assistant]") {
   // The suggester's set_loudness() must produce the same true_peak_oversample as

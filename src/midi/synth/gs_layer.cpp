@@ -650,7 +650,7 @@ std::string_view gs_efx_insert_name(uint16_t type) noexcept {
       return "effects.delay.stereo";
     case 0x0155:  // Reverb (per-part insertion reverb)
     case 0x0156:  // Gate Reverb (approximated by the plate reverb; no gate stage yet)
-      return "effects.reverb.dattorro";
+      return "effects.reverb.plate";
     case 0x0160:  // 2-voice Pitch Shifter
     case 0x0161:  // Feedback Pitch Shifter (the feedback loop is not modelled)
       return "effects.modulation.pitchShifter";

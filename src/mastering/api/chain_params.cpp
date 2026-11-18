@@ -7,7 +7,6 @@
 #include <optional>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <vector>
 
 #include "mastering/api/chain.h"
@@ -152,8 +151,9 @@ bool is_scalar_cutoff_key(std::string_view canonical) {
   return multiband_rest(canonical, &rest) && parse_indexed(rest, "cutoff", "Hz", &index);
 }
 
-// Rewrites the multiband array spellings onto the scalar ones; false when nothing changes.
-bool canonical_multiband_key(std::string_view key, std::string* storage) {
+// The document spellings `bands.<i>.<field>` and `crossover.<leaf>` as the internal
+// `band<i>.<field>` and bare `<leaf>`; false when @p key is neither.
+bool internal_multiband_key(std::string_view key, std::string* storage) {
   std::string_view rest;
   if (!multiband_rest(key, &rest)) return false;
   constexpr std::string_view kCrossoverPrefix = "crossover.";
@@ -166,64 +166,68 @@ bool canonical_multiband_key(std::string_view key, std::string* storage) {
   }
   std::size_t index = 0;
   std::string_view field;
-  if (parse_band_field(rest, "bands.", &index, &field)) {
-    *storage =
-        std::string(kMultibandPrefix) + "band" + std::to_string(index) + "." + std::string(field);
-    return true;
+  if (!parse_band_field(rest, "bands.", &index, &field)) return false;
+  *storage =
+      std::string(kMultibandPrefix) + "band" + std::to_string(index) + "." + std::string(field);
+  return true;
+}
+
+// The spelling that replaced @p key, or empty when @p key was never a chain key.
+std::string retired_chain_key_successor(const std::string& key) {
+  static const std::pair<std::string_view, std::string_view> kRenamed[] = {
+      {"repair.denoise", "repair.denoise.enabled"},
+      {"repair.nFft", "repair.denoise.nFft"},
+      {"repair.hopLength", "repair.denoise.hopLength"},
+      {"repair.ddAlpha", "repair.denoise.ddAlpha"},
+      {"repair.reductionDb", "repair.denoise.reductionDb"},
+      {"repair.gainFloor", "repair.denoise.gainFloor"},
+      {"eq.tiltDb", "eq.tilt.tiltDb"},
+      {"eq.pivotHz", "eq.tilt.pivotHz"},
+      {"dynamics.multibandComp.lowCutoffHz", "dynamics.multibandComp.cutoff0Hz"},
+      {"dynamics.multibandComp.highCutoffHz", "dynamics.multibandComp.cutoff1Hz"},
+  };
+  for (const auto& [retired, current] : kRenamed) {
+    if (key == retired) return std::string(current);
   }
-  return false;
+  std::string_view rest;
+  if (!multiband_rest(key, &rest)) return std::string();
+  if (rest == "slope" || rest == "mode" || rest == "firKernelSize") {
+    return std::string(kMultibandPrefix) + "crossover." + std::string(rest);
+  }
+  std::size_t index = 0;
+  std::string_view field;
+  if (parse_band_field(rest, "band", &index, &field)) {
+    return std::string(kMultibandPrefix) + "bands." + std::to_string(index) + "." +
+           std::string(field);
+  }
+  // The low/mid/high shorthand of the default split's three bands.
+  static const std::pair<std::string_view, std::string_view> kBandWords[] = {
+      {"low", "0"}, {"mid", "1"}, {"high", "2"}};
+  static const std::pair<std::string_view, std::string_view> kBandFields[] = {
+      {"ThresholdDb", "thresholdDb"},
+      {"Ratio", "ratio"},
+      {"AttackMs", "attackMs"},
+      {"ReleaseMs", "releaseMs"}};
+  for (const auto& [word, band] : kBandWords) {
+    for (const auto& [suffix, leaf] : kBandFields) {
+      if (rest == std::string(word) + std::string(suffix)) {
+        return std::string(kMultibandPrefix) + "bands." + std::string(band) + "." +
+               std::string(leaf);
+      }
+    }
+  }
+  return std::string();
 }
 
 }  // namespace
 
 const std::string& canonical_chain_param_key(const std::string& key, std::string* storage) {
-  const char* canonical = nullptr;
-  if (key == "repair.denoise") canonical = "repair.denoise.enabled";
-  if (key == "repair.nFft") canonical = "repair.denoise.nFft";
-  if (key == "repair.hopLength") canonical = "repair.denoise.hopLength";
-  if (key == "repair.ddAlpha") canonical = "repair.denoise.ddAlpha";
-  if (key == "repair.reductionDb") canonical = "repair.denoise.reductionDb";
-  if (key == "repair.gainFloor") canonical = "repair.denoise.gainFloor";
-  if (key == "eq.tiltDb") canonical = "eq.tilt.tiltDb";
-  if (key == "eq.pivotHz") canonical = "eq.tilt.pivotHz";
-  // The multiband shorthand: the default split's two cutoffs and bands 0..2.
-  if (key == "dynamics.multibandComp.lowCutoffHz") canonical = "dynamics.multibandComp.cutoff0Hz";
-  if (key == "dynamics.multibandComp.highCutoffHz") canonical = "dynamics.multibandComp.cutoff1Hz";
-  if (key == "dynamics.multibandComp.lowThresholdDb") {
-    canonical = "dynamics.multibandComp.band0.thresholdDb";
+  const std::string successor = retired_chain_key_successor(key);
+  if (!successor.empty()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "unknown chain config key: " + key + " (renamed to " + successor + ")");
   }
-  if (key == "dynamics.multibandComp.lowRatio") canonical = "dynamics.multibandComp.band0.ratio";
-  if (key == "dynamics.multibandComp.lowAttackMs") {
-    canonical = "dynamics.multibandComp.band0.attackMs";
-  }
-  if (key == "dynamics.multibandComp.lowReleaseMs") {
-    canonical = "dynamics.multibandComp.band0.releaseMs";
-  }
-  if (key == "dynamics.multibandComp.midThresholdDb") {
-    canonical = "dynamics.multibandComp.band1.thresholdDb";
-  }
-  if (key == "dynamics.multibandComp.midRatio") canonical = "dynamics.multibandComp.band1.ratio";
-  if (key == "dynamics.multibandComp.midAttackMs") {
-    canonical = "dynamics.multibandComp.band1.attackMs";
-  }
-  if (key == "dynamics.multibandComp.midReleaseMs") {
-    canonical = "dynamics.multibandComp.band1.releaseMs";
-  }
-  if (key == "dynamics.multibandComp.highThresholdDb") {
-    canonical = "dynamics.multibandComp.band2.thresholdDb";
-  }
-  if (key == "dynamics.multibandComp.highRatio") canonical = "dynamics.multibandComp.band2.ratio";
-  if (key == "dynamics.multibandComp.highAttackMs") {
-    canonical = "dynamics.multibandComp.band2.attackMs";
-  }
-  if (key == "dynamics.multibandComp.highReleaseMs") {
-    canonical = "dynamics.multibandComp.band2.releaseMs";
-  }
-  if (canonical != nullptr) {
-    *storage = canonical;
-    return *storage;
-  }
-  if (canonical_multiband_key(key, storage)) return *storage;
+  if (internal_multiband_key(key, storage)) return *storage;
   return key;
 }
 
@@ -829,7 +833,6 @@ void apply_chain_params(MasteringChainConfig& cfg, const Param* params, std::siz
                         StageFlagsSet& flags) {
   std::vector<std::string> canonical(count);
   std::vector<bool> consumed(count, false);
-  std::unordered_map<std::string, std::size_t> multiband_spellings;
   std::map<std::size_t, std::size_t> cutoff_list;  // list index -> param position, last wins
   const std::string* scalar_cutoff = nullptr;
   for (std::size_t i = 0; i < count; ++i) {
@@ -837,12 +840,6 @@ void apply_chain_params(MasteringChainConfig& cfg, const Param* params, std::siz
     canonical[i] = canonical_chain_param_key(params[i].key, &storage);
     std::string_view rest;
     if (!multiband_rest(canonical[i], &rest)) continue;
-    const auto [seen, inserted] = multiband_spellings.emplace(canonical[i], i);
-    if (!inserted && params[seen->second].key != params[i].key) {
-      throw SonareException(
-          ErrorCode::InvalidParameter,
-          params[seen->second].key + " and " + params[i].key + " name the same multiband field");
-    }
     std::size_t index = 0;
     if (is_cutoff_list_key(canonical[i], &index)) {
       cutoff_list[index] = i;

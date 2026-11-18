@@ -270,10 +270,9 @@ int cmd_suggest_mix(const CliArgs& args, const Audio&) {
   std::optional<AssistantTrack> first_track;
   if (args.has("tempo-bpm")) {
     const std::string tempo_text = args.get_string("tempo-bpm");
-    // Both spellings reach the same config field, so naming both is a
-    // contradiction rather than a precedence question.
+    // Naming it twice is a contradiction rather than a precedence question.
     for (const auto& param : params) {
-      if (param.key == "tempoBpm" || param.key == "tempo_bpm") {
+      if (param.key == "tempoBpm") {
         throw std::invalid_argument("--tempo-bpm and --params tempoBpm= set the same value");
       }
     }
