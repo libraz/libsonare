@@ -72,14 +72,14 @@ test = "bindings/python/tests/test_analyzer_core.py::test_abi_versions_are_none_
 [[entry]]
 kind = "function"
 old = "has_ffmpeg_support"
-removed = true
+removed = "read capabilities().features.ffmpeg"
 domain = "core"
 rule = "abi-probes"
 
 [[entry]]
 kind = "function"
 old = "vocal_edit_available"
-removed = true
+removed = "read capabilities().features.vocal_edit"
 domain = "core"
 rule = "abi-probes"
 
@@ -555,9 +555,9 @@ test = "bindings/python/tests/test_mastering_insert_timing.py::test_insert_timin
 [[entry]]
 kind = "function"
 old = "synth_engine_param_info"
-changed = "returns frozen SynthParamInfo dataclasses read by attribute"
+changed = "returns frozen SynthParamInfo dataclasses read by attribute; engine_mode takes a SynthEngineMode token and an ordinal is TypeError"
 domain = "engine"
-rule = "frozen-results"
+rule = "string-closed-sets"
 test = "bindings/python/tests/test_synth_patch.py::test_engine_param_info_shape"
 
 [[entry]]
@@ -571,7 +571,7 @@ test = "bindings/python/tests/test_synth_patch.py::test_synth_patch_second_prese
 [[entry]]
 kind = "export"
 old = "EXPECTED_ENGINE_ABI_VERSION"
-removed = true
+removed = "call engine_abi_version()"
 domain = "core"
 rule = "abi-probes"
 
@@ -2440,147 +2440,147 @@ test = "bindings/python/tests/test_surface_analysis.py::test_inverse_transforms_
 [[entry]]
 kind = "option"
 old = "mel_delta(n_features)"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "option"
 old = "mel_delta(n_frames)"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "option"
 old = "pcen(n_bins)"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "option"
 old = "pcen(n_frames)"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "option"
 old = "tonnetz(n_chroma)"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "option"
 old = "tonnetz(n_frames)"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "option"
 old = "tempogram_ratio(win_length)"
-removed = true
+removed = "pass the 2-D tempogram; win_length is its row count"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "option"
 old = "mel_to_stft(n_mels)"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "option"
 old = "mel_to_stft(n_frames)"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "option"
 old = "mel_to_audio(n_mels)"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "option"
 old = "mel_to_audio(n_frames)"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "option"
 old = "griffin_lim(n_bins)"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "option"
 old = "griffin_lim(n_frames)"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "option"
 old = "mfcc_to_mel(n_mfcc)"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "option"
 old = "mfcc_to_mel(n_frames)"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "option"
 old = "mfcc_to_audio(n_mfcc)"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "option"
 old = "mfcc_to_audio(n_frames)"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "option"
 old = "cqt_to_audio(n_bins)"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "option"
 old = "cqt_to_audio(n_frames)"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "option"
 old = "vqt_to_audio(n_bins)"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "option"
 old = "vqt_to_audio(n_frames)"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -2626,14 +2626,14 @@ test = "bindings/python/tests/test_surface_analysis.py::test_silence_results_are
 [[entry]]
 kind = "field"
 old = "StftResult.n_bins"
-removed = true
+removed = "read it from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "StftResult.n_frames"
-removed = true
+removed = "read it from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -2656,14 +2656,14 @@ test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold
 [[entry]]
 kind = "field"
 old = "CqtResult.n_bins"
-removed = true
+removed = "read it from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "CqtResult.n_frames"
-removed = true
+removed = "read it from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -2686,21 +2686,21 @@ test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold
 [[entry]]
 kind = "field"
 old = "MelSpectrogramResult.n_mels"
-removed = true
+removed = "read it from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "MelSpectrogramResult.n_frames"
-removed = true
+removed = "read it from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "MelSpectrogramResult.is_db"
-removed = true
+removed = "read power for linear power or db for decibels; both are always present"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -2723,21 +2723,21 @@ test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold
 [[entry]]
 kind = "field"
 old = "MfccResult.n_mfcc"
-removed = true
+removed = "read it from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "MfccResult.n_frames"
-removed = true
+removed = "read it from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "MfccResult.is_db"
-removed = true
+removed = "drop the check; MFCC coefficients are a cepstrum and were never in dB"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -2752,14 +2752,14 @@ test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold
 [[entry]]
 kind = "field"
 old = "ChromaResult.n_chroma"
-removed = true
+removed = "read it from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "ChromaResult.n_frames"
-removed = true
+removed = "read it from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -2782,7 +2782,7 @@ test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold
 [[entry]]
 kind = "field"
 old = "PitchResult.n_frames"
-removed = true
+removed = "read it from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -2813,14 +2813,14 @@ test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold
 [[entry]]
 kind = "field"
 old = "PiptrackResult.n_bins"
-removed = true
+removed = "read it from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "PiptrackResult.n_frames"
-removed = true
+removed = "read it from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -2843,14 +2843,14 @@ test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold
 [[entry]]
 kind = "field"
 old = "ReassignedSpectrogramResult.n_bins"
-removed = true
+removed = "read it from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "field"
 old = "ReassignedSpectrogramResult.n_frames"
-removed = true
+removed = "read it from the 2-D array's shape"
 domain = "analysis"
 rule = "matrix-2d"
 
@@ -2881,49 +2881,49 @@ test = "bindings/python/tests/test_surface_analysis.py::test_result_classes_hold
 [[entry]]
 kind = "type"
 old = "SegmentMatrix"
-removed = true
+removed = "read the returned 2-D np.ndarray directly (shape is (rows, cols))"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "type"
 old = "StftMagnitudeResult"
-removed = true
+removed = "read the 2-D np.ndarray mel_to_stft returns (shape (n_bins, n_frames))"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "type"
 old = "MelPowerResult"
-removed = true
+removed = "read the 2-D np.ndarray mfcc_to_mel returns (shape (n_mels, n_frames))"
 domain = "analysis"
 rule = "matrix-2d"
 
 [[entry]]
 kind = "function"
 old = "mel_result_to_stft"
-removed = true
+removed = "call mel_to_stft(result.power, sr=result.sample_rate, n_fft=result.n_fft, fmin=result.fmin_hz, fmax=result.fmax_hz, htk=result.htk)"
 domain = "analysis"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "function"
 old = "mel_result_to_audio"
-removed = true
+removed = "call mel_to_audio(result.power, sr=result.sample_rate, n_fft=result.n_fft, hop_length=result.hop_length, fmin=result.fmin_hz, fmax=result.fmax_hz, htk=result.htk)"
 domain = "analysis"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "function"
 old = "mfcc_result_to_mel"
-removed = true
+removed = "call mfcc_to_mel(result.coefficients, n_mels=result.n_mels, lifter=result.lifter)"
 domain = "analysis"
 rule = "one-entry-per-operation"
 
 [[entry]]
 kind = "function"
 old = "mfcc_result_to_audio"
-removed = true
+removed = "call mfcc_to_audio(result.coefficients, n_mels=result.n_mels, sr=result.sample_rate, n_fft=result.n_fft, hop_length=result.hop_length, fmin=result.fmin_hz, fmax=result.fmax_hz, htk=result.htk)"
 domain = "analysis"
 rule = "one-entry-per-operation"
 
@@ -3336,21 +3336,21 @@ rule = "seconds-suffix"
 [[entry]]
 kind = "field"
 old = "AnalysisResult.beat_times"
-removed = true
+removed = "read [b.time_sec for b in result.beats]"
 domain = "analysis"
 rule = "typed-results"
 
 [[entry]]
 kind = "field"
 old = "AnalysisResult.beat_strengths"
-removed = true
+removed = "read [b.strength for b in result.beats]"
 domain = "analysis"
 rule = "typed-results"
 
 [[entry]]
 kind = "field"
 old = "AnalysisResult.downbeat_indices"
-removed = true
+removed = "read result.downbeats, the downbeat Beat records"
 domain = "analysis"
 rule = "typed-results"
 
@@ -3425,14 +3425,7 @@ rule = "typed-results"
 [[entry]]
 kind = "type"
 old = "SectionResult"
-removed = true
-domain = "analysis"
-rule = "typed-results"
-
-[[entry]]
-kind = "field"
-old = "SectionResult.sections"
-removed = true
+removed = "analyze_sections returns list[Section]; iterate it instead of .sections"
 domain = "analysis"
 rule = "typed-results"
 
@@ -3454,7 +3447,7 @@ rule = "typed-results"
 [[entry]]
 kind = "option"
 old = "estimate_meter(beat_strengths)"
-removed = true
+removed = "pass beats=analysis.beats (Beat records carry time_sec and strength)"
 domain = "analysis"
 rule = "typed-results"
 
@@ -3726,413 +3719,413 @@ test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are
 [[entry]]
 kind = "field"
 old = "BoundaryResult.n_frames"
-removed = true
+removed = "read it from the 2-D array's shape"
 domain = "analysis"
 rule = "array-results"
 
 [[entry]]
 kind = "method"
 old = "AnalysisResult.bpmConfidence"
-removed = true
+removed = "read bpm_confidence"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisResult.timeSignature"
-removed = true
+removed = "read time_signature"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisResult.bpmCandidates"
-removed = true
+removed = "read bpm_candidates"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisResult.timeSignatureCandidates"
-removed = true
+removed = "read time_signature_candidates"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisResult.beatTimes"
-removed = true
+removed = "read [b.time_sec for b in result.beats]"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisResult.beatStrengths"
-removed = true
+removed = "read [b.strength for b in result.beats]"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisResult.downbeatIndices"
-removed = true
+removed = "read result.downbeats"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisResult.downbeatPhase"
-removed = true
+removed = "read downbeat_phase"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisResult.beatObservations"
-removed = true
+removed = "read beat_observations"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisResult.beatLocalBpm"
-removed = true
+removed = "read beat_local_bpm"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisDynamics.dynamicRangeDb"
-removed = true
+removed = "read dynamic_range_db"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisDynamics.peakDb"
-removed = true
+removed = "read peak_db"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisDynamics.rmsDb"
-removed = true
+removed = "read rms_db"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisDynamics.crestFactor"
-removed = true
+removed = "read crest_factor"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisDynamics.loudnessRangeDb"
-removed = true
+removed = "read loudness_range_lu"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisDynamics.isCompressed"
-removed = true
+removed = "read is_compressed"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisRhythm.timeSignature"
-removed = true
+removed = "read time_signature"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisRhythm.grooveType"
-removed = true
+removed = "read groove_type"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisRhythm.patternRegularity"
-removed = true
+removed = "read pattern_regularity"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisRhythm.tempoStability"
-removed = true
+removed = "read tempo_stability"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisMelody.pitchRangeOctaves"
-removed = true
+removed = "read pitch_range_octaves"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisMelody.pitchStability"
-removed = true
+removed = "read pitch_stability"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisMelody.meanFrequency"
-removed = true
+removed = "read mean_frequency_hz"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AnalysisMelody.vibratoRate"
-removed = true
+removed = "read vibrato_rate_hz"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "Key.shortName"
-removed = true
+removed = "read short_name"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "Chord.rootName"
-removed = true
+removed = "read root_name"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "Chord.bassName"
-removed = true
+removed = "read bass_name"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "MeterEstimate.timeSignature"
-removed = true
+removed = "read time_signature"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "MeterEstimate.downbeatPhase"
-removed = true
+removed = "read downbeat_phase"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "MeterEstimate.candidateScores"
-removed = true
+removed = "read candidate_scores"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AcousticResult.rt60Bands"
-removed = true
+removed = "read rt60_bands"
 domain = "effects"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AcousticResult.edtBands"
-removed = true
+removed = "read edt_bands"
 domain = "effects"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AcousticResult.c50Bands"
-removed = true
+removed = "read c50_bands"
 domain = "effects"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AcousticResult.c80Bands"
-removed = true
+removed = "read c80_bands"
 domain = "effects"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "AcousticResult.isBlind"
-removed = true
+removed = "read is_blind"
 domain = "effects"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "RhythmResult.timeSignature"
-removed = true
+removed = "read time_signature"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "RhythmResult.grooveType"
-removed = true
+removed = "read groove_type"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "RhythmResult.patternRegularity"
-removed = true
+removed = "read pattern_regularity"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "RhythmResult.tempoStability"
-removed = true
+removed = "read tempo_stability"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "RhythmResult.beatIntervals"
-removed = true
+removed = "read beat_intervals"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "DynamicsResult.dynamicRangeDb"
-removed = true
+removed = "read dynamic_range_db"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "DynamicsResult.peakDb"
-removed = true
+removed = "read peak_db"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "DynamicsResult.rmsDb"
-removed = true
+removed = "read rms_db"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "DynamicsResult.crestFactor"
-removed = true
+removed = "read crest_factor"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "DynamicsResult.loudnessRangeDb"
-removed = true
+removed = "read loudness_range_lu"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "DynamicsResult.isCompressed"
-removed = true
+removed = "read is_compressed"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "DynamicsResult.loudnessTimes"
-removed = true
+removed = "read loudness_times_sec"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "DynamicsResult.loudnessRmsDb"
-removed = true
+removed = "read loudness_rms_db"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "TimbreResult.spectralCentroid"
-removed = true
+removed = "read spectral_centroid"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "TimbreResult.spectralFlatness"
-removed = true
+removed = "read spectral_flatness"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "TimbreResult.spectralRolloff"
-removed = true
+removed = "read spectral_rolloff"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "TimbreResult.timbreOverTime"
-removed = true
+removed = "read timbre_over_time"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "LufsResult.integratedLufs"
-removed = true
+removed = "read integrated_lufs"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "LufsResult.momentaryLufs"
-removed = true
+removed = "read momentary_lufs"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "LufsResult.shortTermLufs"
-removed = true
+removed = "read short_term_lufs"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "LufsResult.maxMomentaryLufs"
-removed = true
+removed = "read max_momentary_lufs"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "LufsResult.maxShortTermLufs"
-removed = true
+removed = "read max_short_term_lufs"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "method"
 old = "LufsResult.loudnessRange"
-removed = true
+removed = "read loudness_range_lu"
 domain = "analysis"
 rule = "aliases-removed"
 
@@ -4651,7 +4644,7 @@ test = "bindings/python/tests/test_pitch_parameter_names.py::test_the_scale_help
 [[entry]]
 kind = "function"
 old = "pitch_correct_to_midi_timevarying"
-removed = true
+removed = 'call pitch_correct_timevarying(samples, sample_rate, f0_hz, hop_length, target_mode="midi", target_midi=...)'
 domain = "effects"
 rule = "one-entry-per-operation"
 
@@ -4704,14 +4697,14 @@ rule = "frequency-bounds"
 [[entry]]
 kind = "field"
 old = "StreamConfig.compute_magnitude"
-removed = true
+removed = "drop the argument; it never had any effect"
 domain = "analysis"
 rule = "aliases-removed"
 
 [[entry]]
 kind = "field"
 old = "StreamConfig.output_format"
-removed = true
+removed = "drop the argument; it never had any effect"
 domain = "analysis"
 rule = "aliases-removed"
 
@@ -4741,14 +4734,14 @@ rule = "type-names"
 [[entry]]
 kind = "method"
 old = "StreamAnalyzer.destroy"
-removed = true
+removed = "call close(), or use the analyzer as a context manager"
 domain = "analysis"
 rule = "teardown"
 
 [[entry]]
 kind = "method"
 old = "StreamAnalyzer.delete"
-removed = true
+removed = "call close()"
 domain = "analysis"
 rule = "teardown"
 
@@ -4817,63 +4810,63 @@ test = "bindings/python/tests/test_stream_analyzer_shape.py::test_a_feature_that
 [[entry]]
 kind = "field"
 old = "StreamFrames.n_mels"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "array-results"
 
 [[entry]]
 kind = "field"
 old = "StreamFrames.n_chroma"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "array-results"
 
 [[entry]]
 kind = "field"
 old = "StreamFrames.feature_flags"
-removed = true
+removed = "test the feature field itself; a feature not computed is None"
 domain = "analysis"
 rule = "individual"
 
 [[entry]]
 kind = "field"
 old = "StreamFramesU8.n_mels"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "array-results"
 
 [[entry]]
 kind = "field"
 old = "StreamFramesU8.n_chroma"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "array-results"
 
 [[entry]]
 kind = "field"
 old = "StreamFramesU8.feature_flags"
-removed = true
+removed = "test the feature field itself; a feature not computed is None"
 domain = "analysis"
 rule = "individual"
 
 [[entry]]
 kind = "field"
 old = "StreamFramesI16.n_mels"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "array-results"
 
 [[entry]]
 kind = "field"
 old = "StreamFramesI16.n_chroma"
-removed = true
+removed = "taken from the 2-D array's shape"
 domain = "analysis"
 rule = "array-results"
 
 [[entry]]
 kind = "field"
 old = "StreamFramesI16.feature_flags"
-removed = true
+removed = "test the feature field itself; a feature not computed is None"
 domain = "analysis"
 rule = "individual"
 
@@ -4994,56 +4987,56 @@ rule = "type-names"
 [[entry]]
 kind = "field"
 old = "StreamStats.key_minor"
-removed = true
+removed = 'read stats.estimate.key.mode == "minor" (estimate.key is None until a key is estimated)'
 domain = "analysis"
 rule = "type-names"
 
 [[entry]]
 kind = "field"
 old = "StreamStats.key_confidence"
-removed = true
+removed = "read stats.estimate.key.confidence"
 domain = "analysis"
 rule = "type-names"
 
 [[entry]]
 kind = "field"
 old = "StreamStats.key_name"
-removed = true
+removed = "read stats.estimate.key.name"
 domain = "analysis"
 rule = "type-names"
 
 [[entry]]
 kind = "field"
 old = "StreamStats.key_short_name"
-removed = true
+removed = "read stats.estimate.key.short_name"
 domain = "analysis"
 rule = "type-names"
 
 [[entry]]
 kind = "field"
 old = "StreamStats.chord_root"
-removed = true
+removed = "read stats.estimate.chord.root (estimate.chord is None until a chord is detected)"
 domain = "analysis"
 rule = "type-names"
 
 [[entry]]
 kind = "field"
 old = "StreamStats.chord_quality"
-removed = true
+removed = "read stats.estimate.chord.quality"
 domain = "analysis"
 rule = "type-names"
 
 [[entry]]
 kind = "field"
 old = "StreamStats.chord_name"
-removed = true
+removed = "read stats.estimate.chord.name"
 domain = "analysis"
 rule = "type-names"
 
 [[entry]]
 kind = "field"
 old = "StreamStats.chord_confidence"
-removed = true
+removed = "read stats.estimate.chord.confidence"
 domain = "analysis"
 rule = "type-names"
 
@@ -5319,18 +5312,18 @@ test = "bindings/python/tests/test_voice_and_room_spellings.py::test_the_room_es
 [[entry]]
 kind = "option"
 old = "Project.set_clip_fade(fade_in_curve)"
-changed = "a curve name is exactly linear, equalPower, exponential or logarithmic; separator variants and abbreviations raise"
+changed = "a ProjectFadeCurve token only (linear, equalPower, exponential, logarithmic); separator variants and abbreviations raise, the FADE_CURVE_* ordinals are removed and a number is TypeError"
 domain = "project"
-rule = "token-case"
-test = "bindings/python/tests/test_voice_and_room_spellings.py::test_a_fade_curve_outside_the_four_tokens_is_refused"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_a_fade_curve_ordinal_is_a_type_error"
 
 [[entry]]
 kind = "option"
 old = "Project.set_clip_fade(fade_out_curve)"
-changed = "a curve name is exactly linear, equalPower, exponential or logarithmic; separator variants and abbreviations raise"
+changed = "a ProjectFadeCurve token only (linear, equalPower, exponential, logarithmic); separator variants and abbreviations raise, the FADE_CURVE_* ordinals are removed and a number is TypeError"
 domain = "project"
-rule = "token-case"
-test = "bindings/python/tests/test_voice_and_room_spellings.py::test_a_fade_curve_outside_the_four_tokens_is_refused"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_a_fade_curve_ordinal_is_a_type_error"
 
 [[entry]]
 kind = "option"
@@ -5551,7 +5544,7 @@ test = "bindings/python/tests/test_streaming_mastering_shape.py::test_the_chain_
 [[entry]]
 kind = "method"
 old = "StreamingMasteringChain.prepare"
-removed = true
+removed = "pass sample_rate=, max_block_size= and num_channels= to the constructor"
 domain = "mastering"
 rule = "construction"
 
@@ -5718,49 +5711,49 @@ test = "bindings/python/tests/test_streaming_mastering_shape.py::test_equalizer_
 [[entry]]
 kind = "method"
 old = "EqSpectrumSnapshot.preLeft"
-removed = true
+removed = "read pre_left"
 domain = "analysis"
 rule = "snake-case-only"
 
 [[entry]]
 kind = "method"
 old = "EqSpectrumSnapshot.preRight"
-removed = true
+removed = "read pre_right"
 domain = "analysis"
 rule = "snake-case-only"
 
 [[entry]]
 kind = "method"
 old = "EqSpectrumSnapshot.postLeft"
-removed = true
+removed = "read post_left"
 domain = "analysis"
 rule = "snake-case-only"
 
 [[entry]]
 kind = "method"
 old = "EqSpectrumSnapshot.postRight"
-removed = true
+removed = "read post_right"
 domain = "analysis"
 rule = "snake-case-only"
 
 [[entry]]
 kind = "method"
 old = "EqSpectrumSnapshot.bandGainDb"
-removed = true
+removed = "read band_gain_db"
 domain = "analysis"
 rule = "snake-case-only"
 
 [[entry]]
 kind = "method"
 old = "EqSpectrumSnapshot.profileDb"
-removed = true
+removed = "read profile_db"
 domain = "analysis"
 rule = "snake-case-only"
 
 [[entry]]
 kind = "method"
 old = "EqSpectrumSnapshot.lastAutoGainDb"
-removed = true
+removed = "read last_auto_gain_db"
 domain = "analysis"
 rule = "snake-case-only"
 
@@ -6046,22 +6039,6 @@ test = "bindings/python/tests/test_engine.py::test_engine_rejects_out_of_range_a
 
 [[entry]]
 kind = "option"
-old = "Project.set_clip_fade(fade_in_curve)"
-changed = "a ProjectFadeCurve token only; the FADE_CURVE_* ordinals are removed and a number is TypeError"
-domain = "project"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_a_fade_curve_ordinal_is_a_type_error"
-
-[[entry]]
-kind = "option"
-old = "Project.set_clip_fade(fade_out_curve)"
-changed = "a ProjectFadeCurve token only; the FADE_CURVE_* ordinals are removed and a number is TypeError"
-domain = "project"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_a_fade_curve_ordinal_is_a_type_error"
-
-[[entry]]
-kind = "option"
 old = "Project.set_clip_loop(loop_mode)"
 changed = "'off' or 'loop' only; 'on', 'none' and the LOOP_MODE_* ordinals are refused"
 domain = "project"
@@ -6279,9 +6256,9 @@ test = "bindings/python/tests/test_articulation.py::test_an_unknown_articulation
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.articulation"
-changed = "reports monoRetrigger / monoLegato"
+changed = "returns the Articulation token (poly, monoRetrigger, monoLegato)"
 domain = "engine"
-rule = "token-case"
+rule = "string-closed-sets"
 test = "bindings/python/tests/test_articulation.py::test_articulation_round_trips_per_channel"
 
 [[entry]]
@@ -6457,14 +6434,6 @@ rule = "string-closed-sets"
 test = "bindings/python/tests/test_sample_bank.py::test_the_sample_loop_mode_token_reaches_the_render"
 
 [[entry]]
-kind = "function"
-old = "synth_engine_param_info"
-changed = "engine_mode takes a SynthEngineMode token; an ordinal is TypeError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_synth_patch.py::test_engine_param_info_shape"
-
-[[entry]]
 kind = "method"
 old = "RealtimeEngine.bind_controller"
 changed = "input and axis take ControllerInput / ControllerAxis tokens; an ordinal is TypeError"
@@ -6487,14 +6456,6 @@ changed = "articulation takes an Articulation token; an ordinal is TypeError"
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_articulation.py::test_an_unknown_articulation_spelling_or_ordinal_is_refused_by_the_binding"
-
-[[entry]]
-kind = "method"
-old = "RealtimeEngine.articulation"
-changed = "returns the Articulation token"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_articulation.py::test_articulation_round_trips_per_channel"
 
 [[entry]]
 kind = "method"
@@ -6531,7 +6492,7 @@ test = "bindings/python/tests/test_vocal_edit.py::test_a_merge_policy_is_an_exac
 [[entry]]
 kind = "type"
 old = "VocalOperationKind"
-removed = true
+removed = "build the operation record itself (VocalSetNoteEdit, VocalSplitNote, ...); its class is the kind"
 domain = "project"
 rule = "string-closed-sets"
 
@@ -6910,7 +6871,7 @@ rule = "unit-in-name"
 [[entry]]
 kind = "type"
 old = "MatchTonalBalanceLogBandsResult"
-removed = true
+removed = "read match.tonalBalanceLogBands as MatchTonalBalanceResult; the shape is the same"
 domain = "mastering"
 rule = "typed-results"
 
