@@ -144,7 +144,6 @@ def normalize(
     *,
     mode: NormalizeMode = "peak",
     target_db: float | None = None,
-    validate: bool = True,
 ) -> np.ndarray:
     """Normalize audio so its peak or RMS level reaches ``target_db``.
 
@@ -157,14 +156,12 @@ def normalize(
         mode: ``"peak"`` (default) or ``"rms"``; any other value is refused by name.
         target_db: Finite target at or below 0 dBFS. Omitted, 0.0 dBFS for
             ``"peak"`` and -20.0 dBFS for ``"rms"``, as on Node and WASM.
-        validate: Reject empty / NaN / Inf input (default True). Pass
-            ``validate=False`` to skip the scan on hot paths.
 
     Returns:
         ``float32`` array of normalized samples.
     """
     resolved = _normalize_mode("normalize", mode)
-    _validate_samples("normalize", samples, validate=validate)
+    _validate_samples("normalize", samples)
     target_db_c = _normalize_target(
         "normalize", _DEFAULT_NORMALIZE_TARGET_DB[resolved] if target_db is None else target_db
     )
@@ -194,7 +191,6 @@ def normalize_stereo(
     *,
     mode: NormalizeMode = "peak",
     target_db: float | None = None,
-    validate: bool = True,
 ) -> NormalizeStereoResult:
     """Normalize a stereo pair on one gain measured across both channels.
 
@@ -221,8 +217,6 @@ def normalize_stereo(
         mode: ``"peak"`` (default) or ``"rms"``; any other value is refused by name.
         target_db: Finite target at or below 0 dBFS. Omitted, 0.0 dBFS for
             ``"peak"`` and -20.0 dBFS for ``"rms"``, as on Node and WASM.
-        validate: Reject empty / NaN / Inf input (default True). Pass
-            ``validate=False`` to skip the scan on hot paths.
 
     Returns:
         :class:`NormalizeStereoResult` with the two normalized channels, their
@@ -255,8 +249,6 @@ def trim(
     threshold_db: float = -60.0,
     frame_length: int = _DEFAULT_TRIM_FRAME_LENGTH,
     hop_length: int = _DEFAULT_TRIM_HOP_LENGTH,
-    *,
-    validate: bool = True,
 ) -> np.ndarray:
     """Trim silence from the beginning and end of audio.
 
@@ -266,12 +258,11 @@ def trim(
         threshold_db: Silence threshold in dB (default -60.0).
         frame_length: RMS analysis frame length in samples (default 2048).
         hop_length: RMS analysis hop length in samples (default 512).
-        validate: Reject empty / NaN / Inf input (default ``True``).
 
     Returns:
         ``float32`` array of trimmed samples.
     """
-    _validate_samples("trim", samples, validate=validate)
+    _validate_samples("trim", samples)
     frame_length, hop_length = _validate_trim_options(frame_length, hop_length)
     lib = _get_lib()
     if not hasattr(lib, "sonare_trim_ex"):

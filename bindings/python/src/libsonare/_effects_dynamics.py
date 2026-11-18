@@ -54,13 +54,12 @@ def _run_dynamics(
     config: Any,
     *,
     fn_name: str = "mastering_dynamics",
-    validate: bool = True,
 ) -> DynamicsProcessorResult:
     """Invoke a dynamics ``(samples, sr, &config, &out, &out_length, &out_latency)``
     C call and return its :class:`DynamicsProcessorResult`.
     """
     lib = _get_lib()
-    in_buf = _validate_samples(fn_name, samples, validate=validate)
+    in_buf = _validate_samples(fn_name, samples)
     length = int(in_buf.shape[0])
     c_array = in_buf.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
     latency = ctypes.c_int()
@@ -96,7 +95,6 @@ def mastering_dynamics_compressor(
     sidechain_high_pass_hz: float | None = None,
     pdr_time_ms: float = 0.0,
     pdr_release_scale: float = 1.0,
-    validate: bool = True,
 ) -> DynamicsProcessorResult:
     """Apply the offline feed-forward compressor.
 
@@ -143,7 +141,6 @@ def mastering_dynamics_compressor(
         sample_rate,
         config,
         fn_name="mastering_dynamics_compressor",
-        validate=validate,
     )
 
 
@@ -158,7 +155,6 @@ def mastering_dynamics_gate(
     hold_ms: float = 0.0,
     close_threshold_db: float = -50.0,
     key_high_pass_hz: float | None = None,
-    validate: bool = True,
 ) -> DynamicsProcessorResult:
     """Apply the offline noise gate.
 
@@ -196,7 +192,6 @@ def mastering_dynamics_gate(
         sample_rate,
         config,
         fn_name="mastering_dynamics_gate",
-        validate=validate,
     )
 
 
@@ -214,7 +209,6 @@ def mastering_dynamics_transient_shaper(
     max_gain_db: float = 12.0,
     gain_smoothing_ms: float = 0.0,
     lookahead_ms: float = 0.0,
-    validate: bool = True,
 ) -> DynamicsProcessorResult:
     """Apply the offline envelope-difference transient shaper.
 
@@ -254,5 +248,4 @@ def mastering_dynamics_transient_shaper(
         sample_rate,
         config,
         fn_name="mastering_dynamics_transient_shaper",
-        validate=validate,
     )

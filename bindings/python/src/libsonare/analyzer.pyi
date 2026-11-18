@@ -717,23 +717,15 @@ def hpss(
     n_fft: int = 2048,
     hop_length: int | None = None,
     hard_mask: bool = False,
-    *,
-    validate: bool = True,
 ) -> HpssResult: ...
-def harmonic(
-    samples: FloatSamples, sample_rate: int, *, validate: bool = True
-) -> np.ndarray[Any, Any]: ...
-def percussive(
-    samples: FloatSamples, sample_rate: int, *, validate: bool = True
-) -> np.ndarray[Any, Any]: ...
+def harmonic(samples: FloatSamples, sample_rate: int) -> np.ndarray[Any, Any]: ...
+def percussive(samples: FloatSamples, sample_rate: int) -> np.ndarray[Any, Any]: ...
 def time_stretch(
     samples: FloatSamples,
     sample_rate: int,
     speed_ratio: float,
     n_fft: int = 2048,
     hop_length: int | None = None,
-    *,
-    validate: bool = True,
 ) -> np.ndarray[Any, Any]: ...
 def pitch_shift(
     samples: FloatSamples,
@@ -741,8 +733,6 @@ def pitch_shift(
     pitch_semitones: float,
     n_fft: int = 2048,
     hop_length: int | None = None,
-    *,
-    validate: bool = True,
 ) -> np.ndarray[Any, Any]: ...
 def pitch_correct_to_midi(
     samples: FloatSamples,
@@ -965,7 +955,6 @@ def normalize(
     *,
     mode: NormalizeMode = "peak",
     target_db: float | None = None,
-    validate: bool = True,
 ) -> np.ndarray[Any, Any]: ...
 def normalize_stereo(
     left: FloatSamples,
@@ -974,7 +963,6 @@ def normalize_stereo(
     *,
     mode: NormalizeMode = "peak",
     target_db: float | None = None,
-    validate: bool = True,
 ) -> NormalizeStereoResult: ...
 def mastering(
     samples: FloatSamples,
@@ -1224,8 +1212,6 @@ def trim(
     threshold_db: float = -60.0,
     frame_length: int = 2048,
     hop_length: int = 512,
-    *,
-    validate: bool = True,
 ) -> np.ndarray[Any, Any]: ...
 def stft(
     samples: FloatSamples, sr: int = 22050, n_fft: int = 2048, hop_length: int = 512
@@ -1456,21 +1442,15 @@ def lufs_interleaved(
     samples: FloatSamples,
     channels: int,
     sample_rate: int,
-    *,
-    validate: bool = True,
 ) -> LufsResult: ...
 def lufs_series_interleaved(
     samples: FloatSamples,
     channels: int,
     sample_rate: int,
-    *,
-    validate: bool = True,
 ) -> LufsSeriesResult: ...
 def ebur128_loudness_range_lu(
     samples: FloatSamples,
     sample_rate: int,
-    *,
-    validate: bool = True,
 ) -> float: ...
 def decompose(
     s: FloatSamples,
@@ -1499,8 +1479,6 @@ def decompose_stems(
     beta: float | None = None,
     init: NmfInit | None = None,
     mask_power: float | None = None,
-    *,
-    validate: bool = True,
 ) -> dict[str, object]: ...
 def decompose_stems_linked(
     channels: PlanarChannels,
@@ -1512,8 +1490,6 @@ def decompose_stems_linked(
     beta: float | None = None,
     init: NmfInit | None = None,
     mask_power: float | None = None,
-    *,
-    validate: bool = True,
 ) -> dict[str, object]: ...
 def nn_filter(
     s: FloatSamples,
@@ -1543,8 +1519,6 @@ def hpss_with_residual(
     n_fft: int = 2048,
     hop_length: int | None = None,
     hard_mask: bool = False,
-    *,
-    validate: bool = True,
 ) -> dict[str, object]: ...
 def phase_vocoder(
     samples: FloatSamples,
@@ -1552,8 +1526,6 @@ def phase_vocoder(
     speed_ratio: float,
     n_fft: int = 2048,
     hop_length: int = 512,
-    *,
-    validate: bool = True,
 ) -> np.ndarray[Any, Any]: ...
 def hz_to_mel(hz: float) -> float: ...
 def mel_to_hz(mel: float) -> float: ...
@@ -2039,50 +2011,36 @@ def mastering_repair_trim_silence_stereo(
     gate_lufs: float = -60.0,
     window_ms: float = 400.0,
 ) -> TrimSilenceStereoResult: ...
-def lufs(samples: FloatSamples, sample_rate: int, *, validate: bool = True) -> LufsResult: ...
-def momentary_lufs(
-    samples: FloatSamples, sample_rate: int, *, validate: bool = True
-) -> np.ndarray[Any, Any]: ...
-def short_term_lufs(
-    samples: FloatSamples, sample_rate: int, *, validate: bool = True
-) -> np.ndarray[Any, Any]: ...
+def lufs(samples: FloatSamples, sample_rate: int) -> LufsResult: ...
+def momentary_lufs(samples: FloatSamples, sample_rate: int) -> np.ndarray[Any, Any]: ...
+def short_term_lufs(samples: FloatSamples, sample_rate: int) -> np.ndarray[Any, Any]: ...
 def metering_stereo_correlation(
-    left: FloatSamples, right: FloatSamples, sample_rate: int, *, validate: bool = True
+    left: FloatSamples, right: FloatSamples, sample_rate: int
 ) -> float: ...
-def metering_stereo_width(
-    left: FloatSamples, right: FloatSamples, sample_rate: int, *, validate: bool = True
-) -> float: ...
+def metering_stereo_width(left: FloatSamples, right: FloatSamples, sample_rate: int) -> float: ...
 def metering_vectorscope(
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int,
     max_points: int | None = None,
-    *,
-    validate: bool = True,
 ) -> VectorscopeReport: ...
 def metering_vectorscope_decimated(
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int,
     max_points: int | None = None,
-    *,
-    validate: bool = True,
 ) -> VectorscopeReport: ...
 def metering_phase_scope(
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int,
     max_points: int | None = None,
-    *,
-    validate: bool = True,
 ) -> PhaseScopeReport: ...
 def metering_phase_scope_decimated(
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int,
     max_points: int | None = None,
-    *,
-    validate: bool = True,
 ) -> PhaseScopeReport: ...
 def metering_spectrum(
     samples: FloatSamples,
@@ -2092,8 +2050,6 @@ def metering_spectrum(
     octave_fraction: int | None = None,
     db_ref: float | None = None,
     db_amin: float | None = None,
-    *,
-    validate: bool = True,
 ) -> SpectrumReport: ...
 def metering_spectrum_frame(
     samples: FloatSamples,
@@ -2104,63 +2060,45 @@ def metering_spectrum_frame(
     octave_fraction: int | None = None,
     db_ref: float | None = None,
     db_amin: float | None = None,
-    *,
-    validate: bool = True,
 ) -> SpectrumReport: ...
 def waveform_peaks(
     samples: FloatSamples,
     num_channels: int,
     *,
     samples_per_bucket: int = 512,
-    validate: bool = True,
 ) -> WaveformPeaksReport: ...
 def waveform_peak_pyramid(
     samples: FloatSamples,
     num_channels: int,
     *,
     samples_per_bucket_levels: Sequence[int] = (512, 1024, 2048, 4096),
-    validate: bool = True,
 ) -> list[WaveformPeaksReport]: ...
-def metering_peak_db(
-    samples: FloatSamples, sample_rate: int, *, validate: bool = True
-) -> float: ...
-def metering_rms_db(samples: FloatSamples, sample_rate: int, *, validate: bool = True) -> float: ...
+def metering_peak_db(samples: FloatSamples, sample_rate: int) -> float: ...
+def metering_rms_db(samples: FloatSamples, sample_rate: int) -> float: ...
 def metering_silence_ratio(
     samples: FloatSamples,
     sample_rate: int,
     threshold_db: float = -45.0,
     frame_length: int = 1024,
     hop_length: int = 256,
-    *,
-    validate: bool = True,
 ) -> float: ...
-def metering_crest_factor_db(
-    samples: FloatSamples, sample_rate: int, *, validate: bool = True
-) -> float: ...
+def metering_crest_factor_db(samples: FloatSamples, sample_rate: int) -> float: ...
 def metering_crest_factor_db_stereo(
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int,
-    *,
-    validate: bool = True,
 ) -> float: ...
-def metering_dc_offset(
-    samples: FloatSamples, sample_rate: int, *, validate: bool = True
-) -> float: ...
+def metering_dc_offset(samples: FloatSamples, sample_rate: int) -> float: ...
 def metering_true_peak_dbtp(
     samples: FloatSamples,
     sample_rate: int,
     oversample_factor: int | None = None,
-    *,
-    validate: bool = True,
 ) -> float: ...
 def metering_detect_clipping(
     samples: FloatSamples,
     sample_rate: int,
     threshold: float | None = None,
     min_region_samples: int | None = None,
-    *,
-    validate: bool = True,
 ) -> ClippingReport: ...
 def metering_dynamic_range(
     samples: FloatSamples,
@@ -2169,8 +2107,6 @@ def metering_dynamic_range(
     hop_sec: float | None = None,
     low_percentile: float | None = None,
     high_percentile: float | None = None,
-    *,
-    validate: bool = True,
 ) -> DynamicRangeReport: ...
 def scale_quantize_midi(
     root: int, mode_mask: int, midi: float, scale_reference_midi: float | None = None
@@ -2255,7 +2191,6 @@ def mastering_dynamics_compressor(
     sidechain_high_pass_hz: float | None = None,
     pdr_time_ms: float = 0.0,
     pdr_release_scale: float = 1.0,
-    validate: bool = True,
 ) -> DynamicsProcessorResult: ...
 def mastering_dynamics_gate(
     samples: FloatSamples,
@@ -2268,7 +2203,6 @@ def mastering_dynamics_gate(
     hold_ms: float = 0.0,
     close_threshold_db: float = -50.0,
     key_high_pass_hz: float | None = None,
-    validate: bool = True,
 ) -> DynamicsProcessorResult: ...
 def mastering_dynamics_transient_shaper(
     samples: FloatSamples,
@@ -2284,7 +2218,6 @@ def mastering_dynamics_transient_shaper(
     max_gain_db: float = 12.0,
     gain_smoothing_ms: float = 0.0,
     lookahead_ms: float = 0.0,
-    validate: bool = True,
 ) -> DynamicsProcessorResult: ...
 def resample(
     samples: FloatSamples, sample_rate: int, target_sample_rate: int

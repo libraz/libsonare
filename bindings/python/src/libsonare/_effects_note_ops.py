@@ -384,7 +384,7 @@ def render_notes(
         # optional, and an explicit `f0_hz=None` reaches the decorator as a
         # supplied name.
         f0_array, n_frames = _to_c_float_array(
-            _validate_samples("render_notes", f0_hz, validate=False, arg_name="f0_hz")
+            _validate_samples("render_notes", f0_hz, scan=False, arg_name="f0_hz")
         )
         voiced_array = _optional_note_voiced(
             "render_notes", voiced, f0_supplied=True, n_frames=n_frames

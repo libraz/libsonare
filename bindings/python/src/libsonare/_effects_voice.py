@@ -137,7 +137,7 @@ def voice_change(
             [0.55, 1.65]. The message names the reachable ``formant_factor``
             range; the request is refused, not clamped.
     """
-    _validate_samples("voice_change", samples, validate=True)
+    _validate_samples("voice_change", samples)
     if not isinstance(formant_mode, str) or formant_mode not in _FORMANT_MODES:
         raise SonareValueError(
             f"voice_change: formant_mode must be 'relative' or 'absolute', got {formant_mode!r}"
@@ -642,7 +642,7 @@ def voice_change_realtime(
     """
     if channels < 1 or channels > 2:
         raise SonareValueError("channels must be 1 or 2")
-    in_buf = _validate_samples("voice_change_realtime", samples, validate=True)
+    in_buf = _validate_samples("voice_change_realtime", samples)
     if channels == 2 and int(in_buf.shape[0]) % 2 != 0:
         raise SonareValueError(
             "voice_change_realtime: interleaved stereo input length must be even"

@@ -11584,3 +11584,292 @@ changed = "one of the NnFilterAggregate tokens, omitted hands the core its defau
 domain = "effects"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_new_bindings.py::test_an_omitted_nn_filter_aggregate_is_the_library_default"
+
+# Every call scans its sample input; the validate flag is gone.
+
+[[entry]]
+kind = "option"
+old = "align_take_to_reference(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "project"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "decompose_stems(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "decompose_stems_linked(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "ebur128_loudness_range(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "harmonic(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "hpss(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "hpss_with_residual(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "lufs(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "lufs_interleaved(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "lufs_series_interleaved(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "mastering_dynamics_compressor(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "mastering_dynamics_gate(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "mastering_dynamics_transient_shaper(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "metering_crest_factor_db(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "metering_crest_factor_db_stereo(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "metering_dc_offset(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "metering_detect_clipping(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "metering_dynamic_range(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "metering_peak_db(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "metering_phase_scope(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "metering_phase_scope_decimated(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "metering_rms_db(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "metering_silence_ratio(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "metering_spectrum(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "metering_spectrum_frame(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "metering_stereo_correlation(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "metering_stereo_width(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "metering_true_peak_db(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "metering_vectorscope(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "metering_vectorscope_decimated(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "momentary_lufs(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "normalize(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "normalize_stereo(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "percussive(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "phase_vocoder(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "pitch_shift(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "short_term_lufs(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "time_stretch(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "trim(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "waveform_peak_pyramid(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "waveform_peaks(validate)"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with SonareValueError naming the argument and index, and validate= raises TypeError"
+domain = "mastering"
+rule = "input-always-scanned"

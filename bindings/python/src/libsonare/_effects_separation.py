@@ -221,8 +221,6 @@ def decompose_stems(
     beta: float | None = None,
     init: NmfInit | None = None,
     mask_power: float | None = None,
-    *,
-    validate: bool = True,
 ) -> dict[str, object]:
     """NMF separation that carries the original phase, so components are listenable.
 
@@ -249,7 +247,6 @@ def decompose_stems(
             (1.0). 1 keeps the magnitude ratio; 2 is the Wiener-style power
             ratio, which separates harder at the cost of more artefacts on
             overlapping partials.
-        validate: Validate the input samples (default True).
 
     Returns:
         Dict with ``components`` (list of 1-D float32 arrays, each the length of
@@ -264,7 +261,7 @@ def decompose_stems(
         SonareError: If the library rejects a value that reaches it, such as a
             non-finite ``beta`` or ``mask_power``.
     """
-    _validate_samples("decompose_stems", samples, validate=validate)
+    _validate_samples("decompose_stems", samples)
     config = _stems_config(
         "decompose_stems", n_components, n_fft, hop_length, n_iter, beta, init, mask_power
     )
@@ -318,8 +315,6 @@ def decompose_stems_linked(
     beta: float | None = None,
     init: NmfInit | None = None,
     mask_power: float | None = None,
-    *,
-    validate: bool = True,
 ) -> dict[str, object]:
     """N-channel form of :func:`decompose_stems`: one NMF model, one soft mask.
 
@@ -350,7 +345,6 @@ def decompose_stems_linked(
         mask_power: Soft-mask exponent, at least 1. Default: the library's
             (1.0). 1 keeps the magnitude ratio; 2 is the Wiener-style power
             ratio.
-        validate: Validate the input samples (default True).
 
     Returns:
         Dict with the same keys as :func:`decompose_stems` -- ``components``,
@@ -373,7 +367,7 @@ def decompose_stems_linked(
     lib = _get_lib()
     if not hasattr(lib, "sonare_decompose_stems_linked"):
         raise _unsupported_effect_symbol("sonare_decompose_stems_linked")
-    planes = _linked_channel_planes("decompose_stems_linked", channels, validate=validate)
+    planes = _linked_channel_planes("decompose_stems_linked", channels)
     arrays, in_ptrs, frame_count = _planar_channel_arrays(planes, subject="channels")
     channel_count = len(arrays)
     component_count = ctypes.c_size_t()
@@ -580,8 +574,6 @@ def hpss(
     n_fft: int = _DEFAULT_EFFECT_N_FFT,
     hop_length: int | None = None,
     hard_mask: bool = False,
-    *,
-    validate: bool = True,
 ) -> HpssResult:
     """Perform harmonic-percussive source separation.
 
@@ -599,12 +591,11 @@ def hpss(
             so frames overlap by at least half a window. Default: ``n_fft // 4``
             (at least 1), 512 at the default ``n_fft``.
         hard_mask: Use binary harmonic/percussive masks (default ``False``).
-        validate: Reject empty / NaN / Inf input (default ``True``).
 
     Returns:
         HpssResult with harmonic and percussive components.
     """
-    _validate_samples("hpss", samples, validate=validate)
+    _validate_samples("hpss", samples)
     n_fft, hop_length = _validate_effect_fft_options("hpss", n_fft, hop_length)
     kernel_harmonic = _validate_hpss_kernel("hpss", kernel_harmonic, "kernel_harmonic")
     kernel_percussive = _validate_hpss_kernel("hpss", kernel_percussive, "kernel_percussive")
@@ -682,21 +673,17 @@ def _hpss_legacy(
 def harmonic(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-    *,
-    validate: bool = True,
 ) -> np.ndarray:
     """Extract the harmonic component of audio.
 
     Args:
         samples: Audio samples.
         sample_rate: Sample rate in Hz.
-        validate: Reject empty / NaN / Inf input (default True). Pass
-            ``validate=False`` to skip the scan on hot paths.
 
     Returns:
         ``float32`` array of harmonic component samples.
     """
-    _validate_samples("harmonic", samples, validate=validate)
+    _validate_samples("harmonic", samples)
     return _call_float_array_transform(
         "sonare_harmonic", samples, _to_c_int(sample_rate, "sample_rate")
     )
@@ -705,21 +692,17 @@ def harmonic(
 def percussive(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-    *,
-    validate: bool = True,
 ) -> np.ndarray:
     """Extract the percussive component of audio.
 
     Args:
         samples: Audio samples.
         sample_rate: Sample rate in Hz.
-        validate: Reject empty / NaN / Inf input (default True). Pass
-            ``validate=False`` to skip the scan on hot paths.
 
     Returns:
         ``float32`` array of percussive component samples.
     """
-    _validate_samples("percussive", samples, validate=validate)
+    _validate_samples("percussive", samples)
     return _call_float_array_transform(
         "sonare_percussive", samples, _to_c_int(sample_rate, "sample_rate")
     )
@@ -733,8 +716,6 @@ def hpss_with_residual(
     n_fft: int = _DEFAULT_EFFECT_N_FFT,
     hop_length: int | None = None,
     hard_mask: bool = False,
-    *,
-    validate: bool = True,
 ) -> dict[str, object]:
     """HPSS into harmonic / percussive / residual signals.
 
@@ -766,13 +747,12 @@ def hpss_with_residual(
             so frames overlap by at least half a window. Default: ``n_fft // 4``
             (at least 1), 512 at the default ``n_fft``.
         hard_mask: Use binary harmonic/percussive masks (default ``False``).
-        validate: Reject empty / NaN / Inf input (default ``True``).
 
     Returns:
         A dict with ``harmonic`` / ``percussive`` / ``residual`` float32 arrays
         (all the same length) plus ``sampleRate``.
     """
-    _validate_samples("hpss_with_residual", samples, validate=validate)
+    _validate_samples("hpss_with_residual", samples)
     n_fft, hop_length = _validate_effect_fft_options("hpss_with_residual", n_fft, hop_length)
     kernel_harmonic = _validate_hpss_kernel(
         "hpss_with_residual", kernel_harmonic, "kernel_harmonic"
@@ -869,8 +849,6 @@ def phase_vocoder(
     speed_ratio: float,
     n_fft: int = 2048,
     hop_length: int = 512,
-    *,
-    validate: bool = True,
 ) -> np.ndarray:
     """Phase-vocoder time-scale modification (STFT -> phase_vocoder -> iSTFT).
 
@@ -884,13 +862,11 @@ def phase_vocoder(
             (default 2048).
         hop_length: Hop length used for analysis/synthesis, in ``(0, n_fft / 2]``
             so frames overlap by at least half a window (default 512).
-        validate: Reject empty / NaN / Inf input (default True). Pass
-            ``validate=False`` to skip the scan on hot paths.
 
     Returns:
         The time-stretched audio as a 1-D float32 array.
     """
-    _validate_samples("phase_vocoder", samples, validate=validate)
+    _validate_samples("phase_vocoder", samples)
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     with _out_float_array(lib) as (out, out_length):

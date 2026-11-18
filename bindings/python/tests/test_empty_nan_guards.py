@@ -209,42 +209,15 @@ class TestNanInfGuards:
             metering_peak_db(_with_nan(), sample_rate=22050)
 
 
-class TestValidateFalseStillHasCAbiBackstop:
-    def test_lufs_validate_false(self):
-        # validate=False skips only the Python preflight; C-ABI validation is
-        # mandatory and must still reject NaN input.
-        with pytest.raises(SonareValueError) as exc_info:
-            lufs(_with_nan(), SR, validate=False)
-        assert exc_info.value.code == 4
-        assert "at index" not in str(exc_info.value)
-
-    def test_mastering_dynamics_compressor_validate_false(self):
-        with pytest.raises(SonareValueError) as exc_info:
-            mastering_dynamics_compressor(_with_nan(), SR, validate=False)
-        assert exc_info.value.code == 4
-        assert "at index" not in str(exc_info.value)
-
-    def test_waveform_peaks_validate_false(self):
+class TestWaveformPeaksSilenceVsNonFinite:
+    def test_silent_buffer_answers_zero_and_nan_is_refused(self):
         # The pair is the point: a silent buffer answers 0/0 and a non-finite
         # one is refused, so a NaN channel can no longer render as silence.
-        quiet = waveform_peaks(
-            np.zeros(1024, dtype=np.float32), 1, samples_per_bucket=256, validate=False
-        )
+        quiet = waveform_peaks(np.zeros(1024, dtype=np.float32), 1, samples_per_bucket=256)
         assert quiet.min[0] == 0.0
         assert quiet.max[0] == 0.0
-        with pytest.raises(SonareValueError) as exc_info:
-            waveform_peaks(_with_nan(), 1, samples_per_bucket=256, validate=False)
-        assert exc_info.value.code == 4
-        # The Python preflight names the offending index; the core's refusal does not.
-        assert "at index" not in str(exc_info.value)
-
-    def test_waveform_peak_pyramid_validate_false(self):
-        with pytest.raises(SonareValueError) as exc_info:
-            waveform_peak_pyramid(
-                _with_nan(), 1, samples_per_bucket_levels=[256, 512], validate=False
-            )
-        assert exc_info.value.code == 4
-        assert "at index" not in str(exc_info.value)
+        with pytest.raises(SonareValueError, match="waveform_peaks: samples contains NaN or Inf"):
+            waveform_peaks(_with_nan(), 1, samples_per_bucket=256)
 
 
 class TestPitchCAbiValidation:

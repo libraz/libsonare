@@ -76,7 +76,6 @@ def align_take_to_reference(
     take_sample_rate: int | None = None,
     hop_length: int | None = None,
     bins_per_octave: int | None = None,
-    validate: bool = True,
 ) -> AlignTakeToReferenceResult:
     """Align a take to a reference timeline and return anchors placing it under it.
 
@@ -124,7 +123,6 @@ def align_take_to_reference(
             be a positive **multiple of 12**, because the chroma folds the CQT
             grid onto twelve pitch classes: 12, 24 and 36 are in domain and 13 or
             18 are refused.
-        validate: Reject empty / NaN / Inf input (default True).
 
     Returns:
         An :class:`AlignTakeToReferenceResult` whose ``anchors`` are the

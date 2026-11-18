@@ -208,17 +208,17 @@ def _validate_samples(
     fn_name: str,
     samples: object,
     *,
-    validate: bool = True,
+    scan: bool = True,
     arg_name: str = "samples",
     allow_empty: bool = False,
     window: tuple[int, int] | None = None,
 ) -> np.ndarray:
     """Coerce ``samples`` to a contiguous float32 buffer and apply input guards.
 
-    Rejects empty buffers with :class:`SonareValueError`. When ``validate`` is
-    True (the default), additionally scans for NaN / Inf and raises
-    :class:`SonareValueError` on the first offending index. Hot paths may pass
-    ``validate=False`` to skip the O(n) scan.
+    Rejects empty buffers with :class:`SonareValueError` and scans for NaN / Inf,
+    raising :class:`SonareValueError` on the first offending index. ``scan=False``
+    is only for a buffer whose own encoding uses a non-finite value to mean
+    something (see ``shape_only`` on :func:`_guard_buffer`).
 
     The coercion runs first, so a bad type or a rank other than 1 is named as
     such by :func:`_as_float32_buffer` and never reaches the scan. That
@@ -241,7 +241,7 @@ def _validate_samples(
     length = int(buf.shape[0])
     if not allow_empty and length == 0:
         raise SonareValueError(f"{fn_name}: {arg_name} must not be empty")
-    if validate:
+    if scan:
         start, stop = 0, length
         if window is not None:
             start = min(max(window[0], 0), length)
@@ -287,9 +287,7 @@ def _guard_buffer(
     Arguments are resolved through the wrapped function's signature, so both
     call styles keep working — the librosa mirrors and the realtime event
     packers are positional by design. A name the call never supplied (an
-    optional buffer left at its default) is skipped. When the wrapped function
-    exposes a ``validate`` flag, the value in effect for the call decides
-    whether the O(n) non-finite scan runs.
+    optional buffer left at its default) is skipped.
 
     The wrapper is built with :func:`functools.wraps`, so ``__doc__``,
     ``__module__`` and the introspected signature survive decoration; the
@@ -299,14 +297,10 @@ def _guard_buffer(
 
     def decorate(fn: _GuardedFn) -> _GuardedFn:
         signature = inspect.signature(fn)
-        validate_param = signature.parameters.get("validate")
 
         @functools.wraps(fn)
         def guarded(*args: Any, **kwargs: Any) -> Any:
             bound = signature.bind_partial(*args, **kwargs)
-            validate = True
-            if validate_param is not None:
-                validate = bool(bound.arguments.get("validate", validate_param.default))
             coerced = False
             for arg_name in (*arg_names, *shape_only):
                 if arg_name in bound.arguments:
@@ -320,7 +314,7 @@ def _guard_buffer(
                     bound.arguments[arg_name] = _validate_samples(
                         fn.__name__,
                         bound.arguments[arg_name],
-                        validate=validate and arg_name not in shape_only,
+                        scan=arg_name not in shape_only,
                         arg_name=arg_name,
                     )
                     coerced = True

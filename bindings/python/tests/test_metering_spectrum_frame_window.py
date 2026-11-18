@@ -175,35 +175,6 @@ def test_an_omitted_n_fft_scans_the_span_the_library_actually_reads() -> None:
     assert np.all(np.isfinite(report.magnitude))
 
 
-def test_validate_false_skips_the_facade_scan_but_not_the_core_guard() -> None:
-    """``validate=False`` drops the facade scan; the C layer still refuses the frame.
-
-    The two refusals are distinguishable: the facade raises
-    :class:`SonareValueError` naming the index, the core returns an invalid-
-    parameter error with no index. Outside the frame the core agrees with the
-    facade and accepts the buffer.
-    """
-    inside = FRAME_OFFSET + 200
-    with pytest.raises(SonareValueError) as excinfo:
-        libsonare.metering_spectrum_frame(
-            _with(inside, math.nan), SR, FRAME_OFFSET, N_FFT, validate=False
-        )
-    assert "Invalid parameter" in str(excinfo.value)
-    assert str(inside) not in str(excinfo.value)
-
-    unchecked = libsonare.metering_spectrum_frame(
-        _with(4000, math.nan), SR, FRAME_OFFSET, N_FFT, validate=False
-    )
-    _assert_same_spectrum(
-        unchecked, libsonare.metering_spectrum_frame(_tone(), SR, FRAME_OFFSET, N_FFT)
-    )
-
-
-# ---------------------------------------------------------------------------
-# dB conversion parameters
-# ---------------------------------------------------------------------------
-
-
 def _spectrum(samples: NDArray[np.float32], **kwargs: float) -> libsonare.SpectrumReport:
     return libsonare.metering_spectrum(samples, SR, N_FFT, False, None, **kwargs)
 

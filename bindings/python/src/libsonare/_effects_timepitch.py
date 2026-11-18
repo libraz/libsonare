@@ -55,8 +55,6 @@ def time_stretch(
     speed_ratio: float,
     n_fft: int = _DEFAULT_EFFECT_N_FFT,
     hop_length: int | None = None,
-    *,
-    validate: bool = True,
 ) -> np.ndarray:
     """Time-stretch audio without changing pitch.
 
@@ -71,13 +69,11 @@ def time_stretch(
         hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
             so frames overlap by at least half a window. Default: ``n_fft // 4``
             (at least 1), 512 at the default ``n_fft``.
-        validate: Reject empty / NaN / Inf input (default True). Pass
-            ``validate=False`` to skip the scan on hot paths.
 
     Returns:
         ``float32`` array of time-stretched samples.
     """
-    _validate_samples("time_stretch", samples, validate=validate)
+    _validate_samples("time_stretch", samples)
     n_fft, hop_length = _validate_effect_fft_options("time_stretch", n_fft, hop_length)
     lib = _get_lib()
     if not hasattr(lib, "sonare_time_stretch_ex"):
@@ -107,8 +103,6 @@ def pitch_shift(
     pitch_semitones: float,
     n_fft: int = _DEFAULT_EFFECT_N_FFT,
     hop_length: int | None = None,
-    *,
-    validate: bool = True,
 ) -> np.ndarray:
     """Shift the pitch of audio.
 
@@ -121,13 +115,11 @@ def pitch_shift(
         hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
             so frames overlap by at least half a window. Default: ``n_fft // 4``
             (at least 1), 512 at the default ``n_fft``.
-        validate: Reject empty / NaN / Inf input (default True). Pass
-            ``validate=False`` to skip the scan on hot paths.
 
     Returns:
         ``float32`` array of pitch-shifted samples.
     """
-    _validate_samples("pitch_shift", samples, validate=validate)
+    _validate_samples("pitch_shift", samples)
     n_fft, hop_length = _validate_effect_fft_options("pitch_shift", n_fft, hop_length)
     lib = _get_lib()
     if not hasattr(lib, "sonare_pitch_shift_ex"):

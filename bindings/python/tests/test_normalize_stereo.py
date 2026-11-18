@@ -262,28 +262,6 @@ class TestNormalizeStereoPairRefusals:
         with pytest.raises(SonareValueError, match="left contains NaN or Inf at index 7"):
             call(spoiled, right, SR)  # type: ignore[operator]
 
-    @pytest.mark.parametrize("call", [libsonare.normalize_stereo, _RMS_STEREO])
-    def test_validate_false_skips_the_scan_but_not_the_refusal(self, call: object) -> None:
-        """``validate=False`` drops the facade's scan onto the C layer's own.
-
-        The scan the flag skips is the one that reports an index; the C entry
-        runs its own finite check, so a NaN is still refused -- without the
-        index. The missing index is what proves the flag was honoured: were the
-        facade still scanning, this
-        would arrive as ``SonareValueError`` and the test would pass anyway.
-        """
-        left, right = _pair()
-        spoiled = right.copy()
-        spoiled[7] = np.nan
-        with pytest.raises(SonareValueError) as caught:
-            call(left, spoiled, SR, validate=False)  # type: ignore[operator]
-        assert "at index" not in str(caught.value)
-        assert str(caught.value) == "Invalid parameter"
-
-        # Control: the same call on a clean pair is accepted with the flag off,
-        # so the refusal above is about the NaN rather than about validate=False.
-        assert call(left, right, SR, validate=False).length == len(left)  # type: ignore[operator]
-
 
 _DEFAULTS = json.loads(
     (Path(__file__).resolve().parents[3] / "tests/conformance/binding_defaults.json").read_text(
