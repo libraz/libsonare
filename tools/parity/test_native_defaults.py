@@ -169,6 +169,33 @@ def test_a_c_abi_argument_lands_on_the_default_argument_its_implementation_passe
     assert (site.anchor, site.core, site.unresolved) == ("run_thing#2", "9", ""), site
 
 
+# Sites in this tree where the native fallback is known to differ from the core
+# default but the walker cannot reach a verdict. Each stays pinned to its decline
+# reason, so a walker change that starts comparing one shows up here.
+_KNOWN_BLIND = {
+    ("bindings/node/src/addon/sonare_wrap_features.cpp", "Mfcc", "nMfcc"): (
+        "the value is passed to a function with no C++ declaration in a header"
+    ),
+    ("bindings/node/src/addon/features/rhythm.cpp", "OnsetStrengthMulti", "nBands"): (
+        "value passed to several calls whose defaults differ or are missing"
+    ),
+    ("bindings/node/src/addon/sonare_wrap_analysis.cpp", "DetectChords", "chromaMethod"): (
+        native_defaults.C_FIELD_SWITCHED
+    ),
+    ("bindings/node/src/addon/sonare_wrap_analysis.cpp", "FunctionalAnalysis", "chromaMethod"): (
+        native_defaults.C_FIELD_SWITCHED
+    ),
+}
+
+
+def test_known_blind_sites_in_this_tree_stay_declined_with_their_reason() -> None:
+    sites, _constants = native_defaults.extract(_HERE.parent.parent)
+    found = {(s.file, s.function, s.param): s.unresolved for s in sites}
+    for key, reason in _KNOWN_BLIND.items():
+        assert key in found, f"{key} is no longer a fallback site; update _KNOWN_BLIND"
+        assert found[key] == reason, f"{key}: {found[key]!r}"
+
+
 def test_a_category_that_reached_no_verdict_is_named() -> None:
     rep = compare.Report(surfaces=list(SURFACES), allowlist=allowlist_mod.Allowlist())
     compare._native_default_drift([], {}, rep.allowlist, rep)

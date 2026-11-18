@@ -200,6 +200,9 @@ GUARDED_SENTINEL = (
 ONLY_DEFAULT_PREFIX = "the native literal is the only default found"
 ONLY_DEFAULT_C_FIELD = f"{ONLY_DEFAULT_PREFIX}: the C struct field is consumed as-is"
 ONLY_DEFAULT_ARG = f"{ONLY_DEFAULT_PREFIX}: the core argument has no default"
+C_FIELD_SWITCHED = (
+    "the C ABI maps the C struct field through a switch, which the walker does not follow"
+)
 
 _NOT_CALLS = {"if", "while", "for", "switch", "return", "sizeof", "catch"}
 
@@ -331,16 +334,20 @@ class Resolver:
         if depth >= 2:
             return anchor, None, "the C ABI hop limit was reached"
         hits = set()
+        switched = False
         for head, body in self.c_defs.values():
             pm = re.search(rf"\b{struct}\s*(?:const\s*)?[&*]\s*(\w+)", head)
             if not pm:
                 continue
+            switched = switched or bool(
+                re.search(rf"\bswitch\s*\(\s*{pm.group(1)}(?:\.|->){field}\s*\)", body)
+            )
             for var, cpp_field, guarded in _field_uses(body, rf"{pm.group(1)}(?:\.|->){field}\b"):
                 ty = _var_type(body, var) or _param_type(head, var)
                 if ty and not ty.startswith("Sonare"):
                     hits.add((ty, cpp_field, guarded))
         if not hits:
-            return anchor, None, ONLY_DEFAULT_C_FIELD
+            return anchor, None, C_FIELD_SWITCHED if switched else ONLY_DEFAULT_C_FIELD
         if len(hits) > 1:
             return anchor, None, "the C ABI struct field is copied into several C++ fields"
         ty, cpp_field, guarded = hits.pop()
