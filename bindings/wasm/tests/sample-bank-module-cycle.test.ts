@@ -27,10 +27,10 @@ async function expectCycleIsSafe(internalFirst: boolean): Promise<void> {
   const { normalizeSynthInstrument } = internal ?? (await import('../src/project_internal.js'));
 
   expect(typeof SampleBank).toBe('function');
-  // A preset-name string and a non-bank object are the two branches that stay
-  // clear of the native module, and between them they read both cycle
+  // A refused bare preset string and a non-bank object are the two branches that
+  // stay clear of the native module, and between them they read both cycle
   // participants: the function from one module, the class from the other.
-  expect(normalizeSynthInstrument('cycle', 'sawLead')).toBe('sawLead');
+  expect(() => normalizeSynthInstrument('cycle', 'sawLead')).toThrow(TypeError);
   expect(() => normalizeSynthInstrument('cycle', { sampleBank: {} })).toThrow(TypeError);
   expect(normalizeSynthInstrument('cycle', { engineMode: 'sample' })).toEqual({
     engineMode: 'sample',

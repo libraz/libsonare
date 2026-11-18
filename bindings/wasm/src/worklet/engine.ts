@@ -1020,7 +1020,7 @@ export class SonareEngine {
   }
 
   /** Binds a NativeSynth patch; see {@link setBuiltinInstrument} for swap timing. */
-  setSynthInstrument(trackId: string | number, patch: SynthPatch | string = {}): void {
+  setSynthInstrument(trackId: string | number, patch: SynthPatch = {}): void {
     strips.setSynthInstrument(this.stripContext, trackId, patch);
   }
 

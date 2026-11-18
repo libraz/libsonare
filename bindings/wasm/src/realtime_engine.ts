@@ -782,9 +782,9 @@ export class RealtimeEngine {
 
   /**
    * Bind the patch-driven NativeSynth to a realtime MIDI destination. `patch`
-   * is a {@link SynthPatch} or a preset-name string (`'sawLead'` /
-   * `'va:sawLead'`; see {@link synthPresetNames}), resolving exactly like
-   * {@link Project.bounceWithSynthInstrument}. Live note/CC commands and
+   * is a {@link SynthPatch} (a preset is named by its `preset` field, e.g.
+   * `{ preset: 'sawLead' }`; see {@link synthPresetNames}), resolving exactly
+   * like {@link Project.bounceWithSynthInstruments}. Live note/CC commands and
    * scheduled MIDI clips routed to that destination render through the synth.
    * Unknown preset names throw.
    *
@@ -798,7 +798,7 @@ export class RealtimeEngine {
    * default channel state (program, bank, controllers); a host that needs the
    * current position's state resends it with {@link pushMidiUmp} after this call.
    */
-  setSynthInstrument(destinationId: number, patch: SynthPatch | string = {}): void {
+  setSynthInstrument(destinationId: number, patch: SynthPatch = {}): void {
     this.native.setSynthInstrument(
       destinationId,
       normalizeSynthInstrument('setSynthInstrument', patch),

@@ -836,7 +836,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         );
         break;
       case 'syncSynthInstrument':
-        this.engine.setSynthInstrument(message.destinationId, message.patch as SynthPatch | string);
+        this.engine.setSynthInstrument(message.destinationId, message.patch as SynthPatch);
         break;
       case 'syncLoadSoundFont':
         this.engine.loadSoundFont(message.data);

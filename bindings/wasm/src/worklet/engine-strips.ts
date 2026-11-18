@@ -685,7 +685,7 @@ export function setBuiltinInstrument(
 export function setSynthInstrument(
   ctx: EngineStripContext,
   trackId: string | number,
-  patch: SynthPatch | string,
+  patch: SynthPatch,
 ): void {
   const destinationId = ctx.resolveTargetId(trackId);
   // A SampleBank handle cannot cross to the worklet, so refuse it before the
@@ -703,7 +703,7 @@ export function setSynthInstrument(
       ctx.postSync({
         type: 'syncSynthInstrument',
         destinationId,
-        patch: typeof patch === 'string' ? patch : { ...patch },
+        patch: { ...patch },
       });
     },
   );

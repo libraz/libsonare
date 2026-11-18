@@ -175,15 +175,16 @@ export function sendTimingValue(timing: SendTiming): number {
  * the offline bounce and the realtime engine, so `sampleBank` means the same
  * thing on both.
  */
-export function normalizeSynthInstrument(
-  fnName: string,
-  patch: SynthPatch | string,
-): SynthPatch | string {
+export function normalizeSynthInstrument(fnName: string, patch: SynthPatch): SynthPatch {
+  if (patch === null || typeof patch !== 'object' || Array.isArray(patch)) {
+    throw new TypeError(
+      `${fnName}: patch must be a SynthPatch object; a preset is named by its preset field`,
+    );
+  }
   refuseSynthPatchOrdinals(fnName, patch);
-  if (typeof patch === 'string' || !(patch.sampleBank instanceof SampleBank)) {
-    // Anything else passes through untouched: an omitted bank for the native
-    // layer to read as "no bank", and a value that is not a bank at all for it
-    // to reject as one catchable TypeError.
+  if (!(patch.sampleBank instanceof SampleBank)) {
+    // An omitted bank passes through for the native layer to read as "no bank",
+    // and a value that is not a bank at all for it to reject as a TypeError.
     return patch;
   }
   // Reads SampleBank's private `native`. TypeScript's private is a compile-time

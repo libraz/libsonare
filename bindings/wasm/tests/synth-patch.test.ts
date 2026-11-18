@@ -729,10 +729,20 @@ describe('Sonare WASM NativeSynth', () => {
     expect('engineParams' in synthPresetPatch('violin')).toBe(false);
   });
 
+  it('refuses a preset-name string as the patch and leaves the binding alone', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
+    try {
+      expect(() => engine.setSynthInstrument(7, 'sawLead' as never)).toThrow(TypeError);
+      expect(engine.midiInstrumentCount).toBe(0);
+    } finally {
+      engine.destroy();
+    }
+  });
+
   it('renders live MIDI through the engine synth instrument', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
-      engine.setSynthInstrument(7, 'sawLead');
+      engine.setSynthInstrument(7, { preset: 'sawLead' });
       engine.pushMidiNoteOn(7, 0, 0, 60, 100);
       const out = engine.process([new Float32Array(128), new Float32Array(128)]);
       let p = 0;
@@ -742,7 +752,7 @@ describe('Sonare WASM NativeSynth', () => {
         }
       }
       expect(p).toBeGreaterThan(0);
-      expect(() => engine.setSynthInstrument(7, 'no-such-preset')).toThrow();
+      expect(() => engine.setSynthInstrument(7, { preset: 'no-such-preset' })).toThrow();
       expect(engine.midiInstrumentCount).toBe(1);
     } finally {
       engine.destroy();

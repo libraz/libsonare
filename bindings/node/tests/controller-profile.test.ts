@@ -34,7 +34,7 @@ describe('RealtimeEngine controller bindings', () => {
   // also one of the engines whose exciter a live axis can reach.
   const reedEngine = (): RealtimeEngine => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
-    engine.setSynthInstrument(0, 'clarinet');
+    engine.setSynthInstrument(0, { preset: 'clarinet' });
     return engine;
   };
 
@@ -126,7 +126,7 @@ describe('RealtimeEngine controller bindings reach the audio', () => {
   // between blocks rather than all at once before the first.
   const renderRamp = (bindBreath: boolean): Float32Array => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
-    engine.setSynthInstrument(0, 'clarinet');
+    engine.setSynthInstrument(0, { preset: 'clarinet' });
     // Both arms start from an empty profile, so the only difference between
     // them is the one binding under test rather than the gm default's three.
     engine.clearControllerBindings(0);

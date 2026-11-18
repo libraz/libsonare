@@ -2142,9 +2142,9 @@ export class RealtimeEngine {
 
   /**
    * Bind the patch-driven NativeSynth to a realtime MIDI destination. `patch`
-   * is a {@link SynthPatch} or a preset-name string (`'sawLead'` /
-   * `'va:sawLead'`; see {@link synthPresetNames}), resolving exactly like
-   * {@link Project.bounceWithSynthInstrument}. Live note/CC commands and
+   * is a {@link SynthPatch} (a preset is named by its `preset` field, e.g.
+   * `{ preset: 'sawLead' }`; see {@link synthPresetNames}), resolving exactly
+   * like {@link Project.bounceWithSynthInstruments}. Live note/CC commands and
    * scheduled MIDI clips routed to that destination render through the synth.
    * Unknown preset names throw.
    *
@@ -2156,15 +2156,12 @@ export class RealtimeEngine {
    * channel 10 through the GM drum map, exactly like the same-named bounce
    * binding key; the patch stays the fallback for any unsupported mapping.
    */
-  setSynthInstrument(
-    destinationId: number,
-    patch: Omit<SynthPatch, 'destinationId'> | string = {},
-  ): void {
+  setSynthInstrument(destinationId: number, patch: Omit<SynthPatch, 'destinationId'> = {}): void {
     this.native.setSynthInstrument(
       destinationId,
       normalizeSynthInstrument(
         'setSynthInstrument',
-        typeof patch === 'string' ? patch : withoutDestinationId('setSynthInstrument', patch),
+        withoutDestinationId('setSynthInstrument', patch),
       ),
     );
   }

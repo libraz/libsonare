@@ -598,7 +598,7 @@ describe('RealtimeEngine.setSynthInstrument', () => {
         commandCapacity: 16,
         telemetryCapacity: 16,
       });
-      engine.setSynthInstrument(7, 'sawLead');
+      engine.setSynthInstrument(7, { preset: 'sawLead' });
       engine.pushMidiNoteOn(7, 0, 0, 60, 100);
       const out = engine.process([new Float32Array(128), new Float32Array(128)]);
       let p = 0;
@@ -609,8 +609,18 @@ describe('RealtimeEngine.setSynthInstrument', () => {
       }
       expect(p).toBeGreaterThan(0);
       // Unknown presets are rejected without disturbing the binding.
-      expect(() => engine.setSynthInstrument(7, 'no-such-preset')).toThrow();
+      expect(() => engine.setSynthInstrument(7, { preset: 'no-such-preset' })).toThrow();
       expect(engine.midiInstrumentCount).toBe(1);
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('refuses a preset-name string as the patch and leaves the binding alone', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000 });
+    try {
+      expect(() => engine.setSynthInstrument(7, 'sawLead' as never)).toThrow(TypeError);
+      expect(engine.midiInstrumentCount).toBe(0);
     } finally {
       engine.destroy();
     }

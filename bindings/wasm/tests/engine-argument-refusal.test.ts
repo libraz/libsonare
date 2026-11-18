@@ -98,7 +98,7 @@ describe('RealtimeEngine value refusals are RangeErrors', () => {
   it('refuses a destination with no instrument and a binding with no axis', () => {
     withEngine((engine) => {
       expectRefusalOf(() => engine.setPartRig({ destinationId: 0, part: 0, mode: 'none' }));
-      engine.setSynthInstrument(0, 'clarinet');
+      engine.setSynthInstrument(0, { preset: 'clarinet' });
       expectRefusalOf(() =>
         engine.bindController(0, { input: 'controlChange', index: 2, axis: 'none' }),
       );

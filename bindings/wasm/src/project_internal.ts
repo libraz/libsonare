@@ -233,16 +233,13 @@ export type NativeInstrumentBinding<T> = T & { destinationId: number };
  * private is a compile-time rule, so reading it once here beats widening the
  * class with a method the parity tool would then read as a facade op.
  */
-export function normalizeSynthInstrument(
-  fnName: string,
-  patch: unknown,
-): NativeSynthBinding | string {
-  refuseSynthPatchOrdinals(fnName, patch);
-  if (patch === null || typeof patch !== 'object') {
-    // A preset-name string — and, at runtime, anything else — reaches the
-    // embind layer unchanged, which is where such a value is validated.
-    return patch as NativeSynthBinding | string;
+export function normalizeSynthInstrument(fnName: string, patch: unknown): NativeSynthBinding {
+  if (patch === null || typeof patch !== 'object' || Array.isArray(patch)) {
+    throw new TypeError(
+      `${fnName}: patch must be a SynthPatch object; a preset is named by its preset field`,
+    );
   }
+  refuseSynthPatchOrdinals(fnName, patch);
   const { sampleBank, ...rest } = patch as SynthPatch;
   if (!sampleBank) {
     // Omitted, and at runtime an explicit null: both mean no bank, which a

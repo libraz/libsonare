@@ -17,7 +17,7 @@ import {
 import { setSonareModule } from '../src/module_state.js';
 
 /** A reed voice — one of the engines whose exciter reads the excitation axes. */
-const REED_PRESET = 'clarinet';
+const REED_PRESET = { preset: 'clarinet' } as const;
 
 function withEngine<T>(body: (engine: RealtimeEngine) => T): T {
   const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });

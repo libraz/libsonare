@@ -538,7 +538,7 @@ export interface SonareEngineSyncBuiltinInstrumentMessage {
 export interface SonareEngineSyncSynthInstrumentMessage {
   type: 'syncSynthInstrument';
   destinationId: number;
-  patch: Record<string, unknown> | string;
+  patch: Record<string, unknown>;
 }
 
 export interface SonareEngineSyncSf2InstrumentMessage {

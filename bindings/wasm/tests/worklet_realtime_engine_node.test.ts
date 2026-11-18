@@ -204,7 +204,7 @@ describe('SonareRealtimeEngineNode', () => {
         );
         engine.loadSoundFont(sf2);
         engine.setBuiltinInstrument(3, { gain: 0.5 });
-        engine.setSynthInstrument(3, 'sawLead');
+        engine.setSynthInstrument(3, { preset: 'sawLead' });
         engine.setSf2Instrument(3, { gain: 0.5 });
         // Program Change 5 on group 0, channel 0: it must reach the new instrument.
         engine.pushMidiUmp(3, 0x20c00500);
@@ -501,7 +501,7 @@ describe('SonareRealtimeEngineNode', () => {
             (message) => (message as { type?: unknown }).type === 'syncSynthInstrument',
           ),
         ).toEqual([]);
-        engine.setSynthInstrument(3, 'sawLead');
+        engine.setSynthInstrument(3, { preset: 'sawLead' });
         expect(offlineSet).toHaveBeenCalledTimes(1);
       } finally {
         engine.destroy();
@@ -1164,7 +1164,7 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setBusStrip(100, busDocument(busStripJson));
         engine.setBusInsertParam(100, 0, { name: 'band0.gainDb', value: 1 });
         engine.setBuiltinInstrument(3, { gain: 0.5 });
-        engine.setSynthInstrument(3, 'sawLead');
+        engine.setSynthInstrument(3, { preset: 'sawLead' });
         engine.setSf2Instrument(3, { gain: 0.5 });
         // Live, non-destructive MIDI-FX insert (install then bypass).
         engine.setMidiFx(3, { transposeSemitones: 12 });
@@ -1368,7 +1368,7 @@ describe('SonareRealtimeEngineNode', () => {
             expect.objectContaining({
               type: 'syncSynthInstrument',
               destinationId: 3,
-              patch: 'sawLead',
+              patch: { preset: 'sawLead' },
             }),
             expect.objectContaining({
               type: 'syncSf2Instrument',
