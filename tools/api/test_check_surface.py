@@ -2122,10 +2122,12 @@ REFUSALS = (
         "python-public-names",
         [
             _fn("python", "separate", "StemBuffers"),
+            _fn("python", "decode", "_RawFrames"),
             _rec("python", "class", "Mixer", in_all=False, modules=["__init__", "mixing"]),
         ],
         [
             "python function separate: annotation names StemBuffers, which libsonare does not export",
+            "python function decode: annotation names _RawFrames, which libsonare does not export",
             "python class Mixer: public in libsonare.mixing but not in __all__",
         ],
     ),
@@ -2143,6 +2145,41 @@ REFUSALS = (
 )
 
 
+# Shapes a rule allows that a check once refused: (check id, records).
+PERMITS = (
+    (
+        "token-case",
+        [
+            _field(
+                "node",
+                "LibError",
+                "name",
+                "'LibError'",
+                inline_literals=True,
+                literals=["LibError"],
+            ),
+            _field(
+                "wasm", "Handle", "[brand]", "'Handle'", inline_literals=True, literals=["Handle"]
+            ),
+        ],
+    ),
+    (
+        "pitch-semitones",
+        [
+            _rec(
+                "node",
+                "value",
+                "ParamUnit='semitones'",
+                owner="ParamUnit",
+                member="semitones",
+                token="semitones",
+            )
+        ],
+    ),
+    ("frequency-bounds:centre", [_field("node", "PitchOptions", "centRefHz")]),
+)
+
+
 class Refusals(CheckerCase):
     """Each rule check refuses the shape it exists for; the fixture alone is green."""
 
@@ -2155,6 +2192,17 @@ class Refusals(CheckerCase):
                 _, lines = self.run_check("--check", check)
                 found = sorted(x.strip() for x in set(lines) - set(before) if x.startswith("    "))
                 self.assertEqual(found, sorted(want))
+
+    def test_a_shape_the_rule_allows_is_not_refused(self):
+        for check, records in PERMITS:
+            with self.subTest(check=check):
+                self.inv = copy.deepcopy(BASE)
+                _, before = self.run_check("--check", check)
+                self.add(*copy.deepcopy(records))
+                _, lines = self.run_check("--check", check)
+                self.assertEqual(
+                    sorted(x.strip() for x in set(lines) - set(before) if x.startswith("    ")), []
+                )
 
 
 if __name__ == "__main__":

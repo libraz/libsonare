@@ -42,3 +42,17 @@ surface = "wasm"
 name = "Mixer.processStereoInto"
 category = "hot-path"
 reason = "Per-block render into caller-owned buffers; a request object would allocate on every block."
+
+[[allow]]
+check = "one-positional-form"
+surface = "node"
+name = "RealtimeVoiceChanger.processInterleavedWithCarrierInto"
+category = "hot-path"
+reason = "Per-block render into caller-owned buffers; a request object would allocate on every block."
+
+[[allow]]
+check = "one-positional-form"
+surface = "wasm"
+name = "RealtimeVoiceChanger.processInterleavedWithCarrierInto"
+category = "hot-path"
+reason = "Per-block render into caller-owned buffers; a request object would allocate on every block."

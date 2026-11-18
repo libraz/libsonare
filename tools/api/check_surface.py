@@ -1617,7 +1617,9 @@ def _tokens(ctx):
             if frozenset(r.get("literals", [])) in tables[r["surface"]].values():
                 continue
             for t in r.get("literals", []):
-                yield r, t
+                # A literal spelling its own type's name is a nominal tag (Error.name, a brand).
+                if t != r["owner"]:
+                    yield r, t
 
 
 def chk_name_tables(ctx):
@@ -1708,6 +1710,8 @@ _SEMI_BAD = {"semitones", "pitch_shift_semitones", "retune_semitones"}
 def chk_pitch_semitones(ctx):
     cands, bad = 0, []
     for r in ctx.records:
+        if r["kind"] == "value":
+            continue
         s = snake(bare(r))
         if not s.endswith("semitones"):
             continue
@@ -1736,10 +1740,8 @@ def chk_frequency_bounds(ctx):
 
 
 def chk_frequency_centre(ctx):
-    cands = [r for r in ctx.records if re.search(r"cent(re|er)", bare(r), re.IGNORECASE)]
-    bad = [
-        (r, "spell centre as center") for r in cands if re.search(r"centre", bare(r), re.IGNORECASE)
-    ]
+    cands = [r for r in ctx.records if {"centre", "center"} & set(snake(bare(r)).split("_"))]
+    bad = [(r, "spell centre as center") for r in cands if "centre" in snake(bare(r)).split("_")]
     return len(cands), bad
 
 
@@ -1909,7 +1911,7 @@ def chk_python_public_names(ctx):
             else " ".join(s.get("returns", "") for s in r.get("sigs", []))
         )
         text = re.sub(r"""(['"]).*?\1""", "", text)
-        for m in re.finditer(r"(?<![\w.])([A-Z]\w*)", text):
+        for m in re.finditer(r"(?<![\w.])(_*[A-Z]\w*)", text):
             name = m.group(1)
             cands += 1
             if name in _PY_ALLOWED or name in ctx.python_all:
