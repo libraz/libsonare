@@ -94,6 +94,34 @@ domain = "core"
 rule = "seconds-suffix"
 
 [[entry]]
+kind = "field"
+old = "SonareMasteringConfig.ceiling_db"
+new = "SonareMasteringConfig.ceiling_dbtp"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "SonareStreamingPlatform.ceiling_db"
+new = "SonareStreamingPlatform.ceiling_dbtp"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "function"
+old = "sonare_ebur128_loudness_range"
+new = "sonare_ebur128_loudness_range_lu"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
+kind = "function"
+old = "sonare_audio_ebur128_loudness_range"
+new = "sonare_audio_ebur128_loudness_range_lu"
+domain = "mastering"
+rule = "loudness-names"
+
+[[entry]]
 kind = "function"
 old = "sonare_last_warning_message"
 new = "sonare_last_diagnostic"

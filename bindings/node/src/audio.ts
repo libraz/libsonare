@@ -460,7 +460,7 @@ export class Audio {
   /** EBU R128 loudness range in LU. */
   ebur128LoudnessRangeLu(): number {
     this.requireAlive();
-    return this.native.ebur128LoudnessRange();
+    return this.native.ebur128LoudnessRangeLu();
   }
 
   /** Tempo analysis: chosen BPM, confidence and ranked candidates. */

@@ -624,7 +624,7 @@ describe('standalone functions', () => {
     const suggest = (samples: Float32Array) =>
       masteringAssistantSuggest(samples, sampleRate, {
         targetLufs: -13,
-        ceilingDb: -0.8,
+        ceilingDbtp: -0.8,
         enableRepair: true,
       });
 
@@ -644,7 +644,7 @@ describe('standalone functions', () => {
     expect(Array.isArray(result.explanation)).toBe(true);
     expect(result).not.toHaveProperty('genreCandidates');
     expect(result.chainConfig.loudness?.targetLufs).toBe(-13);
-    expect(result.chainConfig.loudness?.ceilingDb).toBeCloseTo(-0.8, 6);
+    expect(result.chainConfig.loudness?.ceilingDbtp).toBeCloseTo(-0.8, 6);
 
     // enableRepair asks for repair; the measured defect profile picks which stages
     // run. Only the clean side would still pass with enableRepair ignored outright,
@@ -673,7 +673,7 @@ describe('standalone functions', () => {
     const sampleRate = 22050;
     const samples = generateSine(440, sampleRate, 1);
     const result = masteringStreamingPreview(samples, sampleRate, {
-      platforms: [{ name: 'Unit Test', targetLufs: -12, ceilingDb: -1 }],
+      platforms: [{ name: 'Unit Test', targetLufs: -12, ceilingDbtp: -1 }],
     });
 
     expect(result.platforms).toHaveLength(1);

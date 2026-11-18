@@ -89,7 +89,7 @@ describe('Sonare WASM Module', () => {
         numChannels: 1,
         maxBlockSize: 512,
         eq: { tilt: { tiltDb: 1.0 } },
-        loudness: { targetLufs: -18, ceilingDb: -1, truePeakOversample: 4 },
+        loudness: { targetLufs: -18, ceilingDbtp: -1, truePeakOversample: 4 },
         loudnessStaticGainDb: 3.0,
         loudnessStaticGainPeakDb: -6.0,
       });
@@ -114,7 +114,7 @@ describe('Sonare WASM Module', () => {
           new StreamingMasteringChain({
             sampleRate: 44100,
             numChannels: 1,
-            loudness: { targetLufs: -18, ceilingDb: -1, truePeakOversample: 4 },
+            loudness: { targetLufs: -18, ceilingDbtp: -1, truePeakOversample: 4 },
           }),
       ).toThrow();
     });

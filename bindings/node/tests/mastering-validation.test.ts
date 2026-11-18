@@ -62,7 +62,7 @@ describe('mastering offline input validation (inherited from the C++ core)', () 
     const result = masterAudio(x, SR, {
       overrides: {
         dynamics: { compressor: { thresholdDb: -30, ratio: 4 } },
-        loudness: { targetLufs: -14, ceilingDb: -1 },
+        loudness: { targetLufs: -14, ceilingDbtp: -1 },
       },
     });
     expect(Number.isFinite(result.outputTruePeakDbtp)).toBe(true);
@@ -103,7 +103,7 @@ describe('masteringNormalizeLoudness() accepts the appended maximizer knobs', ()
     // results below would agree because nothing reads releaseMs at all, and the
     // equality would hold for a wrapper that dropped the option entirely.
     const x = sine(4096, 220, 0.2);
-    const driven = { targetLufs: 0, ceilingDb: -6 };
+    const driven = { targetLufs: 0, ceilingDbtp: -6 };
     const omitted = masteringNormalizeLoudness(x, SR, driven);
     expect(() => masteringNormalizeLoudness(x, SR, { ...driven, releaseMs: 0 })).toThrow(
       RangeError,
@@ -137,9 +137,9 @@ describe('masteringNormalizeLoudness() accepts the appended maximizer knobs', ()
     const x = sine(4096, 220, 0.2);
     expect(() => masteringNormalizeLoudness(x, SR, { targetLufs: Number.NaN })).toThrow();
     expect(() =>
-      masteringNormalizeLoudness(x, SR, { ceilingDb: Number.POSITIVE_INFINITY }),
+      masteringNormalizeLoudness(x, SR, { ceilingDbtp: Number.POSITIVE_INFINITY }),
     ).toThrow();
-    const recovered = masteringNormalizeLoudness(x, SR, { targetLufs: -14, ceilingDb: -1 });
+    const recovered = masteringNormalizeLoudness(x, SR, { targetLufs: -14, ceilingDbtp: -1 });
     expect(recovered.samples.every((value) => Number.isFinite(value))).toBe(true);
   });
 });

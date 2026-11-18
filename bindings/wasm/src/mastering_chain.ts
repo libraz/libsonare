@@ -168,23 +168,6 @@ export function normalizeStereo(request: NormalizeStereoRequest): NormalizeStere
 
 type NativeResult = Record<string, unknown>;
 
-// Native still names the loudness range `loudnessRange` / `outputLra`.
-function chainResultFromNative<R>(raw: object): R {
-  const { outputLra, report, ...rest } = raw as NativeResult & {
-    outputLra: number;
-    report: { before: NativeResult; after: NativeResult } & NativeResult;
-  };
-  const summary = (native: NativeResult): NativeResult => {
-    const { loudnessRange, ...others } = native as NativeResult & { loudnessRange: number };
-    return { ...others, loudnessRangeLu: loudnessRange };
-  };
-  return {
-    ...rest,
-    outputLoudnessRangeLu: outputLra,
-    report: { ...report, before: summary(report.before), after: summary(report.after) },
-  } as R;
-}
-
 /** Throws `TypeError` unless `onProgress` and `cancel` are each absent or a function. */
 function assertChainCallbacks(fnName: string, request: object): void {
   for (const name of ['onProgress', 'cancel'] as const) {
@@ -435,7 +418,7 @@ export function masterAudio(...args: unknown[]): MasteringChainResult {
   const progress = r.onProgress ?? undefined;
   const cancel = r.cancel ?? undefined;
   const module = requireModule();
-  return chainResultFromNative(
+  return (
     progress || cancel
       ? module.masterAudioWithProgress(
           preset,
@@ -445,8 +428,8 @@ export function masterAudio(...args: unknown[]): MasteringChainResult {
           progress ?? (() => {}),
           cancel ?? (() => false),
         )
-      : module.masterAudio(preset, r.samples, r.sampleRate, overrides),
-  );
+      : module.masterAudio(preset, r.samples, r.sampleRate, overrides)
+  ) as MasteringChainResult;
 }
 
 /**
@@ -481,7 +464,7 @@ export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringC
   const progress = r.onProgress ?? undefined;
   const cancel = r.cancel ?? undefined;
   const module = requireModule();
-  return chainResultFromNative(
+  return (
     progress || cancel
       ? module.masterAudioStereoWithProgress(
           preset,
@@ -492,6 +475,6 @@ export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringC
           progress ?? (() => {}),
           cancel ?? (() => false),
         )
-      : module.masterAudioStereo(preset, r.left, r.right, r.sampleRate, overrides),
-  );
+      : module.masterAudioStereo(preset, r.left, r.right, r.sampleRate, overrides)
+  ) as MasteringChainStereoResult;
 }

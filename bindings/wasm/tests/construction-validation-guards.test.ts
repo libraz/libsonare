@@ -547,7 +547,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
 
   it('sizes masteringStreamingPreview platforms from the real array length', () => {
     const samples = makeSine(1, 220);
-    const platform = (name: string) => ({ name, targetLufs: -14, ceilingDb: -1 });
+    const platform = (name: string) => ({ name, targetLufs: -14, ceilingDbtp: -1 });
     const platformCount = (platforms: unknown): number =>
       masteringStreamingPreview({ samples, sampleRate: SR, platforms } as never).platforms.length;
     // The control: two legal platform lists preview that many platforms.

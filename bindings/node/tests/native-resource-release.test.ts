@@ -58,7 +58,7 @@ const CASES: readonly ReleasableCase[] = [
         dynamics: { compressor: { thresholdDb: -18, ratio: 2 } },
         saturation: { tape: { driveDb: 2 } },
         stereo: { imager: { width: 1.1 } },
-        maximizer: { truePeakLimiter: { ceilingDb: -1 } },
+        maximizer: { truePeakLimiter: { ceilingDbtp: -1 } },
       });
       chain.processStereo(block(1024), block(1024));
       return chain;

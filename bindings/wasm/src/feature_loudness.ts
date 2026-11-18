@@ -55,12 +55,7 @@ export function lufsMultichannel(...args: unknown[]): LufsResult {
     r,
     r.sampleRate,
   );
-  const { loudnessRange, ...measured } = requireModule().lufsInterleaved(
-    data,
-    numChannels,
-    r.sampleRate,
-  );
-  return { ...measured, loudnessRangeLu: loudnessRange };
+  return requireModule().lufsInterleaved(data, numChannels, r.sampleRate);
 }
 
 /**
@@ -110,5 +105,5 @@ export function ebur128LoudnessRangeLu(
 export function ebur128LoudnessRangeLu(...args: unknown[]): number {
   const r = sampleOneShot<Ebur128LoudnessRangeLuRequest>('ebur128LoudnessRangeLu', args);
   assertAudioInput('ebur128LoudnessRangeLu', r.samples, r.sampleRate, r);
-  return requireModule().ebur128LoudnessRange(r.samples, r.sampleRate);
+  return requireModule().ebur128LoudnessRangeLu(r.samples, r.sampleRate);
 }

@@ -13,23 +13,6 @@ import { assertAudioInput, requestOnly, sampleOneShot } from './validation.js';
 
 type NativeResult = Record<string, unknown>;
 
-// Native still names the loudness range `loudnessRange` / `outputLra`.
-function chainResultFromNative<R>(raw: object): R {
-  const { outputLra, report, ...rest } = raw as NativeResult & {
-    outputLra: number;
-    report: { before: NativeResult; after: NativeResult } & NativeResult;
-  };
-  const summary = (native: NativeResult): NativeResult => {
-    const { loudnessRange, ...others } = native as NativeResult & { loudnessRange: number };
-    return { ...others, loudnessRangeLu: loudnessRange };
-  };
-  return {
-    ...rest,
-    outputLoudnessRangeLu: outputLra,
-    report: { ...report, before: summary(report.before), after: summary(report.after) },
-  } as R;
-}
-
 /** Throws `TypeError` unless `onProgress` and `cancel` are each absent or a function. */
 function assertChainCallbacks(fnName: string, request: object): void {
   for (const name of ['onProgress', 'cancel'] as const) {
@@ -211,7 +194,7 @@ export function masterAudio(...args: unknown[]): MasteringChainResult {
   const preset = r.preset ?? null;
   const progress = r.onProgress ?? undefined;
   const cancel = r.cancel ?? undefined;
-  return chainResultFromNative(
+  return (
     progress || cancel
       ? addon.masterAudioWithProgress(
           preset,
@@ -221,8 +204,8 @@ export function masterAudio(...args: unknown[]): MasteringChainResult {
           progress ?? (() => {}),
           cancel ?? (() => false),
         )
-      : addon.masterAudio(preset, r.samples, r.sampleRate, overrides),
-  );
+      : addon.masterAudio(preset, r.samples, r.sampleRate, overrides)
+  ) as MasteringChainResult;
 }
 
 /**
@@ -252,7 +235,7 @@ export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringC
   const preset = r.preset ?? null;
   const progress = r.onProgress ?? undefined;
   const cancel = r.cancel ?? undefined;
-  return chainResultFromNative(
+  return (
     progress || cancel
       ? addon.masterAudioStereoWithProgress(
           preset,
@@ -263,8 +246,8 @@ export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringC
           progress ?? (() => {}),
           cancel ?? (() => false),
         )
-      : addon.masterAudioStereo(preset, r.left, r.right, r.sampleRate, overrides),
-  );
+      : addon.masterAudioStereo(preset, r.left, r.right, r.sampleRate, overrides)
+  ) as MasteringChainStereoResult;
 }
 
 /** Request form of {@link masterAudioAsync}. */
@@ -338,7 +321,7 @@ export function masterAudioAsync(...args: unknown[]): Promise<MasteringChainResu
         r.sampleRate,
         chainConfigJson('masterAudioAsync', 'overrides', r.overrides),
       )
-      .then((result: object) => chainResultFromNative<MasteringChainResult>(result));
+      .then((result: object) => result as MasteringChainResult);
   } catch (error) {
     return Promise.reject(error);
   }
@@ -369,7 +352,7 @@ export function masterAudioStereoAsync(
         r.sampleRate,
         chainConfigJson('masterAudioStereoAsync', 'overrides', r.overrides),
       )
-      .then((result: object) => chainResultFromNative<MasteringChainStereoResult>(result));
+      .then((result: object) => result as MasteringChainStereoResult);
   } catch (error) {
     return Promise.reject(error);
   }

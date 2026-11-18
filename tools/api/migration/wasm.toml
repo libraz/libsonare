@@ -23252,7 +23252,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringAssistantParamsRequest.params"
-removed = "Use MasteringAssistantSuggestRequest and put the params fields (targetLufs, ceilingDb, targetPlatform, ...) directly on it."
+removed = "Use MasteringAssistantSuggestRequest and put the params fields (targetLufs, ceilingDbtp, targetPlatform, ...) directly on it."
 domain = "mastering"
 rule = "options-struct"
 
@@ -23342,7 +23342,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the assistant chain
 [[entry]]
 kind = "field"
 old = "MasteringAssistantStereoParamsRequest.params"
-removed = "Use MasteringAssistantSuggestStereoRequest and put the params fields (targetLufs, ceilingDb, targetPlatform, ...) directly on it."
+removed = "Use MasteringAssistantSuggestStereoRequest and put the params fields (targetLufs, ceilingDbtp, targetPlatform, ...) directly on it."
 domain = "mastering"
 rule = "options-struct"
 
@@ -23502,6 +23502,53 @@ domain = "mastering"
 rule = "loudness-names"
 entry = "./analysis"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::chain results name the loudness range"
+
+[[entry]]
+kind = "field"
+old = "MasteringOptions.ceilingDb"
+to = "MasteringNormalizeLoudnessOptions.ceilingDbtp"
+changed = "ceilingDb -> ceilingDbtp; the ceiling is held on a true-peak measurement, and ceilingDb is refused"
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/wasm/tests/mastering-simple.test.ts::takes the true-peak ceiling as ceilingDbtp"
+
+[[entry]]
+kind = "field"
+old = "MasteringOptions.ceilingDb"
+to = "MasteringNormalizeLoudnessOptions.ceilingDbtp"
+changed = "ceilingDb -> ceilingDbtp; the ceiling is held on a true-peak measurement, and ceilingDb is refused"
+domain = "mastering"
+rule = "loudness-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/mastering-simple.test.ts::takes the true-peak ceiling as ceilingDbtp"
+
+[[entry]]
+kind = "field"
+old = "MasteringRequest.ceilingDb"
+to = "MasteringNormalizeLoudnessRequest.ceilingDbtp"
+changed = "ceilingDb -> ceilingDbtp; the ceiling is held on a true-peak measurement, and ceilingDb is refused"
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/wasm/tests/mastering-simple.test.ts::takes the true-peak ceiling as ceilingDbtp"
+
+[[entry]]
+kind = "field"
+old = "StreamingPlatform.ceilingDb"
+to = "StreamingPlatform.ceilingDbtp"
+changed = "ceilingDb -> ceilingDbtp; the ceiling is held on a true-peak measurement, and ceilingDb is refused"
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/wasm/tests/mastering-simple.test.ts::takes the true-peak ceiling as ceilingDbtp"
+
+[[entry]]
+kind = "field"
+old = "StreamingPlatform.ceilingDb"
+to = "StreamingPlatform.ceilingDbtp"
+changed = "ceilingDb -> ceilingDbtp; the ceiling is held on a true-peak measurement, and ceilingDb is refused"
+domain = "mastering"
+rule = "loudness-names"
+entry = "./analysis"
+test = "bindings/wasm/tests/mastering-simple.test.ts::takes the true-peak ceiling as ceilingDbtp"
 
 [[entry]]
 kind = "field"

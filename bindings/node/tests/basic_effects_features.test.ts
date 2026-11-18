@@ -249,7 +249,7 @@ describe('effects', () => {
 
     const result = masteringNormalizeLoudness(quiet, SR, {
       targetLufs: -18.0,
-      ceilingDb: -1.0,
+      ceilingDbtp: -1.0,
       truePeakOversample: 4,
     });
     expect(result.samples).toBeInstanceOf(Float32Array);
@@ -263,7 +263,7 @@ describe('effects', () => {
 
     const ceilingLimited = masteringNormalizeLoudness(quiet, SR, {
       targetLufs: -2.0,
-      ceilingDb: -1.0,
+      ceilingDbtp: -1.0,
       truePeakOversample: 4,
     });
     expect(ceilingLimited.loudnessTargetLimited).toBe(true);
@@ -272,7 +272,7 @@ describe('effects', () => {
     try {
       const fromAudio = audio.masteringNormalizeLoudness({
         targetLufs: -18.0,
-        ceilingDb: -1.0,
+        ceilingDbtp: -1.0,
         truePeakOversample: 4,
       });
       expect(fromAudio.samples.length).toBe(quiet.length);
@@ -290,7 +290,7 @@ describe('effects', () => {
     for (let i = 0; i < peak.length; i++) {
       peak[i] = Math.sin((2 * Math.PI * 440 * i) / SR);
     }
-    const options = { targetLufs: -6, ceilingDb: -3, truePeakOversample: 4 };
+    const options = { targetLufs: -6, ceilingDbtp: -3, truePeakOversample: 4 };
     const simple = masteringNormalizeLoudness(peak, SR, options);
     const named = masteringApplyProcessor(peak, SR, {
       processor: 'maximizer.loudnessOptimize',
@@ -311,7 +311,7 @@ describe('effects', () => {
       peaky[i] = 0.05 * Math.sin((2 * Math.PI * 440 * i) / SR);
     }
     peaky[peaky.length >> 1] = 1;
-    const params = { targetLufs: -6, ceilingDb: -3, truePeakOversample: 4 };
+    const params = { targetLufs: -6, ceilingDbtp: -3, truePeakOversample: 4 };
     const mono = masteringApplyProcessor(peaky, SR, {
       processor: 'maximizer.loudnessOptimize',
       params: params as never,
@@ -333,12 +333,12 @@ describe('effects', () => {
       { length: 4096 },
       (_, i) => 0.3 * Math.sin((2 * Math.PI * 440 * i) / SR),
     );
-    const implicit = masteringNormalizeLoudness(input, SR, { targetLufs: -18, ceilingDb: -1 });
+    const implicit = masteringNormalizeLoudness(input, SR, { targetLufs: -18, ceilingDbtp: -1 });
     expect(implicit.samples.length).toBe(input.length);
     expect(() =>
       masteringNormalizeLoudness(input, SR, {
         targetLufs: -18,
-        ceilingDb: -1,
+        ceilingDbtp: -1,
         truePeakOversample: 0,
       }),
     ).toThrow(RangeError);

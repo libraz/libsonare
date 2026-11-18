@@ -256,7 +256,7 @@ export interface MasteringAssistantSettings {
   /** Integrated loudness target in LUFS. */
   targetLufs?: number;
   /** True-peak ceiling in dBFS. */
-  ceilingDb?: number;
+  ceilingDbtp?: number;
   /** Let the suggestion enable repair stages. */
   enableRepair?: boolean;
   /** Prefer settings that survive streaming-service normalization. */
@@ -339,8 +339,8 @@ function nativeLoudnessArgs(fnName: string, r: MasteringNormalizeLoudnessRequest
   if (r.targetLufs !== undefined && r.targetLufs !== null) {
     assertFloatValue(fnName, r.targetLufs, 'targetLufs');
   }
-  if (r.ceilingDb !== undefined && r.ceilingDb !== null) {
-    assertFloatValue(fnName, r.ceilingDb, 'ceilingDb');
+  if (r.ceilingDbtp !== undefined && r.ceilingDbtp !== null) {
+    assertFloatValue(fnName, r.ceilingDbtp, 'ceilingDbtp');
   }
   if (r.truePeakOversample !== undefined && r.truePeakOversample !== null) {
     assertPositiveInteger(fnName, r.truePeakOversample, 'truePeakOversample');
@@ -350,7 +350,7 @@ function nativeLoudnessArgs(fnName: string, r: MasteringNormalizeLoudnessRequest
   }
   return [
     r.targetLufs ?? -14.0,
-    r.ceilingDb ?? -1.0,
+    r.ceilingDbtp ?? -1.0,
     r.truePeakOversample ?? 4,
     r.releaseMs ?? 0,
     optionalBoolean(fnName, r.applyGainAtInputRate, 'applyGainAtInputRate', false),
@@ -866,7 +866,7 @@ function assistantParams(
   r: MasteringAssistantSettings,
 ): Record<string, number | boolean | string> {
   const params: Record<string, number | boolean | string> = {};
-  for (const key of ['targetLufs', 'ceilingDb'] as const) {
+  for (const key of ['targetLufs', 'ceilingDbtp'] as const) {
     if (r[key] !== undefined && r[key] !== null) {
       assertFloatValue(fnName, r[key], key);
       params[key] = r[key];

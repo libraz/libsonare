@@ -12231,7 +12231,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant chain
 [[entry]]
 kind = "field"
 old = "MasteringAssistantSuggestRequest.params"
-removed = "Put the params fields (targetLufs, ceilingDb, targetPlatform, ...) directly on the request."
+removed = "Put the params fields (targetLufs, ceilingDbtp, targetPlatform, ...) directly on the request."
 domain = "mastering"
 rule = "options-struct"
 
@@ -12246,7 +12246,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "field"
 old = "MasteringAssistantSuggestStereoRequest.params"
-removed = "Put the params fields (targetLufs, ceilingDb, targetPlatform, ...) directly on the request."
+removed = "Put the params fields (targetLufs, ceilingDbtp, targetPlatform, ...) directly on the request."
 domain = "mastering"
 rule = "options-struct"
 
@@ -12405,6 +12405,33 @@ changed = "loudnessRange -> loudnessRangeLu"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::chain results name the loudness range"
+
+[[entry]]
+kind = "field"
+old = "MasteringOptions.ceilingDb"
+to = "MasteringNormalizeLoudnessOptions.ceilingDbtp"
+changed = "ceilingDb -> ceilingDbtp; the ceiling is held on a true-peak measurement, and ceilingDb is refused"
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/node/tests/request_object_mastering.test.ts::takes the true-peak ceiling as ceilingDbtp"
+
+[[entry]]
+kind = "field"
+old = "MasteringRequest.ceilingDb"
+to = "MasteringNormalizeLoudnessRequest.ceilingDbtp"
+changed = "ceilingDb -> ceilingDbtp; the ceiling is held on a true-peak measurement, and ceilingDb is refused"
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/node/tests/request_object_mastering.test.ts::takes the true-peak ceiling as ceilingDbtp"
+
+[[entry]]
+kind = "field"
+old = "StreamingPlatform.ceilingDb"
+to = "StreamingPlatform.ceilingDbtp"
+changed = "ceilingDb -> ceilingDbtp; the ceiling is held on a true-peak measurement, and ceilingDb is refused"
+domain = "mastering"
+rule = "loudness-names"
+test = "bindings/node/tests/request_object_mastering.test.ts::takes the true-peak ceiling as ceilingDbtp"
 
 [[entry]]
 kind = "field"
@@ -13751,7 +13778,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "type"
 old = "MasteringAssistantSuggestRequest"
-changed = "removes `params`; adds `ceilingDb?: number`; adds `enableRepair?: boolean`; adds `preferStreamingSafe?: boolean`; adds `preset?: MasteringPreset`; adds `speechMonoAmount?: number`; adds `targetLufs?: number`; adds `targetPlatform?: MasteringPlatform`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `params`; adds `ceilingDbtp?: number`; adds `enableRepair?: boolean`; adds `preferStreamingSafe?: boolean`; adds `preset?: MasteringPreset`; adds `speechMonoAmount?: number`; adds `targetLufs?: number`; adds `targetPlatform?: MasteringPlatform`; adds `validate?: boolean`; `sampleRate` is now required"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant params are flat request fields"
@@ -13759,7 +13786,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant param
 [[entry]]
 kind = "type"
 old = "MasteringAssistantSuggestStereoRequest"
-changed = "removes `params`; adds `ceilingDb?: number`; adds `enableRepair?: boolean`; adds `preferStreamingSafe?: boolean`; adds `preset?: MasteringPreset`; adds `speechMonoAmount?: number`; adds `targetLufs?: number`; adds `targetPlatform?: MasteringPlatform`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `params`; adds `ceilingDbtp?: number`; adds `enableRepair?: boolean`; adds `preferStreamingSafe?: boolean`; adds `preset?: MasteringPreset`; adds `speechMonoAmount?: number`; adds `targetLufs?: number`; adds `targetPlatform?: MasteringPlatform`; adds `validate?: boolean`; `sampleRate` is now required"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant params are flat request fields"

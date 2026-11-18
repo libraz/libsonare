@@ -283,7 +283,7 @@ export interface WasmDynamicsAnalysisResult {
   peakDb: number;
   rmsDb: number;
   crestFactor: number;
-  loudnessRangeDb: number;
+  loudnessRangeLu: number;
   isCompressed: boolean;
   loudnessTimesSec: Float32Array;
   loudnessRmsDb: Float32Array;
@@ -860,7 +860,7 @@ export interface WasmLufsResult {
   shortTermLufs: number;
   maxMomentaryLufs: number;
   maxShortTermLufs: number;
-  loudnessRange: number;
+  loudnessRangeLu: number;
 }
 
 /**
@@ -925,7 +925,7 @@ export interface WasmMasteringLoudnessSummary {
   maxMomentaryLufs: number;
   maxShortTermLufs: number;
   truePeakDbtp: number;
-  loudnessRange: number;
+  loudnessRangeLu: number;
 }
 
 export interface WasmMasteringReport {
@@ -940,7 +940,7 @@ export interface WasmMasteringReport {
 export interface WasmMasteringChainResult extends WasmMasteringResult {
   stages: string[];
   outputTruePeakDbtp: number;
-  outputLra: number;
+  outputLoudnessRangeLu: number;
   loudnessTargetLimited: boolean;
   /**
    * Samples a stage replaced with a finite in-domain one, keeping the
@@ -968,7 +968,7 @@ export interface WasmMasteringStereoChainResult {
   appliedGainDb: number;
   stages: string[];
   outputTruePeakDbtp: number;
-  outputLra: number;
+  outputLoudnessRangeLu: number;
   loudnessTargetLimited: boolean;
   /** See {@link WasmMasteringChainResult} for field semantics. Aggregated over both channels. */
   nonFiniteSubstitutionCount: number;
@@ -2703,7 +2703,7 @@ export interface SonareModule {
     samples: Float32Array,
     sampleRate: number,
     targetLufs: number,
-    ceilingDb: number,
+    ceilingDbtp: number,
     truePeakOversample: number,
     releaseMs: number,
     applyGainAtInputRate: boolean,
@@ -2803,7 +2803,7 @@ export interface SonareModule {
   masteringStreamingPreview: (
     samples: Float32Array,
     sampleRate: number,
-    platforms: Array<{ name: string; targetLufs: number; ceilingDb: number }>,
+    platforms: Array<{ name: string; targetLufs: number; ceilingDbtp: number }>,
   ) => string;
   masteringAssistantSuggestStereo: (
     left: Float32Array,
@@ -2827,7 +2827,7 @@ export interface SonareModule {
     left: Float32Array,
     right: Float32Array,
     sampleRate: number,
-    platforms: Array<{ name: string; targetLufs: number; ceilingDb: number }>,
+    platforms: Array<{ name: string; targetLufs: number; ceilingDbtp: number }>,
   ) => string;
   masteringRepairDeclick: (
     samples: Float32Array,
@@ -3659,7 +3659,7 @@ export interface SonareModule {
     channels: number,
     sampleRate: number,
   ) => WasmLufsSeriesResult;
-  ebur128LoudnessRange: (samples: Float32Array, sampleRate: number) => number;
+  ebur128LoudnessRangeLu: (samples: Float32Array, sampleRate: number) => number;
 
   // Core - Resample
   resample: (samples: Float32Array, srcSr: number, targetSr: number) => Float32Array;

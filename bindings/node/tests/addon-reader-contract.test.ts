@@ -334,13 +334,13 @@ describe('the streaming chain constructor refuses a config leaf it cannot read',
   it('leaves a wrong-kind leaf to the core, which names the path', () => {
     const document = JSON.stringify({
       version: 2,
-      params: { maximizer: { truePeakLimiter: { ceilingDb: '-1' } } },
+      params: { maximizer: { truePeakLimiter: { ceilingDbtp: '-1' } } },
     });
     expect(() => new addon.StreamingMasteringChain(document)).toThrow(
       expect.objectContaining({
         code: ErrorCode.InvalidFormat,
         message: expect.stringContaining(
-          'maximizer.truePeakLimiter.ceilingDb is a string, but takes no token',
+          'maximizer.truePeakLimiter.ceilingDbtp is a string, but takes no token',
         ),
       }),
     );

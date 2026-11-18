@@ -57,7 +57,7 @@ describe('WASM masterAudio nested overrides', () => {
   });
 
   it('produces identical results for positional and request-object forms', () => {
-    const overrides = { loudness: { targetLufs: -16, ceilingDb: -1.5 } };
+    const overrides = { loudness: { targetLufs: -16, ceilingDbtp: -1.5 } };
     const positional = masterAudio(samples, sampleRate, { preset: 'pop', overrides });
     const request = masterAudio({ samples, sampleRate, preset: 'pop', overrides });
     expect(request.outputLufs).toBeCloseTo(positional.outputLufs, 6);
@@ -130,7 +130,7 @@ describe('WASM canonical mastering-chain config', () => {
       sampleRate,
       overrides: {
         dynamics: { compressor: { thresholdDb: -30, ratio: 4 } },
-        loudness: { targetLufs: -14, ceilingDb: -1 },
+        loudness: { targetLufs: -14, ceilingDbtp: -1 },
       },
     });
     expect(Number.isFinite(result.outputTruePeakDbtp)).toBe(true);

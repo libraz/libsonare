@@ -51,7 +51,7 @@ describe('masteringNormalizeLoudness() knobs (WASM)', () => {
     // results below would agree because nothing reads releaseMs at all, and the
     // equality would hold for a shim that dropped the argument entirely.
     const x = sine(220, 0.1);
-    const driven = { targetLufs: 0, ceilingDb: -6 };
+    const driven = { targetLufs: 0, ceilingDbtp: -6 };
     const omitted = masteringNormalizeLoudness(x, SR, driven);
     const explicit = masteringNormalizeLoudness(x, SR, { ...driven, releaseMs: 50 });
     const immediate = masteringNormalizeLoudness(x, SR, { ...driven, releaseMs: 1 });
@@ -81,9 +81,19 @@ describe('masteringNormalizeLoudness() knobs (WASM)', () => {
     const x = sine(220, 0.1);
     expect(() => masteringNormalizeLoudness(x, SR, { targetLufs: Number.NaN })).toThrow();
     expect(() =>
-      masteringNormalizeLoudness(x, SR, { ceilingDb: Number.POSITIVE_INFINITY }),
+      masteringNormalizeLoudness(x, SR, { ceilingDbtp: Number.POSITIVE_INFINITY }),
     ).toThrow();
-    const recovered = masteringNormalizeLoudness(x, SR, { targetLufs: -14, ceilingDb: -1 });
+    const recovered = masteringNormalizeLoudness(x, SR, { targetLufs: -14, ceilingDbtp: -1 });
     expect(allFinite(recovered.samples)).toBe(true);
+  });
+
+  it('takes the true-peak ceiling as ceilingDbtp', () => {
+    const x = sine(220, 0.25);
+    const peakOf = (ceilingDbtp: number) =>
+      Math.max(...masteringNormalizeLoudness(x, SR, { targetLufs: 0, ceilingDbtp }).samples);
+    expect(peakOf(-6)).toBeLessThan(peakOf(-1));
+    expect(() => masteringNormalizeLoudness(x, SR, { ceilingDb: -1 } as never)).toThrow(
+      "masteringNormalizeLoudness: unknown option 'ceilingDb'",
+    );
   });
 });

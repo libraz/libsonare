@@ -64,8 +64,8 @@ export const ROWS: Row[] = [
     name: 'masteringNormalizeLoudness',
     fn: sonare.masteringNormalizeLoudness,
     form: 'sampleOptions',
-    params: 'samples sampleRate targetLufs? ceilingDb?',
-    values: { samples: SIG, sampleRate: ALT_SR, targetLufs: -18, ceilingDb: -3 },
+    params: 'samples sampleRate targetLufs? ceilingDbtp?',
+    values: { samples: SIG, sampleRate: ALT_SR, targetLufs: -18, ceilingDbtp: -3 },
     invalid: { sampleRate: 0 },
   },
   {
@@ -221,7 +221,7 @@ export const ROWS: Row[] = [
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
-      platforms: [{ name: 'quiet', targetLufs: -24, ceilingDb: -3 }],
+      platforms: [{ name: 'quiet', targetLufs: -24, ceilingDbtp: -3 }],
     },
     invalid: { sampleRate: 0 },
   },

@@ -187,8 +187,8 @@ function nativeLoudnessArgs(fnName: string, r: MasteringNormalizeLoudnessRequest
   if (r.targetLufs !== undefined && r.targetLufs !== null) {
     assertFloatValue(fnName, r.targetLufs, 'targetLufs');
   }
-  if (r.ceilingDb !== undefined && r.ceilingDb !== null) {
-    assertFloatValue(fnName, r.ceilingDb, 'ceilingDb');
+  if (r.ceilingDbtp !== undefined && r.ceilingDbtp !== null) {
+    assertFloatValue(fnName, r.ceilingDbtp, 'ceilingDbtp');
   }
   if (r.truePeakOversample !== undefined && r.truePeakOversample !== null) {
     assertPositiveInteger(fnName, r.truePeakOversample, 'truePeakOversample');
@@ -198,7 +198,7 @@ function nativeLoudnessArgs(fnName: string, r: MasteringNormalizeLoudnessRequest
   }
   return [
     r.targetLufs ?? -14.0,
-    r.ceilingDb ?? -1.0,
+    r.ceilingDbtp ?? -1.0,
     r.truePeakOversample ?? 4,
     r.releaseMs ?? 0,
     r.applyGainAtInputRate ?? false,

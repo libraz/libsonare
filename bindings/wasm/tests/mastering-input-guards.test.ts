@@ -128,7 +128,7 @@ describe('mastering pair input guards', () => {
 describe('masteringStreamingPreview platform-field guards', () => {
   // A quiet tone with one full-scale burst: the crest factor is what makes the
   // normalization gain push the true peak well past a real ceiling, so the
-  // ceilingRisk verdict is decided by ceilingDb rather than by the material.
+  // ceilingRisk verdict is decided by ceilingDbtp rather than by the material.
   const previewRate = 22050;
   const clippingMaterial = (() => {
     const buf = new Float32Array(previewRate);
@@ -158,23 +158,23 @@ describe('masteringStreamingPreview platform-field guards', () => {
   }
 
   it('reports a ceiling risk for material that will clip at a real ceiling', () => {
-    expect(ceilingVerdict({ name: 'strict', targetLufs: -14, ceilingDb: -1 })).toEqual({
+    expect(ceilingVerdict({ name: 'strict', targetLufs: -14, ceilingDbtp: -1 })).toEqual({
       ceilingRisk: true,
     });
   });
 
   it('reports no ceiling risk once the ceiling is above the normalized peak', () => {
-    expect(ceilingVerdict({ name: 'open', targetLufs: -14, ceilingDb: 40 })).toEqual({
+    expect(ceilingVerdict({ name: 'open', targetLufs: -14, ceilingDbtp: 40 })).toEqual({
       ceilingRisk: false,
     });
   });
 
-  it('rejects a non-finite ceilingDb instead of answering with it', () => {
+  it('rejects a non-finite ceilingDbtp instead of answering with it', () => {
     // Each non-finite value separately: the comparison the verdict comes from is
-    // `truePeak + gain > ceilingDb`, which a NaN sends to the false arm while
+    // `truePeak + gain > ceilingDbtp`, which a NaN sends to the false arm while
     // one of the infinities still decides correctly.
-    for (const ceilingDb of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
-      expect(ceilingVerdict({ name: 'strict', targetLufs: -14, ceilingDb })).toEqual({
+    for (const ceilingDbtp of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(ceilingVerdict({ name: 'strict', targetLufs: -14, ceilingDbtp })).toEqual({
         rejected: true,
       });
     }
@@ -182,7 +182,7 @@ describe('masteringStreamingPreview platform-field guards', () => {
 
   it('rejects a non-finite targetLufs instead of answering with it', () => {
     for (const targetLufs of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
-      expect(ceilingVerdict({ name: 'strict', targetLufs, ceilingDb: -1 })).toEqual({
+      expect(ceilingVerdict({ name: 'strict', targetLufs, ceilingDbtp: -1 })).toEqual({
         rejected: true,
       });
     }

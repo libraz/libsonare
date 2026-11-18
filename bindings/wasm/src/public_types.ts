@@ -87,6 +87,7 @@ export interface Capabilities {
 export type MasteringInsertParamUnit =
   | 'dB'
   | 'dBFS'
+  | 'dBTP'
   | 'LUFS'
   | 'Hz'
   | 'ms'

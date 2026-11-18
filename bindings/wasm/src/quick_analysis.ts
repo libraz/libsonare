@@ -1218,7 +1218,7 @@ export function analyzeDynamics(...args: unknown[]): DynamicsResult {
     peakDb: result.peakDb,
     rmsDb: result.rmsDb,
     crestFactor: result.crestFactor,
-    loudnessRangeLu: result.loudnessRangeDb,
+    loudnessRangeLu: result.loudnessRangeLu,
     isCompressed: result.isCompressed,
     loudnessTimesSec: result.loudnessTimesSec,
     loudnessRmsDb: result.loudnessRmsDb,

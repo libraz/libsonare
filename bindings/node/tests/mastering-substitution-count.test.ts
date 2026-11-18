@@ -44,7 +44,7 @@ describe('nonFiniteSubstitutionCount on offline mastering results', () => {
   // never report anything else.
   it('is zero for a named solo processor, mono and stereo', () => {
     const x = sine(4096);
-    const params = { ceilingDb: -1 };
+    const params = { ceilingDbtp: -1 };
     const processor = 'maximizer.truePeakLimiter' as const;
     const mono = masteringApplyProcessor({ processor, samples: x, sampleRate: SR, params });
     expect(mono.nonFiniteSubstitutionCount).toBe(0);
@@ -75,7 +75,7 @@ describe('nonFiniteSubstitutionCount on offline mastering results', () => {
     const y = sine(4096, 330);
     const overrides = {
       dynamics: { compressor: { thresholdDb: -30, ratio: 4 } },
-      maximizer: { truePeakLimiter: { enabled: true, ceilingDb: -1 } },
+      maximizer: { truePeakLimiter: { enabled: true, ceilingDbtp: -1 } },
     };
 
     expect(masterAudio({ samples: x, sampleRate: SR, overrides }).nonFiniteSubstitutionCount).toBe(

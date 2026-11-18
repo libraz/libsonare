@@ -24,7 +24,7 @@ const masterLimiterScene = JSON.stringify({
           processor: 'maximizer.truePeakLimiter',
           // lookaheadMs is intentionally present in construction JSON.  It is
           // a valid construction field, but is not realtime-safe by name.
-          params: { ceilingDb: -1, lookaheadMs: 0, releaseMs: 50 },
+          params: { ceilingDbtp: -1, lookaheadMs: 0, releaseMs: 50 },
         },
       ],
     },
@@ -84,7 +84,7 @@ describe('master limiter ceiling (real WASM engine)', () => {
       expect(initialPeak).toBeGreaterThan(0.7);
       expect(initialPeak).toBeLessThan(1.05);
 
-      const ceilingId = engine.resolveStripInsertAutomationId('master', 0, 'ceilingDb');
+      const ceilingId = engine.resolveStripInsertAutomationId('master', 0, 'ceilingDbtp');
       expect(ceilingId).toBeGreaterThan(0);
       engine.setParameter(ceilingId, -12);
       // A queued ceiling change must pass through the limiter's lookahead and

@@ -80,7 +80,7 @@ describe('mastering request-object compatibility', () => {
     expect(masterAudio({ samples, sampleRate, overrides: empty })).toEqual(
       masterAudio(samples, sampleRate, { overrides: empty }),
     );
-    const overrides = { loudness: { targetLufs: -14, ceilingDb: -1 } };
+    const overrides = { loudness: { targetLufs: -14, ceilingDbtp: -1 } };
     expect(masterAudio({ samples, sampleRate, overrides })).toEqual(
       masterAudio(samples, sampleRate, { overrides }),
     );
@@ -90,7 +90,7 @@ describe('mastering request-object compatibility', () => {
     const result = masterAudio({
       samples: signal(),
       sampleRate,
-      overrides: { loudness: { targetLufs: -14, ceilingDb: -1 } },
+      overrides: { loudness: { targetLufs: -14, ceilingDbtp: -1 } },
     });
     expect(result.report.before.integratedLufs).toBe(result.inputLufs);
     expect(result.report.after.integratedLufs).toBe(result.outputLufs);
@@ -305,9 +305,29 @@ describe('mastering request-object compatibility', () => {
     expect(masteringAudioProfile({ samples: source, sampleRate })).toEqual(
       masteringAudioProfile(source, sampleRate),
     );
-    const platforms = [{ name: 'Test', targetLufs: -14, ceilingDb: -1 }];
+    const platforms = [{ name: 'Test', targetLufs: -14, ceilingDbtp: -1 }];
     expect(masteringStreamingPreview({ samples: source, sampleRate, platforms })).toEqual(
       masteringStreamingPreview(source, sampleRate, { platforms }),
     );
+  });
+
+  it('takes the true-peak ceiling as ceilingDbtp', () => {
+    const hot = signal();
+    const peakOf = (ceilingDbtp: number) =>
+      Math.max(
+        ...masteringNormalizeLoudness({ samples: hot, sampleRate, targetLufs: 0, ceilingDbtp })
+          .samples,
+      );
+    expect(peakOf(-6)).toBeLessThan(peakOf(-1));
+    expect(() =>
+      masteringNormalizeLoudness({ samples: hot, sampleRate, ceilingDb: -1 } as never),
+    ).toThrow(TypeError);
+    expect(() =>
+      masteringStreamingPreview({
+        samples: hot,
+        sampleRate,
+        platforms: [{ name: 'Test', targetLufs: -14, ceilingDb: -1 } as never],
+      }),
+    ).toThrow(/ceilingDbtp/);
   });
 });

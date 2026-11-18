@@ -530,8 +530,8 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     call: (v) => native.mastering(AUDIO, SAMPLE_RATE, v, -1).outputLufs,
   },
   {
-    name: 'mastering ceilingDb',
-    site: 'effects/mastering.cpp Mastering ceilingDb',
+    name: 'mastering ceilingDbtp',
+    site: 'effects/mastering.cpp Mastering ceilingDbtp',
     control: [-1, -12],
     call: (v) => peak(native.mastering(AUDIO, SAMPLE_RATE, -14, v).samples),
   },
@@ -973,7 +973,7 @@ function analyzerFrames(apply: (analyzer: any) => void): Record<string, Float32A
   return frames;
 }
 
-const PLATFORM = { name: 'test', targetLufs: -14, ceilingDb: -1 };
+const PLATFORM = { name: 'test', targetLufs: -14, ceilingDbtp: -1 };
 
 /** A tempogram for the `factors` rows, computed once. */
 const TEMPOGRAM = native.fourierTempogram(
@@ -1157,11 +1157,11 @@ const REQUIRED_FLOAT_STATE_ARGUMENTS: FloatArgument[] = [
       native.masteringStreamingPreview(SHORT, SAMPLE_RATE, [{ ...PLATFORM, targetLufs: v }]),
   },
   {
-    name: 'masteringStreamingPreview ceilingDb',
-    site: 'effects/mastering_pair.cpp MasteringStreamingPreview ceilingDb',
+    name: 'masteringStreamingPreview ceilingDbtp',
+    site: 'effects/mastering_pair.cpp MasteringStreamingPreview ceilingDbtp',
     control: [-1, -12],
     call: (v) =>
-      native.masteringStreamingPreview(SHORT, SAMPLE_RATE, [{ ...PLATFORM, ceilingDb: v }]),
+      native.masteringStreamingPreview(SHORT, SAMPLE_RATE, [{ ...PLATFORM, ceilingDbtp: v }]),
   },
   {
     name: 'masteringStreamingPreviewStereo targetLufs',
@@ -1173,12 +1173,12 @@ const REQUIRED_FLOAT_STATE_ARGUMENTS: FloatArgument[] = [
       ]),
   },
   {
-    name: 'masteringStreamingPreviewStereo ceilingDb',
-    site: 'effects/mastering_pair.cpp MasteringStreamingPreviewStereo ceilingDb',
+    name: 'masteringStreamingPreviewStereo ceilingDbtp',
+    site: 'effects/mastering_pair.cpp MasteringStreamingPreviewStereo ceilingDbtp',
     control: [-1, -20],
     call: (v) =>
       native.masteringStreamingPreviewStereo(SHORT, SHORT, SAMPLE_RATE, [
-        { ...PLATFORM, ceilingDb: v },
+        { ...PLATFORM, ceilingDbtp: v },
       ]),
   },
   {

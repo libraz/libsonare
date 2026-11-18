@@ -4,14 +4,6 @@ import type { LufsResult, LufsSeriesResult } from './types.js';
 import type { OptionsOf } from './validation.js';
 import { assertAudioInput, assertSampleRate, requestOnly, sampleOneShot } from './validation.js';
 
-// Native names the loudness range `loudnessRange`; the public field carries its unit.
-function toLufsResult(
-  native: Omit<LufsResult, 'loudnessRangeLu'> & { loudnessRange: number },
-): LufsResult {
-  const { loudnessRange, ...rest } = native;
-  return { ...rest, loudnessRangeLu: loudnessRange };
-}
-
 /** Request for {@link lufs}. `validate: false` skips the NaN/Inf pre-scan. */
 export interface LufsRequest {
   /** Mono audio samples. */
@@ -76,7 +68,7 @@ export function lufsMultichannel(...args: unknown[]): LufsResult {
     r,
     r.sampleRate,
   );
-  return toLufsResult(addon.lufsInterleaved(data, numChannels, r.sampleRate));
+  return addon.lufsInterleaved(data, numChannels, r.sampleRate);
 }
 
 /**
@@ -125,7 +117,7 @@ export function ebur128LoudnessRangeLu(
 export function ebur128LoudnessRangeLu(...args: unknown[]): number {
   const r = sampleOneShot<Ebur128LoudnessRangeLuRequest>('ebur128LoudnessRangeLu', args);
   assertAudioInput('ebur128LoudnessRangeLu', r.samples, r.sampleRate, r);
-  return addon.ebur128LoudnessRange(r.samples, r.sampleRate);
+  return addon.ebur128LoudnessRangeLu(r.samples, r.sampleRate);
 }
 
 /**
@@ -142,7 +134,7 @@ export function lufs(
 export function lufs(...args: unknown[]): LufsResult {
   const request = sampleOneShot<LufsRequest>('lufs', args);
   assertAudioInput('lufs', request.samples, request.sampleRate, request);
-  return toLufsResult(addon.lufs(request.samples, request.sampleRate));
+  return addon.lufs(request.samples, request.sampleRate);
 }
 
 /** Per-block momentary (400 ms) LUFS series. Pass the buffer's actual `sampleRate`. */

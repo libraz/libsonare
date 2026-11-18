@@ -335,7 +335,7 @@ describe('Audio class', () => {
       const audio = Audio.fromBuffer(sine(), SR);
       const result = audio.masteringNormalizeLoudness({
         targetLufs: -18.0,
-        ceilingDb: -1.0,
+        ceilingDbtp: -1.0,
         truePeakOversample: 4,
       });
       expect(result.samples).toBeInstanceOf(Float32Array);
@@ -353,7 +353,7 @@ describe('Audio class', () => {
           eq: { tilt: { tiltDb: 1.0 } },
           dynamics: { compressor: { thresholdDb: -24.0, ratio: 1.5 } },
           saturation: { tape: { driveDb: 1.0, saturation: 0.2 } },
-          loudness: { targetLufs: -18.0, ceilingDb: -1.0, truePeakOversample: 4 },
+          loudness: { targetLufs: -18.0, ceilingDbtp: -1.0, truePeakOversample: 4 },
         },
       });
       expect(result.samples).toBeInstanceOf(Float32Array);

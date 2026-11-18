@@ -730,7 +730,7 @@ export function lufs(...args: unknown[]): LufsResult {
     shortTermLufs: native.shortTermLufs,
     maxMomentaryLufs: native.maxMomentaryLufs,
     maxShortTermLufs: native.maxShortTermLufs,
-    loudnessRangeLu: native.loudnessRange,
+    loudnessRangeLu: native.loudnessRangeLu,
   };
 }
 

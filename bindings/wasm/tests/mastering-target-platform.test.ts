@@ -53,7 +53,7 @@ describe('WASM mastering assistant target platform', () => {
     const loudness = masteringAssistantSuggest({ samples, sampleRate, targetPlatform: 'club' })
       .chainConfig.loudness;
     expect(loudness?.targetLufs).toBe(-9);
-    expect(loudness?.ceilingDb).toBeCloseTo(-0.3, 6);
+    expect(loudness?.ceilingDbtp).toBeCloseTo(-0.3, 6);
   });
 
   it('applies the target through the stereo entry point too', () => {
@@ -86,9 +86,9 @@ describe('WASM mastering assistant target platform', () => {
       sampleRate,
       targetPlatform: 'broadcast',
       targetLufs: -13,
-      ceilingDb: -0.8,
+      ceilingDbtp: -0.8,
     }).chainConfig.loudness;
     expect(loudness?.targetLufs).toBe(-13);
-    expect(loudness?.ceilingDb).toBeCloseTo(-0.8, 6);
+    expect(loudness?.ceilingDbtp).toBeCloseTo(-0.8, 6);
   });
 });

@@ -48,7 +48,7 @@ describe('Sonare WASM Module', () => {
 
       const result = masteringNormalizeLoudness(samples, sampleRate, {
         targetLufs: -18.0,
-        ceilingDb: -1.0,
+        ceilingDbtp: -1.0,
         truePeakOversample: 4,
       });
       expect(result.samples).toBeInstanceOf(Float32Array);
@@ -62,7 +62,7 @@ describe('Sonare WASM Module', () => {
 
       const ceilingLimited = masteringNormalizeLoudness(samples, sampleRate, {
         targetLufs: -2.0,
-        ceilingDb: -1.0,
+        ceilingDbtp: -1.0,
         truePeakOversample: 4,
       });
       expect(ceilingLimited.loudnessTargetLimited).toBe(true);
@@ -75,7 +75,7 @@ describe('Sonare WASM Module', () => {
           samples: input,
           sampleRate: 22050,
           targetLufs: -18,
-          ceilingDb: -1,
+          ceilingDbtp: -1,
           truePeakOversample: 0,
         }),
       ).toThrow(RangeError);
@@ -111,12 +111,12 @@ describe('Sonare WASM Module', () => {
           spectral: { airBand: { amount: 0.08 } },
           maximizer: {
             truePeakLimiter: {
-              ceilingDb: -1,
+              ceilingDbtp: -1,
               oversampleFactor: 4,
               applyGainAtInputRate: true,
             },
           },
-          loudness: { targetLufs: -18, ceilingDb: -1, truePeakOversample: 4 },
+          loudness: { targetLufs: -18, ceilingDbtp: -1, truePeakOversample: 4 },
         },
       });
 
@@ -201,7 +201,7 @@ describe('Sonare WASM Module', () => {
           },
           loudness: {
             targetLufs: -18,
-            ceilingDb: -1,
+            ceilingDbtp: -1,
             truePeakOversample: 4,
             applyGainAtInputRate: true,
           },
@@ -427,7 +427,7 @@ describe('Sonare WASM Module', () => {
       }
       peaky[peaky.length >> 1] = 1;
       // The catalog lists no parameters for this processor, so its typed params are empty.
-      const params = { targetLufs: -6, ceilingDb: -3, truePeakOversample: 4 } as never;
+      const params = { targetLufs: -6, ceilingDbtp: -3, truePeakOversample: 4 } as never;
 
       const mono = masteringApplyProcessor({
         processor: 'maximizer.loudnessOptimize',
@@ -533,7 +533,7 @@ describe('Sonare WASM Module', () => {
       const suggest = (samples: Float32Array) =>
         masteringAssistantSuggest(samples, sampleRate, {
           targetLufs: -13,
-          ceilingDb: -0.8,
+          ceilingDbtp: -0.8,
           enableRepair: true,
         });
       const result = suggest(clean);
@@ -543,7 +543,7 @@ describe('Sonare WASM Module', () => {
       expect(Array.isArray(result.explanation)).toBe(true);
       expect(result).not.toHaveProperty('genreCandidates');
       expect(result.chainConfig.loudness?.targetLufs).toBe(-13);
-      expect(result.chainConfig.loudness?.ceilingDb).toBeCloseTo(-0.8, 6);
+      expect(result.chainConfig.loudness?.ceilingDbtp).toBeCloseTo(-0.8, 6);
 
       // enableRepair asks for repair; the measured defect profile picks which stages
       // run. Only the clean side would still pass with enableRepair ignored outright,
@@ -578,7 +578,7 @@ describe('Sonare WASM Module', () => {
         samples[i] = 0.2 * Math.sin((2 * Math.PI * 440 * i) / sampleRate);
       }
       const result = masteringStreamingPreview(samples, sampleRate, {
-        platforms: [{ name: 'Unit Test', targetLufs: -12, ceilingDb: -1 }],
+        platforms: [{ name: 'Unit Test', targetLufs: -12, ceilingDbtp: -1 }],
       });
 
       expect(result.platforms).toHaveLength(1);

@@ -149,7 +149,7 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
   it('masteringNormalizeLoudness', () => {
     const defaults: Required<Omit<MasteringNormalizeLoudnessOptions, 'validate'>> = {
       targetLufs: -14.0,
-      ceilingDb: -1.0,
+      ceilingDbtp: -1.0,
       truePeakOversample: 4,
       releaseMs: 50,
       applyGainAtInputRate: false,

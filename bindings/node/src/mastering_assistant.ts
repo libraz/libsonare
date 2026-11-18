@@ -63,7 +63,7 @@ export interface MasteringAssistantSettings {
   /** Integrated loudness target in LUFS. */
   targetLufs?: number;
   /** True-peak ceiling in dBFS. */
-  ceilingDb?: number;
+  ceilingDbtp?: number;
   /** Let the suggestion enable repair stages. */
   enableRepair?: boolean;
   /** Prefer settings that survive streaming-service normalization. */
@@ -172,7 +172,7 @@ function assistantParams(
   r: MasteringAssistantSettings,
 ): Record<string, number | boolean | string> {
   const params: Record<string, number | boolean | string> = {};
-  for (const key of ['targetLufs', 'ceilingDb'] as const) {
+  for (const key of ['targetLufs', 'ceilingDbtp'] as const) {
     if (r[key] !== undefined && r[key] !== null) {
       assertFloatValue(fnName, r[key], key);
       params[key] = r[key];

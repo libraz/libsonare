@@ -86,7 +86,7 @@ export interface StreamingPlatform {
   /** Integrated-loudness target in LUFS, e.g. -14. */
   targetLufs: number;
   /** True-peak ceiling in dBTP, e.g. -1. */
-  ceilingDb: number;
+  ceilingDbtp: number;
 }
 
 // BEGIN GENERATED SoloProcessor (make processor-types)
@@ -9355,8 +9355,8 @@ export interface MasteringProcessorParamMap {
   'match.applyMatchEq': Record<string, never>;
   /** Parameters of the `maximizer.adaptiveRelease` processor. */
   'maximizer.adaptiveRelease': {
-    /** Unit: dBFS. Range: (-inf, 0]. Default: -1. */
-    ceilingDb?: number;
+    /** Unit: dBTP. Range: (-inf, 0]. Default: -1. */
+    ceilingDbtp?: number;
     /** Unit: ms. Range: [0, inf). Default: 20. */
     minReleaseMs?: number;
     /** Unit: ms. Default: 250. */
@@ -9398,8 +9398,8 @@ export interface MasteringProcessorParamMap {
   };
   /** Parameters of the `maximizer.truePeakLimiter` processor. */
   'maximizer.truePeakLimiter': {
-    /** Unit: dBFS. Range: (-inf, 0]. Default: -1. */
-    ceilingDb?: number;
+    /** Unit: dBTP. Range: (-inf, 0]. Default: -1. */
+    ceilingDbtp?: number;
     /** Unit: ms. Range: [0, inf). Default: 50. */
     releaseMs?: number;
     /** Default: false. */
@@ -13094,7 +13094,7 @@ export interface MasteringProcessorParamMap {
     limiterCeilingDb?: number;
     /** Unit: ms. Range: [1, 500]. Default: 50. */
     limiterReleaseMs?: number;
-    /** Unit: dBFS. Range: [-12, 0]. Default: -1. */
+    /** Unit: dBTP. Range: [-12, 0]. Default: -1. */
     limiterIspCeilingDbtp?: number;
     /** Default: 'off'. */
     pitchCorrectionMode?: 'off' | 'auto' | 'robot';
@@ -13455,10 +13455,10 @@ export interface MasteringNormalizeLoudnessOptions extends ValidateOptions {
   /** Target integrated LUFS. Default -14. */
   targetLufs?: number;
   /**
-   * True/sample peak ceiling in dBFS. Default -1. Held on the true peak read at
-   * {@link truePeakOversample}; a finer meter can read up to ~0.15 dB higher.
+   * True-peak ceiling in dBTP. Default -1. Must be finite. Held on the true peak
+   * read at {@link truePeakOversample}; a finer meter can read up to ~0.15 dB higher.
    */
-  ceilingDb?: number;
+  ceilingDbtp?: number;
   /** Oversampling factor used for peak estimation. Default 4; an explicit 0 is a `RangeError`. */
   truePeakOversample?: number;
   /**
@@ -13967,7 +13967,7 @@ export interface MasteringChainConfig {
       /** Turns the true-peak limiter stage on. Default false. */
       enabled?: boolean;
       /** True-peak ceiling in dBTP (0 or below) that the output does not exceed. Default -1. */
-      ceilingDb?: number;
+      ceilingDbtp?: number;
       /** Look-ahead in ms that lets the gain reduction start before a peak; adds latency. Default 1. */
       lookaheadMs?: number;
       /** Release in ms: one time constant, about 63% of the way at the set time. */
@@ -13984,8 +13984,8 @@ export interface MasteringChainConfig {
     enabled?: boolean;
     /** Integrated-loudness target in LUFS. Default -14. */
     targetLufs?: number;
-    /** Ceiling of the loudness stage; `maximizer.truePeakLimiter.ceilingDb` bounds the limiter, each applies to its own stage. */
-    ceilingDb?: number;
+    /** Ceiling of the loudness stage; `maximizer.truePeakLimiter.ceilingDbtp` bounds the limiter, each applies to its own stage. */
+    ceilingDbtp?: number;
     /** Oversampling factor of the true-peak limiter and meter in this stage: 1, 2, 4, 8 or 16. Default 4. */
     truePeakOversample?: number;
     /** Release in ms: one time constant, about 63% of the way at the set time. */
@@ -13995,9 +13995,9 @@ export interface MasteringChainConfig {
     /**
      * How deep, in dB, the stage may drive its post-gain true-peak limiter to
      * reach {@link targetLufs}. Default 12. The static normalization gain may
-     * exceed the peak headroom toward `ceilingDb` by this much; `0` restores a
+     * exceed the peak headroom toward `ceilingDbtp` by this much; `0` restores a
      * strict headroom clamp, under which peak-normalized input keeps its input
-     * loudness whatever target is asked for. `ceilingDb` holds at every setting.
+     * loudness whatever target is asked for. `ceilingDbtp` holds at every setting.
      */
     maxLimiterGainReductionDb?: number;
   };
@@ -14028,7 +14028,7 @@ export interface StreamingMasteringChainConfig extends MasteringChainConfig {
   /**
    * True peak (dBTP) of the loudness stage's input the static gain was computed
    * for (`truePeakDbtp` of {@link streamingLoudnessGain}). When provided, the
-   * static gain is clamped to `(loudness.ceilingDb - loudnessStaticGainPeakDb) +
+   * static gain is clamped to `(loudness.ceilingDbtp - loudnessStaticGainPeakDb) +
    * max(loudness.maxLimiterGainReductionDb, 0)` so the streaming preview does
    * not drive the loudness limiter harder than the offline chain. When omitted
    * the static gain is applied verbatim.

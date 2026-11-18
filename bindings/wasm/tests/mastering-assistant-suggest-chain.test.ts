@@ -24,7 +24,7 @@ beforeAll(async () => init());
 
 describe('masteringAssistantSuggestChain', () => {
   it('matches the chainConfig the full assistant result carries', () => {
-    const settings = { targetLufs: -13, ceilingDb: -0.8, enableRepair: true };
+    const settings = { targetLufs: -13, ceilingDbtp: -0.8, enableRepair: true };
     const document = masteringAssistantSuggest({ samples, sampleRate, ...settings });
     const chain = masteringAssistantSuggestChain({ samples, sampleRate, ...settings });
 

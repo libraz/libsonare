@@ -61,7 +61,7 @@ describe('mastering assistant target platform', () => {
       targetPlatform: 'club',
     });
     expect(result.chainConfig.loudness?.targetLufs).toBe(-9);
-    expect(result.chainConfig.loudness?.ceilingDb).toBeCloseTo(-0.3, 5);
+    expect(result.chainConfig.loudness?.ceilingDbtp).toBeCloseTo(-0.3, 5);
   });
 
   it('applies the target through the stereo entry point too', () => {
@@ -94,10 +94,10 @@ describe('mastering assistant target platform', () => {
       sampleRate,
       targetPlatform: 'broadcast',
       targetLufs: -13,
-      ceilingDb: -0.8,
+      ceilingDbtp: -0.8,
     });
     expect(result.chainConfig.loudness?.targetLufs).toBe(-13);
-    expect(result.chainConfig.loudness?.ceilingDb).toBeCloseTo(-0.8, 5);
+    expect(result.chainConfig.loudness?.ceilingDbtp).toBeCloseTo(-0.8, 5);
   });
 
   it('an explicit loudness wins even when it equals the default', () => {
@@ -111,10 +111,10 @@ describe('mastering assistant target platform', () => {
       sampleRate,
       targetPlatform: 'broadcast',
       targetLufs: -14,
-      ceilingDb: -1,
+      ceilingDbtp: -1,
     });
     expect(result.chainConfig.loudness?.targetLufs).toBe(-14);
-    expect(result.chainConfig.loudness?.ceilingDb).toBe(-1);
+    expect(result.chainConfig.loudness?.ceilingDbtp).toBe(-1);
   });
 
   it('a target still fills in the field the caller left out', () => {
@@ -127,6 +127,6 @@ describe('mastering assistant target platform', () => {
       targetLufs: -14,
     });
     expect(result.chainConfig.loudness?.targetLufs).toBe(-14);
-    expect(result.chainConfig.loudness?.ceilingDb).toBeCloseTo(-0.3, 5);
+    expect(result.chainConfig.loudness?.ceilingDbtp).toBeCloseTo(-0.3, 5);
   });
 });
