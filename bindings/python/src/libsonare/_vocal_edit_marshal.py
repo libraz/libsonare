@@ -51,7 +51,6 @@ from ._vocal_edit_model import (
     _VOCAL_TARGET_MODES,
     VocalAnalysis,
     VocalAnalysisResult,
-    VocalCreateOptions,
     VocalEditResult,
     VocalFormantMode,
     VocalIdChange,
@@ -349,43 +348,74 @@ def _restore_options_to_c(
     return raw
 
 
-def _options_to_c(
-    lib: ctypes.CDLL, options: VocalCreateOptions | None
+def _create_options_to_c(
+    lib: ctypes.CDLL,
+    *,
+    analysis: VocalAnalysis | None,
+    output_length_samples: int | None,
+    edge_fade_ms: float | None,
+    vibrato_cutoff_hz: float | None,
+    segmentation_threshold_cents: float | None,
+    min_note_ms: float | None,
+    frame_length_samples: int | None,
+    hop_length_samples: int | None,
+    fmin_hz: float | None,
+    fmax_hz: float | None,
+    yin_threshold: float | None,
+    voiced_threshold: float | None,
+    centered: bool | None,
+    reference_hz: float | None,
+    max_history_bytes: int | None,
+    max_cache_bytes: int | None,
+    max_undo_depth: int | None,
+    max_render_jobs: int | None,
 ) -> tuple[SonareVocalCreateOptions, list[Any]]:
+    """Seed the library defaults, then write each setting the caller gave."""
     raw = SonareVocalCreateOptions()
     lib.sonare_vocal_create_options_init(ctypes.byref(raw))
     keepalive: list[Any] = []
-    if options is None:
-        return raw, keepalive
-    fields = (
-        ("output_length_samples", _int64),
-        ("edge_fade_ms", _finite_float),
-        ("vibrato_cutoff_hz", _finite_float),
-        ("segmentation_threshold_cents", _finite_float),
-        ("min_note_ms", _finite_float),
-        ("frame_length_samples", lambda v, n: _uint32(v, n, allow_zero=False)),
-        ("hop_length_samples", lambda v, n: _uint32(v, n, allow_zero=False)),
-        ("fmin_hz", _finite_float),
-        ("fmax_hz", _finite_float),
-        ("yin_threshold", _finite_float),
-        ("voiced_threshold", _finite_float),
-        ("centered", _bool_flag),
-        ("reference_hz", _finite_float),
-        ("max_history_bytes", _uint64),
-        ("max_cache_bytes", _uint64),
-        ("max_undo_depth", lambda v, n: _uint32(v, n)),
-        ("max_render_jobs", lambda v, n: _uint32(v, n)),
-    )
-    for field_name, converter in fields:
-        value = getattr(options, field_name)
-        if value is None:
-            continue
-        converted = converter(value, field_name)
-        setattr(raw, field_name, converted)
-    if options.analysis is not None:
-        analysis, buffers = _analysis_to_c(lib, options.analysis)
-        raw.analysis = ctypes.pointer(analysis)
-        keepalive.extend((analysis, *buffers))
+    if output_length_samples is not None:
+        raw.output_length_samples = _int64(output_length_samples, "output_length_samples")
+    if edge_fade_ms is not None:
+        raw.edge_fade_ms = _finite_float(edge_fade_ms, "edge_fade_ms")
+    if vibrato_cutoff_hz is not None:
+        raw.vibrato_cutoff_hz = _finite_float(vibrato_cutoff_hz, "vibrato_cutoff_hz")
+    if segmentation_threshold_cents is not None:
+        raw.segmentation_threshold_cents = _finite_float(
+            segmentation_threshold_cents, "segmentation_threshold_cents"
+        )
+    if min_note_ms is not None:
+        raw.min_note_ms = _finite_float(min_note_ms, "min_note_ms")
+    if frame_length_samples is not None:
+        raw.frame_length_samples = _uint32(
+            frame_length_samples, "frame_length_samples", allow_zero=False
+        )
+    if hop_length_samples is not None:
+        raw.hop_length_samples = _uint32(hop_length_samples, "hop_length_samples", allow_zero=False)
+    if fmin_hz is not None:
+        raw.fmin_hz = _finite_float(fmin_hz, "fmin_hz")
+    if fmax_hz is not None:
+        raw.fmax_hz = _finite_float(fmax_hz, "fmax_hz")
+    if yin_threshold is not None:
+        raw.yin_threshold = _finite_float(yin_threshold, "yin_threshold")
+    if voiced_threshold is not None:
+        raw.voiced_threshold = _finite_float(voiced_threshold, "voiced_threshold")
+    if centered is not None:
+        raw.centered = _bool_flag(centered, "centered")
+    if reference_hz is not None:
+        raw.reference_hz = _finite_float(reference_hz, "reference_hz")
+    if max_history_bytes is not None:
+        raw.max_history_bytes = _uint64(max_history_bytes, "max_history_bytes")
+    if max_cache_bytes is not None:
+        raw.max_cache_bytes = _uint64(max_cache_bytes, "max_cache_bytes")
+    if max_undo_depth is not None:
+        raw.max_undo_depth = _uint32(max_undo_depth, "max_undo_depth")
+    if max_render_jobs is not None:
+        raw.max_render_jobs = _uint32(max_render_jobs, "max_render_jobs")
+    if analysis is not None:
+        c_analysis, buffers = _analysis_to_c(lib, analysis)
+        raw.analysis = ctypes.pointer(c_analysis)
+        keepalive.extend((c_analysis, *buffers))
     return raw, keepalive
 
 

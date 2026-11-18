@@ -268,47 +268,6 @@ class VocalRenderResult:
         limited_correction_frames: int,
     ) -> None: ...
 
-class VocalCreateOptions:
-    output_length_samples: int | None
-    edge_fade_ms: float | None
-    vibrato_cutoff_hz: float | None
-    segmentation_threshold_cents: float | None
-    min_note_ms: float | None
-    frame_length_samples: int | None
-    hop_length_samples: int | None
-    fmin_hz: float | None
-    fmax_hz: float | None
-    max_history_bytes: int | None
-    max_cache_bytes: int | None
-    max_undo_depth: int | None
-    max_render_jobs: int | None
-    analysis: VocalAnalysis | None
-    yin_threshold: float | None
-    voiced_threshold: float | None
-    centered: bool | None
-    reference_hz: float | None
-    def __init__(
-        self,
-        output_length_samples: int | None = ...,
-        edge_fade_ms: float | None = ...,
-        vibrato_cutoff_hz: float | None = ...,
-        segmentation_threshold_cents: float | None = ...,
-        min_note_ms: float | None = ...,
-        frame_length_samples: int | None = ...,
-        hop_length_samples: int | None = ...,
-        fmin_hz: float | None = ...,
-        fmax_hz: float | None = ...,
-        max_history_bytes: int | None = ...,
-        max_cache_bytes: int | None = ...,
-        max_undo_depth: int | None = ...,
-        max_render_jobs: int | None = ...,
-        analysis: VocalAnalysis | None = ...,
-        yin_threshold: float | None = ...,
-        voiced_threshold: float | None = ...,
-        centered: bool | None = ...,
-        reference_hz: float | None = ...,
-    ) -> None: ...
-
 class VocalSetNoteEdit:
     note_id: int
     edit: VocalNoteEdit
@@ -390,14 +349,24 @@ class VocalEditSession:
         samples: Sequence[float] | NDArray[Any],
         sample_rate: int,
         *,
-        options: VocalCreateOptions | None = ...,
         analysis: VocalAnalysis | None = ...,
+        output_length_samples: int | None = ...,
+        edge_fade_ms: float | None = ...,
+        vibrato_cutoff_hz: float | None = ...,
+        segmentation_threshold_cents: float | None = ...,
+        min_note_ms: float | None = ...,
+        frame_length_samples: int | None = ...,
+        hop_length_samples: int | None = ...,
+        fmin_hz: float | None = ...,
+        fmax_hz: float | None = ...,
         yin_threshold: float | None = ...,
         voiced_threshold: float | None = ...,
         centered: bool | None = ...,
         reference_hz: float | None = ...,
-        output_length_samples: int | None = ...,
-        **option_overrides: Any,
+        max_history_bytes: int | None = ...,
+        max_cache_bytes: int | None = ...,
+        max_undo_depth: int | None = ...,
+        max_render_jobs: int | None = ...,
     ) -> None: ...
     @classmethod
     def restore(
@@ -546,15 +515,6 @@ class VocalRenderJob:
         """Return the rendered result and release the job; ``cancel`` is polled."""
 
 def vocal_edit_abi_version() -> int | None: ...
-def create_vocal_edit_session(
-    samples: Sequence[float] | NDArray[Any],
-    sample_rate: int,
-    *,
-    options: VocalCreateOptions | None = ...,
-    analysis: VocalAnalysis | None = ...,
-    output_length_samples: int | None = ...,
-    **option_overrides: Any,
-) -> VocalEditSession: ...
 def restore_vocal_edit_session(
     samples: Sequence[float] | NDArray[Any],
     sample_rate: int,

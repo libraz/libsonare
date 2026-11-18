@@ -26,6 +26,7 @@ from libsonare._runtime import _get_lib
 from libsonare.vocal_edit import (
     VocalAnalysis,
     VocalEditError,
+    VocalEditSession,
     VocalHistory,
     VocalMergeNotes,
     VocalNoteEdit,
@@ -34,7 +35,6 @@ from libsonare.vocal_edit import (
     VocalSetNoteEdit,
     VocalSetTransition,
     VocalTransition,
-    create_vocal_edit_session,
     restore_vocal_edit_session,
     vocal_edit_abi_version,
 )
@@ -92,7 +92,7 @@ def test_ctypes_vocal_layout_matches_header() -> None:
 def test_create_rejects_stereo_without_touching_output() -> None:
     source, _ = _source_and_analysis()
     with pytest.raises((VocalEditError, ValueError)):
-        create_vocal_edit_session(np.column_stack((source, source)), 16_000)
+        VocalEditSession(np.column_stack((source, source)), 16_000)
 
 
 def test_supplied_analysis_rejects_non_binary_voiced_mask() -> None:
@@ -107,20 +107,18 @@ def test_supplied_analysis_rejects_non_binary_voiced_mask() -> None:
         algorithm_version=analysis.algorithm_version,
     )
     with pytest.raises(ValueError, match="0/1 mask"):
-        create_vocal_edit_session(source, 16_000, analysis=invalid)
+        VocalEditSession(source, 16_000, analysis=invalid)
 
 
 def test_supplied_analysis_rejects_nul_algorithm_id() -> None:
     source, analysis = _source_and_analysis()
     with pytest.raises(SonareValueError, match="algorithm_id"):
-        create_vocal_edit_session(
-            source, 16_000, analysis=replace(analysis, algorithm_id="host\0suffix")
-        )
+        VocalEditSession(source, 16_000, analysis=replace(analysis, algorithm_id="host\0suffix"))
 
 
 def test_context_lifetime_and_owned_note_arrays() -> None:
     source, analysis = _source_and_analysis()
-    with create_vocal_edit_session(source, 16_000, analysis=analysis) as session:
+    with VocalEditSession(source, 16_000, analysis=analysis) as session:
         found = session.notes()
         assert isinstance(found, VocalNotesResult)
         with pytest.raises(TypeError):
@@ -144,7 +142,7 @@ def test_context_lifetime_and_owned_note_arrays() -> None:
 def test_extended_output_length_survives_export_restore_and_snapshot() -> None:
     source, analysis = _source_and_analysis()
     output_length = source.size + 1024
-    with create_vocal_edit_session(
+    with VocalEditSession(
         source,
         16_000,
         analysis=analysis,
@@ -168,7 +166,7 @@ def test_extended_output_length_survives_export_restore_and_snapshot() -> None:
 
 def test_history_flags_follow_commit_undo_and_redo() -> None:
     source, analysis = _source_and_analysis()
-    with create_vocal_edit_session(source, 16_000, analysis=analysis) as session:
+    with VocalEditSession(source, 16_000, analysis=analysis) as session:
         assert session.history() == VocalHistory(False, False)
         with pytest.raises(TypeError):
             iter(session.history())
@@ -207,7 +205,7 @@ def test_history_flags_follow_commit_undo_and_redo() -> None:
 
 def test_draft_edit_evaluate_commit_and_restore() -> None:
     source, analysis = _source_and_analysis()
-    with create_vocal_edit_session(source, 16_000, analysis=analysis) as session:
+    with VocalEditSession(source, 16_000, analysis=analysis) as session:
         notes = session.notes().notes
         assert notes
         note = notes[0]
@@ -246,7 +244,7 @@ def test_draft_edit_evaluate_commit_and_restore() -> None:
 )
 def test_a_vocal_note_edit_mode_is_an_exact_token(field: str, accepted: str) -> None:
     source, analysis = _source_and_analysis()
-    with create_vocal_edit_session(source, 16_000, analysis=analysis) as session:
+    with VocalEditSession(source, 16_000, analysis=analysis) as session:
         note = session.notes().notes[0]
         with session.begin_edit() as draft:
             for value, error in ((1, TypeError), (True, TypeError), ("Center", SonareValueError)):
@@ -263,7 +261,7 @@ def test_a_vocal_note_edit_mode_is_an_exact_token(field: str, accepted: str) -> 
 
 def test_a_merge_policy_is_an_exact_token() -> None:
     source, analysis = _source_and_analysis()
-    with create_vocal_edit_session(source, 16_000, analysis=analysis) as session:
+    with VocalEditSession(source, 16_000, analysis=analysis) as session:
         notes = session.notes().notes
         ids = tuple(note.id for note in notes[:2])
         with session.begin_edit() as draft:
@@ -278,7 +276,7 @@ def test_a_merge_policy_is_an_exact_token() -> None:
 def test_render_job_cancellation_is_call_scoped() -> None:
     source, analysis = _source_and_analysis()
     with (
-        create_vocal_edit_session(source, 16_000, analysis=analysis) as session,
+        VocalEditSession(source, 16_000, analysis=analysis) as session,
         session.capture_render_snapshot() as snapshot,
         snapshot.begin_render_job(request_id=91) as job,
     ):
@@ -293,7 +291,7 @@ def test_render_job_cancellation_is_call_scoped() -> None:
 def test_premature_finalize_keeps_render_job_usable() -> None:
     source, analysis = _source_and_analysis()
     with (
-        create_vocal_edit_session(source, 16_000, analysis=analysis) as session,
+        VocalEditSession(source, 16_000, analysis=analysis) as session,
         session.capture_render_snapshot() as snapshot,
         snapshot.begin_render_job() as job,
     ):
@@ -308,7 +306,7 @@ def test_premature_finalize_keeps_render_job_usable() -> None:
 
 def test_close_from_cancel_probe_is_deferred_until_the_call_returns() -> None:
     source, analysis = _source_and_analysis()
-    session = create_vocal_edit_session(source, 16_000, analysis=analysis)
+    session = VocalEditSession(source, 16_000, analysis=analysis)
 
     def close_session() -> bool:
         session.close()
@@ -318,7 +316,7 @@ def test_close_from_cancel_probe_is_deferred_until_the_call_returns() -> None:
     with pytest.raises(SonareError):
         session.render()
 
-    with create_vocal_edit_session(source, 16_000, analysis=analysis) as other:
+    with VocalEditSession(source, 16_000, analysis=analysis) as other:
         snapshot = other.capture_render_snapshot()
 
         def close_snapshot() -> bool:
@@ -343,7 +341,7 @@ def test_close_from_cancel_probe_is_deferred_until_the_call_returns() -> None:
 
 def test_coordinate_mapping_round_trip_for_note() -> None:
     source, analysis = _source_and_analysis()
-    with create_vocal_edit_session(source, 16_000, analysis=analysis) as session:
+    with VocalEditSession(source, 16_000, analysis=analysis) as session:
         notes = session.notes().notes
         assert notes
         note = notes[0]
@@ -367,7 +365,7 @@ def test_analysis_settings_are_preserved_on_roundtrip() -> None:
         min_note_ms=15.0,
         reference_hz=442.0,
     )
-    with create_vocal_edit_session(source, 16_000, analysis=supplied) as session:
+    with VocalEditSession(source, 16_000, analysis=supplied) as session:
         result = session.analysis()
         for name in (
             "fmin_hz",
@@ -380,16 +378,16 @@ def test_analysis_settings_are_preserved_on_roundtrip() -> None:
             "reference_hz",
         ):
             assert getattr(result.analysis, name) == getattr(supplied, name)
-        with create_vocal_edit_session(source, 16_000, analysis=result.analysis) as again:
+        with VocalEditSession(source, 16_000, analysis=result.analysis) as again:
             assert again.analysis().analysis_sha256 == result.analysis_sha256
 
 
 def test_centered_option_accepts_boolean_and_rejects_integer() -> None:
     source, analysis = _source_and_analysis()
-    with create_vocal_edit_session(source, 16_000, analysis=analysis, centered=True) as session:
+    with VocalEditSession(source, 16_000, analysis=analysis, centered=True) as session:
         assert session.analysis().analysis.centered is True
     with pytest.raises(TypeError):
-        create_vocal_edit_session(source, 16_000, analysis=replace(analysis, centered=1))
+        VocalEditSession(source, 16_000, analysis=replace(analysis, centered=1))
 
 
 @pytest.mark.parametrize("operation", ["render", "next", "finalize"])
@@ -400,7 +398,7 @@ def test_cancellation_callback_exception_is_propagated(operation: str) -> None:
         raise _CancelProbeError("cancel probe failed")
 
     with (
-        create_vocal_edit_session(source, 16_000, analysis=analysis) as session,
+        VocalEditSession(source, 16_000, analysis=analysis) as session,
         session.capture_render_snapshot() as snapshot,
     ):
         if operation == "render":
@@ -424,7 +422,7 @@ def test_vocal_edit_abi_version_is_module_level() -> None:
 
 def test_restore_honours_limits_and_refuses_zero_render_jobs() -> None:
     source, analysis = _source_and_analysis()
-    with create_vocal_edit_session(source, 16_000, analysis=analysis) as session:
+    with VocalEditSession(source, 16_000, analysis=analysis) as session:
         state = session.export_state()
     with pytest.raises((VocalEditError, SonareError)):
         restore_vocal_edit_session(source, 16_000, state, max_render_jobs=0)
@@ -441,14 +439,14 @@ def test_restore_honours_limits_and_refuses_zero_render_jobs() -> None:
 def test_sample_rate_outside_supported_range_is_refused(rate: int) -> None:
     source, analysis = _source_and_analysis()
     with pytest.raises(SonareValueError):
-        create_vocal_edit_session(source, rate, analysis=analysis)
+        VocalEditSession(source, rate, analysis=analysis)
     with pytest.raises(SonareValueError):
         restore_vocal_edit_session(source, rate, b"SVE1")
 
 
 def test_closing_a_session_disposes_its_live_drafts() -> None:
     source, analysis = _source_and_analysis()
-    session = create_vocal_edit_session(source, 16_000, analysis=analysis)
+    session = VocalEditSession(source, 16_000, analysis=analysis)
     draft = session.begin_edit()
     session.close()
     with pytest.raises(SonareError):
@@ -459,7 +457,7 @@ def test_closing_a_session_disposes_its_live_drafts() -> None:
 def test_draft_apply_requires_expected_generation() -> None:
     source, analysis = _source_and_analysis()
     with (
-        create_vocal_edit_session(source, 16_000, analysis=analysis) as session,
+        VocalEditSession(source, 16_000, analysis=analysis) as session,
         session.begin_edit() as draft,
         pytest.raises(TypeError),
     ):
@@ -469,7 +467,7 @@ def test_draft_apply_requires_expected_generation() -> None:
 def test_truthy_cancel_return_cancels_the_render() -> None:
     source, analysis = _source_and_analysis()
     with (
-        create_vocal_edit_session(source, 16_000, analysis=analysis) as session,
+        VocalEditSession(source, 16_000, analysis=analysis) as session,
         session.capture_render_snapshot() as snapshot,
         pytest.raises(VocalEditError),
     ):
@@ -484,7 +482,7 @@ def test_transition_rejects_negative_window_and_out_of_range_strength(
 ) -> None:
     source, analysis = _source_and_analysis()
     with (
-        create_vocal_edit_session(source, 16_000, analysis=analysis) as session,
+        VocalEditSession(source, 16_000, analysis=analysis) as session,
         session.begin_edit() as draft,
         pytest.raises(SonareValueError),
     ):

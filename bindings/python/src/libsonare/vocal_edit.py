@@ -69,6 +69,9 @@ from ._vocal_edit_marshal import (
     _copy_pointer as _copy_pointer,
 )
 from ._vocal_edit_marshal import (
+    _create_options_to_c as _create_options_to_c,
+)
+from ._vocal_edit_marshal import (
     _edit_result_from_c as _edit_result_from_c,
 )
 from ._vocal_edit_marshal import (
@@ -100,9 +103,6 @@ from ._vocal_edit_marshal import (
 )
 from ._vocal_edit_marshal import (
     _operation_to_c as _operation_to_c,
-)
-from ._vocal_edit_marshal import (
-    _options_to_c as _options_to_c,
 )
 from ._vocal_edit_marshal import (
     _pitch_result_from_c as _pitch_result_from_c,
@@ -151,9 +151,6 @@ from ._vocal_edit_model import (
 )
 from ._vocal_edit_model import (
     VocalCapabilities as VocalCapabilities,
-)
-from ._vocal_edit_model import (
-    VocalCreateOptions as VocalCreateOptions,
 )
 from ._vocal_edit_model import (
     VocalEditResult as VocalEditResult,
@@ -378,31 +375,55 @@ class VocalEditSession(_HandleOwner):
         samples: Sequence[float] | np.ndarray[Any, Any],
         sample_rate: int,
         *,
-        options: VocalCreateOptions | None = None,
         analysis: VocalAnalysis | None = None,
         output_length_samples: int | None = None,
-        **option_overrides: Any,
+        edge_fade_ms: float | None = None,
+        vibrato_cutoff_hz: float | None = None,
+        segmentation_threshold_cents: float | None = None,
+        min_note_ms: float | None = None,
+        frame_length_samples: int | None = None,
+        hop_length_samples: int | None = None,
+        fmin_hz: float | None = None,
+        fmax_hz: float | None = None,
+        yin_threshold: float | None = None,
+        voiced_threshold: float | None = None,
+        centered: bool | None = None,
+        reference_hz: float | None = None,
+        max_history_bytes: int | None = None,
+        max_cache_bytes: int | None = None,
+        max_undo_depth: int | None = None,
+        max_render_jobs: int | None = None,
     ) -> None:
+        """Copy ``samples`` and analyse them, or adopt ``analysis`` instead.
+
+        Every keyword left as None takes the library default.
+        """
         lib = _get_lib()
         if not int(lib.sonare_has_feature(b"vocalEdit")):
             raise VocalEditError(6, "libsonare was built without vocal-edit support")
-        source = _validate_samples("create_vocal_edit_session", samples)
+        source = _validate_samples("VocalEditSession", samples)
         rate = _vocal_sample_rate(sample_rate)
-        if output_length_samples is not None:
-            output_length_samples = _int64(output_length_samples, "output_length_samples")
-        if options is not None and (
-            analysis is not None or output_length_samples is not None or option_overrides
-        ):
-            raise SonareValueError("options cannot be combined with individual vocal options")
-        if options is None:
-            options = VocalCreateOptions(
-                output_length_samples=output_length_samples,
-                analysis=analysis,
-                **option_overrides,
-            )
-        elif analysis is not None or output_length_samples is not None:
-            raise SonareValueError("analysis/output_length_samples cannot override options")
-        raw_options, keepalive = _options_to_c(lib, options)
+        raw_options, keepalive = _create_options_to_c(
+            lib,
+            analysis=analysis,
+            output_length_samples=output_length_samples,
+            edge_fade_ms=edge_fade_ms,
+            vibrato_cutoff_hz=vibrato_cutoff_hz,
+            segmentation_threshold_cents=segmentation_threshold_cents,
+            min_note_ms=min_note_ms,
+            frame_length_samples=frame_length_samples,
+            hop_length_samples=hop_length_samples,
+            fmin_hz=fmin_hz,
+            fmax_hz=fmax_hz,
+            yin_threshold=yin_threshold,
+            voiced_threshold=voiced_threshold,
+            centered=centered,
+            reference_hz=reference_hz,
+            max_history_bytes=max_history_bytes,
+            max_cache_bytes=max_cache_bytes,
+            max_undo_depth=max_undo_depth,
+            max_render_jobs=max_render_jobs,
+        )
         handle = ctypes.c_void_p()
         _vocal_check(
             lib.sonare_vocal_session_create(
@@ -879,30 +900,6 @@ def vocal_edit_abi_version() -> int | None:
     return int(lib.sonare_vocal_edit_abi_version())
 
 
-def create_vocal_edit_session(
-    samples: Sequence[float] | np.ndarray[Any, Any],
-    sample_rate: int,
-    *,
-    options: VocalCreateOptions | None = None,
-    analysis: VocalAnalysis | None = None,
-    output_length_samples: int | None = None,
-    **option_overrides: Any,
-) -> VocalEditSession:
-    """Create a copied-source vocal-edit session."""
-    return VocalEditSession(
-        samples,
-        _vocal_sample_rate(sample_rate),
-        options=options,
-        analysis=analysis,
-        output_length_samples=(
-            None
-            if output_length_samples is None
-            else _int64(output_length_samples, "output_length_samples")
-        ),
-        **option_overrides,
-    )
-
-
 def restore_vocal_edit_session(
     samples: Sequence[float] | np.ndarray[Any, Any],
     sample_rate: int,
@@ -953,7 +950,6 @@ __all__ = [
     "VocalEditResult",
     "VocalPitchResult",
     "VocalRenderResult",
-    "VocalCreateOptions",
     "VocalSetNoteEdit",
     "VocalSetNoteSourceSpan",
     "VocalSplitNote",
@@ -967,7 +963,6 @@ __all__ = [
     "VocalEditDraft",
     "VocalRenderSnapshot",
     "VocalRenderJob",
-    "create_vocal_edit_session",
     "restore_vocal_edit_session",
     "vocal_edit_abi_version",
 ]

@@ -10337,3 +10337,24 @@ changed = "returns None; an unknown scene key raises SonareError (INVALID_FORMAT
 domain = "project"
 rule = "error-class-by-cause"
 test = "bindings/python/tests/test_scene_warnings.py::test_project_set_mixer_scene_json_refuses_an_unknown_key_by_path"
+
+[[entry]]
+kind = "function"
+old = "create_vocal_edit_session"
+removed = "construct VocalEditSession(samples, sample_rate, ...) with the same keywords"
+domain = "project"
+rule = "construction"
+
+[[entry]]
+kind = "type"
+old = "VocalCreateOptions"
+removed = "pass each setting as its own keyword to VocalEditSession"
+domain = "project"
+rule = "construction"
+
+[[entry]]
+kind = "option"
+old = "VocalEditSession.constructor(options)"
+removed = "pass each setting as its own keyword (yin_threshold=, max_cache_bytes=, ...)"
+domain = "project"
+rule = "construction"

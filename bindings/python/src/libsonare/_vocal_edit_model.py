@@ -336,48 +336,6 @@ class VocalRenderResult:
 
 
 @dataclass(frozen=True, slots=True)
-class VocalCreateOptions:
-    """Options for creating a vocal-edit session; None leaves a setting at the library default."""
-
-    output_length_samples: int | None = None
-    """Length of the output in samples; None uses the source length."""
-    edge_fade_ms: float | None = None
-    """Fade applied at note edges, in milliseconds; None uses the library default."""
-    vibrato_cutoff_hz: float | None = None
-    """Cutoff separating vibrato from drift, in Hz; None uses the library default."""
-    segmentation_threshold_cents: float | None = None
-    """Pitch change in cents that starts a new note; None uses the library default."""
-    min_note_ms: float | None = None
-    """Shortest note kept, in milliseconds; None uses the library default."""
-    frame_length_samples: int | None = None
-    """Analysis window length, in samples; None uses the library default."""
-    hop_length_samples: int | None = None
-    """Analysis hop, in samples; None uses the library default."""
-    fmin_hz: float | None = None
-    """Lowest frequency searched, in Hz; None uses the library default."""
-    fmax_hz: float | None = None
-    """Highest frequency searched, in Hz; None uses the library default."""
-    max_history_bytes: int | None = None
-    """Largest edit history kept, in bytes; None uses the library default."""
-    max_cache_bytes: int | None = None
-    """Largest render cache kept, in bytes; None uses the library default."""
-    max_undo_depth: int | None = None
-    """Deepest undo stack kept; None uses the library default."""
-    max_render_jobs: int | None = None
-    """Most render jobs alive at once; None uses the library default."""
-    analysis: VocalAnalysis | None = None
-    """Caller-supplied analysis to use instead of analysing the samples; None analyses them."""
-    yin_threshold: float | None = None
-    """Cutoff on the normalized YIN function, in (0, 1]; None uses the library default."""
-    voiced_threshold: float | None = None
-    """Voicing decision threshold, a probability in [0, 1]; None uses the library default."""
-    centered: bool | None = None
-    """True when analysis frames are centred on their position; None uses the library default."""
-    reference_hz: float | None = None
-    """Reference tuning (A4) in Hz; None uses the library default."""
-
-
-@dataclass(frozen=True, slots=True)
 class VocalSetNoteEdit:
     """Operation: replace a note's edit."""
 

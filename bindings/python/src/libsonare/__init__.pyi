@@ -1465,9 +1465,6 @@ from .vocal_edit import (
     VocalCapabilities as VocalCapabilities,
 )
 from .vocal_edit import (
-    VocalCreateOptions as VocalCreateOptions,
-)
-from .vocal_edit import (
     VocalEditDraft as VocalEditDraft,
 )
 from .vocal_edit import (
@@ -1549,9 +1546,6 @@ from .vocal_edit import (
 )
 from .vocal_edit import (
     VocalTransition as VocalTransition,
-)
-from .vocal_edit import (
-    create_vocal_edit_session as create_vocal_edit_session,
 )
 from .vocal_edit import (
     restore_vocal_edit_session as restore_vocal_edit_session,

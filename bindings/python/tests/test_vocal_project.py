@@ -26,10 +26,10 @@ from libsonare._project import Project
 from libsonare._runtime import SonareValueError
 from libsonare.vocal_edit import (
     VocalAnalysis,
+    VocalEditSession,
     VocalNoteEdit,
     VocalSetNoteEdit,
     VocalStateToken,
-    create_vocal_edit_session,
 )
 from libsonare.vocal_project import (
     ProjectVocalOriginalSource,
@@ -54,7 +54,7 @@ def _source_and_render() -> tuple[np.ndarray, int, bytes, np.ndarray, object]:
         algorithm_id="host",
         algorithm_version=1,
     )
-    with create_vocal_edit_session(source, sample_rate, analysis=analysis) as session:
+    with VocalEditSession(source, sample_rate, analysis=analysis) as session:
         notes = session.notes().notes
         assert notes
         note = notes[0]
@@ -263,7 +263,7 @@ def test_callback_close_guards_survive_in_isolated_native_process() -> None:
 
         from libsonare._errors import SonareError
         from libsonare._project import Project
-        from libsonare.vocal_edit import VocalAnalysis, create_vocal_edit_session
+        from libsonare.vocal_edit import VocalAnalysis, VocalEditSession
         from libsonare.vocal_project import ProjectVocalOriginalSource
 
         source = np.frombuffer(
@@ -287,7 +287,7 @@ def test_callback_close_guards_survive_in_isolated_native_process() -> None:
             algorithm_id="host",
             algorithm_version=1,
         )
-        with create_vocal_edit_session(source, sample_rate, analysis=analysis) as session:
+        with VocalEditSession(source, sample_rate, analysis=analysis) as session:
             closing = session.capture_render_snapshot()
 
             def close_snapshot():

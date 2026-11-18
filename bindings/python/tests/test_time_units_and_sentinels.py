@@ -281,7 +281,7 @@ class TestSentinelsAreAbsence:
 
 class TestVocalRenderRange:
     def _session(self):  # type: ignore[no-untyped-def]
-        from libsonare.vocal_edit import VocalAnalysis, create_vocal_edit_session
+        from libsonare.vocal_edit import VocalAnalysis, VocalEditSession
 
         rate = 16_000
         source = (0.25 * np.sin(2.0 * np.pi * 440.0 * np.arange(4096) / rate)).astype(np.float32)
@@ -295,7 +295,7 @@ class TestVocalRenderRange:
             algorithm_id="host",
             algorithm_version=1,
         )
-        return create_vocal_edit_session(source, rate, analysis=analysis)
+        return VocalEditSession(source, rate, analysis=analysis)
 
     def test_seconds_equal_samples_and_open_bounds(self) -> None:
         try:
