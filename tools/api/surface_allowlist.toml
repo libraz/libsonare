@@ -4,7 +4,9 @@
 #   check     a check id (slug or slug:aspect)
 #   surface   wasm | node | python | c | cli-python | cli-native | cli
 #   name      fnmatch pattern on the qualified symbol name
-#   category  librosa-mirror | platform | wire-format | hot-path
+#   category  librosa-mirror | platform | wire-format | hot-path | standard-symbol | scalar
+#             standard-symbol: token-case only; a symbol fixed by a named standard, never one with a word separator
+#             scalar: one-positional-form only; at most four number or boolean parameters and no options
 #   reason    one line
 # --audit-allowlist fails on an entry that excused nothing in a full run.
 
@@ -56,3 +58,255 @@ surface = "wasm"
 name = "RealtimeVoiceChanger.processInterleavedWithCarrierInto"
 category = "hot-path"
 reason = "Per-block render into caller-owned buffers; a request object would allocate on every block."
+
+[[allow]]
+check = "token-case"
+surface = "node"
+name = "MasteringInsertParamUnit='Hz'"
+category = "standard-symbol"
+reason = "SI unit symbol, spelled as the SI Brochure prints it."
+
+[[allow]]
+check = "token-case"
+surface = "node"
+name = "MasteringInsertParamUnit='N'"
+category = "standard-symbol"
+reason = "SI unit symbol, spelled as the SI Brochure prints it."
+
+[[allow]]
+check = "token-case"
+surface = "node"
+name = "MasteringInsertParamUnit='V'"
+category = "standard-symbol"
+reason = "SI unit symbol, spelled as the SI Brochure prints it."
+
+[[allow]]
+check = "token-case"
+surface = "node"
+name = "MasteringInsertParamUnit='LUFS'"
+category = "standard-symbol"
+reason = "Loudness unit symbol, spelled as ITU-R BS.1770 and EBU R 128 print it."
+
+[[allow]]
+check = "token-case"
+surface = "wasm"
+name = "MasteringInsertParamUnit='Hz'"
+category = "standard-symbol"
+reason = "SI unit symbol, spelled as the SI Brochure prints it."
+
+[[allow]]
+check = "token-case"
+surface = "wasm"
+name = "MasteringInsertParamUnit='N'"
+category = "standard-symbol"
+reason = "SI unit symbol, spelled as the SI Brochure prints it."
+
+[[allow]]
+check = "token-case"
+surface = "wasm"
+name = "MasteringInsertParamUnit='V'"
+category = "standard-symbol"
+reason = "SI unit symbol, spelled as the SI Brochure prints it."
+
+[[allow]]
+check = "token-case"
+surface = "wasm"
+name = "MasteringInsertParamUnit='LUFS'"
+category = "standard-symbol"
+reason = "Loudness unit symbol, spelled as ITU-R BS.1770 and EBU R 128 print it."
+
+[[allow]]
+check = "token-case"
+surface = "python"
+name = "MasteringInsertParamUnit='Hz'"
+category = "standard-symbol"
+reason = "SI unit symbol, spelled as the SI Brochure prints it."
+
+[[allow]]
+check = "token-case"
+surface = "python"
+name = "MasteringInsertParamUnit='N'"
+category = "standard-symbol"
+reason = "SI unit symbol, spelled as the SI Brochure prints it."
+
+[[allow]]
+check = "token-case"
+surface = "python"
+name = "MasteringInsertParamUnit='V'"
+category = "standard-symbol"
+reason = "SI unit symbol, spelled as the SI Brochure prints it."
+
+[[allow]]
+check = "token-case"
+surface = "python"
+name = "MasteringInsertParamUnit='LUFS'"
+category = "standard-symbol"
+reason = "Loudness unit symbol, spelled as ITU-R BS.1770 and EBU R 128 print it."
+
+[[allow]]
+check = "token-case"
+surface = "node"
+name = "PlaybackChannelRole='L'"
+category = "standard-symbol"
+reason = "Loudspeaker label, spelled as ITU-R BS.2051 prints it."
+
+[[allow]]
+check = "token-case"
+surface = "node"
+name = "PlaybackChannelRole='R'"
+category = "standard-symbol"
+reason = "Loudspeaker label, spelled as ITU-R BS.2051 prints it."
+
+[[allow]]
+check = "token-case"
+surface = "node"
+name = "PlaybackChannelRole='C'"
+category = "standard-symbol"
+reason = "Loudspeaker label, spelled as ITU-R BS.2051 prints it."
+
+[[allow]]
+check = "token-case"
+surface = "node"
+name = "PlaybackChannelRole='LFE'"
+category = "standard-symbol"
+reason = "Loudspeaker label, spelled as ITU-R BS.2051 prints it."
+
+[[allow]]
+check = "token-case"
+surface = "node"
+name = "PlaybackChannelRole='Ls'"
+category = "standard-symbol"
+reason = "Loudspeaker label, spelled as ITU-R BS.2051 prints it."
+
+[[allow]]
+check = "token-case"
+surface = "node"
+name = "PlaybackChannelRole='Rs'"
+category = "standard-symbol"
+reason = "Loudspeaker label, spelled as ITU-R BS.2051 prints it."
+
+[[allow]]
+check = "token-case"
+surface = "node"
+name = "PlaybackChannelRole='Lss'"
+category = "standard-symbol"
+reason = "Loudspeaker label, spelled as ITU-R BS.2051 prints it."
+
+[[allow]]
+check = "token-case"
+surface = "node"
+name = "PlaybackChannelRole='Rss'"
+category = "standard-symbol"
+reason = "Loudspeaker label, spelled as ITU-R BS.2051 prints it."
+
+[[allow]]
+check = "token-case"
+surface = "wasm"
+name = "PlaybackChannelRole='L'"
+category = "standard-symbol"
+reason = "Loudspeaker label, spelled as ITU-R BS.2051 prints it."
+
+[[allow]]
+check = "token-case"
+surface = "wasm"
+name = "PlaybackChannelRole='R'"
+category = "standard-symbol"
+reason = "Loudspeaker label, spelled as ITU-R BS.2051 prints it."
+
+[[allow]]
+check = "token-case"
+surface = "wasm"
+name = "PlaybackChannelRole='C'"
+category = "standard-symbol"
+reason = "Loudspeaker label, spelled as ITU-R BS.2051 prints it."
+
+[[allow]]
+check = "token-case"
+surface = "wasm"
+name = "PlaybackChannelRole='LFE'"
+category = "standard-symbol"
+reason = "Loudspeaker label, spelled as ITU-R BS.2051 prints it."
+
+[[allow]]
+check = "token-case"
+surface = "wasm"
+name = "PlaybackChannelRole='Ls'"
+category = "standard-symbol"
+reason = "Loudspeaker label, spelled as ITU-R BS.2051 prints it."
+
+[[allow]]
+check = "token-case"
+surface = "wasm"
+name = "PlaybackChannelRole='Rs'"
+category = "standard-symbol"
+reason = "Loudspeaker label, spelled as ITU-R BS.2051 prints it."
+
+[[allow]]
+check = "token-case"
+surface = "wasm"
+name = "PlaybackChannelRole='Lss'"
+category = "standard-symbol"
+reason = "Loudspeaker label, spelled as ITU-R BS.2051 prints it."
+
+[[allow]]
+check = "token-case"
+surface = "wasm"
+name = "PlaybackChannelRole='Rss'"
+category = "standard-symbol"
+reason = "Loudspeaker label, spelled as ITU-R BS.2051 prints it."
+
+[[allow]]
+check = "token-case"
+surface = "node"
+name = "MasteringProcessorParamMap.saturation.ampSim.powerTube"
+category = "standard-symbol"
+reason = "Vacuum-tube type designations (6L6, 6V6) from the RETMA registry; a digit-led designation has no lowerCamel form."
+
+[[allow]]
+check = "token-case"
+surface = "node"
+name = "MixSceneInsert.params.powerTube"
+category = "standard-symbol"
+reason = "Vacuum-tube type designations (6L6, 6V6) from the RETMA registry; a digit-led designation has no lowerCamel form."
+
+[[allow]]
+check = "token-case"
+surface = "wasm"
+name = "MasteringProcessorParamMap.saturation.ampSim.powerTube"
+category = "standard-symbol"
+reason = "Vacuum-tube type designations (6L6, 6V6) from the RETMA registry; a digit-led designation has no lowerCamel form."
+
+[[allow]]
+check = "token-case"
+surface = "wasm"
+name = "MixSceneInsert.params.powerTube"
+category = "standard-symbol"
+reason = "Vacuum-tube type designations (6L6, 6V6) from the RETMA registry; a digit-led designation has no lowerCamel form."
+
+[[allow]]
+check = "one-positional-form"
+surface = "node"
+name = "scaleQuantizeMidi"
+category = "scalar"
+reason = "Pure per-note function: a root, a mode mask, a pitch and an optional reference pitch in, one number out."
+
+[[allow]]
+check = "one-positional-form"
+surface = "node"
+name = "scaleCorrectionSemitones"
+category = "scalar"
+reason = "Pure per-note function: a root, a mode mask, a pitch and an optional reference pitch in, one number out."
+
+[[allow]]
+check = "one-positional-form"
+surface = "wasm"
+name = "scaleQuantizeMidi"
+category = "scalar"
+reason = "Pure per-note function: a root, a mode mask, a pitch and an optional reference pitch in, one number out."
+
+[[allow]]
+check = "one-positional-form"
+surface = "wasm"
+name = "scaleCorrectionSemitones"
+category = "scalar"
+reason = "Pure per-note function: a root, a mode mask, a pitch and an optional reference pitch in, one number out."

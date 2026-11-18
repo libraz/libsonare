@@ -2262,5 +2262,80 @@ class Refusals(CheckerCase):
                 )
 
 
+class AllowCategories(CheckerCase):
+    """A category with a definition excuses only the findings that meet it."""
+
+    def allow(self, check, name, category):
+        return self.write(
+            "allow.toml",
+            f'[[allow]]\ncheck = "{check}"\nsurface = "node"\nname = "{name}"\n'
+            f'category = "{category}"\nreason = "r"\n',
+        )
+
+    def tube(self, *tokens):
+        literal = " | ".join(f"'{t}'" for t in tokens)
+        self.add(
+            _field("node", "Amp", "tube", literal, inline_literals=True, literals=list(tokens))
+        )
+
+    def test_a_standard_symbol_excuses_a_token_with_no_lower_camel_form(self):
+        self.tube("6l6", "6v6")
+        allow = self.allow("token-case", "Amp.tube", "standard-symbol")
+        code, lines = self.run_check("--check", "token-case", allowlist=allow)
+        self.assertEqual(code, 0, "\n".join(lines))
+        self.assertEqual([x for x in lines if x.startswith("    node field Amp.tube")], [])
+
+    def test_a_standard_symbol_does_not_excuse_a_separated_token(self):
+        self.tube("6l6", "el_34")
+        allow = self.allow("token-case", "Amp.tube", "standard-symbol")
+        code, lines = self.run_check("--check", "token-case", allowlist=allow)
+        self.assertEqual(code, 1)
+        self.assertEqual(
+            [x.strip() for x in lines if x.startswith("    node field Amp.tube")],
+            [
+                (
+                    "node field Amp.tube: token 'el_34' is not lowerCamel; allowlisted as"
+                    " standard-symbol, but a token with a word separator has a lowerCamel form"
+                )
+            ],
+        )
+
+    def test_a_scalar_function_is_excused(self):
+        self.add(
+            _fn("node", "snap", "number", *(_param(n) for n in "abc"), _param("d", optional=True))
+        )
+        allow = self.allow("one-positional-form", "snap", "scalar")
+        code, lines = self.run_check("--check", "one-positional-form", allowlist=allow)
+        self.assertEqual(code, 0, "\n".join(lines))
+
+    def test_a_function_taking_options_is_not_scalar(self):
+        self.add(
+            _fn(
+                "node",
+                "snap",
+                "number",
+                *(_param(n) for n in "abc"),
+                _param("o", type="SnapOptions"),
+            )
+        )
+        allow = self.allow("one-positional-form", "snap", "scalar")
+        code, lines = self.run_check("--check", "one-positional-form", allowlist=allow)
+        self.assertEqual(code, 1)
+        self.assertIn(
+            "    node function snap: 4 positional parameters; take a request object; allowlisted"
+            " as scalar, but a scalar function takes at most four number or boolean parameters"
+            " and no options",
+            lines,
+        )
+
+    def test_a_category_on_a_check_it_does_not_cover_is_a_problem(self):
+        allow = self.allow("token-case", "snap", "scalar")
+        self.run_check("--check", "token-case", allowlist=allow)
+        self.assertIn(
+            "surface_allowlist.toml allow 1: category scalar does not apply to token-case",
+            self.report["problems"],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

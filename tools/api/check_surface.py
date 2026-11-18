@@ -116,7 +116,19 @@ RULE_SLUGS = (
     "python-public-names",
     "individual",
 )
-ALLOW_CATEGORIES = ("librosa-mirror", "platform", "wire-format", "hot-path")
+ALLOW_CATEGORIES = (
+    "librosa-mirror",
+    "platform",
+    "wire-format",
+    "hot-path",
+    "standard-symbol",
+    "scalar",
+)
+# A category that only one kind of finding can use.
+_CATEGORY_CHECKS = {
+    "standard-symbol": ("token-case",),
+    "scalar": ("one-positional-form",),
+}
 EXAMPLE_SURFACES = ("wasm", "node", "python", "c", "cli")
 
 DEFAULT_LEDGER_DIR = HERE / "migration"
@@ -351,6 +363,8 @@ def load_allowlist(path: Path, problems: list[str], check_ids: set[str]) -> list
             problems.append(f"{label}: unknown check {entry.check!r}")
         if entry.category not in ALLOW_CATEGORIES:
             problems.append(f"{label}: unknown category {entry.category!r}")
+        elif entry.check not in _CATEGORY_CHECKS.get(entry.category, (entry.check,)):
+            problems.append(f"{label}: category {entry.category} does not apply to {entry.check}")
         if entry.surface not in SURFACES + ("cli",):
             problems.append(f"{label}: unknown surface {entry.surface!r}")
         if not entry.name or not entry.reason:
@@ -1504,9 +1518,12 @@ def _top_level(text: str, sep: str) -> list[str]:
 def _bare_tuple(ret: str) -> bool:
     """A fixed-arity tuple[A, B] as the returned type; tuple[X, ...] is a homogeneous sequence."""
     for part in _top_level(ret, "|"):
-        if part.startswith("tuple[") and part.endswith("]"):
-            if _top_level(part[len("tuple[") : -1], ",")[-1] != "...":
-                return True
+        if (
+            part.startswith("tuple[")
+            and part.endswith("]")
+            and _top_level(part[len("tuple[") : -1], ",")[-1] != "..."
+        ):
+            return True
     return False
 
 
@@ -1554,6 +1571,17 @@ def chk_snake_case_only(ctx):
 
 def _positional_counts(r):
     return [len([p for p in s["params"] if not p.get("rest")]) for s in r.get("sigs", [])]
+
+
+def _scalar_function(r: dict) -> bool:
+    """Every parameter is a number or boolean scalar, at most four, and none is an options bag."""
+    for s in r.get("sigs", []):
+        params = s["params"]
+        if len(params) > 4 or any(p.get("rest") for p in params):
+            return False
+        if any(p["type"].replace(" | undefined", "") not in ("number", "boolean") for p in params):
+            return False
+    return bool(r.get("sigs"))
 
 
 def chk_one_positional_form(ctx):
@@ -1670,6 +1698,15 @@ def chk_name_tables(ctx):
                 diff = sorted(mine ^ theirs)
                 bad.append((r, f"name table differs from {other}: {', '.join(diff)}"))
     return cands, bad
+
+
+_TOKEN_IN_MESSAGE = re.compile(r"token '([^']*)'")
+
+
+def _standard_symbol(r: dict, msg: str) -> bool:
+    """A token with a word separator has a lowerCamel form, so no standard can excuse it."""
+    m = _TOKEN_IN_MESSAGE.search(msg)
+    return bool(m) and not re.search(r"[-_\s]", m.group(1))
 
 
 def chk_token_case(ctx):
@@ -2154,6 +2191,19 @@ def line_of(v) -> str:
     return f"{v['surface']} {v['kind']} {v['name']}: {v['message']}"
 
 
+# What a finding must look like for its category to excuse it, and why one that does not is refused.
+_CATEGORY_FITS = {
+    "scalar": (
+        lambda r, msg: _scalar_function(r),
+        "a scalar function takes at most four number or boolean parameters and no options",
+    ),
+    "standard-symbol": (
+        _standard_symbol,
+        "a token with a word separator has a lowerCamel form",
+    ),
+}
+
+
 def run(args) -> tuple[int, list[str], dict]:
     root = args.root
     out: list[str] = []
@@ -2352,6 +2402,11 @@ def run(args) -> tuple[int, list[str], dict]:
                 ),
                 None,
             )
+            if hit and hit.category in _CATEGORY_FITS:
+                fits, why = _CATEGORY_FITS[hit.category]
+                if not fits(r, msg):
+                    v["message"] = f"{msg}; allowlisted as {hit.category}, but {why}"
+                    hit = None
             if hit:
                 hit.used += 1
                 excused += 1
