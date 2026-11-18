@@ -883,7 +883,13 @@ def register_effects_parsers(
     # so the analysis flags (--n-fft/--hop-length/--n-mels) do not apply and the
     # positional argument is a preset file rather than an audio file.
     voice_preset_validate_p = sub.add_parser(
-        "voice-preset-validate", help="Validate and normalize voice preset JSON"
+        "voice-preset-validate",
+        help="Validate and normalize voice preset JSON",
+        description=(
+            "Validate and normalize voice preset JSON. A preset the library refuses is a "
+            "verdict here, not a refused input: it prints ok false and exits 3, where "
+            "voice-change refuses the same document with exit 5."
+        ),
     )
     voice_preset_validate_p.add_argument("--json", action="store_true", help="Output JSON")
     voice_preset_validate_p.add_argument(

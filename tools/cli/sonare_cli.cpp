@@ -318,6 +318,11 @@ void print_command_usage(const char* prog, const CommandInfo& command,
            "the midpoint between two scale notes is pulled toward both and its vibrato "
            "widens.\n";
   }
+  if (command.name == "voice-preset-validate") {
+    std::cout
+        << "\nA preset the library refuses is a verdict here, not a refused input: it prints "
+           "ok false and exits 3, where voice-change refuses the same document with exit 5.\n";
+  }
   if (command.name == "trim-silence") {
     std::cout << "\nThe default rule trims below an absolute -60 dBFS threshold (--threshold-db); "
                  "--top-db selects the peak-relative rule instead.\n";
