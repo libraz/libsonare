@@ -26,11 +26,11 @@ type NativeSampleBank = InstanceType<typeof addon.SampleBank>;
  * @example
  * ```typescript
  * using bank = new SampleBank();
- * const index = bank.addSample(pcm, { rootKey: 60, sourceRate: 44100 });
+ * const index = bank.addSample(samples, { rootKey: 60, sourceRate: 44100 });
  * bank.addZone({ sampleIndex: index });  // the whole keyboard
  *
- * const audio = project.bounceWithSynthInstrument(
- *   { engineMode: 'sample', sampleSet: 0, sampleBank: bank },
+ * const audio = project.bounceWithSynthInstruments(
+ *   [{ instrument: { engineMode: 'sample', sampleSet: 0, sampleBank: bank } }],
  *   { totalFrames: 24000 },
  * );
  * ```

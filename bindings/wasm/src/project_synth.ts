@@ -146,6 +146,7 @@ export function synthPatchParamInfo(): SynthParamInfo[] {
   return JSON.parse(synthInfoModule().synthPatchParamInfo()) as SynthParamInfo[];
 }
 
+/** Return the canonical NativeSynth enum tables from the native module. */
 export function synthEnumTables(): SynthEnumTables {
   return projectModule()._synthEnumTables();
 }
