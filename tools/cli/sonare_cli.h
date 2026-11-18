@@ -261,6 +261,10 @@ int cmd_mastering_presets(const CliArgs& args, const Audio& audio);
 int cmd_mastering_profile(const CliArgs& args, const Audio& audio);
 int cmd_mastering_streaming(const CliArgs& args, const Audio& audio);
 int cmd_repair(const CliArgs& args, const Audio& audio);
+/// Rewrites one camelCase JSON key as snake_case; defined in sonare_cli_mastering.cpp.
+std::string json_key_to_snake_case(const std::string& key);
+/// Rewrites every object key under @p value as snake_case; defined in sonare_cli_mastering.cpp.
+sonare::util::json::Value json_keys_to_snake_case(const sonare::util::json::Value& value);
 /// Parses a `--params` list of `key=value` pairs; defined in sonare_cli_mastering.cpp.
 std::vector<mastering::api::Param> parse_mastering_params(const std::string& text,
                                                           bool resolve_names = false,

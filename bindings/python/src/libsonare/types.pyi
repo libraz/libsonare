@@ -1911,119 +1911,271 @@ class StageGainReduction:
     gain_reduction_db: float
     def __init__(self, stage: str, gain_reduction_db: float) -> None: ...
 
-class MasteringAudioProfileLoudness(TypedDict):
-    integratedLufs: float
-    loudnessRangeLu: float
-    truePeakDbtp: float
-    crestFactorDb: float
+MixAnalysisBand: TypeAlias = Literal["sub", "low", "lowMid", "mid", "highMid", "high", "air"]
 
-class MasteringAudioProfileSpectral(TypedDict):
-    subRmsDb: float
-    lowRmsDb: float
-    lowMidRmsDb: float
-    midRmsDb: float
-    highMidRmsDb: float
-    highRmsDb: float
-    airRmsDb: float
-    centroidHz: float
+MixSourceClass: TypeAlias = Literal[
+    "unknown",
+    "kick",
+    "snare",
+    "hiHat",
+    "tom",
+    "cymbal",
+    "bass",
+    "guitar",
+    "keys",
+    "strings",
+    "lead",
+    "vocal",
+    "backing",
+    "percussion",
+    "fx",
+    "drumKit",
+]
+
+class MixAssistantTrackProfile:
+    strip_id: str
+    name: str | None
+    source: MixSourceClass
+    source_confidence: float
+    usable: bool
+    exclusion_reason: str | None
+    num_channels: int
+    duration_sec: float
+    integrated_lufs: float | None
+    true_peak_dbtp: float
+    crest_factor_db: float
+    spectral_centroid_hz: float
+    spectral_flatness: float
+    attack_per_second: float
+    sustain_ratio: float
+    band_occupancy: dict[MixAnalysisBand, float]
+    def __init__(
+        self,
+        strip_id: str,
+        name: str | None,
+        source: MixSourceClass,
+        source_confidence: float,
+        usable: bool,
+        exclusion_reason: str | None,
+        num_channels: int,
+        duration_sec: float,
+        integrated_lufs: float | None,
+        true_peak_dbtp: float,
+        crest_factor_db: float,
+        spectral_centroid_hz: float,
+        spectral_flatness: float,
+        attack_per_second: float,
+        sustain_ratio: float,
+        band_occupancy: dict[MixAnalysisBand, float],
+    ) -> None: ...
+
+class MixBandDominance:
+    masker: str
+    maskee: str
+    band: MixAnalysisBand
+    ratio: float
+    valid_frames: int
+    def __init__(
+        self,
+        masker: str,
+        maskee: str,
+        band: MixAnalysisBand,
+        ratio: float,
+        valid_frames: int,
+    ) -> None: ...
+
+class MixTrackAlignment:
+    reference: str
+    target: str
+    lag_samples: int
+    correlation: float
+    polarity_opposed: bool
+    def __init__(
+        self,
+        reference: str,
+        target: str,
+        lag_samples: int,
+        correlation: float,
+        polarity_opposed: bool,
+    ) -> None: ...
+
+class MixCrowdedBand:
+    band: MixAnalysisBand
+    crowding: float
+    def __init__(self, band: MixAnalysisBand, crowding: float) -> None: ...
+
+class MixMonoRisk:
+    strip_id: str
+    correlation: float
+    width: float
+    wide_low_end: bool
+    def __init__(
+        self,
+        strip_id: str,
+        correlation: float,
+        width: float,
+        wide_low_end: bool,
+    ) -> None: ...
+
+class MixAssistantMixProfile:
+    track_count: int
+    band_dominance: list[MixBandDominance]
+    alignment: list[MixTrackAlignment]
+    crowded_bands: list[MixCrowdedBand]
+    mono_risks: list[MixMonoRisk]
+    def __init__(
+        self,
+        track_count: int,
+        band_dominance: list[MixBandDominance],
+        alignment: list[MixTrackAlignment],
+        crowded_bands: list[MixCrowdedBand],
+        mono_risks: list[MixMonoRisk],
+    ) -> None: ...
+
+class MixAssistantResult:
+    scene: dict[str, Any]
+    tracks: list[MixAssistantTrackProfile]
+    mix: MixAssistantMixProfile
+    explanation: list[str]
+    def __init__(
+        self,
+        scene: dict[str, Any],
+        tracks: list[MixAssistantTrackProfile],
+        mix: MixAssistantMixProfile,
+        explanation: list[str],
+    ) -> None: ...
+
+class MasteringAudioProfileLoudness:
+    integrated_lufs: float | None
+    loudness_range_lu: float
+    true_peak_dbtp: float
+    crest_factor_db: float
+    def __init__(
+        self,
+        integrated_lufs: float | None,
+        loudness_range_lu: float,
+        true_peak_dbtp: float,
+        crest_factor_db: float,
+    ) -> None: ...
+
+class MasteringAudioProfileSpectral:
+    sub_rms_db: float
+    low_rms_db: float
+    low_mid_rms_db: float
+    mid_rms_db: float
+    high_mid_rms_db: float
+    high_rms_db: float
+    air_rms_db: float
+    centroid_hz: float
     flatness: float
-    rolloffHz: float
+    rolloff_hz: float
+    def __init__(
+        self,
+        sub_rms_db: float,
+        low_rms_db: float,
+        low_mid_rms_db: float,
+        mid_rms_db: float,
+        high_mid_rms_db: float,
+        high_rms_db: float,
+        air_rms_db: float,
+        centroid_hz: float,
+        flatness: float,
+        rolloff_hz: float,
+    ) -> None: ...
 
-class MasteringAudioProfileDynamics(TypedDict):
-    shortTermLufsStd: float
-    attackPerSecond: float
-    sustainRatio: float
+class MasteringAudioProfileDynamics:
+    short_term_lufs_std: float
+    attack_per_second: float
+    sustain_ratio: float
+    def __init__(
+        self,
+        short_term_lufs_std: float,
+        attack_per_second: float,
+        sustain_ratio: float,
+    ) -> None: ...
 
-class MasteringAudioProfileClick(TypedDict):
-    count: int
-    rejected: int
-    longestRunSamples: int
-    perSecond: float
-
-class MasteringAudioProfileClip(TypedDict):
-    clippedSamples: int
-    clippedRatio: float
-    runCount: int
-    longestRunSamples: int
-    flatRunCount: int
-    longestFlatRunSamples: int
-    flatSampleCount: int
-    flatLevel: float
-
-class MasteringAudioProfileCrackle(TypedDict):
-    sampleCount: int
-    sampleFraction: float
-    perSecond: float
-
-class MasteringAudioProfileNoise(TypedDict):
-    floorDbfs: float
-    bandFloorDbfs: list[float]
-
-class MasteringAudioProfileHum(TypedDict):
-    fundamentalHz: float
-    fundamentalProminence: float
-    harmonics: int
-    harmonicDbfs: list[float]
-
-class MasteringAudioProfileReverb(TypedDict):
-    lateDecayRatioDb: float
-    latePredictability: NotRequired[float]
-
-class MasteringAudioProfileDefects(TypedDict):
-    click: MasteringAudioProfileClick
-    clip: MasteringAudioProfileClip
-    crackle: MasteringAudioProfileCrackle
-    noise: MasteringAudioProfileNoise
-    hum: MasteringAudioProfileHum
-    reverb: MasteringAudioProfileReverb
-
-class MasteringAudioProfile(TypedDict):
-    durationSec: float
+class MasteringAudioProfile:
+    duration_sec: float
     bpm: float
-    bpmConfidence: float
+    bpm_confidence: float
     loudness: MasteringAudioProfileLoudness
     spectral: MasteringAudioProfileSpectral
     dynamics: MasteringAudioProfileDynamics
-    defects: NotRequired[MasteringAudioProfileDefects]
+    defects: AudioDefects | None
+    def __init__(
+        self,
+        duration_sec: float,
+        bpm: float,
+        bpm_confidence: float,
+        loudness: MasteringAudioProfileLoudness,
+        spectral: MasteringAudioProfileSpectral,
+        dynamics: MasteringAudioProfileDynamics,
+        defects: AudioDefects | None,
+    ) -> None: ...
 
 MasteringChainConfig: TypeAlias = dict[str, Any]
 
-class MasteringChainConfigDocument(TypedDict):
-    version: int
-    params: dict[str, Any]
-
-class MasteringAssistantProfile(TypedDict):
-    durationSec: float
+class MasteringAssistantProfile:
+    duration_sec: float
     bpm: float
-    bpmConfidence: float
-    integratedLufs: float | None
-    loudnessRangeLu: float
-    truePeakDbtp: float
-    crestFactorDb: float
-    spectralCentroidHz: float
-    spectralFlatness: float
-    attackPerSecond: float
-    sustainRatio: float
+    bpm_confidence: float
+    integrated_lufs: float | None
+    loudness_range_lu: float
+    true_peak_dbtp: float
+    crest_factor_db: float
+    spectral_centroid_hz: float
+    spectral_flatness: float
+    attack_per_second: float
+    sustain_ratio: float
+    def __init__(
+        self,
+        duration_sec: float,
+        bpm: float,
+        bpm_confidence: float,
+        integrated_lufs: float | None,
+        loudness_range_lu: float,
+        true_peak_dbtp: float,
+        crest_factor_db: float,
+        spectral_centroid_hz: float,
+        spectral_flatness: float,
+        attack_per_second: float,
+        sustain_ratio: float,
+    ) -> None: ...
 
-class MasteringAssistantResult(TypedDict):
-    chainConfig: MasteringChainConfigDocument
+class MasteringAssistantResult:
+    chain_config: MasteringChainConfig
     explanation: list[str]
     profile: MasteringAssistantProfile
+    def __init__(
+        self,
+        chain_config: MasteringChainConfig,
+        explanation: list[str],
+        profile: MasteringAssistantProfile,
+    ) -> None: ...
 
 class StreamingPlatform(TypedDict):
     name: str
     target_lufs: float
     ceiling_dbtp: float
 
-class MasteringStreamingPreviewPlatform(TypedDict):
+class MasteringStreamingPreviewPlatform:
     name: str
-    integratedLufs: float | None
-    truePeakDbtp: float
-    normalizationGainDb: float
-    ceilingRisk: bool
+    integrated_lufs: float | None
+    true_peak_dbtp: float
+    normalization_gain_db: float
+    ceiling_risk: bool
+    def __init__(
+        self,
+        name: str,
+        integrated_lufs: float | None,
+        true_peak_dbtp: float,
+        normalization_gain_db: float,
+        ceiling_risk: bool,
+    ) -> None: ...
 
-class MasteringStreamingPreviewResult(TypedDict):
+class MasteringStreamingPreviewResult:
     platforms: list[MasteringStreamingPreviewPlatform]
+    def __init__(self, platforms: list[MasteringStreamingPreviewPlatform]) -> None: ...
 
 class MatchReferenceLoudnessResult(TypedDict):
     sourceLufs: float | None

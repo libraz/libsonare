@@ -342,65 +342,64 @@ def test_a_streaming_platform_takes_exactly_its_snake_case_keys(
         libsonare.mastering_streaming_preview([0.1] * 4800, 48000, platforms=[platform])  # type: ignore[list-item]
 
 
-def test_mastering_streaming_preview_returns_shared_json() -> None:
+def test_mastering_streaming_preview_returns_its_record() -> None:
     """Streaming preview is exposed through the Python mastering API."""
     import libsonare
 
     sr = 48000
     samples = [0.2 * math.sin(2 * math.pi * 1000 * i / sr) for i in range(sr)]
 
-    preview_json = libsonare.mastering_streaming_preview(
+    preview = libsonare.mastering_streaming_preview(
         samples,
         sample_rate=sr,
         platforms=[{"name": "Unit Test", "target_lufs": 0.0, "ceiling_dbtp": -6.0}],
     )
 
-    assert '"platforms"' in preview_json
-    assert '"name":"Unit Test"' in preview_json
-    assert '"normalizationGainDb"' in preview_json
-    assert '"ceilingRisk":true' in preview_json
+    (platform,) = preview.platforms
+    assert platform.name == "Unit Test"
+    assert platform.integrated_lufs is not None
+    assert platform.normalization_gain_db == pytest.approx(-platform.integrated_lufs, abs=0.001)
+    assert platform.ceiling_risk is True
 
 
-def test_mastering_assistant_suggest_returns_shared_json() -> None:
+def test_mastering_assistant_suggest_returns_its_record() -> None:
     """Mastering assistant suggestion is exposed through Python."""
     import libsonare
 
     sr = 48000
     samples = [0.2 * math.sin(2 * math.pi * 220 * i / sr) for i in range(sr * 3)]
 
-    suggestion_json = libsonare.mastering_assistant_suggest(
+    suggestion = libsonare.mastering_assistant_suggest(
         samples,
         sample_rate=sr,
         params={"targetLufs": -13.0, "ceilingDb": -0.8},
     )
 
-    assert '"chainConfig"' in suggestion_json
-    assert '"explanation"' in suggestion_json
-    assert '"genreCandidates"' not in suggestion_json
-    assert '"loudness.targetLufs":-13' in suggestion_json
-    assert '"loudness.ceilingDb":-0.8' in suggestion_json
+    assert suggestion.explanation
+    assert not hasattr(suggestion, "genre_candidates")
+    assert suggestion.chain_config["loudness"]["targetLufs"] == pytest.approx(-13.0)
+    assert suggestion.chain_config["loudness"]["ceilingDb"] == pytest.approx(-0.8)
 
 
-def test_mastering_audio_profile_returns_shared_json() -> None:
+def test_mastering_audio_profile_returns_its_record() -> None:
     """Mastering assistant audio profile is exposed through Python."""
     import libsonare
 
     sr = 48000
     samples = [0.2 * math.sin(2 * math.pi * 330 * i / sr) for i in range(sr * 2)]
 
-    profile_json = libsonare.mastering_audio_profile(
+    profile = libsonare.mastering_audio_profile(
         samples,
         sample_rate=sr,
         params={"nFft": 1024, "hopLength": 256},
     )
 
-    assert '"durationSec"' in profile_json
-    assert '"loudness"' in profile_json
-    assert '"integratedLufs"' in profile_json
-    assert '"spectral"' in profile_json
-    assert '"centroidHz"' in profile_json
-    assert '"dynamics"' in profile_json
-    assert '"genreCandidates"' not in profile_json
+    assert profile.duration_sec == pytest.approx(2.0)
+    assert profile.loudness.integrated_lufs is not None
+    assert profile.spectral.centroid_hz == pytest.approx(330.0, rel=0.2)
+    assert profile.dynamics.sustain_ratio >= 0.0
+    assert profile.defects is None
+    assert not hasattr(profile, "genre_candidates")
 
 
 def _decorrelated_pair(sr: int, seconds: int) -> tuple[list[float], list[float], list[float]]:
@@ -413,17 +412,17 @@ def _decorrelated_pair(sr: int, seconds: int) -> tuple[list[float], list[float],
 
 def test_stereo_mastering_analysis_uses_channel_summed_loudness() -> None:
     """The stereo analysis entry points measure the pair, not a downmix."""
-    import json
-
     import libsonare
 
     sr = 48000
     left, right, downmix = _decorrelated_pair(sr, 4)
 
-    stereo = json.loads(libsonare.mastering_streaming_preview_stereo(left, right, sample_rate=sr))
-    mono = json.loads(libsonare.mastering_streaming_preview(downmix, sample_rate=sr))
-    stereo_lufs = stereo["platforms"][0]["integratedLufs"]
-    mono_lufs = mono["platforms"][0]["integratedLufs"]
+    stereo = libsonare.mastering_streaming_preview_stereo(left, right, sample_rate=sr)
+    mono = libsonare.mastering_streaming_preview(downmix, sample_rate=sr)
+    stereo_lufs = stereo.platforms[0].integrated_lufs
+    mono_lufs = mono.platforms[0].integrated_lufs
+    assert stereo_lufs is not None
+    assert mono_lufs is not None
 
     # BS.1770 sums the channel powers while the 0.5*(L+R) downmix quarters them,
     # so a decorrelated pair reads 6.02 dB above what a mono caller can measure,
@@ -433,19 +432,18 @@ def test_stereo_mastering_analysis_uses_channel_summed_loudness() -> None:
     assert stereo_lufs == pytest.approx(
         libsonare.lufs_interleaved(interleaved, 2, sr).integrated_lufs, abs=0.01
     )
-    assert stereo["platforms"][0]["normalizationGainDb"] == pytest.approx(
+    assert stereo.platforms[0].normalization_gain_db == pytest.approx(
         -14.0 - stereo_lufs, abs=0.001
     )
 
-    profile = json.loads(libsonare.mastering_audio_profile_stereo(left, right, sample_rate=sr))
-    assert profile["loudness"]["integratedLufs"] == pytest.approx(stereo_lufs, abs=0.01)
-    assert "centroidHz" in profile["spectral"]
+    profile = libsonare.mastering_audio_profile_stereo(left, right, sample_rate=sr)
+    assert profile.loudness.integrated_lufs == pytest.approx(stereo_lufs, abs=0.01)
+    assert profile.spectral.centroid_hz > 0.0
 
-    suggestion = json.loads(
-        libsonare.mastering_assistant_suggest_stereo(left, right, sample_rate=sr)
-    )
-    assert "chainConfig" in suggestion
-    assert "explanation" in suggestion
+    suggestion = libsonare.mastering_assistant_suggest_stereo(left, right, sample_rate=sr)
+    assert suggestion.chain_config
+    assert suggestion.explanation
+    assert suggestion.profile.integrated_lufs == pytest.approx(stereo_lufs, abs=0.01)
 
 
 def test_stereo_crest_factor_survives_a_cancelling_pair() -> None:
@@ -667,20 +665,20 @@ def test_mastering_assistant_suggest_follows_target_platform() -> None:
     assert "club" in names
 
     # Without a target the assistant returns the streaming default of -14 LUFS.
-    default_json = libsonare.mastering_assistant_suggest(samples, sample_rate=sr)
-    assert '"loudness.targetLufs":-14' in default_json
+    default = libsonare.mastering_assistant_suggest(samples, sample_rate=sr)
+    assert default.chain_config["loudness"]["targetLufs"] == pytest.approx(-14.0)
 
-    broadcast_json = libsonare.mastering_assistant_suggest(
+    broadcast = libsonare.mastering_assistant_suggest(
         samples, sample_rate=sr, params={"targetPlatform": "broadcast"}
     )
-    assert '"loudness.targetLufs":-23' in broadcast_json
+    assert broadcast.chain_config["loudness"]["targetLufs"] == pytest.approx(-23.0)
 
     # Only a loud delivery format moves the ceiling as well as the target.
-    club_json = libsonare.mastering_assistant_suggest(
+    club = libsonare.mastering_assistant_suggest(
         samples, sample_rate=sr, params={"targetPlatform": "club"}
     )
-    assert '"loudness.targetLufs":-9' in club_json
-    assert '"loudness.ceilingDb":-0.3' in club_json
+    assert club.chain_config["loudness"]["targetLufs"] == pytest.approx(-9.0)
+    assert club.chain_config["loudness"]["ceilingDb"] == pytest.approx(-0.3)
 
     with pytest.raises(ValueError):
         libsonare.mastering_assistant_suggest(
@@ -693,26 +691,22 @@ def test_mastering_assistant_suggest_follows_target_platform() -> None:
 
 def test_mastering_assistant_starts_from_the_named_preset() -> None:
     """``preset`` is a name here; the assistant never picks one from the audio."""
-    import json
-
     import libsonare
 
     sr = 48000
     samples = [0.2 * math.sin(2 * math.pi * 220 * i / sr) for i in range(sr)]
 
     def explanation(params: dict[str, float | int | bool | str] | None) -> list[str]:
-        return json.loads(
-            libsonare.mastering_assistant_suggest(samples, sample_rate=sr, params=params)
-        )["explanation"]
+        return libsonare.mastering_assistant_suggest(
+            samples, sample_rate=sr, params=params
+        ).explanation
 
     assert "base preset: streaming" in explanation(None)
     assert "base preset: classical" in explanation({"preset": "classical"})
-    stereo = json.loads(
-        libsonare.mastering_assistant_suggest_stereo(
-            samples, samples, sample_rate=sr, params={"preset": "jazz"}
-        )
+    stereo = libsonare.mastering_assistant_suggest_stereo(
+        samples, samples, sample_rate=sr, params={"preset": "jazz"}
     )
-    assert "base preset: jazz" in stereo["explanation"]
+    assert "base preset: jazz" in stereo.explanation
 
     with pytest.raises(ValueError, match="notAPreset"):
         explanation({"preset": "notAPreset"})

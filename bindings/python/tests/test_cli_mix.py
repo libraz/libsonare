@@ -7,6 +7,8 @@ import json
 from types import SimpleNamespace
 from typing import Any
 
+from libsonare._types_mixing_assistant import MixAssistantMixProfile, MixAssistantResult
+
 # ruff: noqa: F403,F405
 from ._analyzer_helpers import *
 from ._analyzer_helpers import _run_cli, _write_test_wav
@@ -423,8 +425,18 @@ def test_suggest_mix_tempo_auto_decodes_each_input_once(monkeypatch) -> None:
     monkeypatch.setattr(libsonare, "detect_bpm", detect_bpm)
     monkeypatch.setattr(
         libsonare,
-        "suggest_mix_scene",
-        lambda tracks, sample_rate, **options: scene_calls.append((tracks, options)) or {},
+        "mixing_assistant_suggest",
+        lambda tracks, sample_rate, **options: (
+            scene_calls.append((tracks, options))
+            or MixAssistantResult(
+                scene={},
+                tracks=[],
+                mix=MixAssistantMixProfile(
+                    track_count=0, band_dominance=[], alignment=[], crowded_bands=[], mono_risks=[]
+                ),
+                explanation=[],
+            )
+        ),
     )
     args = argparse.Namespace(
         input=["vox=stereo.wav", "bass=mono.wav"],

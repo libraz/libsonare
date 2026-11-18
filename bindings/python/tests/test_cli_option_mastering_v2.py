@@ -116,14 +116,9 @@ def test_mastering_assistant_enable_repair_explain_reaches_suggestion_and_chain(
 
     def suggest(*args, **kwargs):
         calls["assistant_params"] = kwargs["params"]
-        return json.dumps(
-            {
-                "chainConfig": {
-                    "version": 1,
-                    "params": {"loudness.targetLufs": -14.0, "repair.declick.enabled": 1},
-                },
-                "explanation": ["repair enabled"],
-            }
+        return SimpleNamespace(
+            chain_config={"loudness": {"targetLufs": -14.0}, "repair": {"declick": {"enabled": 1}}},
+            explanation=["repair enabled"],
         )
 
     def mastering_chain(*args, **kwargs):
@@ -561,7 +556,7 @@ def test_a_loudness_option_carrying_its_default_still_reaches_the_assistant(
         "mastering_assistant_suggest",
         lambda *args, **kwargs: (
             calls.update(params=kwargs["params"])
-            or json.dumps({"chainConfig": {"version": 1, "params": {}}, "explanation": []})
+            or SimpleNamespace(chain_config={}, explanation=[])
         ),
     )
     monkeypatch.setattr(libsonare, "mastering_chain", lambda *args, **kwargs: _result())

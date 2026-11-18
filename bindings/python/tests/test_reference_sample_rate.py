@@ -23,8 +23,8 @@ from libsonare import (
     mastering_pair_analyze,
     mastering_pair_process,
     mastering_pair_process_stereo,
+    mixing_assistant_suggest,
     resample,
-    suggest_mix_scene_json,
 )
 
 from ._helpers import LIB_AVAILABLE, sine
@@ -190,16 +190,18 @@ def _mix_tracks(rate_of_second: int | None, second: np.ndarray) -> list[MixTrack
 def test_mixing_assistant_resamples_a_track_at_another_rate() -> None:
     keys = sine(660.0, 0.8, sr=REF_SR, amp=0.2)
     resampled = np.asarray(resample(keys, REF_SR, SR), dtype=np.float32)
-    expected = suggest_mix_scene_json(_mix_tracks(None, resampled), sample_rate=SR)
-    assert suggest_mix_scene_json(_mix_tracks(REF_SR, keys), sample_rate=SR) == expected
-    assert suggest_mix_scene_json(_mix_tracks(None, keys), sample_rate=SR) != expected
-    assert suggest_mix_scene_json(_mix_tracks(SR, keys), sample_rate=SR) == suggest_mix_scene_json(
-        _mix_tracks(None, keys), sample_rate=SR
-    )
+
+    def scene(tracks: list[MixTrackInput]) -> object:
+        return mixing_assistant_suggest(tracks, sample_rate=SR).scene
+
+    expected = scene(_mix_tracks(None, resampled))
+    assert scene(_mix_tracks(REF_SR, keys)) == expected
+    assert scene(_mix_tracks(None, keys)) != expected
+    assert scene(_mix_tracks(SR, keys)) == scene(_mix_tracks(None, keys))
 
 
 @pytest.mark.parametrize("bad_rate", [0, -1])
 def test_mixing_assistant_refuses_a_non_positive_track_rate(bad_rate: int) -> None:
     keys = sine(660.0, 0.8, sr=SR, amp=0.2)
     with pytest.raises(SonareValueError, match=r"tracks\[1\]\.sample_rate must be positive"):
-        suggest_mix_scene_json(_mix_tracks(bad_rate, keys), sample_rate=SR)
+        mixing_assistant_suggest(_mix_tracks(bad_rate, keys), sample_rate=SR)

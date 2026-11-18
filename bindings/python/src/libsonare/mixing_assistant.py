@@ -22,6 +22,7 @@ import numpy as np
 from ._errors import _not_supported
 from ._mastering_offline import _mastering_params
 from ._narrowing import _narrow_double
+from ._result_records import _fields
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -37,6 +38,15 @@ from ._runtime import (
     _to_c_size_t,
     _utf8_arg,
     _validate_c_int_field,
+)
+from ._types_mixing_assistant import (
+    MixAssistantMixProfile,
+    MixAssistantResult,
+    MixAssistantTrackProfile,
+    MixBandDominance,
+    MixCrowdedBand,
+    MixMonoRisk,
+    MixTrackAlignment,
 )
 
 # Keyword argument -> C-ABI param key. The C side accepts both spellings, but
@@ -242,13 +252,12 @@ def _assistant_params(
 
 
 def _suggest(
-    symbol: str,
     fn_name: str,
     tracks: Sequence[MixTrackInput],
     sample_rate: int,
     options: dict[str, float | int | bool | None],
-) -> str:
-    """Run one of the two suggest entry points and return its JSON string."""
+) -> Any:
+    """Run the suggest entry point and return its parsed document."""
     # The symbol is exported unconditionally -- a build without the assistant
     # keeps it and answers SONARE_ERROR_NOT_SUPPORTED -- so there is nothing to
     # probe for here. _check turns that answer into the same error class every
@@ -262,7 +271,7 @@ def _suggest(
     arrays = _build_track_arrays(fn_name, tracks, sample_rate_value)
     param_array, param_count = _assistant_params(fn_name, options)
     json_ptr = ctypes.c_char_p()
-    rc = getattr(lib, symbol)(
+    rc = lib.sonare_mixing_assistant_suggest(
         arrays.left_ptrs,
         arrays.right_ptrs,
         arrays.ids,
@@ -277,13 +286,82 @@ def _suggest(
     )
     _check(rc)
     try:
-        return ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""
+        return json.loads(ctypes.string_at(json_ptr).decode("utf-8")) if json_ptr.value else {}
     finally:
         if json_ptr.value:
             lib.sonare_free_string(json_ptr)
 
 
-def suggest_mix_scene(
+def _track_profile_from_wire(wire: dict[str, Any]) -> MixAssistantTrackProfile:
+    fields = _fields(wire)
+    fields["name"] = fields["name"] or None
+    fields["exclusion_reason"] = fields["exclusion_reason"] or None
+    for key in (
+        "source_confidence",
+        "duration_sec",
+        "true_peak_dbtp",
+        "crest_factor_db",
+        "spectral_centroid_hz",
+        "spectral_flatness",
+        "attack_per_second",
+        "sustain_ratio",
+    ):
+        fields[key] = float(fields[key])
+    if fields["integrated_lufs"] is not None:
+        fields["integrated_lufs"] = float(fields["integrated_lufs"])
+    fields["band_occupancy"] = {band: float(share) for band, share in wire["bandOccupancy"].items()}
+    return MixAssistantTrackProfile(**fields)
+
+
+def _mix_profile_from_wire(wire: dict[str, Any]) -> MixAssistantMixProfile:
+    return MixAssistantMixProfile(
+        track_count=int(wire["trackCount"]),
+        band_dominance=[
+            MixBandDominance(
+                masker=row["masker"],
+                maskee=row["maskee"],
+                band=row["band"],
+                ratio=float(row["ratio"]),
+                valid_frames=int(row["validFrames"]),
+            )
+            for row in wire["bandDominance"]
+        ],
+        alignment=[
+            MixTrackAlignment(
+                reference=row["reference"],
+                target=row["target"],
+                lag_samples=int(row["lagSamples"]),
+                correlation=float(row["correlation"]),
+                polarity_opposed=bool(row["polarityOpposed"]),
+            )
+            for row in wire["alignment"]
+        ],
+        crowded_bands=[
+            MixCrowdedBand(band=row["band"], crowding=float(row["crowding"]))
+            for row in wire["crowdedBands"]
+        ],
+        mono_risks=[
+            MixMonoRisk(
+                strip_id=row["stripId"],
+                correlation=float(row["correlation"]),
+                width=float(row["width"]),
+                wide_low_end=bool(row["wideLowEnd"]),
+            )
+            for row in wire["monoRisks"]
+        ],
+    )
+
+
+def _mix_assistant_result_from_wire(wire: dict[str, Any]) -> MixAssistantResult:
+    return MixAssistantResult(
+        scene=wire["scene"],
+        tracks=[_track_profile_from_wire(track) for track in wire["tracks"]],
+        mix=_mix_profile_from_wire(wire["mix"]),
+        explanation=[str(line) for line in wire["explanation"]],
+    )
+
+
+def mixing_assistant_suggest(
     tracks: Sequence[MixTrackInput],
     *,
     sample_rate: int,
@@ -301,7 +379,7 @@ def suggest_mix_scene(
     enable_high_pass: bool | None = None,
     n_fft: int | None = None,
     hop_length: int | None = None,
-) -> dict[str, Any]:
+) -> MixAssistantResult:
     """Analyse ``tracks`` and return a suggested scene with the reasoning behind it.
 
     Args:
@@ -310,7 +388,7 @@ def suggest_mix_scene(
             A track whose audio is degenerate — empty, at a non-positive sample
             rate, holding a NaN or Inf sample, too short for a gated loudness,
             silent, or without energy in the analysis bands — is excluded and
-            reported as ``"usable": False`` with an ``"exclusionReason"``
+            reported with ``usable`` False and an ``exclusion_reason``
             naming which, rather than failing the call. A non-finite sample is
             reported as itself rather than as silence, so the reason describes
             the buffer instead of the material.
@@ -331,11 +409,11 @@ def suggest_mix_scene(
         mix_bus_headroom_dbtp: Headroom the summed mix is left with on the
             master bus, in dBTP.
         tempo_bpm: Tempo the suggested delay times are voiced against, in BPM.
-            ``0`` (the default) selects the transport's own fallback tempo: the
+            ``None`` (the default) selects the transport's own fallback tempo: the
             assistant is handed bare stems and cannot measure a tempo the set as
             a whole agrees on. Pass the song's tempo and the delay lands on the
-            beat. A positive value outside 20-400 BPM is rejected rather than
-            clamped.
+            beat. Zero, a negative, or a value outside 20-400 BPM is rejected
+            rather than clamped.
         enable_structure: Suggest bus structure and routing.
         enable_gain: Suggest per-track gain staging.
         enable_balance: Suggest fader balance between tracks.
@@ -360,14 +438,16 @@ def suggest_mix_scene(
     floor that switching every domain off leaves.
 
     Returns:
-        The parsed result document: ``scene`` (in the schema
+        A :class:`MixAssistantResult`: ``scene`` (the document
         :meth:`~libsonare.Mixer.from_scene_json` reads), ``tracks`` and ``mix``
         with the measurements behind the suggestion, and ``explanation``, a list
         of human-readable lines in application order.
     """
-    document = _suggest(
-        "sonare_mixing_assistant_suggest",
-        "suggest_mix_scene",
+    # None is the fallback; 0 is the C entry's spelling of it and is not a tempo here.
+    if tempo_bpm is not None and tempo_bpm <= 0:
+        raise SonareValueError("mixing_assistant_suggest: tempo_bpm must be positive")
+    wire = _suggest(
+        "mixing_assistant_suggest",
         tracks,
         sample_rate,
         {
@@ -387,61 +467,10 @@ def suggest_mix_scene(
             "hop_length": hop_length,
         },
     )
-    return json.loads(document) if document else {}
+    return _mix_assistant_result_from_wire(wire)
 
 
-def suggest_mix_scene_json(
-    tracks: Sequence[MixTrackInput],
-    *,
-    sample_rate: int,
-    target_track_lufs: float | None = None,
-    suggestion_strength: float | None = None,
-    eq_max_cut_db: float | None = None,
-    mix_bus_headroom_dbtp: float | None = None,
-    tempo_bpm: float | None = None,
-    enable_structure: bool | None = None,
-    enable_gain: bool | None = None,
-    enable_balance: bool | None = None,
-    enable_eq: bool | None = None,
-    enable_dynamics: bool | None = None,
-    enable_image: bool | None = None,
-    enable_high_pass: bool | None = None,
-    n_fft: int | None = None,
-    hop_length: int | None = None,
-) -> str:
-    """Suggest a scene for ``tracks`` and return only the scene, as JSON.
-
-    Takes the same arguments as :func:`suggest_mix_scene` and reaches the same
-    suggestion, but serialises only the scene, in the schema
-    :meth:`~libsonare.Mixer.from_scene_json` reads. Use it when the suggestion
-    is going straight to a mixer, so the scene need not be dug out of the fuller
-    result document and re-serialised.
-    """
-    return _suggest(
-        "sonare_mixing_assistant_suggest_scene_json",
-        "suggest_mix_scene_json",
-        tracks,
-        sample_rate,
-        {
-            "target_track_lufs": target_track_lufs,
-            "suggestion_strength": suggestion_strength,
-            "eq_max_cut_db": eq_max_cut_db,
-            "mix_bus_headroom_dbtp": mix_bus_headroom_dbtp,
-            "tempo_bpm": tempo_bpm,
-            "enable_structure": enable_structure,
-            "enable_gain": enable_gain,
-            "enable_balance": enable_balance,
-            "enable_eq": enable_eq,
-            "enable_dynamics": enable_dynamics,
-            "enable_image": enable_image,
-            "enable_high_pass": enable_high_pass,
-            "n_fft": n_fft,
-            "hop_length": hop_length,
-        },
-    )
-
-
-def mix_source_class_names() -> list[str]:
+def mixing_assistant_source_class_names() -> list[str]:
     """Return the source-class identifiers the assistant can report.
 
     Every name returned is a class some shipped entry point can actually put on
@@ -463,14 +492,16 @@ def mix_source_class_names() -> list[str]:
     return names
 
 
-def mix_source_class_from_name(name: str) -> int:
+def mixing_assistant_source_class_from_name(name: str) -> int:
     """Resolve a source-class identifier to its enum value.
 
     Raises:
-        SonareValueError: If ``name`` is not one of :func:`mix_source_class_names`.
+        SonareValueError: If ``name`` is not one of :func:`mixing_assistant_source_class_names`.
     """
     lib = _get_lib()
     value = int(lib.sonare_mixing_assistant_source_class_from_name(_utf8_arg(name, "name")))
     if value < 0:
-        raise SonareValueError(f"mix_source_class_from_name: unknown source class {name!r}")
+        raise SonareValueError(
+            f"mixing_assistant_source_class_from_name: unknown source class {name!r}"
+        )
     return value

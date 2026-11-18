@@ -60,6 +60,8 @@ from .types import (
     LoudnessMatch,
     LufsResult,
     MasteringAmpPresetCatalogEntry,
+    MasteringAssistantResult,
+    MasteringAudioProfile,
     MasteringChainConfig,
     MasteringChainResult,
     MasteringChainStereoResult,
@@ -69,6 +71,7 @@ from .types import (
     MasteringRepairAnalysis,
     MasteringResult,
     MasteringStereoResult,
+    MasteringStreamingPreviewResult,
     MaterialPresetName,
     MelodyResult,
     MelSpectrogramResult,
@@ -1243,7 +1246,7 @@ def mastering_assistant_suggest(
     samples: FloatSamples,
     sample_rate: int,
     params: MasteringAssistantParams | None = None,
-) -> str: ...
+) -> MasteringAssistantResult: ...
 def mastering_assistant_suggest_chain(
     samples: FloatSamples,
     sample_rate: int,
@@ -1253,7 +1256,7 @@ def mastering_audio_profile(
     samples: FloatSamples,
     sample_rate: int,
     params: MasteringParams | None = None,
-) -> str:
+) -> MasteringAudioProfile:
     """``nFft`` and ``hopLength`` in ``params`` are the window length and hop in samples at
     48000 Hz, rescaled to the input sample rate."""
 
@@ -1262,7 +1265,7 @@ def mastering_assistant_suggest_stereo(
     right: FloatSamples,
     sample_rate: int,
     params: MasteringAssistantParams | None = None,
-) -> str: ...
+) -> MasteringAssistantResult: ...
 def mastering_assistant_suggest_chain_stereo(
     left: FloatSamples,
     right: FloatSamples,
@@ -1274,7 +1277,7 @@ def mastering_audio_profile_stereo(
     right: FloatSamples,
     sample_rate: int,
     params: MasteringParams | None = None,
-) -> str:
+) -> MasteringAudioProfile:
     """``nFft`` and ``hopLength`` in ``params`` are the window length and hop in samples at
     48000 Hz, rescaled to the input sample rate."""
 
@@ -1658,13 +1661,13 @@ def mastering_streaming_preview(
     samples: FloatSamples,
     sample_rate: int,
     platforms: Sequence[StreamingPlatform] | None = None,
-) -> str: ...
+) -> MasteringStreamingPreviewResult: ...
 def mastering_streaming_preview_stereo(
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int,
     platforms: Sequence[StreamingPlatform] | None = None,
-) -> str: ...
+) -> MasteringStreamingPreviewResult: ...
 def trim(
     samples: FloatSamples,
     sample_rate: int,

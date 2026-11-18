@@ -2,7 +2,7 @@
 
 The assistant's numeric output is DSP-dependent, so nothing here pins a gain, a
 source class or a line count. What is asserted is the structure of the result
-document and the invariants the API promises: one track entry per input, a
+and the invariants the API promises: one track entry per input, a
 strip for every track id, a scene the mixer can load, and an empty explanation
 when every decision domain is switched off.
 """
@@ -80,9 +80,9 @@ def mixed_tracks():
 @pytest.fixture(scope="module")
 def mono_suggestion(mono_tracks):
     """The default suggestion over ``mono_tracks``, analysed once for the module."""
-    from libsonare import suggest_mix_scene
+    from libsonare import mixing_assistant_suggest
 
-    return suggest_mix_scene(mono_tracks, sample_rate=SAMPLE_RATE)
+    return mixing_assistant_suggest(mono_tracks, sample_rate=SAMPLE_RATE)
 
 
 # Partial weights of the voice-like series below; index 0 is the fundamental.
@@ -123,60 +123,68 @@ def _high_pass_owners(scene) -> list[str]:
 
 def _high_pass_lines(result) -> list[str]:
     """The explanation lines attributable to a proposed high-pass."""
-    return [line for line in result["explanation"] if line.startswith(_HIGH_PASS_REASON)]
+    return [line for line in result.explanation if line.startswith(_HIGH_PASS_REASON)]
 
 
 def _assert_document_shape(result, track_count: int) -> None:
-    """Assert the result document's structure for ``track_count`` inputs."""
-    assert set(result) == {"scene", "tracks", "mix", "explanation"}
-    assert len(result["tracks"]) == track_count
-    assert all(isinstance(line, str) for line in result["explanation"])
-    scene = result["scene"]
+    """Assert the result's structure for ``track_count`` inputs."""
+    from libsonare import MixAssistantMixProfile, MixAssistantResult, MixAssistantTrackProfile
+
+    assert isinstance(result, MixAssistantResult)
+    assert isinstance(result.mix, MixAssistantMixProfile)
+    assert result.mix.track_count == track_count
+    assert len(result.tracks) == track_count
+    assert all(isinstance(track, MixAssistantTrackProfile) for track in result.tracks)
+    assert all(isinstance(line, str) for line in result.explanation)
+    scene = result.scene
     assert set(scene) >= {"version", "strips", "buses", "connections"}
 
 
 def test_source_class_names_resolve_to_their_index():
-    from libsonare import mix_source_class_from_name, mix_source_class_names
+    from libsonare import (
+        mixing_assistant_source_class_from_name,
+        mixing_assistant_source_class_names,
+    )
 
-    names = mix_source_class_names()
+    names = mixing_assistant_source_class_names()
     assert names, "expected at least one mixing-assistant source class"
     for name in names:
-        assert mix_source_class_from_name(name) >= 0
+        assert mixing_assistant_source_class_from_name(name) >= 0
 
 
 def test_an_unknown_source_class_name_is_refused():
-    from libsonare import SonareValueError, mix_source_class_from_name
+    from libsonare import SonareValueError, mixing_assistant_source_class_from_name
 
     with pytest.raises(SonareValueError, match="not-a-source-class"):
-        mix_source_class_from_name("not-a-source-class")
+        mixing_assistant_source_class_from_name("not-a-source-class")
 
 
 def test_suggest_over_mono_tracks(mono_tracks, mono_suggestion):
     _assert_document_shape(mono_suggestion, len(mono_tracks))
-    assert mono_suggestion["explanation"], "a usable multi-track set should be explained"
-    strip_ids = {strip["id"] for strip in mono_suggestion["scene"]["strips"]}
+    assert mono_suggestion.explanation, "a usable multi-track set should be explained"
+    strip_ids = {strip["id"] for strip in mono_suggestion.scene["strips"]}
     assert strip_ids >= {track.track_id for track in mono_tracks}
 
 
 def test_reported_source_classes_are_declared(mono_suggestion):
-    from libsonare import mix_source_class_names
+    from libsonare import mixing_assistant_source_class_names
 
-    names = set(mix_source_class_names())
-    assert {track["source"] for track in mono_suggestion["tracks"]} <= names
+    names = set(mixing_assistant_source_class_names())
+    assert {track.source for track in mono_suggestion.tracks} <= names
 
 
 def test_suggest_over_mixed_mono_and_stereo_tracks(mixed_tracks):
-    from libsonare import suggest_mix_scene
+    from libsonare import mixing_assistant_suggest
 
-    result = suggest_mix_scene(mixed_tracks, sample_rate=SAMPLE_RATE)
+    result = mixing_assistant_suggest(mixed_tracks, sample_rate=SAMPLE_RATE)
     _assert_document_shape(result, len(mixed_tracks))
-    channel_counts = {track["stripId"]: track["numChannels"] for track in result["tracks"]}
+    channel_counts = {track.strip_id: track.num_channels for track in result.tracks}
     assert channel_counts["kick"] == 1
     assert channel_counts["pad"] == 2
 
 
 def test_suggest_over_tracks_of_differing_lengths():
-    from libsonare import MixTrackInput, suggest_mix_scene
+    from libsonare import MixTrackInput, mixing_assistant_suggest
 
     tracks = [
         MixTrackInput("kick", _percussive(55.0, duration_sec=DURATION_SEC), None, "kick"),
@@ -188,40 +196,40 @@ def test_suggest_over_tracks_of_differing_lengths():
             "pad",
         ),
     ]
-    result = suggest_mix_scene(tracks, sample_rate=SAMPLE_RATE)
+    result = mixing_assistant_suggest(tracks, sample_rate=SAMPLE_RATE)
     _assert_document_shape(result, len(tracks))
-    strip_ids = {strip["id"] for strip in result["scene"]["strips"]}
+    strip_ids = {strip["id"] for strip in result.scene["strips"]}
     assert strip_ids >= {track.track_id for track in tracks}
 
 
 def test_suggest_without_tracks_yields_an_empty_suggestion():
-    from libsonare import suggest_mix_scene
+    from libsonare import mixing_assistant_suggest
 
-    result = suggest_mix_scene([], sample_rate=SAMPLE_RATE)
+    result = mixing_assistant_suggest([], sample_rate=SAMPLE_RATE)
     _assert_document_shape(result, 0)
-    assert result["explanation"] == []
-    assert result["scene"]["strips"] == []
+    assert result.explanation == []
+    assert result.scene["strips"] == []
 
 
 def test_suggest_with_a_silent_track():
-    from libsonare import MixTrackInput, suggest_mix_scene
+    from libsonare import MixTrackInput, mixing_assistant_suggest
 
     n = int(SAMPLE_RATE * DURATION_SEC)
     tracks = [
         MixTrackInput("kick", _percussive(55.0), None, "kick"),
         MixTrackInput("silence", np.zeros(n, dtype=np.float32), None, "pad"),
     ]
-    result = suggest_mix_scene(tracks, sample_rate=SAMPLE_RATE)
+    result = mixing_assistant_suggest(tracks, sample_rate=SAMPLE_RATE)
     _assert_document_shape(result, len(tracks))
     # A silent track carries no measurable level, so it is reported as excluded
     # rather than staged against the loudness target.
-    excluded = {track["stripId"]: track["usable"] for track in result["tracks"]}
+    excluded = {track.strip_id: track.usable for track in result.tracks}
     assert excluded["silence"] is False
 
 
 @pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
 def test_a_non_finite_track_is_excluded_as_itself_rather_than_as_silence(bad):
-    from libsonare import MixTrackInput, suggest_mix_scene
+    from libsonare import MixTrackInput, mixing_assistant_suggest
 
     # A non-finite sample reaches the integrated loudness as -inf, where the
     # silence gate would claim it, and the caller would be told something about
@@ -234,31 +242,24 @@ def test_a_non_finite_track_is_excluded_as_itself_rather_than_as_silence(bad):
         MixTrackInput("poisoned", poisoned, None, "bass"),
         MixTrackInput("silence", np.zeros(n, dtype=np.float32), None, "pad"),
     ]
-    result = suggest_mix_scene(tracks, sample_rate=SAMPLE_RATE)
-    by_id = {track["stripId"]: track for track in result["tracks"]}
+    result = mixing_assistant_suggest(tracks, sample_rate=SAMPLE_RATE)
+    by_id = {track.strip_id: track for track in result.tracks}
 
-    assert by_id["poisoned"]["usable"] is False
-    assert by_id["poisoned"]["exclusionReason"] == "track has non-finite samples"
+    assert by_id["poisoned"].usable is False
+    assert by_id["poisoned"].exclusion_reason == "track has non-finite samples"
     # The silent track is the control: both are excluded, and the two reasons
     # stay distinguishable, so the assertion above cannot pass on any refusal.
-    assert by_id["silence"]["usable"] is False
-    assert by_id["silence"]["exclusionReason"] == "track is silent"
+    assert by_id["silence"].usable is False
+    assert by_id["silence"].exclusion_reason == "track is silent"
     # A measurable track is carried, so one bad buffer does not fail the call.
-    assert by_id["kick"]["usable"] is True
-    assert by_id["kick"]["exclusionReason"] == ""
+    assert by_id["kick"].usable is True
+    assert by_id["kick"].exclusion_reason is None
 
 
-def test_scene_json_matches_the_scene_in_the_full_result(mono_tracks, mono_suggestion):
-    from libsonare import suggest_mix_scene_json
+def test_the_suggested_scene_loads_into_a_mixer(mono_tracks, mono_suggestion):
+    from libsonare import Mixer
 
-    scene = json.loads(suggest_mix_scene_json(mono_tracks, sample_rate=SAMPLE_RATE))
-    assert scene == mono_suggestion["scene"]
-
-
-def test_scene_json_loads_into_a_mixer(mono_tracks):
-    from libsonare import Mixer, suggest_mix_scene_json
-
-    scene_json = suggest_mix_scene_json(mono_tracks, sample_rate=SAMPLE_RATE)
+    scene_json = json.dumps(mono_suggestion.scene)
     mixer = Mixer.from_scene_json(scene_json, sample_rate=SAMPLE_RATE, block_size=256)
     try:
         assert mixer.strip_count >= len(mono_tracks)
@@ -267,21 +268,19 @@ def test_scene_json_loads_into_a_mixer(mono_tracks):
 
 
 def test_every_domain_off_yields_no_explanation(mono_tracks):
-    from libsonare import suggest_mix_scene
+    from libsonare import mixing_assistant_suggest
 
-    result = suggest_mix_scene(mono_tracks, sample_rate=SAMPLE_RATE, **_ALL_DOMAINS_OFF)
+    result = mixing_assistant_suggest(mono_tracks, sample_rate=SAMPLE_RATE, **_ALL_DOMAINS_OFF)
     _assert_document_shape(result, len(mono_tracks))
-    assert result["explanation"] == []
+    assert result.explanation == []
 
 
 def test_every_domain_off_still_yields_a_loadable_scene(mono_tracks):
-    from libsonare import suggest_mix_scene_json
+    from libsonare import mixing_assistant_suggest
 
     # The switches suppress decisions, not tracks: the scene still describes
     # every input so it remains a usable starting point for the mixer.
-    scene = json.loads(
-        suggest_mix_scene_json(mono_tracks, sample_rate=SAMPLE_RATE, **_ALL_DOMAINS_OFF)
-    )
+    scene = mixing_assistant_suggest(mono_tracks, sample_rate=SAMPLE_RATE, **_ALL_DOMAINS_OFF).scene
     assert {strip["id"] for strip in scene["strips"]} >= {track.track_id for track in mono_tracks}
 
 
@@ -297,13 +296,13 @@ def test_every_domain_off_still_yields_a_loadable_scene(mono_tracks):
     ],
 )
 def test_each_domain_switch_is_honoured(mono_tracks, mono_suggestion, domain):
-    from libsonare import suggest_mix_scene
+    from libsonare import mixing_assistant_suggest
 
-    result = suggest_mix_scene(mono_tracks, sample_rate=SAMPLE_RATE, **{domain: False})
+    result = mixing_assistant_suggest(mono_tracks, sample_rate=SAMPLE_RATE, **{domain: False})
     _assert_document_shape(result, len(mono_tracks))
     # A disabled domain is skipped rather than evaluated and discarded, so it
     # can only ever remove reasoning, never add any.
-    assert len(result["explanation"]) <= len(mono_suggestion["explanation"])
+    assert len(result.explanation) <= len(mono_suggestion.explanation)
 
 
 @pytest.mark.parametrize(
@@ -318,50 +317,50 @@ def test_each_domain_switch_is_honoured(mono_tracks, mono_suggestion, domain):
     ],
 )
 def test_numeric_options_are_accepted(mono_tracks, option, value):
-    from libsonare import suggest_mix_scene
+    from libsonare import mixing_assistant_suggest
 
-    result = suggest_mix_scene(mono_tracks, sample_rate=SAMPLE_RATE, **{option: value})
+    result = mixing_assistant_suggest(mono_tracks, sample_rate=SAMPLE_RATE, **{option: value})
     _assert_document_shape(result, len(mono_tracks))
 
 
 def test_high_pass_is_proposed_only_once_the_switch_is_on():
-    from libsonare import MixTrackInput, suggest_mix_scene
+    from libsonare import MixTrackInput, mixing_assistant_suggest
 
     # A local fixture rather than the shared one: this case needs low-frequency
     # residue that would move unrelated assertions elsewhere.
     tracks = [MixTrackInput("vox", _voice_with_rumble(), None, "Lead Vox")]
-    off = suggest_mix_scene(tracks, sample_rate=SAMPLE_RATE)
-    on = suggest_mix_scene(tracks, sample_rate=SAMPLE_RATE, enable_high_pass=True)
+    off = mixing_assistant_suggest(tracks, sample_rate=SAMPLE_RATE)
+    on = mixing_assistant_suggest(tracks, sample_rate=SAMPLE_RATE, enable_high_pass=True)
 
     _assert_document_shape(off, len(tracks))
     _assert_document_shape(on, len(tracks))
     # Off by default: the measurement is not taken at all, so no filter and no
     # line about one.
-    assert _high_pass_owners(off["scene"]) == []
+    assert _high_pass_owners(off.scene) == []
     assert _high_pass_lines(off) == []
     # On: the vocal track's 80 Hz corner earns a pre-fader filter of its own.
-    assert _high_pass_owners(on["scene"]) == ["vox"]
+    assert _high_pass_owners(on.scene) == ["vox"]
     assert len(_high_pass_lines(on)) == 1
 
 
 def test_target_track_lufs_moves_gain_staging(mono_tracks):
-    from libsonare import suggest_mix_scene
+    from libsonare import mixing_assistant_suggest
 
-    quiet = suggest_mix_scene(mono_tracks, sample_rate=SAMPLE_RATE, target_track_lufs=-30.0)
-    loud = suggest_mix_scene(mono_tracks, sample_rate=SAMPLE_RATE, target_track_lufs=-6.0)
-    quiet_trims = [strip["inputTrimDb"] for strip in quiet["scene"]["strips"]]
-    loud_trims = [strip["inputTrimDb"] for strip in loud["scene"]["strips"]]
+    quiet = mixing_assistant_suggest(mono_tracks, sample_rate=SAMPLE_RATE, target_track_lufs=-30.0)
+    loud = mixing_assistant_suggest(mono_tracks, sample_rate=SAMPLE_RATE, target_track_lufs=-6.0)
+    quiet_trims = [strip["inputTrimDb"] for strip in quiet.scene["strips"]]
+    loud_trims = [strip["inputTrimDb"] for strip in loud.scene["strips"]]
     assert quiet_trims and len(quiet_trims) == len(loud_trims)
     # A louder target can only ever ask for more input gain, never less.
     assert all(low <= high for low, high in zip(quiet_trims, loud_trims, strict=True))
 
 
 def test_unset_options_keep_the_library_defaults(mono_tracks, mono_suggestion):
-    from libsonare import suggest_mix_scene
+    from libsonare import mixing_assistant_suggest
 
     # Restating a default on this side would mask a change to the core's own
     # default, so an unset option must not reach the param array at all.
-    explicit = suggest_mix_scene(
+    explicit = mixing_assistant_suggest(
         mono_tracks,
         sample_rate=SAMPLE_RATE,
         target_track_lufs=-18.0,
@@ -369,22 +368,22 @@ def test_unset_options_keep_the_library_defaults(mono_tracks, mono_suggestion):
         eq_max_cut_db=4.0,
         mix_bus_headroom_dbtp=-6.0,
     )
-    assert explicit["scene"] == mono_suggestion["scene"]
+    assert explicit.scene == mono_suggestion.scene
 
 
 def test_empty_track_id_is_rejected():
-    from libsonare import MixTrackInput, SonareValueError, suggest_mix_scene
+    from libsonare import MixTrackInput, SonareValueError, mixing_assistant_suggest
 
     with pytest.raises(SonareValueError, match="track_id"):
-        suggest_mix_scene([MixTrackInput("", _tone(110.0))], sample_rate=SAMPLE_RATE)
+        mixing_assistant_suggest([MixTrackInput("", _tone(110.0))], sample_rate=SAMPLE_RATE)
 
 
 def test_duplicate_track_ids_are_rejected():
-    from libsonare import MixTrackInput, SonareValueError, suggest_mix_scene
+    from libsonare import MixTrackInput, SonareValueError, mixing_assistant_suggest
 
     tracks = [MixTrackInput("bass", _tone(110.0)), MixTrackInput("bass", _tone(220.0))]
     with pytest.raises(SonareValueError, match="duplicate"):
-        suggest_mix_scene(tracks, sample_rate=SAMPLE_RATE)
+        mixing_assistant_suggest(tracks, sample_rate=SAMPLE_RATE)
 
 
 def test_non_finite_samples_are_excluded_not_rejected():
@@ -393,53 +392,55 @@ def test_non_finite_samples_are_excluded_not_rejected():
     The exclusion reason is the assertion: a track excluded for the wrong
     reason is the same defect as one rejected outright.
     """
-    from libsonare import MixTrackInput, suggest_mix_scene
+    from libsonare import MixTrackInput, mixing_assistant_suggest
 
     samples = _tone(110.0).copy()
     samples[17] = np.nan
-    result = suggest_mix_scene(
+    result = mixing_assistant_suggest(
         [MixTrackInput("bass", samples), MixTrackInput("pad", _tone(440.0))],
         sample_rate=SAMPLE_RATE,
     )
-    profiles = {track["stripId"]: track for track in result["tracks"]}
-    assert profiles["bass"]["usable"] is False
-    assert profiles["bass"]["exclusionReason"] == "track has non-finite samples"
+    profiles = {track.strip_id: track for track in result.tracks}
+    assert profiles["bass"].usable is False
+    assert profiles["bass"].exclusion_reason == "track has non-finite samples"
     # The rest of the call survives: one bad track is isolated, not fatal.
-    assert profiles["pad"]["usable"] is True
+    assert profiles["pad"].usable is True
 
 
 def test_non_finite_samples_in_the_right_channel_are_excluded():
     """The stereo path reaches the same classification as the mono one."""
-    from libsonare import MixTrackInput, suggest_mix_scene
+    from libsonare import MixTrackInput, mixing_assistant_suggest
 
     right = _tone(440.0).copy()
     right[23] = np.inf
-    result = suggest_mix_scene([MixTrackInput("pad", _tone(440.0), right)], sample_rate=SAMPLE_RATE)
-    profile = result["tracks"][0]
-    assert profile["usable"] is False
-    assert profile["exclusionReason"] == "track has non-finite samples"
+    result = mixing_assistant_suggest(
+        [MixTrackInput("pad", _tone(440.0), right)], sample_rate=SAMPLE_RATE
+    )
+    profile = result.tracks[0]
+    assert profile.usable is False
+    assert profile.exclusion_reason == "track has non-finite samples"
 
 
 def test_mismatched_channel_lengths_are_rejected():
-    from libsonare import MixTrackInput, SonareValueError, suggest_mix_scene
+    from libsonare import MixTrackInput, SonareValueError, mixing_assistant_suggest
 
     tracks = [MixTrackInput("pad", _tone(440.0), _tone(440.0, duration_sec=DURATION_SEC * 0.5))]
     with pytest.raises(SonareValueError, match="lengths must match"):
-        suggest_mix_scene(tracks, sample_rate=SAMPLE_RATE)
+        mixing_assistant_suggest(tracks, sample_rate=SAMPLE_RATE)
 
 
 def test_non_positive_sample_rate_is_rejected():
-    from libsonare import MixTrackInput, SonareValueError, suggest_mix_scene
+    from libsonare import MixTrackInput, SonareValueError, mixing_assistant_suggest
 
     with pytest.raises(SonareValueError, match="sample_rate"):
-        suggest_mix_scene([MixTrackInput("bass", _tone(110.0))], sample_rate=0)
+        mixing_assistant_suggest([MixTrackInput("bass", _tone(110.0))], sample_rate=0)
 
 
 def test_non_finite_option_is_rejected():
-    from libsonare import MixTrackInput, SonareValueError, suggest_mix_scene
+    from libsonare import MixTrackInput, SonareValueError, mixing_assistant_suggest
 
     with pytest.raises(SonareValueError, match="finite"):
-        suggest_mix_scene(
+        mixing_assistant_suggest(
             [MixTrackInput("bass", _tone(110.0))],
             sample_rate=SAMPLE_RATE,
             target_track_lufs=float("nan"),
@@ -456,10 +457,10 @@ def test_tempo_outside_the_musical_range_is_rejected(tempo):
     argument validation raises the same class but spells the field ``tempo_bpm``,
     which is what tells a second copy of the bounds on this side apart.
     """
-    from libsonare import MixTrackInput, SonareValueError, suggest_mix_scene
+    from libsonare import MixTrackInput, SonareValueError, mixing_assistant_suggest
 
     with pytest.raises(SonareValueError, match="tempoBpm") as caught:
-        suggest_mix_scene(
+        mixing_assistant_suggest(
             [MixTrackInput("bass", _tone(110.0))],
             sample_rate=SAMPLE_RATE,
             tempo_bpm=tempo,
@@ -469,25 +470,35 @@ def test_tempo_outside_the_musical_range_is_rejected(tempo):
     assert "tempo_bpm" not in str(caught.value)
 
 
-def test_zero_tempo_selects_the_transport_fallback():
-    """Zero is the documented sentinel, not a tempo, so it is accepted.
+@pytest.mark.parametrize("tempo", [0.0, -120.0])
+def test_a_non_positive_tempo_is_refused(tempo):
+    """Absence is ``None``; the C entry's 0 sentinel is not a tempo a caller can pass."""
+    from libsonare import MixTrackInput, SonareValueError, mixing_assistant_suggest
 
-    Asserted against the scene the option-free call produces rather than against
-    a delay time spelled here: what a caller gets for zero is defined as "what
-    the assistant did before a tempo could be stated", and comparing the two
-    documents is the only thing that says so.
-    """
-    from libsonare import MixTrackInput, suggest_mix_scene_json
-
-    tracks = [MixTrackInput("leadVox", _tone(220.0), name="vocal")]
-    assert suggest_mix_scene_json(
-        tracks, sample_rate=SAMPLE_RATE, tempo_bpm=0.0
-    ) == suggest_mix_scene_json(tracks, sample_rate=SAMPLE_RATE)
+    with pytest.raises(SonareValueError, match="tempo_bpm"):
+        mixing_assistant_suggest(
+            [MixTrackInput("bass", _tone(110.0))],
+            sample_rate=SAMPLE_RATE,
+            tempo_bpm=tempo,
+        )
 
 
-def test_scene_json_rejects_bad_input_the_same_way():
-    from libsonare import MixTrackInput, SonareValueError, suggest_mix_scene_json
+def test_a_track_profile_reports_absent_facts_as_none():
+    from libsonare import MixTrackInput, mixing_assistant_suggest
 
-    tracks = [MixTrackInput("bass", _tone(110.0)), MixTrackInput("bass", _tone(220.0))]
-    with pytest.raises(SonareValueError, match="duplicate"):
-        suggest_mix_scene_json(tracks, sample_rate=SAMPLE_RATE)
+    n = int(SAMPLE_RATE * DURATION_SEC)
+    tracks = [
+        MixTrackInput("bass", _tone(110.0)),
+        MixTrackInput("silence", np.zeros(n, dtype=np.float32), None, "pad"),
+    ]
+    bass, silence = mixing_assistant_suggest(tracks, sample_rate=SAMPLE_RATE).tracks
+    # No name was given, and a usable track has no exclusion to explain.
+    assert bass.name is None
+    assert bass.exclusion_reason is None
+    assert bass.integrated_lufs is not None
+    assert set(bass.band_occupancy) == {"sub", "low", "lowMid", "mid", "highMid", "high", "air"}
+    assert sum(bass.band_occupancy.values()) == pytest.approx(1.0, abs=1e-3)
+    # A silent track has no gated block, so no loudness, and says why it was set aside.
+    assert silence.name == "pad"
+    assert silence.integrated_lufs is None
+    assert silence.exclusion_reason == "track is silent"

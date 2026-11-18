@@ -1,7 +1,7 @@
 """Tests for the mastering-assistant chain-config extractors.
 
 The referent for every assertion here is the core entry point exposed through
-:func:`mastering_assistant_suggest` (the full profile+chain document); nothing
+:func:`mastering_assistant_suggest` (the full profile+chain suggestion); nothing
 below hardcodes an expected value.
 """
 
@@ -20,7 +20,7 @@ from libsonare import (
     mastering_assistant_suggest_chain_stereo,
     mastering_assistant_suggest_stereo,
 )
-from libsonare._mastering_offline import _flatten_chain_config, _nest_chain_config
+from libsonare._mastering_offline import _flatten_chain_config
 from libsonare._mastering_pair import _chain_config_from_document
 
 from ._helpers import LIB_AVAILABLE, sine
@@ -34,36 +34,32 @@ RIGHT = sine(220.0, 0.4, sr=SR, amp=0.15)
 PARAMS = {"targetLufs": -13.0, "ceilingDb": -0.8}
 
 
-def test_chain_matches_the_document_chain_config() -> None:
-    """The chain-only extractor agrees with the chain config nested in the document."""
-    document = json.loads(mastering_assistant_suggest(SAMPLES, sample_rate=SR, params=PARAMS))
+def test_chain_matches_the_suggestion_chain_config() -> None:
+    """The chain-only extractor agrees with the chain config the full suggestion carries."""
+    suggestion = mastering_assistant_suggest(SAMPLES, sample_rate=SR, params=PARAMS)
     chain = mastering_assistant_suggest_chain(SAMPLES, sample_rate=SR, params=PARAMS)
-    assert chain == _nest_chain_config(document["chainConfig"]["params"])
+    assert chain == suggestion.chain_config
     assert not any("." in key for key in chain)
 
 
-def test_chain_stereo_matches_the_document_chain_config() -> None:
-    """The stereo chain-only extractor agrees with the stereo document's chain config."""
-    document = json.loads(
-        mastering_assistant_suggest_stereo(LEFT, RIGHT, sample_rate=SR, params=PARAMS)
-    )
+def test_chain_stereo_matches_the_suggestion_chain_config() -> None:
+    """The stereo chain-only extractor agrees with the stereo suggestion's chain config."""
+    suggestion = mastering_assistant_suggest_stereo(LEFT, RIGHT, sample_rate=SR, params=PARAMS)
     chain = mastering_assistant_suggest_chain_stereo(LEFT, RIGHT, sample_rate=SR, params=PARAMS)
-    assert chain == _nest_chain_config(document["chainConfig"]["params"])
+    assert chain == suggestion.chain_config
 
 
 def test_chain_overrides_master_audio() -> None:
-    """The nested chain round-trips: as overrides it renders like the document's own params."""
-    document = json.loads(mastering_assistant_suggest(SAMPLES, sample_rate=SR, params=PARAMS))
+    """The nested chain round-trips: as overrides it renders like the suggestion's own chain."""
+    suggestion = mastering_assistant_suggest(SAMPLES, sample_rate=SR, params=PARAMS)
     chain = mastering_assistant_suggest_chain(SAMPLES, sample_rate=SR, params=PARAMS)
-    assert _flatten_chain_config(chain) == {
-        key: float(value) for key, value in document["chainConfig"]["params"].items()
-    }
+    assert _flatten_chain_config(chain) == _flatten_chain_config(suggestion.chain_config)
     result = master_audio(SAMPLES, sample_rate=SR, preset="pop", overrides=chain)
     by_hand = master_audio(
         SAMPLES,
         sample_rate=SR,
         preset="pop",
-        overrides=_nest_chain_config(document["chainConfig"]["params"]),
+        overrides=suggestion.chain_config,
     )
     assert result.report is not None
     assert result.samples == by_hand.samples

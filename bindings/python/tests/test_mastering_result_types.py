@@ -1,4 +1,4 @@
-"""The TypedDicts describing the explainable-mastering helpers' JSON match what they emit."""
+"""The explainable-mastering result records and documents match what the core emits."""
 
 from __future__ import annotations
 
@@ -55,28 +55,102 @@ SOURCE = _tones(220, 1760, 0.2)
 REFERENCE = _tones(330, 2200, 0.4)
 
 
-def test_assistant_result() -> None:
-    result = json.loads(libsonare.mastering_assistant_suggest(SOURCE, SR))
-    # The chain document's params are keyed by the suggested stages and stay opaque.
-    _assert_matches(result, libsonare.MasteringAssistantResult, "assistant")
+def _capture_wire(monkeypatch: pytest.MonkeyPatch, parser: str) -> list[Any]:
+    """Record the parsed native document each call hands ``parser``."""
+    from libsonare import _mastering_pair
+
+    seen: list[Any] = []
+    original = getattr(_mastering_pair, parser)
+
+    def spy(wire: Any) -> Any:
+        seen.append(wire)
+        return original(wire)
+
+    monkeypatch.setattr(_mastering_pair, parser, spy)
+    return seen
 
 
-def test_streaming_preview_result() -> None:
-    result = json.loads(libsonare.mastering_streaming_preview(SOURCE, SR))
-    _assert_matches(result, libsonare.MasteringStreamingPreviewResult, "preview")
+def _cli_view(wire: Any) -> Any:
+    """What the command line printed before the records: the document, snake-cased, nulls kept."""
+    from libsonare._cli_common import _json_keys_to_snake_case
+
+    return _json_keys_to_snake_case(wire)
 
 
-def test_audio_profile_result() -> None:
-    result = json.loads(libsonare.mastering_audio_profile(SOURCE, SR))
-    _assert_matches(result, libsonare.MasteringAudioProfile, "profile")
-    assert "defects" not in result
+def _without_nulls(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _without_nulls(v) for k, v in value.items() if v is not None}
+    if isinstance(value, list):
+        return [_without_nulls(item) for item in value]
+    return value
 
 
-def test_audio_profile_result_with_defects() -> None:
-    params = {"detectDefects": True}
-    result = json.loads(libsonare.mastering_audio_profile(SOURCE, SR, params))
-    assert "defects" in result
-    _assert_matches(result, libsonare.MasteringAudioProfile, "profile")
+def test_assistant_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    from libsonare._result_records import _result_to_json_dict
+
+    wires = _capture_wire(monkeypatch, "_assistant_result_from_wire")
+    result = libsonare.mastering_assistant_suggest(SOURCE, SR)
+    assert isinstance(result, libsonare.MasteringAssistantResult)
+    assert isinstance(result.profile, libsonare.MasteringAssistantProfile)
+    (wire,) = wires
+    expected = _cli_view(wire)
+    # The one intended difference: the chain is the nested overrides form, keys as the document's.
+    expected["chain_config"] = libsonare.mastering_assistant_suggest_chain(SOURCE, SR)
+    assert _result_to_json_dict(result) == _without_nulls(expected)
+
+
+def test_streaming_preview_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    from libsonare._result_records import _result_to_json_dict
+
+    wires = _capture_wire(monkeypatch, "_streaming_preview_from_wire")
+    result = libsonare.mastering_streaming_preview(SOURCE, SR)
+    assert all(isinstance(p, libsonare.MasteringStreamingPreviewPlatform) for p in result.platforms)
+    (wire,) = wires
+    assert _result_to_json_dict(result) == _without_nulls(_cli_view(wire))
+
+
+def test_a_silent_take_has_no_integrated_loudness(monkeypatch: pytest.MonkeyPatch) -> None:
+    from libsonare._result_records import _result_to_json_dict
+
+    silence = np.zeros(SR, dtype=np.float32)
+    wires = _capture_wire(monkeypatch, "_audio_profile_from_wire")
+    profile = libsonare.mastering_audio_profile(silence, SR)
+    preview = libsonare.mastering_streaming_preview(silence, SR)
+    assert profile.loudness.integrated_lufs is None
+    assert all(p.integrated_lufs is None for p in preview.platforms)
+    # The command line used to print the absent measurement as null; it now omits the key.
+    (wire,) = wires
+    assert _cli_view(wire)["loudness"]["integrated_lufs"] is None
+    assert "integrated_lufs" not in _result_to_json_dict(profile)["loudness"]
+
+
+def test_audio_profile_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    from libsonare._result_records import _result_to_json_dict
+
+    wires = _capture_wire(monkeypatch, "_audio_profile_from_wire")
+    result = libsonare.mastering_audio_profile(SOURCE, SR)
+    assert isinstance(result, libsonare.MasteringAudioProfile)
+    assert result.defects is None
+    (wire,) = wires
+    assert _result_to_json_dict(result) == _without_nulls(_cli_view(wire))
+
+
+def test_audio_profile_result_with_defects(monkeypatch: pytest.MonkeyPatch) -> None:
+    from libsonare._result_records import _result_to_json_dict
+
+    wires = _capture_wire(monkeypatch, "_audio_profile_from_wire")
+    result = libsonare.mastering_audio_profile(SOURCE, SR, {"detectDefects": True})
+    assert isinstance(result.defects, libsonare.AudioDefects)
+    # The profile never runs WPE, so the reverb reading has nothing to predict with.
+    assert result.defects.reverb.late_predictability is None
+    (wire,) = wires
+    expected = _cli_view(wire)
+    # The one intended difference: with no flat run there is no flat level, which the
+    # document still writes as a number.
+    assert result.defects.clip.flat_run_count == 0
+    assert result.defects.clip.flat_level is None
+    del expected["defects"]["clip"]["flat_level"]
+    assert _result_to_json_dict(result) == _without_nulls(expected)
 
 
 def test_repair_analysis_result() -> None:

@@ -608,11 +608,21 @@ def test_mastering_streaming_cli_passes_platform_targets(monkeypatch, capsys) ->
         *,
         sample_rate: int,
         platforms: list[dict[str, object]] | None,
-    ) -> str:
+    ) -> libsonare.MasteringStreamingPreviewResult:
         calls["samples"] = samples
         calls["sample_rate"] = sample_rate
         calls["platforms"] = platforms
-        return '{"platforms":[{"name":"Service","gainDb":-1.0}]}'
+        return libsonare.MasteringStreamingPreviewResult(
+            platforms=[
+                libsonare.MasteringStreamingPreviewPlatform(
+                    name="Service",
+                    integrated_lufs=None,
+                    true_peak_dbtp=-3.0,
+                    normalization_gain_db=0.0,
+                    ceiling_risk=False,
+                )
+            ]
+        )
 
     monkeypatch.setattr(libsonare, "mastering_streaming_preview", fake_streaming_preview)
 
@@ -626,7 +636,14 @@ def test_mastering_streaming_cli_passes_platform_targets(monkeypatch, capsys) ->
     assert calls["samples"] == [0.2, -0.2, 0.0]
     assert calls["sample_rate"] == 48000
     assert calls["platforms"] == [{"name": "Service", "target_lufs": -14, "ceiling_dbtp": -1}]
-    assert json.loads(capsys.readouterr().out)["platforms"][0]["name"] == "Service"
+    assert json.loads(capsys.readouterr().out)["platforms"] == [
+        {
+            "name": "Service",
+            "true_peak_dbtp": -3.0,
+            "normalization_gain_db": 0.0,
+            "ceiling_risk": False,
+        }
+    ]
 
 
 def test_declip_cli_writes_repaired_audio(monkeypatch, tmp_path, capsys) -> None:

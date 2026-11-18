@@ -31,6 +31,7 @@ from ._cli_common import (
     _write_wav_stereo_frames,
 )
 from ._cli_options import SharedParsers, _c_int, _ContractArgumentParser
+from ._result_records import _result_to_json_dict
 
 
 def _mix_assistant_options(params: dict[str, float]) -> dict[str, Any]:
@@ -123,7 +124,7 @@ def _resolve_tempo_bpm(raw: str, entries: list[str]) -> tuple[float, list[Any]]:
 
 
 def cmd_suggest_mix(args: argparse.Namespace) -> int:
-    from . import suggest_mix_scene
+    from . import mixing_assistant_suggest
 
     if not args.input:
         raise ValueError("suggest-mix requires at least one --input")
@@ -136,16 +137,17 @@ def cmd_suggest_mix(args: argparse.Namespace) -> int:
             raise ValueError("--tempo-bpm and --params tempoBpm= set the same value")
         options["tempo_bpm"], tracks = _resolve_tempo_bpm(args.tempo_bpm, args.input)
     tracks += _mix_assistant_tracks(args.input[len(tracks) :])
-    document = suggest_mix_scene(tracks, sample_rate=args.sample_rate, **options)
+    result = mixing_assistant_suggest(tracks, sample_rate=args.sample_rate, **options)
     if args.scene_out:
-        # Written from the document already in hand rather than through
-        # suggest_mix_scene_json, which would re-run an STFT per track and every
-        # pairwise pass to reach the same scene. That the two agree is pinned by
-        # a test rather than assumed here.
+        # Written from the result already in hand rather than through a second
+        # suggestion, which would re-run an STFT per track and every pairwise
+        # pass to reach the same scene.
         _atomic_write_bytes(
-            args.scene_out, (_strict_json_dumps(document.get("scene", {})) + "\n").encode("utf-8")
+            args.scene_out, (_strict_json_dumps(result.scene) + "\n").encode("utf-8")
         )
-    print(_strict_json_dumps(document))
+    # The scene keeps the scene schema's names, since `mix --scene` reads it back;
+    # everything beside it is measurement output in snake_case.
+    print(_strict_json_dumps(_result_to_json_dict(result)))
     return 0
 
 

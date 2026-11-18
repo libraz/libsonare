@@ -514,7 +514,7 @@ def test_suggest_mix_addresses_every_track_it_was_given() -> None:
 
     assert set(payload) == {"scene", "tracks", "mix", "explanation"}
     # A bare path takes the file's own name; an ID= prefix overrides it.
-    assert {track["stripId"] for track in payload["tracks"]} == {"bass", "top"}
+    assert {track["strip_id"] for track in payload["tracks"]} == {"bass", "top"}
     assert {strip["id"] for strip in payload["scene"]["strips"]} >= {"bass", "top"}
     assert payload["explanation"]
     assert any("bass" in line for line in payload["explanation"])
@@ -575,7 +575,7 @@ def test_suggest_mix_scene_out_is_what_the_mixer_reads() -> None:
             written = json.load(handle)
         assert written == json.loads(result.stdout)["scene"]
 
-        from libsonare import MixTrackInput, suggest_mix_scene_json
+        from libsonare import MixTrackInput, mixing_assistant_suggest
         from libsonare.audio import Audio
 
         # Loaded through the same decoder the CLI uses. Reconstructing the
@@ -589,10 +589,11 @@ def test_suggest_mix_scene_out_is_what_the_mixer_reads() -> None:
         # itself would only be checked against this file.
         # The id is also the name hint, which is what the CLI passes: leaving it
         # out here changes the classification confidence and with it the balance.
-        assert written == json.loads(
-            suggest_mix_scene_json(
+        assert (
+            written
+            == mixing_assistant_suggest(
                 [MixTrackInput("leadVox", samples, name="leadVox")], sample_rate=SR
-            )
+            ).scene
         )
 
         rendering = _run_cli(
@@ -696,11 +697,11 @@ def test_suggest_mix_measures_a_stereo_track_as_a_pair() -> None:
         as_pair = _track(stereo)
         as_fold = _track(folded)
 
-    assert as_pair["numChannels"] == 2
-    assert as_fold["numChannels"] == 1
+    assert as_pair["num_channels"] == 2
+    assert as_fold["num_channels"] == 1
     # The fold is not the pair, and the difference is in the figure every gain
     # decision is made from.
-    assert as_pair["integratedLufs"] != as_fold["integratedLufs"]
+    assert as_pair["integrated_lufs"] != as_fold["integrated_lufs"]
 
 
 def test_suggest_mix_requires_an_input() -> None:

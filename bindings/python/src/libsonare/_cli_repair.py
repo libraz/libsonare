@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import math
 from typing import TYPE_CHECKING, Any, cast
 
@@ -11,7 +10,6 @@ import numpy as np
 
 from ._cli_common import (
     _audio_array,
-    _chain_params_config,
     _load_channels_or_downmix,
     _strict_json_dumps,
     _write_channel_output,
@@ -29,10 +27,12 @@ from ._cli_options import (
     _option_supplied,
     _wav_bits,
 )
-from ._mastering_offline import _nest_chain_config
+from ._mastering_offline import _chain_config_paths, _nest_chain_config
+from ._result_records import _result_to_json_dict
 
 if TYPE_CHECKING:
     from .analyzer import MasteringPreset
+    from .types import AudioDefects
 
 
 def _amplitude_to_db(amplitude: float) -> float:
@@ -176,41 +176,9 @@ def _fit_repair_output_to_full_scale(samples: Any) -> tuple[Any, float]:
 
 # Each detector group of the profile's ``defects`` object, with the wire key
 # and the snake_case key the native CLI's ``--json`` emits for it.
-_DEFECT_GROUP_KEYS: dict[str, tuple[tuple[str, str], ...]] = {
-    "click": (
-        ("count", "count"),
-        ("rejected", "rejected"),
-        ("longestRunSamples", "longest_run_samples"),
-        ("perSecond", "per_second"),
-    ),
-    "clip": (
-        ("clippedSamples", "clipped_samples"),
-        ("clippedRatio", "clipped_ratio"),
-        ("runCount", "run_count"),
-        ("longestRunSamples", "longest_run_samples"),
-        ("flatRunCount", "flat_run_count"),
-        ("longestFlatRunSamples", "longest_flat_run_samples"),
-        ("flatSampleCount", "flat_sample_count"),
-    ),
-    "crackle": (
-        ("sampleCount", "sample_count"),
-        ("sampleFraction", "sample_fraction"),
-        ("perSecond", "per_second"),
-    ),
-    "noise": (("floorDbfs", "floor_dbfs"), ("bandFloorDbfs", "band_floor_dbfs")),
-    "hum": (
-        ("fundamentalHz", "fundamental_hz"),
-        ("fundamentalProminence", "fundamental_prominence"),
-        ("harmonics", "harmonics"),
-        ("harmonicDbfs", "harmonic_dbfs"),
-    ),
-    "reverb": (("lateDecayRatioDb", "late_decay_ratio_db"),),
-}
-
-
-def _repair_detection_report(defects: object) -> dict[str, dict[str, object]] | None:
-    """Render the profile's ``defects`` object in the snake_case shape the native
-    CLI's ``--json`` emits, group for group; None when no detector ran.
+def _repair_detection_report(defects: AudioDefects | None) -> dict[str, dict[str, object]] | None:
+    """Render the profile's ``defects`` in the snake_case shape the native CLI's
+    ``--json`` emits, group for group; None when no detector ran.
 
     A large ``click.rejected`` beside a zero ``click.count`` means the detector
     could not decide, and a ``hum.fundamental_prominence`` (a linear energy
@@ -218,18 +186,7 @@ def _repair_detection_report(defects: object) -> dict[str, dict[str, object]] | 
     """
     if defects is None:
         return None
-    if not isinstance(defects, dict):
-        raise ValueError("libsonare returned an invalid defect profile")
-    report: dict[str, dict[str, object]] = {}
-    for group, keys in _DEFECT_GROUP_KEYS.items():
-        source = defects.get(group)
-        if not isinstance(source, dict) or any(wire not in source for wire, _ in keys):
-            raise ValueError(f"libsonare returned an incomplete '{group}' defect group")
-        report[group] = {cli: source[wire] for wire, cli in keys}
-    # A flat-top level is only measured where a flat run was found.
-    if cast("int", report["clip"]["flat_run_count"]) > 0:
-        report["clip"]["flat_level"] = defects["clip"]["flatLevel"]
-    return report
+    return cast("dict[str, dict[str, object]]", _result_to_json_dict(defects))
 
 
 def _print_repair_detection_report(report: dict[str, dict[str, object]] | None) -> None:
@@ -344,13 +301,9 @@ def cmd_repair(args: argparse.Namespace) -> int:
 
     # Every mode reports the detectors, so they always run here -- never only
     # when it happens to be convenient for one mode.
-    profile = json.loads(
-        mastering_audio_profile(samples, sample_rate=sr, params={"detectDefects": True})
-    )
-    if not isinstance(profile, dict):
-        raise ValueError("libsonare did not return an audio profile")
-    # The profile omits `defects` when no detector ran; so does this report.
-    defects = _repair_detection_report(profile.get("defects"))
+    profile = mastering_audio_profile(samples, sample_rate=sr, params={"detectDefects": True})
+    # The profile carries no `defects` when no detector ran; so does this report.
+    defects = _repair_detection_report(profile.defects)
 
     if detect_only:
         if getattr(args, "json", False):
@@ -378,24 +331,17 @@ def cmd_repair(args: argparse.Namespace) -> int:
         )
         mode = "preset"
     else:
-        suggestion = json.loads(
-            mastering_assistant_suggest(samples, sample_rate=sr, params={"enableRepair": True})
+        suggestion = mastering_assistant_suggest(
+            samples, sample_rate=sr, params={"enableRepair": True}
         )
-        if not isinstance(suggestion, dict) or not isinstance(suggestion.get("chainConfig"), dict):
-            raise ValueError("mastering assistant returned an invalid chain config")
-        chain_config = _chain_params_config(suggestion["chainConfig"])
+        chain_config = _chain_config_paths(suggestion.chain_config)
         repair_config = {
             key: value for key, value in chain_config.items() if key.startswith("repair.")
         }
         repair_config.update(params)
         result = mastering_chain(samples, sample_rate=sr, config=_nest_chain_config(repair_config))
         mode = "assistant"
-        explanation_value = suggestion.get("explanation", [])
-        if not isinstance(explanation_value, list) or not all(
-            isinstance(item, str) for item in explanation_value
-        ):
-            raise ValueError("mastering assistant returned invalid explanation data")
-        explanation = _repair_explanation(explanation_value)
+        explanation = _repair_explanation(suggestion.explanation)
 
     stages = list(getattr(result, "stages", []))
     samples, output_gain_db = _fit_repair_output_to_full_scale(result.samples)

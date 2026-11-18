@@ -491,40 +491,16 @@ from ._types_mastering_results import (
     MasteringAudioProfile as MasteringAudioProfile,
 )
 from ._types_mastering_results import (
-    MasteringAudioProfileClick as MasteringAudioProfileClick,
-)
-from ._types_mastering_results import (
-    MasteringAudioProfileClip as MasteringAudioProfileClip,
-)
-from ._types_mastering_results import (
-    MasteringAudioProfileCrackle as MasteringAudioProfileCrackle,
-)
-from ._types_mastering_results import (
-    MasteringAudioProfileDefects as MasteringAudioProfileDefects,
-)
-from ._types_mastering_results import (
     MasteringAudioProfileDynamics as MasteringAudioProfileDynamics,
 )
 from ._types_mastering_results import (
-    MasteringAudioProfileHum as MasteringAudioProfileHum,
-)
-from ._types_mastering_results import (
     MasteringAudioProfileLoudness as MasteringAudioProfileLoudness,
-)
-from ._types_mastering_results import (
-    MasteringAudioProfileNoise as MasteringAudioProfileNoise,
-)
-from ._types_mastering_results import (
-    MasteringAudioProfileReverb as MasteringAudioProfileReverb,
 )
 from ._types_mastering_results import (
     MasteringAudioProfileSpectral as MasteringAudioProfileSpectral,
 )
 from ._types_mastering_results import (
     MasteringChainConfig as MasteringChainConfig,
-)
-from ._types_mastering_results import (
-    MasteringChainConfigDocument as MasteringChainConfigDocument,
 )
 from ._types_mastering_results import (
     MasteringStreamingPreviewPlatform as MasteringStreamingPreviewPlatform,
@@ -558,6 +534,33 @@ from ._types_mastering_results import (
 )
 from ._types_mastering_results import (
     StreamingPlatform as StreamingPlatform,
+)
+from ._types_mixing_assistant import (
+    MixAnalysisBand as MixAnalysisBand,
+)
+from ._types_mixing_assistant import (
+    MixAssistantMixProfile as MixAssistantMixProfile,
+)
+from ._types_mixing_assistant import (
+    MixAssistantResult as MixAssistantResult,
+)
+from ._types_mixing_assistant import (
+    MixAssistantTrackProfile as MixAssistantTrackProfile,
+)
+from ._types_mixing_assistant import (
+    MixBandDominance as MixBandDominance,
+)
+from ._types_mixing_assistant import (
+    MixCrowdedBand as MixCrowdedBand,
+)
+from ._types_mixing_assistant import (
+    MixMonoRisk as MixMonoRisk,
+)
+from ._types_mixing_assistant import (
+    MixSourceClass as MixSourceClass,
+)
+from ._types_mixing_assistant import (
+    MixTrackAlignment as MixTrackAlignment,
 )
 from ._types_repair import (
     AudioDefects as AudioDefects,

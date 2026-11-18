@@ -7028,7 +7028,7 @@ old = "mastering_assistant_suggest_chain"
 changed = "returns the nested chain config (module -> processor -> parameter) instead of a flat dotted-key dict; pass it to master_audio(overrides=) unchanged"
 domain = "mastering"
 rule = "typed-results"
-test = "bindings/python/tests/test_mastering_assistant_chain.py::test_chain_matches_the_document_chain_config"
+test = "bindings/python/tests/test_mastering_assistant_chain.py::test_chain_matches_the_suggestion_chain_config"
 
 [[entry]]
 kind = "function"
@@ -7036,7 +7036,7 @@ old = "mastering_assistant_suggest_chain_stereo"
 changed = "returns the nested chain config instead of a flat dotted-key dict"
 domain = "mastering"
 rule = "typed-results"
-test = "bindings/python/tests/test_mastering_assistant_chain.py::test_chain_stereo_matches_the_document_chain_config"
+test = "bindings/python/tests/test_mastering_assistant_chain.py::test_chain_stereo_matches_the_suggestion_chain_config"
 
 [[entry]]
 kind = "function"
@@ -7249,7 +7249,8 @@ test = "bindings/python/tests/test_project_midi.py::test_a_reverse_lookup_that_f
 [[entry]]
 kind = "function"
 old = "mix_source_class_from_name"
-changed = "an unknown name raises SonareValueError (returned -1)"
+to = "mixing_assistant_source_class_from_name"
+changed = "renamed to the C/JS name; an unknown name raises SonareValueError (returned -1)"
 domain = "mastering"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_mixing_assistant.py::test_an_unknown_source_class_name_is_refused"
@@ -7273,8 +7274,8 @@ test = "bindings/python/tests/test_analyzer_features.py::test_frame_time_convers
 [[entry]]
 kind = "field"
 old = "MasteringAudioProfileLoudness.lraLu"
-to = "MasteringAudioProfileLoudness.loudnessRangeLu"
-changed = "lraLu -> loudnessRangeLu"
+to = "MasteringAudioProfileLoudness.loudness_range_lu"
+changed = "lraLu -> loudness_range_lu"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile_result"
@@ -7282,8 +7283,8 @@ test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile
 [[entry]]
 kind = "field"
 old = "MasteringAudioProfileLoudness.truePeakDb"
-to = "MasteringAudioProfileLoudness.truePeakDbtp"
-changed = "truePeakDb -> truePeakDbtp"
+to = "MasteringAudioProfileLoudness.true_peak_dbtp"
+changed = "truePeakDb -> true_peak_dbtp"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile_result"
@@ -7291,8 +7292,8 @@ test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile
 [[entry]]
 kind = "field"
 old = "MasteringAssistantProfile.lraLu"
-to = "MasteringAssistantProfile.loudnessRangeLu"
-changed = "lraLu -> loudnessRangeLu"
+to = "MasteringAssistantProfile.loudness_range_lu"
+changed = "lraLu -> loudness_range_lu"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/python/tests/test_mastering_result_types.py::test_assistant_result"
@@ -7300,8 +7301,8 @@ test = "bindings/python/tests/test_mastering_result_types.py::test_assistant_res
 [[entry]]
 kind = "field"
 old = "MasteringAssistantProfile.truePeakDb"
-to = "MasteringAssistantProfile.truePeakDbtp"
-changed = "truePeakDb -> truePeakDbtp"
+to = "MasteringAssistantProfile.true_peak_dbtp"
+changed = "truePeakDb -> true_peak_dbtp"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/python/tests/test_mastering_result_types.py::test_assistant_result"
@@ -7309,8 +7310,8 @@ test = "bindings/python/tests/test_mastering_result_types.py::test_assistant_res
 [[entry]]
 kind = "field"
 old = "MasteringAudioProfileDynamics.attackDensity"
-to = "MasteringAudioProfileDynamics.attackPerSecond"
-changed = "attackDensity -> attackPerSecond"
+to = "MasteringAudioProfileDynamics.attack_per_second"
+changed = "attackDensity -> attack_per_second"
 domain = "mastering"
 rule = "unit-in-name"
 test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile_result"
@@ -7318,8 +7319,8 @@ test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile
 [[entry]]
 kind = "field"
 old = "MasteringAssistantProfile.attackDensity"
-to = "MasteringAssistantProfile.attackPerSecond"
-changed = "attackDensity -> attackPerSecond"
+to = "MasteringAssistantProfile.attack_per_second"
+changed = "attackDensity -> attack_per_second"
 domain = "mastering"
 rule = "unit-in-name"
 test = "bindings/python/tests/test_mastering_result_types.py::test_assistant_result"
@@ -7327,8 +7328,8 @@ test = "bindings/python/tests/test_mastering_result_types.py::test_assistant_res
 [[entry]]
 kind = "field"
 old = "MasteringStreamingPreviewPlatform.truePeakDb"
-to = "MasteringStreamingPreviewPlatform.truePeakDbtp"
-changed = "truePeakDb -> truePeakDbtp"
+to = "MasteringStreamingPreviewPlatform.true_peak_dbtp"
+changed = "truePeakDb -> true_peak_dbtp"
 domain = "mastering"
 rule = "loudness-names"
 test = "bindings/python/tests/test_mastering_result_types.py::test_streaming_preview_result"
@@ -7336,10 +7337,9 @@ test = "bindings/python/tests/test_mastering_result_types.py::test_streaming_pre
 [[entry]]
 kind = "type"
 old = "MasteringAudioProfileDefects"
-changed = "one record per detector: {click, clip, crackle, noise, hum, reverb} (MasteringAudioProfileClick, ...); the flat clip*/hum*/noise* fields go, and the measured flag goes because the whole block is absent when the detectors did not run"
+removed = "read MasteringAudioProfile.defects, an AudioDefects with one record per detector (click, clip, crackle, noise, hum, reverb), or None when the detectors did not run; the flat clip*/hum*/noise* fields and the measured flag go"
 domain = "mastering"
 rule = "typed-results"
-test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile_result_with_defects"
 
 # Getter, unit and channel-count renames, and the streaming-platform record.
 
@@ -7665,3 +7665,344 @@ old = "mfcc_to_audio(mfcc_coeffs)"
 new = "mfcc_to_audio(coefficients)"
 domain = "analysis"
 rule = "construction"
+
+# Assistant, profile and streaming-preview result records.
+
+[[entry]]
+kind = "type"
+old = "MasteringAudioProfile"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict; loudness, spectral and dynamics are records, defects is an AudioDefects or None, and an integrated loudness that was not measured is None"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile_result"
+
+[[entry]]
+kind = "type"
+old = "MasteringAudioProfileLoudness"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile_result"
+
+[[entry]]
+kind = "type"
+old = "MasteringAudioProfileSpectral"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile_result"
+
+[[entry]]
+kind = "type"
+old = "MasteringAudioProfileDynamics"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile_result"
+
+[[entry]]
+kind = "type"
+old = "MasteringAssistantResult"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict; chain_config is the nested MasteringChainConfig mastering_assistant_suggest_chain returns"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_assistant_result"
+
+[[entry]]
+kind = "type"
+old = "MasteringAssistantProfile"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_assistant_result"
+
+[[entry]]
+kind = "type"
+old = "MasteringStreamingPreviewResult"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_streaming_preview_result"
+
+[[entry]]
+kind = "type"
+old = "MasteringStreamingPreviewPlatform"
+changed = "a frozen dataclass with snake_case attributes instead of a TypedDict"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_streaming_preview_result"
+
+[[entry]]
+kind = "function"
+old = "mastering_audio_profile"
+changed = "returns a MasteringAudioProfile record instead of a JSON string"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile_result"
+
+[[entry]]
+kind = "function"
+old = "mastering_audio_profile_stereo"
+changed = "returns a MasteringAudioProfile record instead of a JSON string"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_audio_profile_result"
+
+[[entry]]
+kind = "function"
+old = "mastering_assistant_suggest"
+changed = "returns a MasteringAssistantResult record instead of a JSON string"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_assistant_result"
+
+[[entry]]
+kind = "function"
+old = "mastering_assistant_suggest_stereo"
+changed = "returns a MasteringAssistantResult record instead of a JSON string"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_assistant_result"
+
+[[entry]]
+kind = "function"
+old = "mastering_streaming_preview"
+changed = "returns a MasteringStreamingPreviewResult record instead of a JSON string"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_streaming_preview_result"
+
+[[entry]]
+kind = "function"
+old = "mastering_streaming_preview_stereo"
+changed = "returns a MasteringStreamingPreviewResult record instead of a JSON string"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_streaming_preview_result"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.bpmConfidence"
+new = "MasteringAssistantProfile.bpm_confidence"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.crestFactorDb"
+new = "MasteringAssistantProfile.crest_factor_db"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.durationSec"
+new = "MasteringAssistantProfile.duration_sec"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.integratedLufs"
+new = "MasteringAssistantProfile.integrated_lufs"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.spectralCentroidHz"
+new = "MasteringAssistantProfile.spectral_centroid_hz"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.spectralFlatness"
+new = "MasteringAssistantProfile.spectral_flatness"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantProfile.sustainRatio"
+new = "MasteringAssistantProfile.sustain_ratio"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.bpmConfidence"
+new = "MasteringAudioProfile.bpm_confidence"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfile.durationSec"
+new = "MasteringAudioProfile.duration_sec"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDynamics.shortTermLufsStd"
+new = "MasteringAudioProfileDynamics.short_term_lufs_std"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileDynamics.sustainRatio"
+new = "MasteringAudioProfileDynamics.sustain_ratio"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileLoudness.crestFactorDb"
+new = "MasteringAudioProfileLoudness.crest_factor_db"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileLoudness.integratedLufs"
+new = "MasteringAudioProfileLoudness.integrated_lufs"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileSpectral.airRmsDb"
+new = "MasteringAudioProfileSpectral.air_rms_db"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileSpectral.centroidHz"
+new = "MasteringAudioProfileSpectral.centroid_hz"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileSpectral.highMidRmsDb"
+new = "MasteringAudioProfileSpectral.high_mid_rms_db"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileSpectral.highRmsDb"
+new = "MasteringAudioProfileSpectral.high_rms_db"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileSpectral.lowMidRmsDb"
+new = "MasteringAudioProfileSpectral.low_mid_rms_db"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileSpectral.lowRmsDb"
+new = "MasteringAudioProfileSpectral.low_rms_db"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileSpectral.midRmsDb"
+new = "MasteringAudioProfileSpectral.mid_rms_db"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileSpectral.rolloffHz"
+new = "MasteringAudioProfileSpectral.rolloff_hz"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAudioProfileSpectral.subRmsDb"
+new = "MasteringAudioProfileSpectral.sub_rms_db"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringStreamingPreviewPlatform.ceilingRisk"
+new = "MasteringStreamingPreviewPlatform.ceiling_risk"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringStreamingPreviewPlatform.integratedLufs"
+new = "MasteringStreamingPreviewPlatform.integrated_lufs"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringStreamingPreviewPlatform.normalizationGainDb"
+new = "MasteringStreamingPreviewPlatform.normalization_gain_db"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "MasteringAssistantResult.chainConfig"
+to = "MasteringAssistantResult.chain_config"
+changed = "the nested MasteringChainConfig (module -> processor -> parameter) instead of the version/params document"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mastering_result_types.py::test_assistant_result"
+
+[[entry]]
+kind = "type"
+old = "MasteringChainConfigDocument"
+removed = "MasteringAssistantResult.chain_config is the nested MasteringChainConfig"
+domain = "mastering"
+rule = "typed-results"
+
+# Mixing assistant suggestion record.
+
+[[entry]]
+kind = "function"
+old = "suggest_mix_scene"
+to = "mixing_assistant_suggest"
+changed = "renamed to the C/JS name and returns a MixAssistantResult record (scene document, MixAssistantTrackProfile per track, MixAssistantMixProfile) instead of a dict; an absent name, exclusion reason or loudness is None"
+domain = "mastering"
+rule = "typed-results"
+test = "bindings/python/tests/test_mixing_assistant.py::test_a_track_profile_reports_absent_facts_as_none"
+
+[[entry]]
+kind = "function"
+old = "suggest_mix_scene_json"
+removed = "read mixing_assistant_suggest(...).scene, the same scene document"
+domain = "mastering"
+rule = "typed-results"
+
+[[entry]]
+kind = "function"
+old = "mix_source_class_names"
+to = "mixing_assistant_source_class_names"
+changed = "renamed to the C/JS name"
+domain = "mastering"
+rule = "aliases-removed"
+test = "bindings/python/tests/test_mixing_assistant.py::test_source_class_names_resolve_to_their_index"
+
+[[entry]]
+kind = "option"
+old = "suggest_mix_scene(tempo_bpm)"
+to = "mixing_assistant_suggest(tempo_bpm)"
+changed = "None selects the transport fallback tempo; 0 and negatives raise SonareValueError (0 was the fallback sentinel)"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_mixing_assistant.py::test_a_non_positive_tempo_is_refused"

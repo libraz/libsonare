@@ -1,134 +1,82 @@
-"""Shapes of the JSON documents the explainable-mastering helpers return.
+"""Result records of the explainable-mastering helpers.
 
-Each helper returns a JSON string; parse it with :func:`json.loads` and treat the
-value as the matching ``TypedDict`` here. Keys keep the JSON's camelCase spelling.
-A measurement that is not finite (a silent take has no integrated loudness) is
-``None`` where the field says so.
+The audio profile, assistant suggestion and streaming preview come back as
+frozen records with snake_case attributes. A measurement that is not finite (a
+silent take has no integrated loudness) is ``None`` where the field says so.
+The pair and mono-compatibility analyses still return their JSON documents; the
+``TypedDict`` shapes at the end of this module describe them, with the JSON's
+camelCase keys.
 """
 
 from __future__ import annotations
 
-from typing import Any, NotRequired, TypedDict
+from dataclasses import dataclass
+from typing import Any, TypedDict
+
+from ._types_repair import AudioDefects
 
 
-class MasteringAudioProfileLoudness(TypedDict):
-    """Loudness block of :class:`MasteringAudioProfile`."""
+@dataclass(frozen=True, slots=True)
+class MasteringAudioProfileLoudness:
+    """Loudness group of :class:`MasteringAudioProfile`."""
 
-    integratedLufs: float
-    loudnessRangeLu: float
-    truePeakDbtp: float
-    crestFactorDb: float
+    integrated_lufs: float | None
+    """Integrated loudness in LUFS; None for a silent or below-gate take."""
+    loudness_range_lu: float
+    """EBU Tech 3342 loudness range, in LU."""
+    true_peak_dbtp: float
+    """True peak, in dBTP."""
+    crest_factor_db: float
+    """Crest factor (peak over RMS level) in dB."""
 
 
-class MasteringAudioProfileSpectral(TypedDict):
-    """Spectral block of :class:`MasteringAudioProfile`.
+@dataclass(frozen=True, slots=True)
+class MasteringAudioProfileSpectral:
+    """Spectral group of :class:`MasteringAudioProfile`.
 
-    The ``*RmsDb`` band levels are dBFS on the mean-square convention: a
-    full-scale sine reads -3.01 dBFS in its band.
+    Band levels (``*_rms_db``) are dBFS, mean square: a full-scale sine reads
+    -3.01 dBFS in its band.
     """
 
-    subRmsDb: float
-    lowRmsDb: float
-    lowMidRmsDb: float
-    midRmsDb: float
-    highMidRmsDb: float
-    highRmsDb: float
-    airRmsDb: float
-    centroidHz: float
+    sub_rms_db: float
+    low_rms_db: float
+    low_mid_rms_db: float
+    mid_rms_db: float
+    high_mid_rms_db: float
+    high_rms_db: float
+    air_rms_db: float
+    centroid_hz: float
     flatness: float
-    rolloffHz: float
+    rolloff_hz: float
 
 
-class MasteringAudioProfileDynamics(TypedDict):
-    """Dynamics block of :class:`MasteringAudioProfile`."""
+@dataclass(frozen=True, slots=True)
+class MasteringAudioProfileDynamics:
+    """Dynamics group of :class:`MasteringAudioProfile`."""
 
-    shortTermLufsStd: float
-    attackPerSecond: float
-    sustainRatio: float
-
-
-class MasteringAudioProfileClick(TypedDict):
-    """Click detector reading in a :class:`MasteringAudioProfileDefects` record."""
-
-    count: int
-    rejected: int
-    longestRunSamples: int
-    perSecond: float
+    short_term_lufs_std: float
+    """Standard deviation of the short-term loudness, in LU."""
+    attack_per_second: float
+    """Onsets per second of the input."""
+    sustain_ratio: float
 
 
-class MasteringAudioProfileClip(TypedDict):
-    """Clip detector reading in a :class:`MasteringAudioProfileDefects` record."""
+@dataclass(frozen=True, slots=True)
+class MasteringAudioProfile:
+    """What :func:`mastering_audio_profile` and its stereo form return.
 
-    clippedSamples: int
-    clippedRatio: float
-    runCount: int
-    longestRunSamples: int
-    flatRunCount: int
-    longestFlatRunSamples: int
-    flatSampleCount: int
-    flatLevel: float
-
-
-class MasteringAudioProfileCrackle(TypedDict):
-    """Crackle detector reading in a :class:`MasteringAudioProfileDefects` record."""
-
-    sampleCount: int
-    sampleFraction: float
-    perSecond: float
-
-
-class MasteringAudioProfileNoise(TypedDict):
-    """Noise detector reading in a :class:`MasteringAudioProfileDefects` record."""
-
-    floorDbfs: float
-    bandFloorDbfs: list[float]
-
-
-class MasteringAudioProfileHum(TypedDict):
-    """Hum detector reading in a :class:`MasteringAudioProfileDefects` record.
-
-    ``fundamentalProminence`` is a linear energy ratio over the median hum
-    candidate (not dB); 1.0 means no peak.
+    ``defects`` is None unless the detectors ran: ``detectDefects`` was asked
+    for and the input was long enough to measure. The profile never runs the
+    WPE stage, so its reverb reading carries no ``late_predictability``.
     """
 
-    fundamentalHz: float
-    fundamentalProminence: float
-    harmonics: int
-    harmonicDbfs: list[float]
-
-
-class MasteringAudioProfileReverb(TypedDict):
-    """Reverb detector reading; ``latePredictability`` is present only when WPE ran."""
-
-    lateDecayRatioDb: float
-    latePredictability: NotRequired[float]
-
-
-class MasteringAudioProfileDefects(TypedDict):
-    """What the six repair detectors measured, one record per detector."""
-
-    click: MasteringAudioProfileClick
-    clip: MasteringAudioProfileClip
-    crackle: MasteringAudioProfileCrackle
-    noise: MasteringAudioProfileNoise
-    hum: MasteringAudioProfileHum
-    reverb: MasteringAudioProfileReverb
-
-
-class MasteringAudioProfile(TypedDict):
-    """The document :func:`mastering_audio_profile` returns, parsed.
-
-    ``defects`` is present only when the detectors ran: ``detectDefects`` was
-    asked for and the input was long enough to measure.
-    """
-
-    durationSec: float
+    duration_sec: float
     bpm: float
-    bpmConfidence: float
+    bpm_confidence: float
     loudness: MasteringAudioProfileLoudness
     spectral: MasteringAudioProfileSpectral
     dynamics: MasteringAudioProfileDynamics
-    defects: NotRequired[MasteringAudioProfileDefects]
+    defects: AudioDefects | None
 
 
 MasteringChainConfig = dict[str, Any]
@@ -142,40 +90,34 @@ form :func:`libsonare.master_audio` takes as ``overrides`` and
 """
 
 
-class MasteringChainConfigDocument(TypedDict):
-    """A chain document: a version and flat ``"module.param": value`` params.
-
-    ``params`` keys depend on the suggested stages, so they are not enumerated; a
-    version 2 document carries the multiband stage as an object under
-    ``dynamics.multibandComp``.
-    """
-
-    version: int
-    params: dict[str, Any]
-
-
-class MasteringAssistantProfile(TypedDict):
+@dataclass(frozen=True, slots=True)
+class MasteringAssistantProfile:
     """Measurements the assistant summarises its suggestion from (flat)."""
 
-    durationSec: float
+    duration_sec: float
     bpm: float
-    bpmConfidence: float
-    integratedLufs: float | None
-    loudnessRangeLu: float
-    truePeakDbtp: float
-    crestFactorDb: float
-    spectralCentroidHz: float
-    spectralFlatness: float
-    attackPerSecond: float
-    sustainRatio: float
+    bpm_confidence: float
+    integrated_lufs: float | None
+    """Integrated loudness in LUFS; None for a silent or below-gate take."""
+    loudness_range_lu: float
+    true_peak_dbtp: float
+    crest_factor_db: float
+    spectral_centroid_hz: float
+    spectral_flatness: float
+    attack_per_second: float
+    sustain_ratio: float
 
 
-class MasteringAssistantResult(TypedDict):
-    """The document :func:`mastering_assistant_suggest` returns, parsed."""
+@dataclass(frozen=True, slots=True)
+class MasteringAssistantResult:
+    """What :func:`mastering_assistant_suggest` and its stereo form return."""
 
-    chainConfig: MasteringChainConfigDocument
+    chain_config: MasteringChainConfig
+    """The suggested chain; pass it as ``overrides`` to :func:`master_audio` unchanged."""
     explanation: list[str]
+    """One line per decision the assistant made, in the order it made them."""
     profile: MasteringAssistantProfile
+    """Measurements the suggestion was derived from."""
 
 
 class StreamingPlatform(TypedDict):
@@ -189,18 +131,24 @@ class StreamingPlatform(TypedDict):
     """True-peak ceiling in dBTP, e.g. -1."""
 
 
-class MasteringStreamingPreviewPlatform(TypedDict):
+@dataclass(frozen=True, slots=True)
+class MasteringStreamingPreviewPlatform:
     """One delivery target in a :class:`MasteringStreamingPreviewResult`."""
 
     name: str
-    integratedLufs: float | None
-    truePeakDbtp: float
-    normalizationGainDb: float
-    ceilingRisk: bool
+    """Platform name, echoed from the requested target."""
+    integrated_lufs: float | None
+    """None for a silent or below-gate take."""
+    true_peak_dbtp: float
+    normalization_gain_db: float
+    """Gain that lands the take on the platform's target; 0 when the loudness is None."""
+    ceiling_risk: bool
+    """True when that gain would push the true peak above the platform's ceiling."""
 
 
-class MasteringStreamingPreviewResult(TypedDict):
-    """The document :func:`mastering_streaming_preview` returns, parsed."""
+@dataclass(frozen=True, slots=True)
+class MasteringStreamingPreviewResult:
+    """What :func:`mastering_streaming_preview` and its stereo form return."""
 
     platforms: list[MasteringStreamingPreviewPlatform]
 

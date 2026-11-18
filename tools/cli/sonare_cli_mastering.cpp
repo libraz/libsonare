@@ -9,8 +9,6 @@
 #include "mastering/api/insert_factory.h"
 #include "mastering/assistant/config_from_params.h"
 
-namespace {
-
 /// Rewrite one camelCase JSON key as snake_case ("gainToMatchDb" ->
 /// "gain_to_match_db"). The analysis keys carry no acronym runs, so a plain
 /// "uppercase starts a new word" rule is exact for them.
@@ -48,6 +46,8 @@ sonare::util::json::Value json_keys_to_snake_case(const sonare::util::json::Valu
   }
   return value;
 }
+
+namespace {
 
 /// The mastering analyses are core APIs, and every core JSON producer keys its
 /// output in camelCase to match the Node / WASM object surfaces. CLI stdout is

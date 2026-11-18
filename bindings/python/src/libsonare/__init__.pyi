@@ -830,10 +830,13 @@ from .engine import ClipPageProvider as ClipPageProvider
 from .engine import FileClipPageProvider as FileClipPageProvider
 from .engine import RealtimeEngine as RealtimeEngine
 from .mixing_assistant import MixTrackInput as MixTrackInput
-from .mixing_assistant import mix_source_class_from_name as mix_source_class_from_name
-from .mixing_assistant import mix_source_class_names as mix_source_class_names
-from .mixing_assistant import suggest_mix_scene as suggest_mix_scene
-from .mixing_assistant import suggest_mix_scene_json as suggest_mix_scene_json
+from .mixing_assistant import (
+    mixing_assistant_source_class_from_name as mixing_assistant_source_class_from_name,
+)
+from .mixing_assistant import (
+    mixing_assistant_source_class_names as mixing_assistant_source_class_names,
+)
+from .mixing_assistant import mixing_assistant_suggest as mixing_assistant_suggest
 from .streaming import StreamAnalyzer as StreamAnalyzer
 from .types import CHORD_QUALITIES as CHORD_QUALITIES
 from .types import (
@@ -1090,40 +1093,16 @@ from .types import (
     MasteringAudioProfile as MasteringAudioProfile,
 )
 from .types import (
-    MasteringAudioProfileClick as MasteringAudioProfileClick,
-)
-from .types import (
-    MasteringAudioProfileClip as MasteringAudioProfileClip,
-)
-from .types import (
-    MasteringAudioProfileCrackle as MasteringAudioProfileCrackle,
-)
-from .types import (
-    MasteringAudioProfileDefects as MasteringAudioProfileDefects,
-)
-from .types import (
     MasteringAudioProfileDynamics as MasteringAudioProfileDynamics,
 )
 from .types import (
-    MasteringAudioProfileHum as MasteringAudioProfileHum,
-)
-from .types import (
     MasteringAudioProfileLoudness as MasteringAudioProfileLoudness,
-)
-from .types import (
-    MasteringAudioProfileNoise as MasteringAudioProfileNoise,
-)
-from .types import (
-    MasteringAudioProfileReverb as MasteringAudioProfileReverb,
 )
 from .types import (
     MasteringAudioProfileSpectral as MasteringAudioProfileSpectral,
 )
 from .types import (
     MasteringChainConfig as MasteringChainConfig,
-)
-from .types import (
-    MasteringChainConfigDocument as MasteringChainConfigDocument,
 )
 from .types import (
     MasteringChainResult as MasteringChainResult,
@@ -1206,12 +1185,21 @@ from .types import (
 from .types import (
     MfccResult as MfccResult,
 )
+from .types import MixAnalysisBand as MixAnalysisBand
+from .types import MixAssistantMixProfile as MixAssistantMixProfile
+from .types import MixAssistantResult as MixAssistantResult
+from .types import MixAssistantTrackProfile as MixAssistantTrackProfile
+from .types import MixBandDominance as MixBandDominance
+from .types import MixCrowdedBand as MixCrowdedBand
 from .types import (
     MixMeterSnapshot as MixMeterSnapshot,
 )
+from .types import MixMonoRisk as MixMonoRisk
 from .types import (
     MixResult as MixResult,
 )
+from .types import MixSourceClass as MixSourceClass
+from .types import MixTrackAlignment as MixTrackAlignment
 from .types import (
     NoiseDetection as NoiseDetection,
 )

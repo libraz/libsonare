@@ -333,6 +333,7 @@ _NOT_SCANNED: tuple[tuple[str, tuple[str, ...]], ...] = (
             "_types_enums.py",
             "_types_mastering.py",
             "_types_mastering_results.py",
+            "_types_mixing_assistant.py",
             "_types_repair.py",
             "_types_engine.py",
             "_types_streaming.py",
@@ -345,6 +346,10 @@ _NOT_SCANNED: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "internal helpers: process-local plumbing with no C counterpart",
         ("_runtime.py", "_cancellation.py", "_facade.py", "_errors.py", "_narrowing.py"),
+    ),
+    (
+        "result-record plumbing: private wire parsers and the CLI JSON view, no public signatures",
+        ("_result_records.py",),
     ),
 )
 

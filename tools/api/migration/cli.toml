@@ -196,3 +196,11 @@ changed = "omit the flag for the natural length; an explicit 0 is refused as a u
 domain = "effects"
 rule = "seconds-suffix"
 test = "tests/conformance/cli_contract_v2.json::max_sec_zero_refused"
+
+[[entry]]
+kind = "command"
+old = "suggest-mix"
+changed = "the JSON keys tracks, mix and the keys beside scene in snake_case (strip_id, num_channels, integrated_lufs, band_dominance, track_count ...), as mastering-suggest does; scene keeps the scene schema's names because mix --scene reads it back, band tokens keying band_occupancy stay tokens, and a track's name, exclusion_reason or integrated_lufs is absent rather than null when not measured"
+domain = "mastering"
+rule = "snake-case-only"
+test = "tests/cli/cli_mastering_test.cpp::CLI suggest-mix keys its measurements in snake_case and keeps the scene verbatim"

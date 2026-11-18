@@ -9,6 +9,7 @@ from typing import Any
 
 import numpy as np
 
+from ._effects_repair_session import _audio_defects_from_wire
 from ._errors import _not_supported
 from ._ffi import (
     SonareLoudnessMatch,
@@ -23,6 +24,7 @@ from ._mastering_offline import (
     _nest_chain_config,
 )
 from ._narrowing import _narrow_double
+from ._result_records import _record
 from ._runtime import (
     SonareValueError,
     _check,
@@ -39,9 +41,17 @@ from ._runtime import (
 )
 from .types import (
     LoudnessMatch,
+    MasteringAssistantProfile,
+    MasteringAssistantResult,
+    MasteringAudioProfile,
+    MasteringAudioProfileDynamics,
+    MasteringAudioProfileLoudness,
+    MasteringAudioProfileSpectral,
     MasteringChainConfig,
     MasteringResult,
     MasteringStereoResult,
+    MasteringStreamingPreviewPlatform,
+    MasteringStreamingPreviewResult,
     StreamingPlatform,
 )
 
@@ -491,17 +501,62 @@ def _streaming_platforms(
     return platform_array, len(fields), platform_buffers
 
 
+def _take_json(lib: Any, json_ptr: ctypes.c_char_p) -> Any:
+    """Parse and free a native JSON result string."""
+    try:
+        return json.loads(ctypes.string_at(json_ptr).decode("utf-8")) if json_ptr.value else {}
+    finally:
+        if json_ptr.value:
+            lib.sonare_free_string(json_ptr)
+
+
+def _streaming_preview_from_wire(wire: Mapping[str, Any]) -> MasteringStreamingPreviewResult:
+    return MasteringStreamingPreviewResult(
+        platforms=[
+            MasteringStreamingPreviewPlatform(
+                name=str(platform["name"]),
+                integrated_lufs=(
+                    None
+                    if platform["integratedLufs"] is None
+                    else float(platform["integratedLufs"])
+                ),
+                true_peak_dbtp=float(platform["truePeakDbtp"]),
+                normalization_gain_db=float(platform["normalizationGainDb"]),
+                ceiling_risk=bool(platform["ceilingRisk"]),
+            )
+            for platform in wire["platforms"]
+        ]
+    )
+
+
+def _assistant_result_from_wire(wire: Mapping[str, Any]) -> MasteringAssistantResult:
+    return MasteringAssistantResult(
+        chain_config=_chain_config_from_params(wire["chainConfig"].get("params")),
+        explanation=[str(line) for line in wire["explanation"]],
+        profile=_record(MasteringAssistantProfile, wire["profile"]),
+    )
+
+
+def _audio_profile_from_wire(wire: Mapping[str, Any]) -> MasteringAudioProfile:
+    defects = wire.get("defects")
+    return MasteringAudioProfile(
+        duration_sec=float(wire["durationSec"]),
+        bpm=float(wire["bpm"]),
+        bpm_confidence=float(wire["bpmConfidence"]),
+        loudness=_record(MasteringAudioProfileLoudness, wire["loudness"]),
+        spectral=_record(MasteringAudioProfileSpectral, wire["spectral"]),
+        dynamics=_record(MasteringAudioProfileDynamics, wire["dynamics"]),
+        defects=None if defects is None else _audio_defects_from_wire(defects),
+    )
+
+
 @_guard_buffer("samples")
 def mastering_streaming_preview(
     samples: Sequence[float] | list[float],
     sample_rate: int,
     platforms: Sequence[StreamingPlatform] | None = None,
-) -> str:
-    """Preview streaming-platform normalization and ceiling risk as shared JSON.
-
-    Parse the result with :func:`json.loads`; it has the shape of
-    :class:`MasteringStreamingPreviewResult`.
-    """
+) -> MasteringStreamingPreviewResult:
+    """Preview streaming-platform normalization and ceiling risk."""
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_streaming_preview"):
         raise _not_supported("libsonare was built without mastering streaming preview support")
@@ -518,11 +573,7 @@ def mastering_streaming_preview(
         ctypes.byref(json_ptr),
     )
     _check(rc)
-    try:
-        return ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""
-    finally:
-        if json_ptr.value:
-            lib.sonare_free_string(json_ptr)
+    return _streaming_preview_from_wire(_take_json(lib, json_ptr))
 
 
 @_guard_buffer("samples")
@@ -530,16 +581,14 @@ def mastering_assistant_suggest(
     samples: Sequence[float] | list[float],
     sample_rate: int,
     params: dict[str, float | int | bool | str] | None = None,
-) -> str:
-    """Analyze audio and suggest a mastering chain as shared JSON.
+) -> MasteringAssistantResult:
+    """Analyze audio and suggest a mastering chain with the reasoning behind it.
 
     ``params`` accepts ``targetPlatform`` as a delivery-target name (see
     :func:`mastering_platform_names`) and ``preset`` as the mastering preset the
     suggestion starts from (default ``"streaming"``; restoration presets are
-    refused); every other key is numeric.
-
-    Parse the result with :func:`json.loads`; it has the shape of
-    :class:`MasteringAssistantResult`.
+    refused); every other key is numeric. ``chain_config`` is the nested form
+    :func:`mastering_assistant_suggest_chain` returns.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_assistant_suggest"):
@@ -556,14 +605,10 @@ def mastering_assistant_suggest(
         ctypes.byref(json_ptr),
     )
     _check(rc)
-    try:
-        return ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""
-    finally:
-        if json_ptr.value:
-            lib.sonare_free_string(json_ptr)
+    return _assistant_result_from_wire(_take_json(lib, json_ptr))
 
 
-def _chain_config_from_document(json_text: str) -> MasteringChainConfig:
+def _chain_config_from_params(raw: Any) -> MasteringChainConfig:
     """Nest a ``{"version": ..., "params": {...}}`` chain document's params.
 
     The result is the nested chain config :func:`master_audio` takes as
@@ -572,7 +617,6 @@ def _chain_config_from_document(json_text: str) -> MasteringChainConfig:
     rather than dropped, and an absent or empty ``params`` block is refused: an
     empty overrides mapping applies the preset unchanged.
     """
-    raw: Any = json.loads(json_text).get("params")
     if not raw:
         raise SonareValueError("chain config carries no params block")
     config = _nest_chain_config(raw)
@@ -580,6 +624,11 @@ def _chain_config_from_document(json_text: str) -> MasteringChainConfig:
         if not isinstance(value, (int, float, bool)):
             raise SonareValueError(f"chain config param {path!r} is not a scalar value")
     return config
+
+
+def _chain_config_from_document(json_text: str) -> MasteringChainConfig:
+    """Nest the params of a ``{"version": ..., "params": {...}}`` chain document."""
+    return _chain_config_from_params(json.loads(json_text).get("params"))
 
 
 @_guard_buffer("samples")
@@ -621,11 +670,8 @@ def mastering_audio_profile(
     samples: Sequence[float] | list[float],
     sample_rate: int,
     params: dict[str, float | int | bool] | None = None,
-) -> str:
-    """Analyze audio and return the mastering assistant profile as shared JSON.
-
-    Parse the result with :func:`json.loads`; it has the shape of
-    :class:`MasteringAudioProfile`.
+) -> MasteringAudioProfile:
+    """Analyze audio and return the mastering assistant profile.
 
     The ``nFft`` and ``hopLength`` params are the window length and hop in
     samples at 48000 Hz, rescaled to the input sample rate.
@@ -645,11 +691,7 @@ def mastering_audio_profile(
         ctypes.byref(json_ptr),
     )
     _check(rc)
-    try:
-        return ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""
-    finally:
-        if json_ptr.value:
-            lib.sonare_free_string(json_ptr)
+    return _audio_profile_from_wire(_take_json(lib, json_ptr))
 
 
 def _stereo_channels(
@@ -700,10 +742,8 @@ def mastering_streaming_preview_stereo(
     right: Sequence[float] | list[float],
     sample_rate: int,
     platforms: Sequence[StreamingPlatform] | None = None,
-) -> str:
-    """Preview streaming normalization for a stereo pair as shared JSON.
-
-    Parse the result as :class:`MasteringStreamingPreviewResult`.
+) -> MasteringStreamingPreviewResult:
+    """Preview streaming normalization for a stereo pair.
 
     Measures the integrated loudness with BS.1770 channel summing and reports
     the larger of the two channel true peaks. Passing a ``0.5 * (left + right)``
@@ -712,7 +752,7 @@ def mastering_streaming_preview_stereo(
     ceiling-risk flag follow from that measurement.
     """
     platform_array, platform_count, _buffers = _streaming_platforms(platforms)
-    return _stereo_analysis_json(
+    json_text = _stereo_analysis_json(
         "sonare_mastering_streaming_preview_stereo",
         "libsonare was built without mastering streaming preview support",
         left,
@@ -721,6 +761,7 @@ def mastering_streaming_preview_stereo(
         platform_array,
         platform_count,
     )
+    return _streaming_preview_from_wire(json.loads(json_text))
 
 
 @_guard_buffer("left", "right")
@@ -729,10 +770,8 @@ def mastering_assistant_suggest_stereo(
     right: Sequence[float] | list[float],
     sample_rate: int,
     params: dict[str, float | int | bool | str] | None = None,
-) -> str:
-    """Suggest a mastering chain for a stereo pair as shared JSON.
-
-    Parse the result as :class:`MasteringAssistantResult`.
+) -> MasteringAssistantResult:
+    """Suggest a mastering chain for a stereo pair.
 
     Profiles through :func:`mastering_audio_profile_stereo`, so the loudness
     stage of the suggestion is built on the channel-summed program. ``params``
@@ -740,7 +779,7 @@ def mastering_assistant_suggest_stereo(
     :func:`mastering_assistant_suggest` does.
     """
     param_array, param_count = _assistant_params(params)
-    return _stereo_analysis_json(
+    json_text = _stereo_analysis_json(
         "sonare_mastering_assistant_suggest_stereo",
         "libsonare was built without mastering assistant support",
         left,
@@ -749,6 +788,7 @@ def mastering_assistant_suggest_stereo(
         param_array,
         param_count,
     )
+    return _assistant_result_from_wire(json.loads(json_text))
 
 
 @_guard_buffer("left", "right")
@@ -808,12 +848,10 @@ def mastering_audio_profile_stereo(
     right: Sequence[float] | list[float],
     sample_rate: int,
     params: dict[str, float | int | bool] | None = None,
-) -> str:
-    """Return the mastering assistant profile of a stereo pair as shared JSON.
+) -> MasteringAudioProfile:
+    """Return the mastering assistant profile of a stereo pair.
 
-    Parse the result as :class:`MasteringAudioProfile`.
-
-    The ``loudness`` block is measured from the two channels; the
+    The ``loudness`` group is measured from the two channels; the
     spectral, dynamics and tempo fields describe shape and timing rather than
     absolute level and are measured on the downmix, which keeps them comparable
     with :func:`mastering_audio_profile`, and its ``nFft`` / ``hopLength``
@@ -822,7 +860,7 @@ def mastering_audio_profile_stereo(
     and their results are aggregated.
     """
     param_array, param_count = _mastering_params(params)
-    return _stereo_analysis_json(
+    json_text = _stereo_analysis_json(
         "sonare_mastering_audio_profile_stereo",
         "libsonare was built without mastering audio profile support",
         left,
@@ -831,3 +869,4 @@ def mastering_audio_profile_stereo(
         param_array,
         param_count,
     )
+    return _audio_profile_from_wire(json.loads(json_text))

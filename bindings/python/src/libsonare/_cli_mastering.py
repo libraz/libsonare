@@ -45,6 +45,7 @@ from ._cli_repair import (
 )
 from ._errors import _unknown_error
 from ._mastering_offline import _chain_config_paths, _nest_chain_config
+from ._result_records import _result_to_json_dict
 
 if TYPE_CHECKING:
     from .analyzer import MasteringPreset, SoloProcessor
@@ -383,16 +384,14 @@ def cmd_mastering(args: argparse.Namespace) -> int:
         suggestion_params = _assistant_params_from_args(args, "")
         # The assistant reads the material to decide the chain, so it is handed
         # the same channels the chain will run over rather than a fold of them.
-        suggestion = json.loads(
+        suggestion = (
             mastering_assistant_suggest_stereo(
                 planes[0], planes[1], sample_rate=sr, params=suggestion_params
             )
             if stereo
             else mastering_assistant_suggest(samples, sample_rate=sr, params=suggestion_params)
         )
-        if not isinstance(suggestion, dict) or not isinstance(suggestion.get("chainConfig"), dict):
-            raise ValueError("mastering assistant returned an invalid chain config")
-        config = _chain_params_config(suggestion["chainConfig"])
+        config = _chain_config_paths(suggestion.chain_config)
         config.update(params)
         # Match the native assistant route: an explicitly supplied shortcut
         # wins over a flat --params override; an omitted shortcut leaves the
@@ -400,12 +399,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
         if _option_supplied(args, "true-peak-oversample"):
             config["loudness.truePeakOversample"] = float(getattr(args, "true_peak_oversample", 4))
         result = _run_chain(config)
-        explanation_value = suggestion.get("explanation", [])
-        if not isinstance(explanation_value, list) or not all(
-            isinstance(item, str) for item in explanation_value
-        ):
-            raise ValueError("mastering assistant returned invalid explanation data")
-        explanation = list(explanation_value)
+        explanation = list(suggestion.explanation)
         mode = "assistant"
     elif report_path or stereo:
         # The standalone loudness facade has no stereo form, so a stereo source
@@ -946,8 +940,8 @@ def cmd_mastering_streaming(args: argparse.Namespace) -> int:
         "list[StreamingPlatform] | None",
         _parse_json_list(args.platforms, args.platforms_file) or None,
     )
-    result_json = mastering_streaming_preview(samples, sample_rate=sr, platforms=platforms)
-    print(_strict_json_dumps(_json_keys_to_snake_case(json.loads(result_json))))
+    result = mastering_streaming_preview(samples, sample_rate=sr, platforms=platforms)
+    print(_strict_json_dumps(_result_to_json_dict(result)))
     return 0
 
 
@@ -964,25 +958,22 @@ def cmd_mastering_suggest(args: argparse.Namespace) -> int:
 
     samples, sr = _load_audio(args.file)
     params = _assistant_params_from_args(args, args.params or "")
-    suggestion = json.loads(mastering_assistant_suggest(samples, sample_rate=sr, params=params))
+    suggestion = mastering_assistant_suggest(samples, sample_rate=sr, params=params)
     # The suggested chain is fed back to the library verbatim
     # (`mastering --chain-config`), so the names under it belong to the chain
     # param schema rather than to CLI stdout, and re-keying them would make the
     # document the library rejects. Everything beside it is measurement output
     # and follows the snake_case rule.
-    chain_config = suggestion.pop("chainConfig", None)
+    chain_config = {"version": 1, "params": _chain_config_paths(suggestion.chain_config)}
     config_out = getattr(args, "config_out", "") or ""
     if config_out:
-        if not isinstance(chain_config, dict):
-            raise ValueError("mastering assistant returned no chain config to write")
         # Written from the document already in hand rather than through the
         # chain-only entry point, which would re-measure the file to reach the
         # same config, and written through the shared artifact writer so a failed
         # write carries the class every other CLI artifact's does.
         _atomic_write_bytes(config_out, (_strict_json_dumps(chain_config) + "\n").encode("utf-8"))
-    payload = _json_keys_to_snake_case(suggestion)
-    if chain_config is not None:
-        payload["chain_config"] = chain_config
+    payload = _result_to_json_dict(suggestion)
+    payload["chain_config"] = chain_config
     print(_strict_json_dumps(payload))
     return 0
 
@@ -992,8 +983,8 @@ def cmd_mastering_profile(args: argparse.Namespace) -> int:
 
     samples, sr = _load_audio(args.file)
     params = _parse_kv_params(args.params) if args.params else {}
-    result_json = mastering_audio_profile(samples, sample_rate=sr, params=params)
-    print(_strict_json_dumps(_json_keys_to_snake_case(json.loads(result_json))))
+    result = mastering_audio_profile(samples, sample_rate=sr, params=params)
+    print(_strict_json_dumps(_result_to_json_dict(result)))
     return 0
 
 

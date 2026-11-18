@@ -216,17 +216,46 @@ double resolve_assistant_tempo(const std::string& raw, const std::string& first_
   return bpm;
 }
 
+// The assistant's document re-keyed for stdout, as `mastering-suggest` does with
+// its chain: `scene` is fed back to `mix --scene` verbatim, so the names under it
+// belong to the scene schema; everything beside it is measurement output and
+// follows the snake_case rule. A band token keying `band_occupancy` stays the
+// token it is wherever else it appears as a value. A track field the core writes
+// as null or, for `name` / `exclusionReason`, as an empty string was not
+// measured or does not apply, so it is omitted.
+std::string mix_suggestion_json_for_cli(const std::string& core_json) {
+  namespace json = sonare::util::json;
+  const json::Value document = json::parse(core_json);
+  json::Object out;
+  for (const auto& [key, child] : document.as_object()) {
+    if (key == "scene") {
+      out.emplace(key, child);
+    } else if (key == "tracks") {
+      json::Array tracks;
+      for (const auto& track : child.as_array()) {
+        json::Object row;
+        for (const auto& [field, value] : track.as_object()) {
+          const bool empty_text = (field == "name" || field == "exclusionReason") &&
+                                  value.is_string() && value.as_string().empty();
+          if (value.is_null() || empty_text) continue;
+          row.emplace(json_key_to_snake_case(field),
+                      field == "bandOccupancy" ? value : json_keys_to_snake_case(value));
+        }
+        tracks.emplace_back(json::Value(std::move(row)));
+      }
+      out.emplace(key, json::Value(std::move(tracks)));
+    } else {
+      out.emplace(json_key_to_snake_case(key), json_keys_to_snake_case(child));
+    }
+  }
+  return json::dump(json::Value(std::move(out)));
+}
+
 }  // namespace
 
 // `suggest-mix --input [ID=]a.wav --input [ID=]b.wav` -- measure a set of tracks
 // and print the suggested mixer scene, its per-track profiles and the written
 // reason for every decision.
-//
-// The document is printed exactly as the core produced it, in camelCase, unlike
-// every neighbouring command in this file: `scene` is fed straight back to the
-// mixer through `mix --scene`, so the names under it belong to the scene schema
-// that will read them rather than to this CLI's snake_case stdout convention,
-// and re-keying the rest would split one document across two conventions.
 int cmd_suggest_mix(const CliArgs& args, const Audio&) {
   const std::vector<std::string> entries = args.get_string_list("input");
   if (entries.empty()) {
@@ -289,7 +318,8 @@ int cmd_suggest_mix(const CliArgs& args, const Audio&) {
       throw SonareException(ErrorCode::EncodeFailed, "cannot write scene: " + scene_out);
     }
   }
-  std::cout << mixing::assistant::mix_assistant_result_to_json(result) << "\n";
+  std::cout << mix_suggestion_json_for_cli(mixing::assistant::mix_assistant_result_to_json(result))
+            << "\n";
   return 0;
 }
 #endif

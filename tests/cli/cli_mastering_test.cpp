@@ -2,6 +2,7 @@
 /// @brief Tests for the sonare CLI mastering, repair and mixing commands.
 
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <iterator>
 
 #include "cli/cli_test_helpers.h"
 
@@ -1255,6 +1256,36 @@ TEST_CASE("CLI suggest-mix tempo auto measures what the bpm command measures", "
   REQUIRE(explicit_tempo.exit_code == 0);
   CHECK(automatic.out == explicit_tempo.out);
   std::remove(input.c_str());
+}
+#endif
+
+#if defined(SONARE_WITH_MIXING_ASSISTANT)
+TEST_CASE("CLI suggest-mix keys its measurements in snake_case and keeps the scene verbatim",
+          "[cli][mixing]") {
+  create_test_wav(TEST_WAV);
+  const std::string scene_path = unique_temp_path("_suggest_scene.json");
+  const auto run = exec_command_split(CLI + " suggest-mix --input lead=" + TEST_WAV +
+                                      " --scene-out " + scene_path + " --json -q");
+  INFO(run.err);
+  REQUIRE(run.exit_code == 0);
+  const auto payload = sonare::util::json::parse_strict(run.out);
+  const auto& track = payload["tracks"].as_array().at(0);
+  CHECK(track["strip_id"].as_string() == "lead");
+  CHECK_FALSE(track.as_object().count("stripId"));
+  // A usable track has no exclusion reason, so the key is absent rather than "".
+  REQUIRE(track["usable"].as_bool());
+  CHECK_FALSE(track.as_object().count("exclusion_reason"));
+  // A band token keys the occupancy object as it names a band everywhere else.
+  CHECK(track["band_occupancy"].as_object().count("lowMid") == 1);
+  CHECK(payload.as_object().count("mix") == 1);
+  CHECK(payload["mix"].as_object().count("track_count") == 1);
+  // The scene is what `mix --scene` reads back, so stdout carries it exactly as written.
+  std::ifstream scene_file(scene_path);
+  const std::string written((std::istreambuf_iterator<char>(scene_file)),
+                            std::istreambuf_iterator<char>());
+  CHECK(sonare::util::json::dump(payload["scene"]) ==
+        sonare::util::json::dump(sonare::util::json::parse_strict(written)));
+  std::remove(scene_path.c_str());
 }
 #endif
 

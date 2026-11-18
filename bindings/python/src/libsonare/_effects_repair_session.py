@@ -6,7 +6,6 @@ import ctypes
 import dataclasses
 import json
 import math
-import re
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, cast
 
@@ -20,6 +19,7 @@ from ._cancellation import (
 )
 from ._effects_repair_common import _linked_channel_planes, _linked_output_planes
 from ._ffi import SonareMasteringProgressCallback
+from ._result_records import _camel, _fields, _snake
 from ._runtime import (
     _check,
     _get_lib,
@@ -73,19 +73,6 @@ _STAGE_TYPES: dict[str, type[RepairStage]] = {
     "denoise": DenoiseStage,
     "dereverb": DereverbStage,
 }
-
-
-def _snake(name: str) -> str:
-    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
-
-
-def _camel(name: str) -> str:
-    head, *rest = name.split("_")
-    return head + "".join(part.capitalize() for part in rest)
-
-
-def _fields(values: Mapping[str, Any]) -> dict[str, Any]:
-    return {_snake(key): value for key, value in values.items()}
 
 
 def _detection(detection_type: type, values: Mapping[str, Any]) -> Any:
