@@ -7514,3 +7514,36 @@ changed = "num_channels, num_samples and page_frames are keyword-only"
 domain = "project"
 rule = "construction"
 test = "bindings/python/tests/test_engine_clips.py::test_clip_page_provider_takes_its_shape_by_keyword"
+
+# An unpitched vocal note states its absence in the pitch fields themselves.
+
+[[entry]]
+kind = "field"
+old = "VocalNote.has_pitch"
+removed = "the pitch fields are None on an unpitched note"
+domain = "project"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "VocalNote.median_hz"
+changed = "None on an unpitched note (was 0.0)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_vocal_edit.py::test_a_note_carries_its_pitch_fields_only_when_pitch_was_measured"
+
+[[entry]]
+kind = "field"
+old = "VocalNote.center_midi"
+changed = "None on an unpitched note (was 0.0)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_vocal_edit.py::test_a_note_carries_its_pitch_fields_only_when_pitch_was_measured"
+
+[[entry]]
+kind = "field"
+old = "VocalNote.f0_stability"
+changed = "None on an unpitched note (was 0.0)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_vocal_edit.py::test_a_note_carries_its_pitch_fields_only_when_pitch_was_measured"

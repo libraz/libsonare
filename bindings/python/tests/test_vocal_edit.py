@@ -495,3 +495,17 @@ def test_vocal_abi_version_mismatch_is_refused_when_configuring_signatures() -> 
     lib.sonare_vocal_edit_abi_version.return_value = SONARE_VOCAL_EDIT_ABI_VERSION + 1
     with raises_coded(ErrorCode.ABI_MISMATCH, match="ABI mismatch"):
         configure_vocal_signatures(lib)
+
+
+@pytest.mark.parametrize("pitched", [True, False])
+def test_a_note_carries_its_pitch_fields_only_when_pitch_was_measured(pitched: bool) -> None:
+    from libsonare._ffi_types_vocal import SonareVocalNote
+    from libsonare._vocal_edit_marshal import _note_from_c
+
+    raw = SonareVocalNote()
+    raw.has_pitch = 1 if pitched else 0
+    raw.median_hz, raw.center_midi, raw.f0_stability = 440.0, 69.0, 0.9
+    note = _note_from_c(raw)
+    assert not hasattr(note, "has_pitch")
+    expected = (440.0, 69.0, 0.9) if pitched else (None, None, None)
+    assert (note.median_hz, note.center_midi, note.f0_stability) == expected

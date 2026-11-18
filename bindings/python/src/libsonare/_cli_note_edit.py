@@ -507,10 +507,10 @@ def cmd_vocal_notes(args: argparse.Namespace) -> int:
             "end_sec": note.source_end_sample / sr,
             "analysis_frame_start": note.analysis_frame_start,
             "analysis_frame_end": note.analysis_frame_end,
-            "has_pitch": note.has_pitch,
+            "has_pitch": note.center_midi is not None,
         }
         # An unpitched note has no pitch to report, so its pitch keys are omitted.
-        if note.has_pitch:
+        if note.center_midi is not None:
             name, cents = _nearest_note(note.center_midi)
             row.update(
                 median_hz=note.median_hz,

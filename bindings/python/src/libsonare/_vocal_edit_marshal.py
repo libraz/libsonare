@@ -598,16 +598,16 @@ def _note_edit_from_c(raw: SonareVocalNoteEdit) -> VocalNoteEdit:
 
 def _note_from_c(raw: SonareVocalNote) -> VocalNote:
     amplitude = _copy_pointer(raw.amplitude, int(raw.amplitude_count), np.dtype(np.float32))
+    pitched = bool(raw.has_pitch)
     return VocalNote(
         id=int(raw.id),
         source_start_sample=int(raw.source_start_sample),
         source_end_sample=int(raw.source_end_sample),
         analysis_frame_start=int(raw.analysis_frame_start),
         analysis_frame_end=int(raw.analysis_frame_end),
-        has_pitch=bool(raw.has_pitch),
-        median_hz=float(raw.median_hz),
-        center_midi=float(raw.center_midi),
-        f0_stability=float(raw.f0_stability),
+        median_hz=float(raw.median_hz) if pitched else None,
+        center_midi=float(raw.center_midi) if pitched else None,
+        f0_stability=float(raw.f0_stability) if pitched else None,
         amplitude=amplitude,
         edit=_note_edit_from_c(raw.edit),
     )

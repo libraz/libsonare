@@ -63,10 +63,9 @@ def _vocal_note(*, pitched: bool) -> SimpleNamespace:
         source_end_sample=100,
         analysis_frame_start=0,
         analysis_frame_end=2,
-        has_pitch=pitched,
-        median_hz=440.0 if pitched else 0.0,
-        center_midi=69.0 if pitched else 0.0,
-        f0_stability=0.9 if pitched else 0.0,
+        median_hz=440.0 if pitched else None,
+        center_midi=69.0 if pitched else None,
+        f0_stability=0.9 if pitched else None,
         amplitude=[0.5],
     )
 

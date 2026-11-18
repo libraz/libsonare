@@ -89,10 +89,10 @@ class VocalNote:
     source_end_sample: int
     analysis_frame_start: int
     analysis_frame_end: int
-    has_pitch: bool
-    median_hz: float
-    center_midi: float
-    f0_stability: float
+    # The three pitch fields are None on a note no pitch was measured on.
+    median_hz: float | None
+    center_midi: float | None
+    f0_stability: float | None
     amplitude: FloatArray
     edit: VocalNoteEdit
 
