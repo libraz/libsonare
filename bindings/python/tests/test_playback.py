@@ -7,6 +7,7 @@ handling, numpy marshalling, context-manager lifetime), not the DSP itself.
 
 from __future__ import annotations
 
+import json
 import math
 
 import numpy as np
@@ -171,9 +172,16 @@ def test_config_roundtrip_and_prepare_key_rejection() -> None:
             renderer.set_config({})
 
 
-def test_set_config_accepts_a_json_string() -> None:
+def test_the_config_document_is_a_mapping_never_json_text() -> None:
+    text = '{"target": {"kind": "speakers", "layout": "5.1"}}'
+    with pytest.raises(TypeError, match="json.loads"):
+        PlaybackRenderer(text, max_block_size=BLOCK, sample_rate=48000)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="json.loads"):
+        render_playback([0.0] * 6, num_channels=6, sample_rate=48000, config=text)  # type: ignore[arg-type]
     with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK, sample_rate=48000) as renderer:
-        renderer.set_config('{"target": {"kind": "speakers", "layout": "5.1"}}')
+        with pytest.raises(TypeError, match="json.loads"):
+            renderer.set_config(text)  # type: ignore[arg-type]
+        renderer.set_config(json.loads(text))
 
 
 @pytest.mark.parametrize(

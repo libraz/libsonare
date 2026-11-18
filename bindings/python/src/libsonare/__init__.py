@@ -10,6 +10,7 @@ from ._playback import (
     HrtfSet,
     PlaybackLoudnessMeter,
     PlaybackRenderer,
+    PlaybackRendererConfig,
     render_playback,
 )
 from ._project import (
@@ -939,6 +940,7 @@ __all__ = [
     "HrtfSet",
     "PlaybackLoudnessMeter",
     "PlaybackRenderer",
+    "PlaybackRendererConfig",
     "render_playback",
     "Project",
     "ProjectAutomationTargetKind",

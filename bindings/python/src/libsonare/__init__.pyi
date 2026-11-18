@@ -6,6 +6,7 @@ from ._effects_polyphony import PolyphonicAnalysis as PolyphonicAnalysis
 from ._playback import HrtfSet as HrtfSet
 from ._playback import PlaybackLoudnessMeter as PlaybackLoudnessMeter
 from ._playback import PlaybackRenderer as PlaybackRenderer
+from ._playback import PlaybackRendererConfig as PlaybackRendererConfig
 from ._playback import render_playback as render_playback
 from ._project import AlignTakeToReferenceResult as AlignTakeToReferenceResult
 from ._project import Articulation as Articulation

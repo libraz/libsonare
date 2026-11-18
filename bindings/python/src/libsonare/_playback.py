@@ -40,9 +40,18 @@ from ._runtime import (
     _validate_samples,
 )
 
+PlaybackRendererConfig = dict[str, Any]
+"""A nested playback renderer config document (``target``, ``room``, ``loudness``, ...).
 
-def _playback_config_to_json(config: Mapping[str, Any] | str) -> bytes:
-    return _utf8_arg(config if isinstance(config, str) else json.dumps(dict(config)), "config")
+Complete or partial; an omitted key takes the schema default. JSON text is parsed by
+the caller (``json.loads``) before it is passed.
+"""
+
+
+def _playback_config_to_json(config: PlaybackRendererConfig) -> bytes:
+    if not isinstance(config, Mapping):
+        raise TypeError("config must be a mapping (parse JSON text with json.loads first)")
+    return _utf8_arg(json.dumps(dict(config)), "config")
 
 
 def _require_playback(lib: ctypes.CDLL) -> None:
@@ -140,9 +149,9 @@ class HrtfSet:
 class PlaybackRenderer:
     """Renders decoded movie audio to speakers or binaural headphones.
 
-    ``config`` is the nested document (``target``, ``room``, per-speaker
-    layout, ...); it may be a JSON string or a ``Mapping`` and may be complete
-    or partial (omitted keys take the schema defaults). ``hrtf`` is used only
+    ``config`` is the nested :data:`PlaybackRendererConfig` document (``target``,
+    ``room``, per-speaker layout, ...); it may be complete or partial (omitted
+    keys take the schema defaults). ``hrtf`` is used only
     for a headphones target; on native builds a ``None`` hrtf falls back to
     the embedded default set.
     """
@@ -152,7 +161,7 @@ class PlaybackRenderer:
 
     def __init__(
         self,
-        config: Mapping[str, Any] | str,
+        config: PlaybackRendererConfig,
         *,
         sample_rate: int,
         hrtf: HrtfSet | None = None,
@@ -210,7 +219,7 @@ class PlaybackRenderer:
         handle = self._require_handle()
         _check(self._lib.sonare_playback_renderer_reset(handle))
 
-    def set_config(self, config: Mapping[str, Any] | str) -> None:
+    def set_config(self, config: PlaybackRendererConfig) -> None:
         """Apply a complete configuration document.
 
         A prepare key (``target.kind``, ``target.layout``, ``input.layout``, ...)
@@ -418,7 +427,7 @@ def render_playback(
     *,
     num_channels: int,
     sample_rate: int,
-    config: Mapping[str, Any] | str,
+    config: PlaybackRendererConfig,
     hrtf: HrtfSet | None = None,
 ) -> np.ndarray:
     """Render a whole interleaved buffer offline, time-aligned with the input.

@@ -8757,6 +8757,30 @@ test = "bindings/python/tests/test_block_size_absence.py::test_a_required_channe
 
 [[entry]]
 kind = "option"
+old = "PlaybackRenderer.constructor(config)"
+changed = "a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first"
+domain = "engine"
+rule = "one-input-form"
+test = "bindings/python/tests/test_playback.py::test_the_config_document_is_a_mapping_never_json_text"
+
+[[entry]]
+kind = "option"
+old = "PlaybackRenderer.set_config(config)"
+changed = "a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first"
+domain = "engine"
+rule = "one-input-form"
+test = "bindings/python/tests/test_playback.py::test_the_config_document_is_a_mapping_never_json_text"
+
+[[entry]]
+kind = "option"
+old = "render_playback(config)"
+changed = "a PlaybackRendererConfig mapping only; JSON text raises TypeError, so parse it with json.loads first"
+domain = "engine"
+rule = "one-input-form"
+test = "bindings/python/tests/test_playback.py::test_the_config_document_is_a_mapping_never_json_text"
+
+[[entry]]
+kind = "option"
 old = "Mixer.from_scene_json(block_size)"
 to = "Mixer.from_scene_json(max_block_size)"
 changed = "renamed max_block_size after the C parameter; omitted takes the library default (was 512) and an explicit 0 raises SonareValueError"
