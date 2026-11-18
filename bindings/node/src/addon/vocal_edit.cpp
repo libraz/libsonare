@@ -948,6 +948,7 @@ class VocalRenderAsyncWorker final : public Napi::AsyncWorker {
         job_, &VocalRenderAsyncWorker::CancelCallback, cancelled_.get(), &result_);
     if (error != SONARE_OK) {
       sonare_free_vocal_render_result(&result_);
+      result_initialized_ = false;
       CaptureError(error);
       return;
     }
