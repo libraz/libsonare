@@ -26,6 +26,7 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
+    _mapping_keys,
     _mode_value,
     _require_export,
     _section_type_token,
@@ -252,7 +253,8 @@ def chord_functional_analysis(
 def _key_pair(key: object) -> tuple[object, object]:
     """Reads a key given as an object with ``root`` / ``mode``, a mapping, or a pair."""
     if isinstance(key, Mapping):
-        root, mode = key.get("root"), key.get("mode")
+        fields = _mapping_keys(key, ("root", "mode"), "key")
+        root, mode = fields.get("root"), fields.get("mode")
     elif isinstance(key, tuple | list) and len(key) == 2:
         root, mode = key
     else:

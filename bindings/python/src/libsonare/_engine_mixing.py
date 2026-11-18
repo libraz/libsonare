@@ -23,6 +23,7 @@ from ._runtime import (
     _channel_layout_value,
     _check,
     _get_lib,
+    _mapping_keys,
     _narrow_int,
     _pan_law_value,
     _pan_mode_value,
@@ -46,22 +47,23 @@ def _sidechain_check(refusal: int) -> SidechainCheck:
     return SidechainCheck(ok=False, reason=cast(SidechainRefusal, _SIDECHAIN_REFUSALS[refusal - 1]))
 
 
-def _marshal_sends(sends: Sequence[Mapping[str, object]]) -> ctypes.Array[SonareEngineTrackSend]:
+_SEND_KEYS = ("bus_id", "level_db", "enabled", "send_timing")
+_LANE_KEYS = ("track_id", "sends", "output_bus_id", "source_channel_layout")
+_BUS_KEYS = ("bus_id", "gain_db", "channel_layout", "sends", "output_bus_id")
+
+
+def _marshal_sends(
+    sends: Sequence[Mapping[str, object]], where: str
+) -> ctypes.Array[SonareEngineTrackSend]:
     """Pack send mappings into a ``SonareEngineTrackSend`` array."""
     send_array = (SonareEngineTrackSend * len(sends))()
-    for send_index, send in enumerate(sends):
-        if not isinstance(send, Mapping):
-            raise TypeError("track lane send must be a mapping")
-        send_array[send_index].bus_id = cast(
-            int, send["bus_id"] if "bus_id" in send else send["busId"]
-        )
-        send_array[send_index].level_db = _narrow_double(
-            send["level_db"] if "level_db" in send else send.get("levelDb", 0.0), "level_db"
-        )
+    for send_index, raw_send in enumerate(sends):
+        send = _mapping_keys(raw_send, _SEND_KEYS, f"{where}[{send_index}]")
+        send_array[send_index].bus_id = cast(int, send["bus_id"])
+        send_array[send_index].level_db = _narrow_double(send.get("level_db", 0.0), "level_db")
         send_array[send_index].enabled = 1 if bool(send.get("enabled", True)) else 0
-        # Default to post-fader so callers that omit the timing key keep the
-        # prior behavior.
-        timing = send.get("timing", send.get("send_timing", send.get("sendTiming")))
+        # Absent timing is post-fader, the C default.
+        timing = send.get("send_timing")
         send_array[send_index].send_timing = (
             _send_timing_value(cast(SendTiming, timing)) if timing is not None else 0
         )
@@ -87,14 +89,14 @@ class _EngineMixingMixin:
             # prior stereo behavior.
             raw[i].source_channel_layout = 1
             if isinstance(lane, Mapping):
+                where = f"set_track_lanes: lanes[{i}]"
+                lane = _mapping_keys(lane, _LANE_KEYS, where)
                 # Assigned unconverted so the struct's own narrowing sees the
                 # caller value; int() would truncate a fraction past it.
-                raw[i].track_id = cast(
-                    int, lane["track_id"] if "track_id" in lane else lane["trackId"]
-                )
+                raw[i].track_id = cast(int, lane["track_id"])
                 sends = cast(Sequence[Mapping[str, object]], lane.get("sends", []))
                 if sends:
-                    send_array = _marshal_sends(sends)
+                    send_array = _marshal_sends(sends, f"{where}.sends")
                     raw[i].sends = send_array
                     raw[i].send_count = len(sends)
                     send_arrays.append(send_array)
@@ -102,21 +104,14 @@ class _EngineMixingMixin:
                 # reads as "stay on the master mix", so a fractional bus id
                 # would leave the lane unrouted and report success.
                 raw[i].output_bus_id = _narrow_int(
-                    lane["output_bus_id"]
-                    if "output_bus_id" in lane
-                    else lane.get("outputBusId", 0),
-                    f"set_track_lanes: lanes[{i}].output_bus_id",
+                    lane.get("output_bus_id", 0),
+                    f"{where}.output_bus_id",
                     0,
                     _UINT32_MAX,
                 )
-                if "source_channel_layout" in lane or "sourceChannelLayout" in lane:
+                if "source_channel_layout" in lane:
                     raw[i].source_channel_layout = _channel_layout_value(
-                        cast(
-                            ChannelLayout,
-                            lane["source_channel_layout"]
-                            if "source_channel_layout" in lane
-                            else lane["sourceChannelLayout"],
-                        )
+                        cast(ChannelLayout, lane["source_channel_layout"])
                     )
             else:
                 raw[i].track_id = lane
@@ -126,14 +121,14 @@ class _EngineMixingMixin:
         """Replace one track lane's sends, leaving its output bus and every other lane as published.
 
         Each send is a mapping with ``bus_id``, optional ``level_db`` (default 0),
-        ``enabled`` (default True) and ``timing``. An empty sequence clears the
+        ``enabled`` (default True) and ``send_timing``. An empty sequence clears the
         lane's sends. Goes through the same validation as :meth:`set_track_lanes`,
         so an unchanged send keeps its ramp. Raises ``SonareValueError`` for an
         unknown track (the lane list is empty before the first :meth:`set_track_lanes`),
         an undeclared or duplicate send bus, or a level outside the allowed range.
         Control thread only; not concurrent with processing.
         """
-        send_array = _marshal_sends(sends) if sends else None
+        send_array = _marshal_sends(sends, "set_track_sends: sends") if sends else None
         _check(
             _get_lib().sonare_engine_set_track_sends(
                 self._require_handle(),
@@ -278,44 +273,24 @@ class _EngineMixingMixin:
     def set_track_buses(self, buses: Sequence[Mapping[str, object]]) -> None:
         raw = (SonareEngineBus * len(buses))()
         send_arrays: list[object] = []
-        for i, bus in enumerate(buses):
+        for i, raw_bus in enumerate(buses):
+            where = f"set_track_buses: buses[{i}]"
+            bus = _mapping_keys(raw_bus, _BUS_KEYS, where)
             # Assigned unconverted so the struct's own narrowing sees the caller
             # value; int() would truncate a fraction past it.
-            raw[i].bus_id = cast(int, bus["bus_id"] if "bus_id" in bus else bus["busId"])
-            raw[i].gain_db = _narrow_double(
-                bus["gain_db"] if "gain_db" in bus else bus.get("gainDb", 0.0), "gain_db"
-            )
+            raw[i].bus_id = cast(int, bus["bus_id"])
+            raw[i].gain_db = _narrow_double(bus.get("gain_db", 0.0), "gain_db")
             # ctypes zero-inits channel_layout to 0 (mono); default to stereo
             # unless the caller specifies it.
-            if "channel_layout" in bus or "channelLayout" in bus:
+            if "channel_layout" in bus:
                 raw[i].channel_layout = _channel_layout_value(
-                    cast(
-                        ChannelLayout,
-                        bus["channel_layout"] if "channel_layout" in bus else bus["channelLayout"],
-                    )
+                    cast(ChannelLayout, bus["channel_layout"])
                 )
             else:
                 raw[i].channel_layout = 1
             sends = cast(Sequence[Mapping[str, object]], bus.get("sends", []))
             if sends:
-                send_array = (SonareEngineTrackSend * len(sends))()
-                for send_index, send in enumerate(sends):
-                    if not isinstance(send, Mapping):
-                        raise TypeError("bus send must be a mapping")
-                    send_array[send_index].bus_id = cast(
-                        int, send["bus_id"] if "bus_id" in send else send["busId"]
-                    )
-                    send_array[send_index].level_db = _narrow_double(
-                        send["level_db"] if "level_db" in send else send.get("levelDb", 0.0),
-                        "level_db",
-                    )
-                    send_array[send_index].enabled = 1 if bool(send.get("enabled", True)) else 0
-                    # Default to post-fader so callers that omit the timing key
-                    # keep the prior behavior.
-                    timing = send.get("timing", send.get("send_timing", send.get("sendTiming")))
-                    send_array[send_index].send_timing = (
-                        _send_timing_value(cast(SendTiming, timing)) if timing is not None else 0
-                    )
+                send_array = _marshal_sends(sends, f"{where}.sends")
                 raw[i].sends = send_array
                 raw[i].send_count = len(sends)
                 send_arrays.append(send_array)
@@ -323,8 +298,8 @@ class _EngineMixingMixin:
             # as "stay on the master mix", so a fractional bus id would leave
             # the bus unrouted and report success.
             raw[i].output_bus_id = _narrow_int(
-                bus["output_bus_id"] if "output_bus_id" in bus else bus.get("outputBusId", 0),
-                f"set_track_buses: buses[{i}].output_bus_id",
+                bus.get("output_bus_id", 0),
+                f"{where}.output_bus_id",
                 0,
                 _UINT32_MAX,
             )

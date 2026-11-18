@@ -8590,3 +8590,131 @@ changed = "takes a ProjectWarpMode token ('off' default, 'repitch', 'tempoSync',
 domain = "engine"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_engine_clips.py::test_realtime_engine_warp_mode_validation_matches_project_helper"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_track_lanes(lanes)"
+changed = "a lane mapping takes track_id, sends, output_bus_id and source_channel_layout only, and a send takes bus_id, level_db, enabled and send_timing only; trackId, busId, levelDb, outputBusId, sourceChannelLayout, sendTiming and timing raise SonareValueError naming the key"
+domain = "engine"
+rule = "snake-case-only"
+test = "bindings/python/tests/test_mapping_keys.py::test_engine_mixing_mappings_take_one_spelling"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_track_buses(buses)"
+changed = "a bus mapping takes bus_id, gain_db, channel_layout, sends and output_bus_id only, and its sends take the set_track_lanes send keys; busId, gainDb, channelLayout, outputBusId, sendTiming and timing raise SonareValueError naming the key"
+domain = "engine"
+rule = "snake-case-only"
+test = "bindings/python/tests/test_mapping_keys.py::test_engine_mixing_mappings_take_one_spelling"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_track_sends(sends)"
+changed = "a send takes bus_id, level_db, enabled and send_timing only; busId, levelDb, sendTiming and timing raise SonareValueError naming the key"
+domain = "engine"
+rule = "snake-case-only"
+test = "bindings/python/tests/test_mapping_keys.py::test_engine_mixing_mappings_take_one_spelling"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_tempo_segments(segments)"
+changed = "a segment mapping takes start_ppq, bpm and end_bpm only; any other key raises SonareValueError naming it instead of being ignored"
+domain = "engine"
+rule = "snake-case-only"
+test = "bindings/python/tests/test_mapping_keys.py::test_engine_tempo_and_meter_segments_take_one_spelling"
+
+[[entry]]
+kind = "option"
+old = "RealtimeEngine.set_time_signature_segments(segments)"
+changed = "a segment mapping takes start_ppq, numerator and denominator only; any other key raises SonareValueError naming it instead of being ignored"
+domain = "engine"
+rule = "snake-case-only"
+test = "bindings/python/tests/test_mapping_keys.py::test_engine_tempo_and_meter_segments_take_one_spelling"
+
+[[entry]]
+kind = "option"
+old = "Project.set_clip_takes(takes)"
+changed = "a take mapping takes id, source_id, source_offset_ppq and name only; sourceId and sourceOffsetPpq raise SonareValueError naming the key"
+domain = "project"
+rule = "snake-case-only"
+test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
+
+[[entry]]
+kind = "option"
+old = "Project.set_clip_comp_segments(segments)"
+changed = "a segment mapping takes start_ppq, end_ppq, take_id and crossfade_ppq only; startPpq, endPpq, takeId and crossfadePpq raise SonareValueError naming the key"
+domain = "project"
+rule = "snake-case-only"
+test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
+
+[[entry]]
+kind = "option"
+old = "Project.add_automation_lane(target_param_id)"
+changed = "a descriptor mapping takes target_param_id, points and target_kind only, and a point mapping takes ppq, value and curve only; targetParamId, targetKind, curve_to_next and curveToNext raise SonareValueError naming the key"
+domain = "project"
+rule = "snake-case-only"
+test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
+
+[[entry]]
+kind = "option"
+old = "Project.edit_automation_lane(target_param_id)"
+changed = "a descriptor mapping takes target_param_id, points and target_kind only, and a point mapping takes ppq, value and curve only; targetParamId, targetKind, curve_to_next and curveToNext raise SonareValueError naming the key"
+domain = "project"
+rule = "snake-case-only"
+test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
+
+[[entry]]
+kind = "option"
+old = "Project.set_assist_sidecar(module_id)"
+changed = "a descriptor mapping takes module_id, payload, schema_version, target_track_id, region_start_ppq and region_end_ppq; the camelCase keys moduleId, schemaVersion, targetTrackId, regionStartPpq and regionEndPpq, and any other key, raise SonareValueError naming it instead of being ignored"
+domain = "project"
+rule = "snake-case-only"
+test = "bindings/python/tests/test_project_edit_ops.py::test_assist_sidecar_invalid_or_mixed_input_does_not_mutate"
+
+[[entry]]
+kind = "option"
+old = "Project.import_external_stems(stems)"
+changed = "a stem mapping takes name, layout, planar_samples, role and start_frame only, any other key raising SonareValueError naming it; layout is a ProjectStemLayout token ('mono', 'stereo') and a channel count 1 or 2 is TypeError"
+domain = "project"
+rule = "snake-case-only"
+test = "bindings/python/tests/test_mapping_keys.py::test_an_external_stem_takes_one_spelling_and_a_layout_token"
+
+[[entry]]
+kind = "option"
+old = "Project.set_tempo_segments(segments)"
+changed = "a segment mapping takes start_ppq, bpm and end_bpm only; start_sample, which was ignored, and any other key raise SonareValueError naming it"
+domain = "project"
+rule = "snake-case-only"
+test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
+
+[[entry]]
+kind = "option"
+old = "Project.set_time_signatures(segments)"
+changed = "a segment mapping takes start_ppq, numerator and denominator only; any other key raises SonareValueError naming it instead of being ignored"
+domain = "project"
+rule = "snake-case-only"
+test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
+
+[[entry]]
+kind = "option"
+old = "Project.annotate_chords(chords)"
+changed = "a chord mapping takes start_ppq, end_ppq, root_pc, quality, extensions, slash_bass_pc, roman_numeral and modulation_boundary only; any other key raises SonareValueError naming it instead of being ignored"
+domain = "project"
+rule = "snake-case-only"
+test = "bindings/python/tests/test_mapping_keys.py::test_project_mappings_take_one_spelling"
+
+[[entry]]
+kind = "option"
+old = "chord_functions(key)"
+changed = "a key mapping takes root and mode only; any other key raises SonareValueError naming it"
+domain = "analysis"
+rule = "snake-case-only"
+test = "bindings/python/tests/test_mapping_keys.py::test_a_helper_mapping_refuses_an_unknown_key"
+
+[[entry]]
+kind = "option"
+old = "auto_tune(key)"
+changed = "a key mapping takes root and mode only; any other key raises SonareValueError naming it"
+domain = "effects"
+rule = "snake-case-only"
+test = "bindings/python/tests/test_mapping_keys.py::test_a_helper_mapping_refuses_an_unknown_key"

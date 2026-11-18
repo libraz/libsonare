@@ -25,6 +25,7 @@ from ._project import ProjectDeserializeResult as ProjectDeserializeResult
 from ._project import ProjectFadeCurve as ProjectFadeCurve
 from ._project import ProjectLoopMode as ProjectLoopMode
 from ._project import ProjectOverlapPolicy as ProjectOverlapPolicy
+from ._project import ProjectStemLayout as ProjectStemLayout
 from ._project import ProjectTimeline as ProjectTimeline
 from ._project import ProjectTrackKind as ProjectTrackKind
 from ._project import SampleBank as SampleBank

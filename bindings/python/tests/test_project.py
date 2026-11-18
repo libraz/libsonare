@@ -526,7 +526,7 @@ def test_set_clip_takes_and_comp_segments_round_trip_and_undo() -> None:
         project.set_clip_takes(
             audio_clip,
             [
-                {"id": 1, "sourceOffsetPpq": 0.0, "name": "take A"},
+                {"id": 1, "source_offset_ppq": 0.0, "name": "take A"},
                 {"id": 2, "source_offset_ppq": 0.5, "name": "take B"},
             ],
             active_take_id=1,
@@ -539,7 +539,7 @@ def test_set_clip_takes_and_comp_segments_round_trip_and_undo() -> None:
         project.set_clip_comp_segments(
             audio_clip,
             [
-                {"startPpq": 0.0, "endPpq": 1.0, "takeId": 1},
+                {"start_ppq": 0.0, "end_ppq": 1.0, "take_id": 1},
                 {"start_ppq": 1.0, "end_ppq": 2.0, "take_id": 2},
             ],
         )
@@ -561,7 +561,7 @@ def test_set_clip_takes_and_comp_segments_round_trip_and_undo() -> None:
             )
         with pytest.raises(SonareError):
             project.set_clip_comp_segments(
-                audio_clip, [{"startPpq": 0.0, "endPpq": 1.0, "takeId": 99}]
+                audio_clip, [{"start_ppq": 0.0, "end_ppq": 1.0, "take_id": 99}]
             )
     finally:
         project.close()
@@ -584,12 +584,12 @@ def test_comp_segment_crossfade_ppq_reaches_the_library() -> None:
             active_take_id=1,
         )
 
-        # Mapping form, both naming conventions; omitted defaults to 0.0.
+        # Mapping form; an omitted crossfade_ppq defaults to 0.0.
         project.set_clip_comp_segments(
             audio_clip,
             [
                 {"start_ppq": 0.0, "end_ppq": 1.0, "take_id": 1},
-                {"startPpq": 1.0, "endPpq": 2.0, "takeId": 2, "crossfadePpq": 0.25},
+                {"start_ppq": 1.0, "end_ppq": 2.0, "take_id": 2, "crossfade_ppq": 0.25},
             ],
         )
         as_dict = json.loads(project.to_json_bytes())

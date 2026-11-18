@@ -1236,6 +1236,25 @@ def _token_arg(value: object, tokens: tuple[str, ...], what: str) -> str:
     return tokens[_token_ordinal(value, tokens, what)]
 
 
+def _mapping_keys(mapping: object, keys: tuple[str, ...], where: str) -> Mapping[str, object]:
+    """Return a caller-built mapping once every key in it is one of ``keys``.
+
+    A non-mapping raises ``TypeError``; any other key, including another
+    spelling of an accepted one, raises :class:`SonareValueError` naming it.
+    """
+    if not isinstance(mapping, Mapping):
+        raise TypeError(f"{where} must be a mapping, got {type(mapping).__name__}")
+    for key in mapping:
+        if key not in keys:
+            raise SonareValueError(f"{where}: unknown key {key!r} (expected one of {list(keys)})")
+    return cast("Mapping[str, object]", mapping)
+
+
+# Keys of a tempo / time-signature segment mapping; shared by Project and Engine.
+_TEMPO_SEGMENT_KEYS = ("start_ppq", "bpm", "end_bpm")
+_METER_SEGMENT_KEYS = ("start_ppq", "numerator", "denominator")
+
+
 # Candidate-mode groups a ``modes`` string may name instead of a single mode.
 _MODE_GROUPS: dict[str, tuple[KeyMode, ...]] = {
     "majorMinor": ("major", "minor"),

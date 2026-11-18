@@ -12,7 +12,7 @@ import json
 
 import pytest
 
-from libsonare import ErrorCode, Project, SonareError, mastering_insert_names
+from libsonare import ErrorCode, Project, SonareError, SonareValueError, mastering_insert_names
 
 from ._helpers import raises_coded
 
@@ -367,13 +367,12 @@ def test_assist_sidecar_descriptor_matches_legacy_keyword_form() -> None:
     descriptor_project, track, _clip = _audio_project()
     legacy_project, legacy_track, _legacy_clip = _audio_project()
     descriptor = {
-        "moduleId": "ai.module",
+        "module_id": "ai.module",
         "payload": b"\x01\x02\x03",
-        "schemaVersion": 2,
-        "targetTrackId": track,
-        "regionStartPpq": 12.0,
-        "regionEndPpq": 48.0,
-        "unknown": "ignored",
+        "schema_version": 2,
+        "target_track_id": track,
+        "region_start_ppq": 12.0,
+        "region_end_ppq": 48.0,
     }
 
     descriptor_project.set_assist_sidecar(descriptor)
@@ -392,8 +391,8 @@ def test_assist_sidecar_descriptor_matches_legacy_keyword_form() -> None:
 
 def test_assist_sidecar_descriptor_defaults_and_stable_order() -> None:
     p, _track, _clip = _audio_project()
-    p.set_assist_sidecar({"moduleId": "first"})
-    p.set_assist_sidecar({"moduleId": "second", "payload": b"payload"})
+    p.set_assist_sidecar({"module_id": "first"})
+    p.set_assist_sidecar({"module_id": "second", "payload": b"payload"})
 
     assert p.assist_sidecar_count() == 2
     assert [sidecar.module_id for sidecar in p.assist_sidecars()] == ["first", "second"]
@@ -406,13 +405,13 @@ def test_assist_sidecar_descriptor_defaults_and_stable_order() -> None:
 
 def test_assist_sidecar_descriptor_same_identity_replaces_without_reordering() -> None:
     p, _track, _clip = _audio_project()
-    p.set_assist_sidecar({"moduleId": "first", "payload": b"old"})
-    p.set_assist_sidecar({"moduleId": "second", "payload": b"other"})
+    p.set_assist_sidecar({"module_id": "first", "payload": b"old"})
+    p.set_assist_sidecar({"module_id": "second", "payload": b"other"})
     p.set_assist_sidecar(
         {
-            "moduleId": "first",
+            "module_id": "first",
             "payload": b"new",
-            "schemaVersion": 3,
+            "schema_version": 3,
         }
     )
 
@@ -426,27 +425,33 @@ def test_assist_sidecar_invalid_or_mixed_input_does_not_mutate() -> None:
     p, _track, _clip = _audio_project()
     before = p.to_json()
 
-    for invalid in ({}, {"moduleId": None}, {"moduleId": 42}, {"module_id": "wrong"}):
+    for invalid in ({}, {"module_id": None}, {"module_id": 42}):
         with pytest.raises(TypeError):
             p.set_assist_sidecar(invalid)
         assert p.to_json() == before
 
+    # A key the descriptor does not take, another spelling of one included, is refused by name.
+    for key in ("moduleId", "schemaVersion", "unknown"):
+        with pytest.raises(SonareValueError, match=f"unknown key '{key}'"):
+            p.set_assist_sidecar({"module_id": "first", key: 1})
+        assert p.to_json() == before
+
     with pytest.raises(ValueError):
-        p.set_assist_sidecar({"moduleId": ""})
+        p.set_assist_sidecar({"module_id": ""})
     assert p.to_json() == before
 
     with pytest.raises(TypeError):
-        p.set_assist_sidecar({"moduleId": "mixed"}, b"legacy")
+        p.set_assist_sidecar({"module_id": "mixed"}, b"legacy")
     assert p.to_json() == before
 
     with pytest.raises(TypeError):
-        p.set_assist_sidecar({"moduleId": "mixed"}, schema_version=1)
+        p.set_assist_sidecar({"module_id": "mixed"}, schema_version=1)
     assert p.to_json() == before
 
     for invalid_region in (
-        {"moduleId": "bad-region", "regionStartPpq": -1.0},
-        {"moduleId": "bad-region", "regionStartPpq": float("nan")},
-        {"moduleId": "bad-region", "regionEndPpq": float("inf")},
+        {"module_id": "bad-region", "region_start_ppq": -1.0},
+        {"module_id": "bad-region", "region_start_ppq": float("nan")},
+        {"module_id": "bad-region", "region_end_ppq": float("inf")},
     ):
         with pytest.raises(SonareError):
             p.set_assist_sidecar(invalid_region)

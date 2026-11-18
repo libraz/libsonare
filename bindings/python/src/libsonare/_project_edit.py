@@ -19,6 +19,7 @@ from ._project_mir import key_mode_from_analysis as key_mode_from_analysis
 from ._project_model import *  # noqa: F403
 from ._project_model import (
     _AUTOMATION_TARGET_KIND_UNSET,
+    _STEM_LAYOUTS,
     _automation_lane_args,
     _automation_lane_desc,
     _automation_target_kind_value,
@@ -73,6 +74,7 @@ from ._runtime import (
     _as_float32_buffer,
     _check,
     _get_lib,
+    _mapping_keys,
     _narrow_double,
     _narrow_float,
     _narrow_int,
@@ -83,6 +85,7 @@ from ._runtime import (
     _to_c_size_t,
     _to_c_uint8,
     _to_c_uint32,
+    _token_ordinal,
     _utf8_arg,
     _warp_mode_value,
 )
@@ -94,6 +97,9 @@ if TYPE_CHECKING:
 
 # Mirrors SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL.
 _LOOP_RECORDING_DROP_PARTIAL_TAIL = 1
+_TAKE_KEYS = ("id", "source_id", "source_offset_ppq", "name")
+_COMP_SEGMENT_KEYS = ("start_ppq", "end_ppq", "take_id", "crossfade_ppq")
+_STEM_KEYS = ("name", "layout", "planar_samples", "role", "start_frame")
 
 
 def _planar_channels(audio: object) -> list[np.ndarray] | None:
@@ -306,24 +312,25 @@ class _ProjectEditMixin:
     ) -> tuple[list[int], list[int]]:
         """Import host-separated planar PCM as normal audio tracks and clips.
 
-        Each mapping supplies ``name``, ``layout`` (``"mono"``/``"stereo"``
-        or 1/2), ``planar_samples`` (one float array per channel), and optional
-        ``role`` / ``start_frame``. Input is copied by the native project; it
-        is never resampled, retimed, phase-aligned, or gain-compensated.
+        Each mapping supplies ``name``, ``layout`` (a :data:`ProjectStemLayout`
+        token), ``planar_samples`` (one float array per channel), and optional
+        ``role`` / ``start_frame``; any other key is refused by name. Input is
+        copied by the native project; it is never resampled, retimed,
+        phase-aligned, or gain-compensated.
         """
         descs: list[SonareExternalStemDesc] = []
         names: list[bytes] = []
         roles: list[bytes | None] = []
         sample_arrays: list[list[np.ndarray]] = []
         plane_arrays: list[ctypes.Array[ctypes._Pointer[ctypes.c_float]]] = []
-        for stem in stems:
+        for i, raw_stem in enumerate(stems):
+            stem = _mapping_keys(raw_stem, _STEM_KEYS, f"import_external_stems: stems[{i}]")
             name = stem.get("name")
-            layout = stem.get("layout")
             planes = stem.get("planar_samples")
             if not isinstance(name, str) or not isinstance(planes, Sequence):
                 raise TypeError("each stem needs string name and planar_samples")
-            layout_value: object = 1 if layout == "mono" else 2 if layout == "stereo" else layout
-            if layout_value not in (1, 2) or len(planes) != layout_value:
+            layout_value = _token_ordinal(stem.get("layout"), _STEM_LAYOUTS, "stem layout") + 1
+            if len(planes) != layout_value:
                 raise SonareValueError("planar_samples must match mono or stereo layout")
             arrays = [_as_float32_buffer(plane, arg_name="planar_samples") for plane in planes]
             if not arrays or any(array.size != arrays[0].size for array in arrays):
@@ -334,7 +341,7 @@ class _ProjectEditMixin:
                 raise TypeError("stem role must be a string when supplied")
             roles.append(None if role is None else _utf8_arg(role, "role"))
             sample_arrays.append(arrays)
-            c_planes = (ctypes.POINTER(ctypes.c_float) * int(cast(int, layout_value)))(
+            c_planes = (ctypes.POINTER(ctypes.c_float) * layout_value)(
                 *(array.ctypes.data_as(ctypes.POINTER(ctypes.c_float)) for array in arrays)
             )
             plane_arrays.append(c_planes)
@@ -342,7 +349,7 @@ class _ProjectEditMixin:
                 SonareExternalStemDesc(
                     name=names[-1],
                     role=roles[-1],
-                    layout=int(cast(int, layout_value)),
+                    layout=layout_value,
                     planar_samples=c_planes,
                     frame_count=int(arrays[0].size),
                     # Passed unconverted so the struct's own narrowing sees the
@@ -552,10 +559,11 @@ class _ProjectEditMixin:
         name_backing: list[bytes] = []
         for i, item in enumerate(take_items):
             if isinstance(item, Mapping):
-                take_id = item.get("id", 0)
-                source_id = item.get("source_id", item.get("sourceId", 0))
-                source_offset = item.get("source_offset_ppq", item.get("sourceOffsetPpq", 0.0))
-                name = item.get("name", "")
+                take = _mapping_keys(item, _TAKE_KEYS, f"set_clip_takes: takes[{i}]")
+                take_id = take.get("id", 0)
+                source_id = take.get("source_id", 0)
+                source_offset = take.get("source_offset_ppq", 0.0)
+                name = take.get("name", "")
             else:
                 take_id, source_id, source_offset, name = cast(tuple[int, int, float, str], item)
             # Narrowed rather than coerced, for the reason source_id gives below:
@@ -602,10 +610,13 @@ class _ProjectEditMixin:
         c_segments = (SonareProjectClipCompSegment * len(segment_items))()
         for i, item in enumerate(segment_items):
             if isinstance(item, Mapping):
-                start_ppq = item.get("start_ppq", item.get("startPpq", 0.0))
-                end_ppq = item.get("end_ppq", item.get("endPpq", 0.0))
-                take_id = item.get("take_id", item.get("takeId", 0))
-                crossfade_ppq = item.get("crossfade_ppq", item.get("crossfadePpq", 0.0))
+                segment = _mapping_keys(
+                    item, _COMP_SEGMENT_KEYS, f"set_clip_comp_segments: segments[{i}]"
+                )
+                start_ppq = segment.get("start_ppq", 0.0)
+                end_ppq = segment.get("end_ppq", 0.0)
+                take_id = segment.get("take_id", 0)
+                crossfade_ppq = segment.get("crossfade_ppq", 0.0)
             elif len(item) == 4:
                 start_ppq, end_ppq, take_id, crossfade_ppq = cast(
                     tuple[float, float, int, float], item
@@ -1041,9 +1052,9 @@ class _ProjectEditMixin:
         Omit ``target_kind`` to use the legacy opaque-lane ABI. Supplying
         ``"opaque"``, ``"trackFaderDb"`` or ``"trackPan"`` uses the typed
         extended ABI.
-        A mapping descriptor with ``target_param_id``/``targetParamId``,
-        ``points``, and optional ``target_kind``/``targetKind`` is also
-        accepted for cross-binding parity.
+        A mapping descriptor with ``target_param_id``, ``points`` and optional
+        ``target_kind`` is also accepted; any other key is refused by name.
+        A point given as a mapping takes ``ppq``, ``value`` and optional ``curve``.
         """
         lane_target, lane_points, lane_kind = _automation_lane_args(
             target_param_id, points, target_kind

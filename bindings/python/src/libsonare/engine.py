@@ -76,12 +76,15 @@ from ._narrowing import _narrow_double
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
+    _METER_SEGMENT_KEYS,
+    _TEMPO_SEGMENT_KEYS,
     _UINT8_MAX,
     SonareValueError,
     _check,
     _curve_value,
     _get_lib,
     _int_refusal,
+    _mapping_keys,
     _narrow_int,
     _require_instance,
     _resolve_render_frame,
@@ -435,9 +438,10 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         c_segments = (SonareProjectTempoSegment * count)() if count else None
         for i, seg in enumerate(rows):
             if isinstance(seg, Mapping):
-                start_ppq = _narrow_double(seg["start_ppq"], "start_ppq")
-                bpm = _narrow_double(seg["bpm"], "bpm")
-                end_bpm = _narrow_double(seg.get("end_bpm", 0.0), "end_bpm")
+                fields = _mapping_keys(seg, _TEMPO_SEGMENT_KEYS, f"segments[{i}]")
+                start_ppq = _narrow_double(fields["start_ppq"], "start_ppq")
+                bpm = _narrow_double(fields["bpm"], "bpm")
+                end_bpm = _narrow_double(fields.get("end_bpm", 0.0), "end_bpm")
             else:
                 tup = tuple(seg)
                 if len(tup) < 2:
@@ -472,9 +476,10 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         # which the core's positive-signature check then accepts as written.
         for i, seg in enumerate(rows):
             if isinstance(seg, Mapping):
-                start_ppq = _narrow_double(seg["start_ppq"], "start_ppq")
-                numerator = seg["numerator"]
-                denominator = seg["denominator"]
+                fields = _mapping_keys(seg, _METER_SEGMENT_KEYS, f"segments[{i}]")
+                start_ppq = _narrow_double(fields["start_ppq"], "start_ppq")
+                numerator = fields["numerator"]
+                denominator = fields["denominator"]
             else:
                 tup = tuple(seg)
                 if len(tup) < 3:

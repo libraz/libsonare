@@ -22,6 +22,7 @@ import math
 import numbers
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
+from dataclasses import fields as dataclass_fields
 from typing import TYPE_CHECKING, Any, Literal, SupportsFloat, TypeAlias, cast, get_args
 
 if TYPE_CHECKING:
@@ -177,6 +178,7 @@ from ._runtime import (
     _check,
     _curve_value,
     _get_lib,
+    _mapping_keys,
     _require_export,
     _to_c_size_t,
     _token_ordinal,
@@ -193,6 +195,11 @@ _EXPECTED_PROJECT_ABI_VERSION = 2
 ProjectTrackKind: TypeAlias = Literal["audio", "midi", "aux"]
 """What a track carries: audio clips, MIDI clips, or an auxiliary bus."""
 _TRACK_KINDS: tuple[str, ...] = get_args(ProjectTrackKind)
+
+# External stem layout; a token's index plus one is its SonareExternalStemLayout value.
+ProjectStemLayout: TypeAlias = Literal["mono", "stereo"]
+"""Channel layout of one stem given to :meth:`Project.import_external_stems`."""
+_STEM_LAYOUTS: tuple[str, ...] = get_args(ProjectStemLayout)
 
 # Clip fade curve; a token's index is its SonareProjectFadeCurve ordinal.
 ProjectFadeCurve: TypeAlias = Literal["linear", "equalPower", "exponential", "logarithmic"]
@@ -238,6 +245,10 @@ def _automation_target_param_id_value(value: object) -> int:
     return int(target)
 
 
+_AUTOMATION_LANE_KEYS = ("target_param_id", "points", "target_kind")
+_AUTOMATION_POINT_KEYS = ("ppq", "value", "curve")
+
+
 def _automation_lane_args(
     target_param_id: object,
     points: (
@@ -256,34 +267,23 @@ def _automation_lane_args(
     | None,
     object,
 ]:
-    """Accept the historical positional form and a descriptor mapping.
+    """Accept the positional form and a descriptor mapping.
 
-    The mapping form mirrors the Node/WASM descriptor keys while preserving
-    the existing Python ``(target_param_id, points)`` call shape.
+    A descriptor takes the snake_case keys ``target_param_id``, ``points`` and
+    ``target_kind``; any other key is refused by name.
     """
     if isinstance(target_param_id, Mapping):
-        descriptor = target_param_id
-        resolved_target = (
-            descriptor["target_param_id"]
-            if "target_param_id" in descriptor
-            else descriptor.get("targetParamId")
-        )
+        descriptor = _mapping_keys(target_param_id, _AUTOMATION_LANE_KEYS, "automation lane")
+        resolved_target = descriptor.get("target_param_id")
     elif isinstance(points, Mapping):
-        descriptor = points
-        resolved_target = target_param_id
+        descriptor = _mapping_keys(points, _AUTOMATION_LANE_KEYS, "automation lane")
+        resolved_target = descriptor.get("target_param_id", target_param_id)
     else:
         return target_param_id, points, target_kind
-    if "target_param_id" in descriptor:
-        resolved_target = descriptor["target_param_id"]
-    elif "targetParamId" in descriptor:
-        resolved_target = descriptor["targetParamId"]
     resolved_points = descriptor.get("points", None if isinstance(points, Mapping) else points)
     resolved_kind = target_kind
-    if target_kind is _AUTOMATION_TARGET_KIND_UNSET:
-        if "target_kind" in descriptor:
-            resolved_kind = descriptor["target_kind"]
-        elif "targetKind" in descriptor:
-            resolved_kind = descriptor["targetKind"]
+    if target_kind is _AUTOMATION_TARGET_KIND_UNSET and "target_kind" in descriptor:
+        resolved_kind = descriptor["target_kind"]
     return (
         resolved_target,
         cast(
@@ -326,10 +326,8 @@ def _automation_lane_desc(
     for i, pt in enumerate(rows):
         seq: tuple[object, ...]
         if isinstance(pt, Mapping):
-            ppq_value = pt.get("ppq")
-            value_value = pt.get("value")
-            curve_value = pt.get("curve", pt.get("curve_to_next", pt.get("curveToNext", "linear")))
-            seq = (ppq_value, value_value, curve_value)
+            point = _mapping_keys(pt, _AUTOMATION_POINT_KEYS, f"points[{i}]")
+            seq = (point.get("ppq"), point.get("value"), point.get("curve", "linear"))
         else:
             seq = tuple(pt)
         if len(seq) < 2:
@@ -454,6 +452,9 @@ def _absent_or_in_range(value: object, name: str, upper: int, absent: int) -> in
     return value
 
 
+_MIDI_CC_BINDING_KEYS = tuple(field.name for field in dataclass_fields(MidiCcBinding))
+
+
 def _cc_binding_to_c(binding: MidiCcBinding | Mapping[str, object]) -> SonareMidiCcBinding:
     """Marshal a :class:`MidiCcBinding` (or a Mapping with the same keys) into C.
 
@@ -461,9 +462,10 @@ def _cc_binding_to_c(binding: MidiCcBinding | Mapping[str, object]) -> SonareMid
     ABI's ``0xFF`` spelling of it is refused as a value.
     """
     if isinstance(binding, Mapping):
+        fields = _mapping_keys(binding, _MIDI_CC_BINDING_KEYS, "MIDI CC binding")
 
         def _get(key: str, default: object) -> object:
-            return binding.get(key, default)
+            return fields.get(key, default)
     else:
 
         def _get(key: str, default: object) -> object:

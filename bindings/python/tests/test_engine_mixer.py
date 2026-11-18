@@ -739,23 +739,16 @@ def test_engine_bus_strip_eq_band_updates_embedded_eq() -> None:
         )
 
 
-def test_engine_track_lane_accepts_send_timing_aliases() -> None:
+def test_engine_track_lane_send_timing_is_optional() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
         engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}])
-        # A string timing, the snake_case ``send_timing`` alias, and an omitted
-        # timing key are all accepted without error. The engine exposes no
-        # readback for the effective send timing, so this only asserts that the
-        # three input variants are configured successfully.
+        # A ``send_timing`` token and an omitted one are both accepted. The engine
+        # exposes no readback for the effective send timing, so this only asserts
+        # that both are configured successfully.
         engine.set_track_lanes(
             [
                 {
                     "track_id": 10,
-                    "sends": [
-                        {"bus_id": 1, "level_db": 0.0, "timing": "preFader"},
-                    ],
-                },
-                {
-                    "track_id": 20,
                     "sends": [
                         {"bus_id": 1, "level_db": 0.0, "send_timing": "preFader"},
                     ],

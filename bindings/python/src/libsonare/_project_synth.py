@@ -30,6 +30,7 @@ from ._runtime import (
     _get_lib,
     _joined_names,
     _last_error,
+    _mapping_keys,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -124,7 +125,8 @@ def _part_rig_inserts_arg(
     if inserts is None:
         return None
     entries = []
-    for i, insert in enumerate(inserts):
+    for i, raw_insert in enumerate(inserts):
+        insert = _mapping_keys(raw_insert, ("processor", "params"), f"inserts[{i}]")
         if "processor" not in insert:
             raise SonareValueError(f"inserts[{i}] needs a 'processor' key")
         params = insert.get("params", {})

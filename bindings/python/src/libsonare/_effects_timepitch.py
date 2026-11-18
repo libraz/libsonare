@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Mapping, Sequence
+from typing import cast
 
+from ._analysis_music import _key_pair
 from ._errors import _not_supported
 from ._features_metering import scale_mask_for_mode
 from ._ffi import (
@@ -310,15 +312,8 @@ def _auto_tune_key(key: object) -> SonareKey | None:
         if key != "detect":
             raise SonareValueError("key must be 'detect' or a key with a root and a mode")
         return None
-    if isinstance(key, Mapping):
-        root, mode = key.get("root"), key.get("mode")
-    elif isinstance(key, tuple | list) and len(key) == 2:
-        root, mode = key
-    else:
-        root, mode = getattr(key, "root", None), getattr(key, "mode", None)
-    if root is None or mode is None:
-        raise SonareValueError("key must be 'detect' or a key with a root and a mode")
-    return SonareKey(int(PitchClass(root)), _mode_value(mode), 1.0)
+    root, mode = _key_pair(key)
+    return SonareKey(int(PitchClass(cast(int, root))), _mode_value(cast(KeyMode, mode)), 1.0)
 
 
 @_guard_buffer("samples")

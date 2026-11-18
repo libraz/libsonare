@@ -20,6 +20,8 @@ from ._project_synth import (
     synth_enum_tables as synth_enum_tables,
 )
 from ._runtime import (
+    _METER_SEGMENT_KEYS,
+    _TEMPO_SEGMENT_KEYS,
     SonareProjectAssistSidecar,
     SonareProjectAudioSourceMetadata,
     SonareProjectChordSymbol,
@@ -38,6 +40,7 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _last_diagnostics,
+    _mapping_keys,
     _narrow_int,
     _ordinal_token,
     _require_instance,
@@ -50,6 +53,25 @@ from ._runtime import (
     _utf8_arg,
 )
 from .types import ProjectClip, ProjectMarker, ProjectSource, ProjectTrack
+
+_ASSIST_SIDECAR_KEYS = (
+    "module_id",
+    "payload",
+    "schema_version",
+    "target_track_id",
+    "region_start_ppq",
+    "region_end_ppq",
+)
+_CHORD_KEYS = (
+    "start_ppq",
+    "end_ppq",
+    "root_pc",
+    "quality",
+    "extensions",
+    "slash_bass_pc",
+    "roman_numeral",
+    "modulation_boundary",
+)
 
 
 class _ProjectInspectionMixin:
@@ -272,7 +294,8 @@ class _ProjectInspectionMixin:
         # Keep extension arrays and roman-numeral byte strings alive for the call.
         backing: list[object] = []
         if c_chords is not None:
-            for i, c in enumerate(rows):
+            for i, chord in enumerate(rows):
+                c = _mapping_keys(chord, _CHORD_KEYS, f"chords[{i}]")
                 extension_values = c.get("extensions", []) or []
                 if not isinstance(extension_values, Sequence) or isinstance(extension_values, str):
                     raise TypeError("chord extensions must be a sequence")
@@ -350,10 +373,10 @@ class _ProjectInspectionMixin:
         Sidecars sharing ``module_id`` + ``target_track_id`` + region scope are
         replaced; otherwise a new one is appended. ``module_id`` must be
         non-empty and ``payload`` is copied opaque bytes. The first argument
-        may alternatively be a descriptor mapping with camelCase keys:
-        ``moduleId`` (required), ``payload``, ``schemaVersion``,
-        ``targetTrackId``, ``regionStartPpq`` and ``regionEndPpq``. Unknown
-        descriptor keys are ignored.
+        may alternatively be a descriptor mapping with the same names as keys:
+        ``module_id`` (required), ``payload``, ``schema_version``,
+        ``target_track_id``, ``region_start_ppq`` and ``region_end_ppq``; any
+        other key is refused by name.
         """
         if isinstance(module_id, Mapping):
             if (
@@ -364,16 +387,16 @@ class _ProjectInspectionMixin:
                 or region_end_ppq != 0.0
             ):
                 raise TypeError("descriptor form cannot be mixed with legacy arguments")
-            descriptor = module_id
-            resolved_module_id = descriptor.get("moduleId")
+            descriptor = _mapping_keys(module_id, _ASSIST_SIDECAR_KEYS, "assist sidecar")
+            resolved_module_id = descriptor.get("module_id")
             if not isinstance(resolved_module_id, str):
-                raise TypeError("moduleId must be a string")
+                raise TypeError("module_id must be a string")
             module_id = resolved_module_id
             payload = cast(bytes, descriptor.get("payload", b""))
-            schema_version = cast(int, descriptor.get("schemaVersion", 0))
-            target_track_id = cast(int, descriptor.get("targetTrackId", 0))
-            region_start_ppq = cast(float, descriptor.get("regionStartPpq", 0.0))
-            region_end_ppq = cast(float, descriptor.get("regionEndPpq", 0.0))
+            schema_version = cast(int, descriptor.get("schema_version", 0))
+            target_track_id = cast(int, descriptor.get("target_track_id", 0))
+            region_start_ppq = cast(float, descriptor.get("region_start_ppq", 0.0))
+            region_end_ppq = cast(float, descriptor.get("region_end_ppq", 0.0))
         elif not isinstance(module_id, str):
             raise TypeError("module_id must be a string")
 
@@ -665,20 +688,20 @@ class _ProjectInspectionMixin:
         """Replace the project's tempo map.
 
         Each segment is a mapping (``start_ppq`` / ``bpm`` / optional
-        ``start_sample`` / ``end_bpm``) or a tuple
-        ``(start_ppq, bpm, start_sample=ignored, end_bpm=0.0)``. ``start_sample``
-        is accepted for ABI/source compatibility but ignored; sample positions
-        are derived during normalization. ``end_bpm`` 0 means a constant-tempo
-        segment. Pass an empty sequence to clear.
+        ``end_bpm``) or a tuple ``(start_ppq, bpm, start_sample=ignored,
+        end_bpm=0.0)``; sample positions are derived during normalization.
+        ``end_bpm`` 0 means a constant-tempo segment. Pass an empty sequence to
+        clear.
         """
         rows = list(segments)
         count = len(rows)
         c_segments = (SonareProjectTempoSegment * count)()
         for i, seg in enumerate(rows):
             if isinstance(seg, Mapping):
-                start_ppq = _narrow_double(seg["start_ppq"], "start_ppq")
-                bpm = _narrow_double(seg["bpm"], "bpm")
-                end_bpm = _narrow_double(seg.get("end_bpm", 0.0), "end_bpm")
+                fields = _mapping_keys(seg, _TEMPO_SEGMENT_KEYS, f"segments[{i}]")
+                start_ppq = _narrow_double(fields["start_ppq"], "start_ppq")
+                bpm = _narrow_double(fields["bpm"], "bpm")
+                end_bpm = _narrow_double(fields.get("end_bpm", 0.0), "end_bpm")
             else:
                 tup = tuple(seg)
                 if len(tup) < 2:
@@ -712,9 +735,10 @@ class _ProjectInspectionMixin:
             numerator: object
             denominator: object
             if isinstance(seg, Mapping):
-                start_ppq = _narrow_double(seg["start_ppq"], "start_ppq")
-                numerator = seg["numerator"]
-                denominator = seg["denominator"]
+                fields = _mapping_keys(seg, _METER_SEGMENT_KEYS, f"segments[{i}]")
+                start_ppq = _narrow_double(fields["start_ppq"], "start_ppq")
+                numerator = fields["numerator"]
+                denominator = fields["denominator"]
             else:
                 tup = tuple(seg)
                 if len(tup) < 3:

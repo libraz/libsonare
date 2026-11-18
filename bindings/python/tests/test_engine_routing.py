@@ -140,7 +140,7 @@ def test_engine_bus_sends_tap_before_or_after_gain_db() -> None:
                                 "bus_id": 2,
                                 "level_db": level_db,
                                 "enabled": enabled,
-                                "timing": timing,
+                                "send_timing": timing,
                             }
                         ],
                     },
