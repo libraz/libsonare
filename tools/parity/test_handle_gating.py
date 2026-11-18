@@ -228,19 +228,23 @@ def test_vocal_handle_aliases_credit_the_actual_facade_methods() -> None:
     assert ("vocal_render_job_begin", "python") in _active(unrelated), _active(unrelated)
 
 
-def test_vocal_abi_initializers_are_credited_only_by_name() -> None:
-    """Each struct seeder is an explicit allowlist entry; an unlisted one still gates."""
-    allow = allowlist_mod.load(_HERE / "allowlist.toml")
-    listed = _report(_c("vocal_note_edit_init", "project_vocal_edit_apply_desc_init"), _py(), allow)
-    assert _active(listed) == set(), _active(listed)
+def test_an_init_suffix_alone_is_not_a_seeder() -> None:
+    """Only a one-struct ``*_init`` is a seeder; the name alone credits nothing."""
+    native = {"python": [("py/x.py", "lib.sonare_decompose_with_init(s)\n")]}
+    bare = compare.build_report(
+        {"c": _c("vocal_note_edit_init"), "python": _py()},
+        allowlist_mod.Allowlist(),
+        ["c", "python"],
+        native_sources=native,
+    )
+    assert ("vocal_note_edit_init", "python") in _active(bare), _active(bare)
 
-    unlisted = _report(_c("vocal_unlisted_init"), _py(), allow)
-    assert ("vocal_unlisted_init", "python") in _active(unlisted), _active(unlisted)
-
-    unnamed = _report(_c("vocal_note_edit_init"), _py())
-    assert ("vocal_note_edit_init", "python") in _active(unnamed), _active(unnamed)
-
-    genuine = _report(_c("decompose_with_init"), _py())
+    genuine = compare.build_report(
+        {"c": _c("decompose_with_init"), "python": _py()},
+        allowlist_mod.Allowlist(),
+        ["c", "python"],
+        native_sources=native,
+    )
     assert ("decompose_with_init", "python") in _active(genuine), _active(genuine)
 
 
@@ -454,6 +458,79 @@ def test_a_count_and_by_index_pair_is_reached_by_its_collection() -> None:
     missing = _report(_c(*keys), _py(methods={"track_names": "Project"}))
     for key in keys:
         assert (key, "python") in _active(missing), _active(missing)
+
+
+def _seeder_c() -> Extraction:
+    ex = Extraction(surface="c")
+    ex.functions = [
+        FunctionSig(
+            key="vocal_widget_config_init",
+            surface="c",
+            raw_name="vocal_widget_config_init",
+            params=[Param(name="config", type="SonareWidgetConfig*")],
+            file="c.h",
+            line=1,
+        ),
+        FunctionSig(
+            key="vocal_widget_run",
+            surface="c",
+            raw_name="vocal_widget_run",
+            params=[Param(name="config", type="const SonareWidgetConfig*")],
+            file="c.h",
+            line=2,
+        ),
+        FunctionSig(
+            key="vocal_widget_describe",
+            surface="c",
+            raw_name="vocal_widget_describe",
+            params=[Param(name="out", type="SonareWidgetConfig*")],
+            file="c.h",
+            line=3,
+        ),
+    ]
+    return ex
+
+
+def _seeder_report(native: str):
+    allow = allowlist_mod.Allowlist()
+    return compare.build_report(
+        {"c": _seeder_c(), "python": _py()},
+        allow,
+        ["c", "python"],
+        native_sources={"python": [("py/_widget.py", native)]},
+    )
+
+
+def test_a_seeder_the_native_code_calls_is_covered() -> None:
+    """A facade that seeds the struct it fills reaches the seeder."""
+    rep = _seeder_report(
+        "cfg = SonareWidgetConfig()\n"
+        "lib.sonare_vocal_widget_config_init(ctypes.byref(cfg))\n"
+        "lib.sonare_vocal_widget_run(ctypes.byref(cfg))\n"
+    )
+    found = [f for f in rep.findings if f.key == "vocal_widget_config_init"]
+    assert found == [], found
+
+
+def test_a_struct_passed_in_without_its_seeder_is_active() -> None:
+    """Handing the library an unseeded struct sends a zero struct_size."""
+    rep = _seeder_report(
+        "cfg = SonareWidgetConfig()\n"
+        "# sonare_vocal_widget_config_init(cfg) is not called\n"
+        "lib.sonare_vocal_widget_run(ctypes.byref(cfg))\n"
+    )
+    active = [f for f in rep.active() if f.key == "vocal_widget_config_init"]
+    assert len(active) == 1, rep.findings
+    assert "without calling" in active[0].message and "py/_widget.py:3" in active[0].location
+
+
+def test_a_struct_the_surface_only_receives_needs_no_seeder() -> None:
+    """An out-parameter is filled by the entry that writes it."""
+    rep = _seeder_report(
+        "cfg = SonareWidgetConfig()\nlib.sonare_vocal_widget_describe(ctypes.byref(cfg))\n"
+    )
+    found = [f for f in rep.findings if f.key == "vocal_widget_config_init"]
+    assert [f.informational for f in found] == [True], found
 
 
 def _run_all() -> int:

@@ -711,12 +711,75 @@ def _strip_leading_input(names: list[str], roles: set[str]) -> list[str]:
     return names[_leading_input_group(names, roles) :]
 
 
+_SEEDER_STRUCT = re.compile(r"^(Sonare\w+)\*$")
+# Native code a surface runs: the ctypes modules, the Node addon, the embind TUs.
+_NATIVE_SOURCE_GLOBS = {
+    "python": ("bindings/python/src/libsonare", ("*.py",)),
+    "node": ("bindings/node/src/addon", ("*.cpp", "*.cc", "*.h")),
+    "wasm": ("src/wasm", ("*.cpp", "*.h")),
+}
+
+
+def load_native_sources(root: Path) -> dict[str, list[tuple[str, str]]]:
+    """Read each surface's native code as (repo-relative path, text) pairs."""
+    out: dict[str, list[tuple[str, str]]] = {}
+    for surface, (base, patterns) in _NATIVE_SOURCE_GLOBS.items():
+        files = sorted({f for pat in patterns for f in (root / base).rglob(pat)})
+        out[surface] = [
+            (str(f.relative_to(root)), f.read_text(encoding="utf-8", errors="replace"))
+            for f in files
+        ]
+    return out
+
+
+def _seeder_struct(sig: FunctionSig) -> str | None:
+    """The struct a ``*_init`` seeder fills, or None when ``sig`` is not a seeder."""
+    if not sig.key.endswith("_init") or len(sig.params) != 1:
+        return None
+    m = _SEEDER_STRUCT.match(sig.params[0].type.replace(" ", ""))
+    return m.group(1) if m else None
+
+
+def _struct_readers(c_index: dict[str, FunctionSig]) -> dict[str, list[str]]:
+    """C entries that read each struct (a ``const Sonare*`` parameter), by struct name."""
+    readers: dict[str, list[str]] = {}
+    for key, sig in c_index.items():
+        for p in sig.params:
+            m = re.fullmatch(r"const(Sonare\w+)\*", p.type.replace(" ", ""))
+            if m:
+                readers.setdefault(m.group(1), []).append(key)
+    return readers
+
+
+def _seeder_evidence(
+    key: str, readers: list[str], sources: list[tuple[str, str]]
+) -> tuple[bool, str | None]:
+    """Whether the native code calls ``sonare_<key>``, and where it first passes the
+    struct to an entry that reads it. Comments are dropped so prose is not a call.
+    """
+    call = re.compile(rf"\bsonare_{re.escape(key)}\s*\(")
+    read = (
+        re.compile(rf"\bsonare_(?:{'|'.join(map(re.escape, readers))})\s*\(") if readers else None
+    )
+    calls, read_at = False, None
+    for path, text in sources:
+        hash_comments = path.endswith(".py")
+        for lineno, line in enumerate(text.splitlines(), 1):
+            code = line.split("#", 1)[0] if hash_comments else line.split("//", 1)[0]
+            if call.search(code):
+                calls = True
+            elif read_at is None and read is not None and read.search(code):
+                read_at = f"{path}:{lineno}"
+    return calls, read_at
+
+
 def build_report(
     extractions: dict[str, Extraction],
     allow: Allowlist,
     selected: list[str],
     core_configs: dict[str, CoreConfig] | None = None,
     wasm_internal: WasmInternal | None = None,
+    native_sources: dict[str, list[tuple[str, str]]] | None = None,
 ) -> Report:
     rep = Report(surfaces=selected, allowlist=allow)
     indexed = {s: _index(ex) for s, ex in extractions.items()}
@@ -741,6 +804,8 @@ def build_report(
         for s in selected
     }
     free_keys = {s: _free_keys(extractions.get(s)) for s in selected}
+
+    struct_readers = _struct_readers(c_index)
 
     rep.handle_keys = sorted(k for k in c_index if _is_handle_key(k, handle_prefixes))
 
@@ -801,6 +866,27 @@ def build_report(
                         free_keys.get(s, set()) if prefix else set(indexed.get(s, {}))
                     )
                 covered = bool(aliases) and any(a in alias_symbols for a in aliases)
+            # A seeder is reached through the native code that fills its struct.
+            seeder = _seeder_struct(c_index[key]) if native_sources else None
+            seeder_read_at = None
+            if seeder is not None and not covered and s in native_sources:
+                calls, seeder_read_at = _seeder_evidence(
+                    key, struct_readers.get(seeder, []), native_sources[s]
+                )
+                if calls:
+                    continue
+                if seeder_read_at is None:
+                    rep.findings.append(
+                        Finding(
+                            category="coverage",
+                            key=key,
+                            surface=s,
+                            message=f"seeder '{key}': {s} never passes {seeder} in",
+                            location=f"{c_index[key].file}:{c_index[key].line}",
+                            informational=True,
+                        )
+                    )
+                    continue
             # Every surface reaches a verdict here: the key is either exposed on
             # this surface or it is not, so coverage never declines a comparison.
             if allow.coverage_ok(
@@ -829,6 +915,8 @@ def build_report(
                 )
             elif s == "cli":
                 msg = f"C function '{key}' not exposed by the (curated) CLI"
+            elif seeder_read_at is not None:
+                msg = f"{s} passes {seeder} in without calling seeder '{key}', so its struct_size is zero"
             elif is_handle:
                 msg = (
                     f"C handle/class op '{key}' is not exposed on the {s} facade "
@@ -842,7 +930,7 @@ def build_report(
                     key=key,
                     surface=s,
                     message=msg,
-                    location=f"{c_index[key].file}:{c_index[key].line}",
+                    location=seeder_read_at or f"{c_index[key].file}:{c_index[key].line}",
                     informational=informational,
                 )
             )

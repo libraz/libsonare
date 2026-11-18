@@ -90,7 +90,14 @@ def run(
     resolved = {**_EXTRACTORS, **(extractors or {})}
     extractions = {s: resolved[s](root) for s in selected}
     wasm_int = wasm_internal.extract(root) if "wasm" in selected else None
-    return compare.build_report(extractions, allow, selected, core_configs, wasm_int)
+    return compare.build_report(
+        extractions,
+        allow,
+        selected,
+        core_configs,
+        wasm_int,
+        native_sources=compare.load_native_sources(root),
+    )
 
 
 def _audit_allowlist(rep, selected: list[str], path: Path) -> int:

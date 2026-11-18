@@ -209,26 +209,7 @@ node = [
   "last_error_code",
   "last_diagnostic_count",
   "last_diagnostic",
-  "diagnostic_init",
   "boundary_options_default",
-  "project_vocal_edit_apply_desc_init",
-  "project_vocal_edit_apply_result_init",
-  "project_vocal_edit_dependencies_result_init",
-  "project_vocal_original_source_init",
-  "project_vocal_rehydrate_result_init",
-  "vocal_analysis_init",
-  "vocal_analysis_result_init",
-  "vocal_capabilities_init",
-  "vocal_create_options_init",
-  "vocal_edit_result_init",
-  "vocal_error_detail_init",
-  "vocal_note_edit_init",
-  "vocal_notes_result_init",
-  "vocal_operation_init",
-  "vocal_pitch_result_init",
-  "vocal_render_result_init",
-  "vocal_restore_options_init",
-  "vocal_state_bytes_init",
   "meter_options_default",
   "music_analyze_options_default",
   "transcribe_config_default",
@@ -264,17 +245,6 @@ node = [
   "mel_to_audio_checked_ex",
   "mfcc_to_audio_checked_ex",
   "mfcc_to_audio_checked_ex2",
-  # Seeds SonareDownmixOptions; the facades take normalize / include LFE as downmix options.
-  "downmix_options_init",
-  # Seed the room configs; the facades take each field as an option and keep the core default
-  # for an absent one.
-  "rir_synth_config_init",
-  "room_morph_config_init",
-  # Seed the polyphonic analysis config; the facades take each field as an option and keep the
-  # core default for an absent one.
-  "polyphonic_config_init",
-  # Seed the master-meter config; the facades take enabled and truePeakOversample.
-  "mixer_master_meter_config_init",
   # C-side canonical enum-name supplier consumed internally by the facade
   # snapshot/test helpers; not exposed as a same-named public function.
   "synth_enum_names",
@@ -356,26 +326,7 @@ wasm = [
   "last_error_code",
   "last_diagnostic_count",
   "last_diagnostic",
-  "diagnostic_init",
   "boundary_options_default",
-  "project_vocal_edit_apply_desc_init",
-  "project_vocal_edit_apply_result_init",
-  "project_vocal_edit_dependencies_result_init",
-  "project_vocal_original_source_init",
-  "project_vocal_rehydrate_result_init",
-  "vocal_analysis_init",
-  "vocal_analysis_result_init",
-  "vocal_capabilities_init",
-  "vocal_create_options_init",
-  "vocal_edit_result_init",
-  "vocal_error_detail_init",
-  "vocal_note_edit_init",
-  "vocal_notes_result_init",
-  "vocal_operation_init",
-  "vocal_pitch_result_init",
-  "vocal_render_result_init",
-  "vocal_restore_options_init",
-  "vocal_state_bytes_init",
   "meter_options_default",
   "music_analyze_options_default",
   "transcribe_config_default",
@@ -397,17 +348,6 @@ wasm = [
   "mel_to_audio_checked_ex",
   "mfcc_to_audio_checked_ex",
   "mfcc_to_audio_checked_ex2",
-  # Seeds SonareDownmixOptions; the facades take normalize / include LFE as downmix options.
-  "downmix_options_init",
-  # Seed the room configs; the facades take each field as an option and keep the core default
-  # for an absent one.
-  "rir_synth_config_init",
-  "room_morph_config_init",
-  # Seed the polyphonic analysis config; the facades take each field as an option and keep the
-  # core default for an absent one.
-  "polyphonic_config_init",
-  # Seed the master-meter config; the facades take enabled and truePeakOversample.
-  "mixer_master_meter_config_init",
   "synth_enum_names",
   # Unified-analysis variants folded into the base facade analyze /
   # analyzeWithProgress / analyzeMelody (WASM keeps its native analyze() object).
@@ -483,26 +423,7 @@ python = [
   "last_error_code",
   "last_diagnostic_count",
   "last_diagnostic",
-  "diagnostic_init",
   "boundary_options_default",
-  "project_vocal_edit_apply_desc_init",
-  "project_vocal_edit_apply_result_init",
-  "project_vocal_edit_dependencies_result_init",
-  "project_vocal_original_source_init",
-  "project_vocal_rehydrate_result_init",
-  "vocal_analysis_init",
-  "vocal_analysis_result_init",
-  "vocal_capabilities_init",
-  "vocal_create_options_init",
-  "vocal_edit_result_init",
-  "vocal_error_detail_init",
-  "vocal_note_edit_init",
-  "vocal_notes_result_init",
-  "vocal_operation_init",
-  "vocal_pitch_result_init",
-  "vocal_render_result_init",
-  "vocal_restore_options_init",
-  "vocal_state_bytes_init",
   "meter_options_default",
   "music_analyze_options_default",
   "transcribe_config_default",
@@ -526,17 +447,6 @@ python = [
   "mel_to_audio_checked_ex",
   "mfcc_to_audio_checked_ex",
   "mfcc_to_audio_checked_ex2",
-  # Seeds SonareDownmixOptions; the facades take normalize / include LFE as downmix options.
-  "downmix_options_init",
-  # Seed the room configs; the facades take each field as an option and keep the core default
-  # for an absent one.
-  "rir_synth_config_init",
-  "room_morph_config_init",
-  # Seed the polyphonic analysis config; the facades take each field as an option and keep the
-  # core default for an absent one.
-  "polyphonic_config_init",
-  # Seed the master-meter config; the facades take enabled and truePeakOversample.
-  "mixer_master_meter_config_init",
   "synth_enum_names",
   # Unified-analysis variants folded into the base facade `analyze` /
   # `analyze_with_progress` / `analyze_melody` (use_pyin/center params).
