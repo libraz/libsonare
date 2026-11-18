@@ -22,7 +22,7 @@ import math
 import numbers
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, SupportsFloat, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, Literal, SupportsFloat, TypeAlias, cast, get_args
 
 if TYPE_CHECKING:
     from ._project import Project, ProjectTimeline
@@ -126,6 +126,7 @@ from ._project_synth import (
 )
 from ._runtime import (
     _UINT32_MAX,
+    AutomationCurve,
     SonareAutomationLaneDesc,
     SonareAutomationPoint,
     SonareMidiCcBinding,
@@ -137,6 +138,7 @@ from ._runtime import (
     _require_export,
     _resolve_enum,
     _to_c_size_t,
+    _token_ordinal,
     _utf8_arg,
 )
 
@@ -157,29 +159,15 @@ _TRACK_KIND_NAMES = {
     "aux": TRACK_AUX,
 }
 
-# Clip fade-curve ordinals (mirror SonareProjectFadeCurve).
-FADE_CURVE_LINEAR = 0
-FADE_CURVE_EQUAL_POWER = 1
-FADE_CURVE_EXPONENTIAL = 2
-FADE_CURVE_LOGARITHMIC = 3
+# Clip fade curve; a token's index is its SonareProjectFadeCurve ordinal.
+ProjectFadeCurve: TypeAlias = Literal["linear", "equalPower", "exponential", "logarithmic"]
+"""Shape of a clip fade-in or fade-out."""
+_FADE_CURVES: tuple[str, ...] = get_args(ProjectFadeCurve)
 
-_FADE_CURVE_NAMES = {
-    "linear": FADE_CURVE_LINEAR,
-    "equalPower": FADE_CURVE_EQUAL_POWER,
-    "exponential": FADE_CURVE_EXPONENTIAL,
-    "logarithmic": FADE_CURVE_LOGARITHMIC,
-}
-
-# Clip loop-mode ordinals (mirror SonareProjectLoopMode).
-LOOP_MODE_OFF = 0
-LOOP_MODE_LOOP = 1
-
-_LOOP_MODE_NAMES = {
-    "off": LOOP_MODE_OFF,
-    "none": LOOP_MODE_OFF,
-    "loop": LOOP_MODE_LOOP,
-    "on": LOOP_MODE_LOOP,
-}
+# Clip loop mode; a token's index is its SonareProjectLoopMode ordinal.
+ProjectLoopMode: TypeAlias = Literal["off", "loop"]
+"""Whether a clip loops."""
+_LOOP_MODES: tuple[str, ...] = get_args(ProjectLoopMode)
 
 # Automation target-kind ordinals (mirror SonareAutomationTargetKind).  The
 # optional Python value is deliberately kept separate from the legacy C
@@ -241,7 +229,7 @@ def _automation_target_param_id_value(value: object) -> int:
 def _automation_lane_args(
     target_param_id: object,
     points: (
-        Sequence[tuple[float, float, int | str]]
+        Sequence[tuple[float, float, AutomationCurve]]
         | Sequence[Sequence[float]]
         | Sequence[Mapping[str, object]]
         | Mapping[str, object]
@@ -250,7 +238,7 @@ def _automation_lane_args(
     target_kind: object,
 ) -> tuple[
     object,
-    Sequence[tuple[float, float, int | str]]
+    Sequence[tuple[float, float, AutomationCurve]]
     | Sequence[Sequence[float]]
     | Sequence[Mapping[str, object]]
     | None,
@@ -287,7 +275,7 @@ def _automation_lane_args(
     return (
         resolved_target,
         cast(
-            Sequence[tuple[float, float, int | str]]
+            Sequence[tuple[float, float, AutomationCurve]]
             | Sequence[Sequence[float]]
             | Sequence[Mapping[str, object]]
             | None,
@@ -297,26 +285,18 @@ def _automation_lane_args(
     )
 
 
-def _fade_curve_value(curve: str | int) -> int:
-    if isinstance(curve, str):
-        out = ctypes.c_uint32()
-        _check(
-            _get_lib().sonare_project_fade_curve_from_name(
-                _utf8_arg(curve, "curve"), ctypes.byref(out)
-            )
-        )
-        return int(out.value)
-    return _resolve_enum(curve, _FADE_CURVE_NAMES, "fade curve")
+def _fade_curve_value(curve: ProjectFadeCurve) -> int:
+    return _token_ordinal(curve, _FADE_CURVES, "fade curve")
 
 
-def _loop_mode_value(mode: str | int) -> int:
-    return _resolve_enum(mode, _LOOP_MODE_NAMES, "loop mode")
+def _loop_mode_value(mode: ProjectLoopMode) -> int:
+    return _token_ordinal(mode, _LOOP_MODES, "loop mode")
 
 
 def _automation_lane_desc(
     target_param_id: object,
     points: (
-        Sequence[tuple[float, float, int | str]]
+        Sequence[tuple[float, float, AutomationCurve]]
         | Sequence[Sequence[float]]
         | Sequence[Mapping[str, object]]
         | None
@@ -336,7 +316,7 @@ def _automation_lane_desc(
         if isinstance(pt, Mapping):
             ppq_value = pt.get("ppq")
             value_value = pt.get("value")
-            curve_value = pt.get("curve", pt.get("curve_to_next", pt.get("curveToNext", 0)))
+            curve_value = pt.get("curve", pt.get("curve_to_next", pt.get("curveToNext", "linear")))
             seq = (ppq_value, value_value, curve_value)
         else:
             seq = tuple(pt)
@@ -344,7 +324,7 @@ def _automation_lane_desc(
             raise SonareValueError(f"points[{i}] must contain at least (ppq, value)")
         ppq = float(cast(SupportsFloat, seq[0]))
         value = float(cast(SupportsFloat, seq[1]))
-        curve = _curve_value(cast(int | str, seq[2])) if len(seq) >= 3 else 0
+        curve = _curve_value(seq[2]) if len(seq) >= 3 else 0
         if not math.isfinite(ppq):
             raise SonareValueError(f"points[{i}].ppq must be a finite number")
         if not math.isfinite(value):

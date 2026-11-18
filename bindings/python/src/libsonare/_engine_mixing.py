@@ -12,7 +12,7 @@ from ._ffi import SonareSurroundPan
 from ._narrowing import _narrow_double
 from ._runtime import (
     _UINT32_MAX,
-    PanLawInput,
+    PanLaw,
     SendTiming,
     SidechainSourceKind,
     SonareEngineBus,
@@ -438,12 +438,12 @@ class _EngineMixingMixin:
             )
         )
 
-    def set_track_strip_pan_law(self, track_id: int, pan_law: PanLawInput) -> None:
-        """Set a track strip's pan law (a ``PanLawName`` alias, enum, or int 0..3).
+    def set_track_strip_pan_law(self, track_id: int, pan_law: PanLaw) -> None:
+        """Set a track strip's pan law (a :data:`PanLaw` token such as ``"const3Db"``).
 
         Balance mode keeps centre unity and uses the law only for the far-channel
         taper; stereo-pan and dual-pan modes take the law's centre attenuation.
-        A mono source is unity at centre under every law (see :class:`PanLaw`).
+        A mono source is unity at centre under every law (see :data:`PanLaw`).
         """
         _check(
             _get_lib().sonare_engine_set_track_strip_pan_law(
@@ -751,8 +751,8 @@ class _EngineMixingMixin:
             )
         )
 
-    def set_bus_strip_pan_law(self, bus_id: int, pan_law: PanLawInput) -> None:
-        """Set a bus strip's pan law (a ``PanLawName`` alias, enum, or int 0..3).
+    def set_bus_strip_pan_law(self, bus_id: int, pan_law: PanLaw) -> None:
+        """Set a bus strip's pan law (a :data:`PanLaw` token such as ``"const3Db"``).
 
         Bus-strip counterpart of :meth:`set_track_strip_pan_law`.
         """

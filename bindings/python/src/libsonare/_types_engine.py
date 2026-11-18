@@ -133,7 +133,7 @@ class AutomationPoint:
 
     ppq: float
     value: float
-    curve_to_next: AutomationCurve = AutomationCurve.LINEAR
+    curve_to_next: AutomationCurve = "linear"
 
 
 class MarkerKind(IntEnum):

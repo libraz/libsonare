@@ -6384,3 +6384,131 @@ changed = "returns a StereoBlock named tuple instead of a bare tuple"
 domain = "effects"
 rule = "typed-results"
 test = "bindings/python/tests/test_state_reads_are_properties.py::test_process_planar_stereo_returns_a_stereo_block"
+
+[[entry]]
+kind = "type"
+old = "PanLaw"
+changed = "Literal['const3Db', 'const4.5Db', 'const6Db', 'linear0Db']; the IntEnum and its members are removed"
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_closed_sets_are_literal_types_in_ordinal_order"
+
+[[entry]]
+kind = "type"
+old = "AutomationCurve"
+changed = "Literal['linear', 'exponential', 'hold', 'sCurve']; the IntEnum and its members are removed"
+domain = "mastering"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_closed_sets_are_literal_types_in_ordinal_order"
+
+[[entry]]
+kind = "method"
+old = "Mixer.set_pan_law"
+changed = "takes an exact PanLaw token; another spelling is SonareValueError, a number is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_mixing.py::test_set_pan_law_matches_shared_name_corpus"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_track_strip_pan_law"
+changed = "takes an exact PanLaw token; another spelling is SonareValueError, a number is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_engine_mixer.py::test_engine_track_strip_pan_and_send_setters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_bus_strip_pan_law"
+changed = "takes an exact PanLaw token; another spelling is SonareValueError, a number is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_engine_mixer.py::test_engine_bus_strip_pan_and_send_setters"
+
+[[entry]]
+kind = "option"
+old = "Mixer.schedule_fader_automation(curve)"
+changed = "an exact AutomationCurve token, default 'linear'; 's-curve' is now 'sCurve' and a number is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_mixing.py::test_automation_curves_match_shared_name_corpus"
+
+[[entry]]
+kind = "option"
+old = "Mixer.schedule_pan_automation(curve)"
+changed = "an exact AutomationCurve token, default 'linear'; 's-curve' is now 'sCurve' and a number is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_mixing.py::test_automation_curves_match_shared_name_corpus"
+
+[[entry]]
+kind = "option"
+old = "Mixer.schedule_width_automation(curve)"
+changed = "an exact AutomationCurve token, default 'linear'; 's-curve' is now 'sCurve' and a number is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_mixing.py::test_automation_curves_match_shared_name_corpus"
+
+[[entry]]
+kind = "option"
+old = "Mixer.schedule_send_automation(curve)"
+changed = "an exact AutomationCurve token, default 'linear'; 's-curve' is now 'sCurve' and a number is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_mixing.py::test_automation_curves_match_shared_name_corpus"
+
+[[entry]]
+kind = "option"
+old = "Mixer.schedule_insert_automation(curve)"
+changed = "an exact AutomationCurve token, default 'linear'; 's-curve' is now 'sCurve' and a number is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_mixing.py::test_automation_curves_match_shared_name_corpus"
+
+[[entry]]
+kind = "field"
+old = "ParameterInfo.default_curve"
+changed = "an AutomationCurve token (was an IntEnum member)"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_engine.py::test_engine_rejects_out_of_range_automation_curve"
+
+[[entry]]
+kind = "field"
+old = "AutomationPoint.curve_to_next"
+changed = "an AutomationCurve token, default 'linear'; a number is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_engine.py::test_engine_rejects_out_of_range_automation_curve"
+
+[[entry]]
+kind = "option"
+old = "Project.set_clip_fade(fade_in_curve)"
+changed = "a ProjectFadeCurve token only; the FADE_CURVE_* ordinals are removed and a number is TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_a_fade_curve_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "Project.set_clip_fade(fade_out_curve)"
+changed = "a ProjectFadeCurve token only; the FADE_CURVE_* ordinals are removed and a number is TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_a_fade_curve_ordinal_is_a_type_error"
+
+[[entry]]
+kind = "option"
+old = "Project.set_clip_loop(loop_mode)"
+changed = "'off' or 'loop' only; 'on', 'none' and the LOOP_MODE_* ordinals are refused"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_the_loop_mode_is_off_or_loop"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.set_config_pod"
+changed = "an enum field given as a number is TypeError (was SonareValueError)"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_exact_closed_set_tokens.py::test_a_voice_changer_enum_ordinal_is_a_type_error"

@@ -881,14 +881,14 @@ class _ProjectEditMixin:
         fade_in_length_ppq: float = 0.0,
         fade_out_length_ppq: float = 0.0,
         *,
-        fade_in_curve: str | int = FADE_CURVE_LINEAR,
-        fade_out_curve: str | int = FADE_CURVE_LINEAR,
+        fade_in_curve: ProjectFadeCurve = "linear",
+        fade_out_curve: ProjectFadeCurve = "linear",
     ) -> None:
         """Set a clip's fade-in and fade-out regions via an undoable edit.
 
         Each fade length (PPQ) must be finite and >= 0 (0 = no fade); each curve
-        is a :data:`FADE_CURVE_*` ordinal or name (``"linear"`` / ``"equalPower"``
-        / ``"exponential"`` / ``"logarithmic"``).
+        is a token (``"linear"`` / ``"equalPower"`` / ``"exponential"`` /
+        ``"logarithmic"``).
         """
         fin = _narrow_double(fade_in_length_ppq, "fade_in_length_ppq")
         fout = _narrow_double(fade_out_length_ppq, "fade_out_length_ppq")
@@ -910,13 +910,13 @@ class _ProjectEditMixin:
     def set_clip_loop(
         self,
         clip_id: int,
-        loop_mode: str | int = LOOP_MODE_OFF,
+        loop_mode: ProjectLoopMode = "off",
         loop_length_ppq: float = 0.0,
         loop_crossfade_ppq: float = 0.0,
     ) -> None:
         """Set a clip's loop mode + loop length (PPQ) via an undoable edit.
 
-        ``loop_mode`` is a :data:`LOOP_MODE_*` ordinal or name. When looping,
+        ``loop_mode`` is ``"off"`` or ``"loop"``. When looping,
         ``loop_length_ppq`` must be finite and >= 0, where ``0`` means "loop the
         entire clip" (the effective length is resolved from the clip's own
         duration). ``loop_crossfade_ppq`` is an optional equal-power crossfade at
@@ -1004,7 +1004,7 @@ class _ProjectEditMixin:
         track_id: int,
         target_param_id: int | Mapping[str, object],
         points: (
-            Sequence[tuple[float, float, int | str]]
+            Sequence[tuple[float, float, AutomationCurve]]
             | Sequence[Sequence[float]]
             | Sequence[Mapping[str, object]]
             | Mapping[str, object]
@@ -1015,7 +1015,7 @@ class _ProjectEditMixin:
         """Append an automation lane and return its stable target parameter id.
 
         ``points`` is an optional list of ``(ppq, value, curve)`` breakpoints
-        (``curve`` is an :class:`AutomationCurve` ordinal / name; default linear).
+        (``curve`` is an :data:`AutomationCurve` token; default ``"linear"``).
         ``target_param_id`` must be non-zero; zero is reserved as the unset id.
         Omit ``target_kind`` to use the legacy opaque-lane ABI. Supplying
         ``"opaque"``/``0``, ``"track-fader-db"``/``1``, or
@@ -1075,7 +1075,7 @@ class _ProjectEditMixin:
         track_id: int,
         target_param_id: int | Mapping[str, object],
         points: (
-            Sequence[tuple[float, float, int | str]]
+            Sequence[tuple[float, float, AutomationCurve]]
             | Sequence[Sequence[float]]
             | Sequence[Mapping[str, object]]
             | Mapping[str, object]

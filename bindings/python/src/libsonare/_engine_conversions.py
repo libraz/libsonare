@@ -6,9 +6,11 @@ import ctypes
 import json
 import operator
 from collections.abc import Mapping, Sequence
+from typing import cast
 
 from ._narrowing import _narrow_double
 from ._runtime import (
+    _AUTOMATION_CURVES,
     _C_INT_MAX,
     _C_INT_MIN,
     _UINT32_MAX,
@@ -134,7 +136,7 @@ def _parameter_from_c(raw: SonareParameterInfo) -> ParameterInfo:
         max_value=float(raw.max_value),
         default_value=float(raw.default_value),
         rt_safe=bool(raw.rt_safe),
-        default_curve=AutomationCurve(int(raw.default_curve)),
+        default_curve=cast(AutomationCurve, _AUTOMATION_CURVES[int(raw.default_curve)]),
     )
 
 

@@ -82,6 +82,7 @@ from ._runtime import (
     _UINT8_MAX,
     SonareValueError,
     _check,
+    _curve_value,
     _get_lib,
     _int_refusal,
     _narrow_int,
@@ -94,7 +95,6 @@ from ._runtime import (
     _to_c_uint32,
 )
 from .types import (
-    AutomationCurve,
     AutomationPoint,
     EngineClip,
     EngineMarker,
@@ -538,7 +538,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         raw.max_value = float(info.max_value)
         raw.default_value = float(info.default_value)
         raw.rt_safe = 1 if info.rt_safe else 0
-        raw.default_curve = int(AutomationCurve(info.default_curve))
+        raw.default_curve = _curve_value(info.default_curve)
         _check(_get_lib().sonare_engine_add_parameter(self._require_handle(), ctypes.byref(raw)))
 
     def clear_parameters(self) -> None:
@@ -592,7 +592,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 SonareAutomationPoint(
                     _narrow_double(point.ppq, "point.ppq"),
                     _narrow_double(point.value, "point.value"),
-                    int(AutomationCurve(point.curve_to_next)),
+                    _curve_value(point.curve_to_next),
                 )
                 for point in points
             ]

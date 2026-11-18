@@ -19,10 +19,10 @@ from ._project_inspection import _ProjectInspectionMixin
 from ._project_midi import _ProjectMidiMixin
 from ._project_model import *  # noqa: F403
 from ._project_model import (
-    _FADE_CURVE_NAMES as _FADE_CURVE_NAMES,
+    _FADE_CURVES as _FADE_CURVES,
 )
 from ._project_model import (
-    _LOOP_MODE_NAMES as _LOOP_MODE_NAMES,
+    _LOOP_MODES as _LOOP_MODES,
 )
 from ._project_model import (
     _SYNTH_WAVEFORM_NAMES as _SYNTH_WAVEFORM_NAMES,

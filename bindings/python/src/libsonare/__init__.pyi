@@ -15,6 +15,8 @@ from ._project import MidiRouteResult as MidiRouteResult
 from ._project import NotePairValidation as NotePairValidation
 from ._project import Project as Project
 from ._project import ProjectDeserializeResult as ProjectDeserializeResult
+from ._project import ProjectFadeCurve as ProjectFadeCurve
+from ._project import ProjectLoopMode as ProjectLoopMode
 from ._project import ProjectTimeline as ProjectTimeline
 from ._project import SampleBank as SampleBank
 from ._project import Sf2InstrumentConfig as Sf2InstrumentConfig

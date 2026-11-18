@@ -126,7 +126,6 @@ def abi_version() -> int: ...
 def engine_abi_version() -> int: ...
 def voice_changer_abi_version() -> int | None: ...
 
-AutomationCurveArg: TypeAlias = AutomationCurve | str | int
 IntSamples: TypeAlias = Sequence[int] | list[int] | np.ndarray[Any, Any]
 MasteringParamValue: TypeAlias = float | int | bool
 MasteringParams: TypeAlias = dict[str, MasteringParamValue]
@@ -1383,7 +1382,7 @@ class Mixer:
     def set_polarity_invert(
         self, strip: StripRef, invert_left: bool, invert_right: bool
     ) -> None: ...
-    def set_pan_law(self, strip: StripRef, pan_law: PanLaw | str | int) -> None: ...
+    def set_pan_law(self, strip: StripRef, pan_law: PanLaw) -> None: ...
     def set_channel_delay_samples(self, strip: StripRef, delay_samples: int) -> None: ...
     def set_vca_offset_db(self, strip: StripRef, offset_db: float) -> None: ...
     def set_dual_pan(self, strip: StripRef, left: float, right: float) -> None: ...
@@ -1429,21 +1428,21 @@ class Mixer:
         strip: StripRef,
         sample_pos: int,
         fader_db: float,
-        curve: AutomationCurveArg = AutomationCurve.LINEAR,
+        curve: AutomationCurve = "linear",
     ) -> None: ...
     def schedule_pan_automation(
         self,
         strip: StripRef,
         sample_pos: int,
         pan: float,
-        curve: AutomationCurveArg = AutomationCurve.LINEAR,
+        curve: AutomationCurve = "linear",
     ) -> None: ...
     def schedule_width_automation(
         self,
         strip: StripRef,
         sample_pos: int,
         width: float,
-        curve: AutomationCurveArg = AutomationCurve.LINEAR,
+        curve: AutomationCurve = "linear",
     ) -> None: ...
     def schedule_send_automation(
         self,
@@ -1451,7 +1450,7 @@ class Mixer:
         send_index: int,
         sample_pos: int,
         db: float,
-        curve: AutomationCurveArg = AutomationCurve.LINEAR,
+        curve: AutomationCurve = "linear",
     ) -> None: ...
     def schedule_insert_automation(
         self,
@@ -1460,7 +1459,7 @@ class Mixer:
         param_id: int,
         sample_pos: int,
         value: float,
-        curve: AutomationCurveArg = AutomationCurve.LINEAR,
+        curve: AutomationCurve = "linear",
     ) -> None: ...
     def process_stereo(
         self,

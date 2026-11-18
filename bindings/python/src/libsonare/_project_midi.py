@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 
@@ -33,6 +33,8 @@ from ._project_synth import (
     synth_enum_tables as synth_enum_tables,
 )
 from ._runtime import (
+    _AUTOMATION_CURVES,
+    AutomationCurve,
     SonareAutomationPoint,
     SonareMidiCcBinding,
     SonareMidiEventPod,
@@ -1009,7 +1011,7 @@ class _ProjectMidiMixin:
     def midi_cc_to_breakpoint(
         bindings: Sequence[MidiCcBinding | Mapping[str, object]],
         event: tuple[float, int, int] | Sequence[float],
-    ) -> tuple[float, float, int] | None:
+    ) -> tuple[float, float, AutomationCurve] | None:
         """Convert one CC ``event`` to an automation breakpoint via a binding table.
 
         Returns ``(ppq, value, curve_to_next)`` or ``None`` when the event does
@@ -1037,7 +1039,8 @@ class _ProjectMidiMixin:
         if rc == SONARE_ERROR_INVALID_STATE:
             return None
         _check(rc)
-        return (float(pt.ppq), float(pt.value), int(pt.curve_to_next))
+        curve = cast(AutomationCurve, _AUTOMATION_CURVES[int(pt.curve_to_next)])
+        return (float(pt.ppq), float(pt.value), curve)
 
     @staticmethod
     def midi_param_to_cc(

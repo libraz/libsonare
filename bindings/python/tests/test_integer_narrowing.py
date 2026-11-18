@@ -84,20 +84,20 @@ def test_a_wrapped_bitmask_is_refused_rather_than_read_as_a_different_scale() ->
 
 def test_an_out_of_range_sample_position_is_refused(mixer_scene) -> None:
     """The 64-bit reader."""
-    mixer_scene.schedule_fader_automation("vocal", 0, -6.0, 0)
+    mixer_scene.schedule_fader_automation("vocal", 0, -6.0)
     for value in (2**63, 2**63 + 2, -(2**63) - 1):
         with pytest.raises(SonareValueError, match="sample_pos"):
-            mixer_scene.schedule_fader_automation("vocal", value, -6.0, 0)
+            mixer_scene.schedule_fader_automation("vocal", value, -6.0)
 
 
 def test_an_out_of_range_index_is_refused(mixer_scene) -> None:
     """The unsigned 32-bit readers behind an insert automation target."""
-    mixer_scene.schedule_insert_automation(0, 0, 0, 0, 0.5, 0)
+    mixer_scene.schedule_insert_automation(0, 0, 0, 0, 0.5)
     for value in (-1, 2**32, 2**32 + 2):
         with pytest.raises(SonareValueError, match="insert_index"):
-            mixer_scene.schedule_insert_automation(0, value, 0, 0, 0.5, 0)
+            mixer_scene.schedule_insert_automation(0, value, 0, 0, 0.5)
         with pytest.raises(SonareValueError, match="param_id"):
-            mixer_scene.schedule_insert_automation(0, 0, value, 0, 0.5, 0)
+            mixer_scene.schedule_insert_automation(0, 0, value, 0, 0.5)
 
 
 def _cc_sweep() -> list:
@@ -252,7 +252,7 @@ def arrangement_project():
     for clip, source in zip(clips, (1, 2), strict=True):
         project.set_clip_takes(clip, [{"id": 1, "source_id": source}])
     for track in tracks:
-        project.add_automation_lane(track, 7, [(0.0, 0.25, 0)])
+        project.add_automation_lane(track, 7, [(0.0, 0.25, "linear")])
     return project, tracks, clips, spare
 
 
@@ -266,7 +266,7 @@ def test_a_wrapped_arrangement_id_is_refused_rather_than_selecting_another_objec
     an argument its own edit never reads.
     """
     project, (track_a, track_b), (clip_a, clip_b), (spare_a, spare_b) = arrangement_project
-    points = [(0.0, 0.5, 0)]
+    points = [(0.0, 0.5, "linear")]
     segment = [{"start_ppq": 0.0, "end_ppq": 100.0, "take_id": 1}]
 
     def applied(edit, value) -> str:
@@ -698,7 +698,7 @@ def _wrong_type_sites():
     from libsonare._effects_note_model import _note_set_index
     from libsonare._project_model import _automation_target_kind_value, _validate_midi_event_word
     from libsonare._project_synth import _unsigned
-    from libsonare._runtime import _curve_value
+    from libsonare._runtime import _meter_tap_value
     from libsonare.vocal_edit import _finite_float
 
     return [
@@ -707,7 +707,7 @@ def _wrong_type_sites():
         ("note_set_index", lambda v: _note_set_index("fn", "index", v), "x", 1.5),
         ("target_kind", _automation_target_kind_value, [], 1.5),
         ("midi_word", lambda v: _validate_midi_event_word(v, "word"), "x", -1),
-        ("enum", _curve_value, [], 1.5),
+        ("enum", _meter_tap_value, [], 1.5),
     ]
 
 

@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from libsonare import ErrorCode, SonareValueError
-from libsonare._runtime import _pan_law_value
+from libsonare._runtime import _curve_value, _pan_law_value
 
 from ._helpers import LIB_AVAILABLE, raises_coded
 
@@ -19,6 +19,11 @@ _PAN_LAW_CORPUS = json.loads(
     (Path(__file__).resolve().parents[3] / "tests/conformance/pan_law_names.json").read_text(
         encoding="utf-8"
     )
+)
+_AUTOMATION_CURVE_CORPUS = json.loads(
+    (
+        Path(__file__).resolve().parents[3] / "tests/conformance/automation_curve_names.json"
+    ).read_text(encoding="utf-8")
 )
 
 
@@ -302,15 +307,15 @@ def test_read_goniometer_latest_bounds_the_buffer_independently_of_max_points(mi
     assert mixer.read_goniometer_latest("vocal", 0) == []
 
 
-def test_set_pan_law_accepts_enum_int_and_name(mixer) -> None:
-    """set_pan_law accepts a PanLaw enum, a raw int, and a name; invalid raises."""
-    from libsonare import PanLaw
-
-    mixer.set_pan_law(0, PanLaw.CONST_6DB)
-    mixer.set_pan_law(0, 2)
-    mixer.set_pan_law(0, "linear")
-    with pytest.raises(ValueError):
+def test_set_pan_law_takes_exact_tokens(mixer) -> None:
+    """set_pan_law takes the four exact tokens; an ordinal is a TypeError."""
+    for token in ("const3Db", "const4.5Db", "const6Db", "linear0Db"):
+        mixer.set_pan_law(0, token)
+    with pytest.raises(SonareValueError, match="const3Db"):
         mixer.set_pan_law(0, "not-a-pan-law")
+    for value in (2, True, 2.0):
+        with pytest.raises(TypeError):
+            mixer.set_pan_law(0, value)
 
 
 def test_strip_pan_and_width_refusals_are_value_errors(mixer) -> None:
@@ -329,15 +334,15 @@ def test_strip_pan_and_width_refusals_are_value_errors(mixer) -> None:
 
 
 def test_set_pan_law_matches_shared_name_corpus(mixer) -> None:
-    """Every canonical alias and conservative normalization maps cross-binding identically."""
-    for case in _PAN_LAW_CORPUS["accepted"] + _PAN_LAW_CORPUS["normalization"]:
+    """Each exact token maps to the shared ordinal; other spellings and numbers are refused."""
+    for case in _PAN_LAW_CORPUS["accepted"]:
         mixer.set_pan_law(0, case["value"])
         assert _pan_law_value(case["value"]) == case["ordinal"], case["value"]
-    for ordinal in _PAN_LAW_CORPUS["numeric"]:
-        mixer.set_pan_law(0, ordinal)
-        assert _pan_law_value(ordinal) == ordinal
     for value in _PAN_LAW_CORPUS["rejected"]:
-        with pytest.raises(ValueError):
+        with pytest.raises(SonareValueError):
+            mixer.set_pan_law(0, value)
+    for value in _PAN_LAW_CORPUS["rejected_numeric"]:
+        with pytest.raises(TypeError):
             mixer.set_pan_law(0, value)
 
 
@@ -674,24 +679,29 @@ def test_get_strip_count_matches_strip_count(mixer) -> None:
     assert mixer.strip_count == 2
 
 
-def test_automation_schedulers_accept_curve_enum(mixer) -> None:
-    """Automation schedulers accept the AutomationCurve enum, names, and ints."""
-    from libsonare import AutomationCurve
-
-    mixer.schedule_fader_automation("vocal", 0, -6.0, AutomationCurve.LINEAR)
+def test_automation_schedulers_take_curve_tokens(mixer) -> None:
+    """Automation schedulers take the AutomationCurve tokens."""
+    mixer.schedule_fader_automation("vocal", 0, -6.0)
     mixer.schedule_pan_automation("vocal", 128, 0.5, "linear")
-    mixer.schedule_width_automation("vocal", 128, 1.2, AutomationCurve.EXPONENTIAL)
-    mixer.schedule_fader_automation("vocal", 256, -12.0, AutomationCurve.HOLD)
-    mixer.schedule_pan_automation("vocal", 384, -0.25, "s-curve")
+    mixer.schedule_width_automation("vocal", 128, 1.2, "exponential")
+    mixer.schedule_fader_automation("vocal", 256, -12.0, "hold")
+    mixer.schedule_pan_automation("vocal", 384, -0.25, "sCurve")
 
     send_index = mixer.add_send("vocal", "auto-send", "vocal-verb", send_db=-10.0, timing=1)
-    mixer.schedule_send_automation("vocal", send_index, 0, -3.0, 1)
+    mixer.schedule_send_automation("vocal", send_index, 0, -3.0, "exponential")
 
 
-def test_automation_rejects_invalid_curve(mixer) -> None:
-    """An unknown automation curve name raises ValueError."""
-    with pytest.raises(ValueError):
-        mixer.schedule_fader_automation("vocal", 0, -6.0, "wobble")
+def test_automation_curves_match_shared_name_corpus(mixer) -> None:
+    """Each curve token maps to the shared ordinal; other spellings and numbers are refused."""
+    for case in _AUTOMATION_CURVE_CORPUS["accepted"]:
+        mixer.schedule_fader_automation("vocal", 0, -6.0, case["value"])
+        assert _curve_value(case["value"]) == case["ordinal"], case["value"]
+    for value in _AUTOMATION_CURVE_CORPUS["rejected"]:
+        with pytest.raises(SonareValueError):
+            mixer.schedule_fader_automation("vocal", 0, -6.0, value)
+    for value in _AUTOMATION_CURVE_CORPUS["rejected_numeric"]:
+        with pytest.raises(TypeError):
+            mixer.schedule_fader_automation("vocal", 0, -6.0, value)
 
 
 def test_mixer_is_a_context_manager() -> None:

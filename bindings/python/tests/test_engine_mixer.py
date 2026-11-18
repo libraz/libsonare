@@ -547,7 +547,7 @@ def test_engine_track_strip_pan_and_send_setters() -> None:
             engine.set_track_strip_pan(0, -1.0)
         assert bad_pan_error.value.code == 4
         with pytest.raises(SonareError):
-            engine.set_track_strip_pan_law(0, "linear")
+            engine.set_track_strip_pan_law(0, "linear0Db")
         with pytest.raises(SonareError):
             engine.set_track_strip_pan_mode(0, "balance")
         with pytest.raises(SonareError):
@@ -555,14 +555,14 @@ def test_engine_track_strip_pan_and_send_setters() -> None:
         with pytest.raises(SonareError):
             engine.set_track_strip_channel_delay_samples(0, 8)
 
-        # Pan law / mode accept enum names and ints; the helpers coerce them.
-        engine.set_track_strip_pan_law(10, "linear")
-        for case in _PAN_LAW_CORPUS["accepted"] + _PAN_LAW_CORPUS["normalization"]:
+        # The pan law takes the exact shared tokens and nothing else.
+        for case in _PAN_LAW_CORPUS["accepted"]:
             engine.set_track_strip_pan_law(10, case["value"])
-        for ordinal in _PAN_LAW_CORPUS["numeric"]:
-            engine.set_track_strip_pan_law(10, ordinal)
         for value in _PAN_LAW_CORPUS["rejected"]:
-            with pytest.raises(ValueError):
+            with pytest.raises(SonareValueError):
+                engine.set_track_strip_pan_law(10, value)
+        for value in _PAN_LAW_CORPUS["rejected_numeric"]:
+            with pytest.raises(TypeError):
                 engine.set_track_strip_pan_law(10, value)
         engine.set_track_strip_pan_mode(10, "stereo-pan")
         engine.set_track_strip_channel_delay_samples(10, 0)
@@ -644,7 +644,7 @@ def test_engine_bus_strip_pan_and_send_setters() -> None:
             engine.set_bus_strip_pan(0, -1.0)
         assert bad_pan_error.value.code == 4
         with pytest.raises(SonareError):
-            engine.set_bus_strip_pan_law(0, "linear")
+            engine.set_bus_strip_pan_law(0, "linear0Db")
         with pytest.raises(SonareError):
             engine.set_bus_strip_pan_mode(0, "balance")
         with pytest.raises(SonareError):
@@ -661,14 +661,14 @@ def test_engine_bus_strip_pan_and_send_setters() -> None:
         with pytest.raises(SonareError):
             engine.set_bus_strip_dual_pan(1, math.nan, 0.0)
 
-        # Pan law / mode accept enum names and ints; the helpers coerce them.
-        engine.set_bus_strip_pan_law(1, "linear")
-        for case in _PAN_LAW_CORPUS["accepted"] + _PAN_LAW_CORPUS["normalization"]:
+        # The pan law takes the exact shared tokens and nothing else.
+        for case in _PAN_LAW_CORPUS["accepted"]:
             engine.set_bus_strip_pan_law(1, case["value"])
-        for ordinal in _PAN_LAW_CORPUS["numeric"]:
-            engine.set_bus_strip_pan_law(1, ordinal)
         for value in _PAN_LAW_CORPUS["rejected"]:
-            with pytest.raises(ValueError):
+            with pytest.raises(SonareValueError):
+                engine.set_bus_strip_pan_law(1, value)
+        for value in _PAN_LAW_CORPUS["rejected_numeric"]:
+            with pytest.raises(TypeError):
                 engine.set_bus_strip_pan_law(1, value)
         engine.set_bus_strip_pan_mode(1, "stereo-pan")
         engine.set_bus_strip_dual_pan(1, 0.0, 0.0)
@@ -695,7 +695,7 @@ def test_engine_bus_strip_pan_rejects_surround_bus() -> None:
             engine.set_bus_strip_pan(1, 0.0)
         assert surround_pan_error.value.code == 4
         with pytest.raises(SonareError):
-            engine.set_bus_strip_pan_law(1, "linear")
+            engine.set_bus_strip_pan_law(1, "linear0Db")
         with pytest.raises(SonareError):
             engine.set_bus_strip_pan_mode(1, "balance")
         with pytest.raises(SonareError):

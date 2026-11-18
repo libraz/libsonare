@@ -41,23 +41,18 @@ from ._narrowing import _resolve_sample_bound as _resolve_sample_bound
 from ._narrowing import _resolve_time_offset as _resolve_time_offset
 from ._narrowing import _resolve_zero_default as _resolve_zero_default
 from ._narrowing import _utf8_arg as _utf8_arg
+from ._types_enums import _AUTOMATION_CURVES as _AUTOMATION_CURVES
 from ._types_enums import _CHORD_CHROMA_METHODS as _CHORD_CHROMA_METHODS
 from ._types_enums import _GENRE_HINTS as _GENRE_HINTS
 from ._types_enums import _KEY_MODES as _KEY_MODES
 from ._types_enums import _KEY_PROFILES as _KEY_PROFILES
 from ._types_enums import _NORM_TYPES as _NORM_TYPES
+from ._types_enums import _PAN_LAWS as _PAN_LAWS
 from ._types_enums import _PITCH_TARGET_MODES as _PITCH_TARGET_MODES
 from ._types_enums import _SECTION_TYPES as _SECTION_TYPES
 from ._types_enums import _TEMPOGRAM_MODES as _TEMPOGRAM_MODES
 from ._types_enums import _WINDOW_TYPES as _WINDOW_TYPES
 from .types import *  # noqa: F403
-
-# Pan-law aliases are normalized case-insensitively and with underscores folded
-# to hyphens. A finite Literal would incorrectly reject valid spellings such as
-# ``CONST_4.5DB`` before the runtime resolver can apply that contract; malformed
-# strings still fail in _pan_law_value below.
-PanLawName = str
-PanLawInput = PanLawName | PanLaw | int
 
 PAN_MODE_BALANCE = 0
 PAN_MODE_STEREO_PAN = 1
@@ -1142,47 +1137,14 @@ def _pan_mode_value(value: str | int) -> int:
     return _resolve_enum(value, _PAN_MODE_NAMES, "pan mode", dash=True)
 
 
-_AUTOMATION_CURVE_NAMES = {
-    "linear": int(AutomationCurve.LINEAR),
-    "lin": int(AutomationCurve.LINEAR),
-    "exponential": int(AutomationCurve.EXPONENTIAL),
-    "exp": int(AutomationCurve.EXPONENTIAL),
-    "hold": int(AutomationCurve.HOLD),
-    "step": int(AutomationCurve.HOLD),
-    "s-curve": int(AutomationCurve.S_CURVE),
-    "s_curve": int(AutomationCurve.S_CURVE),
-    "scurve": int(AutomationCurve.S_CURVE),
-    "smooth": int(AutomationCurve.S_CURVE),
-}
+def _curve_value(value: AutomationCurve) -> int:
+    """Resolve an automation curve token to its C enum value."""
+    return _token_ordinal(value, _AUTOMATION_CURVES, "automation curve")
 
 
-def _curve_value(value: AutomationCurve | str | int) -> int:
-    """Resolve an automation curve to its C enum value."""
-    return _resolve_enum(
-        value, _AUTOMATION_CURVE_NAMES, "automation curve", enum_cls=AutomationCurve
-    )
-
-
-_PAN_LAW_NAMES = {
-    "const3db": int(PanLaw.CONST_3DB),
-    "const-3db": int(PanLaw.CONST_3DB),
-    "-3db": int(PanLaw.CONST_3DB),
-    "const4.5db": int(PanLaw.CONST_4_5DB),
-    "const-4.5db": int(PanLaw.CONST_4_5DB),
-    "-4.5db": int(PanLaw.CONST_4_5DB),
-    "const6db": int(PanLaw.CONST_6DB),
-    "const-6db": int(PanLaw.CONST_6DB),
-    "-6db": int(PanLaw.CONST_6DB),
-    "linear0db": int(PanLaw.LINEAR_0DB),
-    "linear": int(PanLaw.LINEAR_0DB),
-    "linear-0db": int(PanLaw.LINEAR_0DB),
-    "0db": int(PanLaw.LINEAR_0DB),
-}
-
-
-def _pan_law_value(value: PanLawInput) -> int:
-    """Resolve a pan law to its C enum value (0=-3dB, 1=-4.5dB, 2=-6dB, 3=linear)."""
-    return _resolve_enum(value, _PAN_LAW_NAMES, "pan law", enum_cls=PanLaw, dash=True)
+def _pan_law_value(value: PanLaw) -> int:
+    """Resolve a pan law token to its C enum value."""
+    return _token_ordinal(value, _PAN_LAWS, "pan law")
 
 
 _METER_TAP_NAMES = {

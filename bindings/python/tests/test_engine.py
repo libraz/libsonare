@@ -7,7 +7,6 @@ import math
 import pytest
 
 from libsonare import (
-    AutomationCurve,
     AutomationPoint,
     EngineMarker,
     EngineMetronomeConfig,
@@ -73,7 +72,7 @@ def test_engine_transport_state_and_live_parameters() -> None:
                 max_value=12.0,
                 default_value=0.0,
                 rt_safe=True,
-                default_curve=AutomationCurve.LINEAR,
+                default_curve="linear",
             )
         )
         engine.set_parameter(3, 1.5)
@@ -138,14 +137,17 @@ def test_engine_rejects_out_of_range_automation_curve() -> None:
                 max_value=1.0,
                 default_value=0.0,
                 rt_safe=True,
-                default_curve=AutomationCurve.LINEAR,
+                default_curve="linear",
             )
         )
-        # An out-of-range breakpoint curve ordinal is rejected (not clamped).
-        with pytest.raises((ValueError, SonareError)):
-            engine.set_automation_lane(5, [AutomationPoint(ppq=0.0, value=0.5, curve_to_next=99)])
-        # An out-of-range default curve is likewise rejected.
-        with pytest.raises((ValueError, SonareError)):
+        # A curve ordinal is a type error, and an unknown curve token is refused.
+        with pytest.raises(TypeError):
+            engine.set_automation_lane(5, [AutomationPoint(ppq=0.0, value=0.5, curve_to_next=3)])  # type: ignore[arg-type]
+        with pytest.raises(SonareValueError):
+            engine.set_automation_lane(
+                5, [AutomationPoint(ppq=0.0, value=0.5, curve_to_next="s-curve")]
+            )  # type: ignore[arg-type]
+        with pytest.raises(TypeError):
             engine.add_parameter(
                 ParameterInfo(
                     id=6,
@@ -306,7 +308,7 @@ def test_engine_empty_automation_lane_removes_it() -> None:
                 max_value=12.0,
                 default_value=0.0,
                 rt_safe=True,
-                default_curve=AutomationCurve.LINEAR,
+                default_curve="linear",
             )
         )
         engine.set_automation_lane(7, [AutomationPoint(ppq=0.0, value=0.0)])

@@ -25,18 +25,16 @@ from collections.abc import Callable, Sequence
 
 import pytest
 
-from libsonare import AutomationCurve, MeterTap, PanLaw, SendTiming, SonareValueError
-from libsonare._project_model import _loop_mode_value, _track_kind_value
+from libsonare import MeterTap, SendTiming, SonareValueError
+from libsonare._project_model import _track_kind_value
 from libsonare._project_synth import (
     _sample_desc_loop_value,
     _sample_key_track_value,
     _sample_loop_value,
 )
 from libsonare._runtime import (
-    _curve_value,
     _meter_tap_value,
     _mode_values,
-    _pan_law_value,
     _pan_mode_value,
     _profile_value,
     _send_timing_value,
@@ -61,22 +59,8 @@ _FAMILIES: Sequence[_Family] = (
         (),
         (3, 99, -1),
     ),
-    (
-        _pan_law_value,
-        "pan law",
-        (("const3db", 0), ("const4.5db", 1), ("const6db", 2), ("linear", 3)),
-        (),
-        (4, 99, -1),
-    ),
     (_meter_tap_value, "meter tap", (("pre-fader", 0), ("post-fader", 1)), (), (2, 99, -1)),
     (_send_timing_value, "send timing", (("post-fader", 0), ("pre-fader", 1)), (), (2, 99, -1)),
-    (
-        _curve_value,
-        "automation curve",
-        (("linear", 0), ("exponential", 1), ("hold", 2), ("s-curve", 3)),
-        (),
-        (4, 99, -1),
-    ),
     (
         _warp_mode_value,
         "warp mode",
@@ -85,7 +69,6 @@ _FAMILIES: Sequence[_Family] = (
         (4, 99, -1),
     ),
     (_track_kind_value, "track kind", (("audio", 0), ("midi", 1), ("aux", 2)), (), (3, 99, -1)),
-    (_loop_mode_value, "loop mode", (("off", 0), ("loop", 1)), (), (2, 99, -1)),
     (
         _sample_loop_value,
         "sample loop mode",
@@ -187,8 +170,6 @@ def test_a_bool_is_refused_rather_than_read_as_zero_or_one(
 @pytest.mark.parametrize(
     ("resolve", "member"),
     (
-        (_curve_value, AutomationCurve.S_CURVE),
-        (_pan_law_value, PanLaw.LINEAR_0DB),
         (_meter_tap_value, MeterTap.POST_FADER),
         (_send_timing_value, SendTiming.PRE_FADER),
     ),

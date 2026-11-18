@@ -311,7 +311,9 @@ def test_midi_cc_learn_and_conversion_helpers() -> None:
 
     # cc_to_breakpoint converts a matching CC to an automation point.
     point = Project.midi_cc_to_breakpoint([binding], Project.midi_cc(0.0, 0, 2, 1, 100))
-    assert point is None or len(point) == 3
+    assert point is None or (
+        len(point) == 3 and point[2] in ("linear", "exponential", "hold", "sCurve")
+    )
     # param_to_cc converts a parameter value back to a CC event (or None if unbound).
     back = Project.midi_param_to_cc([binding], 77, 0.5, 0)
     assert back is None or len(back) == 3

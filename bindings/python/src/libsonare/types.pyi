@@ -482,19 +482,8 @@ SectionType: TypeAlias = Literal[
     "unknown",
 ]
 
-class AutomationCurve(IntEnum):
-    LINEAR = 0
-    EXPONENTIAL = 1
-    HOLD = 2
-    S_CURVE = 3
-
-class PanLaw(IntEnum):
-    """Mono centre-gain law; stereo Balance keeps centre unity and tapers only the far channel."""
-
-    CONST_3DB = 0
-    CONST_4_5DB = 1
-    CONST_6DB = 2
-    LINEAR_0DB = 3
+AutomationCurve = Literal["linear", "exponential", "hold", "sCurve"]
+PanLaw = Literal["const3Db", "const4.5Db", "const6Db", "linear0Db"]
 
 class ChannelLayout(IntEnum):
     MONO = 0
@@ -2150,7 +2139,7 @@ class AutomationPoint:
         self,
         ppq: float,
         value: float,
-        curve_to_next: AutomationCurve = AutomationCurve.LINEAR,
+        curve_to_next: AutomationCurve = "linear",
     ) -> None: ...
 
 class MarkerKind(IntEnum):

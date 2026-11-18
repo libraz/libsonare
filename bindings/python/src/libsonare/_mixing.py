@@ -16,7 +16,7 @@ from ._runtime import (
     MeterTap,
     MixMeterSnapshot,
     MixResult,
-    PanLawInput,
+    PanLaw,
     SendTiming,
     SonareMixMeterSnapshot,
     SonareValueError,
@@ -440,12 +440,12 @@ class Mixer:
             )
         )
 
-    def set_pan_law(self, strip: StripRef, pan_law: PanLawInput) -> None:
-        """Set a strip's pan law (a ``PanLawName`` alias, enum, or int 0..3).
+    def set_pan_law(self, strip: StripRef, pan_law: PanLaw) -> None:
+        """Set a strip's pan law (a :data:`PanLaw` token such as ``"const3Db"``).
 
         Balance mode keeps centre unity and uses the law only for the far-channel
         taper; stereo-pan and dual-pan modes take the law's centre attenuation.
-        A mono source is unity at centre under every law (see :class:`PanLaw`).
+        A mono source is unity at centre under every law (see :data:`PanLaw`).
         """
         handle = self._strip_handle(strip)
         _check(_get_lib().sonare_strip_set_pan_law(handle, ctypes.c_int(_pan_law_value(pan_law))))
@@ -533,7 +533,7 @@ class Mixer:
         ``dual-pan`` pans the left and right inputs independently (default -1
         and +1, a pass-through) with the same centre attenuation.
 
-        ``pan_mode`` accepts a :class:`PanLaw`-independent pan mode as an int
+        ``pan_mode`` accepts a :data:`PanLaw`-independent pan mode as an int
         (``0`` balance, ``1`` stereo-pan, ``2`` dual-pan), a name
         (``"balance"``/``"stereoPan"``/``"stereo-pan"``/``"dualPan"``/
         ``"dual-pan"``), or ``None`` to keep the strip's current pan mode. The
@@ -780,7 +780,7 @@ class Mixer:
         strip: StripRef,
         sample_pos: int,
         fader_db: float,
-        curve: AutomationCurve | str | int = AutomationCurve.LINEAR,
+        curve: AutomationCurve = "linear",
     ) -> None:
         """Schedule a sample-accurate fader (dB) automation event on a strip."""
         handle = self._strip_handle(strip)
@@ -798,7 +798,7 @@ class Mixer:
         strip: StripRef,
         sample_pos: int,
         pan: float,
-        curve: AutomationCurve | str | int = AutomationCurve.LINEAR,
+        curve: AutomationCurve = "linear",
     ) -> None:
         """Schedule a sample-accurate pan automation event on a strip."""
         handle = self._strip_handle(strip)
@@ -816,7 +816,7 @@ class Mixer:
         strip: StripRef,
         sample_pos: int,
         width: float,
-        curve: AutomationCurve | str | int = AutomationCurve.LINEAR,
+        curve: AutomationCurve = "linear",
     ) -> None:
         """Schedule a sample-accurate stereo-width automation event on a strip."""
         handle = self._strip_handle(strip)
@@ -835,7 +835,7 @@ class Mixer:
         send_index: int,
         sample_pos: int,
         db: float,
-        curve: AutomationCurve | str | int = AutomationCurve.LINEAR,
+        curve: AutomationCurve = "linear",
     ) -> None:
         """Schedule a sample-accurate send-level (dB) automation event on a strip."""
         handle = self._strip_handle(strip)
@@ -856,7 +856,7 @@ class Mixer:
         param_id: int,
         sample_pos: int,
         value: float,
-        curve: AutomationCurve | str | int = AutomationCurve.LINEAR,
+        curve: AutomationCurve = "linear",
     ) -> None:
         """Schedule a sample-accurate insert-parameter automation event.
 
@@ -866,9 +866,8 @@ class Mixer:
             param_id: Processor-specific parameter id.
             sample_pos: Absolute sample position from the start of processing.
             value: Target parameter value.
-            curve: ``AutomationCurve`` enum, name, or int (``0`` linear,
-                ``1`` exponential, ``2`` hold, ``3`` s-curve). Accepts a raw
-                int for backward compatibility.
+            curve: :data:`AutomationCurve` token (``"linear"``,
+                ``"exponential"``, ``"hold"`` or ``"sCurve"``).
         """
         handle = self._strip_handle(strip_index)
         lib = _get_lib()

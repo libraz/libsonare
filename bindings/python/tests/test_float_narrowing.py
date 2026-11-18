@@ -123,8 +123,8 @@ def test_a_saturating_fader_is_refused(mixer_scene) -> None:
 
 def test_a_saturating_automation_value_is_refused(mixer_scene) -> None:
     """The scheduling path, where the float sits among four integer readers."""
-    mixer_scene.schedule_insert_automation(0, 0, 0, 0, 0.5, 0)
-    mixer_scene.schedule_insert_automation(0, 0, 0, 0, 0.75, 0)  # positive control
+    mixer_scene.schedule_insert_automation(0, 0, 0, 0, 0.5)
+    mixer_scene.schedule_insert_automation(0, 0, 0, 0, 0.75)  # positive control
     for value in REFUSED:
         _refuses(
             "value",
@@ -135,7 +135,6 @@ def test_a_saturating_automation_value_is_refused(mixer_scene) -> None:
             0,
             0,
             value,
-            0,
         )
 
 

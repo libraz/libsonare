@@ -75,9 +75,11 @@ _HARMONY_STEP_COUNT = 3
 
 
 def _enum_ordinal(field: str, value: object) -> int:
-    """Map an enum spelling to its C ordinal, refusing an unknown spelling."""
+    """Map an enum spelling to its C ordinal, refusing a non-string or an unknown one."""
     names = _ENUM_FIELD_NAMES[field]
-    if not isinstance(value, str) or value not in names:
+    if not isinstance(value, str):
+        raise TypeError(f"{field} must be a string token, got {type(value).__name__}")
+    if value not in names:
         expected = ", ".join(repr(n) for n in names)
         raise SonareValueError(f"{field} must be one of {expected}, got {value!r}")
     return names.index(value)
