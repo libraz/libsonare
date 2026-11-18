@@ -9,7 +9,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
-import { createVocalEditSession } from '../src/index.js';
+import { createVocalEditSession, ErrorCode } from '../src/index.js';
 import { addon } from '../src/native.js';
 import { withConfiguredProject, withEngine } from './_abort_guard_handles.js';
 
@@ -291,7 +291,7 @@ describe('bounceOffline refuses a non-finite targetLufs instead of normalizing t
 });
 
 describe('the mixer entry points refuse a sample rate outside [8000, 384000]', () => {
-  const scene = JSON.stringify({ tracks: [] });
+  const scene = JSON.stringify({ strips: [], buses: [] });
   const tone = new Float32Array(64);
 
   it('Mixer constructor (Mixer.fromJson)', () => {
@@ -331,12 +331,21 @@ describe('the mixer entry points refuse a sample rate outside [8000, 384000]', (
 });
 
 describe('the streaming chain constructor refuses a config leaf it cannot read', () => {
-  it('names a string leaf instead of dropping it from the chain', () => {
-    expect(() => new addon.StreamingMasteringChain({ limiter: { ceilingDb: '-1' } })).toThrow(
-      /limiter\.ceilingDb/,
+  it('leaves a wrong-kind leaf to the core, which names the path', () => {
+    const document = JSON.stringify({
+      version: 2,
+      params: { maximizer: { truePeakLimiter: { ceilingDb: '-1' } } },
+    });
+    expect(() => new addon.StreamingMasteringChain(document)).toThrow(
+      expect.objectContaining({
+        code: ErrorCode.InvalidFormat,
+        message: expect.stringContaining(
+          'maximizer.truePeakLimiter.ceilingDb is a string, but takes no token',
+        ),
+      }),
     );
-    expect(() => new addon.StreamingMasteringChain({ limiter: null })).toThrow(TypeError);
-    expect(() => new addon.StreamingMasteringChain({ loudnessStaticGainDb: 'x' })).toThrow(
+    expect(() => new addon.StreamingMasteringChain({ maximizer: {} })).toThrow(TypeError);
+    expect(() => new addon.StreamingMasteringChain(null, { loudnessStaticGainDb: 'x' })).toThrow(
       /loudnessStaticGainDb/,
     );
   });
@@ -377,7 +386,7 @@ describe('a refusal raised before the old harness position no longer aborts', ()
       for (let round = 0; round < 2; round++) {
         swallow(() => new addon.StreamingEqualizer({ sampleRate: 'x' }));
         swallow(() => new addon.StreamingEqualizer({ maxBlockSize: 1e40 }));
-        swallow(() => new addon.StreamingMasteringChain({ loudnessStaticGainDb: 'x' }));
+        swallow(() => new addon.StreamingMasteringChain(null, { loudnessStaticGainDb: 'x' }));
         swallow(() => addon.renderPlayback(new Float32Array(4), 2 ** 40, 1.5, '{}'));
         swallow(() => addon.tempogram(new Float32Array(64), 2 ** 40));
         swallow(() => addon.mixStereo([new Float32Array(4)], [new Float32Array(4)], 1e40));

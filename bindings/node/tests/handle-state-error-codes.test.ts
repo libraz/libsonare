@@ -220,9 +220,9 @@ describe('streaming constructors refuse a refused argument as a RangeError', () 
   it('StreamingEqualizer refusals are RangeErrors', () => {
     // The core's snake_case wording, where the addon's readers name the camelCase key.
     const configs: Array<[Record<string, number>, RegExp]> = [
-      [{ sampleRate: 0 }, /^sample_rate must be positive/],
-      [{ sampleRate: -48000 }, /^sample_rate must be positive/],
-      [{ maxBlockSize: -1 }, /max_block_size must be non-negative/],
+      [{ sampleRate: 0 }, /sample_rate must be finite and within \[8000, 384000\]/],
+      [{ sampleRate: -48000 }, /sample_rate must be finite and within \[8000, 384000\]/],
+      [{ maxBlockSize: -1 }, /max_block_size must be within \[1, 1048576\]/],
     ];
     for (const [config, wording] of configs) {
       const error = capture(() => new addon.StreamingEqualizer(config));
@@ -232,10 +232,9 @@ describe('streaming constructors refuse a refused argument as a RangeError', () 
     }
   });
 
-  it('StreamingMasteringChain refusals are RangeErrors', () => {
-    // The chain's own constraint wording, not a reader's type refusal.
+  it('StreamingMasteringChain refuses document content as InvalidFormat', () => {
+    // The chain's own constraint wording, refused by the core's document reader.
     const configs: Array<[Record<string, unknown>, RegExp]> = [
-      [{ loudness: { enabled: true } }, /loudness_static_gain_db is not finite/],
       [
         { loudness: { truePeakOversample: 3 } },
         /truePeakOversample must be one of 1, 2, 4, 8, or 16/,
@@ -246,11 +245,24 @@ describe('streaming constructors refuse a refused argument as a RangeError', () 
       ],
     ];
     for (const [config, wording] of configs) {
-      const error = capture(() => new addon.StreamingMasteringChain(config));
-      expect(error, JSON.stringify(config)).toBeInstanceOf(RangeError);
-      expect(codeOf(error), JSON.stringify(config)).toBeUndefined();
+      const error = capture(
+        () => new addon.StreamingMasteringChain(JSON.stringify({ params: config })),
+      );
+      expect(codeOf(error), JSON.stringify(config)).toBe(ErrorCode.InvalidFormat);
       expect((error as Error).message, JSON.stringify(config)).toMatch(wording);
     }
+  });
+
+  it('StreamingMasteringChain refuses a loudness stage with no static gain as a RangeError', () => {
+    const error = capture(
+      () =>
+        new addon.StreamingMasteringChain(
+          JSON.stringify({ params: { loudness: { enabled: true } } }),
+        ),
+    );
+    expect(error).toBeInstanceOf(RangeError);
+    expect(codeOf(error)).toBeUndefined();
+    expect((error as Error).message).toMatch(/loudness_static_gain_db is not finite/);
   });
 
   it('StreamingEqualizer refuses a maxBlockSize it cannot take exactly, naming the field', () => {
