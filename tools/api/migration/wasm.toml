@@ -27017,11 +27017,3 @@ old = "createOpfsClipPageProvider(engine)"
 removed = "createOpfsClipPageProvider(options) takes no engine; the clip names the provider instance"
 domain = "project"
 rule = "construction"
-
-[[entry]]
-kind = "field"
-old = "StreamingMasteringChainConfig.numChannels"
-changed = "required (1 | 2): the channel count of the caller's stream has no default (was 1)"
-domain = "mastering"
-rule = "absent-not-sentinel"
-test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::no numChannels"

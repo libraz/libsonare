@@ -15033,11 +15033,3 @@ old = "FileClipPageProvider.id"
 removed = "a clip names its provider by instance, not by id"
 rule = "construction"
 domain = "project"
-
-[[entry]]
-kind = "field"
-old = "StreamingMasteringChainConfig.numChannels"
-changed = "required (1 | 2): the channel count of the caller's stream has no default (was 1)"
-domain = "mastering"
-rule = "absent-not-sentinel"
-test = "bindings/node/tests/surface/mastering-streaming.test.ts::no numChannels"
