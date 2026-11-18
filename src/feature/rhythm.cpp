@@ -185,8 +185,10 @@ std::vector<float> tempogram(const Audio& audio, const TempogramConfig& config) 
   return tempogram(env, audio.sample_rate(), config);
 }
 
-std::vector<float> fourier_tempogram(const std::vector<float>& onset_envelope, int /*sr*/,
-                                     const TempogramConfig& config) {
+namespace detail {
+
+std::vector<float> fourier_tempogram_of_envelope(const std::vector<float>& onset_envelope,
+                                                 const TempogramConfig& config) {
   if (config.win_length <= 1) {
     throw SonareException(ErrorCode::InvalidParameter, "fourier_tempogram: win_length must be > 1");
   }
@@ -209,13 +211,24 @@ std::vector<float> fourier_tempogram(const std::vector<float>& onset_envelope, i
   return spec_mag;
 }
 
+}  // namespace detail
+
+std::vector<float> fourier_tempogram(const std::vector<float>& onset_envelope, int /*sr*/,
+                                     const TempogramConfig& config) {
+  if (!numeric::all_finite(onset_envelope.data(), onset_envelope.size())) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "fourier_tempogram: input contains a non-finite sample");
+  }
+  return detail::fourier_tempogram_of_envelope(onset_envelope, config);
+}
+
 std::vector<float> fourier_tempogram(const Audio& audio, const TempogramConfig& config) {
   MelConfig mel_cfg;
   mel_cfg.hop_length = config.hop_length;
   OnsetConfig onset_cfg;
   onset_cfg.center = config.center;
   const auto env = compute_onset_strength(audio, mel_cfg, onset_cfg);
-  return fourier_tempogram(env, audio.sample_rate(), config);
+  return detail::fourier_tempogram_of_envelope(env, config);
 }
 
 std::vector<float> cyclic_tempogram(const std::vector<float>& onset_envelope, int sr,
@@ -237,7 +250,7 @@ std::vector<float> cyclic_tempogram(const std::vector<float>& onset_envelope, in
   // the nearest class, then magnitudes are summed (no interpolation, no
   // per-class normalization). librosa resamples onto a log-tempo axis instead,
   // so absolute values and bin alignment differ. See header @warning.
-  const std::vector<float> ft = fourier_tempogram(onset_envelope, sr, config);
+  const std::vector<float> ft = detail::fourier_tempogram_of_envelope(onset_envelope, config);
   const int fourier_bins = config.win_length / 2 + 1;
   const int n_frames = static_cast<int>(ft.size() / static_cast<std::size_t>(fourier_bins));
   std::vector<float> cyclic(static_cast<std::size_t>(n_bins) * static_cast<std::size_t>(n_frames),
@@ -415,6 +428,10 @@ std::vector<float> tempogram_ratio(const std::vector<float>& tempogram_data, int
   // Every rejection below used to be answered with a zero-filled vector, which
   // reads as a genuine "no energy at this ratio" measurement. Reject instead so
   // a caller can never mistake an unanswerable call for a result.
+  if (!numeric::all_finite(tempogram_data.data(), tempogram_data.size())) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "tempogram_ratio: input contains a non-finite sample");
+  }
   if (tempogram_data.empty()) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "tempogram_ratio: tempogram_data must not be empty");

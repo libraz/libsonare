@@ -97,6 +97,10 @@ FrameDecision decide_frames(const float* x, std::size_t n, float top_db, int fra
   if (!numeric::finite_positive(top_db)) {
     throw SonareException(ErrorCode::InvalidParameter, prefix + "top_db must be finite and > 0");
   }
+  if (!numeric::all_finite(x, n)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          prefix + "input contains a non-finite sample");
+  }
   FrameDecision decision;
   decision.rms = centered_rms(x, n, frame_length, hop_length);
   decision.mask = non_silent_frames(decision.rms, top_db);

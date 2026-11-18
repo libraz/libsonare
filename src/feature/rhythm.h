@@ -63,8 +63,15 @@ std::vector<float> tempogram(const Audio& audio, const TempogramConfig& config =
 
 /// @brief Fourier (FFT-based) tempogram: STFT of the onset envelope.
 /// @return Magnitude matrix [n_bins x n_frames] where n_bins = win_length/2 + 1.
+/// @throws SonareException(InvalidParameter) when @p onset_envelope holds a non-finite value.
 std::vector<float> fourier_tempogram(const std::vector<float>& onset_envelope, int sr,
                                      const TempogramConfig& config = TempogramConfig());
+
+namespace detail {
+/// No finiteness refusal: a library-computed envelope may be non-finite on finite input.
+std::vector<float> fourier_tempogram_of_envelope(const std::vector<float>& onset_envelope,
+                                                 const TempogramConfig& config);
+}  // namespace detail
 
 std::vector<float> fourier_tempogram(const Audio& audio,
                                      const TempogramConfig& config = TempogramConfig());

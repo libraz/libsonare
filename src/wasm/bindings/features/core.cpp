@@ -110,7 +110,6 @@ val js_db_to_amplitude(val values, const val& ref_val) {
 val js_preemphasis(val samples, const val& coef_val, val zi) {
   const float coef = checkedFloatFromVal(coef_val, "coef");
   std::vector<float> data = float32ArrayToVector(samples);
-  validateFiniteVector(data, "preemphasis");
   if (zi.isUndefined() || zi.isNull()) {
     return vectorToFloat32Array(preemphasis(data, coef));
   }
@@ -120,7 +119,6 @@ val js_preemphasis(val samples, const val& coef_val, val zi) {
 val js_deemphasis(val samples, const val& coef_val, val zi) {
   const float coef = checkedFloatFromVal(coef_val, "coef");
   std::vector<float> data = float32ArrayToVector(samples);
-  validateFiniteVector(data, "deemphasis");
   if (zi.isUndefined() || zi.isNull()) {
     return vectorToFloat32Array(deemphasis(data, coef));
   }
@@ -133,7 +131,6 @@ val js_trim_silence(val samples, const val& top_db_val, const val& frame_length_
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   std::vector<float> data = float32ArrayToVector(samples);
-  validateFiniteVector(data, "trimSilence");
   auto result = trim(data, top_db, frame_length, hop_length);
   val out = val::object();
   out.set("audio", vectorToFloat32Array(result.audio));
@@ -148,7 +145,6 @@ val js_split_silence(val samples, const val& top_db_val, const val& frame_length
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   std::vector<float> data = float32ArrayToVector(samples);
-  validateFiniteVector(data, "splitSilence");
   auto ranges = split(data, top_db, frame_length, hop_length);
   std::vector<int> flat;
   flat.reserve(ranges.size() * 2);
@@ -234,7 +230,6 @@ val js_frame_signal(val samples, const val& frame_length_val, const val& hop_len
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   std::vector<float> data = float32ArrayToVector(samples);
-  validateFiniteVector(data, "frameSignal");
   val out = val::object();
   out.set("nFrames", frame_count(data.size(), frame_length, hop_length));
   out.set("frames", vectorToFloat32Array(frame(data, frame_length, hop_length)));
@@ -498,7 +493,6 @@ val js_fourier_tempogram(val onset_envelope, const val& sample_rate_val, const v
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int win_length = checkedIntFromVal(win_length_val, "winLength");
   std::vector<float> data = float32ArrayToVector(onset_envelope);
-  validateFiniteVector(data, "fourierTempogram");
   validatePositiveSampleRate("fourierTempogram", sample_rate);
   TempogramConfig config;
   config.hop_length = hop_length;
@@ -524,7 +518,6 @@ val js_tempogram_ratio(val tempogram_data, const val& win_length_val, const val&
                                  "tempogramRatio input", false);
   }
   std::vector<float> data = float32ArrayToVector(tempogram_data);
-  validateFiniteVector(data, "tempogramRatio");
   validatePositiveSampleRate("tempogramRatio", sample_rate);
   // An undefined/null/empty factors argument falls back to the library default
   // {0.5, 1, 2, 3, 4}, matching the C and Node behaviour.

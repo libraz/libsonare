@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "sonare_c_test_helpers.h"
@@ -1424,4 +1425,47 @@ TEST_CASE("sonare_vector_normalize refuses a norm_type outside 0..3", "[c_api][f
     REQUIRE(std::abs(out[0] - expected_first[norm_type]) <= 1e-6f);
     sonare_free_floats(out);
   }
+}
+
+TEST_CASE("array transforms refuse a non-finite input in the core function they wrap", "[c_api]") {
+  std::vector<float> input(4096, 0.25f);
+  input[100] = std::numeric_limits<float>::quiet_NaN();
+  const auto refused_naming = [](SonareError code, const char* function) {
+    CAPTURE(function);
+    CHECK(code == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          std::string(function) + ": input contains a non-finite sample");
+  };
+  float* out = nullptr;
+  size_t out_length = 0;
+  int* intervals = nullptr;
+  int start = 0;
+  int end = 0;
+  int n_frames = 0;
+  refused_naming(sonare_preemphasis(input.data(), input.size(), 0.97f, 0.0f, 0, &out, &out_length),
+                 "preemphasis");
+  refused_naming(sonare_deemphasis(input.data(), input.size(), 0.97f, 0.0f, 0, &out, &out_length),
+                 "deemphasis");
+  refused_naming(sonare_trim_silence(input.data(), input.size(), 60.0f, 2048, 512, &out,
+                                     &out_length, &start, &end),
+                 "trim");
+  refused_naming(
+      sonare_split_silence(input.data(), input.size(), 60.0f, 2048, 512, &intervals, &out_length),
+      "split");
+  refused_naming(
+      sonare_frame_signal(input.data(), input.size(), 2048, 512, &out, &out_length, &n_frames),
+      "frame");
+  refused_naming(sonare_fourier_tempogram(input.data(), 256, 22050, 512, 8, 1, 0, &out, &out_length,
+                                          &n_frames),
+                 "fourier_tempogram");
+  refused_naming(
+      sonare_tempogram_ratio(input.data(), 5 * 200, 8, 22050, 512, nullptr, 0, &out, &out_length),
+      "tempogram_ratio");
+  CHECK(out == nullptr);
+  CHECK(intervals == nullptr);
+
+  // A NULL buffer with a length is still refused before the core is reached, with a reason.
+  CHECK(sonare_fourier_tempogram(nullptr, 8, 22050, 512, 8, 1, 0, &out, &out_length, &n_frames) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("NULL") != std::string::npos);
 }

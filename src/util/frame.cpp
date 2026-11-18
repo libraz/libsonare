@@ -7,6 +7,7 @@
 #include <limits>
 
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -29,6 +30,9 @@ std::vector<float> frame(const float* x, std::size_t n, int frame_length, int ho
   }
   if (n > 0 && x == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter, "frame: null input with non-zero length");
+  }
+  if (!numeric::all_finite(x, n)) {
+    throw SonareException(ErrorCode::InvalidParameter, "frame: input contains a non-finite sample");
   }
 
   const int n_frames = frame_count(n, frame_length, hop_length);

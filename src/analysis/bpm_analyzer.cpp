@@ -375,7 +375,7 @@ std::vector<float> extract_fourier_local_bpm_curve(const std::vector<float>& ons
   config.center = true;
   config.norm = false;
 
-  std::vector<float> ft = fourier_tempogram(onset_strength, sr, config);
+  std::vector<float> ft = detail::fourier_tempogram_of_envelope(onset_strength, config);
   if (tempogram_out) {
     *tempogram_out = ft;
   }

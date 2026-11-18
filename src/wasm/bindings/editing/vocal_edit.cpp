@@ -164,17 +164,6 @@ std::vector<uint32_t> idArray(const val& value, const char* field) {
   return result;
 }
 
-void validateSource(const std::vector<float>& source) {
-  if (source.empty()) {
-    throw WasmRangeError("samples must not be empty");
-  }
-  for (float sample : source) {
-    if (!std::isfinite(sample)) {
-      throw WasmRangeError("samples must be finite");
-    }
-  }
-}
-
 struct EditStorage {
   std::vector<SonareVocalPitchPoint> points;
   std::vector<float> envelope;
@@ -658,7 +647,6 @@ val capabilitiesToVal(const SonareVocalCapabilities& capabilities) {
 val js_vocal_edit_session_create(val samples, const val& sample_rate_value, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_value, "sampleRate");
   std::vector<float> source = float32ArrayToVector(samples);
-  validateSource(source);
   CreateStorage storage;
   const SonareVocalCreateOptions parsed = optionsFromVal(options, &storage);
   SonareVocalSession* session = nullptr;
@@ -675,7 +663,6 @@ double js_vocal_edit_session_restore(val samples, const val& sample_rate_value, 
                                      val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_value, "sampleRate");
   std::vector<float> source = float32ArrayToVector(samples);
-  validateSource(source);
   std::vector<uint8_t> bytes = byteArray(state, "state");
   SonareVocalRestoreOptions parsed{};
   sonare_vocal_restore_options_init(&parsed);

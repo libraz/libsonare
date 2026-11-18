@@ -43,6 +43,10 @@ std::vector<float> preemphasis(const float* x, std::size_t n, float coef, std::o
   if (zi.has_value() && !numeric::finite(*zi)) {
     throw SonareException(ErrorCode::InvalidParameter, "preemphasis: zi must be finite");
   }
+  if (!numeric::all_finite(x, n)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "preemphasis: input contains a non-finite sample");
+  }
   std::vector<float> y(n);
   if (n == 0) return y;
   const float z = zi.has_value() ? *zi : default_zi_pre(x, n);
@@ -67,6 +71,10 @@ std::vector<float> deemphasis(const float* x, std::size_t n, float coef, std::op
   }
   if (zi.has_value() && !numeric::finite(*zi)) {
     throw SonareException(ErrorCode::InvalidParameter, "deemphasis: zi must be finite");
+  }
+  if (!numeric::all_finite(x, n)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "deemphasis: input contains a non-finite sample");
   }
   std::vector<float> y(n);
   if (n == 0) return y;
