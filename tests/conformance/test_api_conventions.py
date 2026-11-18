@@ -143,9 +143,10 @@ class DocumentKeyScreenRule(unittest.TestCase):
         field("node", "RendererDoc", "target", "string"),
         field("wasm", "RendererDoc", "input", "string"),
         field("wasm", "RendererDoc", "target", "string"),
+        field("node", "RenderRequest", "doc", "RendererDoc"),
     ]
 
-    def judge(self, node_keys: str, wasm_keys: str):
+    def judge(self, node_keys: str, wasm_keys: str, facade: str = ""):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "tools/api").mkdir(parents=True)
@@ -155,6 +156,7 @@ class DocumentKeyScreenRule(unittest.TestCase):
             for surface, text in (("node", node_keys), ("wasm", wasm_keys)):
                 (root / "bindings" / surface / "src").mkdir(parents=True)
                 (root / "bindings" / surface / "src/request_keys.ts").write_text(text)
+            (root / "bindings/node/src/renderer.ts").write_text(facade)
             with mock.patch.object(check, "ROOT", root):
                 return run("document-key-screen", self.RECORDS)
 
@@ -174,6 +176,52 @@ class DocumentKeyScreenRule(unittest.TestCase):
         self.assertEqual(
             sorted(f.key for f in verdict.violations),
             ["node:RENDERER_DOC_KEYS", "wasm:RendererDocKeys"],
+        )
+
+    READERS = """
+function docJson(fnName: string, config: RendererDoc): string {
+  if (typeof config !== 'object' || config === null) {
+    throw new TypeError(`${fnName}: config must be an object`);
+  }
+  return JSON.stringify(config);
+}
+
+export function render(request: RenderRequest): void {
+  if (request.doc === undefined || request.doc === null) {
+    throw new TypeError('render: give a doc');
+  }
+  native(docJson('render', request.doc));
+}
+"""
+
+    def test_a_pass_through_reader_passes(self) -> None:
+        verdict = self.judge("", "", self.READERS)
+        self.assertEqual(verdict.read, 2)
+        self.assertFalse(verdict.failed)
+
+    def test_a_reader_that_refuses_a_value_or_walks_keys_is_named(self) -> None:
+        planted = """
+function layoutOf(config: RendererDoc): number {
+  if (config.target.layout === 'odd') {
+    throw new RangeError('target.layout must be stereo');
+  }
+  return 2;
+}
+
+function flatten(config: RendererDoc): string[] {
+  return Object.keys(config);
+}
+
+export function apply(request: RenderRequest): void {
+  if (request.doc.length > 4) {
+    throw new RangeError('apply: too many entries');
+  }
+}
+"""
+        verdict = self.judge("", "", self.READERS + planted)
+        self.assertEqual(
+            sorted(f.key for f in verdict.violations),
+            ["node:renderer.apply", "node:renderer.flatten", "node:renderer.layoutOf"],
         )
 
 

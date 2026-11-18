@@ -243,6 +243,109 @@ def _document_roots() -> set[str]:
     return {entry["type"] for entry in data.get("document", [])}
 
 
+_FUNCTION_HEAD = re.compile(
+    r"(?m)^[ \t]*(?:export\s+)?(?:async\s+)?(?:function\s+)?(?:static\s+)?([A-Za-z_]\w*)\s*(?:<[^>()]*>)?\("
+)
+_NOT_FUNCTIONS = frozenset(
+    {"if", "for", "while", "switch", "catch", "return", "super", "constructor"}
+)
+_KIND_CHECK_MESSAGE = re.compile(
+    r"must be (?:an object|a configuration object|an array|a plain object)"
+)
+_THROW = re.compile(r"throw new \w*Error\(\s*([`'\"][^`'\"]*)")
+_KEY_WALK = re.compile(r"Object\.(?:keys|entries|values)\(|for \(const \w+ in |Object\.hasOwn\(")
+_PRESENCE_OR_KIND = re.compile(
+    r"!?\s*[\w.]+\s*[!=]==?\s*(?:undefined|null)|typeof\s+[\w.]+\s*[!=]==?\s*'\w+'"
+    r"|!?\s*Array\.isArray\([\w.]+\)|![\w.]+"
+)
+_IF_THROW = re.compile(
+    r"if \(((?:[^()]|\([^()]*\))*)\)\s*\{?\s*throw new \w*Error\(\s*([`'\"][^`'\"]*)"
+)
+
+
+def _matching(text: str, start: int, open_: str, close: str) -> int:
+    """Index just past the bracket closing the one at ``start``; strings are not skipped."""
+    depth = 0
+    for i in range(start, len(text)):
+        if text[i] == open_:
+            depth += 1
+        elif text[i] == close:
+            depth -= 1
+            if depth == 0:
+                return i + 1
+    return len(text)
+
+
+def _function_bodies(text: str):
+    """(name, params, body) for every function or method head with a braced body."""
+    for match in _FUNCTION_HEAD.finditer(text):
+        if match.group(1) in _NOT_FUNCTIONS:
+            continue
+        params_end = _matching(text, match.end() - 1, "(", ")")
+        tail = text[params_end : params_end + 200]
+        brace = tail.find("{")
+        if brace < 0 or any(stop in tail[:brace] for stop in (";", "=>", "\n\n")):
+            continue
+        body_start = params_end + brace
+        yield (
+            match.group(1),
+            text[match.end() : params_end - 1],
+            text[body_start : _matching(text, body_start, "{", "}")],
+        )
+
+
+def _document_reader_records(records: list[dict]) -> list[dict]:
+    """One record per facade function handed a document, naming how it screens one, if it does.
+
+    A document reaches a function as a parameter typed with a registered root or as a request
+    field declared with one. A throw past the argument-kind check, or a walk over the document's
+    keys, is a screen. A screen written without a throw or a recognised key walk is not seen.
+    """
+    roots = _document_roots()
+    root_pattern = "|".join(sorted(roots))
+    typed_param = re.compile(rf"(\w+)\??\s*:\s*(?:readonly\s+)?(?:{root_pattern})\b")
+    document_fields = {
+        r["member"]
+        for r in records
+        if _js(r)
+        and r["kind"] == "field"
+        and re.search(rf"\b(?:{root_pattern})\b", r.get("type") or "")
+    }
+    out: list[dict] = []
+    for surface in ("node", "wasm"):
+        for path in _ts_sources(ROOT, surface):
+            text = path.read_text(encoding="utf-8")
+            for name, params, body in _function_bodies(text):
+                names = typed_param.findall(params)
+                fields = [f for f in document_fields if re.search(rf"\w\.{f}\b", body)]
+                if not names and not fields:
+                    continue
+                screens = None
+                if names:
+                    walked = _KEY_WALK.search(body)
+                    refused = [m for m in _THROW.findall(body) if not _KIND_CHECK_MESSAGE.search(m)]
+                    if walked:
+                        screens = "walks the document's keys"
+                    elif refused:
+                        screens = f"refuses a value ({refused[0].strip('`')[:60]})"
+                for condition, message in _IF_THROW.findall(body):
+                    if screens or _KIND_CHECK_MESSAGE.search(message):
+                        continue
+                    judged = _PRESENCE_OR_KIND.sub("", condition)
+                    if any(re.search(rf"\.{f}\b", judged) for f in fields):
+                        screens = f"refuses a value ({message.strip('`')[:60]})"
+                out.append(
+                    {
+                        "surface": surface,
+                        "kind": "key-set",
+                        "name": f"{path.stem}.{name}",
+                        "screens": screens,
+                        "reader": True,
+                    }
+                )
+    return out
+
+
 def _key_screen_records(records: list[dict]) -> list[dict]:
     """One record per facade key set, naming the document type it screens, if any."""
     roots = _document_roots()
@@ -1263,17 +1366,33 @@ RULES: list[Rule] = [
     ),
     Rule(
         name="document-key-screen",
-        summary="a facade key set screens request objects, never a document the core parses",
+        summary=(
+            "a document the core parses has one refuser, the core: no facade key set screens it, "
+            "and a facade function handed one refuses nothing past its kind; a screen written "
+            "without a throw or a recognised key walk is not seen"
+        ),
         population=lambda r: r["kind"] == "key-set",
         violation=lambda r: (
-            f"{r['screens']} is a document; the core refuses its keys at every depth as InvalidFormat"
-            if r["screens"]
-            else None
+            None
+            if not r["screens"]
+            else f"{r['screens']}; the core is the one refuser of a document"
+            if r.get("reader")
+            else f"{r['screens']} is a document; the core refuses its keys at every depth as InvalidFormat"
         ),
-        derive=_key_screen_records,
+        derive=lambda records: [*_key_screen_records(records), *_document_reader_records(records)],
         pending={
-            "node:CHAIN_CONFIG_SECTIONS": "goes when the chain document reaches the core as written",
-            "wasm:MasteringChainConfigKeys": "goes when the chain document reaches the core as written",
+            **{
+                key: "goes when the chain document reaches the core as written"
+                for key in (
+                    "node:CHAIN_CONFIG_SECTIONS",
+                    "wasm:MasteringChainConfigKeys",
+                    "node:chain_config.flattenChainConfig",
+                    "wasm:chain_config.flattenChainConfig",
+                )
+            },
+            "wasm:playback-processor.outputChannelCount": (
+                "the worklet sizes its output from target.layout before the core reads the config"
+            ),
         },
     ),
     Rule(
