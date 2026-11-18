@@ -9,11 +9,34 @@ from __future__ import annotations
 from typing import Any
 
 from cli_contract_schema import (
+    _PAYLOAD_PROPERTY_NAME_RE,
     _exact,
     _normalized_option_inventory,
     _strings,
     _validate_option,
 )
+
+
+def _non_snake_keys(value: Any, label: str) -> list[str]:
+    """Every object key under @p value that is not snake_case, as ``label.key``.
+
+    The inventory is CLI output like any command's payload, so a field added to
+    both surfaces and to the expected key sets in camelCase is still refused.
+    """
+    if isinstance(value, list):
+        return [
+            found
+            for i, item in enumerate(value)
+            for found in _non_snake_keys(item, f"{label}[{i}]")
+        ]
+    if not isinstance(value, dict):
+        return []
+    found: list[str] = []
+    for key, child in value.items():
+        if not _PAYLOAD_PROPERTY_NAME_RE.match(key):
+            found.append(f"{label}.{key}")
+        found.extend(_non_snake_keys(child, f"{label}.{key}"))
+    return found
 
 
 def _expected_paths(
@@ -84,11 +107,14 @@ def _accepted_names(commands: dict[str, dict[str, Any]]) -> set[str]:
 
 
 def _validate_inventory(value: Any, surface: str) -> tuple[list[str], dict[str, dict[str, Any]]]:
-    errors: list[str] = []
+    errors: list[str] = [
+        f"{key}: inventory key is not snake_case"
+        for key in _non_snake_keys(value, f"inventory.{surface}")
+    ]
     if not _exact(value, {"schema_version", "surface", "commands"}, f"inventory.{surface}", errors):
         return errors, {}
-    if value["schema_version"] != 2:
-        errors.append(f"inventory.{surface}.schema_version: expected 2")
+    if value["schema_version"] != 3:
+        errors.append(f"inventory.{surface}.schema_version: expected 3")
     if value["surface"] != surface:
         errors.append(f"inventory.{surface}.surface: expected {surface!r}")
     commands: dict[str, dict[str, Any]] = {}

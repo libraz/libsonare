@@ -33,7 +33,7 @@ def test_dump_cli_contract_uses_argparse_actions_and_schema_v2(monkeypatch, caps
     cli.main()
 
     payload = json.loads(capsys.readouterr().out)
-    assert payload["schema_version"] == 2
+    assert payload["schema_version"] == 3
     chroma_record = next(command for command in payload["commands"] if command["path"] == "chroma")
     assert _option(chroma_record, "n-fft")["default"] == 4096
     for command in payload["commands"]:
@@ -56,18 +56,18 @@ def test_dump_cli_contract_uses_argparse_actions_and_schema_v2(monkeypatch, caps
     assert _option(pitch_record, "f0-min-hz")["domain"] == {
         "choices": [],
         "minimum": 0.0,
-        "exclusiveMinimum": True,
+        "exclusive_minimum": True,
         "maximum": None,
-        "exclusiveMaximum": False,
-        "rejectExit": "usage",
+        "exclusive_maximum": False,
+        "reject_exit": "usage",
     }
     assert _option(pitch_record, "algorithm")["domain"] == {
         "choices": ["yin", "pyin"],
         "minimum": None,
-        "exclusiveMinimum": False,
+        "exclusive_minimum": False,
         "maximum": None,
-        "exclusiveMaximum": False,
-        "rejectExit": "invalid_parameter",
+        "exclusive_maximum": False,
+        "reject_exit": "invalid_parameter",
     }
     mastering_record = next(
         command for command in payload["commands"] if command["path"] == "mastering"

@@ -18,7 +18,7 @@
     "relative": 1e-05
   },
   "inventory": {
-    "schema_version": 2,
+    "schema_version": 3,
     "command_fields": [
       "path",
       "aliases",
@@ -92,10 +92,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -135,10 +135,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -188,10 +188,10 @@
               "nnls"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -213,10 +213,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -310,10 +310,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -396,10 +396,10 @@
               "nndsvd"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -510,10 +510,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         }
       ],
@@ -558,10 +558,10 @@
               "24"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -577,10 +577,10 @@
               "1"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -690,10 +690,10 @@
               "3"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -712,10 +712,10 @@
               "4"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -780,10 +780,10 @@
               "5"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -843,10 +843,10 @@
               "9"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         }
       ],
@@ -888,10 +888,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -1046,10 +1046,10 @@
               "jazz"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -1168,10 +1168,10 @@
               "24"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -1303,10 +1303,10 @@
               "cd"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -1325,10 +1325,10 @@
               "16"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         }
       ],
@@ -1395,10 +1395,10 @@
               "24"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -1485,10 +1485,10 @@
               "24"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -1729,10 +1729,10 @@
               "cd"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         }
       ],
@@ -1747,10 +1747,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -1763,10 +1763,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -1826,10 +1826,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -1842,10 +1842,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -1958,10 +1958,10 @@
               "dual-pan"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -2085,10 +2085,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -2101,10 +2101,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -2117,10 +2117,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -2133,10 +2133,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -2160,10 +2160,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -2176,10 +2176,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         }
       ],
@@ -2203,10 +2203,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -2219,10 +2219,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -2235,10 +2235,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -2251,10 +2251,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -2341,10 +2341,10 @@
               "pyin"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -2357,10 +2357,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -2373,10 +2373,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -2398,10 +2398,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -2423,10 +2423,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": 1,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         }
       ],
@@ -2481,10 +2481,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -2506,10 +2506,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -2525,10 +2525,10 @@
               "scale"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -2561,10 +2561,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 1,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -2577,10 +2577,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -2593,10 +2593,10 @@
           "domain": {
             "choices": [],
             "minimum": 1,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 4095,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -2609,10 +2609,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 11,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -2625,10 +2625,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 127,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -2641,10 +2641,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         }
       ],
@@ -2659,10 +2659,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -2684,10 +2684,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -2722,10 +2722,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -2738,10 +2738,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -2843,10 +2843,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -2859,10 +2859,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -2875,10 +2875,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -2891,10 +2891,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -2916,10 +2916,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -2941,10 +2941,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -2957,10 +2957,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -2973,10 +2973,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 1,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -2989,10 +2989,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": 1,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         }
       ],
@@ -3027,10 +3027,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -3043,10 +3043,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -3126,10 +3126,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -3142,10 +3142,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -3178,10 +3178,10 @@
           "domain": {
             "choices": [],
             "minimum": 1,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 4294967295,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -3380,10 +3380,10 @@
               "24"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -3485,10 +3485,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -3501,10 +3501,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -3544,10 +3544,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         }
       ],
@@ -3562,10 +3562,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 1,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -3641,10 +3641,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -3668,10 +3668,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": 4,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -3693,10 +3693,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 4294967295,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -3774,10 +3774,10 @@
           "domain": {
             "choices": [],
             "minimum": 1,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 4095,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -3790,10 +3790,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 127,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -3806,10 +3806,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 11,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         }
       ],
@@ -3954,10 +3954,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         }
       ],
@@ -3972,10 +3972,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 1,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -4051,10 +4051,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -4096,10 +4096,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 4294967295,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -4235,10 +4235,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -4260,10 +4260,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -4400,10 +4400,10 @@
               "singing"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -4463,10 +4463,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -4557,10 +4557,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -4573,10 +4573,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 1,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -4609,10 +4609,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -4629,10 +4629,10 @@
               "nearest"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         }
       ],
@@ -4670,10 +4670,10 @@
               "absolute"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -4831,10 +4831,10 @@
           "domain": {
             "choices": [],
             "minimum": -12.0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 12.0,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -4856,10 +4856,10 @@
           "domain": {
             "choices": ["auto", "mono", "stereo", "5.1", "7.1"],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -4881,10 +4881,10 @@
           "domain": {
             "choices": [],
             "minimum": 0.0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 1.0,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -4915,10 +4915,10 @@
           "domain": {
             "choices": [],
             "minimum": -70.0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 0.0,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -4931,10 +4931,10 @@
           "domain": {
             "choices": ["none", "living-room", "home-theater", "screening-room"],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -4947,10 +4947,10 @@
           "domain": {
             "choices": ["headphones", "stereo", "5.1", "7.1"],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -4963,10 +4963,10 @@
           "domain": {
             "choices": [],
             "minimum": -40.0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": -5.0,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         }
       ]
@@ -5938,10 +5938,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -5981,10 +5981,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -6687,10 +6687,10 @@
               "absolute"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -7121,10 +7121,10 @@
               "24"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -7256,10 +7256,10 @@
               "cd"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -7278,10 +7278,10 @@
               "16"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         }
       ],
@@ -7417,10 +7417,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 1,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -7496,10 +7496,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -7541,10 +7541,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 4294967295,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -7664,10 +7664,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -7680,10 +7680,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -7723,10 +7723,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         }
       ],
@@ -7830,10 +7830,10 @@
               "pyin"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -7846,10 +7846,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -7862,10 +7862,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -7887,10 +7887,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -7912,10 +7912,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": 1,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         }
       ],
@@ -8036,10 +8036,10 @@
               "24"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -8055,10 +8055,10 @@
               "1"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -8168,10 +8168,10 @@
               "3"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -8190,10 +8190,10 @@
               "4"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -8258,10 +8258,10 @@
               "5"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -8321,10 +8321,10 @@
               "9"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         }
       ],
@@ -8484,10 +8484,10 @@
               "24"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -8724,10 +8724,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -8749,10 +8749,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -8827,10 +8827,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -8852,10 +8852,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -9022,10 +9022,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -9038,10 +9038,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -9054,10 +9054,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -9070,10 +9070,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -9227,10 +9227,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -9243,10 +9243,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -9364,10 +9364,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -9380,10 +9380,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -10241,10 +10241,10 @@
               "jazz"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -10436,10 +10436,10 @@
               "nnls"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -10461,10 +10461,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -10558,10 +10558,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -10774,10 +10774,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         }
       ],
@@ -11282,10 +11282,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -11298,10 +11298,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -11314,10 +11314,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -11330,10 +11330,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -11355,10 +11355,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -11380,10 +11380,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -11396,10 +11396,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -11412,10 +11412,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 1,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -11428,10 +11428,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": 1,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         }
       ],
@@ -11638,10 +11638,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 1,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -11717,10 +11717,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -11744,10 +11744,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": 4,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -11769,10 +11769,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 4294967295,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -12384,10 +12384,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -12400,10 +12400,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -12608,10 +12608,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -12624,10 +12624,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -12660,10 +12660,10 @@
           "domain": {
             "choices": [],
             "minimum": 1,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 4294967295,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -13427,10 +13427,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -13827,10 +13827,10 @@
               "24"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -14270,10 +14270,10 @@
               "24"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -14512,10 +14512,10 @@
           "domain": {
             "choices": [],
             "minimum": 1,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 4095,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -14528,10 +14528,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 127,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -14544,10 +14544,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 11,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         }
       ],
@@ -14741,10 +14741,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -14766,10 +14766,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -14785,10 +14785,10 @@
               "scale"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -14821,10 +14821,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 1,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -14837,10 +14837,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -14853,10 +14853,10 @@
           "domain": {
             "choices": [],
             "minimum": 1,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 4095,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -14869,10 +14869,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 11,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -14885,10 +14885,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 127,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -14901,10 +14901,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         }
       ],
@@ -15227,10 +15227,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -15243,10 +15243,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -15259,10 +15259,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -15275,10 +15275,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -15302,10 +15302,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -15318,10 +15318,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         }
       ],
@@ -15543,10 +15543,10 @@
               "cd"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         }
       ],
@@ -15796,10 +15796,10 @@
               "nndsvd"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -15969,10 +15969,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -15985,10 +15985,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -16310,10 +16310,10 @@
               "singing"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -16373,10 +16373,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -16571,10 +16571,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": true,
+            "exclusive_minimum": true,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         }
       ],
@@ -16805,10 +16805,10 @@
               "dual-pan"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -16978,10 +16978,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -16994,10 +16994,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 1,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -17030,10 +17030,10 @@
           "domain": {
             "choices": [],
             "minimum": 0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         },
         {
@@ -17050,10 +17050,10 @@
               "nearest"
             ],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "invalid_parameter"
+            "exclusive_maximum": false,
+            "reject_exit": "invalid_parameter"
           }
         }
       ],
@@ -17403,10 +17403,10 @@
           "domain": {
             "choices": [],
             "minimum": -12.0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 12.0,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -17428,10 +17428,10 @@
           "domain": {
             "choices": ["auto", "mono", "stereo", "5.1", "7.1"],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -17453,10 +17453,10 @@
           "domain": {
             "choices": [],
             "minimum": 0.0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 1.0,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -17487,10 +17487,10 @@
           "domain": {
             "choices": [],
             "minimum": -70.0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": 0.0,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -17503,10 +17503,10 @@
           "domain": {
             "choices": ["none", "living-room", "home-theater", "screening-room"],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -17519,10 +17519,10 @@
           "domain": {
             "choices": ["headphones", "stereo", "5.1", "7.1"],
             "minimum": null,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": null,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         },
         {
@@ -17535,10 +17535,10 @@
           "domain": {
             "choices": [],
             "minimum": -40.0,
-            "exclusiveMinimum": false,
+            "exclusive_minimum": false,
             "maximum": -5.0,
-            "exclusiveMaximum": false,
-            "rejectExit": "usage"
+            "exclusive_maximum": false,
+            "reject_exit": "usage"
           }
         }
       ],

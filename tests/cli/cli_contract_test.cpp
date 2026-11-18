@@ -231,7 +231,7 @@ TEST_CASE("CLI hidden contract inventory is machine-readable", "[cli][contract]"
   auto [code, output] = exec_command(CLI + " --dump-cli-contract");
   REQUIRE(code == 0);
   const auto inventory = sonare::util::json::parse_strict(output);
-  REQUIRE(inventory["schema_version"].as_int() == 2);
+  REQUIRE(inventory["schema_version"].as_int() == 3);
   REQUIRE(inventory["surface"].as_string() == "native");
   REQUIRE(inventory["commands"].is_array());
 
@@ -754,19 +754,19 @@ TEST_CASE("CLI option domains match the cross-surface declaration", "[cli][argum
     const CliOptionSpec* spec = cli_option_spec_for_command(command, option);
     REQUIRE(spec != nullptr);
     REQUIRE_FALSE(spec->domain.empty());
-    REQUIRE(stage_name(spec->domain.stage) == record["rejectExit"].as_string());
+    REQUIRE(stage_name(spec->domain.stage) == record["reject_exit"].as_string());
     std::vector<std::string> choices;
     for (const auto& choice : record["choices"].as_array()) choices.push_back(choice.as_string());
     REQUIRE(spec->domain.choices == choices);
     REQUIRE(spec->domain.has_minimum == !record["minimum"].is_null());
     if (spec->domain.has_minimum) {
       REQUIRE(spec->domain.minimum == record["minimum"].as_number());
-      REQUIRE(spec->domain.exclusive_minimum == record["exclusiveMinimum"].as_bool());
+      REQUIRE(spec->domain.exclusive_minimum == record["exclusive_minimum"].as_bool());
     }
     REQUIRE(spec->domain.has_maximum == !record["maximum"].is_null());
     if (spec->domain.has_maximum) {
       REQUIRE(spec->domain.maximum == record["maximum"].as_number());
-      REQUIRE(spec->domain.exclusive_maximum == record["exclusiveMaximum"].as_bool());
+      REQUIRE(spec->domain.exclusive_maximum == record["exclusive_maximum"].as_bool());
     }
   }
   for (const auto& record : fixture["requiredInvalidParameter"].as_array()) {

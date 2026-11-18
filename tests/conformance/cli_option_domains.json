@@ -6,7 +6,7 @@
     "than its scalar type, and every required option whose absence is reported as",
     "an invalid parameter rather than a usage error.",
     "",
-    "This is the declaration the two CLIs agree on. rejectExit names the exit-code",
+    "This is the declaration the two CLIs agree on. reject_exit names the exit-code",
     "class the refusal carries: 'usage' (2) is what the Python parser reports for a",
     "type=/choices= rejection, and 'invalid_parameter' (3) is what its handler",
     "reports after parsing. tests/conformance/cli_contract_v2.json drives the same",
@@ -18,147 +18,147 @@
     {
       "command": "analyze",
       "option": "chroma-high-pass-hz",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "analyze",
       "option": "meter-denominator",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "boundaries",
       "option": "threshold",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "boundaries",
       "option": "absolute-threshold",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "boundaries",
       "option": "kernel-size",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "boundaries",
       "option": "n-mfcc",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "boundaries",
       "option": "n-chroma",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "boundaries",
       "option": "peak-distance",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "boundaries",
       "option": "reference-window",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "chords",
       "option": "smoothing-window",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "project.bounce",
       "option": "frames",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "project.bounce",
       "option": "channels",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "midi-render",
       "option": "frames",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "midi-render",
       "option": "channels",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "key",
       "option": "genre-hint",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [
         "auto",
         "edm",
@@ -169,164 +169,164 @@
         "jazz"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "chords",
       "option": "chroma-method",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [
         "cqt",
         "stft",
         "nnls"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "chords",
       "option": "hmm-beam-width",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "sections",
       "option": "min-duration-sec",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "sections",
       "option": "threshold",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "dynamics",
       "option": "window-sec",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "rhythm",
       "option": "start-bpm",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "rhythm",
       "option": "bpm-min",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "rhythm",
       "option": "bpm-max",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "melody",
       "option": "threshold",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "melody",
       "option": "hop-length",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "melody",
       "option": "f0-min-hz",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "melody",
       "option": "f0-max-hz",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "eq",
       "option": "bits",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [
         "16",
         "24"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "eq",
       "option": "coeff-mode",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [
         "0",
         "1"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "eq",
       "option": "phase-mode",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [
         "0",
         "1",
@@ -334,14 +334,14 @@
         "3"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "eq",
       "option": "placement",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [
         "0",
         "1",
@@ -350,14 +350,14 @@
         "4"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "eq",
       "option": "resolution",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [
         "0",
         "1",
@@ -367,14 +367,14 @@
         "5"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "eq",
       "option": "type",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [
         "0",
         "1",
@@ -388,27 +388,27 @@
         "9"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "mastering",
       "option": "bits",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [
         "16",
         "24"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "mastering",
       "option": "target-platform",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [
         "streaming",
         "youtube",
@@ -420,14 +420,14 @@
         "cd"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "mastering",
       "option": "true-peak-oversample",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [
         "1",
         "2",
@@ -436,40 +436,40 @@
         "16"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "mastering-pair-processor",
       "option": "bits",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [
         "16",
         "24"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "mastering-processor",
       "option": "bits",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [
         "16",
         "24"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "mastering-suggest",
       "option": "target-platform",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [
         "streaming",
         "youtube",
@@ -481,210 +481,210 @@
         "cd"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "suggest-mix",
       "option": "tempo-bpm",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "repair",
       "option": "bits",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [
         "16",
         "24"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "note-move",
       "option": "onset-sample",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "note-move",
       "option": "onset-sec",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "note-move",
       "option": "offset-sample",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "note-move",
       "option": "offset-sec",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "note-move",
       "option": "target-onset-sample",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "note-move",
       "option": "target-onset-sec",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "note-stretch",
       "option": "onset-sample",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "note-stretch",
       "option": "onset-sec",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "note-stretch",
       "option": "offset-sample",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "note-stretch",
       "option": "offset-sec",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "plp",
       "option": "bpm-min",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "plp",
       "option": "bpm-max",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "pitch",
       "option": "algorithm",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [
         "yin",
         "pyin"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "pitch",
       "option": "f0-max-hz",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "pitch",
       "option": "f0-min-hz",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "pitch",
       "option": "hop-length",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "pitch",
       "option": "threshold",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": 1.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "vector-normalize",
       "option": "norm-type",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [
         "0",
         "1",
@@ -692,510 +692,510 @@
         "3"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "scale-quantize",
       "option": "root",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": 11.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "scale-quantize",
       "option": "mode-mask",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 1.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": 4095.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "scale-quantize",
       "option": "reference-midi",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": 127.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "pitch-correct-timevarying",
       "option": "mode",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [
         "midi",
         "scale"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "pitch-correct-timevarying",
       "option": "target-midi",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": 127.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "pitch-correct-timevarying",
       "option": "hop-length",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "pitch-correct-timevarying",
       "option": "scale-root",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": 11.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "pitch-correct-timevarying",
       "option": "scale-mode-mask",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 1.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": 4095.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "pitch-correct-timevarying",
       "option": "retune-amount",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": 1.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "pitch-correct-timevarying",
       "option": "max-correction-semitones",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "pitch-correct-timevarying",
       "option": "retune-speed-ms",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "pitch-correct-timevarying",
       "option": "vibrato-threshold-cents",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "project.align-takes",
       "option": "reference-source",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 1.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": 4294967295.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "project.align-takes",
       "option": "hop-length",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "project.align-takes",
       "option": "bins-per-octave",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "transcribe",
       "option": "tempo-bpm",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "transcribe",
       "option": "monophonic-model",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [
         "segments",
         "singing"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "tune-to-midi",
       "option": "track",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "tune-to-midi",
       "option": "unmatched-policy",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [
         "leave",
         "mute",
         "nearest"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "tune-to-midi",
       "option": "min-overlap-ratio",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": 1.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "tune-to-midi",
       "option": "max-correction-semitones",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "decompose-stems",
       "option": "init",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [
         "random",
         "nndsvd"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "pitch-shift",
       "option": "n-fft",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "pitch-shift",
       "option": "hop-length",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "voice-change",
       "option": "formant-mode",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [
         "relative",
         "absolute"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "time-stretch",
       "option": "n-fft",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "time-stretch",
       "option": "hop-length",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "tone",
       "option": "sample-rate",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 8000.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": 384000.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "chirp",
       "option": "sample-rate",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 8000.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": 384000.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "clicks",
       "option": "sample-rate",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 8000.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": 384000.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "mel",
       "option": "fmin-hz",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "mel",
       "option": "fmax-hz",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "mel-to-audio",
       "option": "fmin-hz",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "mel-to-audio",
       "option": "fmax-hz",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "mfcc-to-audio",
       "option": "fmin-hz",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "mfcc-to-audio",
       "option": "fmax-hz",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "chirp",
       "option": "fmin-hz",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "chirp",
       "option": "fmax-hz",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "cqt",
       "option": "fmin-hz",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "vqt",
       "option": "fmin-hz",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "estimate-room",
       "option": "n-octave-bands",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "synthesize-rir",
       "option": "absorption",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": 1.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "synthesize-rir",
       "option": "seed",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": 4294967295.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "synthesize-rir",
       "option": "max-sec",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "room-morph",
       "option": "absorption",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": 1.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "room-morph",
       "option": "seed",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": 4294967295.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "room-morph",
       "option": "max-sec",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "room-morph",
       "option": "receiver-spacing",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": 4.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "playback",
       "option": "target",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [
         "headphones",
         "stereo",
@@ -1203,14 +1203,14 @@
         "7.1"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "playback",
       "option": "input-layout",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [
         "auto",
         "mono",
@@ -1219,28 +1219,28 @@
         "7.1"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "mix-strip",
       "option": "pan-mode",
-      "rejectExit": "invalid_parameter",
+      "reject_exit": "invalid_parameter",
       "choices": [
         "balance",
         "stereo-pan",
         "dual-pan"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "playback",
       "option": "room",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [
         "none",
         "living-room",
@@ -1248,139 +1248,139 @@
         "screening-room"
       ],
       "minimum": null,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "playback",
       "option": "night",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": 1.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "playback",
       "option": "dialogue-db",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": -12.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": 12.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "playback",
       "option": "program-lufs",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": -70.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": 0.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "playback",
       "option": "target-lufs",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": -40.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": -5.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "vocal-notes",
       "option": "f0-max-hz",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "vocal-notes",
       "option": "f0-min-hz",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "vocal-notes",
       "option": "frame-length-samples",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "vocal-notes",
       "option": "hop-length-samples",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "vocal-notes",
       "option": "min-note-ms",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "vocal-notes",
       "option": "reference-hz",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "vocal-notes",
       "option": "segmentation-threshold-cents",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": null,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "vocal-notes",
       "option": "voiced-threshold",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": false,
+      "exclusive_minimum": false,
       "maximum": 1.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     },
     {
       "command": "vocal-notes",
       "option": "yin-threshold",
-      "rejectExit": "usage",
+      "reject_exit": "usage",
       "choices": [],
       "minimum": 0.0,
-      "exclusiveMinimum": true,
+      "exclusive_minimum": true,
       "maximum": 1.0,
-      "exclusiveMaximum": false
+      "exclusive_maximum": false
     }
   ],
   "requiredInvalidParameter": [

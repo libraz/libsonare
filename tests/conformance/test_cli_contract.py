@@ -15,9 +15,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 CHECKER_PATH = ROOT / "tools" / "conformance" / "check_cli_contract.py"
-SPEC = importlib.util.spec_from_file_location(
-    "libsonare_cli_contract_checker", CHECKER_PATH
-)
+SPEC = importlib.util.spec_from_file_location("libsonare_cli_contract_checker", CHECKER_PATH)
 assert SPEC is not None and SPEC.loader is not None
 CHECKER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CHECKER)
@@ -43,28 +41,22 @@ class CliContractSelfTest(unittest.TestCase):
         # checker.  Renaming the existing version contract keeps this fixture
         # small while proving validation follows the manifest declarations.
         candidate = copy.deepcopy(self.manifest)
-        version = next(
-            item for item in candidate["active_paths"] if item["path"] == "version"
-        )
+        version = next(item for item in candidate["active_paths"] if item["path"] == "version")
         version["path"] = "synthetic"
         candidate["commands"]["synthetic"] = candidate["commands"].pop("version")
-        candidate["inventory"]["expected_options"]["synthetic"] = candidate[
-            "inventory"
-        ]["expected_options"].pop("version")
+        candidate["inventory"]["expected_options"]["synthetic"] = candidate["inventory"][
+            "expected_options"
+        ].pop("version")
         self.assertEqual(CHECKER.validate_manifest(candidate), [])
 
     def test_manifest_top_level_is_closed(self) -> None:
         candidate = copy.deepcopy(self.manifest)
         candidate["unexpected"] = True
         errors = CHECKER.validate_manifest(candidate)
-        self.assertTrue(
-            any("unknown keys unexpected" in error for error in errors), errors
-        )
+        self.assertTrue(any("unknown keys unexpected" in error for error in errors), errors)
 
     def test_payload_schema_is_closed_and_typed(self) -> None:
-        version = next(
-            item for item in self.manifest["active_paths"] if item["path"] == "version"
-        )
+        version = next(item for item in self.manifest["active_paths"] if item["path"] == "version")
         schema = version["payloads"]["success"]
         self.assertEqual(
             CHECKER.validate_payload(
@@ -148,9 +140,7 @@ class CliContractSelfTest(unittest.TestCase):
         analyze = self.manifest["commands"]["analyze"]
         self.assertEqual(analyze["status"], "active")
         self.assertEqual(analyze["classification"], "shared")
-        contract = next(
-            item for item in self.manifest["active_paths"] if item["path"] == "analyze"
-        )
+        contract = next(item for item in self.manifest["active_paths"] if item["path"] == "analyze")
         self.assertEqual(
             [option["name"] for option in contract["options"]],
             [
@@ -164,9 +154,7 @@ class CliContractSelfTest(unittest.TestCase):
         )
         self.assertEqual(
             next(
-                option
-                for option in contract["options"]
-                if option["name"] == "chroma-high-pass-hz"
+                option for option in contract["options"] if option["name"] == "chroma-high-pass-hz"
             )["default"],
             80,
         )
@@ -196,26 +184,20 @@ class CliContractSelfTest(unittest.TestCase):
         )
         del missing_contract["payloads"]["success"]["keys"]["sections"]
         errors = CHECKER.validate_manifest(missing)
-        self.assertTrue(
-            any("canonical keys differ" in error for error in errors), errors
-        )
+        self.assertTrue(any("canonical keys differ" in error for error in errors), errors)
 
         replaced = copy.deepcopy(self.manifest)
         replaced_contract = next(
             item for item in replaced["active_paths"] if item["path"] == "analyze"
         )
-        replaced_contract["payloads"]["success"]["keys"]["sections_typo"] = (
-            replaced_contract["payloads"]["success"]["keys"].pop("sections")
-        )
+        replaced_contract["payloads"]["success"]["keys"]["sections_typo"] = replaced_contract[
+            "payloads"
+        ]["success"]["keys"].pop("sections")
         errors = CHECKER.validate_manifest(replaced)
-        self.assertTrue(
-            any("canonical keys differ" in error for error in errors), errors
-        )
+        self.assertTrue(any("canonical keys differ" in error for error in errors), errors)
 
     def test_analyze_section_type_must_be_lowercase_kebab(self) -> None:
-        contract = next(
-            item for item in self.manifest["active_paths"] if item["path"] == "analyze"
-        )
+        contract = next(item for item in self.manifest["active_paths"] if item["path"] == "analyze")
         case = next(item for item in contract["cases"] if item["id"] == "default")
         payload = {
             "bpm": 120.0,
@@ -284,10 +266,7 @@ class CliContractSelfTest(unittest.TestCase):
             title_case,
         )
         self.assertTrue(
-            any(
-                "expected lowercase-kebab section type" in message
-                for _, message in title_case
-            ),
+            any("expected lowercase-kebab section type" in message for _, message in title_case),
             title_case,
         )
 
@@ -324,13 +303,11 @@ class CliContractSelfTest(unittest.TestCase):
         missing_contract = next(
             item for item in missing["active_paths"] if item["path"] == "spectral"
         )
-        del missing_contract["payloads"]["success"]["keys"]["features"]["keys"]["rms"][
-            "keys"
-        ]["max"]
+        del missing_contract["payloads"]["success"]["keys"]["features"]["keys"]["rms"]["keys"][
+            "max"
+        ]
         errors = CHECKER.validate_manifest(missing)
-        self.assertTrue(
-            any("canonical keys differ" in error for error in errors), errors
-        )
+        self.assertTrue(any("canonical keys differ" in error for error in errors), errors)
 
     def test_spectral_payload_rejects_missing_canonical_statistic(self) -> None:
         contract = next(
@@ -369,9 +346,7 @@ class CliContractSelfTest(unittest.TestCase):
         for path in ("rhythm", "pitch", "eq", "mastering-processor"):
             for mutation in ("missing", "extra", "type"):
                 candidate = copy.deepcopy(self.manifest)
-                contract = next(
-                    item for item in candidate["active_paths"] if item["path"] == path
-                )
+                contract = next(item for item in candidate["active_paths"] if item["path"] == path)
                 fields = contract["payloads"]["success"]["keys"]
                 field = next(iter(fields))
                 if mutation == "missing":
@@ -384,8 +359,7 @@ class CliContractSelfTest(unittest.TestCase):
                 errors = CHECKER.validate_manifest(candidate)
                 self.assertTrue(
                     any(
-                        "canonical keys differ" in error
-                        or "canonical type differs" in error
+                        "canonical keys differ" in error or "canonical type differs" in error
                         for error in errors
                     ),
                     (path, mutation, errors),
@@ -420,9 +394,7 @@ class CliContractSelfTest(unittest.TestCase):
         candidate = copy.deepcopy(self.manifest)
         candidate["parser_cases"][0]["surface_exit"] = {"native": 3, "python": 2}
         errors = CHECKER.validate_manifest(candidate)
-        self.assertTrue(
-            any("unknown keys surface_exit" in error for error in errors), errors
-        )
+        self.assertTrue(any("unknown keys surface_exit" in error for error in errors), errors)
 
     def test_single_json_document_and_numeric_tolerance(self) -> None:
         self.assertEqual(CHECKER.parse_single_json('{"ok":true}'), {"ok": True})
@@ -477,9 +449,7 @@ class CliContractSelfTest(unittest.TestCase):
             "test.warning",
             report,
         )
-        self.assertTrue(
-            any("at least one diagnostic" in message for _, message in report), report
-        )
+        self.assertTrue(any("at least one diagnostic" in message for _, message in report), report)
 
         preset = next(
             contract
@@ -497,9 +467,7 @@ class CliContractSelfTest(unittest.TestCase):
             "test.preset",
             report,
         )
-        self.assertTrue(
-            any("expected an object" in message for _, message in report), report
-        )
+        self.assertTrue(any("expected an object" in message for _, message in report), report)
 
     def test_executable_path_resolution_preserves_path_commands(self) -> None:
         """A repo-relative runtime path survives the Python surface's cwd change."""
@@ -546,9 +514,7 @@ class CliContractSelfTest(unittest.TestCase):
             CHECKER._is_core_source(ROOT / "src/wasm/bindings/common/common.h", uncompiled)
         )
         self.assertTrue(CHECKER._is_core_source(core, uncompiled))
-        self.assertTrue(
-            CHECKER._is_core_source(ROOT / "include/sonare/sonare_c.h", uncompiled)
-        )
+        self.assertTrue(CHECKER._is_core_source(ROOT / "include/sonare/sonare_c.h", uncompiled))
         # Non-vacuity: without the exclusion the same file reads as a core source,
         # which is the state that refused a matched pair.
         self.assertTrue(CHECKER._is_core_source(wasm))
@@ -614,15 +580,11 @@ class CliContractSelfTest(unittest.TestCase):
         manifest = copy.deepcopy(self.manifest)
         manifest["commands"]["version"]["status"] = "pending"
         manifest["active_paths"] = [
-            contract
-            for contract in manifest["active_paths"]
-            if contract["path"] != "version"
+            contract for contract in manifest["active_paths"] if contract["path"] != "version"
         ]
         self.assertEqual(CHECKER.validate_manifest(manifest), [])
         inventory = self._fake_inventory(manifest, "native")
-        version = next(
-            command for command in inventory["commands"] if command["path"] == "version"
-        )
+        version = next(command for command in inventory["commands"] if command["path"] == "version")
         version["options"][0]["default"] = "drifted"
         report: list[tuple[str, str]] = []
 
@@ -637,10 +599,7 @@ class CliContractSelfTest(unittest.TestCase):
         with mock.patch.object(CHECKER, "_run", fake_run):
             CHECKER._inventory_checks("native", "unused", manifest, 1.0, report)
         self.assertTrue(
-            any(
-                "version: active option schema differs" in message
-                for _, message in report
-            ),
+            any("version: active option schema differs" in message for _, message in report),
             report,
         )
 
@@ -701,7 +660,7 @@ class CliContractSelfTest(unittest.TestCase):
             for path in CHECKER._expected_paths(manifest["commands"], surface)
         }
         return {
-            "schema_version": 2,
+            "schema_version": 3,
             "surface": surface,
             "commands": list(commands.values()),
         }
@@ -724,9 +683,7 @@ class CliContractSelfTest(unittest.TestCase):
 
         # Outside the pointer the rule still bites, on the very same command.
         outside = copy.deepcopy(self.manifest)
-        doctor = next(
-            item for item in outside["active_paths"] if item["path"] == "doctor"
-        )
+        doctor = next(item for item in outside["active_paths"] if item["path"] == "doctor")
         keys = doctor["payloads"]["success"]["keys"]
         keys["hardwareConcurrency"] = keys.pop("hardware_concurrency")
         self.assertTrue(
@@ -739,9 +696,10 @@ class CliContractSelfTest(unittest.TestCase):
         # Non-vacuity: without the entry the transported names are rejected, so
         # the clean baseline above cannot be passing for want of a check.
         without = copy.deepcopy(self.manifest)
-        without["payload_property_exemptions"]["shared_schema_document"][
-            "properties"
-        ] = ["mixing-preset", "voice-preset"]
+        without["payload_property_exemptions"]["shared_schema_document"]["properties"] = [
+            "mixing-preset",
+            "voice-preset",
+        ]
         self.assertTrue(
             any(
                 "doctor:instrumentParamAutomation" in error
@@ -757,9 +715,9 @@ class CliContractSelfTest(unittest.TestCase):
         without anyone looking at it again.
         """
         stale = copy.deepcopy(self.manifest)
-        stale["payload_property_exemptions"]["shared_schema_document"][
-            "properties"
-        ].append("resample")
+        stale["payload_property_exemptions"]["shared_schema_document"]["properties"].append(
+            "resample"
+        )
         self.assertTrue(
             any(
                 "'resample' suppressed nothing" in error
@@ -846,10 +804,7 @@ class CliContractSelfTest(unittest.TestCase):
         candidate["commands"]["version"]["reason"] = "x" * 30
         errors = CHECKER.validate_manifest(candidate)
         self.assertTrue(
-            any(
-                "commands.version: unknown keys reason, reason_kind" in error
-                for error in errors
-            ),
+            any("commands.version: unknown keys reason, reason_kind" in error for error in errors),
             errors,
         )
 
@@ -946,14 +901,10 @@ class CliContractSelfTest(unittest.TestCase):
         self.assertIn("normalize", reduced)
         # The stub shape leaves the command listed, so it must be tolerated
         # rather than merely undemanded -- otherwise it reads as unclassified.
-        tolerated = CHECKER._tolerated_paths(
-            commands, "native", frozenset({"pitchEditor"})
-        )
+        tolerated = CHECKER._tolerated_paths(commands, "native", frozenset({"pitchEditor"}))
         self.assertIn("pitch-correct", tolerated)
         self.assertNotIn("normalize", tolerated)
-        self.assertEqual(
-            CHECKER._tolerated_paths(commands, "native"), set()
-        )
+        self.assertEqual(CHECKER._tolerated_paths(commands, "native"), set())
 
     def test_all_shared_paths_have_active_canonical_option_contracts(self) -> None:
         shared = {
@@ -964,9 +915,7 @@ class CliContractSelfTest(unittest.TestCase):
         self.assertEqual(len(shared), 79)
         self.assertEqual(set(self.manifest["inventory"]["expected_options"]), shared)
         for path in shared:
-            self.assertEqual(
-                self.manifest["commands"][path]["option_status"], "active", path
-            )
+            self.assertEqual(self.manifest["commands"][path]["option_status"], "active", path)
             expected = self.manifest["inventory"]["expected_options"][path]
             self.assertEqual(
                 [option["name"] for option in expected],
@@ -993,9 +942,7 @@ class CliContractSelfTest(unittest.TestCase):
         # committed snapshot must not depend on either one.
         for inventory in (native, python):
             command = next(
-                command
-                for command in inventory["commands"]
-                if command["path"] == "estimate-room"
+                command for command in inventory["commands"] if command["path"] == "estimate-room"
             )
             command["options"].reverse()
             for option in command["options"]:
@@ -1019,9 +966,9 @@ class CliContractSelfTest(unittest.TestCase):
         pre_activation = copy.deepcopy(self.manifest)
         pre_activation["commands"]["bpm"]["option_status"] = "pending"
         mismatch = copy.deepcopy(native)
-        next(
-            command for command in mismatch["commands"] if command["path"] == "bpm"
-        )["options"][0]["default"] = True
+        next(command for command in mismatch["commands"] if command["path"] == "bpm")["options"][0][
+            "default"
+        ] = True
         with self.assertRaisesRegex(ValueError, "inventory.shared.bpm"):
             CHECKER._build_shared_option_snapshot(mismatch, python, pre_activation)
 
@@ -1033,9 +980,9 @@ class CliContractSelfTest(unittest.TestCase):
             CHECKER._build_shared_option_snapshot(missing, python, self.manifest)
 
         malformed = copy.deepcopy(native)
-        del next(
-            command for command in malformed["commands"] if command["path"] == "bpm"
-        )["options"][0]["required"]
+        del next(command for command in malformed["commands"] if command["path"] == "bpm")[
+            "options"
+        ][0]["required"]
         with self.assertRaisesRegex(ValueError, "malformed option metadata"):
             CHECKER._build_shared_option_snapshot(malformed, python, self.manifest)
 
@@ -1079,6 +1026,26 @@ class CliContractSelfTest(unittest.TestCase):
             json.dumps(snapshot, indent=2, ensure_ascii=False) + "\n",
         )
 
+    def test_inventory_keys_are_snake_case(self) -> None:
+        """The inventory is CLI output, so a camelCase key fails even when expected."""
+        clean = self._fake_inventory(copy.deepcopy(self.manifest), "native")
+        errors, _ = CHECKER._validate_inventory(clean, "native")
+        self.assertFalse([error for error in errors if "snake_case" in error])
+
+        drifted = copy.deepcopy(clean)
+        drifted["schemaVersion"] = drifted.pop("schema_version")
+        option = next(
+            option
+            for command in drifted["commands"]
+            for option in command["options"]
+            if option.get("domain")
+        )
+        option["domain"]["rejectExit"] = option["domain"].pop("reject_exit")
+        errors, _ = CHECKER._validate_inventory(drifted, "native")
+        snake = [error for error in errors if "snake_case" in error]
+        self.assertTrue(any("inventory.native.schemaVersion" in error for error in snake))
+        self.assertTrue(any(error.split(":")[0].endswith(".domain.rejectExit") for error in snake))
+
     def test_active_option_inventory_rejects_shared_and_one_sided_drift(self) -> None:
         """Canonical metadata catches equal drift; cross-surface catches asymmetric drift."""
         manifest = copy.deepcopy(self.manifest)
@@ -1104,9 +1071,7 @@ class CliContractSelfTest(unittest.TestCase):
         # manifest's canonical expected_options map.
         for inventory in (native, python):
             version = next(
-                command
-                for command in inventory["commands"]
-                if command["path"] == "version"
+                command for command in inventory["commands"] if command["path"] == "version"
             )
             version["options"][0]["default"] = True
         self.assertTrue(
@@ -1153,9 +1118,7 @@ class CliContractSelfTest(unittest.TestCase):
         candidate = copy.deepcopy(self.manifest)
         del candidate["inventory"]["expected_options"]["version"][0]["type"]
         errors = CHECKER.validate_manifest(candidate)
-        self.assertTrue(
-            any("expected_options.version[0]" in error for error in errors), errors
-        )
+        self.assertTrue(any("expected_options.version[0]" in error for error in errors), errors)
 
         candidate = copy.deepcopy(self.manifest)
         candidate["inventory"]["expected_options"]["version"][0] = {"name": "json"}
@@ -1178,9 +1141,7 @@ class CliContractSelfTest(unittest.TestCase):
         )
 
         inventory = self._fake_inventory(self.manifest, "native")
-        version = next(
-            command for command in inventory["commands"] if command["path"] == "version"
-        )
+        version = next(command for command in inventory["commands"] if command["path"] == "version")
         del version["options"][0]["required"]
         report.clear()
         with mock.patch.object(
@@ -1227,9 +1188,7 @@ class CliContractSelfTest(unittest.TestCase):
         required["default"] = "input.wav"
         errors.clear()
         CHECKER._validate_option(required, "required", errors)
-        self.assertTrue(
-            any("required option needs a null default" in error for error in errors)
-        )
+        self.assertTrue(any("required option needs a null default" in error for error in errors))
 
         repeatable = {
             "name": "set",
@@ -1248,10 +1207,7 @@ class CliContractSelfTest(unittest.TestCase):
         errors.clear()
         CHECKER._validate_option(repeatable, "repeatable", errors)
         self.assertTrue(
-            any(
-                "repeatable option needs an empty array default" in error
-                for error in errors
-            )
+            any("repeatable option needs an empty array default" in error for error in errors)
         )
 
         optional_number = {
@@ -1272,10 +1228,7 @@ class CliContractSelfTest(unittest.TestCase):
         del candidate["active_paths"][0]["options"][0]["required"]
         errors = CHECKER.validate_manifest(candidate)
         self.assertTrue(
-            any(
-                "active_paths[0].options[0]: missing keys required" in error
-                for error in errors
-            ),
+            any("active_paths[0].options[0]: missing keys required" in error for error in errors),
             errors,
         )
 
@@ -1293,10 +1246,10 @@ class CliContractSelfTest(unittest.TestCase):
                 "domain": {
                     "choices": ["one", "two"],
                     "minimum": None,
-                    "exclusiveMinimum": False,
+                    "exclusive_minimum": False,
                     "maximum": None,
-                    "exclusiveMaximum": False,
-                    "rejectExit": "usage",
+                    "exclusive_maximum": False,
+                    "reject_exit": "usage",
                 },
             },
             {
@@ -1331,10 +1284,10 @@ class CliContractSelfTest(unittest.TestCase):
                 {
                     "choices": ["one", "two"],
                     "minimum": None,
-                    "exclusiveMinimum": False,
+                    "exclusive_minimum": False,
                     "maximum": None,
-                    "exclusiveMaximum": False,
-                    "rejectExit": "usage",
+                    "exclusive_maximum": False,
+                    "reject_exit": "usage",
                 },
             ),
             (1, "domain", None),
@@ -1344,10 +1297,10 @@ class CliContractSelfTest(unittest.TestCase):
                 {
                     "choices": ["one", "two"],
                     "minimum": None,
-                    "exclusiveMinimum": False,
+                    "exclusive_minimum": False,
                     "maximum": None,
-                    "exclusiveMaximum": False,
-                    "rejectExit": "invalid_parameter",
+                    "exclusive_maximum": False,
+                    "reject_exit": "invalid_parameter",
                 },
             ),
         ):
@@ -1387,7 +1340,9 @@ class ProjectCompileDiagnosticVariantTest(unittest.TestCase):
         return {"type": "object", "keys": keys}
 
     def test_targetless_variant_is_accepted(self) -> None:
-        self.assertEqual(self._with_items({"one_of": [self._variant(), self._variant("target_id")]}), [])
+        self.assertEqual(
+            self._with_items({"one_of": [self._variant(), self._variant("target_id")]}), []
+        )
 
     def test_variant_union_must_equal_the_canonical_keys(self) -> None:
         errors = self._with_items({"one_of": [self._variant("target_id")]})
@@ -1395,7 +1350,9 @@ class ProjectCompileDiagnosticVariantTest(unittest.TestCase):
 
     def test_variant_must_be_closed(self) -> None:
         errors = self._with_items({"one_of": [self._variant(), {"type": "object"}]})
-        self.assertTrue(any("one_of[1]" in e and "closed object schema" in e for e in errors), errors)
+        self.assertTrue(
+            any("one_of[1]" in e and "closed object schema" in e for e in errors), errors
+        )
 
     def test_variant_may_drop_only_an_absentable_key(self) -> None:
         errors = self._with_items({"one_of": [self._variant(), self._variant("code")]})
@@ -1408,7 +1365,11 @@ class ProjectCompileDiagnosticVariantTest(unittest.TestCase):
         case = next(c for c in compile_path["cases"] if c["id"] == "no_timeline")
 
         def run(target: object, surface: str) -> list[tuple[str, str]]:
-            diagnostic: dict[str, object] = {"code": "clipOverlap", "severity": "warning", "message": "m"}
+            diagnostic: dict[str, object] = {
+                "code": "clipOverlap",
+                "severity": "warning",
+                "message": "m",
+            }
             if target is not ...:
                 diagnostic["target_id"] = target
             payload = {
@@ -1419,8 +1380,13 @@ class ProjectCompileDiagnosticVariantTest(unittest.TestCase):
             }
             report: list[tuple[str, str]] = []
             CHECKER._validate_case_payload(
-                "project.compile", case, payload, compile_path, surface,
-                f"{surface}.project.compile.no_timeline", report,
+                "project.compile",
+                case,
+                payload,
+                compile_path,
+                surface,
+                f"{surface}.project.compile.no_timeline",
+                report,
             )
             return [r for r in report if r[0] == "fail"]
 

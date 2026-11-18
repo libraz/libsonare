@@ -42,7 +42,7 @@ _PATH_OPTION_NAMES = frozenset(
 # compares them directly: that comparison is what turns "one surface narrowed an
 # option and the other did not" from an invisible drift into a failure.
 #
-# ``rejectExit`` names the exit-code class the refusal carries. ``usage`` (2) is
+# ``reject_exit`` names the exit-code class the refusal carries. ``usage`` (2) is
 # an argparse-level rejection -- a ``type=`` callable or a ``choices=`` tuple --
 # and ``invalid_parameter`` (3) is a handler that rejects after parsing. Both
 # exist here, so the class is part of the declaration rather than something a
@@ -63,10 +63,10 @@ def _domain_record(
     return {
         "choices": [str(choice) for choice in (choices or ())],
         "minimum": minimum,
-        "exclusiveMinimum": exclusive_minimum,
+        "exclusive_minimum": exclusive_minimum,
         "maximum": maximum,
-        "exclusiveMaximum": exclusive_maximum,
-        "rejectExit": reject_exit,
+        "exclusive_maximum": exclusive_maximum,
+        "reject_exit": reject_exit,
     }
 
 
@@ -255,7 +255,7 @@ def build_cli_contract(
 ) -> dict[str, Any]:
     """Build the hidden inventory from the supplied argparse tree."""
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "surface": surface,
         "commands": [
             _command_record(path, command_parser)

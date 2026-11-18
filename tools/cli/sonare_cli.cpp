@@ -201,7 +201,7 @@ void emit_inventory_default(JsonBuilder& json, const CliOptionMetadata& option) 
 // `null`, which is what makes "one surface narrowed it and the other did not"
 // a visible difference rather than an invisible one.
 //
-// `rejectExit` names the exit-code class the refusal carries, because both CLIs
+// `reject_exit` names the exit-code class the refusal carries, because both CLIs
 // report some domains at parse time (usage) and others from the handler
 // (invalid parameter), and a `shared` command has to agree on which.
 void emit_inventory_domain(JsonBuilder& json, const CliOptionMetadata& option) {
@@ -218,14 +218,14 @@ void emit_inventory_domain(JsonBuilder& json, const CliOptionMetadata& option) {
   } else {
     json.null_value();
   }
-  json.kv("exclusiveMinimum", option.domain.exclusive_minimum).key("maximum");
+  json.kv("exclusive_minimum", option.domain.exclusive_minimum).key("maximum");
   if (option.domain.has_maximum) {
     json.value(option.domain.maximum);
   } else {
     json.null_value();
   }
-  json.kv("exclusiveMaximum", option.domain.exclusive_maximum)
-      .kv("rejectExit",
+  json.kv("exclusive_maximum", option.domain.exclusive_maximum)
+      .kv("reject_exit",
           option.domain.stage == CliOptionDomainStage::Parameter ? "invalid_parameter" : "usage")
       .end_object();
 }
@@ -244,7 +244,7 @@ void emit_inventory_option(JsonBuilder& json, const CliOptionMetadata& option) {
 
 std::string dump_cli_contract_json() {
   JsonBuilder json;
-  json.begin_object().kv("schema_version", 2).kv("surface", "native").key("commands").begin_array();
+  json.begin_object().kv("schema_version", 3).kv("surface", "native").key("commands").begin_array();
   for (const auto& command : cli_command_registry()) {
     if (!command.inventory) continue;
     json.begin_object().kv("path", command.path).key("aliases").begin_array();
