@@ -3,6 +3,7 @@
 /// @file sonare_cli_registry.h
 /// @brief The immutable command/option contract and the validation it drives.
 
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -94,6 +95,9 @@ struct CliOptionSpec {
 /// an empty error when the combination is accepted.
 using CliCommandValidator = CliValidationError (*)(const CliArgs&);
 
+/// `CliCommandSpec::positional_count` of a leaf that takes any number of positionals.
+constexpr size_t kUnboundedPositionals = std::numeric_limits<size_t>::max();
+
 /// A leaf command/path contract.  Project routes are represented as the ten
 /// `project.<subcommand>` leaves rather than one broad project schema.
 struct CliCommandSpec {
@@ -106,6 +110,10 @@ struct CliCommandSpec {
   /// derived, and a leaf whose positional is something else (the `project`
   /// subcommand, a preset document, a MIDI value) says so on its own record.
   size_t positional_count = 0;
+  /// Names the last positional (`project.json`) when the leaf requires all
+  /// `positional_count` of them, so a missing one is refused by name; empty
+  /// leaves any shortfall to the handler.
+  std::string positional_name;
   /// True when the handler carries a two-channel input through as a stereo
   /// pair. Every audio leaf is handed the mono downmix main() decodes, so a
   /// leaf that re-reads the file to keep both channels says so here rather than

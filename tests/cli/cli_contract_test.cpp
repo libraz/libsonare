@@ -271,12 +271,12 @@ TEST_CASE("CLI hidden contract inventory is machine-readable", "[cli][contract]"
 #ifdef SONARE_WITH_ARRANGEMENT
     } else if (path == "project.validate") {
       found_project_validate = true;
-      REQUIRE(command["options"].size() == 4);
-      REQUIRE(command["options"][2]["name"].as_string() == "in");
-      REQUIRE(command["options"][2]["required"].as_bool());
-      REQUIRE(command["options"][2]["default"].is_null());
-      REQUIRE(command["options"][3]["aliases"][0].as_string() == "o");
-      REQUIRE_FALSE(command["options"][3]["required"].as_bool());
+      REQUIRE(command["options"].size() == 3);
+      for (const auto& option : command["options"].as_array()) {
+        REQUIRE(option["name"].as_string() != "in");
+      }
+      REQUIRE(command["options"][2]["aliases"][0].as_string() == "o");
+      REQUIRE_FALSE(command["options"][2]["required"].as_bool());
 #endif
     } else if (path == "voice-preset-validate") {
       found_voice_validate = true;
@@ -618,10 +618,11 @@ TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {
   }
   REQUIRE(project_leaf_count == 11);
   REQUIRE(cli_command_spec_for_path("project") == nullptr);
-  const auto* project_input = cli_option_spec_for_command("project.validate", "in");
-  REQUIRE(project_input != nullptr);
-  REQUIRE(project_input->required);
-  REQUIRE(project_input->default_value.kind == CliOptionDefaultKind::Null);
+  REQUIRE(cli_option_spec_for_command("project.validate", "in") == nullptr);
+  const auto* project_validate = cli_command_spec_for_path("project.validate");
+  REQUIRE(project_validate != nullptr);
+  REQUIRE(project_validate->positional_count == 2);
+  REQUIRE(project_validate->positional_name == "project.json");
 #endif
 }
 
@@ -699,16 +700,16 @@ TEST_CASE("CLI registry defaults and hidden controls project through parser", "[
   REQUIRE_FALSE(help->inventory);
 
 #ifdef SONARE_WITH_ARRANGEMENT
-  const CliArgs project =
-      parse({"sonare-cli", "project", "validate", "--strict", "--in", "project.json"});
+  const CliArgs project = parse({"sonare-cli", "project", "validate", "--strict", "project.json"});
   REQUIRE(project.command == "project");
   REQUIRE(project.input_file == "validate");
   REQUIRE(project.has("strict"));
-  REQUIRE(project.get_string("in") == "project.json");
+  REQUIRE(project.positionals.size() == 2);
+  REQUIRE(project.positionals[1] == "project.json");
   REQUIRE(validate_cli_arguments(project, false).empty());
 
-  const CliArgs bounce = parse(
-      {"sonare-cli", "project", "bounce", "--in", "project.json", "-o", "out.wav", "--synth"});
+  const CliArgs bounce =
+      parse({"sonare-cli", "project", "bounce", "project.json", "-o", "out.wav", "--synth"});
   REQUIRE(bounce.command == "project");
   REQUIRE(bounce.input_file == "bounce");
   REQUIRE(bounce.get_string("synth") == "true");
@@ -1045,7 +1046,23 @@ TEST_CASE("CLI enforces registry requirements and canonical option aliases",
 #ifdef SONARE_WITH_ARRANGEMENT
     auto [code, output] = exec_command(CLI + " project validate --json");
     REQUIRE(code == 2);
-    REQUIRE_THAT(output, ContainsSubstring("Missing required option '--in'"));
+    REQUIRE_THAT(output, ContainsSubstring("Missing required positional argument <project.json>"));
+#endif
+  }
+
+  SECTION("a retired input option is an unknown option") {
+#ifdef SONARE_WITH_ARRANGEMENT
+    for (const char* command :
+         {"project compile --in p.json", "project import-smf --smf s.mid -o o.json",
+          "project import-midi2 --midi2 m.midi2 -o o.json", "midi-render --in p.json -o o.wav"}) {
+      CAPTURE(command);
+      auto [code, output] = exec_command(CLI + " " + command);
+      REQUIRE(code == 2);
+      REQUIRE_THAT(output, ContainsSubstring("Unknown option"));
+    }
+    auto [code, output] = exec_command(CLI + " midi-render -o o.wav");
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring("Missing required positional argument <project.json>"));
 #endif
   }
 
@@ -1054,7 +1071,7 @@ TEST_CASE("CLI enforces registry requirements and canonical option aliases",
     auto [code, output] = exec_command(CLI + " project validate --frames 1 --json");
     REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("Unknown option '--frames'"));
-    REQUIRE_THAT(output, !ContainsSubstring("Missing required option '--in'"));
+    REQUIRE_THAT(output, !ContainsSubstring("Missing required positional"));
 #endif
   }
 
@@ -1592,8 +1609,8 @@ TEST_CASE("CLI global options", "[cli]") {
     // The rejected preset is an invalid parameter, and it stays one: the family
     // rule that rewrote every project failure to the invalid-state code is gone,
     // so this reports the class the C ABI actually returned.
-    auto [code, output] = exec_command(
-        CLI + " project bounce --in missing.json -o ignored.wav --synth not-a-preset -q");
+    auto [code, output] =
+        exec_command(CLI + " project bounce missing.json -o ignored.wav --synth not-a-preset -q");
     REQUIRE(code == 3);
     REQUIRE_THAT(output, ContainsSubstring("unknown synth preset 'not-a-preset'"));
   }
@@ -1618,7 +1635,8 @@ TEST_CASE("CLI command help", "[cli]") {
   auto [project_code, project_output] = exec_command(CLI + " project validate --help");
   REQUIRE(project_code == 0);
   REQUIRE_THAT(project_output, ContainsSubstring("--strict"));
-  REQUIRE_THAT(project_output, ContainsSubstring("--in <value>"));
+  REQUIRE_THAT(project_output, !ContainsSubstring("--in <value>"));
+  REQUIRE_THAT(project_output, ContainsSubstring("<project.json>"));
   REQUIRE_THAT(project_output, ContainsSubstring("--output <value>"));
 #endif
 }

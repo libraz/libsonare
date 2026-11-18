@@ -1282,14 +1282,14 @@ int cmd_trim_silence(const CliArgs& args, const Audio& audio) {
 
 namespace {
 
-// The takes `split-silence` measures together: the positional first, then every
-// --input in command-line order.
+// The takes `split-silence` measures together: the first positional, already
+// loaded as `audio`, then every further positional in command-line order.
 std::vector<std::vector<float>> load_split_silence_takes(const CliArgs& args, const Audio& audio) {
   std::vector<std::vector<float>> takes;
-  const std::vector<std::string> paths = args.get_string_list("input");
-  takes.reserve(paths.size() + 1);
+  takes.reserve(args.positionals.size());
   takes.emplace_back(audio.begin(), audio.end());
-  for (const std::string& path : paths) {
+  for (size_t index = 1; index < args.positionals.size(); ++index) {
+    const std::string& path = args.positionals[index];
     // Through Audio::from_file, as main() loads the positional, so every take
     // meets the same offline-input policy.
     Audio take = Audio::from_file(path);

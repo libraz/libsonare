@@ -167,7 +167,7 @@ TEST_CASE("CLI project command group", "[cli]") {
       out << R"({"version":7,"sample_rate":44100.5,"tracks":[],"clips":[]})";
     }
     const SplitResult result =
-        exec_command_split(CLI + " project bounce --in " + project + " -o " + wav + " --frames 64");
+        exec_command_split(CLI + " project bounce " + project + " -o " + wav + " --frames 64");
     CHECK(result.exit_code == 5);
     CHECK_THAT(result.err, ContainsSubstring("invalid_sample_rate: sample_rate must be a whole "
                                              "number of hertz within the supported range"));
@@ -204,11 +204,11 @@ TEST_CASE("CLI project command group", "[cli]") {
     auto [nc, no] = exec_command(CLI + " project new -o " + proj);
     REQUIRE(nc == 0);
 
-    auto [vc, vo] = exec_command(CLI + " project validate --in " + proj);
+    auto [vc, vo] = exec_command(CLI + " project validate " + proj);
     REQUIRE(vc == 0);
     REQUIRE_THAT(vo, ContainsSubstring("valid"));
 
-    auto [cc, co] = exec_command(CLI + " project compile --in " + proj);
+    auto [cc, co] = exec_command(CLI + " project compile " + proj);
     REQUIRE(cc == 0);
 
     std::remove(proj.c_str());
@@ -234,7 +234,7 @@ TEST_CASE("CLI project command group", "[cli]") {
     }
 
     auto [diagnostic_code, diagnostic_output] =
-        exec_command(CLI + " project compile --in " + invalid + " --json -q");
+        exec_command(CLI + " project compile " + invalid + " --json -q");
     // A project that loads but compiles without a renderable timeline is a
     // project-state failure, the class `project validate --strict` already
     // reports for its own parsed-but-failing outcome, and the class the Python
@@ -278,7 +278,7 @@ TEST_CASE("CLI project command group", "[cli]") {
     auto [new_code, new_output] = exec_command(CLI + " project new -o " + clean);
     REQUIRE(new_code == 0);
     auto [clean_code, clean_output] =
-        exec_command(CLI + " project compile --in " + clean + " --json -q");
+        exec_command(CLI + " project compile " + clean + " --json -q");
     REQUIRE(clean_code == 0);
     const auto clean_payload = sonare::util::json::parse_strict(clean_output);
     REQUIRE(clean_payload.contains("messages"));
@@ -299,12 +299,11 @@ TEST_CASE("CLI project command group", "[cli]") {
     auto [nc, no] = exec_command(CLI + " project new -o " + proj);
     REQUIRE(nc == 0);
 
-    auto [ec, eo] = exec_command(CLI + " project export-midi2 --in " + proj + " -o " + midi2);
+    auto [ec, eo] = exec_command(CLI + " project export-midi2 " + proj + " -o " + midi2);
     REQUIRE(ec == 0);
     REQUIRE_THAT(eo, ContainsSubstring("Exported MIDI2 Clip File"));
 
-    auto [ic, io] =
-        exec_command(CLI + " project import-midi2 --midi2 " + midi2 + " -o " + imported);
+    auto [ic, io] = exec_command(CLI + " project import-midi2 " + midi2 + " -o " + imported);
     REQUIRE(ic == 0);
     REQUIRE_THAT(io, ContainsSubstring("Imported MIDI2 Clip File"));
 
@@ -319,7 +318,7 @@ TEST_CASE("CLI project command group", "[cli]") {
       std::ofstream f(bad);
       f << "{ this is not valid json ";
     }
-    auto [code, output] = exec_command(CLI + " project validate --in " + bad);
+    auto [code, output] = exec_command(CLI + " project validate " + bad);
     REQUIRE(code != 0);
     std::remove(bad.c_str());
   }
@@ -334,13 +333,13 @@ TEST_CASE("CLI project command group", "[cli]") {
     }
 
     auto [normal_code, normal_output] =
-        exec_command(CLI + " project validate --in " + project + " --json");
+        exec_command(CLI + " project validate " + project + " --json");
     REQUIRE(normal_code == 0);
     REQUIRE_THAT(normal_output, ContainsSubstring("\"valid\": true"));
     REQUIRE_THAT(normal_output, ContainsSubstring("dangling_clip_source"));
     REQUIRE_THAT(normal_output, ContainsSubstring("dangling_clip_track"));
 
-    auto [strict_code, strict_output] = exec_command(CLI + " project validate --in " + project +
+    auto [strict_code, strict_output] = exec_command(CLI + " project validate " + project +
                                                      " --strict -o " + canonical + " --json");
     REQUIRE(strict_code == 9);
     REQUIRE_THAT(strict_output, ContainsSubstring("\"valid\": true"));
@@ -357,7 +356,7 @@ TEST_CASE("CLI project command group", "[cli]") {
     auto [new_code, new_output] = exec_command(CLI + " project new -o " + project);
     REQUIRE(new_code == 0);
     auto [code, output] =
-        exec_command(CLI + " project validate --in " + project + " --frames 123 --json");
+        exec_command(CLI + " project validate " + project + " --frames 123 --json");
     REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("Unknown option '--frames'"));
     std::remove(project.c_str());
@@ -375,7 +374,7 @@ TEST_CASE("CLI project command group", "[cli]") {
     REQUIRE(nc == 0);
 
     auto [bc, bo] =
-        exec_command(CLI + " project bounce --in " + proj + " -o " + wav + " --frames 256 --json");
+        exec_command(CLI + " project bounce " + proj + " -o " + wav + " --frames 256 --json");
     REQUIRE(bc == 0);
     REQUIRE_THAT(bo, ContainsSubstring("\"sample_rate\": 48000"));
 
@@ -389,7 +388,7 @@ TEST_CASE("CLI project command group", "[cli]") {
     auto [nc, no] = exec_command(CLI + " project new -o " + proj);
     REQUIRE(nc == 0);
 
-    auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
+    auto [bc, bo] = exec_command(CLI + " project bounce " + proj + " -o " + wav +
                                  " --frames 256 --channels 2 --json");
     REQUIRE(bc == 0);
     REQUIRE_THAT(bo, ContainsSubstring("\"channels\": 2"));
@@ -408,7 +407,7 @@ TEST_CASE("CLI project command group", "[cli]") {
     auto [nc, no] = exec_command(CLI + " project new -o " + proj);
     REQUIRE(nc == 0);
 
-    auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
+    auto [bc, bo] = exec_command(CLI + " project bounce " + proj + " -o " + wav +
                                  " --frames 256 --channels 1 --json");
     REQUIRE(bc == 0);
     REQUIRE_THAT(bo, ContainsSubstring("\"channels\": 1"));
@@ -430,7 +429,7 @@ TEST_CASE("CLI project command group", "[cli]") {
 
     for (const char* count : {"3", "4"}) {
       INFO(count);
-      auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
+      auto [bc, bo] = exec_command(CLI + " project bounce " + proj + " -o " + wav +
                                    " --frames 256 --channels " + count + " -q");
       REQUIRE(bc == 3);
       REQUIRE_THAT(bo, ContainsSubstring("--channels"));
@@ -441,9 +440,8 @@ TEST_CASE("CLI project command group", "[cli]") {
 
     // Refused before the input is opened: an unreadable project would otherwise
     // report the file failure first.
-    auto [missing_code, missing_output] =
-        exec_command(CLI + " project bounce --in no-such-project.json -o " + wav +
-                     " --frames 256 --channels 3 -q");
+    auto [missing_code, missing_output] = exec_command(
+        CLI + " project bounce no-such-project.json -o " + wav + " --frames 256 --channels 3 -q");
     REQUIRE(missing_code == 3);
     REQUIRE_THAT(missing_output, ContainsSubstring("--channels"));
 
@@ -463,7 +461,7 @@ TEST_CASE("CLI project command group", "[cli]") {
 
     for (const char* count : {"6", "8"}) {
       INFO(count);
-      auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
+      auto [bc, bo] = exec_command(CLI + " project bounce " + proj + " -o " + wav +
                                    " --frames 256 --channels " + count + " -q");
       REQUIRE(bc == 3);
       REQUIRE_THAT(bo, ContainsSubstring("Invalid parameter"));
@@ -483,14 +481,14 @@ TEST_CASE("CLI project command group", "[cli]") {
     create_surround_master_project(proj71, "7.1");
 
     {
-      auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj51 + " -o " + wav +
+      auto [bc, bo] = exec_command(CLI + " project bounce " + proj51 + " -o " + wav +
                                    " --frames 256 --channels 6 --json");
       REQUIRE(bc == 0);
       REQUIRE_THAT(bo, ContainsSubstring("\"channels\": 6"));
       REQUIRE(wav_header_channel_count(wav) == 6);
     }
     {
-      auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj71 + " -o " + wav +
+      auto [bc, bo] = exec_command(CLI + " project bounce " + proj71 + " -o " + wav +
                                    " --frames 256 --channels 8 --json");
       REQUIRE(bc == 0);
       REQUIRE_THAT(bo, ContainsSubstring("\"channels\": 8"));
@@ -499,7 +497,7 @@ TEST_CASE("CLI project command group", "[cli]") {
     // 8 still exceeds a 5.1 master's own 6-channel width: the value is a valid
     // speaker layout, but this project's master is narrower than it.
     {
-      auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj51 + " -o " + wav +
+      auto [bc, bo] = exec_command(CLI + " project bounce " + proj51 + " -o " + wav +
                                    " --frames 256 --channels 8 -q");
       REQUIRE(bc == 3);
       REQUIRE_THAT(bo, !ContainsSubstring("--channels"));
@@ -522,7 +520,7 @@ TEST_CASE("CLI project command group", "[cli]") {
 
     const std::string over_cap = std::to_string(64ull * 1024ull * 1024ull + 1ull);
     auto [code, output] = exec_command("head -c " + over_cap + " /dev/zero > " + fifo + " & " +
-                                       CLI + " project compile --in " + fifo + " -q");
+                                       CLI + " project compile " + fifo + " -q");
     REQUIRE(code == 3);
     REQUIRE_THAT(output, ContainsSubstring("byte limit"));
 
@@ -535,7 +533,7 @@ TEST_CASE("CLI project command group", "[cli]") {
     auto [nc, no] = exec_command(CLI + " project new -o " + proj + " --sample-rate 44100");
     REQUIRE(nc == 0);
 
-    auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
+    auto [bc, bo] = exec_command(CLI + " project bounce " + proj + " -o " + wav +
                                  " --frames 256 --sample-rate 44100 --json");
     REQUIRE(bc == 0);
     REQUIRE_THAT(bo, ContainsSubstring("\"sample_rate\": 44100"));
@@ -556,8 +554,8 @@ TEST_CASE("CLI project command group", "[cli]") {
           exec_command(CLI + " project new -o " + proj + " --sample-rate " + std::to_string(rate));
       REQUIRE(nc == 0);
 
-      auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
-                                   " --frames 256 --json");
+      auto [bc, bo] =
+          exec_command(CLI + " project bounce " + proj + " -o " + wav + " --frames 256 --json");
       REQUIRE(bc == 0);
       REQUIRE_THAT(bo, ContainsSubstring("\"sample_rate\": " + std::to_string(rate)));
       REQUIRE(wav_header_sample_rate(wav) == static_cast<unsigned int>(rate));
@@ -573,7 +571,7 @@ TEST_CASE("CLI project command group", "[cli]") {
     auto [nc, no] = exec_command(CLI + " project new -o " + proj + " --sample-rate 44100");
     REQUIRE(nc == 0);
 
-    auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
+    auto [bc, bo] = exec_command(CLI + " project bounce " + proj + " -o " + wav +
                                  " --frames 256 --sample-rate 48000 --json");
     REQUIRE(bc == 3);
     REQUIRE_THAT(bo, ContainsSubstring("44100"));
@@ -592,7 +590,7 @@ TEST_CASE("CLI project command group", "[cli]") {
     auto [nc, no] = exec_command(CLI + " project new -o " + proj);
     REQUIRE(nc == 0);
 
-    auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
+    auto [bc, bo] = exec_command(CLI + " project bounce " + proj + " -o " + wav +
                                  " --frames 256 --synth saw --json");
     REQUIRE(bc == 0);
     REQUIRE_THAT(bo, ContainsSubstring("\"synth\": true"));
@@ -607,12 +605,12 @@ TEST_CASE("CLI project command group", "[cli]") {
     auto [nc, no] = exec_command(CLI + " project new -o " + proj);
     REQUIRE(nc == 0);
 
-    auto [kc, ko] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
+    auto [kc, ko] = exec_command(CLI + " project bounce " + proj + " -o " + wav +
                                  " --frames 256 --synth SAWLEAD --json");
     REQUIRE(kc == 0);
     REQUIRE_THAT(ko, ContainsSubstring("\"synth\": true"));
 
-    auto [cc, co] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
+    auto [cc, co] = exec_command(CLI + " project bounce " + proj + " -o " + wav +
                                  " --frames 256 --synth saw-lead -q");
     REQUIRE(cc == 3);
     REQUIRE_THAT(co, ContainsSubstring("unknown synth preset 'saw-lead'"));
@@ -644,7 +642,7 @@ TEST_CASE("CLI project command group", "[cli]") {
     // ten `project.<subcommand>` leaves -- so the generic per-command help
     // resolved to an empty option list and named none of them. The request goes
     // to the handler, which owns the full usage text, and the ten subcommands
-    // and the four input options are what makes that observable.
+    // and the four input positionals are what makes that observable.
     auto [code, output] = exec_command(CLI + " project --help");
     REQUIRE(code == 0);
     for (const char* subcommand : {"abi", "synth-presets", "new", "validate", "compile", "bounce",
@@ -652,9 +650,9 @@ TEST_CASE("CLI project command group", "[cli]") {
       CAPTURE(subcommand);
       REQUIRE_THAT(output, ContainsSubstring(std::string("  ") + subcommand));
     }
-    REQUIRE_THAT(output, ContainsSubstring("--in"));
-    REQUIRE_THAT(output, ContainsSubstring("--smf"));
-    REQUIRE_THAT(output, ContainsSubstring("--midi2"));
+    REQUIRE_THAT(output, ContainsSubstring("in.json"));
+    REQUIRE_THAT(output, ContainsSubstring("in.mid"));
+    REQUIRE_THAT(output, ContainsSubstring("in.midi2"));
     REQUIRE_THAT(output, ContainsSubstring("--synth"));
   }
 
@@ -669,20 +667,20 @@ TEST_CASE("CLI project command group", "[cli]") {
   }
 
   SECTION("a missing import input is a file-not-found exit, not an invalid parameter") {
-    // `--smf` / `--midi2` name a user-supplied input file, so failing to open
-    // one keeps the class it carries -- the same code `project validate --in`
+    // The SMF / MIDI2 positional names a user-supplied input file, so failing to open
+    // one keeps the class it carries -- the same code `project validate`
     // reports for the same condition, and the same one the Python CLI reports.
     // A script that branches on "fetch the input again" versus "the arguments
     // are wrong" must not get a different answer per subcommand.
     const std::string missing = unique_temp_path("_absent.mid");
     const std::string out = unique_temp_path("_import.json");
     auto [smf_code, smf_output] =
-        exec_command(CLI + " project import-smf --smf " + missing + " -o " + out);
+        exec_command(CLI + " project import-smf " + missing + " -o " + out);
     REQUIRE(smf_code == 4);
     REQUIRE_THAT(smf_output, ContainsSubstring("cannot open SMF file"));
 
     auto [midi2_code, midi2_output] =
-        exec_command(CLI + " project import-midi2 --midi2 " + missing + " -o " + out);
+        exec_command(CLI + " project import-midi2 " + missing + " -o " + out);
     REQUIRE(midi2_code == 4);
     REQUIRE_THAT(midi2_output, ContainsSubstring("cannot open MIDI2 file"));
   }
@@ -696,7 +694,7 @@ TEST_CASE("CLI project command group", "[cli]") {
       f.seekp((64LL * 1024 * 1024) + 1);
       f.put('\0');
     }
-    auto [code, output] = exec_command(CLI + " project validate --in " + big + " -q");
+    auto [code, output] = exec_command(CLI + " project validate " + big + " -q");
     REQUIRE(code == 3);
     REQUIRE_THAT(output, ContainsSubstring("exceeds"));
     std::remove(big.c_str());

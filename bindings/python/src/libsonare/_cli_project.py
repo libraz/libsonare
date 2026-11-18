@@ -595,7 +595,7 @@ def cmd_project(args: argparse.Namespace) -> int:
     if subcommand == "import-smf":
         if not args.output:
             raise ValueError("project import-smf requires --output")
-        data = _read_bounded(args.smf, _MAX_PROJECT_OR_MIDI_BYTES)
+        data = _read_bounded(args.input, _MAX_PROJECT_OR_MIDI_BYTES)
         project = Project()
         try:
             first_clip = project.import_smf(data)
@@ -629,7 +629,7 @@ def cmd_project(args: argparse.Namespace) -> int:
     if subcommand == "import-midi2":
         if not args.output:
             raise ValueError("project import-midi2 requires --output")
-        data = _read_bounded(args.midi2, _MAX_PROJECT_OR_MIDI_BYTES)
+        data = _read_bounded(args.input, _MAX_PROJECT_OR_MIDI_BYTES)
         project = Project()
         try:
             first_clip = project.import_clip_file(data)
@@ -767,13 +767,13 @@ def register_project_parsers(
                 action="store_true",
                 help="Fail (non-zero exit) when the project loads with diagnostics",
             )
-            pp.add_argument("--in", dest="input", required=True, help="Input project JSON")
+            pp.add_argument("input", metavar="project.json", help="Input project JSON")
             pp.add_argument("-o", "--output", type=str, default=argparse.SUPPRESS)
         else:
             pp = project_sub.add_parser(
                 pname, parents=[project_stdout_common], help="Project compile"
             )
-            pp.add_argument("--in", dest="input", required=True, help="Input project JSON")
+            pp.add_argument("input", metavar="project.json", help="Input project JSON")
     sf2_cli_note = (
         "SF2 / SoundFont and per-destination synth JSON are not wired through this CLI command; "
         "use the Project API for SoundFont-backed bounces."
@@ -784,7 +784,7 @@ def register_project_parsers(
         help="Render project to WAV",
         description=sf2_cli_note,
     )
-    pbounce.add_argument("--in", dest="input", required=True, help="Input project JSON")
+    pbounce.add_argument("input", metavar="project.json", help="Input project JSON")
     pbounce.add_argument(
         "--sample-rate",
         type=_c_int,
@@ -848,7 +848,7 @@ def register_project_parsers(
         parents=[project_common],
         help="Align every take in a project against one reference source",
     )
-    palign.add_argument("--in", dest="input", required=True, help="Input project JSON")
+    palign.add_argument("input", metavar="project.json", help="Input project JSON")
     # The value domains stay out of argparse: `type=` / `choices=` would report
     # them as usage errors, and each one is an invalid parameter.
     _cli_domain(
@@ -901,17 +901,17 @@ def register_project_parsers(
         reject_exit="invalid_parameter",
     )
     pexport_smf = project_sub.add_parser("export-smf", parents=[project_common], help="Export SMF")
-    pexport_smf.add_argument("--in", dest="input", required=True, help="Input project JSON")
+    pexport_smf.add_argument("input", metavar="project.json", help="Input project JSON")
     pimport_smf = project_sub.add_parser("import-smf", parents=[project_common], help="Import SMF")
-    pimport_smf.add_argument("--smf", required=True, help="Input Standard MIDI File")
+    pimport_smf.add_argument("input", metavar="song.mid", help="Input Standard MIDI File")
     pexport_midi2 = project_sub.add_parser(
         "export-midi2", parents=[project_common], help="Export MIDI 2.0 Clip File"
     )
-    pexport_midi2.add_argument("--in", dest="input", required=True, help="Input project JSON")
+    pexport_midi2.add_argument("input", metavar="project.json", help="Input project JSON")
     pimport_midi2 = project_sub.add_parser(
         "import-midi2", parents=[project_common], help="Import MIDI 2.0 Clip File"
     )
-    pimport_midi2.add_argument("--midi2", required=True, help="Input MIDI 2.0 Clip File")
+    pimport_midi2.add_argument("input", metavar="clip.midi2", help="Input MIDI 2.0 Clip File")
     project_sub.add_parser(
         "synth-presets", parents=[project_stdout_common], help="List NativeSynth presets"
     )
@@ -922,7 +922,7 @@ def register_project_parsers(
         help="Render a MIDI project through NativeSynth",
         description=sf2_cli_note,
     )
-    midi_render_p.add_argument("--in", dest="input", required=True, help="Input project JSON")
+    midi_render_p.add_argument("input", metavar="project.json", help="Input project JSON")
     midi_render_p.add_argument(
         "--sample-rate",
         type=_c_int,

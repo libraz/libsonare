@@ -734,7 +734,7 @@ def test_project_import_smf_cli_preserves_salvaged_truncation(tmp_path) -> None:
     source = tmp_path / "truncated.mid"
     output = tmp_path / "project.json"
     source.write_bytes(_truncated_smf())
-    result = _run_console("project", "import-smf", "--smf", str(source), "--output", str(output))
+    result = _run_console("project", "import-smf", str(source), "--output", str(output))
     assert result.returncode == 0, result.stderr
     assert output.exists()
 
@@ -1015,6 +1015,31 @@ def test_spectral_json_has_closed_unrounded_feature_stats(monkeypatch, capsys) -
         assert stats["max"] == max(feature_values)
 
 
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ("project", "compile", "--in", "project.json"),
+        ("project", "import-smf", "--smf", "song.mid", "-o", "out.json"),
+        ("project", "import-midi2", "--midi2", "clip.midi2", "-o", "out.json"),
+        ("midi-render", "--in", "project.json", "-o", "out.wav"),
+    ],
+)
+def test_retired_input_options_are_usage_errors(arguments) -> None:
+    """The input file is a positional; its earlier option spelling is refused."""
+    result = _run_console(*arguments)
+
+    assert result.returncode == 2
+    assert "unrecognized arguments" in result.stderr
+
+
+def test_missing_project_positional_is_a_usage_error_naming_it() -> None:
+    """A project leaf without its input file exits 2 and names the expected positional."""
+    result = _run_console("project", "compile")
+
+    assert result.returncode == 2
+    assert "project.json" in result.stderr
+
+
 def test_mastering_cli_uses_requested_true_peak_oversample(tmp_path) -> None:
     """Mastering forwards the CLI oversampling factor and reports the applied value."""
     source = tmp_path / "tone.wav"
@@ -1166,13 +1191,13 @@ def test_project_validate_surfaces_diagnostics_field(tmp_path) -> None:
     proj = tmp_path / "clean.sonare"
     created = _run_console("project", "new", "-o", str(proj))
     assert created.returncode == 0, created.stderr
-    result = _run_console("project", "validate", "--in", str(proj), "--json")
+    result = _run_console("project", "validate", str(proj), "--json")
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
     assert payload["valid"] is True
     assert payload["diagnostics"] == []
     assert payload["diagnostic_count"] == 0
-    strict = _run_console("project", "validate", "--in", str(proj), "--strict", "--json")
+    strict = _run_console("project", "validate", str(proj), "--strict", "--json")
     assert strict.returncode == 0, strict.stderr
 
 
@@ -1217,7 +1242,6 @@ def test_project_validate_strict_writes_canonical_artifact_before_exit(tmp_path)
     result = _run_console(
         "project",
         "validate",
-        "--in",
         str(source),
         "--strict",
         "--output",
@@ -1237,7 +1261,7 @@ def test_project_validate_malformed_document_uses_invalid_format_exit(tmp_path) 
     """CLI malformed-project errors use C-ABI InvalidFormat (exit 5)."""
     source = tmp_path / "malformed.json"
     source.write_text("{ this is not valid json ", encoding="utf-8")
-    result = _run_console("project", "validate", "--in", str(source), "--json")
+    result = _run_console("project", "validate", str(source), "--json")
     assert result.returncode == 5
     assert result.stdout == ""
 
@@ -1255,7 +1279,7 @@ def test_project_bounce_uses_the_project_own_sample_rate_by_default(tmp_path, st
     assert created.returncode == 0, created.stderr
 
     result = _run_console(
-        "project", "bounce", "--in", str(proj), "-o", str(wav), "--frames", "256", "--json"
+        "project", "bounce", str(proj), "-o", str(wav), "--frames", "256", "--json"
     )
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["sample_rate"] == stored_rate
@@ -1279,7 +1303,7 @@ def test_project_bounce_refuses_a_fractional_project_rate(tmp_path, stored_rate)
     )
 
     result = _run_console(
-        "project", "bounce", "--in", str(proj), "-o", str(wav), "--frames", "64", "--json"
+        "project", "bounce", str(proj), "-o", str(wav), "--frames", "64", "--json"
     )
     assert result.returncode == 5
     assert (
@@ -1300,7 +1324,7 @@ def test_project_bounce_renders_an_integral_project_rate(tmp_path, stored_rate) 
     )
 
     result = _run_console(
-        "project", "bounce", "--in", str(proj), "-o", str(wav), "--frames", "64", "--json"
+        "project", "bounce", str(proj), "-o", str(wav), "--frames", "64", "--json"
     )
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["sample_rate"] == stored_rate
@@ -1310,7 +1334,6 @@ def test_project_bounce_renders_an_integral_project_rate(tmp_path, stored_rate) 
     rejected = _run_console(
         "project",
         "bounce",
-        "--in",
         str(proj),
         "-o",
         str(tmp_path / "rejected.wav"),
@@ -1332,7 +1355,6 @@ def test_project_bounce_accepts_an_explicit_sample_rate_matching_the_project(tmp
     result = _run_console(
         "project",
         "bounce",
-        "--in",
         str(proj),
         "-o",
         str(wav),
@@ -1367,7 +1389,6 @@ def test_project_bounce_rejects_an_explicit_zero_or_negative_sample_rate(
     result = _run_console(
         "project",
         "bounce",
-        "--in",
         str(proj),
         "-o",
         str(wav),
@@ -1395,7 +1416,6 @@ def test_project_bounce_rejects_an_explicit_sample_rate_disagreeing_with_the_pro
     result = _run_console(
         "project",
         "bounce",
-        "--in",
         str(proj),
         "-o",
         str(wav),

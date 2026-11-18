@@ -778,3 +778,73 @@ changed = "the native CLI's --json diagnostics carry code and severity as the li
 domain = "project"
 rule = "cli-front-end-parity"
 test = "tests/cli/cli_project_test.cpp::compile JSON keeps one human message per diagnostic"
+
+[[entry]]
+kind = "flag"
+old = "project.validate --in"
+removed = "pass the project file as the positional argument: project validate project.json"
+domain = "project"
+rule = "cli-positional-input"
+
+[[entry]]
+kind = "flag"
+old = "project.compile --in"
+removed = "pass the project file as the positional argument: project compile project.json"
+domain = "project"
+rule = "cli-positional-input"
+
+[[entry]]
+kind = "flag"
+old = "project.bounce --in"
+removed = "pass the project file as the positional argument: project bounce project.json"
+domain = "project"
+rule = "cli-positional-input"
+
+[[entry]]
+kind = "flag"
+old = "project.align-takes --in"
+removed = "pass the project file as the positional argument: project align-takes project.json"
+domain = "project"
+rule = "cli-positional-input"
+
+[[entry]]
+kind = "flag"
+old = "project.export-smf --in"
+removed = "pass the project file as the positional argument: project export-smf project.json"
+domain = "project"
+rule = "cli-positional-input"
+
+[[entry]]
+kind = "flag"
+old = "project.export-midi2 --in"
+removed = "pass the project file as the positional argument: project export-midi2 project.json"
+domain = "project"
+rule = "cli-positional-input"
+
+[[entry]]
+kind = "flag"
+old = "project.import-smf --smf"
+removed = "pass the input file as the positional argument: project import-smf song.mid"
+domain = "project"
+rule = "cli-positional-input"
+
+[[entry]]
+kind = "flag"
+old = "project.import-midi2 --midi2"
+removed = "pass the input file as the positional argument: project import-midi2 clip.midi2"
+domain = "project"
+rule = "cli-positional-input"
+
+[[entry]]
+kind = "flag"
+old = "midi-render --in"
+removed = "pass the project file as the positional argument: midi-render project.json"
+domain = "project"
+rule = "cli-positional-input"
+
+[[entry]]
+kind = "flag"
+old = "split-silence --input"
+removed = "pass every take as a positional argument: split-silence a.wav b.wav"
+domain = "analysis"
+rule = "cli-positional-input"

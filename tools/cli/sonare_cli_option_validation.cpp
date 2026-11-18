@@ -301,5 +301,11 @@ CliValidationError validate_cli_arguments(const CliArgs& args, bool requires_aud
                 "' for command '" + args.command + "'",
             false};
   }
+  if (command != nullptr && !command->positional_name.empty() &&
+      args.positionals.size() < command->positional_count) {
+    return {"Missing required positional argument <" + command->positional_name +
+                "> for command '" + args.command + "'",
+            false};
+  }
   return {};
 }

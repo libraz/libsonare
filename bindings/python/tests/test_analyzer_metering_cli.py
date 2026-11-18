@@ -342,19 +342,19 @@ def test_project_cli_exports_smf_and_midi_render_smoke() -> None:
         finally:
             project.close()
 
-        validate = _run_cli(["project", "validate", "--in", str(project_path), "--json"])
+        validate = _run_cli(["project", "validate", str(project_path), "--json"])
         assert validate.returncode == 0, validate.stderr
         assert json.loads(validate.stdout)["valid"] is True
 
         export = _run_cli(
-            ["project", "export-smf", "--in", str(project_path), "-o", str(smf_path), "--json"]
+            ["project", "export-smf", str(project_path), "-o", str(smf_path), "--json"]
         )
         assert export.returncode == 0, export.stderr
         assert smf_path.read_bytes().startswith(b"MThd")
         assert json.loads(export.stdout)["bytes"] == smf_path.stat().st_size
 
         imported = _run_cli(
-            ["project", "import-smf", "--smf", str(smf_path), "-o", str(imported_path), "--json"]
+            ["project", "import-smf", str(smf_path), "-o", str(imported_path), "--json"]
         )
         assert imported.returncode == 0, imported.stderr
         assert imported_path.exists()
@@ -363,7 +363,6 @@ def test_project_cli_exports_smf_and_midi_render_smoke() -> None:
         rendered = _run_cli(
             [
                 "midi-render",
-                "--in",
                 str(project_path),
                 "-o",
                 str(wav_path),

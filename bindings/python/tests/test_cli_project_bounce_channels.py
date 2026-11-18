@@ -62,7 +62,7 @@ def test_bounce_refuses_a_width_no_speaker_layout_has(tmp_path: Path) -> None:
 
     for count in ("3", "4"):
         result = _run_console(
-            "project", "bounce", "--in", str(project), "-o", str(output), "--channels", count
+            "project", "bounce", str(project), "-o", str(output), "--channels", count
         )
         assert result.returncode == EXIT_INVALID_PARAMETER, result.stderr
         assert not output.exists()
@@ -77,7 +77,7 @@ def test_bounce_refuses_channels_that_exceed_a_stereo_master(tmp_path: Path) -> 
 
     for count in ("6", "8"):
         result = _run_console(
-            "project", "bounce", "--in", str(project), "-o", str(output), "--channels", count
+            "project", "bounce", str(project), "-o", str(output), "--channels", count
         )
         assert result.returncode == EXIT_INVALID_PARAMETER, result.stderr
         assert not output.exists()
@@ -98,7 +98,6 @@ def test_bounce_renders_channels_up_to_a_surround_masters_width(tmp_path: Path) 
     result = _run_console(
         "project",
         "bounce",
-        "--in",
         str(project_51),
         "-o",
         str(output),
@@ -113,7 +112,6 @@ def test_bounce_renders_channels_up_to_a_surround_masters_width(tmp_path: Path) 
     result = _run_console(
         "project",
         "bounce",
-        "--in",
         str(project_71),
         "-o",
         str(output),
@@ -128,6 +126,6 @@ def test_bounce_renders_channels_up_to_a_surround_masters_width(tmp_path: Path) 
     # 8 is a valid speaker-layout width, but still exceeds a 5.1 master's own
     # 6-channel width.
     result = _run_console(
-        "project", "bounce", "--in", str(project_51), "-o", str(output), "--channels", "8"
+        "project", "bounce", str(project_51), "-o", str(output), "--channels", "8"
     )
     assert result.returncode == EXIT_INVALID_PARAMETER, result.stderr

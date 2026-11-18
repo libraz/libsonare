@@ -132,7 +132,8 @@ CliOptionSpec path_value(const char* name, bool required = false, bool global_le
 
 // Every caller sits inside one of these two command blocks, so the helper has
 // to carry their union or it becomes an unused function when both are off.
-#if defined(SONARE_WITH_MASTERING) || defined(SONARE_WITH_ARRANGEMENT)
+#if defined(SONARE_WITH_MASTERING) || \
+    (defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR))
 CliOptionSpec required_path(const char* name) { return path_value(name, true); }
 #endif
 
@@ -156,6 +157,9 @@ CliOptionSpec repeatable_path(const char* name) {
 }
 
 #ifdef SONARE_WITH_ARRANGEMENT
+// The positional every project-reading leaf names in its missing-argument error.
+constexpr const char* kProjectJsonPositional = "project.json";
+
 CliOptionSpec optional_string(const char* name, const char* implicit = "true",
                               bool repeatable = false) {
   return make_option(name, CliOptionArity::OptionalValue, CliOptionScalarType::String,
@@ -498,16 +502,19 @@ std::vector<CliOptionSpec> with_json(std::vector<CliOptionSpec> options) {
 }
 
 // `positionals` names the arity of a leaf that takes a positional which is not
-// an audio file; an audio leaf already takes exactly one and ignores it.
+// an audio file, or more than the one an audio leaf takes by default
+// (kUnboundedPositionals for a list of audio files). `positional_name` makes
+// the full count required and names the last one when it is missing.
 // `preserves_stereo_input` is the leaf's own answer to what a two-channel input
 // produces.
 void add_command(std::vector<CliCommandSpec>& registry, const char* path, bool requires_audio,
                  std::vector<CliOptionSpec> options, std::vector<std::string> aliases = {},
                  CliCommandValidator validate = nullptr, size_t positionals = 0,
-                 bool preserves_stereo_input = false, bool preserves_multichannel_input = false) {
+                 bool preserves_stereo_input = false, bool preserves_multichannel_input = false,
+                 const char* positional_name = "") {
   registry.push_back({path, std::move(aliases), with_json(std::move(options)), requires_audio,
-                      requires_audio ? 1u : positionals, preserves_stereo_input,
-                      preserves_multichannel_input, true, validate});
+                      requires_audio && positionals == 0 ? 1u : positionals, positional_name,
+                      preserves_stereo_input, preserves_multichannel_input, true, validate});
 }
 
 const std::vector<CliCommandSpec>& build_cli_registry() {
@@ -773,8 +780,9 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // reachable from a command line at all -- one interval covering everything
     // answers three different situations and the intervals cannot say which.
     add_command(commands, "split-silence", true,
-                {repeatable_path("input"), number_value("top-db", 60.0), path_value("write-takes"),
-                 flag("report"), global_int("n-fft", 2048), global_int("hop-length", 512)});
+                {number_value("top-db", 60.0), path_value("write-takes"), flag("report"),
+                 global_int("n-fft", 2048), global_int("hop-length", 512)},
+                {}, nullptr, kUnboundedPositionals);
     add_command(commands, "normalize", true,
                 {string_value("mode", "peak"), number_value("target-db"), required_output()}, {},
                 nullptr, 0, /*preserves_stereo_input=*/true);
@@ -1111,29 +1119,32 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
 
 #ifdef SONARE_WITH_ARRANGEMENT
     // Exactly eleven project leaves; there is deliberately no broad `project`
-    // option row. Each takes its subcommand as the one positional, so they are
-    // registered through a helper rather than each restating that arity.
-    const auto add_project_command = [&commands](const char* path,
-                                                 std::vector<CliOptionSpec> options,
-                                                 CliCommandValidator validate = nullptr) {
-      add_command(commands, path, false, std::move(options), {}, validate, 1);
-    };
+    // option row. Each takes its subcommand as the first positional, and the
+    // ones that read a file take it as the second (`input` names it), so they
+    // are registered through a helper rather than each restating that arity.
+    const auto add_project_command =
+        [&commands](const char* path, std::vector<CliOptionSpec> options,
+                    CliCommandValidator validate = nullptr, const char* input = nullptr) {
+          add_command(commands, path, false, std::move(options), {}, validate, input ? 2 : 1, false,
+                      false, input ? input : "");
+        };
     add_project_command("project.abi", {});
     add_project_command("project.synth-presets", {});
     add_project_command("project.new", {int_value("sample-rate", 0), required_output()});
-    add_project_command("project.validate", {flag("strict"), required_path("in"), output_value()});
-    add_project_command("project.compile", {required_path("in")});
+    add_project_command("project.validate", {flag("strict"), output_value()}, nullptr,
+                        kProjectJsonPositional);
+    add_project_command("project.compile", {}, nullptr, kProjectJsonPositional);
     // `--audio` is one assignment per occurrence rather than a delimited list,
     // as `--set` and `--edit` are: the source id written with the path keeps the
     // pairing in one token, and a path may carry whatever separator a fold would
     // have to pick. Its type is String rather than Path because the value is an
     // assignment, not a bare path.
-    add_project_command("project.bounce",
-                        {required_path("in"), required_output(), int_value("sample-rate"),
-                         library_sized(int_value("frames")), library_sized(int_value("channels")),
-                         int_value("instrument-latency-samples", 0), optional_string("synth"),
-                         string_value("audio", false, true), flag("resolve-audio")},
-                        &validate_project_bounce_channels);
+    add_project_command(
+        "project.bounce",
+        {required_output(), int_value("sample-rate"), library_sized(int_value("frames")),
+         library_sized(int_value("channels")), int_value("instrument-latency-samples", 0),
+         optional_string("synth"), string_value("audio", false, true), flag("resolve-audio")},
+        &validate_project_bounce_channels, kProjectJsonPositional);
     // `align-takes` reads the source FILES rather than binding PCM, so it shares
     // `--audio` / `--resolve-audio` with `bounce` and nothing else. Its three
     // numeric options carry the invalid-parameter class: each is a value the
@@ -1143,23 +1154,24 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // stays with the core rather than being restated here.
     add_project_command(
         "project.align-takes",
-        {required_path("in"), required_output(),
+        {required_output(),
          with_domain(int_value("reference-source", true),
                      between(1.0, static_cast<double>(std::numeric_limits<std::uint32_t>::max()),
                              CliOptionDomainStage::Parameter)),
          string_value("audio", false, true), flag("resolve-audio"),
          with_domain(global_int("hop-length", 0), at_least(0.0, CliOptionDomainStage::Parameter)),
          with_domain(int_value("bins-per-octave", 0),
-                     at_least(0.0, CliOptionDomainStage::Parameter))});
+                     at_least(0.0, CliOptionDomainStage::Parameter))},
+        nullptr, kProjectJsonPositional);
     // `project bounce` with the synth pinned on, as a top-level leaf: it takes
     // no subcommand positional, and `--synth` is a plain value rather than an
     // optional flag because the rendering always goes through NativeSynth and
     // only the preset is in question.
     add_command(commands, "midi-render", false,
-                {required_path("in"), required_output(), int_value("sample-rate"),
-                 library_sized(int_value("frames")), library_sized(int_value("channels")),
-                 int_value("instrument-latency-samples", 0), string_value("synth", "")},
-                {}, &validate_project_bounce_channels);
+                {required_output(), int_value("sample-rate"), library_sized(int_value("frames")),
+                 library_sized(int_value("channels")), int_value("instrument-latency-samples", 0),
+                 string_value("synth", "")},
+                {}, &validate_project_bounce_channels, 1, false, false, kProjectJsonPositional);
     // Every numeric here means "keep the library default" when absent, and the
     // C ABI spells that 0 and refuses an out-of-domain value by name, so the
     // domains stay on that one entry -- except the tempo, which every tempo flag refuses.
@@ -1196,10 +1208,11 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                      at_least(0.0, CliOptionDomainStage::Parameter)),
          required_output()});
 #endif
-    add_project_command("project.export-smf", {required_path("in"), required_output()});
-    add_project_command("project.import-smf", {required_path("smf"), required_output()});
-    add_project_command("project.export-midi2", {required_path("in"), required_output()});
-    add_project_command("project.import-midi2", {required_path("midi2"), required_output()});
+    add_project_command("project.export-smf", {required_output()}, nullptr, kProjectJsonPositional);
+    add_project_command("project.import-smf", {required_output()}, nullptr, "song.mid");
+    add_project_command("project.export-midi2", {required_output()}, nullptr,
+                        kProjectJsonPositional);
+    add_project_command("project.import-midi2", {required_output()}, nullptr, "clip.midi2");
 #endif
 #ifdef SONARE_WITH_PLAYBACK
     // Movie-audio playback renderer: mono/stereo/5.1/7.1 PCM in, either

@@ -16,8 +16,6 @@ constexpr float kDefaultReattackRatio = 2.0f;
 using ProjectMidiImportFn = SonareError (*)(SonareProject*, const uint8_t*, size_t, uint32_t*);
 
 struct ProjectMidiImportSpec {
-  const char* input_option;
-  const char* missing_input_message;
   const char* input_kind;
   const char* import_error_context;
   const char* success_format;
@@ -25,11 +23,7 @@ struct ProjectMidiImportSpec {
 };
 
 int cmd_project_import_midi(const CliArgs& args, const ProjectMidiImportSpec& spec) {
-  const std::string input_path = args.get_string(spec.input_option);
-  if (input_path.empty()) {
-    std::cerr << color::red << spec.missing_input_message << color::reset << "\n";
-    return 1;
-  }
+  const std::string input_path = project_input_path(args);
   std::vector<uint8_t> bytes;
   if (!read_binary_file(input_path, &bytes)) {
     std::cerr << color::red << "Error: cannot open " << spec.input_kind << " file: " << input_path
@@ -239,7 +233,7 @@ int cmd_transcribe(const CliArgs& args, const Audio& audio) {
   return 0;
 }
 
-// `project export-smf --in in.json -o out.mid` — export the project's tempo map
+// `project export-smf in.json -o out.mid` — export the project's tempo map
 // + MIDI clips to a Standard MIDI File.
 int cmd_project_export_smf(const CliArgs& args) {
   ProjectHandle handle;
@@ -273,7 +267,7 @@ int cmd_project_export_smf(const CliArgs& args) {
   return 0;
 }
 
-// `project export-midi2 --in in.json -o out.midi2` — export the project's tempo
+// `project export-midi2 in.json -o out.midi2` — export the project's tempo
 // map + MIDI clips to a MIDI 2.0 Clip File.
 int cmd_project_export_midi2(const CliArgs& args) {
   ProjectHandle handle;
@@ -307,18 +301,16 @@ int cmd_project_export_midi2(const CliArgs& args) {
   return 0;
 }
 
-// `project import-smf --smf in.mid -o out.json` — import an SMF into a new
+// `project import-smf in.mid -o out.json` — import an SMF into a new
 // project and serialize it to JSON.
 int cmd_project_import_smf(const CliArgs& args) {
-  return cmd_project_import_midi(args, {"smf", "Error: missing SMF input (use --smf <file.mid>)",
-                                        "SMF", "import SMF", "SMF", sonare_project_import_smf});
+  return cmd_project_import_midi(args, {"SMF", "import SMF", "SMF", sonare_project_import_smf});
 }
 
-// `project import-midi2 --midi2 in.midi2 -o out.json` — import a MIDI 2.0 Clip
+// `project import-midi2 in.midi2 -o out.json` — import a MIDI 2.0 Clip
 // File into a new project and serialize it to JSON.
 int cmd_project_import_midi2(const CliArgs& args) {
-  return cmd_project_import_midi(
-      args, {"midi2", "Error: missing MIDI2 input (use --midi2 <file.midi2>)", "MIDI2",
-             "import MIDI2 Clip File", "MIDI2 Clip File", sonare_project_import_clip_file});
+  return cmd_project_import_midi(args, {"MIDI2", "import MIDI2 Clip File", "MIDI2 Clip File",
+                                        sonare_project_import_clip_file});
 }
 #endif  // SONARE_WITH_ARRANGEMENT

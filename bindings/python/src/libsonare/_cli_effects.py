@@ -363,10 +363,11 @@ def cmd_trim_silence(args: argparse.Namespace) -> int:
 
 
 def _split_silence_takes(args: argparse.Namespace) -> tuple[list[list[float]], int]:
-    """Load the takes ``split-silence`` measures together, positional first."""
-    samples, sr = _load_audio(args.file)
+    """Load the takes ``split-silence`` measures together, in command-line order."""
+    first, *others = args.file
+    samples, sr = _load_audio(first)
     takes = [samples]
-    for path in getattr(args, "input", None) or []:
+    for path in others:
         take, take_sr = _load_audio(path)
         # Frame indices from two rates are not comparable, so a mismatch would
         # report intervals in units the caller cannot map back onto either take.
@@ -789,18 +790,6 @@ def register_effects_parsers(
     trim_silence_p.add_argument("--hop-length", type=_c_int, default=512)
     split_silence_p = sub.add_parser(
         "split-silence", parents=[fft_stdout_options], help="List non-silent intervals"
-    )
-    # One take per occurrence, as suggest-mix --input does. The positional is the
-    # first take, so this option names the further ones.
-    split_silence_p.add_argument(
-        "--input",
-        action="append",
-        default=[],
-        metavar="WAV",
-        help=(
-            "Another take of the same part (repeat once per take); the intervals "
-            "become the union, so a cut falls only where every take is quiet"
-        ),
     )
     split_silence_p.add_argument(
         "--top-db",

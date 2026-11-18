@@ -152,7 +152,6 @@ def test_bounce_binds_named_audio_sources_and_renders_signal(comped: SimpleNames
     result = _run_console(
         "project",
         "bounce",
-        "--in",
         str(comped.document),
         "-o",
         str(comped.output),
@@ -175,7 +174,6 @@ def test_resolve_audio_opens_the_documents_own_file_uris(comped: SimpleNamespace
     result = _run_console(
         "project",
         "bounce",
-        "--in",
         str(comped.document),
         "-o",
         str(comped.output),
@@ -189,9 +187,7 @@ def test_resolve_audio_opens_the_documents_own_file_uris(comped: SimpleNamespace
 
 def test_bounce_names_every_unresolved_source_and_its_uri(comped: SimpleNamespace) -> None:
     """The refusal says which sources are missing and how to supply them."""
-    result = _run_console(
-        "project", "bounce", "--in", str(comped.document), "-o", str(comped.output)
-    )
+    result = _run_console("project", "bounce", str(comped.document), "-o", str(comped.output))
 
     assert result.returncode == EXIT_INVALID_STATE, result.stderr
     for source_id, uri in enumerate(comped.uris, start=1):
@@ -211,7 +207,7 @@ def test_resolve_audio_refuses_a_non_file_scheme_by_name(comped: SimpleNamespace
     )
 
     result = _run_console(
-        "project", "bounce", "--in", str(document), "-o", str(comped.output), "--resolve-audio"
+        "project", "bounce", str(document), "-o", str(comped.output), "--resolve-audio"
     )
 
     assert result.returncode == EXIT_INVALID_PARAMETER, result.stderr
@@ -248,7 +244,7 @@ def test_a_bound_take_keeps_its_source_channels(tmp_path: Path) -> None:
 
     output = tmp_path / "stereo-out.wav"
     result = _run_console(
-        "project", "bounce", "--in", str(document_path), "-o", str(output), "--resolve-audio"
+        "project", "bounce", str(document_path), "-o", str(output), "--resolve-audio"
     )
 
     assert result.returncode == 0, result.stderr
@@ -263,7 +259,6 @@ def test_bounce_refuses_an_audio_binding_no_source_answers_to(comped: SimpleName
     result = _run_console(
         "project",
         "bounce",
-        "--in",
         str(comped.document),
         "-o",
         str(comped.output),
@@ -294,7 +289,7 @@ def test_comp_segment_seam_crossfades_where_the_document_asks_for_one(
     for name, document in (("faded", comped.document), ("stepped", stepped)):
         output = comped.tmp_path / f"{name}.wav"
         result = _run_console(
-            "project", "bounce", "--in", str(document), "-o", str(output), "--resolve-audio"
+            "project", "bounce", str(document), "-o", str(output), "--resolve-audio"
         )
         assert result.returncode == 0, result.stderr
         samples, _ = _read_channel(output)

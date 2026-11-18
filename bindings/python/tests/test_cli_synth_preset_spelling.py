@@ -35,7 +35,6 @@ def _bounce(tmp_path: Path, synth: str) -> tuple[subprocess.CompletedProcess[str
     result = _run_console(
         "project",
         "bounce",
-        "--in",
         str(project),
         "-o",
         str(output),

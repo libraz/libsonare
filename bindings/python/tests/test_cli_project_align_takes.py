@@ -115,7 +115,6 @@ def aligned(takes: SimpleNamespace) -> SimpleNamespace:
     result = _run_console(
         "project",
         "align-takes",
-        "--in",
         str(takes.document),
         "-o",
         str(output),
@@ -185,7 +184,6 @@ def test_text_mode_reports_one_line_per_take_between_the_two_summaries(
     result = _run_console(
         "project",
         "align-takes",
-        "--in",
         str(takes.document),
         "-o",
         str(output),
@@ -226,7 +224,6 @@ def test_an_existing_warp_map_is_neither_reused_nor_renumbered(takes: SimpleName
     result = _run_console(
         "project",
         "align-takes",
-        "--in",
         str(variant),
         "-o",
         str(output),
@@ -251,7 +248,6 @@ def test_every_unbound_source_is_named_on_its_own_line(takes: SimpleNamespace) -
     result = _run_console(
         "project",
         "align-takes",
-        "--in",
         str(takes.document),
         "-o",
         str(output),
@@ -277,7 +273,6 @@ def test_resolve_audio_refuses_a_non_file_scheme_by_name(takes: SimpleNamespace)
     result = _run_console(
         "project",
         "align-takes",
-        "--in",
         str(variant),
         "-o",
         str(output),
@@ -297,9 +292,7 @@ def test_a_missing_output_is_an_invalid_parameter_not_a_usage_error(
     takes: SimpleNamespace,
 ) -> None:
     """Every command here that writes a file refuses an absent -o the same way."""
-    result = _run_console(
-        "project", "align-takes", "--in", str(takes.document), "--reference-source", "1"
-    )
+    result = _run_console("project", "align-takes", str(takes.document), "--reference-source", "1")
 
     assert result.returncode == EXIT_INVALID_PARAMETER, result.stderr
     assert "requires --output" in result.stderr
@@ -321,7 +314,6 @@ def test_a_document_with_no_take_is_a_refused_request_not_an_empty_success(
     result = _run_console(
         "project",
         "align-takes",
-        "--in",
         str(variant),
         "-o",
         str(output),
@@ -361,7 +353,6 @@ def test_a_take_at_another_rate_is_aligned_and_scaled_to_the_project_rate(
     result = _run_console(
         "project",
         "align-takes",
-        "--in",
         str(variant),
         "-o",
         str(output),
@@ -407,7 +398,6 @@ def test_a_reference_that_is_not_an_audio_source_is_refused_under_its_id(
     result = _run_console(
         "project",
         "align-takes",
-        "--in",
         str(path),
         "-o",
         str(takes.root / "with-midi-out.json"),
@@ -427,7 +417,6 @@ def test_a_resolution_the_core_refuses_is_passed_through_rather_than_restated(
     result = _run_console(
         "project",
         "align-takes",
-        "--in",
         str(takes.document),
         "-o",
         str(takes.root / "bins-out.json"),

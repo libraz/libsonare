@@ -276,7 +276,7 @@ int resolve_bounce_audio_sources(const CliArgs& args, SonareProject* project) {
   return kExitInvalidState;
 }
 
-// `project bounce --in in.json -o out.wav` — compile + render the project
+// `project bounce in.json -o out.wav` — compile + render the project
 // offline to an interleaved WAV file. With `--synth [preset]` MIDI tracks are
 // rendered through the NativeSynth catalog. A named preset is a fixed patch;
 // the bare flag follows GM bank/program changes and routes channel 10 through
@@ -405,7 +405,7 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
 
 int cmd_project_bounce(const CliArgs& args) { return project_bounce_impl(args, args.has("synth")); }
 
-// `midi-render --in in.json -o out.wav [--synth preset]` — the same render with
+// `midi-render in.json -o out.wav [--synth preset]` — the same render with
 // the synth pinned on, so a MIDI project reaches audio without the caller
 // having to know it is a project bounce underneath. An empty `--synth` follows
 // GM bank/program changes, which is what makes the bare form useful on a
@@ -480,7 +480,7 @@ int resolve_align_source_paths(const CliArgs& args, const std::map<uint32_t, std
   return missing ? kExitInvalidState : 0;
 }
 
-// `project align-takes --in in.json --reference-source <id> -o out.json` — align
+// `project align-takes in.json --reference-source <id> -o out.json` — align
 // every take in the document against one reference take and write the result in
 // as first-class warp maps the takes' own clips point at.
 //

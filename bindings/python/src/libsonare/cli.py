@@ -292,7 +292,6 @@ def _build_parser() -> _ContractArgumentParser:
         "time-stretch",
         "normalize",
         "trim-silence",
-        "split-silence",
         "resample",
         "voice-change",
         "acoustic",
@@ -324,6 +323,15 @@ def _build_parser() -> _ContractArgumentParser:
         "playback",
     ]:
         sub.choices[name].add_argument("file", help="Audio file path")
+    # Every take is a positional; the first is the audio input, as for any audio command.
+    sub.choices["split-silence"].add_argument(
+        "file",
+        nargs="+",
+        help=(
+            "Audio file path; more files are further takes of the same part, and the "
+            "intervals become the union, so a cut falls only where every take is quiet"
+        ),
+    )
 
     return parser
 

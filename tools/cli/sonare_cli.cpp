@@ -310,7 +310,12 @@ void print_command_usage(const char* prog, const CommandInfo& command,
                          const std::string& option_command = {}) {
   const std::string path = option_command.empty() ? command.name : option_command;
   std::cout << "Usage: " << prog << " " << invocation_for_path(path) << " [options]";
-  if (command.requires_audio) std::cout << " <audio_file>";
+  const CliCommandSpec* spec = cli_command_spec_for_path(path);
+  if (command.requires_audio) {
+    std::cout << " <audio_file>" << (spec != nullptr && spec->positional_count > 1 ? "..." : "");
+  } else if (spec != nullptr && !spec->positional_name.empty()) {
+    std::cout << " <" << spec->positional_name << ">";
+  }
   std::cout << "\n\n" << command.description << "\n";
   if (command.name == "pitch-correct-timevarying") {
     std::cout

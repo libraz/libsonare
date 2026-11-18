@@ -352,7 +352,7 @@ def test_split_silence_cli_unions_the_takes(tmp_path) -> None:
     alone_intervals = json.loads(alone.stdout)
     assert not _split_silence_covers(alone_intervals, only_b_sample)
 
-    both = _run_cli(["split-silence", take_a, "--input", take_b, "--json"])
+    both = _run_cli(["split-silence", take_a, take_b, "--json"])
     assert both.returncode == 0, both.stderr
     both_intervals = json.loads(both.stdout)
     assert _split_silence_covers(both_intervals, only_b_sample)
@@ -363,7 +363,7 @@ def test_split_silence_cli_unions_the_takes(tmp_path) -> None:
 
 
 def test_split_silence_cli_single_take_matches_the_facade(tmp_path) -> None:
-    """With no --input the intervals are exactly split_silence()'s own."""
+    """With one take the intervals are exactly split_silence()'s own."""
     import libsonare
 
     sample_rate = 22050
@@ -398,9 +398,7 @@ def test_split_silence_cli_write_takes_slices_every_take(tmp_path) -> None:
         take_b, _blocked_sine([(0.2, 0.30), (0.0, 0.40), (0.2, 0.30)], sample_rate), sample_rate
     )
 
-    result = _run_cli(
-        ["split-silence", take_a, "--input", take_b, "--write-takes", prefix, "--json"]
-    )
+    result = _run_cli(["split-silence", take_a, take_b, "--write-takes", prefix, "--json"])
     assert result.returncode == 0, result.stderr
     intervals = json.loads(result.stdout)
     assert len(intervals) >= 2
@@ -422,7 +420,7 @@ def test_split_silence_cli_refuses_a_take_at_another_rate(tmp_path) -> None:
     _write_test_wav(take_a, _blocked_sine([(0.5, 0.30), (0.0, 0.40)], 22050), 22050)
     _write_test_wav(take_b, _blocked_sine([(0.5, 0.30), (0.0, 0.40)], 44100), 44100)
 
-    result = _run_cli(["split-silence", take_a, "--input", take_b, "--json"])
+    result = _run_cli(["split-silence", take_a, take_b, "--json"])
     assert result.returncode == 3, result.stderr
     assert "44100" in result.stderr
     assert "22050" in result.stderr

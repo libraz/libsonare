@@ -82,29 +82,21 @@ int report_output_write_failure(const std::string& path) {
   return project_exit_code(SONARE_ERROR_ENCODE_FAILED);
 }
 
-// Loads a project JSON file from --in into a fresh handle. Returns true on
-// success. On failure prints an error and leaves the handle empty.
-//
-// `project` accepts one positional and the subcommand name consumes it, so
-// there is no second positional to fall back to: the --project and
-// args.input_file branches below are unreachable from every current caller,
-// all of which declare --in as required. They are kept as a guard for a future
-// subcommand that does not, which would otherwise read its own subcommand name
-// as a file path.
+// The input file is the positional after the `project` subcommand, or the only
+// positional of a top-level leaf such as `midi-render`. The registry refuses its
+// absence before a handler runs.
 std::string project_input_path(const CliArgs& args) {
-  return args.has("in") ? args.get_string("in") : args.get_string("project", args.input_file);
+  const size_t index = args.command == "project" ? 1u : 0u;
+  return index < args.positionals.size() ? args.positionals[index] : std::string();
 }
 
+// Loads the project JSON file named by the input positional into a fresh handle.
+// Returns true on success. On failure prints an error and leaves the handle
+// empty.
 bool load_project_from_args(const CliArgs& args, ProjectHandle* handle, std::string* diagnostics,
                             SonareError* load_error) {
   if (load_error != nullptr) *load_error = SONARE_OK;
   const std::string in_path = project_input_path(args);
-  if (in_path.empty()) {
-    if (load_error != nullptr) *load_error = SONARE_ERROR_INVALID_PARAMETER;
-    std::cerr << color::red << "Error: missing project JSON (use --in <project.json>)"
-              << color::reset << "\n";
-    return false;
-  }
   std::vector<uint8_t> bytes;
   if (!read_binary_file(in_path, &bytes)) {
     if (load_error != nullptr) *load_error = SONARE_ERROR_FILE_NOT_FOUND;
@@ -231,7 +223,7 @@ int cmd_project_new(const CliArgs& args) {
   return 0;
 }
 
-// `project validate --in in.json` — round-trip a project JSON through the
+// `project validate in.json` — round-trip a project JSON through the
 // deserializer + serializer; with -o, writes the canonical JSON back out.
 int cmd_project_validate(const CliArgs& args) {
   ProjectHandle handle;
@@ -295,7 +287,7 @@ int cmd_project_validate(const CliArgs& args) {
   return 0;
 }
 
-// `project compile --in in.json` — compile the project into a renderable
+// `project compile in.json` — compile the project into a renderable
 // timeline and surface diagnostics.
 int cmd_project_compile(const CliArgs& args) {
   ProjectHandle handle;
@@ -378,15 +370,15 @@ std::vector<std::string> unlisted_project_options(const std::string& curated) {
 }
 
 void print_project_usage(std::ostream& out) {
-  out << "Usage: sonare project <subcommand> [options]\n\n"
+  out << "Usage: sonare project <subcommand> [input] [options]\n\n"
       << "PROJECT SUBCOMMANDS (headless arrangement / DAW):\n"
       << "  abi                  Print the project C ABI version\n"
       << "  synth-presets        List NativeSynth preset names accepted by --synth\n"
       << "  new                  Create an empty project (-o out.json)\n"
-      << "  validate             Round-trip / validate a project (--in in.json [--strict] [-o "
+      << "  validate             Round-trip / validate a project (in.json [--strict] [-o "
          "out.json])\n"
-      << "  compile              Compile a project + report diagnostics (--in in.json)\n"
-      << "  bounce               Render a project offline to WAV (--in in.json -o out.wav)\n"
+      << "  compile              Compile a project + report diagnostics (in.json)\n"
+      << "  bounce               Render a project offline to WAV (in.json -o out.wav)\n"
       << "                       Audio clips need their sources bound first: --audio "
          "<id>=<file>\n"
       << "                       per source, or --resolve-audio for file:// URIs in the "
@@ -396,15 +388,15 @@ void print_project_usage(std::ostream& out) {
       << "                       SF2 and per-destination synth JSON are not exposed here; use the\n"
       << "                       project C/Node/Python/WASM APIs for SoundFont-backed bounces\n"
       << "  align-takes          Align every take to one reference take and write the alignment\n"
-      << "                       in as warp maps (--in in.json --reference-source <id> -o "
+      << "                       in as warp maps (in.json --reference-source <id> -o "
          "out.json)\n"
       << "                       Needs the source files, not bound PCM: --audio <id>=<file> per\n"
       << "                       source, or --resolve-audio for file:// URIs in the document\n"
-      << "  export-smf           Export tempo map + MIDI clips to SMF (--in in.json -o out.mid)\n"
-      << "  import-smf           Import an SMF into a new project (--smf in.mid -o out.json)\n"
-      << "  export-midi2         Export tempo map + MIDI clips to MIDI2 Clip File (--in in.json -o "
+      << "  export-smf           Export tempo map + MIDI clips to SMF (in.json -o out.mid)\n"
+      << "  import-smf           Import an SMF into a new project (in.mid -o out.json)\n"
+      << "  export-midi2         Export tempo map + MIDI clips to MIDI2 Clip File (in.json -o "
          "out.midi2)\n"
-      << "  import-midi2         Import MIDI2 Clip File into a new project (--midi2 in.midi2 -o "
+      << "  import-midi2         Import MIDI2 Clip File into a new project (in.midi2 -o "
          "out.json)\n"
       << "\nOPTIONS:\n";
 
@@ -414,9 +406,6 @@ void print_project_usage(std::ostream& out) {
   // appended from the registry below, so a new leaf option cannot be visible in
   // `project <leaf> --help` and missing from this overview.
   const std::string curated =
-      "  --in <file>          Input project JSON\n"
-      "  --smf <file>         Input Standard MIDI File (import-smf)\n"
-      "  --midi2 <file>       Input MIDI 2.0 Clip File (import-midi2)\n"
       "  -o, --output <file>  Output file\n"
       "  --sample-rate <hz>   Sample rate (new / bounce; bounce defaults to the project's own "
       "rate)\n"

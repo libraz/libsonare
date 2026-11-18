@@ -148,7 +148,7 @@ TEST_CASE("CLI split-silence unions the takes instead of intersecting them", "[c
   REQUIRE_FALSE(split_silence_covers(alone, only_b_sample));
 
   auto [both_code, both_output] =
-      exec_command(CLI + " split-silence " + take_a + " --input " + take_b + " --json -q");
+      exec_command(CLI + " split-silence " + take_a + " " + take_b + " --json -q");
   REQUIRE(both_code == 0);
   const auto both = parse_split_silence_json(both_output);
   REQUIRE(split_silence_covers(both, only_b_sample));
@@ -178,7 +178,7 @@ TEST_CASE("CLI split-silence refuses a take at another sample rate", "[cli]") {
   create_blocked_level_wav(take_b, {{0.5f, 0.30f}, {0.0f, 0.40f}}, 44100);
 
   auto [code, output] =
-      exec_command(CLI + " split-silence " + take_a + " --input " + take_b + " --json -q");
+      exec_command(CLI + " split-silence " + take_a + " " + take_b + " --json -q");
   REQUIRE(code == 3);
   REQUIRE_THAT(output, ContainsSubstring("44100"));
   REQUIRE_THAT(output, ContainsSubstring("22050"));
@@ -193,7 +193,7 @@ TEST_CASE("CLI split-silence --write-takes slices every take at every interval",
   // cannot compare equal by both carrying take 1.
   create_blocked_level_wav(take_b, {{0.2f, 0.30f}, {0.0f, 0.40f}, {0.2f, 0.30f}});
 
-  auto [code, output] = exec_command(CLI + " split-silence " + take_a + " --input " + take_b +
+  auto [code, output] = exec_command(CLI + " split-silence " + take_a + " " + take_b +
                                      " --write-takes " + prefix + " --json -q");
   REQUIRE(code == 0);
   const auto ranges = parse_split_silence_json(output);

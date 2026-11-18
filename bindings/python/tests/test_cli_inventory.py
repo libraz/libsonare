@@ -95,9 +95,9 @@ def test_inventory_preserves_required_repeatable_and_none_defaults() -> None:
     assert bounce_rate["default"] is None
     assert bounce_rate["required"] is False
 
-    project_input = _option(commands["project.validate"], "in")
-    assert project_input["required"] is True
-    assert project_input["default"] is None
+    reference_source = _option(commands["project.align-takes"], "reference-source")
+    assert reference_source["required"] is True
+    assert reference_source["default"] is None
     project_output = _option(commands["project.validate"], "output")
     assert project_output["type"] == "path"
     assert project_output["default"] is None
@@ -287,7 +287,7 @@ def test_trim_silence_selector_defaults_are_dynamic() -> None:
         ["analyze", "input.wav", "--output", "ignored"],
         ["voice-presets", "-o", "ignored"],
         ["spectral", "input.wav", "--output", "ignored"],
-        ["project", "--output", "ignored", "compile", "--in", "project.json"],
+        ["project", "--output", "ignored", "compile", "project.json"],
     ],
 )
 def test_stdout_only_output_is_parser_failure_without_dispatch(
@@ -480,7 +480,6 @@ def test_project_validate_strict_writes_canonical_artifact(tmp_path) -> None:
             "--output",
             str(output),
             "validate",
-            "--in",
             str(source),
             "--strict",
             "--json",
@@ -491,7 +490,6 @@ def test_project_validate_strict_writes_canonical_artifact(tmp_path) -> None:
         [
             "project",
             "validate",
-            "--in",
             str(source),
             "--strict",
             "--output",

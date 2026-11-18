@@ -73,7 +73,7 @@ The `sonare` command exposes the analysis, mastering, mixing, effects and projec
 ```bash
 sonare analyze song.mp3                              # BPM + key summary
 sonare master song.wav -o mastered.wav --preset pop  # preset mastering
-sonare project bounce --in project.json -o out.wav --synth sawLead
+sonare project bounce project.json -o out.wav --synth sawLead
 ```
 
 Run `sonare --help`, or see the [CLI reference](https://libsonare.libraz.net/docs/cli).
