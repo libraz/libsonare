@@ -26,33 +26,33 @@ def _sine(count: int, hz: float, offset: int = 0) -> list[float]:
 
 def test_streaming_retune_lifecycle() -> None:
     with StreamingRetune(pitch_semitones=12.0, mix=1.0, grain_size_samples=512) as retune:
-        assert retune.grain_size_samples() == 0
-        assert retune.latency_samples() == 0
+        assert retune.grain_size_samples == 0
+        assert retune.latency_samples == 0
         retune.prepare(SR, BLOCK)
-        assert retune.grain_size_samples() == 512
-        assert retune.latency_samples() == 512
+        assert retune.grain_size_samples == 512
+        assert retune.latency_samples == 512
         assert retune.config() == {"pitch_semitones": 12.0, "mix": 1.0, "grain_size_samples": 512}
         retune.reset()
-        assert retune.grain_size_samples() == 512
+        assert retune.grain_size_samples == 512
 
 
 def test_streaming_retune_derives_grain_from_sample_rate() -> None:
     with StreamingRetune() as retune:
         retune.prepare(SR, BLOCK)
-        assert retune.grain_size_samples() == 2232
+        assert retune.grain_size_samples == 2232
 
 
 def test_streaming_retune_applies_grain_requested_after_prepare() -> None:
     with StreamingRetune() as retune:
         retune.prepare(SR, BLOCK)
-        derived = retune.grain_size_samples()
+        derived = retune.grain_size_samples
         retune.set_config(grain_size_samples=512)
         # Structural: the request takes effect at the next prepare, and config()
         # keeps reporting the effective grain until then.
-        assert retune.grain_size_samples() == derived
+        assert retune.grain_size_samples == derived
         assert retune.config()["grain_size_samples"] == derived
         retune.prepare(SR, BLOCK)
-        assert retune.grain_size_samples() == 512
+        assert retune.grain_size_samples == 512
 
 
 def test_streaming_retune_rederives_grain_after_an_unrelated_set_config() -> None:
@@ -63,15 +63,15 @@ def test_streaming_retune_rederives_grain_after_an_unrelated_set_config() -> Non
     # double the transient smear, with no diagnostic saying why.
     with StreamingRetune() as retune:
         retune.prepare(SR, BLOCK)
-        assert retune.grain_size_samples() == 2232
+        assert retune.grain_size_samples == 2232
         retune.set_config(pitch_semitones=5.0)
         retune.prepare(22050, BLOCK)
-        assert retune.grain_size_samples() == 1024
+        assert retune.grain_size_samples == 1024
         # An explicitly requested grain still survives an unrelated update.
         retune.set_config(grain_size_samples=512)
         retune.set_config(mix=0.5)
         retune.prepare(22050, BLOCK)
-        assert retune.grain_size_samples() == 512
+        assert retune.grain_size_samples == 512
 
 
 def test_streaming_retune_set_config_keeps_unmentioned_keywords() -> None:

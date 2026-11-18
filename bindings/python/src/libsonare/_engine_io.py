@@ -224,11 +224,13 @@ class _EngineIoMixin:
         raw.num_channels = spec.num_channels
         _check(_get_lib().sonare_engine_set_graph(self._require_handle(), ctypes.byref(raw)))
 
+    @property
     def graph_node_count(self) -> int:
         out = ctypes.c_size_t()
         _check(_get_lib().sonare_engine_graph_node_count(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
 
+    @property
     def graph_connection_count(self) -> int:
         out = ctypes.c_size_t()
         _check(
@@ -519,6 +521,7 @@ class _EngineIoMixin:
             )
         )
 
+    @property
     def clip_page_prefetch_frames(self) -> int:
         """Return the clip-page look-ahead window in timeline frames."""
         lib = _get_lib()

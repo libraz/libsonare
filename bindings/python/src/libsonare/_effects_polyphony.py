@@ -397,6 +397,7 @@ class PolyphonicAnalysis:
 
     # -- what the analysis found -------------------------------------------
 
+    @property
     def note_count(self) -> int:
         """Number of notes, which is also the number of claim sets."""
         lib = _get_lib()
@@ -404,6 +405,7 @@ class PolyphonicAnalysis:
         _check(lib.sonare_polyphonic_note_count(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
 
+    @property
     def frame_count(self) -> int:
         """Number of STFT frames the analysis ran over."""
         lib = _get_lib()
@@ -432,7 +434,7 @@ class PolyphonicAnalysis:
         """
         lib = _get_lib()
         handle = self._require_handle()
-        count = self.note_count()
+        count = self.note_count
         if count == 0:
             return []
         rows = (SonareNoteObject * count)()
@@ -456,7 +458,7 @@ class PolyphonicAnalysis:
         """
         lib = _get_lib()
         handle = self._require_handle()
-        capacity = self.frame_count()
+        capacity = self.frame_count
         out = (ctypes.c_int32 * capacity)()
         written = ctypes.c_size_t()
         _check(
@@ -488,7 +490,7 @@ class PolyphonicAnalysis:
         """
         lib = _get_lib()
         handle = self._require_handle()
-        capacity = self.note_count()
+        capacity = self.note_count
         out = (ctypes.c_float * capacity)()
         written = ctypes.c_size_t()
         _check(
@@ -698,7 +700,7 @@ class PolyphonicAnalysis:
         lib = _get_lib()
         handle = self._require_handle()
         index = _note_set_index(fn_name, "note", note)
-        capacity = self.frame_count()
+        capacity = self.frame_count
         out = (ctypes.c_float * capacity)()
         written = ctypes.c_size_t()
         _check(

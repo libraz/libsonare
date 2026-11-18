@@ -52,6 +52,7 @@ from ._runtime import (
     _utf8_arg,
     _validate_samples,
 )
+from ._types_analysis import StereoBlock
 
 _VOICE_CHANGE_STRUCT_VERSION = 1
 _FORMANT_MODES = {"relative": 0, "absolute": 1}
@@ -212,6 +213,7 @@ class RealtimeVoiceChanger:
         )
         _check(rc)
 
+    @property
     def latency_samples(self) -> int:
         out = ctypes.c_int()
         rc = self._lib.sonare_realtime_voice_changer_latency_samples(
@@ -220,6 +222,7 @@ class RealtimeVoiceChanger:
         _check_realtime(rc)
         return int(out.value)
 
+    @property
     def non_finite_discard_count(self) -> int:
         """Return the blocks in which the chain discarded its own state.
 
@@ -443,13 +446,13 @@ class RealtimeVoiceChanger:
         self,
         left: Sequence[float] | list[float] | np.ndarray,
         right: Sequence[float] | list[float] | np.ndarray,
-    ) -> tuple[np.ndarray, np.ndarray]:
+    ) -> StereoBlock:
         """Process planar (non-interleaved) stereo audio block-by-block.
 
         ``left`` and ``right`` are separate channel buffers of equal length.
         The handle must have been prepared with at least 2 channels. Returns a
-        ``(left, right)`` tuple of ``numpy.ndarray`` (dtype ``float32``)
-        processed in place.
+        :class:`StereoBlock` (``left``, ``right``) of ``numpy.ndarray``
+        (dtype ``float32``) processed in place.
         """
         return self._process_planar_stereo(left, right, None)
 
@@ -458,7 +461,7 @@ class RealtimeVoiceChanger:
         left: Sequence[float] | list[float] | np.ndarray,
         right: Sequence[float] | list[float] | np.ndarray,
         carrier: Sequence[float] | list[float] | np.ndarray,
-    ) -> tuple[np.ndarray, np.ndarray]:
+    ) -> StereoBlock:
         """Process planar stereo with a mono external vocoder ``carrier``.
 
         ``carrier`` is shared by both channels and must match their length.
@@ -470,7 +473,7 @@ class RealtimeVoiceChanger:
         left: Sequence[float] | list[float] | np.ndarray,
         right: Sequence[float] | list[float] | np.ndarray,
         carrier: Sequence[float] | list[float] | np.ndarray | None,
-    ) -> tuple[np.ndarray, np.ndarray]:
+    ) -> StereoBlock:
         left_buf = _as_float32_buffer(left, arg_name="left")
         right_buf = _as_float32_buffer(right, arg_name="right")
         total = int(left_buf.shape[0])
@@ -503,7 +506,7 @@ class RealtimeVoiceChanger:
                     _to_c_size_t(length, "length"),
                 )
             _check_realtime(rc)
-        return out_left, out_right
+        return StereoBlock(out_left, out_right)
 
     def note_on(self, note: int, velocity: float = 1.0) -> None:
         """Hold MIDI ``note`` from the start of the next processed block.
@@ -1113,6 +1116,7 @@ class StreamingRetune:
             "grain_size_samples": int(grain_size_samples.value),
         }
 
+    @property
     def grain_size_samples(self) -> int:
         """Resolved grain length in samples; 0 before :meth:`prepare`."""
         out = ctypes.c_int()
@@ -1123,6 +1127,7 @@ class StreamingRetune:
         )
         return int(out.value)
 
+    @property
     def latency_samples(self) -> int:
         """Fixed overlap-add latency in samples (one grain); 0 before prepare."""
         out = ctypes.c_int()

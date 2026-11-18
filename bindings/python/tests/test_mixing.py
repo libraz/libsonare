@@ -81,14 +81,14 @@ def mixer():
 
 def _process_one_block(mixer) -> None:
     """Feed one block of audio through every strip so meters/goniometer fill."""
-    n = mixer.strip_count()
+    n = mixer.strip_count
     block = [[0.2 * math.sin(2 * math.pi * 440 * i / 48000) for i in range(256)] for _ in range(n)]
     mixer.process_stereo(block, block)
 
 
 def test_preset_scene_builds_mixer(mixer) -> None:
     """A mixer built from the first preset exposes the expected strips."""
-    assert mixer.strip_count() == 2
+    assert mixer.strip_count == 2
     scene = json.loads(mixer.to_scene_json())
     assert len(scene["strips"]) == 2
 
@@ -97,7 +97,7 @@ def test_strip_by_id_returns_index_and_raises_on_unknown(mixer) -> None:
     """strip_by_id resolves known ids to an int index and raises KeyError otherwise."""
     index = mixer.strip_by_id("vocal")
     assert isinstance(index, int)
-    assert 0 <= index < mixer.strip_count()
+    assert 0 <= index < mixer.strip_count
     with pytest.raises(KeyError):
         mixer.strip_by_id("does-not-exist")
 
@@ -546,9 +546,9 @@ def test_strip_can_be_added_to_a_live_mixer(mixer) -> None:
     DIFFERENT mixer, which drops the automation position and queued events
     compile() exists to preserve.
     """
-    before = mixer.strip_count()
+    before = mixer.strip_count
     mixer.add_strip("py-live-strip")
-    assert mixer.strip_count() == before + 1
+    assert mixer.strip_count == before + 1
     mixer.compile()
 
     # The metering keywords are the scene's own "metering" object, so a strip
@@ -570,12 +570,12 @@ def test_strip_can_be_added_to_a_live_mixer(mixer) -> None:
 
 def test_bus_add_remove_and_count(mixer) -> None:
     """add_bus / bus_count / remove_bus manage the mixer bus topology."""
-    before = mixer.bus_count()
+    before = mixer.bus_count
     assert isinstance(before, int)
     mixer.add_bus("py-aux-bus", "aux")
-    assert mixer.bus_count() == before + 1
+    assert mixer.bus_count == before + 1
     mixer.remove_bus("py-aux-bus")
-    assert mixer.bus_count() == before
+    assert mixer.bus_count == before
 
 
 def _empty_mixer():
@@ -655,10 +655,10 @@ def test_set_output_bus_refusals_name_the_ids_and_leave_the_scene_unchanged() ->
 
 def test_vca_group_add_remove_and_count(mixer) -> None:
     """add_vca_group / vca_group_count / remove_vca_group manage VCA groups."""
-    before = mixer.vca_group_count()
+    before = mixer.vca_group_count
     assert isinstance(before, int)
     mixer.add_vca_group("py-vca", gain_db=-3.0, members=["vocal"])
-    assert mixer.vca_group_count() == before + 1
+    assert mixer.vca_group_count == before + 1
     mixer.set_vca_group_gain_db("py-vca", -7.0)
     mixer.set_vca_group_members("py-vca", ["guest"])
     scene = json.loads(mixer.to_scene_json())
@@ -666,12 +666,12 @@ def test_vca_group_add_remove_and_count(mixer) -> None:
     assert group["gainDb"] == -7.0
     assert group["members"] == ["guest"]
     mixer.remove_vca_group("py-vca")
-    assert mixer.vca_group_count() == before
+    assert mixer.vca_group_count == before
 
 
 def test_get_strip_count_matches_strip_count(mixer) -> None:
     """strip_count (now backed by sonare_mixer_get_strip_count) is consistent."""
-    assert mixer.strip_count() == 2
+    assert mixer.strip_count == 2
 
 
 def test_automation_schedulers_accept_curve_enum(mixer) -> None:
@@ -699,9 +699,9 @@ def test_mixer_is_a_context_manager() -> None:
     from libsonare import Mixer
 
     with Mixer.from_scene_json(_first_preset_json(), sample_rate=48000, block_size=256) as mixer:
-        assert mixer.strip_count() > 0
+        assert mixer.strip_count > 0
     with raises_coded(ErrorCode.INVALID_STATE):
-        mixer.strip_count()
+        _ = mixer.strip_count
 
     with (
         pytest.raises(KeyError),
@@ -709,14 +709,14 @@ def test_mixer_is_a_context_manager() -> None:
     ):
         raise KeyError("inside")
     with raises_coded(ErrorCode.INVALID_STATE):
-        raised.strip_count()
+        _ = raised.strip_count
 
 
 def test_methods_after_close_raise(mixer) -> None:
     """Calling a method after close raises RuntimeError (guarded contract)."""
     mixer.close()
     with raises_coded(ErrorCode.INVALID_STATE):
-        mixer.strip_count()
+        _ = mixer.strip_count
     with raises_coded(ErrorCode.INVALID_STATE):
         mixer.set_soloed("vocal", True)
     with raises_coded(ErrorCode.INVALID_STATE):
@@ -728,10 +728,10 @@ def test_methods_after_close_raise(mixer) -> None:
 
 
 def test_tail_samples_and_drain_tail_stereo(mixer) -> None:
-    tail = mixer.tail_samples()
+    tail = mixer.tail_samples
     assert isinstance(tail, int)
     assert tail >= 0
-    latency = mixer.latency_samples()
+    latency = mixer.latency_samples
     assert isinstance(latency, int)
     assert latency >= 0
     result = mixer.drain_tail_stereo(128)
@@ -757,7 +757,7 @@ def test_tail_samples_reports_longest_serial_send_route() -> None:
 
     mixer = Mixer.from_scene_json(_serial_tail_scene(), sample_rate=48000, block_size=128)
     try:
-        assert mixer.tail_samples() > 1440
+        assert mixer.tail_samples > 1440
     finally:
         mixer.close()
 
@@ -989,7 +989,7 @@ def test_mixer_flush_meters_is_callable(mixer) -> None:
 
 def test_process_stereo_input_count_rule(mixer) -> None:
     """Fewer inputs than strips leave the rest silent; more are refused naming both counts."""
-    strips = mixer.strip_count()
+    strips = mixer.strip_count
     block = [0.25] * 128
     mixer.process_stereo([], [])
     mixer.process_stereo([block], [block])

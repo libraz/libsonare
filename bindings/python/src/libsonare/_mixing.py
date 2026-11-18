@@ -173,6 +173,7 @@ class Mixer:
         self._require()
         _check(_get_lib().sonare_mixer_compile(self._handle))
 
+    @property
     def strip_count(self) -> int:
         """Return the number of strips in the mixer."""
         self._require()
@@ -287,6 +288,7 @@ class Mixer:
             )
         )
 
+    @property
     def bus_count(self) -> int:
         """Return the number of buses in the mixer topology."""
         self._require()
@@ -368,6 +370,7 @@ class Mixer:
             )
         )
 
+    @property
     def vca_group_count(self) -> int:
         """Return the number of VCA groups in the mixer topology."""
         self._require()
@@ -410,7 +413,7 @@ class Mixer:
         target = lib.sonare_mixer_strip_by_id(self._handle, _utf8_arg(strip_id, "strip_id"))
         if not target:
             raise KeyError(f"mixer strip id not found: {strip_id}")
-        for index in range(self.strip_count()):
+        for index in range(self.strip_count):
             handle = lib.sonare_mixer_strip_at(self._handle, _to_c_size_t(index, "index"))
             if handle and int(handle) == int(target):
                 return index
@@ -899,7 +902,7 @@ class Mixer:
         self._require()
         if len(left_channels) != len(right_channels):
             raise SonareValueError("left_channels and right_channels must have the same length")
-        strip_count = self.strip_count()
+        strip_count = self.strip_count
         if len(left_channels) > strip_count:
             raise SonareValueError(
                 f"got {len(left_channels)} input channels for a {strip_count}-strip mixer"
@@ -954,6 +957,7 @@ class Mixer:
             sample_rate=int(self._sample_rate),
         )
 
+    @property
     def tail_samples(self) -> int:
         """Return the longest audible reverb/delay path to the master, in samples.
 
@@ -966,6 +970,7 @@ class Mixer:
         _check(_get_lib().sonare_mixer_tail_samples(self._handle, ctypes.byref(out)))
         return int(out.value)
 
+    @property
     def latency_samples(self) -> int:
         """Return the compiled mixer graph's latency in samples.
 

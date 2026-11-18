@@ -294,7 +294,7 @@ def cmd_mix(args: argparse.Namespace) -> int:
     try:
         for warning in mixer.scene_warnings():
             print(f"warning: {warning}", file=sys.stderr)
-        strip_count = mixer.strip_count()
+        strip_count = mixer.strip_count
 
         rendered_samples = 0
         if args.input:
@@ -321,7 +321,7 @@ def cmd_mix(args: argparse.Namespace) -> int:
             # sample zero without trimming so routing alignment is preserved.
             # tail_samples() is a property of the compiled graph, not of render
             # progress, so it is safe to read here to size the write up front.
-            total_frames = (length or 0) + mixer.tail_samples()
+            total_frames = (length or 0) + mixer.tail_samples
             with _atomic_wav_writer(args.output, 2, args.sample_rate, frames=total_frames) as wav:
                 # Whether the stream is dithered depends on every sample of it, so
                 # the blocks are held (as float32) until the render has finished.
@@ -337,7 +337,7 @@ def cmd_mix(args: argparse.Namespace) -> int:
                     )
                     rendered_samples += len(result.left)
 
-                tail_remaining = mixer.tail_samples()
+                tail_remaining = mixer.tail_samples
                 while tail_remaining > 0:
                     count = min(tail_remaining, args.block_size)
                     result = mixer.drain_tail_stereo(count)

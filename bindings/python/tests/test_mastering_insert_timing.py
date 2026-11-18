@@ -174,7 +174,7 @@ def _scene_timing(processor: str, params: dict) -> tuple[int, int]:
         "connections": [{"source": "a", "destination": "master"}],
     }
     with libsonare.Mixer.from_scene_json(json.dumps(scene), 48000) as mixer:
-        return mixer.latency_samples(), mixer.tail_samples()
+        return mixer.latency_samples, mixer.tail_samples
 
 
 def _timing_pair(processor: str, params: dict) -> tuple[int, int]:

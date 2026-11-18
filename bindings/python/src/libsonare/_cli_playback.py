@@ -218,7 +218,7 @@ def _resolved_program_lufs(
     meter = PlaybackLoudnessMeter(channels, sample_rate)
     try:
         meter.push_interleaved(interleaved)
-        measured = meter.integrated_lufs()
+        measured = meter.integrated_lufs
     finally:
         meter.close()
     if not math.isfinite(measured) or measured < -70.0 or measured > 0.0:
@@ -230,7 +230,7 @@ def _render_via_reporting_handle(
     renderer: PlaybackRenderer, interleaved: np.ndarray, in_channels: int
 ) -> np.ndarray:
     """Render offline through ``renderer`` so its diagnostics describe this render."""
-    out_channels = renderer.output_channels()
+    out_channels = renderer.output_channels
     return renderer.render_offline(interleaved, in_channels).reshape(-1, out_channels)
 
 
@@ -267,7 +267,7 @@ def cmd_playback(args: argparse.Namespace) -> int:
             sample_rate=sample_rate,
             max_block_size=_OFFLINE_RENDER_BLOCK_FRAMES,
         )
-        out_channels = renderer.output_channels()
+        out_channels = renderer.output_channels
         rendered = _render_via_reporting_handle(renderer, interleaved, channels)
         # Read after the render so a limiter/loudness clamp or a non-finite
         # discard the render itself triggered shows up in the report.

@@ -237,6 +237,7 @@ class PlaybackRenderer:
             )
         )
 
+    @property
     def input_channels(self) -> int:
         """Channel count of the active input layout.
 
@@ -248,6 +249,7 @@ class PlaybackRenderer:
         _check(self._lib.sonare_playback_renderer_input_channel_count(handle, ctypes.byref(out)))
         return int(out.value)
 
+    @property
     def output_channels(self) -> int:
         """Channel count of the output target; fixed for the renderer's lifetime."""
         handle = self._require_handle()
@@ -255,6 +257,7 @@ class PlaybackRenderer:
         _check(self._lib.sonare_playback_renderer_output_channel_count(handle, ctypes.byref(out)))
         return int(out.value)
 
+    @property
     def latency_samples(self) -> int:
         """Renderer latency in frames (headphones: near ear).
 
@@ -266,6 +269,7 @@ class PlaybackRenderer:
         _check(self._lib.sonare_playback_renderer_latency_samples(handle, ctypes.byref(out)))
         return int(out.value)
 
+    @property
     def non_finite_discard_count(self) -> int:
         """Non-finite input samples replaced with 0 since creation."""
         handle = self._require_handle()
@@ -293,7 +297,7 @@ class PlaybackRenderer:
         """
         handle = self._require_handle()
         in_arrays, in_ptrs, frames = _planar_channel_arrays(planes, subject="planes")
-        out_channels = self.output_channels()
+        out_channels = self.output_channels
         # The renderer writes each plane straight into its row of the returned array.
         out = np.zeros((out_channels, frames), dtype=np.float32)
         row_ptr = ctypes.POINTER(ctypes.c_float)
@@ -328,7 +332,7 @@ class PlaybackRenderer:
         if total % ch != 0:
             raise SonareValueError("interleaved samples length must be divisible by in_channels")
         frames = total // ch
-        out_channels = self.output_channels()
+        out_channels = self.output_channels
         out_len = frames * out_channels
         out_buf = np.zeros(out_len, dtype=np.float32)
         c_out = (
@@ -500,6 +504,7 @@ class PlaybackLoudnessMeter:
             )
         )
 
+    @property
     def integrated_lufs(self) -> float:
         """Integrated loudness of everything pushed so far, in LUFS."""
         handle = self._require_handle()

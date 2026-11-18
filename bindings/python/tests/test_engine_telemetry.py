@@ -216,8 +216,8 @@ def test_realtime_engine_process_and_telemetry() -> None:
                 parameter_bindings=[EngineGraphParameterBinding(7, "gain")],
             )
         )
-        assert engine.graph_node_count() == 3
-        assert engine.graph_connection_count() == 4
+        assert engine.graph_node_count == 3
+        assert engine.graph_connection_count == 4
         engine.set_clips(
             [
                 EngineClip(

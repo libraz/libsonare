@@ -110,7 +110,7 @@ def test_destroy_and_delete_alias_close(chord: NDArray[np.float32]) -> None:
     handle.destroy()
     handle.delete()
     with raises_coded(ErrorCode.INVALID_STATE, match="closed"):
-        handle.note_count()
+        _ = handle.note_count
 
 
 def test_use_after_close_raises(chord: NDArray[np.float32]) -> None:
@@ -118,8 +118,8 @@ def test_use_after_close_raises(chord: NDArray[np.float32]) -> None:
     handle = libsonare.PolyphonicAnalysis(chord, SR)
     handle.close()
     for call in (
-        handle.note_count,
-        handle.frame_count,
+        lambda: handle.note_count,
+        lambda: handle.frame_count,
         handle.notes,
         handle.polyphony,
         handle.render,
@@ -136,9 +136,9 @@ def test_use_after_close_raises(chord: NDArray[np.float32]) -> None:
 
 def test_context_manager_closes(chord: NDArray[np.float32]) -> None:
     with libsonare.PolyphonicAnalysis(chord, SR) as handle:
-        assert handle.frame_count() > 0
+        assert handle.frame_count > 0
     with raises_coded(ErrorCode.INVALID_STATE, match="closed"):
-        handle.frame_count()
+        _ = handle.frame_count
 
 
 def test_empty_and_non_finite_input_are_rejected() -> None:
@@ -160,8 +160,8 @@ def test_the_dyad_resolves_into_one_note_per_tone(
     analysis: libsonare.PolyphonicAnalysis, notes: list[libsonare.NoteObject]
 ) -> None:
     """The measured shape of this fixture: two notes over the whole framing."""
-    assert analysis.note_count() == len(notes) == EXPECTED_NOTES
-    assert analysis.frame_count() == EXPECTED_FRAMES
+    assert analysis.note_count == len(notes) == EXPECTED_NOTES
+    assert analysis.frame_count == EXPECTED_FRAMES
 
 
 def test_notes_carry_their_spans_and_the_identity_edit(
@@ -208,7 +208,7 @@ def test_each_notes_f0_curve_holds_its_own_pitch(
 def test_polyphony_has_one_entry_per_frame(analysis: libsonare.PolyphonicAnalysis) -> None:
     counts = analysis.polyphony()
     assert counts.dtype == np.int32
-    assert len(counts) == analysis.frame_count() == EXPECTED_FRAMES
+    assert len(counts) == analysis.frame_count == EXPECTED_FRAMES
     assert np.all(counts >= 0)
 
 
@@ -296,7 +296,7 @@ def test_a_short_capacity_read_is_clamped_not_refused(
 
 
 def test_a_note_index_past_the_end_is_refused(analysis: libsonare.PolyphonicAnalysis) -> None:
-    past = analysis.note_count()
+    past = analysis.note_count
     for call in (
         analysis.note_f0,
         analysis.note_amplitude,
@@ -355,7 +355,7 @@ def test_a_pitch_shift_reaches_the_render(chord: NDArray[np.float32]) -> None:
     rather than a rounding-level wobble.
     """
     with libsonare.PolyphonicAnalysis(chord, SR) as handle:
-        assert handle.note_count() == EXPECTED_NOTES
+        assert handle.note_count == EXPECTED_NOTES
         before = handle.render()
         handle.set_note_edit(0, libsonare.NoteEdit(pitch_semitones=1.0))
         after = handle.render()
@@ -389,7 +389,7 @@ def test_muting_a_note_quietens_its_span(chord: NDArray[np.float32]) -> None:
 def test_a_gain_edit_is_readable_back_on_the_note(chord: NDArray[np.float32]) -> None:
     """``notes()`` reports the pending edit, so a host can show what it set."""
     with libsonare.PolyphonicAnalysis(chord, SR) as handle:
-        assert handle.note_count() == EXPECTED_NOTES
+        assert handle.note_count == EXPECTED_NOTES
         handle.set_note_edit(0, libsonare.NoteEdit(gain_db=-6.0, pitch_semitones=2.0))
         edit = handle.notes()[0].edit
         assert edit.gain_db == pytest.approx(-6.0)
@@ -400,7 +400,7 @@ def test_a_gain_edit_is_readable_back_on_the_note(chord: NDArray[np.float32]) ->
 def test_setting_none_restores_the_identity_edit(chord: NDArray[np.float32]) -> None:
     """The replacement is whole, so ``None`` puts the note back as analysed."""
     with libsonare.PolyphonicAnalysis(chord, SR) as handle:
-        assert handle.note_count() == EXPECTED_NOTES
+        assert handle.note_count == EXPECTED_NOTES
         identity = handle.render()
         handle.set_note_edit(0, libsonare.NoteEdit(gain_db=-12.0))
         assert not np.array_equal(handle.render(), identity)
@@ -421,7 +421,7 @@ def test_an_envelope_is_read_back_on_the_note_that_carries_it(
     """
     points = np.array([1.0, 0.25, 0.0], dtype=np.float32)
     with libsonare.PolyphonicAnalysis(chord, SR) as handle:
-        assert handle.note_count() == EXPECTED_NOTES
+        assert handle.note_count == EXPECTED_NOTES
         note = handle.notes()[0]
         identity = handle.render()
 
@@ -453,7 +453,7 @@ def test_an_envelope_survives_a_note_round_trip(chord: NDArray[np.float32]) -> N
     """
     points = np.array([0.5, 1.0], dtype=np.float32)
     with libsonare.PolyphonicAnalysis(chord, SR) as handle:
-        assert handle.note_count() == EXPECTED_NOTES
+        assert handle.note_count == EXPECTED_NOTES
         first = libsonare.NoteEdit()
         first.amplitude_envelope = points
         handle.set_note_edit(0, first)
@@ -469,7 +469,7 @@ def test_an_envelope_survives_a_note_round_trip(chord: NDArray[np.float32]) -> N
 
 def test_a_two_dimensional_envelope_is_refused(chord: NDArray[np.float32]) -> None:
     with libsonare.PolyphonicAnalysis(chord, SR) as handle:
-        assert handle.note_count() == EXPECTED_NOTES
+        assert handle.note_count == EXPECTED_NOTES
         edit = libsonare.NoteEdit()
         edit.amplitude_envelope = np.ones((2, 2), dtype=np.float32)
         with pytest.raises(SonareValueError, match="one-dimensional"):
@@ -496,7 +496,7 @@ def test_the_hop_length_reaches_the_framing(chord: NDArray[np.float32]) -> None:
     """
     for hop in (DEFAULT_HOP, 1024):
         with libsonare.PolyphonicAnalysis(chord, SR, hop_length=hop) as handle:
-            frames = handle.frame_count()
+            frames = handle.frame_count
             assert frames == CHORD_SAMPLES // hop + 1
             assert len(handle.polyphony()) == frames
 
@@ -521,8 +521,8 @@ def test_a_negative_selects_zero_on_the_four_fields_that_accept_it(
         min_ridge_peak_ratio=-1.0,
         min_ridge_duration_ms=-1.0,
     ) as floored:
-        assert floored.note_count() >= EXPECTED_NOTES
-        assert floored.frame_count() == EXPECTED_FRAMES
+        assert floored.note_count >= EXPECTED_NOTES
+        assert floored.frame_count == EXPECTED_FRAMES
 
 
 # ---------------------------------------------------------------------------

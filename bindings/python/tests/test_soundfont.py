@@ -202,7 +202,7 @@ def test_engine_sf2_instrument_renders_live_midi() -> None:
 
         engine.load_soundfont(_SF2_BYTES)
         engine.set_sf2_instrument(Sf2InstrumentConfig(gain=1.0), destination_id=7)
-        assert engine.midi_instrument_count() == 1
+        assert engine.midi_instrument_count == 1
 
         engine.push_midi_note_on(7, 0, 0, 60, 100)
         out = engine.process([[0.0] * 128, [0.0] * 128])
@@ -210,7 +210,7 @@ def test_engine_sf2_instrument_renders_live_midi() -> None:
         assert peak > 0.0
 
         engine.clear_midi_instrument(7)
-        assert engine.midi_instrument_count() == 0
+        assert engine.midi_instrument_count == 0
     finally:
         engine.close()
 

@@ -465,7 +465,7 @@ def test_process_stereo_returns_named_result(mixer) -> None:
     """process_stereo returns a MixerStereoResult with left/right/sample_rate."""
     from libsonare import MixerStereoResult
 
-    n = mixer.strip_count()
+    n = mixer.strip_count
     block = [[0.1] * 256 for _ in range(n)]
     result = mixer.process_stereo(block, block)
 

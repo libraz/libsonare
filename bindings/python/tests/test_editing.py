@@ -374,7 +374,7 @@ def test_realtime_voice_changer_function_and_class() -> None:
         block = samples[:128]
         out = changer.process_mono(block)
         assert len(out) == len(block)
-        assert changer.latency_samples() > 0
+        assert changer.latency_samples > 0
         # config_json must reflect the active preset (B-1 regression).
         cfg = changer.config_json()
         assert isinstance(cfg, str) and cfg.startswith("{")

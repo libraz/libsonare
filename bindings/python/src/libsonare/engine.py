@@ -327,6 +327,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
+    @property
     def tail_samples(self) -> int:
         """Longest audible tail after the last input, in samples (an upper bound).
 

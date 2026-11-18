@@ -260,7 +260,7 @@ def test_scene_json_loads_into_a_mixer(mono_tracks):
     scene_json = suggest_mix_scene_json(mono_tracks, sample_rate=SAMPLE_RATE)
     mixer = Mixer.from_scene_json(scene_json, sample_rate=SAMPLE_RATE, block_size=256)
     try:
-        assert mixer.strip_count() >= len(mono_tracks)
+        assert mixer.strip_count >= len(mono_tracks)
     finally:
         mixer.close()
 

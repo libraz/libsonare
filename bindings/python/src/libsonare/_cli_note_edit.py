@@ -375,7 +375,7 @@ def cmd_polyphonic_notes(args: argparse.Namespace) -> int:
 
     samples, sr = _load_audio(args.file)
     with PolyphonicAnalysis.analyze(samples, sr) as analysis:
-        frame_count = analysis.frame_count()
+        frame_count = analysis.frame_count
         polyphony = [int(count) for count in analysis.polyphony()]
         rows: list[dict[str, object]] = [
             {
@@ -519,7 +519,7 @@ def cmd_polyphonic_render(args: argparse.Namespace) -> int:
     assignments = list(getattr(args, "edit", None) or [])
     samples, sr = _load_audio(args.file)
     with PolyphonicAnalysis.analyze(samples, sr) as analysis:
-        note_count = analysis.note_count()
+        note_count = analysis.note_count
         if assignments:
             # One NoteEdit per note, mutated in place, so several --edit
             # occurrences on one note accumulate instead of replacing each other.

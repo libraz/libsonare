@@ -154,4 +154,4 @@ def test_voice_changer_closed_process_mono_does_not_return_placeholder_audio() -
 def test_voice_changer_closed_latency_is_not_zero_placeholder() -> None:
     changer = _make_voice_changer()
     changer.close()
-    _assert_invalid_state(lambda: changer.latency_samples())
+    _assert_invalid_state(lambda: changer.latency_samples)

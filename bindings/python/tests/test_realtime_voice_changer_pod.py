@@ -259,7 +259,7 @@ def test_formant_mode_is_fixed_when_the_changer_is_created() -> None:
         libsonare.RealtimeVoiceChanger(48000, _flat(absolute)) as warped,
     ):
         # One analysis frame (1024 samples at 48 kHz) more than the relative chain.
-        assert warped.latency_samples() == relative.latency_samples() + 1024
+        assert warped.latency_samples == relative.latency_samples + 1024
         assert warped.config_pod().formant_mode == "absolute"
         warped.set_config_pod(dataclasses.replace(absolute, formant_factor=1.2))
         with pytest.raises(ValueError, match="formant mode"):

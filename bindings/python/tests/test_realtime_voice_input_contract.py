@@ -161,15 +161,15 @@ def test_zero_frame_process_is_a_no_op_and_preserves_state(profile_name: str) ->
     with _new_changer(config, layout) as after_empty:
         empty_output = _process(after_empty, profile_name, empty, empty)
         _assert_render(empty_output, layout, 0)
-        assert after_empty.non_finite_discard_count() == 0
+        assert after_empty.non_finite_discard_count == 0
         actual = _process(after_empty, profile_name, samples, carrier)
         _assert_render(actual, layout, FRAME_COUNT)
-        assert after_empty.non_finite_discard_count() == 0
+        assert after_empty.non_finite_discard_count == 0
 
     with _new_changer(config, layout) as untouched:
         expected = _process(untouched, profile_name, samples, carrier)
         _assert_render(expected, layout, FRAME_COUNT)
-        assert untouched.non_finite_discard_count() == 0
+        assert untouched.non_finite_discard_count == 0
 
     for actual_array, expected_array in zip(
         _output_arrays(actual), _output_arrays(expected), strict=True
@@ -195,13 +195,13 @@ def test_non_finite_main_audio_is_sanitized_and_reported(
     with _new_changer(config, layout) as clean:
         clean_output = _process(clean, profile_name, samples, carrier)
         _assert_render(clean_output, layout, FRAME_COUNT)
-        assert clean.non_finite_discard_count() == 0
+        assert clean.non_finite_discard_count == 0
 
     with _new_changer(config, layout) as degraded:
-        before = degraded.non_finite_discard_count()
+        before = degraded.non_finite_discard_count
         output = _process(degraded, profile_name, bad_samples, carrier)
         _assert_render(output, layout, FRAME_COUNT)
-        assert degraded.non_finite_discard_count() > before
+        assert degraded.non_finite_discard_count > before
 
 
 @pytest.mark.parametrize("profile_name", _CARRIER_PROFILES)
@@ -217,13 +217,13 @@ def test_unused_non_finite_carrier_is_ignored(profile_name: str, mode: str) -> N
         actual = _process(with_unused_carrier, profile_name, samples, carrier)
         _assert_render(actual, layout, FRAME_COUNT)
         assert any(np.any(array != 0) for array in _output_arrays(actual))
-        assert with_unused_carrier.non_finite_discard_count() == 0
+        assert with_unused_carrier.non_finite_discard_count == 0
 
     with _new_changer(config, layout) as without_carrier:
         expected = _process(without_carrier, profile_name, samples, carrier, include_carrier=False)
         _assert_render(expected, layout, FRAME_COUNT)
         assert any(np.any(array != 0) for array in _output_arrays(expected))
-        assert without_carrier.non_finite_discard_count() == 0
+        assert without_carrier.non_finite_discard_count == 0
 
     for actual_array, expected_array in zip(
         _output_arrays(actual), _output_arrays(expected), strict=True
@@ -244,7 +244,7 @@ def test_external_carrier_changes_the_render(profile_name: str) -> None:
             output = _process(changer, profile_name, samples, _tone(hz=frequency))
             _assert_render(output, layout, FRAME_COUNT)
             assert any(np.any(array != 0) for array in _output_arrays(output))
-            assert changer.non_finite_discard_count() == 0
+            assert changer.non_finite_discard_count == 0
             outputs.append(_output_arrays(output))
 
     assert any(
@@ -282,15 +282,15 @@ def test_external_nan_carrier_is_sanitized_and_recovery_is_finite(profile_name: 
 
     with _new_changer(_vocoder("external"), layout) as changer:
         _assert_external_config(changer)
-        before = changer.non_finite_discard_count()
+        before = changer.non_finite_discard_count
         degraded = _process(changer, profile_name, samples, carrier)
         _assert_render(degraded, layout, FRAME_COUNT)
-        after_degraded = changer.non_finite_discard_count()
+        after_degraded = changer.non_finite_discard_count
         assert after_degraded > before
 
         recovered = _process(changer, profile_name, samples, clean_carrier)
         _assert_render(recovered, layout, FRAME_COUNT)
-        assert changer.non_finite_discard_count() == after_degraded
+        assert changer.non_finite_discard_count == after_degraded
 
 
 @pytest.mark.parametrize("profile_name", sorted(REALTIME_VOICE_PROCESS_PROFILES))

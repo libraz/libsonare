@@ -28,11 +28,11 @@ from ._helpers import _midi1_word, raises_coded
 def test_engine_builtin_instrument_bind_and_clear() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_builtin_instrument(BuiltinSynthConfig(waveform="saw", gain=0.5), 0)
-        assert engine.midi_instrument_count() == 1
+        assert engine.midi_instrument_count == 1
         engine.set_builtin_instrument()  # default sine patch on destination 0
-        assert engine.midi_instrument_count() == 1
+        assert engine.midi_instrument_count == 1
         engine.clear_midi_instrument(0)
-        assert engine.midi_instrument_count() == 0
+        assert engine.midi_instrument_count == 0
 
 
 def test_engine_midi_cc_bindings() -> None:
@@ -51,9 +51,9 @@ def test_engine_midi_cc_bindings() -> None:
                 max_value=1.0,
             )
         )
-        assert engine.midi_cc_binding_count() == 2
+        assert engine.midi_cc_binding_count == 2
         engine.clear_midi_cc_bindings()
-        assert engine.midi_cc_binding_count() == 0
+        assert engine.midi_cc_binding_count == 0
 
 
 def test_engine_set_and_clear_midi_fx_round_trips() -> None:
@@ -78,7 +78,7 @@ def test_engine_live_midi_input_source_queue() -> None:
         engine.push_midi_input_channel_pressure(0, 0, 127, 0)
         engine.push_midi_input_poly_pressure(0, 0, 60, 96, 0)
         engine.push_midi_input_note_off(0, 0, 60, 0, 0)
-        assert engine.midi_input_pending_count() == 6
+        assert engine.midi_input_pending_count == 6
         engine.clear_midi_input_source()
 
 

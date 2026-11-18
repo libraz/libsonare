@@ -85,6 +85,7 @@ def test_mix_cli_resamples_inputs_to_mixer_rate(monkeypatch, tmp_path) -> None:
         def scene_warnings(self) -> list[str]:
             return []
 
+        @property
         def strip_count(self) -> int:
             return 1
 
@@ -95,6 +96,7 @@ def test_mix_cli_resamples_inputs_to_mixer_rate(monkeypatch, tmp_path) -> None:
             captured["left_len"] = len(left[0])
             return SimpleNamespace(left=list(left[0]), right=list(right[0]))
 
+        @property
         def tail_samples(self) -> int:
             return 0
 
@@ -137,6 +139,7 @@ def test_mix_cli_processes_blocks_partial_block_and_tail(monkeypatch, tmp_path) 
         def scene_warnings(self) -> list[str]:
             return []
 
+        @property
         def strip_count(self) -> int:
             return 1
 
@@ -147,6 +150,7 @@ def test_mix_cli_processes_blocks_partial_block_and_tail(monkeypatch, tmp_path) 
             block_lengths.append(len(left[0]))
             return SimpleNamespace(left=list(left[0]), right=list(right[0]))
 
+        @property
         def tail_samples(self) -> int:
             return 515
 

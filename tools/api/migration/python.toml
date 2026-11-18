@@ -6184,3 +6184,203 @@ old = "EqSpectrumSnapshot.lastAutoGainDb"
 removed = true
 domain = "analysis"
 rule = "snake-case-only"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.latency_samples"
+changed = "a property (was a method)"
+domain = "effects"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.non_finite_discard_count"
+changed = "a property (was a method)"
+domain = "effects"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "StreamingRetune.grain_size_samples"
+changed = "a property (was a method)"
+domain = "effects"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "StreamingRetune.latency_samples"
+changed = "a property (was a method)"
+domain = "effects"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "PolyphonicAnalysis.note_count"
+changed = "a property (was a method)"
+domain = "analysis"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "PolyphonicAnalysis.frame_count"
+changed = "a property (was a method)"
+domain = "analysis"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "Mixer.strip_count"
+changed = "a property (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "Mixer.bus_count"
+changed = "a property (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "Mixer.vca_group_count"
+changed = "a property (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "Mixer.tail_samples"
+changed = "a property (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "Mixer.latency_samples"
+changed = "a property (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "PlaybackRenderer.input_channels"
+changed = "a property (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "PlaybackRenderer.output_channels"
+changed = "a property (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "PlaybackRenderer.latency_samples"
+changed = "a property (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "PlaybackRenderer.non_finite_discard_count"
+changed = "a property (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "PlaybackLoudnessMeter.integrated_lufs"
+changed = "a property (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.midi_instrument_count"
+changed = "a property (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.midi_cc_binding_count"
+changed = "a property (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.midi_input_pending_count"
+changed = "a property (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.graph_node_count"
+changed = "a property (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.graph_connection_count"
+changed = "a property (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.clip_page_prefetch_frames"
+changed = "a property (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.tail_samples"
+changed = "a property (was a method)"
+domain = "engine"
+rule = "getters"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_state_read_is_a_property"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.process_planar_stereo"
+changed = "returns a StereoBlock named tuple instead of a bare tuple"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_process_planar_stereo_returns_a_stereo_block"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.process_planar_stereo_with_carrier"
+changed = "returns a StereoBlock named tuple instead of a bare tuple"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/python/tests/test_state_reads_are_properties.py::test_process_planar_stereo_returns_a_stereo_block"

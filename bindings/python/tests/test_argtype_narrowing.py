@@ -58,16 +58,16 @@ def test_a_wrapped_cc_number_is_refused_rather_than_replacing_another_binding() 
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.bind_midi_cc(0, 1, 42, min_value=0.0, max_value=1.0)
         engine.bind_midi_cc(0, 2, 42, min_value=0.0, max_value=1.0)
-        assert engine.midi_cc_binding_count() == 2  # positive control
+        assert engine.midi_cc_binding_count == 2  # positive control
         engine.bind_midi_cc(0, 1, 42, min_value=0.0, max_value=1.0)
-        assert engine.midi_cc_binding_count() == 2  # rebinding replaces rather than adds
+        assert engine.midi_cc_binding_count == 2  # rebinding replaces rather than adds
 
         for value in (256 + 1, 256, -1, 1.5):
             with pytest.raises(SonareValueError, match="controller"):
                 engine.bind_midi_cc(0, value, 42, min_value=0.0, max_value=1.0)
             with pytest.raises(SonareValueError, match="channel"):
                 engine.bind_midi_cc(value, 1, 42, min_value=0.0, max_value=1.0)
-        assert engine.midi_cc_binding_count() == 2
+        assert engine.midi_cc_binding_count == 2
 
 
 def test_a_wrapped_bus_id_or_insert_index_is_refused_rather_than_resolving_another_insert() -> None:

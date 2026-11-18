@@ -500,6 +500,7 @@ class _EngineMidiMixin:
             )
         )
 
+    @property
     def midi_instrument_count(self) -> int:
         """Return the number of bound realtime MIDI instruments."""
         lib = _get_lib()
@@ -927,6 +928,7 @@ class _EngineMidiMixin:
         )
         _check(lib.sonare_engine_clear_midi_cc_bindings(self._require_handle()))
 
+    @property
     def midi_cc_binding_count(self) -> int:
         """Return the number of live MIDI CC bindings."""
         lib = _get_lib()
@@ -1000,6 +1002,7 @@ class _EngineMidiMixin:
         )
         _check(lib.sonare_engine_clear_midi_input_source(self._require_handle()))
 
+    @property
     def midi_input_pending_count(self) -> int:
         """Number of queued events in the engine-owned live MIDI input source."""
         lib = _get_lib()

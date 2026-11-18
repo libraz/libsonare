@@ -290,7 +290,7 @@ def test_offline_entry_points_refuse_a_block_above_the_prepared_block() -> None:
 
 def test_tail_and_latency_follow_the_configured_strips() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=_RESET_BLOCK) as engine:
-        assert engine.tail_samples() == 0
+        assert engine.tail_samples == 0
         assert engine.graph_latency_samples_q8() == 0
         engine.set_track_lanes([10])
         # A 1 ms limiter lookahead is 48 samples at 48 kHz: 48 * 256 in q8.
@@ -334,6 +334,6 @@ def test_tail_samples_reports_a_lane_channel_delay() -> None:
             ),
         )
         # An insert-free strip adds nothing, so the tail is the channel delay alone.
-        assert engine.tail_samples() == 0
+        assert engine.tail_samples == 0
         engine.set_track_strip_channel_delay_samples(10, 300)
-        assert engine.tail_samples() == 300
+        assert engine.tail_samples == 300

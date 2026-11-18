@@ -73,14 +73,14 @@ def test_require_playback_is_silent_when_the_symbol_is_present() -> None:
 
 def test_renderer_reports_its_shape() -> None:
     with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK) as renderer:
-        assert renderer.output_channels() == 6
-        assert renderer.input_channels() == 2
-        assert renderer.latency_samples() == 1312
+        assert renderer.output_channels == 6
+        assert renderer.input_channels == 2
+        assert renderer.latency_samples == 1312
 
 
 def test_headphones_default_config_is_stereo_out() -> None:
     with PlaybackRenderer({}, max_block_size=BLOCK) as renderer:
-        assert renderer.output_channels() == 2
+        assert renderer.output_channels == 2
 
 
 def test_process_planar_renders_finite_output_of_the_right_shape() -> None:
@@ -113,10 +113,10 @@ def test_process_planar_allocates_the_output_once() -> None:
 
 def test_process_planar_switches_auto_input_layout() -> None:
     with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK) as renderer:
-        assert renderer.input_channels() == 2
+        assert renderer.input_channels == 2
         planes = [_sine(BLOCK) for _ in range(6)]
         renderer.process_planar(planes)
-        assert renderer.input_channels() == 6
+        assert renderer.input_channels == 6
 
 
 def test_process_interleaved_renders_finite_output() -> None:
@@ -146,12 +146,12 @@ def test_process_interleaved_rejects_nonpositive_channels() -> None:
 
 def test_non_finite_input_is_discarded_and_counted() -> None:
     with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK) as renderer:
-        assert renderer.non_finite_discard_count() == 0
+        assert renderer.non_finite_discard_count == 0
         samples = np.zeros(BLOCK * 2, dtype=np.float32)
         samples[3] = float("nan")
         out = renderer.process_interleaved(samples, in_channels=2)
         assert np.isfinite(out).all()
-        assert renderer.non_finite_discard_count() == 1
+        assert renderer.non_finite_discard_count == 1
 
 
 def test_config_roundtrip_and_prepare_key_rejection() -> None:
@@ -238,10 +238,10 @@ def test_closed_renderer_rejects_further_calls() -> None:
         "set_config": lambda: renderer.set_config(None),  # type: ignore[arg-type]
         "config": lambda: renderer.config(),
         "set_head_orientation": lambda: renderer.set_head_orientation(float("nan")),
-        "input_channels": lambda: renderer.input_channels(),
-        "output_channels": lambda: renderer.output_channels(),
-        "latency_samples": lambda: renderer.latency_samples(),
-        "non_finite_discard_count": lambda: renderer.non_finite_discard_count(),
+        "input_channels": lambda: renderer.input_channels,
+        "output_channels": lambda: renderer.output_channels,
+        "latency_samples": lambda: renderer.latency_samples,
+        "non_finite_discard_count": lambda: renderer.non_finite_discard_count,
         "diagnostics": lambda: renderer.diagnostics(),
         "process_planar": lambda: renderer.process_planar(None),  # type: ignore[arg-type]
         "process_interleaved": lambda: renderer.process_interleaved(None, 0),  # type: ignore[arg-type]
@@ -259,7 +259,7 @@ def test_closed_loudness_meter_rejects_further_calls_before_buffer_validation() 
     meter.close()
     operations = {
         "push_interleaved": lambda: meter.push_interleaved(None),  # type: ignore[arg-type]
-        "integrated_lufs": lambda: meter.integrated_lufs(),
+        "integrated_lufs": lambda: meter.integrated_lufs,
     }
     for name, operation in operations.items():
         with pytest.raises(SonareError) as raised:
@@ -297,7 +297,7 @@ def test_hrtf_set_default_and_lifecycle() -> None:
         HrtfSet.default() as hrtf,
         PlaybackRenderer({}, hrtf=hrtf, max_block_size=BLOCK) as renderer,
     ):
-        assert renderer.output_channels() == 2
+        assert renderer.output_channels == 2
 
 
 def test_hrtf_set_from_bytes_rejects_malformed_data() -> None:
@@ -331,7 +331,7 @@ def test_loudness_meter_integrates_pushed_frames() -> None:
     with PlaybackLoudnessMeter(2, SR) as meter:
         block = _sine(4096 * 2, hz=200.0)
         meter.push_interleaved(block)
-        lufs = meter.integrated_lufs()
+        lufs = meter.integrated_lufs
         assert np.isfinite(lufs)
         assert lufs < 0.0
 
