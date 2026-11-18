@@ -120,10 +120,13 @@ describe('a sentinel-bearing count', () => {
     );
   });
 
-  it('meteringVectorscope decimates to the count it is given, and 0 still means all', () => {
+  it('meteringVectorscope decimates to the count it is given, and refuses 0 by name', () => {
     const request = { left: tone, right, sampleRate: 22050 };
     expect(meteringVectorscope({ ...request, maxPoints: 64 }).mid.length).toBe(64);
-    expect(meteringVectorscope({ ...request, maxPoints: 0 }).mid.length).toBe(tone.length);
+    expect(meteringVectorscope(request).mid.length).toBe(tone.length);
+    expect(() => meteringVectorscope({ ...request, maxPoints: 0 })).toThrow(
+      /maxPoints must not be 0/,
+    );
   });
 
   it('meteringVectorscope refuses a negative or fractional point budget', () => {

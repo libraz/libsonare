@@ -13503,7 +13503,7 @@ rule = "type-names"
 [[entry]]
 kind = "type"
 old = "MeteringScopeRequest"
-removed = "Use MeteringVectorscopeRequest or MeteringPhaseScopeRequest and set maxPoints to decimate."
+removed = "Use MeteringVectorscopeRequest or MeteringPhaseScopeRequest and set maxPoints to decimate; an explicit 0 is refused, so omit maxPoints for every point."
 domain = "mastering"
 rule = "type-names"
 
@@ -13549,7 +13549,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::PanMode"
 [[entry]]
 kind = "type"
 old = "ScopeOptions"
-removed = "Set maxPoints in MeteringVectorscopeRequest or MeteringPhaseScopeRequest."
+removed = "Set maxPoints in MeteringVectorscopeRequest or MeteringPhaseScopeRequest; an explicit 0 is refused, so omit maxPoints for every point."
 domain = "mastering"
 rule = "one-positional-form"
 

@@ -449,9 +449,9 @@ export interface MeteringVectorscopeRequest extends ValidateOptions {
   /** Sample rate of both channels in Hz. Required. */
   sampleRate: number;
   /**
-   * Upper bound on the returned point count. Absent or `0` (no decimation, a named value
-   * rather than a sentinel) yields one point per input sample; otherwise the point cloud is
-   * deterministically decimated to at most `maxPoints` points for display.
+   * Upper bound on the returned point count, a positive integer. Absent yields one point per
+   * input sample; otherwise the point cloud is deterministically decimated to at most
+   * `maxPoints` points for display. `0` is refused.
    */
   maxPoints?: number;
 }
@@ -464,7 +464,7 @@ export interface MeteringPhaseScopeRequest extends ValidateOptions {
   right: Float32Array;
   /** Sample rate of both channels in Hz. Required. */
   sampleRate: number;
-  /** Upper bound on the returned point count; absent or `0` = every point. */
+  /** Upper bound on the returned point count, a positive integer; absent = every point. `0` is refused. */
   maxPoints?: number;
 }
 
@@ -548,6 +548,7 @@ function scopeRequest(
   const r = requestOnly<MeteringVectorscopeRequest>(fnName, args);
   assertAudioInput(fnName, r.left, r.sampleRate, r, 'left');
   assertAudioInput(fnName, r.right, r.sampleRate, r, 'right');
+  refuseZeroSentinel(fnName, r, ['maxPoints']);
   const maxPoints = r.maxPoints ?? 0;
   assertNonNegativeSafeInteger(fnName, maxPoints, 'maxPoints');
   return { ...r, maxPoints };

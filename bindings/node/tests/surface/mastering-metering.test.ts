@@ -171,13 +171,14 @@ describe('mastering metering surface', () => {
 
   describe('scope calls fold the decimated forms in', () => {
     it.each(['meteringVectorscope', 'meteringPhaseScope'])(
-      '%s decimates through maxPoints and accepts 0 as no decimation',
+      '%s decimates through maxPoints and refuses 0 as a point budget',
       (name) => {
         const all = api[name]({ left, right, sampleRate }) as { mid: Float32Array };
-        const zero = api[name]({ left, right, sampleRate, maxPoints: 0 }) as { mid: Float32Array };
         const some = api[name]({ left, right, sampleRate, maxPoints: 64 }) as { mid: Float32Array };
         expect(all.mid.length).toBe(left.length);
-        expect(zero.mid.length).toBe(left.length);
+        expect(thrown(() => api[name]({ left, right, sampleRate, maxPoints: 0 }))).toBeInstanceOf(
+          RangeError,
+        );
         expect(some.mid.length).toBeLessThanOrEqual(64);
         expect(thrown(() => api[name]({ left, right, sampleRate, maxPoints: -1 }))).toBeInstanceOf(
           RangeError,

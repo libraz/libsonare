@@ -105,12 +105,12 @@ describe('metering request object compatibility (WASM)', () => {
     expect(phaseScope.radius.length).toBeLessThanOrEqual(maxPoints);
     const full = meteringPhaseScope({ left: samples, right, sampleRate });
     expect(phaseScope.correlation).toBeCloseTo(full.correlation, 6);
-    // Omitting maxPoints and passing 0 both stay full resolution (one point per input sample).
+    // Omitting maxPoints stays full resolution (one point per input sample); 0 is refused.
     expect(meteringVectorscope({ left: samples, right, sampleRate }).mid.length).toBe(
       samples.length,
     );
-    expect(meteringVectorscope({ left: samples, right, sampleRate, maxPoints: 0 }).mid.length).toBe(
-      samples.length,
+    expect(() => meteringVectorscope({ left: samples, right, sampleRate, maxPoints: 0 })).toThrow(
+      /maxPoints must not be 0/,
     );
   });
 
