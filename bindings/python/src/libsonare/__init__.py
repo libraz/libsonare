@@ -5,6 +5,7 @@ from importlib.metadata import version as _pkg_version
 
 from ._cancellation import CancelCallback, ProgressCallback
 from ._effects_polyphony import PolyphonicAnalysis
+from ._mixing import StripRef
 from ._playback import (
     HrtfSet,
     PlaybackLoudnessMeter,
@@ -71,7 +72,25 @@ from ._project import (
     synth_preset_patch,
 )
 from ._project_edit import PART_RIG_ALL_PARTS, PART_RIG_MODES
+from ._project_instruments import GsEfxRealization
+from ._project_model import (
+    ProjectCompileResult,
+    ProjectCompileTimelineResult,
+    ProjectDiagnostic,
+    ProjectDiagnosticCode,
+    ProjectDiagnosticSeverity,
+)
 from ._runtime import ErrorCode, ErrorCodeName, SonareError, SonareValueError
+from ._types_capabilities import SynthParamCondition, SynthParamInfo
+from ._types_engine import PlanarChannels
+from ._types_mastering import (
+    MasteringAssistantParams,
+    MasteringParams,
+    MasteringParamValue,
+    MasteringPreset,
+    MasteringSoloParams,
+    SoloProcessor,
+)
 from .analyzer import (
     Mixer,
     MixerStereoResult,
@@ -1298,6 +1317,24 @@ from .vocal_project import (
     rehydrate_project_vocal_edits,
 )
 
+__all__ += [
+    "GsEfxRealization",
+    "MasteringAssistantParams",
+    "MasteringParamValue",
+    "MasteringParams",
+    "MasteringPreset",
+    "MasteringSoloParams",
+    "PlanarChannels",
+    "ProjectCompileResult",
+    "ProjectCompileTimelineResult",
+    "ProjectDiagnostic",
+    "ProjectDiagnosticCode",
+    "ProjectDiagnosticSeverity",
+    "SoloProcessor",
+    "StripRef",
+    "SynthParamCondition",
+    "SynthParamInfo",
+]
 __all__ += [
     "ProjectVocalRehydrateStatus",
     "ProjectVocalOriginalSource",

@@ -25,13 +25,10 @@ from ._runtime import (
     _utf8_arg,
 )
 
-_SegmentMetric = Literal["cosine", "euclidean"]
-_SegmentMode = Literal["connectivity", "affinity"]
-_SegmentLinkage = Literal["average", "single", "complete", "ward"]
 # Checked here so a refusal names the tokens; the core reads an unknown metric as euclidean.
-_SEGMENT_METRICS: tuple[str, ...] = get_args(_SegmentMetric)
-_SEGMENT_MODES: tuple[str, ...] = get_args(_SegmentMode)
-_SEGMENT_LINKAGES: tuple[str, ...] = get_args(_SegmentLinkage)
+_SEGMENT_METRICS: tuple[str, ...] = get_args(Literal["cosine", "euclidean"])
+_SEGMENT_MODES: tuple[str, ...] = get_args(Literal["connectivity", "affinity"])
+_SEGMENT_LINKAGES: tuple[str, ...] = get_args(Literal["average", "single", "complete", "ward"])
 
 
 def _square_input(
@@ -61,8 +58,8 @@ def segment_cross_similarity(
     x: npt.ArrayLike,
     y: npt.ArrayLike,
     k: int | None = None,
-    metric: _SegmentMetric = "cosine",
-    mode: _SegmentMode = "connectivity",
+    metric: Literal["cosine", "euclidean"] = "cosine",
+    mode: Literal["connectivity", "affinity"] = "connectivity",
 ) -> np.ndarray:
     """Return column-wise cross-similarity (``librosa.segment.cross_similarity``).
 
@@ -94,8 +91,8 @@ def segment_recurrence_matrix(
     k: int | None = None,
     width: int = 1,
     sym: bool = False,
-    metric: _SegmentMetric = "euclidean",
-    mode: _SegmentMode = "connectivity",
+    metric: Literal["cosine", "euclidean"] = "euclidean",
+    mode: Literal["connectivity", "affinity"] = "connectivity",
 ) -> np.ndarray:
     """Return a self-similarity recurrence matrix (``librosa.segment.recurrence_matrix``).
 
@@ -190,7 +187,7 @@ def segment_subsegment(
 def segment_agglomerative(
     data: npt.ArrayLike,
     k: int,
-    linkage: _SegmentLinkage = "average",
+    linkage: Literal["average", "single", "complete", "ward"] = "average",
 ) -> np.ndarray:
     """Cluster feature columns and return one label per column as an int32 array.
 

@@ -25,6 +25,7 @@ from ._project_model import (
     ProjectTrackKind,
     _absent_or_in_range,
 )
+from ._project_render import _compile_diagnostics
 from ._project_synth import (
     SYNTH_ENUM_TABLES as SYNTH_ENUM_TABLES,
 )
@@ -776,11 +777,10 @@ class _ProjectInspectionMixin:
         reads the timeline + diagnostics recorded during the last
         ``bounce*`` call instead of recompiling.
 
-        On a project no bounce has ever run on the result is empty in full:
-        ``has_timeline`` is ``False`` and ``diagnostics`` is empty. A failed
-        bounce is distinguishable from that state, because a bounce only loses
-        its timeline through an error diagnostic and so always reports at least
-        one.
+        On a project no bounce has ever run on, ``diagnostics`` is empty. A
+        failed bounce is distinguishable from that state, because a bounce only
+        loses its timeline through an error diagnostic and so always reports at
+        least one.
         """
         lib = _get_lib()
         result = SonareProjectCompileResult()
@@ -790,18 +790,6 @@ class _ProjectInspectionMixin:
             )
         )
         try:
-            has_timeline = bool(result.has_timeline)
-            messages = result.messages.decode("utf-8") if result.messages else ""
-            message_lines = messages.splitlines()
-            diagnostics = tuple(
-                ProjectDiagnostic(
-                    code=int(result.diagnostics[i].code),
-                    severity=int(result.diagnostics[i].severity),
-                    target_id=int(result.diagnostics[i].target_id) or None,
-                    message=message_lines[i] if i < len(message_lines) else "",
-                )
-                for i in range(int(result.diagnostic_count))
-            )
-            return ProjectCompileResult(has_timeline, messages, diagnostics)
+            return ProjectCompileResult(_compile_diagnostics(result))
         finally:
             lib.sonare_project_free_compile_result(ctypes.byref(result))

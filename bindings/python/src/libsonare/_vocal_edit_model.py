@@ -123,7 +123,7 @@ class VocalNote:
     """Centre pitch as a MIDI note number; None when no pitch was measured."""
     f0_stability: float | None
     """Stability of the fundamental over the note; None when no pitch was measured."""
-    amplitude: FloatArray
+    amplitude: NDArray[np.float32]
     """Amplitude envelope of the note."""
     edit: VocalNoteEdit
     """The note's current edit."""
@@ -175,7 +175,7 @@ class VocalAnalysis:
     """Hop between analysis frames, in samples."""
     frame_length_samples: int
     """Analysis window length, in samples."""
-    f0_hz: FloatArray
+    f0_hz: NDArray[np.float32]
     """Fundamental frequency per frame, in Hz."""
     voiced: NDArray[np.uint8]
     """Voicing flag per frame (0 or 1)."""
@@ -269,7 +269,7 @@ class VocalPitchResult:
 
 @dataclass(frozen=True, slots=True)
 class VocalRenderResult:
-    samples: FloatArray
+    samples: NDArray[np.float32]
     """Rendered mono samples."""
     start_sample: int
     """Output sample at which ``samples`` starts."""

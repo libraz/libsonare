@@ -10,12 +10,14 @@ undo/redo, MIR snap-to-grid, and malformed-input handling.
 from __future__ import annotations
 
 import ctypes
+import dataclasses
 import json
 from typing import Any
 
 import numpy as np
 import pytest
 
+import libsonare
 from libsonare import (
     ErrorCode,
     Project,
@@ -383,18 +385,17 @@ def test_compile_surfaces_renderable_timeline() -> None:
     project, *_ = _build_project()
     try:
         result = project.compile()
-        assert isinstance(result.messages, str)
+        assert isinstance(result, libsonare.ProjectCompileResult)
         with pytest.raises(TypeError):
             iter(result)  # type: ignore[call-overload]
-        assert result.has_timeline is True
+        assert [f.name for f in dataclasses.fields(result)] == ["diagnostics"]
         # The project carries a MIDI clip, so the compiler emits a single
         # best-effort warning (code 10 = kMidiClipNoInstrument) that the bounce is
         # silent unless an instrument is bound. It is non-fatal (timeline valid).
-        assert result.diagnostic_count == 1
-        assert result.diagnostics[0].code == 10
-        assert result.diagnostics[0].severity == 1  # warning
+        assert len(result.diagnostics) == 1
+        assert result.diagnostics[0].code == "midiClipNoInstrument"
+        assert result.diagnostics[0].severity == "warning"
         assert "project contains MIDI clips" in result.diagnostics[0].message
-        assert result.messages.splitlines()[0] == result.diagnostics[0].message
     finally:
         project.close()
 

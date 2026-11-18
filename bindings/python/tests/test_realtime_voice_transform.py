@@ -106,12 +106,12 @@ def test_new_fields_round_trip_through_the_pod() -> None:
         vocoder_carrier_wave="ensemble",
         midi_release="input",
     )
-    pod = cfg.to_pod()
+    pod = cfg._to_pod()
     assert pod.struct_version == 2
     assert list(pod.harmony_steps) == [5, -2, -7]
     assert pod.pitch_correction_scale == 1
     assert pod.reverb_variation_division == 2
-    assert libsonare.RealtimeVoiceChangerConfig.from_pod(pod) == cfg
+    assert libsonare.RealtimeVoiceChangerConfig._from_pod(pod) == cfg
     with _changer(base) as changer:
         changer.set_config_pod(cfg)
         live = changer.config_pod()
@@ -144,38 +144,38 @@ def test_pod_mirror_places_harmony_steps_as_a_three_element_int_array() -> None:
 )
 def test_unknown_enum_spelling_is_refused(field: str) -> None:
     with pytest.raises(SonareValueError, match=field):
-        dataclasses.replace(_neutral(), **{field: "sideways"}).to_pod()
+        dataclasses.replace(_neutral(), **{field: "sideways"})._to_pod()
 
 
 def test_harmony_steps_must_hold_exactly_three_integers() -> None:
     base = _neutral()
     for steps in [(1, 2), (1, 2, 3, 4), ()]:
         with pytest.raises(SonareValueError, match="harmony_steps"):
-            dataclasses.replace(base, harmony_steps=steps).to_pod()
+            dataclasses.replace(base, harmony_steps=steps)._to_pod()
     with pytest.raises(TypeError, match=r"harmony_steps\[1\]"):
-        dataclasses.replace(base, harmony_steps=(0, True, 0)).to_pod()
+        dataclasses.replace(base, harmony_steps=(0, True, 0))._to_pod()
     with pytest.raises(SonareValueError, match=r"harmony_steps\[2\]"):
-        dataclasses.replace(base, harmony_steps=(0, 0, 2**31)).to_pod()
+        dataclasses.replace(base, harmony_steps=(0, 0, 2**31))._to_pod()
     with pytest.raises(SonareValueError, match=r"harmony_steps\[0\]"):
-        dataclasses.replace(base, harmony_steps=(1.5, 0, 0)).to_pod()
+        dataclasses.replace(base, harmony_steps=(1.5, 0, 0))._to_pod()
     with pytest.raises(TypeError, match="harmony_steps"):
-        dataclasses.replace(base, harmony_steps=3).to_pod()  # type: ignore[arg-type]
+        dataclasses.replace(base, harmony_steps=3)._to_pod()  # type: ignore[arg-type]
 
 
 def test_numeric_fields_refuse_what_a_c_type_would_change() -> None:
     base = _neutral()
     with pytest.raises(TypeError):
-        dataclasses.replace(base, vocoder_bands=True).to_pod()
+        dataclasses.replace(base, vocoder_bands=True)._to_pod()
     with pytest.raises(TypeError):
-        dataclasses.replace(base, harmony_level=True).to_pod()
+        dataclasses.replace(base, harmony_level=True)._to_pod()
     with pytest.raises(SonareValueError):
-        dataclasses.replace(base, vocoder_bands=20.5).to_pod()
+        dataclasses.replace(base, vocoder_bands=20.5)._to_pod()
     with pytest.raises(SonareValueError):
-        dataclasses.replace(base, vocoder_bands=2**32).to_pod()
+        dataclasses.replace(base, vocoder_bands=2**32)._to_pod()
     with pytest.raises(SonareValueError):
-        dataclasses.replace(base, pitch_correction_key_root=2**31).to_pod()
+        dataclasses.replace(base, pitch_correction_key_root=2**31)._to_pod()
     with pytest.raises(SonareValueError):
-        dataclasses.replace(base, character_amount=float("nan")).to_pod()
+        dataclasses.replace(base, character_amount=float("nan"))._to_pod()
 
 
 @pytest.mark.parametrize(

@@ -320,18 +320,49 @@ class AssistSidecar:
     """Opaque module-owned payload bytes."""
 
 
+# A token's index is its SonareProjectDiagnostic severity ordinal.
+ProjectDiagnosticSeverity: TypeAlias = Literal["error", "warning"]
+"""How serious a compile diagnostic is; an error means no timeline was produced."""
+_DIAGNOSTIC_SEVERITIES: tuple[str, ...] = get_args(ProjectDiagnosticSeverity)
+
+# A token's index is its arrangement Diagnostic::Code ordinal.
+ProjectDiagnosticCode: TypeAlias = Literal[
+    "ok",
+    "danglingSourceRef",
+    "clipOverlap",
+    "invalidTempo",
+    "invalidPpq",
+    "unsupportedGraph",
+    "unsupportedMixing",
+    "emptyAudioSource",
+    "invalidSampleRate",
+    "sourceKindMismatch",
+    "midiClipNoInstrument",
+    "raggedAudioSource",
+    "loopCrossfadeUnavailable",
+    "sharedChannelStrip",
+    "automationLaneConflict",
+    "invalidAutomationTargetKind",
+    "automationLaneCapacity",
+    "reservedAutomationRouteConflict",
+    "automationTargetUnrouted",
+]
+"""What a compile diagnostic reports."""
+_DIAGNOSTIC_CODES: tuple[str, ...] = get_args(ProjectDiagnosticCode)
+
+
 @dataclass(frozen=True)
 class ProjectDiagnostic:
-    """One compile diagnostic surfaced by :meth:`Project.compile`.
+    """One compile diagnostic surfaced by :meth:`Project.compile`."""
 
-    ``target_id`` is the affected clip, track or source id, or ``None`` when the
-    diagnostic concerns no single one.
-    """
-
-    code: int
-    severity: int
+    code: ProjectDiagnosticCode
+    """What the diagnostic reports."""
+    severity: ProjectDiagnosticSeverity
+    """``"error"`` means no timeline was produced; ``"warning"`` does not block one."""
     target_id: int | None
+    """Affected clip, track or source id; ``None`` when the diagnostic names none."""
     message: str = ""
+    """Human-readable detail for this diagnostic."""
 
 
 @dataclass(frozen=True)
@@ -463,16 +494,22 @@ def _marker_name_bytes(name: str | None) -> bytes:
 
 @dataclass(frozen=True)
 class ProjectCompileResult:
-    """Structured compile result matching the C/Node/WASM project surface."""
+    """Result of :meth:`Project.compile` and :meth:`Project.last_bounce_compile_result`."""
 
-    has_timeline: bool
-    messages: str
     diagnostics: tuple[ProjectDiagnostic, ...]
-    timeline: ProjectTimeline | None = None
+    """Every diagnostic the compile produced; empty when it was clean. An
+    ``"error"`` entry means no timeline was produced."""
 
-    @property
-    def diagnostic_count(self) -> int:
-        return len(self.diagnostics)
+
+@dataclass(frozen=True)
+class ProjectCompileTimelineResult:
+    """Result of :meth:`Project.compile_timeline`."""
+
+    diagnostics: tuple[ProjectDiagnostic, ...]
+    """Every diagnostic the compile produced; empty when it was clean."""
+    timeline: ProjectTimeline | None
+    """The compiled playback snapshot, owned by the caller; ``None`` when
+    compilation produced none (``diagnostics`` says why)."""
 
 
 @dataclass(frozen=True)

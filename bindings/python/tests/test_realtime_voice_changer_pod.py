@@ -165,7 +165,7 @@ def test_set_config_pod_does_not_break_processing() -> None:
 
 def test_to_pod_and_from_pod_are_inverses() -> None:
     cfg = libsonare.realtime_voice_changer_preset_config("darkVillain")
-    cycled = libsonare.RealtimeVoiceChangerConfig.from_pod(cfg.to_pod())
+    cycled = libsonare.RealtimeVoiceChangerConfig._from_pod(cfg._to_pod())
     assert dataclasses.astuple(cycled) == dataclasses.astuple(cfg)
 
 
@@ -189,12 +189,12 @@ def _flat(config: libsonare.RealtimeVoiceChangerConfig) -> dict[str, object]:
 def test_formant_mode_is_a_string_field_defaulting_to_relative() -> None:
     cfg = libsonare.realtime_voice_changer_preset_config("neutralMonitor")
     assert cfg.formant_mode == "relative"
-    pod = dataclasses.replace(cfg, formant_mode="absolute").to_pod()
+    pod = dataclasses.replace(cfg, formant_mode="absolute")._to_pod()
     assert pod.struct_version == 2
     assert pod.formant_mode == 1
-    assert libsonare.RealtimeVoiceChangerConfig.from_pod(pod).formant_mode == "absolute"
+    assert libsonare.RealtimeVoiceChangerConfig._from_pod(pod).formant_mode == "absolute"
     with pytest.raises(ValueError, match="formant_mode"):
-        dataclasses.replace(cfg, formant_mode="sideways").to_pod()
+        dataclasses.replace(cfg, formant_mode="sideways")._to_pod()
 
 
 def test_formant_mode_is_fixed_when_the_changer_is_created() -> None:

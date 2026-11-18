@@ -7,10 +7,152 @@ between languages see the same names. They intentionally violate PEP8 N802.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Literal, TypeAlias
 
 import numpy as np
 
 from ._types_analysis import _empty_float32
+
+MasteringParamValue: TypeAlias = float | int | bool
+"""A single mastering parameter value."""
+MasteringParams: TypeAlias = dict[str, MasteringParamValue]
+"""Mastering parameters keyed by their catalog name."""
+MasteringSoloParams: TypeAlias = dict[str, MasteringParamValue | str]
+"""A solo processor's params; an enum-valued key also takes its choices name."""
+MasteringAssistantParams: TypeAlias = dict[str, MasteringParamValue | str]
+"""Assistant params; ``targetPlatform`` and ``preset`` additionally take names."""
+
+MasteringPreset: TypeAlias = Literal[
+    "pop",
+    "edm",
+    "acoustic",
+    "hipHop",
+    "aiMusic",
+    "speech",
+    "streaming",
+    "youtube",
+    "broadcast",
+    "podcast",
+    "audiobook",
+    "cinema",
+    "jpop",
+    "ambient",
+    "lofi",
+    "classical",
+    "drumAndBass",
+    "techno",
+    "metal",
+    "trap",
+    "rnb",
+    "jazz",
+    "kpop",
+    "trance",
+    "gameOst",
+    "vinyl",
+    "tapeHiss",
+    "fieldRecording",
+    "voiceMemo",
+    "shellac78",
+]
+"""A mastering preset name, as :func:`mastering_preset_names` lists them."""
+
+# BEGIN GENERATED SoloProcessor (make processor-types)
+# Every processor name mastering_processor_names() can return, and therefore
+# every name mastering_process() / mastering_process_stereo() accept.
+SoloProcessor: TypeAlias = Literal[
+    "dynamics.brickwallLimiter",
+    "dynamics.compressor",
+    "dynamics.deesser",
+    "dynamics.duckingProcessor",
+    "dynamics.expander",
+    "dynamics.gate",
+    "dynamics.limiter",
+    "dynamics.parallelComp",
+    "dynamics.sidechainRouter",
+    "dynamics.transientShaper",
+    "dynamics.upwardCompressor",
+    "dynamics.upwardExpander",
+    "dynamics.vocalRider",
+    "effects.acoustic.roomMorph",
+    "effects.delay.stereo",
+    "effects.filter.vowel",
+    "effects.gsEfx",
+    "effects.modulation.autoWah",
+    "effects.modulation.chorus",
+    "effects.modulation.ensemble",
+    "effects.modulation.flanger",
+    "effects.modulation.phaser",
+    "effects.modulation.pitchShifter",
+    "effects.modulation.ringModulator",
+    "effects.modulation.rotary",
+    "effects.modulation.wah",
+    "effects.reverb.convolution",
+    "effects.reverb.dattorro",
+    "effects.reverb.fdn",
+    "effects.reverb.plate",
+    "effects.reverb.room",
+    "effects.reverb.velvet",
+    "eq.bandPass",
+    "eq.cutFilter",
+    "eq.dynamic",
+    "eq.equalizer",
+    "eq.graphic",
+    "eq.linearPhase",
+    "eq.midSide",
+    "eq.minimumPhase",
+    "eq.parametric",
+    "eq.passiveTube",
+    "eq.shelving",
+    "eq.steppedProportionalQ",
+    "eq.tilt",
+    "final.bitDepth",
+    "final.dither",
+    "final.outputChain",
+    "maximizer.adaptiveRelease",
+    "maximizer.loudnessOptimize",
+    "maximizer.maximizer",
+    "maximizer.softKneeMax",
+    "maximizer.truePeakLimiter",
+    "multiband.compressor",
+    "multiband.dynamicEq",
+    "multiband.expander",
+    "multiband.imager",
+    "multiband.limiter",
+    "multiband.saturation",
+    "repair.declick",
+    "repair.declip",
+    "repair.decrackle",
+    "repair.dehum",
+    "repair.denoiseClassical",
+    "repair.dereverbClassical",
+    "repair.trimSilence",
+    "saturation.ampSim",
+    "saturation.bitcrusher",
+    "saturation.distortion",
+    "saturation.exciter",
+    "saturation.hardClipper",
+    "saturation.multibandExciter",
+    "saturation.overdrive",
+    "saturation.softClipper",
+    "saturation.tape",
+    "saturation.transformer",
+    "saturation.tube",
+    "saturation.waveshaper",
+    "spectral.airBand",
+    "spectral.lowEndFocus",
+    "spectral.presenceEnhancer",
+    "spectral.spectralShaper",
+    "stereo.autoPan",
+    "stereo.binaural",
+    "stereo.haasEnhancer",
+    "stereo.imager",
+    "stereo.monoMaker",
+    "stereo.phaseAlign",
+    "stereo.stereoBalance",
+    "utility.gain",
+    "voice.changer",
+]
+# END GENERATED SoloProcessor
 
 
 @dataclass(frozen=True, slots=True, eq=False)

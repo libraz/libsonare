@@ -287,7 +287,7 @@ class RealtimeVoiceChanger:
             self._require_handle(), ctypes.byref(pod)
         )
         _check(rc)
-        return RealtimeVoiceChangerConfig.from_pod(pod)
+        return RealtimeVoiceChangerConfig._from_pod(pod)
 
     def set_config_pod(self, config: RealtimeVoiceChangerConfig) -> None:
         """Realtime-safe configuration update via the flat POD path.
@@ -301,7 +301,7 @@ class RealtimeVoiceChanger:
                 "loaded libsonare is missing sonare_realtime_voice_changer_set_config; "
                 "rebuild the shared library."
             )
-        pod = config.to_pod()
+        pod = config._to_pod()
         rc = self._lib.sonare_realtime_voice_changer_set_config(
             self._require_handle(), ctypes.byref(pod)
         )
@@ -940,7 +940,7 @@ class RealtimeVoiceChangerConfig:
     input."""
 
     @classmethod
-    def from_pod(cls, pod: SonareRealtimeVoiceChangerConfig) -> RealtimeVoiceChangerConfig:
+    def _from_pod(cls, pod: SonareRealtimeVoiceChangerConfig) -> RealtimeVoiceChangerConfig:
         """Copy field-for-field out of a ctypes struct."""
         values: dict[str, Any] = {}
         for name, *_ in pod._fields_:
@@ -954,7 +954,7 @@ class RealtimeVoiceChangerConfig:
             values[name] = value
         return cls(**values)
 
-    def to_pod(self) -> SonareRealtimeVoiceChangerConfig:
+    def _to_pod(self) -> SonareRealtimeVoiceChangerConfig:
         """Copy field-for-field into a freshly allocated ctypes struct."""
         out = SonareRealtimeVoiceChangerConfig()
         out.struct_version = _REALTIME_CONFIG_STRUCT_VERSION
@@ -1008,7 +1008,7 @@ def realtime_voice_changer_preset_config(preset: VoicePresetId) -> RealtimeVoice
         _to_c_int(_resolve_preset_ordinal(preset), "preset"), ctypes.byref(pod)
     )
     _check(rc)
-    return RealtimeVoiceChangerConfig.from_pod(pod)
+    return RealtimeVoiceChangerConfig._from_pod(pod)
 
 
 def _retune_grain_size_request(grain_size_samples: int | None) -> int:

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
@@ -13,6 +13,10 @@ from ._errors import _not_supported
 from ._narrowing import _resolve_zero_default
 from ._project_model import *  # noqa: F403
 from ._project_model import (
+    _DIAGNOSTIC_CODES,
+    _DIAGNOSTIC_SEVERITIES,
+    ProjectDiagnosticCode,
+    ProjectDiagnosticSeverity,
     _make_instrument_callbacks,
     _synth_patch_arg,
 )
@@ -34,6 +38,7 @@ from ._runtime import (
     _check,
     _from_c_float_array,
     _get_lib,
+    _ordinal_token,
     _out_float_array,
     _to_c_size_t,
 )
@@ -63,22 +68,34 @@ def _bounce_options(
     )
 
 
-def _compile_result_fields(
+def _compile_diagnostics(
     result: SonareProjectCompileResult,
-) -> tuple[bool, str, tuple[ProjectDiagnostic, ...]]:
-    """Read ``(has_timeline, messages, diagnostics)`` out of a native compile result."""
+) -> tuple[ProjectDiagnostic, ...]:
+    """Read the diagnostics out of a native compile result, line ``i`` of
+    ``messages`` becoming ``diagnostics[i].message``."""
     messages = result.messages.decode("utf-8") if result.messages else ""
     message_lines = messages.splitlines()
-    diagnostics = tuple(
+    return tuple(
         ProjectDiagnostic(
-            code=int(result.diagnostics[i].code),
-            severity=int(result.diagnostics[i].severity),
+            code=cast(
+                ProjectDiagnosticCode,
+                _ordinal_token(
+                    int(result.diagnostics[i].code), _DIAGNOSTIC_CODES, "diagnostic code"
+                ),
+            ),
+            severity=cast(
+                ProjectDiagnosticSeverity,
+                _ordinal_token(
+                    int(result.diagnostics[i].severity),
+                    _DIAGNOSTIC_SEVERITIES,
+                    "diagnostic severity",
+                ),
+            ),
             target_id=int(result.diagnostics[i].target_id) or None,
             message=message_lines[i] if i < len(message_lines) else "",
         )
         for i in range(int(result.diagnostic_count))
     )
-    return bool(result.has_timeline), messages, diagnostics
 
 
 class _ProjectRenderMixin:
@@ -91,15 +108,14 @@ class _ProjectRenderMixin:
     def compile(self) -> ProjectCompileResult:
         """Compile the project into an RT-readable timeline.
 
-        Returns a :class:`ProjectCompileResult` with ``has_timeline``,
-        ``messages``, and structured ``diagnostics``. Never throws on bad
-        project content; it surfaces error diagnostics.
+        Returns a :class:`ProjectCompileResult` holding every diagnostic. Never
+        throws on bad project content; it surfaces error diagnostics.
         """
         lib = _get_lib()
         result = SonareProjectCompileResult()
         _check(lib.sonare_project_compile(self._require_handle(), ctypes.byref(result)))
         try:
-            return ProjectCompileResult(*_compile_result_fields(result))
+            return ProjectCompileResult(_compile_diagnostics(result))
         finally:
             lib.sonare_project_free_compile_result(ctypes.byref(result))
 

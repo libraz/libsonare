@@ -66,10 +66,21 @@ from ._project import synth_preset_names as synth_preset_names
 from ._project import synth_preset_patch as synth_preset_patch
 from ._project_edit import PART_RIG_ALL_PARTS as PART_RIG_ALL_PARTS
 from ._project_edit import PART_RIG_MODES as PART_RIG_MODES
+from ._project_instruments import GsEfxRealization as GsEfxRealization
+from ._project_model import ProjectCompileResult as ProjectCompileResult
+from ._project_model import ProjectCompileTimelineResult as ProjectCompileTimelineResult
+from ._project_model import ProjectDiagnostic as ProjectDiagnostic
+from ._project_model import ProjectDiagnosticCode as ProjectDiagnosticCode
+from ._project_model import ProjectDiagnosticSeverity as ProjectDiagnosticSeverity
 from ._runtime import ErrorCode as ErrorCode
 from ._runtime import ErrorCodeName as ErrorCodeName
 from ._runtime import SonareError as SonareError
 from ._runtime import SonareValueError as SonareValueError
+from .analyzer import MasteringAssistantParams as MasteringAssistantParams
+from .analyzer import MasteringParams as MasteringParams
+from .analyzer import MasteringParamValue as MasteringParamValue
+from .analyzer import MasteringPreset as MasteringPreset
+from .analyzer import MasteringSoloParams as MasteringSoloParams
 from .analyzer import (
     Mixer as Mixer,
 )
@@ -94,6 +105,7 @@ from .analyzer import (
 from .analyzer import (
     PitchDecompositionResult as PitchDecompositionResult,
 )
+from .analyzer import PlanarChannels as PlanarChannels
 from .analyzer import (
     RealtimeVoiceChanger as RealtimeVoiceChanger,
 )
@@ -103,6 +115,7 @@ from .analyzer import (
 from .analyzer import (
     SilenceCommonReport as SilenceCommonReport,
 )
+from .analyzer import SoloProcessor as SoloProcessor
 from .analyzer import (
     SpectralRegionOp as SpectralRegionOp,
 )
@@ -118,6 +131,7 @@ from .analyzer import (
 from .analyzer import (
     StreamingRetune as StreamingRetune,
 )
+from .analyzer import StripRef as StripRef
 from .analyzer import (
     TranscribeResult as TranscribeResult,
 )

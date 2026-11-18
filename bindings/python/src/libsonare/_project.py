@@ -62,7 +62,7 @@ from ._project_model import (
 from ._project_model import (
     _validate_midi_event_word as _validate_midi_event_word,
 )
-from ._project_render import _compile_result_fields, _ProjectRenderMixin
+from ._project_render import _compile_diagnostics, _ProjectRenderMixin
 from ._runtime import (
     SonareProjectCompileResult,
     _check,
@@ -181,13 +181,13 @@ class Project(
             raise _invalid_state("Project is closed")
         return self._handle
 
-    def compile_timeline(self) -> ProjectCompileResult:
+    def compile_timeline(self) -> ProjectCompileTimelineResult:
         """Compile the project and keep the timeline for an engine.
 
-        Returns the :class:`ProjectCompileResult` :meth:`compile` returns, with
-        ``timeline`` set to a :class:`ProjectTimeline` when compilation produced
-        one and ``None`` otherwise (the error diagnostics say why). Never throws
-        on bad project content.
+        Returns a :class:`ProjectCompileTimelineResult` whose ``timeline`` is a
+        :class:`ProjectTimeline` when compilation produced one and ``None``
+        otherwise (the error diagnostics say why). Never throws on bad project
+        content.
         """
         lib = _get_lib()
         result = SonareProjectCompileResult()
@@ -198,8 +198,8 @@ class Project(
             )
         )
         try:
-            return ProjectCompileResult(
-                *_compile_result_fields(result),
+            return ProjectCompileTimelineResult(
+                _compile_diagnostics(result),
                 ProjectTimeline(timeline) if timeline.value else None,
             )
         except BaseException:

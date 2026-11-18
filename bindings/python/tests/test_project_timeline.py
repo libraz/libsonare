@@ -10,6 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+import libsonare
 from libsonare import (
     BuiltinSynthConfig,
     EngineBounceOptions,
@@ -101,7 +102,8 @@ def _engine_bounce(engine: RealtimeEngine) -> np.ndarray:
 
 def _compile(project: Project) -> ProjectTimeline:
     result = project.compile_timeline()
-    assert result.has_timeline is True
+    assert isinstance(result, libsonare.ProjectCompileTimelineResult)
+    assert not [d for d in result.diagnostics if d.severity == "error"]
     assert result.timeline is not None
     return result.timeline
 
@@ -178,8 +180,7 @@ def test_compile_failure_has_no_timeline_and_reports_diagnostics() -> None:
     with Project.from_json(json) as project:
         result = project.compile_timeline()
         expected = project.compile()
+        assert isinstance(result, libsonare.ProjectCompileTimelineResult)
         assert result.timeline is None
-        assert result.has_timeline is False
-        assert result.diagnostic_count > 0
+        assert any(d.severity == "error" and d.message for d in result.diagnostics)
         assert result.diagnostics == expected.diagnostics
-        assert result.messages == expected.messages

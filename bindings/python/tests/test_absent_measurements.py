@@ -99,7 +99,7 @@ def test_a_project_diagnostic_about_no_single_target_has_no_target_id() -> None:
         SonareProjectCompileResult,
         SonareProjectDiagnostic,
     )
-    from libsonare._project_render import _compile_result_fields
+    from libsonare._project_render import _compile_diagnostics
 
     rows = (SonareProjectDiagnostic * 2)()
     rows[0].target_id = 0
@@ -107,7 +107,7 @@ def test_a_project_diagnostic_about_no_single_target_has_no_target_id() -> None:
     result = SonareProjectCompileResult()
     result.diagnostics = rows
     result.diagnostic_count = 2
-    _, _, diagnostics = _compile_result_fields(result)
+    diagnostics = _compile_diagnostics(result)
     assert [d.target_id for d in diagnostics] == [None, 7]
 
 

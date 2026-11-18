@@ -1141,9 +1141,6 @@ class RealtimeVoiceChangerConfig:
     reverb_variation_division: NoteDivisionName
     midi_release: MidiReleaseName
     def __init__(self, **kwargs: object) -> None: ...
-    @classmethod
-    def from_pod(cls, pod: object) -> RealtimeVoiceChangerConfig: ...
-    def to_pod(self) -> object: ...
 
 class RealtimeVoiceChanger:
     def __init__(

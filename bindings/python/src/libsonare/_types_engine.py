@@ -6,8 +6,9 @@ between languages see the same names. They intentionally violate PEP8 N802.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal, get_args
+from typing import TYPE_CHECKING, Literal, TypeAlias, get_args
 
 import numpy as np
 
@@ -25,6 +26,9 @@ from ._types_enums import (
 
 if TYPE_CHECKING:
     from ._project_model import ProjectLoopMode, ProjectSourceKind, ProjectTrackKind
+
+PlanarChannels: TypeAlias = Sequence[Sequence[float] | np.ndarray] | np.ndarray
+"""Planar audio: one buffer per channel, or a 2-D ``(channels, frames)`` array."""
 
 
 @dataclass(frozen=True, slots=True)

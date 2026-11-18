@@ -251,14 +251,11 @@ def test_bounce_auto_derives_length_when_total_frames_omitted() -> None:
 
 
 def test_last_bounce_compile_result_is_empty_before_any_bounce() -> None:
-    # No bounce has run, so the result is empty in full. A failed bounce is told
-    # apart by its diagnostics, never by has_timeline alone: losing the timeline
-    # always leaves an error diagnostic behind.
+    # No bounce has run, so there are no diagnostics. A failed bounce is told
+    # apart by its diagnostics: losing the timeline always leaves an error behind.
     project = Project()
     try:
         result = project.last_bounce_compile_result()
-        assert result.has_timeline is False
         assert result.diagnostics == ()
-        assert result.diagnostic_count == 0
     finally:
         project.close()

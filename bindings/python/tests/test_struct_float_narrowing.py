@@ -189,17 +189,17 @@ def test_ctypes_snapshot_compares_array_contents() -> None:
 
 def test_a_shipped_config_refuses_a_folding_value_on_the_field_that_carried_it() -> None:
     """The guard reaches the declared fields of a real struct, not only a probe."""
-    assert ls.RealtimeVoiceChangerConfig(input_gain_db=-6.25).to_pod().input_gain_db == -6.25
-    assert ls.RealtimeVoiceChangerConfig(input_gain_db=2.5).to_pod().input_gain_db == 2.5
+    assert ls.RealtimeVoiceChangerConfig(input_gain_db=-6.25)._to_pod().input_gain_db == -6.25
+    assert ls.RealtimeVoiceChangerConfig(input_gain_db=2.5)._to_pod().input_gain_db == 2.5
     for value in (1e40, float("nan"), float("inf")):
         with pytest.raises(SonareValueError, match="input_gain_db"):
-            ls.RealtimeVoiceChangerConfig(input_gain_db=value).to_pod()
+            ls.RealtimeVoiceChangerConfig(input_gain_db=value)._to_pod()
         with pytest.raises(SonareValueError, match="output_gain_db"):
-            ls.RealtimeVoiceChangerConfig(output_gain_db=value).to_pod()
+            ls.RealtimeVoiceChangerConfig(output_gain_db=value)._to_pod()
 
 
 def test_a_shipped_config_round_trips_the_defaults_the_library_supplies() -> None:
     """A value the C side produced is written back, so the guard has to accept it."""
-    pod = ls.RealtimeVoiceChangerConfig().to_pod()
-    again = ls.RealtimeVoiceChangerConfig.from_pod(pod).to_pod()
+    pod = ls.RealtimeVoiceChangerConfig()._to_pod()
+    again = ls.RealtimeVoiceChangerConfig._from_pod(pod)._to_pod()
     assert _ctypes_value_snapshot(again) == _ctypes_value_snapshot(pod)
