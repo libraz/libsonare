@@ -972,7 +972,7 @@ def waveform_peaks(
     out = SonareWaveformPeaksResult()
     rc = lib.sonare_waveform_peaks(
         c_array,
-        ctypes.c_size_t(length // num_channels),
+        _to_c_size_t(length // num_channels, "length"),
         _to_c_int(num_channels, "num_channels"),
         _to_c_size_t(samples_per_bucket, "samples_per_bucket"),
         ctypes.byref(out),
@@ -1030,7 +1030,7 @@ def waveform_peak_pyramid(
     out = SonareWaveformPeakPyramidResult()
     rc = lib.sonare_waveform_peak_pyramid(
         c_array,
-        ctypes.c_size_t(length // num_channels),
+        _to_c_size_t(length // num_channels, "length"),
         _to_c_int(num_channels, "num_channels"),
         c_levels,
         ctypes.c_size_t(len(levels)),

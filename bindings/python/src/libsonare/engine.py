@@ -6,6 +6,8 @@ import ctypes
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
+from . import _ffi_types_core as _ffi_core
+from . import _ffi_types_mastering_project as _ffi_project
 from ._engine_conversions import (
     _automation_points_to_c,
     _clips_to_c,
@@ -59,33 +61,6 @@ from ._engine_pages import ClipPageProvider as ClipPageProvider
 from ._engine_pages import FileClipPageProvider as FileClipPageProvider
 from ._errors import ErrorCode, SonareError, _not_supported, _require_open
 from ._facade import rebind_facade_exports as _rebind_facade_exports
-from ._ffi_types_core import (
-    SonareEngineMarker as _SonareEngineMarker,
-)
-from ._ffi_types_core import (
-    SonareEngineMetronomeConfig as _SonareEngineMetronomeConfig,
-)
-from ._ffi_types_core import (
-    SonareExternalMidiEvent as _SonareExternalMidiEvent,
-)
-from ._ffi_types_core import (
-    SonareParameterInfo as _SonareParameterInfo,
-)
-from ._ffi_types_core import (
-    SonareTransportState as _SonareTransportState,
-)
-from ._ffi_types_mastering_project import (
-    SonareEngineMidiClipSchedule as _SonareEngineMidiClipSchedule,
-)
-from ._ffi_types_mastering_project import (
-    SonareEngineMidiEvent as _SonareEngineMidiEvent,
-)
-from ._ffi_types_mastering_project import (
-    SonareProjectTempoSegment as _SonareProjectTempoSegment,
-)
-from ._ffi_types_mastering_project import (
-    SonareProjectTimeSignatureSegment as _SonareProjectTimeSignatureSegment,
-)
 from ._narrowing import _narrow_double, _resolve_zero_default
 from ._runtime import (
     _C_INT_MAX,
@@ -448,7 +423,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         """
         rows = list(segments)
         count = len(rows)
-        c_segments = (_SonareProjectTempoSegment * count)() if count else None
+        c_segments = (_ffi_project.SonareProjectTempoSegment * count)() if count else None
         for i, seg in enumerate(rows):
             fields = _mapping_keys(seg, _TEMPO_SEGMENT_KEYS, f"segments[{i}]")
             start_ppq = _narrow_double(fields["start_ppq"], "start_ppq")
@@ -474,7 +449,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         """
         rows = list(segments)
         count = len(rows)
-        c_segments = (_SonareProjectTimeSignatureSegment * count)() if count else None
+        c_segments = (_ffi_project.SonareProjectTimeSignatureSegment * count)() if count else None
         # The signature fields are carried unconverted so the struct's own
         # narrowing sees each caller value; int() truncated 4.5 onto the legal 4,
         # which the core's positive-signature check then accepts as written.
@@ -522,7 +497,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
 
     def add_parameter(self, info: ParameterInfo) -> None:
         _require_instance(info, ParameterInfo, "info")
-        raw = _SonareParameterInfo()
+        raw = _ffi_core.SonareParameterInfo()
         # Assigned unconverted so the struct's own narrowing sees the caller's
         # value; int() would truncate a fraction onto a neighbouring parameter
         # id. rt_safe is the exception -- it is a documented bool, spelled 0/1.
@@ -554,7 +529,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         return int(out.value)
 
     def parameter_info_by_index(self, index: int) -> ParameterInfo:
-        raw = _SonareParameterInfo()
+        raw = _ffi_core.SonareParameterInfo()
         _check(
             _get_lib().sonare_engine_parameter_info_by_index(
                 self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
@@ -563,7 +538,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         return _parameter_from_c(raw)
 
     def parameter_info(self, id: int) -> ParameterInfo:
-        raw = _SonareParameterInfo()
+        raw = _ffi_core.SonareParameterInfo()
         _check(
             _get_lib().sonare_engine_parameter_info(
                 self._require_handle(), _to_c_uint32(id, "id"), ctypes.byref(raw)
@@ -602,7 +577,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         return int(out.value)
 
     def set_markers(self, markers: Sequence[EngineMarker]) -> None:
-        raw_markers = (_SonareEngineMarker * len(markers))(
+        raw_markers = (_ffi_core.SonareEngineMarker * len(markers))(
             *[_marker_to_c(marker) for marker in markers]
         )
         _check(
@@ -615,7 +590,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         return int(out.value)
 
     def marker_by_index(self, index: int) -> EngineMarker:
-        raw = _SonareEngineMarker()
+        raw = _ffi_core.SonareEngineMarker()
         _check(
             _get_lib().sonare_engine_marker_by_index(
                 self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
@@ -624,7 +599,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         return _marker_from_c(raw)
 
     def marker(self, id: int) -> EngineMarker:
-        raw = _SonareEngineMarker()
+        raw = _ffi_core.SonareEngineMarker()
         _check(
             _get_lib().sonare_engine_marker(
                 self._require_handle(), _to_c_uint32(id, "id"), ctypes.byref(raw)
@@ -655,7 +630,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         _check(_get_lib().sonare_engine_set_metronome(self._require_handle(), ctypes.byref(raw)))
 
     def metronome(self) -> EngineMetronomeConfig:
-        raw = _SonareEngineMetronomeConfig()
+        raw = _ffi_core.SonareEngineMetronomeConfig()
         _check(_get_lib().sonare_engine_metronome(self._require_handle(), ctypes.byref(raw)))
         return _metronome_from_c(raw)
 
@@ -844,11 +819,11 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_midi_clips"):
             raise _not_supported("libsonare was built without realtime MIDI clip support")
-        event_arrays: list[ctypes.Array[_SonareEngineMidiEvent]] = []
-        raw_clips = (_SonareEngineMidiClipSchedule * len(clips))()
+        event_arrays: list[ctypes.Array[_ffi_project.SonareEngineMidiEvent]] = []
+        raw_clips = (_ffi_project.SonareEngineMidiClipSchedule * len(clips))()
         for index, clip in enumerate(clips):
             _require_instance(clip, EngineMidiClipSchedule, "clip")
-            raw_events = (_SonareEngineMidiEvent * len(clip.events))()
+            raw_events = (_ffi_project.SonareEngineMidiEvent * len(clip.events))()
             for event_index, event in enumerate(clip.events):
                 # ctypes narrows to the c_uint8 field silently, so a group of 256
                 # would arrive as 0 and pass the C ABI's range check instead of
@@ -873,7 +848,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 )
                 # The remaining fields go in unconverted so the struct's own
                 # narrowing sees each caller value.
-                raw_events[event_index] = _SonareEngineMidiEvent(
+                raw_events[event_index] = _ffi_project.SonareEngineMidiEvent(
                     event.render_frame,
                     event.word0,
                     event.word1,
@@ -885,7 +860,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                     event.sysex_handle,
                 )
             event_arrays.append(raw_events)
-            raw_clips[index] = _SonareEngineMidiClipSchedule(
+            raw_clips[index] = _ffi_project.SonareEngineMidiClipSchedule(
                 clip.id,
                 clip.track_id,
                 clip.start_sample,
@@ -1057,7 +1032,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         if not hasattr(lib, "sonare_engine_drain_external_midi"):
             raise _not_supported("libsonare was built without external-MIDI output support")
         capacity = _to_c_size_t(max_records, "max_records").value
-        raw = (_SonareExternalMidiEvent * capacity)()
+        raw = (_ffi_core.SonareExternalMidiEvent * capacity)()
         written = ctypes.c_size_t()
         results: list[ExternalMidiEvent] = []
         while len(results) < max_records:
@@ -1098,7 +1073,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_get_transport_state"):
             raise _not_supported("libsonare was built without transport-state support")
-        raw = _SonareTransportState()
+        raw = _ffi_core.SonareTransportState()
         _check(lib.sonare_engine_get_transport_state(self._require_handle(), ctypes.byref(raw)))
         return TransportState(
             playing=bool(raw.playing),
