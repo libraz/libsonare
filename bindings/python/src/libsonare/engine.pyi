@@ -227,11 +227,11 @@ class RealtimeEngine:
     def set_track_buses(self, buses: Sequence[Mapping[str, object]]) -> None:
         """Declare the group buses from their mappings."""
         ...
-    def set_bus_strip(self, bus_id: int, bus: MixSceneBusInput) -> None:
-        """Replace a bus's strip with ``bus``; the bus must exist via :meth:`set_track_buses`."""
+    def set_bus_strip(self, bus_id: int, settings: MixSceneBusInput) -> None:
+        """Replace a bus's strip with ``settings``; the bus comes from :meth:`set_track_buses`."""
         ...
-    def set_strip(self, ref: StripRef, strip: MixSceneStripInput) -> None:
-        """Replace a strip with ``strip``: a track id or ``"master"``."""
+    def set_strip(self, ref: StripRef, settings: MixSceneStripInput) -> None:
+        """Replace a strip with ``settings``: a track id or ``"master"``."""
         ...
     def set_strip_eq_band(self, ref: StripRef, band_index: int, band: EqBandInput) -> None:
         """Replace one equalizer band of a strip in realtime; a track id or ``"master"``."""

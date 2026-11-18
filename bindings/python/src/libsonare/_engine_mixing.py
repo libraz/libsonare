@@ -342,27 +342,27 @@ class _EngineMixingMixin:
             )
         _check(_get_lib().sonare_engine_set_track_buses(self._require_handle(), raw, len(buses)))
 
-    def set_bus_strip(self, bus_id: int, bus: MixSceneBusInput) -> None:
-        """Replace a bus's strip with ``bus``; the bus must exist via :meth:`set_track_buses`.
+    def set_bus_strip(self, bus_id: int, settings: MixSceneBusInput) -> None:
+        """Replace a bus's strip with ``settings``; the bus must exist via :meth:`set_track_buses`.
 
-        ``bus`` is a :data:`MixSceneBusInput` mapping; anything else raises ``TypeError``.
+        ``settings`` is a :data:`MixSceneBusInput` mapping; anything else raises ``TypeError``.
         """
         _check(
             _get_lib().sonare_engine_set_bus_strip_json(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
-                _scene_entry_json(bus, "buses", "bus"),
+                _scene_entry_json(settings, "buses", "settings"),
             )
         )
 
-    def set_strip(self, ref: StripRef, strip: MixSceneStripInput) -> None:
-        """Replace a strip with ``strip``: a track id or ``"master"`` names the strip.
+    def set_strip(self, ref: StripRef, settings: MixSceneStripInput) -> None:
+        """Replace a strip with ``settings``: a track id or ``"master"`` names the strip.
 
-        ``strip`` is a :data:`MixSceneStripInput` mapping; anything else raises ``TypeError``. The
-        mapping carries its own ``id``; the engine applies it to the addressed strip.
+        ``settings`` is a :data:`MixSceneStripInput` mapping; anything else raises ``TypeError``.
+        The mapping carries its own ``id``; the engine applies it to the addressed strip.
         """
         track_id = _strip_target("set_strip", ref)
-        payload = _scene_entry_json(strip, "strips", "strip")
+        payload = _scene_entry_json(settings, "strips", "settings")
         if track_id is None:
             rc = _get_lib().sonare_engine_set_master_strip_json(self._require_handle(), payload)
         else:
