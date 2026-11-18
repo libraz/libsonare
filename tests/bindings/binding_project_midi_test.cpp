@@ -913,6 +913,50 @@ TEST_CASE("project C surface preserves long UTF-8 marker names", "[project]") {
   sonare_project_destroy(project);
 }
 
+TEST_CASE("project C surface reads back full track names and source URIs", "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  // One byte past each fixed descriptor field's capacity.
+  const std::string track_name(64, 't');
+  const std::string uri = "file:///" + std::string(120, 'u');
+  REQUIRE(uri.size() == 128u);
+
+  SonareProjectTrackDesc track_desc{};
+  track_desc.name = track_name.c_str();
+  uint32_t track = 0;
+  REQUIRE(sonare_project_add_track(project, &track_desc, &track) == SONARE_OK);
+  SonareProjectClipDesc clip_desc{};
+  clip_desc.track_id = track;
+  clip_desc.length_ppq = 1.0;
+  clip_desc.gain = 1.0f;
+  clip_desc.source_uri = uri.c_str();
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_clip(project, &clip_desc, &clip) == SONARE_OK);
+
+  char* full_name = nullptr;
+  REQUIRE(sonare_project_track_name_by_index(project, 0, &full_name) == SONARE_OK);
+  REQUIRE(full_name != nullptr);
+  CHECK(std::string(full_name) == track_name);
+  sonare_free_string(full_name);
+
+  char* full_uri = nullptr;
+  REQUIRE(sonare_project_source_name_or_uri_by_index(project, 0, &full_uri) == SONARE_OK);
+  REQUIRE(full_uri != nullptr);
+  CHECK(std::string(full_uri) == uri);
+  sonare_free_string(full_uri);
+
+  char* none = reinterpret_cast<char*>(1);
+  CHECK(sonare_project_track_name_by_index(project, 1, &none) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(none == nullptr);
+  none = reinterpret_cast<char*>(1);
+  CHECK(sonare_project_source_name_or_uri_by_index(project, 1, &none) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(none == nullptr);
+  CHECK(sonare_project_track_name_by_index(project, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("project C surface preserves SMF SysEx through project serialization", "[project]") {
   const std::vector<uint8_t> smf = make_project_sysex_smf();
   const std::vector<uint8_t> payload = {0x7E, 0x7F, 0x09, 0x01, 0xF7};

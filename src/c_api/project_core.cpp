@@ -447,6 +447,73 @@ SonareError sonare_project_clip_by_index(const SonareProject* project, size_t in
 #endif
 }
 
+SonareError sonare_project_track_name_by_index(const SonareProject* project, size_t index,
+                                               char** out_name) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!out_name) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "project_track_name_by_index: out_name must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  *out_name = nullptr;
+  if (!project) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "project_track_name_by_index: project must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  const auto& tracks = project->history.project().tracks();
+  if (index >= tracks.size()) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "project_track_name_by_index: index is out of range");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  *out_name = copy_string(tracks[index].name);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  if (out_name) *out_name = {};
+  SONARE_C_STUB_NOT_SUPPORTED(project, index, out_name);
+#endif
+}
+
+SonareError sonare_project_source_name_or_uri_by_index(const SonareProject* project, size_t index,
+                                                       char** out_name_or_uri) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!out_name_or_uri) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "project_source_name_or_uri_by_index: out_name_or_uri must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  *out_name_or_uri = nullptr;
+  if (!project) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "project_source_name_or_uri_by_index: project must not be NULL");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  const auto& sources = project->history.project().sources();
+  if (index >= sources.size()) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "project_source_name_or_uri_by_index: index is out of range");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  const arr::ClipSource& source = sources[index];
+  if (const auto* audio = std::get_if<arr::AudioSourceRef>(&source)) {
+    *out_name_or_uri = copy_string(audio->uri);
+  } else {
+    *out_name_or_uri = copy_string(std::get<arr::MidiSourceRef>(source).name);
+  }
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  if (out_name_or_uri) *out_name_or_uri = {};
+  SONARE_C_STUB_NOT_SUPPORTED(project, index, out_name_or_uri);
+#endif
+}
+
 SonareError sonare_project_source_by_index(const SonareProject* project, size_t index,
                                            SonareProjectSource* out) {
   SONARE_C_API_ENTRY;

@@ -352,8 +352,8 @@ struct ProjectWasm {
   val trackByIndex(const val& index_val) const;
   val clipByIndex(const val& index_val) const;
   val sourceByIndex(const val& index_val) const;
-  // Shared ProjectSource builder: audio sources carry the full URI and metadata.
-  val sourceToVal(const SonareProjectSource& d) const;
+  // Shared ProjectSource builder: @p name_or_uri is the full string from an untruncated getter.
+  val sourceToVal(const SonareProjectSource& d, const char* name_or_uri) const;
   double markerCount() const;
   double trackCount() const;
   double clipCount() const;

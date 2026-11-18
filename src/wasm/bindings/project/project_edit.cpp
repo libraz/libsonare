@@ -78,7 +78,12 @@ val ProjectWasm::unresolvedAudioSources() const {
     const SonareError source_err =
         sonare_project_unresolved_audio_source_by_index(project_.get(), i, &source);
     if (source_err != SONARE_OK) throwCError(source_err, "failed to read unresolved audio source");
-    sources.set(static_cast<unsigned>(i), sourceToVal(source));
+    char* uri = nullptr;
+    const SonareError uri_err =
+        sonare_project_get_audio_source_uri(project_.get(), source.id, &uri);
+    if (uri_err != SONARE_OK) throwCError(uri_err, "failed to read audio source uri");
+    const std::unique_ptr<char, decltype(&sonare_free_string)> owned(uri, &sonare_free_string);
+    sources.set(static_cast<unsigned>(i), sourceToVal(source, uri));
   }
   return sources;
 }

@@ -437,6 +437,8 @@ _ALIAS_COVERAGE = {
     # component accessors / name resolver.
     "project_fade_curve_from_name": ("set_clip_fade",),
     "project_marker_name_by_index": ("marker_by_index", "markers"),
+    "project_track_name_by_index": ("track_by_index", "tracks"),
+    "project_source_name_or_uri_by_index": ("source_by_index", "sources"),
     "project_set_marker_ex_name": ("set_marker_ex", "set_marker"),
     "project_unresolved_audio_source_count": ("unresolved_audio_source_ids",),
     "project_unresolved_audio_source_id_by_index": ("unresolved_audio_source_ids",),

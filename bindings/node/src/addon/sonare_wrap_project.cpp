@@ -27,23 +27,16 @@ struct HeapStringGuard {
   }
 };
 
-// Builds the ProjectSource object; audio sources carry the full URI, not the
-// truncated descriptor field.
+// Builds the ProjectSource object from the descriptor and the source's full name or URI, which
+// the caller reads through an untruncated getter rather than the descriptor's bounded field.
 Napi::Value BuildProjectSource(Napi::Env env, const SonareProject* project,
-                               const SonareProjectSource& source) {
+                               const SonareProjectSource& source, const char* name_or_uri) {
   AudioSourceMetadataGuard metadata;
-  HeapStringGuard uri;
   if (source.kind == 0) {
     const SonareError metadata_error =
         sonare_project_get_audio_source_metadata(project, source.id, &metadata.value);
     if (metadata_error != SONARE_OK) {
       ThrowIfError(env, metadata_error);
-      return env.Undefined();
-    }
-    const SonareError uri_error =
-        sonare_project_get_audio_source_uri(project, source.id, &uri.value);
-    if (uri_error != SONARE_OK) {
-      ThrowIfError(env, uri_error);
       return env.Undefined();
     }
   }
@@ -54,7 +47,7 @@ Napi::Value BuildProjectSource(Napi::Env env, const SonareProject* project,
   out.Set("numChannels", source.num_channels);
   out.Set("storageHandleId", source.storage_handle_id);
   out.Set("sampleRateHint", source.sample_rate_hint);
-  out.Set("nameOrUri", uri.value != nullptr ? uri.value : source.name_or_uri);
+  out.Set("nameOrUri", name_or_uri);
   out.Set("contentHash", metadata.value.content_hash != nullptr ? metadata.value.content_hash : "");
   out.Set("externalStemRole",
           metadata.value.external_stem_role != nullptr ? metadata.value.external_stem_role : "");
@@ -438,6 +431,9 @@ Napi::Value ProjectWrap::TrackByIndex(const Napi::CallbackInfo& info) {
   SonareProjectTrack track{};
   ThrowIfError(env, sonare_project_track_by_index(project_, index, &track));
   if (env.IsExceptionPending()) return env.Undefined();
+  HeapStringGuard name;
+  ThrowIfError(env, sonare_project_track_name_by_index(project_, index, &name.value));
+  if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object out = Napi::Object::New(env);
   out.Set("id", track.id);
   out.Set("kind", track.kind);
@@ -446,7 +442,7 @@ Napi::Value ProjectWrap::TrackByIndex(const Napi::CallbackInfo& info) {
   out.Set("pan", track.pan);
   out.Set("mute", track.mute != 0);
   out.Set("solo", track.solo != 0);
-  out.Set("name", track.name);
+  out.Set("name", name.value);
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -484,8 +480,11 @@ Napi::Value ProjectWrap::SourceByIndex(const Napi::CallbackInfo& info) {
   SonareProjectSource source{};
   ThrowIfError(env, sonare_project_source_by_index(project_, index, &source));
   if (env.IsExceptionPending()) return env.Undefined();
-
-  return BuildProjectSource(env, project_, source);
+  HeapStringGuard name_or_uri;
+  ThrowIfError(env,
+               sonare_project_source_name_or_uri_by_index(project_, index, &name_or_uri.value));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return BuildProjectSource(env, project_, source, name_or_uri.value);
   SONARE_NODE_CATCH(env)
 }
 
@@ -654,7 +653,10 @@ Napi::Value ProjectWrap::UnresolvedAudioSources(const Napi::CallbackInfo& info) 
     SonareProjectSource source{};
     ThrowIfError(env, sonare_project_unresolved_audio_source_by_index(project_, i, &source));
     if (env.IsExceptionPending()) return env.Undefined();
-    Napi::Value built = BuildProjectSource(env, project_, source);
+    HeapStringGuard uri;
+    ThrowIfError(env, sonare_project_get_audio_source_uri(project_, source.id, &uri.value));
+    if (env.IsExceptionPending()) return env.Undefined();
+    Napi::Value built = BuildProjectSource(env, project_, source, uri.value);
     if (env.IsExceptionPending()) return env.Undefined();
     sources.Set(static_cast<uint32_t>(i), built);
   }

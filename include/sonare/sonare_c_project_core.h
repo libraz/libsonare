@@ -415,6 +415,17 @@ SonareError sonare_project_clip_by_index(const SonareProject* project, size_t in
 SonareError sonare_project_source_by_index(const SonareProject* project, size_t index,
                                            SonareProjectSource* out);
 
+/// @brief Returns the complete UTF-8 track name by 0-based stored index.
+/// @details Free @p out_name with sonare_free_string.
+SonareError sonare_project_track_name_by_index(const SonareProject* project, size_t index,
+                                               char** out_name);
+
+/// @brief Returns the complete UTF-8 name (MIDI) or URI (audio) of a source by 0-based stored
+///        index.
+/// @details Free @p out_name_or_uri with sonare_free_string.
+SonareError sonare_project_source_name_or_uri_by_index(const SonareProject* project, size_t index,
+                                                       char** out_name_or_uri);
+
 /// @brief Reads the owning metadata strings for an audio source id.
 ///
 /// On success both fields are heap-allocated copies, including empty strings,
