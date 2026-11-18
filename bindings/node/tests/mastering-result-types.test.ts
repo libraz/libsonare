@@ -69,6 +69,11 @@ describe('typed results of the explainable-mastering helpers', () => {
     expect(typeof result.loudness.integratedLufs).toBe('number');
   });
 
+  it('reports null integrated loudness for a silent take', () => {
+    const result = masteringAudioProfile({ samples: new Float32Array(SR), sampleRate: SR });
+    expect(result.loudness.integratedLufs).toBeNull();
+  });
+
   it('keys the pair analysis result on the analysis name literal', () => {
     const loudness = masteringAnalyzePair({
       analysis: 'match.referenceLoudness',

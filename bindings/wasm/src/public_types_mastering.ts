@@ -7982,8 +7982,8 @@ export type StereoAnalysis = 'stereo.monoCompatCheck' | 'stereo.monoCompatCheckL
 
 /** Loudness group of {@link MasteringAudioProfile}. */
 export interface MasteringAudioProfileLoudness {
-  /** Integrated loudness in LUFS. */
-  integratedLufs: number;
+  /** Integrated loudness in LUFS; `null` for a silent or below-gate take. */
+  integratedLufs: number | null;
   /** EBU Tech 3342 loudness range, in LU. */
   loudnessRangeLu: number;
   /** True peak, in dBTP. */
