@@ -2,13 +2,7 @@
  * One repair analysis and one repair application over any number of channels.
  */
 
-import {
-  audioDefectsFromNative,
-  dbFromLinear,
-  dehumReport,
-  denoiseReport,
-  linearFromDb,
-} from './internal/repair_common.js';
+import { audioDefectsFromNative, dehumReport, denoiseReport } from './internal/repair_common.js';
 import { addon } from './native.js';
 import type { DereverbClassicalOptions } from './repair_dereverb.js';
 import type { DeclickOptions, DeclipOptions, DecrackleOptions } from './repair_impulsive.js';
@@ -64,35 +58,6 @@ export type MasteringRepairStage =
       /** Stage to apply. */
       stage: 'dereverb';
     } & Omit<DereverbClassicalOptions, 'validate'>);
-
-/** Native stage settings still carry the declip level as the linear `clipThreshold`. */
-function stageToNative(stage: MasteringRepairStage): Record<string, unknown> {
-  const native: Record<string, unknown> = { ...stage };
-  if ('clipThreshold' in native) {
-    throw new TypeError(
-      "masteringRepairApply: unknown setting 'clipThreshold' (use clipThresholdDb)",
-    );
-  }
-  if (native.stage === 'declip' && native.clipThresholdDb !== undefined) {
-    native.clipThreshold = linearFromDb(
-      'masteringRepairApply',
-      'clipThresholdDb',
-      native.clipThresholdDb,
-    );
-  }
-  delete native.clipThresholdDb;
-  return native;
-}
-
-/** The inverse of {@link stageToNative}, for the stages the analysis recommends. */
-function stageFromNative(native: Record<string, unknown>): MasteringRepairStage {
-  const stage = { ...native };
-  if (stage.stage === 'declip' && typeof stage.clipThreshold === 'number') {
-    stage.clipThresholdDb = dbFromLinear(stage.clipThreshold);
-    delete stage.clipThreshold;
-  }
-  return stage as unknown as MasteringRepairStage;
-}
 
 /**
  * What {@link masteringRepairAnalyze} measured and recommends.
@@ -245,9 +210,6 @@ export function masteringRepairAnalyze(...args: unknown[]): MasteringRepairAnaly
   const analysis = JSON.parse(
     addon.masteringRepairAnalyze(request.channels, request.sampleRate, JSON.stringify(options)),
   ) as MasteringRepairAnalysis;
-  analysis.recommended = (analysis.recommended as unknown as Record<string, unknown>[]).map(
-    stageFromNative,
-  );
   if (analysis.defects !== undefined) {
     analysis.defects = audioDefectsFromNative(analysis.defects);
     analysis.channels = analysis.channels?.map(audioDefectsFromNative);
@@ -286,7 +248,7 @@ export function masteringRepairApply(...args: unknown[]): MasteringRepairApplyRe
   const result = addon.masteringRepairApply(
     request.channels,
     request.sampleRate,
-    JSON.stringify(request.stages.map(stageToNative)),
+    JSON.stringify(request.stages),
     request.onProgress ?? (() => {}),
     request.cancel ?? (() => false),
   ) as { channels: Float32Array[]; reportsJson: string };

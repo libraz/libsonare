@@ -4,7 +4,6 @@ import {
   assertAudioInput,
   assertClosedToken,
   assertNonNegativeFloatValue,
-  assertPositiveFloatValue,
   sampleOneShot,
 } from './validation.js';
 
@@ -135,21 +134,10 @@ export function masteringDynamicsCompressor(
 export function masteringDynamicsCompressor(...args: unknown[]): DynamicsProcessorResult {
   const r = sampleOneShot<MasteringDynamicsCompressorRequest>('masteringDynamicsCompressor', args);
   assertAudioInput('masteringDynamicsCompressor', r.samples, r.sampleRate, r);
-  const { sidechainHighPassHz, ...opts } = r as MasteringDynamicsCompressorRequest &
-    Record<string, unknown>;
+  const opts = { ...r } as MasteringDynamicsCompressorRequest & Record<string, unknown>;
   if (r.detector !== undefined && r.detector !== null) {
     assertClosedToken('masteringDynamicsCompressor', r.detector, COMPRESSOR_DETECTORS, 'detector');
     opts.detector = COMPRESSOR_DETECTOR_ORDINAL[r.detector] as never;
-  }
-  // The addon still reads an enable flag plus a corner for the sidechain high-pass.
-  if (sidechainHighPassHz !== undefined && sidechainHighPassHz !== null) {
-    assertPositiveFloatValue(
-      'masteringDynamicsCompressor',
-      sidechainHighPassHz,
-      'sidechainHighPassHz',
-    );
-    opts.sidechainHpfEnabled = true;
-    opts.sidechainHpfHz = sidechainHighPassHz;
   }
   return addon.masteringDynamicsCompressor(r.samples, r.sampleRate, opts);
 }

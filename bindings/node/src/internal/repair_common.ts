@@ -39,22 +39,6 @@ const NON_NATIVE_FIELDS = new Set([
   'validate',
 ]);
 
-/** A dBFS level at or below 0 as a linear amplitude; `TypeError` unless a number, `RangeError` above 0 dBFS or NaN. */
-export function linearFromDb(fnName: string, field: string, db: unknown): number {
-  if (typeof db !== 'number') {
-    throw new TypeError(`${fnName}: ${field} must be a number`);
-  }
-  if (Number.isNaN(db) || db > 0) {
-    throw new RangeError(`${fnName}: ${field} must be at most 0 dBFS`);
-  }
-  return 10 ** (db / 20);
-}
-
-/** A linear amplitude as dBFS. */
-export function dbFromLinear(linear: number): number {
-  return 20 * Math.log10(linear);
-}
-
 /**
  * The options object the addon reads: the request without audio, rate and `validate`. `null`
  * is absence.

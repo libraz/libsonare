@@ -513,26 +513,6 @@
       {
         "choices": null,
         "coupledWith": [],
-        "default": null,
-        "dependsOn": [],
-        "id": null,
-        "max": 1,
-        "maxExclusive": false,
-        "maxRelativeTo": null,
-        "min": null,
-        "minExclusive": false,
-        "name": "repair.denoise.gainFloor",
-        "rtSafe": false,
-        "scale": "linear",
-        "slot": null,
-        "type": "number",
-        "uiMax": null,
-        "uiMin": null,
-        "unit": "none"
-      },
-      {
-        "choices": null,
-        "coupledWith": [],
         "default": false,
         "dependsOn": [],
         "id": null,
@@ -1358,7 +1338,7 @@
           "maxRelativeTo": null,
           "min": null,
           "minExclusive": false,
-          "name": "sidechainHpfEnabled",
+          "name": "sidechainHighPassEnabled",
           "rtSafe": true,
           "scale": "linear",
           "slot": null,
@@ -1378,7 +1358,7 @@
           "maxRelativeTo": null,
           "min": 0,
           "minExclusive": true,
-          "name": "sidechainHpfHz",
+          "name": "sidechainHighPassHz",
           "rtSafe": true,
           "scale": "log",
           "slot": null,
@@ -2495,7 +2475,7 @@
           "maxRelativeTo": null,
           "min": null,
           "minExclusive": false,
-          "name": "sidechainHpfEnabled",
+          "name": "sidechainHighPassEnabled",
           "rtSafe": false,
           "scale": "linear",
           "slot": null,
@@ -2507,7 +2487,7 @@
         {
           "choices": null,
           "coupledWith": [
-            "sidechainHpfEnabled"
+            "sidechainHighPassEnabled"
           ],
           "default": 90,
           "dependsOn": [],
@@ -2517,7 +2497,7 @@
           "maxRelativeTo": null,
           "min": null,
           "minExclusive": false,
-          "name": "sidechainHpfHz",
+          "name": "sidechainHighPassHz",
           "rtSafe": false,
           "scale": "log",
           "slot": null,
@@ -5017,11 +4997,11 @@
         {
           "choices": [
             {
-              "name": "bandpass",
+              "name": "bandPass",
               "value": 0
             },
             {
-              "name": "lowpass",
+              "name": "lowPass",
               "value": 1
             }
           ],
@@ -7159,11 +7139,11 @@
         {
           "choices": [
             {
-              "name": "bandpass",
+              "name": "bandPass",
               "value": 0
             },
             {
-              "name": "lowpass",
+              "name": "lowPass",
               "value": 1
             }
           ],
@@ -120678,22 +120658,22 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": 0.98,
+          "default": -0.17547831,
           "dependsOn": [],
           "id": null,
-          "max": 1,
-          "maxExclusive": false,
+          "max": 5.17719e-07,
+          "maxExclusive": true,
           "maxRelativeTo": null,
-          "min": 0,
+          "min": -903.09,
           "minExclusive": true,
-          "name": "clipThreshold",
+          "name": "clipThresholdDb",
           "rtSafe": false,
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": 1,
-          "uiMin": 0.5,
-          "unit": "none"
+          "uiMax": 0,
+          "uiMin": -6.0206,
+          "unit": "dBFS"
         },
         {
           "choices": null,
@@ -123045,11 +123025,11 @@
               "value": 0
             },
             {
-              "name": "lowpass",
+              "name": "lowPass",
               "value": 1
             },
             {
-              "name": "highpass",
+              "name": "highPass",
               "value": 2
             }
           ],

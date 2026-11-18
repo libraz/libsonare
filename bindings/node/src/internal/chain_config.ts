@@ -71,10 +71,7 @@ function enumTokens(path: string): readonly string[] | undefined {
  * An array recurses as `<path>.<index>` (`crossover.cutoffsHz.0`,
  * `bands.2.thresholdDb`); an empty array is refused by its path. An enum leaf is
  * written as its token and sent as its ordinal; a number or an unknown token is a
- * `RangeError`. `declip.clipThresholdDb` (dBFS) is sent as the linear
- * `clipThreshold` and a band's `sidechainHighPassHz` as native's
- * `sidechainHpfEnabled` + `sidechainHpfHz` pair, because native still uses those
- * spellings. A dotted key, a removed spelling or a boolean `denoise` is a
+ * `RangeError`. A dotted key, a removed spelling or a boolean `denoise` is a
  * `TypeError` naming it.
  */
 export function flattenChainConfig(
@@ -130,17 +127,7 @@ export function flattenChainConfig(
             `Mastering override '${path}' must be a finite level at or below 0 dBFS`,
           );
         }
-        out['repair.declip.clipThreshold'] = 10 ** (value / 20);
-      } else if (key === 'sidechainHighPassHz' && BAND_PATH.test(path)) {
-        if (typeof value !== 'number') {
-          throw new TypeError(notAValue(path));
-        }
-        if (!(value > 0) || !Number.isFinite(value)) {
-          throw new RangeError(`Mastering override '${path}' must be a finite frequency above 0`);
-        }
-        const base = prefix;
-        out[`${base}.sidechainHpfEnabled`] = true;
-        out[`${base}.sidechainHpfHz`] = value;
+        out[path] = value;
       } else if (typeof value === 'number' || typeof value === 'boolean') {
         out[path] = value;
       } else if (typeof value === 'object' && value !== null) {
@@ -160,9 +147,8 @@ export function flattenChainConfig(
 /**
  * Nests a flat `{ "module.processor.param": value }` map native returns into a
  * {@link MasteringChainConfig}, the inverse of {@link flattenChainConfig}: indices
- * become arrays, enum ordinals become tokens, the linear declip threshold becomes
- * dBFS and a band's sidechain pair becomes `sidechainHighPassHz`. A structured
- * value (a version 2 document's multiband object) is expanded to its dotted keys first.
+ * become arrays and enum ordinals become tokens. A structured value (a version 2
+ * document's multiband object) is expanded to its dotted keys first.
  */
 export function nestChainConfig(flat: Record<string, unknown>): MasteringChainConfig {
   const root: ChainSection = {};
@@ -199,26 +185,9 @@ export function nestChainConfig(flat: Record<string, unknown>): MasteringChainCo
   for (const [path, value] of Object.entries(flat)) {
     expand(path, value);
   }
-  const hpfHz = new Map<string, number>();
-  const hpfOn = new Map<string, boolean>();
   for (const [path, value] of Object.entries(expanded)) {
     const tokens = enumTokens(path);
-    if (tokens !== undefined && typeof value === 'number') {
-      set(path, tokens[value] ?? value);
-    } else if (path === 'repair.declip.clipThreshold' && typeof value === 'number') {
-      set('repair.declip.clipThresholdDb', 20 * Math.log10(value));
-    } else if (path.endsWith('.sidechainHpfHz') && BAND_PATH.test(path)) {
-      hpfHz.set(path.slice(0, -'.sidechainHpfHz'.length), value as number);
-    } else if (path.endsWith('.sidechainHpfEnabled') && BAND_PATH.test(path)) {
-      hpfOn.set(path.slice(0, -'.sidechainHpfEnabled'.length), value as boolean);
-    } else {
-      set(path, value);
-    }
-  }
-  for (const [band, hz] of hpfHz) {
-    if (hpfOn.get(band) === true) {
-      set(`${band}.sidechainHighPassHz`, hz);
-    }
+    set(path, tokens !== undefined && typeof value === 'number' ? (tokens[value] ?? value) : value);
   }
   return root as MasteringChainConfig;
 }

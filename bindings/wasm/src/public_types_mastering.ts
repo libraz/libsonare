@@ -317,9 +317,9 @@ export interface MasteringProcessorParamMap {
     /** Default: 'rms'. */
     detector?: 'peak' | 'rms' | 'logRms';
     /** Default: false. */
-    sidechainHpfEnabled?: boolean;
+    sidechainHighPassEnabled?: boolean;
     /** Unit: Hz. Range: (0, inf). Default: 100. */
-    sidechainHpfHz?: number;
+    sidechainHighPassHz?: number;
     /** Unit: ms. Range: [0, inf). Default: 0. */
     pdrTimeMs?: number;
     /** Range: [1, inf). Default: 1. */
@@ -440,9 +440,9 @@ export interface MasteringProcessorParamMap {
     /** Default: false. */
     monoSumming?: boolean;
     /** Default: false. */
-    sidechainHpfEnabled?: boolean;
+    sidechainHighPassEnabled?: boolean;
     /** Unit: Hz. Default: 90. */
-    sidechainHpfHz?: number;
+    sidechainHighPassHz?: number;
   };
   /** Parameters of the `dynamics.transientShaper` processor. */
   'dynamics.transientShaper': {
@@ -694,8 +694,8 @@ export interface MasteringProcessorParamMap {
     lfoRateHz?: number;
     /** Range: [0, 1]. Default: 0. */
     lfoDepth?: number;
-    /** Default: 'bandpass'. */
-    filterType?: 'bandpass' | 'lowpass';
+    /** Default: 'bandPass'. */
+    filterType?: 'bandPass' | 'lowPass';
     /** Default: 'up'. */
     direction?: 'up' | 'down';
     /** Default: 'linearHz'. */
@@ -902,8 +902,8 @@ export interface MasteringProcessorParamMap {
     resonance?: number;
     /** Range: [0, 1]. Default: 1. */
     dryWet?: number;
-    /** Default: 'bandpass'. */
-    filterType?: 'bandpass' | 'lowpass';
+    /** Default: 'bandPass'. */
+    filterType?: 'bandPass' | 'lowPass';
     /** Default: 'linearHz'. */
     sweepLaw?: 'linearHz' | 'linearOctave';
   };
@@ -12436,8 +12436,8 @@ export interface MasteringProcessorParamMap {
   };
   /** Parameters of the `repair.declip` processor. */
   'repair.declip': {
-    /** Range: (0, 1]. Default: 0.98. */
-    clipThreshold?: number;
+    /** Unit: dBFS. Range: (-903.09, 5.17719e-07). Default: -0.17547831. */
+    clipThresholdDb?: number;
     /** Unit: count. Range: [1, 8]. Default: 2. */
     iterations?: number;
     /** Range: [0, 1]. Default: 0.65. */
@@ -12655,8 +12655,8 @@ export interface MasteringProcessorParamMap {
     wpNoisePink?: boolean;
     /** Default: 'lp'. */
     discType?: 'lp' | 'ep' | 'sp' | 'rnd';
-    /** Default: 'lowpass'. */
-    filterType?: 'off' | 'lowpass' | 'highpass';
+    /** Default: 'lowPass'. */
+    filterType?: 'off' | 'lowPass' | 'highPass';
     /** Default: false. */
     mono?: boolean;
     /** Range: [0, 9]. Default: 0. */
@@ -13797,6 +13797,8 @@ export interface MasteringChainConfig {
       makeupGainDb?: number;
       /** Derives the makeup gain from the threshold and ratio instead of using `makeupGainDb`. Default false. */
       autoMakeup?: boolean;
+      /** Sidechain high-pass corner in Hz, greater than 0; absent = no high-pass. */
+      sidechainHighPassHz?: number;
     };
     /** Sibilance reduction in a detection band. */
     deesser?: {

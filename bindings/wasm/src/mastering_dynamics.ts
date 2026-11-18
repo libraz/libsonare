@@ -3,7 +3,6 @@ import type { ValidateOptions } from './validation.js';
 import {
   assertAudioInput,
   assertNonNegativeFloatValue,
-  assertPositiveFloatValue,
   requireToken,
   sampleOneShot,
 } from './validation.js';
@@ -174,17 +173,6 @@ export function masteringDynamicsCompressor(...args: unknown[]): DynamicsProcess
       'peak',
     );
     opts.detector = COMPRESSOR_DETECTOR_ORDINAL[token];
-  }
-  // Native still reads an enable flag plus a corner for the sidechain high-pass.
-  delete opts.sidechainHighPassHz;
-  if (r.sidechainHighPassHz !== undefined && r.sidechainHighPassHz !== null) {
-    assertPositiveFloatValue(
-      'masteringDynamicsCompressor',
-      r.sidechainHighPassHz,
-      'sidechainHighPassHz',
-    );
-    opts.sidechainHpfEnabled = true;
-    opts.sidechainHpfHz = r.sidechainHighPassHz;
   }
   return requireModule().masteringDynamicsCompressor(r.samples, r.sampleRate, opts);
 }

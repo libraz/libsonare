@@ -2,7 +2,7 @@
  * One repair analysis and one repair application over any number of channels.
  */
 
-import { audioDefectsFromNative, dbFromLinear, linearFromDb } from './internal/repair_common.js';
+import { audioDefectsFromNative } from './internal/repair_common.js';
 import { getSonareModule } from './module_state.js';
 import type { ProgressCallback } from './public_types.js';
 import type { MasteringAudioProfileDefects } from './public_types_mastering.js';
@@ -62,35 +62,6 @@ export type MasteringRepairStage =
       /** Stage to apply. */
       stage: 'dereverb';
     } & Omit<DereverbClassicalOptions, 'validate'>);
-
-/** Native stage settings still carry the declip level as the linear `clipThreshold`. */
-function stageToNative(stage: MasteringRepairStage): Record<string, unknown> {
-  const native: Record<string, unknown> = { ...stage };
-  if ('clipThreshold' in native) {
-    throw new TypeError(
-      "masteringRepairApply: unknown setting 'clipThreshold' (use clipThresholdDb)",
-    );
-  }
-  if (native.stage === 'declip' && native.clipThresholdDb !== undefined) {
-    native.clipThreshold = linearFromDb(
-      'masteringRepairApply',
-      'clipThresholdDb',
-      native.clipThresholdDb,
-    );
-  }
-  delete native.clipThresholdDb;
-  return native;
-}
-
-/** The inverse of {@link stageToNative}, for the stages the analysis recommends. */
-function stageFromNative(native: Record<string, unknown>): MasteringRepairStage {
-  const stage = { ...native };
-  if (stage.stage === 'declip' && typeof stage.clipThreshold === 'number') {
-    stage.clipThresholdDb = dbFromLinear(stage.clipThreshold);
-    delete stage.clipThreshold;
-  }
-  return stage as unknown as MasteringRepairStage;
-}
 
 /**
  * What {@link masteringRepairAnalyze} measured and recommends.
@@ -251,9 +222,6 @@ export function masteringRepairAnalyze(...args: unknown[]): MasteringRepairAnaly
       JSON.stringify(options),
     ),
   ) as MasteringRepairAnalysis;
-  analysis.recommended = (analysis.recommended as unknown as Record<string, unknown>[]).map(
-    stageFromNative,
-  );
   if (analysis.defects !== undefined) {
     analysis.defects = audioDefectsFromNative(analysis.defects);
     analysis.channels = analysis.channels?.map(audioDefectsFromNative);
@@ -292,7 +260,7 @@ export function masteringRepairApply(...args: unknown[]): MasteringRepairApplyRe
   const result = requireModule().masteringRepairApply(
     request.channels,
     request.sampleRate,
-    JSON.stringify(request.stages.map(stageToNative)),
+    JSON.stringify(request.stages),
     request.onProgress ?? null,
     request.cancel ?? null,
   );
