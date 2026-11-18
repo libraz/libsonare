@@ -197,7 +197,7 @@ function resolveEngineConfig(
 ): ResolvedEngineConfig {
   const request = requestObject(fnName, config, 'config', true);
   if (isAbsent(request.sampleRate)) {
-    throw new TypeError(`${fnName}: sampleRate is required`);
+    throw new TypeError(`${fnName}: sampleRate must be a number`);
   }
   const sampleRate = requireFinite(fnName, request.sampleRate, 'sampleRate');
   return {
@@ -1705,7 +1705,7 @@ export class RealtimeEngine {
     const fnName = 'configureCapture';
     const request = requestObject(fnName, options, 'options', true);
     if (isAbsent(request.capacityFrames)) {
-      throw new TypeError(`${fnName}: capacityFrames is required`);
+      throw new TypeError(`${fnName}: capacityFrames must be a number`);
     }
     const capacityFrames = request.capacityFrames as number;
     const numChannels = isAbsent(request.numChannels) ? 2 : (request.numChannels as number);

@@ -258,6 +258,7 @@ export class SonareEngine {
     const blockSize = offlineBlockSize ?? options.maxBlockSize ?? AUDIO_WORKLET_RENDER_QUANTUM;
     const numChannels = requireChannelCount(
       offlineNumChannels ?? options.numChannels,
+      'SonareEngine.create',
       offlineNumChannels === undefined ? 'numChannels' : 'offlineNumChannels',
     );
     const realtimeNode = await SonareRealtimeEngineNode.create(context, nodeOptions);

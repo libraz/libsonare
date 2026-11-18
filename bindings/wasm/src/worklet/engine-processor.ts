@@ -210,7 +210,11 @@ export class SonareRealtimeEngineWorkletProcessor {
     );
     this.clipPageRepostFrames = Math.max(1, Math.round(this.sampleRate * CLIP_PAGE_REPOST_SECONDS));
     this.blockSize = options.maxBlockSize ?? AUDIO_WORKLET_RENDER_QUANTUM;
-    this.numChannels = requireChannelCount(options.numChannels, 'numChannels');
+    this.numChannels = requireChannelCount(
+      options.numChannels,
+      'SonareRealtimeEngineWorkletProcessor',
+      'numChannels',
+    );
     this.transport = options.transport;
     // Zero is the off switch for meter publication, so the floor is 0.
     this.meterIntervalFrames = requireIntegerOption(

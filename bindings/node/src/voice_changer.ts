@@ -69,9 +69,6 @@ function flatConfigReference(): RealtimeVoiceChangerConfig {
 function assertFlatConfigFields(fnName: string, config: Record<string, unknown>): void {
   for (const [key, sample] of Object.entries(flatConfigReference())) {
     const value = config[key];
-    if (value === undefined) {
-      throw new TypeError(`${fnName}: ${key} is required`);
-    }
     if (key !== 'harmonySteps' && typeof value !== typeof sample) {
       throw new TypeError(`${fnName}: ${key} must be a ${typeof sample}`);
     }
@@ -482,7 +479,7 @@ export function voiceChangeRealtime(request: VoiceChangeRealtimeRequest): Float3
   const fnName = 'voiceChangeRealtime';
   const req = requestOnly<VoiceChangeRealtimeRequest>(fnName, [request]);
   if (req.sampleRate === undefined || req.sampleRate === null) {
-    throw new TypeError(`${fnName}: sampleRate is required`);
+    throw new TypeError(`${fnName}: sampleRate must be a number`);
   }
   assertAudioChannels(fnName, req.channels, req.sampleRate, req);
   const planes = assertPlanes(fnName, req.channels);

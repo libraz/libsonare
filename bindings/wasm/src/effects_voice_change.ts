@@ -101,7 +101,7 @@ export function voiceChangeRealtime(request: VoiceChangeRealtimeRequest): Float3
   const fnName = 'voiceChangeRealtime';
   const req = requestOnly<VoiceChangeRealtimeRequest>(fnName, [request]);
   if (req.sampleRate === undefined || req.sampleRate === null) {
-    throw new TypeError(`${fnName}: sampleRate is required`);
+    throw new TypeError(`${fnName}: sampleRate must be a number`);
   }
   assertAudioChannels(fnName, req.channels, req.sampleRate, req);
   const planes = req.channels;

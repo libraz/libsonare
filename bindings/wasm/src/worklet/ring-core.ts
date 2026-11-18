@@ -181,7 +181,7 @@ export function resolveRingOptions<K extends string>(
   for (const key of Object.keys(defaults) as K[]) {
     const value = given[key] ?? defaults[key];
     if (value === undefined) {
-      throw new TypeError(`${fn}: ${key} is required`);
+      throw new TypeError(`${fn}: ${key} must be a number`);
     }
     resolved[key] = value;
   }

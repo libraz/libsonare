@@ -89,8 +89,8 @@ export class SonareWorkletProcessor {
 
   constructor(options: SonareWorkletProcessorConstructorOptions) {
     assertKnownProcessorOptions('SonareWorkletProcessor', 'mixerProcessorConstructor', options);
-    if (!options.sceneJson) {
-      throw new TypeError('sceneJson is required.');
+    if (typeof options.sceneJson !== 'string') {
+      throw new TypeError('SonareWorkletProcessor: sceneJson must be a string');
     }
     this.sampleRate = resolveScopeSampleRate(options.sampleRate, 'SonareWorkletProcessor');
     this.maxBlockSize = options.maxBlockSize ?? AUDIO_WORKLET_RENDER_QUANTUM;

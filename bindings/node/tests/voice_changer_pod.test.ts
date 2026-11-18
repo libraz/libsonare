@@ -148,7 +148,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
     ).toThrow(TypeError);
     expect(
       () => new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1, config: podWithoutMode }),
-    ).toThrow(/formantMode is required/);
+    ).toThrow(/RealtimeVoiceChanger: formantMode must be a string/);
     const vc = new RealtimeVoiceChanger({ sampleRate: 48000, numChannels: 1, config: pod });
     try {
       expect(() => vc.setConfig(podWithoutMode)).toThrow(TypeError);

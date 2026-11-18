@@ -32,9 +32,6 @@ function flatConfigReference(): RealtimeVoiceChangerConfig {
 function assertFlatConfigFields(fnName: string, config: Record<string, unknown>): void {
   for (const [key, sample] of Object.entries(flatConfigReference())) {
     const value = config[key];
-    if (value === undefined) {
-      throw new TypeError(`${fnName}: ${key} is required`);
-    }
     if (key !== 'harmonySteps' && typeof value !== typeof sample) {
       throw new TypeError(`${fnName}: ${key} must be a ${typeof sample}`);
     }

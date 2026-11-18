@@ -491,7 +491,11 @@ export class SonareRealtimeEngineNode {
       mode === 'sab'
         ? createExternalMidiRingBuffer({ capacity: externalMidiRingCapacity })
         : undefined;
-    const channelCount = requireChannelCount(options.numChannels, 'numChannels');
+    const channelCount = requireChannelCount(
+      options.numChannels,
+      'SonareRealtimeEngineNode.create',
+      'numChannels',
+    );
     const cueOutput = options.cueOutput === true;
     const processorOptions: SonareRealtimeEngineWorkletProcessorOptions = {
       sampleRate,

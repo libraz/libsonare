@@ -309,7 +309,9 @@ describe('RealtimeVoiceChanger flat config setConfig', () => {
     const { formantMode: _omitted, ...partial } = pod;
     const podWithoutMode = partial as unknown as RealtimeVoiceChangerConfig;
     expect(() => make(podWithoutMode)).toThrow(TypeError);
-    expect(() => make(podWithoutMode)).toThrow(/formantMode is required/);
+    expect(() => make(podWithoutMode)).toThrow(
+      /RealtimeVoiceChanger: formantMode must be a string/,
+    );
     const changer = make(pod);
     try {
       expect(() => changer.setConfig(podWithoutMode)).toThrow(TypeError);
