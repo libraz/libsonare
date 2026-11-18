@@ -9,6 +9,8 @@ from typing import Any, Literal, NamedTuple, NotRequired, TypeAlias, TypedDict
 import numpy as np
 from numpy.typing import NDArray
 
+from ._project_model import ProjectLoopMode, ProjectSourceKind, ProjectTrackKind
+
 FloatSamples: TypeAlias = Sequence[float] | list[float] | np.ndarray[Any, Any]
 # Planar audio: one buffer per channel, or a 2-D (channels, frames) array.
 PlanarChannels: TypeAlias = Sequence[FloatSamples] | np.ndarray[Any, Any]
@@ -2565,7 +2567,7 @@ class ProjectMarker:
 
 class ProjectTrack:
     id: int
-    kind: int
+    kind: ProjectTrackKind
     midi_destination_id: int
     gain: float
     pan: float
@@ -2575,7 +2577,7 @@ class ProjectTrack:
     def __init__(
         self,
         id: int,
-        kind: int,
+        kind: ProjectTrackKind,
         midi_destination_id: int,
         gain: float,
         pan: float,
@@ -2588,30 +2590,30 @@ class ProjectClip:
     id: int
     track_id: int
     source_id: int
-    source_kind: int
+    source_kind: ProjectSourceKind
     start_ppq: float
     length_ppq: float
     source_offset_ppq: float
     gain: float
-    loop_mode: int
+    loop_mode: ProjectLoopMode
     loop_length_ppq: float
     def __init__(
         self,
         id: int,
         track_id: int,
         source_id: int,
-        source_kind: int,
+        source_kind: ProjectSourceKind,
         start_ppq: float,
         length_ppq: float,
         source_offset_ppq: float,
         gain: float,
-        loop_mode: int,
+        loop_mode: ProjectLoopMode,
         loop_length_ppq: float,
     ) -> None: ...
 
 class ProjectSource:
     id: int
-    kind: int
+    kind: ProjectSourceKind
     num_channels: int
     storage_handle_id: int
     sample_rate_hint: float
@@ -2621,7 +2623,7 @@ class ProjectSource:
     def __init__(
         self,
         id: int,
-        kind: int,
+        kind: ProjectSourceKind,
         num_channels: int,
         storage_handle_id: int,
         sample_rate_hint: float,

@@ -83,7 +83,7 @@ def test_reads_stored_tracks_clips_and_sources_by_index() -> None:
 
         track = project.track_by_index(0)
         assert track.id == track_id
-        assert track.kind == 0
+        assert track.kind == "audio"
         assert track.name == "readback"
         assert track.gain == 1.0
         assert track.pan == 0.0
@@ -93,17 +93,17 @@ def test_reads_stored_tracks_clips_and_sources_by_index() -> None:
         clip = project.clip_by_index(0)
         assert clip.id == clip_id
         assert clip.track_id == track_id
-        assert clip.source_kind == 0
+        assert clip.source_kind == "audio"
         assert clip.start_ppq == 2.0
         assert clip.length_ppq == 4.0
         assert clip.source_offset_ppq == 1.0
         assert clip.gain == 0.75
-        assert clip.loop_mode == 0
+        assert clip.loop_mode == "off"
         assert clip.loop_length_ppq == 0.0
 
         source = project.source_by_index(0)
         assert source.id == clip.source_id
-        assert source.kind == 0
+        assert source.kind == "audio"
         assert source.name_or_uri == "asset://readback.wav"
         assert source.content_hash == ""
         assert source.external_stem_role == ""
@@ -156,6 +156,21 @@ def test_audio_source_metadata_roundtrips_clears_and_undoes() -> None:
             assert source.external_stem_role == "vocals"
         finally:
             restored.close()
+    finally:
+        project.close()
+
+
+def test_project_track_clip_and_source_descriptors_read_as_tokens() -> None:
+    project = Project()
+    try:
+        aux = project.add_track("aux", "fx")
+        midi_track, midi_clip = project.add_midi_clip(0.0, 4.0)
+        project.set_clip_loop(midi_clip, "loop", 2.0)
+        kinds = {project.track_by_index(i).id: project.track_by_index(i).kind for i in range(2)}
+        assert kinds == {aux: "aux", midi_track: "midi"}
+        clip = project.clip_by_index(0)
+        assert (clip.source_kind, clip.loop_mode) == ("midi", "loop")
+        assert project.source_by_index(0).kind == "midi"
     finally:
         project.close()
 
@@ -291,7 +306,7 @@ def test_unresolved_audio_sources_carry_full_uri_and_metadata() -> None:
             sources = restored.unresolved_audio_sources()
             assert [source.id for source in sources] == ids
             assert sources[0].name_or_uri == long_uri
-            assert sources[0].kind == 0
+            assert sources[0].kind == "audio"
             assert sources[1].name_or_uri == "asset://stem.wav"
             assert sources[1].content_hash == "sha256:abc"
             assert sources[1].external_stem_role == "vocals"

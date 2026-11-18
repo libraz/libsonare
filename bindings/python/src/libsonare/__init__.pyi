@@ -28,6 +28,7 @@ from ._project import ProjectKeyMode as ProjectKeyMode
 from ._project import ProjectLoopMode as ProjectLoopMode
 from ._project import ProjectMidiCcBindingKind as ProjectMidiCcBindingKind
 from ._project import ProjectOverlapPolicy as ProjectOverlapPolicy
+from ._project import ProjectSourceKind as ProjectSourceKind
 from ._project import ProjectStemLayout as ProjectStemLayout
 from ._project import ProjectTimeline as ProjectTimeline
 from ._project import ProjectTrackKind as ProjectTrackKind

@@ -13,10 +13,16 @@ from ._engine_conversions import _marker_kind_name, _marker_kind_value
 from ._narrowing import _narrow_double
 from ._project_model import *  # noqa: F403
 from ._project_model import (
+    _LOOP_MODES,
     _NO_PITCH_CLASS,
     _OVERLAP_POLICIES,
     _PROJECT_CHORD_QUALITIES,
     _PROJECT_KEY_MODES,
+    _SOURCE_KINDS,
+    _TRACK_KINDS,
+    ProjectLoopMode,
+    ProjectSourceKind,
+    ProjectTrackKind,
     _absent_or_in_range,
 )
 from ._project_synth import (
@@ -524,7 +530,7 @@ class _ProjectInspectionMixin:
         )
         return ProjectTrack(
             id=int(raw.id),
-            kind=int(raw.kind),
+            kind=cast(ProjectTrackKind, _TRACK_KINDS[int(raw.kind)]),
             midi_destination_id=int(raw.midi_destination_id),
             gain=float(raw.gain),
             pan=float(raw.pan),
@@ -545,12 +551,12 @@ class _ProjectInspectionMixin:
             id=int(raw.id),
             track_id=int(raw.track_id),
             source_id=int(raw.source_id),
-            source_kind=int(raw.source_kind),
+            source_kind=cast(ProjectSourceKind, _SOURCE_KINDS[int(raw.source_kind)]),
             start_ppq=float(raw.start_ppq),
             length_ppq=float(raw.length_ppq),
             source_offset_ppq=float(raw.source_offset_ppq),
             gain=float(raw.gain),
-            loop_mode=int(raw.loop_mode),
+            loop_mode=cast(ProjectLoopMode, _LOOP_MODES[int(raw.loop_mode)]),
             loop_length_ppq=float(raw.loop_length_ppq),
         )
 
@@ -612,7 +618,7 @@ class _ProjectInspectionMixin:
                     lib.sonare_free_string(uri)
         return ProjectSource(
             id=int(raw.id),
-            kind=int(raw.kind),
+            kind=cast(ProjectSourceKind, _SOURCE_KINDS[int(raw.kind)]),
             num_channels=int(raw.num_channels),
             storage_handle_id=int(raw.storage_handle_id),
             sample_rate_hint=float(raw.sample_rate_hint),

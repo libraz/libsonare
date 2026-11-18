@@ -7,7 +7,7 @@ between languages see the same names. They intentionally violate PEP8 N802.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal, get_args
+from typing import TYPE_CHECKING, Literal, get_args
 
 import numpy as np
 
@@ -21,6 +21,9 @@ from ._types_enums import (
     ProjectWarpMode,
     SectionType,
 )
+
+if TYPE_CHECKING:
+    from ._project_model import ProjectLoopMode, ProjectSourceKind, ProjectTrackKind
 
 
 @dataclass(frozen=True, slots=True)
@@ -250,8 +253,8 @@ class ProjectTrack:
 
     id: int
     """Track id."""
-    kind: int
-    """Track kind ordinal: 0 audio, 1 MIDI, 2 aux."""
+    kind: ProjectTrackKind
+    """What the track carries (:data:`ProjectTrackKind`)."""
     midi_destination_id: int
     """MIDI destination id the track routes to."""
     gain: float
@@ -276,8 +279,8 @@ class ProjectClip:
     """Id of the track holding the clip."""
     source_id: int
     """Id of the clip's source."""
-    source_kind: int
-    """Kind of the source: 0 audio, 1 MIDI."""
+    source_kind: ProjectSourceKind
+    """What the clip's source holds (:data:`ProjectSourceKind`)."""
     start_ppq: float
     """Clip start position in PPQ."""
     length_ppq: float
@@ -286,8 +289,8 @@ class ProjectClip:
     """Offset into the source in PPQ where the clip starts reading."""
     gain: float
     """Linear gain of the clip."""
-    loop_mode: int
-    """Loop mode ordinal: 0 off, 1 loop."""
+    loop_mode: ProjectLoopMode
+    """Whether the clip loops (:data:`ProjectLoopMode`)."""
     loop_length_ppq: float
     """Loop length in PPQ."""
 
@@ -298,8 +301,8 @@ class ProjectSource:
 
     id: int
     """Source id."""
-    kind: int
-    """Source kind: 0 audio, 1 MIDI."""
+    kind: ProjectSourceKind
+    """What the source holds (:data:`ProjectSourceKind`)."""
     num_channels: int
     """Number of channels."""
     storage_handle_id: int

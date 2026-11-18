@@ -194,6 +194,11 @@ ProjectTrackKind: TypeAlias = Literal["audio", "midi", "aux"]
 """What a track carries: audio clips, MIDI clips, or an auxiliary bus."""
 _TRACK_KINDS: tuple[str, ...] = get_args(ProjectTrackKind)
 
+# Source kind; a token's index is its SonareProjectSourceKind ordinal.
+ProjectSourceKind: TypeAlias = Literal["audio", "midi"]
+"""What a project source holds: decoded audio or MIDI events."""
+_SOURCE_KINDS: tuple[str, ...] = get_args(ProjectSourceKind)
+
 # External stem layout; a token's index plus one is its SonareExternalStemLayout value.
 ProjectStemLayout: TypeAlias = Literal["mono", "stereo"]
 """Channel layout of one stem given to :meth:`Project.import_external_stems`."""

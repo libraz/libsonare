@@ -9212,3 +9212,35 @@ old = "Project.set_midi_fx"
 removed = "call bake_midi_fx, the same destructive bake"
 domain = "project"
 rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "ProjectTrack.kind"
+changed = "a ProjectTrackKind token ('audio', 'midi', 'aux') instead of an ordinal"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_project.py::test_project_track_clip_and_source_descriptors_read_as_tokens"
+
+[[entry]]
+kind = "field"
+old = "ProjectClip.source_kind"
+changed = "a ProjectSourceKind token ('audio', 'midi') instead of an ordinal"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_project.py::test_project_track_clip_and_source_descriptors_read_as_tokens"
+
+[[entry]]
+kind = "field"
+old = "ProjectClip.loop_mode"
+changed = "a ProjectLoopMode token ('off', 'loop') instead of an ordinal"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_project.py::test_project_track_clip_and_source_descriptors_read_as_tokens"
+
+[[entry]]
+kind = "field"
+old = "ProjectSource.kind"
+changed = "a ProjectSourceKind token ('audio', 'midi') instead of an ordinal"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_project.py::test_project_track_clip_and_source_descriptors_read_as_tokens"
