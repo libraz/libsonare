@@ -899,7 +899,7 @@ def master_audio(
     c_array, length = _to_c_float_array(samples)
     audio = (c_array, _to_c_size_t(length, "length"), _to_c_int(sample_rate, "sample_rate"))
     if preset is None and overrides is None:
-        raise SonareValueError("master_audio: give a preset or overrides")
+        raise SonareValueError("master_audio: give preset or overrides")
     head: tuple[Any, ...]
     if preset is None:
         symbol, head = "sonare_mastering_chain", audio
@@ -948,7 +948,7 @@ def master_audio_stereo(
         _to_c_int(sample_rate, "sample_rate"),
     )
     if preset is None and overrides is None:
-        raise SonareValueError("master_audio_stereo: give a preset or overrides")
+        raise SonareValueError("master_audio_stereo: give preset or overrides")
     head: tuple[Any, ...]
     if preset is None:
         symbol, head = "sonare_mastering_chain_stereo", audio
