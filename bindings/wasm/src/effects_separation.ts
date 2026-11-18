@@ -6,7 +6,7 @@
 import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type { HpssResult } from './public_types.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertHpssKernels,
@@ -19,7 +19,7 @@ function requireModule() {
 }
 
 /** Canonical request form for HPSS. */
-export interface HpssRequest extends ValidateOptions {
+export interface HpssRequest {
   /** Mono input audio. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
@@ -41,7 +41,7 @@ export interface HpssRequest extends ValidateOptions {
 }
 
 /** Request for {@link harmonic}. */
-export interface HarmonicRequest extends ValidateOptions {
+export interface HarmonicRequest {
   /** Mono input audio. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
@@ -49,7 +49,7 @@ export interface HarmonicRequest extends ValidateOptions {
 }
 
 /** Request for {@link percussive}. */
-export interface PercussiveRequest extends ValidateOptions {
+export interface PercussiveRequest {
   /** Mono input audio. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */

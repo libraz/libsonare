@@ -47,7 +47,7 @@ export function transcribe(
 export function transcribe(...args: unknown[]): TranscribeResult {
   const request = sampleOneShot<TranscribeRequest>('transcribe', args);
   assertAudioInput('transcribe', request.samples, request.sampleRate, request);
-  const { validate: _validate, ...rest } = request;
+  const { ...rest } = request;
   if (rest.tempoBpm !== undefined && rest.tempoBpm !== null) {
     assertPositiveFloatValue('transcribe', rest.tempoBpm, 'tempoBpm');
   }

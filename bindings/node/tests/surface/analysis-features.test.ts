@@ -154,10 +154,20 @@ describe('sample-taking functions', () => {
     expectThrows(() => sonare.zeroCrossingRate(bad, sampleRate), RangeError);
   });
 
-  it.each(SAMPLE_FUNCTIONS)('%s declares validate as an option of the request', (name, options) => {
+  it.each(SAMPLE_FUNCTIONS)('%s refuses validate as an unknown request key', (name, options) => {
     const fn = api[name] as (...args: unknown[]) => unknown;
-    expect(() => fn({ samples, sampleRate, ...options, validate: false })).not.toThrow();
-    expect(() => fn(samples, sampleRate, { ...options, validate: true })).not.toThrow();
+    const message = `${name}: unknown request key 'validate'`;
+    expect(() => fn({ samples, sampleRate, ...options, validate: false })).toThrow(message);
+    expect(() => fn(samples, sampleRate, { ...options, validate: true })).toThrow(
+      `${name}: unknown option 'validate'`,
+    );
+  });
+
+  it.each(SAMPLE_FUNCTIONS)('%s refuses a non-finite sample', (name, options) => {
+    const fn = api[name] as (...args: unknown[]) => unknown;
+    const bad = new Float32Array(samples);
+    bad[10] = Number.NaN;
+    expectThrows(() => fn({ samples: bad, sampleRate, ...options }), RangeError);
   });
 
   it('splitSilenceCommon and its report variant take a request only', () => {

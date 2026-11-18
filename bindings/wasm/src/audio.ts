@@ -142,7 +142,7 @@ import {
   detectKeyCandidates,
   detectOnsets,
 } from './quick_analysis.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import { requireToken, validateAudioBuffer } from './validation.js';
 
 // ============================================================================
@@ -840,7 +840,7 @@ export class Audio {
   }
 
   /** Magnitude, power and dB spectrum of the held audio. */
-  spectrum(options: SpectrumOptions & ValidateOptions = {}): SpectrumReport {
+  spectrum(options: SpectrumOptions = {}): SpectrumReport {
     return meteringSpectrum(this.samples, this.sampleRate, options);
   }
 
@@ -848,7 +848,7 @@ export class Audio {
    * True single-frame magnitude / power / dB spectrum starting at sample
    * `startSample`. See {@link meteringSpectrumFrame} for the frame-validation contract.
    */
-  spectrumFrame(startSample = 0, options: SpectrumOptions & ValidateOptions = {}): SpectrumReport {
+  spectrumFrame(startSample = 0, options: SpectrumOptions = {}): SpectrumReport {
     return meteringSpectrumFrame(this.samples, this.sampleRate, { ...options, startSample });
   }
 

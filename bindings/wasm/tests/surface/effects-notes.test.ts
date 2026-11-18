@@ -71,6 +71,9 @@ function maxDiff(a: Float32Array, b: Float32Array): number {
 type Loose = (...args: unknown[]) => unknown;
 const loose = (fn: unknown): Loose => fn as Loose;
 
+/** A removed option, typed so it passes the excess-property check. */
+const NOT_AN_OPTION: object = { validate: false };
+
 describe('effects notes surface', () => {
   beforeAll(async () => {
     await init();
@@ -431,39 +434,66 @@ describe('effects notes surface', () => {
     ).toBeInstanceOf(RangeError);
   });
 
-  it.each([
-    ['timeStretch', () => timeStretch({ samples, sampleRate, speedRatio: 1.1, validate: false })],
-    ['pitchShift', () => pitchShift({ samples, sampleRate, pitchSemitones: 1, validate: false })],
+  it.each<[string, (s: Float32Array, x: object) => unknown]>([
+    [
+      'timeStretch',
+      (s: Float32Array, x: object) =>
+        timeStretch({ samples: s, sampleRate, speedRatio: 1.1, ...x }),
+    ],
+    [
+      'pitchShift',
+      (s: Float32Array, x: object) =>
+        pitchShift({ samples: s, sampleRate, pitchSemitones: 1, ...x }),
+    ],
     [
       'pitchCorrectToMidi',
-      () =>
+      (s: Float32Array, x: object) =>
         pitchCorrectToMidi({
-          samples,
+          samples: s,
           sampleRate,
           currentMidi: 60,
           targetMidi: 61,
-          validate: false,
+          ...x,
         }),
     ],
-    ['noteStretch', () => noteStretch({ samples, sampleRate, stretchRatio: 1.1, validate: false })],
-    ['noteMove', () => noteMove({ samples, sampleRate, targetOnsetSample: 10, validate: false })],
-    ['spectralEdit', () => spectralEdit({ samples, sampleRate, ops: [], validate: false })],
+    [
+      'noteStretch',
+      (s: Float32Array, x: object) =>
+        noteStretch({ samples: s, sampleRate, stretchRatio: 1.1, ...x }),
+    ],
+    [
+      'noteMove',
+      (s: Float32Array, x: object) =>
+        noteMove({ samples: s, sampleRate, targetOnsetSample: 10, ...x }),
+    ],
+    [
+      'spectralEdit',
+      (s: Float32Array, x: object) => spectralEdit({ samples: s, sampleRate, ops: [], ...x }),
+    ],
     [
       'pitchCorrectTimevarying',
-      () => pitchCorrectTimevarying({ samples, sampleRate, f0Hz, validate: false }),
+      (s: Float32Array, x: object) =>
+        pitchCorrectTimevarying({ samples: s, sampleRate, f0Hz, ...x }),
     ],
-    ['autoTune', () => autoTune({ samples, sampleRate, validate: false })],
-    ['renderNotes', () => renderNotes({ samples, sampleRate, notes: [], validate: false })],
+    ['autoTune', (s: Float32Array, x: object) => autoTune({ samples: s, sampleRate, ...x })],
+    [
+      'renderNotes',
+      (s: Float32Array, x: object) => renderNotes({ samples: s, sampleRate, notes: [], ...x }),
+    ],
     [
       'renderPercussiveEvents',
-      () => renderPercussiveEvents({ samples, sampleRate, events: [], validate: false }),
+      (s: Float32Array, x: object) =>
+        renderPercussiveEvents({ samples: s, sampleRate, events: [], ...x }),
     ],
     [
       'extractPercussiveEvents',
-      () => extractPercussiveEvents({ samples, sampleRate, validate: false }),
+      (s: Float32Array, x: object) => extractPercussiveEvents({ samples: s, sampleRate, ...x }),
     ],
-  ])('accepts validate on %s', (_name, call) => {
-    expect(() => call()).not.toThrow();
+  ])('%s refuses a validate key and non-finite samples', (name, call) => {
+    expect(() => call(samples, NOT_AN_OPTION)).toThrow(`${name}: unknown request key 'validate'`);
+    const bad = Float32Array.from(samples);
+    bad[10] = Number.NaN;
+    expect(() => call(bad, {})).toThrow(RangeError);
   });
 
   it.each([

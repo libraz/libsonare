@@ -27,7 +27,6 @@ import type {
 import type { SonareModule } from './sonare.js';
 import {
   assertAudioInput,
-  optionalBoolean,
   requestObject,
   requireSampleBound,
   resolveSampleBound,
@@ -493,7 +492,6 @@ function validateCreate(request: VocalCreateRequest): void {
   if (!request || typeof request !== 'object') {
     throw new TypeError('request must be an object');
   }
-  optionalBoolean('createVocalEditSession', request.validate, 'validate', true);
   assertAudioInput('createVocalEditSession', request.samples, request.sampleRate, request);
   if (request.outputLengthSamples !== undefined) {
     requireSample(request.outputLengthSamples, 'outputLengthSamples');
@@ -598,7 +596,6 @@ export function createVocalEditSession(request: VocalCreateRequest): VocalEditSe
 /** Open a new session from an exported state blob and the same source PCM. */
 export function restoreVocalEditSession(request: VocalRestoreRequest): VocalEditSession {
   requestObject('restoreVocalEditSession', request, 'request', true);
-  optionalBoolean('restoreVocalEditSession', request.validate, 'validate', true);
   assertAudioInput('restoreVocalEditSession', request.samples, request.sampleRate, request);
   if (!(request.state instanceof Uint8Array)) {
     throw new TypeError('state must be a Uint8Array');

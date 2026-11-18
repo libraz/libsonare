@@ -179,8 +179,17 @@ describe('analysis features: sample-taking one-shots', () => {
     expect(viaPositional).toEqual(viaRequest);
   });
 
-  it.each(sampleTaking)('%s accepts validate: false', (_name, fn, extra) => {
-    expect(() => fn(samples, sr, { ...extra, validate: false })).not.toThrow();
+  it.each(sampleTaking)('%s refuses validate as an unknown option', (_name, fn, extra) => {
+    expect(() => fn(samples, sr, { ...extra, validate: false } as never)).toThrow(
+      /unknown option 'validate'/,
+    );
+  });
+
+  it.each(sampleTaking)('%s refuses non-finite samples with RangeError', (_name, fn, extra) => {
+    const bad = Float32Array.from(samples);
+    bad[10] = Number.NaN;
+    expect(caught(() => fn(bad, sr, extra))).toBeInstanceOf(RangeError);
+    expect(caught(() => fn({ samples: bad, sampleRate: sr, ...extra }))).toBeInstanceOf(RangeError);
   });
 
   it('refuses an unknown option by name in the positional form', () => {

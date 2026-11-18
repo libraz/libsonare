@@ -3,7 +3,6 @@
  * their input checks.
  */
 
-import type { GuardedOptions } from './internal/feature_validation.js';
 import { validatePositiveIntegers } from './internal/feature_validation.js';
 import { resolveFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
@@ -34,7 +33,7 @@ function requireModule() {
 }
 
 /** STFT request. */
-export interface StftRequest extends GuardedOptions {
+export interface StftRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -46,7 +45,7 @@ export interface StftRequest extends GuardedOptions {
 }
 
 /** STFT-in-dB request. */
-export interface StftDbRequest extends GuardedOptions {
+export interface StftDbRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -58,7 +57,7 @@ export interface StftDbRequest extends GuardedOptions {
 }
 
 /** STFT chromagram request. */
-export interface ChromaRequest extends GuardedOptions {
+export interface ChromaRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -73,7 +72,7 @@ export interface ChromaRequest extends GuardedOptions {
  * Chroma-energy-normalized request. Carries no `nFft`: it is built on a
  * constant-Q transform, which has no FFT size to set.
  */
-export interface ChromaCensRequest extends GuardedOptions {
+export interface ChromaCensRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -87,7 +86,7 @@ export interface ChromaCensRequest extends GuardedOptions {
 }
 
 /** Constant-Q chromagram request. Carries no `nFft`, like {@link ChromaCensRequest}. */
-export interface ChromaCqtRequest extends GuardedOptions {
+export interface ChromaCqtRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -104,7 +103,7 @@ export interface ChromaCqtRequest extends GuardedOptions {
  * Bass-focused chroma request. Carries no `binsPerOctave`: the bass chroma fixes
  * its bin count and its lowest frequency together.
  */
-export interface BassChromaRequest extends GuardedOptions {
+export interface BassChromaRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -116,7 +115,7 @@ export interface BassChromaRequest extends GuardedOptions {
 }
 
 /** Mel spectrogram request. */
-export interface MelSpectrogramRequest extends GuardedOptions {
+export interface MelSpectrogramRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -136,7 +135,7 @@ export interface MelSpectrogramRequest extends GuardedOptions {
 }
 
 /** MFCC request. */
-export interface MfccRequest extends GuardedOptions {
+export interface MfccRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -160,7 +159,7 @@ export interface MfccRequest extends GuardedOptions {
 }
 
 /** First-order delta request. */
-export interface MelDeltaRequest extends GuardedOptions {
+export interface MelDeltaRequest {
   /** Rows are features, cols are frames. */
   features: Matrix2D;
   /** Regression window, odd and at least 3. Default 9. */
@@ -168,7 +167,7 @@ export interface MelDeltaRequest extends GuardedOptions {
 }
 
 /** Reassigned spectrogram request. */
-export interface ReassignedSpectrogramRequest extends GuardedOptions {
+export interface ReassignedSpectrogramRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -184,7 +183,7 @@ export interface ReassignedSpectrogramRequest extends GuardedOptions {
 }
 
 /** Request for {@link trim}. */
-export interface TrimRequest extends GuardedOptions {
+export interface TrimRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
@@ -471,7 +470,7 @@ export function mfcc(...args: unknown[]): MfccResult {
 export function melDelta(request: MelDeltaRequest): Matrix2D;
 export function melDelta(...args: unknown[]): Matrix2D {
   const r = requestOnly<MelDeltaRequest>('melDelta', args);
-  const features = assertMatrix2D('melDelta', r.features, 'features', r.validate !== false);
+  const features = assertMatrix2D('melDelta', r.features, 'features');
   const width = r.width ?? 9;
   assertPositiveInteger('melDelta', width, 'width');
   if (width < 3 || width % 2 === 0) {

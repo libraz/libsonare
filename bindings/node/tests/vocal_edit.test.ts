@@ -629,13 +629,10 @@ describe('Node vocal edit facade', () => {
     }
   });
 
-  it('reads the validate flag of create and restore as the finiteness-scan switch', () => {
+  it('always scans create and restore input and refuses a validate key', () => {
     const bad = sine();
     bad[10] = Number.NaN;
     expect(() => createVocalEditSession({ ...request(bad) })).toThrow(/NaN or Inf at index 10/);
-    expect(() => createVocalEditSession({ ...request(bad), validate: true })).toThrow(
-      /NaN or Inf at index 10/,
-    );
     expect(() =>
       restoreVocalEditSession({
         samples: bad,
@@ -643,25 +640,17 @@ describe('Node vocal edit facade', () => {
         state: new Uint8Array(8),
       }),
     ).toThrow(/NaN or Inf at index 10/);
-    // validate:false is a facade-only key; a refusal now comes from further down, not this scan.
-    for (const attempt of [
-      () => createVocalEditSession({ ...request(bad), validate: false }),
-      () =>
-        restoreVocalEditSession({
-          samples: bad,
-          sampleRate: SAMPLE_RATE,
-          state: new Uint8Array(8),
-          validate: false,
-        }),
-    ]) {
-      try {
-        attempt().destroy();
-      } catch (error) {
-        expect((error as Error).message).not.toMatch(/NaN or Inf at index/);
-      }
-    }
-    const good = createVocalEditSession({ ...request(), validate: false });
-    good.destroy();
+    expect(() => createVocalEditSession({ ...request(), validate: false } as never)).toThrow(
+      /createVocalEditSession: unknown request key 'validate'/,
+    );
+    expect(() =>
+      restoreVocalEditSession({
+        samples: sine(),
+        sampleRate: SAMPLE_RATE,
+        state: new Uint8Array(8),
+        validate: false,
+      } as never),
+    ).toThrow(/unknown request key 'validate'/);
   });
 
   it('reads the limits byte fields as numbers and refuses a decimal string', () => {

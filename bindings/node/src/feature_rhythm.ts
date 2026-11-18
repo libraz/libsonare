@@ -87,8 +87,6 @@ export interface FourierTempogramRequest {
   winLength?: number;
   /** Centre the windows. Default `true`. */
   center?: boolean;
-  /** `false` skips the NaN/Inf pre-scan of the envelope. Default `true`. */
-  validate?: boolean;
 }
 
 /**
@@ -122,8 +120,6 @@ export interface OnsetStrengthRequest {
   hopLength?: number;
   /** Mel bands the flux is taken over. Default 128. */
   nMels?: number;
-  /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link onsetStrengthMulti}. */
@@ -140,8 +136,6 @@ export interface OnsetStrengthMultiRequest {
   hopLength?: number;
   /** Mel bands the flux is taken over. Default `128`. */
   nMels?: number;
-  /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link tempogramRatio}. */
@@ -159,8 +153,6 @@ export interface TempogramRatioRequest {
    * folded an out-of-range entry to an infinity before the call.
    */
   factors?: Float32Array | number[];
-  /** `false` skips the NaN/Inf pre-scan of the tempogram. Default `true`. */
-  validate?: boolean;
 }
 
 /** Rolls onset events back to the preceding energy minimum. Request-only. */
@@ -338,7 +330,7 @@ export function fourierTempogram(...args: unknown[]): Matrix2D {
   assertSampleRate('fourierTempogram', sampleRate);
   assertPositiveInteger('fourierTempogram', r.hopLength ?? 512, 'hopLength');
   assertPositiveInteger('fourierTempogram', r.winLength ?? 384, 'winLength');
-  assertFiniteSamples('fourierTempogram', r.onsetEnvelope, r.validate !== false, 'onsetEnvelope');
+  assertFiniteSamples('fourierTempogram', r.onsetEnvelope, true, 'onsetEnvelope');
   const out = addon.fourierTempogram(
     r.onsetEnvelope,
     sampleRate,
@@ -356,7 +348,7 @@ export function tempogramRatio(...args: unknown[]): Float32Array {
   const r = requestOnly<TempogramRatioRequest>('tempogramRatio', args);
   const sampleRate = r.sampleRate ?? 22050;
   assertSampleRate('tempogramRatio', sampleRate);
-  assertMatrix2D('tempogramRatio', r.tempogram, 'tempogram', r.validate);
+  assertMatrix2D('tempogramRatio', r.tempogram, 'tempogram');
   assertPositiveInteger('tempogramRatio', r.hopLength ?? 512, 'hopLength');
   return addon.tempogramRatio(
     r.tempogram.data,

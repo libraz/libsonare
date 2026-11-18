@@ -796,11 +796,6 @@ export interface RenderOfflineRequest {
    * boundary. Audio stays continuous either way; only bit-identity is lost.
    */
   finalize?: boolean;
-  /**
-   * Whether `channels` is scanned for NaN and Inf before rendering (a `RangeError`
-   * on a hit). Default `true`; `false` skips the O(n) scan.
-   */
-  validate?: boolean;
 }
 
 /**

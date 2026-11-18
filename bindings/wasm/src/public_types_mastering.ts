@@ -7,7 +7,6 @@ import type {
   NoiseDetection,
   ReverbDetection,
 } from './public_types_repair.js';
-import type { ValidateOptions } from './validation.js';
 
 /**
  * Built-in mastering presets. The restoration presets — `vinyl`, `tapeHiss`,
@@ -13451,7 +13450,7 @@ export interface StereoAnalysisResultMap {
 }
 
 /** Options of {@link masteringNormalizeLoudness}. All fields are optional. */
-export interface MasteringNormalizeLoudnessOptions extends ValidateOptions {
+export interface MasteringNormalizeLoudnessOptions {
   /** Target integrated LUFS. Default -14. */
   targetLufs?: number;
   /**

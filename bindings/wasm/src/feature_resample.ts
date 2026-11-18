@@ -50,7 +50,7 @@ export function resample(...args: unknown[]): Float32Array {
     request = requestOnly<ResampleRequest>('resample', args);
   }
   // Type and emptiness only: rate range and non-finite samples are the core's to refuse.
-  assertAudioSamples('resample', request.samples, { validate: false });
+  assertAudioSamples('resample', request.samples, { scanFinite: false });
   assertInt32('resample', request.sampleRate, 'sampleRate');
   assertInt32('resample', request.targetSampleRate, 'targetSampleRate');
   return requireModule().resample(request.samples, request.sampleRate, request.targetSampleRate);

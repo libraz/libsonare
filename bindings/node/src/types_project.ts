@@ -1069,8 +1069,6 @@ export interface TranscribeRequest extends TranscribeOptions {
   samples: Float32Array;
   /** Sample rate of {@link samples}, in Hz. */
   sampleRate: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
-  validate?: boolean;
   /**
    * The tempo the PPQ grid is built on, in BPM. Omit it to have it detected
    * from {@link samples}, which costs an onset/tempo pass. A value `<= 0` is a

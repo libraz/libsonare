@@ -1504,7 +1504,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts the reque
 [[entry]]
 kind = "function"
 old = "resample"
-changed = "one positional form (resample(samples, sampleRate, targetSampleRate)); request ResampleRequest {samples, sampleRate, targetSampleRate, validate?}"
+changed = "one positional form (resample(samples, sampleRate, targetSampleRate)); request ResampleRequest {samples, sampleRate, targetSampleRate}"
 domain = "analysis"
 rule = "sample-rate-name"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::resamples by source and target rate"
@@ -1512,7 +1512,7 @@ test = "bindings/wasm/tests/surface/analysis-features.test.ts::resamples by sour
 [[entry]]
 kind = "function"
 old = "resample"
-changed = "one positional form (resample(samples, sampleRate, targetSampleRate)); request ResampleRequest {samples, sampleRate, targetSampleRate, validate?}"
+changed = "one positional form (resample(samples, sampleRate, targetSampleRate)); request ResampleRequest {samples, sampleRate, targetSampleRate}"
 domain = "analysis"
 rule = "sample-rate-name"
 entry = "./analysis"
@@ -5987,7 +5987,7 @@ old = "EstimateTuningRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts validate: false"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "type"
@@ -5996,7 +5996,7 @@ changed = "sampleRate: number required (inherited optional from the shared base;
 domain = "analysis"
 rule = "sample-rate-required"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts validate: false"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "type"
@@ -6011,7 +6011,7 @@ old = "FrameSignalRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts validate: false"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "type"
@@ -6020,7 +6020,7 @@ changed = "sampleRate: number required (inherited optional from the shared base;
 domain = "analysis"
 rule = "sample-rate-required"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts validate: false"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "type"
@@ -6204,7 +6204,7 @@ old = "PiptrackRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts validate: false"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "type"
@@ -6213,7 +6213,7 @@ changed = "sampleRate: number required (inherited optional from the shared base;
 domain = "analysis"
 rule = "sample-rate-required"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts validate: false"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "type"
@@ -6221,7 +6221,7 @@ old = "PitchPyinRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts validate: false"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "type"
@@ -6230,7 +6230,7 @@ changed = "sampleRate: number required (inherited optional from the shared base;
 domain = "analysis"
 rule = "sample-rate-required"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts validate: false"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "type"
@@ -6238,7 +6238,7 @@ old = "PitchYinRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts validate: false"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "type"
@@ -6247,7 +6247,7 @@ changed = "sampleRate: number required (inherited optional from the shared base;
 domain = "analysis"
 rule = "sample-rate-required"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts validate: false"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "type"
@@ -6255,7 +6255,7 @@ old = "PolyFeaturesRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts validate: false"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "type"
@@ -6264,7 +6264,7 @@ changed = "sampleRate: number required (inherited optional from the shared base;
 domain = "analysis"
 rule = "sample-rate-required"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts validate: false"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "type"
@@ -6334,7 +6334,7 @@ old = "SpectralContrastRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts validate: false"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "type"
@@ -6343,7 +6343,7 @@ changed = "sampleRate: number required (inherited optional from the shared base;
 domain = "analysis"
 rule = "sample-rate-required"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts validate: false"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "type"
@@ -6381,7 +6381,7 @@ old = "SpectralRolloffRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts validate: false"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "type"
@@ -6390,7 +6390,7 @@ changed = "sampleRate: number required (inherited optional from the shared base;
 domain = "analysis"
 rule = "sample-rate-required"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts validate: false"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "type"
@@ -6450,7 +6450,7 @@ old = "ZeroCrossingRateRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts validate: false"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "type"
@@ -6459,7 +6459,7 @@ changed = "sampleRate: number required (inherited optional from the shared base;
 domain = "analysis"
 rule = "sample-rate-required"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts validate: false"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "type"
@@ -6467,7 +6467,7 @@ old = "ZeroCrossingsRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts validate: false"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "type"
@@ -6476,7 +6476,7 @@ changed = "sampleRate: number required (inherited optional from the shared base;
 domain = "analysis"
 rule = "sample-rate-required"
 entry = "./analysis"
-test = "bindings/wasm/tests/surface/analysis-features.test.ts::accepts validate: false"
+test = "bindings/wasm/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "field"
@@ -16626,7 +16626,7 @@ test = "bindings/wasm/tests/surface/engine-worklet.test.ts::configures capture f
 [[entry]]
 kind = "method"
 old = "SonareEngine.renderOffline"
-changed = "request-only renderOffline(request: SonareEngineRenderOfflineRequest) with validate; the frame-count number is a TypeError"
+changed = "request-only renderOffline(request: SonareEngineRenderOfflineRequest); the frame-count number is a TypeError"
 domain = "engine"
 rule = "one-positional-form"
 entry = "./worklet"
@@ -18089,7 +18089,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::Matrix2D"
 [[entry]]
 kind = "type"
 old = "DecomposeStemsLinkedRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
@@ -18097,7 +18097,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "type"
 old = "DecomposeStemsLinkedRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 entry = "./analysis"
@@ -18106,7 +18106,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "type"
 old = "DecomposeStemsRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
@@ -18114,7 +18114,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "type"
 old = "DecomposeStemsRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 entry = "./analysis"
@@ -18154,7 +18154,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "type"
 old = "HpssRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
@@ -18162,7 +18162,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "type"
 old = "HpssWithResidualRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
@@ -18170,7 +18170,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "type"
 old = "HpssWithResidualRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 entry = "./analysis"
@@ -18237,7 +18237,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "type"
 old = "RemixRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
@@ -18245,7 +18245,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "type"
 old = "RemixRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 entry = "./analysis"
@@ -18265,23 +18265,6 @@ new = "SynthesizeRirRequest"
 domain = "effects"
 rule = "type-names"
 entry = "./analysis"
-
-[[entry]]
-kind = "type"
-old = "RoomEstimateOptions"
-changed = "adds `validate?: boolean`"
-domain = "effects"
-rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
-
-[[entry]]
-kind = "type"
-old = "RoomEstimateOptions"
-changed = "adds `validate?: boolean`"
-domain = "effects"
-rule = "sample-rate-required"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "type"
@@ -18316,7 +18299,7 @@ entry = "./analysis"
 [[entry]]
 kind = "type"
 old = "RoomMorphOptions"
-changed = "removes `listenerX`; removes `listenerY`; removes `listenerZ`; removes `maxSeconds`; removes `sourceX`; removes `sourceY`; removes `sourceZ`; adds `listener?: RoomPlacement`; adds `maxSec?: number`; adds `source?: RoomPlacement`; adds `validate?: boolean`"
+changed = "removes `listenerX`; removes `listenerY`; removes `listenerZ`; removes `maxSeconds`; removes `sourceX`; removes `sourceY`; removes `sourceZ`; adds `listener?: RoomPlacement`; adds `maxSec?: number`; adds `source?: RoomPlacement`"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
@@ -18324,7 +18307,7 @@ test = "bindings/wasm/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "type"
 old = "RoomMorphOptions"
-changed = "removes `listenerX`; removes `listenerY`; removes `listenerZ`; removes `maxSeconds`; removes `sourceX`; removes `sourceY`; removes `sourceZ`; adds `listener?: RoomPlacement`; adds `maxSec?: number`; adds `source?: RoomPlacement`; adds `validate?: boolean`"
+changed = "removes `listenerX`; removes `listenerY`; removes `listenerZ`; removes `maxSeconds`; removes `sourceX`; removes `sourceY`; removes `sourceZ`; adds `listener?: RoomPlacement`; adds `maxSec?: number`; adds `source?: RoomPlacement`"
 domain = "effects"
 rule = "sample-rate-required"
 entry = "./analysis"
@@ -18963,23 +18946,6 @@ test = "bindings/wasm/tests/surface/effects-notes.test.ts::exposes the note type
 
 [[entry]]
 kind = "type"
-old = "NoteMoveOptions"
-changed = "adds `validate?: boolean`"
-domain = "effects"
-rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
-
-[[entry]]
-kind = "type"
-old = "NoteMoveOptions"
-changed = "adds `validate?: boolean`"
-domain = "effects"
-rule = "sample-rate-required"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
-
-[[entry]]
-kind = "type"
 old = "NoteMoveRequest"
 changed = "`sampleRate` is now required"
 domain = "effects"
@@ -18996,7 +18962,7 @@ rule = "type-names"
 [[entry]]
 kind = "type"
 old = "NoteStretchOptions"
-changed = "adds `validate?: boolean`; `stretchRatio` is now required"
+changed = "`stretchRatio` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
@@ -19004,7 +18970,7 @@ test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "type"
 old = "NoteStretchOptions"
-changed = "adds `validate?: boolean`; `stretchRatio` is now required"
+changed = "`stretchRatio` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 entry = "./analysis"
@@ -19069,7 +19035,7 @@ test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "type"
 old = "SpectralEditOptions"
-changed = "adds `ops: readonly SpectralRegionOp[]` (required); adds `validate?: boolean`; `window` is now `WindowType` (was `SpectralEditWindow`)"
+changed = "adds `ops: readonly SpectralRegionOp[]` (required); `window` is now `WindowType` (was `SpectralEditWindow`)"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equals request form for"
@@ -19077,7 +19043,7 @@ test = "bindings/wasm/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "type"
 old = "SpectralEditOptions"
-changed = "adds `ops: readonly SpectralRegionOp[]` (required); adds `validate?: boolean`; `window` is now `WindowType` (was `SpectralEditWindow`)"
+changed = "adds `ops: readonly SpectralRegionOp[]` (required); `window` is now `WindowType` (was `SpectralEditWindow`)"
 domain = "effects"
 rule = "sample-rate-required"
 entry = "./analysis"
@@ -19513,83 +19479,43 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::is request-only"
 
 [[entry]]
 kind = "type"
-old = "DeclickOptions"
-changed = "adds `validate?: boolean`"
-domain = "effects"
-rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
-
-[[entry]]
-kind = "type"
 old = "DeclipOptions"
-changed = "removes `clipThreshold`; adds `clipThresholdDb?: number`; adds `validate?: boolean`"
+changed = "removes `clipThreshold`; adds `clipThresholdDb?: number`"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
-
-[[entry]]
-kind = "type"
-old = "DecrackleOptions"
-changed = "adds `validate?: boolean`"
-domain = "effects"
-rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
-
-[[entry]]
-kind = "type"
-old = "DehumOptions"
-changed = "adds `validate?: boolean`"
-domain = "effects"
-rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
-
-[[entry]]
-kind = "type"
-old = "DenoiseClassicalOptions"
-changed = "adds `validate?: boolean`"
-domain = "effects"
-rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
-
-[[entry]]
-kind = "type"
-old = "DereverbClassicalOptions"
-changed = "adds `validate?: boolean`"
-domain = "effects"
-rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::masteringRepairDeclipStereo takes clipThresholdDb"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairAnalyzeRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairApplyRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDeclickRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDeclickStereoRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
@@ -19613,18 +19539,18 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channel
 [[entry]]
 kind = "type"
 old = "MasteringRepairDeclipRequest"
-changed = "removes `clipThreshold`; adds `clipThresholdDb?: number`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `clipThreshold`; adds `clipThresholdDb?: number`; `sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDeclipStereoRequest"
-changed = "removes `clipThreshold`; adds `clipThresholdDb?: number`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `clipThreshold`; adds `clipThresholdDb?: number`; `sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
@@ -19648,18 +19574,18 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channel
 [[entry]]
 kind = "type"
 old = "MasteringRepairDecrackleRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDecrackleStereoRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
@@ -19683,18 +19609,18 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channel
 [[entry]]
 kind = "type"
 old = "MasteringRepairDehumRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDehumStereoRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
@@ -19718,10 +19644,10 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channel
 [[entry]]
 kind = "type"
 old = "MasteringRepairDenoiseClassicalLinkedRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
@@ -19741,18 +19667,18 @@ entry = "./analysis"
 [[entry]]
 kind = "type"
 old = "MasteringRepairDenoiseClassicalRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDenoiseClassicalStereoRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
@@ -19776,10 +19702,10 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channel
 [[entry]]
 kind = "type"
 old = "MasteringRepairDereverbClassicalLinkedRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
@@ -19799,18 +19725,18 @@ entry = "./analysis"
 [[entry]]
 kind = "type"
 old = "MasteringRepairDereverbClassicalRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDereverbClassicalStereoRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
@@ -19834,66 +19760,66 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channel
 [[entry]]
 kind = "type"
 old = "MasteringRepairDetectClicksRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDetectClippingRequest"
-changed = "removes `clipThreshold`; adds `clipThresholdDb?: number`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `clipThreshold`; adds `clipThresholdDb?: number`; `sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDetectCrackleRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDetectHumRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDetectNoiseFloorRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDetectReverbRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDetectTrimRangeRequest"
-changed = "removes `threshold`; adds `thresholdDb?: number`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `threshold`; adds `thresholdDb?: number`; `sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDetectTrimRangeStereoRequest"
-changed = "removes `threshold`; adds `thresholdDb?: number`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `threshold`; adds `thresholdDb?: number`; `sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
@@ -19906,7 +19832,7 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::masteringRepairNoise
 [[entry]]
 kind = "type"
 old = "MasteringRepairStage"
-changed = "discriminated union: ({stage:'declick'} & Omit<DeclickOptions,'validate'>) | ({stage:'declip'} & Omit<DeclipOptions,'validate'>) | ({stage:'decrackle'} & Omit<DecrackleOptions,'validate'>) | ({stage:'dehum'} & Omit<DehumOptions,'validate'>) | ({stage:'denoise'} & Omit<DenoiseClassicalOptions,'validate'>) | ({stage:'dereverb'} & Omit<DereverbClassicalOptions,'validate'>)"
+changed = "discriminated union: ({stage:'declick'} & DeclickOptions) | ({stage:'declip'} & DeclipOptions) | ({stage:'decrackle'} & DecrackleOptions) | ({stage:'dehum'} & DehumOptions) | ({stage:'denoise'} & DenoiseClassicalOptions) | ({stage:'dereverb'} & DereverbClassicalOptions)"
 domain = "effects"
 rule = "individual"
 test = "bindings/wasm/tests/surface/effects-repair.test.ts::stages are a discriminated union"
@@ -19914,18 +19840,18 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::stages are a discrim
 [[entry]]
 kind = "type"
 old = "MasteringRepairTrimSilenceRequest"
-changed = "removes `threshold`; adds `thresholdDb?: number`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `threshold`; adds `thresholdDb?: number`; `sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairTrimSilenceStereoRequest"
-changed = "removes `threshold`; adds `thresholdDb?: number`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `threshold`; adds `thresholdDb?: number`; `sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
@@ -19949,10 +19875,10 @@ test = "bindings/wasm/tests/surface/effects-repair.test.ts::results are {channel
 [[entry]]
 kind = "type"
 old = "TrimSilenceOptions"
-changed = "removes `threshold`; adds `thresholdDb?: number`; adds `validate?: boolean`"
+changed = "removes `threshold`; adds `thresholdDb?: number`"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::masteringRepairTrimSilence takes thresholdDb and refuses threshold"
 
 [[entry]]
 kind = "field"
@@ -25592,7 +25518,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::Audio carries the r
 [[entry]]
 kind = "type"
 old = "MasterAudioRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masterAudio takes (samples, sampleRate, options)"
@@ -25600,7 +25526,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masterAudio takes (
 [[entry]]
 kind = "type"
 old = "MasterAudioStereoRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masterAudio takes (samples, sampleRate, options)"
@@ -25608,7 +25534,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::masterAudio takes (
 [[entry]]
 kind = "type"
 old = "MasteringAbMatchLoudnessRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -25616,7 +25542,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "type"
 old = "MasteringAbMatchLoudnessStereoRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -25716,7 +25642,7 @@ rule = "type-names"
 [[entry]]
 kind = "type"
 old = "MasteringStreamingPreviewStereoRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the streaming preview reports truePeakDbtp"
@@ -25724,7 +25650,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::the streaming previ
 [[entry]]
 kind = "type"
 old = "StreamingLoudnessGainRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::streamingLoudnessGain reports truePeakDbtp"
@@ -25732,7 +25658,7 @@ test = "bindings/wasm/tests/surface/mastering-chain.test.ts::streamingLoudnessGa
 [[entry]]
 kind = "type"
 old = "StreamingLoudnessGainStereoRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/wasm/tests/surface/mastering-chain.test.ts::streamingLoudnessGain reports truePeakDbtp"
@@ -25983,23 +25909,6 @@ entry = "./analysis"
 
 [[entry]]
 kind = "type"
-old = "SpectrumOptions"
-changed = "adds `validate?: boolean`"
-domain = "mastering"
-rule = "sample-rate-required"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::SpectrumOptions"
-
-[[entry]]
-kind = "type"
-old = "SpectrumOptions"
-changed = "adds `validate?: boolean`"
-domain = "mastering"
-rule = "sample-rate-required"
-entry = "./analysis"
-test = "bindings/wasm/tests/surface/mastering-metering.test.ts::SpectrumOptions"
-
-[[entry]]
-kind = "type"
 old = "WaveformPeakPyramidRequest"
 changed = "removes `samples`; `channels` is now `Float32Array[]` (was `number`)"
 domain = "mastering"
@@ -26071,7 +25980,7 @@ test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::suggestMixScene"
 [[entry]]
 kind = "type"
 old = "MixStereoRequest"
-changed = "removes `faderDb`; removes `inputTrimDb`; removes `leftChannels`; removes `muted`; removes `pan`; removes `panMode`; removes `rightChannels`; removes `width`; adds `strips: MixStereoStrip[]` (required); adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `faderDb`; removes `inputTrimDb`; removes `leftChannels`; removes `muted`; removes `pan`; removes `panMode`; removes `rightChannels`; removes `width`; adds `strips: MixStereoStrip[]` (required); `sampleRate` is now required"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/wasm/tests/surface/mastering-mixing.test.ts::MixStereoRequest"
@@ -29519,3 +29428,448 @@ domain = "analysis"
 rule = "individual"
 entry = "./analysis"
 test = "bindings/wasm/tests/surface/analysis-features.test.ts::griffinLim: nFft must equal (nBins - 1) * 2"
+
+[[entry]]
+kind = "field"
+old = "AcousticOptions.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "AcousticOptions.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeBpmOptions.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeBpmOptions.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeDynamicsOptions.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeDynamicsOptions.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "AnalyzePolyphonicRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeRhythmOptions.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeRhythmOptions.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeTimbreOptions.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeTimbreOptions.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "BassChromaSpectrogramRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "BassChromaSpectrogramRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "ChordDetectionOptions.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "ChordDetectionOptions.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "CqtToAudioRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "CqtToAudioRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "ExtractNotesRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "ExtractPercussiveEventsRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "FourierTempogramRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "FourierTempogramRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "GriffinLimRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "GriffinLimRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "KeyDetectionOptions.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "KeyDetectionOptions.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "LufsInterleavedRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "LufsInterleavedRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "LufsSeriesInterleavedRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "LufsSeriesInterleavedRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MelDeltaRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "MelDeltaRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MelToAudioRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "MelToAudioRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MelToStftRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "MelToStftRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MergeNotesRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "MeteringDynamicRangeOptions.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "MeteringDynamicRangeOptions.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MeteringTruePeakRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "MeteringTruePeakRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MfccToAudioRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "MfccToAudioRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MfccToMelRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "MfccToMelRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "MusicAnalyzeRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "MusicAnalyzeRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "OnsetEnvelopeRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "OnsetEnvelopeRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "RenderNotesRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "RenderPercussiveEventsRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "TempogramRatioRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "TempogramRatioRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "TransientShaperOptions.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "TrimRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "TrimRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "field"
+old = "VoiceChangeOptions.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "VoiceChangeRealtimeRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "VqtToAudioRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "VqtToAudioRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "analysis"
+rule = "input-always-scanned"
+entry = "./analysis"
+
+[[entry]]
+kind = "type"
+old = "ValidateOptions"
+removed = "removed; no call takes a validate option, and every call scans its input for NaN and infinity"
+domain = "core"
+rule = "input-always-scanned"

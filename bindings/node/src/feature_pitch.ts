@@ -25,7 +25,7 @@ import {
   sampleOneShot,
 } from './validation.js';
 
-/** Request for {@link chroma}. `validate: false` skips the NaN/Inf pre-scan. */
+/** Request for {@link chroma}. */
 export interface ChromaRequest {
   /** Mono audio samples. */
   samples: Float32Array;
@@ -35,8 +35,6 @@ export interface ChromaRequest {
   nFft?: number;
   /** Hop in samples. Default 512. */
   hopLength?: number;
-  /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
-  validate?: boolean;
 }
 
 /**
@@ -54,8 +52,6 @@ export interface ChromaCensRequest {
   nChroma?: number;
   /** Constant-Q bins per octave. Default 36. */
   binsPerOctave?: number;
-  /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link chromaCqt}. */
@@ -74,8 +70,6 @@ export interface BassChromaRequest {
   hopLength?: number;
   /** Chroma bins. Default `12`. */
   nChroma?: number;
-  /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
-  validate?: boolean;
 }
 
 /**
@@ -104,8 +98,6 @@ export interface CqtRequest {
   nBins?: number;
   /** Bins per octave. Default 12. */
   binsPerOctave?: number;
-  /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link pseudoCqt}. */
@@ -134,8 +126,6 @@ export interface EstimateTuningRequest {
   nFft?: number;
   /** Hop length in samples. Default `512`. */
   hopLength?: number;
-  /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link pitchYin}. */
@@ -154,8 +144,6 @@ export interface PitchYinRequest {
   f0MaxHz?: number;
   /** YIN threshold in [0, 1] for voiced/unvoiced decisions. Default `0.1`. */
   threshold?: number;
-  /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link pitchPyin}. */
@@ -180,8 +168,6 @@ export interface PiptrackRequest {
   fmaxHz?: number;
   /** Magnitude threshold, as a fraction of the frame's maximum, below which a peak is dropped. Default `0.1`. */
   threshold?: number;
-  /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link noteSegments}. Give `voiced` or `voicedProb`; `voiced` takes precedence. */
@@ -246,8 +232,6 @@ export interface NnlsChromaRequest {
   stftBlendNFft?: number;
   /** Hop length in samples. Default `512`. */
   hopLength?: number;
-  /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
-  validate?: boolean;
 }
 
 interface NativeChroma {

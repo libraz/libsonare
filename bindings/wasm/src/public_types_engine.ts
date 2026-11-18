@@ -697,8 +697,6 @@ export interface RenderOfflineRequest {
    * blocks per chunk; otherwise audio stays continuous and only bit-identity is lost.
    */
   finalize?: boolean;
-  /** Set `false` to skip the sample scan for NaN and infinities. Default `true`. */
-  validate?: boolean;
 }
 
 export interface EngineCapabilities {

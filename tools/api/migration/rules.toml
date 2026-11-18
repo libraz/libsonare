@@ -238,6 +238,19 @@ if (strip.integratedLufs === undefined) skipStrip();
 '''
 
 [[rule]]
+slug = "input-always-scanned"
+title = "Every call scans its input for non-finite values"
+summary = "The per-call `validate` option and the `ValidateOptions` type are removed from Node and WASM. Every call scans its sample and matrix inputs for NaN and infinity and refuses one with a `RangeError` naming the call and the index; a `validate` key is refused as an unknown key. `mixingAssistantSuggest` reports a non-finite track as excluded instead of refusing the call."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const result = hpss({ samples, sampleRate: 44100, validate: false });
+'''
+after = '''
+const result = hpss({ samples, sampleRate: 44100 });
+'''
+
+[[rule]]
 slug = "token-case"
 title = "String values are lowerCamelCase tokens"
 summary = "Every member of a closed string set is one lowerCamelCase word, identical in JavaScript, Python and JSON documents; acronyms count as one word. CLI values are the same word in kebab-case, read in any letter case; no other spelling is accepted. A name the library enumerates at run time (a preset, processor or analysis name) is an identifier, not a CLI word: the CLI takes and prints it in the library's spelling, also in any letter case. A set that names the members of an enum, such as the error code names, keeps the enum's spelling and is the same set on every binding."

@@ -416,7 +416,7 @@ describe('reported mistakes', () => {
   });
 
   it('a declared key set to undefined is absent', () => {
-    expect(() => api.detectBpm({ samples, sampleRate: 22050, validate: undefined })).not.toThrow(
+    expect(() => api.detectBpm({ samples, sampleRate: 22050, bpmMin: undefined })).not.toThrow(
       /unknown request key/,
     );
   });

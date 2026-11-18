@@ -407,22 +407,14 @@ const PreemphasisRequestKeys = keysOf<PreemphasisRequest>()([
   'sampleRate',
   'coef',
   'zi',
-  'validate',
 ]);
-const DeemphasisRequestKeys = keysOf<DeemphasisRequest>()([
-  'samples',
-  'sampleRate',
-  'coef',
-  'zi',
-  'validate',
-]);
+const DeemphasisRequestKeys = keysOf<DeemphasisRequest>()(['samples', 'sampleRate', 'coef', 'zi']);
 const TrimSilenceRequestKeys = keysOf<TrimSilenceRequest>()([
   'samples',
   'sampleRate',
   'topDb',
   'frameLength',
   'hopLength',
-  'validate',
 ]);
 const SplitSilenceRequestKeys = keysOf<SplitSilenceRequest>()([
   'samples',
@@ -430,7 +422,6 @@ const SplitSilenceRequestKeys = keysOf<SplitSilenceRequest>()([
   'topDb',
   'frameLength',
   'hopLength',
-  'validate',
 ]);
 const SplitSilenceCommonWithReportRequestKeys = keysOf<SplitSilenceCommonWithReportRequest>()([
   'signals',
@@ -438,34 +429,15 @@ const SplitSilenceCommonWithReportRequestKeys = keysOf<SplitSilenceCommonWithRep
   'frameLength',
   'hopLength',
 ]);
-const StftRequestKeys = keysOf<StftRequest>()([
-  'samples',
-  'sampleRate',
-  'nFft',
-  'hopLength',
-  'validate',
-]);
-const StftDbRequestKeys = keysOf<StftDbRequest>()([
-  'samples',
-  'sampleRate',
-  'nFft',
-  'hopLength',
-  'validate',
-]);
-const ChromaRequestKeys = keysOf<ChromaRequest>()([
-  'samples',
-  'sampleRate',
-  'nFft',
-  'hopLength',
-  'validate',
-]);
+const StftRequestKeys = keysOf<StftRequest>()(['samples', 'sampleRate', 'nFft', 'hopLength']);
+const StftDbRequestKeys = keysOf<StftDbRequest>()(['samples', 'sampleRate', 'nFft', 'hopLength']);
+const ChromaRequestKeys = keysOf<ChromaRequest>()(['samples', 'sampleRate', 'nFft', 'hopLength']);
 const ChromaCensRequestKeys = keysOf<ChromaCensRequest>()([
   'samples',
   'sampleRate',
   'hopLength',
   'nChroma',
   'binsPerOctave',
-  'validate',
 ]);
 const ChromaCqtRequestKeys = keysOf<ChromaCqtRequest>()([
   'samples',
@@ -473,72 +445,52 @@ const ChromaCqtRequestKeys = keysOf<ChromaCqtRequest>()([
   'hopLength',
   'nChroma',
   'binsPerOctave',
-  'validate',
 ]);
 const BassChromaRequestKeys = keysOf<BassChromaRequest>()([
   'samples',
   'sampleRate',
   'hopLength',
   'nChroma',
-  'validate',
 ]);
 const SpectralCentroidRequestKeys = keysOf<SpectralCentroidRequest>()([
   'samples',
   'sampleRate',
   'nFft',
   'hopLength',
-  'validate',
 ]);
 const SpectralFlatnessRequestKeys = keysOf<SpectralFlatnessRequest>()([
   'samples',
   'sampleRate',
   'nFft',
   'hopLength',
-  'validate',
 ]);
 const RmsEnergyRequestKeys = keysOf<RmsEnergyRequest>()([
   'samples',
   'sampleRate',
   'frameLength',
   'hopLength',
-  'validate',
 ]);
 const DetectBpmRequestKeys = keysOf<DetectBpmRequest>()([
   'samples',
   'sampleRate',
   'bpmMin',
   'bpmMax',
-  'validate',
 ]);
 const DetectBeatsRequestKeys = keysOf<DetectBeatsRequest>()([
   'samples',
   'sampleRate',
   'bpmMin',
   'bpmMax',
-  'validate',
 ]);
-const DetectDownbeatsRequestKeys = keysOf<DetectDownbeatsRequest>()([
-  'samples',
-  'sampleRate',
-  'validate',
-]);
-const MomentaryLufsRequestKeys = keysOf<MomentaryLufsRequest>()([
-  'samples',
-  'sampleRate',
-  'validate',
-]);
-const ShortTermLufsRequestKeys = keysOf<ShortTermLufsRequest>()([
-  'samples',
-  'sampleRate',
-  'validate',
-]);
+const DetectDownbeatsRequestKeys = keysOf<DetectDownbeatsRequest>()(['samples', 'sampleRate']);
+const MomentaryLufsRequestKeys = keysOf<MomentaryLufsRequest>()(['samples', 'sampleRate']);
+const ShortTermLufsRequestKeys = keysOf<ShortTermLufsRequest>()(['samples', 'sampleRate']);
 const OnsetStrengthRequestKeys = keysOf<OnsetStrengthRequest>()([
   'nFft',
   'hopLength',
   'nMels',
   'samples',
   'sampleRate',
-  'validate',
 ]);
 const PseudoCqtRequestKeys = keysOf<PseudoCqtRequest>()([
   'hopLength',
@@ -547,7 +499,6 @@ const PseudoCqtRequestKeys = keysOf<PseudoCqtRequest>()([
   'binsPerOctave',
   'samples',
   'sampleRate',
-  'validate',
 ]);
 const HybridCqtRequestKeys = keysOf<HybridCqtRequest>()([
   'hopLength',
@@ -556,12 +507,10 @@ const HybridCqtRequestKeys = keysOf<HybridCqtRequest>()([
   'binsPerOctave',
   'samples',
   'sampleRate',
-  'validate',
 ]);
 const AnalyzeRequestKeys = keysOf<AnalyzeRequest>()([
   'samples',
   'sampleRate',
-  'validate',
   'nFft',
   'hopLength',
   'bpmMin',
@@ -592,7 +541,6 @@ const AnalyzeBpmRequestKeys = keysOf<AnalyzeBpmRequest>()([
   'nFft',
   'hopLength',
   'maxCandidates',
-  'validate',
   'samples',
   'sampleRate',
 ]);
@@ -600,7 +548,6 @@ const AnalyzeDynamicsRequestKeys = keysOf<AnalyzeDynamicsRequest>()([
   'windowSec',
   'hopLength',
   'compressionThresholdDb',
-  'validate',
   'samples',
   'sampleRate',
 ]);
@@ -609,7 +556,6 @@ const AnalyzeImpulseResponseRequestKeys = keysOf<AnalyzeImpulseResponseRequest>(
   'minDecayDb',
   'samples',
   'sampleRate',
-  'validate',
 ]);
 const AnalyzeMelodyRequestKeys = keysOf<AnalyzeMelodyRequest>()([
   'samples',
@@ -619,7 +565,6 @@ const AnalyzeMelodyRequestKeys = keysOf<AnalyzeMelodyRequest>()([
   'threshold',
   'usePyin',
   'center',
-  'validate',
   'f0MinHz',
   'f0MaxHz',
 ]);
@@ -663,7 +608,6 @@ const AnalyzePolyphonicRequestKeys = keysOf<AnalyzePolyphonicRequest>()([
   'segmentationThresholdCents',
   'minNoteMs',
   'referenceHz',
-  'validate',
 ]);
 const AnalyzeRhythmRequestKeys = keysOf<AnalyzeRhythmRequest>()([
   'bpmMin',
@@ -671,7 +615,6 @@ const AnalyzeRhythmRequestKeys = keysOf<AnalyzeRhythmRequest>()([
   'startBpm',
   'nFft',
   'hopLength',
-  'validate',
   'samples',
   'sampleRate',
 ]);
@@ -682,7 +625,6 @@ const AnalyzeSectionsRequestKeys = keysOf<AnalyzeSectionsRequest>()([
   'hopLength',
   'minSectionSec',
   'threshold',
-  'validate',
 ]);
 const AnalyzeTimbreRequestKeys = keysOf<AnalyzeTimbreRequest>()([
   'nFft',
@@ -690,7 +632,6 @@ const AnalyzeTimbreRequestKeys = keysOf<AnalyzeTimbreRequest>()([
   'nMels',
   'nMfcc',
   'windowSec',
-  'validate',
   'samples',
   'sampleRate',
 ]);
@@ -711,7 +652,6 @@ const AutoTuneRequestKeys = keysOf<AutoTuneRequest>()([
   'vibratoThresholdCents',
   'maxCorrectionSemitones',
   'scaleReferenceMidi',
-  'validate',
 ]);
 const AutoTuneKeyKeys = keysOf<AutoTuneKey>()(['root', 'mode']);
 const ChirpRequestKeys = keysOf<ChirpRequest>()([
@@ -737,7 +677,6 @@ const ChordFunctionalAnalysisRequestKeys = keysOf<ChordFunctionalAnalysisRequest
   'detectInversions',
   'chromaMethod',
   'tuningCents',
-  'validate',
   'samples',
   'sampleRate',
 ]);
@@ -759,7 +698,6 @@ const CqtRequestKeys = keysOf<CqtRequest>()([
   'fminHz',
   'nBins',
   'binsPerOctave',
-  'validate',
 ]);
 const CqtToAudioRequestKeys = keysOf<CqtToAudioRequest>()([
   'magnitude',
@@ -768,7 +706,6 @@ const CqtToAudioRequestKeys = keysOf<CqtToAudioRequest>()([
   'fminHz',
   'binsPerOctave',
   'nIter',
-  'validate',
 ]);
 const VocalCreateRequestKeys = keysOf<VocalCreateRequest>()([
   'samples',
@@ -788,7 +725,6 @@ const VocalCreateRequestKeys = keysOf<VocalCreateRequest>()([
   'referenceHz',
   'limits',
   'analysis',
-  'validate',
 ]);
 const VocalSessionLimitsKeys = keysOf<VocalSessionLimits>()([
   'maxHistoryBytes',
@@ -845,7 +781,6 @@ const DecomposeStemsRequestKeys = keysOf<DecomposeStemsRequest>()([
   'beta',
   'init',
   'maskPower',
-  'validate',
 ]);
 const DecomposeStemsLinkedRequestKeys = keysOf<DecomposeStemsLinkedRequest>()([
   'channels',
@@ -857,14 +792,12 @@ const DecomposeStemsLinkedRequestKeys = keysOf<DecomposeStemsLinkedRequest>()([
   'beta',
   'init',
   'maskPower',
-  'validate',
 ]);
 const DetectAcousticRequestKeys = keysOf<DetectAcousticRequest>()([
   'nOctaveBands',
   'nThirdOctaveSubbands',
   'minDecayDb',
   'noiseFloorMarginDb',
-  'validate',
   'samples',
   'sampleRate',
 ]);
@@ -882,7 +815,6 @@ const DetectBoundariesRequestKeys = keysOf<DetectBoundariesRequest>()([
   'referenceWindowSec',
   'useMfcc',
   'useChroma',
-  'validate',
 ]);
 const DetectChordsRequestKeys = keysOf<DetectChordsRequest>()([
   'minDurationSec',
@@ -900,7 +832,6 @@ const DetectChordsRequestKeys = keysOf<DetectChordsRequest>()([
   'detectInversions',
   'chromaMethod',
   'tuningCents',
-  'validate',
   'samples',
   'sampleRate',
 ]);
@@ -913,7 +844,6 @@ const DetectKeyRequestKeys = keysOf<DetectKeyRequest>()([
   'modes',
   'profile',
   'genreHint',
-  'validate',
   'samples',
   'sampleRate',
   'chromaHighPassHz',
@@ -927,7 +857,6 @@ const DetectKeyCandidatesRequestKeys = keysOf<DetectKeyCandidatesRequest>()([
   'modes',
   'profile',
   'genreHint',
-  'validate',
   'samples',
   'sampleRate',
   'chromaHighPassHz',
@@ -935,7 +864,6 @@ const DetectKeyCandidatesRequestKeys = keysOf<DetectKeyCandidatesRequest>()([
 const DetectOnsetsRequestKeys = keysOf<DetectOnsetsRequest>()([
   'samples',
   'sampleRate',
-  'validate',
   'nFft',
   'hopLength',
   'threshold',
@@ -951,7 +879,6 @@ const DetectOnsetsRequestKeys = keysOf<DetectOnsetsRequest>()([
 const Ebur128LoudnessRangeLuRequestKeys = keysOf<Ebur128LoudnessRangeLuRequest>()([
   'samples',
   'sampleRate',
-  'validate',
 ]);
 const EstimateMeterRequestKeys = keysOf<EstimateMeterRequest>()([
   'beats',
@@ -973,7 +900,6 @@ const EstimateRoomRequestKeys = keysOf<EstimateRoomRequest>()([
   'noiseFloorMarginDb',
   'samples',
   'sampleRate',
-  'validate',
 ]);
 const EstimateTuningRequestKeys = keysOf<EstimateTuningRequest>()([
   'resolution',
@@ -982,7 +908,6 @@ const EstimateTuningRequestKeys = keysOf<EstimateTuningRequest>()([
   'sampleRate',
   'nFft',
   'hopLength',
-  'validate',
 ]);
 const ExtractNotesRequestKeys = keysOf<ExtractNotesRequest>()([
   'samples',
@@ -995,7 +920,6 @@ const ExtractNotesRequestKeys = keysOf<ExtractNotesRequest>()([
   'minNoteMs',
   'referenceHz',
   'voicedThreshold',
-  'validate',
 ]);
 const ExtractPercussiveEventsRequestKeys = keysOf<ExtractPercussiveEventsRequest>()([
   'samples',
@@ -1008,7 +932,6 @@ const ExtractPercussiveEventsRequestKeys = keysOf<ExtractPercussiveEventsRequest
   'hopLength',
   'hpssKernelHarmonic',
   'hpssKernelPercussive',
-  'validate',
 ]);
 const FixFramesRequestKeys = keysOf<FixFramesRequest>()(['frames', 'xMin', 'xMax', 'pad']);
 const FixLengthRequestKeys = keysOf<FixLengthRequest>()(['values', 'targetSize', 'padValue']);
@@ -1018,14 +941,12 @@ const FourierTempogramRequestKeys = keysOf<FourierTempogramRequest>()([
   'hopLength',
   'winLength',
   'center',
-  'validate',
 ]);
 const FrameSignalRequestKeys = keysOf<FrameSignalRequest>()([
   'samples',
   'frameLength',
   'hopLength',
   'sampleRate',
-  'validate',
 ]);
 const GriffinLimRequestKeys = keysOf<GriffinLimRequest>()([
   'magnitude',
@@ -1034,9 +955,8 @@ const GriffinLimRequestKeys = keysOf<GriffinLimRequest>()([
   'hopLength',
   'nIter',
   'momentum',
-  'validate',
 ]);
-const HarmonicRequestKeys = keysOf<HarmonicRequest>()(['samples', 'sampleRate', 'validate']);
+const HarmonicRequestKeys = keysOf<HarmonicRequest>()(['samples', 'sampleRate']);
 const HpssRequestKeys = keysOf<HpssRequest>()([
   'samples',
   'sampleRate',
@@ -1045,7 +965,6 @@ const HpssRequestKeys = keysOf<HpssRequest>()([
   'nFft',
   'hopLength',
   'hardMask',
-  'validate',
 ]);
 const HpssWithResidualRequestKeys = keysOf<HpssWithResidualRequest>()([
   'samples',
@@ -1055,18 +974,12 @@ const HpssWithResidualRequestKeys = keysOf<HpssWithResidualRequest>()([
   'nFft',
   'hopLength',
   'hardMask',
-  'validate',
 ]);
-const LufsRequestKeys = keysOf<LufsRequest>()(['samples', 'sampleRate', 'validate']);
-const LufsMultichannelRequestKeys = keysOf<LufsMultichannelRequest>()([
-  'channels',
-  'sampleRate',
-  'validate',
-]);
+const LufsRequestKeys = keysOf<LufsRequest>()(['samples', 'sampleRate']);
+const LufsMultichannelRequestKeys = keysOf<LufsMultichannelRequest>()(['channels', 'sampleRate']);
 const LufsSeriesMultichannelRequestKeys = keysOf<LufsSeriesMultichannelRequest>()([
   'channels',
   'sampleRate',
-  'validate',
 ]);
 const MasterAudioRequestKeys = keysOf<MasterAudioRequest>()([
   'samples',
@@ -1075,7 +988,6 @@ const MasterAudioRequestKeys = keysOf<MasterAudioRequest>()([
   'overrides',
   'onProgress',
   'cancel',
-  'validate',
 ]);
 const MasterAudioStereoRequestKeys = keysOf<MasterAudioStereoRequest>()([
   'left',
@@ -1085,7 +997,6 @@ const MasterAudioStereoRequestKeys = keysOf<MasterAudioStereoRequest>()([
   'overrides',
   'onProgress',
   'cancel',
-  'validate',
 ]);
 const MasteringNormalizeLoudnessRequestKeys = keysOf<MasteringNormalizeLoudnessRequest>()([
   'samples',
@@ -1095,14 +1006,12 @@ const MasteringNormalizeLoudnessRequestKeys = keysOf<MasteringNormalizeLoudnessR
   'truePeakOversample',
   'releaseMs',
   'applyGainAtInputRate',
-  'validate',
 ]);
 const MasteringAbMatchLoudnessRequestKeys = keysOf<MasteringAbMatchLoudnessRequest>()([
   'source',
   'reference',
   'sampleRate',
   'referenceSampleRate',
-  'validate',
 ]);
 const MasteringAbMatchLoudnessStereoRequestKeys = keysOf<MasteringAbMatchLoudnessStereoRequest>()([
   'sourceLeft',
@@ -1111,7 +1020,6 @@ const MasteringAbMatchLoudnessStereoRequestKeys = keysOf<MasteringAbMatchLoudnes
   'referenceRight',
   'sampleRate',
   'referenceSampleRate',
-  'validate',
 ]);
 const MasteringAssistantSuggestRequestKeys = keysOf<MasteringAssistantSuggestRequest>()([
   'samples',
@@ -1123,7 +1031,6 @@ const MasteringAssistantSuggestRequestKeys = keysOf<MasteringAssistantSuggestReq
   'speechMonoAmount',
   'targetPlatform',
   'preset',
-  'validate',
 ]);
 const MasteringAssistantSuggestStereoRequestKeys = keysOf<MasteringAssistantSuggestStereoRequest>()(
   [
@@ -1137,7 +1044,6 @@ const MasteringAssistantSuggestStereoRequestKeys = keysOf<MasteringAssistantSugg
     'speechMonoAmount',
     'targetPlatform',
     'preset',
-    'validate',
   ],
 );
 const MasteringAudioProfileRequestKeys = keysOf<MasteringAudioProfileRequest>()([
@@ -1147,7 +1053,6 @@ const MasteringAudioProfileRequestKeys = keysOf<MasteringAudioProfileRequest>()(
   'hopLength',
   'truePeakOversample',
   'detectDefects',
-  'validate',
 ]);
 const MasteringAudioProfileStereoRequestKeys = keysOf<MasteringAudioProfileStereoRequest>()([
   'left',
@@ -1157,7 +1062,6 @@ const MasteringAudioProfileStereoRequestKeys = keysOf<MasteringAudioProfileStere
   'hopLength',
   'truePeakOversample',
   'detectDefects',
-  'validate',
 ]);
 const MasteringDynamicsCompressorRequestKeys = keysOf<MasteringDynamicsCompressorRequest>()([
   'samples',
@@ -1173,7 +1077,6 @@ const MasteringDynamicsCompressorRequestKeys = keysOf<MasteringDynamicsCompresso
   'sidechainHighPassHz',
   'pdrTimeMs',
   'pdrReleaseScale',
-  'validate',
 ]);
 const MasteringDynamicsGateRequestKeys = keysOf<MasteringDynamicsGateRequest>()([
   'samples',
@@ -1185,7 +1088,6 @@ const MasteringDynamicsGateRequestKeys = keysOf<MasteringDynamicsGateRequest>()(
   'holdMs',
   'closeThresholdDb',
   'keyHighPassHz',
-  'validate',
 ]);
 const MasteringDynamicsTransientShaperRequestKeys =
   keysOf<MasteringDynamicsTransientShaperRequest>()([
@@ -1201,7 +1103,6 @@ const MasteringDynamicsTransientShaperRequestKeys =
     'maxGainDb',
     'gainSmoothingMs',
     'lookaheadMs',
-    'validate',
   ]);
 const MasteringAnalyzePairRequestKeys = keysOf<MasteringAnalyzePairRequest>()([
   'analysis',
@@ -1210,7 +1111,6 @@ const MasteringAnalyzePairRequestKeys = keysOf<MasteringAnalyzePairRequest>()([
   'sampleRate',
   'referenceSampleRate',
   'params',
-  'validate',
 ]);
 const MasteringApplyPairProcessorRequestKeys = keysOf<MasteringApplyPairProcessorRequest>()([
   'processor',
@@ -1219,7 +1119,6 @@ const MasteringApplyPairProcessorRequestKeys = keysOf<MasteringApplyPairProcesso
   'sampleRate',
   'referenceSampleRate',
   'params',
-  'validate',
 ]);
 const MasteringApplyPairProcessorStereoRequestKeys =
   keysOf<MasteringApplyPairProcessorStereoRequest>()([
@@ -1231,14 +1130,12 @@ const MasteringApplyPairProcessorStereoRequestKeys =
     'sampleRate',
     'referenceSampleRate',
     'params',
-    'validate',
   ]);
 const MasteringApplyProcessorRequestKeys = keysOf<MasteringApplyProcessorRequest>()([
   'processor',
   'samples',
   'sampleRate',
   'params',
-  'validate',
 ]);
 const MasteringApplyProcessorStereoRequestKeys = keysOf<MasteringApplyProcessorStereoRequest>()([
   'processor',
@@ -1246,13 +1143,11 @@ const MasteringApplyProcessorStereoRequestKeys = keysOf<MasteringApplyProcessorS
   'right',
   'sampleRate',
   'params',
-  'validate',
 ]);
 const MasteringRepairAnalyzeRequestKeys = keysOf<MasteringRepairAnalyzeRequest>()([
   'channels',
   'sampleRate',
   'preferStreamingSafe',
-  'validate',
 ]);
 const MasteringRepairApplyRequestKeys = keysOf<MasteringRepairApplyRequest>()([
   'channels',
@@ -1260,7 +1155,6 @@ const MasteringRepairApplyRequestKeys = keysOf<MasteringRepairApplyRequest>()([
   'stages',
   'onProgress',
   'cancel',
-  'validate',
 ]);
 const MasteringRepairDeclickRequestKeys = keysOf<MasteringRepairDeclickRequest>()([
   'samples',
@@ -1270,7 +1164,6 @@ const MasteringRepairDeclickRequestKeys = keysOf<MasteringRepairDeclickRequest>(
   'maxClickSamples',
   'lpcOrder',
   'residualRatio',
-  'validate',
 ]);
 const MasteringRepairDeclickStereoRequestKeys = keysOf<MasteringRepairDeclickStereoRequest>()([
   'left',
@@ -1281,7 +1174,6 @@ const MasteringRepairDeclickStereoRequestKeys = keysOf<MasteringRepairDeclickSte
   'maxClickSamples',
   'lpcOrder',
   'residualRatio',
-  'validate',
 ]);
 const MasteringRepairDeclipRequestKeys = keysOf<MasteringRepairDeclipRequest>()([
   'samples',
@@ -1290,7 +1182,6 @@ const MasteringRepairDeclipRequestKeys = keysOf<MasteringRepairDeclipRequest>()(
   'lpcOrder',
   'iterations',
   'lpcBlend',
-  'validate',
 ]);
 const MasteringRepairDeclipStereoRequestKeys = keysOf<MasteringRepairDeclipStereoRequest>()([
   'left',
@@ -1300,7 +1191,6 @@ const MasteringRepairDeclipStereoRequestKeys = keysOf<MasteringRepairDeclipStere
   'lpcOrder',
   'iterations',
   'lpcBlend',
-  'validate',
 ]);
 const MasteringRepairDecrackleRequestKeys = keysOf<MasteringRepairDecrackleRequest>()([
   'samples',
@@ -1308,7 +1198,6 @@ const MasteringRepairDecrackleRequestKeys = keysOf<MasteringRepairDecrackleReque
   'threshold',
   'mode',
   'levels',
-  'validate',
 ]);
 const MasteringRepairDecrackleStereoRequestKeys = keysOf<MasteringRepairDecrackleStereoRequest>()([
   'left',
@@ -1317,7 +1206,6 @@ const MasteringRepairDecrackleStereoRequestKeys = keysOf<MasteringRepairDecrackl
   'threshold',
   'mode',
   'levels',
-  'validate',
 ]);
 const MasteringRepairDehumRequestKeys = keysOf<MasteringRepairDehumRequest>()([
   'samples',
@@ -1331,7 +1219,6 @@ const MasteringRepairDehumRequestKeys = keysOf<MasteringRepairDehumRequest>()([
   'frameSize',
   'pllBandwidth',
   'mode',
-  'validate',
 ]);
 const MasteringRepairDehumStereoRequestKeys = keysOf<MasteringRepairDehumStereoRequest>()([
   'left',
@@ -1346,7 +1233,6 @@ const MasteringRepairDehumStereoRequestKeys = keysOf<MasteringRepairDehumStereoR
   'frameSize',
   'pllBandwidth',
   'mode',
-  'validate',
 ]);
 const MasteringRepairDenoiseClassicalRequestKeys = keysOf<MasteringRepairDenoiseClassicalRequest>()(
   [
@@ -1363,7 +1249,6 @@ const MasteringRepairDenoiseClassicalRequestKeys = keysOf<MasteringRepairDenoise
     'noiseEstimationQuantile',
     'speechPresenceGain',
     'gainSmoothing',
-    'validate',
   ],
 );
 const MasteringRepairDenoiseClassicalLinkedRequestKeys =
@@ -1381,7 +1266,6 @@ const MasteringRepairDenoiseClassicalLinkedRequestKeys =
     'noiseEstimationQuantile',
     'speechPresenceGain',
     'gainSmoothing',
-    'validate',
   ]);
 const MasteringRepairDenoiseClassicalStereoRequestKeys =
   keysOf<MasteringRepairDenoiseClassicalStereoRequest>()([
@@ -1399,7 +1283,6 @@ const MasteringRepairDenoiseClassicalStereoRequestKeys =
     'noiseEstimationQuantile',
     'speechPresenceGain',
     'gainSmoothing',
-    'validate',
   ]);
 const MasteringRepairDereverbClassicalRequestKeys =
   keysOf<MasteringRepairDereverbClassicalRequest>()([
@@ -1417,7 +1300,6 @@ const MasteringRepairDereverbClassicalRequestKeys =
     'wpeIterations',
     'wpeTaps',
     'wpeStrength',
-    'validate',
   ]);
 const MasteringRepairDereverbClassicalLinkedRequestKeys =
   keysOf<MasteringRepairDereverbClassicalLinkedRequest>()([
@@ -1435,7 +1317,6 @@ const MasteringRepairDereverbClassicalLinkedRequestKeys =
     'wpeIterations',
     'wpeTaps',
     'wpeStrength',
-    'validate',
   ]);
 const MasteringRepairDereverbClassicalStereoRequestKeys =
   keysOf<MasteringRepairDereverbClassicalStereoRequest>()([
@@ -1454,7 +1335,6 @@ const MasteringRepairDereverbClassicalStereoRequestKeys =
     'wpeIterations',
     'wpeTaps',
     'wpeStrength',
-    'validate',
   ]);
 const MasteringRepairDetectClicksRequestKeys = keysOf<MasteringRepairDetectClicksRequest>()([
   'samples',
@@ -1464,7 +1344,6 @@ const MasteringRepairDetectClicksRequestKeys = keysOf<MasteringRepairDetectClick
   'maxClickSamples',
   'lpcOrder',
   'residualRatio',
-  'validate',
 ]);
 const MasteringRepairDetectClippingRequestKeys = keysOf<MasteringRepairDetectClippingRequest>()([
   'samples',
@@ -1473,7 +1352,6 @@ const MasteringRepairDetectClippingRequestKeys = keysOf<MasteringRepairDetectCli
   'lpcOrder',
   'iterations',
   'lpcBlend',
-  'validate',
 ]);
 const MasteringRepairDetectCrackleRequestKeys = keysOf<MasteringRepairDetectCrackleRequest>()([
   'samples',
@@ -1481,7 +1359,6 @@ const MasteringRepairDetectCrackleRequestKeys = keysOf<MasteringRepairDetectCrac
   'threshold',
   'mode',
   'levels',
-  'validate',
 ]);
 const MasteringRepairDetectHumRequestKeys = keysOf<MasteringRepairDetectHumRequest>()([
   'samples',
@@ -1495,7 +1372,6 @@ const MasteringRepairDetectHumRequestKeys = keysOf<MasteringRepairDetectHumReque
   'frameSize',
   'pllBandwidth',
   'mode',
-  'validate',
 ]);
 const MasteringRepairDetectNoiseFloorRequestKeys = keysOf<MasteringRepairDetectNoiseFloorRequest>()(
   [
@@ -1512,7 +1388,6 @@ const MasteringRepairDetectNoiseFloorRequestKeys = keysOf<MasteringRepairDetectN
     'noiseEstimationQuantile',
     'speechPresenceGain',
     'gainSmoothing',
-    'validate',
   ],
 );
 const MasteringRepairDetectReverbRequestKeys = keysOf<MasteringRepairDetectReverbRequest>()([
@@ -1530,7 +1405,6 @@ const MasteringRepairDetectReverbRequestKeys = keysOf<MasteringRepairDetectRever
   'wpeIterations',
   'wpeTaps',
   'wpeStrength',
-  'validate',
 ]);
 const MasteringRepairDetectTrimRangeRequestKeys = keysOf<MasteringRepairDetectTrimRangeRequest>()([
   'samples',
@@ -1541,7 +1415,6 @@ const MasteringRepairDetectTrimRangeRequestKeys = keysOf<MasteringRepairDetectTr
   'mode',
   'gateLufs',
   'windowMs',
-  'validate',
 ]);
 const MasteringRepairDetectTrimRangeStereoRequestKeys =
   keysOf<MasteringRepairDetectTrimRangeStereoRequest>()([
@@ -1554,7 +1427,6 @@ const MasteringRepairDetectTrimRangeStereoRequestKeys =
     'mode',
     'gateLufs',
     'windowMs',
-    'validate',
   ]);
 const MasteringRepairTrimSilenceRequestKeys = keysOf<MasteringRepairTrimSilenceRequest>()([
   'samples',
@@ -1565,7 +1437,6 @@ const MasteringRepairTrimSilenceRequestKeys = keysOf<MasteringRepairTrimSilenceR
   'mode',
   'gateLufs',
   'windowMs',
-  'validate',
 ]);
 const MasteringRepairTrimSilenceStereoRequestKeys =
   keysOf<MasteringRepairTrimSilenceStereoRequest>()([
@@ -1578,7 +1449,6 @@ const MasteringRepairTrimSilenceStereoRequestKeys =
     'mode',
     'gateLufs',
     'windowMs',
-    'validate',
   ]);
 const MasteringAnalyzeStereoRequestKeys = keysOf<MasteringAnalyzeStereoRequest>()([
   'analysis',
@@ -1586,7 +1456,6 @@ const MasteringAnalyzeStereoRequestKeys = keysOf<MasteringAnalyzeStereoRequest>(
   'right',
   'sampleRate',
   'params',
-  'validate',
 ]);
 const MasteringInsertParamInfoRequestKeys = keysOf<MasteringInsertParamInfoRequest>()([
   'insert',
@@ -1601,10 +1470,9 @@ const MasteringStreamingPreviewRequestKeys = keysOf<MasteringStreamingPreviewReq
   'samples',
   'sampleRate',
   'platforms',
-  'validate',
 ]);
 const MasteringStreamingPreviewStereoRequestKeys = keysOf<MasteringStreamingPreviewStereoRequest>()(
-  ['left', 'right', 'sampleRate', 'platforms', 'validate'],
+  ['left', 'right', 'sampleRate', 'platforms'],
 );
 const MelToStftRequestKeys = keysOf<MelToStftRequest>()([
   'power',
@@ -1613,7 +1481,6 @@ const MelToStftRequestKeys = keysOf<MelToStftRequest>()([
   'fminHz',
   'fmaxHz',
   'htk',
-  'validate',
 ]);
 const MelToAudioRequestKeys = keysOf<MelToAudioRequest>()([
   'power',
@@ -1624,14 +1491,8 @@ const MelToAudioRequestKeys = keysOf<MelToAudioRequest>()([
   'fmaxHz',
   'htk',
   'nIter',
-  'validate',
 ]);
-const MfccToMelRequestKeys = keysOf<MfccToMelRequest>()([
-  'coefficients',
-  'nMels',
-  'lifter',
-  'validate',
-]);
+const MfccToMelRequestKeys = keysOf<MfccToMelRequest>()(['coefficients', 'nMels', 'lifter']);
 const MfccToAudioRequestKeys = keysOf<MfccToAudioRequest>()([
   'coefficients',
   'nMels',
@@ -1643,7 +1504,6 @@ const MfccToAudioRequestKeys = keysOf<MfccToAudioRequest>()([
   'fmaxHz',
   'htk',
   'nIter',
-  'validate',
 ]);
 const MasteringRepairDereverbConfigForRoomRequestKeys =
   keysOf<MasteringRepairDereverbConfigForRoomRequest>()([
@@ -1665,7 +1525,7 @@ const MasteringRepairNoiseBandBinsRequestKeys = keysOf<MasteringRepairNoiseBandB
   'nFft',
   'sampleRate',
 ]);
-const MelDeltaRequestKeys = keysOf<MelDeltaRequest>()(['features', 'width', 'validate']);
+const MelDeltaRequestKeys = keysOf<MelDeltaRequest>()(['features', 'width']);
 const MelSpectrogramRequestKeys = keysOf<MelSpectrogramRequest>()([
   'nMels',
   'fminHz',
@@ -1675,7 +1535,6 @@ const MelSpectrogramRequestKeys = keysOf<MelSpectrogramRequest>()([
   'sampleRate',
   'nFft',
   'hopLength',
-  'validate',
 ]);
 const MergeNotesRequestKeys = keysOf<MergeNotesRequest>()([
   'first',
@@ -1691,52 +1550,34 @@ const MergeNotesRequestKeys = keysOf<MergeNotesRequest>()([
   'minNoteMs',
   'referenceHz',
   'voicedThreshold',
-  'validate',
 ]);
-const MeteringPeakDbRequestKeys = keysOf<MeteringPeakDbRequest>()([
-  'samples',
-  'sampleRate',
-  'validate',
-]);
-const MeteringRmsDbRequestKeys = keysOf<MeteringRmsDbRequest>()([
-  'samples',
-  'sampleRate',
-  'validate',
-]);
+const MeteringPeakDbRequestKeys = keysOf<MeteringPeakDbRequest>()(['samples', 'sampleRate']);
+const MeteringRmsDbRequestKeys = keysOf<MeteringRmsDbRequest>()(['samples', 'sampleRate']);
 const MeteringCrestFactorDbRequestKeys = keysOf<MeteringCrestFactorDbRequest>()([
   'samples',
   'sampleRate',
-  'validate',
 ]);
-const MeteringDcOffsetRequestKeys = keysOf<MeteringDcOffsetRequest>()([
-  'samples',
-  'sampleRate',
-  'validate',
-]);
+const MeteringDcOffsetRequestKeys = keysOf<MeteringDcOffsetRequest>()(['samples', 'sampleRate']);
 const MeteringCrestFactorDbStereoRequestKeys = keysOf<MeteringCrestFactorDbStereoRequest>()([
   'left',
   'right',
   'sampleRate',
-  'validate',
 ]);
 const MeteringStereoCorrelationRequestKeys = keysOf<MeteringStereoCorrelationRequest>()([
   'left',
   'right',
   'sampleRate',
-  'validate',
 ]);
 const MeteringStereoWidthRequestKeys = keysOf<MeteringStereoWidthRequest>()([
   'left',
   'right',
   'sampleRate',
-  'validate',
 ]);
 const MeteringDetectClippingRequestKeys = keysOf<MeteringDetectClippingRequest>()([
   'samples',
   'sampleRate',
   'thresholdDb',
   'minRegionSamples',
-  'validate',
 ]);
 const MeteringDynamicRangeRequestKeys = keysOf<MeteringDynamicRangeRequest>()([
   'samples',
@@ -1745,21 +1586,18 @@ const MeteringDynamicRangeRequestKeys = keysOf<MeteringDynamicRangeRequest>()([
   'hopSec',
   'lowPercentile',
   'highPercentile',
-  'validate',
 ]);
 const MeteringVectorscopeRequestKeys = keysOf<MeteringVectorscopeRequest>()([
   'left',
   'right',
   'sampleRate',
   'maxPoints',
-  'validate',
 ]);
 const MeteringPhaseScopeRequestKeys = keysOf<MeteringPhaseScopeRequest>()([
   'left',
   'right',
   'sampleRate',
   'maxPoints',
-  'validate',
 ]);
 const MeteringSilenceRatioRequestKeys = keysOf<MeteringSilenceRatioRequest>()([
   'samples',
@@ -1767,7 +1605,6 @@ const MeteringSilenceRatioRequestKeys = keysOf<MeteringSilenceRatioRequest>()([
   'thresholdDb',
   'frameLength',
   'hopLength',
-  'validate',
 ]);
 const MeteringSpectrumRequestKeys = keysOf<MeteringSpectrumRequest>()([
   'samples',
@@ -1777,7 +1614,6 @@ const MeteringSpectrumRequestKeys = keysOf<MeteringSpectrumRequest>()([
   'octaveFraction',
   'dbRef',
   'dbAmin',
-  'validate',
 ]);
 const MeteringSpectrumFrameRequestKeys = keysOf<MeteringSpectrumFrameRequest>()([
   'samples',
@@ -1788,13 +1624,11 @@ const MeteringSpectrumFrameRequestKeys = keysOf<MeteringSpectrumFrameRequest>()(
   'octaveFraction',
   'dbRef',
   'dbAmin',
-  'validate',
 ]);
 const MeteringTruePeakDbtpRequestKeys = keysOf<MeteringTruePeakDbtpRequest>()([
   'samples',
   'sampleRate',
   'oversampleFactor',
-  'validate',
 ]);
 const MfccRequestKeys = keysOf<MfccRequest>()([
   'nMfcc',
@@ -1807,9 +1641,8 @@ const MfccRequestKeys = keysOf<MfccRequest>()([
   'sampleRate',
   'nFft',
   'hopLength',
-  'validate',
 ]);
-const MixStereoRequestKeys = keysOf<MixStereoRequest>()(['strips', 'sampleRate', 'validate']);
+const MixStereoRequestKeys = keysOf<MixStereoRequest>()(['strips', 'sampleRate']);
 const NnFilterRequestKeys = keysOf<NnFilterRequest>()(['s', 'aggregate', 'k', 'width']);
 const NnlsChromaRequestKeys = keysOf<NnlsChromaRequest>()([
   'samples',
@@ -1818,14 +1651,12 @@ const NnlsChromaRequestKeys = keysOf<NnlsChromaRequest>()([
   'stftBlendWeight',
   'stftBlendNFft',
   'hopLength',
-  'validate',
 ]);
 const NormalizeRequestKeys = keysOf<NormalizeRequest>()([
   'samples',
   'sampleRate',
   'targetDb',
   'mode',
-  'validate',
 ]);
 const NormalizeStereoRequestKeys = keysOf<NormalizeStereoRequest>()([
   'left',
@@ -1833,7 +1664,6 @@ const NormalizeStereoRequestKeys = keysOf<NormalizeStereoRequest>()([
   'sampleRate',
   'targetDb',
   'mode',
-  'validate',
 ]);
 const NoteMoveRequestKeys = keysOf<NoteMoveRequest>()([
   'samples',
@@ -1844,7 +1674,6 @@ const NoteMoveRequestKeys = keysOf<NoteMoveRequest>()([
   'offsetSec',
   'targetOnsetSample',
   'targetOnsetSec',
-  'validate',
 ]);
 const NoteSegmentsRequestKeys = keysOf<NoteSegmentsRequest>()([
   'f0Hz',
@@ -1864,7 +1693,6 @@ const NoteStretchRequestKeys = keysOf<NoteStretchRequest>()([
   'offsetSample',
   'offsetSec',
   'stretchRatio',
-  'validate',
 ]);
 const NoteTargetsFromSmfRequestKeys = keysOf<NoteTargetsFromSmfRequest>()(['data', 'trackIndex']);
 const OnsetBacktrackRequestKeys = keysOf<OnsetBacktrackRequest>()(['events', 'energy']);
@@ -1875,7 +1703,6 @@ const OnsetStrengthMultiRequestKeys = keysOf<OnsetStrengthMultiRequest>()([
   'nFft',
   'hopLength',
   'nMels',
-  'validate',
 ]);
 const PadCenterRequestKeys = keysOf<PadCenterRequest>()(['values', 'targetSize', 'padValue']);
 const PcenRequestKeys = keysOf<PcenRequest>()([
@@ -1897,14 +1724,13 @@ const PeakPickRequestKeys = keysOf<PeakPickRequest>()([
   'delta',
   'wait',
 ]);
-const PercussiveRequestKeys = keysOf<PercussiveRequest>()(['samples', 'sampleRate', 'validate']);
+const PercussiveRequestKeys = keysOf<PercussiveRequest>()(['samples', 'sampleRate']);
 const PhaseVocoderRequestKeys = keysOf<PhaseVocoderRequest>()([
   'speedRatio',
   'samples',
   'sampleRate',
   'nFft',
   'hopLength',
-  'validate',
 ]);
 const PiptrackRequestKeys = keysOf<PiptrackRequest>()([
   'samples',
@@ -1914,7 +1740,6 @@ const PiptrackRequestKeys = keysOf<PiptrackRequest>()([
   'fminHz',
   'fmaxHz',
   'threshold',
-  'validate',
 ]);
 const PitchCorrectTimevaryingRequestKeys = keysOf<PitchCorrectTimevaryingRequest>()([
   'samples',
@@ -1932,14 +1757,12 @@ const PitchCorrectTimevaryingRequestKeys = keysOf<PitchCorrectTimevaryingRequest
   'vibratoThresholdCents',
   'voiced',
   'voicedProb',
-  'validate',
 ]);
 const PitchCorrectToMidiRequestKeys = keysOf<PitchCorrectToMidiRequest>()([
   'samples',
   'sampleRate',
   'currentMidi',
   'targetMidi',
-  'validate',
 ]);
 const PitchPyinRequestKeys = keysOf<PitchPyinRequest>()([
   'samples',
@@ -1950,7 +1773,6 @@ const PitchPyinRequestKeys = keysOf<PitchPyinRequest>()([
   'fillNa',
   'f0MinHz',
   'f0MaxHz',
-  'validate',
 ]);
 const PitchShiftRequestKeys = keysOf<PitchShiftRequest>()([
   'samples',
@@ -1958,7 +1780,6 @@ const PitchShiftRequestKeys = keysOf<PitchShiftRequest>()([
   'pitchSemitones',
   'nFft',
   'hopLength',
-  'validate',
 ]);
 const PitchTuningRequestKeys = keysOf<PitchTuningRequest>()([
   'frequencies',
@@ -1973,7 +1794,6 @@ const PitchYinRequestKeys = keysOf<PitchYinRequest>()([
   'threshold',
   'f0MinHz',
   'f0MaxHz',
-  'validate',
 ]);
 const PlpRequestKeys = keysOf<PlpRequest>()([
   'onsetEnvelope',
@@ -1989,7 +1809,6 @@ const PolyFeaturesRequestKeys = keysOf<PolyFeaturesRequest>()([
   'sampleRate',
   'nFft',
   'hopLength',
-  'validate',
 ]);
 const ReassignedSpectrogramRequestKeys = keysOf<ReassignedSpectrogramRequest>()([
   'refPower',
@@ -1998,14 +1817,12 @@ const ReassignedSpectrogramRequestKeys = keysOf<ReassignedSpectrogramRequest>()(
   'sampleRate',
   'nFft',
   'hopLength',
-  'validate',
 ]);
 const RemixRequestKeys = keysOf<RemixRequest>()([
   'samples',
   'intervals',
   'sampleRate',
   'alignZeros',
-  'validate',
 ]);
 const RenderNotesRequestKeys = keysOf<RenderNotesRequest>()([
   'samples',
@@ -2016,7 +1833,6 @@ const RenderNotesRequestKeys = keysOf<RenderNotesRequest>()([
   'voiced',
   'frameRate',
   'vibratoCutoffHz',
-  'validate',
 ]);
 const RenderPercussiveEventsRequestKeys = keysOf<RenderPercussiveEventsRequest>()([
   'samples',
@@ -2027,7 +1843,6 @@ const RenderPercussiveEventsRequestKeys = keysOf<RenderPercussiveEventsRequest>(
   'hopLength',
   'hpssKernelHarmonic',
   'hpssKernelPercussive',
-  'validate',
 ]);
 const RenderPlaybackRequestKeys = keysOf<RenderPlaybackRequest>()([
   'samples',
@@ -2035,7 +1850,6 @@ const RenderPlaybackRequestKeys = keysOf<RenderPlaybackRequest>()([
   'sampleRate',
   'config',
   'hrtf',
-  'validate',
 ]);
 const PlaybackRendererOptionsKeys = keysOf<PlaybackRendererOptions>()([
   'config',
@@ -2062,14 +1876,12 @@ const VocalRestoreRequestKeys = keysOf<VocalRestoreRequest>()([
   'sampleRate',
   'state',
   'limits',
-  'validate',
 ]);
 const ZeroCrossingRateRequestKeys = keysOf<ZeroCrossingRateRequest>()([
   'samples',
   'sampleRate',
   'frameLength',
   'hopLength',
-  'validate',
 ]);
 const RoomGeometryFromEstimateRequestKeys = keysOf<RoomGeometryFromEstimateRequest>()([
   'estimate',
@@ -2100,7 +1912,6 @@ const RoomMorphRequestKeys = keysOf<RoomMorphRequest>()([
   'airAbsorptionEnabled',
   'airTemperatureC',
   'airHumidityPercent',
-  'validate',
 ]);
 const RoomMorphStereoRequestKeys = keysOf<RoomMorphStereoRequest>()([
   'left',
@@ -2127,7 +1938,6 @@ const RoomMorphStereoRequestKeys = keysOf<RoomMorphStereoRequest>()([
   'airAbsorptionEnabled',
   'airTemperatureC',
   'airHumidityPercent',
-  'validate',
 ]);
 const SegmentAgglomerativeRequestKeys = keysOf<SegmentAgglomerativeRequest>()([
   'data',
@@ -2172,7 +1982,6 @@ const SpectralBandwidthRequestKeys = keysOf<SpectralBandwidthRequest>()([
   'nFft',
   'hopLength',
   'p',
-  'validate',
 ]);
 const SpectralContrastRequestKeys = keysOf<SpectralContrastRequest>()([
   'nBands',
@@ -2182,7 +1991,6 @@ const SpectralContrastRequestKeys = keysOf<SpectralContrastRequest>()([
   'sampleRate',
   'nFft',
   'hopLength',
-  'validate',
 ]);
 const SpectralEditRequestKeys = keysOf<SpectralEditRequest>()([
   'samples',
@@ -2192,7 +2000,6 @@ const SpectralEditRequestKeys = keysOf<SpectralEditRequest>()([
   'hopLength',
   'window',
   'healRadiusFrames',
-  'validate',
 ]);
 const SpectralFluxRequestKeys = keysOf<SpectralFluxRequest>()([
   'samples',
@@ -2200,7 +2007,6 @@ const SpectralFluxRequestKeys = keysOf<SpectralFluxRequest>()([
   'nFft',
   'hopLength',
   'lag',
-  'validate',
 ]);
 const SpectralRolloffRequestKeys = keysOf<SpectralRolloffRequest>()([
   'rollPercent',
@@ -2208,7 +2014,6 @@ const SpectralRolloffRequestKeys = keysOf<SpectralRolloffRequest>()([
   'sampleRate',
   'nFft',
   'hopLength',
-  'validate',
 ]);
 const SplitNoteRequestKeys = keysOf<SplitNoteRequest>()([
   'index',
@@ -2225,7 +2030,6 @@ const SplitNoteRequestKeys = keysOf<SplitNoteRequest>()([
   'minNoteMs',
   'referenceHz',
   'voicedThreshold',
-  'validate',
 ]);
 const SplitSilenceCommonRequestKeys = keysOf<SplitSilenceCommonRequest>()([
   'signals',
@@ -2237,14 +2041,12 @@ const StreamingLoudnessGainRequestKeys = keysOf<StreamingLoudnessGainRequest>()(
   'samples',
   'sampleRate',
   'config',
-  'validate',
 ]);
 const StreamingLoudnessGainStereoRequestKeys = keysOf<StreamingLoudnessGainStereoRequest>()([
   'left',
   'right',
   'sampleRate',
   'config',
-  'validate',
 ]);
 const MixingAssistantSuggestRequestKeys = keysOf<MixingAssistantSuggestRequest>()([
   'tracks',
@@ -2263,7 +2065,6 @@ const MixingAssistantSuggestRequestKeys = keysOf<MixingAssistantSuggestRequest>(
   'enableHighPass',
   'nFft',
   'hopLength',
-  'validate',
 ]);
 const SynthesizeRirRequestKeys = keysOf<SynthesizeRirRequest>()([
   'sampleRate',
@@ -2300,7 +2101,6 @@ const TempogramRatioRequestKeys = keysOf<TempogramRatioRequest>()([
   'sampleRate',
   'hopLength',
   'factors',
-  'validate',
 ]);
 const TimeStretchRequestKeys = keysOf<TimeStretchRequest>()([
   'samples',
@@ -2308,7 +2108,6 @@ const TimeStretchRequestKeys = keysOf<TimeStretchRequest>()([
   'speedRatio',
   'nFft',
   'hopLength',
-  'validate',
 ]);
 const ToneRequestKeys = keysOf<ToneRequest>()([
   'frequencyHz',
@@ -2338,7 +2137,6 @@ const TranscribeRequestKeys = keysOf<TranscribeRequest>()([
   'channel',
   'f0MinHz',
   'f0MaxHz',
-  'validate',
 ]);
 const TrimRequestKeys = keysOf<TrimRequest>()([
   'samples',
@@ -2346,7 +2144,6 @@ const TrimRequestKeys = keysOf<TrimRequest>()([
   'thresholdDb',
   'frameLength',
   'hopLength',
-  'validate',
 ]);
 const VectorNormalizeRequestKeys = keysOf<VectorNormalizeRequest>()([
   'values',
@@ -2359,13 +2156,11 @@ const VoiceChangeRequestKeys = keysOf<VoiceChangeRequest>()([
   'pitchSemitones',
   'formantFactor',
   'formantMode',
-  'validate',
 ]);
 const VoiceChangeRealtimeRequestKeys = keysOf<VoiceChangeRealtimeRequest>()([
   'channels',
   'sampleRate',
   'config',
-  'validate',
 ]);
 const VqtRequestKeys = keysOf<VqtRequest>()([
   'gamma',
@@ -2375,7 +2170,6 @@ const VqtRequestKeys = keysOf<VqtRequest>()([
   'fminHz',
   'nBins',
   'binsPerOctave',
-  'validate',
 ]);
 const VqtToAudioRequestKeys = keysOf<VqtToAudioRequest>()([
   'gamma',
@@ -2385,18 +2179,12 @@ const VqtToAudioRequestKeys = keysOf<VqtToAudioRequest>()([
   'fminHz',
   'binsPerOctave',
   'nIter',
-  'validate',
 ]);
 const WaveformPeakPyramidRequestKeys = keysOf<WaveformPeakPyramidRequest>()([
   'channels',
   'samplesPerBucketLevels',
-  'validate',
 ]);
-const WaveformPeaksRequestKeys = keysOf<WaveformPeaksRequest>()([
-  'channels',
-  'samplesPerBucket',
-  'validate',
-]);
+const WaveformPeaksRequestKeys = keysOf<WaveformPeaksRequest>()(['channels', 'samplesPerBucket']);
 const ZeroCrossingsRequestKeys = keysOf<ZeroCrossingsRequest>()([
   'samples',
   'threshold',
@@ -2404,7 +2192,6 @@ const ZeroCrossingsRequestKeys = keysOf<ZeroCrossingsRequest>()([
   'pad',
   'zeroPos',
   'sampleRate',
-  'validate',
 ]);
 
 const SetPartRigRequestKeys = keysOf<PartRigRequest>()([
@@ -2417,7 +2204,6 @@ const RenderOfflineRequestKeys = keysOf<RenderOfflineRequest>()([
   'channels',
   'blockSize',
   'finalize',
-  'validate',
 ]);
 const EngineConfigRequestKeys = keysOf<RealtimeEngineConfig>()([
   'sampleRate',
@@ -2458,7 +2244,6 @@ const SonareEngineRenderOfflineRequestKeys = keysOf<SonareEngineRenderOfflineReq
   'totalFrames',
   'blockSize',
   'finalize',
-  'validate',
 ]);
 const SetLoopRequestKeys = keysOf<EngineLoop>()(['startPpq', 'endPpq', 'enabled']);
 const SetMetronomeRequestKeys = keysOf<EngineMetronomeConfig>()([

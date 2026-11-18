@@ -5058,7 +5058,7 @@ test = "bindings/node/tests/surface/analysis-music.test.ts::estimateMeter takes 
 [[entry]]
 kind = "function"
 old = "resample"
-changed = "one positional form (resample(samples, sampleRate, targetSampleRate)); request ResampleRequest {samples, sampleRate, targetSampleRate, validate?}"
+changed = "one positional form (resample(samples, sampleRate, targetSampleRate)); request ResampleRequest {samples, sampleRate, targetSampleRate}"
 domain = "analysis"
 rule = "sample-rate-name"
 test = "bindings/node/tests/surface/analysis-music.test.ts::resample takes two named rates"
@@ -5472,7 +5472,7 @@ old = "AnalyzeBpmRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
 
 [[entry]]
 kind = "type"
@@ -5480,7 +5480,7 @@ old = "AnalyzeDynamicsRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
 
 [[entry]]
 kind = "type"
@@ -5488,7 +5488,7 @@ old = "AnalyzeImpulseResponseRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
 
 [[entry]]
 kind = "type"
@@ -5496,7 +5496,7 @@ old = "AnalyzeMelodyRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
 
 [[entry]]
 kind = "type"
@@ -5504,7 +5504,7 @@ old = "AnalyzeRhythmRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
 
 [[entry]]
 kind = "type"
@@ -5512,7 +5512,7 @@ old = "AnalyzeSectionsRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default); gains threshold?: number, the section boundary threshold (omitted = the library default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
 
 [[entry]]
 kind = "type"
@@ -5520,7 +5520,7 @@ old = "AnalyzeTimbreRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
 
 [[entry]]
 kind = "type"
@@ -5552,7 +5552,7 @@ old = "ChordFunctionalAnalysisRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
 
 [[entry]]
 kind = "type"
@@ -5575,7 +5575,7 @@ old = "DetectAcousticRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
 
 [[entry]]
 kind = "type"
@@ -5583,7 +5583,7 @@ old = "DetectBoundariesRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
 
 [[entry]]
 kind = "type"
@@ -5591,7 +5591,7 @@ old = "DetectChordsRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
 
 [[entry]]
 kind = "type"
@@ -5599,7 +5599,7 @@ old = "DetectKeyCandidatesRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
 
 [[entry]]
 kind = "type"
@@ -5614,7 +5614,7 @@ old = "DetectKeyRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
 
 [[entry]]
 kind = "type"
@@ -5622,7 +5622,7 @@ old = "DetectOnsetsRequest"
 changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
 
 [[entry]]
 kind = "type"
@@ -8317,7 +8317,7 @@ test = "bindings/node/tests/surface/engine.test.ts::configures the whole capture
 [[entry]]
 kind = "method"
 old = "RealtimeEngine.renderOffline"
-changed = "request-only renderOffline({ channels, blockSize?, finalize?, validate? }); the (channels, blockSize) overload is removed"
+changed = "request-only renderOffline({ channels, blockSize?, finalize? }); the (channels, blockSize) overload is removed"
 domain = "engine"
 rule = "one-positional-form"
 test = "bindings/node/tests/surface/engine.test.ts::renders from a request object only"
@@ -9068,7 +9068,7 @@ test = "bindings/node/tests/surface/effects-sep.test.ts::Matrix2D"
 [[entry]]
 kind = "type"
 old = "DecomposeStemsLinkedRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
@@ -9076,7 +9076,7 @@ test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "type"
 old = "DecomposeStemsRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
@@ -9091,7 +9091,7 @@ rule = "worklet-scope"
 [[entry]]
 kind = "type"
 old = "HpssRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
@@ -9099,7 +9099,7 @@ test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "type"
 old = "HpssWithResidualRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
@@ -9115,7 +9115,7 @@ test = "bindings/node/tests/surface/effects-sep.test.ts::Matrix2D"
 [[entry]]
 kind = "type"
 old = "NormalizeRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
@@ -9123,7 +9123,7 @@ test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "type"
 old = "NormalizeStereoRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
@@ -9131,7 +9131,7 @@ test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "type"
 old = "PhaseVocoderRequest"
-changed = "removes `rate`; adds `speedRatio: number` (required); adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `rate`; adds `speedRatio: number` (required); `sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
@@ -9139,7 +9139,7 @@ test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "type"
 old = "RemixRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
@@ -9150,14 +9150,6 @@ old = "RirSynthOptions"
 new = "SynthesizeRirRequest"
 domain = "effects"
 rule = "type-names"
-
-[[entry]]
-kind = "type"
-old = "RoomEstimateOptions"
-changed = "adds `validate?: boolean`"
-domain = "effects"
-rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
 
 [[entry]]
 kind = "type"
@@ -9183,7 +9175,7 @@ rule = "type-names"
 [[entry]]
 kind = "type"
 old = "RoomMorphOptions"
-changed = "removes `listenerX`; removes `listenerY`; removes `listenerZ`; removes `maxSeconds`; removes `sourceX`; removes `sourceY`; removes `sourceZ`; adds `listener?: RoomPlacement`; adds `maxSec?: number`; adds `source?: RoomPlacement`; adds `validate?: boolean`"
+changed = "removes `listenerX`; removes `listenerY`; removes `listenerZ`; removes `maxSeconds`; removes `sourceX`; removes `sourceY`; removes `sourceZ`; adds `listener?: RoomPlacement`; adds `maxSec?: number`; adds `source?: RoomPlacement`"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
@@ -9191,7 +9183,7 @@ test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "type"
 old = "RoomMorphRequest"
-changed = "removes `listenerX`; removes `listenerY`; removes `listenerZ`; removes `maxSeconds`; removes `sourceX`; removes `sourceY`; removes `sourceZ`; adds `listener?: RoomPlacement`; adds `maxSec?: number`; adds `source?: RoomPlacement`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `listenerX`; removes `listenerY`; removes `listenerZ`; removes `maxSeconds`; removes `sourceX`; removes `sourceY`; removes `sourceZ`; adds `listener?: RoomPlacement`; adds `maxSec?: number`; adds `source?: RoomPlacement`; `sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
@@ -9199,7 +9191,7 @@ test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in 
 [[entry]]
 kind = "type"
 old = "RoomMorphStereoRequest"
-changed = "removes `listenerX`; removes `listenerY`; removes `listenerZ`; removes `maxSeconds`; removes `sourceX`; removes `sourceY`; removes `sourceZ`; adds `listener?: RoomPlacement`; adds `maxSec?: number`; adds `source?: RoomPlacement`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `listenerX`; removes `listenerY`; removes `listenerZ`; removes `maxSeconds`; removes `sourceX`; removes `sourceY`; removes `sourceZ`; adds `listener?: RoomPlacement`; adds `maxSec?: number`; adds `source?: RoomPlacement`; `sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
@@ -9596,7 +9588,7 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::scale helpers: an abs
 [[entry]]
 kind = "type"
 old = "AutoTuneOptions"
-changed = "removes `referenceMidi`; adds `key?: AutoTuneKey | \"detect\"`; adds `scaleReferenceMidi?: number`; adds `validate?: boolean`"
+changed = "removes `referenceMidi`; adds `key?: AutoTuneKey | \"detect\"`; adds `scaleReferenceMidi?: number`"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
@@ -9604,7 +9596,7 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "type"
 old = "AutoTuneRequest"
-changed = "removes `referenceMidi`; adds `scaleReferenceMidi?: number`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `referenceMidi`; adds `scaleReferenceMidi?: number`; `sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
@@ -9619,16 +9611,8 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::refuses a removed not
 
 [[entry]]
 kind = "type"
-old = "ExtractPercussiveEventsRequest"
-changed = "adds `validate?: boolean`"
-domain = "effects"
-rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
-
-[[entry]]
-kind = "type"
 old = "MergeNotesRequest"
-changed = "adds `validate?: boolean`; `voiced` is now `VoicedFlags` (was `VoicedFlags | null`); `voicedProb` is now `Float32Array` (was `Float32Array | null`)"
+changed = "`voiced` is now `VoicedFlags` (was `VoicedFlags | null`); `voicedProb` is now `Float32Array` (was `Float32Array | null`)"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
@@ -9643,16 +9627,8 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::exposes the note type
 
 [[entry]]
 kind = "type"
-old = "NoteMoveOptions"
-changed = "adds `validate?: boolean`"
-domain = "effects"
-rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
-
-[[entry]]
-kind = "type"
 old = "NoteMoveRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
@@ -9660,7 +9636,7 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "type"
 old = "NoteStretchOptions"
-changed = "adds `validate?: boolean`; `stretchRatio` is now required"
+changed = "`stretchRatio` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
@@ -9668,7 +9644,7 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "type"
 old = "NoteStretchRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required; `stretchRatio` is now required"
+changed = "`sampleRate` is now required; `stretchRatio` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
@@ -9683,7 +9659,7 @@ rule = "type-names"
 [[entry]]
 kind = "type"
 old = "PitchCorrectOptions"
-changed = "removes `mode`; removes `referenceMidi`; adds `f0Hz: Float32Array` (required); adds `hopLength?: number`; adds `scaleReferenceMidi?: number`; adds `targetMode?: PitchTargetMode`; adds `validate?: boolean`; `voiced` is now `VoicedFlags` (was `VoicedFlags | null`); `voicedProb` is now `Float32Array` (was `Float32Array | null`)"
+changed = "removes `mode`; removes `referenceMidi`; adds `f0Hz: Float32Array` (required); adds `hopLength?: number`; adds `scaleReferenceMidi?: number`; adds `targetMode?: PitchTargetMode`; `voiced` is now `VoicedFlags` (was `VoicedFlags | null`); `voicedProb` is now `Float32Array` (was `Float32Array | null`)"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
@@ -9691,7 +9667,7 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "type"
 old = "PitchCorrectTimevaryingRequest"
-changed = "removes `mode`; removes `referenceMidi`; adds `scaleReferenceMidi?: number`; adds `targetMode?: PitchTargetMode`; adds `validate?: boolean`; `sampleRate` is now required; `voiced` is now `VoicedFlags` (was `VoicedFlags | null`); `voicedProb` is now `Float32Array` (was `Float32Array | null`)"
+changed = "removes `mode`; removes `referenceMidi`; adds `scaleReferenceMidi?: number`; adds `targetMode?: PitchTargetMode`; `sampleRate` is now required; `voiced` is now `VoicedFlags` (was `VoicedFlags | null`); `voicedProb` is now `Float32Array` (was `Float32Array | null`)"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
@@ -9699,7 +9675,7 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "type"
 old = "PitchCorrectToMidiRequest"
-changed = "adds `validate?: boolean`; `currentMidi` is now required; `sampleRate` is now required; `targetMidi` is now required"
+changed = "`currentMidi` is now required; `sampleRate` is now required; `targetMidi` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
@@ -9714,7 +9690,7 @@ rule = "one-entry-per-operation"
 [[entry]]
 kind = "type"
 old = "PitchShiftRequest"
-changed = "removes `semitones`; adds `pitchSemitones: number` (required); adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `semitones`; adds `pitchSemitones: number` (required); `sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
@@ -9722,15 +9698,7 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "type"
 old = "RenderNotesRequest"
-changed = "adds `validate?: boolean`; `voiced` is now `VoicedFlags` (was `VoicedFlags | null`)"
-domain = "effects"
-rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
-
-[[entry]]
-kind = "type"
-old = "RenderPercussiveEventsRequest"
-changed = "adds `validate?: boolean`"
+changed = "`voiced` is now `VoicedFlags` (was `VoicedFlags | null`)"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
@@ -9738,7 +9706,7 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "type"
 old = "SpectralEditOptions"
-changed = "adds `ops: readonly SpectralRegionOp[]` (required); adds `validate?: boolean`; `window` is now `WindowType` (was `\"hann\" | \"hamming\" | \"blackman\" | \"rectangular\"`)"
+changed = "adds `ops: readonly SpectralRegionOp[]` (required); `window` is now `WindowType` (was `\"hann\" | \"hamming\" | \"blackman\" | \"rectangular\"`)"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
@@ -9746,7 +9714,7 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "type"
 old = "SpectralEditRequest"
-changed = "adds `validate?: boolean`; `ops` is now `readonly SpectralRegionOp[]` (was `SpectralRegionOp[]`); `ops` is now required; `window` is now `WindowType` (was `\"hann\" | \"hamming\" | \"blackman\" | \"rectangular\"`)"
+changed = "`ops` is now `readonly SpectralRegionOp[]` (was `SpectralRegionOp[]`); `ops` is now required; `window` is now `WindowType` (was `\"hann\" | \"hamming\" | \"blackman\" | \"rectangular\"`)"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
@@ -9754,7 +9722,7 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "type"
 old = "SplitNoteRequest"
-changed = "adds `frameSec?: number`; adds `validate?: boolean`; `frame` is now optional; `voiced` is now `VoicedFlags` (was `VoicedFlags | null`); `voicedProb` is now `Float32Array` (was `Float32Array | null`)"
+changed = "adds `frameSec?: number`; `frame` is now optional; `voiced` is now `VoicedFlags` (was `VoicedFlags | null`); `voicedProb` is now `Float32Array` (was `Float32Array | null`)"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
@@ -9762,7 +9730,7 @@ test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equal
 [[entry]]
 kind = "type"
 old = "TimeStretchRequest"
-changed = "removes `rate`; adds `speedRatio: number` (required); adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `rate`; adds `speedRatio: number` (required); `sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
@@ -10069,14 +10037,6 @@ test = "bindings/node/tests/surface/effects-repair.test.ts::is request-only"
 
 [[entry]]
 kind = "type"
-old = "DeclickOptions"
-changed = "adds `validate?: boolean`"
-domain = "effects"
-rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
-
-[[entry]]
-kind = "type"
 old = "DeclickStereoResult"
 to = "MasteringRepairDeclickResult"
 changed = "renamed to MasteringRepairDeclickResult; shape {channels, reports}"
@@ -10087,10 +10047,10 @@ test = "bindings/node/tests/surface/effects-repair.test.ts::results are {channel
 [[entry]]
 kind = "type"
 old = "DeclipOptions"
-changed = "removes `clipThreshold`; adds `clipThresholdDb?: number`; adds `validate?: boolean`"
+changed = "removes `clipThreshold`; adds `clipThresholdDb?: number`"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::masteringRepairDeclipStereo takes clipThresholdDb"
 
 [[entry]]
 kind = "type"
@@ -10103,14 +10063,6 @@ test = "bindings/node/tests/surface/effects-repair.test.ts::results are {channel
 
 [[entry]]
 kind = "type"
-old = "DecrackleOptions"
-changed = "adds `validate?: boolean`"
-domain = "effects"
-rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
-
-[[entry]]
-kind = "type"
 old = "DecrackleStereoResult"
 to = "MasteringRepairDecrackleResult"
 changed = "renamed to MasteringRepairDecrackleResult; shape {channels, reports}"
@@ -10120,28 +10072,12 @@ test = "bindings/node/tests/surface/effects-repair.test.ts::results are {channel
 
 [[entry]]
 kind = "type"
-old = "DehumOptions"
-changed = "adds `validate?: boolean`"
-domain = "effects"
-rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
-
-[[entry]]
-kind = "type"
 old = "DehumStereoResult"
 to = "MasteringRepairDehumResult"
 changed = "renamed to MasteringRepairDehumResult; shape {channels, reports}"
 domain = "effects"
 rule = "type-names"
 test = "bindings/node/tests/surface/effects-repair.test.ts::results are {channels, reports}"
-
-[[entry]]
-kind = "type"
-old = "DenoiseClassicalOptions"
-changed = "adds `validate?: boolean`"
-domain = "effects"
-rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
 
 [[entry]]
 kind = "type"
@@ -10158,14 +10094,6 @@ changed = "renamed to MasteringRepairDenoiseClassicalResult; shape {channels, re
 domain = "effects"
 rule = "type-names"
 test = "bindings/node/tests/surface/effects-repair.test.ts::results are {channels, reports}"
-
-[[entry]]
-kind = "type"
-old = "DereverbClassicalOptions"
-changed = "adds `validate?: boolean`"
-domain = "effects"
-rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
 
 [[entry]]
 kind = "type"
@@ -10186,194 +10114,194 @@ test = "bindings/node/tests/surface/effects-repair.test.ts::results are {channel
 [[entry]]
 kind = "type"
 old = "MasteringRepairAnalyzeRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairApplyRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDeclickRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDeclickStereoRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDeclipRequest"
-changed = "removes `clipThreshold`; adds `clipThresholdDb?: number`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `clipThreshold`; adds `clipThresholdDb?: number`; `sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDeclipStereoRequest"
-changed = "removes `clipThreshold`; adds `clipThresholdDb?: number`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `clipThreshold`; adds `clipThresholdDb?: number`; `sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDecrackleRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDecrackleStereoRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDehumRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDehumStereoRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDenoiseClassicalLinkedRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDenoiseClassicalRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDenoiseClassicalStereoRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDereverbClassicalLinkedRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDereverbClassicalRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDereverbClassicalStereoRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDetectClicksRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDetectClippingRequest"
-changed = "removes `clipThreshold`; adds `clipThresholdDb?: number`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `clipThreshold`; adds `clipThresholdDb?: number`; `sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDetectCrackleRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDetectHumRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDetectNoiseFloorRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDetectReverbRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDetectTrimRangeRequest"
-changed = "removes `threshold`; adds `thresholdDb?: number`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `threshold`; adds `thresholdDb?: number`; `sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairDetectTrimRangeStereoRequest"
-changed = "removes `threshold`; adds `thresholdDb?: number`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `threshold`; adds `thresholdDb?: number`; `sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
@@ -10386,7 +10314,7 @@ test = "bindings/node/tests/surface/effects-repair.test.ts::masteringRepairNoise
 [[entry]]
 kind = "type"
 old = "MasteringRepairStage"
-changed = "discriminated union: ({stage:'declick'} & Omit<DeclickOptions,'validate'>) | ({stage:'declip'} & Omit<DeclipOptions,'validate'>) | ({stage:'decrackle'} & Omit<DecrackleOptions,'validate'>) | ({stage:'dehum'} & Omit<DehumOptions,'validate'>) | ({stage:'denoise'} & Omit<DenoiseClassicalOptions,'validate'>) | ({stage:'dereverb'} & Omit<DereverbClassicalOptions,'validate'>)"
+changed = "discriminated union: ({stage:'declick'} & DeclickOptions) | ({stage:'declip'} & DeclipOptions) | ({stage:'decrackle'} & DecrackleOptions) | ({stage:'dehum'} & DehumOptions) | ({stage:'denoise'} & DenoiseClassicalOptions) | ({stage:'dereverb'} & DereverbClassicalOptions)"
 domain = "effects"
 rule = "individual"
 test = "bindings/node/tests/surface/effects-repair.test.ts::stages are a discriminated union"
@@ -10394,26 +10322,26 @@ test = "bindings/node/tests/surface/effects-repair.test.ts::stages are a discrim
 [[entry]]
 kind = "type"
 old = "MasteringRepairTrimSilenceRequest"
-changed = "removes `threshold`; adds `thresholdDb?: number`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `threshold`; adds `thresholdDb?: number`; `sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "MasteringRepairTrimSilenceStereoRequest"
-changed = "removes `threshold`; adds `thresholdDb?: number`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `threshold`; adds `thresholdDb?: number`; `sampleRate` is now required"
 domain = "effects"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
 
 [[entry]]
 kind = "type"
 old = "TrimSilenceOptions"
-changed = "removes `threshold`; adds `thresholdDb?: number`; adds `validate?: boolean`"
+changed = "removes `threshold`; adds `thresholdDb?: number`"
 domain = "analysis"
 rule = "sample-rate-required"
-test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+test = "bindings/node/tests/surface/effects-repair.test.ts::masteringRepairTrimSilence takes thresholdDb and refuses threshold"
 
 [[entry]]
 kind = "type"
@@ -13596,7 +13524,7 @@ test = "bindings/node/tests/surface/mastering-mixing.test.ts::MixSceneInsert"
 [[entry]]
 kind = "type"
 old = "MixStereoRequest"
-changed = "removes `faderDb`; removes `inputTrimDb`; removes `leftChannels`; removes `muted`; removes `pan`; removes `panMode`; removes `rightChannels`; removes `width`; adds `strips: MixStereoStrip[]` (required); adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `faderDb`; removes `inputTrimDb`; removes `leftChannels`; removes `muted`; removes `pan`; removes `panMode`; removes `rightChannels`; removes `width`; adds `strips: MixStereoStrip[]` (required); `sampleRate` is now required"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-mixing.test.ts::mixStereo takes a request over strips"
@@ -13753,7 +13681,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::Audio carries the r
 [[entry]]
 kind = "type"
 old = "MasterAudioRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::masterAudio takes (samples, sampleRate, options)"
@@ -13761,7 +13689,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::masterAudio takes (
 [[entry]]
 kind = "type"
 old = "MasterAudioStereoRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::masterAudio takes (samples, sampleRate, options)"
@@ -13769,7 +13697,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::masterAudio takes (
 [[entry]]
 kind = "type"
 old = "MasteringAbMatchLoudnessRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -13777,7 +13705,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "type"
 old = "MasteringAbMatchLoudnessStereoRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate"
@@ -13785,7 +13713,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::requires sampleRate
 [[entry]]
 kind = "type"
 old = "MasteringAssistantSuggestRequest"
-changed = "removes `params`; adds `ceilingDbtp?: number`; adds `enableRepair?: boolean`; adds `preferStreamingSafe?: boolean`; adds `preset?: MasteringPreset`; adds `speechMonoAmount?: number`; adds `targetLufs?: number`; adds `targetPlatform?: MasteringPlatform`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `params`; adds `ceilingDbtp?: number`; adds `enableRepair?: boolean`; adds `preferStreamingSafe?: boolean`; adds `preset?: MasteringPreset`; adds `speechMonoAmount?: number`; adds `targetLufs?: number`; adds `targetPlatform?: MasteringPlatform`; `sampleRate` is now required"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant params are flat request fields"
@@ -13793,7 +13721,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant param
 [[entry]]
 kind = "type"
 old = "MasteringAssistantSuggestStereoRequest"
-changed = "removes `params`; adds `ceilingDbtp?: number`; adds `enableRepair?: boolean`; adds `preferStreamingSafe?: boolean`; adds `preset?: MasteringPreset`; adds `speechMonoAmount?: number`; adds `targetLufs?: number`; adds `targetPlatform?: MasteringPlatform`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `params`; adds `ceilingDbtp?: number`; adds `enableRepair?: boolean`; adds `preferStreamingSafe?: boolean`; adds `preset?: MasteringPreset`; adds `speechMonoAmount?: number`; adds `targetLufs?: number`; adds `targetPlatform?: MasteringPlatform`; `sampleRate` is now required"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant params are flat request fields"
@@ -13801,7 +13729,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the assistant param
 [[entry]]
 kind = "type"
 old = "MasteringAudioProfileRequest"
-changed = "removes `params`; adds `detectDefects?: boolean`; adds `hopLength?: number`; adds `nFft?: number`; adds `truePeakOversample?: number`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `params`; adds `detectDefects?: boolean`; adds `hopLength?: number`; adds `nFft?: number`; adds `truePeakOversample?: number`; `sampleRate` is now required"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
@@ -13809,7 +13737,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the audio profile i
 [[entry]]
 kind = "type"
 old = "MasteringAudioProfileStereoRequest"
-changed = "removes `params`; adds `detectDefects?: boolean`; adds `hopLength?: number`; adds `nFft?: number`; adds `truePeakOversample?: number`; adds `validate?: boolean`; `sampleRate` is now required"
+changed = "removes `params`; adds `detectDefects?: boolean`; adds `hopLength?: number`; adds `nFft?: number`; adds `truePeakOversample?: number`; `sampleRate` is now required"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the audio profile is grouped"
@@ -13873,7 +13801,7 @@ rule = "type-names"
 [[entry]]
 kind = "type"
 old = "MasteringStreamingPreviewStereoRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::the streaming preview reports truePeakDbtp"
@@ -13881,7 +13809,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::the streaming previ
 [[entry]]
 kind = "type"
 old = "StreamingLoudnessGainRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::streamingLoudnessGain reports truePeakDbtp"
@@ -13889,7 +13817,7 @@ test = "bindings/node/tests/surface/mastering-chain.test.ts::streamingLoudnessGa
 [[entry]]
 kind = "type"
 old = "StreamingLoudnessGainStereoRequest"
-changed = "adds `validate?: boolean`; `sampleRate` is now required"
+changed = "`sampleRate` is now required"
 domain = "mastering"
 rule = "sample-rate-required"
 test = "bindings/node/tests/surface/mastering-chain.test.ts::streamingLoudnessGain reports truePeakDbtp"
@@ -14006,14 +13934,6 @@ old = "MeteringTruePeakRequest"
 new = "MeteringTruePeakDbtpRequest"
 domain = "mastering"
 rule = "type-names"
-
-[[entry]]
-kind = "type"
-old = "SpectrumOptions"
-changed = "adds `validate?: boolean`"
-domain = "mastering"
-rule = "sample-rate-required"
-test = "bindings/node/tests/surface/mastering-metering.test.ts::SpectrumOptions"
 
 [[entry]]
 kind = "type"
@@ -16162,3 +16082,66 @@ changed = "omitted, inferred from the magnitude's bin count as (rows - 1) * 2 (w
 domain = "analysis"
 rule = "individual"
 test = "bindings/node/tests/surface/analysis-features.test.ts::griffinLim: nFft must equal (nBins - 1) * 2"
+
+[[entry]]
+kind = "field"
+old = "MeteringDynamicRangeOptions.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "MeteringTruePeakRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "TransientShaperOptions.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "mastering"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "VoiceChangeOptions.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "field"
+old = "VoiceChangeRealtimeRequest.validate"
+removed = "removed; every call scans its input for NaN and infinity and refuses one with RangeError, and a validate key is refused as unknown"
+domain = "effects"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "Audio.lufs(options)"
+removed = "removed; the options bag held only validate, and the call always scans its samples for NaN and infinity"
+domain = "core"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "Audio.momentaryLufs(options)"
+removed = "removed; the options bag held only validate, and the call always scans its samples for NaN and infinity"
+domain = "core"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "option"
+old = "Audio.shortTermLufs(options)"
+removed = "removed; the options bag held only validate, and the call always scans its samples for NaN and infinity"
+domain = "core"
+rule = "input-always-scanned"
+
+[[entry]]
+kind = "type"
+old = "ValidateOptions"
+removed = "removed; no call takes a validate option, and every call scans its input for NaN and infinity"
+domain = "core"
+rule = "input-always-scanned"

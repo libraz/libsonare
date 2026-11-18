@@ -1,17 +1,13 @@
 import { nativeTranscribeOptions } from './internal/transcribe_request.js';
 import { projectModule } from './project_internal.js';
 import type { TranscribeOptions, TranscribeResult } from './project_types.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import { assertAudioInput, assertPositiveFloatValue, sampleOneShot } from './validation.js';
 
 /**
  * Canonical request form for {@link transcribe}.
- *
- * `validate: false` skips only the facade's NaN/Inf pre-scan; the transcription
- * C ABI (`sonare_transcribe`) re-validates the buffer either way, with its own
- * wording. Absent, the pre-scan runs.
  */
-export interface TranscribeRequest extends TranscribeOptions, ValidateOptions {
+export interface TranscribeRequest extends TranscribeOptions {
   /** Mono source audio. Must be non-empty and all-finite. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz, `[8000, 384000]`. */
@@ -88,7 +84,7 @@ export function transcribe(
 export function transcribe(...args: unknown[]): TranscribeResult {
   const request = sampleOneShot<TranscribeRequest>('transcribe', args);
   assertAudioInput('transcribe', request.samples, request.sampleRate, request);
-  const { samples, sampleRate, tempoBpm, validate, ...rest } = request;
+  const { samples, sampleRate, tempoBpm, ...rest } = request;
   if (tempoBpm !== undefined && tempoBpm !== null) {
     assertPositiveFloatValue('transcribe', tempoBpm, 'tempoBpm');
   }

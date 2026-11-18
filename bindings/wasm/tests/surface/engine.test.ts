@@ -804,8 +804,8 @@ describe('offline render and process', () => {
       const error = caught(() => engine.renderOffline({ channels: [poisoned] }));
       expect(error).toBeInstanceOf(RangeError);
       expect((error as Error).message).toContain('index 3');
-      expect(() => engine.renderOffline({ channels: [plane()], validate: 1 as never })).toThrow(
-        TypeError,
+      expect(() => engine.renderOffline({ channels: [plane()], validate: false } as never)).toThrow(
+        new TypeError("renderOffline: unknown request key 'validate'"),
       );
     });
   });

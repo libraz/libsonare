@@ -186,47 +186,44 @@ describe('NaN/Inf guards (WASM)', () => {
   });
 });
 
-describe('validate=false skips the JS index scan but the native core still rejects (WASM)', () => {
-  // { validate: false } only skips the JS-side O(n) scan that names the exact
-  // index. The native core always re-validates (matching the C ABI / Node /
-  // Python), so a non-finite buffer still throws — just without the indexed JS
-  // message. This closes the former footgun where validate:false pushed NaN
-  // straight into the DSP.
-  it('lufs with validate=false no longer reports the JS index, but still throws natively', () => {
-    expect(() => lufs(withNaN(), SR, { validate: false })).not.toThrow(
-      /samples contains NaN or Inf at index/,
+describe('non-finite samples are always refused and validate is not an option (WASM)', () => {
+  it('lufs refuses NaN with the indexed message and refuses a validate option', () => {
+    expect(() => lufs(withNaN(), SR)).toThrow(/samples contains NaN or Inf at index/);
+    expect(() => lufs(withNaN(), SR, { validate: false } as never)).toThrow(
+      "lufs: unknown option 'validate'",
     );
-    expect(() => lufs(withNaN(), SR, { validate: false })).toThrow();
   });
-  it('masteringDynamicsCompressor with validate=false still throws natively on NaN', () => {
-    expect(() => masteringDynamicsCompressor(withNaN(), SR, { validate: false })).not.toThrow(
-      /samples contains NaN or Inf at index/,
+  it('masteringDynamicsCompressor refuses NaN and a validate option', () => {
+    expect(() => masteringDynamicsCompressor(withNaN(), SR)).toThrow(RangeError);
+    expect(() => masteringDynamicsCompressor(withNaN(), SR, { validate: false } as never)).toThrow(
+      "masteringDynamicsCompressor: unknown option 'validate'",
     );
-    expect(() => masteringDynamicsCompressor(withNaN(), SR, { validate: false })).toThrow();
   });
-  it('waveformPeaks with validate=false rejects NaN rather than drawing it as silence', () => {
-    // These bindings call the C++ core directly rather than the C ABI, so the
-    // guard they inherit is the bucket kernel's own. The pair is what matters:
-    // a silent buffer answers 0/0 and a non-finite one is refused.
+  it('waveformPeaks rejects NaN rather than drawing it as silence', () => {
     const quiet = waveformPeaks({
       channels: [new Float32Array(1024)],
       samplesPerBucket: 256,
-      validate: false,
     });
     expect(quiet.min[0]?.[0]).toBe(0);
     expect(quiet.max[0]?.[0]).toBe(0);
+    expect(() => waveformPeaks({ channels: [withNaN()], samplesPerBucket: 256 })).toThrow(
+      RangeError,
+    );
     expect(() =>
-      waveformPeaks({ channels: [withNaN()], samplesPerBucket: 256, validate: false }),
-    ).toThrow();
+      waveformPeaks({ channels: [withNaN()], samplesPerBucket: 256, validate: false } as never),
+    ).toThrow("waveformPeaks: unknown request key 'validate'");
   });
-  it('waveformPeakPyramid with validate=false still throws natively on NaN', () => {
+  it('waveformPeakPyramid rejects NaN and a validate key', () => {
+    expect(() =>
+      waveformPeakPyramid({ channels: [withNaN()], samplesPerBucketLevels: [256, 512] }),
+    ).toThrow(RangeError);
     expect(() =>
       waveformPeakPyramid({
         channels: [withNaN()],
         samplesPerBucketLevels: [256, 512],
         validate: false,
-      }),
-    ).toThrow();
+      } as never),
+    ).toThrow("waveformPeakPyramid: unknown request key 'validate'");
   });
 });
 

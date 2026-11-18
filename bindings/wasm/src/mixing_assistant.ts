@@ -1,13 +1,7 @@
 import { parseRecordJson } from './internal/record_json.js';
 import { getSonareModule } from './module_state.js';
 import type { MixAssistantResult, MixAssistantTrack, MixSourceClass } from './public_types.js';
-import {
-  assertSampleRate,
-  assertString,
-  requestOnly,
-  requireBoolean,
-  type ValidateOptions,
-} from './validation.js';
+import { assertSampleRate, assertString, requestOnly } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -17,10 +11,10 @@ function requireModule() {
  * Inputs for {@link mixingAssistantSuggest}. Every tunable is optional and falls back to the core
  * default noted on it; the same field names and defaults are used by the Node and Python surfaces.
  *
- * `validate` is accepted for symmetry with the other one-shots; the assistant never throws on a
- * non-finite track but reports it as an excluded track.
+ * A non-finite track is not refused: its profile comes back with `usable: false` and an
+ * `exclusionReason`.
  */
-export interface MixingAssistantSuggestRequest extends ValidateOptions {
+export interface MixingAssistantSuggestRequest {
   /** Tracks to mix, in the order their profiles are reported. */
   tracks: MixAssistantTrack[];
   /**
@@ -227,9 +221,6 @@ export function mixingAssistantSuggest(...args: unknown[]): MixAssistantResult {
   const req = requestOnly<MixingAssistantSuggestRequest>(fnName, args);
   // Required, not defaulted: a guessed rate would misread every band edge and lag.
   assertSampleRate(fnName, req.sampleRate);
-  if (req.validate !== undefined && req.validate !== null) {
-    requireBoolean(fnName, req.validate, 'validate');
-  }
   const { left, right, ids, names, sampleRates } = planarTracks(fnName, req.tracks, req.sampleRate);
   assertTempo(fnName, req.tempoBpm);
   const params: Record<string, number | boolean> = {};

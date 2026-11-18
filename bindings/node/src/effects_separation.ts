@@ -6,7 +6,7 @@
 import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { addon } from './native.js';
 import type { HpssResult } from './types.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import { assertAudioInput, assertHpssKernels, sampleOneShot } from './validation.js';
 
 function resolveHardMask(fnName: string, hardMask: unknown): boolean {
@@ -19,8 +19,8 @@ function resolveHardMask(fnName: string, hardMask: unknown): boolean {
   return hardMask;
 }
 
-/** Request for {@link hpss}. `validate: false` skips the NaN/Inf pre-scan. */
-export interface HpssRequest extends ValidateOptions {
+/** Request for {@link hpss}. */
+export interface HpssRequest {
   /** Mono input audio. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
@@ -54,7 +54,7 @@ export interface HpssWithResidualResult {
 }
 
 /** Request for {@link harmonic}. */
-export interface HarmonicRequest extends ValidateOptions {
+export interface HarmonicRequest {
   /** Mono input audio. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
@@ -62,7 +62,7 @@ export interface HarmonicRequest extends ValidateOptions {
 }
 
 /** Request for {@link percussive}. */
-export interface PercussiveRequest extends ValidateOptions {
+export interface PercussiveRequest {
   /** Mono input audio. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */

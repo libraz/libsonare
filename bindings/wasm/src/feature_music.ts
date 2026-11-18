@@ -13,7 +13,7 @@ import type {
   Section,
 } from './public_types.js';
 import type { WasmCqtResult } from './sonare.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertFiniteScalar,
@@ -35,8 +35,6 @@ function requireModule() {
   return getSonareModule();
 }
 
-type GuardedOptions = ValidateOptions;
-
 /** The audio and its sample rate, which every one-shot over samples takes. */
 interface SampleInput {
   /** Mono audio samples. */
@@ -46,7 +44,7 @@ interface SampleInput {
 }
 
 /** Canonical request form shared by the Constant-Q transform variants. */
-export interface CqtRequest extends SampleInput, GuardedOptions {
+export interface CqtRequest extends SampleInput {
   /** Hop length in samples; default 512. */
   hopLength?: number;
   /** Lowest bin frequency in Hz; default 32.70319566257483 (C1). */
@@ -70,7 +68,7 @@ export interface VqtRequest extends CqtRequest {
 }
 
 /** Canonical request form for {@link onsetStrength}. */
-export interface OnsetStrengthRequest extends SampleInput, GuardedOptions {
+export interface OnsetStrengthRequest extends SampleInput {
   /** FFT size in samples. Default `2048`. */
   nFft?: number;
   /** Hop length in samples. Default `512`. */
@@ -86,7 +84,7 @@ export interface OnsetStrengthMultiRequest extends OnsetStrengthRequest {
 }
 
 /** Canonical request form for {@link fourierTempogram}. */
-export interface FourierTempogramRequest extends GuardedOptions {
+export interface FourierTempogramRequest {
   /** Onset strength envelope, one value per frame. */
   onsetEnvelope: Float32Array;
   /** Sample rate in Hz of the audio the envelope came from; default 22050. */
@@ -100,7 +98,7 @@ export interface FourierTempogramRequest extends GuardedOptions {
 }
 
 /** Canonical request form for {@link tempogramRatio}. */
-export interface TempogramRatioRequest extends GuardedOptions {
+export interface TempogramRatioRequest {
   /** Tempogram as {@link Matrix2D}: rows = tempogram lags, cols = frames. */
   tempogram: Matrix2D;
   /** Sample rate in Hz of the audio the tempogram came from. Default `22050`. */
@@ -112,7 +110,7 @@ export interface TempogramRatioRequest extends GuardedOptions {
 }
 
 /** Canonical request form for {@link cqtToAudio}. */
-export interface CqtToAudioRequest extends GuardedOptions {
+export interface CqtToAudioRequest {
   /** CQT magnitude as {@link Matrix2D}: rows = CQT bins, cols = frames. */
   magnitude: Matrix2D;
   /** Output sample rate in Hz. */
@@ -128,7 +126,7 @@ export interface CqtToAudioRequest extends GuardedOptions {
 }
 
 /** Canonical request form for {@link vqtToAudio}. */
-export interface VqtToAudioRequest extends GuardedOptions {
+export interface VqtToAudioRequest {
   /** VQT magnitude as {@link Matrix2D}: rows = VQT bins, cols = frames. */
   magnitude: Matrix2D;
   /** Output sample rate in Hz. */
@@ -152,13 +150,13 @@ export interface DetectBoundariesRequest extends SampleInput, BoundaryOptions {}
 /** Canonical request form for {@link analyzeMelody}. */
 export interface AnalyzeMelodyRequest extends SampleInput, MelodyOptions {}
 /** Canonical request form for {@link lufs}. */
-export interface LufsRequest extends SampleInput, GuardedOptions {}
+export interface LufsRequest extends SampleInput {}
 /** Canonical request form for {@link momentaryLufs}. */
-export interface MomentaryLufsRequest extends SampleInput, GuardedOptions {}
+export interface MomentaryLufsRequest extends SampleInput {}
 /** Canonical request form for {@link shortTermLufs}. */
-export interface ShortTermLufsRequest extends SampleInput, GuardedOptions {}
+export interface ShortTermLufsRequest extends SampleInput {}
 /** Canonical request form for {@link nnlsChroma}. */
-export interface NnlsChromaRequest extends SampleInput, GuardedOptions {
+export interface NnlsChromaRequest extends SampleInput {
   /** Blend an STFT chroma into the NNLS chroma. Default `true`. */
   enableStftBlend?: boolean;
   /** Weight of the blended STFT chroma. Default `0.55`. */
@@ -315,7 +313,7 @@ function cqtInverseInput(
   fnName: 'cqtToAudio' | 'vqtToAudio',
   request: CqtToAudioRequest | VqtToAudioRequest,
 ) {
-  assertMatrix2D(fnName, request.magnitude, 'magnitude', request.validate !== false);
+  assertMatrix2D(fnName, request.magnitude, 'magnitude');
   const sampleRate = request.sampleRate;
   const hopLength = request.hopLength ?? 512;
   const binsPerOctave = request.binsPerOctave ?? 12;
@@ -509,7 +507,7 @@ export function detectBoundaries(...args: unknown[]): BoundaryResult {
 }
 
 /** Options for {@link analyzeMelody}. All fields are optional. */
-export interface MelodyOptions extends GuardedOptions {
+export interface MelodyOptions {
   /** Lowest f0 (Hz) the tracker will consider. Default 65 (≈ C2). */
   f0MinHz?: number;
   /** Highest f0 (Hz) the tracker will consider. Default 2093 (≈ C7). */
@@ -664,7 +662,7 @@ export function fourierTempogram(request: FourierTempogramRequest): Matrix2D {
     throw new TypeError('fourierTempogram: onsetEnvelope must be a Float32Array');
   }
   assertSampleRate('fourierTempogram', sampleRate);
-  assertSamples('fourierTempogram', r.onsetEnvelope, r.validate !== false, 'onsetEnvelope');
+  assertSamples('fourierTempogram', r.onsetEnvelope, true, 'onsetEnvelope');
   validatePositiveIntegers('fourierTempogram', { hopLength, winLength });
   // Native takes a `norm` flag; the normalised form is the only one exposed.
   const result = requireModule().fourierTempogram(
@@ -687,12 +685,7 @@ export function fourierTempogram(request: FourierTempogramRequest): Matrix2D {
  */
 export function tempogramRatio(request: TempogramRatioRequest): Float32Array {
   const r = requestOnly<TempogramRatioRequest>('tempogramRatio', [request]);
-  const tempogram = assertMatrix2D(
-    'tempogramRatio',
-    r.tempogram,
-    'tempogram',
-    r.validate !== false,
-  );
+  const tempogram = assertMatrix2D('tempogramRatio', r.tempogram, 'tempogram');
   const sampleRate = r.sampleRate ?? 22050;
   const hopLength = r.hopLength ?? 512;
   assertSampleRate('tempogramRatio', sampleRate);

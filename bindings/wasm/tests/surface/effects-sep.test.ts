@@ -132,11 +132,20 @@ describe('effects separation: sample-taking one-shots', () => {
     },
   );
 
+  it.each(sampleTaking)('%s refuses validate and other unknown keys', (_name, fn, input, extra) => {
+    expect(caught(() => fn(input, sr, { ...extra, validate: false }))).toBeInstanceOf(TypeError);
+    expect(caught(() => fn(input, sr, { ...extra, notAnOption: 1 }))).toBeInstanceOf(TypeError);
+  });
+
   it.each(sampleTaking)(
-    '%s accepts validate: false and refuses unknown keys',
+    '%s refuses non-finite samples with RangeError',
     (_name, fn, input, extra) => {
-      expect(() => fn(input, sr, { ...extra, validate: false })).not.toThrow();
-      expect(caught(() => fn(input, sr, { ...extra, notAnOption: 1 }))).toBeInstanceOf(TypeError);
+      const bad = Float32Array.from(input);
+      bad[10] = Number.NaN;
+      expect(caught(() => fn(bad, sr, extra))).toBeInstanceOf(RangeError);
+      expect(caught(() => fn({ samples: bad, sampleRate: sr, ...extra }))).toBeInstanceOf(
+        RangeError,
+      );
     },
   );
 
@@ -157,7 +166,18 @@ describe('effects separation: sample-taking one-shots', () => {
       expect(caught(() => fn(request))).toBeInstanceOf(TypeError);
       expect(caught(() => fn({ ...request, sampleRate: 22050.5 }))).toBeInstanceOf(RangeError);
       expect(caught(() => fn(noise, sr))).toBeInstanceOf(TypeError);
-      expect(() => fn({ ...request, sampleRate: sr, validate: false })).not.toThrow();
+      expect(caught(() => fn({ ...request, sampleRate: sr, validate: false }))).toBeInstanceOf(
+        TypeError,
+      );
+      const bad = Float32Array.from(noise);
+      bad[10] = Number.NaN;
+      const poisoned =
+        _name === 'decomposeStemsLinked'
+          ? { channels: [bad, noise] }
+          : { ...request, left: bad, right: noise };
+      expect(caught(() => fn({ ...poisoned, sampleRate: sr, ...extra }))).toBeInstanceOf(
+        RangeError,
+      );
     },
   );
 });

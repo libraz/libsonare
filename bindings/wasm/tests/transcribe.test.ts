@@ -354,16 +354,14 @@ describe('WASM transcribe', () => {
     withNan[100] = Number.NaN;
     expect(() => transcribe({ samples: withNan, sampleRate })).toThrow(RangeError);
 
-    // The non-finite scan is unconditional, and this is what makes that
-    // load-bearing rather than tidy: the transcription C ABI validates the
-    // pointer, the length and the rate and NOTHING about the sample values, so
-    // there is no second line of defence behind it. Measured with the scan
-    // skipped, an all-NaN buffer came back as a SUCCESS reporting zero notes.
-    // `validate: false` skips only the facade's pre-scan, so the C ABI's own
-    // refusal is what a caller who sets it gets.
-    const bypass: TranscribeRequest = { samples: withNan, sampleRate, validate: false };
-    expect(() => transcribe(bypass)).toThrow(RangeError);
-    expect(() => transcribe(bypass)).not.toThrow(/unknown request key/);
+    // The transcription C ABI checks nothing about the sample values, so the
+    // facade's non-finite scan is the only refusal and is not optional.
+    const bypass = {
+      samples: withNan,
+      sampleRate,
+      validate: false,
+    } as unknown as TranscribeRequest;
+    expect(() => transcribe(bypass)).toThrow("transcribe: unknown request key 'validate'");
     const allNan = new Float32Array(samples.length).fill(Number.NaN);
     expect(() => transcribe({ samples: allNan, sampleRate })).toThrow(RangeError);
   });

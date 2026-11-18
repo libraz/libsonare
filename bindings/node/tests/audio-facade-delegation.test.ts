@@ -351,9 +351,9 @@ const DELEGATIONS: Delegation[] = [
       onsetStrength(samples, rate, { nFft: a, hopLength: b, nMels: c }),
   },
   { name: 'nnlsChroma', noIntArgs: 'takes no argument' },
-  { name: 'lufs', noIntArgs: 'takes a validate option only' },
-  { name: 'momentaryLufs', noIntArgs: 'takes a validate option only' },
-  { name: 'shortTermLufs', noIntArgs: 'takes a validate option only' },
+  { name: 'lufs', noIntArgs: 'takes no integer argument' },
+  { name: 'momentaryLufs', noIntArgs: 'takes no integer argument' },
+  { name: 'shortTermLufs', noIntArgs: 'takes no integer argument' },
 ];
 
 /** What a call answered: a refusal identified by class and message, or nothing. */

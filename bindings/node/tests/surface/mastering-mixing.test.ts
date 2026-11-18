@@ -136,15 +136,13 @@ describe('mastering mixing surface', () => {
       expect(thrown(call)).toBeInstanceOf(errorClass);
     });
 
-    it('validate: false skips only the non-finite scan', () => {
+    it('scans for non-finite samples and refuses a validate key', () => {
       const poisoned = leftOnly();
       poisoned[3] = Number.NaN;
       expect(thrown(() => mix({ left: poisoned }))).toBeInstanceOf(RangeError);
       expect(
-        thrown(() =>
-          mixStereo({ strips: [strip({ left: poisoned })], sampleRate: SR, validate: false }),
-        ),
-      ).not.toBeInstanceOf(TypeError);
+        thrown(() => mixStereo({ strips: [strip()], sampleRate: SR, validate: false } as never)),
+      ).toBeInstanceOf(TypeError);
     });
 
     it('applies per-strip settings, leaving a strip that omits a field at its default', () => {
@@ -437,7 +435,7 @@ describe('mastering mixing surface', () => {
       }
     });
 
-    it('requires an integer sampleRate and refuses a wrong-typed tunable', () => {
+    it('requires an integer sampleRate and refuses an unknown key', () => {
       expect(
         thrown(() => loose(mixingAssistantSuggest)({ tracks: assistantTracks() })),
       ).toBeInstanceOf(TypeError);
@@ -449,7 +447,7 @@ describe('mastering mixing surface', () => {
           loose(mixingAssistantSuggest)({
             tracks: assistantTracks(),
             sampleRate: SR,
-            validate: 'no',
+            validate: false,
           }),
         ),
       ).toBeInstanceOf(TypeError);

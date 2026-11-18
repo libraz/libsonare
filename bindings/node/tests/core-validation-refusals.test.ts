@@ -450,14 +450,28 @@ describe('zeroCrossings refuses a non-finite sample in the core', () => {
 
   it.each(accepted)('accepts $id', (item) => {
     const samples = samplesFor(item);
-    expect(zeroCrossings(samples, 22050, { validate: false }).length).toBeGreaterThan(0);
+    expect(zeroCrossings(samples, 22050).length).toBeGreaterThan(0);
   });
 
-  it.each(refused)('refuses $id with the facade scan skipped', (item) => {
+  it.each(refused)('refuses $id in the core', (item) => {
     const kind = errorClassFor[item.cause as Cause];
     const text = literal(item.message as string);
     const samples = samplesFor(item);
-    expectRefusal(() => zeroCrossings(samples, 22050, { validate: false }), kind, text);
+    expectRefusal(() => addon.zeroCrossings(samples, 1e-10, false, true, true), kind, text);
+  });
+
+  it.each(refused)('refuses $id in the facade scan', (item) => {
+    const samples = samplesFor(item);
+    expectRefusal(() => zeroCrossings(samples, 22050), RangeError, /zeroCrossings: .*index/);
+  });
+
+  it('refuses a validate key', () => {
+    const samples = samplesFor(accepted[0]);
+    expectRefusal(
+      () => zeroCrossings(samples, 22050, { validate: false } as never),
+      TypeError,
+      /zeroCrossings: unknown option 'validate'/,
+    );
   });
 });
 

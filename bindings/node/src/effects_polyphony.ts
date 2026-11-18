@@ -25,8 +25,6 @@ export interface AnalyzePolyphonicRequest extends PolyphonicAnalysisOptions {
    * register than the one asked for.
    */
   sampleRate: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
-  validate?: boolean;
 }
 
 /** Fields whose absence keeps a named meaning, so an explicit 0 is refused rather than read as it. */
@@ -122,8 +120,8 @@ export class PolyphonicAnalysis {
    */
   constructor(request: AnalyzePolyphonicRequest) {
     const resolved = sampleOneShot<AnalyzePolyphonicRequest>('analyzePolyphonic', [request]);
-    const { samples, sampleRate, validate, ...options } = resolved;
-    assertAudioInput('analyzePolyphonic', samples, sampleRate, { validate });
+    const { samples, sampleRate, ...options } = resolved;
+    assertAudioInput('analyzePolyphonic', samples, sampleRate);
     assertPolyphonicOptions('analyzePolyphonic', options);
     this.sampleRate = sampleRate;
     this.native = new addon.PolyphonicAnalysis(

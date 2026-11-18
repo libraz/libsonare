@@ -549,5 +549,5 @@ export {
 } from './types.js';
 export type * from './types_vocal_edit.js';
 export type * from './types_vocal_project.js';
-export type { OptionsOf, ValidateOptions } from './validation.js';
+export type { OptionsOf } from './validation.js';
 export * from './vocal_edit.js';

@@ -6,12 +6,7 @@
 import type { ClippingReport } from '../metering.js';
 import type { ClipDetection, DeclipReport } from '../public_types_repair.js';
 import type { WasmClipDetection, WasmDeclipReport } from '../sonare.js';
-import {
-  assertAudioChannels,
-  assertAudioSamples,
-  assertFloatValue,
-  type ValidateOptions,
-} from '../validation.js';
+import { assertAudioChannels, assertAudioSamples, assertFloatValue } from '../validation.js';
 import { interleavePlanes } from './pod_config.js';
 
 /**
@@ -50,7 +45,7 @@ export function assertUnitInterval(fnName: string, value: unknown, argName: stri
 export function interleaveMeterChannels(
   fnName: string,
   channels: unknown,
-  options: ValidateOptions,
+  options: object,
   sampleRate?: unknown,
 ): { data: Float32Array; numChannels: number } {
   if (sampleRate !== undefined) {

@@ -394,7 +394,7 @@ export const ROWS: Row[] = [
     fn: sonare.ebur128LoudnessRangeLu,
     form: 'sampleOptions',
     params: 'samples sampleRate ...options?',
-    values: { samples: LONG, sampleRate: ALT_SR, options: { validate: false } },
+    values: { samples: LONG, sampleRate: ALT_SR },
     invalid: { sampleRate: 0 },
   },
   {
@@ -415,7 +415,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate hopLength? fminHz? nBins? binsPerOctave? ...options?',
     values: {
-      options: { validate: false },
       samples: SHORT,
       sampleRate: ALT_SR,
       hopLength: 256,
@@ -431,7 +430,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate hopLength? fminHz? nBins? binsPerOctave? ...options?',
     values: {
-      options: { validate: false },
       samples: SHORT,
       sampleRate: ALT_SR,
       hopLength: 256,
@@ -447,7 +445,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate hopLength? fminHz? nBins? binsPerOctave? ...options?',
     values: {
-      options: { validate: false },
       samples: SHORT,
       sampleRate: ALT_SR,
       hopLength: 256,
@@ -463,7 +460,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate hopLength? fminHz? nBins? binsPerOctave? gamma? ...options?',
     values: {
-      options: { validate: false },
       samples: SHORT,
       sampleRate: ALT_SR,
       hopLength: 256,
@@ -480,7 +476,6 @@ export const ROWS: Row[] = [
     form: 'requestOnly',
     params: 'magnitude sampleRate hopLength? fminHz? binsPerOctave? nIter? ...options?',
     values: {
-      options: { validate: false },
       magnitude: CQT.magnitude,
       sampleRate: ALT_SR,
       hopLength: 128,
@@ -499,7 +494,6 @@ export const ROWS: Row[] = [
     form: 'requestOnly',
     params: 'magnitude sampleRate hopLength? fminHz? binsPerOctave? gamma? nIter? ...options?',
     values: {
-      options: { validate: false },
       magnitude: VQT.magnitude,
       sampleRate: ALT_SR,
       hopLength: 128,
@@ -535,7 +529,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate nFft? hopLength? nMels? nBands? ...options?',
     values: {
-      options: { validate: false },
       samples: SIG,
       sampleRate: ALT_SR,
       nFft: 1024,
@@ -551,7 +544,6 @@ export const ROWS: Row[] = [
     form: 'requestOnly',
     params: 'onsetEnvelope sampleRate? hopLength? winLength? center? ...options?',
     values: {
-      options: { validate: false },
       onsetEnvelope: ENV,
       sampleRate: ALT_SR,
       hopLength: 256,
@@ -577,7 +569,6 @@ export const ROWS: Row[] = [
     form: 'requestOnly',
     params: 'tempogram sampleRate? hopLength? factors? ...options?',
     values: {
-      options: { validate: false },
       tempogram: TG,
       sampleRate: ALT_SR,
       hopLength: 256,
@@ -598,7 +589,6 @@ export const ROWS: Row[] = [
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
-      options: { validate: false },
     },
     invalid: { sampleRate: 0 },
   },
@@ -610,7 +600,6 @@ export const ROWS: Row[] = [
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
-      options: { validate: false },
     },
     invalid: { sampleRate: 0 },
   },
@@ -622,7 +611,6 @@ export const ROWS: Row[] = [
     values: {
       samples: LONG,
       sampleRate: ALT_SR,
-      options: { validate: false },
     },
     invalid: { sampleRate: 0 },
   },
@@ -717,7 +705,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate nFft? hopLength? nMels? ...options?',
     values: {
-      options: { validate: false },
       samples: SIG,
       sampleRate: ALT_SR,
       nFft: 1024,
@@ -732,7 +719,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate hopLength? kernelSize? threshold? ...options?',
     values: {
-      options: { validate: false },
       samples: LONG8,
       sampleRate: ALT_SR,
       hopLength: 1024,

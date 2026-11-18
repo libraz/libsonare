@@ -15,19 +15,13 @@ import type {
   ReverbDetection,
   RoomEstimateResult,
 } from './types.js';
-import {
-  assertAudioChannels,
-  assertAudioInput,
-  requestOnly,
-  sampleOneShot,
-  type ValidateOptions,
-} from './validation.js';
+import { assertAudioChannels, assertAudioInput, requestOnly, sampleOneShot } from './validation.js';
 
 /** A complete dereverb config, as `masteringRepairDereverbConfigForRoom` returns it. */
-export type DereverbClassicalConfig = Required<Omit<DereverbClassicalOptions, 'validate'>>;
+export type DereverbClassicalConfig = Required<DereverbClassicalOptions>;
 
 /** Options for `masteringRepairDereverbClassical`. */
-export interface DereverbClassicalOptions extends ValidateOptions {
+export interface DereverbClassicalOptions {
   /** Late-reverberation threshold relative to a bin's own power, in [0, 1]; `0` suppresses every bin carrying late energy. Default `0`. */
   threshold?: number;
   /** Share of the computed suppression applied, from 0 (none) to 1 (all). Default `1`. */
@@ -60,8 +54,7 @@ export interface MasteringRepairDereverbClassicalRequest
     DereverbClassicalOptions {}
 
 /** Request form of `masteringRepairDereverbConfigForRoom`. */
-export interface MasteringRepairDereverbConfigForRoomRequest
-  extends Omit<DereverbClassicalOptions, 'validate'> {
+export interface MasteringRepairDereverbConfigForRoomRequest extends DereverbClassicalOptions {
   /** The measured room, from `estimateRoom`. Only `volume` and `rt60Bands` are read. */
   estimate: RoomEstimateResult;
 }

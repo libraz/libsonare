@@ -17,7 +17,7 @@ import type {
   MasteringAudioProfileDefects,
   ProgressCallback,
 } from './types.js';
-import { assertAudioChannels, requestOnly, type ValidateOptions } from './validation.js';
+import { assertAudioChannels, requestOnly } from './validation.js';
 
 /** The repair stages, in the order {@link masteringRepairApply} runs them. */
 export type MasteringRepairStageName =
@@ -29,7 +29,7 @@ export type MasteringRepairStageName =
   | 'dereverb';
 
 /**
- * One stage to apply: the stage name plus that stage's own options (without `validate`). A
+ * One stage to apply: the stage name plus that stage's own options. A
  * setting left out takes the stage's default; a misspelt one is a type error and, at runtime,
  * refused by name. `declip` takes `clipThresholdDb` in dBFS.
  */
@@ -37,27 +37,27 @@ export type MasteringRepairStage =
   | ({
       /** Stage to apply. */
       stage: 'declip';
-    } & Omit<DeclipOptions, 'validate'>)
+    } & DeclipOptions)
   | ({
       /** Stage to apply. */
       stage: 'declick';
-    } & Omit<DeclickOptions, 'validate'>)
+    } & DeclickOptions)
   | ({
       /** Stage to apply. */
       stage: 'decrackle';
-    } & Omit<DecrackleOptions, 'validate'>)
+    } & DecrackleOptions)
   | ({
       /** Stage to apply. */
       stage: 'dehum';
-    } & Omit<DehumOptions, 'validate'>)
+    } & DehumOptions)
   | ({
       /** Stage to apply. */
       stage: 'denoise';
-    } & Omit<DenoiseClassicalOptions, 'validate'>)
+    } & DenoiseClassicalOptions)
   | ({
       /** Stage to apply. */
       stage: 'dereverb';
-    } & Omit<DereverbClassicalOptions, 'validate'>);
+    } & DereverbClassicalOptions);
 
 /**
  * What {@link masteringRepairAnalyze} measured and recommends.
@@ -145,7 +145,7 @@ export interface MasteringRepairApplyResult {
 }
 
 /** Request for {@link masteringRepairAnalyze}. */
-export interface MasteringRepairAnalyzeRequest extends ValidateOptions {
+export interface MasteringRepairAnalyzeRequest {
   /** One plane per channel, all of the same length. At least one. */
   channels: Float32Array[];
   /** Sample rate in Hz. Required. */
@@ -155,7 +155,7 @@ export interface MasteringRepairAnalyzeRequest extends ValidateOptions {
 }
 
 /** Request for {@link masteringRepairApply}. */
-export interface MasteringRepairApplyRequest extends ValidateOptions {
+export interface MasteringRepairApplyRequest {
   /** One plane per channel, all of the same length. At least one. */
   channels: Float32Array[];
   /** Sample rate in Hz. Required. */

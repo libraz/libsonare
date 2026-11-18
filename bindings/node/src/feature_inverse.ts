@@ -3,7 +3,7 @@ import { resolveIntegerOption, resolvePositiveIntegerOption } from './internal/f
 import { quarterHop } from './internal/fft_options.js';
 import { addon } from './native.js';
 import type { Matrix2D } from './types.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertFiniteScalar,
@@ -32,8 +32,6 @@ export interface CqtToAudioRequest {
   binsPerOctave?: number;
   /** Griffin-Lim iterations. Default 32. */
   nIter?: number;
-  /** `false` skips the NaN/Inf pre-scan of the matrix. */
-  validate?: boolean;
 }
 
 /** Request for {@link vqtToAudio}. `magnitude` is rows = VQT bins, cols = frames. */
@@ -56,8 +54,6 @@ export interface MelToStftRequest {
   fmaxHz?: number;
   /** Use the HTK mel formula instead of Slaney. Default `false`. */
   htk?: boolean;
-  /** `false` skips the NaN/Inf pre-scan of the matrix. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link melToAudio}. */
@@ -82,8 +78,6 @@ export interface GriffinLimRequest {
   nIter?: number;
   /** Fast Griffin-Lim momentum. Default 0.99. */
   momentum?: number;
-  /** `false` skips the NaN/Inf pre-scan of the matrix. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link mfccToMel}. */
@@ -94,8 +88,6 @@ export interface MfccToMelRequest {
   nMels?: number;
   /** Lifter used by the forward MFCC transform; zero means no liftering. */
   lifter?: number;
-  /** `false` skips the NaN/Inf pre-scan of the matrix. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link mfccToAudio}. */
@@ -117,7 +109,7 @@ export interface MfccToAudioRequest extends MfccToMelRequest {
 }
 
 /** Request for {@link phaseVocoder}. */
-export interface PhaseVocoderRequest extends ValidateOptions {
+export interface PhaseVocoderRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
@@ -181,7 +173,7 @@ const DEFAULT_CQT_FMIN_HZ = 32.70319566257483;
 export function cqtToAudio(request: CqtToAudioRequest): Float32Array;
 export function cqtToAudio(...args: unknown[]): Float32Array {
   const r = requestOnly<CqtToAudioRequest>('cqtToAudio', args);
-  assertMatrix2D('cqtToAudio', r.magnitude, 'magnitude', r.validate);
+  assertMatrix2D('cqtToAudio', r.magnitude, 'magnitude');
   const sampleRate = r.sampleRate;
   assertSampleRate('cqtToAudio', sampleRate);
   // Positivity only: the core takes any positive hop and any positive iteration
@@ -206,7 +198,7 @@ export function cqtToAudio(...args: unknown[]): Float32Array {
 export function vqtToAudio(request: VqtToAudioRequest): Float32Array;
 export function vqtToAudio(...args: unknown[]): Float32Array {
   const r = requestOnly<VqtToAudioRequest>('vqtToAudio', args);
-  assertMatrix2D('vqtToAudio', r.magnitude, 'magnitude', r.validate);
+  assertMatrix2D('vqtToAudio', r.magnitude, 'magnitude');
   const sampleRate = r.sampleRate;
   assertSampleRate('vqtToAudio', sampleRate);
   const hopLength = resolvePositiveIntegerOption('vqtToAudio', 'hopLength', r.hopLength, 512);
@@ -230,7 +222,7 @@ export function vqtToAudio(...args: unknown[]): Float32Array {
 export function melToStft(request: MelToStftRequest): Matrix2D;
 export function melToStft(...args: unknown[]): Matrix2D {
   const r = requestOnly<MelToStftRequest>('melToStft', args);
-  assertMatrix2D('melToStft', r.power, 'power', r.validate);
+  assertMatrix2D('melToStft', r.power, 'power');
   const sampleRate = r.sampleRate ?? 22050;
   // No range bound here: the core only requires sample_rate > 0 for this
   // reconstruction, unlike the [8000, 384000] audio-analysis bound.
@@ -262,7 +254,7 @@ export function melToStft(...args: unknown[]): Matrix2D {
 export function melToAudio(request: MelToAudioRequest): Float32Array;
 export function melToAudio(...args: unknown[]): Float32Array {
   const r = requestOnly<MelToAudioRequest>('melToAudio', args);
-  assertMatrix2D('melToAudio', r.power, 'power', r.validate);
+  assertMatrix2D('melToAudio', r.power, 'power');
   const sampleRate = r.sampleRate ?? 22050;
   assertPositiveInteger('melToAudio', sampleRate, 'sampleRate');
   // Positivity only, as melToStft: the geometry rule this reconstruction carries
@@ -309,7 +301,7 @@ function assertGriffinLimFftSize(nBins: number, nFft: number): void {
 export function griffinLim(request: GriffinLimRequest): Float32Array;
 export function griffinLim(...args: unknown[]): Float32Array {
   const r = requestOnly<GriffinLimRequest>('griffinLim', args);
-  assertMatrix2D('griffinLim', r.magnitude, 'magnitude', r.validate);
+  assertMatrix2D('griffinLim', r.magnitude, 'magnitude');
   const sampleRate = r.sampleRate;
   assertSampleRate('griffinLim', sampleRate);
   const nBins = r.magnitude.rows;
@@ -338,7 +330,7 @@ export function griffinLim(...args: unknown[]): Float32Array {
 export function mfccToMel(request: MfccToMelRequest): Matrix2D;
 export function mfccToMel(...args: unknown[]): Matrix2D {
   const r = requestOnly<MfccToMelRequest>('mfccToMel', args);
-  assertMatrix2D('mfccToMel', r.coefficients, 'coefficients', r.validate);
+  assertMatrix2D('mfccToMel', r.coefficients, 'coefficients');
   const out = addon.mfccToMel(
     r.coefficients.data,
     r.coefficients.rows,
@@ -353,7 +345,7 @@ export function mfccToMel(...args: unknown[]): Matrix2D {
 export function mfccToAudio(request: MfccToAudioRequest): Float32Array;
 export function mfccToAudio(...args: unknown[]): Float32Array {
   const r = requestOnly<MfccToAudioRequest>('mfccToAudio', args);
-  assertMatrix2D('mfccToAudio', r.coefficients, 'coefficients', r.validate);
+  assertMatrix2D('mfccToAudio', r.coefficients, 'coefficients');
   const sampleRate = r.sampleRate ?? 22050;
   assertPositiveInteger('mfccToAudio', sampleRate, 'sampleRate');
   // Positivity only, as melToAudio: the same reconstruction behind one more

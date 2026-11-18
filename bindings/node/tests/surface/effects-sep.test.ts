@@ -127,13 +127,16 @@ describe('effects separation: sample-taking one-shots', () => {
     },
   );
 
-  it.each(sampleTaking)(
-    '%s accepts validate: false and refuses unknown keys',
-    (_name, fn, input, extra) => {
-      expect(() => fn(input, sr, { ...extra, validate: false })).not.toThrow();
-      expect(caught(() => fn(input, sr, { ...extra, notAnOption: 1 }))).toBeInstanceOf(TypeError);
-    },
-  );
+  it.each(sampleTaking)('%s refuses non-finite samples', (_name, fn, input, extra) => {
+    const bad = Float32Array.from(input);
+    bad[3] = Number.NaN;
+    expect(caught(() => fn({ samples: bad, sampleRate: sr, ...extra }))).toBeInstanceOf(RangeError);
+  });
+
+  it.each(sampleTaking)('%s refuses validate and other unknown keys', (_name, fn, input, extra) => {
+    expect(caught(() => fn(input, sr, { ...extra, validate: false }))).toBeInstanceOf(TypeError);
+    expect(caught(() => fn(input, sr, { ...extra, notAnOption: 1 }))).toBeInstanceOf(TypeError);
+  });
 
   it.each([
     ['normalizeStereo', normalizeStereo, {}],
@@ -152,7 +155,9 @@ describe('effects separation: sample-taking one-shots', () => {
       expect(caught(() => fn(request))).toBeInstanceOf(TypeError);
       expect(caught(() => fn({ ...request, sampleRate: 22050.5 }))).toBeInstanceOf(RangeError);
       expect(caught(() => fn(noise, sr))).toBeInstanceOf(TypeError);
-      expect(() => fn({ ...request, sampleRate: sr, validate: false })).not.toThrow();
+      expect(caught(() => fn({ ...request, sampleRate: sr, validate: false }))).toBeInstanceOf(
+        TypeError,
+      );
     },
   );
 });

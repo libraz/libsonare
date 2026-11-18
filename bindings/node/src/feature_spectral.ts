@@ -20,7 +20,7 @@ import {
   sampleOneShot,
 } from './validation.js';
 
-/** Request for {@link stft}. `validate: false` skips the NaN/Inf pre-scan. */
+/** Request for {@link stft}. */
 export interface StftRequest {
   /** Mono audio samples. */
   samples: Float32Array;
@@ -30,8 +30,6 @@ export interface StftRequest {
   nFft?: number;
   /** Hop in samples. Default 512. */
   hopLength?: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link stftDb}. */
@@ -61,8 +59,6 @@ export interface MelSpectrogramRequest {
   nFft?: number;
   /** Hop in samples. Default `512`. */
   hopLength?: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link mfcc}. */
@@ -87,8 +83,6 @@ export interface MfccRequest {
   nFft?: number;
   /** Hop in samples. Default `512`. */
   hopLength?: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link melDelta}. */
@@ -97,8 +91,6 @@ export interface MelDeltaRequest {
   features: Matrix2D;
   /** Odd regression width of at least 3. Default 9. */
   width?: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of `features`. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link reassignedSpectrogram}. */
@@ -115,8 +107,6 @@ export interface ReassignedSpectrogramRequest {
   nFft?: number;
   /** Hop in samples. Default `512`. */
   hopLength?: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link spectralContrast}. */
@@ -135,8 +125,6 @@ export interface SpectralContrastRequest {
   nFft?: number;
   /** Hop in samples. Default `512`. */
   hopLength?: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link polyFeatures}. */
@@ -151,8 +139,6 @@ export interface PolyFeaturesRequest {
   nFft?: number;
   /** Hop in samples. Default `512`. */
   hopLength?: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link zeroCrossings}. */
@@ -169,8 +155,6 @@ export interface ZeroCrossingsRequest {
   pad?: boolean;
   /** Treat the sign of zero as positive. Default `true`. */
   zeroPos?: boolean;
-  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link spectralBandwidth}. */
@@ -185,8 +169,6 @@ export interface SpectralBandwidthRequest {
   hopLength?: number;
   /** Norm order of the deviation. Default 2. */
   p?: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link spectralRolloff}. */
@@ -201,8 +183,6 @@ export interface SpectralRolloffRequest {
   nFft?: number;
   /** Hop in samples. Default `512`. */
   hopLength?: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link spectralFlux}. */
@@ -217,8 +197,6 @@ export interface SpectralFluxRequest {
   hopLength?: number;
   /** Frame lag of the difference. Default 1. */
   lag?: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link zeroCrossingRate}. */
@@ -231,8 +209,6 @@ export interface ZeroCrossingRateRequest {
   frameLength?: number;
   /** Hop in samples. Default `512`. */
   hopLength?: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link rmsEnergy}. */
@@ -384,7 +360,7 @@ export function mfcc(...args: unknown[]): MfccResult {
 export function melDelta(request: MelDeltaRequest): Matrix2D;
 export function melDelta(...args: unknown[]): Matrix2D {
   const r = requestOnly<MelDeltaRequest>('melDelta', args);
-  assertMatrix2D('melDelta', r.features, 'features', r.validate);
+  assertMatrix2D('melDelta', r.features, 'features');
   const width = r.width ?? 9;
   assertPositiveInteger('melDelta', width, 'width');
   if (width < 3 || width % 2 === 0) {

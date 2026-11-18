@@ -225,7 +225,7 @@ export interface PlaybackLoudnessMeterOptions {
 
 /** Request shape for the one-shot `renderPlayback`. */
 export interface RenderPlaybackRequest {
-  /** Interleaved input, `numChannels` samples per frame; must be finite unless `validate` is false. */
+  /** Interleaved input, `numChannels` samples per frame; must be finite. */
   samples: Float32Array;
   /** Interleaved channel count of the input: 1, 2, 6 or 8; the configured input layout must accept it. */
   numChannels: number;
@@ -235,8 +235,6 @@ export interface RenderPlaybackRequest {
   config: PlaybackRendererConfig;
   /** Required for a headphones target; see {@link PlaybackRendererOptions.hrtf}. */
   hrtf?: HrtfSet;
-  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default `true`. */
-  validate?: boolean;
 }
 
 /** `renderPlayback`'s result: interleaved output with the target's own channel count. */

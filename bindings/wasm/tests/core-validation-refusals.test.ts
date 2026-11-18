@@ -477,7 +477,7 @@ describe('resample takes no validate option', () => {
   });
 });
 
-describe('zeroCrossings refuses a non-finite sample in the core', () => {
+describe('zeroCrossings refuses a non-finite sample', () => {
   const { input, accepted, refused } = corpus.zero_crossings;
   const samplesFor = ({ nan_at }: ZeroCrossingsCase) => {
     const samples = new Float32Array(input.length).fill(input.fill);
@@ -489,15 +489,23 @@ describe('zeroCrossings refuses a non-finite sample in the core', () => {
 
   it.each(accepted)('accepts $id', (item) => {
     const samples = samplesFor(item);
-    expect(zeroCrossings(samples, 22050, { validate: false }).length).toBeGreaterThan(0);
+    expect(zeroCrossings(samples, 22050).length).toBeGreaterThan(0);
   });
 
-  it.each(refused)('refuses $id with the facade scan skipped', (item) => {
+  it.each(refused)('refuses $id with the facade scan', (item) => {
     const kind = errorClassFor[item.cause as Cause];
-    const text = literal(item.message as string);
     const samples = samplesFor(item);
-    const error = expectRefusalOf(() => zeroCrossings(samples, 22050, { validate: false }), kind);
-    expect(error.message).toMatch(text);
+    const error = expectRefusalOf(() => zeroCrossings(samples, 22050), kind);
+    expect(error.message).toMatch(/NaN or Inf|non-finite/);
+  });
+
+  it('refuses validate as an unknown option', () => {
+    const samples = samplesFor({ id: 'clean_signal' } as ZeroCrossingsCase);
+    const error = expectRefusalOf(
+      () => zeroCrossings(samples, 22050, { validate: false } as never),
+      TypeError,
+    );
+    expect(error.message).toBe("zeroCrossings: unknown option 'validate'");
   });
 });
 

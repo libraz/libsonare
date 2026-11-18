@@ -11,7 +11,6 @@ import {
   sampleOneShot,
   toMatrix2D,
   tuningCentsFromNative,
-  type ValidateOptions,
 } from './validation.js';
 
 function requireModule() {
@@ -23,7 +22,7 @@ function requireModule() {
 // ============================================================================
 
 /** YIN pitch request. */
-export interface PitchYinRequest extends ValidateOptions {
+export interface PitchYinRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -41,7 +40,7 @@ export interface PitchYinRequest extends ValidateOptions {
 }
 
 /** pYIN pitch request. */
-export interface PitchPyinRequest extends ValidateOptions {
+export interface PitchPyinRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -61,7 +60,7 @@ export interface PitchPyinRequest extends ValidateOptions {
 }
 
 /** Spectral pitch-candidate request. */
-export interface PiptrackRequest extends ValidateOptions {
+export interface PiptrackRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -253,7 +252,7 @@ export interface PitchTuningRequest {
 }
 
 /** Tuning-offset request over an audio signal. */
-export interface EstimateTuningRequest extends ValidateOptions {
+export interface EstimateTuningRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */

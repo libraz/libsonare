@@ -10,7 +10,6 @@ export const ROWS: Row[] = [
     form: 'requestOnly',
     params: 'power sampleRate? nFft? fminHz? fmaxHz? htk? ...options?',
     values: {
-      options: { validate: false },
       power: MEL.power,
       sampleRate: ALT_SR,
       nFft: 512,
@@ -27,7 +26,6 @@ export const ROWS: Row[] = [
     form: 'requestOnly',
     params: 'power sampleRate? nFft? hopLength? fminHz? fmaxHz? nIter? htk? ...options?',
     values: {
-      options: { validate: false },
       power: MEL.power,
       sampleRate: ALT_SR,
       nFft: 512,
@@ -46,7 +44,6 @@ export const ROWS: Row[] = [
     form: 'requestOnly',
     params: 'magnitude sampleRate nFft? hopLength? nIter? momentum? ...options?',
     values: {
-      options: { validate: false },
       magnitude: ST1024.magnitude,
       sampleRate: ALT_SR,
       nFft: 1024,
@@ -70,7 +67,6 @@ export const ROWS: Row[] = [
     form: 'requestOnly',
     params: 'coefficients nMels? lifter? ...options?',
     values: {
-      options: { validate: false },
       coefficients: MFCC.coefficients,
       nMels: 32,
       lifter: 22,
@@ -84,7 +80,6 @@ export const ROWS: Row[] = [
     params:
       'coefficients nMels? sampleRate? nFft? hopLength? fminHz? fmaxHz? nIter? htk? lifter? ...options?',
     values: {
-      options: { validate: false },
       coefficients: MFCC.coefficients,
       nMels: 32,
       sampleRate: ALT_SR,
@@ -213,7 +208,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate thresholdDb? frameLength? hopLength? ...options?',
     values: {
-      options: { validate: false },
       samples: PADDED,
       sampleRate: ALT_SR,
       thresholdDb: -20,
@@ -230,7 +224,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate nFft? hopLength? ...options?',
     values: {
-      options: { validate: false },
       samples: SIG,
       sampleRate: ALT_SR,
       nFft: 1024,
@@ -244,7 +237,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate nFft? hopLength? ...options?',
     values: {
-      options: { validate: false },
       samples: SIG,
       sampleRate: ALT_SR,
       nFft: 1024,
@@ -259,7 +251,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate hopLength? nChroma? binsPerOctave? ...options?',
     values: {
-      options: { validate: false },
       samples: SHORT,
       sampleRate: ALT_SR,
       hopLength: 1024,
@@ -273,7 +264,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate hopLength? nChroma? binsPerOctave? ...options?',
     values: {
-      options: { validate: false },
       samples: SHORT,
       sampleRate: ALT_SR,
       hopLength: 1024,
@@ -287,7 +277,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate hopLength? nChroma? ...options?',
     values: {
-      options: { validate: false },
       samples: SHORT,
       sampleRate: ALT_SR,
       hopLength: 1024,
@@ -300,7 +289,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate nFft? hopLength? nMels? fminHz? fmaxHz? htk? ...options?',
     values: {
-      options: { validate: false },
       samples: SIG,
       sampleRate: ALT_SR,
       nFft: 1024,
@@ -319,7 +307,6 @@ export const ROWS: Row[] = [
     params:
       'samples sampleRate nFft? hopLength? nMels? nMfcc? fminHz? fmaxHz? htk? lifter? ...options?',
     values: {
-      options: { validate: false },
       samples: SIG,
       sampleRate: ALT_SR,
       nFft: 1024,
@@ -362,7 +349,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate nFft? hopLength? ...options?',
     values: {
-      options: { validate: false },
       samples: SIG,
       sampleRate: ALT_SR,
       nFft: 1024,

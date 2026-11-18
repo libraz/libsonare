@@ -552,9 +552,12 @@ describe('polyphonic analysis and transcription', () => {
     expect(errorOf(() => call({ minFramePeakRatio: -0.1 }))).toBeInstanceOf(RangeError);
   });
 
-  it('transcribe honours validate: false and reports a tempo', () => {
-    const result = transcribe({ samples: triad(), sampleRate, tempoBpm: 100, validate: false });
+  it('transcribe reports the requested tempo and refuses a validate key', () => {
+    const result = transcribe({ samples: triad(), sampleRate, tempoBpm: 100 });
     expect(result.tempoBpm).toBe(100);
+    expect(() =>
+      transcribe({ samples: triad(), sampleRate, tempoBpm: 100, validate: false } as never),
+    ).toThrow("transcribe: unknown request key 'validate'");
   });
 });
 

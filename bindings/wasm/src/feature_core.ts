@@ -24,7 +24,6 @@ import {
   toInt32Array,
   toMatrix2D,
   toMatrix2DByRows,
-  type ValidateOptions,
 } from './validation.js';
 
 function requireModule() {
@@ -114,7 +113,7 @@ export interface DbToAmplitudeRequest {
 }
 
 /** Pre-emphasis filter request. */
-export interface PreemphasisRequest extends ValidateOptions {
+export interface PreemphasisRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -126,7 +125,7 @@ export interface PreemphasisRequest extends ValidateOptions {
 }
 
 /** De-emphasis filter request. */
-export interface DeemphasisRequest extends ValidateOptions {
+export interface DeemphasisRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -138,7 +137,7 @@ export interface DeemphasisRequest extends ValidateOptions {
 }
 
 /** Silence trim request. */
-export interface TrimSilenceRequest extends ValidateOptions {
+export interface TrimSilenceRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -152,7 +151,7 @@ export interface TrimSilenceRequest extends ValidateOptions {
 }
 
 /** Non-silent interval request for one signal. */
-export interface SplitSilenceRequest extends ValidateOptions {
+export interface SplitSilenceRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -248,7 +247,7 @@ export interface SplitSilenceCommonWithReportResult {
 }
 
 /** Overlapping frames of a signal. The rate is validated but does not change the result. */
-export interface FrameSignalRequest extends ValidateOptions {
+export interface FrameSignalRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */

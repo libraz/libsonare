@@ -761,21 +761,21 @@ describe('StreamingRetune refuses non-finite input and clamps finite ranges', ()
   });
 });
 
-describe('offline boundary validation is enforced by the native WASM layer', () => {
-  it('rejects NaN/Inf in every quick-analysis entry even when the JS scan is disabled', () => {
+describe('offline boundary validation always scans the samples', () => {
+  it('rejects NaN/Inf in every quick-analysis entry', () => {
     const bad = new Float32Array(2048);
     bad[17] = Number.NaN;
     const calls = [
-      () => detectBpm(bad, 22050, { validate: false }),
-      () => detectKey({ samples: bad, sampleRate: 22050, validate: false }),
-      () => detectKeyCandidates({ samples: bad, sampleRate: 22050, validate: false }),
-      () => detectOnsets(bad, 22050, { validate: false }),
-      () => detectBeats(bad, 22050, { validate: false }),
-      () => detectDownbeats(bad, 22050, { validate: false }),
-      () => analyze(bad, 22050, { validate: false }),
+      () => detectBpm(bad, 22050),
+      () => detectKey({ samples: bad, sampleRate: 22050 }),
+      () => detectKeyCandidates({ samples: bad, sampleRate: 22050 }),
+      () => detectOnsets(bad, 22050),
+      () => detectBeats(bad, 22050),
+      () => detectDownbeats(bad, 22050),
+      () => analyze(bad, 22050),
     ];
     for (const call of calls) {
-      expect(call).toThrow();
+      expect(call).toThrow(RangeError);
     }
   });
 

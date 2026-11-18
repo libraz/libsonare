@@ -23,7 +23,7 @@ import type {
   PitchDecompositionResult,
   VoicedFlags,
 } from './types.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertFiniteScalar,
@@ -57,7 +57,7 @@ export interface NoteMoveRequest extends NoteMoveOptions {
  * The audio and the track must be the ones a set was extracted from, or the set
  * is measured against something else.
  */
-export interface ExtractNotesRequest extends NoteExtractorOptions, ValidateOptions {
+export interface ExtractNotesRequest extends NoteExtractorOptions {
   /** Mono source audio the F0 track was measured from. */
   samples: Float32Array;
   /**
@@ -125,7 +125,7 @@ export interface DecomposeNotePitchRequest {
 }
 
 /** Request for {@link renderNotes}: the source audio and the edited notes to render over it. */
-export interface RenderNotesRequest extends ValidateOptions {
+export interface RenderNotesRequest {
   /** Mono source audio the notes were extracted from. */
   samples: Float32Array;
   /**
@@ -395,7 +395,7 @@ export function extractNotes(
 ): NoteObject[];
 export function extractNotes(...args: unknown[]): NoteObject[] {
   const request = sampleOneShot<ExtractNotesRequest>('extractNotes', args);
-  const { samples, sampleRate, f0Hz, frameRate, voicedProb, validate, ...options } = request;
+  const { samples, sampleRate, f0Hz, frameRate, voicedProb, ...options } = request;
   const nativeVoiced = assertNoteTrackRequest('extractNotes', request);
   const extracted: NoteObject[] = addon.extractNotes(samples, sampleRate, f0Hz, frameRate, {
     ...options,
@@ -464,8 +464,8 @@ export function renderNotes(
 ): Float32Array;
 export function renderNotes(...args: unknown[]): Float32Array {
   const request = sampleOneShot<RenderNotesRequest>('renderNotes', args);
-  const { samples, sampleRate, notes, voiced, validate, ...options } = request;
-  assertAudioInput('renderNotes', samples, sampleRate, { validate });
+  const { samples, sampleRate, notes, voiced, ...options } = request;
+  assertAudioInput('renderNotes', samples, sampleRate);
   if (!Array.isArray(notes)) {
     throw new TypeError('renderNotes: notes must be an array');
   }
@@ -610,7 +610,6 @@ export function splitNote(...args: unknown[]): NoteObject[] {
     index,
     frame: requestFrame,
     frameSec,
-    validate,
     ...options
   } = request;
   const nativeVoiced = assertNoteTrackRequest('splitNote', request);
@@ -705,7 +704,6 @@ export function mergeNotes(...args: unknown[]): NoteObject[] {
     notes,
     first,
     last,
-    validate,
     ...options
   } = request;
   const nativeVoiced = assertNoteTrackRequest('mergeNotes', request);

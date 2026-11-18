@@ -62,7 +62,7 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
   const x = testSignal();
 
   it('analyzeBpm', () => {
-    const defaults: Required<Omit<AnalyzeBpmOptions, 'validate'>> = {
+    const defaults: Required<AnalyzeBpmOptions> = {
       bpmMin: 60.0,
       bpmMax: 200.0,
       startBpm: 120.0,
@@ -74,7 +74,7 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
   });
 
   it('analyzeRhythm', () => {
-    const defaults: Required<Omit<AnalyzeRhythmOptions, 'validate'>> = {
+    const defaults: Required<AnalyzeRhythmOptions> = {
       bpmMin: 60.0,
       bpmMax: 200.0,
       startBpm: 120.0,
@@ -85,7 +85,7 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
   });
 
   it('analyzeDynamics', () => {
-    const defaults: Required<Omit<AnalyzeDynamicsOptions, 'validate'>> = {
+    const defaults: Required<AnalyzeDynamicsOptions> = {
       windowSec: 0.4,
       hopLength: 512,
       compressionThresholdDb: 6.0,
@@ -94,7 +94,7 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
   });
 
   it('detectAcoustic', () => {
-    const defaults: Required<Omit<AcousticOptions, 'validate'>> = {
+    const defaults: Required<AcousticOptions> = {
       nOctaveBands: 6,
       nThirdOctaveSubbands: 24,
       minDecayDb: 30.0,
@@ -104,7 +104,7 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
   });
 
   it('analyzeTimbre', () => {
-    const defaults: Required<Omit<AnalyzeTimbreOptions, 'validate'>> = {
+    const defaults: Required<AnalyzeTimbreOptions> = {
       nFft: 2048,
       hopLength: 512,
       nMels: 128,
@@ -115,7 +115,7 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
   });
 
   it('analyzeSections', () => {
-    const defaults: Required<Omit<AnalyzeSectionsOptions, 'validate'>> = {
+    const defaults: Required<AnalyzeSectionsOptions> = {
       nFft: 2048,
       hopLength: 512,
       minSectionSec: 4.0,
@@ -125,7 +125,7 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
   });
 
   it('analyzeMelody', () => {
-    const defaults: Required<Omit<MelodyOptions, 'validate'>> = {
+    const defaults: Required<MelodyOptions> = {
       f0MinHz: 65.0,
       f0MaxHz: 2093.0,
       frameLength: 2048,
@@ -138,7 +138,7 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
   });
 
   it('voiceChange', () => {
-    const defaults: Required<Omit<VoiceChangeOptions, 'validate'>> = {
+    const defaults: Required<VoiceChangeOptions> = {
       pitchSemitones: 0.0,
       formantFactor: 1.0,
       formantMode: 'relative',
@@ -147,7 +147,7 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
   });
 
   it('masteringNormalizeLoudness', () => {
-    const defaults: Required<Omit<MasteringNormalizeLoudnessOptions, 'validate'>> = {
+    const defaults: Required<MasteringNormalizeLoudnessOptions> = {
       targetLufs: -14.0,
       ceilingDbtp: -1.0,
       truePeakOversample: 4,
@@ -166,7 +166,7 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
   });
 
   it('meteringDetectClipping', () => {
-    const defaults: Required<Omit<MeteringDetectClippingOptions, 'validate'>> = {
+    const defaults: Required<MeteringDetectClippingOptions> = {
       thresholdDb: 20 * Math.log10(0.999),
       minRegionSamples: 1,
     };
@@ -174,7 +174,7 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
   });
 
   it('meteringDynamicRange', () => {
-    const defaults: Required<Omit<MeteringDynamicRangeOptions, 'validate'>> = {
+    const defaults: Required<MeteringDynamicRangeOptions> = {
       windowSec: 3,
       hopSec: 1,
       lowPercentile: 0.1,

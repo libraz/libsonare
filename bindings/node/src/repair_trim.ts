@@ -10,19 +10,13 @@ import type {
   TrimRange,
   TrimSilenceResult,
 } from './types.js';
-import {
-  assertAudioInput,
-  requestOnly,
-  resolveSampleBound,
-  sampleOneShot,
-  type ValidateOptions,
-} from './validation.js';
+import { assertAudioInput, requestOnly, resolveSampleBound, sampleOneShot } from './validation.js';
 
 /** Trimming modes accepted by `masteringRepairTrimSilence`. */
 export type TrimSilenceMode = 'peak' | 'lufsGated';
 
 /** Options for `masteringRepairTrimSilence`. */
-export interface TrimSilenceOptions extends ValidateOptions {
+export interface TrimSilenceOptions {
   /** Peak gate in dBFS, at most 0. Default -60. Read only by `'peak'`. */
   thresholdDb?: number;
   /** Kept margin around the signal, in samples. Not with `paddingSec`. */

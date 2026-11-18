@@ -30,8 +30,6 @@ export interface SonareEngineRenderOfflineRequest {
    * The transport position is restored when the timeline ends, not between chunks.
    */
   finalize?: boolean;
-  /** Set `false` to skip the scan for NaN and infinities. Default `true`. */
-  validate?: boolean;
 }
 
 /** An OPFS-streamed clip's page bookkeeping, keyed by its page provider. */
@@ -195,7 +193,6 @@ export async function renderOffline(
       channels,
       blockSize,
       finalize,
-      ...(request.validate === undefined ? {} : { validate: request.validate }),
     });
     if (finalize) {
       endTimeline(ctx, origin);

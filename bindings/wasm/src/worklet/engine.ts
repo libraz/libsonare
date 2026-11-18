@@ -1545,7 +1545,7 @@ export class SonareEngine {
    *
    * The request takes `totalFrames`, `blockSize` (default and ceiling: the
    * offline block size; a larger value throws `RangeError`), `finalize` and
-   * `validate`. With
+   * With
    * `finalize: false` a chunk leaves held notes and delay tails running into
    * the next call, which does not prime again; end the series with
    * {@link finishOfflineRender}. The mirror's transport position is restored

@@ -353,8 +353,8 @@ describe('SonareEngine shares the RealtimeEngine vocabulary', () => {
       expect(planes).toHaveLength(2);
       expect(planes[0]).toHaveLength(256);
       await expect(
-        engine.renderOffline({ totalFrames: 256, validate: false }),
-      ).resolves.toBeDefined();
+        engine.renderOffline({ totalFrames: 256, validate: false } as never),
+      ).rejects.toThrow("renderOffline: unknown request key 'validate'");
       await expect(engine.renderOffline(256 as never)).rejects.toThrow(TypeError);
       await expect(
         engine.renderOffline({ totalFrames: 256, sampleRate: 48000 } as never),

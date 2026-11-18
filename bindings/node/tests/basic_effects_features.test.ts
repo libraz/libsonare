@@ -562,37 +562,26 @@ describe('features', () => {
     expect(diff).toBeGreaterThan(1e-6);
   });
 
-  it('inverse feature wrappers reject non-finite matrices', () => {
-    // The facade names the offending index; with its scan off, the core transform
-    // refuses with its own function and argument name.
+  it('inverse feature wrappers reject non-finite matrices and a validate key', () => {
+    // The facade scan names the function and the offending index.
     const melData = new Float32Array(8 * 4).fill(0.1);
     melData[3] = Number.NaN;
     const mel = matrix(melData, 8, 4);
     expect(() => melToStft({ power: mel, sampleRate: SR, nFft: 256 })).toThrow(
       /melToStft: power\.data contains NaN or Inf at index 3/,
     );
-    expect(() => melToStft({ power: mel, sampleRate: SR, nFft: 256, validate: false })).toThrow(
-      /mel_to_stft: M contains a non-finite value/,
-    );
     expect(() =>
-      melToAudio({
-        power: mel,
-        sampleRate: SR,
-        nFft: 256,
-        hopLength: 64,
-        nIter: 2,
-        validate: false,
-      }),
-    ).toThrow(/non-finite value/);
+      melToAudio({ power: mel, sampleRate: SR, nFft: 256, hopLength: 64, nIter: 2 }),
+    ).toThrow(/melToAudio: power\.data contains NaN or Inf at index 3/);
+    expect(() =>
+      melToStft({ power: mel, sampleRate: SR, nFft: 256, validate: false } as never),
+    ).toThrow("melToStft: unknown request key 'validate'");
 
     const coeffData = new Float32Array(5 * 4).fill(0.1);
     coeffData[7] = Number.POSITIVE_INFINITY;
     const mfccCoeffs = matrix(coeffData, 5, 4);
     expect(() => mfccToMel({ coefficients: mfccCoeffs, nMels: 8 })).toThrow(
       /mfccToMel: coefficients\.data contains NaN or Inf at index 7/,
-    );
-    expect(() => mfccToMel({ coefficients: mfccCoeffs, nMels: 8, validate: false })).toThrow(
-      /mfcc_to_mel: mfcc contains a non-finite value/,
     );
     expect(() =>
       mfccToAudio({
@@ -602,9 +591,11 @@ describe('features', () => {
         nFft: 256,
         hopLength: 64,
         nIter: 2,
-        validate: false,
       }),
-    ).toThrow(/non-finite value/);
+    ).toThrow(/mfccToAudio: coefficients\.data contains NaN or Inf at index 7/);
+    expect(() =>
+      mfccToMel({ coefficients: mfccCoeffs, nMels: 8, validate: false } as never),
+    ).toThrow("mfccToMel: unknown request key 'validate'");
 
     const magnitude = new Float32Array(3 * 5).fill(1);
     magnitude[4] = Number.NaN;
@@ -616,9 +607,8 @@ describe('features', () => {
         hopLength: 1,
         nIter: 1,
         momentum: 0,
-        validate: false,
       }),
-    ).toThrow(/griffin_lim: magnitude contains a non-finite value/);
+    ).toThrow(/griffinLim: magnitude\.data contains NaN or Inf at index 4/);
   });
 
   it('passes the forward lifter back to MFCC inversion', () => {

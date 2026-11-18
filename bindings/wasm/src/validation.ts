@@ -2,25 +2,6 @@ import { requireOneOf } from './internal/one_of.js';
 import type { Matrix2D } from './public_types.js';
 import { REQUEST_SHAPES, type RequestFn, type RequestShape } from './request_keys.js';
 
-/**
- * Per-call validation options accepted by guarded wrappers. Empty-buffer
- * checks are always performed; pass `{ validate: false }` to opt out of the
- * O(n) NaN/Inf scan on hot paths.
- *
- * `{ validate: false }` only skips this JS-side pre-scan (which raises a
- * `RangeError` naming the exact offending index). It is NOT a way to push
- * non-finite samples into the core: the native layer always re-validates the
- * buffer — through `validate_offline_audio_input` for the offline-analysis
- * entry points, and through the computation's own per-sample guard where a call
- * takes no sample rate to validate against (the waveform bucket kernels) —
- * matching the C ABI / Node / Python surfaces, so an NaN/Inf buffer still
- * throws, just with a generic native message instead of the indexed JS one.
- */
-export interface ValidateOptions {
-  /** Scan the samples for NaN and infinity before the call. Default `true`. */
-  validate?: boolean;
-}
-
 /** The options of request `R` in the positional form `(samples, sampleRate, options)`. */
 export type OptionsOf<R> = Omit<R, 'samples' | 'sampleRate'>;
 
@@ -211,7 +192,7 @@ export function assertSampleRate(
  * touches the native layer: a wrong-typed argument is a `TypeError` naming it,
  * and empty or non-finite audio and an out-of-range rate are a `RangeError`.
  *
- * `options.validate === false` skips only the O(n) finiteness scan. A stereo or
+ * A stereo or
  * paired entry point calls this once per buffer, naming each through `argName`.
  */
 export function assertAudioInput(
@@ -223,7 +204,12 @@ export function assertAudioInput(
 ): void {
   assertFloat32Array(fnName, samples, argName);
   assertSampleRate(fnName, sampleRate as number);
-  assertSamples(fnName, samples, (options as ValidateOptions).validate !== false, argName);
+  assertSamples(
+    fnName,
+    samples,
+    (options as { scanFinite?: boolean }).scanFinite !== false,
+    argName,
+  );
 }
 
 /** {@link assertAudioInput} for an entry point that takes no sample rate. */
@@ -234,7 +220,12 @@ export function assertAudioSamples(
   argName = 'samples',
 ): void {
   assertFloat32Array(fnName, samples, argName);
-  assertSamples(fnName, samples, (options as ValidateOptions).validate !== false, argName);
+  assertSamples(
+    fnName,
+    samples,
+    (options as { scanFinite?: boolean }).scanFinite !== false,
+    argName,
+  );
 }
 
 /** A `Float32Array` argument; anything else is a `TypeError` naming the field. */
@@ -562,7 +553,7 @@ export function assertInterleavedSamples(
   channels: number,
   validate: boolean,
 ): void {
-  assertAudioSamples(fnName, samples, { validate });
+  assertAudioSamples(fnName, samples, { scanFinite: validate });
   assertPositiveInteger(fnName, channels, 'channels');
   if (samples.length % channels !== 0) {
     throw new RangeError(`${fnName}: samples length must be a multiple of channels`);

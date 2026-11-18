@@ -11,7 +11,6 @@ import {
   assertPositiveFloatValue,
   requireBoolean,
   sampleOneShot,
-  type ValidateOptions,
 } from './validation.js';
 
 function requireModule() {
@@ -19,7 +18,7 @@ function requireModule() {
 }
 
 /** Spectral centroid request. */
-export interface SpectralCentroidRequest extends ValidateOptions {
+export interface SpectralCentroidRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -31,7 +30,7 @@ export interface SpectralCentroidRequest extends ValidateOptions {
 }
 
 /** Spectral bandwidth request. */
-export interface SpectralBandwidthRequest extends ValidateOptions {
+export interface SpectralBandwidthRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -45,7 +44,7 @@ export interface SpectralBandwidthRequest extends ValidateOptions {
 }
 
 /** Spectral rolloff request. */
-export interface SpectralRolloffRequest extends ValidateOptions {
+export interface SpectralRolloffRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -59,7 +58,7 @@ export interface SpectralRolloffRequest extends ValidateOptions {
 }
 
 /** Spectral flatness request. */
-export interface SpectralFlatnessRequest extends ValidateOptions {
+export interface SpectralFlatnessRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -71,7 +70,7 @@ export interface SpectralFlatnessRequest extends ValidateOptions {
 }
 
 /** Spectral flux request. */
-export interface SpectralFluxRequest extends ValidateOptions {
+export interface SpectralFluxRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -85,7 +84,7 @@ export interface SpectralFluxRequest extends ValidateOptions {
 }
 
 /** Spectral contrast request. */
-export interface SpectralContrastRequest extends ValidateOptions {
+export interface SpectralContrastRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -103,7 +102,7 @@ export interface SpectralContrastRequest extends ValidateOptions {
 }
 
 /** Polynomial feature request. */
-export interface PolyFeaturesRequest extends ValidateOptions {
+export interface PolyFeaturesRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -117,7 +116,7 @@ export interface PolyFeaturesRequest extends ValidateOptions {
 }
 
 /** Zero-crossing rate request. */
-export interface ZeroCrossingRateRequest extends ValidateOptions {
+export interface ZeroCrossingRateRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -129,7 +128,7 @@ export interface ZeroCrossingRateRequest extends ValidateOptions {
 }
 
 /** RMS energy request. */
-export interface RmsEnergyRequest extends ValidateOptions {
+export interface RmsEnergyRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */
@@ -141,7 +140,7 @@ export interface RmsEnergyRequest extends ValidateOptions {
 }
 
 /** Zero-crossing index request. The rate is validated but does not change the result. */
-export interface ZeroCrossingsRequest extends ValidateOptions {
+export interface ZeroCrossingsRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. */

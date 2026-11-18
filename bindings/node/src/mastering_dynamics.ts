@@ -1,5 +1,4 @@
 import { addon } from './native.js';
-import type { ValidateOptions } from './validation.js';
 import {
   assertAudioInput,
   assertClosedToken,
@@ -11,7 +10,7 @@ import {
 export type CompressorDetector = 'peak' | 'rms' | 'logRms';
 
 /** Options for `masteringDynamicsCompressor`. */
-export interface CompressorOptions extends ValidateOptions {
+export interface CompressorOptions {
   /** Level above which compression starts, in dBFS. Default `-18`. */
   thresholdDb?: number;
   /** Compression ratio, clamped to at least 1. Default `2`. */
@@ -37,7 +36,7 @@ export interface CompressorOptions extends ValidateOptions {
 }
 
 /** Options for `masteringDynamicsGate`. */
-export interface GateOptions extends ValidateOptions {
+export interface GateOptions {
   /** Level above which the gate opens, in dBFS. Default `-50`. */
   thresholdDb?: number;
   /** Attack in ms: one time constant, about 63% of the way at the set time. */
@@ -55,7 +54,7 @@ export interface GateOptions extends ValidateOptions {
 }
 
 /** Options for `masteringDynamicsTransientShaper`. */
-export interface TransientShaperOptions extends ValidateOptions {
+export interface TransientShaperOptions {
   /** Gain applied to attacks, in dB. Default `3`. */
   attackGainDb?: number;
   /** Gain applied to sustain, in dB. Default `0`. */

@@ -344,14 +344,10 @@ function normalizeRenderOfflineRequest(request: RenderOfflineRequest): {
   finalize: boolean;
 } {
   requestObject('renderOffline', request, 'request', true);
-  if (optionalBoolean('renderOffline', request.validate, 'validate', true)) {
-    for (const [plane, channel] of (request.channels ?? []).entries()) {
-      for (let i = 0; i < (channel?.length ?? 0); i++) {
-        if (!Number.isFinite(channel[i])) {
-          throw new RangeError(
-            `renderOffline: channels[${plane}] contains NaN or Inf at index ${i}`,
-          );
-        }
+  for (const [plane, channel] of (request.channels ?? []).entries()) {
+    for (let i = 0; i < (channel?.length ?? 0); i++) {
+      if (!Number.isFinite(channel[i])) {
+        throw new RangeError(`renderOffline: channels[${plane}] contains NaN or Inf at index ${i}`);
       }
     }
   }

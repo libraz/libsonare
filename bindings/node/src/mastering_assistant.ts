@@ -12,7 +12,7 @@ import type {
   MasteringStreamingPreviewResult,
   StreamingPlatform,
 } from './types.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertClosedToken,
@@ -25,7 +25,7 @@ import {
 export type { MasteringAudioProfile, MasteringAudioProfileDefects } from './types.js';
 
 /** Request form of {@link masteringAudioProfile}. */
-export interface MasteringAudioProfileRequest extends ValidateOptions {
+export interface MasteringAudioProfileRequest {
   /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
@@ -41,7 +41,7 @@ export interface MasteringAudioProfileRequest extends ValidateOptions {
 }
 
 /** Stereo counterpart of {@link MasteringAudioProfileRequest}. */
-export interface MasteringAudioProfileStereoRequest extends ValidateOptions {
+export interface MasteringAudioProfileStereoRequest {
   /** Left channel samples. */
   left: Float32Array;
   /** Right channel samples. */
@@ -77,9 +77,7 @@ export interface MasteringAssistantSettings {
 }
 
 /** Request form of {@link masteringAssistantSuggest} and {@link masteringAssistantSuggestChain}. */
-export interface MasteringAssistantSuggestRequest
-  extends MasteringAssistantSettings,
-    ValidateOptions {
+export interface MasteringAssistantSuggestRequest extends MasteringAssistantSettings {
   /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
@@ -87,9 +85,7 @@ export interface MasteringAssistantSuggestRequest
 }
 
 /** Request form of {@link masteringAssistantSuggestStereo} and {@link masteringAssistantSuggestChainStereo}. */
-export interface MasteringAssistantSuggestStereoRequest
-  extends MasteringAssistantSettings,
-    ValidateOptions {
+export interface MasteringAssistantSuggestStereoRequest extends MasteringAssistantSettings {
   /** Left channel samples. */
   left: Float32Array;
   /** Right channel samples. */
@@ -99,7 +95,7 @@ export interface MasteringAssistantSuggestStereoRequest
 }
 
 /** Request form of {@link masteringStreamingPreview}. */
-export interface MasteringStreamingPreviewRequest extends ValidateOptions {
+export interface MasteringStreamingPreviewRequest {
   /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
@@ -109,7 +105,7 @@ export interface MasteringStreamingPreviewRequest extends ValidateOptions {
 }
 
 /** Request form of {@link masteringStreamingPreviewStereo}. */
-export interface MasteringStreamingPreviewStereoRequest extends ValidateOptions {
+export interface MasteringStreamingPreviewStereoRequest {
   /** Left channel samples. */
   left: Float32Array;
   /** Right channel samples. */
@@ -203,7 +199,7 @@ function assistantParams(
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
- * @param options - Assistant settings ({@link MasteringAssistantSuggestRequest}) and `validate`
+ * @param options - Assistant settings ({@link MasteringAssistantSuggestRequest})
  * @returns The suggested chain, one explanation line per decision and the measured profile
  * @throws {TypeError} when `sampleRate` is missing or a field has the wrong type
  * @throws {RangeError} on audio out of domain, or an unknown `targetPlatform` or `preset`

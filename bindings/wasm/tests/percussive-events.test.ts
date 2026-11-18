@@ -1096,26 +1096,23 @@ describe('renderPercussiveEvents', () => {
     expectIdenticalOver(rendered, compact, events[1].onsetSample, compact.length);
   });
 
-  it('skips only the JS pre-scan when validate is false', () => {
-    // The flag drops the indexed O(n) scan, not the check: the native layer
-    // re-validates the buffer, so a non-finite sample is still rejected — with
-    // the native error in place of the RangeError that names the index.
+  it('always scans for non-finite samples and refuses a validate key', () => {
     const poisoned = Float32Array.from(compact);
     poisoned[100] = Number.NaN;
     expect(() => extractPercussiveEvents({ samples: poisoned, sampleRate })).toThrow(RangeError);
-    expectRangeRefusal(() =>
-      extractPercussiveEvents({ samples: poisoned, sampleRate, validate: false }),
+    expect(() => renderPercussiveEvents({ samples: poisoned, sampleRate, events: [] })).toThrow(
+      RangeError,
     );
-    expectRangeRefusal(() =>
-      renderPercussiveEvents({ samples: poisoned, sampleRate, events: [], validate: false }),
-    );
-
-    // And on a clean buffer it changes nothing about the result.
-    expect(extractPercussiveEvents({ samples: compact, sampleRate, validate: false })).toEqual(
-      extractPercussiveEvents({ samples: compact, sampleRate }),
-    );
-    expect(
-      renderPercussiveEvents({ samples: compact, sampleRate, events: [], validate: false }),
-    ).toEqual(compact);
+    expect(() =>
+      extractPercussiveEvents({ samples: compact, sampleRate, validate: false } as never),
+    ).toThrow("extractPercussiveEvents: unknown request key 'validate'");
+    expect(() =>
+      renderPercussiveEvents({
+        samples: compact,
+        sampleRate,
+        events: [],
+        validate: false,
+      } as never),
+    ).toThrow("renderPercussiveEvents: unknown request key 'validate'");
   });
 });

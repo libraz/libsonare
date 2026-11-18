@@ -851,12 +851,14 @@ describe('RealtimeEngine offline render and bounce', () => {
     });
   });
 
-  it('scans the input for non-finite samples unless validate is false', () => {
+  it('scans the input for non-finite samples and refuses a validate key', () => {
     withEngine((engine) => {
       const bad = block();
       bad[0][3] = Number.NaN;
       expect(caught(() => engine.renderOffline({ channels: bad }))).toBeInstanceOf(RangeError);
-      expect(() => engine.renderOffline({ channels: block(), validate: false })).not.toThrow();
+      expect(() => engine.renderOffline({ channels: block(), validate: false } as never)).toThrow(
+        new TypeError("renderOffline: unknown request key 'validate'"),
+      );
     });
   });
 

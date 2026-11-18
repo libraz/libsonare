@@ -7,7 +7,7 @@ import {
   waveformReportFromNative,
 } from './internal/metering_native.js';
 import { getSonareModule } from './module_state.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertNonNegativeInteger,
@@ -80,7 +80,7 @@ export interface DynamicRangeReport {
 }
 
 /** Options for {@link meteringDetectClipping}. All fields are optional. */
-export interface MeteringDetectClippingOptions extends ValidateOptions {
+export interface MeteringDetectClippingOptions {
   /** Clip level in dBFS, at most 0 (0 dBFS is a real level). Absent = the library's, about -0.0087 dBFS (0.999 linear); a level too small to reach the detector is a `RangeError`. */
   thresholdDb?: number;
   /** Minimum run length to report. Absent = 1 (the library's); an explicit 0 is a `RangeError`. */
@@ -88,7 +88,7 @@ export interface MeteringDetectClippingOptions extends ValidateOptions {
 }
 
 /** Options for {@link meteringDynamicRange}. All fields are optional. */
-export interface MeteringDynamicRangeOptions extends ValidateOptions {
+export interface MeteringDynamicRangeOptions {
   /** Window length in seconds. Absent = 3 s; an explicit 0 is a `RangeError`. */
   windowSec?: number;
   /** Hop length in seconds. Absent = 1 s; an explicit 0 is a `RangeError`. */
@@ -104,7 +104,7 @@ function requireModule() {
 }
 
 /** Request form of {@link meteringPeakDb}. */
-export interface MeteringPeakDbRequest extends ValidateOptions {
+export interface MeteringPeakDbRequest {
   /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
@@ -112,7 +112,7 @@ export interface MeteringPeakDbRequest extends ValidateOptions {
 }
 
 /** Request form of {@link meteringRmsDb}. */
-export interface MeteringRmsDbRequest extends ValidateOptions {
+export interface MeteringRmsDbRequest {
   /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
@@ -120,7 +120,7 @@ export interface MeteringRmsDbRequest extends ValidateOptions {
 }
 
 /** Request form of {@link meteringCrestFactorDb}. */
-export interface MeteringCrestFactorDbRequest extends ValidateOptions {
+export interface MeteringCrestFactorDbRequest {
   /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
@@ -128,7 +128,7 @@ export interface MeteringCrestFactorDbRequest extends ValidateOptions {
 }
 
 /** Request form of {@link meteringDcOffset}. */
-export interface MeteringDcOffsetRequest extends ValidateOptions {
+export interface MeteringDcOffsetRequest {
   /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
@@ -136,7 +136,7 @@ export interface MeteringDcOffsetRequest extends ValidateOptions {
 }
 
 /** Request form of {@link meteringTruePeakDbtp}. */
-export interface MeteringTruePeakDbtpRequest extends ValidateOptions {
+export interface MeteringTruePeakDbtpRequest {
   /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
@@ -146,7 +146,7 @@ export interface MeteringTruePeakDbtpRequest extends ValidateOptions {
 }
 
 /** Request form of {@link meteringSilenceRatio}. */
-export interface MeteringSilenceRatioRequest extends ValidateOptions {
+export interface MeteringSilenceRatioRequest {
   /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
@@ -238,7 +238,7 @@ export function meteringCrestFactorDb(...args: unknown[]): number {
 }
 
 /** Request form of {@link meteringCrestFactorDbStereo}. */
-export interface MeteringCrestFactorDbStereoRequest extends ValidateOptions {
+export interface MeteringCrestFactorDbStereoRequest {
   /** Left channel samples. */
   left: Float32Array;
   /** Right channel samples. */
@@ -399,7 +399,7 @@ export interface PhaseScopeReport {
 }
 
 /** Options for {@link meteringSpectrum}. All fields are optional; an omitted one takes the library default. */
-export interface SpectrumOptions extends ValidateOptions {
+export interface SpectrumOptions {
   /** FFT size. Absent = 2048; an explicit 0 is a `RangeError`. */
   nFft?: number;
   /** Apply fractional-octave smoothing to magnitude. */
@@ -429,7 +429,7 @@ export interface SpectrumReport {
 }
 
 /** Request form of {@link meteringStereoCorrelation}. */
-export interface MeteringStereoCorrelationRequest extends ValidateOptions {
+export interface MeteringStereoCorrelationRequest {
   /** Left channel samples. */
   left: Float32Array;
   /** Right channel samples. */
@@ -439,7 +439,7 @@ export interface MeteringStereoCorrelationRequest extends ValidateOptions {
 }
 
 /** Request form of {@link meteringStereoWidth}. */
-export interface MeteringStereoWidthRequest extends ValidateOptions {
+export interface MeteringStereoWidthRequest {
   /** Left channel samples. */
   left: Float32Array;
   /** Right channel samples. */
@@ -449,7 +449,7 @@ export interface MeteringStereoWidthRequest extends ValidateOptions {
 }
 
 /** Request form of {@link meteringVectorscope}. */
-export interface MeteringVectorscopeRequest extends ValidateOptions {
+export interface MeteringVectorscopeRequest {
   /** Left channel samples. */
   left: Float32Array;
   /** Right channel samples. */
@@ -465,7 +465,7 @@ export interface MeteringVectorscopeRequest extends ValidateOptions {
 }
 
 /** Request form of {@link meteringPhaseScope}. */
-export interface MeteringPhaseScopeRequest extends ValidateOptions {
+export interface MeteringPhaseScopeRequest {
   /** Left channel samples. */
   left: Float32Array;
   /** Right channel samples. */
@@ -491,7 +491,7 @@ export interface MeteringSpectrumFrameRequest extends MeteringSpectrumRequest {
 }
 
 /** Request form of {@link waveformPeaks}. */
-export interface WaveformPeaksRequest extends ValidateOptions {
+export interface WaveformPeaksRequest {
   /** One `Float32Array` per channel, equal lengths. */
   channels: Float32Array[];
   /** Bucket width in samples. Default 512. */
@@ -499,7 +499,7 @@ export interface WaveformPeaksRequest extends ValidateOptions {
 }
 
 /** Request form of {@link waveformPeakPyramid}. */
-export interface WaveformPeakPyramidRequest extends ValidateOptions {
+export interface WaveformPeakPyramidRequest {
   /** One `Float32Array` per channel, equal lengths. */
   channels: Float32Array[];
   /** Bucket widths in samples, one per zoom level. Default [512, 1024, 2048, 4096]. */
@@ -644,18 +644,12 @@ export function meteringSpectrumFrame(
 export function meteringSpectrumFrame(...args: unknown[]): SpectrumReport {
   const r = sampleOneShot<MeteringSpectrumFrameRequest>('meteringSpectrumFrame', args);
   // The frame is the only span scanned for non-finite samples (below).
-  assertAudioInput('meteringSpectrumFrame', r.samples, r.sampleRate, { validate: false });
+  assertAudioInput('meteringSpectrumFrame', r.samples, r.sampleRate, { scanFinite: false });
   const native = nativeSpectrumOptions('meteringSpectrumFrame', r);
   const startSample = r.startSample ?? 0;
   assertNonNegativeInteger('meteringSpectrumFrame', startSample, 'startSample');
   const nFft = (native.nFft as number | undefined) ?? DEFAULT_SPECTRUM_N_FFT;
-  assertSamplesInWindow(
-    'meteringSpectrumFrame',
-    r.samples,
-    r.validate !== false,
-    startSample,
-    nFft,
-  );
+  assertSamplesInWindow('meteringSpectrumFrame', r.samples, true, startSample, nFft);
   // Native takes the start as the positional `frame_offset`.
   return requireModule().meteringSpectrumFrame(r.samples, r.sampleRate, startSample, native);
 }
@@ -663,8 +657,7 @@ export function meteringSpectrumFrame(...args: unknown[]): SpectrumReport {
 /**
  * Compute per-channel min/max waveform buckets from planar audio.
  *
- * A non-finite sample is rejected rather than skipped, and `{ validate: false }`
- * does not change that — it only skips the JS pre-scan that names the offending
+ * A non-finite sample is rejected rather than skipped; the JS pre-scan names the offending
  * index. A bucket whose samples are not finite has no min/max to report, and the
  * `0`/`0` it would otherwise carry is what a waveform display draws as silence.
  * Bucket widths are in samples, so the call takes no sample rate.

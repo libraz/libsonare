@@ -3,7 +3,6 @@
  * or MFCC representation, and the phase reconstruction they share.
  */
 
-import type { GuardedOptions } from './internal/feature_validation.js';
 import { validatePositiveIntegers } from './internal/feature_validation.js';
 import { quarterHop, resolveFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
@@ -39,7 +38,7 @@ function resolveInverseFftOptions(
 }
 
 /** Mel power to linear STFT magnitude request. */
-export interface MelToStftRequest extends GuardedOptions {
+export interface MelToStftRequest {
   /** Rows are mel bands, cols are frames. */
   power: Matrix2D;
   /** Rate of the source audio, in Hz. Default 22050. */
@@ -55,7 +54,7 @@ export interface MelToStftRequest extends GuardedOptions {
 }
 
 /** Griffin-Lim reconstruction from mel power request. */
-export interface MelToAudioRequest extends GuardedOptions {
+export interface MelToAudioRequest {
   /** Rows are mel bands, cols are frames. */
   power: Matrix2D;
   /** Rate of the source audio, in Hz. Default 22050. */
@@ -75,7 +74,7 @@ export interface MelToAudioRequest extends GuardedOptions {
 }
 
 /** MFCC to mel power request. */
-export interface MfccToMelRequest extends GuardedOptions {
+export interface MfccToMelRequest {
   /** Rows are coefficients, cols are frames. */
   coefficients: Matrix2D;
   /** Mel bands to reconstruct. Default 128. */
@@ -85,7 +84,7 @@ export interface MfccToMelRequest extends GuardedOptions {
 }
 
 /** Griffin-Lim reconstruction from MFCC request. */
-export interface MfccToAudioRequest extends GuardedOptions {
+export interface MfccToAudioRequest {
   /** Rows are coefficients, cols are frames. */
   coefficients: Matrix2D;
   /** Mel bands to reconstruct. Default 128. */
@@ -109,7 +108,7 @@ export interface MfccToAudioRequest extends GuardedOptions {
 }
 
 /** Griffin-Lim reconstruction from an STFT magnitude request. */
-export interface GriffinLimRequest extends GuardedOptions {
+export interface GriffinLimRequest {
   /** Rows are `nFft / 2 + 1` bins, cols are frames. */
   magnitude: Matrix2D;
   /** Rate of the source audio, in Hz. */
@@ -135,7 +134,7 @@ export function melToStft(...args: unknown[]): Matrix2D {
   const r = requestOnly<MelToStftRequest>('melToStft', args);
   const sampleRate = r.sampleRate ?? 22050;
   assertSampleRate('melToStft', sampleRate);
-  const power = assertMatrix2D('melToStft', r.power, 'power', r.validate !== false);
+  const power = assertMatrix2D('melToStft', r.power, 'power');
   // Not on the shared FFT rule: this inverts a filterbank rather than running a
   // transform, so `nFft` only sizes the output to `nFft / 2 + 1` bins and an odd
   // size is accepted by the core and by the Node surface alike.
@@ -172,7 +171,7 @@ export function melToAudio(...args: unknown[]): Float32Array {
   const r = requestOnly<MelToAudioRequest>('melToAudio', args);
   const sampleRate = r.sampleRate ?? 22050;
   assertSampleRate('melToAudio', sampleRate);
-  const power = assertMatrix2D('melToAudio', r.power, 'power', r.validate !== false);
+  const power = assertMatrix2D('melToAudio', r.power, 'power');
   const fft = resolveInverseFftOptions('melToAudio', r.nFft ?? 2048, r.hopLength);
   const nIter = r.nIter ?? 32;
   assertInt32('melToAudio', nIter, 'nIter');
@@ -212,7 +211,7 @@ export function griffinLim(...args: unknown[]): Float32Array {
   const r = requestOnly<GriffinLimRequest>('griffinLim', args);
   const sampleRate = r.sampleRate;
   assertSampleRate('griffinLim', sampleRate);
-  const magnitude = assertMatrix2D('griffinLim', r.magnitude, 'magnitude', r.validate !== false);
+  const magnitude = assertMatrix2D('griffinLim', r.magnitude, 'magnitude');
   const fft = resolveInverseFftOptions(
     'griffinLim',
     r.nFft ?? (magnitude.rows - 1) * 2,
@@ -242,12 +241,7 @@ export function griffinLim(...args: unknown[]): Float32Array {
 export function mfccToMel(request: MfccToMelRequest): Matrix2D;
 export function mfccToMel(...args: unknown[]): Matrix2D {
   const r = requestOnly<MfccToMelRequest>('mfccToMel', args);
-  const coefficients = assertMatrix2D(
-    'mfccToMel',
-    r.coefficients,
-    'coefficients',
-    r.validate !== false,
-  );
+  const coefficients = assertMatrix2D('mfccToMel', r.coefficients, 'coefficients');
   const nMels = r.nMels ?? 128;
   assertInt32('mfccToMel', nMels, 'nMels');
   const native = requireModule().mfccToMel(
@@ -271,12 +265,7 @@ export function mfccToAudio(...args: unknown[]): Float32Array {
   const r = requestOnly<MfccToAudioRequest>('mfccToAudio', args);
   const sampleRate = r.sampleRate ?? 22050;
   assertSampleRate('mfccToAudio', sampleRate);
-  const coefficients = assertMatrix2D(
-    'mfccToAudio',
-    r.coefficients,
-    'coefficients',
-    r.validate !== false,
-  );
+  const coefficients = assertMatrix2D('mfccToAudio', r.coefficients, 'coefficients');
   const fft = resolveInverseFftOptions('mfccToAudio', r.nFft ?? 2048, r.hopLength);
   const nMels = r.nMels ?? 128;
   const nIter = r.nIter ?? 32;
@@ -306,7 +295,7 @@ export function mfccToAudio(...args: unknown[]): Float32Array {
 }
 
 /** Request for {@link phaseVocoder}. */
-export interface PhaseVocoderRequest extends GuardedOptions {
+export interface PhaseVocoderRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */

@@ -17,15 +17,10 @@ import type {
   MasteringRepairDecrackleResult,
   MasteringRepairSamplesRequest,
 } from './types.js';
-import {
-  assertAudioInput,
-  requestOnly,
-  sampleOneShot,
-  type ValidateOptions,
-} from './validation.js';
+import { assertAudioInput, requestOnly, sampleOneShot } from './validation.js';
 
 /** Options for `masteringRepairDeclick`. */
-export interface DeclickOptions extends ValidateOptions {
+export interface DeclickOptions {
   /** Click detection threshold as a linear sample magnitude, in (0, 10]. Default `0.8`. */
   threshold?: number;
   /** Ratio a click edge must exceed against the sample-to-sample level beside it, in (0, 100]. Default `4`. */
@@ -93,7 +88,7 @@ export function masteringRepairDeclickStereo(...args: unknown[]): MasteringRepai
 }
 
 /** Options for `masteringRepairDeclip`. */
-export interface DeclipOptions extends ValidateOptions {
+export interface DeclipOptions {
   /** Clip level in dBFS, at most 0. Default about -0.175 (0.98 linear). */
   clipThresholdDb?: number;
   /** Order of the LPC model that fills a clipped run, from 0 up. Default `36`. */
@@ -113,7 +108,7 @@ export interface MasteringRepairDeclipRequest
 export type DecrackleMode = 'median' | 'waveletShrinkage';
 
 /** Options for `masteringRepairDecrackle`. */
-export interface DecrackleOptions extends ValidateOptions {
+export interface DecrackleOptions {
   /** Detection threshold, in (0, 1000]: a deviation from the local median in `'median'` mode, a cap on the shrinkage threshold in `'waveletShrinkage'` mode. Default `0.4`. */
   threshold?: number;
   /** Repair algorithm. Default `'median'`. */

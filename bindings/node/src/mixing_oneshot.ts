@@ -13,7 +13,6 @@ import {
   assertSampleRate,
   requestOnly,
   requireBoolean,
-  type ValidateOptions,
 } from './validation.js';
 
 /** Names of the built-in mixing scene presets accepted by {@link mixingScenePreset}. */
@@ -61,7 +60,7 @@ export interface MixStereoStrip {
 }
 
 /** Inputs for the one-shot {@link mixStereo} facade. */
-export interface MixStereoRequest extends ValidateOptions {
+export interface MixStereoRequest {
   /** Strips to mix, in order; must not be empty. */
   strips: MixStereoStrip[];
   /** Sample rate in Hz, `[8000, 384000]`. Required. */

@@ -6,7 +6,7 @@
 import { resolveEntryTimes } from './internal/effects_common.js';
 import { getSonareModule } from './module_state.js';
 import type { PercussiveEvent, PercussiveEventInput } from './public_types.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import { assertAudioInput, assertPercussiveSeparation, sampleOneShot } from './validation.js';
 
 function requireModule() {
@@ -58,9 +58,7 @@ export interface PercussiveSeparationOptions {
 }
 
 /** Canonical request form for {@link extractPercussiveEvents}. */
-export interface ExtractPercussiveEventsRequest
-  extends PercussiveSeparationOptions,
-    ValidateOptions {
+export interface ExtractPercussiveEventsRequest extends PercussiveSeparationOptions {
   /** Source audio; a plain number array is copied to a `Float32Array` first. */
   samples: Float32Array | readonly number[];
   /**
@@ -98,9 +96,7 @@ export interface ExtractPercussiveEventsRequest
 }
 
 /** Canonical request form for {@link renderPercussiveEvents}. */
-export interface RenderPercussiveEventsRequest
-  extends PercussiveSeparationOptions,
-    ValidateOptions {
+export interface RenderPercussiveEventsRequest extends PercussiveSeparationOptions {
   /** Source audio; a plain number array is copied to a `Float32Array` first. */
   samples: Float32Array | readonly number[];
   /**

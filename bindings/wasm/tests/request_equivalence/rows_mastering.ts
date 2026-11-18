@@ -10,7 +10,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate targetDb? mode? ...options?',
     values: {
-      options: { validate: false },
       samples: SIG,
       sampleRate: ALT_SR,
       targetDb: -6,
@@ -276,7 +275,6 @@ export const ROWS: Row[] = [
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
-      options: { validate: false },
     },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'a sample peak reads no rate' },
@@ -289,7 +287,6 @@ export const ROWS: Row[] = [
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
-      options: { validate: false },
     },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'a whole-buffer RMS reads no rate' },
@@ -302,7 +299,7 @@ export const ROWS: Row[] = [
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
-      options: { thresholdDb: -20, frameLength: 256, hopLength: 64, validate: false },
+      options: { thresholdDb: -20, frameLength: 256, hopLength: 64 },
     },
     invalid: { options: { hopLength: 0 } },
     inert: { sampleRate: 'frames are counted in samples' },
@@ -315,7 +312,6 @@ export const ROWS: Row[] = [
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
-      options: { validate: false },
     },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'a peak-to-RMS ratio reads no rate' },
@@ -328,7 +324,6 @@ export const ROWS: Row[] = [
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
-      options: { validate: false },
     },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'a mean reads no rate' },
@@ -341,7 +336,7 @@ export const ROWS: Row[] = [
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
-      options: { oversampleFactor: 2, validate: false },
+      options: { oversampleFactor: 2 },
     },
     invalid: { options: { oversampleFactor: 3 } },
     inert: { sampleRate: 'oversampling is rate-relative' },
@@ -378,7 +373,6 @@ export const ROWS: Row[] = [
       left: SIG,
       right: SIG2,
       sampleRate: ALT_SR,
-      options: { validate: false },
     },
     invalid: { sampleRate: 0 },
   },
@@ -391,7 +385,6 @@ export const ROWS: Row[] = [
       left: SIG,
       right: SIG2,
       sampleRate: ALT_SR,
-      options: { validate: false },
     },
     invalid: { sampleRate: 0 },
   },

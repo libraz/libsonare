@@ -146,34 +146,21 @@ describe('meteringSpectrumFrame validates only the analysis frame', () => {
     expect(Array.from(report.magnitude).every(Number.isFinite)).toBe(true);
   });
 
-  it('drops the facade scan under validate:false but not the core guard', () => {
+  it('refuses a validate key and still scans the window', () => {
     const inside = FRAME_OFFSET + 200;
-    // The two refusals are distinguishable: the facade names the index, the core
-    // does not.
+    expect(() =>
+      meteringSpectrumFrame(tone(), SR, {
+        startSample: FRAME_OFFSET,
+        nFft: N_FFT,
+        validate: false,
+      } as never),
+    ).toThrow("meteringSpectrumFrame: unknown option 'validate'");
     expect(() =>
       meteringSpectrumFrame(toneWith(inside, Number.NaN), SR, {
         startSample: FRAME_OFFSET,
         nFft: N_FFT,
-        validate: false,
       }),
-    ).toThrow();
-    expect(() =>
-      meteringSpectrumFrame(toneWith(inside, Number.NaN), SR, {
-        startSample: FRAME_OFFSET,
-        nFft: N_FFT,
-        validate: false,
-      }),
-    ).not.toThrow(`at index ${inside}`);
-
-    const unchecked = meteringSpectrumFrame(toneWith(4000, Number.NaN), SR, {
-      startSample: FRAME_OFFSET,
-      nFft: N_FFT,
-      validate: false,
-    });
-    expectSameSpectrum(
-      unchecked,
-      meteringSpectrumFrame(tone(), SR, { startSample: FRAME_OFFSET, nFft: N_FFT }),
-    );
+    ).toThrow(`at index ${inside}`);
   });
 });
 

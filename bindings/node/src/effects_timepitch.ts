@@ -9,7 +9,7 @@ import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { KEY_MODES } from './internal/key_modes.js';
 import { addon } from './native.js';
 import type { AutoTuneOptions, AutoTuneResult, PitchCorrectOptions } from './types.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertClosedToken,
@@ -23,7 +23,7 @@ import {
  * Time-stretch request. `sampleRate` (Hz) and `speedRatio` are required; a
  * missing field is a `TypeError`, a non-finite value a `RangeError`.
  */
-export interface TimeStretchRequest extends ValidateOptions {
+export interface TimeStretchRequest {
   /** Mono input audio. */
   samples: Float32Array;
   /** Sample rate in Hz. Required. */
@@ -41,7 +41,7 @@ export interface TimeStretchRequest extends ValidateOptions {
 }
 
 /** Pitch-shift request. `sampleRate` (Hz) and `pitchSemitones` are required. */
-export interface PitchShiftRequest extends ValidateOptions {
+export interface PitchShiftRequest {
   /** Mono input audio. */
   samples: Float32Array;
   /** Sample rate in Hz. Required. */
@@ -55,7 +55,7 @@ export interface PitchShiftRequest extends ValidateOptions {
 }
 
 /** Constant-interval correction request. `sampleRate` (Hz), `currentMidi` and `targetMidi` are required. */
-export interface PitchCorrectToMidiRequest extends ValidateOptions {
+export interface PitchCorrectToMidiRequest {
   /** Mono input audio. */
   samples: Float32Array;
   /** Sample rate in Hz. Required. */
@@ -207,8 +207,8 @@ export function pitchCorrectTimevarying(
 ): Float32Array;
 export function pitchCorrectTimevarying(...args: unknown[]): Float32Array {
   const r = sampleOneShot<PitchCorrectTimevaryingRequest>('pitchCorrectTimevarying', args);
-  const { samples, sampleRate, f0Hz, hopLength, validate, voiced, voicedProb, ...rest } = r;
-  assertAudioInput('pitchCorrectTimevarying', samples, sampleRate, { validate });
+  const { samples, sampleRate, f0Hz, hopLength, voiced, voicedProb, ...rest } = r;
+  assertAudioInput('pitchCorrectTimevarying', samples, sampleRate);
   if (!(f0Hz instanceof Float32Array)) {
     throw new TypeError('pitchCorrectTimevarying: f0Hz must be a Float32Array');
   }
@@ -260,12 +260,12 @@ export function autoTune(
 ): AutoTuneResult;
 export function autoTune(...args: unknown[]): AutoTuneResult {
   const r = sampleOneShot<AutoTuneRequest>('autoTune', args);
-  const { samples, sampleRate, key, validate, ...options } = r;
+  const { samples, sampleRate, key, ...options } = r;
   const keyOrDetect = key ?? 'detect';
   if (keyOrDetect !== 'detect' && typeof keyOrDetect !== 'object') {
     throw new TypeError("autoTune: key must be 'detect' or { root, mode }");
   }
-  assertAudioInput('autoTune', samples, sampleRate, { validate });
+  assertAudioInput('autoTune', samples, sampleRate);
   let nativeKey: { root: number; mode: string } | null = null;
   if (keyOrDetect !== 'detect') {
     assertPitchClass('autoTune', keyOrDetect.root, 'key.root');

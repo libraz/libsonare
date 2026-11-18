@@ -133,7 +133,7 @@ describe('playback renderer (WASM)', () => {
     ).toThrow(new TypeError('renderPlayback: config must be a configuration object'));
   });
 
-  it('scans the samples for NaN unless validate is false', () => {
+  it('scans the samples for NaN and refuses a validate key', () => {
     const samples = new Float32Array(8);
     samples[3] = Number.NaN;
     const request = {
@@ -145,8 +145,8 @@ describe('playback renderer (WASM)', () => {
     expect(() => renderPlayback(request)).toThrow(
       new RangeError('renderPlayback: samples contains NaN or Inf at index 3'),
     );
-    expect(() => renderPlayback({ ...request, validate: false })).not.toThrow(
-      /contains NaN or Inf/,
+    expect(() => renderPlayback({ ...request, validate: false } as never)).toThrow(
+      new TypeError("renderPlayback: unknown request key 'validate'"),
     );
   });
 

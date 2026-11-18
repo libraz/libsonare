@@ -7,7 +7,7 @@ import type {
   PolyphonicRenderOptions,
 } from './public_types.js';
 import type { WasmPolyphonicAnalysis } from './sonare.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertFloatValue,
@@ -17,7 +17,7 @@ import {
 } from './validation.js';
 
 /** Canonical request form for {@link analyzePolyphonic}. */
-export interface AnalyzePolyphonicRequest extends PolyphonicAnalysisOptions, ValidateOptions {
+export interface AnalyzePolyphonicRequest extends PolyphonicAnalysisOptions {
   /** Source audio; must be non-empty. */
   samples: Float32Array;
   /**
@@ -36,7 +36,7 @@ const NAMED_ZERO_FIELDS = {
 
 /** The native config of a request: the fields native reads, in its own spellings. */
 function nativePolyphonicConfig(request: AnalyzePolyphonicRequest): Record<string, unknown> {
-  const { samples, sampleRate, validate, ...rest } = request as unknown as Record<string, unknown>;
+  const { samples, sampleRate, ...rest } = request as unknown as Record<string, unknown>;
   const config = rest;
   for (const [key, meaning] of Object.entries(NAMED_ZERO_FIELDS)) {
     if (config[key] === 0) {

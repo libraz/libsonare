@@ -283,7 +283,7 @@ describe('masterAudio: preset, overrides, progress and cancel', () => {
     );
   });
 
-  it('refuses non-finite audio unless validate is false', () => {
+  it('refuses non-finite audio', () => {
     const bad = new Float32Array(left);
     bad[10] = Number.NaN;
     expectThrows(() => sonare.masterAudio({ samples: bad, sampleRate, preset: 'pop' }), RangeError);

@@ -323,19 +323,6 @@ function fieldValue(specs: Spec[], values: Args, key: string): unknown {
   return (values[spread.name] as Args | undefined)?.[key];
 }
 
-/** The row's values with a NaN written into the first audio buffer. */
-function poisoned(specs: Spec[], values: Args): Args {
-  for (const spec of specs) {
-    const value = values[spec.name];
-    if (value instanceof Float32Array) {
-      const copy = value.slice();
-      copy[0] = Number.NaN;
-      return { ...values, [spec.name]: copy };
-    }
-  }
-  throw new Error('row has no audio buffer to poison');
-}
-
 /** An F0 track with a one-semitone step, a short voiced run and a gap, for the note-set rows. */
 const NOTE_FRAME_RATE = SR / 512;
 const NOTE_TRACK = (() => {
@@ -1114,28 +1101,28 @@ const ROWS: Row[] = [
     name: 'ebur128LoudnessRangeLu',
     fn: sonare.ebur128LoudnessRangeLu,
     params: 'samples sampleRate ...options?',
-    values: { samples: LONG, sampleRate: ALT_SR, options: { validate: false } },
+    values: { samples: LONG, sampleRate: ALT_SR },
     invalid: { sampleRate: 0 },
   },
   {
     name: 'lufs',
     fn: sonare.lufs,
     params: 'samples sampleRate ...options?',
-    values: { samples: SIG, sampleRate: ALT_SR, options: { validate: false } },
+    values: { samples: SIG, sampleRate: ALT_SR },
     invalid: { sampleRate: 0 },
   },
   {
     name: 'momentaryLufs',
     fn: sonare.momentaryLufs,
     params: 'samples sampleRate ...options?',
-    values: { samples: SIG, sampleRate: ALT_SR, options: { validate: false } },
+    values: { samples: SIG, sampleRate: ALT_SR },
     invalid: { sampleRate: 0 },
   },
   {
     name: 'shortTermLufs',
     fn: sonare.shortTermLufs,
     params: 'samples sampleRate ...options?',
-    values: { samples: LONG, sampleRate: ALT_SR, options: { validate: false } },
+    values: { samples: LONG, sampleRate: ALT_SR },
     invalid: { sampleRate: 0 },
   },
   {
@@ -2204,7 +2191,7 @@ const ROWS: Row[] = [
     name: 'meteringPeakDb',
     fn: sonare.meteringPeakDb,
     params: 'samples sampleRate ...options?',
-    values: { samples: SIG, sampleRate: ALT_SR, options: { validate: false } },
+    values: { samples: SIG, sampleRate: ALT_SR },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'a sample peak reads no rate' },
   },
@@ -2212,7 +2199,7 @@ const ROWS: Row[] = [
     name: 'meteringRmsDb',
     fn: sonare.meteringRmsDb,
     params: 'samples sampleRate ...options?',
-    values: { samples: SIG, sampleRate: ALT_SR, options: { validate: false } },
+    values: { samples: SIG, sampleRate: ALT_SR },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'a whole-buffer RMS reads no rate' },
   },
@@ -2220,7 +2207,7 @@ const ROWS: Row[] = [
     name: 'meteringCrestFactorDb',
     fn: sonare.meteringCrestFactorDb,
     params: 'samples sampleRate ...options?',
-    values: { samples: SIG, sampleRate: ALT_SR, options: { validate: false } },
+    values: { samples: SIG, sampleRate: ALT_SR },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'a peak-to-RMS ratio reads no rate' },
   },
@@ -2228,7 +2215,7 @@ const ROWS: Row[] = [
     name: 'meteringDcOffset',
     fn: sonare.meteringDcOffset,
     params: 'samples sampleRate ...options?',
-    values: { samples: SIG, sampleRate: ALT_SR, options: { validate: false } },
+    values: { samples: SIG, sampleRate: ALT_SR },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'a mean reads no rate' },
   },
@@ -2239,7 +2226,7 @@ const ROWS: Row[] = [
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
-      options: { thresholdDb: -20, frameLength: 256, hopLength: 64, validate: false },
+      options: { thresholdDb: -20, frameLength: 256, hopLength: 64 },
     },
     invalid: { hopLength: 0 },
     inert: { sampleRate: 'frames are counted in samples' },
@@ -2251,7 +2238,7 @@ const ROWS: Row[] = [
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
-      options: { oversampleFactor: 2, validate: false },
+      options: { oversampleFactor: 2 },
     },
     invalid: { oversampleFactor: 3 },
     inert: { sampleRate: 'oversampling is rate-relative' },
@@ -2282,7 +2269,7 @@ const ROWS: Row[] = [
     fn: sonare.meteringStereoCorrelation,
     requestOnly: true,
     params: 'left right sampleRate ...options?',
-    values: { left: SIG, right: SIG2, sampleRate: ALT_SR, options: { validate: false } },
+    values: { left: SIG, right: SIG2, sampleRate: ALT_SR },
     invalid: { sampleRate: 0 },
   },
   {
@@ -2290,7 +2277,7 @@ const ROWS: Row[] = [
     fn: sonare.meteringStereoWidth,
     requestOnly: true,
     params: 'left right sampleRate ...options?',
-    values: { left: SIG, right: SIG2, sampleRate: ALT_SR, options: { validate: false } },
+    values: { left: SIG, right: SIG2, sampleRate: ALT_SR },
     invalid: { sampleRate: 0 },
   },
   {
@@ -2493,12 +2480,10 @@ describe('request-object equivalence', () => {
       for (const field of fieldsOf(row, specs)) {
         const label = field.key ?? field.param;
         const masked = { ...row.values, ...row.controlBase?.[label] };
-        // `validate` only decides which layer refuses a non-finite sample.
-        const base = label === 'validate' ? poisoned(specs, masked) : masked;
-        const reference =
-          label === 'validate' || row.controlBase?.[label]
-            ? await run(row, specs, base, 'positional')
-            : full;
+        const base = masked;
+        const reference = row.controlBase?.[label]
+          ? await run(row, specs, base, 'positional')
+          : full;
         if (
           isDeepStrictEqual(await run(row, specs, without(base, field), 'positional'), reference)
         ) {

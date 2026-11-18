@@ -81,9 +81,9 @@ describe('remaining feature request-object compatibility', () => {
     expect(lufs({ samples, sampleRate })).toEqual(lufs(samples, sampleRate));
     expect(momentaryLufs({ samples, sampleRate })).toEqual(momentaryLufs(samples, sampleRate));
     expect(shortTermLufs({ samples, sampleRate })).toEqual(shortTermLufs(samples, sampleRate));
-    expect(lufsMultichannel({ channels: [samples], sampleRate })).toEqual(
-      lufsMultichannel({ channels: [samples], sampleRate, validate: true }),
-    );
+    expect(() =>
+      lufsMultichannel({ channels: [samples], sampleRate, validate: true } as never),
+    ).toThrow("lufsMultichannel: unknown request key 'validate'");
     const onset = new Float32Array(512).fill(0.2);
     const tempoGrid = tempogram({
       onsetEnvelope: onset,
@@ -181,17 +181,16 @@ describe('remaining feature request-object compatibility', () => {
     const reqMissing = captureThrow(() => phaseVocoder({ samples, sampleRate } as never));
     expect(posMissing.threw).toBe(true);
     expect(reqMissing.message).toBe(posMissing.message);
-    // `validate: false` is honoured on the request form: the finiteness scan is skipped.
     const dirty = Float32Array.from(samples);
     dirty[3] = Number.NaN;
     const scanned = captureThrow(() =>
       phaseVocoder({ samples: dirty, speedRatio: 1.1, sampleRate }),
     );
     expect(scanned.message).toMatch(/contains NaN/);
-    const unscanned = captureThrow(() =>
-      phaseVocoder({ samples: dirty, speedRatio: 1.1, sampleRate, validate: false }),
+    const unknown = captureThrow(() =>
+      phaseVocoder({ samples: dirty, speedRatio: 1.1, sampleRate, validate: false } as never),
     );
-    expect(unscanned.message).not.toMatch(/contains NaN/);
+    expect(unknown.message).toBe("phaseVocoder: unknown request key 'validate'");
     expect(posRate.threw).toBe(true);
     expect(reqRate.threw).toBe(true);
     expect(reqRate.message).toBe(posRate.message);

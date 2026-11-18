@@ -419,39 +419,48 @@ describe('effects notes surface', () => {
   });
 
   it.each([
-    ['timeStretch', () => timeStretch({ samples, sampleRate, speedRatio: 1.1, validate: false })],
-    ['pitchShift', () => pitchShift({ samples, sampleRate, pitchSemitones: 1, validate: false })],
-    [
-      'pitchCorrectToMidi',
-      () =>
-        pitchCorrectToMidi({
-          samples,
-          sampleRate,
-          currentMidi: 60,
-          targetMidi: 61,
-          validate: false,
-        }),
-    ],
-    ['noteStretch', () => noteStretch({ samples, sampleRate, stretchRatio: 1.1, validate: false })],
-    ['noteMove', () => noteMove({ samples, sampleRate, targetOnsetSample: 10, validate: false })],
-    ['spectralEdit', () => spectralEdit({ samples, sampleRate, ops: [], validate: false })],
-    [
-      'pitchCorrectTimevarying',
-      () => pitchCorrectTimevarying({ samples, sampleRate, f0Hz, validate: false }),
-    ],
-    ['autoTune', () => autoTune({ samples, sampleRate, validate: false })],
-    ['renderNotes', () => renderNotes({ samples, sampleRate, notes: [], validate: false })],
-    [
-      'renderPercussiveEvents',
-      () => renderPercussiveEvents({ samples, sampleRate, events: [], validate: false }),
-    ],
-    [
-      'extractPercussiveEvents',
-      () => extractPercussiveEvents({ samples, sampleRate, validate: false }),
-    ],
-  ])('accepts validate on %s', (_name, call) => {
-    expect(() => call()).not.toThrow();
-  });
+    ['timeStretch', timeStretch, { speedRatio: 1.1 }],
+    ['pitchShift', pitchShift, { pitchSemitones: 1 }],
+    ['pitchCorrectToMidi', pitchCorrectToMidi, { currentMidi: 60, targetMidi: 61 }],
+    ['noteStretch', noteStretch, { stretchRatio: 1.1 }],
+    ['noteMove', noteMove, { targetOnsetSample: 10 }],
+    ['spectralEdit', spectralEdit, { ops: [] }],
+    ['pitchCorrectTimevarying', pitchCorrectTimevarying, { f0Hz }],
+    ['autoTune', autoTune, {}],
+    ['renderNotes', renderNotes, { notes: [] }],
+    ['renderPercussiveEvents', renderPercussiveEvents, { events: [] }],
+    ['extractPercussiveEvents', extractPercussiveEvents, {}],
+  ] as Array<[string, (request: never) => unknown, object]>)(
+    '%s refuses validate as an unknown request key',
+    (name, fn, extra) => {
+      expect(thrown(() => fn({ samples, sampleRate, ...extra, validate: false } as never))).toEqual(
+        new TypeError(`${name}: unknown request key 'validate'`),
+      );
+    },
+  );
+
+  it.each([
+    ['timeStretch', timeStretch, { speedRatio: 1.1 }],
+    ['pitchShift', pitchShift, { pitchSemitones: 1 }],
+    ['pitchCorrectToMidi', pitchCorrectToMidi, { currentMidi: 60, targetMidi: 61 }],
+    ['noteStretch', noteStretch, { stretchRatio: 1.1 }],
+    ['noteMove', noteMove, { targetOnsetSample: 10 }],
+    ['spectralEdit', spectralEdit, { ops: [] }],
+    ['pitchCorrectTimevarying', pitchCorrectTimevarying, { f0Hz }],
+    ['autoTune', autoTune, {}],
+    ['renderNotes', renderNotes, { notes: [] }],
+    ['renderPercussiveEvents', renderPercussiveEvents, { events: [] }],
+    ['extractPercussiveEvents', extractPercussiveEvents, {}],
+  ] as Array<[string, (request: never) => unknown, object]>)(
+    '%s refuses a non-finite sample',
+    (_name, fn, extra) => {
+      const bad = Float32Array.from(samples);
+      bad[3] = Number.NaN;
+      expect(thrown(() => fn({ samples: bad, sampleRate, ...extra } as never))).toBeInstanceOf(
+        RangeError,
+      );
+    },
+  );
 
   it.each([
     [

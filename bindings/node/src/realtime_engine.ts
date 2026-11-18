@@ -1874,7 +1874,7 @@ export class RealtimeEngine {
   renderOffline(request: RenderOfflineRequest): Float32Array[] {
     const fnName = 'renderOffline';
     const record = requestObject(fnName, request, 'request', true);
-    if (record.validate !== false && Array.isArray(record.channels)) {
+    if (Array.isArray(record.channels)) {
       record.channels.forEach((plane, index) => {
         if (plane instanceof Float32Array) {
           assertFiniteSamples(fnName, plane, true, `channels[${index}]`);

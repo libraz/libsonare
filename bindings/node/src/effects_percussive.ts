@@ -6,7 +6,7 @@
 import { resolveEntryTimes, toSamples } from './internal/effects_common.js';
 import { addon } from './native.js';
 import type { PercussiveEvent, PercussiveEventInput } from './types.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertInt32,
@@ -80,9 +80,7 @@ export interface PercussiveSeparationOptions {
 }
 
 /** Request for {@link extractPercussiveEvents}: audio plus the separation and onset-detector settings. */
-export interface ExtractPercussiveEventsRequest
-  extends PercussiveSeparationOptions,
-    ValidateOptions {
+export interface ExtractPercussiveEventsRequest extends PercussiveSeparationOptions {
   /**
    * Source audio. A plain number array is copied to a `Float32Array` first,
    * which is what the native side reads.
@@ -123,9 +121,7 @@ export interface ExtractPercussiveEventsRequest
 }
 
 /** Request for {@link renderPercussiveEvents}: audio, the edited events and the separation they were extracted with. */
-export interface RenderPercussiveEventsRequest
-  extends PercussiveSeparationOptions,
-    ValidateOptions {
+export interface RenderPercussiveEventsRequest extends PercussiveSeparationOptions {
   /**
    * Source audio. A plain number array is copied to a `Float32Array` first,
    * which is what the native side reads.
@@ -205,9 +201,9 @@ export function extractPercussiveEvents(...args: unknown[]): PercussiveEvent[] {
     'extractPercussiveEvents',
     args,
   );
-  const { samples: input, sampleRate, validate, ...options } = request;
+  const { samples: input, sampleRate, ...options } = request;
   const samples = Array.isArray(input) ? toSamples(input) : input;
-  assertAudioInput('extractPercussiveEvents', samples, sampleRate, { validate });
+  assertAudioInput('extractPercussiveEvents', samples, sampleRate);
   assertPercussiveSeparation('extractPercussiveEvents', options);
   if (options.onsetWait !== undefined) {
     // Checked here with its four bag-siblings, and for the same reason: 0 is
@@ -274,9 +270,9 @@ export function renderPercussiveEvents(
 ): Float32Array;
 export function renderPercussiveEvents(...args: unknown[]): Float32Array {
   const request = percussiveRequest<RenderPercussiveEventsRequest>('renderPercussiveEvents', args);
-  const { samples: input, sampleRate, events, validate, ...options } = request;
+  const { samples: input, sampleRate, events, ...options } = request;
   const samples = Array.isArray(input) ? toSamples(input) : input;
-  assertAudioInput('renderPercussiveEvents', samples, sampleRate, { validate });
+  assertAudioInput('renderPercussiveEvents', samples, sampleRate);
   if (!Array.isArray(events)) {
     throw new TypeError('renderPercussiveEvents: events must be an array');
   }

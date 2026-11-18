@@ -313,8 +313,6 @@ export interface VocalCreateRequest extends VocalCreateOptions {
   samples: Float32Array;
   /** Sample rate of `samples` in hertz. */
   sampleRate: number;
-  /** Set false to skip the O(n) finiteness scan of `samples`; default true. */
-  validate?: boolean;
 }
 
 /** Request for {@link restoreVocalEditSession}. */
@@ -327,8 +325,6 @@ export interface VocalRestoreRequest {
   state: Uint8Array;
   /** Runtime limits; omitted fields take the same defaults as session creation. */
   limits?: VocalSessionLimits;
-  /** Set false to skip the O(n) finiteness scan of `samples`; default true. */
-  validate?: boolean;
 }
 
 /** Replaces a note's whole edit. */

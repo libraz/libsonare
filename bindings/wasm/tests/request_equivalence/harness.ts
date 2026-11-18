@@ -19,7 +19,6 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { describe, expect, it } from 'vitest';
-import type { Matrix2D } from '../../dist/index.js';
 import * as sonare from '../../src/index';
 
 await sonare.init();
@@ -364,28 +363,6 @@ function without(row: Row, values: Args, field: Field): Args {
   return next;
 }
 
-/** The row's values with a NaN written into the first audio buffer. */
-function poisoned(specs: Spec[], values: Args): Args {
-  for (const spec of specs) {
-    const value = values[spec.name];
-    if (value instanceof Float32Array) {
-      const copy = value.slice();
-      copy[0] = Number.NaN;
-      return { ...values, [spec.name]: copy };
-    }
-    if (
-      value !== null &&
-      typeof value === 'object' &&
-      (value as Matrix2D).data instanceof Float32Array
-    ) {
-      const data = (value as Matrix2D).data.slice();
-      data[0] = Number.NaN;
-      return { ...values, [spec.name]: { ...(value as Matrix2D), data } };
-    }
-  }
-  throw new Error('row has no audio buffer to poison');
-}
-
 /** Overload functions whose result is a native handle, compared by their own test below. */
 const HANDLE_RESULTS = new Set(['analyzePolyphonic']);
 
@@ -484,15 +461,12 @@ export function describeRows(rows: Row[]): void {
       for (const field of fieldsOf(row, specs)) {
         const label = field.key ?? field.param;
         const masked = { ...row.values, ...row.controlBase?.[label] };
-        // `validate` only decides which layer refuses a non-finite sample.
-        const base = label === 'validate' ? poisoned(specs, masked) : masked;
-        const reference =
-          label === 'validate' || row.controlBase?.[label]
-            ? await run(row, specs, base, 'positional')
-            : full;
+        const reference = row.controlBase?.[label]
+          ? await run(row, specs, masked, 'positional')
+          : full;
         if (
           isDeepStrictEqual(
-            await run(row, specs, without(row, base, field), 'positional'),
+            await run(row, specs, without(row, masked, field), 'positional'),
             reference,
           )
         ) {

@@ -38,33 +38,30 @@ describe('metering request object compatibility (WASM)', () => {
   });
 
   it('matches positional single-channel meter calls', () => {
-    const options = { validate: true };
-    expect(meteringPeakDb({ samples, sampleRate, ...options })).toBeCloseTo(
-      meteringPeakDb(samples, sampleRate, options),
+    expect(meteringPeakDb({ samples, sampleRate })).toBeCloseTo(
+      meteringPeakDb(samples, sampleRate),
       6,
     );
-    expect(meteringRmsDb({ samples, sampleRate, ...options })).toBeCloseTo(
-      meteringRmsDb(samples, sampleRate, options),
+    expect(meteringRmsDb({ samples, sampleRate })).toBeCloseTo(
+      meteringRmsDb(samples, sampleRate),
       6,
     );
-    expect(meteringCrestFactorDb({ samples, sampleRate, ...options })).toBeCloseTo(
-      meteringCrestFactorDb(samples, sampleRate, options),
+    expect(meteringCrestFactorDb({ samples, sampleRate })).toBeCloseTo(
+      meteringCrestFactorDb(samples, sampleRate),
       6,
     );
-    expect(meteringDcOffset({ samples, sampleRate, ...options })).toBeCloseTo(
-      meteringDcOffset(samples, sampleRate, options),
+    expect(meteringDcOffset({ samples, sampleRate })).toBeCloseTo(
+      meteringDcOffset(samples, sampleRate),
       6,
     );
-    expect(
-      meteringTruePeakDbtp({ samples, sampleRate, oversampleFactor: 4, ...options }),
-    ).toBeCloseTo(
-      meteringTruePeakDbtp(samples, sampleRate, { oversampleFactor: 4, ...options }),
+    expect(meteringTruePeakDbtp({ samples, sampleRate, oversampleFactor: 4 })).toBeCloseTo(
+      meteringTruePeakDbtp(samples, sampleRate, { oversampleFactor: 4 }),
       6,
     );
   });
 
   it('matches positional clipping and dynamic-range calls', () => {
-    const clippingOptions = { thresholdDb: -6, minRegionSamples: 2, validate: true };
+    const clippingOptions = { thresholdDb: -6, minRegionSamples: 2 };
     expect(meteringDetectClipping({ samples, sampleRate, ...clippingOptions })).toEqual(
       meteringDetectClipping(samples, sampleRate, clippingOptions),
     );
@@ -73,7 +70,6 @@ describe('metering request object compatibility (WASM)', () => {
       hopSec: 0.05,
       lowPercentile: 0.1,
       highPercentile: 0.9,
-      validate: true,
     };
     const requested = meteringDynamicRange({ samples, sampleRate, ...rangeOptions });
     const positional = meteringDynamicRange(samples, sampleRate, rangeOptions);
@@ -84,15 +80,14 @@ describe('metering request object compatibility (WASM)', () => {
   });
 
   it('runs the stereo meter and scope calls from a request', () => {
-    const options = { validate: true };
-    expect(meteringStereoCorrelation({ left: samples, right, sampleRate, ...options })).toBeCloseTo(
+    expect(meteringStereoCorrelation({ left: samples, right, sampleRate })).toBeCloseTo(
       meteringStereoCorrelation({ left: samples, right, sampleRate }),
       6,
     );
     expect(Number.isFinite(meteringStereoWidth({ left: samples, right, sampleRate }))).toBe(true);
-    const vectorscope = meteringVectorscope({ left: samples, right, sampleRate, ...options });
+    const vectorscope = meteringVectorscope({ left: samples, right, sampleRate });
     expect(vectorscope.mid).toHaveLength(samples.length);
-    const phaseScope = meteringPhaseScope({ left: samples, right, sampleRate, ...options });
+    const phaseScope = meteringPhaseScope({ left: samples, right, sampleRate });
     expect(phaseScope.mid).toHaveLength(samples.length);
     expect(Number.isFinite(phaseScope.correlation)).toBe(true);
   });
@@ -115,7 +110,7 @@ describe('metering request object compatibility (WASM)', () => {
   });
 
   it('matches positional spectrum calls', () => {
-    const options = { nFft: 1024, applyOctaveSmoothing: true, octaveFraction: 3, validate: true };
+    const options = { nFft: 1024, applyOctaveSmoothing: true, octaveFraction: 3 };
     const spectrum = meteringSpectrum({ samples, sampleRate, ...options });
     const spectrumPositional = meteringSpectrum(samples, sampleRate, options);
     expectFloatArraysEqual(spectrum.magnitude, spectrumPositional.magnitude);
@@ -130,7 +125,7 @@ describe('metering request object compatibility (WASM)', () => {
 
   it('runs waveform bucket calls from planar requests', () => {
     const channels = [samples, right];
-    const peaks = waveformPeaks({ channels, samplesPerBucket: 128, validate: true });
+    const peaks = waveformPeaks({ channels, samplesPerBucket: 128 });
     expect(peaks.min).toHaveLength(2);
     expect(peaks.bucketCount).toBe(samples.length / 128);
     // Channel 0 carries the larger level.
@@ -140,7 +135,6 @@ describe('metering request object compatibility (WASM)', () => {
     const pyramid = waveformPeakPyramid({
       channels,
       samplesPerBucketLevels: [128, 256],
-      validate: true,
     });
     expect(pyramid).toHaveLength(2);
     expect(pyramid[0]?.bucketCount).toBe(samples.length / 128);

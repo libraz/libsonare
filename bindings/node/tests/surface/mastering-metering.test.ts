@@ -509,17 +509,17 @@ describe('mastering metering surface', () => {
   });
 
   describe('spectrum options', () => {
-    it('SpectrumOptions carries validate', () => {
-      expectTypeOf<SpectrumOptions>().toHaveProperty('validate');
+    it('SpectrumOptions declares no validate', () => {
+      expectTypeOf<SpectrumOptions>().not.toHaveProperty('validate');
     });
 
-    it('skips the finiteness pre-scan on validate: false', () => {
+    it('always scans for non-finite samples and refuses validate', () => {
       const bad = Float32Array.from(samples);
       bad[10] = Number.NaN;
       expect(thrown(() => api.meteringSpectrum(bad, sampleRate))).toBeInstanceOf(RangeError);
       expect(
-        thrown(() => api.meteringSpectrum(bad, sampleRate, { validate: false })),
-      ).not.toBeInstanceOf(TypeError);
+        thrown(() => api.meteringSpectrum(samples, sampleRate, { validate: false } as never)),
+      ).toBeInstanceOf(TypeError);
     });
   });
 

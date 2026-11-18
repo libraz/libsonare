@@ -213,7 +213,6 @@ function nativeLimits(limits: VocalSessionLimits): object {
 /** The request the addon reads: facade-only keys dropped, byte limits spelled as strings. */
 function nativeRequest(request: VocalCreateRequest | VocalRestoreRequest): object {
   const out: Record<string, unknown> = { ...request };
-  delete out.validate;
   if (request.limits !== undefined && request.limits !== null) {
     out.limits = nativeLimits(request.limits);
   }
@@ -783,8 +782,6 @@ export function vocalEditAbiVersion(): number | undefined {
 
 /**
  * Analyses `request.samples` and opens an editing session over them.
- *
- * `request.validate === false` skips the finiteness scan of the samples.
  */
 export function createVocalEditSession(request: VocalCreateRequest): VocalEditSession {
   requestObject('createVocalEditSession', request, 'request', true);
@@ -798,8 +795,6 @@ export function createVocalEditSession(request: VocalCreateRequest): VocalEditSe
 /**
  * Reopens a session from {@link VocalEditSession.exportState} bytes and the
  * samples they were exported from.
- *
- * `request.validate === false` skips the finiteness scan of the samples.
  */
 export function restoreVocalEditSession(request: VocalRestoreRequest): VocalEditSession {
   requestObject('restoreVocalEditSession', request, 'request', true);

@@ -182,37 +182,38 @@ describe('addon input errors remain catchable (Node)', () => {
   });
 });
 
-describe('validate=false still has the C-ABI NaN backstop (Node)', () => {
-  it('lufs with validate=false rejects NaN in the C-ABI', () => {
-    // `validate: false` bypasses only the TypeScript preflight. The C-ABI
-    // repeats this safety check and must continue to reject non-finite audio.
-    expect(() => lufs(withNaN(), SR, { validate: false })).toThrow();
+describe('non-finite audio is always refused (Node)', () => {
+  it('lufs refuses NaN and a validate option', () => {
+    expect(() => lufs(withNaN(), SR)).toThrow(RangeError);
+    expect(() => lufs(withNaN(), SR, { validate: false } as never)).toThrow(
+      "lufs: unknown option 'validate'",
+    );
   });
-  it('masteringDynamicsCompressor with validate=false rejects NaN in the C-ABI', () => {
-    expect(() => masteringDynamicsCompressor(withNaN(), SR, { validate: false })).toThrow();
+  it('masteringDynamicsCompressor refuses NaN and a validate option', () => {
+    expect(() => masteringDynamicsCompressor(withNaN(), SR)).toThrow(RangeError);
+    expect(() => masteringDynamicsCompressor(withNaN(), SR, { validate: false } as never)).toThrow(
+      /unknown option 'validate'/,
+    );
   });
-  it('waveformPeaks with validate=false rejects NaN rather than drawing it as silence', () => {
-    // The pair is what matters: a silent buffer answers 0/0 and a non-finite
-    // one is refused, so the two cannot arrive in the same shape.
-    const quiet = waveformPeaks({
-      channels: [new Float32Array(1024)],
-      samplesPerBucket: 256,
-      validate: false,
-    });
+  it('waveformPeaks refuses NaN rather than drawing it as silence', () => {
+    // A silent buffer answers 0/0 and a non-finite one is refused, so the two
+    // cannot arrive in the same shape.
+    const quiet = waveformPeaks({ channels: [new Float32Array(1024)], samplesPerBucket: 256 });
     expect(quiet.min[0]?.[0]).toBe(0);
     expect(quiet.max[0]?.[0]).toBe(0);
+    expect(() => waveformPeaks({ channels: [withNaN()], samplesPerBucket: 256 })).toThrow(
+      RangeError,
+    );
     expect(() =>
-      waveformPeaks({ channels: [withNaN()], samplesPerBucket: 256, validate: false }),
-    ).toThrow();
+      waveformPeaks({ channels: [withNaN()], samplesPerBucket: 256, validate: false } as never),
+    ).toThrow(/unknown request key 'validate'/);
   });
-  it('waveformPeakPyramid with validate=false rejects NaN in the C-ABI', () => {
-    expect(() =>
-      waveformPeakPyramid({
-        channels: [withNaN()],
-        samplesPerBucketLevels: [256, 512],
-        validate: false,
-      }),
-    ).toThrow();
+  it('waveformPeakPyramid refuses NaN and a validate option', () => {
+    const request = { channels: [withNaN()], samplesPerBucketLevels: [256, 512] };
+    expect(() => waveformPeakPyramid(request)).toThrow(RangeError);
+    expect(() => waveformPeakPyramid({ ...request, validate: false } as never)).toThrow(
+      /unknown request key 'validate'/,
+    );
   });
 });
 

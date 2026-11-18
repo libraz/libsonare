@@ -28,7 +28,6 @@ import {
   assertPositiveInteger,
   requestOnly,
   sampleOneShot,
-  type ValidateOptions,
 } from './validation.js';
 
 /** Algorithms accepted by `masteringRepairDenoiseClassical`. */
@@ -38,7 +37,7 @@ export type DenoiseClassicalMode = 'logMmse' | 'mmseStsa' | 'spectralSubtraction
 export type DenoiseClassicalNoiseEstimator = 'quantile' | 'mcra' | 'imcra' | 'spp';
 
 /** Options for `masteringRepairDenoiseClassical`. */
-export interface DenoiseClassicalOptions extends ValidateOptions {
+export interface DenoiseClassicalOptions {
   /** Gain estimator. Default `'logMmse'`. */
   mode?: DenoiseClassicalMode;
   /** Noise PSD estimator. Default `'quantile'`. */
@@ -238,7 +237,7 @@ export function masteringRepairDenoiseClassicalLinked(
 export type DehumMode = 'subtract' | 'notch';
 
 /** Options for `masteringRepairDehum`. */
-export interface DehumOptions extends ValidateOptions {
+export interface DehumOptions {
   /** Hum fundamental in Hz, in (0, 5000]. Default `50`. */
   fundamentalHz?: number;
   /** Number of harmonics removed, from 1 to 16. Default `4`. */

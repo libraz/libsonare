@@ -1,6 +1,5 @@
 import type { Matrix2D } from './public_types.js';
 import type { Key, KeyMode, PitchClass } from './public_types_music.js';
-import type { ValidateOptions } from './validation.js';
 
 /**
  * Per-frame voicing decision, one entry per `f0Hz` frame. A truthy or non-zero
@@ -20,7 +19,7 @@ export type VoicedFlags =
 export type PitchTargetMode = 'midi' | 'scale';
 
 /** Options for `pitchCorrectTimevarying`: the F0 track is required, everything else is optional. */
-export interface PitchCorrectOptions extends ValidateOptions {
+export interface PitchCorrectOptions {
   /** Per-frame measured F0 in Hz, one entry per analysis frame. */
   f0Hz: Float32Array;
   /**
@@ -65,7 +64,7 @@ export interface AutoTuneKey {
 }
 
 /** Tuning knobs of `autoTune`. All fields are optional. */
-export interface AutoTuneOptions extends ValidateOptions {
+export interface AutoTuneOptions {
   /**
    * `'detect'` (default) finds the key with `detectKey`'s defaults; a
    * `{ root, mode }` names it, as `detectKey`'s result does: `root` an integer
@@ -98,7 +97,7 @@ export interface AutoTuneResult {
 }
 
 /** Options for `noteStretch`. `stretchRatio` is required. */
-export interface NoteStretchOptions extends ValidateOptions {
+export interface NoteStretchOptions {
   /** Note onset position in samples (selects the region). Default 0. Not with `onsetSec`. */
   onsetSample?: number;
   /** Note onset in seconds, rounded to the nearest sample. Not with `onsetSample`. */
@@ -116,7 +115,7 @@ export interface NoteStretchOptions extends ValidateOptions {
 }
 
 /** Options for `noteMove`. One of `targetOnsetSample` / `targetOnsetSec` is required. */
-export interface NoteMoveOptions extends ValidateOptions {
+export interface NoteMoveOptions {
   /** First sample of the note to move. Default 0. Not with `onsetSec`. */
   onsetSample?: number;
   /** First second of the note to move, rounded to the nearest sample. Not with `onsetSample`. */
@@ -669,7 +668,7 @@ export interface SpectralRegionOp {
 }
 
 /** STFT + heal parameters for `spectralEdit`. `ops` is required; the rest is optional. */
-export interface SpectralEditOptions extends ValidateOptions {
+export interface SpectralEditOptions {
   /** Region edit ops applied in array order; an empty array returns a copy of the input. */
   ops: readonly SpectralRegionOp[];
   /** FFT size; a power of two in `[4, 262144]`. Default 2048. */

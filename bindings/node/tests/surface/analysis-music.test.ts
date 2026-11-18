@@ -123,12 +123,12 @@ describe('one positional form, sampleRate required', () => {
     expect(() => fn({ samples, sampleRate }, 22050)).toThrow(TypeError);
   });
 
-  it.each(sampleTaking)('%s scans for NaN by default and declares validate', (_name, fn) => {
+  it.each(sampleTaking)('%s scans for NaN and refuses validate', (name, fn) => {
     const bad = Float32Array.from(samples);
     bad[10] = Number.NaN;
     expect(errorOf(() => fn({ samples: bad, sampleRate }))).toBeInstanceOf(RangeError);
-    expect(errorOf(() => fn({ samples: bad, sampleRate, validate: false }))).not.toBeInstanceOf(
-      TypeError,
+    expect(errorOf(() => fn({ samples, sampleRate, validate: false }))).toEqual(
+      new TypeError(`${name}: unknown request key 'validate'`),
     );
   });
 

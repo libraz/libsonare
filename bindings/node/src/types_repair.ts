@@ -3,8 +3,6 @@
  * denoise, dehum, dereverb and silence trim.
  */
 
-import type { ValidateOptions } from './validation.js';
-
 /** One channel's click detection, from {@link masteringRepairDeclick} or {@link masteringRepairDeclickStereo}. Counts runs, not samples. */
 export interface ClickDetection {
   /** Runs meeting the repair criteria. A run inside a broadband transient such as a drum hit is not counted; the repair still acts on it. */
@@ -512,7 +510,7 @@ export interface MasteringRepairTrimSilenceResult {
 }
 
 /** Common input fields for offline repair processors. */
-export interface MasteringRepairSamplesRequest extends ValidateOptions {
+export interface MasteringRepairSamplesRequest {
   /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate in Hz. Required. */

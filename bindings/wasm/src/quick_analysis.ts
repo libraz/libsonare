@@ -51,7 +51,7 @@ import type {
   TimbreResult,
 } from './public_types.js';
 import type { ProgressCallback, WasmAcousticResult } from './sonare.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertFiniteScalar,
@@ -197,8 +197,6 @@ function refusingInvalidGeometry<T>(fnName: string, call: () => T): T {
   }
 }
 
-type GuardedOptions = ValidateOptions;
-
 /** The audio and its sample rate, which every one-shot over samples takes. */
 interface SampleInput {
   /** Mono audio samples. */
@@ -225,16 +223,16 @@ function tempoRange(
 }
 
 /** Canonical request form for {@link detectBpm}. */
-export interface DetectBpmRequest extends SampleInput, GuardedOptions, TempoRangeOptions {}
+export interface DetectBpmRequest extends SampleInput, TempoRangeOptions {}
 
 /** Canonical request form for {@link detectBeats}. */
-export interface DetectBeatsRequest extends SampleInput, GuardedOptions, TempoRangeOptions {}
+export interface DetectBeatsRequest extends SampleInput, TempoRangeOptions {}
 
 /** Canonical request form for {@link detectDownbeats}. */
-export interface DetectDownbeatsRequest extends SampleInput, GuardedOptions {}
+export interface DetectDownbeatsRequest extends SampleInput {}
 
 /** Peak-picking configuration for {@link detectOnsets}. */
-export interface OnsetDetectOptions extends GuardedOptions {
+export interface OnsetDetectOptions {
   /** FFT window in samples. Default `2048`. */
   nFft?: number;
   /** Hop length in samples. Default `512`. */
@@ -291,7 +289,7 @@ export interface ChordFunctionsRequest<T extends ChordFunctionsInput = Chord> {
 }
 
 /** Canonical request form for impulse-response analysis. */
-export interface AnalyzeImpulseResponseRequest extends SampleInput, GuardedOptions {
+export interface AnalyzeImpulseResponseRequest extends SampleInput {
   /** Octave bands; default 6. */
   nOctaveBands?: number;
   /** Minimum decay range in dB for a valid RT60 fit; default 30. */
@@ -645,7 +643,7 @@ export function chordFunctionalAnalysis(...args: unknown[]): FunctionalChord[] {
  * Options for {@link analyze}. Every field is optional and falls back to the
  * core default when omitted.
  */
-export interface MusicAnalyzeOptions extends GuardedOptions {
+export interface MusicAnalyzeOptions {
   /** FFT window in samples at 22050 Hz, rescaled to the input rate. Default `2048`. */
   nFft?: number;
   /** Hop length in samples. Default `512`. */

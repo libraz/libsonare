@@ -7,7 +7,7 @@ import type {
   SplitSilenceCommonWithReportResult,
   TrimResult,
 } from './types.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertAudioSamples,
@@ -20,7 +20,7 @@ import {
   sampleOneShot,
 } from './validation.js';
 
-/** Request for {@link trimSilence}. `validate: false` skips the NaN/Inf pre-scan. */
+/** Request for {@link trimSilence}. */
 export interface TrimSilenceRequest {
   /** Mono audio samples. */
   samples: Float32Array;
@@ -32,8 +32,6 @@ export interface TrimSilenceRequest {
   frameLength?: number;
   /** Hop in samples. Default 512. */
   hopLength?: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link splitSilence}. */
@@ -73,8 +71,6 @@ export interface FrameSignalRequest {
   frameLength: number;
   /** Hop between frames in samples. */
   hopLength: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link preemphasis}. `zi` is the initial delay value. */
@@ -87,8 +83,6 @@ export interface PreemphasisRequest {
   coef?: number;
   /** Initial filter state. */
   zi?: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of the input. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link deemphasis}. */
@@ -132,7 +126,7 @@ export interface VectorNormalizeRequest {
 const NORM_ORDINALS: Readonly<Record<NormType, number>> = { max: 0, l1: 1, l2: 2, power: 3 };
 
 /** Request for {@link trim}. */
-export interface TrimRequest extends ValidateOptions {
+export interface TrimRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */

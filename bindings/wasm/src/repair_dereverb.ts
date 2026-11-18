@@ -10,20 +10,14 @@ import type {
   MasteringRepairDereverbClassicalResult,
   ReverbDetection,
 } from './public_types_repair.js';
-import {
-  assertAudioChannels,
-  assertAudioInput,
-  requestOnly,
-  sampleOneShot,
-  type ValidateOptions,
-} from './validation.js';
+import { assertAudioChannels, assertAudioInput, requestOnly, sampleOneShot } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
 }
 
 /** Options for `masteringRepairDereverbClassical`. */
-export interface DereverbClassicalOptions extends ValidateOptions {
+export interface DereverbClassicalOptions {
   /** Late-reverberation threshold relative to a bin's own power, in [0, 1]; `0` suppresses every bin carrying late energy. Default `0`. */
   threshold?: number;
   /** Share of the computed suppression applied, from 0 (none) to 1 (all). Default `1`. */
@@ -58,8 +52,8 @@ export interface MasteringRepairDereverbClassicalRequest extends DereverbClassic
   sampleRate: number;
 }
 
-/** The dereverb settings without the per-call `validate`, as the room helper takes and returns them. */
-type DereverbClassicalConfigOptions = Omit<DereverbClassicalOptions, 'validate'>;
+/** The dereverb settings as the room helper takes and returns them. */
+type DereverbClassicalConfigOptions = DereverbClassicalOptions;
 
 /** A complete dereverb config, as `masteringRepairDereverbConfigForRoom` returns it. */
 export type DereverbClassicalConfig = Required<DereverbClassicalConfigOptions>;

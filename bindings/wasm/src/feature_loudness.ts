@@ -6,7 +6,7 @@
 import { interleaveMeterChannels, lufsSeriesFromNative } from './internal/metering_native.js';
 import { getSonareModule } from './module_state.js';
 import type { LufsResult, LufsSeriesResult } from './public_types.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import { assertAudioInput, assertSampleRate, requestOnly, sampleOneShot } from './validation.js';
 
 function requireModule() {
@@ -14,7 +14,7 @@ function requireModule() {
 }
 
 /** Request form of {@link lufsMultichannel}. */
-export interface LufsMultichannelRequest extends ValidateOptions {
+export interface LufsMultichannelRequest {
   /** One `Float32Array` per channel, equal lengths. */
   channels: Float32Array[];
   /** Sample rate of the channels in Hz. Required. */
@@ -22,7 +22,7 @@ export interface LufsMultichannelRequest extends ValidateOptions {
 }
 
 /** Request form of {@link lufsSeriesMultichannel}. */
-export interface LufsSeriesMultichannelRequest extends ValidateOptions {
+export interface LufsSeriesMultichannelRequest {
   /** One `Float32Array` per channel, equal lengths. */
   channels: Float32Array[];
   /** Sample rate of the channels in Hz. Required. */
@@ -30,7 +30,7 @@ export interface LufsSeriesMultichannelRequest extends ValidateOptions {
 }
 
 /** Request form of {@link ebur128LoudnessRangeLu}. */
-export interface Ebur128LoudnessRangeLuRequest extends ValidateOptions {
+export interface Ebur128LoudnessRangeLuRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */

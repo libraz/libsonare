@@ -1,7 +1,6 @@
 import { deinterleavePlanes, interleavePlanes, nativeVoiceConfig } from './internal/pod_config.js';
 import { getSonareModule } from './module_state.js';
 import type { RealtimeVoiceChangerConfigInput } from './public_types.js';
-import type { ValidateOptions } from './validation.js';
 import {
   assertAudioChannels,
   assertAudioInput,
@@ -18,7 +17,7 @@ function requireModule() {
 export type FormantMode = 'relative' | 'absolute';
 
 /** Options for {@link voiceChange}. All fields are optional. */
-export interface VoiceChangeOptions extends ValidateOptions {
+export interface VoiceChangeOptions {
   /** Pitch shift in semitones (negative = down). Default 0. */
   pitchSemitones?: number;
   /** Formant scale factor (>1 brightens, <1 darkens). Default 1. */
@@ -77,7 +76,7 @@ export function voiceChange(...args: unknown[]): Float32Array {
 }
 
 /** Canonical request form for offline realtime voice changing. */
-export interface VoiceChangeRealtimeRequest extends ValidateOptions {
+export interface VoiceChangeRealtimeRequest {
   /** One (mono) or two (stereo) planar channels of equal length. */
   channels: Float32Array[];
   /** Sample rate in Hz, an integer in [8000, 384000]. Required. */

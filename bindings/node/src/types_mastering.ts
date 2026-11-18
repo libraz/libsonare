@@ -7,10 +7,9 @@ import type {
   NoiseDetection,
   ReverbDetection,
 } from './types_repair.js';
-import type { ValidateOptions } from './validation.js';
 
 /** Options of {@link masteringNormalizeLoudness}. All fields are optional. */
-export interface MasteringNormalizeLoudnessOptions extends ValidateOptions {
+export interface MasteringNormalizeLoudnessOptions {
   /**
    * Integrated-loudness target in LUFS. Default -14. Must be finite; a
    * non-finite value is rejected.

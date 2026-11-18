@@ -75,6 +75,7 @@ RULE_SLUGS = (
     "absent-not-sentinel",
     "library-owned-defaults",
     "non-finite-is-absent",
+    "input-always-scanned",
     "token-case",
     "digit-tokens",
     "string-closed-sets",
@@ -1282,8 +1283,6 @@ def chk_sample_rate_required(ctx):
         sr = fields.get("sampleRate")
         if sr is None or sr.get("optional"):
             bad.append((r, "takes samples but sampleRate is not a required field"))
-        if "validate" not in fields:
-            bad.append((r, "takes samples but has no validate field"))
     for r in recs(ctx, ("python",), ("function", "method")):
         if ctx.mirror(r) or not _py_rate_scoped(r):
             continue

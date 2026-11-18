@@ -1,5 +1,3 @@
-import type { ValidateOptions } from './validation.js';
-
 /**
  * Pitch class enum (C=0, C#=1, ..., B=11)
  */
@@ -150,7 +148,7 @@ export interface KeyDetection extends Key {
 }
 
 /** Settings shared by `detectKey` and `detectKeyCandidates`. */
-export interface KeyDetectionOptions extends ValidateOptions {
+export interface KeyDetectionOptions {
   /** Analysis window in samples at 22050 Hz, rescaled to the input rate. Default `2048`. */
   nFft?: number;
   /** Hop in samples of the analysed signal: the input resampled to 22050 Hz when its rate is above 22050 Hz, the input itself otherwise. Default `512`. */
@@ -188,7 +186,7 @@ export interface KeyCandidate {
 }
 
 /** Settings of `detectChords` and `chordFunctionalAnalysis`. */
-export interface ChordDetectionOptions extends ValidateOptions {
+export interface ChordDetectionOptions {
   /** Shortest chord kept, in seconds. */
   minDurationSec?: number;
   /** Chord smoothing window, in seconds. */
@@ -227,7 +225,7 @@ export interface ChordDetectionOptions extends ValidateOptions {
 }
 
 /** Options for `analyzeBpm`. All fields are optional. */
-export interface AnalyzeBpmOptions extends ValidateOptions {
+export interface AnalyzeBpmOptions {
   /** Lowest BPM to consider. Default 60. */
   bpmMin?: number;
   /** Highest BPM to consider. Default 200. */
@@ -243,7 +241,7 @@ export interface AnalyzeBpmOptions extends ValidateOptions {
 }
 
 /** Options for `analyzeRhythm`. All fields are optional. */
-export interface AnalyzeRhythmOptions extends ValidateOptions {
+export interface AnalyzeRhythmOptions {
   /** Lowest BPM to consider. Default 60. */
   bpmMin?: number;
   /** Highest BPM to consider. Default 200. */
@@ -257,7 +255,7 @@ export interface AnalyzeRhythmOptions extends ValidateOptions {
 }
 
 /** Options for `analyzeDynamics`. All fields are optional. */
-export interface AnalyzeDynamicsOptions extends ValidateOptions {
+export interface AnalyzeDynamicsOptions {
   /** Loudness-curve window length in seconds. Default 0.4. */
   windowSec?: number;
   /** Hop in samples of the caller's buffer, at the sample rate. Default 512. */
@@ -267,7 +265,7 @@ export interface AnalyzeDynamicsOptions extends ValidateOptions {
 }
 
 /** Options for `analyzeTimbre`. All fields are optional. */
-export interface AnalyzeTimbreOptions extends ValidateOptions {
+export interface AnalyzeTimbreOptions {
   /** Analysis window length in samples at 22050 Hz, rescaled to the input sample rate. Default 2048. */
   nFft?: number;
   /** Hop length in samples of the input buffer. Default 512. */
@@ -281,7 +279,7 @@ export interface AnalyzeTimbreOptions extends ValidateOptions {
 }
 
 /** Options for `analyzeSections`. All fields are optional. */
-export interface AnalyzeSectionsOptions extends ValidateOptions {
+export interface AnalyzeSectionsOptions {
   /** Analysis window in samples at 22050 Hz, rescaled to the analysis rate. Default 2048. */
   nFft?: number;
   /** Hop in samples of the analysed signal: the input resampled to 22050 Hz when its rate is above 22050 Hz, the input itself otherwise. Default 512. */
@@ -446,7 +444,7 @@ export interface Section {
 }
 
 /** Options for `detectBoundaries`. All fields are optional. */
-export interface BoundaryOptions extends ValidateOptions {
+export interface BoundaryOptions {
   /** Analysis window in samples at 22050 Hz, rescaled to the analysis rate. Default 2048. */
   nFft?: number;
   /** Hop in samples of the analysed signal: the input resampled to 22050 Hz when its rate is above 22050 Hz, the input itself otherwise. Default 512. */

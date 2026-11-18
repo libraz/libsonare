@@ -6,7 +6,7 @@
 import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type { Matrix2D } from './public_types.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioChannels,
   assertAudioInput,
@@ -156,7 +156,7 @@ function assertSquare(fnName: string, matrix: Matrix2D, argName: string): void {
 }
 
 /** Request for {@link remix} and {@link remixAlignedIntervals}. */
-export interface RemixRequest extends ValidateOptions {
+export interface RemixRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
@@ -168,7 +168,7 @@ export interface RemixRequest extends ValidateOptions {
 }
 
 /** Request for {@link hpssWithResidual}. */
-export interface HpssWithResidualRequest extends ValidateOptions {
+export interface HpssWithResidualRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
@@ -234,7 +234,7 @@ export function decompose(...args: unknown[]): DecomposeResult {
 }
 
 /** Options for {@link decomposeStems}. */
-export interface DecomposeStemsRequest extends ValidateOptions {
+export interface DecomposeStemsRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
@@ -304,7 +304,7 @@ export function decomposeStems(...args: unknown[]): DecomposeStemsResult {
 }
 
 /** Request form of {@link decomposeStemsLinked}. */
-export interface DecomposeStemsLinkedRequest extends ValidateOptions {
+export interface DecomposeStemsLinkedRequest {
   /** At least one channel; all the same length. */
   channels: Float32Array[];
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */

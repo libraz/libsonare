@@ -71,7 +71,6 @@ import {
   requestObject,
   requestOnly,
   sampleOneShot,
-  type ValidateOptions,
 } from './validation.js';
 
 /** Fields whose 0 the core reads as "use the library default": absent is the default, 0 is refused. */
@@ -303,8 +302,6 @@ export interface OnsetDetectOptions {
   backtrack?: boolean;
   /** Frames searched backwards when `backtrack` is set. Default `10`. */
   backtrackRange?: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
-  validate?: boolean;
 }
 /** Request for {@link detectOnsets}. */
 export interface DetectOnsetsRequest extends OnsetDetectOptions {
@@ -323,21 +320,21 @@ export interface TempoRangeOptions {
 }
 
 /** Request for {@link detectBpm}. */
-export interface DetectBpmRequest extends ValidateOptions, TempoRangeOptions {
+export interface DetectBpmRequest extends TempoRangeOptions {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
 }
 /** Request for {@link detectBeats}. */
-export interface DetectBeatsRequest extends ValidateOptions, TempoRangeOptions {
+export interface DetectBeatsRequest extends TempoRangeOptions {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
   sampleRate: number;
 }
 /** Request for {@link detectDownbeats}. */
-export interface DetectDownbeatsRequest extends ValidateOptions {
+export interface DetectDownbeatsRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
@@ -481,8 +478,6 @@ export interface MusicAnalyzeOptions {
    * converts a reference pitch to this unit.
    */
   tuningCents?: number | 'auto';
-  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
-  validate?: boolean;
 }
 
 /** Request for {@link analyze}: the settings plus audio and optional progress reporting. */
@@ -582,7 +577,7 @@ export interface AnalyzeDynamicsRequest extends AnalyzeDynamicsOptions {
   sampleRate: number;
 }
 /** Request for {@link analyzeImpulseResponse}. */
-export interface AnalyzeImpulseResponseRequest extends ValidateOptions {
+export interface AnalyzeImpulseResponseRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
@@ -627,7 +622,7 @@ export interface ChordFunctionalAnalysisRequest
 }
 
 /** Normalises either call form of a one-shot over audio and preflights the audio. */
-function audioCall<R extends { samples: Float32Array; sampleRate: number } & ValidateOptions>(
+function audioCall<R extends { samples: Float32Array; sampleRate: number }>(
   fnName: RequestFn,
   args: readonly unknown[],
 ): R {
@@ -677,7 +672,7 @@ function nativeAnalyzeOptions(fnName: string, request: AnalyzeRequest): Record<s
     assertFloatValue(fnName, request.chromaHighPassHz, 'chromaHighPassHz');
   }
   return compact({
-    ...without(request, 'samples', 'sampleRate', 'validate', 'onProgress', 'cancel', 'tuningCents'),
+    ...without(request, 'samples', 'sampleRate', 'onProgress', 'cancel', 'tuningCents'),
     tuningCents: nativeTuning(fnName, request.tuningCents),
   });
 }
@@ -1069,14 +1064,7 @@ export function detectBoundaries(...args: unknown[]): BoundaryResult {
     request.samples,
     request.sampleRate,
     compact({
-      ...without(
-        request,
-        'samples',
-        'sampleRate',
-        'validate',
-        'peakDistanceSec',
-        'referenceWindowSec',
-      ),
+      ...without(request, 'samples', 'sampleRate', 'peakDistanceSec', 'referenceWindowSec'),
       peakDistance: request.peakDistanceSec,
       referenceWindow: request.referenceWindowSec,
     }),

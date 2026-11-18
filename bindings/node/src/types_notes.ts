@@ -4,7 +4,6 @@
  */
 
 import type { Key, KeyMode, PitchClass } from './types_analysis.js';
-import type { ValidateOptions } from './validation.js';
 
 /**
  * Per-frame voicing decision, one entry per `f0Hz` frame. A truthy or non-zero
@@ -24,7 +23,7 @@ export type VoicedFlags =
 export type PitchTargetMode = 'midi' | 'scale';
 
 /** Options for {@link pitchCorrectTimevarying}: the F0 track is required, everything else is optional. */
-export interface PitchCorrectOptions extends ValidateOptions {
+export interface PitchCorrectOptions {
   /** Per-frame measured F0 in Hz, one entry per analysis frame. */
   f0Hz: Float32Array;
   /**
@@ -76,7 +75,7 @@ export interface AutoTuneKey {
 }
 
 /** Tuning knobs of {@link autoTune}. All fields are optional. */
-export interface AutoTuneOptions extends ValidateOptions {
+export interface AutoTuneOptions {
   /**
    * `'detect'` (default) finds the key with {@link detectKey}'s defaults; a
    * `{ root, mode }` names it, as {@link detectKey}'s result does: `root` an
@@ -109,7 +108,7 @@ export interface AutoTuneResult {
 }
 
 /** Options for {@link noteStretch}. `stretchRatio` is required. */
-export interface NoteStretchOptions extends ValidateOptions {
+export interface NoteStretchOptions {
   /** First sample of the note to stretch. Default 0. Not with `onsetSec`. */
   onsetSample?: number;
   /** First second of the note to stretch, rounded to the nearest sample. Not with `onsetSample`. */
@@ -649,7 +648,7 @@ export interface PitchDecompositionResult {
 }
 
 /** Options for {@link noteMove}. One of `targetOnsetSample` / `targetOnsetSec` is required. */
-export interface NoteMoveOptions extends ValidateOptions {
+export interface NoteMoveOptions {
   /** First sample of the note to move. Default 0. Not with `onsetSec`. */
   onsetSample?: number;
   /** First second of the note to move, rounded to the nearest sample. Not with `onsetSample`. */

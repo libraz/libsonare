@@ -162,22 +162,22 @@ describe('repair: sample rate and call shape', () => {
     expectThrows(() => fn({ ...request, bogus: 1 }), TypeError);
   });
 
-  it.each(MONO)('%s declares validate as an option of the request', (name, options) => {
+  it.each(MONO)('%s refuses validate and scans for non-finite samples', (name, options) => {
     const fn = api[name] as Fn;
     const samples = name.includes('Trim') ? padded() : left;
-    expect(() => fn({ samples, sampleRate, ...options, validate: false })).not.toThrow();
-    expect(() => fn(samples, sampleRate, { ...options, validate: true })).not.toThrow();
+    expectThrows(() => fn({ samples, sampleRate, ...options, validate: false }), TypeError);
+    expectThrows(() => fn(samples, sampleRate, { ...options, validate: true }), TypeError);
     const bad = new Float32Array(samples);
     bad[10] = Number.NaN;
     expectThrows(() => fn({ samples: bad, sampleRate, ...options }), RangeError);
   });
 
-  it.each(PAIR_CALLS)('%s declares validate as an option of the request', (name) => {
+  it.each(PAIR_CALLS)('%s refuses validate and scans for non-finite samples', (name) => {
     const fn = api[name] as Fn;
     const request = name.includes('Trim')
       ? { left: padded(), right: padded(), sampleRate }
       : pairRequest();
-    expect(() => fn({ ...request, validate: false })).not.toThrow();
+    expectThrows(() => fn({ ...request, validate: false }), TypeError);
     const bad = new Float32Array(request.left as Float32Array);
     bad[10] = Number.NaN;
     expectThrows(() => fn({ ...request, left: bad }), RangeError);
@@ -378,8 +378,8 @@ describe('repair: session', () => {
       sonare.masteringRepairApply({ channels: [left], sampleRate, stages: analysis.recommended }),
     ).not.toThrow();
     expect(() =>
-      sonare.masteringRepairAnalyze({ channels: [left], sampleRate, validate: false }),
-    ).not.toThrow();
+      sonare.masteringRepairAnalyze({ channels: [left], sampleRate, validate: false } as never),
+    ).toThrow(TypeError);
   });
 });
 

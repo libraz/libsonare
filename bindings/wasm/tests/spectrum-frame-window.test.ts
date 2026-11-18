@@ -141,7 +141,6 @@ describe('meteringSpectrumFrame validates only the analysis frame', () => {
     meteringSpectrumFrame(samples as Float32Array, SR, {
       startSample: FRAME_OFFSET,
       nFft: N_FFT,
-      validate: false,
     });
     expect(asked).toContainEqual([FRAME_OFFSET, FRAME_END]);
     // Non-vacuity in both directions: the probe really was consulted, and
@@ -178,34 +177,21 @@ describe('meteringSpectrumFrame validates only the analysis frame', () => {
     expect(Array.from(report.magnitude).every(Number.isFinite)).toBe(true);
   });
 
-  it('drops the facade scan under validate:false but not the core guard', () => {
+  it('names the index on a non-finite sample and refuses a validate option', () => {
     const inside = FRAME_OFFSET + 200;
-    // The two refusals are distinguishable: the facade names the index, the core
-    // does not.
     expect(() =>
       meteringSpectrumFrame(toneWith(inside, Number.NaN), SR, {
         startSample: FRAME_OFFSET,
         nFft: N_FFT,
-        validate: false,
       }),
-    ).toThrow();
+    ).toThrow(`at index ${inside}`);
     expect(() =>
-      meteringSpectrumFrame(toneWith(inside, Number.NaN), SR, {
+      meteringSpectrumFrame(tone(), SR, {
         startSample: FRAME_OFFSET,
         nFft: N_FFT,
         validate: false,
-      }),
-    ).not.toThrow(`at index ${inside}`);
-
-    const unchecked = meteringSpectrumFrame(toneWith(4000, Number.NaN), SR, {
-      startSample: FRAME_OFFSET,
-      nFft: N_FFT,
-      validate: false,
-    });
-    expectSameSpectrum(
-      unchecked,
-      meteringSpectrumFrame(tone(), SR, { startSample: FRAME_OFFSET, nFft: N_FFT }),
-    );
+      } as never),
+    ).toThrow("meteringSpectrumFrame: unknown option 'validate'");
   });
 });
 

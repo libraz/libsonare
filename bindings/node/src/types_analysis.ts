@@ -1,5 +1,3 @@
-import type { ValidateOptions } from './validation.js';
-
 /** Pitch class, C = 0 through B = 11. */
 export type PitchClass = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
 
@@ -96,8 +94,6 @@ export interface KeyDetectionOptions {
    * pitch to this unit. Pass 0 to read the chroma at A440.
    */
   tuningCents?: number | 'auto';
-  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
-  validate?: boolean;
 }
 
 /** Result of {@link detectKey}: the key, and the tuning its chroma was built with. */
@@ -365,8 +361,6 @@ export interface MelodyOptions {
    * for plain YIN. Default true.
    */
   center?: boolean;
-  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
-  validate?: boolean;
 }
 
 /** Options for {@link analyzeBpm}. All fields are optional. */
@@ -383,8 +377,6 @@ export interface AnalyzeBpmOptions {
   hopLength?: number;
   /** Number of tempo candidates to return. Default 5. */
   maxCandidates?: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
-  validate?: boolean;
 }
 
 /** Options for {@link analyzeRhythm}. All fields are optional. */
@@ -399,8 +391,6 @@ export interface AnalyzeRhythmOptions {
   nFft?: number;
   /** Hop length in samples of the input buffer. Default 512. */
   hopLength?: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
-  validate?: boolean;
 }
 
 /** Options for {@link analyzeDynamics}. All fields are optional. */
@@ -411,8 +401,6 @@ export interface AnalyzeDynamicsOptions {
   hopLength?: number;
   /** Threshold (dB) above which compression is flagged. Default 6. */
   compressionThresholdDb?: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
-  validate?: boolean;
 }
 
 /** Options for {@link detectAcoustic}. All fields are optional. */
@@ -425,8 +413,6 @@ export interface AcousticOptions {
   minDecayDb?: number;
   /** Noise-floor margin (dB) above the measured floor. Default 10. */
   noiseFloorMarginDb?: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
-  validate?: boolean;
 }
 
 /** Options for {@link analyzeTimbre}. All fields are optional. */
@@ -441,8 +427,6 @@ export interface AnalyzeTimbreOptions {
   nMfcc?: number;
   /** Per-frame statistics window in seconds. Default 0.5. */
   windowSec?: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
-  validate?: boolean;
 }
 
 /** Options for {@link analyzeSections}. All fields are optional. */
@@ -461,8 +445,6 @@ export interface AnalyzeSectionsOptions {
    * downbeats and keep a minimum length.
    */
   threshold?: number;
-  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
-  validate?: boolean;
 }
 
 /** Options for {@link detectBoundaries}. All fields are optional. */
@@ -504,8 +486,6 @@ export interface BoundaryOptions {
   useMfcc?: boolean;
   /** Include chroma in the similarity features. Default true. */
   useChroma?: boolean;
-  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
-  validate?: boolean;
 }
 
 /** One detected structural transition. */
@@ -797,7 +777,7 @@ export interface RirResult {
 }
 
 /** Settings of {@link estimateRoom}. */
-export interface RoomEstimateOptions extends ValidateOptions {
+export interface RoomEstimateOptions {
   /** Length/width ratio hint of the room. Omit for no hint; an explicit 0 is refused. */
   aspectHintLw?: number;
   /** Length/height ratio hint of the room. Omit for no hint; an explicit 0 is refused. */
@@ -868,7 +848,7 @@ export interface RoomPlacement {
 }
 
 /** Settings of {@link roomMorph} and {@link roomMorphStereo}. */
-export interface RoomMorphOptions extends RoomGeometry, ValidateOptions {
+export interface RoomMorphOptions extends RoomGeometry {
   /** Wet level of the target room. */
   wet?: number;
   /** How far the source recording's own room tail is suppressed. */
@@ -1189,8 +1169,6 @@ export interface ChordDetectionOptions {
    * reference pitch to this unit. Pass 0 for concert A440.
    */
   tuningCents?: number | 'auto';
-  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
-  validate?: boolean;
 }
 
 /** Harmonic and percussive components from harmonic-percussive separation. */

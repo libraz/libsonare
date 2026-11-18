@@ -1227,7 +1227,7 @@ export {
 export type { EqPhaseMode, StereoBlock } from './streaming_processors.js';
 export type { TranscribeRequest } from './transcribe.js';
 export { transcribe } from './transcribe.js';
-export type { OptionsOf, ValidateOptions } from './validation.js';
+export type { OptionsOf } from './validation.js';
 export {
   createVocalEditSession,
   restoreVocalEditSession,

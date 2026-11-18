@@ -30,17 +30,10 @@ export function assertRepairGeometry(
 }
 
 /** Request fields that are audio, rate or JS-side validation and never reach the addon options. */
-const NON_NATIVE_FIELDS = new Set([
-  'samples',
-  'left',
-  'right',
-  'channels',
-  'sampleRate',
-  'validate',
-]);
+const NON_NATIVE_FIELDS = new Set(['samples', 'left', 'right', 'channels', 'sampleRate']);
 
 /**
- * The options object the addon reads: the request without audio, rate and `validate`. `null`
+ * The options object the addon reads: the request without audio and rate. `null`
  * is absence.
  */
 export function repairNativeOptions(request: object): Record<string, unknown> {

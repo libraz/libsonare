@@ -5,12 +5,7 @@
 
 import type { ClippingReport } from '../metering.js';
 import type { ClipDetection, DeclipReport } from '../types_repair.js';
-import {
-  assertAudioChannels,
-  assertAudioSamples,
-  assertFloatValue,
-  type ValidateOptions,
-} from '../validation.js';
+import { assertAudioChannels, assertAudioSamples, assertFloatValue } from '../validation.js';
 import { interleavePlanar } from './planar.js';
 
 /**
@@ -49,7 +44,7 @@ export function assertUnitInterval(fnName: string, value: unknown, argName: stri
 export function interleaveMeterChannels(
   fnName: string,
   channels: unknown,
-  options: ValidateOptions,
+  options: object,
   sampleRate?: unknown,
 ): { data: Float32Array; numChannels: number } {
   if (sampleRate !== undefined) {

@@ -138,7 +138,7 @@ describe('boundary regressions (WASM)', () => {
     }
   });
 
-  it('revalidates stereo meters natively when validate is false', () => {
+  it('scans both stereo meter channels and refuses a validate key', () => {
     const invalid = sine(0.5);
     invalid[17] = Number.NaN;
     expect(() =>
@@ -149,7 +149,6 @@ describe('boundary regressions (WASM)', () => {
         left: invalid,
         right: sine(0.5),
         sampleRate: SR,
-        validate: false,
       }),
     ).toThrow();
     const invalidRight = sine(0.5);
@@ -159,7 +158,6 @@ describe('boundary regressions (WASM)', () => {
         left: sine(0.5),
         right: invalidRight,
         sampleRate: SR,
-        validate: false,
       }),
     ).toThrow();
     expect(() =>
@@ -167,7 +165,6 @@ describe('boundary regressions (WASM)', () => {
         left: sine(0.5),
         right: sine(0.5),
         sampleRate: 7999,
-        validate: false,
       }),
     ).toThrow();
     expect(() =>
@@ -175,7 +172,6 @@ describe('boundary regressions (WASM)', () => {
         left: sine(0.5),
         right: sine(0.5),
         sampleRate: 384001,
-        validate: false,
       }),
     ).toThrow();
     expect(
@@ -183,9 +179,16 @@ describe('boundary regressions (WASM)', () => {
         left: sine(0.5),
         right: sine(0.5),
         sampleRate: SR,
-        validate: false,
       }),
     ).toBeCloseTo(1, 5);
+    expect(() =>
+      meteringStereoCorrelation({
+        left: sine(0.5),
+        right: sine(0.5),
+        sampleRate: SR,
+        validate: false,
+      } as never),
+    ).toThrow("meteringStereoCorrelation: unknown request key 'validate'");
   });
 
   it('validates drainTailStereo before allocation at both facade and raw boundaries', () => {

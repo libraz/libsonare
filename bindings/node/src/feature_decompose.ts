@@ -3,7 +3,7 @@ import { assertMatrix2D, toMatrix2D, toNativeIndexList } from './internal/featur
 import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { addon } from './native.js';
 import type { Matrix2D } from './types.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioChannels,
   assertAudioInput,
@@ -132,7 +132,7 @@ export interface DecomposeResult {
 }
 
 /** Request for {@link decomposeStems}. */
-export interface DecomposeStemsRequest extends ValidateOptions {
+export interface DecomposeStemsRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
@@ -185,7 +185,7 @@ export interface NnFilterRequest {
 }
 
 /** Request for {@link hpssWithResidual}. */
-export interface HpssWithResidualRequest extends ValidateOptions {
+export interface HpssWithResidualRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
@@ -398,7 +398,7 @@ export function decomposeStems(...args: unknown[]): DecomposeStemsResult {
 }
 
 /** Request for {@link decomposeStemsLinked}. */
-export interface DecomposeStemsLinkedRequest extends ValidateOptions {
+export interface DecomposeStemsLinkedRequest {
   /** One plane per channel, all of the same length. At least one. */
   channels: Float32Array[];
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
@@ -493,7 +493,7 @@ export function nnFilter(...args: unknown[]): Matrix2D {
 }
 
 /** Request for {@link remix} and {@link remixAlignedIntervals}. */
-export interface RemixRequest extends ValidateOptions {
+export interface RemixRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */

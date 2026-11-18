@@ -10,7 +10,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate ...options?',
     values: {
-      options: { validate: false },
       samples: SIG,
       sampleRate: ALT_SR,
     },
@@ -46,7 +45,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate ...options?',
     values: {
-      options: { validate: false },
       samples: SIG,
       sampleRate: ALT_SR,
     },
@@ -58,7 +56,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate ...options?',
     values: {
-      options: { validate: false },
       samples: SIG,
       sampleRate: ALT_SR,
     },
@@ -192,7 +189,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate tempoBpm? minNoteMs? ...options?',
     values: {
-      options: { validate: false },
       samples: TWO_NOTES,
       sampleRate: ALT_SR,
       tempoBpm: 90,

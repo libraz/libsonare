@@ -8,7 +8,7 @@ import type {
   ProgressCallback,
   StreamingLoudnessGainResult,
 } from './types.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import { assertAudioInput, requestOnly, sampleOneShot } from './validation.js';
 
 type NativeResult = Record<string, unknown>;
@@ -24,7 +24,7 @@ function assertChainCallbacks(fnName: string, request: object): void {
 }
 
 /** Request for {@link streamingLoudnessGain}. */
-export interface StreamingLoudnessGainRequest extends ValidateOptions {
+export interface StreamingLoudnessGainRequest {
   /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
@@ -34,7 +34,7 @@ export interface StreamingLoudnessGainRequest extends ValidateOptions {
 }
 
 /** Request for {@link streamingLoudnessGainStereo}. */
-export interface StreamingLoudnessGainStereoRequest extends ValidateOptions {
+export interface StreamingLoudnessGainStereoRequest {
   /** Left channel samples. */
   left: Float32Array;
   /** Right channel samples. */
@@ -116,7 +116,7 @@ export function streamingLoudnessGainStereo(
 }
 
 /** Request form of {@link masterAudio}. */
-export interface MasterAudioRequest extends ValidateOptions {
+export interface MasterAudioRequest {
   /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
@@ -138,7 +138,7 @@ export interface MasterAudioRequest extends ValidateOptions {
 }
 
 /** Request form of {@link masterAudioStereo}. */
-export interface MasterAudioStereoRequest extends ValidateOptions {
+export interface MasterAudioStereoRequest {
   /** Left channel samples. */
   left: Float32Array;
   /** Right channel samples. */
@@ -168,7 +168,7 @@ export interface MasterAudioStereoRequest extends ValidateOptions {
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
- * @param options - `preset`, `overrides`, `onProgress`, `cancel`, `validate`
+ * @param options - `preset`, `overrides`, `onProgress`, `cancel`
  * @returns Processed audio, loudness metadata, and applied stage names
  * @throws {TypeError} when `sampleRate` is missing, neither `preset` nor `overrides` is given,
  *   or a request field has the wrong type
@@ -251,7 +251,7 @@ export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringC
 }
 
 /** Request form of {@link masterAudioAsync}. */
-export interface MasterAudioAsyncRequest extends ValidateOptions {
+export interface MasterAudioAsyncRequest {
   /** Mono input samples. */
   samples: Float32Array;
   /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
@@ -269,7 +269,7 @@ export interface MasterAudioAsyncRequest extends ValidateOptions {
 }
 
 /** Request form of {@link masterAudioStereoAsync}. */
-export interface MasterAudioStereoAsyncRequest extends ValidateOptions {
+export interface MasterAudioStereoAsyncRequest {
   /** Left channel samples. */
   left: Float32Array;
   /** Right channel samples. */

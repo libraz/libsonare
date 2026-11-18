@@ -24,7 +24,7 @@ import type {
   PitchDecompositionResult,
   VoicedFlags,
 } from './public_types.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertFiniteScalar,
@@ -77,7 +77,7 @@ export interface NoteMoveRequest extends NoteMoveOptions {
 }
 
 /** Canonical request form for {@link extractNotes}. */
-export interface ExtractNotesRequest extends NoteExtractorOptions, ValidateOptions {
+export interface ExtractNotesRequest extends NoteExtractorOptions {
   /** Mono source audio the F0 track was measured from. */
   samples: Float32Array;
   /**
@@ -103,7 +103,7 @@ export interface ExtractNotesRequest extends NoteExtractorOptions, ValidateOptio
 }
 
 /** Canonical request form for {@link renderNotes}. */
-export interface RenderNotesRequest extends ValidateOptions {
+export interface RenderNotesRequest {
   /** Mono source audio the notes were extracted from. */
   samples: Float32Array;
   /**
@@ -166,7 +166,7 @@ export interface DecomposeNotePitchRequest {
 }
 
 /** The audio, track and note set the two note-set reshaping calls share. */
-interface NoteSetRequest extends NoteExtractorOptions, ValidateOptions {
+interface NoteSetRequest extends NoteExtractorOptions {
   /**
    * The audio the set was extracted from. Every note is re-measured against it,
    * so a different buffer re-derives the whole set against something else.

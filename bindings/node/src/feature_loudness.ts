@@ -4,14 +4,12 @@ import type { LufsResult, LufsSeriesResult } from './types.js';
 import type { OptionsOf } from './validation.js';
 import { assertAudioInput, assertSampleRate, requestOnly, sampleOneShot } from './validation.js';
 
-/** Request for {@link lufs}. `validate: false` skips the NaN/Inf pre-scan. */
+/** Request for {@link lufs}. */
 export interface LufsRequest {
   /** Mono audio samples. */
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
   sampleRate: number;
-  /** `false` skips the NaN/Inf pre-scan of the samples. Default `true`. */
-  validate?: boolean;
 }
 
 /** Request for {@link momentaryLufs}. */
@@ -26,8 +24,6 @@ export interface LufsMultichannelRequest {
   channels: Float32Array[];
   /** Sample rate of the channels in Hz. Required. */
   sampleRate: number;
-  /** `false` skips the NaN/Inf pre-scan. */
-  validate?: boolean;
 }
 
 /** Request for {@link lufsSeriesMultichannel}. */
@@ -36,8 +32,6 @@ export interface LufsSeriesMultichannelRequest {
   channels: Float32Array[];
   /** Sample rate of the channels in Hz. Required. */
   sampleRate: number;
-  /** `false` skips the NaN/Inf pre-scan. */
-  validate?: boolean;
 }
 
 /** Request for {@link ebur128LoudnessRangeLu}. */
@@ -46,8 +40,6 @@ export interface Ebur128LoudnessRangeLuRequest {
   samples: Float32Array;
   /** Sample rate of `samples` in Hz. Required. */
   sampleRate: number;
-  /** `false` skips the NaN/Inf pre-scan. */
-  validate?: boolean;
 }
 
 /**

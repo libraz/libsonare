@@ -15,18 +15,11 @@ export function audioDefectsFromNative(native: unknown): MasteringAudioProfileDe
 }
 
 /** Request fields that are audio, rate or JS-side validation and never reach the native options. */
-const NON_NATIVE_FIELDS = new Set([
-  'samples',
-  'left',
-  'right',
-  'channels',
-  'sampleRate',
-  'validate',
-]);
+const NON_NATIVE_FIELDS = new Set(['samples', 'left', 'right', 'channels', 'sampleRate']);
 
 /**
  * The options object the native repair call reads: the request without audio, rate and
- * `validate`. `null` on an optional field is absence.
+ * `null` on an optional field is absence.
  */
 export function repairNativeOptions(request: object): Record<string, unknown> {
   const native: Record<string, unknown> = {};

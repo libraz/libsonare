@@ -1,22 +1,16 @@
 import { parseRecordJson } from './internal/record_json.js';
 import { addon } from './native.js';
 import type { MixAssistantResult, MixAssistantTrack, MixSourceClass } from './types.js';
-import {
-  assertPositiveInteger,
-  assertSampleRate,
-  requestOnly,
-  requireBoolean,
-  type ValidateOptions,
-} from './validation.js';
+import { assertPositiveInteger, assertSampleRate, requestOnly } from './validation.js';
 
 /**
  * Inputs for {@link mixingAssistantSuggest}. Every tunable is optional; an omitted field keeps the
  * native default rather than being sent as an explicit value.
  *
- * `validate` is accepted for symmetry with the other one-shots; the assistant never throws on a
- * non-finite track but reports it as an excluded track.
+ * A non-finite track is not refused: its profile comes back with `usable: false` and an
+ * `exclusionReason`.
  */
-export interface MixingAssistantSuggestRequest extends ValidateOptions {
+export interface MixingAssistantSuggestRequest {
   /** Tracks to mix. An empty array yields an empty suggestion. */
   tracks: MixAssistantTrack[];
   /**
@@ -254,9 +248,6 @@ export function mixingAssistantSuggest(...args: unknown[]): MixAssistantResult {
   const fnName = 'mixingAssistantSuggest';
   const req = requestOnly<MixingAssistantSuggestRequest>(fnName, args);
   assertSampleRate(fnName, req.sampleRate);
-  if (req.validate !== undefined && req.validate !== null) {
-    requireBoolean(fnName, req.validate, 'validate');
-  }
   const tracks = normalizeTracks(fnName, req.tracks, req.sampleRate);
   assertTempo(fnName, req.tempoBpm);
   const params = normalizeOptions(fnName, req);

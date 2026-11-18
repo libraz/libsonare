@@ -79,8 +79,8 @@ export function spectralEdit(
 ): Float32Array;
 export function spectralEdit(...args: unknown[]): Float32Array {
   const request = sampleOneShot<SpectralEditRequest>('spectralEdit', args);
-  const { samples: input, sampleRate, ops, validate, ...requestOptions } = request;
-  assertAudioInput('spectralEdit', input, sampleRate, { validate });
+  const { samples: input, sampleRate, ops, ...requestOptions } = request;
+  assertAudioInput('spectralEdit', input, sampleRate);
   if (ops === undefined || ops === null) {
     throw new TypeError('spectralEdit: ops must be an array');
   }

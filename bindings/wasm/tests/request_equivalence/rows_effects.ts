@@ -71,7 +71,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate ...options?',
     values: {
-      options: { validate: false },
       samples: SIG,
       sampleRate: ALT_SR,
     },
@@ -84,7 +83,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate ...options?',
     values: {
-      options: { validate: false },
       samples: SIG,
       sampleRate: ALT_SR,
     },
@@ -111,7 +109,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate speedRatio nFft? hopLength? ...options?',
     values: {
-      options: { validate: false },
       samples: SIG,
       sampleRate: ALT_SR,
       speedRatio: 1.25,
@@ -126,7 +123,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate pitchSemitones nFft? hopLength? ...options?',
     values: {
-      options: { validate: false },
       samples: SIG,
       sampleRate: ALT_SR,
       pitchSemitones: 2,
@@ -141,7 +137,6 @@ export const ROWS: Row[] = [
     form: 'sampleOptions',
     params: 'samples sampleRate currentMidi targetMidi ...options?',
     values: {
-      options: { validate: false },
       samples: SIG,
       sampleRate: ALT_SR,
       currentMidi: 57,

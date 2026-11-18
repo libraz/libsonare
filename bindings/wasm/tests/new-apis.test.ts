@@ -512,11 +512,11 @@ describe('v1.2 feature additions (WASM)', () => {
 
       for (const voiced of invalid) {
         expectVoicedTypeError(
-          () => timevarying(f0, hop, { targetMidi: 60, voiced: voiced as never, validate: false }),
+          () => timevarying(f0, hop, { targetMidi: 60, voiced: voiced as never }),
           'pitchCorrectTimevarying',
         );
         expectVoicedTypeError(
-          () => timevaryingRequest(f0, hop, { voiced: voiced as never, validate: false }),
+          () => timevaryingRequest(f0, hop, { voiced: voiced as never }),
           'pitchCorrectTimevarying',
         );
       }
@@ -530,11 +530,11 @@ describe('v1.2 feature additions (WASM)', () => {
 
       for (const voiced of invalid) {
         expectVoicedTypeError(
-          () => timevarying(f0, hop, { targetMidi: 60, voiced: voiced as never, validate: false }),
+          () => timevarying(f0, hop, { targetMidi: 60, voiced: voiced as never }),
           'pitchCorrectTimevarying',
         );
         expectVoicedTypeError(
-          () => timevaryingRequest(f0, hop, { voiced: voiced as never, validate: false }),
+          () => timevaryingRequest(f0, hop, { voiced: voiced as never }),
           'pitchCorrectTimevarying',
         );
       }

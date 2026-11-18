@@ -8,7 +8,7 @@ import { assertPitchTrackLengths, toVoicedFloat32 } from './internal/effects_com
 import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type { AutoTuneOptions, AutoTuneResult, PitchCorrectOptions } from './public_types.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertFloatValue,
@@ -24,7 +24,7 @@ function requireModule() {
  * Time-stretch request. `sampleRate` is required (Hz); `speedRatio` is required.
  * A missing field is a `TypeError`, a non-finite or out-of-range value a `RangeError`.
  */
-export interface TimeStretchRequest extends ValidateOptions {
+export interface TimeStretchRequest {
   /** Mono input audio. */
   samples: Float32Array;
   /** Sample rate in Hz. Required. */
@@ -42,7 +42,7 @@ export interface TimeStretchRequest extends ValidateOptions {
 }
 
 /** Pitch-shift request. `sampleRate` (Hz) and `pitchSemitones` are required. */
-export interface PitchShiftRequest extends ValidateOptions {
+export interface PitchShiftRequest {
   /** Mono input audio. */
   samples: Float32Array;
   /** Sample rate in Hz. Required. */
@@ -56,7 +56,7 @@ export interface PitchShiftRequest extends ValidateOptions {
 }
 
 /** Constant-interval correction request. `sampleRate` (Hz), `currentMidi` and `targetMidi` are required. */
-export interface PitchCorrectToMidiRequest extends ValidateOptions {
+export interface PitchCorrectToMidiRequest {
   /** Mono input audio. */
   samples: Float32Array;
   /** Sample rate in Hz. Required. */
@@ -218,7 +218,6 @@ export function pitchCorrectTimevarying(...args: unknown[]): Float32Array {
     sampleRate: _sampleRate,
     f0Hz: _f0Hz,
     hopLength,
-    validate: _validate,
     voiced: _voiced,
     voicedProb,
     ...rest
@@ -269,7 +268,7 @@ export function autoTune(
 export function autoTune(...args: unknown[]): AutoTuneResult {
   const r = sampleOneShot<AutoTuneRequest>('autoTune', args);
   assertAudioInput('autoTune', r.samples, r.sampleRate, r);
-  const { samples, sampleRate, key, validate: _validate, ...options } = r;
+  const { samples, sampleRate, key, ...options } = r;
   const keyOrDetect = key ?? 'detect';
   if (keyOrDetect !== 'detect' && typeof keyOrDetect !== 'object') {
     throw new TypeError("autoTune: key must be 'detect' or { root, mode }");

@@ -1,7 +1,5 @@
-import type { ValidateOptions } from './validation.js';
-
 /** Options for `detectAcoustic`. All fields are optional. */
-export interface AcousticOptions extends ValidateOptions {
+export interface AcousticOptions {
   /** Number of octave bands. Default 6. */
   nOctaveBands?: number;
   /** Number of 1/3-octave sub-bands. Default 24. */
@@ -167,7 +165,7 @@ export interface RirResult {
 }
 
 /** Settings of {@link estimateRoom}. */
-export interface RoomEstimateOptions extends ValidateOptions {
+export interface RoomEstimateOptions {
   /** Length/width ratio hint of the room. Omit for no hint; an explicit 0 is refused. */
   aspectHintLw?: number;
   /** Length/height ratio hint of the room. Omit for no hint; an explicit 0 is refused. */
@@ -233,7 +231,7 @@ export interface RoomPlacement {
 }
 
 /** Settings of {@link roomMorph} and {@link roomMorphStereo}. */
-export interface RoomMorphOptions extends RoomGeometry, ValidateOptions {
+export interface RoomMorphOptions extends RoomGeometry {
   /** Wet level of the target room. */
   wet?: number;
   /** How far the source recording's own room tail is suppressed. */

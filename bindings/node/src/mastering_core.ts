@@ -19,7 +19,7 @@ import type {
   StereoAnalysisResultMap,
   StereoPairProcessor,
 } from './types.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertFloatValue,
@@ -44,8 +44,7 @@ export interface MasteringNormalizeLoudnessRequest extends MasteringNormalizeLou
 }
 
 /** Request form of {@link masteringApplyProcessor}. */
-export interface MasteringApplyProcessorRequest<P extends SoloProcessor = SoloProcessor>
-  extends ValidateOptions {
+export interface MasteringApplyProcessorRequest<P extends SoloProcessor = SoloProcessor> {
   /** Name of the processor to apply (see `masteringProcessorNames`). */
   processor: P;
   /** Mono input samples. */
@@ -57,8 +56,7 @@ export interface MasteringApplyProcessorRequest<P extends SoloProcessor = SoloPr
 }
 
 /** Request form of {@link masteringApplyProcessorStereo}. */
-export interface MasteringApplyProcessorStereoRequest<P extends SoloProcessor = SoloProcessor>
-  extends ValidateOptions {
+export interface MasteringApplyProcessorStereoRequest<P extends SoloProcessor = SoloProcessor> {
   /** Name of the processor to apply to the pair. */
   processor: P;
   /** Left channel samples. */
@@ -72,8 +70,7 @@ export interface MasteringApplyProcessorStereoRequest<P extends SoloProcessor = 
 }
 
 /** Request form of {@link masteringApplyPairProcessor}. */
-export interface MasteringApplyPairProcessorRequest<P extends PairProcessor = PairProcessor>
-  extends ValidateOptions {
+export interface MasteringApplyPairProcessorRequest<P extends PairProcessor = PairProcessor> {
   /** Name of the pair processor to apply (see `masteringPairProcessorNames`). */
   processor: P;
   /** The take the processor is applied to. */
@@ -92,7 +89,7 @@ export interface MasteringApplyPairProcessorRequest<P extends PairProcessor = Pa
 }
 
 /** Request form of {@link masteringApplyPairProcessorStereo}. */
-export interface MasteringApplyPairProcessorStereoRequest extends ValidateOptions {
+export interface MasteringApplyPairProcessorStereoRequest {
   /** Name of the pair processor to apply (see `masteringPairProcessorNames`). */
   processor: StereoPairProcessor;
   /** Left channel of the source take. */
@@ -115,7 +112,7 @@ export interface MasteringApplyPairProcessorStereoRequest extends ValidateOption
 }
 
 /** Request form of {@link masteringAbMatchLoudness}. */
-export interface MasteringAbMatchLoudnessRequest extends ValidateOptions {
+export interface MasteringAbMatchLoudnessRequest {
   /** The take to gain-match. */
   source: Float32Array;
   /** The take whose loudness `source` is matched to; returned untouched. */
@@ -130,7 +127,7 @@ export interface MasteringAbMatchLoudnessRequest extends ValidateOptions {
 }
 
 /** Request form of {@link masteringAbMatchLoudnessStereo}. */
-export interface MasteringAbMatchLoudnessStereoRequest extends ValidateOptions {
+export interface MasteringAbMatchLoudnessStereoRequest {
   /** Left channel of the take to gain-match. */
   sourceLeft: Float32Array;
   /** Right channel of the take to gain-match. */
@@ -149,8 +146,7 @@ export interface MasteringAbMatchLoudnessStereoRequest extends ValidateOptions {
 }
 
 /** Request form of {@link masteringAnalyzePair}. */
-export interface MasteringAnalyzePairRequest<A extends PairAnalysis = PairAnalysis>
-  extends ValidateOptions {
+export interface MasteringAnalyzePairRequest<A extends PairAnalysis = PairAnalysis> {
   /** Name of the pair analysis to run (see `masteringPairAnalysisNames`). */
   analysis: A;
   /** The take being analyzed. */
@@ -169,8 +165,7 @@ export interface MasteringAnalyzePairRequest<A extends PairAnalysis = PairAnalys
 }
 
 /** Request form of {@link masteringAnalyzeStereo}. */
-export interface MasteringAnalyzeStereoRequest<A extends StereoAnalysis = StereoAnalysis>
-  extends ValidateOptions {
+export interface MasteringAnalyzeStereoRequest<A extends StereoAnalysis = StereoAnalysis> {
   /** Name of the stereo analysis to run (see `masteringStereoAnalysisNames`). */
   analysis: A;
   /** Left channel samples. */
@@ -245,7 +240,7 @@ export function masteringNormalizeLoudness(...args: unknown[]): MasteringNormali
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz, an integer in `[8000, 384000]`
- * @param options - `processor` (required), `params`, `validate`
+ * @param options - `processor` (required), `params`
  * @throws {TypeError} when `sampleRate` or `processor` is missing or a field has the wrong type
  * @throws {RangeError} on audio out of domain, an unknown processor or a parameter it refuses
  */
@@ -307,7 +302,6 @@ function assertPairAudio(
   r: {
     sampleRate: number;
     referenceSampleRate?: number;
-    validate?: boolean;
   },
   source: [string, unknown],
   reference: [string, unknown],

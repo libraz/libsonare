@@ -142,7 +142,7 @@ import type {
   StftResult,
   TimbreResult,
 } from './types.js';
-import type { OptionsOf, ValidateOptions } from './validation.js';
+import type { OptionsOf } from './validation.js';
 import { assertPositiveInteger, assertSampleRate } from './validation.js';
 
 /**
@@ -685,17 +685,17 @@ export class Audio {
   }
 
   /** Integrated loudness (LUFS) and loudness range of the held audio. */
-  lufs(options: ValidateOptions = {}): LufsResult {
-    return lufsFn(this.data, this.sampleRate, options);
+  lufs(): LufsResult {
+    return lufsFn(this.data, this.sampleRate);
   }
 
   /** Momentary (400 ms) loudness series in LUFS. */
-  momentaryLufs(options: ValidateOptions = {}): Float32Array {
-    return momentaryLufsFn(this.data, this.sampleRate, options);
+  momentaryLufs(): Float32Array {
+    return momentaryLufsFn(this.data, this.sampleRate);
   }
 
   /** Short-term (3 s) loudness series in LUFS. */
-  shortTermLufs(options: ValidateOptions = {}): Float32Array {
-    return shortTermLufsFn(this.data, this.sampleRate, options);
+  shortTermLufs(): Float32Array {
+    return shortTermLufsFn(this.data, this.sampleRate);
   }
 }

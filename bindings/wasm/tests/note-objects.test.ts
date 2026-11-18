@@ -619,7 +619,6 @@ describe('renderNotes', () => {
         f0Hz: new Float64Array(1) as never,
         frameRate: Number.NaN,
         voiced: invalidVoiced,
-        validate: false,
       }),
     ).toThrow('renderNotes: f0Hz must be a Float32Array');
     expect(() =>
@@ -630,7 +629,6 @@ describe('renderNotes', () => {
         f0Hz,
         frameRate: Number.NaN,
         voiced: invalidVoiced,
-        validate: false,
       }),
     ).toThrow('renderNotes: frameRate must be a finite number');
     expect(() =>
@@ -639,7 +637,6 @@ describe('renderNotes', () => {
         sampleRate,
         notes: [],
         voiced: invalidVoiced,
-        validate: false,
       }),
     ).toThrow('renderNotes: voiced must be');
   });
@@ -1368,14 +1365,13 @@ describe('renderNotes voiced masks', () => {
     expect(maxDifference(masked, baseline)).toBeLessThanOrEqual(1e-6);
   });
 
-  it('rejects a mask without f0Hz and a mismatched mask even when validation is disabled', () => {
+  it('rejects a mask without f0Hz and a mismatched mask', () => {
     expect(() =>
       renderNotes({
         samples: source,
         sampleRate: fixtureRate,
         notes: [],
         voiced: new Int32Array(fixtureFrames).fill(1),
-        validate: false,
       }),
     ).toThrow('renderNotes: voiced requires f0Hz');
     expect(() =>
@@ -1386,7 +1382,6 @@ describe('renderNotes voiced masks', () => {
         f0Hz: track,
         voiced: new Int32Array(fixtureFrames - 1).fill(1),
         frameRate: fixtureFrameRate,
-        validate: false,
       }),
     ).toThrow('renderNotes: voiced must have the same length as f0Hz');
   });
@@ -1402,7 +1397,6 @@ describe('renderNotes voiced masks', () => {
             f0Hz: track,
             voiced: voiced as never,
             frameRate: fixtureFrameRate,
-            validate: false,
           }),
         'renderNotes',
       );
@@ -1420,7 +1414,6 @@ describe('renderNotes voiced masks', () => {
             f0Hz: track,
             voiced: voiced as never,
             frameRate: fixtureFrameRate,
-            validate: false,
           }),
         'renderNotes',
       );
