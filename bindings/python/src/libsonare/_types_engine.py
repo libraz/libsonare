@@ -7,7 +7,7 @@ between languages see the same names. They intentionally violate PEP8 N802.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import IntEnum
+from typing import Literal, get_args
 
 import numpy as np
 
@@ -105,12 +105,9 @@ class EngineTelemetry:
         return self.graph_latency_samples_q8
 
 
-class EngineTrackMonitorMode(IntEnum):
-    """Per-track-lane monitor tap mode for the realtime engine."""
-
-    OFF = 0
-    PFL = 1
-    AFL = 2
+EngineTrackMonitorMode = Literal["off", "pfl", "afl"]
+"""Per-track-lane monitor tap mode for the realtime engine."""
+_TRACK_MONITOR_MODES: tuple[str, ...] = get_args(EngineTrackMonitorMode)
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,15 +133,26 @@ class AutomationPoint:
     curve_to_next: AutomationCurve = "linear"
 
 
-class MarkerKind(IntEnum):
-    """Timeline marker kind. Mirrors SonareMarkerKind in the C ABI and the
-    other bindings' marker-kind enums; the values are part of the ABI."""
+MarkerKind = Literal["marker", "text", "lyric", "cuePoint", "keySignature"]
+"""Timeline marker kind, in SonareMarkerKind ordinal order."""
+_MARKER_KINDS: tuple[str, ...] = get_args(MarkerKind)
 
-    MARKER = 0
-    TEXT = 1
-    LYRIC = 2
-    CUE_POINT = 3
-    KEY_SIGNATURE = 4
+SidechainRefusal = Literal[
+    "invalidTarget",
+    "insertOutOfRange",
+    "undeclaredSource",
+    "invalidSourceKind",
+    "selfKey",
+    "cycle",
+    "tableFull",
+    "planRefused",
+]
+"""Why a ``can_set_*_sidechain`` query refused a binding."""
+_SIDECHAIN_REFUSALS: tuple[str, ...] = get_args(SidechainRefusal)
+
+EngineCaptureSource = Literal["output", "input"]
+"""What the realtime engine's recording sink captures."""
+_CAPTURE_SOURCES: tuple[str, ...] = get_args(EngineCaptureSource)
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,27 +160,25 @@ class SidechainCheck:
     """Outcome of a ``can_set_*_sidechain`` query.
 
     ``ok`` is True when the matching setter would accept the binding;
-    otherwise ``reason`` names the first refusal: ``"invalid_target"``,
-    ``"insert_out_of_range"``, ``"undeclared_source"``, ``"invalid_source_kind"``,
-    ``"self_key"``, ``"cycle"``, ``"table_full"`` or ``"plan_refused"``.
+    otherwise ``reason`` names the first refusal as a :data:`SidechainRefusal`.
     """
 
     ok: bool
-    reason: str | None = None
+    reason: SidechainRefusal | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class EngineMarker:
     """Timeline marker used by the realtime engine transport.
 
-    ``kind`` is a :class:`MarkerKind` ordinal; ``key_fifths`` (-7..7, sharps
-    positive) and ``key_minor`` apply only to the key-signature kind.
+    ``kind`` is a :data:`MarkerKind` token; ``key_fifths`` (-7..7, sharps
+    positive) and ``key_minor`` apply only to the ``"keySignature"`` kind.
     """
 
     id: int
     ppq: float
     name: str = ""
-    kind: int = 0
+    kind: MarkerKind = "marker"
     key_fifths: int = 0
     key_minor: bool = False
 
@@ -181,15 +187,15 @@ class EngineMarker:
 class ProjectMarker:
     """Timeline marker stored on a headless :class:`~libsonare._project.Project`.
 
-    Same shape as :class:`EngineMarker`: ``kind`` is a :class:`MarkerKind`
-    ordinal and ``key_fifths`` / ``key_minor`` apply only to the key-signature
-    kind.
+    Same shape as :class:`EngineMarker`: ``kind`` is a :data:`MarkerKind`
+    token and ``key_fifths`` / ``key_minor`` apply only to the
+    ``"keySignature"`` kind.
     """
 
     id: int
     ppq: float
     name: str = ""
-    kind: int = 0
+    kind: MarkerKind = "marker"
     key_fifths: int = 0
     key_minor: bool = False
 
@@ -339,7 +345,7 @@ class EngineCaptureStatus:
     overflow_count: int
     armed: bool
     punch_enabled: bool
-    source: str
+    source: EngineCaptureSource
     record_offset_samples: int
 
 
@@ -396,25 +402,21 @@ class EngineFreezeResult:
     num_channels: int
 
 
-class EngineGraphNodeType(IntEnum):
-    """Builtin processor node type for realtime engine graphs."""
-
-    PASS_THROUGH = 0
-    GAIN = 1
+EngineGraphNodeType = Literal["passThrough", "gain"]
+"""Builtin processor node type for realtime engine graphs."""
+_GRAPH_NODE_TYPES: tuple[str, ...] = get_args(EngineGraphNodeType)
 
 
-class EngineGraphMix(IntEnum):
-    """Connection mix mode for realtime engine graphs.
+EngineGraphMix = Literal["replace", "add"]
+"""Connection mix mode for realtime engine graphs.
 
-    Edges into one destination port are taken in connection order. ``REPLACE``
-    overwrites what earlier edges put on the port; ``ADD`` accumulates onto it.
-    A port's first edge initializes it either way, so the two differ only on a
-    shared port. An omitted ``mix`` is ``ADD``, unlike a zero-initialized C
-    connection, which is ``REPLACE``.
-    """
-
-    REPLACE = 0
-    ADD = 1
+Edges into one destination port are taken in connection order. ``"replace"``
+overwrites what earlier edges put on the port; ``"add"`` accumulates onto it.
+A port's first edge initializes it either way, so the two differ only on a
+shared port. An omitted ``mix`` is ``"add"``, unlike a zero-initialized C
+connection, which is ``"replace"``.
+"""
+_GRAPH_MIXES: tuple[str, ...] = get_args(EngineGraphMix)
 
 
 @dataclass(frozen=True, slots=True)
@@ -422,7 +424,7 @@ class EngineGraphNode:
     """Prepared realtime engine graph node."""
 
     id: str
-    type: EngineGraphNodeType = EngineGraphNodeType.PASS_THROUGH
+    type: EngineGraphNodeType = "passThrough"
     gain_db: float = 0.0
     num_ports: int = 0
 
@@ -435,7 +437,7 @@ class EngineGraphConnection:
     source_port: int
     dest_node: str
     dest_port: int
-    mix: EngineGraphMix = EngineGraphMix.ADD
+    mix: EngineGraphMix = "add"
 
 
 @dataclass(frozen=True, slots=True)

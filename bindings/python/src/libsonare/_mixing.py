@@ -640,9 +640,7 @@ class Mixer:
             raise _not_supported("libsonare was built without strip remove_send support")
         _check(lib.sonare_strip_remove_send(handle, _to_c_uint32(index, "index")))
 
-    def strip_meter(
-        self, strip: StripRef, tap: MeterTap = "postFader"
-    ) -> MixMeterSnapshot:
+    def strip_meter(self, strip: StripRef, tap: MeterTap = "postFader") -> MixMeterSnapshot:
         """Read a per-strip meter snapshot at the given tap point.
 
         Args:
@@ -665,12 +663,6 @@ class Mixer:
         else:
             _check(lib.sonare_strip_meter(handle, ctypes.byref(snapshot)))
         return _mix_meter_from_c(snapshot)
-
-    def meter_tap(
-        self, strip: StripRef, tap: MeterTap = "postFader"
-    ) -> MixMeterSnapshot:
-        """Alias of :meth:`strip_meter` matching the C ``meter_tap`` naming."""
-        return self.strip_meter(strip, tap)
 
     def bus_meter(self, bus_id: str) -> MixMeterSnapshot:
         """Read the post-insert meter for a compiled bus, including master."""

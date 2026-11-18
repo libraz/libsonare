@@ -324,7 +324,7 @@ def _automation_lane_desc(
             raise SonareValueError(f"points[{i}] must contain at least (ppq, value)")
         ppq = float(cast(SupportsFloat, seq[0]))
         value = float(cast(SupportsFloat, seq[1]))
-        curve = _curve_value(seq[2]) if len(seq) >= 3 else 0
+        curve = _curve_value(cast(AutomationCurve, seq[2])) if len(seq) >= 3 else 0
         if not math.isfinite(ppq):
             raise SonareValueError(f"points[{i}].ppq must be a finite number")
         if not math.isfinite(value):

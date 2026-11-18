@@ -11,7 +11,6 @@ from libsonare import (
     EngineMarker,
     EngineMetronomeConfig,
     ErrorCode,
-    MarkerKind,
     ParameterInfo,
     RealtimeEngine,
     SonareError,
@@ -175,12 +174,12 @@ def test_engine_marker_kind_and_key_signature_round_trip() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_markers(
             [
-                EngineMarker(1, 0.0, "verse", kind=MarkerKind.CUE_POINT),
+                EngineMarker(1, 0.0, "verse", kind="cuePoint"),
                 EngineMarker(
                     2,
                     4.0,
                     "G major",
-                    kind=MarkerKind.KEY_SIGNATURE,
+                    kind="keySignature",
                     key_fifths=1,
                     key_minor=False,
                 ),
@@ -188,7 +187,7 @@ def test_engine_marker_kind_and_key_signature_round_trip() -> None:
                     3,
                     8.0,
                     "C minor",
-                    kind=MarkerKind.KEY_SIGNATURE,
+                    kind="keySignature",
                     key_fifths=-3,
                     key_minor=True,
                 ),
@@ -197,18 +196,18 @@ def test_engine_marker_kind_and_key_signature_round_trip() -> None:
         assert engine.marker_count() == 3
 
         cue = engine.marker_by_index(0)
-        assert cue.kind == MarkerKind.CUE_POINT
+        assert cue.kind == "cuePoint"
         assert cue.name == "verse"
         assert cue.key_fifths == 0
         assert cue.key_minor is False
 
         major = engine.marker(2)
-        assert major.kind == MarkerKind.KEY_SIGNATURE
+        assert major.kind == "keySignature"
         assert major.key_fifths == 1
         assert major.key_minor is False
 
         minor = engine.marker(3)
-        assert minor.kind == MarkerKind.KEY_SIGNATURE
+        assert minor.kind == "keySignature"
         assert minor.key_fifths == -3
         assert minor.key_minor is True
 

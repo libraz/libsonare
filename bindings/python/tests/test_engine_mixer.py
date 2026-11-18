@@ -12,7 +12,6 @@ from libsonare import (
     MAX_TRACK_LANES,
     AutomationPoint,
     EngineClip,
-    EngineTrackMonitorMode,
     RealtimeEngine,
     SonareError,
     SonareValueError,
@@ -26,30 +25,19 @@ _PAN_LAW_CORPUS = json.loads(
 )
 
 
-@pytest.mark.parametrize(
-    ("value", "expected"),
-    [
-        (EngineTrackMonitorMode.OFF, 0),
-        (EngineTrackMonitorMode.PFL, 1),
-        (EngineTrackMonitorMode.AFL, 2),
-        (0, 0),
-        (1, 1),
-        (2, 2),
-        ("OFF", 0),
-        ("pfl", 1),
-        ("AfL", 2),
-    ],
-)
-def test_track_monitor_mode_conversion(value: object, expected: int) -> None:
-    assert _track_monitor_mode_value(value) == expected  # type: ignore[arg-type]
+def test_track_monitor_mode_tokens_map_to_their_ordinals() -> None:
+    assert [_track_monitor_mode_value(mode) for mode in ("off", "pfl", "afl")] == [0, 1, 2]
 
 
-@pytest.mark.parametrize(
-    "value",
-    [True, False, 1.0, 1.5, math.nan, math.inf, -1, 3, "cue", "pfl\N{SNOWMAN}"],
-)
-def test_track_monitor_mode_conversion_rejects_invalid_values(value: object) -> None:
-    with pytest.raises(ValueError):
+@pytest.mark.parametrize("value", ["OFF", "Pfl", "cue", "pfl\N{SNOWMAN}"])
+def test_another_track_monitor_mode_spelling_is_refused(value: str) -> None:
+    with pytest.raises(SonareValueError, match="afl"):
+        _track_monitor_mode_value(value)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("value", [True, 0, 1, 1.0, math.nan])
+def test_a_track_monitor_mode_number_is_a_type_error(value: object) -> None:
+    with pytest.raises(TypeError):
         _track_monitor_mode_value(value)  # type: ignore[arg-type]
 
 
@@ -83,7 +71,7 @@ def test_engine_track_monitor_mode_pfl_and_afl() -> None:
             '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
         )
         engine.play()
-        engine.set_track_monitor_mode(0, "PFL", render_frame=block // 2)
+        engine.set_track_monitor_mode(0, "pfl", render_frame=block // 2)
         main, monitor = engine.process_with_monitor([[0.0] * block])
         assert main[0][-1] == pytest.approx(1.0, abs=0.01)
         assert monitor[0][0] == pytest.approx(0.0, abs=0.01)
@@ -96,7 +84,7 @@ def test_engine_track_monitor_mode_pfl_and_afl() -> None:
         assert 0.4 < main[0][-1] < 0.7
         assert monitor[0][-1] == pytest.approx(1.0, abs=0.01)
 
-        engine.set_track_monitor_mode(0, EngineTrackMonitorMode.AFL)
+        engine.set_track_monitor_mode(0, "afl")
         main, monitor = engine.process_with_monitor([[0.0] * block])
         assert monitor[0][-1] == pytest.approx(main[0][-1], abs=0.01)
         assert 0.4 < monitor[0][-1] < 0.7

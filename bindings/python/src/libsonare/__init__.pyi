@@ -946,6 +946,9 @@ from .types import (
     EngineBounceResult as EngineBounceResult,
 )
 from .types import (
+    EngineCaptureSource as EngineCaptureSource,
+)
+from .types import (
     EngineCaptureStatus as EngineCaptureStatus,
 )
 from .types import (
@@ -1256,6 +1259,9 @@ from .types import (
 )
 from .types import (
     SidechainCheck as SidechainCheck,
+)
+from .types import (
+    SidechainRefusal as SidechainRefusal,
 )
 from .types import (
     SidechainSourceKind as SidechainSourceKind,

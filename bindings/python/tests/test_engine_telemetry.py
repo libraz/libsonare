@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from typing import get_args
 
 import pytest
 
@@ -11,13 +12,11 @@ from libsonare import (
     EngineClip,
     EngineGraphConnection,
     EngineGraphNode,
-    EngineGraphNodeType,
     EngineGraphParameterBinding,
     EngineGraphSpec,
     EngineMarker,
     EngineMetronomeConfig,
     EngineTelemetryError,
-    EngineTelemetryType,
     ParameterInfo,
     RealtimeEngine,
     ScopeTelemetryRecord,
@@ -199,7 +198,7 @@ def test_realtime_engine_process_and_telemetry() -> None:
             EngineGraphSpec(
                 nodes=[
                     EngineGraphNode("in", num_ports=2),
-                    EngineGraphNode("gain", EngineGraphNodeType.GAIN, gain_db=0.0, num_ports=2),
+                    EngineGraphNode("gain", "gain", gain_db=0.0, num_ports=2),
                     EngineGraphNode("out", num_ports=2),
                 ],
                 connections=[
@@ -253,8 +252,8 @@ def test_realtime_engine_process_and_telemetry() -> None:
         telemetry = engine.drain_telemetry()
         assert telemetry
         last = telemetry[-1]
-        assert last.type == EngineTelemetryType.PROCESS_BLOCK
-        assert last.error == EngineTelemetryError.NONE
+        assert last.type == "processBlock"
+        assert last.error == "none"
         assert last.render_frame == 0
         assert last.timeline_sample == 48000 + 128
         assert last.audible_timeline_sample == 48000 + 128
@@ -293,8 +292,8 @@ def test_realtime_engine_process_and_telemetry() -> None:
 
 
 def test_realtime_engine_reports_oversized_channel_telemetry() -> None:
-    assert EngineTelemetryError.MAX_CHANNELS_EXCEEDED.value == 20
-    assert 19 not in {error.value for error in EngineTelemetryError}
+    errors = get_args(EngineTelemetryError)
+    assert errors[19:21] == ("invalidCommand", "maxChannelsExceeded")
 
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128, max_channels=2) as engine:
         output = engine.process([[0.0] * 8, [0.0] * 8, [0.0] * 8])
@@ -303,8 +302,7 @@ def test_realtime_engine_reports_oversized_channel_telemetry() -> None:
         oversized = [
             record
             for record in engine.drain_telemetry()
-            if record.type == EngineTelemetryType.ERROR
-            and record.error == EngineTelemetryError.MAX_CHANNELS_EXCEEDED
+            if record.type == "error" and record.error == "maxChannelsExceeded"
         ]
         assert oversized
         assert oversized[-1].value == 3
@@ -421,16 +419,32 @@ def test_engine_overflow_counters_start_at_zero_and_stay_there_when_nothing_drop
 
 
 def test_engine_telemetry_error_parameter_base_overflow_ordinal() -> None:
-    assert EngineTelemetryError.PARAMETER_BASE_OVERFLOW.value == 21
-    assert EngineTelemetryError.PARAMETER_BASE_OVERFLOW.name == "PARAMETER_BASE_OVERFLOW"
+    from libsonare._types_enums import _ENGINE_TELEMETRY_ERRORS
+
+    assert get_args(EngineTelemetryError)[21] == "parameterBaseOverflow"
+    assert _ENGINE_TELEMETRY_ERRORS[21] == "parameterBaseOverflow"
 
 
 def test_graph_connection_mix_is_replace_or_add_only() -> None:
-    from libsonare import EngineGraphConnection, EngineGraphMix, SonareValueError
+    from libsonare import EngineGraphConnection, SonareValueError
     from libsonare._engine_conversions import _graph_connection_to_c
 
     assert _graph_connection_to_c(EngineGraphConnection("a", 0, "b", 0)).mix == 1
-    replace = EngineGraphConnection("a", 0, "b", 0, mix=EngineGraphMix.REPLACE)
+    replace = EngineGraphConnection("a", 0, "b", 0, mix="replace")
     assert _graph_connection_to_c(replace).mix == 0
-    with pytest.raises(SonareValueError):
-        _graph_connection_to_c(EngineGraphConnection("a", 0, "b", 0, mix=2))  # type: ignore[arg-type]
+    with pytest.raises(SonareValueError, match="add"):
+        _graph_connection_to_c(EngineGraphConnection("a", 0, "b", 0, mix="Replace"))  # type: ignore[arg-type]
+    for number in (0, 2, True):
+        with pytest.raises(TypeError):
+            _graph_connection_to_c(EngineGraphConnection("a", 0, "b", 0, mix=number))  # type: ignore[arg-type]
+
+
+def test_capture_source_is_an_exact_token() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        engine.set_capture_source("input")
+        engine.set_capture_source("output")
+        with pytest.raises(SonareValueError, match="input"):
+            engine.set_capture_source("Input")  # type: ignore[arg-type]
+        for number in (1, True):
+            with pytest.raises(TypeError):
+                engine.set_capture_source(number)  # type: ignore[arg-type]

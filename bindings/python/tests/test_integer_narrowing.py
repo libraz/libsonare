@@ -139,19 +139,21 @@ def test_a_wrapped_param_id_is_refused_rather_than_read_as_a_bound_one() -> None
             ls.Project.midi_param_to_cc([binding], value, 0.5, 0)
 
 
-def test_a_wrapped_marker_kind_is_refused_rather_than_read_as_a_different_kind() -> None:
-    """The struct route for an enum ordinal: the field's own type carries the bound."""
+def test_a_marker_kind_is_an_exact_token() -> None:
+    """A number never selects a marker kind, and another spelling is refused."""
     with ls.RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_markers(
             [
-                ls.EngineMarker(1, 0.0, "a", kind=ls.MarkerKind.CUE_POINT),
-                ls.EngineMarker(2, 4.0, "b", kind=ls.MarkerKind.KEY_SIGNATURE),
+                ls.EngineMarker(1, 0.0, "a", kind="cuePoint"),
+                ls.EngineMarker(2, 4.0, "b", kind="keySignature"),
             ]
         )
         assert engine.marker(1).kind != engine.marker(2).kind  # positive control
-        for value in (2**8 + 3, 2**8, -1, 2**32):
-            with pytest.raises(SonareValueError, match="kind"):
-                engine.set_markers([ls.EngineMarker(3, 0.0, "c", kind=value)])
+        for value in (3, 2**8 + 3, -1, True):
+            with pytest.raises(TypeError, match="kind"):
+                engine.set_markers([ls.EngineMarker(3, 0.0, "c", kind=value)])  # type: ignore[arg-type]
+        with pytest.raises(SonareValueError, match="cuePoint"):
+            engine.set_markers([ls.EngineMarker(3, 0.0, "c", kind="cue_point")])  # type: ignore[arg-type]
 
 
 @pytest.fixture

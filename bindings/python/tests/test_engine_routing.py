@@ -486,31 +486,31 @@ def test_can_set_sidechain_reports_each_refusal_and_matches_the_setters() -> Non
         # Lane keys; each lane carries one insert to key.
         for track_id in (10, 30):
             engine.set_track_strip_json(track_id, _strip_json(track_id, [_PASS_LIMITER]))
-        check(engine.can_set_lane_sidechain(0, 0, 30), "invalid_target")
-        check(engine.can_set_lane_sidechain(10, 1, 30), "insert_out_of_range")
-        check(engine.can_set_lane_sidechain(10, 0, 99), "undeclared_source")
+        check(engine.can_set_lane_sidechain(0, 0, 30), "invalidTarget")
+        check(engine.can_set_lane_sidechain(10, 1, 30), "insertOutOfRange")
+        check(engine.can_set_lane_sidechain(10, 0, 99), "undeclaredSource")
         with pytest.raises(SonareError):
             engine.set_lane_sidechain(10, 1, 30)
         with pytest.raises(SonareError):
             engine.set_lane_sidechain(10, 0, 99)
-        check(engine.can_set_lane_sidechain(10, 0, 10), "self_key")
+        check(engine.can_set_lane_sidechain(10, 0, 10), "selfKey")
         check(engine.can_set_lane_sidechain(10, 0, 30), None)
         engine.set_lane_sidechain(10, 0, 30)
         check(engine.can_set_lane_sidechain(30, 0, 10), "cycle")
         with pytest.raises(SonareError):
             engine.set_lane_sidechain(30, 0, 10)
         # Bus keys; the rig already keys bus 2 insert 0 from bus 1.
-        check(engine.can_set_bus_sidechain(9, 0, "track", 10), "invalid_target")
-        check(engine.can_set_bus_sidechain(1, 1, "track", 30), "insert_out_of_range")
-        check(engine.can_set_bus_sidechain(1, 0, "track", 99), "undeclared_source")
+        check(engine.can_set_bus_sidechain(9, 0, "track", 10), "invalidTarget")
+        check(engine.can_set_bus_sidechain(1, 1, "track", 30), "insertOutOfRange")
+        check(engine.can_set_bus_sidechain(1, 0, "track", 99), "undeclaredSource")
         with pytest.raises(TypeError):
             engine.can_set_bus_sidechain(1, 0, 2, 30)  # type: ignore[arg-type]
-        check(engine.can_set_bus_sidechain(1, 0, "bus", 1), "self_key")
+        check(engine.can_set_bus_sidechain(1, 0, "bus", 1), "selfKey")
         check(engine.can_set_bus_sidechain(1, 0, "bus", 2), "cycle")
         check(engine.can_set_bus_sidechain(2, 0, "track", 30), None)
         # Master keys.
-        check(engine.can_set_master_sidechain(1, "track", 30), "insert_out_of_range")
-        check(engine.can_set_master_sidechain(0, "track", 99), "undeclared_source")
+        check(engine.can_set_master_sidechain(1, "track", 30), "insertOutOfRange")
+        check(engine.can_set_master_sidechain(0, "track", 99), "undeclaredSource")
         with pytest.raises(TypeError):
             engine.can_set_master_sidechain(0, 2, 30)  # type: ignore[arg-type]
         check(engine.can_set_master_sidechain(0, "bus", 1), None)
@@ -525,7 +525,7 @@ def test_can_set_sidechain_reports_each_refusal_and_matches_the_setters() -> Non
         full.set_track_strip_json(10, _strip_json(10, [_PASS_LIMITER] * 33))
         for insert in range(32):
             full.set_lane_sidechain(10, insert, 30)
-        check(full.can_set_lane_sidechain(10, 32, 30), "table_full")
+        check(full.can_set_lane_sidechain(10, 32, 30), "tableFull")
         with pytest.raises(SonareError):
             full.set_lane_sidechain(10, 32, 30)
 
@@ -543,24 +543,24 @@ def test_can_set_sidechain_reports_each_refusal_and_matches_the_setters() -> Non
         plan.set_track_strip_json(
             30, _strip_json(30, [(limiter[0], {**limiter[1], "lookaheadMs": 1.0}), ducker])
         )
-        check(plan.can_set_lane_sidechain(30, 1, 20), "plan_refused")
+        check(plan.can_set_lane_sidechain(30, 1, 20), "planRefused")
         with pytest.raises(SonareError):
             plan.set_lane_sidechain(30, 1, 20)
         check(plan.can_set_lane_sidechain(30, 1, 10), None)
 
     # The facade refuses a bad source kind before the C ABI can report it, so the
     # code-to-reason table is exercised directly.
-    check(_sidechain_check(4), "invalid_source_kind")
+    check(_sidechain_check(4), "invalidSourceKind")
     assert seen == {
         None,
-        "invalid_target",
-        "insert_out_of_range",
-        "undeclared_source",
-        "invalid_source_kind",
-        "self_key",
+        "invalidTarget",
+        "insertOutOfRange",
+        "undeclaredSource",
+        "invalidSourceKind",
+        "selfKey",
         "cycle",
-        "table_full",
-        "plan_refused",
+        "tableFull",
+        "planRefused",
     }
 
 

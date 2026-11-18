@@ -90,38 +90,40 @@ PanMode = Literal["balance", "stereoPan", "dualPan"]
 _PAN_MODES: tuple[str, ...] = get_args(PanMode)
 
 
-class EngineTelemetryType(IntEnum):
-    """Realtime engine telemetry record type."""
+EngineTelemetryType = Literal["processBlock", "error"]
+"""Realtime engine telemetry record type."""
+_ENGINE_TELEMETRY_TYPES: tuple[str, ...] = get_args(EngineTelemetryType)
 
-    PROCESS_BLOCK = 0
-    ERROR = 1
+EngineTelemetryError = Literal[
+    "none",
+    "commandQueueOverflow",
+    "pendingCommandOverflow",
+    "boundaryOverflow",
+    "telemetryOverflow",
+    "captureOverflow",
+    "maxBlockExceeded",
+    "unknownTarget",
+    "nonRealtimeSafeParameter",
+    "notPrepared",
+    "nonQueueableCommand",
+    "automationBindTargetOverflow",
+    "staleAutomationLanes",
+    "smoothedParameterCapacity",
+    "commandBacklogDeferred",
+    "clipPageUnderrun",
+    "insertAutomationOverflow",
+    "midiClockOverflow",
+    "metronomeOverflow",
+    "invalidCommand",
+    "maxChannelsExceeded",
+    "parameterBaseOverflow",
+]
+"""Recoverable realtime engine error code of a telemetry record, in ordinal order.
 
-
-class EngineTelemetryError(IntEnum):
-    """Recoverable realtime engine error codes."""
-
-    NONE = 0
-    COMMAND_QUEUE_OVERFLOW = 1
-    PENDING_COMMAND_OVERFLOW = 2
-    BOUNDARY_OVERFLOW = 3
-    TELEMETRY_OVERFLOW = 4
-    CAPTURE_OVERFLOW = 5
-    MAX_BLOCK_EXCEEDED = 6
-    UNKNOWN_TARGET = 7
-    NON_REALTIME_SAFE_PARAMETER = 8
-    NOT_PREPARED = 9
-    NON_QUEUEABLE_COMMAND = 10
-    AUTOMATION_BIND_TARGET_OVERFLOW = 11
-    STALE_AUTOMATION_LANES = 12
-    SMOOTHED_PARAMETER_CAPACITY = 13
-    COMMAND_BACKLOG_DEFERRED = 14
-    CLIP_PAGE_UNDERRUN = 15
-    INSERT_AUTOMATION_OVERFLOW = 16
-    MIDI_CLOCK_OVERFLOW = 17
-    METRONOME_OVERFLOW = 18
-    # Ordinal 19 is reserved by the WASM worklet protocol.
-    MAX_CHANNELS_EXCEEDED = 20
-    PARAMETER_BASE_OVERFLOW = 21
+``"invalidCommand"`` is emitted only by the browser worklet; it is listed so a
+record moved between surfaces keeps its type.
+"""
+_ENGINE_TELEMETRY_ERRORS: tuple[str, ...] = get_args(EngineTelemetryError)
 
 
 KeyMode = Literal["major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian"]

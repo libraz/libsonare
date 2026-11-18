@@ -11,21 +11,15 @@ from typing import cast
 from ._narrowing import _narrow_double
 from ._runtime import (
     _AUTOMATION_CURVES,
-    _C_INT_MAX,
-    _C_INT_MIN,
     _UINT32_MAX,
     AutomationCurve,
     EngineClip,
     EngineGraphConnection,
-    EngineGraphMix,
     EngineGraphNode,
-    EngineGraphNodeType,
     EngineGraphParameterBinding,
     EngineMarker,
     EngineMetronomeConfig,
     EngineTelemetry,
-    EngineTelemetryError,
-    EngineTelemetryType,
     MeterTelemetryRecord,
     MeterTelemetryRecordWide,
     ParameterInfo,
@@ -46,65 +40,52 @@ from ._runtime import (
     SonareScopeTelemetryRecord,
     SonareValueError,
     _float_array_result,
-    _narrow_int,
     _planar_channel_arrays,
     _require_instance,
+    _token_ordinal,
     _utf8_arg,
     _validate_c_int_field,
     _warp_mode_value,
 )
-from ._types_engine import EngineTrackMonitorMode
-
-_CAPTURE_SOURCE_VALUES = {"output": 0, "input": 1}
-_TRACK_MONITOR_MODE_VALUES = {
-    "off": int(EngineTrackMonitorMode.OFF),
-    "pfl": int(EngineTrackMonitorMode.PFL),
-    "afl": int(EngineTrackMonitorMode.AFL),
-}
-
-
-def _track_monitor_mode_value(mode: EngineTrackMonitorMode | str | int) -> int:
-    """Resolve a track monitor mode to its C enum ordinal.
-
-    Only the three public ordinals and their case-insensitive ASCII names are
-    accepted; booleans and fractional values are rejected before the native call.
-    """
-    if isinstance(mode, str):
-        if mode.isascii():
-            try:
-                return _TRACK_MONITOR_MODE_VALUES[mode.lower()]
-            except KeyError:
-                pass
-        raise SonareValueError("track monitor mode must be OFF/PFL/AFL or an integer 0, 1, or 2")
-    if isinstance(mode, bool):
-        raise SonareValueError("track monitor mode must be OFF/PFL/AFL or an integer 0, 1, or 2")
-    try:
-        value = operator.index(mode)
-    except (TypeError, ValueError, OverflowError) as exc:
-        raise SonareValueError(
-            "track monitor mode must be OFF/PFL/AFL or an integer 0, 1, or 2"
-        ) from exc
-    if value not in _TRACK_MONITOR_MODE_VALUES.values():
-        raise SonareValueError("track monitor mode must be OFF/PFL/AFL or an integer 0, 1, or 2")
-    return int(value)
+from ._types_engine import (
+    _CAPTURE_SOURCES,
+    _GRAPH_MIXES,
+    _GRAPH_NODE_TYPES,
+    _MARKER_KINDS,
+    _TRACK_MONITOR_MODES,
+    EngineCaptureSource,
+    EngineTrackMonitorMode,
+    MarkerKind,
+)
+from ._types_enums import (
+    _ENGINE_TELEMETRY_ERRORS,
+    _ENGINE_TELEMETRY_TYPES,
+    EngineTelemetryError,
+    EngineTelemetryType,
+)
 
 
-def _capture_source_value(source: str | int) -> int:
-    if isinstance(source, str):
-        try:
-            return _CAPTURE_SOURCE_VALUES[source]
-        except KeyError as exc:
-            raise SonareValueError("capture source must be 'output' or 'input'") from exc
-    # Narrowed rather than coerced: int(0.5) is the 0 the membership test below
-    # then accepts as "output", so a fractional ordinal would select a source.
-    value = _narrow_int(source, "capture source", _C_INT_MIN, _C_INT_MAX)
-    if value in _CAPTURE_SOURCE_VALUES.values():
-        return value
-    raise SonareValueError("capture source must be 'output' or 'input'")
+def _track_monitor_mode_value(mode: EngineTrackMonitorMode) -> int:
+    """Resolve a track monitor mode token to its C enum ordinal."""
+    return _token_ordinal(mode, _TRACK_MONITOR_MODES, "track monitor mode")
 
 
-def _capture_source_name(source: int) -> str:
-    return "input" if int(source) == _CAPTURE_SOURCE_VALUES["input"] else "output"
+def _capture_source_value(source: EngineCaptureSource) -> int:
+    """Resolve a capture source token to its C enum ordinal."""
+    return _token_ordinal(source, _CAPTURE_SOURCES, "capture source")
+
+
+def _capture_source_name(source: int) -> EngineCaptureSource:
+    return cast(EngineCaptureSource, _CAPTURE_SOURCES[int(source)])
+
+
+def _marker_kind_value(kind: MarkerKind) -> int:
+    """Resolve a marker kind token to its C enum ordinal."""
+    return _token_ordinal(kind, _MARKER_KINDS, "marker kind")
+
+
+def _marker_kind_name(kind: int) -> MarkerKind:
+    return cast(MarkerKind, _MARKER_KINDS[int(kind)])
 
 
 def _band_json_arg(band: Mapping[str, object] | str) -> bytes:
@@ -152,7 +133,7 @@ def _marker_to_c(marker: EngineMarker) -> SonareEngineMarker:
     raw.id = marker_id
     # Assigned unconverted so the struct's own narrowing sees each caller value;
     # int() would truncate a fraction past it.
-    raw.kind = marker.kind
+    raw.kind = _marker_kind_value(marker.kind)
     raw.key_fifths = marker.key_fifths
     raw.key_minor = 1 if marker.key_minor else 0
     raw.ppq = _narrow_double(marker.ppq, "marker.ppq")
@@ -165,7 +146,7 @@ def _marker_from_c(raw: SonareEngineMarker) -> EngineMarker:
         id=int(raw.id),
         ppq=float(raw.ppq),
         name=_c_string(bytes(raw.name)),
-        kind=int(raw.kind),
+        kind=_marker_kind_name(raw.kind),
         key_fifths=int(raw.key_fifths),
         key_minor=bool(raw.key_minor),
     )
@@ -287,7 +268,7 @@ def _clips_to_c(
 def _graph_node_to_c(node: EngineGraphNode) -> SonareEngineGraphNode:
     raw = SonareEngineGraphNode()
     raw.id = _fixed_bytes(node.id, 64, "id")
-    raw.type = int(EngineGraphNodeType(node.type))
+    raw.type = _token_ordinal(node.type, _GRAPH_NODE_TYPES, "graph node type")
     raw.gain_db = _narrow_double(node.gain_db, "node.gain_db")
     # Narrowed rather than coerced: int(0.5) is the 0 this field reads as "take
     # the spec's channel count", so a fractional port count would build the node
@@ -304,12 +285,7 @@ def _graph_connection_to_c(connection: EngineGraphConnection) -> SonareEngineGra
     raw.source_port = connection.source_port
     raw.dest_node = _fixed_bytes(connection.dest_node, 64, "dest_node")
     raw.dest_port = connection.dest_port
-    try:
-        raw.mix = int(EngineGraphMix(connection.mix))
-    except ValueError as exc:
-        raise SonareValueError(
-            f"mix must be EngineGraphMix.REPLACE or EngineGraphMix.ADD, got {connection.mix!r}"
-        ) from exc
+    raw.mix = _token_ordinal(connection.mix, _GRAPH_MIXES, "graph connection mix")
     return raw
 
 
@@ -325,8 +301,8 @@ def _graph_parameter_binding_to_c(
 
 def _telemetry_from_c(raw: SonareEngineTelemetry) -> EngineTelemetry:
     return EngineTelemetry(
-        type=EngineTelemetryType(int(raw.type)),
-        error=EngineTelemetryError(int(raw.error)),
+        type=cast(EngineTelemetryType, _ENGINE_TELEMETRY_TYPES[int(raw.type)]),
+        error=cast(EngineTelemetryError, _ENGINE_TELEMETRY_ERRORS[int(raw.error)]),
         render_frame=int(raw.render_frame),
         timeline_sample=int(raw.timeline_sample),
         audible_timeline_sample=int(raw.audible_timeline_sample),

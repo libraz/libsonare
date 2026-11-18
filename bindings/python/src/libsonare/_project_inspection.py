@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, cast, overload
 
 import numpy as np
 
+from ._engine_conversions import _marker_kind_name, _marker_kind_value
 from ._narrowing import _narrow_double
 from ._project_model import *  # noqa: F403
 from ._project_synth import (
@@ -469,7 +470,7 @@ class _ProjectInspectionMixin:
         # Assigned unconverted so the struct's own narrowing sees each caller
         # value; int() would truncate a fraction past it.
         raw.id = marker.id
-        raw.kind = marker.kind
+        raw.kind = _marker_kind_value(marker.kind)
         raw.key_fifths = marker.key_fifths
         raw.key_minor = 1 if marker.key_minor else 0
         raw.ppq = _narrow_double(marker.ppq, "marker.ppq")
@@ -507,7 +508,7 @@ class _ProjectInspectionMixin:
             id=int(raw.id),
             ppq=float(raw.ppq),
             name=name,
-            kind=int(raw.kind),
+            kind=_marker_kind_name(raw.kind),
             key_fifths=int(raw.key_fifths),
             key_minor=bool(raw.key_minor),
         )

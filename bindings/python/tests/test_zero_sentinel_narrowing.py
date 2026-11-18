@@ -300,9 +300,7 @@ def test_a_fractional_output_bus_is_refused_rather_than_read_as_the_master_mix()
                     )
                 ]
             )
-            engine.set_track_buses(
-                [{"bus_id": 1, "channel_layout": "5.1"}]
-            )
+            engine.set_track_buses([{"bus_id": 1, "channel_layout": "5.1"}])
             lane: dict[str, object] = {"track_id": 10}
             if output_bus_id is not None:
                 lane["output_bus_id"] = output_bus_id
@@ -332,9 +330,7 @@ def test_a_fractional_port_count_is_refused_rather_than_read_as_the_specs_channe
                 ls.EngineGraphSpec(
                     nodes=[
                         ls.EngineGraphNode("in"),
-                        ls.EngineGraphNode(
-                            "gain", ls.EngineGraphNodeType.GAIN, gain_db=0.0, **node_kwargs
-                        ),
+                        ls.EngineGraphNode("gain", "gain", gain_db=0.0, **node_kwargs),
                         ls.EngineGraphNode("out"),
                     ],
                     connections=[

@@ -6575,15 +6575,7 @@ old = "Mixer.strip_meter(tap)"
 changed = "a MeterTap token, default 'postFader'; a number is TypeError"
 domain = "engine"
 rule = "string-closed-sets"
-test = "bindings/python/tests/test_mixing.py::test_strip_meter_and_meter_tap_return_snapshots"
-
-[[entry]]
-kind = "option"
-old = "Mixer.meter_tap(tap)"
-changed = "a MeterTap token, default 'postFader'; a number is TypeError"
-domain = "engine"
-rule = "string-closed-sets"
-test = "bindings/python/tests/test_mixing.py::test_strip_meter_and_meter_tap_return_snapshots"
+test = "bindings/python/tests/test_mixing.py::test_strip_meter_returns_snapshots"
 
 [[entry]]
 kind = "option"
@@ -6825,3 +6817,106 @@ changed = "0 is the value 0 and a negative is refused; a negative no longer sele
 domain = "analysis"
 rule = "absent-not-sentinel"
 test = "bindings/python/tests/test_polyphonic_editing.py::test_a_negative_floor_is_refused"
+
+[[entry]]
+kind = "type"
+old = "EngineTelemetryType"
+changed = "Literal['processBlock', 'error']; the IntEnum and its members are removed"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_engine_telemetry.py::test_realtime_engine_process_and_telemetry"
+
+[[entry]]
+kind = "type"
+old = "EngineTelemetryError"
+changed = "Literal of the lowerCamel error tokens in ordinal order, 'invalidCommand' included; the IntEnum and its members are removed"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_engine_telemetry.py::test_engine_telemetry_error_parameter_base_overflow_ordinal"
+
+[[entry]]
+kind = "type"
+old = "EngineTrackMonitorMode"
+changed = "Literal['off', 'pfl', 'afl']; the IntEnum and its members are removed"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_imports.py::test_track_monitor_mode_is_a_public_literal"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_track_monitor_mode"
+changed = "mode takes 'off', 'pfl' or 'afl' exactly; a case-folded spelling is SonareValueError and an ordinal is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_engine_mixer.py::test_a_track_monitor_mode_number_is_a_type_error"
+
+[[entry]]
+kind = "type"
+old = "MarkerKind"
+changed = "Literal['marker', 'text', 'lyric', 'cuePoint', 'keySignature']; the IntEnum and its members are removed"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_integer_narrowing.py::test_a_marker_kind_is_an_exact_token"
+
+[[entry]]
+kind = "field"
+old = "EngineMarker.kind"
+changed = "a MarkerKind token, default 'marker'; an ordinal is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_engine.py::test_engine_marker_kind_and_key_signature_round_trip"
+
+[[entry]]
+kind = "field"
+old = "ProjectMarker.kind"
+changed = "a MarkerKind token, default 'marker'; an ordinal is TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_project.py::test_project_marker_ex_round_trips_kind_and_key"
+
+[[entry]]
+kind = "type"
+old = "EngineGraphNodeType"
+changed = "Literal['passThrough', 'gain']; the IntEnum and its members are removed"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_engine_telemetry.py::test_realtime_engine_process_and_telemetry"
+
+[[entry]]
+kind = "type"
+old = "EngineGraphMix"
+changed = "Literal['replace', 'add']; the IntEnum and its members are removed"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_engine_telemetry.py::test_graph_connection_mix_is_replace_or_add_only"
+
+[[entry]]
+kind = "field"
+old = "EngineCaptureStatus.source"
+changed = "typed as the EngineCaptureSource Literal ('output' | 'input')"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_engine_telemetry.py::test_realtime_engine_process_and_telemetry"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.set_capture_source"
+changed = "source takes 'output' or 'input' exactly; an ordinal is TypeError"
+domain = "engine"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_engine_telemetry.py::test_capture_source_is_an_exact_token"
+
+[[entry]]
+kind = "field"
+old = "SidechainCheck.reason"
+changed = "a lowerCamel SidechainRefusal token (invalidTarget, insertOutOfRange, ...) instead of snake_case"
+domain = "engine"
+rule = "token-case"
+test = "bindings/python/tests/test_engine_routing.py::test_can_set_sidechain_reports_each_refusal_and_matches_the_setters"
+
+[[entry]]
+kind = "method"
+old = "Mixer.meter_tap"
+removed = true
+domain = "engine"
+rule = "aliases-removed"

@@ -31,7 +31,7 @@ def _snapshot(engine: RealtimeEngine) -> bytes:
                 marker.id,
                 marker.ppq,
                 marker.name,
-                int(marker.kind),
+                marker.kind,
                 marker.key_fifths,
                 marker.key_minor,
             ]

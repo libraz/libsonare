@@ -18,7 +18,6 @@ import pytest
 
 from libsonare import (
     ErrorCode,
-    MarkerKind,
     Project,
     ProjectMarker,
     SonareError,
@@ -907,7 +906,7 @@ def test_project_marker_ex_round_trips_kind_and_key() -> None:
                 0,
                 2.0,
                 "E flat major",
-                kind=MarkerKind.KEY_SIGNATURE,
+                kind="keySignature",
                 key_fifths=-3,
                 key_minor=False,
             )
@@ -921,14 +920,14 @@ def test_project_marker_ex_round_trips_kind_and_key() -> None:
 
         plain = project.marker_by_index(0)
         assert plain.id == plain_id
-        assert plain.kind == MarkerKind.MARKER
+        assert plain.kind == "marker"
         assert plain.name == "intro"
         assert plain.key_fifths == 0
         assert plain.key_minor is False
 
         key = project.marker_by_index(1)
         assert key.id == key_id
-        assert key.kind == MarkerKind.KEY_SIGNATURE
+        assert key.kind == "keySignature"
         assert key.name == "E flat major"
         assert key.key_fifths == -3
         assert key.key_minor is False

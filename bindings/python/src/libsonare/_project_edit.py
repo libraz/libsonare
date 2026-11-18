@@ -82,6 +82,9 @@ from ._runtime import (
 )
 from .types import ProjectSource
 
+if TYPE_CHECKING:
+    from ._runtime import AutomationCurve
+
 # Mirrors SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL.
 _LOOP_RECORDING_DROP_PARTIAL_TAIL = 1
 

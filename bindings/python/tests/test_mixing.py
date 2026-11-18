@@ -107,8 +107,8 @@ def test_strip_by_id_returns_index_and_raises_on_unknown(mixer) -> None:
         mixer.strip_by_id("does-not-exist")
 
 
-def test_strip_meter_and_meter_tap_return_snapshots(mixer) -> None:
-    """strip_meter / meter_tap return a MixMeterSnapshot with numeric fields."""
+def test_strip_meter_returns_snapshots(mixer) -> None:
+    """strip_meter returns a MixMeterSnapshot with numeric fields at either tap."""
     from libsonare.types import MixMeterSnapshot
 
     _process_one_block(mixer)
@@ -133,7 +133,8 @@ def test_strip_meter_and_meter_tap_return_snapshots(mixer) -> None:
     assert isinstance(snapshot.seq, int)
 
     # The tap is a token; an ordinal is refused.
-    assert isinstance(mixer.meter_tap(0, "preFader"), MixMeterSnapshot)
+    assert isinstance(mixer.strip_meter(0, "preFader"), MixMeterSnapshot)
+    assert not hasattr(mixer, "meter_tap")
     with pytest.raises(TypeError):
         mixer.strip_meter(0, 0)  # type: ignore[arg-type]
     assert isinstance(mixer.strip_meter(0, "preFader"), MixMeterSnapshot)

@@ -7,7 +7,6 @@ import json
 import pytest
 
 from libsonare import (
-    MarkerKind,
     Project,
     SonareError,
 )
@@ -324,11 +323,11 @@ def test_project_import_smf_surfaces_key_signature_marker() -> None:
     try:
         project.import_smf(_make_key_signature_smf())
         kinds = [project.marker_by_index(i).kind for i in range(project.marker_count())]
-        assert MarkerKind.KEY_SIGNATURE in kinds
+        assert "keySignature" in kinds
         key = next(
             project.marker_by_index(i)
             for i in range(project.marker_count())
-            if project.marker_by_index(i).kind == MarkerKind.KEY_SIGNATURE
+            if project.marker_by_index(i).kind == "keySignature"
         )
         assert key.key_fifths == 1
         assert key.key_minor is False

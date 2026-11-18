@@ -36,7 +36,6 @@ if TYPE_CHECKING:
     from ._types_enums import SpectralEditMode, WindowType
 
 
-
 @dataclasses.dataclass
 class SpectralRegionOp:
     """One time x frequency rectangle edit op for :func:`spectral_edit`.

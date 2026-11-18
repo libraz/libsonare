@@ -491,33 +491,32 @@ MeterTap = Literal["preFader", "postFader"]
 SendTiming = Literal["preFader", "postFader"]
 SidechainSourceKind = Literal["track", "bus"]
 
-class EngineTelemetryType(IntEnum):
-    PROCESS_BLOCK = 0
-    ERROR = 1
+EngineTelemetryType = Literal["processBlock", "error"]
 
-class EngineTelemetryError(IntEnum):
-    NONE = 0
-    COMMAND_QUEUE_OVERFLOW = 1
-    PENDING_COMMAND_OVERFLOW = 2
-    BOUNDARY_OVERFLOW = 3
-    TELEMETRY_OVERFLOW = 4
-    CAPTURE_OVERFLOW = 5
-    MAX_BLOCK_EXCEEDED = 6
-    UNKNOWN_TARGET = 7
-    NON_REALTIME_SAFE_PARAMETER = 8
-    NOT_PREPARED = 9
-    NON_QUEUEABLE_COMMAND = 10
-    AUTOMATION_BIND_TARGET_OVERFLOW = 11
-    STALE_AUTOMATION_LANES = 12
-    SMOOTHED_PARAMETER_CAPACITY = 13
-    COMMAND_BACKLOG_DEFERRED = 14
-    CLIP_PAGE_UNDERRUN = 15
-    INSERT_AUTOMATION_OVERFLOW = 16
-    MIDI_CLOCK_OVERFLOW = 17
-    METRONOME_OVERFLOW = 18
-    # Ordinal 19 is reserved by the WASM worklet protocol.
-    MAX_CHANNELS_EXCEEDED = 20
-    PARAMETER_BASE_OVERFLOW = 21
+EngineTelemetryError = Literal[
+    "none",
+    "commandQueueOverflow",
+    "pendingCommandOverflow",
+    "boundaryOverflow",
+    "telemetryOverflow",
+    "captureOverflow",
+    "maxBlockExceeded",
+    "unknownTarget",
+    "nonRealtimeSafeParameter",
+    "notPrepared",
+    "nonQueueableCommand",
+    "automationBindTargetOverflow",
+    "staleAutomationLanes",
+    "smoothedParameterCapacity",
+    "commandBacklogDeferred",
+    "clipPageUnderrun",
+    "insertAutomationOverflow",
+    "midiClockOverflow",
+    "metronomeOverflow",
+    "invalidCommand",
+    "maxChannelsExceeded",
+    "parameterBaseOverflow",
+]
 
 class Key:
     """Detected musical key.
@@ -2093,10 +2092,7 @@ class EngineTelemetry:
     @property
     def graphLatencySamplesQ8(self) -> int: ...
 
-class EngineTrackMonitorMode(IntEnum):
-    OFF = 0
-    PFL = 1
-    AFL = 2
+EngineTrackMonitorMode = Literal["off", "pfl", "afl"]
 
 class ParameterInfo:
     id: int
@@ -2130,23 +2126,29 @@ class AutomationPoint:
         curve_to_next: AutomationCurve = "linear",
     ) -> None: ...
 
-class MarkerKind(IntEnum):
-    MARKER = 0
-    TEXT = 1
-    LYRIC = 2
-    CUE_POINT = 3
-    KEY_SIGNATURE = 4
+MarkerKind = Literal["marker", "text", "lyric", "cuePoint", "keySignature"]
+SidechainRefusal = Literal[
+    "invalidTarget",
+    "insertOutOfRange",
+    "undeclaredSource",
+    "invalidSourceKind",
+    "selfKey",
+    "cycle",
+    "tableFull",
+    "planRefused",
+]
+EngineCaptureSource = Literal["output", "input"]
 
 class SidechainCheck:
     ok: bool
-    reason: str | None
-    def __init__(self, ok: bool, reason: str | None = None) -> None: ...
+    reason: SidechainRefusal | None
+    def __init__(self, ok: bool, reason: SidechainRefusal | None = None) -> None: ...
 
 class EngineMarker:
     id: int
     ppq: float
     name: str
-    kind: int
+    kind: MarkerKind
     key_fifths: int
     key_minor: bool
     def __init__(
@@ -2154,7 +2156,7 @@ class EngineMarker:
         id: int,
         ppq: float,
         name: str = "",
-        kind: int = 0,
+        kind: MarkerKind = "marker",
         key_fifths: int = 0,
         key_minor: bool = False,
     ) -> None: ...
@@ -2163,7 +2165,7 @@ class ProjectMarker:
     id: int
     ppq: float
     name: str
-    kind: int
+    kind: MarkerKind
     key_fifths: int
     key_minor: bool
     def __init__(
@@ -2171,7 +2173,7 @@ class ProjectMarker:
         id: int,
         ppq: float,
         name: str = "",
-        kind: int = 0,
+        kind: MarkerKind = "marker",
         key_fifths: int = 0,
         key_minor: bool = False,
     ) -> None: ...
@@ -2350,7 +2352,7 @@ class EngineCaptureStatus:
     overflow_count: int
     armed: bool
     punch_enabled: bool
-    source: str
+    source: EngineCaptureSource
     record_offset_samples: int
     def __init__(
         self,
@@ -2427,22 +2429,16 @@ class EngineFreezeResult:
     num_channels: int
     def __init__(self, clip_id: int, frames: int, num_channels: int) -> None: ...
 
-class EngineGraphNodeType(IntEnum):
-    PASS_THROUGH = 0
-    GAIN = 1
+EngineGraphNodeType = Literal["passThrough", "gain"]
+EngineGraphMix = Literal["replace", "add"]
+"""Mixing intent for a graph edge.
 
-class EngineGraphMix(IntEnum):
-    """Mixing intent for a graph edge.
-
-    Edges into one destination port are taken in connection order. ``REPLACE``
-    overwrites what earlier edges put on the port; ``ADD`` accumulates onto it.
-    A port's first edge initializes it either way, so the two differ only on a
-    shared port. An omitted ``mix`` is ``ADD``, unlike a zero-initialized C
-    connection, which is ``REPLACE``.
-    """
-
-    REPLACE = 0
-    ADD = 1
+Edges into one destination port are taken in connection order. ``"replace"``
+overwrites what earlier edges put on the port; ``"add"`` accumulates onto it.
+A port's first edge initializes it either way, so the two differ only on a
+shared port. An omitted ``mix`` is ``"add"``, unlike a zero-initialized C
+connection, which is ``"replace"``.
+"""
 
 class EngineGraphNode:
     id: str
@@ -2452,7 +2448,7 @@ class EngineGraphNode:
     def __init__(
         self,
         id: str,
-        type: EngineGraphNodeType = EngineGraphNodeType.PASS_THROUGH,
+        type: EngineGraphNodeType = "passThrough",
         gain_db: float = 0.0,
         num_ports: int = 0,
     ) -> None: ...
@@ -2469,7 +2465,7 @@ class EngineGraphConnection:
         source_port: int,
         dest_node: str,
         dest_port: int,
-        mix: EngineGraphMix = EngineGraphMix.ADD,
+        mix: EngineGraphMix = "add",
     ) -> None: ...
 
 class EngineGraphParameterBinding:

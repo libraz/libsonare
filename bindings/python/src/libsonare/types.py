@@ -281,6 +281,9 @@ from ._types_engine import (
     EngineBounceResult as EngineBounceResult,
 )
 from ._types_engine import (
+    EngineCaptureSource as EngineCaptureSource,
+)
+from ._types_engine import (
     EngineCaptureStatus as EngineCaptureStatus,
 )
 from ._types_engine import (
@@ -378,6 +381,9 @@ from ._types_engine import (
 )
 from ._types_engine import (
     SidechainCheck as SidechainCheck,
+)
+from ._types_engine import (
+    SidechainRefusal as SidechainRefusal,
 )
 from ._types_engine import (
     TransportState as TransportState,

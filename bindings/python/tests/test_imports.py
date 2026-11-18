@@ -30,15 +30,12 @@ def test_import_libsonare() -> None:
     import libsonare  # noqa: F401  (import is the assertion)
 
 
-def test_track_monitor_mode_is_public_enum() -> None:
-    from enum import IntEnum
+def test_track_monitor_mode_is_a_public_literal() -> None:
+    from typing import get_args
 
     import libsonare
 
-    assert issubclass(libsonare.EngineTrackMonitorMode, IntEnum)
-    assert libsonare.EngineTrackMonitorMode.OFF.value == 0
-    assert libsonare.EngineTrackMonitorMode.PFL.value == 1
-    assert libsonare.EngineTrackMonitorMode.AFL.value == 2
+    assert get_args(libsonare.EngineTrackMonitorMode) == ("off", "pfl", "afl")
     assert "EngineTrackMonitorMode" in libsonare.__all__
 
 

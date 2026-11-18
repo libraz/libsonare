@@ -34,26 +34,16 @@ from ._runtime import (
     _to_c_uint32,
     _utf8_arg,
 )
-from ._types_engine import SidechainCheck
-
-_SIDECHAIN_REFUSALS = (
-    None,
-    "invalid_target",
-    "insert_out_of_range",
-    "undeclared_source",
-    "invalid_source_kind",
-    "self_key",
-    "cycle",
-    "table_full",
-    "plan_refused",
-)
+from ._types_engine import _SIDECHAIN_REFUSALS, SidechainCheck, SidechainRefusal
 
 
 def _sidechain_check(refusal: int) -> SidechainCheck:
-    if not 0 <= refusal < len(_SIDECHAIN_REFUSALS):
+    # Code 0 is acceptance; refusal codes follow in token order.
+    if refusal == 0:
+        return SidechainCheck(ok=True, reason=None)
+    if not 1 <= refusal <= len(_SIDECHAIN_REFUSALS):
         raise _unknown_error(f"unknown sidechain refusal code {refusal}")
-    reason = _SIDECHAIN_REFUSALS[refusal]
-    return SidechainCheck(ok=reason is None, reason=reason)
+    return SidechainCheck(ok=False, reason=cast(SidechainRefusal, _SIDECHAIN_REFUSALS[refusal - 1]))
 
 
 def _marshal_sends(sends: Sequence[Mapping[str, object]]) -> ctypes.Array[SonareEngineTrackSend]:
@@ -73,9 +63,7 @@ def _marshal_sends(sends: Sequence[Mapping[str, object]]) -> ctypes.Array[Sonare
         # prior behavior.
         timing = send.get("timing", send.get("send_timing", send.get("sendTiming")))
         send_array[send_index].send_timing = (
-            _send_timing_value(cast(SendTiming, timing))
-            if timing is not None
-            else 0
+            _send_timing_value(cast(SendTiming, timing)) if timing is not None else 0
         )
     return send_array
 
@@ -326,9 +314,7 @@ class _EngineMixingMixin:
                     # keep the prior behavior.
                     timing = send.get("timing", send.get("send_timing", send.get("sendTiming")))
                     send_array[send_index].send_timing = (
-                        _send_timing_value(cast(SendTiming, timing))
-                        if timing is not None
-                        else 0
+                        _send_timing_value(cast(SendTiming, timing)) if timing is not None else 0
                     )
                 raw[i].sends = send_array
                 raw[i].send_count = len(sends)

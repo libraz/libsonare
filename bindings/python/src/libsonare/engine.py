@@ -7,9 +7,6 @@ from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from ._engine_conversions import (
-    _CAPTURE_SOURCE_VALUES as _CAPTURE_SOURCE_VALUES,
-)
-from ._engine_conversions import (
     _band_json_arg as _band_json_arg,
 )
 from ._engine_conversions import (
@@ -823,14 +820,13 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
     def set_track_monitor_mode(
         self,
         lane_index: int,
-        mode: EngineTrackMonitorMode | str | int,
+        mode: EngineTrackMonitorMode,
         render_frame: int | None = None,
     ) -> None:
         """Schedule a PFL/AFL monitor tap for a configured track lane.
 
-        ``mode`` accepts :class:`EngineTrackMonitorMode`, its integer ordinal,
-        or the case-insensitive ASCII names ``"off"``, ``"pfl"``, and
-        ``"afl"``. Unknown lane indices are reported asynchronously by engine
+        ``mode`` is ``"off"``, ``"pfl"`` or ``"afl"``. Unknown lane indices
+        are reported asynchronously by engine
         telemetry, matching the native command contract.
 
         ``process`` fold the armed cue into the program

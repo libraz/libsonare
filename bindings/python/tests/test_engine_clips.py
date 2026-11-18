@@ -11,8 +11,6 @@ import pytest
 from libsonare import (
     ClipPageProvider,
     EngineClip,
-    EngineTelemetryError,
-    EngineTelemetryType,
     FileClipPageProvider,
     RealtimeEngine,
     SonareError,
@@ -149,9 +147,7 @@ def test_engine_streams_paged_clip_provider_and_drains_requests() -> None:
         assert request.channel == 0
         assert request.sample == 4
         assert any(
-            record.type == EngineTelemetryType.ERROR
-            and record.error == EngineTelemetryError.CLIP_PAGE_UNDERRUN
-            and record.value == 123
+            record.type == "error" and record.error == "clipPageUnderrun" and record.value == 123
             for record in engine.drain_telemetry()
         )
 

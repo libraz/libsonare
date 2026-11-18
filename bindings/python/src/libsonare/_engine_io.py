@@ -74,6 +74,7 @@ from ._runtime import (
     _to_c_uint,
     _validate_c_int_field,
 )
+from ._types_engine import EngineCaptureSource
 
 
 def _plane_arrays(arrays: Sequence[Any], frame_count: int) -> list[np.ndarray]:
@@ -151,7 +152,8 @@ class _EngineIoMixin:
             )
         )
 
-    def set_capture_source(self, source: str | int) -> None:
+    def set_capture_source(self, source: EngineCaptureSource) -> None:
+        """Choose what the recording sink captures: ``\"output\"`` or ``\"input\"``."""
         _check(
             _get_lib().sonare_engine_set_capture_source(
                 self._require_handle(), _to_c_int(_capture_source_value(source), "source")
