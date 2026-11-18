@@ -10,8 +10,10 @@ from __future__ import annotations
 import dataclasses
 import importlib.util
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 _SPEC = importlib.util.spec_from_file_location(
     "check_api_conventions", Path(__file__).resolve().parent / "check_api_conventions.py"
@@ -329,6 +331,64 @@ class MidiModuleFunctionsRule(unittest.TestCase):
         )
         verdict = run("midi-module-functions", [*self.CLEAN, planted])
         self.assertEqual([f.key for f in verdict.violations], ["node:midiCc"])
+
+
+class ConstructionRule(unittest.TestCase):
+    CLEAN = [
+        js_class("wasm", "Mixer", param_types=["MixerConfig"]),
+        {**js_class("wasm", "SonareError", param_types=["code", "message"]), "bases": ["Error"]},
+        {
+            **function("wasm", "Node.create", "Promise<Node>"),
+            "kind": "method",
+            "static": True,
+            "member": "create",
+        },
+    ]
+
+    def judge(self, records):
+        return run("construction", records)
+
+    def test_clean_surface_passes(self) -> None:
+        verdict = self.judge(self.CLEAN)
+        self.assertEqual(verdict.read, 2)
+        self.assertFalse(verdict.failed)
+
+    def test_positional_constructor_is_named(self) -> None:
+        planted = js_class("node", "Engine", param_types=["number", "number"])
+        verdict = self.judge([*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["node:Engine"])
+
+    def test_synchronous_create_is_named(self) -> None:
+        planted = {
+            **function("node", "Project.create", "Project"),
+            "kind": "method",
+            "static": True,
+            "member": "create",
+        }
+        verdict = self.judge([*self.CLEAN, planted])
+        self.assertEqual([f.key for f in verdict.violations], ["node:Project.create"])
+
+    def test_python_config_parameter_is_named(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "m.py"
+            src.write_text(
+                "class Good:\n    def __init__(self, *, rate: int) -> None: ...\n\nclass Bad:\n    def __init__(self, config) -> None: ...\n"
+            )
+            records = [
+                {
+                    "surface": "python",
+                    "kind": "class",
+                    "name": n,
+                    "owner": "",
+                    "member": "",
+                    "file": "m.py",
+                }
+                for n in ("Good", "Bad")
+            ]
+            with mock.patch.object(check, "ROOT", Path(tmp)):
+                verdict = self.judge(records)
+        self.assertEqual(verdict.read, 2)
+        self.assertEqual([f.key for f in verdict.violations], ["python:Bad"])
 
 
 class Framework(unittest.TestCase):

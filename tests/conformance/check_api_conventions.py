@@ -20,6 +20,7 @@ Run ``python3 tests/conformance/check_api_conventions.py [--rule NAME]``.
 from __future__ import annotations
 
 import argparse
+import ast
 import dataclasses
 import json
 import os
@@ -299,6 +300,70 @@ def _midi_function_violation(r: dict) -> str | None:
     return None
 
 
+_PY_CONFIG_PARAMS = ("options", "config", "overrides")
+
+
+def _python_init_params(path: Path, cls: str) -> list[str] | None:
+    """Parameter names of ``cls.__init__`` in a Python source file, or None when it has none."""
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError):
+        return None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == cls:
+            for item in node.body:
+                if isinstance(item, ast.FunctionDef) and item.name == "__init__":
+                    a = item.args
+                    names = [x.arg for x in (*a.posonlyargs, *a.args, *a.kwonlyargs)]
+                    return [
+                        *names,
+                        *([a.vararg.arg] if a.vararg else []),
+                        *([a.kwarg.arg] if a.kwarg else []),
+                    ]
+    return None
+
+
+def _construction_records(records: list[dict]) -> list[dict]:
+    out: list[dict] = []
+    for r in records:
+        if r["kind"] == "class" and _js(r) and not r.get("ctor_private"):
+            # An Error subclass keeps the platform Error constructor shape.
+            if "Error" in (r.get("bases") or []):
+                continue
+            params = [
+                p["name"] for sig in (r.get("sigs") or [{}])[:1] for p in sig.get("params", [])
+            ]
+            out.append(
+                {"surface": r["surface"], "kind": "js-ctor", "name": r["name"], "params": params}
+            )
+        elif r["kind"] == "method" and _js(r) and r.get("static") and r.get("member") == "create":
+            out.append(
+                {
+                    "surface": r["surface"],
+                    "kind": "js-create",
+                    "name": r["name"],
+                    "returns": _returns(r) or "",
+                }
+            )
+        elif r["kind"] == "class" and r["surface"] == "python":
+            params = _python_init_params(ROOT / r["file"], r["name"])
+            if params is not None:
+                out.append(
+                    {"surface": "python", "kind": "py-ctor", "name": r["name"], "params": params}
+                )
+    return out
+
+
+def _construction_violation(r: dict) -> str | None:
+    if r["kind"] == "js-ctor" and len(r["params"]) > 1:
+        return "a synchronous constructor takes one config object"
+    if r["kind"] == "js-create" and not r["returns"].startswith("Promise<"):
+        return "static create() exists only for constructions that return a Promise"
+    if r["kind"] == "py-ctor" and any(p in _PY_CONFIG_PARAMS for p in r["params"]):
+        return "a Python constructor takes keyword arguments, not an options or config object"
+    return None
+
+
 RULES: list[Rule] = [
     Rule(
         name="getters",
@@ -408,6 +473,29 @@ RULES: list[Rule] = [
             f"{s}:{f}": "throw RangeError for an unmappable input, or state in the rule why the absent result stays"
             for s in ("node", "wasm")
             for f in ("midiCcLearn", "midiCcToBreakpoint", "midiParamToCc")
+        },
+    ),
+    Rule(
+        name="construction",
+        summary="sync construction is new X(config) or keyword arguments; create() is async",
+        population=lambda r: r["kind"] in ("js-ctor", "js-create", "py-ctor"),
+        violation=_construction_violation,
+        derive=_construction_records,
+        pending={
+            "python:PlaybackRenderer": "take the renderer config as keyword arguments",
+            "python:StreamAnalyzer": "take the stream config as keyword arguments",
+            "python:StreamingMasteringChain": "take the chain config as keyword arguments",
+            "python:VocalEditSession": "drop options= and **option_overrides, take keyword arguments",
+            "wasm:ClipPageStreamer": "take one config object holding the engine",
+            "wasm:SonarePlaybackWorkletProcessor": "fold port into the options object",
+            "wasm:SonareRealtimeEngineWorkletProcessor": "fold transport into the options object",
+            "wasm:SonareStreamAnalyzerWorkletProcessor": "fold port into the options object",
+            "wasm:SonareWorkletProcessor": "fold transport into the options object",
+            "wasm:VocalEditDraft": "declare the handle constructor private, as Node does",
+            "wasm:VocalEditSession": "declare the handle constructor private, as Node does",
+            "wasm:VocalRenderSnapshot": "declare the handle constructor private, as Node does",
+            "wasm:VocalEditWorkerDraft": "declare the guarded constructor private",
+            "wasm:VocalEditWorkerSession": "declare the guarded constructor private",
         },
     ),
 ]
