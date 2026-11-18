@@ -287,11 +287,9 @@ function clipFromNative(raw: Record<string, unknown>): ProjectClip {
 }
 
 function sourceFromNative(raw: Record<string, unknown>): ProjectSource {
-  const { channelCount, kind, ...rest } = raw;
   return {
-    ...rest,
-    kind: tokenName(SOURCE_KIND, kind as number, 'source kind'),
-    numChannels: channelCount,
+    ...raw,
+    kind: tokenName(SOURCE_KIND, raw.kind as number, 'source kind'),
   } as ProjectSource;
 }
 

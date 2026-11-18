@@ -212,8 +212,7 @@ describe('edits', () => {
     });
   });
 
-  // Pending until set-source-audio fills the channel count from the attached audio; then fold this into the case above.
-  it.fails('reports the channel count of attached source audio', () => {
+  it('reports the channel count of attached source audio', () => {
     withProject((project) => {
       addUriClip(project);
       const [sourceId] = project.unresolvedAudioSourceIds();

@@ -175,7 +175,7 @@ export interface NativeProjectClip {
 export interface NativeProjectSource {
   id: number;
   kind: number;
-  channelCount: number;
+  numChannels: number;
   storageHandleId: number;
   sampleRateHint: number;
   nameOrUri: string;
@@ -1011,10 +1011,10 @@ export function projectBounceResult(
   return { channels: deinterleavePlanes(interleaved, numChannels), sampleRate, numChannels };
 }
 
-/** A native source with its kind as a token and `channelCount` under its public name. */
+/** A native source with its kind as a token. */
 export function projectSourceFromNative(native: NativeProjectSource): ProjectSource {
-  const { channelCount, kind, ...rest } = native;
-  return { ...rest, kind: projectSourceKindName(kind), numChannels: channelCount };
+  const { kind, ...rest } = native;
+  return { ...rest, kind: projectSourceKindName(kind) };
 }
 
 /** The native tempo candidate with the meter's first segment under its public name. */

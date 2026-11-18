@@ -1675,6 +1675,56 @@ TEST_CASE("C-ABI set_source_audio preserves PCM ownership through undo and redo"
   sonare_project_destroy(project);
 }
 
+TEST_CASE("C-ABI set_source_audio moves the source channel and rate hints with the content",
+          "[project][c-abi-edit]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  SonareProjectTrackDesc track_desc{};
+  track_desc.kind = SONARE_TRACK_AUDIO;
+  uint32_t track_id = 0;
+  REQUIRE(sonare_project_add_track(project, &track_desc, &track_id) == SONARE_OK);
+
+  const std::vector<float> mono = {0.25f, -0.5f, 0.75f};
+  SonareProjectClipDesc clip_desc{};
+  clip_desc.track_id = track_id;
+  clip_desc.length_ppq = 1.0;
+  clip_desc.gain = 1.0f;
+  clip_desc.audio_interleaved = mono.data();
+  clip_desc.audio_frames = static_cast<int64_t>(mono.size());
+  clip_desc.audio_channels = 1;
+  clip_desc.audio_sample_rate = 48000;
+  uint32_t clip_id = 0;
+  REQUIRE(sonare_project_add_clip(project, &clip_desc, &clip_id) == SONARE_OK);
+  const uint32_t source_id = project->history.project().find_clip(clip_id)->source_id;
+
+  const auto source_info = [&]() {
+    SonareProjectSource info{};
+    REQUIRE(sonare_project_source_by_index(project, 0, &info) == SONARE_OK);
+    REQUIRE(info.id == source_id);
+    return info;
+  };
+  REQUIRE(source_info().num_channels == 1u);
+  REQUIRE(source_info().sample_rate_hint == 48000.0);
+
+  const std::vector<float> stereo = {0.1f, -0.1f, 0.2f, -0.2f};
+  REQUIRE(sonare_project_set_source_audio(project, source_id, stereo.data(), 2, 2, 44100) ==
+          SONARE_OK);
+  REQUIRE(source_info().num_channels == 2u);
+  REQUIRE(source_info().sample_rate_hint == 44100.0);
+  REQUIRE(project->audio.sources.at(source_id).channels.size() == 2u);
+
+  // One undo step restores the content and the hints together.
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(source_info().num_channels == 1u);
+  REQUIRE(source_info().sample_rate_hint == 48000.0);
+  REQUIRE(project->audio.sources.at(source_id).channels.front() == mono);
+  REQUIRE(sonare_project_redo(project) == SONARE_OK);
+  REQUIRE(source_info().num_channels == 2u);
+  REQUIRE(source_info().sample_rate_hint == 44100.0);
+
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("C ABI take alignment produces anchors the project warp map accepts", "[c_api][mir]") {
   // The composition this entry point exists for. The core alignment's own anchors
   // are monotonic but not strictly increasing, and sonare_project_set_warp_map

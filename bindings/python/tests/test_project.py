@@ -1045,3 +1045,22 @@ def test_tempo_options_reject_an_unusable_value() -> None:
             project.analyze_tempo(audio, 22050, ramp_threshold=-1.0)
     finally:
         project.close()
+
+
+def test_replacing_source_audio_carries_its_shape_and_undo_restores_it() -> None:
+    project = Project()
+    try:
+        track_id = project.add_track("audio", "lead")
+        project.add_clip(track_id, 0.0, 1.0, source_uri="asset://take.wav")
+        source_id = project.source_by_index(0).id
+        project.set_source_audio(source_id, np.full(480, 0.25, dtype=np.float32), 1, 48000)
+        mono = project.source_by_index(0)
+        assert (mono.num_channels, mono.sample_rate_hint) == (1, 48000.0)
+        project.set_source_audio(source_id, np.full(2 * 441, 0.25, dtype=np.float32), 2, 44100)
+        stereo = project.source_by_index(0)
+        assert (stereo.num_channels, stereo.sample_rate_hint) == (2, 44100.0)
+        project.undo()
+        restored = project.source_by_index(0)
+        assert (restored.num_channels, restored.sample_rate_hint) == (1, 48000.0)
+    finally:
+        project.close()

@@ -532,16 +532,27 @@ SonareError sonare_project_set_source_audio(SonareProject* project, uint32_t sou
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   const arr::ClipSource* source = project->history.project().find_source(source_id);
-  if (source == nullptr || !std::holds_alternative<arr::AudioSourceRef>(*source)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  const auto* audio = source ? std::get_if<arr::AudioSourceRef>(source) : nullptr;
+  if (audio == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   arr::AudioSourceSamples contents;
   contents.sample_rate = static_cast<double>(sample_rate);
   contents.channels = deinterleave(interleaved, frames, channels);
-  auto command =
+  auto content =
       make_replace_audio_content_command(&project->audio, source_id, std::move(contents));
-  if (!command || !project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  if (!content) return SONARE_ERROR_INVALID_STATE;
+  // The source's channel and rate hints describe the content, so they move with
+  // it in the same undoable step.
+  arr::AudioSourceRef replacement = *audio;
+  replacement.channel_count = static_cast<uint32_t>(channels);
+  replacement.sample_rate_hint = static_cast<double>(sample_rate);
+  std::vector<arr::EditCommandPtr> commands;
+  commands.push_back(std::move(content));
+  commands.push_back(
+      std::make_unique<arr::ReplaceSource>(source_id, arr::ClipSource{std::move(replacement)}));
+  if (!project->history.apply_transaction(std::move(commands))) {
+    return SONARE_ERROR_INVALID_STATE;
+  }
   return SONARE_OK;
   SONARE_C_CATCH
 #else

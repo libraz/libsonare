@@ -1160,7 +1160,7 @@ export interface WasmProjectClip {
 export interface WasmProjectSource {
   id: number;
   kind: number;
-  channelCount: number;
+  numChannels: number;
   storageHandleId: number;
   sampleRateHint: number;
   nameOrUri: string;

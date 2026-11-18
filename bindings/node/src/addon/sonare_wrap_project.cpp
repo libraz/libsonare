@@ -51,7 +51,7 @@ Napi::Value BuildProjectSource(Napi::Env env, const SonareProject* project,
   Napi::Object out = Napi::Object::New(env);
   out.Set("id", source.id);
   out.Set("kind", source.kind);
-  out.Set("channelCount", source.num_channels);
+  out.Set("numChannels", source.num_channels);
   out.Set("storageHandleId", source.storage_handle_id);
   out.Set("sampleRateHint", source.sample_rate_hint);
   out.Set("nameOrUri", uri.value != nullptr ? uri.value : source.name_or_uri);

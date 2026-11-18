@@ -201,7 +201,9 @@ SonareError sonare_project_unresolved_audio_source_id_by_index(const SonareProje
 /// @brief Registers decoded interleaved PCM for an existing audio source.
 ///
 /// The edit is undoable. @p frames must be positive, @p channels positive, and
-/// @p sample_rate within the supported project audio range.
+/// @p sample_rate within the supported project audio range. The source's
+/// num_channels and sample_rate_hint are set from @p channels and
+/// @p sample_rate in the same undo step.
 SonareError sonare_project_set_source_audio(SonareProject* project, uint32_t source_id,
                                             const float* interleaved, int64_t frames, int channels,
                                             int sample_rate);
