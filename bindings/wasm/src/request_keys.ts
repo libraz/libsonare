@@ -226,6 +226,7 @@ import type { RoomPlacement, SynthesizeRirRequest } from './public_types_acousti
 import type {
   CaptureOptions,
   CapturePunch,
+  ClipPageProviderOptions,
   EngineAutomationPoint,
   EngineLoop,
   EngineMetronomeConfig,
@@ -2047,6 +2048,11 @@ const PlaybackRendererOptionsKeys = keysOf<PlaybackRendererOptions>()([
   'sampleRate',
   'maxBlockSize',
 ]);
+const ClipPageProviderOptionsKeys = keysOf<ClipPageProviderOptions>()([
+  'numChannels',
+  'numSamples',
+  'pageFrames',
+]);
 const PlaybackLoudnessMeterOptionsKeys = keysOf<PlaybackLoudnessMeterOptions>()([
   'numChannels',
   'sampleRate',
@@ -2899,6 +2905,7 @@ export const REQUEST_SHAPES = {
     nested: { config: PlaybackRendererConfigKeys },
   },
   PlaybackLoudnessMeter: { keys: PlaybackLoudnessMeterOptionsKeys },
+  ClipPageProvider: { keys: ClipPageProviderOptionsKeys },
   'Mixer.fromJson': { keys: MixerJsonOptionsRequestKeys },
   configureMeter: { keys: ConfigureMeterRequestKeys },
   setPolarityInvert: { keys: SetPolarityInvertRequestKeys },

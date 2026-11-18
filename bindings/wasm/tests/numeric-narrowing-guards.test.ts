@@ -130,33 +130,19 @@ describe('clip fields refuse a handle or an ordinal that is not whole', () => {
     }
   };
 
-  it('refuses a fractional page-provider handle instead of binding a real provider', () => {
-    const withProvider = (pageProvider: number): number => {
+  it('refuses a page provider that is not a ClipPageProvider instance', () => {
+    const withProvider = (pageProvider: unknown): void => {
       const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
       try {
-        const first = engine.createClipPageProvider(1, 128, 128);
-        const second = engine.createClipPageProvider(1, 128, 128);
-        engine.supplyClipPage(first.id, 0, [new Float32Array(128).fill(0.25)]);
-        engine.supplyClipPage(second.id, 0, [new Float32Array(128).fill(-0.5)]);
-        engine.setClips([{ id: 1, startPpq: 0, pageProvider, lengthSamples: 128 }]);
-        engine.play();
-        return engine.process([new Float32Array(128)])[0][0];
+        engine.setClips([
+          { id: 1, startPpq: 0, pageProvider: pageProvider as never, lengthSamples: 128 },
+        ]);
       } finally {
         engine.destroy();
       }
     };
-    // The control: the two handles carry different audio.
-    expect(withProvider(1)).toBeCloseTo(0.25, 4);
-    expect(withProvider(2)).toBeCloseTo(-0.5, 4);
-    // 1.5 and 2.9 used to resolve onto those same two providers.
-    expectRangeRefusal(() => withProvider(1.5));
-    expectRangeRefusal(() => withProvider(2.9));
-    for (const value of [...NON_FINITE, ...SATURATING]) {
-      expectRangeRefusal(() => withProvider(value));
-    }
-    // A whole number that names no live provider is refused as an unknown id.
-    for (const value of [0, -1, 3]) {
-      expectRangeRefusal(() => withProvider(value));
+    for (const value of [1, 1.5, 0, -1, ...NON_FINITE, ...SATURATING, { id: 1 }]) {
+      expect(() => withProvider(value)).toThrow(/must be a ClipPageProvider instance/);
     }
   });
 

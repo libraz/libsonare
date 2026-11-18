@@ -5,7 +5,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { ErrorCode, init, isSonareError, RealtimeEngine } from '../dist/index.js';
+import { ClipPageProvider, ErrorCode, init, isSonareError, RealtimeEngine } from '../dist/index.js';
 import { expectArgumentRefusal } from './_helpers';
 
 describe('Sonare WASM Module', () => {
@@ -373,9 +373,14 @@ describe('Sonare WASM Module', () => {
       shortTempoEngine.destroy();
 
       const pagedEngine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
-      expect(() => pagedEngine.createClipPageProvider(1, 1_000_000_000_000, 1)).toThrow();
-      expect(() => pagedEngine.createClipPageProvider(65, 8, 4)).toThrow();
-      const provider = pagedEngine.createClipPageProvider(1, 8, 4);
+      expect(
+        () =>
+          new ClipPageProvider({ numChannels: 1, numSamples: 1_000_000_000_000, pageFrames: 1 }),
+      ).toThrow();
+      expect(
+        () => new ClipPageProvider({ numChannels: 65, numSamples: 8, pageFrames: 4 }),
+      ).toThrow();
+      const provider = new ClipPageProvider({ numChannels: 1, numSamples: 8, pageFrames: 4 });
       expect(() => provider.supply(0, [new Float32Array([1, 2])])).toThrow();
       expect(() =>
         pagedEngine.setClips([
@@ -418,12 +423,7 @@ describe('Sonare WASM Module', () => {
       pagedEngine.seekSample(0);
       const secondPaged = pagedEngine.process([new Float32Array(8)]);
       expect(Array.from(secondPaged[0])).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
-      expect(() => pagedEngine.clearClipPage(999, 0)).toThrow();
       provider.destroy();
-      expect(() => pagedEngine.clearClipPage(provider.id, 0)).toThrow();
-      const recycledProvider = pagedEngine.createClipPageProvider(1, 8, 4);
-      expect(recycledProvider.id).toBe(provider.id);
-      recycledProvider.destroy();
       pagedEngine.destroy();
 
       engine.armCapture({ armed: true });
@@ -1172,5 +1172,79 @@ describe('Sonare WASM Module', () => {
         engine.destroy();
       }
     });
+  });
+});
+
+describe('ClipPageProvider', () => {
+  beforeAll(async () => {
+    await init();
+  });
+
+  const make = () => new ClipPageProvider({ numChannels: 1, numSamples: 8, pageFrames: 4 });
+  const invalidState = (call: () => unknown) => {
+    try {
+      call();
+    } catch (error) {
+      expect(isSonareError(error)).toBe(true);
+      expect((error as { code: unknown }).code).toBe(ErrorCode.InvalidState);
+      return (error as Error).message;
+    }
+    throw new Error('expected the call to throw');
+  };
+
+  it('refuses an unknown option key by name', () => {
+    expect(
+      () =>
+        new ClipPageProvider({ numChannels: 1, numSamples: 8, pageFrames: 4, bogus: 1 } as never),
+    ).toThrow(TypeError);
+    expect(
+      () =>
+        new ClipPageProvider({ numChannels: 1, numSamples: 8, pageFrames: 4, bogus: 1 } as never),
+    ).toThrow(/bogus/);
+  });
+
+  it('refuses positional arguments', () => {
+    expect(
+      () => new (ClipPageProvider as unknown as new (...args: number[]) => unknown)(2, 1000, 256),
+    ).toThrow(TypeError);
+  });
+
+  it('refuses a dimension that is not positive', () => {
+    for (const bad of [
+      { numChannels: 0, numSamples: 8, pageFrames: 4 },
+      { numChannels: 1, numSamples: 0, pageFrames: 4 },
+      { numChannels: 1, numSamples: 8, pageFrames: 0 },
+      { numChannels: 1, numSamples: 8, pageFrames: -4 },
+    ]) {
+      expect(() => new ClipPageProvider(bad)).toThrow(RangeError);
+    }
+  });
+
+  it('refuses supply and clear after destroy, and destroys twice', () => {
+    const provider = make();
+    provider.supply(0, [new Float32Array([1, 2, 3, 4])]);
+    provider.clear(0);
+    provider.destroy();
+    expect(() => provider.destroy()).not.toThrow();
+    expect(invalidState(() => provider.supply(0, [new Float32Array(4)]))).toMatch(/destroyed/);
+    expect(invalidState(() => provider.clear(0))).toMatch(/destroyed/);
+  });
+
+  it('refuses a clip whose page provider is not an instance or was destroyed', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
+    const destroyed = make();
+    destroyed.destroy();
+    try {
+      for (const call of [
+        (pageProvider: unknown) => engine.setClips([{ id: 1, startPpq: 0, pageProvider } as never]),
+        (pageProvider: unknown) => engine.upsertClip({ id: 1, startPpq: 0, pageProvider } as never),
+      ]) {
+        expect(() => call(3)).toThrow(TypeError);
+        expect(() => call(3)).toThrow(/must be a ClipPageProvider instance/);
+        expect(invalidState(() => call(destroyed))).toMatch(/has been destroyed/);
+      }
+    } finally {
+      engine.destroy();
+    }
   });
 });

@@ -1,7 +1,7 @@
 import type { ClipPageSampleRequest } from './clip_page_streamer.js';
 import { ErrorCode, SonareError } from './errors.js';
 import { releasedHandleError } from './internal/handle_guard.js';
-import type { ClipPageProvider, RealtimeEngine } from './realtime_engine.js';
+import { ClipPageProvider } from './realtime_engine.js';
 
 /** Source file and paging layout of an OPFS-backed clip page provider. */
 export interface OpfsClipPageProviderOptions {
@@ -216,25 +216,28 @@ export function createOpfsClipPageWorker(): Worker {
 }
 
 /**
- * Create a page provider on `engine` whose pages are read from an OPFS file.
+ * Create a page provider whose pages are read from an OPFS file.
  *
- * @param engine - Engine the provider is created on.
  * @param options - File location and paging layout.
  * @returns The binding; `close()` it when the clip is no longer scheduled.
  * @throws RangeError when `numChannels`, `numSamples` or `pageFrames` is not positive.
  */
 export function createOpfsClipPageProvider(
-  engine: RealtimeEngine,
   options: OpfsClipPageProviderOptions,
 ): OpfsClipPageProviderBinding {
-  if (options.numChannels <= 0 || options.numSamples <= 0 || options.pageFrames <= 0) {
-    throw new RangeError('numChannels, numSamples, and pageFrames must be positive');
-  }
-  const provider = engine.createClipPageProvider(
-    options.numChannels,
-    options.numSamples,
-    options.pageFrames,
-  );
+  return openOpfsClipPageProvider(ClipPageProvider, options);
+}
+
+/** {@link createOpfsClipPageProvider} with the provider built from `providerClass`. */
+export function openOpfsClipPageProvider(
+  providerClass: typeof ClipPageProvider,
+  options: OpfsClipPageProviderOptions,
+): OpfsClipPageProviderBinding {
+  const provider = new providerClass({
+    numChannels: options.numChannels,
+    numSamples: options.numSamples,
+    pageFrames: options.pageFrames,
+  });
   const worker = options.worker ?? createOpfsClipPageWorker();
   const heldKey = opfsClipPathKey(options.path);
   heldOpfsClipPaths.set(heldKey, (heldOpfsClipPaths.get(heldKey) ?? 0) + 1);

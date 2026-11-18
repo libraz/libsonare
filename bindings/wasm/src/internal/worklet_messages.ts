@@ -202,6 +202,9 @@ export function resolveMetronomeConfig(config: EngineMetronomeConfig): ResolvedM
   return resolved;
 }
 
+/** A clip as posted to the processor; a page provider never crosses the port. */
+export type SonareEngineSyncedClip = Omit<EngineClip, 'pageProvider'>;
+
 // Out-of-band control messages posted from the main-thread SonareEngine facade
 // to the worklet engine processor over node.port. Unlike SonareEngineCommandRecord
 // (a small POD POSTed/ringed every block) these carry bulk/structured payloads
@@ -211,12 +214,12 @@ export function resolveMetronomeConfig(config: EngineMetronomeConfig): ResolvedM
 // allocation and publish bounded snapshots for process() to consume.
 export interface SonareEngineSyncClipsMessage {
   type: 'syncClips';
-  clips: EngineClip[];
+  clips: SonareEngineSyncedClip[];
 }
 
 export interface SonareEngineSyncClipsDeltaMessage {
   type: 'syncClipsDelta';
-  upserts: EngineClip[];
+  upserts: SonareEngineSyncedClip[];
   removeIds: number[];
 }
 
@@ -230,7 +233,7 @@ export interface SonareEngineSyncClipPageProviderMessage {
    */
   streamKey?: number;
   /** Omitted when an OPFS stream is primed before its clip is scheduled. */
-  clip?: EngineClip;
+  clip?: SonareEngineSyncedClip;
   numChannels: number;
   numSamples: number;
   pageFrames: number;
@@ -295,7 +298,7 @@ export interface SonareEngineSyncClipPageCommitMessage {
    * schedule was known. The original pre-baked push path supplies it on the
    * provider message instead.
    */
-  clip?: EngineClip;
+  clip?: SonareEngineSyncedClip;
 }
 
 export interface SonareEngineSyncMidiClipsMessage {

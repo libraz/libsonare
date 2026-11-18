@@ -5,6 +5,7 @@ import type {
   SidechainSourceKind,
   TimeSignature,
 } from './public_types.js';
+import type { ClipPageProvider } from './realtime_engine.js';
 
 /** Construction and `prepare` settings of {@link RealtimeEngine}. */
 export interface RealtimeEngineConfig {
@@ -82,6 +83,16 @@ export interface ExternalMidiEvent {
   bytes: Uint8Array;
 }
 
+/** Size and paging of a {@link ClipPageProvider}. */
+export interface ClipPageProviderOptions {
+  /** Channel count; must be positive. */
+  numChannels: number;
+  /** Source length in frames; must be positive. */
+  numSamples: number;
+  /** Frames per page; must be positive. */
+  pageFrames: number;
+}
+
 /** A clip of audio placed on the engine timeline. */
 export interface EngineClip {
   id?: number;
@@ -98,7 +109,7 @@ export interface EngineClip {
   /** Default `'off'`. */
   warpMode?: EngineWarpMode;
   warpAnchors?: Array<{ warpSample: number; sourceSample: number }>;
-  pageProvider?: number | { readonly id: number };
+  pageProvider?: ClipPageProvider;
 }
 
 /** A parameter registered with {@link RealtimeEngine.addParameter}. */

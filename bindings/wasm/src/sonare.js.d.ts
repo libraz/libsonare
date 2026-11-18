@@ -1041,7 +1041,8 @@ export interface WasmEngineClip {
   fadeOutSamples?: number;
   warpMode?: 'off' | 'repitch' | 'tempo-sync' | 'time-stretch' | 0 | 1 | 2 | 3;
   warpAnchors?: Array<{ warpSample: number; sourceSample: number }>;
-  pageProvider?: number | { readonly id: number };
+  /** The provider instance that serves this clip's pages. */
+  pageProvider?: WasmClipPageProvider;
 }
 
 export interface WasmEngineTrackSend {
@@ -1078,6 +1079,14 @@ export interface WasmEngineBus {
   outputBusId?: number;
   /** Sends to other buses, in the same shape as a track lane's sends. */
   sends?: WasmEngineTrackSend[];
+}
+
+/** Embind clip page store, shared by every clip whose `pageProvider` names it. */
+export interface WasmClipPageProvider {
+  supply: (pageIndex: number, channels: Float32Array[]) => void;
+  clear: (pageIndex: number) => void;
+  delete: () => void;
+  isDeleted: () => boolean;
 }
 
 export interface WasmClipPageRequest {
@@ -1612,10 +1621,6 @@ export interface WasmRealtimeEngine {
   setBusStripPanMode: (busId: number, panMode: number) => void;
   setBusStripDualPan: (busId: number, leftPan: number, rightPan: number) => void;
   setTrackStripChannelDelaySamples: (trackId: number, delaySamples: number) => void;
-  createClipPageProvider: (numChannels: number, numSamples: number, pageFrames: number) => number;
-  supplyClipPage: (providerId: number, pageIndex: number, channels: Float32Array[]) => void;
-  clearClipPage: (providerId: number, pageIndex: number) => void;
-  destroyClipPageProvider: (providerId: number) => void;
   popClipPageRequest: () => WasmClipPageRequest | null;
   popClipPageRequestToScratch: () => boolean;
   clipPageRequestScratchClipId: () => number;
@@ -3734,6 +3739,12 @@ export interface SonareModule {
     window: number,
     outputFormat: number,
   ) => WasmStreamAnalyzer;
+
+  ClipPageProvider: new (
+    numChannels: number,
+    numSamples: number,
+    pageFrames: number,
+  ) => WasmClipPageProvider;
 
   RealtimeEngine: new (
     sampleRate: number,

@@ -1,3 +1,4 @@
+import type { ClipPageProvider } from './clip_page_provider.js';
 import type { TimeSignature } from './types_analysis.js';
 import type { AutomationCurve, SendTiming } from './types_mixing.js';
 import type { ProjectWarpAnchor } from './types_project.js';
@@ -312,7 +313,7 @@ export interface EngineClip {
   /** Warp mode; absent is `'off'`. A number is refused. */
   warpMode?: 'off' | 'repitch' | 'tempoSync' | 'timeStretch';
   warpAnchors?: ProjectWarpAnchor[];
-  pageProvider?: number | { readonly id: number };
+  pageProvider?: ClipPageProvider;
 }
 
 /**
@@ -410,14 +411,20 @@ export interface SidechainCheck {
   reason: SidechainRefusal | null;
 }
 
-/** Layout of the file read by a {@link FileClipPageProvider}. */
-export interface FileClipPageProviderOptions {
-  /** Channel count of the interleaved data; must be positive. */
+/** Dimensions of a {@link ClipPageProvider}. */
+export interface ClipPageProviderOptions {
+  /** Channel count; must be positive. */
   numChannels: number;
   /** Length of the clip in frames; must be positive. */
   numSamples: number;
   /** Frames per page; must be positive. */
   pageFrames: number;
+}
+
+/** Layout of the file read by a {@link FileClipPageProvider}. */
+export interface FileClipPageProviderOptions extends ClipPageProviderOptions {
+  /** Path of the headerless interleaved float32 file. */
+  path: string;
   /** Byte offset of the first frame in the file. Default `0`. */
   dataOffsetBytes?: number;
 }

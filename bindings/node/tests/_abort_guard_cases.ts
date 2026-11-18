@@ -22,6 +22,7 @@ import {
   SR,
   TRACK_ID,
   transportSnapshot,
+  withClipPageProvider,
   withConfiguredEngine,
   withConfiguredProject,
   withEngine,
@@ -910,32 +911,6 @@ export const CASES: AbortGuardCase[] = [
         call: (e) => e.setTrackStripChannelDelaySamples(TRACK_ID, '64'),
       },
     ],
-  },
-  {
-    name: 'RealtimeEngine.createClipPageProvider',
-    missingRequired: [],
-    badArguments: [
-      { argument: 'numChannels', call: (e) => e.createClipPageProvider('1', 1024, 256) },
-      { argument: 'pageFrames', call: (e) => e.createClipPageProvider(1, 1024, '256') },
-    ],
-  },
-  {
-    name: 'RealtimeEngine.supplyClipPage',
-    missingRequired: [],
-    badArguments: [
-      { argument: 'providerId', call: (e) => e.supplyClipPage('1', 0, [samples(64)]) },
-      { argument: 'pageIndex', call: (e) => e.supplyClipPage(1, '0', [samples(64)]) },
-    ],
-  },
-  {
-    name: 'RealtimeEngine.clearClipPage',
-    missingRequired: [],
-    badArguments: [{ argument: 'providerId', call: (e) => e.clearClipPage('1', 0) }],
-  },
-  {
-    name: 'RealtimeEngine.destroyClipPageProvider',
-    missingRequired: [],
-    badArguments: [{ argument: 'providerId', call: (e) => e.destroyClipPageProvider('1') }],
   },
   {
     name: 'RealtimeEngine.setClipPagePrefetchFrames',
@@ -1951,6 +1926,34 @@ export const CASES: AbortGuardCase[] = [
       { argument: 'omitted boundaries', call: () => addon.segmentSubsegment(samples(4), 2, 2) },
       { argument: 'no arguments at all', call: () => addon.segmentSubsegment() },
       { argument: 'wrong-typed data', call: () => addon.segmentSubsegment('x', 2, 2, [0]) },
+    ],
+  },
+  {
+    name: 'ClipPageProvider',
+    missingRequired: [],
+    rejectsArgument: [
+      { argument: 'numChannels', call: () => new addon.ClipPageProvider('1', 1024, 256) },
+      { argument: 'pageFrames', call: () => new addon.ClipPageProvider(1, 1024, '256') },
+    ],
+  },
+  {
+    name: 'ClipPageProvider.supply',
+    missingRequired: [],
+    rejectsArgument: [
+      {
+        argument: 'pageIndex',
+        call: () => withClipPageProvider((provider) => provider.supply('0', [samples(64)])),
+      },
+    ],
+  },
+  {
+    name: 'ClipPageProvider.clear',
+    missingRequired: [],
+    rejectsArgument: [
+      {
+        argument: 'pageIndex',
+        call: () => withClipPageProvider((provider) => provider.clear('0')),
+      },
     ],
   },
   {

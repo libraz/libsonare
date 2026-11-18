@@ -381,7 +381,7 @@ describe('SonareEngine shares the RealtimeEngine vocabulary', () => {
       expect(id).toBe(1);
       expect(() => engine.addClip(3, { startPpq: 0 })).toThrow(TypeError);
       expect(() =>
-        engine.addClip(3, { channels: [new Float32Array(8)], pageProvider: 1, startPpq: 0 }),
+        loose(engine).addClip(3, { channels: [new Float32Array(8)], pageProvider: 1, startPpq: 0 }),
       ).toThrow(TypeError);
       expect(() => loose(engine).addClip(3, [new Float32Array(8)], 0, { id: 2 })).toThrow(
         TypeError,

@@ -33,6 +33,7 @@ function message(call: () => unknown): string {
 // Shapes of class-method requests; their methods carry their own unknown-key cases.
 const METHOD_SHAPES = [
   'Mixer',
+  'ClipPageProvider',
   'Mixer.fromJson',
   'PlaybackLoudnessMeter',
   'PlaybackRenderer',
@@ -177,6 +178,15 @@ describe('a class-method request refuses its keys through an instance', () => {
     expect(() => new api.Mixer({ sampleRate: 48000, bogus: 1 } as never)).toThrow(
       "Mixer: unknown request key 'bogus'",
     );
+    expect(
+      () =>
+        new api.ClipPageProvider({
+          numChannels: 1,
+          numSamples: 8,
+          pageFrames: 4,
+          bogus: 1,
+        } as never),
+    ).toThrow("ClipPageProvider: unknown request key 'bogus'");
   });
 });
 

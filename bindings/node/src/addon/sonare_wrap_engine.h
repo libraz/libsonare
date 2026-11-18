@@ -4,7 +4,6 @@
 #include <napi.h>
 #include <sonare/sonare_c.h>
 
-#include <unordered_map>
 #include <vector>
 
 class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
@@ -103,10 +102,6 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value SetBusStripPanMode(const Napi::CallbackInfo& info);
   Napi::Value SetBusStripDualPan(const Napi::CallbackInfo& info);
   Napi::Value SetTrackStripChannelDelaySamples(const Napi::CallbackInfo& info);
-  Napi::Value CreateClipPageProvider(const Napi::CallbackInfo& info);
-  Napi::Value SupplyClipPage(const Napi::CallbackInfo& info);
-  Napi::Value ClearClipPage(const Napi::CallbackInfo& info);
-  Napi::Value DestroyClipPageProvider(const Napi::CallbackInfo& info);
   Napi::Value PopClipPageRequest(const Napi::CallbackInfo& info);
   Napi::Value SetClipPagePrefetchFrames(const Napi::CallbackInfo& info);
   Napi::Value ClipPagePrefetchFrames(const Napi::CallbackInfo& info);
@@ -210,13 +205,6 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   void ReleaseNativeResources();
 
   SonareRealtimeEngine* engine_ = nullptr;
-  // Keyed by a monotonically increasing id that is never reused (unlike a
-  // freed-slot-reused vector index), so a destroyed provider's id can never
-  // be reassigned to a different, later provider: erase(id) makes lookups on
-  // that id fail forever instead of silently resolving to whatever now
-  // occupies the same slot.
-  std::unordered_map<int, SonareClipPageProvider*> clip_page_providers_;
-  int next_clip_page_provider_id_ = 1;
   // Capture storage is owned by the addon, not borrowed from a JS TypedArray:
   // ArrayBuffers may detach after setCaptureBuffer() (e.g. transfer to a worker).
   std::vector<std::vector<float>> capture_buffers_;

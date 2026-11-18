@@ -1,7 +1,9 @@
 import { closeSync, openSync, readSync } from 'node:fs';
 import { ErrorCode, SonareError } from './errors.js';
-import type { RealtimeEngine } from './realtime_engine.js';
-import type { FileClipPageProviderOptions } from './types.js';
+import { bindNativeClipPageProvider } from './internal/clip_page_native.js';
+import { addon } from './native.js';
+import type { ClipPageProviderOptions, FileClipPageProviderOptions } from './types.js';
+import { requestObject } from './validation.js';
 
 /** A clip page the player missed or is about to need, positioned by sample. */
 export interface ClipPageSampleRequest {
@@ -13,39 +15,39 @@ export interface ClipPageSampleRequest {
   sample: number;
 }
 
-/** Handle to a paged clip source on a {@link RealtimeEngine}; pages are supplied on demand. */
+interface NativeClipPageProvider {
+  supply(pageIndex: number, channels: Float32Array[]): void;
+  clear(pageIndex: number): void;
+  destroy(): void;
+}
+
+/** A paged clip source: pages are supplied on demand and the provider is passed as a clip's `pageProvider`. */
 export class ClipPageProvider {
-  private disposed = false;
+  private readonly native: NativeClipPageProvider;
 
-  constructor(
-    private readonly engine: RealtimeEngine,
-    /** Provider id on the engine. */
-    readonly id: number,
-  ) {}
+  constructor(options: ClipPageProviderOptions) {
+    requestObject('ClipPageProvider', options, 'options', true);
+    this.native = new addon.ClipPageProvider(
+      options.numChannels,
+      options.numSamples,
+      options.pageFrames,
+    );
+    bindNativeClipPageProvider(this, this.native);
+  }
 
-  /** Hand the engine one page of planar channels. Throws `InvalidState` after `destroy()`. */
+  /** Hand the provider one page of planar channels. Throws `InvalidState` after `destroy()`. */
   supply(pageIndex: number, channels: Float32Array[]): void {
-    if (this.disposed) {
-      throw new SonareError(ErrorCode.InvalidState, 'ClipPageProvider is destroyed');
-    }
-    this.engine.supplyClipPage(this.id, pageIndex, channels);
+    this.native.supply(pageIndex, channels);
   }
 
-  /** Evict one resident page; a no-op after `destroy()`. */
+  /** Evict one resident page. Throws `InvalidState` after `destroy()`. */
   clear(pageIndex: number): void {
-    if (this.disposed) {
-      return;
-    }
-    this.engine.clearClipPage(this.id, pageIndex);
+    this.native.clear(pageIndex);
   }
 
-  /** Release the provider on the engine. Idempotent. */
+  /** Release the provider; clips already scheduled keep playing. Idempotent. */
   destroy(): void {
-    if (this.disposed) {
-      return;
-    }
-    this.disposed = true;
-    this.engine.destroyClipPageProvider(this.id);
+    this.native.destroy();
   }
 
   /** Releases the provider through {@link destroy}, so the instance works with `using`. */
@@ -57,24 +59,26 @@ export class ClipPageProvider {
 /** A {@link ClipPageProvider} fed from a headerless interleaved float32 file. */
 export class FileClipPageProvider extends ClipPageProvider {
   private fd: number | null;
-  private readonly numChannels: number;
-  private readonly numSamples: number;
+  private readonly channelCount: number;
+  private readonly frameCount: number;
   private readonly pageFrames: number;
   private readonly dataOffsetBytes: number;
 
-  constructor(
-    engine: RealtimeEngine,
-    id: number,
-    path: string,
-    options: FileClipPageProviderOptions,
-  ) {
-    super(engine, id);
-    if (options.numChannels <= 0 || options.numSamples <= 0 || options.pageFrames <= 0) {
-      throw new RangeError('numChannels, numSamples, and pageFrames must be positive');
+  constructor(options: FileClipPageProviderOptions) {
+    requestObject('FileClipPageProvider', options, 'options', true);
+    super({
+      numChannels: options.numChannels,
+      numSamples: options.numSamples,
+      pageFrames: options.pageFrames,
+    });
+    try {
+      this.fd = openSync(options.path, 'r');
+    } catch (err) {
+      super.destroy();
+      throw err;
     }
-    this.fd = openSync(path, 'r');
-    this.numChannels = options.numChannels;
-    this.numSamples = options.numSamples;
+    this.channelCount = options.numChannels;
+    this.frameCount = options.numSamples;
     this.pageFrames = options.pageFrames;
     this.dataOffsetBytes = options.dataOffsetBytes ?? 0;
   }
@@ -88,11 +92,11 @@ export class FileClipPageProvider extends ClipPageProvider {
       return false;
     }
     const startFrame = pageIndex * this.pageFrames;
-    if (startFrame >= this.numSamples) {
+    if (startFrame >= this.frameCount) {
       return false;
     }
-    const frames = Math.min(this.pageFrames, this.numSamples - startFrame);
-    const frameBytes = this.numChannels * Float32Array.BYTES_PER_ELEMENT;
+    const frames = Math.min(this.pageFrames, this.frameCount - startFrame);
+    const frameBytes = this.channelCount * Float32Array.BYTES_PER_ELEMENT;
     const buffer = Buffer.allocUnsafe(frames * frameBytes);
     const bytesRead = readSync(
       this.fd,
@@ -105,10 +109,10 @@ export class FileClipPageProvider extends ClipPageProvider {
     if (framesRead <= 0) {
       return false;
     }
-    const channels = Array.from({ length: this.numChannels }, () => new Float32Array(framesRead));
+    const channels = Array.from({ length: this.channelCount }, () => new Float32Array(framesRead));
     for (let frame = 0; frame < framesRead; ++frame) {
-      for (let ch = 0; ch < this.numChannels; ++ch) {
-        channels[ch][frame] = buffer.readFloatLE((frame * this.numChannels + ch) * 4);
+      for (let ch = 0; ch < this.channelCount; ++ch) {
+        channels[ch][frame] = buffer.readFloatLE((frame * this.channelCount + ch) * 4);
       }
     }
     this.supply(pageIndex, channels);

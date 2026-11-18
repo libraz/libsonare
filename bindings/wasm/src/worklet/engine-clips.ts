@@ -1,5 +1,8 @@
 import type { EngineClip, EngineMidiClipSchedule, RealtimeEngine } from '../index.js';
-import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
+import type {
+  SonareEngineSyncedClip,
+  SonareEngineSyncMessage,
+} from '../internal/worklet_messages.js';
 import { commitStore } from './engine-commit.js';
 
 /**
@@ -131,6 +134,12 @@ function commitClips(
   commitStore(ctx, ctx.clips, staged, applyOffline, () => postClipsDelta(ctx, upserts, removeIds));
 }
 
+/** The clip schedule without its audio, which travels as pages; a provider stays on this side. */
+function scheduleOf(clip: EngineClip): SonareEngineSyncedClip {
+  const { pageProvider: _provider, ...schedule } = clip;
+  return { ...schedule, channels: undefined };
+}
+
 function postClipsDelta(ctx: EngineClipContext, upserts: EngineClip[], removeIds: number[]): void {
   const preparedById = new Map<number, EngineClip>();
   for (const clip of upserts) {
@@ -166,7 +175,7 @@ function postClipsDelta(ctx: EngineClipContext, upserts: EngineClip[], removeIds
         type: 'syncClipPageCommit',
         clipId: stream.clipId,
         streamKey: stream.streamKey,
-        clip: { ...prepared, channels: undefined, pageProvider: undefined },
+        clip: scheduleOf(prepared),
       });
       continue;
     }
@@ -186,7 +195,7 @@ function postClipsDelta(ctx: EngineClipContext, upserts: EngineClip[], removeIds
     ctx.postSync({
       type: 'syncClipPageProvider',
       clipId: prepared.id,
-      clip: { ...prepared, channels: undefined, pageProvider: undefined },
+      clip: scheduleOf(prepared),
       numChannels: channels.length,
       numSamples,
       pageFrames: PREBAKED_CLIP_PAGE_FRAMES,

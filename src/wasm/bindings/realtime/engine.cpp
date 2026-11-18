@@ -134,6 +134,7 @@ void registerRealtimeEngineBindings() {
   cls.function("applyProjectTimeline", &RealtimeEngineWasm::applyProjectTimeline);
 #endif
   registerRealtimeEngineClips(cls);
+  registerClipPageProvider();
   registerRealtimeEngineCapture(cls);
   registerRealtimeEngineProcessing(cls);
   registerRealtimeEngineTelemetry(cls);

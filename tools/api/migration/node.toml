@@ -14926,3 +14926,118 @@ old = "PlaybackLoudnessMeter.constructor(sampleRate)"
 removed = "pass sampleRate in the options object: new PlaybackLoudnessMeter({ numChannels, sampleRate })"
 domain = "engine"
 rule = "construction"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.createClipPageProvider"
+removed = "new ClipPageProvider({ numChannels, numSamples, pageFrames }) creates a provider no engine owns"
+rule = "construction"
+domain = "engine"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.supplyClipPage"
+removed = "call supply(pageIndex, channels) on the ClipPageProvider"
+rule = "construction"
+domain = "engine"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.clearClipPage"
+removed = "call clear(pageIndex) on the ClipPageProvider"
+rule = "construction"
+domain = "engine"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.destroyClipPageProvider"
+removed = "call destroy() on the ClipPageProvider"
+rule = "construction"
+domain = "engine"
+
+[[entry]]
+kind = "class"
+old = "ClipPageProvider"
+changed = "constructor(options: ClipPageProviderOptions) with { numChannels, numSamples, pageFrames } replaces construction through the engine; clear() after destroy() is InvalidState instead of a no-op"
+rule = "construction"
+test = "bindings/node/tests/engine-clips.test.ts::refuses supply and clear after destroy, and destroys idempotently"
+domain = "project"
+
+[[entry]]
+kind = "option"
+old = "ClipPageProvider.constructor(engine)"
+removed = "pass { numChannels, numSamples, pageFrames }; the provider is no longer bound to an engine or addressed by id"
+rule = "construction"
+domain = "project"
+
+[[entry]]
+kind = "option"
+old = "ClipPageProvider.constructor(id)"
+removed = "pass { numChannels, numSamples, pageFrames }; the provider is no longer bound to an engine or addressed by id"
+rule = "construction"
+domain = "project"
+
+[[entry]]
+kind = "field"
+old = "ClipPageProvider.id"
+removed = "a clip names its provider by instance, not by id"
+rule = "construction"
+domain = "project"
+
+[[entry]]
+kind = "field"
+old = "EngineClip.pageProvider.id"
+removed = "pageProvider takes the ClipPageProvider instance; a number or { id } is refused"
+rule = "construction"
+domain = "engine"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.createFileClipPageProvider"
+removed = "new FileClipPageProvider({ path, ... }) creates the provider"
+rule = "construction"
+domain = "engine"
+
+[[entry]]
+kind = "class"
+old = "FileClipPageProvider"
+changed = "constructor(options: FileClipPageProviderOptions) with path inside the options object replaces (engine, path, options)"
+rule = "construction"
+test = "bindings/node/tests/engine-clips.test.ts::refuses a missing file without leaking its native provider"
+domain = "project"
+
+[[entry]]
+kind = "option"
+old = "FileClipPageProvider.constructor(engine)"
+removed = "pass path in the options object: new FileClipPageProvider({ path, ... }); the provider is not bound to an engine"
+rule = "construction"
+domain = "project"
+
+[[entry]]
+kind = "option"
+old = "FileClipPageProvider.constructor(id)"
+removed = "the provider is not addressed by id"
+rule = "construction"
+domain = "project"
+
+[[entry]]
+kind = "option"
+old = "FileClipPageProvider.constructor(path)"
+removed = "pass path in the options object: new FileClipPageProvider({ path, ... }); the provider is not bound to an engine"
+rule = "construction"
+domain = "project"
+
+[[entry]]
+kind = "field"
+old = "FileClipPageProvider.id"
+removed = "a clip names its provider by instance, not by id"
+rule = "construction"
+domain = "project"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.numChannels"
+changed = "required (1 | 2): the channel count of the caller's stream has no default (was 1)"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/mastering-streaming.test.ts::no numChannels"

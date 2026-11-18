@@ -27,11 +27,6 @@
 #include "midi/ump.h"
 #endif
 
-// Paged audio provider backing lazily-streamed clips; the full definition lives
-// in realtime_engine_clips.cpp (only that TU constructs/dereferences it). The
-// facade holds them via shared_ptr, so a forward declaration suffices here.
-class WasmClipPageProvider;
-
 // Canonical AutomationCurve ordinals (Linear=0, Exp=1, Hold=2, SCurve=3) are
 // shared with the C ABI and other bindings; conversion is a direct cast.
 sonare::automation::CurveType automationCurveFromInt(int curve);
@@ -358,12 +353,6 @@ class RealtimeEngineWasm {
   void removeClip(const emscripten::val& clip_id_val);
   emscripten::val prebakedClipChannels(const emscripten::val& clip_id_val) const;
   int clipCount() const;
-  int createClipPageProvider(const emscripten::val& num_channels_val, int64_t num_samples,
-                             int64_t page_frames);
-  void supplyClipPage(const emscripten::val& provider_id_val, int64_t page_index,
-                      emscripten::val channels);
-  void clearClipPage(const emscripten::val& provider_id_val, int64_t page_index);
-  void destroyClipPageProvider(const emscripten::val& provider_id_val);
   emscripten::val popClipPageRequest();
   // Allocation-free scalar variant for the AudioWorklet SAB request ring.
   // popClipPageRequest() remains for public/control-plane callers that need an
@@ -511,7 +500,6 @@ class RealtimeEngineWasm {
   /// Timeline last applied; keeps the marker names the engine points into alive.
   std::shared_ptr<const sonare::arrangement::CompiledTimeline> applied_timeline_;
 #endif
-  std::vector<std::shared_ptr<WasmClipPageProvider>> clip_page_providers_;
   sonare::engine::ClipPageRequest clip_page_request_scratch_{};
   sonare::engine::Telemetry telemetry_scratch_{};
   sonare::engine::MeterTelemetryRecord meter_telemetry_scratch_{};
@@ -559,6 +547,8 @@ void registerRealtimeEngineMidiControl(emscripten::class_<RealtimeEngineWasm>& c
 void registerRealtimeEngineMidiIo(emscripten::class_<RealtimeEngineWasm>& cls);
 void registerRealtimeEngineMixer(emscripten::class_<RealtimeEngineWasm>& cls);
 void registerRealtimeEngineClips(emscripten::class_<RealtimeEngineWasm>& cls);
+/// @brief Registers ClipPageProvider, the paged clip source a clip names as pageProvider.
+void registerClipPageProvider();
 void registerRealtimeEngineCapture(emscripten::class_<RealtimeEngineWasm>& cls);
 void registerRealtimeEngineProcessing(emscripten::class_<RealtimeEngineWasm>& cls);
 void registerRealtimeEngineTelemetry(emscripten::class_<RealtimeEngineWasm>& cls);

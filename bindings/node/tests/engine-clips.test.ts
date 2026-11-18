@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ErrorCode, RealtimeEngine } from '../src/index.js';
+import { ClipPageProvider, ErrorCode, FileClipPageProvider, RealtimeEngine } from '../src/index.js';
 
 describe('RealtimeEngine native binding', () => {
   it('rejects clips without channels or a page provider without aborting', () => {
@@ -58,7 +58,7 @@ describe('RealtimeEngine native binding', () => {
 
   it('streams paged clip providers and drains page requests', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
-    const provider = engine.createClipPageProvider(1, 8, 4);
+    const provider = new ClipPageProvider({ numChannels: 1, numSamples: 8, pageFrames: 4 });
     provider.supply(0, [new Float32Array([1, 2, 3, 4])]);
 
     engine.setClips([
@@ -88,10 +88,10 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('rejects paged providers whose metadata exceeds shared limits', () => {
-    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
-    expect(() => engine.createClipPageProvider(1, 1_000_000_000_000, 1)).toThrow();
-    expect(() => engine.createClipPageProvider(65, 8, 4)).toThrow();
-    engine.destroy();
+    expect(
+      () => new ClipPageProvider({ numChannels: 1, numSamples: 1_000_000_000_000, pageFrames: 1 }),
+    ).toThrow();
+    expect(() => new ClipPageProvider({ numChannels: 65, numSamples: 8, pageFrames: 4 })).toThrow();
   });
 
   it('feeds paged clips from raw float32 files', () => {
@@ -102,7 +102,8 @@ describe('RealtimeEngine native binding', () => {
       writeFileSync(rawPath, Buffer.from(interleaved.buffer));
 
       const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
-      const provider = engine.createFileClipPageProvider(rawPath, {
+      const provider = new FileClipPageProvider({
+        path: rawPath,
         numChannels: 1,
         numSamples: 8,
         pageFrames: 4,
@@ -127,55 +128,88 @@ describe('RealtimeEngine native binding', () => {
     }
   });
 
-  it('never reuses a clip page provider id after it is destroyed', () => {
-    // ids used to be freed-slot indices, so a destroyed provider's id was
-    // handed straight back to the next createClipPageProvider call -- a
-    // clip bound to the stale id then silently played whichever provider now
-    // held that slot instead of being refused. Ids are read relatively here
-    // (rather than pinned to literal numbers) because a failed
-    // createFileClipPageProvider attempt above also consumes and immediately
-    // frees one, and this test must not depend on how many ids came before it.
-    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
-    expect(() =>
-      engine.createFileClipPageProvider('/definitely/missing/sonare-clip.f32', {
-        numChannels: 1,
-        numSamples: 8,
-        pageFrames: 4,
-      }),
-    ).toThrow();
-    const afterFailedOpen = engine.createClipPageProvider(1, 8, 4);
-    afterFailedOpen.destroy();
-
-    const first = engine.createClipPageProvider(1, 8, 4);
-    const second = engine.createClipPageProvider(1, 8, 4);
-    expect(second.id).toBe(first.id + 1);
-    first.destroy();
-    const third = engine.createClipPageProvider(1, 8, 4);
-    // The control: ids keep climbing rather than backfilling first's freed id.
-    expect(third.id).toBe(second.id + 1);
-    expect(third.id).not.toBe(first.id);
-    second.destroy();
-    third.destroy();
+  it('keeps a scheduled clip playing after its provider is destroyed', () => {
+    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 4 });
+    const provider = new ClipPageProvider({ numChannels: 1, numSamples: 4, pageFrames: 4 });
+    provider.supply(0, [new Float32Array([1, 2, 3, 4])]);
+    engine.setClips([{ id: 5, pageProvider: provider, startPpq: 0 }]);
+    provider.destroy();
+    engine.play();
+    expect(Array.from(engine.process([new Float32Array(4)])[0])).toEqual([1, 2, 3, 4]);
     engine.destroy();
   });
 
-  it('refuses a clip bound to a destroyed provider instead of silently playing whatever now holds its old id', () => {
-    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
-    const stale = engine.createClipPageProvider(1, 8, 4);
-    stale.destroy();
-    // Before the fix this reused stale's numeric id, so the assertion below
-    // would have silently bound clip 1 to replacement's audio instead of
-    // throwing -- the control is that replacement gets a DIFFERENT id.
-    const replacement = engine.createClipPageProvider(1, 8, 4);
-    expect(replacement.id).not.toBe(stale.id);
-    replacement.supply(0, [new Float32Array([9, 9, 9, 9])]);
+  describe('ClipPageProvider', () => {
+    const dims = { numChannels: 1, numSamples: 8, pageFrames: 4 };
 
-    expect(() => engine.setClips([{ id: 1, pageProvider: stale, startPpq: 0 }])).toThrow(
-      /pageProvider is not a live ClipPageProvider/,
-    );
+    it('refuses an unknown option key, naming it', () => {
+      expect(() => new ClipPageProvider({ ...dims, notAField: 1 } as never)).toThrow(TypeError);
+      expect(() => new ClipPageProvider({ ...dims, notAField: 1 } as never)).toThrow(/notAField/);
+    });
 
-    replacement.destroy();
-    engine.destroy();
+    it('refuses a positional call', () => {
+      expect(
+        () => new (ClipPageProvider as unknown as new (...args: number[]) => unknown)(2, 1000, 256),
+      ).toThrow(TypeError);
+    });
+
+    it('refuses non-positive dimensions with a RangeError', () => {
+      expect(() => new ClipPageProvider({ ...dims, numChannels: 0 })).toThrow(RangeError);
+      expect(() => new ClipPageProvider({ ...dims, numSamples: 0 })).toThrow(RangeError);
+      expect(() => new ClipPageProvider({ ...dims, pageFrames: 0 })).toThrow(RangeError);
+    });
+
+    it('refuses supply and clear after destroy, and destroys idempotently', () => {
+      const provider = new ClipPageProvider(dims);
+      provider.destroy();
+      expect(() => provider.destroy()).not.toThrow();
+      const invalidState = expect.objectContaining({ code: ErrorCode.InvalidState });
+      expect(() => provider.supply(0, [new Float32Array(4)])).toThrow(invalidState);
+      expect(() => provider.clear(0)).toThrow(invalidState);
+    });
+
+    it('is refused by setClips unless it is a live ClipPageProvider', () => {
+      const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
+      try {
+        expect(() => engine.setClips([{ id: 1, pageProvider: 3 as never, startPpq: 0 }])).toThrow(
+          TypeError,
+        );
+        expect(() => engine.setClips([{ id: 1, pageProvider: 3 as never, startPpq: 0 }])).toThrow(
+          /must be a ClipPageProvider instance/,
+        );
+        const stale = new ClipPageProvider(dims);
+        stale.destroy();
+        const refusal = expect.objectContaining({ code: ErrorCode.InvalidState });
+        expect(() => engine.setClips([{ id: 1, pageProvider: stale, startPpq: 0 }])).toThrow(
+          refusal,
+        );
+        expect(() => engine.setClips([{ id: 1, pageProvider: stale, startPpq: 0 }])).toThrow(
+          /has been destroyed/,
+        );
+      } finally {
+        engine.destroy();
+      }
+    });
+  });
+
+  describe('FileClipPageProvider', () => {
+    it('refuses an unknown option key, naming it', () => {
+      const options = { path: '/x', numChannels: 1, numSamples: 8, pageFrames: 4, notAField: 1 };
+      expect(() => new FileClipPageProvider(options as never)).toThrow(TypeError);
+      expect(() => new FileClipPageProvider(options as never)).toThrow(/notAField/);
+    });
+
+    it('refuses a missing file without leaking its native provider', () => {
+      expect(
+        () =>
+          new FileClipPageProvider({
+            path: '/definitely/missing/sonare-clip.f32',
+            numChannels: 1,
+            numSamples: 8,
+            pageFrames: 4,
+          }),
+      ).toThrow();
+    });
   });
 
   it('renders repitch warped clips from anchors', () => {
@@ -367,66 +401,5 @@ describe('RealtimeEngine native binding', () => {
     } finally {
       engine.destroy();
     }
-  });
-
-  it('destroy() releases the clip page providers it still owns', () => {
-    const pageFrames = 1 << 20;
-    const pages = 8;
-    const supplied = 2 * pages * pageFrames * 4;
-    const page = [new Float32Array(pageFrames), new Float32Array(pageFrames)];
-
-    /** Loads `supplied` bytes of clip pages into a fresh engine. */
-    const loadPages = (target: RealtimeEngine): number => {
-      const provider = target.createClipPageProvider(2, pageFrames * pages, pageFrames);
-      for (let index = 0; index < pages; index++) {
-        target.supplyClipPage(provider.id, index, page);
-      }
-      return provider.id;
-    };
-
-    const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
-    const second = engine.createClipPageProvider(1, pageFrames, pageFrames);
-    const third = engine.createClipPageProvider(1, pageFrames, pageFrames);
-    // Explicitly destroying one leaves a nulled slot: the release path has to
-    // walk past it rather than free it a second time.
-    second.destroy();
-
-    const baselineRss = process.memoryUsage().rss;
-    const first = { id: loadPages(engine) };
-    const loadedDelta = process.memoryUsage().rss - baselineRss;
-    // Positive control: the pages have to be resident for the reuse check below
-    // to mean anything.
-    expect(loadedDelta).toBeGreaterThan(supplied / 2);
-
-    // No destroyClipPageProvider(first.id) here: destroy() alone must reach it.
-    engine.destroy();
-    // RSS is measured by reuse rather than by a drop, because the allocator is
-    // free to hold freed blocks: loading the same pages again must land inside
-    // the memory the first load released rather than stacking a second copy on
-    // top of it (which is what the leak measured, at nearly twice this bound).
-    const reload = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
-    loadPages(reload);
-    expect(process.memoryUsage().rss - baselineRss).toBeLessThan(loadedDelta + supplied / 2);
-    reload.destroy();
-
-    // The provider table is empty, so neither id resolves any more.
-    expect(() => engine.supplyClipPage(first.id, 0, page)).toThrow(
-      expect.objectContaining({ code: ErrorCode.InvalidState }),
-    );
-    expect(() => engine.supplyClipPage(third.id, 0, page)).toThrow(
-      expect.objectContaining({ code: ErrorCode.InvalidState }),
-    );
-    // Idempotent: the facade's destroy() is guarded by its own disposed flag, so
-    // reach past it to drive the native release a second time directly.
-    const native = (engine as unknown as { native: { destroy(): void } }).native;
-    expect(() => native.destroy()).not.toThrow();
-    expect(() => engine.destroy()).not.toThrow();
-    // A provider handed out before the sweep and released after it must not free
-    // an already-freed provider either.
-    expect(() => third.destroy()).not.toThrow();
-    // The process is still usable, not merely free of an escaping exception.
-    const after = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
-    expect(after.transportState().playing).toBe(false);
-    after.destroy();
   });
 });

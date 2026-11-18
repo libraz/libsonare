@@ -1,9 +1,6 @@
-import {
-  ClipPageProvider,
-  type ClipPageSampleRequest,
-  FileClipPageProvider,
-} from './clip_page_provider.js';
+import type { ClipPageSampleRequest } from './clip_page_provider.js';
 import { ErrorCode, SonareError } from './errors.js';
+import { nativeClipPageProviderOf } from './internal/clip_page_native.js';
 import { assignMarkerIds } from './internal/marker_ids.js';
 import { midiFxConfigJson } from './internal/midi_fx_config.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from './internal/mix_scene.js';
@@ -45,7 +42,6 @@ import type {
   EngineTransportState,
   EqBandInput,
   ExternalMidiEvent,
-  FileClipPageProviderOptions,
   MidiFxConfig,
   MixSceneBusInput,
   MixSceneStripInput,
@@ -213,15 +209,14 @@ function resolveEngineConfig(
   };
 }
 
-/** The addon reads a page provider by its numeric handle and a warp mode by ordinal. */
+/** The addon reads a page provider through its native handle and a warp mode by ordinal. */
 function toNativeClip(fnName: string, clip: EngineClip): unknown {
   const native: Record<string, unknown> = {
     ...clip,
-    pageProvider:
-      typeof clip.pageProvider === 'object' && clip.pageProvider !== null
-        ? clip.pageProvider.id
-        : clip.pageProvider,
   };
+  if (clip.pageProvider !== undefined) {
+    native.pageProvider = nativeClipPageProviderOf(clip.pageProvider);
+  }
   if (!isAbsent(clip.warpMode)) {
     native.warpMode = requireToken(fnName, clip.warpMode, WARP_MODE, 'warpMode');
   }
@@ -983,32 +978,6 @@ export class RealtimeEngine {
     return this.native.countInEndSample(startSample, bars);
   }
 
-  createClipPageProvider(
-    numChannels: number,
-    numSamples: number,
-    pageFrames: number,
-  ): ClipPageProvider {
-    const id = this.native.createClipPageProvider(numChannels, numSamples, pageFrames);
-    return new ClipPageProvider(this, id);
-  }
-
-  createFileClipPageProvider(
-    path: string,
-    options: FileClipPageProviderOptions,
-  ): FileClipPageProvider {
-    const id = this.native.createClipPageProvider(
-      options.numChannels,
-      options.numSamples,
-      options.pageFrames,
-    );
-    try {
-      return new FileClipPageProvider(this, id, path, options);
-    } catch (err) {
-      this.native.destroyClipPageProvider(id);
-      throw err;
-    }
-  }
-
   setClips(clips: EngineClip[]): void {
     this.native.setClips(clips.map((clip) => toNativeClip('setClips', clip)));
   }
@@ -1641,18 +1610,6 @@ export class RealtimeEngine {
       trackOnly('setStripChannelDelaySamples', ref),
       delaySamples,
     );
-  }
-
-  supplyClipPage(providerId: number, pageIndex: number, channels: Float32Array[]): void {
-    this.native.supplyClipPage(providerId, pageIndex, channels);
-  }
-
-  clearClipPage(providerId: number, pageIndex: number): void {
-    this.native.clearClipPage(providerId, pageIndex);
-  }
-
-  destroyClipPageProvider(providerId: number): void {
-    this.native.destroyClipPageProvider(providerId);
   }
 
   popClipPageRequest(): ClipPageSampleRequest | null {

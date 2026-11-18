@@ -9,6 +9,7 @@ import type {
 } from '../index.js';
 import type { OpfsClipPageProviderBinding } from '../opfs_clip_pages.js';
 import type { OwnerEpoch } from '../owner_epoch.js';
+import type { ClipPageProvider } from '../realtime_engine.js';
 import { requestObject } from '../validation.js';
 import { commitSync } from './engine-commit.js';
 import { requireIntegerOption } from './guards.js';
@@ -33,7 +34,7 @@ export interface SonareRenderOfflineRequest {
   validate?: boolean;
 }
 
-/** An OPFS-streamed clip's page bookkeeping, keyed by its page provider id. */
+/** An OPFS-streamed clip's page bookkeeping, keyed by its page provider. */
 export interface OpfsExportSource {
   binding: OpfsClipPageProviderBinding;
   pageFrames: number;
@@ -48,7 +49,7 @@ export interface EngineExportContext {
   readonly offlineBlockSize: number;
   readonly offlineNumChannels: number;
   readonly clips: ReadonlyMap<number, EngineClip>;
-  readonly opfsSources: ReadonlyMap<number, OpfsExportSource>;
+  readonly opfsSources: ReadonlyMap<ClipPageProvider, OpfsExportSource>;
   /** `chunkOrigin` is the transport position the mirror returns to once a chunked render ends. */
   readonly session: { chunkOrigin: number | undefined };
   /** Owning engine's epoch; a render that resumes after destroy stops. */
@@ -133,9 +134,8 @@ async function prefetchOpfsSpan(
   const token = ctx.epoch.current();
   try {
     for (const clip of ctx.clips.values()) {
-      const providerId =
-        typeof clip.pageProvider === 'object' ? clip.pageProvider?.id : clip.pageProvider;
-      const source = providerId === undefined ? undefined : ctx.opfsSources.get(providerId);
+      const source =
+        clip.pageProvider === undefined ? undefined : ctx.opfsSources.get(clip.pageProvider);
       if (!source) {
         continue;
       }

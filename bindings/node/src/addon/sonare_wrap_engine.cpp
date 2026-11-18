@@ -174,10 +174,6 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::SetBusStripDualPan>("setBusStripDualPan"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackStripChannelDelaySamples>(
               "setTrackStripChannelDelaySamples"),
-          InstanceMethod<&RealtimeEngineWrap::CreateClipPageProvider>("createClipPageProvider"),
-          InstanceMethod<&RealtimeEngineWrap::SupplyClipPage>("supplyClipPage"),
-          InstanceMethod<&RealtimeEngineWrap::ClearClipPage>("clearClipPage"),
-          InstanceMethod<&RealtimeEngineWrap::DestroyClipPageProvider>("destroyClipPageProvider"),
           InstanceMethod<&RealtimeEngineWrap::PopClipPageRequest>("popClipPageRequest"),
           InstanceMethod<&RealtimeEngineWrap::SetClipPagePrefetchFrames>(
               "setClipPagePrefetchFrames"),
@@ -329,13 +325,6 @@ void RealtimeEngineWrap::ReleaseNativeResources() {
     sonare_engine_destroy(engine_);
     engine_ = nullptr;
   }
-  // After the engine is gone nothing can still page from a provider, so the
-  // providers are released next. Entries are erased by destroyClipPageProvider,
-  // which is what makes a second pass here a no-op rather than a double free.
-  for (const auto& entry : clip_page_providers_) {
-    if (entry.second != nullptr) sonare_clip_page_provider_destroy(entry.second);
-  }
-  clip_page_providers_.clear();
   // A capture buffer sized for a long session is the largest allocation the
   // wrap owns, and once the engine is gone nothing can read it: capturedAudio()
   // rejects a destroyed engine. Release it here rather than waiting for the JS

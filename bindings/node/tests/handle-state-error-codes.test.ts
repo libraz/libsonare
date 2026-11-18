@@ -23,9 +23,7 @@ import { addon } from '../src/native.js';
 type Loose = any;
 
 /** Release methods stay idempotent no-ops once the owner has freed what they release. */
-const RELEASE_METHODS: Record<string, readonly string[]> = {
-  RealtimeEngine: ['destroyClipPageProvider'],
-};
+const RELEASE_METHODS: Record<string, readonly string[]> = {};
 
 const capture = (run: () => unknown): unknown => {
   try {
@@ -50,9 +48,11 @@ function methodNames(prototype: object): string[] {
 }
 
 describe('a destroyed native handle reports InvalidState on every method', () => {
-  const handles: Array<[string, () => Loose]> = [
+  // The third element is the fewest methods the prototype walk must find, so an empty walk cannot pass.
+  const handles: Array<[string, () => Loose, number?]> = [
     ['Project', () => new addon.Project()],
     ['RealtimeEngine', () => new addon.RealtimeEngine(48000, 128)],
+    ['ClipPageProvider', () => new addon.ClipPageProvider(1, 8, 4), 2],
     ['StreamingRetune', () => new addon.StreamingRetune({})],
     [
       'Mixer',
@@ -70,12 +70,12 @@ describe('a destroyed native handle reports InvalidState on every method', () =>
     ],
   ];
 
-  for (const [label, make] of handles) {
+  for (const [label, make, minMethods = 4] of handles) {
     it(label, () => {
       const probe = make();
       const names = methodNames(Object.getPrototypeOf(probe));
       probe.destroy();
-      expect(names.length).toBeGreaterThan(3);
+      expect(names.length).toBeGreaterThanOrEqual(minMethods);
       const offenders: string[] = [];
       const exempt = RELEASE_METHODS[label] ?? [];
       for (const name of exempt) {

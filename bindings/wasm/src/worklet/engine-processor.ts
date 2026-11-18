@@ -1,5 +1,5 @@
 import type { EngineClip, SynthPatch } from '../index.js';
-import { RealtimeEngine } from '../index.js';
+import { ClipPageProvider, RealtimeEngine } from '../index.js';
 import { engineNativeHandle } from '../internal/engine_native_handle.js';
 import { failurePayload } from '../internal/failure_payload.js';
 import {
@@ -162,7 +162,7 @@ export class SonareRealtimeEngineWorkletProcessor {
   // which outlives its clip's schedule until that stream closes.
   private readonly pagedClipProviders = new Map<
     number,
-    { providerId: number; streamKey: number | undefined }
+    { provider: ClipPageProvider; streamKey: number | undefined }
   >();
   private readonly pagedClipPageFrames = new Map<number, number>();
   private readonly pendingPagedClips = new Map<number, EngineClip>();
@@ -456,14 +456,14 @@ export class SonareRealtimeEngineWorkletProcessor {
         break;
       }
       case 'syncClipPageProvider': {
-        const provider = this.engine.createClipPageProvider(
-          message.numChannels,
-          message.numSamples,
-          message.pageFrames,
-        );
+        const provider = new ClipPageProvider({
+          numChannels: message.numChannels,
+          numSamples: message.numSamples,
+          pageFrames: message.pageFrames,
+        });
         this.removePagedClipProvider(message.clipId);
         this.pagedClipProviders.set(message.clipId, {
-          providerId: provider.id,
+          provider,
           streamKey: message.streamKey,
         });
         this.pagedClipPageFrames.set(message.clipId, message.pageFrames);
@@ -473,16 +473,16 @@ export class SonareRealtimeEngineWorkletProcessor {
         break;
       }
       case 'syncClipPage': {
-        const providerId = this.ownedPagedClipProvider(message.clipId, message.streamKey);
-        if (providerId !== undefined) {
-          this.engine.supplyClipPage(providerId, message.pageIndex, message.channels);
+        const provider = this.ownedPagedClipProvider(message.clipId, message.streamKey);
+        if (provider !== undefined) {
+          provider.supply(message.pageIndex, message.channels);
         }
         break;
       }
       case 'syncClipPageClear': {
-        const providerId = this.ownedPagedClipProvider(message.clipId, message.streamKey);
-        if (providerId !== undefined) {
-          this.engine.clearClipPage(providerId, message.pageIndex);
+        const provider = this.ownedPagedClipProvider(message.clipId, message.streamKey);
+        if (provider !== undefined) {
+          provider.clear(message.pageIndex);
         }
         break;
       }
@@ -495,10 +495,10 @@ export class SonareRealtimeEngineWorkletProcessor {
         break;
       }
       case 'syncClipPageCommit': {
-        const providerId = this.ownedPagedClipProvider(message.clipId, message.streamKey);
+        const provider = this.ownedPagedClipProvider(message.clipId, message.streamKey);
         const clip = message.clip ?? this.pendingPagedClips.get(message.clipId);
-        if (providerId !== undefined && clip) {
-          const nextClip = { ...clip, pageProvider: providerId };
+        if (provider !== undefined && clip) {
+          const nextClip = { ...clip, pageProvider: provider };
           this.engine.upsertClip(nextClip);
           this.liveClips.set(message.clipId, nextClip);
           this.pendingPagedClips.delete(message.clipId);
@@ -506,12 +506,12 @@ export class SonareRealtimeEngineWorkletProcessor {
         break;
       }
       case 'syncClipPageDestroy': {
-        const providerId = this.ownedPagedClipProvider(message.clipId, message.streamKey);
-        if (providerId === undefined) {
+        const provider = this.ownedPagedClipProvider(message.clipId, message.streamKey);
+        if (provider === undefined) {
           break;
         }
         // Only a clip still reading this provider goes; a same-id successor stays.
-        if (this.liveClips.get(message.clipId)?.pageProvider === providerId) {
+        if (this.liveClips.get(message.clipId)?.pageProvider === provider) {
           this.engine.removeClip(message.clipId);
           this.liveClips.delete(message.clipId);
         }
@@ -1717,15 +1717,15 @@ export class SonareRealtimeEngineWorkletProcessor {
   private ownedPagedClipProvider(
     clipId: number,
     streamKey: number | undefined,
-  ): number | undefined {
+  ): ClipPageProvider | undefined {
     const entry = this.pagedClipProviders.get(clipId);
-    return entry !== undefined && entry.streamKey === streamKey ? entry.providerId : undefined;
+    return entry !== undefined && entry.streamKey === streamKey ? entry.provider : undefined;
   }
 
   private removePagedClipProvider(clipId: number): void {
     const entry = this.pagedClipProviders.get(clipId);
     if (entry !== undefined) {
-      this.engine.destroyClipPageProvider(entry.providerId);
+      entry.provider.destroy();
     }
     this.pagedClipProviders.delete(clipId);
     this.pagedClipPageFrames.delete(clipId);

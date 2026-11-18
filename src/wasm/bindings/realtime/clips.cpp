@@ -130,10 +130,27 @@ class WasmClipPageProvider final : public sonare::engine::ClipPagedAudioProvider
 
 namespace {
 
-std::shared_ptr<WasmClipPageProvider> liveProviderById(
-    const std::vector<std::shared_ptr<WasmClipPageProvider>>& providers, int id) {
-  if (id <= 0 || static_cast<size_t>(id) > providers.size()) return nullptr;
-  return providers[static_cast<size_t>(id - 1)];
+std::shared_ptr<WasmClipPageProvider> createClipPageProvider(const val& num_channels_val,
+                                                             int64_t num_samples,
+                                                             int64_t page_frames) {
+  const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
+  if (!sonare::engine::validate_clip_page_dimensions(num_channels, num_samples, page_frames)) {
+    throw WasmRangeError("clip page provider dimensions must be positive");
+  }
+  return std::make_shared<WasmClipPageProvider>(num_channels, num_samples, page_frames);
+}
+
+// The provider a clip's pageProvider carries. The engine keeps its own shared
+// reference, so deleting the handle later leaves a scheduled clip intact.
+std::shared_ptr<WasmClipPageProvider> readPageProvider(const val& value) {
+  if (!value.instanceof (val::module_property("ClipPageProvider"))) {
+    throw WasmTypeError("pageProvider must be a ClipPageProvider instance");
+  }
+  if (value.call<bool>("isDeleted")) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "pageProvider has been destroyed");
+  }
+  return value.as<std::shared_ptr<WasmClipPageProvider>>();
 }
 
 }  // namespace
@@ -172,15 +189,7 @@ RealtimeEngineWasm::BuiltClip RealtimeEngineWasm::buildClipSchedule(val clip_val
   schedule.id = uintProperty(clip_val, "id", default_id);
   schedule.track_id = hasProperty(clip_val, "trackId") ? uintProperty(clip_val, "trackId", 0) : 0;
   if (has_page_provider) {
-    // Truncating rather than refusing resolves a fractional handle onto a
-    // real provider: 1.5 binds provider 1 and 2.9 binds provider 2.
-    const int provider_id =
-        checkedIntFromVal(objectProperty(clip_val, "pageProvider"), "pageProvider");
-    auto provider = liveProviderById(clip_page_providers_, provider_id);
-    if (!provider) {
-      throw WasmRangeError("pageProvider is not live");
-    }
-    schedule.page_provider = provider;
+    schedule.page_provider = readPageProvider(objectProperty(clip_val, "pageProvider"));
     schedule.buffer = {};
   } else {
     schedule.buffer = {nullptr, channel_count, num_samples};
@@ -457,48 +466,6 @@ val RealtimeEngineWasm::prebakedClipChannels(const val& clip_id_val) const {
 
 int RealtimeEngineWasm::clipCount() const { return static_cast<int>(engine_.clip_count()); }
 
-int RealtimeEngineWasm::createClipPageProvider(const val& num_channels_val, int64_t num_samples,
-                                               int64_t page_frames) {
-  const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
-  if (!sonare::engine::validate_clip_page_dimensions(num_channels, num_samples, page_frames)) {
-    throw WasmRangeError("clip page provider dimensions must be positive");
-  }
-  auto provider = std::make_shared<WasmClipPageProvider>(num_channels, num_samples, page_frames);
-  for (size_t index = 0; index < clip_page_providers_.size(); ++index) {
-    if (!clip_page_providers_[index]) {
-      clip_page_providers_[index] = std::move(provider);
-      return static_cast<int>(index + 1);
-    }
-  }
-  clip_page_providers_.push_back(std::move(provider));
-  return static_cast<int>(clip_page_providers_.size());
-}
-
-void RealtimeEngineWasm::supplyClipPage(const val& provider_id_val, int64_t page_index,
-                                        val channels) {
-  const int provider_id = checkedIntFromVal(provider_id_val, "providerId");
-  auto provider = liveProviderById(clip_page_providers_, provider_id);
-  if (!provider) {
-    throw WasmRangeError("pageProvider is not live");
-  }
-  provider->supply(page_index, channels);
-}
-
-void RealtimeEngineWasm::clearClipPage(const val& provider_id_val, int64_t page_index) {
-  const int provider_id = checkedIntFromVal(provider_id_val, "providerId");
-  auto provider = liveProviderById(clip_page_providers_, provider_id);
-  if (!provider) {
-    throw WasmRangeError("pageProvider is not live");
-  }
-  provider->clear(page_index);
-}
-
-void RealtimeEngineWasm::destroyClipPageProvider(const val& provider_id_val) {
-  const int provider_id = checkedIntFromVal(provider_id_val, "providerId");
-  if (provider_id <= 0 || static_cast<size_t>(provider_id) > clip_page_providers_.size()) return;
-  clip_page_providers_[static_cast<size_t>(provider_id - 1)].reset();
-}
-
 val RealtimeEngineWasm::popClipPageRequest() {
   sonare::engine::ClipPageRequest request{};
   if (!engine_.pop_clip_page_request(request)) return val::null();
@@ -559,16 +526,19 @@ double RealtimeEngineWasm::clipPagePrefetchFrames() const {
   return static_cast<double>(engine_.clip_page_prefetch_frames());
 }
 
+void registerClipPageProvider() {
+  class_<WasmClipPageProvider>("ClipPageProvider")
+      .smart_ptr_constructor("ClipPageProvider", &createClipPageProvider)
+      .function("supply", &WasmClipPageProvider::supply)
+      .function("clear", &WasmClipPageProvider::clear);
+}
+
 void registerRealtimeEngineClips(class_<RealtimeEngineWasm>& cls) {
   cls.function("setClips", &RealtimeEngineWasm::setClips)
       .function("upsertClip", &RealtimeEngineWasm::upsertClip)
       .function("removeClip", &RealtimeEngineWasm::removeClip)
       .function("prebakedClipChannels", &RealtimeEngineWasm::prebakedClipChannels)
       .function("clipCount", &RealtimeEngineWasm::clipCount)
-      .function("createClipPageProvider", &RealtimeEngineWasm::createClipPageProvider)
-      .function("supplyClipPage", &RealtimeEngineWasm::supplyClipPage)
-      .function("clearClipPage", &RealtimeEngineWasm::clearClipPage)
-      .function("destroyClipPageProvider", &RealtimeEngineWasm::destroyClipPageProvider)
       .function("popClipPageRequest", &RealtimeEngineWasm::popClipPageRequest)
       .function("popClipPageRequestToScratch", &RealtimeEngineWasm::popClipPageRequestToScratch)
       .function("clipPageRequestScratchClipId", &RealtimeEngineWasm::clipPageRequestScratchClipId)

@@ -339,12 +339,10 @@ export interface WorkletOpfsClipStreamHost {
  * provider to schedule via `addClip(trackId, provider, startPpq, { id: clipId })`.
  *
  * @param streamer Shared streamer pumped on the control thread.
- * @param engine Engine the provider is created on (the same one `streamer` drives).
  * @param options Provider options plus `clipId` and optional `primePages`.
  */
 export function attachOpfsClipStream(
   streamer: ClipPageStreamer,
-  engine: RealtimeEngine,
   options: OpfsClipStreamOptions,
 ): Promise<OpfsClipStream>;
 /**
@@ -358,15 +356,12 @@ export function attachOpfsClipStream(
 ): Promise<OpfsClipStream>;
 export async function attachOpfsClipStream(
   streamerOrEngine: ClipPageStreamer | WorkletOpfsClipStreamHost,
-  engineOrOptions: RealtimeEngine | OpfsClipStreamOptions,
-  maybeOptions?: OpfsClipStreamOptions,
+  options: OpfsClipStreamOptions,
 ): Promise<OpfsClipStream> {
   if (!(streamerOrEngine instanceof ClipPageStreamer)) {
-    return streamerOrEngine.attachOpfsClipStream(engineOrOptions as OpfsClipStreamOptions);
+    return streamerOrEngine.attachOpfsClipStream(options);
   }
   const streamer = streamerOrEngine;
-  const engine = engineOrOptions as RealtimeEngine;
-  const options = maybeOptions;
   if (!options) {
     throw new TypeError('attachOpfsClipStream requires options.');
   }
@@ -376,7 +371,7 @@ export async function attachOpfsClipStream(
     throw releasedHandleError('ClipPageStreamer', 'is closed.');
   }
   const token = epoch.current();
-  const binding = createOpfsClipPageProvider(engine, providerOptions);
+  const binding = createOpfsClipPageProvider(providerOptions);
   // A close() while priming reclaims the binding before it is registered.
   const releaseOnClose = epoch.onClose(() => binding.close());
   try {

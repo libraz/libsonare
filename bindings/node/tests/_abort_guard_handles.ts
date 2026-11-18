@@ -322,10 +322,6 @@ export interface NativeEngine {
   setBusStripPanMode(busId: unknown, panMode: unknown): void;
   setBusStripDualPan(busId: unknown, leftPan: unknown, rightPan: unknown): void;
   setTrackStripChannelDelaySamples(trackId: unknown, delaySamples: unknown): void;
-  createClipPageProvider(numChannels: unknown, numSamples: unknown, pageFrames: unknown): number;
-  supplyClipPage(providerId: unknown, pageIndex: unknown, channels: unknown): void;
-  clearClipPage(providerId: unknown, pageIndex: unknown): void;
-  destroyClipPageProvider(providerId: unknown): void;
   setClipPagePrefetchFrames(frames: unknown): void;
   clipPagePrefetchFrames(): number;
   setCaptureBuffer(channelsOrCount: unknown, capacityFrames?: unknown): void;
@@ -335,6 +331,12 @@ export interface NativeEngine {
   setRecordOffsetSamples(offsetSamples: unknown): void;
   setInputMonitor(enabled: unknown, gain?: unknown): void;
   captureStatus(): NativeCaptureStatus;
+}
+
+export interface NativeClipPageProvider {
+  destroy(): void;
+  supply(pageIndex: unknown, channels: unknown): void;
+  clear(pageIndex: unknown): void;
 }
 
 export interface NativeSampleBank {
@@ -448,6 +450,15 @@ export function withProject<T>(body: (project: NativeProject) => T): T {
     return body(project);
   } finally {
     project.destroy();
+  }
+}
+
+export function withClipPageProvider<T>(body: (provider: NativeClipPageProvider) => T): T {
+  const provider = new addon.ClipPageProvider(1, 1024, 256) as NativeClipPageProvider;
+  try {
+    return body(provider);
+  } finally {
+    provider.destroy();
   }
 }
 

@@ -221,7 +221,7 @@ describe('writeOpfsClip', () => {
     await writeOpfsClip('clips/rt.f32', channels, { worker: harness.asWorker() });
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     const supplied: Float32Array[][] = [];
-    const binding = createOpfsClipPageProvider(engine, {
+    const binding = createOpfsClipPageProvider({
       path: 'clips/rt.f32',
       numChannels: 2,
       numSamples: 10,
@@ -249,7 +249,7 @@ describe('writeOpfsClip', () => {
     const harness = new OpfsWorkerHarness();
     await writeOpfsClip('held.f32', [new Float32Array(8)], { worker: harness.asWorker() });
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
-    const binding = createOpfsClipPageProvider(engine, {
+    const binding = createOpfsClipPageProvider({
       path: '/held.f32',
       numChannels: 1,
       numSamples: 8,

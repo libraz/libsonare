@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "sonare_wrap.h"
+#include "sonare_wrap_clip_page_provider.h"
 #include "sonare_wrap_engine.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_playback.h"
@@ -650,6 +651,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   RealtimeEngineWrap::Init(env, exports);
   ProjectWrap::Init(env, exports);
   SampleBankWrap::Init(env, exports);
+  ClipPageProviderWrap::Init(env, exports);
   ProjectTimelineWrap::Init(env, exports);
   sonare_node::PolyphonicAnalysisWrap::Init(env, exports);
   HrtfSetWrap::Init(env, exports);

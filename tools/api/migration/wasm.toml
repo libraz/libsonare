@@ -26946,3 +26946,82 @@ old = "MixerMeterSnapshot"
 removed = "Mixer.meterSnapshot() returns MixMeterSnapshot, the same record stripMeter and busMeter return, with the loudness, mono-compatibility and per-plane fields the master reading lacked"
 domain = "mastering"
 rule = "type-names"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.createClipPageProvider"
+removed = "new ClipPageProvider({ numChannels, numSamples, pageFrames }) creates a provider no engine owns"
+rule = "construction"
+domain = "engine"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.supplyClipPage"
+removed = "call supply(pageIndex, channels) on the ClipPageProvider"
+rule = "construction"
+domain = "engine"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.clearClipPage"
+removed = "call clear(pageIndex) on the ClipPageProvider"
+rule = "construction"
+domain = "engine"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.destroyClipPageProvider"
+removed = "call destroy() on the ClipPageProvider"
+rule = "construction"
+domain = "engine"
+
+[[entry]]
+kind = "class"
+old = "ClipPageProvider"
+changed = "constructor(options: ClipPageProviderOptions) with { numChannels, numSamples, pageFrames } replaces construction through the engine; clear() after destroy() is InvalidState instead of a no-op"
+rule = "construction"
+test = "bindings/wasm/tests/realtime-engine-routing.test.ts::refuses supply and clear after destroy, and destroys twice"
+domain = "project"
+
+[[entry]]
+kind = "option"
+old = "ClipPageProvider.constructor(engine)"
+removed = "pass { numChannels, numSamples, pageFrames }; the provider is no longer bound to an engine or addressed by id"
+rule = "construction"
+domain = "project"
+
+[[entry]]
+kind = "option"
+old = "ClipPageProvider.constructor(id)"
+removed = "pass { numChannels, numSamples, pageFrames }; the provider is no longer bound to an engine or addressed by id"
+rule = "construction"
+domain = "project"
+
+[[entry]]
+kind = "field"
+old = "ClipPageProvider.id"
+removed = "a clip names its provider by instance, not by id"
+rule = "construction"
+domain = "project"
+
+[[entry]]
+kind = "field"
+old = "EngineClip.pageProvider.id"
+removed = "pageProvider takes the ClipPageProvider instance; a number or { id } is refused"
+rule = "construction"
+domain = "engine"
+
+[[entry]]
+kind = "option"
+old = "createOpfsClipPageProvider(engine)"
+removed = "createOpfsClipPageProvider(options) takes no engine; the clip names the provider instance"
+domain = "project"
+rule = "construction"
+
+[[entry]]
+kind = "field"
+old = "StreamingMasteringChainConfig.numChannels"
+changed = "required (1 | 2): the channel count of the caller's stream has no default (was 1)"
+domain = "mastering"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/mastering-streaming.test.ts::no numChannels"

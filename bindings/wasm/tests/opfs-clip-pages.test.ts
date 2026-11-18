@@ -144,7 +144,7 @@ describe('createOpfsClipPageProvider', () => {
   it('feeds page requests through a worker-backed provider', async () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     const worker = new FakeClipPageWorker();
-    const binding = createOpfsClipPageProvider(engine, {
+    const binding = createOpfsClipPageProvider({
       path: 'clips/clip.f32',
       numChannels: 1,
       numSamples: 8,
@@ -177,12 +177,12 @@ describe('createOpfsClipPageProvider', () => {
     const suppliedA: number[] = [];
     const suppliedB: number[] = [];
     const options = { numChannels: 1, numSamples: 8, pageFrames: 4, worker: worker as never };
-    const a = createOpfsClipPageProvider(engine, {
+    const a = createOpfsClipPageProvider({
       ...options,
       path: 'clips/a.f32',
       onPageSupplied: (_page, channels) => suppliedA.push(channels[0][0]),
     });
-    const b = createOpfsClipPageProvider(engine, {
+    const b = createOpfsClipPageProvider({
       ...options,
       path: 'clips/b.f32',
       onPageSupplied: (_page, channels) => suppliedB.push(channels[0][0]),
@@ -220,7 +220,7 @@ describe('createOpfsClipPageProvider', () => {
   it('rejects a pending read and a later supplyPage with InvalidState once closed', async () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     const worker = new DeferredClipPageWorker();
-    const binding = createOpfsClipPageProvider(engine, {
+    const binding = createOpfsClipPageProvider({
       path: 'clips/closing.f32',
       numChannels: 1,
       numSamples: 8,
@@ -243,7 +243,7 @@ describe('createOpfsClipPageProvider', () => {
   it('refuses an offline render that would read a page no one supplied', async () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     const worker = new FakeClipPageWorker();
-    const binding = createOpfsClipPageProvider(engine, {
+    const binding = createOpfsClipPageProvider({
       path: 'clips/clip.f32',
       numChannels: 1,
       numSamples: 8,
@@ -269,7 +269,7 @@ describe('createOpfsClipPageProvider', () => {
   it('rejects the request and settles its pending entry when the worker refuses the post', async () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     const worker = new FakeClipPageWorker();
-    const binding = createOpfsClipPageProvider(engine, {
+    const binding = createOpfsClipPageProvider({
       path: 'clips/clip.f32',
       numChannels: 1,
       numSamples: 8,
@@ -294,7 +294,7 @@ describe('createOpfsClipPageProvider', () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     const worker = new FakeClipPageWorker();
     worker.framesOverride = 2;
-    const binding = createOpfsClipPageProvider(engine, {
+    const binding = createOpfsClipPageProvider({
       path: 'clips/clip.f32',
       numChannels: 1,
       numSamples: 8,
@@ -311,7 +311,7 @@ describe('createOpfsClipPageProvider', () => {
   it('serializes concurrent page reads sent to the worker', async () => {
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 8 });
     const worker = new FakeClipPageWorker();
-    const binding = createOpfsClipPageProvider(engine, {
+    const binding = createOpfsClipPageProvider({
       path: 'clips/clip.f32',
       numChannels: 1,
       numSamples: 8,
@@ -639,7 +639,7 @@ describe('attachOpfsClipStream', () => {
     const worker = new DeferredClipPageWorker();
     const streamer = new ClipPageStreamer(engine);
     try {
-      const attach = attachOpfsClipStream(streamer, engine, {
+      const attach = attachOpfsClipStream(streamer, {
         path: 'clips/clip.f32',
         clipId: 401,
         numChannels: 1,
@@ -653,7 +653,7 @@ describe('attachOpfsClipStream', () => {
       await expect(attach).rejects.toThrow();
       expect(worker.listeners.size).toBe(0);
       await expect(
-        attachOpfsClipStream(streamer, engine, {
+        attachOpfsClipStream(streamer, {
           path: 'clips/clip.f32',
           clipId: 402,
           numChannels: 1,
@@ -673,7 +673,7 @@ describe('attachOpfsClipStream', () => {
     const worker = new FakeClipPageWorker();
     // Default window retains page 0 behind the frontier, so a seek back replays it.
     const streamer = new ClipPageStreamer(engine);
-    const { provider } = await attachOpfsClipStream(streamer, engine, {
+    const { provider } = await attachOpfsClipStream(streamer, {
       path: 'clips/clip.f32',
       clipId: 400,
       numChannels: 1,

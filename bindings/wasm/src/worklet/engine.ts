@@ -38,13 +38,11 @@ import type {
   UmpWords,
 } from '../index.js';
 import { RealtimeEngine } from '../index.js';
+import { clipPageProviderClassFor } from '../internal/clip_page_native.js';
 import { releasedHandleError } from '../internal/handle_guard.js';
 import { mixSceneBusToNative, mixSceneStripToNative } from '../internal/mix_scene.js';
 import type { SonareEngineSyncMessage } from '../internal/worklet_messages.js';
-import {
-  createOpfsClipPageProvider,
-  type OpfsClipPageProviderBinding,
-} from '../opfs_clip_pages.js';
+import { type OpfsClipPageProviderBinding, openOpfsClipPageProvider } from '../opfs_clip_pages.js';
 import { OwnerEpoch } from '../owner_epoch.js';
 import type { SurroundPan } from '../public_types.js';
 import type {
@@ -55,7 +53,7 @@ import type {
   SidechainSource,
 } from '../public_types_engine.js';
 import type { SonareRealtimeEngineNodeCapabilities } from '../public_types_worklet.js';
-import type { ClipPageProvider } from '../realtime_engine.js';
+import { ClipPageProvider } from '../realtime_engine.js';
 import { resolveRenderFrame } from '../validation.js';
 import type { EngineAutomationContext } from './engine-automation.js';
 import * as automation from './engine-automation.js';
@@ -182,11 +180,11 @@ export class SonareEngine {
   // places a hard cap on work queued while OPFS I/O is stalled.
   private readonly workletClipPageRequests = new Map<number, ClipPagePageRequest>();
   private readonly workletPageProviderClipIds = new Map<
-    number,
+    ClipPageProvider,
     { clipId: number; streamKey: number }
   >();
   private nextClipStreamKey = 1;
-  private readonly opfsExportSources = new Map<number, OpfsExportSource>();
+  private readonly opfsExportSources = new Map<ClipPageProvider, OpfsExportSource>();
   private readonly exportSession: { chunkOrigin: number | undefined } = { chunkOrigin: undefined };
   private workletClipStreamer: ClipPageStreamer | undefined;
   private workletClipPump: Promise<void> | undefined;
@@ -826,29 +824,33 @@ export class SonareEngine {
       pageFrames: providerOptions.pageFrames,
     });
     let binding: OpfsClipPageProviderBinding;
-    binding = createOpfsClipPageProvider(this.offlineEngine, {
-      ...providerOptions,
-      onPageSupplied: (pageIndex, channels) => {
-        this.opfsExportSources.get(binding.provider.id)?.residentPages.add(pageIndex);
-        this.postSync(
-          { type: 'syncClipPage', clipId, streamKey, pageIndex, channels },
-          transferableAudioBuffers(channels),
-        );
+    // The offline engine may come from the index bundle, whose natives only take its own providers.
+    binding = openOpfsClipPageProvider(
+      clipPageProviderClassFor(this.offlineEngine, ClipPageProvider),
+      {
+        ...providerOptions,
+        onPageSupplied: (pageIndex, channels) => {
+          this.opfsExportSources.get(binding.provider)?.residentPages.add(pageIndex);
+          this.postSync(
+            { type: 'syncClipPage', clipId, streamKey, pageIndex, channels },
+            transferableAudioBuffers(channels),
+          );
+        },
+        onPageCleared: (pageIndex) => {
+          this.opfsExportSources.get(binding.provider)?.residentPages.delete(pageIndex);
+          this.postSync({ type: 'syncClipPageClear', clipId, streamKey, pageIndex });
+        },
+        onClose: () => {
+          this.workletPageProviderClipIds.delete(binding.provider);
+          this.opfsExportSources.delete(binding.provider);
+          this.postSync({ type: 'syncClipPageDestroy', clipId, streamKey });
+        },
       },
-      onPageCleared: (pageIndex) => {
-        this.opfsExportSources.get(binding.provider.id)?.residentPages.delete(pageIndex);
-        this.postSync({ type: 'syncClipPageClear', clipId, streamKey, pageIndex });
-      },
-      onClose: () => {
-        this.workletPageProviderClipIds.delete(binding.provider.id);
-        this.opfsExportSources.delete(binding.provider.id);
-        this.postSync({ type: 'syncClipPageDestroy', clipId, streamKey });
-      },
-    });
+    );
     // Destroy during priming closes the binding before the engines go away.
     const releaseOnDestroy = this.epoch.onClose(() => binding.close());
-    this.workletPageProviderClipIds.set(binding.provider.id, { clipId, streamKey });
-    this.opfsExportSources.set(binding.provider.id, {
+    this.workletPageProviderClipIds.set(binding.provider, { clipId, streamKey });
+    this.opfsExportSources.set(binding.provider, {
       binding,
       pageFrames: providerOptions.pageFrames,
       numSamples: providerOptions.numSamples,
@@ -1636,14 +1638,10 @@ export class SonareEngine {
    * provider is not one; throws when the clip id differs from the stream's.
    */
   private workletClipStream(clip: EngineClip): { clipId: number; streamKey: number } | undefined {
-    const providerId =
-      typeof clip.pageProvider === 'object' && clip.pageProvider !== null
-        ? clip.pageProvider.id
-        : clip.pageProvider;
-    if (providerId === undefined) {
+    if (clip.pageProvider === undefined) {
       return undefined;
     }
-    const stream = this.workletPageProviderClipIds.get(providerId);
+    const stream = this.workletPageProviderClipIds.get(clip.pageProvider);
     if (stream !== undefined && clip.id !== stream.clipId) {
       throw new RangeError(
         `OPFS stream clipId ${stream.clipId} must match addClip(..., { id: ${stream.clipId} }).`,

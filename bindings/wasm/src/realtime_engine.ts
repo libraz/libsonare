@@ -11,6 +11,11 @@ import {
 } from './codes.js';
 import { ErrorCode, SonareError } from './errors.js';
 import { CHANNEL_LAYOUT_VALUES } from './internal/channel_layout.js';
+import {
+  bindNativeClipPageProvider,
+  nativeClipPageProviderOf,
+  registerClipPageProviderClass,
+} from './internal/clip_page_native.js';
 import { eqBandJson } from './internal/eq_band_json.js';
 import { externalMidiEvent } from './internal/external_midi.js';
 import { assertHandleLive, releasedHandleError } from './internal/handle_guard.js';
@@ -49,6 +54,7 @@ import type {
 } from './public_types.js';
 import type {
   CaptureOptions,
+  ClipPageProviderOptions,
   EngineAutomationPoint,
   EngineBounceOptions,
   EngineBounceResult,
@@ -85,6 +91,7 @@ import type {
   StripRef,
 } from './public_types_engine.js';
 import type {
+  WasmClipPageProvider,
   WasmEngineBus,
   WasmEngineClip,
   WasmEngineMeterTelemetry,
@@ -105,6 +112,7 @@ import {
 export type {
   CaptureOptions,
   CapturePunch,
+  ClipPageProviderOptions,
   EngineAutomationPoint,
   EngineBounceOptions,
   EngineBounceResult,
@@ -369,7 +377,7 @@ export function engineCapabilities(): EngineCapabilities {
   };
 }
 
-/** The clip shape the embind layer reads: the warp mode travels as its ordinal, a page provider as its id. */
+/** The clip shape the embind layer reads: the warp mode travels as its ordinal, a page provider as its embind instance. */
 function nativeClip(clip: EngineClip): WasmEngineClip {
   const { warpMode, pageProvider, ...rest } = clip;
   return {
@@ -377,8 +385,9 @@ function nativeClip(clip: EngineClip): WasmEngineClip {
     ...(warpMode === undefined
       ? {}
       : { warpMode: tokenCode('setClips', 'warpMode', warpMode, WARP_MODES) as 0 | 1 | 2 | 3 }),
-    pageProvider:
-      typeof pageProvider === 'object' && pageProvider !== null ? pageProvider.id : pageProvider,
+    ...(pageProvider === undefined
+      ? {}
+      : { pageProvider: nativeClipPageProviderOf(pageProvider) as WasmEngineClip['pageProvider'] }),
   };
 }
 
@@ -2370,27 +2379,6 @@ export class RealtimeEngine {
     this.native.setBusStripDualPan(busId, leftPan, rightPan);
   }
 
-  createClipPageProvider(
-    numChannels: number,
-    numSamples: number,
-    pageFrames: number,
-  ): ClipPageProvider {
-    const id = this.native.createClipPageProvider(numChannels, numSamples, pageFrames);
-    return new ClipPageProvider(this, id);
-  }
-
-  supplyClipPage(providerId: number, pageIndex: number, channels: Float32Array[]): void {
-    this.native.supplyClipPage(providerId, pageIndex, channels);
-  }
-
-  clearClipPage(providerId: number, pageIndex: number): void {
-    this.native.clearClipPage(providerId, pageIndex);
-  }
-
-  destroyClipPageProvider(providerId: number): void {
-    this.native.destroyClipPageProvider(providerId);
-  }
-
   /** Pops the oldest clip-page request, or `undefined` when none is queued. */
   popClipPageRequest(): ClipPageSampleRequest | undefined {
     return this.native.popClipPageRequest() ?? undefined;
@@ -2805,39 +2793,50 @@ export class RealtimeEngine {
   }
 }
 
-/** Handle to a paged clip source on a {@link RealtimeEngine}; pages are supplied on demand. */
+/** A paged clip source, independent of any engine; pages are supplied on demand. */
 export class ClipPageProvider {
+  private nativeHandle: WasmClipPageProvider;
   private disposed = false;
 
-  constructor(
-    private readonly engine: RealtimeEngine,
-    /** Provider id on the engine. */
-    readonly id: number,
-  ) {}
+  /**
+   * @param options - Channel count, length and page size, all positive.
+   * @throws RangeError when a dimension is not positive.
+   */
+  constructor(options: ClipPageProviderOptions) {
+    requestObject('ClipPageProvider', options, 'options', true);
+    const native = new (getSonareModule().ClipPageProvider)(
+      options.numChannels,
+      options.numSamples,
+      options.pageFrames,
+    );
+    this.nativeHandle = native;
+    bindNativeClipPageProvider(this, native);
+  }
 
-  /** Hand the engine one page of planar channels. Throws `InvalidState` after `destroy()`. */
-  supply(pageIndex: number, channels: Float32Array[]): void {
+  private get native(): WasmClipPageProvider {
     if (this.disposed) {
       throw releasedHandleError('ClipPageProvider', 'is destroyed');
     }
-    this.engine.supplyClipPage(this.id, pageIndex, channels);
+    return this.nativeHandle;
   }
 
-  /** Evict one resident page; a no-op after `destroy()`. */
+  /** Hand the engine one page of planar channels. Throws `InvalidState` after `destroy()`. */
+  supply(pageIndex: number, channels: Float32Array[]): void {
+    this.native.supply(pageIndex, channels);
+  }
+
+  /** Evict one resident page. Throws `InvalidState` after `destroy()`. */
   clear(pageIndex: number): void {
-    if (this.disposed) {
-      return;
-    }
-    this.engine.clearClipPage(this.id, pageIndex);
+    this.native.clear(pageIndex);
   }
 
-  /** Release the provider on the engine. Idempotent. */
+  /** Release the provider; a clip already scheduled keeps playing. Idempotent. */
   destroy(): void {
     if (this.disposed) {
       return;
     }
     this.disposed = true;
-    this.engine.destroyClipPageProvider(this.id);
+    this.nativeHandle.delete();
   }
 
   /** Releases the provider through {@link destroy}, so the instance works with `using`. */
@@ -2845,3 +2844,5 @@ export class ClipPageProvider {
     this.destroy();
   }
 }
+
+registerClipPageProviderClass(RealtimeEngine, ClipPageProvider);

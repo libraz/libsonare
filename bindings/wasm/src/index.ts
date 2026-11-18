@@ -1131,6 +1131,7 @@ export {
 export type {
   CaptureOptions,
   CapturePunch,
+  ClipPageProviderOptions,
   EngineAutomationPoint,
   EngineBounceOptions,
   EngineBounceResult,

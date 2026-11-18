@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "engine/common.h"
+#include "sonare_wrap_clip_page_provider.h"
 #include "sonare_wrap_engine.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_project_timeline.h"
@@ -51,12 +52,6 @@ int ParseWarpMode(Napi::Env env, const Napi::Value& value) {
 
 const char* CaptureSourceName(int source) {
   return source == SONARE_ENGINE_CAPTURE_SOURCE_INPUT ? "input" : "output";
-}
-
-SonareClipPageProvider* ProviderById(
-    const std::unordered_map<int, SonareClipPageProvider*>& providers, int id) {
-  const auto it = providers.find(id);
-  return it == providers.end() ? nullptr : it->second;
 }
 
 // Reads a JS array of sends into SonareEngineTrackSend, the one shape lanes,
@@ -109,9 +104,8 @@ struct ClipStorage {
 
 // Reads one JS clip object into @p out_clip, whose pointers land in @p out_storage.
 // Returns false with a pending JS exception on a malformed clip.
-bool ReadClip(Napi::Env env, const Napi::Value& entry,
-              const std::unordered_map<int, SonareClipPageProvider*>& providers,
-              ClipStorage* out_storage, SonareEngineClip* out_clip) {
+bool ReadClip(Napi::Env env, const Napi::Value& entry, ClipStorage* out_storage,
+              SonareEngineClip* out_clip) {
   if (!entry.IsObject()) {
     Napi::TypeError::New(env, "clip must be an object").ThrowAsJavaScriptException();
     return false;
@@ -165,14 +159,8 @@ bool ReadClip(Napi::Env env, const Napi::Value& entry,
   clip.track_id = Uint32Property(obj, "trackId", 0);
   if (env.IsExceptionPending()) return false;
   if (has_page_provider) {
-    int provider_id = 0;
-    if (!RequiredIntProperty(env, obj, "pageProvider", &provider_id)) return false;
-    SonareClipPageProvider* provider = ProviderById(providers, provider_id);
-    if (!provider) {
-      Napi::TypeError::New(env, "pageProvider is not a live ClipPageProvider")
-          .ThrowAsJavaScriptException();
-      return false;
-    }
+    SonareClipPageProvider* provider = nullptr;
+    if (!ClipPageProviderWrap::ReadHandle(env, obj.Get("pageProvider"), &provider)) return false;
     clip.page_provider = provider;
     clip.channels = nullptr;
     clip.num_channels = 0;
@@ -239,7 +227,7 @@ Napi::Value RealtimeEngineWrap::SetClips(const Napi::CallbackInfo& info) {
   std::vector<ClipStorage> storage(input.Length());
   std::vector<SonareEngineClip> clips(input.Length());
   for (uint32_t i = 0; i < input.Length(); ++i) {
-    if (!ReadClip(env, input.Get(i), clip_page_providers_, &storage[i], &clips[i])) {
+    if (!ReadClip(env, input.Get(i), &storage[i], &clips[i])) {
       return env.Undefined();
     }
   }
@@ -258,7 +246,7 @@ Napi::Value RealtimeEngineWrap::UpsertClip(const Napi::CallbackInfo& info) {
   }
   ClipStorage storage;
   SonareEngineClip clip{};
-  if (!ReadClip(env, info[0], clip_page_providers_, &storage, &clip)) return env.Undefined();
+  if (!ReadClip(env, info[0], &storage, &clip)) return env.Undefined();
   ThrowIfError(env, sonare_engine_upsert_clip(engine_, &clip));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -572,113 +560,6 @@ Napi::Value RealtimeEngineWrap::ClipCount(const Napi::CallbackInfo& info) {
   ThrowIfError(env, sonare_engine_clip_count(engine_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(count));
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value RealtimeEngineWrap::CreateClipPageProvider(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  int num_channels = 0;
-  int64_t num_samples = 0;
-  int64_t page_frames = 0;
-  if (!RequiredIntArg(env, info, 0, "numChannels", &num_channels) ||
-      !RequiredInt64Arg(env, info, 1, "numSamples", &num_samples) ||
-      !RequiredInt64Arg(env, info, 2, "pageFrames", &page_frames)) {
-    return env.Undefined();
-  }
-  SonareClipPageProvider* provider = nullptr;
-  ThrowIfError(env,
-               sonare_clip_page_provider_create(num_channels, num_samples, page_frames, &provider));
-  if (env.IsExceptionPending()) return env.Undefined();
-  const int id = next_clip_page_provider_id_++;
-  clip_page_providers_[id] = provider;
-  return Napi::Number::New(env, static_cast<double>(id));
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value RealtimeEngineWrap::SupplyClipPage(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  int provider_id = 0;
-  int64_t page_index = 0;
-  if (!RequiredIntArg(env, info, 0, "providerId", &provider_id) ||
-      !RequiredInt64Arg(env, info, 1, "pageIndex", &page_index)) {
-    return env.Undefined();
-  }
-  SonareClipPageProvider* provider = ProviderById(clip_page_providers_, provider_id);
-  if (!provider) {
-    Napi::TypeError::New(env, "pageProvider is not live").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (info.Length() <= 2 || !info[2].IsArray()) {
-    Napi::TypeError::New(env, "expected an array of Float32Array channels")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  Napi::Array channels = info[2].As<Napi::Array>();
-  std::vector<std::vector<float>> storage;
-  std::vector<const float*> ptrs;
-  storage.reserve(channels.Length());
-  ptrs.reserve(channels.Length());
-  size_t frames = 0;
-  for (uint32_t ch = 0; ch < channels.Length(); ++ch) {
-    Napi::Value value = channels.Get(ch);
-    if (!sonare_node::IsFloat32Array(value)) {
-      Napi::TypeError::New(env, "clip page channel must be a Float32Array")
-          .ThrowAsJavaScriptException();
-      return env.Undefined();
-    }
-    Napi::Float32Array channel = value.As<Napi::Float32Array>();
-    if (ch == 0) {
-      frames = channel.ElementLength();
-    } else if (channel.ElementLength() != frames) {
-      Napi::RangeError::New(env, "all clip page channels must have the same length")
-          .ThrowAsJavaScriptException();
-      return env.Undefined();
-    }
-    storage.emplace_back(channel.Data(), channel.Data() + channel.ElementLength());
-    ptrs.push_back(storage.back().data());
-  }
-  ThrowIfError(env, sonare_clip_page_provider_supply(provider, page_index, ptrs.data(),
-                                                     static_cast<int>(ptrs.size()),
-                                                     static_cast<int64_t>(frames)));
-  return env.Undefined();
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value RealtimeEngineWrap::ClearClipPage(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  int provider_id = 0;
-  int64_t page_index = 0;
-  if (!RequiredIntArg(env, info, 0, "providerId", &provider_id) ||
-      !RequiredInt64Arg(env, info, 1, "pageIndex", &page_index)) {
-    return env.Undefined();
-  }
-  SonareClipPageProvider* provider = ProviderById(clip_page_providers_, provider_id);
-  if (!provider) {
-    Napi::TypeError::New(env, "pageProvider is not live").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  ThrowIfError(env, sonare_clip_page_provider_clear(provider, page_index));
-  return env.Undefined();
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value RealtimeEngineWrap::DestroyClipPageProvider(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  // Releasing stays a no-op once engine destruction has already freed the providers.
-  int id = 0;
-  if (!RequiredIntArg(env, info, 0, "providerId", &id)) return env.Undefined();
-  SonareClipPageProvider* provider = ProviderById(clip_page_providers_, id);
-  if (!provider) return env.Undefined();
-  sonare_clip_page_provider_destroy(provider);
-  clip_page_providers_.erase(id);
-  return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
 

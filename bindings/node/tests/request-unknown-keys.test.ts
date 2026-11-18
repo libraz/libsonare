@@ -29,7 +29,9 @@ const refusals = /unknown (request key|option)/;
 
 /** Shapes of class-method requests; they are not index functions and carry their own unknown-key cases. */
 const methodShapes = [
+  'ClipPageProvider',
   'ExternalSeparatedStem',
+  'FileClipPageProvider',
   'Mixer',
   'Mixer.fromJson',
   'PlaybackLoudnessMeter',

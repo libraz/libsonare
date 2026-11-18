@@ -74,6 +74,7 @@ set(ADDON_SOURCES
   src/addon/project/midi_mir.cpp
   src/addon/project/render.cpp
   src/addon/sonare_wrap_sample_bank.cpp
+  src/addon/sonare_wrap_clip_page_provider.cpp
   src/addon/sonare_wrap_project_timeline.cpp
   src/addon/sonare_wrap.cpp
   src/addon/sonare_wrap_acoustic.cpp

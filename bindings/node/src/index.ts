@@ -95,6 +95,7 @@ export type {
   ChromaResult,
   ClickDetection,
   ClipDetection,
+  ClipPageProviderOptions,
   ControllerAxis,
   ControllerBinding,
   ControllerInput,
