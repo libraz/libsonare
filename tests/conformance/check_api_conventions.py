@@ -818,6 +818,140 @@ def _matrix_violation(r: dict) -> str | None:
     return None
 
 
+_C_LEXICAL = re.compile(
+    r"R\"(\w*)\(.*?\)\1\"|//[^\n]*|/\*.*?\*/|\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'", re.S
+)
+_C_ENTRY = re.compile(r"^[A-Za-z_][^\n(){};]*?\b(sonare_\w+)\s*\(", re.M)
+_C_DEFINITION = re.compile(
+    r"^[ \t]*(?:[A-Za-z_][^\n;{}()=]*?)\b([A-Za-z_]\w*)\s*\([^;{}]*\)\s*(?:const\s*)?(?:noexcept\s*)?\{",
+    re.M | re.S,
+)
+_C_BASE_SETTERS = ("set_last_error", "set_last_error_static", "record_current_exception")
+_C_NOT_A_FUNCTION = frozenset(
+    {"if", "for", "while", "switch", "catch", "return", "constexpr", "get", "operator"}
+)
+_C_ERROR_RETURN = re.compile(r"\breturn\s+(SONARE_ERROR_(?!OK\b)\w+)\s*;")
+
+
+def _c_blank(text: str) -> str:
+    """Source text with comments and literals blanked, newlines kept."""
+    return _C_LEXICAL.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), text)
+
+
+def _c_match(text: str, open_at: int) -> int:
+    """Index just past the delimiter closing the one at ``open_at``."""
+    pairs = {"(": ")", "{": "}"}
+    opener, closer, depth = text[open_at], pairs[text[open_at]], 0
+    for i in range(open_at, len(text)):
+        if text[i] == opener:
+            depth += 1
+        elif text[i] == closer:
+            depth -= 1
+            if depth == 0:
+                return i + 1
+    raise ValueError("unbalanced delimiter")
+
+
+def _c_entry_bodies(code: str) -> list[tuple[str, int, str]]:
+    """(name, body offset, body) of each file-scope ``sonare_*`` definition."""
+    out = []
+    for match in _C_ENTRY.finditer(code):
+        try:
+            after = _c_match(code, code.index("(", match.end() - 1))
+        except ValueError:
+            continue
+        head = code[after:].lstrip()
+        brace, semi = head.find("{"), head.find(";")
+        if brace < 0 or 0 <= semi < brace or re.search(r"[;})]", head[:brace]):
+            continue
+        start = after + (len(code) - after - len(head)) + brace
+        try:
+            end = _c_match(code, start)
+        except ValueError:
+            continue
+        out.append((match.group(1), start + 1, code[start + 1 : end - 1]))
+    return out
+
+
+def _c_message_setters(codes: list[str]) -> set[str]:
+    """Names of functions, directly or through another, that record the error message."""
+    bodies = []
+    for code in codes:
+        for match in _C_DEFINITION.finditer(code):
+            if match.group(1) in _C_NOT_A_FUNCTION:
+                continue
+            try:
+                bodies.append(
+                    (match.group(1), code[match.end() - 1 : _c_match(code, match.end() - 1)])
+                )
+            except ValueError:
+                continue
+    setters = set(_C_BASE_SETTERS)
+    grew = True
+    while grew:
+        grew = False
+        for name, body in bodies:
+            if name not in setters and any(re.search(rf"\b{s}\s*\(", body) for s in setters):
+                setters.add(name)
+                grew = True
+    return setters
+
+
+def _c_unset_returns(body: str, setters: set[str]) -> list[tuple[int, str]]:
+    """Offsets of non-OK literal returns with no message-setting call on their path."""
+    token = re.compile(
+        r"[{}]|" + _C_ERROR_RETURN.pattern + r"|\b(?:" + "|".join(sorted(setters)) + r")\s*\("
+    )
+    stack, bad = [False], []
+    for match in token.finditer(body):
+        text = match.group(0)
+        if text == "{":
+            stack.append(False)
+        elif text == "}":
+            if len(stack) > 1:
+                stack.pop()
+        elif text.startswith("return"):
+            if not any(stack):
+                bad.append((match.start(), match.group(1)))
+        else:
+            stack[-1] = True
+    return bad
+
+
+def _c_error_path_files(root: Path) -> list[dict]:
+    """One record per C-ABI source file, counting error returns that set no message."""
+    paths = sorted((root / "src" / "c_api").glob("*.cpp"))
+    sources = {
+        p: _c_blank(p.read_text(encoding="utf-8"))
+        for p in [*paths, *sorted((root / "src" / "c_api").glob("*.h"))]
+    }
+    setters = _c_message_setters(list(sources.values()))
+    out: list[dict] = []
+    for path in paths:
+        code = sources[path]
+        unset: list[str] = []
+        entries = _c_entry_bodies(code)
+        for name, offset, body in entries:
+            for at, _ in _c_unset_returns(body, setters):
+                unset.append(f"{name}:{code.count(chr(10), 0, offset + at) + 1}")
+        if entries:
+            out.append(
+                {
+                    "surface": "c",
+                    "kind": "c-error-path",
+                    "name": path.relative_to(root).as_posix(),
+                    "unset": unset,
+                }
+            )
+    return out
+
+
+def _c_error_path_violation(r: dict) -> str | None:
+    if r["unset"]:
+        return f"{len(r['unset'])} non-OK returns set no error message, first {r['unset'][0]}"
+    return None
+
+
 RULES: list[Rule] = [
     Rule(
         name="getters",
@@ -1218,6 +1352,72 @@ RULES: list[Rule] = [
                 ("BoundaryResult", "nFrames"),
                 ("PitchResult", "nFrames"),
                 ("MfccResult", "nMels"),
+            )
+        },
+    ),
+    Rule(
+        name="c-error-path",
+        summary="every non-OK return of a C-ABI entry point sets sonare_last_error_message()",
+        population=lambda r: r["kind"] == "c-error-path",
+        violation=_c_error_path_violation,
+        scan=_c_error_path_files,
+        pending={
+            f"c:{path}": "set the error message on each validation return, which records none today"
+            for path in (
+                "src/c_api/core_analysis.cpp",
+                "src/c_api/core_audio.cpp",
+                "src/c_api/core_cqt.cpp",
+                "src/c_api/core_quick.cpp",
+                "src/c_api/features_inverse.cpp",
+                "src/c_api/features_music.cpp",
+                "src/c_api/features_segment.cpp",
+                "src/c_api/features_spectral_pitch.cpp",
+                "src/c_api/features_spectrogram_mel.cpp",
+                "src/c_api/features_streaming.cpp",
+                "src/c_api/mixing_assistant.cpp",
+                "src/c_api/mixing_graph.cpp",
+                "src/c_api/mixing_mixer.cpp",
+                "src/c_api/mixing_strip.cpp",
+                "src/c_api/project_bounce.cpp",
+                "src/c_api/project_core.cpp",
+                "src/c_api/project_edit_clip.cpp",
+                "src/c_api/project_edit_track.cpp",
+                "src/c_api/project_external_stems.cpp",
+                "src/c_api/project_midi.cpp",
+                "src/c_api/project_mir.cpp",
+                "src/c_api/project_part_rig.cpp",
+                "src/c_api/project_soundfont.cpp",
+                "src/c_api/project_timeline.cpp",
+                "src/c_api/project_vocal_edit.cpp",
+                "src/c_api/sonare_c_acoustic.cpp",
+                "src/c_api/sonare_c_assist.cpp",
+                "src/c_api/sonare_c_compat.cpp",
+                "src/c_api/sonare_c_daw.cpp",
+                "src/c_api/sonare_c_editing.cpp",
+                "src/c_api/sonare_c_effects.cpp",
+                "src/c_api/sonare_c_engine.cpp",
+                "src/c_api/sonare_c_engine_capture.cpp",
+                "src/c_api/sonare_c_engine_clips.cpp",
+                "src/c_api/sonare_c_engine_controller.cpp",
+                "src/c_api/sonare_c_engine_midi.cpp",
+                "src/c_api/sonare_c_engine_mixing.cpp",
+                "src/c_api/sonare_c_engine_render.cpp",
+                "src/c_api/sonare_c_engine_timeline.cpp",
+                "src/c_api/sonare_c_mastering_apply.cpp",
+                "src/c_api/sonare_c_mastering_chain.cpp",
+                "src/c_api/sonare_c_mastering_dynamics.cpp",
+                "src/c_api/sonare_c_mastering_eq.cpp",
+                "src/c_api/sonare_c_mastering_preset.cpp",
+                "src/c_api/sonare_c_mastering_repair.cpp",
+                "src/c_api/sonare_c_mastering_streaming.cpp",
+                "src/c_api/sonare_c_memory.cpp",
+                "src/c_api/sonare_c_playback.cpp",
+                "src/c_api/sonare_c_polyphony.cpp",
+                "src/c_api/sonare_c_sample_bank.cpp",
+                "src/c_api/sonare_c_streaming_retune.cpp",
+                "src/c_api/sonare_c_transcribe.cpp",
+                "src/c_api/sonare_c_voice_changer.cpp",
+                "src/c_api/synth_catalog.cpp",
             )
         },
     ),

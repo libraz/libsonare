@@ -779,6 +779,48 @@ class Matrix2dRule(unittest.TestCase):
         self.assertEqual([f.key for f in verdict.violations], ["wasm:Grid"])
 
 
+class CErrorPathRule(unittest.TestCase):
+    GOOD = (
+        "static void reject(const char* m) { set_last_error(SONARE_ERROR_INVALID_PARAMETER, m); }\n"
+        "SonareError sonare_good(int* out) {\n"
+        "  SONARE_C_API_ENTRY;\n"
+        '  if (!out) { set_last_error(SONARE_ERROR_INVALID_PARAMETER, "null"); return SONARE_ERROR_INVALID_PARAMETER; }\n'
+        '  if (*out < 0) { reject("negative"); return SONARE_ERROR_INVALID_PARAMETER; }\n'
+        "  return SONARE_OK;\n"
+        "}\n"
+    )
+    BAD = (
+        "SonareError sonare_bad(int* out) {\n"
+        "  SONARE_C_API_ENTRY;\n"
+        '  if (*out > 9) { set_last_error(SONARE_ERROR_INVALID_PARAMETER, "big"); }\n'
+        "  if (!out) return SONARE_ERROR_INVALID_PARAMETER;\n"
+        "  return SONARE_OK;\n"
+        "}\n"
+    )
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+
+    def judge(self, **files: str):
+        root = Path(self._tmp.name)
+        (root / "src" / "c_api").mkdir(parents=True)
+        for name, text in files.items():
+            (root / "src" / "c_api" / f"{name}.cpp").write_text(text)
+        r = dataclasses.replace(rule("c-error-path"), pending={}, exempt={})
+        return check.judge(r, r.scan(root))
+
+    def test_clean_tree_passes(self) -> None:
+        verdict = self.judge(good=self.GOOD)
+        self.assertEqual(verdict.read, 1)
+        self.assertFalse(verdict.failed)
+
+    def test_return_without_message_is_named(self) -> None:
+        verdict = self.judge(good=self.GOOD, bad=self.BAD)
+        self.assertEqual([f.key for f in verdict.violations], ["c:src/c_api/bad.cpp"])
+        self.assertIn("sonare_bad:4", verdict.violations[0].detail)
+
+
 class Framework(unittest.TestCase):
     def test_reading_nothing_fails(self) -> None:
         verdict = check.judge(rule("getters"), [])
