@@ -270,7 +270,6 @@ def cmd_repair(args: argparse.Namespace) -> int:
         master_audio,
         mastering_assistant_suggest,
         mastering_audio_profile,
-        mastering_chain,
     )
 
     detect_only = bool(getattr(args, "detect", False))
@@ -341,7 +340,9 @@ def cmd_repair(args: argparse.Namespace) -> int:
             key: value for key, value in chain_config.items() if key.startswith("repair.")
         }
         repair_config.update(params)
-        result = mastering_chain(samples, sample_rate=sr, config=_nest_chain_config(repair_config))
+        result = master_audio(
+            samples, sample_rate=sr, preset=None, overrides=_nest_chain_config(repair_config)
+        )
         mode = "assistant"
         explanation = _repair_explanation(suggestion.explanation)
 

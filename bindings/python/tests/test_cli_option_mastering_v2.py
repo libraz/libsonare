@@ -80,11 +80,12 @@ def test_mastering_config_reads_the_document_and_forwards_params(monkeypatch, tm
     calls: dict[str, object] = {}
     patch_mono_decode(monkeypatch, lambda path: ([0.0], 44_100))
 
-    def mastering_chain(*args, **kwargs):
-        calls["config"] = kwargs["config"]
+    def master_audio(*args, **kwargs):
+        assert kwargs["preset"] is None
+        calls["config"] = kwargs["overrides"]
         return _result(stages=["loudness"])
 
-    monkeypatch.setattr(libsonare, "mastering_chain", mastering_chain)
+    monkeypatch.setattr(libsonare, "master_audio", master_audio)
     config_path = tmp_path / "chain.json"
     config_path.write_text(
         json.dumps({"version": 1, "params": {"loudness.targetLufs": -15.0}}),
@@ -126,12 +127,13 @@ def test_mastering_assistant_enable_repair_explain_reaches_suggestion_and_chain(
             explanation=["repair enabled"],
         )
 
-    def mastering_chain(*args, **kwargs):
-        calls["config"] = kwargs["config"]
+    def master_audio(*args, **kwargs):
+        assert kwargs["preset"] is None
+        calls["config"] = kwargs["overrides"]
         return _result(stages=["repair.declick", "loudness"])
 
     monkeypatch.setattr(libsonare, "mastering_assistant_suggest", suggest)
-    monkeypatch.setattr(libsonare, "mastering_chain", mastering_chain)
+    monkeypatch.setattr(libsonare, "master_audio", master_audio)
     args = cli._build_parser().parse_args(
         [
             "mastering",
@@ -564,7 +566,7 @@ def test_a_loudness_option_carrying_its_default_still_reaches_the_assistant(
             or SimpleNamespace(chain_config={}, explanation=[])
         ),
     )
-    monkeypatch.setattr(libsonare, "mastering_chain", lambda *args, **kwargs: _result())
+    monkeypatch.setattr(libsonare, "master_audio", lambda *args, **kwargs: _result())
 
     def suggestion_params(*extra: str) -> dict[str, object]:
         args = cli._build_parser().parse_args(

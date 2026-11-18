@@ -438,7 +438,7 @@ def test_mastering_params_and_chain_config_take_an_enum_name(tmp_path, capsys) -
 def test_chain_config_takes_a_v2_multiband_document(tmp_path, capsys, channels) -> None:
     """A v2 document's nested multiband block renders as its flattened keys do.
 
-    The referent is ``mastering_chain`` on the same config flattened to ordinal
+    The referent is ``master_audio`` with no preset and the same config flattened to ordinal
     keys, run in the same build over the same decoded source, written by the
     CLI's own writer.
     """
@@ -499,12 +499,15 @@ def test_chain_config_takes_a_v2_multiband_document(tmp_path, capsys, channels) 
         },
     }
     if channels == 2:
-        result = libsonare.mastering_chain_stereo(
-            planes[0], planes[1], rate, _nest_chain_config(flat)
+        result = libsonare.master_audio_stereo(
+            planes[0], planes[1], rate, preset=None, overrides=_nest_chain_config(flat)
         )
         rendered = [result.left, result.right]
     else:
-        rendered = [libsonare.mastering_chain(planes[0], rate, _nest_chain_config(flat)).samples]
+        mono = libsonare.master_audio(
+            planes[0], rate, preset=None, overrides=_nest_chain_config(flat)
+        )
+        rendered = [mono.samples]
     expected = tmp_path / "facade.wav"
     _write_channel_output(str(expected), rendered, rate)
     assert output.read_bytes() == expected.read_bytes()

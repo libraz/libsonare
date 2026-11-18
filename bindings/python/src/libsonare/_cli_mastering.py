@@ -336,13 +336,19 @@ def cmd_mastering(args: argparse.Namespace) -> int:
 
     def _run_chain(config: dict[str, Any]) -> Any:
         """Run one chain config over however many channels the source has."""
-        from . import mastering_chain, mastering_chain_stereo
+        from . import master_audio, master_audio_stereo
 
         if stereo:
-            return mastering_chain_stereo(
-                planes[0], planes[1], sample_rate=sr, config=_nest_chain_config(config)
+            return master_audio_stereo(
+                planes[0],
+                planes[1],
+                sample_rate=sr,
+                preset=None,
+                overrides=_nest_chain_config(config),
             )
-        return mastering_chain(samples, sample_rate=sr, config=_nest_chain_config(config))
+        return master_audio(
+            samples, sample_rate=sr, preset=None, overrides=_nest_chain_config(config)
+        )
 
     result: Any
     mode = "loudness"
@@ -748,7 +754,7 @@ def cmd_mastering_stereo_analyze(args: argparse.Namespace) -> int:
 
 
 def cmd_mastering_chain(args: argparse.Namespace) -> int:
-    from . import mastering_chain, mastering_chain_stereo
+    from . import master_audio, master_audio_stereo
 
     planes, sr = _load_channels_or_downmix(args.file)
     config = _parse_json_config(args.config, args.config_file)
@@ -759,12 +765,14 @@ def cmd_mastering_chain(args: argparse.Namespace) -> int:
     # only in which buffers they carry.
     result: MasteringChainStereoResult | MasteringChainResult
     if len(planes) == 2:
-        result = mastering_chain_stereo(
-            planes[0], planes[1], sample_rate=sr, config=_nest_chain_config(config)
+        result = master_audio_stereo(
+            planes[0], planes[1], sample_rate=sr, preset=None, overrides=_nest_chain_config(config)
         )
         rendered = [result.left, result.right]
     else:
-        result = mastering_chain(planes[0], sample_rate=sr, config=_nest_chain_config(config))
+        result = master_audio(
+            planes[0], sample_rate=sr, preset=None, overrides=_nest_chain_config(config)
+        )
         rendered = [result.samples]
     report_path = getattr(args, "report", "")
 
@@ -800,8 +808,6 @@ def cmd_master(args: argparse.Namespace) -> int:
         master_audio_stereo,
         mastering_assistant_suggest_chain,
         mastering_assistant_suggest_chain_stereo,
-        mastering_chain,
-        mastering_chain_stereo,
     )
 
     planes, sr = _load_channels_or_downmix(args.file)
@@ -830,11 +836,17 @@ def cmd_master(args: argparse.Namespace) -> int:
         carries them is what the two chain entry points differ in.
         """
         if stereo:
-            pair = mastering_chain_stereo(
-                planes[0], planes[1], sample_rate=sr, config=_nest_chain_config(config)
+            pair = master_audio_stereo(
+                planes[0],
+                planes[1],
+                sample_rate=sr,
+                preset=None,
+                overrides=_nest_chain_config(config),
             )
             return pair, [pair.left, pair.right]
-        mono = mastering_chain(planes[0], sample_rate=sr, config=_nest_chain_config(config))
+        mono = master_audio(
+            planes[0], sample_rate=sr, preset=None, overrides=_nest_chain_config(config)
+        )
         return mono, [mono.samples]
 
     result: MasteringChainStereoResult | MasteringChainResult
