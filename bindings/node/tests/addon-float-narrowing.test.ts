@@ -755,7 +755,7 @@ const REQUIRED_FLOAT_ARGUMENTS: FloatArgument[] = [
   },
   {
     name: 'synthesizeRir source x',
-    site: 'sonare_wrap_acoustic.cpp PositionFromOptions component',
+    site: 'sonare_wrap_options.h XyzProperty component',
     control: [1, 2],
     call: (v) => magnitudeSum(rir({ source: { x: v, y: 1, z: 1.2 } })),
   },
@@ -1325,6 +1325,13 @@ const UNCONTROLLED_SITES = ['streaming/stream_analyzer.cpp SetExpectedDuration d
  */
 const BAILOUT_READER_SITES = new Set(['sonare_wrap_features.cpp NoteSegments frameRate']);
 
+/**
+ * Sites in the required-argument table whose narrowing call sits inside a shared
+ * reader in `sonare_wrap_options.h`: driven here through an entry point that
+ * reads with it, but not part of the per-file call-site population.
+ */
+const SHARED_READER_SITES = new Set(['sonare_wrap_options.h XyzProperty component']);
+
 describe('the tables cover the whole required-read population', () => {
   it('keeps 1e39 the discriminating value it is documented to be', () => {
     // Finite as a caller wrote it, an infinity at float width: exactly what
@@ -1339,13 +1346,13 @@ describe('the tables cover the whole required-read population', () => {
 
   it('drives every node_narrow_finite_float call site in the addon', () => {
     const calls = addonSources()
-      // The shared header holds the reader itself plus the three members built
-      // on it, none of which is a site.
+      // The shared header holds the reader itself plus the members built on it,
+      // none of which is a site.
       .filter((source) => source.file !== 'sonare_wrap_options.h')
       .flatMap((source) => source.text.match(/node_narrow_finite_float\(/g) ?? []);
     const sites = new Set([
       ...REQUIRED_FLOAT_ARGUMENTS.map((argument) => argument.site).filter(
-        (site) => !BAILOUT_READER_SITES.has(site),
+        (site) => !BAILOUT_READER_SITES.has(site) && !SHARED_READER_SITES.has(site),
       ),
       ...REQUIRED_FLOAT_STATE_ARGUMENTS.map((argument) => argument.site),
       ...UNCONTROLLED_SITES,
